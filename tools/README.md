@@ -43,7 +43,7 @@ the sequence, and nothing else.
 | Guard | Why |
 |---|---|
 | **Dry run by default**, stopping before the import and printing the exact commands it would run | The import writes, and is measurably not a no-op — the layout flip happens there |
-| `-Arm` requires `-IsScratchProject`, an explicit caller assertion | Nothing here guesses at "scratch". A project name is not evidence and a wrong guess writes to a real project |
+| **`-Arm` is fenced to an allowlisted scratch project** (`confirm-roundtrip.allowlist`, ADR-0011) | A mutating loop that can be pointed at the real project is a way around CLAUDE.md hard rule 5 that nobody decided to build — and it would be reached by a mistyped path, not by a decision |
 | `-Arm` requires `-Group`, copied verbatim from `openness-cli list` | A shortened guess fails with an error that does not point at the mismatch |
 | The first export is `Copy-Item`d, never load-and-saved, and its md5 is re-checked after every stage | A comparison against a reformatted reference is worthless |
 | Live-run content + a scratch dir inside the repo is refused | Live-run access is full; **retention** is what the boundary governs (docs/13) |
@@ -60,6 +60,40 @@ ran, `10` dry run (nothing was attempted, so nothing is proven).
 
 `-FirstExport <path>` reuses an export already in hand, which makes the dry run **fully offline** —
 no Portal contact at all.
+
+### The scratch fence (ADR-0011, armed 2026-08-13)
+
+The loop was **built dry-run-only**. ADR-0011 ruled it *adopted* — it is the only proof in this
+toolchain with an authority independent of the converter in its loop — **and fenced in the same
+breath**, because the two halves do not work apart.
+
+`-Arm` refuses any project not listed in **`tools/confirm-roundtrip.allowlist`**:
+
+- **An allowlist, never a denylist.** This engineering PC carries about **nineteen real site
+  `.ap20` projects in folders beside the two scratch ones**; a denylist fails open on the one nobody
+  thought to list.
+- **The refusal is exit `4`, not a warning**, and it is evaluated **before any binary check, before
+  any directory is created, and before stage 1** — so on a refusal Portal is never contacted.
+- **The resolved canonical path is compared**, so casing, a relative path or a `..` cannot walk
+  around it. Anything that cannot be positively resolved — a bare project name, the project *folder*
+  instead of the `.apNN` file, a junction, an 8.3 short name, a missing or empty allowlist — is a
+  **refusal, not a pass**.
+- **No override.** No `-Force`, no environment variable; `-IsScratchProject` (the old caller
+  assertion) is refused **by name**, the same shape as `download-plan` refusing `--yes`. Adding a
+  project is an owner decision recorded in the allowlist file.
+
+**`confirm-roundtrip-fence.tests.ps1` tests the fence, offline, in both directions** — 11 cases, and
+it never contacts Portal. *"Portal was never contacted"* is **asserted, not assumed**: the tests hand
+the script a **stub `openness-cli`** that appends to a sentinel file, and assert the sentinel does not
+exist. That is a direct observation that the process was never launched, and it is sound because
+`Start-Process $OpennessCliPath` is the script's **only** route to Portal. The instrument is itself
+controlled — one permitted case asserts the sentinel *is* written, so its absence elsewhere means
+something. Negative-tested by disabling the fence: **9 of 11 go red**, six of them reporting
+*"openness-cli WAS launched - Portal would have been contacted."*
+
+```
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\confirm-roundtrip-fence.tests.ps1
+```
 
 ## Benchmarks
 

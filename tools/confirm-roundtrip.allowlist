@@ -1,0 +1,33 @@
+# confirm-roundtrip.ps1 -- THE SCRATCH-PROJECT ALLOWLIST (ADR-0011)
+#
+# The confirm loop MUTATES: its import stage writes to the project, and it is measurably not a
+# no-op (the block memory layout flips underneath it). ADR-0011 therefore fences the armed loop to
+# the scratch project, and this file is that fence's data.
+#
+# *** ALLOWLIST, NEVER A DENYLIST (ADR-0011 requirement 1). *** A denylist of real projects is wrong
+# twice over: it fails open on a project nobody thought to list, and it grows silently stale. As of
+# 2026-08-13 this engineering PC carries about NINETEEN real production .ap20 projects in sibling
+# folders of the two below, so "the project nobody thought to list" is not hypothetical here.
+#
+# *** THERE IS NO OVERRIDE. *** No -Force, no -AllowAnyProject, no environment variable. Adding a
+# project here is a decision, made once, by the owner, with the restore point named -- it is not a
+# flag and it is not something an agent does to get a run through. See ADR-0011 requirement 6 and
+# its "revisit trigger".
+#
+# FORMAT
+#   One project per line. Blank lines and lines starting with # are ignored.
+#   Each entry is the path to the project FILE (.apNN), in one of two forms:
+#     repo:<path>   resolved against the root of the repository this script lives in. Portable
+#                   across checkouts and git worktrees, which is why the scratch projects use it.
+#     <absolute>    a fully-qualified path, e.g. D:\Scratch\Thing\Thing.ap20
+#   A bare relative path is REFUSED rather than guessed at (ADR-0011 requirement 4).
+#
+# An entry that does not exist on this machine simply never matches. That fails CLOSED, which is
+# the safe direction, so it is not itself an error.
+
+# The S6 sandbox / validation project. Called test-project001 everywhere in docs and IR; the live
+# Portal folder on disk keeps its original name (CLAUDE.md, "Codename note").
+repo:GenProject1/GenProject1.ap20
+
+# The reference/scratch project the S1 round-trip work ran against.
+repo:SampleProject/SampleProject.ap20

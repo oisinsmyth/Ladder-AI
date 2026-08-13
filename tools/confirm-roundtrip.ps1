@@ -22,11 +22,26 @@
     layout flip happens exactly there. So:
 
       - the DEFAULT IS A DRY RUN that stops before the import and prints what it would do next;
-      - -Arm is required for the mutating half, and -Arm additionally requires -IsScratchProject,
-        which the caller must assert. Nothing here guesses at "scratch": a project name is not
-        evidence, and a wrong guess writes to a real project;
+      - -Arm is required for the mutating half, and the armed run is FENCED TO AN ALLOWLISTED
+        SCRATCH PROJECT (ADR-0011) - see "THE SCRATCH FENCE" below. There is no override flag;
       - the FIRST EXPORT is preserved byte-exact, never re-saved through any tool, and its hash is
         re-checked at the end. A comparison against a reformatted reference is worthless.
+
+    *** THIS IS A GATE, NOT A CHECK AN AGENT RUNS PER EDIT. *** It needs Portal EXCLUSIVELY and costs
+    minutes per block. Its place is a converter capability change (ADR-0010 names it as that gate)
+    and pre-promotion verification. For the per-edit loop use `converter preflight`, `review` and
+    `drift-check`, all of which are read-only, run in milliseconds, and can be pointed at anything.
+
+    *** THE SCRATCH FENCE (ADR-0011). *** -Arm refuses any project that is not in
+    tools/confirm-roundtrip.allowlist. The refusal is an EXIT CODE (4), evaluated before any binary
+    check, before any directory is created, and before stage 1 - so on a refusal Portal is never
+    contacted at all. It is an ALLOWLIST, never a denylist: this engineering PC carries about
+    nineteen private engineering projects in folders beside the scratch ones, and a denylist fails open on
+    the one nobody listed. Comparison is against the RESOLVED canonical path, so a relative path,
+    different casing or a ".." cannot walk around it; anything that cannot be positively resolved -
+    a bare project name, a junction, an 8.3 short name, a missing or empty allowlist - is a REFUSAL,
+    not a pass. There is deliberately no -Force and no environment variable: adding a project is an
+    owner decision recorded in the allowlist, not a flag.
 
     *** THIS SCRIPT DELIBERATELY DOES NOT RE-ASSERT block-layout --set Standard AFTER THE IMPORT. ***
     CLAUDE.md requires that in ordinary work, because a re-import reverts a block to Optimized. Here
@@ -39,6 +54,8 @@
 
 .PARAMETER Project
     Project name (already open in Portal) or path to a .apNN file - whatever openness-cli takes.
+    WITH -Arm IT MUST BE THE PATH to the .apNN file: a bare name cannot be resolved to a canonical
+    path, so the scratch fence cannot identify it, and an unidentifiable target is refused.
 
 .PARAMETER Block
     The block to round-trip. With -Type, a PLC data type (UDT) instead.
@@ -61,11 +78,15 @@
 
 .PARAMETER Arm
     Perform the mutating half (import, compile, second export, compare). Without it the run stops
-    after stage 3 and exits 10 - a dry run proves nothing and must not look like a pass.
+    after stage 3 and exits 10 - a dry run proves nothing and must not look like a pass. Subject to
+    the scratch fence: see "THE SCRATCH FENCE" above and tools/confirm-roundtrip.allowlist.
 
 .PARAMETER IsScratchProject
-    The caller's explicit assertion that -Project is a scratch copy safe to write to. Required with
-    -Arm. There is no detection behind this on purpose.
+    NO LONGER ACCEPTED (ADR-0011) and refused BY NAME, the same shape as download-plan refusing
+    --yes and --force by name. It used to be the caller's own assertion that the target was safe to
+    write to, with nothing behind it; the allowlist replaced it, because relying on the caller's
+    word is the option ADR-0011 explicitly rejected. Declared only so that a recorded invocation
+    fails loudly instead of silently meaning something else.
 
 .EXAMPLE
     # Dry run against an export already in hand - no Portal contact at all.
@@ -73,10 +94,10 @@
         -FirstExport C:\tmp\already-exported.xml
 
 .EXAMPLE
-    # The armed loop.
-    .\confirm-roundtrip.ps1 -Project Scratch1 -Block MyBlock -ScratchDir C:\tmp\loop `
-        -Group 'PLC1 6ES7 214-1AG40-0XB0/Program blocks' -IrProject ir\test-project001 `
-        -Arm -IsScratchProject
+    # The armed loop. -Project is the PATH to the .apNN file, and it must be in the allowlist.
+    .\confirm-roundtrip.ps1 -Project 'C:\...\GenProject1\GenProject1.ap20' -Block MyBlock `
+        -ScratchDir C:\tmp\loop -Group 'PLC1 6ES7 214-1AG40-0XB0/Program blocks' `
+        -IrProject ir\test-project001 -Arm
 
 .NOTES
     EXIT CODES - a stage failure and a content change are DIFFERENT FINDINGS and never share a code.
@@ -85,7 +106,9 @@
       1  loop completed, the content CHANGED - `compare` names what
       2  loop completed but the comparison COULD NOT BE MADE (not a pass)
       3  a stage failed; the loop did not complete and says nothing about invariance
-      4  refused before anything ran (a guard, a missing binary, a missing argument)
+      4  refused before anything ran (the SCRATCH FENCE, a guard, a missing binary, a missing
+         argument). On a fence refusal specifically, Portal was never contacted and nothing was
+         written anywhere.
      10  dry run finished - the mutating half was never attempted, so nothing is proven
 #>
 
@@ -210,9 +233,269 @@ function Get-Md5([string]$Path) {
     return (Get-FileHash -Path $Path -Algorithm MD5).Hash.ToLower()
 }
 
+# ============================================================================== THE SCRATCH FENCE
+#
+# ADR-0011. The armed loop MUTATES, so it may only be pointed at an allowlisted scratch project.
+# This whole block runs BEFORE any binary check, BEFORE any directory is created, and above all
+# BEFORE STAGE 1 - which is the first thing that would launch openness-cli and therefore Portal.
+# The precedent is openness-cli's own --yes gates: without the gate satisfied, the plan prints and
+# PORTAL IS NEVER ATTACHED. A fence evaluated after the project is open has already done the thing
+# it was meant to prevent.
+#
+# THIS SCRIPT'S ONLY ROUTE TO PORTAL IS Start-Process $OpennessCliPath, in Invoke-Stage, at stages
+# 1/4/5/6 and nowhere else. So "the fence refused before openness-cli was launched" and "the fence
+# refused before Portal was contacted" are the same statement, and the fence tests assert the first
+# one directly with a sentinel stub rather than inferring it.
+
+function Get-RepoRootOfThisScript {
+    $probe = Split-Path -Parent $PSCommandPath
+    while ($probe) {
+        # A git worktree's .git is a FILE, not a directory; Test-Path matches both.
+        if (Test-Path (Join-Path $probe '.git')) { return $probe }
+        $parent = Split-Path -Parent $probe
+        if ($parent -eq $probe) { break }
+        $probe = $parent
+    }
+    return $null
+}
+
+# Canonicalisation, ADR-0011 requirement 5: compare the RESOLVED path, never the string as typed,
+# so a relative path, a different casing or a ".." cannot walk around the fence. Requirement 4 does
+# the rest of the work here: anything this cannot positively resolve is a REFUSAL, not a pass.
+#
+# Windows PowerShell 5.1 has no ResolveLinkTarget and Resolve-Path does NOT follow reparse points,
+# so a junction or symlink cannot be resolved reliably from here. It is therefore DETECTED AND
+# REFUSED rather than half-resolved - "I could not canonicalise this" is an honest refusal, and a
+# comparison that silently ignored a junction would be a fence with a documented way through it.
+# 8.3 short names (PROGRA~1) get the same treatment for the same reason: GetFullPath does not
+# expand them, so they are refused with the fix named.
+function Resolve-CanonicalPath {
+    param([string]$Path, [ref]$Problem)
+
+    $Problem.Value = $null
+
+    if ([string]::IsNullOrWhiteSpace($Path)) {
+        $Problem.Value = 'the path is empty'
+        return $null
+    }
+
+    $full = $null
+    try {
+        $full = [System.IO.Path]::GetFullPath($Path)
+    } catch {
+        $Problem.Value = "the path could not be resolved: $($_.Exception.Message)"
+        return $null
+    }
+
+    $full = $full.TrimEnd([char]'\', [char]'/')
+
+    foreach ($component in $full.Split([char]'\')) {
+        if ($component -match '~\d') {
+            $Problem.Value = "'$component' looks like an 8.3 short name, which cannot be canonicalised from here - supply the long path"
+            return $null
+        }
+    }
+
+    return $full
+}
+
+# Walks the path and every ancestor directory looking for a reparse point. Only meaningful for
+# things that exist, which the caller has already established for the project itself.
+function Test-AnyReparsePoint {
+    param([string]$FullPath, [ref]$Where)
+
+    $Where.Value = $null
+    $probe = $FullPath
+    while ($probe) {
+        if (Test-Path -LiteralPath $probe) {
+            $item = Get-Item -LiteralPath $probe -Force -ErrorAction SilentlyContinue
+            if ($item -and (($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0)) {
+                $Where.Value = $probe
+                return $true
+            }
+        }
+        $parent = Split-Path -Parent $probe
+        if (-not $parent -or $parent -eq $probe) { break }
+        $probe = $parent
+    }
+    return $false
+}
+
+function Assert-ScratchProject {
+    param([string]$ProjectValue)
+
+    $allowlistPath = Join-Path $PSScriptRoot 'confirm-roundtrip.allowlist'
+
+    # Empty is not clean (FI-44, ADR-0011 requirement 4). A missing or contentless allowlist means
+    # the fence verified NOTHING, so it must refuse - never "no entries, therefore nothing to
+    # object to".
+    if (-not (Test-Path -LiteralPath $allowlistPath)) {
+        Deny @"
+-Arm is fenced to the scratch project (ADR-0011) and the allowlist is MISSING:
+  $allowlistPath
+
+The fence cannot verify anything without it, and an unverified target is a refusal, not a pass.
+"@
+    }
+
+    $entries = @()
+    foreach ($line in (Get-Content -LiteralPath $allowlistPath)) {
+        $trimmed = $line.Trim()
+        if ($trimmed.Length -eq 0 -or $trimmed.StartsWith('#')) { continue }
+        $entries += $trimmed
+    }
+
+    if ($entries.Count -eq 0) {
+        Deny @"
+-Arm is fenced to the scratch project (ADR-0011) and the allowlist contains NO ENTRIES:
+  $allowlistPath
+
+An empty allowlist permits nothing. This is a refusal rather than a pass by construction.
+"@
+    }
+
+    $repoRootForEntries = Get-RepoRootOfThisScript
+
+    $resolvedEntries = @()
+    foreach ($entry in $entries) {
+        $raw = $entry
+        if ($entry.StartsWith('repo:', [System.StringComparison]::OrdinalIgnoreCase)) {
+            if (-not $repoRootForEntries) {
+                Deny "Allowlist entry '$raw' is repo-relative, but the repository root could not be located from $PSCommandPath."
+            }
+            $raw = Join-Path $repoRootForEntries $entry.Substring('repo:'.Length)
+        }
+
+        if (-not [System.IO.Path]::IsPathRooted($raw)) {
+            Deny @"
+Allowlist entry '$entry' is a bare relative path.
+
+It would resolve differently depending on the working directory, which is exactly the ambiguity
+ADR-0011 requirement 4 refuses. Use an absolute path, or the 'repo:' prefix.
+"@
+        }
+
+        $problem = $null
+        $resolved = Resolve-CanonicalPath -Path $raw -Problem ([ref]$problem)
+        if (-not $resolved) {
+            Deny "Allowlist entry '$entry' could not be canonicalised: $problem"
+        }
+
+        $resolvedEntries += [pscustomobject]@{ Raw = $entry; Resolved = $resolved }
+    }
+
+    $permittedList = ($resolvedEntries | ForEach-Object { "  " + $_.Raw + "  ->  " + $_.Resolved }) -join [System.Environment]::NewLine
+
+    # A bare project NAME (openness-cli accepts one for an already-open project) has no path to
+    # canonicalise, so the fence cannot positively identify it as the scratch project - and
+    # "probably the scratch one, it is named like it" is precisely the guess ADR-0011 declines to
+    # make. Arming therefore requires the path to the .apNN FILE.
+    #
+    # *** IT MUST BE A FILE, AND THE EXTENSION IS CHECKED. *** Found by the fence's own tests,
+    # 2026-08-13: a bare name is not merely unresolvable, it can RESOLVE TO A DIRECTORY - run from
+    # the repo root, `-Project GenProject1` hit the project FOLDER, which exists. The fence still
+    # refused (the folder does not equal the .ap20 entry, so it failed closed), but it refused with
+    # the wrong reason printed, and a guard that explains itself wrongly is how someone concludes it
+    # is broken and goes looking for a way around it.
+    $isProjectFile = (Test-Path -LiteralPath $ProjectValue -PathType Leaf) -and
+                     ([System.IO.Path]::GetExtension($ProjectValue) -match '^\.ap\d+$')
+    if (-not $isProjectFile) {
+        $what = if (Test-Path -LiteralPath $ProjectValue -PathType Container) {
+            'it is a DIRECTORY, not a project file'
+        } elseif (Test-Path -LiteralPath $ProjectValue) {
+            'it exists but is not a .apNN project file'
+        } else {
+            'no such file exists'
+        }
+
+        Deny @"
+-Arm is fenced to the scratch project (ADR-0011), and -Project is not a project file: $what.
+
+  -Project as given : $ProjectValue
+
+The armed loop needs the PATH TO THE .apNN FILE, not a project name and not the project folder. A
+name cannot be resolved to a canonical path, so the fence cannot positively identify it as the
+scratch project - and an unidentifiable target is a refusal, not a pass (ADR-0011 requirement 4). A
+dry run (no -Arm) still accepts whatever openness-cli accepts, including a bare name.
+
+Permitted (from $allowlistPath):
+$permittedList
+
+Nothing was written and Portal was never contacted.
+"@
+    }
+
+    $problem = $null
+    $projectResolved = Resolve-CanonicalPath -Path $ProjectValue -Problem ([ref]$problem)
+    if (-not $projectResolved) {
+        Deny "-Project could not be canonicalised: $problem"
+    }
+
+    $where = $null
+    if (Test-AnyReparsePoint -FullPath $projectResolved -Where ([ref]$where)) {
+        Deny @"
+-Project reaches the target through a junction or symlink:
+  $where
+
+Windows PowerShell 5.1 cannot resolve a reparse point reliably, so this path cannot be canonicalised
+and the fence will not compare a path it could not canonicalise (ADR-0011 requirements 4 and 5).
+Supply the real path to the project instead.
+"@
+    }
+
+    foreach ($entry in $resolvedEntries) {
+        if ([string]::Equals($projectResolved, $entry.Resolved, [System.StringComparison]::OrdinalIgnoreCase)) {
+            Write-Host ''
+            Write-Host 'SCRATCH FENCE: permitted (ADR-0011)'
+            Write-Host "  -Project resolves to : $projectResolved"
+            Write-Host "  allowlist entry      : $($entry.Raw)"
+            return
+        }
+    }
+
+    Deny @"
+-Arm is fenced to the scratch project, and this is not one (ADR-0011).
+
+  -Project as given    : $ProjectValue
+  -Project resolves to : $projectResolved
+
+Permitted (from $allowlistPath):
+$permittedList
+
+The confirm loop's import stage WRITES, and it is measurably not a no-op. CLAUDE.md hard rule 5 puts
+the promotion into the real project behind the engineer, and a mutating loop that could be pointed
+at a real project is a way around that gate that nobody decided to build - it would be reached by a
+mistyped path, not by a decision.
+
+*** THERE IS NO OVERRIDE FLAG, DELIBERATELY. *** If this project legitimately needs the loop, that is
+an owner decision that adds it to the allowlist with the restore point named (ADR-0011 requirement 6
+and its revisit trigger). Nothing you can pass on this command line will get you past this.
+
+Nothing was written and Portal was never contacted.
+"@
+}
+
 # ------------------------------------------------------------------------------ guards, up front
 
 Write-Heading "CONFIRM LOOP - $Block in $Project"
+
+# Refused BY NAME rather than quietly ignored, the same shape as download-plan refusing --yes and
+# --force by name. -IsScratchProject used to be the caller's own assertion that the target was safe
+# to write to, with nothing behind it. ADR-0011 replaced that with the allowlist, because "rely on
+# the caller's care" is the option the ruling explicitly rejected. Leaving the switch accepted would
+# let a recorded invocation keep working while silently meaning something else.
+if ($IsScratchProject) {
+    Deny @'
+-IsScratchProject is no longer accepted (ADR-0011).
+
+It was the caller's assertion that the target was a scratch copy, with no detection behind it. The
+fence is now an allowlist in tools/confirm-roundtrip.allowlist, checked against the resolved path,
+because a caller's word is what ADR-0011 declined to rely on. Drop the switch; if the project is in
+the allowlist the run proceeds, and if it is not, no flag will help.
+'@
+}
+
+if ($Arm) { Assert-ScratchProject -ProjectValue $Project }
 
 foreach ($pair in @(, @('converter', $ConverterPath)) + @(, @('openness-cli', $OpennessCliPath))) {
     if (-not (Test-Path $pair[1])) {
@@ -222,17 +505,6 @@ foreach ($pair in @(, @('converter', $ConverterPath)) + @(, @('openness-cli', $O
         if ($needed) { Deny "$($pair[0]) not found at: $($pair[1])" }
         Write-Host "NOTE: $($pair[0]) not found at $($pair[1]) - not needed for this run."
     }
-}
-
-if ($Arm -and -not $IsScratchProject) {
-    Deny @'
--Arm requires -IsScratchProject.
-
-The import stage WRITES TO THE PROJECT and is not a no-op - the memory-layout flip this loop exists
-to measure happens exactly there. Nothing in this script tries to detect "scratch" from a project
-name or path: a name is not evidence, and a wrong guess writes to a real project. Assert it or do
-not arm it.
-'@
 }
 
 if ($Arm -and -not $Group) {
