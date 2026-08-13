@@ -385,6 +385,30 @@ phase 2 with the copy-layer generator.
 > > rather than the generator — and it is already retired as **A1** (3,000 writes × 123 registers,
 > > 0 torn). Today's measurement adds the wire, not the semantics.
 > >
+> > ### 🔴 `download-plan`'s EMPTY ADDRESS ARRAYS ARE NOT EVIDENCE OF ABSENCE — 2026-08-14
+> >
+> > A download threw `Connect to module PLC1 … failed` on two adapters, and the diagnosis reached for
+> > was *"`GenProject1` has no configured target address"* — because every `targetInterfaces[].addresses`
+> > read `[]`. **The report says `isConfigured: true`, and the tell is one line further up:** *** THE
+> > `pcInterfaces[].addresses` ARRAYS ARE EMPTY TOO, AND THE PC PROVABLY HAS ADDRESSES. *** So the
+> > empty arrays are an artifact of the read mode — `probedWithoutConnecting: true`,
+> > `GetAccessibleDevices()` and `ApplyConfiguration()` never called — and say nothing either way.
+> >
+> > **What the network actually says, measured:** `10.10.10.10:102` (ISO-on-TCP, the protocol a
+> > download uses) is **OPEN in 109 ms**, with `:502` **refused** as a negative control proving the
+> > probe discriminates. **The tunnel forwards the download protocol and the CPU answers on it.** So
+> > the tunnel, the port and the "no address configured" story are all eliminated.
+> >
+> > ⚠️ *** THE REMAINING CANDIDATE: `GenProject1`'s HARDWARE CONFIG MAY CARRY A DIFFERENT IP THAN THE
+> > RIG'S. *** It is the S6 sandbox, developed without a rig, so its PLC would hold whatever default it
+> > was created with. **No `openness-cli` subcommand reads or writes device addressing**, so this is
+> > a ten-second look in TIA and cannot currently be settled from tooling.
+> >
+> > **The general lesson, since this is the second false diagnosis in two days:** *an absent value in a
+> > report is only evidence if you know the report populates that field when it IS present.* Check a
+> > field you can independently verify — here, the PC's own addresses — before reading an empty one as
+> > a finding.
+> >
 > > ⚠️ **A RIG PRECONDITION — AND ITS SCOPE, CORRECTED.** *** NO ORDINARY PHYSICAL ETHERNET ADAPTER
 > > APPEARS AMONG THE THREE CONFIGURED PC INTERFACES *** — Hyper-V ×2, PLCSIM ×1, TAP-Windows ×2, all
 > > with empty address collections, **byte-identical across two runs.** 🔴 **BUT THIS IS EVIDENCE ABOUT
