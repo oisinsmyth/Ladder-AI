@@ -38,25 +38,41 @@ phase 2 with the copy-layer generator.
 
 **The critical path is now A1**, and it runs through the phase-1 spike.
 
-> ### 📍 STATUS, 2026-08-13 — *** PHASE 1 IS CLOSED. A1 IS FULLY RETIRED. ***
+> ### 📍 STANDING STATUS — keep this current; it is the ONE place "where are we" lives
 >
-> Both of A1's recorded caveats fell on the rig the same day they were built. **No tear observed in
-> 3,000 writes of 123 registers on VARIANT 1, 3,200 on VARIANT 2**, and **1.4 answered decisively —
-> 0 torn reads in 3,000, with 3,000 distinct generations.** Liveness exact on every run. The entry
-> below carries the numbers and the limits.
+> *** PHASES 0, 1 AND 2 ARE CLOSED. PHASE 4.3/4.4 BUILT. *** Last updated 2026-08-13.
 >
-> **The one A1 limit that survives is a round-trip property, not a width one:** two writes have
-> still never been put inside a single scan, because the round trip is ~78 ms against a ~23 ms scan.
+> **A1 fully retired** — no tear in 3,000 writes of 123 registers on VARIANT 1, 3,200 on VARIANT 2,
+> and 1.4 answered with 0 torn reads in 3,000. **Phase 2's exit criterion met**, GREEN/RED shown by
+> executing the generated IR and the defect shown invisible under another vector. **Phase 4.3/4.4 +
+> queue persistence built.**
 >
-> ✅ **That correction has landed: `RTT_p99` is now 201** (the worst observed full-width run p99, set
-> pessimistically and argued). **No conclusion changed shape**; §12a carries a shape-or-magnitude table
-> for the lanes. Two consequences: **phase 4's admission control is over-admitting at S ≥ 50** and needs
-> a look, and **"marginal cost per register is zero" is now false as stated** — it is ~6% of a round
-> trip, so the conclusion survives by a measured ~16x rather than by assumed infinity.
+> | assumption | state |
+> |---|---|
+> | A1 `MB_SERVER` atomicity | ✅ retired at full width, both call orders |
+> | A2 round-trip rate | ✅ measured; `RTT_typ 78`, `RTT_p99 201`, F-4 says the tail is **not** width-sensitive |
+> | A3 `%MW` capacity | ✅ 4096 words, outside work memory |
+> | A7 run-state read | ✅ measured in both CPU states |
+> | A9 memory budget | ✅ scoped to retain-only by ruling |
+> | **A4** block driveable by its own command | ⏳ phase 2 built; **owed on the device** |
+> | **A5** two slots do not interfere | ⏳ phase 3, in build |
+> | **A6** delegate throw (G4) | 🔴 **UNMEASURED — needs the owner present.** Widest blast radius left |
+> | **A8** structural DB change (G2) | ⏸ deferred by the owner |
 >
-> **Phase 2 (2.1, 2.2, 0.1b) and phase 4 (4.3, 4.4) are built.** Phase 2 was started before A1's
-> width caveat fell because phase 2's gate is A4 — and the caveat is what the allocator would have
-> had to be revised for, which is why it was taken first.
+> **Owed on the device, and stated as owed:** phase 2's RED/GREEN through the real copy layer and
+> `MB_SERVER`; the **start-bool bit order** (still `[I]`, and the simulator and `BitAddressOf` agree
+> *from the same premise*, so their agreement is worth nothing); the 32-bit word order.
+>
+> **Adopted by the owner and not yet implemented:** **F-1** (a read may cover several *whole* slots)
+> in `Harness.Map` + `MirrorClient` and in the spec's X-A wording; **the drain ruling** (needs no
+> code).
+>
+> **Open for the owner:** **A6/1.7**; the **queue/marker joint-consistency** ruling (two files, no
+> shared transaction); **F-4's second half** (cap slot width? nothing argues for it on timing
+> grounds); the **p90-plus-exceedance-rate** tail proposal; **F-2**, **F-3**.
+>
+> **The rule that has earned its place five times in one day:** *a guard written, tested around, and
+> never executed.* See `autonomous-working-agreement.md`.
 
 ---
 
