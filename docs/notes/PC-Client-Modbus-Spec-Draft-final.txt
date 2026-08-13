@@ -299,6 +299,31 @@ So a block whose only evidence of correct behaviour is a one-scan pulse may be u
 that wave, and the runner will correctly REFUSE the vector rather than return a meaningless
 green.
 
+*** THE CONTRACT THIS SECTION IMPLIES IS NOW DRAFTED — `docs/notes/test-environment-contract.md`
+(phase 5.1, 2026-08-13). *** This section says a design can be unobservable and that the runner
+refuses; it does not say what an author must therefore SUPPLY. That document does: the vector
+format, `Basis` citing clause AND assertion, the observability declaration, the settling
+declaration, start-bool binding, the blacklist, and how to read a result — each marked with
+whether it is MECHANICALLY CHECKABLE and by what.
+
+  *** TWO THINGS IT ADDS THAT THIS SECTION DOES NOT HAVE, BOTH FROM MEASUREMENT: ***
+    - *** A COMPLETION FLAG IS NOT A SETTLING SIGNAL. *** Phase 2's defective build raised `Done`
+      at 10 and then ramped to 15, so a faster-than-floor poll reads mid-ramp and returns a
+      CONFIDENTLY WRONG VERDICT rather than an error — the worst outcome available, and the one
+      the observability floor otherwise conceals. Vectors must declare when a value has SETTLED,
+      and a settling condition that merely re-cites the done-flag is refused.
+    - *** A SCAN COUNT IS MEANINGLESS WITHOUT THE COMPRESSION FACTOR IT WAS STATED AT. *** Under
+      X-D a 20-scan window at `comp = 1` is a 2-scan window at `comp = 10` — crossing the floor
+      with nobody editing the vector. The declaration carries its `comp` and the floor is
+      re-checked at the one actually used.
+
+  *** AND IT RAISES ONE QUESTION FOR THE OWNER THAT THIS SECTION LEAVES ANSWERED BOTH WAYS: MAY AN
+  AUTHOR CHANGE A BLOCK'S INTERFACE PURELY TO MAKE IT TESTABLE? *** §2.6 offers no route from
+  "unobservable" back to "testable"; the obvious one — expose the evidence as a block output —
+  collides with D13 and §2.1, which put instrumentation in the COPY LAYER and say `lad-coder`
+  never writes observability code. That is the central question of a document called
+  design-for-testability, and the design currently answers it both ways.
+
 *** THE SECOND UNTESTABLE SHAPE, FROM D37: A BLOCK WITH NO DISCOVERABLE START CONDITION. ***
 D37's start bool binds to a command signal the block ALREADY has, found via
 `converter candidate-scan --direction command` — never to a test-only input, because an input
