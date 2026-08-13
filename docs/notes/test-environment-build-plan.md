@@ -1283,6 +1283,78 @@ configuration produces the ladder's behaviour rather than a hang.
 
 ---
 
+### ✅ PHASE 4.3 AND 4.4 BUILT — admission control, the two queues, the drain (2026-08-13, `cba90e9`)
+
+`src/wave-control/`, **58 → 140 tests**. 4.2's ladder deliberately untouched: its Class A rung rests
+on **A6/G4**, which is unmeasured and needs the owner present, and nothing built here assumes an
+answer to it — the drain stops at *"the boundary is due"*.
+
+**4.3 admission control is a GATE OVER ATTESTED RESULTS, not a runner of checks.** It admits only
+objects carrying a *passed* preflight and a *passed* isolated compile, **and only when the
+evidence's `converter ir-hash` matches the content being submitted.** *** WITHOUT THAT HASH
+COMPARISON THE GATE IS A FORMALITY ANY STALE RUN SATISFIES *** — which is the same defect class as
+the compile fix that never reached its binary, one layer up. Atomic per DB-9: one bad object refuses
+the whole submission, and every finding is reported rather than the first.
+
+**A consequence of DB-4's twenty that had not been drawn out:** *dependency-closed* means every
+declared dependency of every object in a batch is in that batch or already on the device — and
+because batches **partition** the change set, that forces each weakly-connected component of the
+dependency graph into **ONE** batch. *** SO THE TWENTY IS A LIMIT ON GROUPS, AND A GROUP OF 21 IS A
+REFUSAL — NOT A SPLIT, NOT A WARNING. *** The case is real rather than hypothetical: DB-1's blast
+radius makes a modified UDT `RUN (Init)` on every DB built on it.
+
+  ➜ **The packer's output is re-verified by a `DependencyClosure` written from the definition rather
+    than from components.** The packer "knows" its batches are closed by construction, and that
+    conviction is exactly the blind spot to guard — *the check must not share its subject's
+    reasoning.* **It earned its keep immediately:** with the size rule deliberately disabled, the
+    plan was *still* refused, by the independent verifier, naming 20 `DependencyInAnotherBatch`
+    violations. The test only went red because it pins *which* refusal fires.
+
+**4.4** — `ChangeRouter` (D23) **refuses what it cannot place** rather than filing it somewhere safe;
+`DrainPolicy` (D24) computes "no test can make progress" across **both queues plus the baseline**,
+because D24's own justification is that the deferred queue holds other dependencies. **Declining to
+drain requires a witness** — `DoNotDrain` is unconstructible without naming the submission that can
+still run. Draining takes a decision object rather than a flag, since R8 demands an explicitly
+declared disruptive mode.
+
+**Negative testing: 12 source mutations plus 2 committed mutant checkers**, each restored
+byte-for-byte and the tree verified clean after each. Largest signal: mixing a submission across
+queues → **12 red**.
+
+**"Empty is not clean" at four sites**, including one worth naming: `DeployedProgram.From` **refuses
+an empty list**, because *"the device holds nothing"* and *"we could not read the device"* arrive as
+the same empty list and call for opposite actions. Also `StalledWithNothingToDrain` is kept distinct
+from the healthy `NothingToDrain` — both have an empty deferred queue, one is a stall.
+
+**Today's two download measurements are encoded rather than averaged.** `CpuStopRequirement` records
+that a **2-object** download left a running CPU running while the **19-object** one needed the stop —
+so the stop is a function of *what* changed, not of downloading and not of object count. *** EVERY
+PLANNED BATCH THEREFORE REPORTS `Undetermined` ***, pinned by a test against both a 2-object and a
+19-object plan; `Required`/`NotRequired` exist only for a download-time determination, which is
+D32's and blocked.
+
+#### Spec ambiguities, with the reading taken
+
+  1. *** A SUBMISSION THAT ROUTES BOTH WAYS IS HELD TO THE LATER QUEUE AND DEFERRED AS A UNIT. ***
+     §1.4 routes *changes*; DB-9 admits *submissions*. Splitting would leave the project holding
+     **half a test set that a wave could then test against — a silent wrong green**, against a delay
+     §1.4 has already priced. Load-bearing (12 tests) and **agreed on review: it fails safe, which
+     is the tie-breaker.**
+  2. **An OB *code* change** is in neither DB-1's table (new/deleted/property) nor R1's flat "an OB
+     change". Took **R1** — fail-closed, and it is the routing rule.
+  3. 🔴 **OPEN: does the ≤20 limit apply to the drain's full download?** DB-4's mechanism is
+     integration *"in one program cycle"*, a RUN-mode property, and the drain is not that.
+     Deliberately not answered — the planner is scoped `WaveBoundaryBatchPlanner` and the drain path
+     does not call it. **Close this before the first drain.**
+  4. **Unbounded deferred-queue starvation is permitted by D24's condition.** Wait count is recorded
+     and logged; nothing acts on it, because a threshold would be a policy the spec does not have.
+  5. **An unclassified change is refused, not deferred** — deferring launders an unmade decision
+     into the log.
+
+  ➜ 🔴 **NAMED GAP — the deferred queue is not persisted.** X-C's marker records the *wave*, not the
+    queues, so **a coordinator crash loses the deferred queue.** No format was invented for it,
+    deliberately. This sits beside X-C's existing unreadable-marker case rather than inside it.
+
 ## PHASE 5 — FIRST REAL VALUE
 
 **This is the milestone that matters. Everything before it is infrastructure.**
