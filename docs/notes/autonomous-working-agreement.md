@@ -190,6 +190,24 @@ running does not license:
       used to claim, against what supplies its terms, and against the assertions it says it relies on.
       *** CROSS-REFERENCING A DOCUMENT AGAINST ITS OWN DEPENDENCIES IS A DIFFERENT OPERATION FROM
       READING IT, AND ONLY ONE OF THEM FINDS THIS FAMILY. ***
+- *** A NOTE THAT PROTECTS SOMETHING MUST BREAK WHEN THE PROTECTION IS BREACHED — MAKE THE REFERENCE
+  SELF-FALSIFYING. *** Measured 2026-08-13, and it reversed the obvious fix. A note existed to stop a
+  redundant-looking word being deleted from two assertions, because that word is what makes them
+  non-vacuous. The tidy answer — *replace the fragile identifier with a stable behaviour phrase* —
+  **is actively wrong here**, and the reason generalises:
+    ➜ *** THE NOTE'S SUBJECT IS HOW THOSE ASSERTIONS ARE WORDED, NOT WHAT THEY CLAIM — AND A CLAIM IS
+      EXACTLY WHAT A REWORDING PRESERVES. *** A behaviour phrase would still point at them after the
+      word was deleted, so the note would go on **asserting a protection that no longer exists**: the
+      wrong-pointer defect, inside the note written to prevent the tidy.
+    ➜ **Identify by the PROPERTY instead:** *"every assertion whose own hashed text contains the word
+      X — at present two — …"*. Delete the word and the sentence **stops naming anything and the
+      count stops matching**, so it *** BREAKS VISIBLY AT THE MOMENT THE PROTECTION IS BREACHED,
+      INSTEAD OF OUTLIVING IT. *** Set-defined rather than count-defined, so anything later acquiring
+      the property is covered automatically.
+    ➜ General form: **when a reference exists to guard an invariant, ask what happens to the reference
+      if the invariant is violated.** If it still resolves, it is a comment. If it dangles, it is a check.
+    ➜ And the reason the original identifier was never adequate: **it never encoded the property — it
+      just pointed at the things that happened to have it.**
 - *** A POSITIONAL REFERENCE IN PROSE GOES STALE SILENTLY, AND OUR OWN ID SCHEME SAYS SO. ***
   §3.2 of the enumeration design rules that an index is never an identifier — *"insert an assertion at
   index 1 and every later index shifts, so a stored reference silently comes to name a different
