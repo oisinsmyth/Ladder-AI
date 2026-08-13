@@ -245,3 +245,46 @@ byte-exact re-derivation is the guard on the marker grammar (`SynthesisParityTes
 
 The live-cycle checks (`ReferenceProjectRoundTrip`, `SynthesizerLiveCheck`) remain manual-run `static`
 classes needing a Portal session, not `[Fact]`s — same convention as `RoundTripRunner.RunFull`.
+
+## What the Normalizer discards, and why two suites now compare raw (2026-08-13)
+
+This harness is one of only two checks in the toolchain with an **outside authority** in its loop — it
+compares against real TIA exports, which the converter did not produce (`docs/notes/autonomous-working-agreement.md`,
+*"a proof is only as strong as the most independent authority in its loop"*). But almost all of it reaches
+that authority **through `Normalizer.AreSemanticallyEquivalent`**, which is converter code with an ignore
+list — so anything on that list is outside the harness's reach no matter how good the answer key is. That
+is the same shape as the wire-endpoint bug, where the converter and the Normalizer were blind in exactly
+the same way and cancelled. `WireEndpointDirectionTests` was the first raw, Normalizer-free guard;
+these are the second and third.
+
+- **`BlockInterfaceFidelityTests`** — a block's `<Interface>` compared raw against its real export,
+  committed `.ir` → `to-xml` (the `drift-check` direction). `Normalizer.IsVolatile` drops any
+  `<Interface>` with no `<Section Name="Static">`, justified by a premise that has since expired
+  ("a code block's Interface is known-boilerplate by the time it reaches here"). Two classes of block
+  now arrive with real content there: **an FC with parameters** (measured: retyping `ScaleValue`'s
+  `ScaleFactor` `Real` → `Int` and comparing the derived XML against the real export returns
+  `VERDICT: EQUIVALENT`) and **a UDT**, whose interface is `<Section Name="None">` — and a UDT is
+  *nothing but* its interface, so the comparison is left with a name and a block number.
+  *Found by this suite:* `UDT_PusherIO` and `UDT_ShredderSequencerIO` each declare a member
+  (`AutoStartSignal : Bool`) that is **absent from their committed exports**, and `drift-check` has
+  been printing `MATCH` for both — so `ExportDriftDetectorTests` was green over real drift that its
+  own baseline never listed. Both are now named in `KnownInterfaceDrift`, asserted in both directions
+  (an unlisted block must match; a listed one must still differ).
+- **`MemoryLayoutFidelityTests`** — `<MemoryLayout>` compared raw, real export → `to-ir` → `to-xml`.
+  The Normalizer compares this element only when *both* documents declare one, which is right for a
+  corpus that predates the emit side and means, measured, that **0 of the 26 committed `.ir` declare a
+  layout while 27 of 38 exports do** — so every `AreSemanticallyEquivalent` call reachable from this
+  suite runs with the assertion opted out. `NoCommittedIr_DeclaresALayout_...` records that as a number
+  so re-deriving the corpus (which would arm the Normalizer's own comparison) cannot pass unnoticed.
+
+Both were negative-tested against a converter built from `HEAD` with the defect surgically reintroduced.
+Dropping the two `BlockMemoryLayout.AppendIfPresent` calls — the exact historical hole, where the export
+carries no layout, the import states no opinion and TIA applies the S7-1200 default — produces **29
+failures, every one of them in `MemoryLayoutFidelityTests`**: the other 46 tests stay green over it.
+
+**Residual, and it needs a Portal session, not more test code:** every committed export declares
+`Optimized` and none declares `Standard`, so the corpus alone cannot tell "carries TIA's value" from
+"always writes Optimized". `MemoryLayoutValue_IsCarriedThrough_NotHardcoded` closes that by mutating one
+real export's single layout value to `Standard` and round-tripping it — the structure and position stay
+TIA's and only that value is synthetic, but it is not a substitute for a real `Standard` export in the
+corpus (`openness-cli block-layout --set Standard --yes`, then export).
