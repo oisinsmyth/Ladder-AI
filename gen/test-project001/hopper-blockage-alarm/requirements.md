@@ -63,6 +63,16 @@ Same one deviation flagged in the prior scoped run, re-flagged at RFI-Q-HBA-06:
 - **Numeric bounds are not part of assertion identity.** Owner-fixed but commissioning-changeable
   values (the persistence threshold, the clear-debounce filter time) are carried **beside** a
   requirement, never welded into the sentence a downstream assertion hashes — see AR-HBA-03.
+- 🔴 **A bare parameter phrase always means the SPECIFIED value, never the block's own (AR-HBA-14).**
+  Wherever this register says "the persistence threshold", "the debounce time", "the clear-debounce
+  filter time" or any equivalent bare phrase, it means **the value in AR-HBA-03's bounds table** — the
+  owner-specified one — and **never the value the implementation happens to hold**. A block whose preset
+  disagrees with the table **fails the clause**; it does not redefine it. This applies to every clause
+  and every assertion in the register, including all those written before AR-HBA-14 existed.
+  **The general form, which is a repo-wide rule and not local to this register:** *** a requirement that
+  references the implementation's own parameter is VACUOUS — the thing under test satisfies it by
+  defining its own terms. *** Same defect as the narrowing repair (AR-HBA-13), reached from the other
+  side: one drops a claim while looking intact, the other keeps the claim and empties it.
 - **Signal names are not part of assertion identity either — preserve this deliberately.** A signal
   name belongs in an assertion's `response_signal:` field, never inside the hashed sentence. Measured
   on the AR-HBA-01 round: **naming the previously-unnamed output cost ZERO re-hashes**, because no
@@ -129,6 +139,13 @@ decision and is **proposed** until then — see RFI-Q-HBA-03.
   literally contradicted Q-HBA-02, which says a brief false is not a clear. Q-HBA-02 is the later,
   owner-resolved statement and governs; this clause is reworded to match it rather than left as a
   contradiction for a downstream reader to resolve silently.
+- **"Since the accumulator was last zero" is defined by AR-HBA-15 (agent ruling, not owner).** It means
+  **from the most recent INSTANT at which the accumulator held zero, whatever put it there** — *not*
+  from a zeroing **event**. The distinction is the whole ruling: after a power cycle the accumulator
+  holds zero, and it **goes on holding zero through a subsequent `FaultReset`** until accrual actually
+  begins — so the most recent zero-holding instant is **after** that reset, limb 1's "no `FaultReset`
+  since…" is satisfied, and **limb 1 DOES bite inside AR-HBA-10's window.** No clause text changes; this
+  fixes the referent of wording already stamped. See AR-HBA-15.
 - **Restored by AR-HBA-13 (agent ruling, not owner) — a RESTORATION, NOT A REVERSAL of AR-HBA-04.**
   Read this before concluding the later ruling overturned the earlier one: **it did not.** AR-HBA-04's
   debounced-clear case stands **exactly as written** and is limb 2 above. What AR-HBA-13 does is put
@@ -787,6 +804,114 @@ boundary from opposite sides; AR-HBA-07's re-raise is unaffected (limb 1 governs
 zero accumulator); and **AR-HBA-10 reinforces rather than conflicts** — the bounded post-power-cycle
 window is bounded by *the same threshold* limb 1 protects, since a power cycle returns the accumulator
 to zero and therefore starts a fresh "first episode".
+
+## Fifth round (2026-08-13) — rulings AR-HBA-14…16
+
+The re-decomposition landed at **27 assertions with ZERO re-hashes** — all 25 stamped texts
+byte-identical, so neither vector set dangles. AR-HBA-13 achieved that by **adding** a claim rather than
+moving one. **All three rulings below are likewise additive: no clause `Text` is touched.**
+
+Its structural finding, which justifies the second new assertion and is worth stating plainly:
+
+> *** An under-scaled preset asserts BOTH outputs early, and `008.A1`/`A2` stay TRUE — because the two
+> outputs still AGREE. A simultaneity claim is satisfied by a SYNCHRONISED ERROR. ***
+
+REQ-HBA-008's amendment (AR-HBA-12, extended by AR-HBA-13) is what made the inhibit half nameable at
+all.
+
+### AR-HBA-14 — a bare parameter phrase means the SPECIFIED value *(closes AMB-16)*
+
+**RULING:** one line in the Format section — wherever the register says "the persistence threshold",
+"the debounce time" or any equivalent bare phrase, it means **AR-HBA-03's specified value, never the
+value the block happens to hold.**
+
+**Reasoning.** AR-HBA-13 was **the only place the register said "specified"**. Twenty-two other
+assertions say *"the persistence threshold"* and nothing said whose. Read as the block's own preset,
+several are far weaker than they look — the enumerator notes that **`003.A1` would otherwise also have
+caught the under-scaled preset, post-clear**, and silently did not. One line **strengthens twenty-two
+assertions without moving a character**, so the cost is zero re-hashes.
+
+**The general form, recorded because it is now a repo-wide rule:** *** a requirement that references the
+implementation's own parameter is vacuous — the thing under test satisfies it by defining its own
+terms. *** This is the same defect as the narrowing repair (AR-HBA-13), arrived at from the other side:
+**a narrowing repair drops a claim while leaving it looking intact; a self-referential parameter keeps
+the claim and empties it.** Both are invisible to any check that reads the clause and asks only whether
+it still says something.
+
+**CHANGED:** Format section (one new bullet). **No clause text.**
+
+### AR-HBA-15 — "since the accumulator was last zero" is an INSTANT, not an event *(closes AMB-15)*
+
+**RULING:** it means **from the most recent instant at which the accumulator held zero, whatever put it
+there** — not from a zeroing *event*. **Limb 1 therefore DOES bite inside AR-HBA-10's window.**
+
+**The mechanism, stated because it is easy to get exactly backwards.** AR-HBA-10's sequence is: power
+cycle (accumulator → zero) *then* `FaultReset`. Read as a zeroing **event**, the reset falls *after* the
+event and limb 1's "no `FaultReset` since…" would be violated, so limb 1 would not apply. Read as an
+**instant**, the accumulator **goes on holding zero through the reset** — nothing has made it accrue yet
+— so the most recent zero-holding instant is **after** the reset, the precondition is satisfied, and
+limb 1 applies to the accrual that follows.
+
+**Why that reading.** After a power cycle the accumulator accrues from zero, and that **is** a first
+uninterrupted episode by any ordinary reading. The alternative leaves an under-scaled preset invisible
+in **exactly the post-power-cycle case** — the one AR-HBA-10 itself identified as risky — reopening the
+hole AR-HBA-13 closed, one scenario over. It also matters that **`007.A5` is a `WITHIN` bound, i.e. an
+upper limit, which a SHORT preset satisfies more easily rather than less**; nothing else there supplies
+a lower bound, so without limb 1 biting, that window has no floor at all.
+
+**Keeps the count at 27.** The alternative reading needs two further assertions to cover what limb 1
+would then fail to reach.
+
+**CHANGED:** REQ-HBA-002 Notes (definition). **No clause text.**
+
+### AR-HBA-16 — title-vs-assertion is a REPORTED SIGNAL ONLY *(closes AMB-17)*
+
+**RULING:** adopt "a clause title that none of its assertions supports" as a **reported signal only**. It
+is **flagged for a human to look at**. It is **never** a source of an assertion and **never** closes a
+gap by itself.
+
+**The enumerator was right to refuse it, and that refusal is upheld, not overridden.** It observed that
+such a title is a cheap smell test — **this register had one for four rounds** (REQ-HBA-002, "No alarm
+below threshold", whose content AR-HBA-04 had narrowed away) — and declined to adopt it as a rule,
+because **deriving assertions from titles stops the denominator being spec-derived.** That is correct:
+a title is a label an author chose, not a requirement anyone stated, and an enumeration that reads
+titles is reading the author's filing rather than the specification.
+
+> 🔴 **To any future enumerator: this is NOT licence.** You may **report** that a clause's title has no
+> supporting assertion. You may **not** write an assertion to make a title true, treat a title as
+> evidence that a claim exists, or count a title toward coverage. If a title implies a claim the clause
+> text does not make, **that is a finding to raise as a dispute** — exactly as the vector author did
+> with REQ-HBA-002 — and the repair is an amendment to the **clause text**, made by a ruling, never an
+> assertion invented to fit the heading.
+
+**CHANGED:** this entry only. **No clause text, no Format change.**
+
+### Combination re-read — four interactions, all closed here
+
+AR-HBA-14 touches every clause at once, which is the profile of an edit that interacts.
+
+1. 🔴 **AR-HBA-14 × AR-HBA-13 — a "tidying" trap, and the most likely future damage.** AR-HBA-13's limb 1
+   says "the **specified** one" explicitly. After AR-HBA-14 that word is *redundant*. **It must NOT be
+   removed.** Deleting it would move stamped text and dangle both vector sets' citations, to buy
+   nothing. **Redundancy here is deliberate and load-bearing; do not tidy it.**
+2. **AR-HBA-14 × AR-HBA-03's bounds table.** The table's "Where it lives at runtime" column says "FB's
+   own `TIME` tunable", which could be misread as making the block authoritative. It is not: that column
+   says where the specified value is **installed**, not where it is **defined**. **If the block's
+   tunable disagrees with the table, the table wins and the block is wrong** — which is precisely what
+   D7's read-back checked.
+3. **AR-HBA-15 × REQ-HBA-003.** A debounced clear also puts the accumulator at zero, so limb 1 restarts
+   after every clear, not only on the very first episode ever. **That is complementary to limb 2, not in
+   conflict with it:** limb 2 governs the episode *ending* in a clear, limb 1 governs the fresh accrual
+   *following* it. No new assertions — limb 1's existing text is already generic over "the accumulator
+   was last zero".
+4. **AR-HBA-15 × AR-HBA-05.** Because a `FaultReset` does **not** zero the accumulator (AR-HBA-05), a
+   reset *mid-episode* does break limb 1's precondition and limb 1 steps aside. **That leaves no hole:**
+   AR-HBA-07 governs that case, keying the re-raise on the accumulator alone.
+
+**Checked and found clean:** AR-HBA-14 strengthens rather than alters AR-HBA-03 (it pins the *referent*
+of an arrangement that was already "value beside, quantity in the text"); AR-HBA-16 adds no assertion and
+so cannot move a count; and none of the three rulings touches a clause `Text`, so the 25 stamped
+assertion texts remain byte-identical and **neither vector set dangles.**
 
 ## Pre-stamp consistency pass (2026-08-13)
 
