@@ -1886,6 +1886,61 @@ or `RTT`.** The lane chose no timing constant at all, so nothing built needs rev
 consumed by DB-13's slot colouring, which is 6.1 and not yet written — **the correction lands before
 the code that would have used it**, which is the whole point of retiring assumptions in phase order.
 
+### ✅ 5.1 DRAFTED — the test-environment contract (2026-08-13, `adce070`)
+
+`docs/notes/test-environment-contract.md`. **Seven elements plus two guards, each carrying a column
+for WHAT ACTUALLY CHECKS IT** — since this project's thesis is that the mechanical floor survives an
+agent choosing not to look. It carries **no timing constants**; every figure cites §12a, on the stated
+grounds that *a contract with a stale constant is worse than one with a pointer*.
+
+  - **Mechanically checkable:** vector format · assertion ID drawn from the spec-derived enumeration ·
+    **observability, in full, and it REFUSES** · start-bool binding (one per slot, bound *by name*,
+    later-scan rule enforced against the **observed** counter) · blacklist add-only · *** AUTHORSHIP
+    (D6) — a match between vector author and block author is a REFUSAL, not a warning *** · model
+    fidelity (M4) as a set-difference.
+  - **Judgement:** that the cited clause is the right one · that the assertion is a faithful reading ·
+    that a settling condition really implies finality · whether over-blacklisting is happening
+    (**measurable, not preventable**).
+
+**Observability is a refusal built on "a poll IS one round trip"** — so there is no rate to turn up —
+and **latched is the preferred mode as the only one immune to the tail**, not merely the cheaper one.
+
+**Completion ≠ settling is written as *a confidently wrong verdict, not an error*,** and the checkable
+half is that *** A SETTLING CONDITION WHICH MERELY RE-CITES THE DONE-FLAG IS REFUSED. ***
+
+**`Basis` carries the autopsy as its reason:** a clause citation lets an ambiguous reading be reused
+silently, where naming the **assertion** forces two readings to produce two *visibly different*
+assertions instead of two greens.
+
+**Reading a result is a verdict table with a "does NOT mean" column**, and `Stale` gets its own
+section: *** A FROZEN MIRROR IS PERFECTLY SELF-CONSISTENT ***, so liveness must be established
+independently of content — stimulus check, counter advanced **by the expected amount** rather than
+merely moved, manifest presence.
+
+> #### 🚩 THE CENTRAL QUESTION OF A DESIGN-FOR-TESTABILITY DOCUMENT, AND THE DESIGN ANSWERS IT BOTH WAYS
+>
+> *** THERE IS NO ROUTE FROM "UNOBSERVABLE" BACK TO "TESTABLE". *** The observability declaration is
+> frozen and must precede the download, so a vector that cannot be observed is simply refused — and
+> the obvious remedy, **exposing the evidence as a block output**, collides head-on with **D13/§2.1**,
+> which place instrumentation in the copy layer and say `lad-coder` never writes observability code.
+>
+> **MAY AN AUTHOR CHANGE A BLOCK'S INTERFACE PURELY TO MAKE IT TESTABLE?** *** OWNER'S — it decides
+> whether design-for-testability is a real practice here or only a naming convention ***, and it
+> touches deliverable content rather than harness scaffolding, which is why it is not ours.
+
+  ➜ **Also needing confirmation:** "assertion" is **undefined in §2.6**, which predates D35/§7 — so an
+    author reading only §2.6 writes prose. The draft **requires an enumeration ID**, and that
+    requirement is new here rather than inherited.
+  ➜ **A scan count with no `comp` attached silently crosses the floor under compression.** Fix
+    proposed rather than assumed.
+  ➜ Minor: the copy layer's one-scan lag leaves an unspecified off-by-one for **stamped** assertions.
+
+**For the skill** (deliberately not written — skill frontmatter is strict YAML with two silent failure
+modes and deserves its own pass): §10 gives the gate-by-gate surface and two properties — *** EVERY
+GATE FAILS CLOSED WITH NO RELAXING FLAG *** (precedent: phase 2's `AddressesExamined`, a correct rule
+with nothing establishing it had run), **empty is not clean**, and **test it by mutation, not by
+example.**
+
 ## PHASE 5 — FIRST REAL VALUE
 
 **This is the milestone that matters. Everything before it is infrastructure.**
