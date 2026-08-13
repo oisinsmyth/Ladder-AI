@@ -317,7 +317,40 @@ phase 2 with the copy-layer generator.
 > > that, and a session that only records outcomes cannot tell a CPU that kept running from one that
 > > stopped and was recovered.
 > >
-> > #### THE GATEWAY EXISTS NOW — AND ITS OWN LEDGER SAYS IT HAS NEVER RUN
+> > #### ✅ REHEARSED 2026-08-13 — NOTHING ON THE WIRE, AND IT FOUND A FALSE GREEN
+> >
+> > The runbook's §4 rehearsal ran against `GenProject1`: **no download, no CPU stop, no import, no
+> > project modification.** Both approved binaries re-hashed byte-identical afterwards and Portal's
+> > end state matched its start. **Nothing hung.**
+> >
+> > | step | exit | time |
+> > |---|---|---|
+> > | `list` — **the first real attach, so the approval is now proven empirically** | 0 | **0.73 s** |
+> > | `download-plan --json` | 0 | 6.1 s |
+> > | the rehearsal, **argument vector accepted in full** | 0 | 19.2 s |
+> >
+> > *** IT REACHED THE DOWNLOAD'S OWN COMPILE — the one `--block`, device, `compile-all` and
+> > `sanity-check` measurably do NOT reach — AND IT PASSED: `errors=0`, all 21 blocks and 6 UDTs
+> > loaded, a real 65-file / 341 KB image. *** So the expensive failure mode is retired cheaply.
+> >
+> > 🔴 **AND THE DEFECT IT FOUND WOULD HAVE PRODUCED A CONFIDENT FALSE GREEN.** `Program.cs` asserts
+> > that *"an abort, a throw **and a folder run** produce no `DownloadResult` at all"*. **A folder run
+> > produces one.** So the report contradicts itself three ways: `transferVerdict` correctly says
+> > *"NOTHING WAS TRANSFERRED… BY CONSTRUCTION"*, while `loadManifest.verdict` says **`Transferred`**
+> > and the top-level verdict says **"YES — THE SOFTWARE WAS LOADED"**. Measured by feeding the real
+> > stdout to the parser: *** A GATEWAY HANDED THIS REPORT COMPUTES `Loaded = true` FOR A RUN THAT
+> > CONTACTED NO CONTROLLER. ***
+> >
+> > **The guard for it exists, names "a folder download" in its own message, and cannot fire** — and
+> > its test uses a **hand-authored fixture asserting the premise this run falsified.** Not reachable
+> > through the loop today only because the gateway never emits the flag: *** THE ONLY THING
+> > PREVENTING THE MISREAD IS THAT THE FLAG ISN'T EMITTED — THERE IS NO CHECK. ***
+> >
+> > ⚠️ **A NEW RIG PRECONDITION, AND NOBODY GUESSED AT IT:** *** NO ORDINARY PHYSICAL ETHERNET ADAPTER
+> > APPEARS AMONG THE THREE CONFIGURED PC INTERFACES *** — Hyper-V ×2, PLCSIM ×1, TAP-Windows ×2. **The
+> > route to the rig is not established**, and no download can succeed until it is.
+> >
+> > #### THE GATEWAY — AND ITS OWN LEDGER SAID IT HAD NEVER RUN
 > >
 > > `Harness.Device` stages IR → `to-xml` → `import-all` → `--set Standard` + `--expect` → `compile-all`
 > > → `sanity-check` → `download-probe` → recover the load manifest. **`Loaded` keys on the manifest
