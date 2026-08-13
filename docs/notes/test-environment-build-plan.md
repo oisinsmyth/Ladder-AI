@@ -2303,6 +2303,75 @@ GATE FAILS CLOSED WITH NO RELAXING FLAG *** (precedent: phase 2's `AddressesExam
 with nothing establishing it had run), **empty is not clean**, and **test it by mutation, not by
 example.**
 
+### 🔴🔴 THE 5.1 SKILL IS WRITTEN — AND ALMOST NOTHING IT GATES IS ACTUALLY CHECKED (2026-08-13, `e7f6e59`)
+
+`.claude/skills/design-for-testability/SKILL.md`. *** IT WAS DELIBERATELY GIVEN TO A LANE THAT DID NOT
+WRITE THE CONTRACT *** — a skill written by the contract's own author encodes the same reading twice
+and any ambiguity survives invisibly, which is the correlated-check failure this project was rebuilt
+around. **It worked: the findings below are ones the author could not have seen.**
+
+Gates, in submission order: **schema → authorship (D6) → basis → fidelity (M4) → observability →
+settling → start bool → blacklist → liveness (post-run)**, plus three judgement-only sub-gates. **Three
+outcomes per gate, never collapsed to two:** CHECKED · JUDGEMENT (labelled) · *** NOT CHECKED, WHICH
+FAILS CLOSED *** — the same three-way split as the morning's tag-table fix, and the skill names both
+that and `AddressesExamined` **so the failure is not re-created a third time.**
+
+> #### 🔴 WHICH GATES INVOKE A REAL TOOL: ALMOST NONE, AND THAT IS THE FINDING
+>
+>   - `Admissibility.Check` genuinely implements basis, fidelity, settling and authorship — **but it is
+>     a library method with no CLI**, called only by `ResultPackageBuilder`. *** A C# METHOD IS NOT A
+>     CHECK AN AUTHOR CAN RUN. ***
+>   - *** OBSERVABILITY — THE CONTRACT'S OWN "ONE WITH TEETH" — IS NOT IMPLEMENTED. ***
+>     `Admissibility.Check` takes **`bool observabilitySupported` as a CALLER-SUPPLIED PARAMETER.**
+>     *** THE CHECK IS AN ARGUMENT, NOT A COMPUTATION. ***
+>   - **The blacklist: the word appears nowhere in `src/harness`.** Schema and start bool have no
+>     verifier either.
+>   - **Liveness** (`StimulusCheck` / `ManifestPresence`) is real, but runs **inside the runner at
+>     result time, not at submission** — so it cannot refuse a vector before a wave is spent on it.
+>
+> *** SO NO SUBMISSION CAN BE CERTIFIED ADMISSIBLE FROM A COMMAND LINE TODAY *** — and the skill says
+> so rather than inviting self-certification. Its useful output is **the per-gate list naming the
+> missing verifier**, which is the harness lane's build list. **Step 0 is "verify the verifier"**: grep
+> for each named verifier and confirm a runnable command before calling anything CHECKED — *never
+> trust the skill's own table.*
+
+#### Ten places the contract left an implementer guessing. The two that would bite this week:
+
+  1. *** TWO INCOMPATIBLE VECTOR MODELS EXIST AND THE CONTRACT MATCHES NEITHER. ***
+     `Harness/TestVector.cs` has `Basis` as a **plain string**, `Observability` as
+     `{PersistentState, Transient, Coincidence}`, and `Steps`/`WaitScans` — with **no**
+     `Slot`/`Index`/`Author`/`StartBool`/`MaxDuration`/`Blacklist`/`CompressionFactor`, all of which
+     §2 specifies. Meanwhile `Admissibility.cs` uses the **contract's** two-part `Basis`. **Both shapes
+     are in the codebase.**
+  2. *** THE OBSERVABILITY VOCABULARY IS TWO DIFFERENT AXES AND NOTHING MAPS THEM. ***
+     `{Latched, Sampled, Stamped}` is *instrumentation applied*; `{PersistentState, Transient,
+     Coincidence}` is *signal nature*. **A schema gate written against §2 would reject every vector the
+     existing type can express.**
+
+Then: `Kills` is in the code and absent from §2 while §10 demands mutation testing; *** "AGENT
+IDENTITY" IS UNDEFINED — D6 is `StringComparison.Ordinal` on an unspecified string, so it is A GATE
+PASSED BY TYPING A DIFFERENT STRING ***; §4.3's "map's observability declarations" has no home; **the
+spec-derived assertion enumeration has no source file**, so §3's decorrelating argument currently rests
+on **citing into something unreadable**; "reject" versus "refuse" is used inconsistently; §10 implies
+short-circuit while the code reports every failure; and §9.1/§9.4 are open with gate-5 refusal being an
+**escalation, not a task**.
+
+#### The frontmatter was verified the only way that proves anything
+
+Quoted the `description`, **converted to CRLF first** — *the state git leaves it in, and the exact
+condition that makes an unquoted colon-space fatal* — then parsed with a real YAML parser: **681
+chars, ok**, and all 13 existing skill files still ok. *** THEN NEGATIVE-TESTED AGAINST THIS EXACT
+FILE, because a green from a check never shown to go red is not evidence: ***
+
+| mutation | result |
+|---|---|
+| unquoted `: ` | **PARSE FAIL** — *would not register at all* |
+| unquoted ` #` | *** TRUNCATED, 45 chars lost *** — trigger text gone, skill still lists and runs |
+| as committed | **681, ok** |
+
+  ➜ **Left for whoever lands a verifier:** the gate table's row and the `Bash(...)` entry in
+    `allowed-tools` **must change together**, or the skill names a command it cannot run.
+
 ## PHASE 5 — FIRST REAL VALUE
 
 **This is the milestone that matters. Everything before it is infrastructure.**
