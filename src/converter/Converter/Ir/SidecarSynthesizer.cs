@@ -627,7 +627,7 @@ public static class SidecarSynthesizer
     {
         // 🔴 THE COMPARISON'S OWN TYPE TYPES ITS LITERALS — fixed 2026-08-12.
         //
-        // SrcType is resolved FIRST and then handed to both operands as `constantTypeOverride`, so
+        // SrcType is resolved FIRST and then handed to both operands as their `portType`, so
         // a literal's `<ConstantType>` is the comparison's type rather than a guess from the
         // literal's own digits. FI-55 fixed the SrcType half of exactly this bug and left the
         // literal half: with registers declared `UInt` — the honest type for a Modbus holding
@@ -643,12 +643,12 @@ public static class SidecarSynthesizer
         // NOT a UInt fix. Nothing had hit this because the committed corpus contains ZERO
         // `UInt`/`Word` comparisons — and `Word`, `USInt`, `UDInt` and `SInt` are all equally
         // unexercised, so the rule is "the operation's type wins", the same rule MUL/ADD/CALC's own
-        // operands (constantTypeOverride: srcType) have always followed. Duration literals keep
+        // operands (portType: srcType) have always followed. Duration literals keep
         // their FI-54 carve-out inside ResolveOperand: they are TypedConstants with no
         // <ConstantType> at all, whatever type the surrounding operation has.
         var srcType = InferCompareSrcType(compare.Left, compare.Right, tagTypes);
-        var left = ResolveOperand(compare.Left, typedConstant: false, ref nextUid, accessEntries, constantEntries, localNames, constantTypeOverride: srcType);
-        var right = ResolveOperand(compare.Right, typedConstant: false, ref nextUid, accessEntries, constantEntries, localNames, constantTypeOverride: srcType);
+        var left = ResolveOperand(compare.Left, typedConstant: false, ref nextUid, accessEntries, constantEntries, localNames, portType: srcType);
+        var right = ResolveOperand(compare.Right, typedConstant: false, ref nextUid, accessEntries, constantEntries, localNames, portType: srcType);
         var comparePartUId = nextUid++;
         var outgoingWireUId = nextUid++;
 
@@ -742,9 +742,17 @@ public static class SidecarSynthesizer
     // it — Int for in-range values, widening to DInt/UDInt/... for larger ones, InferLiteralConstantType)
     // — correct for Step numbers, counter increments, the x1000.0 HMI-seconds scale factor, and a
     // UDInt rollover constant alike; still a magnitude heuristic, not symbol-table type inference.
+    //
+    // 🔴 `portType` IS REQUIRED — NO DEFAULT, DELIBERATELY (2026-08-13). It is the declared type of
+    // the PORT this operand feeds, and it is what types a literal. It used to be
+    // `constantTypeOverride = null`, and an optional parameter is an invitation: SIX call sites
+    // never passed it, including the CALL-argument site where the callee's own parameter type was
+    // already resolved ON THE VERY NEXT LINE. Removing the default is the fix — a new operand site
+    // now cannot silently fall back to magnitude, it must state its port type or pass null and say
+    // why. Fixing the six sites alone would have left the seventh to be written next year.
     private static OperandSidecar ResolveOperand(
         Expr expr, bool typedConstant, ref int nextUid, List<SidecarAccessEntry> accessEntries,
-        List<SidecarConstantEntry> constantEntries, IReadOnlySet<string> localNames, string? constantTypeOverride = null)
+        List<SidecarConstantEntry> constantEntries, IReadOnlySet<string> localNames, string? portType)
     {
         switch (expr)
         {
@@ -756,7 +764,7 @@ public static class SidecarSynthesizer
 
             case Expr.Literal literal:
                 var constantUId = nextUid++;
-                // constantTypeOverride carries the operation's own type where magnitude can't infer it
+                // portType carries the operation's own type where magnitude can't infer it
                 // (a WAND mask `16#89` is a Word, not the Int its digits suggest) — from the caller's
                 // resolved SrcType.
                 // FI-54 (2026-08-08). A DURATION LITERAL IS ALWAYS A TypedConstant, whatever
@@ -769,7 +777,7 @@ public static class SidecarSynthesizer
                 // anywhere but a TON's PT.
                 //
                 // Why the old rule produced it: `typedConstant` is passed true only at a TON's PT,
-                // so everywhere else the type came from `constantTypeOverride` (the operation's own
+                // so everywhere else the type came from `portType` (the operation's own
                 // resolved type). For a MOVE into a Time member that override is "Time", which is
                 // the one value that must never be written. The rule was keyed on POSITION when the
                 // thing that actually decides is the LITERAL'S OWN KIND.
@@ -777,9 +785,21 @@ public static class SidecarSynthesizer
                 // The accepted shape is confirmed against a real TIA export
                 // (`simatic-ml/reference/TimerSample.xml`): Scope="TypedConstant", a bare
                 // <ConstantValue>T#100MS</ConstantValue>, and NO <ConstantType> child at all.
+                //
+                // 🔴 THE PORT'S DECLARED TYPE TYPES THE LITERAL; MAGNITUDE IS ONLY THE FALLBACK, AND
+                // IT REFUSES RATHER THAN GUESSES (2026-08-13). See InferLiteralConstantType: a
+                // base-prefixed literal has NO magnitude-derivable type, because a bit string's
+                // width is a declaration choice its digits cannot express. `16#A93F2C71` used to be
+                // emitted as `Int` — 32 bits into a 16-bit type, so every real 32-bit build stamp
+                // failed to import, by construction.
                 var constantType = typedConstant || IsDurationLiteral(literal.Value)
                     ? null
-                    : (constantTypeOverride ?? InferLiteralConstantType(literal.Value));
+                    : (portType ?? InferLiteralConstantType(literal.Value) ?? throw new UnsupportedSynthesisConstructException(
+                        $"Cannot type the literal '{literal.Value}': it is a base-prefixed (bit-string) literal, whose "
+                        + "width is a declaration choice its digits cannot express, and the port it feeds has no "
+                        + "resolvable declared type. Declare the destination/parameter type (pass `--project <ir-dir>` "
+                        + "so it resolves), or write the value in decimal if it really is a plain number. Typing it by "
+                        + "magnitude is what emitted every hex literal as `Int`."));
                 constantEntries.Add(new SidecarConstantEntry(literal.Value, constantUId, constantType));
                 var literalWireUId = nextUid++;
                 return new OperandSidecar.LiteralOperand(constantUId, literalWireUId);
@@ -803,8 +823,40 @@ public static class SidecarSynthesizer
             || v.StartsWith("LTIME#", StringComparison.OrdinalIgnoreCase);
     }
 
-    private static string InferLiteralConstantType(string value) =>
-        value.Contains('.') ? "Real" : InferIntegerLiteralType(value);
+    // The FALLBACK, used only when the port has no declared type. Returns null for a literal whose
+    // type genuinely cannot be inferred from its own text, so the caller refuses instead of guessing.
+    //
+    // A BASE-PREFIXED LITERAL HAS NO MAGNITUDE-DERIVABLE TYPE. `16#89` is a `Word` in this corpus and
+    // `16#7F` could be `Byte`, `Word` or `DWord` — a bit string's WIDTH IS A DECLARATION CHOICE, and
+    // its digits cannot express it. The old code did not merely guess badly here, it never even
+    // reached the magnitude test: `long.TryParse("16#A93F2C71")` fails, so EVERY base-prefixed
+    // literal fell through to the `Int` default regardless of its value. A 32-bit build stamp was
+    // therefore 16 bits by construction and could not import. Widening the parse would not fix it —
+    // 2839872113 would then be typed `UDInt` into a `DWord` port, which TIA rejects by the same door.
+    //
+    // Note the `.` test below is deliberately reached only for non-base-prefixed values: `16#1.5`
+    // is not a Real, and a base prefix now short-circuits before that test can misread one.
+    private static string? InferLiteralConstantType(string value) =>
+        IsBasePrefixedLiteral(value) ? null
+        : value.Contains('.') ? "Real"
+        : InferIntegerLiteralType(value);
+
+    // Siemens' `<base>#<value>` notation, the same shape IrParser.ParseLeaf matches generically by
+    // base-number shape rather than hardcoding base 16 (S1 item 12) — so `2#1011` and `8#77` are
+    // covered, not just hex.
+    private static bool IsBasePrefixedLiteral(string value)
+    {
+        var hash = value.IndexOf('#');
+        if (hash <= 0 || hash == value.Length - 1)
+        {
+            return false;
+        }
+
+        // A duration literal is also `<something>#<value>`; it never reaches here (IsDurationLiteral
+        // short-circuits in ResolveOperand) but the digits-only test keeps this predicate honest on
+        // its own terms — `T#100MS`'s prefix is not a number.
+        return value[..hash].All(char.IsAsciiDigit);
+    }
 
     // Narrowest standard integer type that holds a non-decimal literal, defaulting to Int for
     // in-range values so existing Step/counter literals are unchanged; widens to DInt/UDInt/LInt/
@@ -853,7 +905,9 @@ public static class SidecarSynthesizer
         // shape for all three, plus the reset (R) operand a TONR carries and TON/TOF don't.
         var (chainRail, steps) = BuildChain(timer.In, sharedRailWireUId, ref nextUid, accessEntries, constantEntries, localNames, fanoutRegistry, tagTypes);
         var tonPartUId = nextUid++;
-        var preset = ResolveOperand(timer.Pt, typedConstant: true, ref nextUid, accessEntries, constantEntries, localNames);
+        // portType null and irrelevant: `typedConstant: true` means a PT literal is a TypedConstant
+        // with no <ConstantType> child at all, whatever type the port has (FI-54).
+        var preset = ResolveOperand(timer.Pt, typedConstant: true, ref nextUid, accessEntries, constantEntries, localNames, portType: null);
 
         // Not added to accessEntries: FlgNetBuilder.BuildTimer embeds InstanceUId/Scope/Path
         // directly into the TON Part's own <Instance> sub-element (a real, live-verified finding —
@@ -870,7 +924,9 @@ public static class SidecarSynthesizer
         // is outside the Parts flow-order constraint, so late minting is fine.
         var reset = timer.Reset is null
             ? null
-            : ResolveOperand(timer.Reset, typedConstant: false, ref nextUid, accessEntries, constantEntries, localNames);
+            // A TONR's R port is Bool; a literal there is `TRUE`/`FALSE`, which no numeric type
+            // describes, so the port type is stated as null rather than invented.
+            : ResolveOperand(timer.Reset, typedConstant: false, ref nextUid, accessEntries, constantEntries, localNames, portType: null);
 
         return new TimerBindingSidecar(
             tonPartUId,
@@ -908,7 +964,7 @@ public static class SidecarSynthesizer
         // export. A tag `IN` ignores the override; an unresolvable dest falls back to magnitude.
         var inOperand = ResolveOperand(
             move.In, typedConstant: false, ref nextUid, accessEntries, constantEntries, localNames,
-            constantTypeOverride: tagTypes.Resolve(move.DestTag));
+            portType: tagTypes.Resolve(move.DestTag));
 
         var destAccessUId = nextUid++;
         accessEntries.Add(new SidecarAccessEntry(move.DestTag, destAccessUId, ScopeFor(move.DestTag, localNames)));
@@ -979,7 +1035,7 @@ public static class SidecarSynthesizer
         {
             inputs.Add(ResolveOperand(
                 input, typedConstant: false, ref nextUid, accessEntries, constantEntries, localNames,
-                constantTypeOverride: operandType));
+                portType: operandType));
         }
 
         var destAccessUId = nextUid++;
@@ -1007,18 +1063,23 @@ public static class SidecarSynthesizer
     {
         var (_, enSidecar) = BuildEnSourceSidecar(convert.En, precedingEnoPartUId, sharedRailWireUId, ref nextUid, accessEntries, constantEntries, localNames, fanoutRegistry, tagTypes);
         var convertPartUId = nextUid++;
-        var inOperand = ResolveOperand(convert.In, typedConstant: false, ref nextUid, accessEntries, constantEntries, localNames);
-
-        var destAccessUId = nextUid++;
-        accessEntries.Add(new SidecarAccessEntry(convert.DestTag, destAccessUId, ScopeFor(convert.DestTag, localNames)));
-        var destWireUId = nextUid++;
 
         // Src/DestType are the operand tag types (sidecar-only, not in the readable text). Resolve
         // them from the tag-type registry; fall back to the Real→DInt HMI-seconds→ms idiom this build
         // was originally grounded on when a type is unknown (no --project types, or a literal input) —
         // strictly better than the old hardcode, never worse. A tag-typed IN/dest now types correctly.
+        //
+        // Hoisted above the operand (2026-08-13) so `srcType` — the CONVERT's own input port type —
+        // can type a literal IN. It was computed ten lines below the operand and never handed to it,
+        // so `CONVERT(IN := 16#FF)` emitted `ConstantType Int` against `SrcType Real`.
         var srcType = (convert.In is Expr.TagRef inTag ? tagTypes.Resolve(inTag.Path) : null) ?? "Real";
         var destType = tagTypes.Resolve(convert.DestTag) ?? "DInt";
+
+        var inOperand = ResolveOperand(convert.In, typedConstant: false, ref nextUid, accessEntries, constantEntries, localNames, portType: srcType);
+
+        var destAccessUId = nextUid++;
+        accessEntries.Add(new SidecarAccessEntry(convert.DestTag, destAccessUId, ScopeFor(convert.DestTag, localNames)));
+        var destWireUId = nextUid++;
 
         return new ConvertStatementSidecar(convertPartUId, enSidecar, inOperand, srcType, destType, destAccessUId, destWireUId);
     }
@@ -1033,8 +1094,11 @@ public static class SidecarSynthesizer
     {
         var (_, enSidecar) = BuildEnSourceSidecar(abs.En, precedingEnoPartUId: null, sharedRailWireUId, ref nextUid, accessEntries, constantEntries, localNames, fanoutRegistry, tagTypes);
         var absPartUId = nextUid++;
-        var inOperand = ResolveOperand(abs.In, typedConstant: false, ref nextUid, accessEntries, constantEntries, localNames);
+        // Type first, then the operand it types (2026-08-13). RequireOperandType already refuses a
+        // non-tag input, so no ABS literal reaches synthesis today and this changes no output — it
+        // stops the site being an omission that would bite the moment that guard is relaxed.
         var srcType = RequireOperandType(tagTypes, abs.In, "ABS");
+        var inOperand = ResolveOperand(abs.In, typedConstant: false, ref nextUid, accessEntries, constantEntries, localNames, portType: srcType);
 
         var destAccessUId = nextUid++;
         accessEntries.Add(new SidecarAccessEntry(abs.DestTag, destAccessUId, ScopeFor(abs.DestTag, localNames)));
@@ -1052,8 +1116,9 @@ public static class SidecarSynthesizer
     {
         var (_, enSidecar) = BuildEnSourceSidecar(swap.En, precedingEnoPartUId: null, sharedRailWireUId, ref nextUid, accessEntries, constantEntries, localNames, fanoutRegistry, tagTypes);
         var swapPartUId = nextUid++;
-        var inOperand = ResolveOperand(swap.In, typedConstant: false, ref nextUid, accessEntries, constantEntries, localNames);
+        // Type first, then the operand — same reasoning as ABS above.
         var srcType = RequireOperandType(tagTypes, swap.In, "SWAP");
+        var inOperand = ResolveOperand(swap.In, typedConstant: false, ref nextUid, accessEntries, constantEntries, localNames, portType: srcType);
 
         var destAccessUId = nextUid++;
         accessEntries.Add(new SidecarAccessEntry(swap.DestTag, destAccessUId, ScopeFor(swap.DestTag, localNames)));
@@ -1126,7 +1191,7 @@ public static class SidecarSynthesizer
         var inputs = new List<OperandSidecar>();
         foreach (var input in wordAnd.Inputs)
         {
-            inputs.Add(ResolveOperand(input, typedConstant: false, ref nextUid, accessEntries, constantEntries, localNames, constantTypeOverride: srcType));
+            inputs.Add(ResolveOperand(input, typedConstant: false, ref nextUid, accessEntries, constantEntries, localNames, portType: srcType));
         }
 
         var destAccessUId = nextUid++;
@@ -1150,7 +1215,7 @@ public static class SidecarSynthesizer
         var inputs = new List<OperandSidecar>();
         foreach (var input in calc.Inputs)
         {
-            inputs.Add(ResolveOperand(input, typedConstant: false, ref nextUid, accessEntries, constantEntries, localNames, constantTypeOverride: srcType));
+            inputs.Add(ResolveOperand(input, typedConstant: false, ref nextUid, accessEntries, constantEntries, localNames, portType: srcType));
         }
 
         var destAccessUId = nextUid++;
@@ -1169,10 +1234,11 @@ public static class SidecarSynthesizer
     {
         var (_, enSidecar) = BuildEnSourceSidecar(tsub.En, precedingEnoPartUId: null, sharedRailWireUId, ref nextUid, accessEntries, constantEntries, localNames, fanoutRegistry, tagTypes);
         var tsubPartUId = nextUid++;
-        var in1 = ResolveOperand(tsub.In1, typedConstant: false, ref nextUid, accessEntries, constantEntries, localNames);
-        var in2 = ResolveOperand(tsub.In2, typedConstant: false, ref nextUid, accessEntries, constantEntries, localNames);
+        // Types first, then the operands they type — same reasoning as ABS above.
         var dateType = RequireOperandType(tagTypes, tsub.In1, "T_SUB");
         var timeType = RequireOperandType(tagTypes, tsub.In2, "T_SUB");
+        var in1 = ResolveOperand(tsub.In1, typedConstant: false, ref nextUid, accessEntries, constantEntries, localNames, portType: dateType);
+        var in2 = ResolveOperand(tsub.In2, typedConstant: false, ref nextUid, accessEntries, constantEntries, localNames, portType: timeType);
 
         var destAccessUId = nextUid++;
         accessEntries.Add(new SidecarAccessEntry(tsub.DestTag, destAccessUId, ScopeFor(tsub.DestTag, localNames)));
@@ -1190,10 +1256,11 @@ public static class SidecarSynthesizer
     {
         var (_, enSidecar) = BuildEnSourceSidecar(tconv.En, precedingEnoPartUId, sharedRailWireUId, ref nextUid, accessEntries, constantEntries, localNames, fanoutRegistry, tagTypes);
         var tconvPartUId = nextUid++;
-        var inOperand = ResolveOperand(tconv.In, typedConstant: false, ref nextUid, accessEntries, constantEntries, localNames);
+        // Types first, then the operand — same reasoning as ABS above.
         var srcType = RequireOperandType(tagTypes, tconv.In, "T_CONV");
         var destType = tagTypes.Resolve(tconv.DestTag) ?? throw new UnsupportedSynthesisConstructException(
             $"T_CONV synthesis needs its dest '{tconv.DestTag}' type, which couldn't be resolved.");
+        var inOperand = ResolveOperand(tconv.In, typedConstant: false, ref nextUid, accessEntries, constantEntries, localNames, portType: srcType);
 
         var destAccessUId = nextUid++;
         accessEntries.Add(new SidecarAccessEntry(tconv.DestTag, destAccessUId, ScopeFor(tconv.DestTag, localNames)));
@@ -1210,10 +1277,17 @@ public static class SidecarSynthesizer
     {
         var (_, enSidecar) = BuildEnSourceSidecar(move.En, precedingEnoPartUId: null, sharedRailWireUId, ref nextUid, accessEntries, constantEntries, localNames);
         var partUId = nextUid++;
-        var src = ResolveOperand(move.Src, typedConstant: false, ref nextUid, accessEntries, constantEntries, localNames);
-        var count = ResolveOperand(move.Count, typedConstant: false, ref nextUid, accessEntries, constantEntries, localNames);
-        var srcIndex = ResolveOperand(move.SrcIndex, typedConstant: false, ref nextUid, accessEntries, constantEntries, localNames);
-        var destIndex = ResolveOperand(move.DestIndex, typedConstant: false, ref nextUid, accessEntries, constantEntries, localNames);
+        // portType null, stated rather than defaulted (2026-08-13) — and this is the one operand site
+        // the "type from the port" rule genuinely cannot cover. SRC is a `Variant` (it has no scalar
+        // type at all), and COUNT/SRC_INDEX/DEST_INDEX carry TIA's own fixed port types, which live
+        // in no registry this synthesizer can read and for which this project has no grounded export
+        // to read them off. So the magnitude fallback applies here — correct for the plain decimal
+        // counts and indices that are the only literals ever seen in these ports, and now a hard
+        // error rather than a silent `Int` if a base-prefixed literal ever appears in one.
+        var src = ResolveOperand(move.Src, typedConstant: false, ref nextUid, accessEntries, constantEntries, localNames, portType: null);
+        var count = ResolveOperand(move.Count, typedConstant: false, ref nextUid, accessEntries, constantEntries, localNames, portType: null);
+        var srcIndex = ResolveOperand(move.SrcIndex, typedConstant: false, ref nextUid, accessEntries, constantEntries, localNames, portType: null);
+        var destIndex = ResolveOperand(move.DestIndex, typedConstant: false, ref nextUid, accessEntries, constantEntries, localNames, portType: null);
 
         var retValAccessUId = nextUid++;
         accessEntries.Add(new SidecarAccessEntry(move.RetValTag, retValAccessUId, ScopeFor(move.RetValTag, localNames)));
@@ -1319,7 +1393,13 @@ public static class SidecarSynthesizer
                 case CallArgument.InputArg input:
                 {
                     var param = RequireParam(call.BlockName, input.ParamName, "Input", parms);
-                    var value = ResolveOperand(input.Value, typedConstant: false, ref nextUid, accessEntries, constantEntries, localNames);
+                    // 🔴 `param.Type` — the callee's own declared parameter type — is what types a
+                    // literal argument (2026-08-13). It was resolved here and used on the next line
+                    // for the sidecar's Type while the literal itself was typed by magnitude, so
+                    // `CALL FB_Reg(Stamp := 16#A93F2C71)` against `Stamp : DWord` emitted
+                    // `<ConstantType>Int</ConstantType>` and the block could not be imported. The
+                    // type was never missing; it was simply not passed one line up.
+                    var value = ResolveOperand(input.Value, typedConstant: false, ref nextUid, accessEntries, constantEntries, localNames, portType: param.Type);
                     arguments.Add(new CallArgumentSidecar.InputArgSidecar(input.ParamName, param.Type, value));
                     break;
                 }

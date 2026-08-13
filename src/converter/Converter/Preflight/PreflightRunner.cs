@@ -133,6 +133,11 @@ public static class PreflightRunner
             }
         }
 
+        // literal-fit (2026-08-13): a literal too wide for the member or parameter it is written
+        // into. `MOVE(IN := 70000) => <an Int member>` passed pre-flight CLEAN before this, and TIA
+        // rejects it — see LiteralFitCheck for why the check lives here and not in `converter review`.
+        findings.AddRange(LiteralFitCheck.Check(block, tagTypes, callees));
+
         // Locals: the block's own declared names resolve internally, everything else must
         // resolve in the project/batch index — the pipeline's `exists`/`proposed` line.
         var locals = new HashSet<string>(StringComparer.Ordinal);

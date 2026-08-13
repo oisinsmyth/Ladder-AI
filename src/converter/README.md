@@ -2652,6 +2652,85 @@ DB RealDbName
 FI-56, asserted the collapse after it, and now asserts the expansion is kept. 1010 converter tests
 green (up from 996), golden harness green at 46.
 
+## A literal is typed by the port it feeds, not by its own magnitude (2026-08-13)
+
+Found on the rig. *** The converter emitted `<ConstantType>Int</ConstantType>` for EVERY hex literal,
+regardless of magnitude or of the destination's type *** — so a 32-bit build stamp was 16 bits **by
+construction** and every real stamp failed to import, including the worked example `16#A93F2C71`.
+
+**Second instance of one class, so the narrow fix was replaced rather than duplicated.** The 2026-08-12
+fix was *"a comparison's literal is typed by the comparison's own type, not by magnitude"*. This is the
+same bug one site along. The general rule is therefore:
+
+> **A literal's `ConstantType` is the declared type of the PORT it is written into. Magnitude is only
+> the fallback where no declared type exists — and that fallback refuses rather than guesses.**
+
+**Two independent causes, both closed.**
+
+1. **The magnitude path never ran for a base-prefixed literal.** `long.TryParse("16#A93F2C71")` fails,
+   so every `16#`/`2#`/`8#` literal fell straight through to the `Int` default — not a bad guess, no
+   guess at all. **Widening the parse would not have fixed it:** 2,839,872,113 would then be typed
+   `UDInt` into a `DWord` port, which TIA rejects by the same door. A bit string's **width is a
+   declaration choice its digits cannot express**, so `InferLiteralConstantType` now returns *null* for
+   a base-prefixed literal and the caller **hard-errors** naming the literal and the fix. (Precedent:
+   FI-71 refusing to emit XML with unresolved member types.)
+2. **Six operand sites never passed the port type at all** — including the CALL-argument site, where
+   the callee's own `param.Type` was resolved **on the very next line** and used for the sidecar's
+   `Type` while the literal beside it was typed by magnitude. Measured:
+   `CALL FB_Reg(Stamp := 16#A93F2C71)` against `Stamp : DWord` emitted `Int`.
+
+**The structural half of the fix, which is the part that stops a third instance:** `ResolveOperand`'s
+`constantTypeOverride = null` became a **required** parameter, `portType`. An optional parameter is an
+invitation, and six sites accepted it. A new operand site now cannot silently fall back to magnitude —
+it must state its port type, or pass `null` and say why. Fixing six omissions would have left the
+seventh to be written next year.
+
+Sites and what types them now: CALL arg → the callee's `param.Type`; MOVE → the destination tag's
+type; comparison → the compare's `SrcType`; WAND/CALC/MUL/ADD → the box's operation type;
+CONVERT/ABS/SWAP/T_SUB/T_CONV → the box's own `SrcType` (these already refuse a non-tag operand, so
+they emit nothing different today — they stop being an omission waiting for that guard to relax). The
+one site the rule genuinely cannot cover is **MOVE_BLK_VARIANT**, stated rather than defaulted: `SRC`
+is a `Variant` with no scalar type, and `COUNT`/`SRC_INDEX`/`DEST_INDEX` carry TIA port types that live
+in no registry here and that this project has no grounded export to read off.
+
+**`literal-fit` — the mechanical floor's missing check.** Asked which `converter review` rule should
+have caught this, the honest answer is **none**: `docs/06-lad-conventions.md` has no rule about a
+literal fitting its destination type, so no review rule failed — there was never one to fail, and
+inventing a C-nnn from the tooling side is not this component's call. Pre-flight's stated job *is* the
+known, recurring import/compile error classes, and this is one — measured, `MOVE(IN := 70000)` into an
+`Int` member was reported **CLEAN** by pre-flight and is rejected by TIA. The new check flags a plain
+decimal outside the destination's declared range, and a base-prefixed literal wider than the
+destination's **bit width** (`16#A93F2C71` needs 32, `Int` holds 16 — wrong under any reading). It is
+deliberately *not* a signed-range test on bit-string literals: whether TIA reinterprets `16#FFFF` as a
+two's-complement `Int` is a question with no grounded answer here, and a check that guessed at it would
+be one people learn to ignore. Zero findings across the whole 26-file `ir/test-project001` corpus.
+
+### *** THE PROOF THAT SHOULD HAVE CAUGHT IT COULD NOT, AND WHY ***
+
+The phase-2 lane verified its generated IR survives `to-xml` → `to-ir --no-sidecar` **byte-identically**,
+and that proof passed — **because the wrong type round-trips faithfully.** All 1069 existing tests were
+green on this too. *** A round-trip check is blind to any error the round trip preserves *** — the same
+shape as the Normalizer being blind in exactly the way the converter was wrong. Every assertion in
+`LiteralDestinationTypeSynthesisTests` is therefore against the **emitted type**, never a round trip.
+
+Audited across the toolchain, and **measured, not assumed**:
+
+| proof | blind to a *consistent* converter error? |
+|---|---|
+| `to-xml` → `to-ir --no-sidecar` byte-identical (`IrSelfStabilityTests`, `NoSidecarEquivalenceTests`) | **YES.** Both halves are converter code; a shared assumption cancels. This is the proof that passed. |
+| `converter diff`, `ir-hash` | **YES**, structurally — `ConstantType` is sidecar, not readable IR. Fine for network invariance; proves nothing about emitted types. |
+| `converter drift-check` | **Per file.** Not blind against a genuine TIA export; blind against a corpus entry the converter itself produced. |
+| `converter compare` + `tools/confirm-roundtrip.ps1` | **NO — this would have caught it.** Verified live: two exports differing only in `ConstantType` return `VALUE-DIFFERS … first: DWord / second: Int` with the path. TIA's own export is on both ends. |
+| golden harness `Normalizer.AreSemanticallyEquivalent` vs a real TIA export | **NO** — `ConstantType` is not on any ignore list (checked, then measured as above). |
+
+The rule worth keeping: **a proof is only as strong as the most independent authority in its loop, and
+the converter round trip has none.**
+
+55 new tests (`LiteralDestinationTypeSynthesisTests`, `LiteralFitCheckTests`); **1124 green, up from
+1069**. Negative-tested by reverting the two fix points: **11 went red**, and the four "not a blanket
+widening" cases stayed green in both states, which is what distinguishes this fix from simply widening
+everything.
+
 ## `review` — the tag table was never reviewed, and the report said "not applicable" (2026-08-13)
 
 `converter review` run against a **tag table** exited 0 while all 18 mechanized rules reported
