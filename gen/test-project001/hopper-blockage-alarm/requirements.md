@@ -163,7 +163,8 @@ decision and is **proposed** until then — see RFI-Q-HBA-03.
   alone** — at or past the threshold means **the alarm re-raises**, *whether or not the plant is
   running* (AR-HBA-07). A reset therefore cannot hold a live fault off, and holding `FaultReset` on
   continuously cannot pin the alarm off.
-  **What is observable after the reset, by case (AR-HBA-08):**
+  **What is observable after the reset, by case (AR-HBA-08)** — and this split applies to
+  **both outputs** identically, `HopperBlockedInhibit` tracking `HopperBlockedAlarm` per REQ-HBA-008:
   - **The condition still holds** (accumulated time still at or past the threshold) — the alarm is
     **true** when next observed. Whether it went momentarily false in between is **DON'T-CARE**: the
     re-raise is immediate, so any drop is a sub-scan transient of no operational consequence, and
@@ -182,8 +183,10 @@ decision and is **proposed** until then — see RFI-Q-HBA-03.
 - **Determined by AR-HBA-05 (agent ruling, not owner)** on three points the request left silent:
   - **Edge, not level.** The reset acts on the rising edge of `FaultReset`. A held-on reset does not
     keep the alarm cleared.
-  - **Raise-dominant.** If a reset and a satisfied raise condition coincide in the same evaluation,
-    the raise wins and the alarm ends that evaluation asserted.
+  - **Raise-dominant.** A reset coincident with the threshold crossing **does not consume that
+    crossing**: the alarm **is asserted when next observed**, rather than the crossing being swallowed
+    and the alarm failing to return. *(Reworded by AR-HBA-11 — this previously claimed the alarm "ends
+    that evaluation asserted", a same-scan sequencing claim no assertion can falsify.)*
   - **The accumulated persistence time is untouched by reset** — it is neither zeroed nor frozen.
     Consequence, stated so it is testable: resetting while the hopper is still high and the plant
     still running produces an alarm that re-raises essentially at once, **not** one that re-arms
@@ -240,6 +243,25 @@ decision and is **proposed** until then — see RFI-Q-HBA-03.
   revision it proposed was already present in this clause's Text. That was a contradiction about
   *whether a signed REQ had changed*, not about behaviour. NEW-HBA-04 is now RESOLVED; this clause's
   Text is unchanged by that closure.
+
+### Output pairing
+
+### REQ-HBA-008 — The inhibit output tracks the alarm output
+- **Text:** `HopperBlockedInhibit` **tracks `HopperBlockedAlarm` at all times** — it asserts when the
+  alarm asserts, stays asserted while the alarm is latched, de-asserts when the alarm is cleared by
+  `FaultReset`, and re-asserts whenever the alarm re-raises. This holds at **every** transition the
+  register describes: raise (REQ-HBA-001), latch (REQ-HBA-004, REQ-HBA-006), reset and re-raise
+  (REQ-HBA-005, AR-HBA-07), power-cycle survival and the bounded post-power-cycle window
+  (REQ-HBA-007, AR-HBA-10). There is no state in which one output is asserted and the other is not.
+  **Observability follows the alarm's, identically** — AR-HBA-08's by-case split applies to this output
+  in the same terms: a momentary drop is DON'T-CARE while the condition holds, an observable and
+  persistent false is REQUIRED once it has cleared.
+- **Class:** alarm
+- **Source:** Q-HBA-05, which names the two outputs as a **pair**; tracking is what makes them a pair.
+  Clause **added by AR-HBA-12 (agent ruling, not owner)** — see AR-HBA-12.
+- **Notes:** "Tracks" is about **value**, not about wiring. The two remain distinct interface members so
+  integration can route the alarm to annunciation and the demand to the stop independently (Q-HBA-05);
+  this clause constrains what they read, not how they are consumed.
 
 ## Open questions (RFIs)
 
@@ -405,8 +427,9 @@ rather than annotated.
 
 **RULING:** on a rising edge of `FaultReset` the alarm latch is cleared and then **re-evaluated**; if
 the blockage condition still holds the alarm **re-raises**. `FaultReset` is **edge-triggered**. A
-coincident reset and raise resolve **raise-dominant**. The **accumulated persistence time is untouched
-by reset** — neither zeroed nor frozen.
+coincident reset and raise resolve **raise-dominant** — meaning, in observable terms, that the reset
+**does not consume the threshold crossing** (reworded by AR-HBA-11). The **accumulated persistence time
+is untouched by reset** — neither zeroed nor frozen.
 
 **Reasoning.** AMB-01 and AMB-02 are one question, because the edge/level and dominance choices are
 exactly what decides whether a reset can suppress a live fault.
@@ -417,8 +440,9 @@ exactly what decides whether a reset can suppress a live fault.
   the safe direction.
 - *Edge, not level.* Under a level-sensitive reset a stuck-on or wired-on `FaultReset` pins the alarm
   off permanently and silently. An edge cannot do that.
-- *Raise-dominant.* The same argument at one-scan resolution: set-dominance is what makes "a reset
-  cannot suppress a live fault" true in the coincident case too.
+- *Raise-dominant.* The same argument in the coincident case: a reset arriving exactly as the threshold
+  is crossed must not swallow that crossing, or "a reset cannot suppress a live fault" fails at the one
+  moment it matters most. **Stated as an observable** (AR-HBA-11), not as same-scan sequencing.
 - *Accumulator untouched — and this is the point of consistency with AR-HBA-06.* The accumulator's
   discipline is **evidence about the hopper**: it accrues on high-and-running, freezes when running is
   lost, and is discarded on positive evidence that the hopper cleared. `FaultReset` is an operator
@@ -606,6 +630,78 @@ time retentive, this ruling must be revisited.
 to name the power-cycle route).
 
 ---
+
+## Third round (2026-08-13) — rulings AR-HBA-11…12
+
+The re-decomposition returned **23 assertions** (from 13 at first enumeration) and found a **third**
+combination-only collision. Same treatment: agent rulings, not the owner's.
+
+### AR-HBA-11 — AR-HBA-05's same-evaluation claim is reworded as an observable *(closes AMB-12)*
+
+**RULING:** amend AR-HBA-05's sentence to state what `005.A5` already asserts. **Do NOT scope
+AR-HBA-08.** Zero re-hashes.
+
+**The collision.** AR-HBA-05 said the alarm *"ends **that evaluation** asserted"*; AR-HBA-08 rules the
+momentary drop DON'T-CARE. Since an assertion must be falsifiable, **no assertion can carry AR-HBA-05's
+literal same-evaluation claim** — leaving an unretracted second source stating a requirement the
+enumeration cannot cover. Each ruling reads correctly alone; the collision exists only combined.
+
+**Reasoning:**
+
+1. **It was an implementation detail phrased as a requirement.** "Ends that evaluation asserted" is a
+   claim about **internal same-scan sequencing**. Its **operational** content is carried in full by
+   `005.A5` — *a reset coincident with the threshold crossing does not consume it, and the alarm
+   returns* — which is falsifiable, observable as ordinary persistent state, and is the thing anyone
+   actually cares about.
+2. **The alternative buys a `Coincidence` sibling** — an assertion requiring **the program to record
+   scan numbers** — in order to test a consequence that is **already covered**.
+3. 🔴 **And it would rest on an OPEN owner question.** Whether an author may *create* an observable
+   value rather than surface an existing one is §2.6's unresolved item. ***Never take a spec decision
+   that depends on an unresolved question when an equivalent decision does not.*** **That is the
+   deciding argument** — not the cheaper diff, which merely agrees with it.
+
+**CHANGED:** AR-HBA-05 RULING line + its raise-dominance reasoning bullet, REQ-HBA-005 Notes
+(raise-dominant bullet).
+
+### AR-HBA-12 — the inhibit output tracks the alarm at all times *(closes AMB-13)*
+
+**RULING:** `HopperBlockedInhibit` **tracks `HopperBlockedAlarm` at all times** — raise, latch, reset
+and re-raise. Stated as a **general clause (REQ-HBA-008)**, deliberately **not** as a special case
+inside AR-HBA-10.
+
+**Reasoning.** AR-HBA-10's bounded window releases **both** outputs, but only the alarm's return was
+assertable — and the stop demand is **the operationally important half**, since it is the one that lets
+the plant run on a blocked hopper. The enumerator was right to refuse to invent it. Q-HBA-05 names the
+two as a **pair**, and *tracking is what makes them a pair*.
+
+**Why general rather than case-specific.** An AR-HBA-10-only clause would leave the identical silence at
+**every other transition** — raise, latch, hopper-clear-while-latched, ordinary reset. One general
+statement makes AR-HBA-10's case fall out with no special-casing, and closes the rest at the same time.
+The denominator is expected to reach **24**; that is the point of the ruling, not a cost of it.
+
+**CHANGED:** new clause REQ-HBA-008; REQ-HBA-005 Text (AR-HBA-08's split marked as covering both
+outputs).
+
+### Fourth-collision re-read — one found, and closed here
+
+Re-read after drafting both rulings, on the standing evidence that every previous round produced a
+collision visible only once rulings were combined.
+
+**Found: AR-HBA-12 × AR-HBA-08.** AR-HBA-08's by-case observability split is worded entirely about *the
+alarm*. Once REQ-HBA-008 makes the inhibit track the alarm **at all times**, that tracking necessarily
+includes the momentary drop AR-HBA-08 rules DON'T-CARE — so a vector asserting on the **inhibit's**
+transient would have sat in exactly the untestable position AR-HBA-08 was written to remove, one output
+over. AR-HBA-12 would have **propagated the AMB-09 problem to the second output** while appearing to
+close a gap.
+
+**Closed in place**, not filed: the split is now stated as applying to **both outputs identically**, in
+REQ-HBA-005's Text and again in REQ-HBA-008's Text.
+
+**Also checked and found clean:** that "tracks" is not read as "is the same bit" (REQ-HBA-008's Notes
+keep the two distinct interface members, since Q-HBA-05 requires independent routing); that tracking
+does not disturb REQ-HBA-006 (hopper clearing drops the accumulator, not the latch — so neither output
+moves); and that AR-HBA-11's rewording leaves nothing else in the register depending on same-scan
+sequencing.
 
 ## Pre-stamp consistency pass (2026-08-13)
 
