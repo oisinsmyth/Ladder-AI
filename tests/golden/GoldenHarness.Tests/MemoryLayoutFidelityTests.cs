@@ -35,23 +35,8 @@ public class MemoryLayoutFidelityTests
     /// they declare no layout either, and "declares none, still declares none afterwards" is a real
     /// assertion: inventing a layout where TIA stated none is the same defect pointing the other way.
     /// </summary>
-    private static IEnumerable<(string Name, string ExportPath, string IrDir)> Exports()
-    {
-        var repo = ToolPaths.RepoRoot();
-        foreach (var project in new[] { "reference", "test-project001" })
-        {
-            var xmlDir = Path.Combine(repo, "simatic-ml", project);
-            if (!Directory.Exists(xmlDir))
-            {
-                continue;
-            }
-
-            foreach (var xmlPath in Directory.EnumerateFiles(xmlDir, "*.xml").OrderBy(p => p, StringComparer.Ordinal))
-            {
-                yield return (Path.GetFileNameWithoutExtension(xmlPath), xmlPath, Path.Combine(repo, "ir", project));
-            }
-        }
-    }
+    private static IEnumerable<(string Name, string ExportPath, string IrDir)> Exports() =>
+        ExportRoundTripRunner.CommittedExports();
 
     public static IEnumerable<object[]> AllExports() =>
         Exports().Select(e => new object[] { e.Name, e.ExportPath, e.IrDir });
@@ -63,45 +48,8 @@ public class MemoryLayoutFidelityTests
             .Select(e => e.Value.Trim())
             .ToList();
 
-    /// <summary>
-    /// export → <c>to-ir</c> → <c>to-xml</c>, into a scratch dir. <c>--out</c> is not optional: the
-    /// default is beside-the-input, which would write over the committed corpus (FI-72).
-    /// Every failure is a FAILURE, never a skip — a round trip that produced no file must not read as
-    /// a block whose layout was preserved.
-    /// </summary>
-    private static XDocument RoundTrip(string name, string exportPath, string irDir)
-    {
-        var workDir = Path.Combine(Path.GetTempPath(), "memory-layout-fidelity", name);
-        if (Directory.Exists(workDir))
-        {
-            Directory.Delete(workDir, recursive: true);
-        }
-
-        var scratchIr = Path.Combine(workDir, "ir");
-        var scratchXml = Path.Combine(workDir, "xml");
-        Directory.CreateDirectory(scratchIr);
-        Directory.CreateDirectory(scratchXml);
-
-        var toIr = ProcessRunner.Run(ToolPaths.ConverterExe, "to-ir", exportPath, "--out", scratchIr);
-        Assert.True(toIr.ExitCode == 0, $"{name}: to-ir failed (exit {toIr.ExitCode}) — {toIr.StdErr}{toIr.StdOut}");
-
-        var irPath = Path.Combine(scratchIr, name + ".ir");
-        Assert.True(File.Exists(irPath),
-            $"{name}: to-ir reported success but wrote no {irPath}. Empty is not clean.");
-
-        // No --synthesize: `to-ir` wrote a real sidecar, and the converter refuses to derive over one.
-        // The sidecar path is the right one for this question anyway — MemoryLayout is a block-level
-        // attribute, not network wiring, so it must survive whether or not the sidecar is re-derived.
-        var toXml = ProcessRunner.Run(
-            ToolPaths.ConverterExe, "to-xml", irPath, "--project", irDir, "--out", scratchXml);
-        Assert.True(toXml.ExitCode == 0, $"{name}: to-xml failed (exit {toXml.ExitCode}) — {toXml.StdErr}{toXml.StdOut}");
-
-        var xmlPath = Path.Combine(scratchXml, name + ".xml");
-        Assert.True(File.Exists(xmlPath),
-            $"{name}: to-xml reported success but wrote no {xmlPath}. Empty is not clean.");
-
-        return XDocument.Load(xmlPath);
-    }
+    private static XDocument RoundTrip(string name, string exportPath, string irDir) =>
+        ExportRoundTripRunner.Run("memory-layout-fidelity", name, exportPath, irDir);
 
     [Theory]
     [MemberData(nameof(AllExports))]

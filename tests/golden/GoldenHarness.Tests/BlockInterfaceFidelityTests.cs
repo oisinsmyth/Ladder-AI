@@ -45,6 +45,10 @@ namespace GoldenHarness;
 /// </summary>
 public class BlockInterfaceFidelityTests
 {
+    private readonly Xunit.Abstractions.ITestOutputHelper _output;
+
+    public BlockInterfaceFidelityTests(Xunit.Abstractions.ITestOutputHelper output) => _output = output;
+
     /// <summary>
     /// Blocks whose regenerated Interface does NOT match its committed export today, each with the
     /// reason. Asserted in BOTH directions: a block not listed here must match, and a block listed
@@ -238,16 +242,19 @@ public class BlockInterfaceFidelityTests
     }
 
     /// <summary>
-    /// THE MEASUREMENT, PINNED — the reason this file compares raw instead of asking the Normalizer.
+    /// THE MEASUREMENT — the reason this file compares raw instead of asking the Normalizer.
     ///
     /// Real corpus content, one attribute changed: <c>ScaleValue</c>'s <c>ScaleFactor</c> parameter
     /// retyped <c>Real</c> → <c>Int</c>. That changes what the block IS; TIA compiles it differently
     /// and the FlgNet is untouched, so no wiring comparison can see it either.
     ///
-    /// The first assertion records that <see cref="Normalizer.AreSemanticallyEquivalent"/> calls the
-    /// two documents equal. *** IT IS A PIN, NOT AN ENDORSEMENT. *** If you have just fixed
-    /// <c>Normalizer.IsVolatile</c>, this assertion is SUPPOSED to go red: delete it and leave the
-    /// second one, which is this suite's own guard and must hold either way.
+    /// <para>DELIBERATELY ASSERTS NOTHING ABOUT THE NORMALIZER'S VERDICT. It returned <c>true</c> here
+    /// when this file was written (2026-08-13) — a code block's whole Interface was discarded — and the
+    /// converter lane closed that the same day. The point of a raw guard is that it holds under BOTH
+    /// contracts and does not have to be rewritten when the instrument changes, so the Normalizer's
+    /// answer is REPORTED and not asserted. What is asserted is the thing this suite owns: that the raw
+    /// comparison sees the retype. That assertion has been shown to go red (negative-tested by
+    /// neutering the canonicalizer).</para>
     /// </summary>
     [Fact]
     public void RawComparison_SeesAnFcParameterRetype_WhereTheNormalizerDoesNot()
@@ -266,10 +273,11 @@ public class BlockInterfaceFidelityTests
         Assert.Equal("Real", (string?)member!.Attribute("Datatype"));
         member.SetAttributeValue("Datatype", "Int");
 
-        Assert.True(Normalizer.AreSemanticallyEquivalent(real, mutated),
-            "PIN, NOT AN ENDORSEMENT (see this test's summary): the Normalizer used to call these equal " +
-            "because it discards a code block's whole Interface. If you have just fixed that, delete this " +
-            "assertion — the raw check below is the one that has to keep holding.");
+        _output.WriteLine(
+            "Normalizer.AreSemanticallyEquivalent on an FC parameter retyped Real -> Int: " +
+            $"{Normalizer.AreSemanticallyEquivalent(real, mutated)} " +
+            "(true = the Interface is being discarded, which is what this file was built for; " +
+            "false = the converter lane's IsVolatile fix is in effect. Reported, not asserted.)");
 
         Assert.False(
             string.Equals(CanonicalInterface(real), CanonicalInterface(mutated), StringComparison.Ordinal),
@@ -280,7 +288,8 @@ public class BlockInterfaceFidelityTests
     /// <summary>
     /// The same measurement on the sharper case: a UDT, whose interface is its entire definition.
     /// Deletes a member outright rather than retyping one, because losing a member from a type is the
-    /// severest form and must not be mistaken for volatile scaffolding.
+    /// severest form and must not be mistaken for volatile scaffolding. Same rule as above — the
+    /// Normalizer's verdict is reported, only the raw comparison is asserted.
     /// </summary>
     [Fact]
     public void RawComparison_SeesAUdtLosingAMember_WhereTheNormalizerDoesNot()
@@ -298,10 +307,11 @@ public class BlockInterfaceFidelityTests
         var removedName = (string?)members[0].Attribute("Name");
         members[0].Remove();
 
-        Assert.True(Normalizer.AreSemanticallyEquivalent(real, mutated),
-            $"PIN, NOT AN ENDORSEMENT: the Normalizer used to call a UDT equal to itself-minus-'{removedName}', " +
-            "because a UDT's Interface has a <Section Name=\"None\"> and no Static section, so the whole " +
-            "definition is discarded. If you have just fixed Normalizer.IsVolatile, delete this assertion.");
+        _output.WriteLine(
+            $"Normalizer.AreSemanticallyEquivalent on a UDT minus member '{removedName}': " +
+            $"{Normalizer.AreSemanticallyEquivalent(real, mutated)} " +
+            "(true = a UDT's whole definition is being discarded; false = the IsVolatile fix is in " +
+            "effect. Reported, not asserted.)");
 
         Assert.False(
             string.Equals(CanonicalInterface(real), CanonicalInterface(mutated), StringComparison.Ordinal),

@@ -288,3 +288,50 @@ failures, every one of them in `MemoryLayoutFidelityTests`**: the other 46 tests
 real export's single layout value to `Standard` and round-tripping it — the structure and position stay
 TIA's and only that value is synthetic, but it is not a substitute for a real `Standard` export in the
 corpus (`openness-cli block-layout --set Standard --yes`, then export).
+
+## The ignore-list audit (2026-08-13) — MemoryLayout was the first of fifteen
+
+Two of the Normalizer's ignores were measured on 2026-08-13 and both were holes, so the rest were
+measured too. `Normalizer.VolatileElementNames` has **22 entries**; the result, against all 38 committed
+exports:
+
+| verdict | count | entries |
+|---|---|---|
+| **hole** — present in real exports, dropped by the converter, ignored by the comparator | **14** | `DBAccessibleFromOPCUA`, `IsOnlyStoredInLoadMemory`, `IsWriteProtectedInAS`, `MemoryReserve`, `IsRetainMemResEnabled`, `SetENOAutomatically`, `IsIECCheckEnabled` (semantic); `AutoNumber`, `HeaderAuthor`, `HeaderFamily`, `HeaderName`, `HeaderVersion`, `UDABlockProperties`, `UDAEnableTagReadback` (metadata) |
+| **load-bearing**, verified | 1 | `DocumentInfo` — a whole-export envelope, absent from single-block output by construction |
+| **unmeasurable against this corpus** | 7 | `CreationDate`, `ModifiedDate`, `CompileDate`, `CodeModifiedDate`, `InterfaceModifiedDate`, `StructureModified`, `ParameterModified` — **zero occurrences in any committed export** |
+
+**The converter emits exactly one of the 22 — `MemoryLayout` — and only since 2026-08-12, i.e. after it
+bit.** For the other 21 no writer in `src/converter/Converter/SimaticMl/` produces the element at all.
+So the 14 holes are all the same shape as `MemoryLayout`: *we emit nothing, TIA supplies its default on
+import, the two therefore agree, and the ignore list is what makes the agreement look like a match.*
+They have not bitten only because every value in the corpus is uniform (`IsIECCheckEnabled=false`,
+`DBAccessibleFromOPCUA=true`, `MemoryReserve=100`, …) — which is exactly how quiet `MemoryLayout` was
+until someone set a non-default value and watched it revert.
+
+`BlockPropertyFidelityTests` compares every block-level `<AttributeList>` property raw across
+export → `to-ir` → `to-xml`, with those 14 named and their cost recorded, so a **15th cannot join them
+unnoticed** and each one closing is detected. It also asserts the two other directions — a property
+surviving with a *changed* value, and a property we *invent* that TIA never stated — and keeps a positive
+control (`Name`/`Namespace`/`Number`/`ProgrammingLanguage` do survive, value-identical, as does
+`IsFailsafeCompliant`, which is on no ignore list).
+
+Nothing was un-ignored: a Normalizer that ignores too little is as broken as one that ignores too much,
+and the wire-endpoint fix had to preserve what its sort was protecting.
+
+**What would settle the 7 unmeasurable entries, with zero new test code:** they are date/modified stamps
+that TIA plausibly regenerates on *re-export after a compile*, and **the committed corpus contains only
+first exports.** Committing one block's post-import/compile re-export beside its original settles all
+seven at once — which is precisely what `ReferenceProjectRoundTrip` / `RoundTripRunner.RunFull` already
+produce during a live cycle; they just discard it. Until then these are **unmeasured, not clean**, and
+the Normalizer's own comment says as much ("informed by the PlcBlock properties reflected on in
+`docs/notes/openness-api-surface-v20.md`, but **unverified against a real re-export**").
+
+Two ignores outside `VolatileElementNames` were also measured. The `MultilingualText`
+`CompositionName="Title"` skip is **latent, not MemoryLayout-shaped**: the converter *does* emit titles
+and network titles round-trip with identical content, so the skip currently hides only element ordering
+and a DB's own (empty) block-level Title — a real but low-stakes gap, and not the "we emit nothing, TIA
+defaults it" pattern. `ElementsWithVolatileId` (Wire/Access/Part/Call/Instance/OpenCon/CompileUnit) and
+the `Wires`/`Parts` ordering rules are **load-bearing on recorded live evidence** — TIA reassigns those
+UIds unprompted — and the one place order *is* meaningful, a wire's first endpoint, is already exempt and
+guarded raw by `WireEndpointDirectionTests`.
