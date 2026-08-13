@@ -18,6 +18,7 @@ public class SubmissionGateTests
         int comp = 1,
         string? kills = "a ramp that overshoots by one step",
         IReadOnlyList<ObservabilityDeclaration>? expectations = null,
+        AssertionForm form = AssertionForm.When,
         SettlingDeclaration? settling = null,
         IReadOnlyList<BlacklistEntry>? blacklist = null) =>
         new(id, slot, 0, new AgentIdentity(author),
@@ -25,6 +26,7 @@ public class SubmissionGateTests
             new Dictionary<string, string> { ["Demo_Step"] = "5" },
             startBool,
             expectations ?? new[] { new ObservabilityDeclaration("Demo_Count", SignalNature.PersistentState, InstrumentationMode.Latched, 0) },
+            form,
             settling ?? new SettlingDeclaration("count unchanged across 3 scans", new[] { "Demo_Count" }),
             maxDuration,
             blacklist ?? new[] { new BlacklistEntry("FC_Other", "shares the plant model instance") },

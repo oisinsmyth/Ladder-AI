@@ -82,6 +82,14 @@ public sealed class VectorDocument
     public Dictionary<string, string>? Inputs { get; set; }
     public string? StartBool { get; set; }
     public List<ExpectationDocument>? Expectations { get; set; }
+
+    /// <summary>
+    /// The cited assertion's canonical form. <b>Defaults to <c>When</c> because that is the shape that
+    /// is CHECKED HARDEST</b> — a NEVER assertion loses SAMPLED entirely (F-3), so a document that
+    /// omits the field gets the permissive-looking default and is still gated on everything else. An
+    /// author who means NEVER must say so, and the enumeration is where they get the answer.
+    /// </summary>
+    public AssertionForm AssertionForm { get; set; } = AssertionForm.When;
     public string? SettlingCondition { get; set; }
     public List<string>? SettlingSignals { get; set; }
     public int MaxDurationScans { get; set; }

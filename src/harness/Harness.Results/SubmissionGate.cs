@@ -76,6 +76,7 @@ public static class SubmissionGate
     /// </summary>
     private static readonly ObservabilityReport Passing = ObservabilityCheck.Evaluate(
         new[] { new ObservabilityDeclaration("<gate-local>", SignalNature.PersistentState, InstrumentationMode.Latched, 0) },
+        AssertionForm.When,
         MirrorObservability.Of(("<gate-local>", new[] { InstrumentationMode.Latched })),
         floorScans: 1, declaredCompression: 1, runtimeCompression: 1);
 
@@ -260,7 +261,7 @@ public static class SubmissionGate
                 declared = 1;
             }
 
-            var report = ObservabilityCheck.Evaluate(v.Expectations, map, floorScans, declared, runtimeCompression);
+            var report = ObservabilityCheck.Evaluate(v.Expectations, v.Form, map, floorScans, declared, runtimeCompression);
             problems.AddRange(report.Refusals.Select(r => $"{v.Id}/{r.Signal}: {r.Outcome} — {r.Detail}"));
         }
 

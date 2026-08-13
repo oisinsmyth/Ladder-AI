@@ -22,6 +22,14 @@ public enum ObservabilityOutcome
     WindowBelowFloor,
 
     /// <summary>
+    /// <b>Sampling a NEVER assertion.</b> Its pass is produced by having seen nothing, and a poll gap
+    /// produces exactly that - so a miss reads as a PASS. Distinct from
+    /// <see cref="ModeCannotAnswerThisNature"/> because the reason and the fix are different: the signal
+    /// may be perfectly readable, and it is the SHAPE OF THE CLAIM that sampling cannot support.
+    /// </summary>
+    SampledCannotAnswerANeverAssertion,
+
+    /// <summary>
     /// The window clears the floor as DECLARED and not at the compression factor the run will use.
     /// Sound at authoring time and silently void at run time.
     /// </summary>
@@ -86,16 +94,34 @@ public static class ObservabilityCheck
     /// only nature for which the window check does any work.</item>
     /// </list>
     /// </summary>
-    public static IReadOnlySet<InstrumentationMode> ModesThatCanAnswer(SignalNature nature) => nature switch
+    /// <param name="form">
+    /// <b>F-3, RULED 2026-08-13: an unlatched SAMPLED assertion is admissible for
+    /// <see cref="SignalNature.PersistentState"/> ONLY, and never for an <see cref="AssertionForm.Never"/>
+    /// assertion whatever the signal's nature.</b> The grant is given exactly where it is free and refused
+    /// exactly where it would manufacture false greens.
+    /// </param>
+    public static IReadOnlySet<InstrumentationMode> ModesThatCanAnswer(SignalNature nature, AssertionForm form)
     {
-        SignalNature.Coincidence => new HashSet<InstrumentationMode> { InstrumentationMode.Stamped },
-        SignalNature.Transient => new HashSet<InstrumentationMode> { InstrumentationMode.Latched, InstrumentationMode.Stamped },
-        SignalNature.PersistentState => new HashSet<InstrumentationMode>
+        var modes = nature switch
         {
-            InstrumentationMode.Latched, InstrumentationMode.Sampled, InstrumentationMode.Stamped,
-        },
-        _ => throw new ArgumentOutOfRangeException(nameof(nature), nature, "unknown signal nature."),
-    };
+            SignalNature.Coincidence => new HashSet<InstrumentationMode> { InstrumentationMode.Stamped },
+            SignalNature.Transient => new HashSet<InstrumentationMode> { InstrumentationMode.Latched, InstrumentationMode.Stamped },
+            SignalNature.PersistentState => new HashSet<InstrumentationMode>
+            {
+                InstrumentationMode.Latched, InstrumentationMode.Sampled, InstrumentationMode.Stamped,
+            },
+            _ => throw new ArgumentOutOfRangeException(nameof(nature), nature, "unknown signal nature."),
+        };
+
+        // *** F-3: SAMPLING CANNOT ANSWER A "NEVER". *** The assertion "never saw the forbidden state" is
+        // SATISFIED BY NEVER HAVING LOOKED, so a poll gap produces a PASS rather than a miss - a false
+        // green, which is the worst available direction. It applies whatever the signal's nature: a
+        // perfectly persistent forbidden state that appears and clears inside one gap is still unseen.
+        if (form == AssertionForm.Never)
+            modes.Remove(InstrumentationMode.Sampled);
+
+        return modes;
+    }
 
     /// <summary>
     /// Evaluate a vector's observability against the map and the floor.
@@ -109,6 +135,7 @@ public static class ObservabilityCheck
     /// <param name="runtimeCompression">The <c>comp</c> the wave will actually use.</param>
     public static ObservabilityReport Evaluate(
         IReadOnlyList<ObservabilityDeclaration> expectations,
+        AssertionForm form,
         MirrorObservability map,
         double floorScans,
         int declaredCompression,
@@ -143,7 +170,7 @@ public static class ObservabilityCheck
 
         foreach (var expectation in expectations)
         {
-            findings.Add(Evaluate(expectation, map, floorScans, declaredCompression, runtimeCompression));
+            findings.Add(Evaluate(expectation, form, map, floorScans, declaredCompression, runtimeCompression));
         }
 
         return new ObservabilityReport(findings, floorScans);
@@ -151,6 +178,7 @@ public static class ObservabilityCheck
 
     private static ObservabilityFinding Evaluate(
         ObservabilityDeclaration expectation,
+        AssertionForm form,
         MirrorObservability map,
         double floorScans,
         int declaredCompression,
@@ -158,7 +186,18 @@ public static class ObservabilityCheck
     {
         // 1. Can this MODE answer a question about a signal of this NATURE? Asked first, because it is
         //    the only one no instrumentation choice can fix — it is physics, not provisioning.
-        var canAnswer = ModesThatCanAnswer(expectation.Nature);
+        var canAnswer = ModesThatCanAnswer(expectation.Nature, form);
+
+        // F-3's refusal is reported separately from the nature refusal, because the signal may be
+        // perfectly readable and it is the SHAPE OF THE CLAIM that sampling cannot support.
+        if (form == AssertionForm.Never && expectation.Mode == InstrumentationMode.Sampled)
+        {
+            return new ObservabilityFinding(expectation.Signal, ObservabilityOutcome.SampledCannotAnswerANeverAssertion,
+                $"{expectation.Signal} is SAMPLED and the cited assertion is a NEVER. A NEVER assertion PASSES BY HAVING SEEN NOTHING, and a poll gap produces exactly that - so an occurrence inside a gap is MISSED ENTIRELY AND READS AS A PASS. "
+                + "It is rate-dependent, rare and unreproducible: one 2,216 ms outlier per ~2,000 round trips is ~95 scans blind, so a suite passes hundreds of times and misses the one occurrence. "
+                + "And the result package cannot tell the two apart - a sampled assertion that saw nothing is Held, identical to one that saw nothing BECAUSE NOTHING HAPPENED. Latch it (F-3, ruled by the owner 2026-08-13).");
+        }
+
         if (!canAnswer.Contains(expectation.Mode))
         {
             return new ObservabilityFinding(expectation.Signal, ObservabilityOutcome.ModeCannotAnswerThisNature,

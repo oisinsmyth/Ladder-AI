@@ -127,6 +127,27 @@ public class GateCliTests
     }
 
     [Fact]
+    public void A_sampled_NEVER_assertion_is_refused_by_the_command()
+    {
+        // F-3, ruled: sampled is admissible for PersistentState only, and never for a NEVER assertion.
+        // The document says which form it cites; omitting the field gets `When`, so an author who means
+        // NEVER must say so - and saying so is what makes the refusal reachable.
+        var never = Good
+            .Replace("\"mode\": \"Latched\", \"windowScans\": 0", "\"mode\": \"Sampled\", \"windowScans\": 100", StringComparison.Ordinal)
+            .Replace("[\"Latched\"]", "[\"Sampled\"]", StringComparison.Ordinal)
+            .Replace("\"compressionFactor\": 1", "\"assertionForm\": \"Never\", \"compressionFactor\": 1", StringComparison.Ordinal);
+
+        var (exit, output) = Run(never);
+
+        Assert.Equal(GateExit.NotAdmissible, exit);
+        Assert.Contains("SampledCannotAnswerANeverAssertion", output, StringComparison.Ordinal);
+
+        // The same vector as a WHEN is admissible, so the refusal is about the FORM and nothing else.
+        Assert.Equal(GateExit.AdmissibleSubjectToJudgement,
+            Run(never.Replace("\"assertionForm\": \"Never\", ", string.Empty, StringComparison.Ordinal)).Exit);
+    }
+
+    [Fact]
     public void The_report_carries_the_ESCALATIONS_the_submission_may_turn_on()
     {
         var (_, output) = Run(Good);

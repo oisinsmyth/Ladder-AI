@@ -3,7 +3,12 @@ namespace Harness.Map;
 /// <summary>
 /// A map, or the reasons there is not one. Never both, and never neither.
 /// </summary>
-public sealed record MapResult(RegisterMap? Map, IReadOnlyList<string> Refusals)
+/// <param name="SizeReport">
+/// What the wave set's slot widths cost it (F-6). <b>A report, never a gate</b> — <see cref="Allocated"/>
+/// does not consult it and nothing refuses on it. Null only when the request was refused before widths
+/// could be read at all.
+/// </param>
+public sealed record MapResult(RegisterMap? Map, IReadOnlyList<string> Refusals, SlotSizeReport? SizeReport = null)
 {
     /// <summary>True only when a map was produced. Equivalent to <c>Refusals.Count == 0</c> by construction.</summary>
     public bool Allocated => Map is not null;
@@ -70,6 +75,11 @@ public static class MapAllocator
         if (refusals.Count > 0)
             return new MapResult(null, refusals);
 
+        // F-6's cost, computed from what the wave set ASKED for — before the fixed-size rule flattens
+        // every slot to the widest and the original widths stop being visible anywhere. A REPORT: it is
+        // carried on the result and consulted by nothing.
+        var sizeReport = SlotSizeReport.For(slots);
+
         // Fixed-size slots, sized to the widest in the wave set (X-A). Not narrowed per slot: a client's
         // bounds check is then base + index x slot_size, and an excised slot leaves its hole in place.
         var vectorPerSlot = slots.Max(s => s.VectorRegisters);
@@ -100,7 +110,7 @@ public static class MapAllocator
             refusals.Add($"the map needs {resultBlock.End} registers but only {geometry.AvailableRegisters} are addressable from %M{geometry.BaseByte} to the top of {geometry.TotalBytes} bytes of bit memory — over by {resultBlock.End - geometry.AvailableRegisters}.");
 
         if (refusals.Count > 0)
-            return new MapResult(null, refusals);
+            return new MapResult(null, refusals, sizeReport);
 
         var allocations = slots.Select((s, i) => new SlotAllocation(
             SlotId: s.SlotId,
@@ -125,6 +135,6 @@ public static class MapAllocator
             resultPerSlot,
             allocations);
 
-        return new MapResult(map, Array.Empty<string>());
+        return new MapResult(map, Array.Empty<string>(), sizeReport);
     }
 }

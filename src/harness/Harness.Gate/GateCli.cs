@@ -136,6 +136,7 @@ public static class GateCli
         (v.Expectations ?? new List<ExpectationDocument>())
             .Select(e => new ObservabilityDeclaration(e.Signal ?? string.Empty, e.Nature, e.Mode, e.WindowScans))
             .ToArray(),
+        v.AssertionForm,
         string.IsNullOrWhiteSpace(v.SettlingCondition)
             ? null
             : new SettlingDeclaration(v.SettlingCondition, v.SettlingSignals ?? new List<string>()),

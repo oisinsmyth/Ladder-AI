@@ -43,10 +43,12 @@ public class AdmissibilityTests
     /// </summary>
     private static readonly ObservabilityReport Supportable = ObservabilityCheck.Evaluate(
         new[] { new ObservabilityDeclaration("Sig", SignalNature.PersistentState, InstrumentationMode.Latched, 0) },
+        AssertionForm.When,
         MirrorObservability.Of(("Sig", new[] { InstrumentationMode.Latched })), 9, 1, 1);
 
     private static readonly ObservabilityReport Unsupportable = ObservabilityCheck.Evaluate(
         new[] { new ObservabilityDeclaration("Sig", SignalNature.Transient, InstrumentationMode.Sampled, 40) },
+        AssertionForm.When,
         MirrorObservability.Of(("Sig", new[] { InstrumentationMode.Sampled })), 9, 1, 1);
 
     [Fact]

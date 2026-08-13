@@ -38,6 +38,29 @@ public enum InstrumentationMode
     Stamped,
 }
 
+/// <summary>
+/// Which of the assertion enumeration's two canonical forms the cited assertion takes.
+///
+/// <para><c>WHEN &lt;trigger&gt; THEN &lt;response&gt;</c> versus <c>NEVER &lt;forbidden state&gt;</c>.
+/// It is a property of the ASSERTION, not of the signal or the instrumentation - which is why it is
+/// declared once per vector and passed to the observability check rather than sitting on each
+/// expectation.</para>
+///
+/// <para><b>It changes what a mode may answer</b>, because a NEVER assertion is the one shape whose
+/// PASS is produced by seeing nothing. See <see cref="ObservabilityCheck.ModesThatCanAnswer"/>.</para>
+/// </summary>
+public enum AssertionForm
+{
+    /// <summary><c>WHEN &lt;trigger&gt; THEN &lt;observable response&gt;</c>. A pass requires having SEEN the response.</summary>
+    When,
+
+    /// <summary>
+    /// <c>NEVER &lt;forbidden observable state&gt;</c> - interlocks and prohibitions. <b>A pass is
+    /// produced by having seen nothing</b>, which is exactly what a poll gap also produces.
+    /// </summary>
+    Never,
+}
+
 /// <summary>One expectation's observability declaration (contract §4.3), on both axes.</summary>
 /// <param name="Signal">The tag. Must appear in the map's observability declarations.</param>
 /// <param name="Nature">What the signal is like. Decides which modes could answer at all.</param>
@@ -114,6 +137,7 @@ public sealed record SubmissionVector(
     IReadOnlyDictionary<string, string> Inputs,
     string StartBool,
     IReadOnlyList<ObservabilityDeclaration> Expectations,
+    AssertionForm Form,
     SettlingDeclaration? Settling,
     int MaxDurationScans,
     IReadOnlyList<BlacklistEntry> Blacklist,

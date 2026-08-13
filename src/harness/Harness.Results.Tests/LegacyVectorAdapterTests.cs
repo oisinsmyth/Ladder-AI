@@ -108,9 +108,9 @@ public class LegacyVectorAdapterTests
         // A nature does not BECOME a mode. It constrains which modes could answer, and for the
         // persistent case that is all three — so a translation table would have had to pick one
         // arbitrarily and would have been wrong two thirds of the time.
-        Assert.Equal(3, ObservabilityCheck.ModesThatCanAnswer(SignalNature.PersistentState).Count);
-        Assert.Equal(2, ObservabilityCheck.ModesThatCanAnswer(SignalNature.Transient).Count);
-        Assert.Single(ObservabilityCheck.ModesThatCanAnswer(SignalNature.Coincidence));
+        Assert.Equal(3, ObservabilityCheck.ModesThatCanAnswer(SignalNature.PersistentState, AssertionForm.When).Count);
+        Assert.Equal(2, ObservabilityCheck.ModesThatCanAnswer(SignalNature.Transient, AssertionForm.When).Count);
+        Assert.Single(ObservabilityCheck.ModesThatCanAnswer(SignalNature.Coincidence, AssertionForm.When));
     }
 
     [Fact]
@@ -122,6 +122,6 @@ public class LegacyVectorAdapterTests
         var doc = typeof(ObservabilityCheck).GetMethod(nameof(ObservabilityCheck.ModesThatCanAnswer));
 
         Assert.NotNull(doc);
-        Assert.Contains(InstrumentationMode.Stamped, ObservabilityCheck.ModesThatCanAnswer(SignalNature.Transient));
+        Assert.Contains(InstrumentationMode.Stamped, ObservabilityCheck.ModesThatCanAnswer(SignalNature.Transient, AssertionForm.When));
     }
 }

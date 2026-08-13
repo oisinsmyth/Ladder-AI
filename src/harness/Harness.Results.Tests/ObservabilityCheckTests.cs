@@ -18,9 +18,11 @@ public class ObservabilityCheckTests
 
     private static ObservabilityReport Evaluate(
         SignalNature nature, InstrumentationMode mode, int window = 0,
-        MirrorObservability? map = null, double floor = 9, int declared = 1, int runtime = 1) =>
+        MirrorObservability? map = null, double floor = 9, int declared = 1, int runtime = 1,
+        AssertionForm form = AssertionForm.When) =>
         ObservabilityCheck.Evaluate(
             new[] { new ObservabilityDeclaration("Sig", nature, mode, window) },
+            form,
             map ?? Map(InstrumentationMode.Latched, InstrumentationMode.Sampled, InstrumentationMode.Stamped),
             floor, declared, runtime);
 
@@ -33,7 +35,7 @@ public class ObservabilityCheckTests
     {
         // "A same-scan coincidence is unobservable by sampling AT ALL." A latch says it happened; it
         // never says two things coincided.
-        Assert.Equal(new[] { InstrumentationMode.Stamped }, ObservabilityCheck.ModesThatCanAnswer(SignalNature.Coincidence));
+        Assert.Equal(new[] { InstrumentationMode.Stamped }, ObservabilityCheck.ModesThatCanAnswer(SignalNature.Coincidence, AssertionForm.When));
 
         Assert.Equal(ObservabilityOutcome.ModeCannotAnswerThisNature, Evaluate(SignalNature.Coincidence, InstrumentationMode.Sampled, 100).Findings[0].Outcome);
         Assert.Equal(ObservabilityOutcome.ModeCannotAnswerThisNature, Evaluate(SignalNature.Coincidence, InstrumentationMode.Latched).Findings[0].Outcome);
@@ -64,12 +66,88 @@ public class ObservabilityCheckTests
     [Fact]
     public void A_PERSISTENT_state_is_the_only_nature_the_window_check_does_any_work_for()
     {
-        Assert.Equal(3, ObservabilityCheck.ModesThatCanAnswer(SignalNature.PersistentState).Count);
+        Assert.Equal(3, ObservabilityCheck.ModesThatCanAnswer(SignalNature.PersistentState, AssertionForm.When).Count);
 
         // Latched and Stamped are exempt from the floor whatever the window; only Sampled has one to clear.
         Assert.True(Evaluate(SignalNature.PersistentState, InstrumentationMode.Latched, window: 0).Supported);
         Assert.True(Evaluate(SignalNature.PersistentState, InstrumentationMode.Stamped, window: 0).Supported);
         Assert.False(Evaluate(SignalNature.PersistentState, InstrumentationMode.Sampled, window: 0).Supported);
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // *** F-3, RULED 2026-08-13: SAMPLED IS ADMISSIBLE FOR PersistentState ONLY, AND NEVER FOR A NEVER ***
+    // ---------------------------------------------------------------------------------------------
+
+    [Fact]
+    public void A_NEVER_ASSERTION_CANNOT_BE_SAMPLED_AT_ANY_NATURE_INCLUDING_THE_ONE_SAMPLING_IS_GRANTED_FOR()
+    {
+        // *** THE FALSE GREEN THE RULING EXISTS FOR. *** "Never saw the forbidden state" is SATISFIED BY
+        // NEVER HAVING LOOKED, and a poll gap produces exactly that - so an occurrence inside a gap is
+        // missed entirely and READS AS A PASS. PersistentState is the nature sampling IS granted for,
+        // which is why it is the interesting case: the grant is per (nature, form), not per nature.
+        var finding = Evaluate(SignalNature.PersistentState, InstrumentationMode.Sampled, window: 100,
+            map: Map(InstrumentationMode.Sampled), form: AssertionForm.Never).Findings[0];
+
+        Assert.Equal(ObservabilityOutcome.SampledCannotAnswerANeverAssertion, finding.Outcome);
+        Assert.Contains("MISSED ENTIRELY AND READS AS A PASS", finding.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void The_refusal_names_all_three_consequences_that_decided_it()
+    {
+        var detail = Evaluate(SignalNature.PersistentState, InstrumentationMode.Sampled, window: 100,
+            map: Map(InstrumentationMode.Sampled), form: AssertionForm.Never).Findings[0].Detail;
+
+        Assert.Contains("~95 scans blind", detail, StringComparison.Ordinal);                    // rare and unreproducible
+        Assert.Contains("result package cannot tell the two apart", detail, StringComparison.Ordinal);
+        Assert.Contains("BECAUSE NOTHING HAPPENED", detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_NEVER_assertion_IS_admissible_LATCHED_or_STAMPED()
+    {
+        // The ruling refuses a MODE, not the assertion form. A latch cannot fall in a gap, so the same
+        // claim is answerable the moment it is latched - which is the whole point of refusing rather
+        // than warning.
+        Assert.True(Evaluate(SignalNature.PersistentState, InstrumentationMode.Latched, form: AssertionForm.Never).Supported);
+        Assert.True(Evaluate(SignalNature.PersistentState, InstrumentationMode.Stamped, form: AssertionForm.Never).Supported);
+    }
+
+    [Fact]
+    public void The_sufficiency_table_LOSES_Sampled_for_a_NEVER_at_every_nature()
+    {
+        foreach (var nature in Enum.GetValues<SignalNature>())
+        {
+            Assert.DoesNotContain(InstrumentationMode.Sampled, ObservabilityCheck.ModesThatCanAnswer(nature, AssertionForm.Never));
+        }
+
+        // And keeps it for the one nature the ruling grants it to, in the WHEN form.
+        Assert.Contains(InstrumentationMode.Sampled, ObservabilityCheck.ModesThatCanAnswer(SignalNature.PersistentState, AssertionForm.When));
+    }
+
+    [Fact]
+    public void SAMPLED_IS_ADMISSIBLE_FOR_PersistentState_ONLY_stated_as_the_whole_grant()
+    {
+        // The ruling in one assertion: across both forms and all three natures, the only cell that
+        // admits Sampled is (PersistentState, When).
+        var admitting = from nature in Enum.GetValues<SignalNature>()
+                        from form in Enum.GetValues<AssertionForm>()
+                        where ObservabilityCheck.ModesThatCanAnswer(nature, form).Contains(InstrumentationMode.Sampled)
+                        select (nature, form);
+
+        Assert.Equal(new[] { (SignalNature.PersistentState, AssertionForm.When) }, admitting);
+    }
+
+    [Fact]
+    public void The_NEVER_refusal_is_a_DIFFERENT_outcome_from_the_nature_refusal()
+    {
+        // The signal may be perfectly readable and it is the SHAPE OF THE CLAIM that sampling cannot
+        // support, so collapsing the two would tell an author to change the wrong thing.
+        Assert.Equal(ObservabilityOutcome.SampledCannotAnswerANeverAssertion,
+            Evaluate(SignalNature.PersistentState, InstrumentationMode.Sampled, 100, Map(InstrumentationMode.Sampled), form: AssertionForm.Never).Findings[0].Outcome);
+
+        Assert.Equal(ObservabilityOutcome.ModeCannotAnswerThisNature,
+            Evaluate(SignalNature.Transient, InstrumentationMode.Sampled, 100, Map(InstrumentationMode.Sampled), form: AssertionForm.When).Findings[0].Outcome);
     }
 
     // ---------------------------------------------------------------------------------------------
@@ -104,7 +182,7 @@ public class ObservabilityCheckTests
     {
         var finding = ObservabilityCheck.Evaluate(
             new[] { new ObservabilityDeclaration("Elsewhere", SignalNature.PersistentState, InstrumentationMode.Sampled, 40) },
-            Map(InstrumentationMode.Sampled), 9, 1, 1).Findings[0];
+            AssertionForm.When, Map(InstrumentationMode.Sampled), 9, 1, 1).Findings[0];
 
         Assert.Equal(ObservabilityOutcome.SignalNotInMap, finding.Outcome);
         Assert.Contains("BEFORE the download", finding.Detail, StringComparison.Ordinal);
@@ -162,7 +240,7 @@ public class ObservabilityCheckTests
     [Fact]
     public void A_vector_declaring_NO_observability_is_not_observable_by_default()
     {
-        var report = ObservabilityCheck.Evaluate(Array.Empty<ObservabilityDeclaration>(), Map(InstrumentationMode.Sampled), 9, 1, 1);
+        var report = ObservabilityCheck.Evaluate(Array.Empty<ObservabilityDeclaration>(), AssertionForm.When, Map(InstrumentationMode.Sampled), 9, 1, 1);
 
         Assert.False(report.Supported);
         Assert.Equal(ObservabilityOutcome.NothingToCheckAgainst, report.Findings[0].Outcome);
@@ -173,7 +251,7 @@ public class ObservabilityCheckTests
     {
         var report = ObservabilityCheck.Evaluate(
             new[] { new ObservabilityDeclaration("Sig", SignalNature.PersistentState, InstrumentationMode.Latched, 0) },
-            new MirrorObservability(new Dictionary<string, IReadOnlySet<InstrumentationMode>>()), 9, 1, 1);
+            AssertionForm.When, new MirrorObservability(new Dictionary<string, IReadOnlySet<InstrumentationMode>>()), 9, 1, 1);
 
         Assert.False(report.Supported);
         Assert.Equal(ObservabilityOutcome.NothingToCheckAgainst, report.Findings[0].Outcome);
@@ -186,7 +264,7 @@ public class ObservabilityCheckTests
         Assert.Throws<ArgumentOutOfRangeException>(() =>
             ObservabilityCheck.Evaluate(
                 new[] { new ObservabilityDeclaration("Sig", SignalNature.PersistentState, InstrumentationMode.Sampled, 1) },
-                Map(InstrumentationMode.Sampled), floorScans: 0, 1, 1));
+                AssertionForm.When, Map(InstrumentationMode.Sampled), floorScans: 0, 1, 1));
     }
 
     [Fact]
@@ -201,7 +279,7 @@ public class ObservabilityCheckTests
             .Select(p => p.Name!)
             .ToArray();
 
-        Assert.Equal(new[] { "expectations", "map", "floorScans", "declaredCompression", "runtimeCompression" }, parameters);
+        Assert.Equal(new[] { "expectations", "form", "map", "floorScans", "declaredCompression", "runtimeCompression" }, parameters);
         Assert.DoesNotContain(parameters, p => p.Contains("support", StringComparison.OrdinalIgnoreCase)
                                             || p.Contains("observabilitySupported", StringComparison.OrdinalIgnoreCase));
     }

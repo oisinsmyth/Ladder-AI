@@ -44,6 +44,7 @@ public class ResultPackageTests
 
     private static readonly ObservabilityReport Supportable = ObservabilityCheck.Evaluate(
         new[] { new ObservabilityDeclaration("Demo_Count", SignalNature.PersistentState, InstrumentationMode.Latched, 0) },
+        AssertionForm.When,
         MirrorObservability.Of(("Demo_Count", new[] { InstrumentationMode.Latched })), 9, 1, 1);
 
     private static SlotRunResult Run(SlotOutcome outcome = SlotOutcome.Completed) =>
