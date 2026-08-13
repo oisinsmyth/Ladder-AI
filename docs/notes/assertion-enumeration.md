@@ -230,6 +230,41 @@ Listings show `REQ-014.A2` because `REQ-014:3f9a1c` is unreadable aloud. ***THE 
 ONLY. A `Basis` citation in the ordinal form is REJECTED*** — mechanically, by shape — precisely
 because it is the readable one and would otherwise be the one people type.
 
+### 3.4 Who stamps the IDs — added 2026-08-13, because the first live enumeration could not
+
+***THE ENUMERATOR ISSUES ITS ARTIFACT WITH `normalised_text:` AND NO `id:` KEY. A SEPARATE STAMPING
+STEP COMPUTES THE HASHES AND WRITES THEM IN, AND THAT STAMPED FILE IS WHAT GETS PUBLISHED AND
+CITED.***
+
+This is not a convenience. `assertion-enumerator` is denied `Bash` **deliberately** — that fence is
+what stops it running the converter over a block and letting the implementation contaminate a
+spec-side denominator. But an ID is a SHA-256, so the same fence removes every way to produce one:
+**the agent responsible for the denominator cannot produce the identifiers it is cited by.** An
+enumerator that wrote hex by hand would be doing exactly what §3.2's `IdDoesNotRecompute` check
+exists to catch.
+
+> ### THE STAMPER NEEDS NO TRUST, AND THAT IS THE WHOLE REASON THIS IS SAFE
+>
+> Stamping is a **pure function of text that is already fixed**, and the gate **recomputes every ID
+> from `normalised_text` and refuses a mismatch**. So a stamper cannot smuggle anything in: a wrong
+> hash is caught, and a *right* hash is one anybody would have produced. **It therefore does not need
+> to be independent of the block author or the vector author** — unlike the decomposition itself,
+> which does.
+>
+> Which is worth stating as a general shape: ***a step whose output is fully verified by a later
+> recomputation does not need an independent author. A step whose output is a JUDGEMENT does.*** The
+> enumeration is the second kind; the hashing is the first. Fencing them identically would have cost
+> independence where it was needed and added ceremony where it was not.
+
+**Consequences to hold to:**
+
+- **No vector may cite an enumeration that has not been stamped.** An unstamped file has nothing
+  citable in it, and a citation into it must be a hard error rather than a lookup miss.
+- **Re-stamping after any text edit is mandatory** and produces exactly the dangling-ID event §3.2
+  specifies. The stamper must never "preserve" an existing ID whose text has changed — that is the
+  silent-survival failure §3.2 is built to prevent, and it is the one thing a careless implementation
+  would do to be helpful.
+
 ---
 
 ## 4. The buckets, and what makes `UNCLASSIFIED = 0` enforceable
