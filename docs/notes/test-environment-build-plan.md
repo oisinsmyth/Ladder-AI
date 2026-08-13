@@ -3191,6 +3191,133 @@ three now key on **errors** and report warnings without gating.
 re-registration of every edited skill with its description intact**, which is the one thing silent
 truncation cannot fake.
 
+### ✅ 6.3 COVERAGE IS BUILT — and `UNCLASSIFIED` is not a field you can forget to fill (2026-08-13, `cab71b8`)
+
+**177 → 217 tests.** Five types across the three sides, and **the separation is the mechanism**:
+`AssertionEnumeration` and `CoverageClassification` are **two separate spec-side artifacts**, so the
+residual is computed *across* them and **a citation can only SELECT from the first.**
+
+*** `CoverageBucket` HAS NO `Unclassified` MEMBER AT ALL *** — pinned by a reflection test over the enum
+names, so a future edit cannot quietly make it writable. `NotStated = 0` is refused on assignment and
+is **explicitly not the residual**: *** THE RESIDUAL IS A SET, NEVER A VALUE. *** Holding the bucket
+inside the enumeration would have made "unclassified" **a blank field — and a blank field is a state
+you can forget to fill without anything noticing.**
+
+**The bare percentage is closed structurally:** `CoverageFigure` exposes **no** `Percent`/`Ratio`/
+`Fraction`; the number exists only inside `Render()`, which always emits all four counts, the residual
+and the oldest deferral age — **and a reflection test fails if any public member returns a `double`
+under such a name.**
+
+**Honest residuals, not claimed as closed:** coarse and fine decomposition **cannot** be closed by code
+— assertions-per-clause is reported, but *** THERE IS NO CORPUS NORM YET, so the report says "reported,
+not judged." *** Deferral drift is accepted, with **visibility as the whole defence.**
+
+> #### 🚩 OWNER'S — ONE INFLATION ROUTE DOES NOT PASS THROUGH A SECOND PARTY
+>
+> **R4 says instance qualification happens "at citation time".** *** READ LITERALLY, THE DENOMINATOR'S
+> SIZE DEPENDS ON WHAT THE CITATIONS MENTION — SO AN INSTANCE NOBODY WROTE A VECTOR FOR COULD NOT BE
+> MISSING. *** That is §7's self-referential trap by a side door, and it needs **no second party at
+> all**, which is the structural defence every other route routes through.
+>
+> **Reading taken, because the code had to pick:** instances are **spec-side** —
+> `EnumeratedClause.Instances`, declared by the enumerator from the clause text; citations *select*
+> from it, and an undeclared instance is a **finding**. The doc may instead mean the *citation* is
+> qualified at citation time, **which is compatible** — but the literal reading is exploitable.
+
+**The assertion-form authority gap is CLOSED** — `EnumeratedAssertion` carries `Form`, compared against
+the vector's declared form. Two properties worth keeping: `AssertionForm.Unstated = 0`, so **a DROPPED
+form fails the same comparison** (the not-declared case has its own test, not merely the mis-declared
+one); and **the enumeration's own `Form` is checked against the TEXT SHAPE**, so the authority cannot
+be established by mislabelling the enumeration instead.
+
+  ➜ 🔴 **Residual, and it converges with the skills lane's finding:** `Harness.Gate`/`SubmissionGate`
+    still read `EnumerationDocument { Clauses, Assertions }` — **flat strings, no form, no enumerator**
+    — so *** THE HARNESS PATH STAYS UNCHECKED UNTIL TWO FIELDS ARE WIRED. *** The check exists; the
+    wiring is a hand-off. **Two lanes reached this independently**, which is the strongest evidence it
+    is real.
+
+**`Stale` ≠ `Missing`:** something recorded the ID in `supersedes:` (reworded — re-read the vector)
+versus **nothing ever did** (it never existed). Two findings, two tests, and collapsing them goes red.
+
+*Worth knowing before the next mutation campaign: `if (false)` is unusable in this solution —
+`TreatWarningsAsErrors` rejects it as unreachable code. Re-express as an always-false comparison.*
+
+### ✅ PHASE 5.3 — THE LOOP IS BUILT (2026-08-13, `b44677b`, `08849e4`)
+
+`Harness.Loop`: derive map → **gate** → generate copy layer → assert 0.1b → *device boundary* → deploy
+→ confirm version → run wave → package. **GREEN:** a correct block goes from submission to `PASS` **with
+no human in it.** **RED:** the phase-2 defect returns `FAIL`, **names the clause *and the assertion***,
+and says fix the block against the specification. **626 → 638 tests**, seven assemblies.
+
+*** "BEFORE THE WAVE IS SPENT" IS ASSERTED ON THE GATEWAY'S OWN CALL COUNTS *** — `Deployments == 0`,
+`Opens == 0`. **Not "the deployment failed" but *nothing was ever handed to it*.** Four things stop
+there: an inadmissible submission, **a gate that could not run**, an unobservable vector, and the 0.1b
+assertion.
+
+**The loop exposes no verdict of its own**, pinned by reflection over `LoopResult`'s members, and
+`LearnedAnything` is `Ran && any conclusive` — *** DELIBERATELY NOT "no failures". ***
+
+**Enumerator independence and the assertion-form cross-check are now CHECKED end to end** — measured on
+the built exe, not read from source: a document carrying `forms` + `enumerator` gives `[CHECKED]` on
+both and exit 0; the flat projection gives `[NOT CHECKED]` and exit 1; an enumerator equal to the block
+author, **or to a vector author differing only by case and a trailing space**, gives `[REFUSED]`.
+
+> #### 🔴 A DEFAULT OF 0 WAS THE PERMISSIVE ANSWER
+>
+> `AssertionForm` had **`When = 0`**, *** SO AN OMITTED FIELD WAS HANDED THE PERMISSIVE FORM — THE EXACT
+> HOLE ITS CROSS-CHECK EXISTED TO CLOSE, ONE LAYER UP IN THE WIRE. *** Now `Unstated = 0`, so
+> `default(AssertionForm)` is unusable and **a dropped form fails the same comparison as a wrong one.**
+> Honoured in four places, including the sufficiency table, which **fails closed because it might be a
+> NEVER.**
+
+**How an absent field is treated — chosen per case, never defaulted:** an absent **enumerator** or
+**forms map** is `NOT CHECKED` (*a property of the enumeration, which a resubmission cannot fix*); a
+missing form for a **cited** assertion, or an `Unstated` on either side, is **REFUSED**. *Nothing
+silently becomes a pass.*
+
+  ➜ *** MUTATION FOUND THE FIFTH AND SIXTH TESTS THAT COULD NOT FAIL. *** Hardcoding the completion
+    value back to `1` left the suite **green** — **every vector used 1, so the field and the literal
+    were indistinguishable.** Dropping the CLI pass-through left it green too, **because nothing
+    reported the value.** Same shape as the previous four: *the case a field exists for gets tested;
+    the case where it was ignored does not.*
+  ➜ **And "verify the verifier" changed the job before it began:** the wiring lane found *** ITS FIRST
+    TWO TASKS WERE ALREADY DONE *** by an earlier commit, landed while three lanes were independently
+    converging on the finding.
+
+**Owed on the device — eight items on `LoopResult.OwedOnTheDevice`,** led by *** DEPLOYMENT ITSELF: this
+loop has never put an object on a controller. ***
+
+### 🎯 R4 RULED SPEC-SIDE — and the lane withdrew its own load-bearing claim (2026-08-13, `099f309`)
+
+**Owner ruling:** the instance set is declared **by the enumerator, from the clause text**; a citation
+**selects** from it, **cannot add to it**, and an undeclared instance is a **finding**.
+
+The old wording made the denominator's size depend on what the citations mention — *** SO AN INSTANCE
+NOBODY WROTE A VECTOR FOR COULD NOT BE MISSING: §7's SELF-REFERENTIAL TRAP ARRIVING ON THE *INSTANCE*
+AXIS WHILE THE ASSERTION AXIS STAYED CLEAN. *** Amended and **recorded as a correction rather than
+rewritten**, at length, *because the failure is subtle enough to be reintroduced by someone tidying the
+sentence.*
+
+> #### ⚠️ AND IT FALSIFIED A CLAIM THE WHOLE DEFENCE RESTED ON
+>
+> §5 had closed with *"every attack above is an attack on the denominator, which is why they all have
+> to route through a second party."* *** ROUTE 8 ATTACKED THE DENOMINATOR WITHOUT ROUTING THROUGH
+> ANYONE — the claim is WITHDRAWN. The second-party defence is real but NOT AUTOMATIC. ***
+>
+> Replaced with a standing test for any future edit to that document, and it is the useful artifact:
+>
+> > *** CAN A VECTOR AUTHOR, ACTING IN GOOD FAITH AND WRITING NOTHING FALSE, MAKE THE DENOMINATOR
+> > SMALLER? ***
+>
+> **That question would have caught R4's original wording, and nothing else did for as long as it
+> stood.**
+
+  ➜ **Open question 3 (*who performs the enumeration*) is now MORE load-bearing, not less:** the
+    enumerator owns **two** axes, so a compromised one **can shrink the denominator twice**, and any
+    independence rule has to cover the whole enumeration.
+  ➜ **§7 itself needed no amendment** — it never said *when* instance qualification happens, so the
+    exploitable reading was introduced downstream and is corrected there.
+
 ## PHASE 5 — FIRST REAL VALUE
 
 **This is the milestone that matters. Everything before it is infrastructure.**
