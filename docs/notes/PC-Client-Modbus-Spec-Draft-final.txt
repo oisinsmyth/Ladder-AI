@@ -1394,6 +1394,46 @@ until the requirement text changes or the implementing block changes — detecta
 the assertion text and by `converter ir-hash` respectively. Re-classification is proportional
 to CHANGE, not to total requirement count.
 
+*** THIS SECTION SETTLES WHERE THE UNIT IS ENUMERATED AND NEVER SAYS WHAT THE UNIT IS. THAT GAP
+IS NOW FILLED — `docs/notes/assertion-enumeration.md` (2026-08-13). *** It was found while
+dispatching the 5.1 skill: the contract requires a vector to cite an assertion ID "drawn from
+the spec-derived enumeration", and the enumeration had no definition, so the skill could only
+check that SOMETHING was written in the field — the difference between a gate and a formality.
+*** AND AN AMBIGUOUS DECOMPOSITION MAKES THE DENOMINATOR NEGOTIABLE, WHICH DEFEATS THIS
+SECTION'S OWN INVARIANT BY A DIFFERENT ROUTE: coverage stays 100% because the counting was
+generous rather than because the unit was self-referential. *** The definition, in one line:
+
+    *** AN ASSERTION IS THE SMALLEST STATEMENT ABOUT OBSERVABLE BEHAVIOUR THAT CAN BE FALSIFIED
+    ON ITS OWN *** — there is a possible defect that makes it false while leaving every other
+    assertion of the clause true. Written as `WHEN <trigger> THEN <response> [WITHIN <bound>]`
+    or `NEVER <forbidden state>`; split on TRIGGER and on RESPONSE, never on QUALIFIERS such as
+    a timing bound, and never on IMPLEMENTATION.
+
+  🔴 *** ONE CORRECTION TO THIS SECTION, AND IT IS THE STICKY KEY. *** The key proposed above —
+  `(clause hash, assertion index, assertion text hash)` — has a POSITIONAL middle term. Insert
+  an assertion at index 1 and every later index shifts, so a stored classification silently
+  comes to name a different assertion. The hazard is narrower here than it looks, because this
+  section uses the key for STICKINESS rather than for CITATION — but a citation and a
+  classification must not key on different things, and only the CONTENT-DERIVED form is safe.
+  *** IDs ARE `REQ-014:3f9a1c` — clause ID plus a hash of the normalised assertion text, with
+  NOTHING POSITIONAL IN THEM. The index survives as a DISPLAY ORDINAL that may never be cited. ***
+  Editing an assertion's text CHANGES its ID deliberately: the old one dangles, prior citations
+  are flagged stale, and a `supersedes:` link records it — because a citation that silently
+  survives a rewording of what it cites was written against words nobody re-read.
+
+  *** AND `UNCLASSIFIED = 0` IS MADE ENFORCEABLE BY NEVER BEING WRITABLE: *** it is the set
+  difference `enumerated - (COVERED u OUT-OF-SCOPE u DEFERRED u UNTESTABLE-ON-RIG)`, computed
+  and not declared, so a forgotten assertion produces a failed gate rather than a missing tick.
+  Same shape as phase 2's `AddressesExamined` separate denominator. An enumeration parsing ZERO
+  assertions is *nothing examined* and fails — empty is not clean.
+
+  *** THREE THINGS IT RAISES THAT THIS SECTION DOES NOT ANSWER, THE LAST BEING THE IMPORTANT
+  ONE: *** whether STARTUP is a fifth bucket or a scheduling attribute (proposed: attribute, so
+  "exactly one bucket" survives); where a vector author's DECOMPOSITION DISPUTE is recorded and
+  who rules on it; and *** WHO PERFORMS THE ENUMERATION — because if it is the block's author,
+  D6's independence is lost AT THE DENOMINATOR, which undoes most of the protection this section
+  is built on. That should be ruled before the 5.1 skill is built. ***
+
 *** ONE CONSEQUENCE OF THE ASSERTION UNIT THAT MUST BE BUILT FOR, NOT DISCOVERED: RE-READING A
 CLAUSE CAN CHANGE ITS DECOMPOSITION. *** A clause previously read as one assertion may later
 decompose into two. That is NOT a classification change and must not be silently absorbed as

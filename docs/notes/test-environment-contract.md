@@ -30,7 +30,7 @@ actually checks it.
 |---|---|---|---|
 | 1 | **Vector format** | ✅ fully | schema: required fields, types, one start bool, `MaxDuration` present |
 | 2 | **`Basis` — clause** | ⚠️ existence only | citation must **resolve** to a written clause (the `relation-reconcile` precedent). *That it is the right clause is judgement.* |
-| 3 | **`Basis` — assertion** | ✅ existence + coverage | assertion ID must come from the **spec-derived enumeration** (§7/D35), never free text |
+| 3 | **`Basis` — assertion** | ✅ existence + coverage | assertion ID must come from the **spec-derived enumeration** (§7/D35, defined in `assertion-enumeration.md`), never free text; ordinal form rejected; response signal must appear in `Expectations` |
 | 4 | **Observability declaration** | ✅ **fully — and it REFUSES** | declared window ≥ §12a's floor; mode ∈ {latched, sampled, stamped}; signal present in the map; declared **before** the generating download |
 | 5 | **Settling declaration** | ⚠️ partial, and the partial half bites | that one exists, and that it is **not merely the completion flag** — both checkable. *Whether it is the right condition is judgement.* |
 | 6 | **Start-bool binding** | ✅ fully | exactly one per slot; raised on a later scan (D37); T=0 recorded from the observed scan counter |
@@ -98,6 +98,21 @@ both agents read the same sentence and are free to read it the same way.
 unit). Never free text. §7 is explicit that a denominator defined by what somebody wrote a vector for
 is always 100%; the same trap applies here — an author who *writes* an assertion rather than *citing*
 one has re-created the correlated check with extra steps.
+
+> ✅ **The enumeration is now defined — `docs/notes/assertion-enumeration.md` (2026-08-13).** When
+> this contract was drafted it required a citation into an enumeration that did not exist, which
+> would have left the skill able to check only that *something* was written in the field. An
+> assertion is **the smallest statement about observable behaviour that can be falsified on its
+> own**, written as `WHEN … THEN … [WITHIN …]` or `NEVER …`; IDs are `REQ-014:3f9a1c` — clause ID
+> plus a content hash, **nothing positional**, so inserting a clause or an assertion shifts no
+> existing citation. **A citation in the display-ordinal form (`REQ-014.A2`) is rejected**, and one
+> naming an ID the enumeration does not contain is a dangling-citation error — *an error in the
+> vector, never an extension of the denominator*.
+>
+> **One further check that document adds and this one should carry:** the cited assertion's
+> **response signal must appear in this vector's `Expectations`** — a set-difference, the same shape
+> as `trace`'s guard-containment hop. It does not prove the vector tests the assertion, but it
+> catches a citation that could not possibly be testing it.
 
 **Mechanically checkable:** that the clause resolves to something written, and that the assertion ID
 exists in the enumeration. **Not mechanically checkable:** that the assertion is a faithful reading of
@@ -311,10 +326,13 @@ put instrumentation in the copy layer and say `lad-coder` never writes observabi
 question of a document called *design for testability*, and the design currently answers both ways.
 **Owner's.**
 
-**9.2 — "Assertion" is not defined in §2.6.** D35 counts per assertion and §7 requires the enumeration
-be spec-derived, but §2.6 predates both and an author reading only §2.6 will write prose. This
-contract requires an ID from the enumeration (§3); **that requirement is new here and should be
-confirmed.**
+**9.2 — "Assertion" is not defined in §2.6. ✅ RESOLVED 2026-08-13.** D35 counts per assertion and §7
+requires the enumeration be spec-derived, but §2.6 predates both, and *neither said what an assertion
+IS* — so an author reading only §2.6 writes prose. Definition, decomposition rules, ID scheme and
+bucket enforcement now live in `docs/notes/assertion-enumeration.md`. **Three things it leaves open,
+and the third should be ruled before the skill is built: whether STARTUP is a fifth bucket or a
+scheduling attribute; where a decomposition dispute is recorded; and *who performs the enumeration* —
+because if it is the block's author, D6's independence is lost at the denominator.**
 
 **9.3 — Scan counts have no compression factor attached** (§4.4). Mechanically fixable, and this
 document proposes the fix rather than assuming it: declare the `comp`, re-check the floor at run time.
