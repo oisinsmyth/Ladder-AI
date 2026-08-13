@@ -6,6 +6,8 @@ allowed-tools:
   - Read
   - Grep
   - Glob
+  - Bash(dotnet run --project src/harness/Harness.Gate -- check *)
+  - Bash(src/harness/Harness.Gate/bin/*/net8.0/harness-gate check *)
 ---
 
 # /design-for-testability — the phase 5.1 admissibility gate
@@ -68,19 +70,34 @@ Contract §10's surface, in the order a submission meets it, with the **verifier
 
 | # | gate | what the contract requires | verifier today | outcome |
 |---|---|---|---|---|
-| 1 | **schema** | every §2 field present and typed; `MaxDuration` non-empty | **none.** `Harness/TestVector.cs` is a *different shape* — see "What I had to guess" | ***NOT CHECKED*** |
-| 2 | **authorship (D6)** | vector author ≠ block author | `Admissibility.Check` — **library only, no CLI** | ***NOT CHECKED*** (code exists, not runnable) |
-| 3 | **basis — clause** | resolves to written text | `Admissibility.Check` against `AssertionEnumeration` — **and nothing populates that enumeration from a file** | ***NOT CHECKED*** |
-| 3b | **basis — assertion** | ID drawn from the spec-derived enumeration, never free text | same | ***NOT CHECKED*** |
+| 1 | **schema** | every §2 field present and typed; `MaxDuration` non-empty | `SubmissionGate` — **`harness-gate check`** | **CHECKED** |
+| 2 | **authorship (D6)** | vector author ≠ block author | `AgentIdentity` — **normalised**, so a case/whitespace variant no longer passes it | **CHECKED** |
+| 3 | **basis — clause** | resolves to written text | `Admissibility` against `AssertionEnumeration`, populated from the submission's `enumeration` block | **CHECKED** |
+| 3b | **basis — assertion** | ID drawn from the spec-derived enumeration, never free text | same. An empty enumeration is a **refusal** | **CHECKED** |
 | 3c | *is the assertion a faithful reading of the clause?* | — | **nothing, ever** | **JUDGEMENT** |
-| 4 | **fidelity (M4)** | asserted behaviours ⊆ the model's `Represents` | `Admissibility.Check` — library only | ***NOT CHECKED*** |
-| 5 | **observability** | mode valid; signal in the map; window ≥ §12a derivation 1's floor **at the run-time `comp`**; declared before the generating download | ***not implemented.*** `Admissibility.Check` takes `observabilitySupported` as a **caller-supplied bool** — the check is a parameter, not a computation | ***NOT CHECKED*** |
-| 6 | **settling exists, and is not the completion flag** | both halves | `Admissibility.Check` — library only | ***NOT CHECKED*** (code exists, not runnable) |
+| 4 | **fidelity (M4)** | asserted behaviours ⊆ the model's `Represents` | `Admissibility` — set difference | **CHECKED** |
+| 5 | **observability** | mode valid; signal in the map; window ≥ §12a derivation 1's floor **at the run-time `comp`**; declared before the generating download | ***`ObservabilityCheck` — A COMPUTATION.*** It was a caller-supplied `bool`; it is now derived from the vector's declared nature+mode, what the MAP provides, and the floor `harness-gate` computes from the wave set | **CHECKED** |
+| 6 | **settling exists, and is not the completion flag** | both halves | `Admissibility` | **CHECKED** |
 | 6b | *does the condition really imply the value is final?* | — | **nothing, ever** | **JUDGEMENT** |
-| 7 | **start bool** | exactly one per slot; bound by NAME; raised a later scan than the inert-establish, against the **observed** counter | **none** | ***NOT CHECKED*** |
-| 8 | **blacklist** | add-only against computed disjointness; every entry has a reason | **none — the word appears nowhere in `src/harness`** | ***NOT CHECKED*** |
-| 8b | *is it over-broad?* | — | measurable (density), **not preventable** | **JUDGEMENT** |
-| 9 | **liveness** *(post-run)* | stimulus check; counter advanced **by the expected amount**; manifest presence | `Harness.Results/StimulusCheck.cs` — runs **inside the runner**, not at submission | **CHECKED at run time only** |
+| 7 | **start bool** | exactly one per slot; bound by NAME; raised a later scan than the inert-establish, against the **observed** counter | `SubmissionGate` for the first two. **The later-scan rule is RUN-TIME** (`InertPhase`) and is reported as such, never claimed at submission | **CHECKED** (submission half) |
+| 8 | **blacklist** | add-only against computed disjointness; every entry has a reason | `SubmissionGate`. ***Add-only is a property of the TYPE*** — `BlacklistEntry` carries no negation, so a removal cannot be expressed. **An ABSENT conflict graph is NOT CHECKED**, not a pass | **CHECKED** *(NOT CHECKED without `computedConflicts`)* |
+| 8b | *is it over-broad?* | — | density, reported not gated | **JUDGEMENT** |
+| 9 | **liveness** *(post-run)* | stimulus check; counter advanced **by the expected amount**; manifest presence | `StimulusCheck`, at run time. **The separable half is now a submission gate**: a vector whose liveness could never be established is refused *before* a wave is spent | **CHECKED** (preconditions) **+ CHECKED at run time** |
+
+### The command
+
+```
+dotnet run --project src/harness/Harness.Gate -- check <submission.json>
+```
+
+`exit 0` = ADMISSIBLE-SUBJECT-TO-JUDGEMENT · `exit 1` = NOT ADMISSIBLE · `exit 2` = NOTHING EXAMINED.
+***There is deliberately no plain ADMISSIBLE.*** Run it, and paste its per-gate output into your report
+rather than restating it — the report's job is the judgement calls and the escalations, which the tool
+cannot make.
+
+**`exit 2` is its own code and never 0.** An empty submission, an unreadable document or a mode nothing
+implements is *nothing examined*, and a gate that exits 0 on those is the purest form of the failure
+this skill exists to prevent.
 
 ### What this means for a report you write today
 

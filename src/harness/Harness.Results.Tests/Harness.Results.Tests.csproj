@@ -25,6 +25,13 @@
   -->
   <ItemGroup>
     <ProjectReference Include="..\Harness.Results\Harness.Results.csproj" />
+
+    <!--
+      The CLI's decision half is tested here rather than in a suite of its own: it is a thin composition
+      over the gates this project already exercises, and the one thing worth testing about it - that a
+      gate nobody can run is reported as NOT CHECKED and exits non-zero - needs the gates, not a process.
+    -->
+    <ProjectReference Include="..\Harness.Gate\Harness.Gate.csproj" />
   </ItemGroup>
 
 </Project>

@@ -25,14 +25,29 @@ public class AdmissibilityTests
         string blockAuthor = "agent-a",
         bool observabilitySupported = true,
         bool omitFidelity = false,
-        bool omitSettling = false) =>
+        bool omitSettling = false,
+        bool omitObservability = false) =>
         Admissibility.Check(
             basis ?? new Basis("REQ-14", "REQ-14.a"),
             enumeration ?? Enumeration,
             omitFidelity ? null : fidelity ?? FidelityDeclaration.Of("M", new[] { "fill" }, new[] { "lag" }, true),
             behaviours ?? new[] { "fill" },
             omitSettling ? null : settling ?? new SettlingDeclaration("unchanged across 3 scans", new[] { "Demo_Count" }),
-            completion, vectorAuthor, blockAuthor, observabilitySupported);
+            completion, new AgentIdentity(vectorAuthor), new AgentIdentity(blockAuthor),
+            omitObservability ? null : observabilitySupported ? Supportable : Unsupportable);
+
+    /// <summary>
+    /// REAL computed reports, not fabricated verdicts. There is no way to construct an
+    /// ObservabilityReport except by running the checker, which is the point of the change: the test
+    /// cannot assert the answer any more than a caller can.
+    /// </summary>
+    private static readonly ObservabilityReport Supportable = ObservabilityCheck.Evaluate(
+        new[] { new ObservabilityDeclaration("Sig", SignalNature.PersistentState, InstrumentationMode.Latched, 0) },
+        MirrorObservability.Of(("Sig", new[] { InstrumentationMode.Latched })), 9, 1, 1);
+
+    private static readonly ObservabilityReport Unsupportable = ObservabilityCheck.Evaluate(
+        new[] { new ObservabilityDeclaration("Sig", SignalNature.Transient, InstrumentationMode.Sampled, 40) },
+        MirrorObservability.Of(("Sig", new[] { InstrumentationMode.Sampled })), 9, 1, 1);
 
     [Fact]
     public void A_complete_declaration_is_admissible()
@@ -178,6 +193,29 @@ public class AdmissibilityTests
     public void An_unobservable_vector_is_refused_because_a_green_that_cannot_mean_anything_is_worse()
     {
         Assert.Contains(Check(observabilitySupported: false).Refusals, r => r.Reason == RefusalReason.Unobservable);
+    }
+
+    [Fact]
+    public void AN_OBSERVABILITY_EVALUATION_THAT_NEVER_RAN_IS_REFUSED_NOT_PASSED()
+    {
+        // *** FOUND BY MUTATION, AND IT WAS A HOLE. *** The gate was made a computation, and the case
+        // where the computation DID NOT HAPPEN had no test: neutering the null branch left the whole
+        // suite green. A gate that did not run is not a gate that passed, and null is exactly how "did
+        // not run" arrives here.
+        var refusal = Assert.Single(Check(omitObservability: true).Refusals);
+
+        Assert.Equal(RefusalReason.Unobservable, refusal.Reason);
+        Assert.Contains("no observability evaluation was performed", refusal.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_refusing_observability_report_carries_EVERY_finding_into_the_refusals()
+    {
+        // Not just "unobservable" — the computed reason per signal, so the author is told which
+        // expectation and why rather than that something somewhere could not be seen.
+        var refusal = Assert.Single(Check(observabilitySupported: false).Refusals);
+
+        Assert.Contains("ModeCannotAnswerThisNature", refusal.Detail, StringComparison.Ordinal);
     }
 
     // ---------------------------------------------------------------------------------------------

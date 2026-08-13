@@ -6,7 +6,11 @@ namespace Harness.Results;
 /// <summary>What a submission declared about one vector — everything the package needs that a run cannot supply.</summary>
 /// <param name="AssertedBehaviours">The behaviours this vector's assertions depend on. Set-differenced against the model's declaration (M4).</param>
 /// <param name="CompletionSignal">The block's own done-signal, so the settling declaration can be checked against it.</param>
-/// <param name="ObservabilitySupported">Whether the transport can support the declared observability. False is a refusal, not a warning.</param>
+/// <param name="Observability">
+/// The COMPUTED observability evaluation for this vector (ObservabilityCheck.Evaluate). Null means the
+/// check did not run, which fails closed - it used to be a caller-supplied bool, and a gate whose
+/// verdict its caller supplies is not a gate.
+/// </param>
 public sealed record VectorDeclaration(
     string VectorId,
     Basis? Basis,
@@ -14,9 +18,9 @@ public sealed record VectorDeclaration(
     SettlingDeclaration? Settling,
     IReadOnlyCollection<string> AssertedBehaviours,
     string CompletionSignal,
-    string VectorAuthor,
-    string BlockAuthor,
-    bool ObservabilitySupported);
+    AgentIdentity VectorAuthor,
+    AgentIdentity BlockAuthor,
+    ObservabilityReport? Observability);
 
 /// <summary>
 /// Assembles DB-8's package from what a run produced and what the submission declared.
@@ -65,7 +69,7 @@ public static class ResultPackageBuilder
             declaration.CompletionSignal,
             declaration.VectorAuthor,
             declaration.BlockAuthor,
-            declaration.ObservabilitySupported);
+            declaration.Observability);
 
         var stimulusReport = StimulusCheck.Check(stimulus, expectation, expectedBuild);
 

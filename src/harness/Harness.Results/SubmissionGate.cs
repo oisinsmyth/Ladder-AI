@@ -1,0 +1,367 @@
+using System.Text.RegularExpressions;
+
+namespace Harness.Results;
+
+/// <summary>
+/// The three outcomes per gate, and they may never be collapsed into two.
+/// </summary>
+public enum GateStatus
+{
+    /// <summary>A verifier ran against this submission's actual content. A result.</summary>
+    Checked,
+
+    /// <summary>No verifier can exist for this; an independent reader decided. A result, LABELLED.</summary>
+    Judgement,
+
+    /// <summary>
+    /// No verifier exists yet, or the input it needs is absent. <b>NOT A RESULT</b> — and it fails
+    /// closed, with no flag that relaxes it.
+    /// </summary>
+    NotChecked,
+}
+
+/// <summary>One gate's outcome, with the verifier that produced it named.</summary>
+public sealed record GateResult(string Gate, GateStatus Status, bool Passed, string Verifier, string Detail);
+
+/// <summary>The submission's verdict. <b>There is deliberately no plain "ADMISSIBLE".</b></summary>
+public enum SubmissionVerdict
+{
+    /// <summary>Every mechanical gate ran and passed. Judgement gates remain, and they are named.</summary>
+    AdmissibleSubjectToJudgement,
+
+    /// <summary>A gate ran and refused, or a gate could not be run at all.</summary>
+    NotAdmissible,
+
+    /// <summary>There was nothing to gate. Empty is not clean.</summary>
+    NothingExamined,
+}
+
+/// <summary>The whole report for one submission.</summary>
+public sealed record SubmissionReport(IReadOnlyList<GateResult> Gates, int VectorsExamined)
+{
+    public SubmissionVerdict Verdict =>
+        VectorsExamined == 0 || Gates.Count == 0 ? SubmissionVerdict.NothingExamined
+        : Gates.Any(g => g.Status == GateStatus.NotChecked) ? SubmissionVerdict.NotAdmissible
+        : Gates.Any(g => g.Status == GateStatus.Checked && !g.Passed) ? SubmissionVerdict.NotAdmissible
+        : SubmissionVerdict.AdmissibleSubjectToJudgement;
+
+    /// <summary>Gates that could not be run. This is the harness lane's build list.</summary>
+    public IReadOnlyList<GateResult> NotChecked => Gates.Where(g => g.Status == GateStatus.NotChecked).ToArray();
+
+    /// <summary>Gates that ran and refused.</summary>
+    public IReadOnlyList<GateResult> Refused => Gates.Where(g => g.Status == GateStatus.Checked && !g.Passed).ToArray();
+
+    /// <summary>Gates nothing can ever verify, listed so they are not mistaken for verified ones.</summary>
+    public IReadOnlyList<GateResult> Judgements => Gates.Where(g => g.Status == GateStatus.Judgement).ToArray();
+}
+
+/// <summary>
+/// Contract §10's enforcement surface, in the order a submission meets it — <b>as runnable checks.</b>
+///
+/// <para><b>A gate nobody can run is not a gate, and saying it passed is worse than saying nothing.</b>
+/// Every gate below reports which of the three outcomes it reached and which verifier produced it, so a
+/// report cannot claim a check that did not happen.</para>
+/// </summary>
+public static class SubmissionGate
+{
+    private static readonly Regex AbsoluteAddress = new(@"^%[A-Za-z]{0,2}\d+(\.\d+)?$", RegexOptions.Compiled);
+
+    /// <summary>
+    /// A REAL, computed observability report over a trivially supportable expectation.
+    ///
+    /// <para>The per-gate delegations below reuse <c>Admissibility.Check</c>, which composes every gate;
+    /// each call needs a value for the gates it is not asking about. This is deliberately a report
+    /// PRODUCED BY the checker rather than a fabricated "supported" — there is no way to fabricate one,
+    /// which is the property that made observability a computation in the first place.</para>
+    /// </summary>
+    private static readonly ObservabilityReport Passing = ObservabilityCheck.Evaluate(
+        new[] { new ObservabilityDeclaration("<gate-local>", SignalNature.PersistentState, InstrumentationMode.Latched, 0) },
+        MirrorObservability.Of(("<gate-local>", new[] { InstrumentationMode.Latched })),
+        floorScans: 1, declaredCompression: 1, runtimeCompression: 1);
+
+    /// <summary>Run every gate over one submission.</summary>
+    /// <param name="computedConflicts">
+    /// Blocks the reference graph says conflict with this submission's targets (D9). <b>Null means the
+    /// graph was not available</b>, which makes the blacklist gate NOT CHECKED rather than passed — a
+    /// blacklist compared against an absent graph is a blacklist nobody checked.
+    /// </param>
+    public static SubmissionReport Check(
+        IReadOnlyList<SubmissionVector> vectors,
+        AssertionEnumeration enumeration,
+        FidelityDeclaration? fidelity,
+        AgentIdentity blockAuthor,
+        MirrorObservability map,
+        double floorScans,
+        int runtimeCompression,
+        IReadOnlySet<string>? computedConflicts)
+    {
+        ArgumentNullException.ThrowIfNull(vectors);
+        ArgumentNullException.ThrowIfNull(enumeration);
+        ArgumentNullException.ThrowIfNull(map);
+
+        var gates = new List<GateResult>();
+
+        if (vectors.Count == 0)
+        {
+            gates.Add(new GateResult("0 submission", GateStatus.Checked, false, nameof(SubmissionGate),
+                "the submission contains no vectors. Empty is not clean: a submission with nothing in it cannot be admitted, and reporting it as admissible would be the purest form of a gate that passed without examining anything."));
+            return new SubmissionReport(gates, 0);
+        }
+
+        gates.Add(Schema(vectors));
+        gates.Add(Authorship(vectors, blockAuthor));
+        gates.Add(BasisGate(vectors, enumeration));
+        gates.Add(new GateResult("3c basis — faithful reading of the clause", GateStatus.Judgement, true, "none, ever",
+            "whether the cited assertion is a faithful reading of the clause is what the independent author is for. It is recorded, never verified."));
+        gates.Add(Fidelity(vectors, fidelity));
+        gates.Add(Observability(vectors, map, floorScans, runtimeCompression));
+        gates.Add(Settling(vectors));
+        gates.Add(new GateResult("6b settling — does the condition imply the value is final", GateStatus.Judgement, true, "none, ever",
+            "whether the declared settling condition really implies finality is judgement, informed by the model's fidelity declaration."));
+        gates.Add(StartBool(vectors));
+        gates.Add(Blacklist(vectors, computedConflicts));
+        gates.Add(new GateResult("8b blacklist — over-broad?", GateStatus.Judgement, true, "density, reported not gated",
+            $"blacklist density is {vectors.Sum(v => v.Blacklist.Count)} entr(ies) across {vectors.Count} vector(s). Over-blacklisting is measurable and not preventable."));
+        gates.Add(LivenessPreconditions(vectors, map));
+
+        return new SubmissionReport(gates, vectors.Count);
+    }
+
+    // -------------------------------------------------------------------------------------------------
+    // 1 — schema
+    // -------------------------------------------------------------------------------------------------
+
+    private static GateResult Schema(IReadOnlyList<SubmissionVector> vectors)
+    {
+        var problems = new List<string>();
+
+        foreach (var v in vectors)
+        {
+            var label = string.IsNullOrWhiteSpace(v.Id) ? "<unnamed vector>" : v.Id;
+
+            if (string.IsNullOrWhiteSpace(v.Id)) problems.Add($"{label}: Id is empty.");
+            if (string.IsNullOrWhiteSpace(v.Slot)) problems.Add($"{label}: Slot is empty.");
+            if (v.Index < 0) problems.Add($"{label}: Index is negative.");
+            if (string.IsNullOrWhiteSpace(v.StartBool)) problems.Add($"{label}: StartBool is empty.");
+            if (string.IsNullOrWhiteSpace(v.CompletionSignal)) problems.Add($"{label}: CompletionSignal is empty.");
+            if (v.CompressionFactor < 1) problems.Add($"{label}: CompressionFactor is {v.CompressionFactor}. Scan counts are meaningless without the comp they were stated at.");
+
+            // MaxDuration is not a formality: X-B makes it the per-test timeout and DB-13 needs it for
+            // wave length, so a vector without one can neither be packed nor bounded.
+            if (v.MaxDurationScans < 1)
+                problems.Add($"{label}: MaxDuration is {v.MaxDurationScans} scans. X-B makes it the per-test timeout and DB-13 needs it for wave length — a vector without one can neither be packed nor bounded.");
+
+            if (v.Expectations.Count == 0)
+                problems.Add($"{label}: no Expectations. A vector that asserts nothing cannot fail, so its pass says nothing.");
+
+            // Kills is in the code and absent from contract section 2's format. Section 10 requires
+            // mutation testing and this is the only mechanism for it that exists, so it is required here
+            // and the discrepancy is raised rather than silently resolved.
+            if (string.IsNullOrWhiteSpace(v.Kills))
+                problems.Add($"{label}: no Kills. A vector that no credible wrong implementation would fail only measures uptime. (Contract section 2 omits this field; section 10 requires mutation testing and this is the only mechanism for it — raised as a discrepancy, not resolved.)");
+        }
+
+        return new GateResult("1 schema", GateStatus.Checked, problems.Count == 0, nameof(SubmissionGate),
+            problems.Count == 0 ? $"{vectors.Count} vector(s), every contract section 2 field present and typed." : string.Join(" | ", problems));
+    }
+
+    // -------------------------------------------------------------------------------------------------
+    // 2 — authorship (D6)
+    // -------------------------------------------------------------------------------------------------
+
+    private static GateResult Authorship(IReadOnlyList<SubmissionVector> vectors, AgentIdentity blockAuthor)
+    {
+        var problems = new List<string>();
+
+        if (!blockAuthor.IsRecorded)
+            problems.Add("the block's author is not recorded, so D6's independence cannot be established. Unknown is not independent.");
+
+        foreach (var v in vectors)
+        {
+            if (!v.Author.IsRecorded)
+                problems.Add($"{v.Id}: the vector's author is not recorded.");
+            else if (blockAuthor.IsRecorded && v.Author.SameAs(blockAuthor))
+                problems.Add($"{v.Id}: '{v.Author}' wrote both the block and the vector. That is a correlated check and it is a refusal, not a warning.");
+        }
+
+        return new GateResult("2 authorship (D6)", GateStatus.Checked, problems.Count == 0, nameof(AgentIdentity),
+            problems.Count == 0
+                ? $"vector author(s) differ from the block author '{blockAuthor}' under a normalised comparison. NOTE: what MAKES two agents different is undefined — see AgentIdentity."
+                : string.Join(" | ", problems));
+    }
+
+    // -------------------------------------------------------------------------------------------------
+    // 3 — basis, 4 — fidelity, 6 — settling: delegated to Admissibility, which already computes them
+    // -------------------------------------------------------------------------------------------------
+
+    private static GateResult BasisGate(IReadOnlyList<SubmissionVector> vectors, AssertionEnumeration enumeration)
+    {
+        var problems = vectors
+            .SelectMany(v => Admissibility.Check(v.Basis, enumeration, FidelityDeclaration.Of("<n/a>", new[] { "x" }, null, true),
+                    Array.Empty<string>(), new SettlingDeclaration("n/a", Array.Empty<string>()), v.CompletionSignal,
+                    new AgentIdentity("a"), new AgentIdentity("b"), Passing)
+                .Refusals
+                .Where(r => r.Reason is RefusalReason.BasisNotCited or RefusalReason.ClauseNotEnumerated
+                                     or RefusalReason.AssertionNotEnumerated or RefusalReason.EnumerationEmpty)
+                .Select(r => $"{v.Id}: {r.Reason} — {r.Detail}"))
+            .ToArray();
+
+        return new GateResult("3 basis — clause AND assertion", GateStatus.Checked, problems.Length == 0, nameof(Admissibility),
+            problems.Length == 0 ? $"every citation resolves into an enumeration of {enumeration.Assertions.Count} assertion(s)." : string.Join(" | ", problems));
+    }
+
+    private static GateResult Fidelity(IReadOnlyList<SubmissionVector> vectors, FidelityDeclaration? fidelity)
+    {
+        var problems = vectors
+            .SelectMany(v => Admissibility.Check(new Basis("c", "a"), AssertionEnumeration.Of(new[] { "c" }, new[] { "a" }),
+                    fidelity, v.AssertedBehaviours, new SettlingDeclaration("n/a", Array.Empty<string>()), v.CompletionSignal,
+                    new AgentIdentity("a"), new AgentIdentity("b"), Passing)
+                .Refusals
+                .Where(r => r.Reason is RefusalReason.FidelityExceeded or RefusalReason.FidelityUnusable or RefusalReason.NothingExamined)
+                .Select(r => $"{v.Id}: {r.Reason} — {r.Detail}"))
+            .ToArray();
+
+        return new GateResult("4 fidelity (M4)", GateStatus.Checked, problems.Length == 0, nameof(Admissibility),
+            problems.Length == 0 ? $"every asserted behaviour is in model '{fidelity?.ModelId}'s Represents set." : string.Join(" | ", problems));
+    }
+
+    private static GateResult Settling(IReadOnlyList<SubmissionVector> vectors)
+    {
+        var problems = vectors
+            .SelectMany(v => Admissibility.Check(new Basis("c", "a"), AssertionEnumeration.Of(new[] { "c" }, new[] { "a" }),
+                    FidelityDeclaration.Of("<n/a>", new[] { "x" }, null, true), Array.Empty<string>(),
+                    v.Settling, v.CompletionSignal, new AgentIdentity("a"), new AgentIdentity("b"), Passing)
+                .Refusals
+                .Where(r => r.Reason is RefusalReason.SettlingNotDeclared or RefusalReason.SettlingIsTheCompletionFlag)
+                .Select(r => $"{v.Id}: {r.Reason} — {r.Detail}"))
+            .ToArray();
+
+        return new GateResult("6 settling", GateStatus.Checked, problems.Length == 0, nameof(Admissibility),
+            problems.Length == 0 ? "every vector declares a settling condition that is not the completion flag alone." : string.Join(" | ", problems));
+    }
+
+    // -------------------------------------------------------------------------------------------------
+    // 5 — observability, COMPUTED
+    // -------------------------------------------------------------------------------------------------
+
+    private static GateResult Observability(IReadOnlyList<SubmissionVector> vectors, MirrorObservability map, double floorScans, int runtimeCompression)
+    {
+        var problems = new List<string>();
+
+        foreach (var v in vectors)
+        {
+            // A vector whose declared comp is not a comp is refused HERE as well as at the schema gate,
+            // and the check is then run at 1 so the rest of the vector is still evaluated. Skipping it
+            // would report the observability gate as passed on a vector it never looked at.
+            var declared = v.CompressionFactor;
+            if (declared < 1)
+            {
+                problems.Add($"{v.Id}: CompressionFactor is {declared}, so the window arithmetic has no basis. Scan counts are meaningless without the comp they were stated at; the check below was run at comp=1 to evaluate the rest.");
+                declared = 1;
+            }
+
+            var report = ObservabilityCheck.Evaluate(v.Expectations, map, floorScans, declared, runtimeCompression);
+            problems.AddRange(report.Refusals.Select(r => $"{v.Id}/{r.Signal}: {r.Outcome} — {r.Detail}"));
+        }
+
+        return new GateResult("5 observability", GateStatus.Checked, problems.Count == 0, nameof(ObservabilityCheck),
+            problems.Count == 0
+                ? $"every expectation is supportable by the map, against a floor of {floorScans:0.0} scan(s) at comp={runtimeCompression}."
+                : string.Join(" | ", problems));
+    }
+
+    // -------------------------------------------------------------------------------------------------
+    // 7 — start bool
+    // -------------------------------------------------------------------------------------------------
+
+    private static GateResult StartBool(IReadOnlyList<SubmissionVector> vectors)
+    {
+        var problems = new List<string>();
+
+        foreach (var group in vectors.GroupBy(v => v.Slot, StringComparer.Ordinal))
+        {
+            var names = group.Select(v => v.StartBool).Distinct(StringComparer.Ordinal).ToArray();
+            if (names.Length > 1)
+                problems.Add($"slot '{group.Key}' names {names.Length} different start bools ({string.Join(", ", names)}). Exactly one per slot: the commit raises one bit per slot.");
+        }
+
+        foreach (var v in vectors.Where(v => AbsoluteAddress.IsMatch(v.StartBool?.Trim() ?? string.Empty)))
+        {
+            problems.Add($"{v.Id}: StartBool '{v.StartBool}' is a bit POSITION, not a name. Bind by NAME — the bit order within the start-bool register is [I], not [M], and the simulator and BitAddressOf agree FROM THE SAME PREMISE, so their agreement is worth nothing.");
+        }
+
+        return new GateResult("7 start bool (submission half)", GateStatus.Checked, problems.Count == 0, nameof(SubmissionGate),
+            problems.Count == 0
+                ? "exactly one start bool per slot, every one bound by name. The LATER-SCAN rule is enforced at run time by InertPhase against the observed counter, and is not checkable here."
+                : string.Join(" | ", problems));
+    }
+
+    // -------------------------------------------------------------------------------------------------
+    // 8 — blacklist
+    // -------------------------------------------------------------------------------------------------
+
+    private static GateResult Blacklist(IReadOnlyList<SubmissionVector> vectors, IReadOnlySet<string>? computedConflicts)
+    {
+        if (computedConflicts is null)
+        {
+            return new GateResult("8 blacklist", GateStatus.NotChecked, false, "cross-check conflict graph",
+                "no computed disjointness graph was supplied, so the add-only property was compared against nothing. A blacklist checked against an absent graph is a blacklist nobody checked, and reporting it as passed is exactly the failure this gate exists to prevent.");
+        }
+
+        var problems = new List<string>();
+
+        foreach (var v in vectors)
+        {
+            foreach (var entry in v.Blacklist)
+            {
+                if (string.IsNullOrWhiteSpace(entry.Block))
+                    problems.Add($"{v.Id}: a blacklist entry names no block.");
+
+                if (string.IsNullOrWhiteSpace(entry.Reason))
+                    problems.Add($"{v.Id}: blacklist entry '{entry.Block}' carries no reason. The failure mode here is defensive over-blacklisting, concurrency collapsing toward serial, and nobody noticing BECAUSE IT STILL WORKS — a recorded reason is what makes that visible.");
+            }
+        }
+
+        // ADD-ONLY IS A PROPERTY OF THE TYPE, NOT OF THIS CHECK: BlacklistEntry carries no negation, no
+        // "allow" and no override, so an agent cannot express a removal. What is verified here is that
+        // the effective set is a SUPERSET of the computed one — which it is by construction, and is
+        // asserted rather than assumed.
+        var declared = vectors.SelectMany(v => v.Blacklist.Select(b => b.Block)).ToHashSet(StringComparer.Ordinal);
+        var effective = new HashSet<string>(computedConflicts, StringComparer.Ordinal);
+        effective.UnionWith(declared);
+
+        if (!computedConflicts.IsSubsetOf(effective))
+            problems.Add("the effective exclusion set does not contain every computed conflict. That should be impossible — the blacklist can only add — so this is a defect in the gate, not in the submission.");
+
+        return new GateResult("8 blacklist", GateStatus.Checked, problems.Count == 0, nameof(SubmissionGate),
+            problems.Count == 0
+                ? $"{declared.Count} declared exclusion(s) on top of {computedConflicts.Count} computed conflict(s); every entry carries a reason, and the type carries no way to remove one. NOTE: the blacklist names BLOCKS while admission colours SLOTS, so naming a block excludes every slot testing it."
+                : string.Join(" | ", problems));
+    }
+
+    // -------------------------------------------------------------------------------------------------
+    // 9 — liveness, the half that IS separable to submission time
+    // -------------------------------------------------------------------------------------------------
+
+    private static GateResult LivenessPreconditions(IReadOnlyList<SubmissionVector> vectors, MirrorObservability map)
+    {
+        // The liveness CHECK is post-run and cannot be brought forward — nothing has happened yet. What
+        // CAN be brought forward is whether liveness could be established at all, and a vector whose
+        // liveness would be unanswerable is refused before a wave is spent on it rather than after.
+        var problems = new List<string>();
+
+        foreach (var v in vectors)
+        {
+            if (string.IsNullOrWhiteSpace(v.StartBool))
+                problems.Add($"{v.Id}: no start bool, so neither 'was it commanded' nor 'did it run' could be answered after the wave. The result would be unreadable rather than failing.");
+
+            if (map.IsEmpty)
+                problems.Add($"{v.Id}: the map declares nothing, so no signal this vector reads could be shown to have been published.");
+        }
+
+        return new GateResult("9 liveness preconditions (submission half)", GateStatus.Checked, problems.Count == 0, nameof(SubmissionGate),
+            problems.Count == 0
+                ? "every vector could have its liveness established after the run: it has a start bool, and the map publishes something. The stimulus check itself is post-run (StimulusCheck) and is not a submission-time gate."
+                : string.Join(" | ", problems));
+    }
+}

@@ -127,9 +127,9 @@ public sealed record Admissibility(IReadOnlyList<(RefusalReason Reason, string D
         IReadOnlyCollection<string> assertedBehaviours,
         SettlingDeclaration? settling,
         string completionSignal,
-        string vectorAuthor,
-        string blockAuthor,
-        bool observabilitySupported)
+        AgentIdentity vectorAuthor,
+        AgentIdentity blockAuthor,
+        ObservabilityReport? observability)
     {
         ArgumentNullException.ThrowIfNull(enumeration);
         ArgumentNullException.ThrowIfNull(assertedBehaviours);
@@ -207,22 +207,35 @@ public sealed record Admissibility(IReadOnlyList<(RefusalReason Reason, string D
         }
 
         // --- authorship (D6) -----------------------------------------------------------------------
-        if (string.IsNullOrWhiteSpace(vectorAuthor) || string.IsNullOrWhiteSpace(blockAuthor))
+        if (!vectorAuthor.IsRecorded || !blockAuthor.IsRecorded)
         {
             refusals.Add((RefusalReason.AuthorshipCorrelated,
                 "authorship is not recorded on both sides, so D6's independence cannot be established. Unknown is not independent."));
         }
-        else if (string.Equals(vectorAuthor, blockAuthor, StringComparison.Ordinal))
+        else if (vectorAuthor.SameAs(blockAuthor))
         {
             refusals.Add((RefusalReason.AuthorshipCorrelated,
-                $"'{vectorAuthor}' wrote both the block and the vector. That is a correlated check, and it is a refusal rather than a warning."));
+                $"'{vectorAuthor}' wrote both the block and the vector. That is a correlated check, and it is a refusal rather than a warning. (The comparison is NORMALISED - trimmed and case-folded - which is strictly tighter than the ordinal one it replaces, and closes the variants a keystroke would otherwise defeat.)"));
         }
 
         // --- observability -------------------------------------------------------------------------
-        if (!observabilitySupported)
+        // *** IT IS A COMPUTATION AND NO LONGER A PARAMETER. *** This used to take `bool
+        // observabilitySupported`, which made the gate the contract leans on hardest an ARGUMENT: a
+        // caller could assert the answer. An ObservabilityReport can only be produced by
+        // ObservabilityCheck.Evaluate against the map and the floor, so passing one is passing evidence
+        // rather than a verdict; passing NULL is "the check did not run", which fails closed.
+        if (observability is null)
         {
             refusals.Add((RefusalReason.Unobservable,
-                "the transport cannot support this vector's declared observability. A green that cannot mean anything is worse than a refusal."));
+                "no observability evaluation was performed, so nothing established that this vector's declared observability can be supported. A gate that did not run is not a gate that passed."));
+        }
+        else if (!observability.Supported)
+        {
+            foreach (var finding in observability.Refusals)
+            {
+                refusals.Add((RefusalReason.Unobservable,
+                    $"{finding.Signal}: {finding.Outcome} - {finding.Detail} A green that cannot mean anything is worse than a refusal."));
+            }
         }
 
         return new Admissibility(refusals);

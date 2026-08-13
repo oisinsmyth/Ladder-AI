@@ -38,9 +38,13 @@ public class ResultPackageTests
             settling ?? new SettlingDeclaration("count unchanged across 3 consecutive scans", new[] { "Demo_Count" }),
             behaviours ?? new[] { "fill-to-setpoint" },
             "Demo_Done",
-            vectorAuthor,
-            blockAuthor,
-            observabilitySupported);
+            new AgentIdentity(vectorAuthor),
+            new AgentIdentity(blockAuthor),
+            observabilitySupported ? Supportable : null);
+
+    private static readonly ObservabilityReport Supportable = ObservabilityCheck.Evaluate(
+        new[] { new ObservabilityDeclaration("Demo_Count", SignalNature.PersistentState, InstrumentationMode.Latched, 0) },
+        MirrorObservability.Of(("Demo_Count", new[] { InstrumentationMode.Latched })), 9, 1, 1);
 
     private static SlotRunResult Run(SlotOutcome outcome = SlotOutcome.Completed) =>
         new(outcome, new ushort[] { 10, 1 }, 100, 140, 2, 8,
