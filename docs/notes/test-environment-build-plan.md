@@ -294,10 +294,21 @@ phase 2 with the copy-layer generator.
 > > **looser** of the two fences — the exact condition that test's failure message says must never
 > > hold. **It must not be silenced by re-adding the constant.**
 > >
-> > **Two more rig-session preconditions**, because `portal-status` showed 2 sessions in use so only
-> > Debug was built: a **Release rebuild of `download-probe` when Portal is free**, plus a **manual
-> > `openness-approve-build.ps1 -Exe`** — it has no self-approval by design. *An operator meeting an
-> > unapproved binary mid-session reads it as a wedged Portal, which has cost this project an hour.*
+> > **Two more rig-session preconditions — BOTH NOW DONE (2026-08-13, in a window where
+> > `portal-status` reported 0 processes / 0 orphans / 0 strays).** `download-probe` is
+> > **Release-built** and **approved across 17.0 / 19.0 / 20.0**: the check first reported *"10 entries,
+> > 2 name this exact path, **0 match this file's hash**"* — so it was genuinely unapproved, not
+> > assumed so. *An operator meeting an unapproved binary mid-session reads it as a wedged Portal,
+> > which has cost this project an hour.*
+> >
+> > ⚠️ **APPROVED IS NOT VERIFIED.** The registry entry is written; the approval tool's own closing
+> > line is that only an actual attach proves it. **That attach is step 0 of the rig session**, not
+> > something to claim now.
+> >
+> > 🔴 **THE ONE THING ONLY THE OWNER CAN DO:** if the session targets a `Live Runs/` scratch project
+> > rather than `GenProject1`, its path must be added to the **machine-local** allowlist at
+> > `%ProgramData%\Ladder-AI\download-probe.allowlist`. **No agent may write that file** — it is the
+> > owner granting a download target, and the path cannot go in the committed list (docs/13).
 >
 > **FOR THE OWNER — two open questions, plus six rulings I made so nothing blocked:**
 >
