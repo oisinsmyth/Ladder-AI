@@ -72,9 +72,11 @@ phase 2 with the copy-layer generator.
 > **the deployment gateway** (built, *never run*) · `compile --station` as the gate · the armed
 > confirm loop · the download fence as an **allowlist**.
 >
-> **IN FLIGHT:** *** 5.2 IS THE ONLY THING LEFT BEFORE THE RIG. *** **The enumeration has CONVERGED
-> at 25 assertions over 8 clauses** (`13a2533`) and is being **stamped**; vectors by a **different**
-> agent follow; then the one rig session.
+> **IN FLIGHT:** *** 5.2's AUTHORING IS COMPLETE. THE RIG SESSION IS THE ONLY WORK LEFT IN THE PLAN. ***
+> **27 assertions over 8 clauses, all stamped, all 27 verified to recompute under an independent
+> implementation** — and **set B carries 27 vectors, 27 distinct IDs, zero dangled citations,
+> `UNCLASSIFIED = 0`, with gate 3i passing on every one.** Set A is frozen at 25 as the comparison
+> artifact. Nothing remains to author.
 >
 > > ### 📉 THE CONVERGENCE, BECAUSE IT IS THE EVIDENCE THAT THE METHOD WORKS
 > >
