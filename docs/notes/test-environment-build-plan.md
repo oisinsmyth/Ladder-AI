@@ -251,12 +251,31 @@ phase 2 with the copy-layer generator.
 > > download**; it passed only because the fake echoed back every name handed to it. And **a pipe
 > > would have hung forever** — Portal inherits the redirected stdout and `WaitForExit` never returns.
 > >
-> > 🔴 **F1 — A PRECONDITION, NOT A DETAIL: NO PROJECT ON THIS MACHINE PASSES THE PROBE'S SCRATCH
-> > GUARD.** It demands a filename ending `" scratch.ap20"`; `GenProject1.ap20` and
-> > `SampleProject.ap20` both fail → exit 3, nothing contacted. **Ruled: replace it with the ALLOWLIST
-> > pattern ADR-0011 already established**, not a rename. A filename suffix is a *convention* — it
-> > blocks the legitimate project while doing nothing about the ~19 real site `.ap20` files on
-> > this machine, any of which could satisfy it by rename. **Wrong in both directions at once.**
+> > 🔴 **F1 — A PRECONDITION, NOT A DETAIL.** The probe's scratch guard demanded a filename ending
+> > `" scratch.ap20"`; `GenProject1.ap20` and `SampleProject.ap20` both fail → exit 3, nothing
+> > contacted. **Ruled and done (`f69d7e6`): replaced with the ALLOWLIST pattern ADR-0011 already
+> > established**, not a rename — a filename suffix is a *convention*, blocking the legitimate project
+> > while doing nothing about the ~19 real site `.ap20` files here, any of which could satisfy it
+> > by rename.
+> >
+> > ⚠️ **AND I OVERSTATED IT — "no project on this machine passes" WAS MY GENERALISATION, NOT A
+> > MEASUREMENT.** The gateway lane measured *those two projects*; I repeated it as a claim about the
+> > machine. **A `Live Runs/` scratch copy does pass**, because the suffix was fitted to exactly those
+> > — so a repo-only allowlist **would have broken the one project that currently works.** Hence two
+> > fixed-path allowlists: the tracked `tools/download-probe.allowlist`, and a machine-local one at
+> > `%ProgramData%\Ladder-AI\` for paths that **may not be committed** (docs/13). *** OUTSIDE THE TREE
+> > RATHER THAN GITIGNORED, AND THE REASON IS TODAY'S `.bak`: AN IGNORE PATTERN PROTECTS THE FILE
+> > SOMEBODY THOUGHT OF. *** **No agent may create the machine-local file** — that is the owner
+> > granting a download target; its absence is a refusal naming the exact path and format.
+> >
+> > **A downstream test went red, correctly:** the gateway's own `RequiredProjectSuffix` is now the
+> > **looser** of the two fences — the exact condition that test's failure message says must never
+> > hold. **It must not be silenced by re-adding the constant.**
+> >
+> > **Two more rig-session preconditions**, because `portal-status` showed 2 sessions in use so only
+> > Debug was built: a **Release rebuild of `download-probe` when Portal is free**, plus a **manual
+> > `openness-approve-build.ps1 -Exe`** — it has no self-approval by design. *An operator meeting an
+> > unapproved binary mid-session reads it as a wedged Portal, which has cost this project an hour.*
 >
 > **FOR THE OWNER — two open questions, plus six rulings I made so nothing blocked:**
 >
