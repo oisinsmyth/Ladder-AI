@@ -108,7 +108,11 @@ namespace Ladder.Wave
                     "downloaded is undecidable, and the object count DB-4 budgets against would be wrong."));
             }
 
-            var evidenceByObject = BuildEvidenceIndex(evidence);
+            // Kept whole, and attached to the decision: an admitted submission may sit in a queue across
+            // a coordinator's death, and evidence that did not travel with it would come back as an item
+            // nobody had gated (WaveQueueStore / QueueRehydration).
+            var suppliedEvidence = (evidence ?? Enumerable.Empty<AdmissionEvidence>()).Where(e => e != null).ToArray();
+            var evidenceByObject = BuildEvidenceIndex(suppliedEvidence);
 
             foreach (var changedObject in submission.Objects)
             {
@@ -132,6 +136,7 @@ namespace Ladder.Wave
                     submission,
                     findings,
                     routing,
+                    suppliedEvidence,
                     "Refused whole (DB-9): a partial submission is a refusal with reasons, never a " +
                     "partial admission. " + findings.Count + " finding(s) across " +
                     submission.Objects.Count + " object(s).");
@@ -145,6 +150,7 @@ namespace Ladder.Wave
                     submission,
                     DownloadQueue.DeferredQueue,
                     routing,
+                    suppliedEvidence,
                     "Admitted, and HELD AS A UNIT for the drain boundary: " + deferred.Length +
                     " of its " + submission.Objects.Count + " object(s) are STOP-class (" +
                     string.Join(", ", deferred) + "). Splitting the submission across a wave boundary " +
@@ -156,16 +162,17 @@ namespace Ladder.Wave
                 submission,
                 DownloadQueue.RunQueue,
                 routing,
+                suppliedEvidence,
                 "Admitted: every object passed preflight and compiled clean in isolation against the " +
                 "content submitted, and every change is RUN-class, so the submission flows through a " +
                 "normal wave boundary (§1.2, R6, D23).");
         }
 
-        private static Dictionary<string, List<AdmissionEvidence>> BuildEvidenceIndex(IEnumerable<AdmissionEvidence>? evidence)
+        private static Dictionary<string, List<AdmissionEvidence>> BuildEvidenceIndex(IEnumerable<AdmissionEvidence> evidence)
         {
             var index = new Dictionary<string, List<AdmissionEvidence>>(ChangedObject.NameComparer);
 
-            foreach (var item in (evidence ?? Enumerable.Empty<AdmissionEvidence>()).Where(e => e != null))
+            foreach (var item in evidence)
             {
                 if (item.ObjectName.Length == 0)
                 {

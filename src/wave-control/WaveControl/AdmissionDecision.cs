@@ -104,6 +104,7 @@ namespace Ladder.Wave
             DownloadQueue queue,
             IReadOnlyList<AdmissionFinding> findings,
             IReadOnlyList<RoutingVerdict> routing,
+            IReadOnlyList<AdmissionEvidence> evidence,
             string summary)
         {
             Submission = submission;
@@ -111,6 +112,7 @@ namespace Ladder.Wave
             Queue = queue;
             Findings = findings;
             Routing = routing;
+            Evidence = evidence;
             Summary = summary;
         }
 
@@ -130,6 +132,18 @@ namespace Ladder.Wave
 
         /// <summary>The per-object routing verdicts, kept for the log even when the submission was refused.</summary>
         public IReadOnlyList<RoutingVerdict> Routing { get; }
+
+        /// <summary>
+        /// The evidence this decision was made on, for the objects in this submission.
+        /// </summary>
+        /// <remarks>
+        /// Kept because an admitted submission may sit in a queue across a coordinator's lifetime, and
+        /// the evidence has to travel with it: a queue entry restored WITHOUT its preflight, compile and
+        /// hash would be an item that was gated once, silently reloaded as an item nobody gated. See
+        /// <see cref="WaveQueueStore"/> and <see cref="QueueRehydration"/>, which re-run this same gate
+        /// against the content's CURRENT hash before anything restored is allowed to drain.
+        /// </remarks>
+        public IReadOnlyList<AdmissionEvidence> Evidence { get; }
 
         /// <summary>A sentence describing the decision.</summary>
         public string Summary { get; }
@@ -188,12 +202,14 @@ namespace Ladder.Wave
                 DownloadQueue.Unassigned,
                 new AdmissionFinding[0],
                 new RoutingVerdict[0],
+                new AdmissionEvidence[0],
                 summary);
 
         internal static AdmissionDecision Refuse(
             Submission submission,
             IReadOnlyList<AdmissionFinding> findings,
             IReadOnlyList<RoutingVerdict> routing,
+            IReadOnlyList<AdmissionEvidence> evidence,
             string summary)
         {
             if (findings.Count == 0)
@@ -210,6 +226,7 @@ namespace Ladder.Wave
                 DownloadQueue.Unassigned,
                 findings,
                 routing,
+                evidence,
                 summary);
         }
 
@@ -217,6 +234,7 @@ namespace Ladder.Wave
             Submission submission,
             DownloadQueue queue,
             IReadOnlyList<RoutingVerdict> routing,
+            IReadOnlyList<AdmissionEvidence> evidence,
             string summary)
         {
             if (queue == DownloadQueue.Unassigned)
@@ -227,7 +245,7 @@ namespace Ladder.Wave
                     "decision that reads as admitted while belonging to neither queue.");
             }
 
-            return new AdmissionDecision(submission, AdmissionOutcome.Admitted, queue, new AdmissionFinding[0], routing, summary);
+            return new AdmissionDecision(submission, AdmissionOutcome.Admitted, queue, new AdmissionFinding[0], routing, evidence, summary);
         }
     }
 }

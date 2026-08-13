@@ -9,26 +9,50 @@ namespace Ladder.Wave
     {
         internal QueuedSubmission(
             Submission submission,
+            IReadOnlyList<AdmissionEvidence> evidence,
             DownloadQueue queue,
             string reason,
             DateTimeOffset enqueuedUtc,
-            int sequence)
+            int sequence,
+            bool excised)
         {
             Submission = submission;
+            Evidence = evidence;
             Queue = queue;
             Reason = reason;
             EnqueuedUtc = enqueuedUtc;
             Sequence = sequence;
+            Excised = excised;
         }
 
         /// <summary>The submission.</summary>
         public Submission Submission { get; }
+
+        /// <summary>
+        /// The admission evidence this entry was admitted on. It travels WITH the entry, including
+        /// across a save and reload, because an entry restored without it would be an item that was
+        /// gated once and silently reloaded as an item nobody gated.
+        /// </summary>
+        public IReadOnlyList<AdmissionEvidence> Evidence { get; }
 
         /// <summary>Which queue it is in now.</summary>
         public DownloadQueue Queue { get; }
 
         /// <summary>Why it is in that queue — the routing argument, or the excision reason.</summary>
         public string Reason { get; }
+
+        /// <summary>
+        /// TRUE when this entry is in the deferred queue because it was EXCISED (D32 step 5), not
+        /// because its change class put it there.
+        /// </summary>
+        /// <remarks>
+        /// *** THIS FLAG IS WHY THE QUEUE CROSS-CHECK ON RELOAD HAS TO BE ASYMMETRIC. *** An excised
+        /// entry is RUN-class sitting in the DEFERRED queue by decision, so re-deriving its queue from
+        /// its change classes gives the "wrong" answer legitimately. A boolean carries that, where
+        /// sniffing the reason text for the word EXCISED would be a check one edit away from silently
+        /// passing everything. See <see cref="QueueRehydrator"/>.
+        /// </remarks>
+        public bool Excised { get; }
 
         /// <summary>When it entered the queues.</summary>
         public DateTimeOffset EnqueuedUtc { get; }
@@ -76,11 +100,10 @@ namespace Ladder.Wave
     /// log, satisfies both.
     /// </para>
     /// <para>
-    /// NOT PERSISTED. These queues live in the coordinator's process. X-C's marker is what survives a
-    /// crash, and it records the wave, not the queues — so a coordinator that dies loses the deferred
-    /// queue and its submitting agents must re-submit. That is a named gap, not an oversight: nothing
-    /// in the spec asks for queue persistence, and inventing a format for it here would put a second
-    /// unreviewed durability mechanism next to the one X-C specified.
+    /// PERSISTED SEPARATELY, BY <see cref="WaveQueueStore"/>. This type holds the queues in memory and
+    /// knows nothing about files; the store saves and reloads them, and <see cref="QueueRehydrator"/>
+    /// re-runs the admission gate on everything it reads back. The separation is deliberate — the
+    /// queue rules and the durability rules fail in different ways and are worth testing apart.
     /// </para>
     /// </remarks>
     public sealed class WaveQueues
@@ -132,12 +155,58 @@ namespace Ladder.Wave
 
             var entry = new QueuedSubmission(
                 decision.Submission,
+                decision.Evidence,
                 decision.Queue,
                 decision.Summary,
                 enqueuedUtc ?? DateTimeOffset.UtcNow,
-                _sequence++);
+                _sequence++,
+                excised: false);
 
             _entries.Add(entry);
+            return entry;
+        }
+
+        /// <summary>
+        /// RESTORE an entry read back from <see cref="WaveQueueStore"/>, preserving the facts a
+        /// re-admission cannot recompute: when it arrived, its position in the arrival order, how many
+        /// wave boundaries it has already waited, and the REASON — which for an excised entry is D32
+        /// step 5's record and is the one thing that must not be replaced by a fresh admission summary.
+        /// </summary>
+        /// <remarks>
+        /// Internal on purpose: the ONLY route to it is <see cref="QueueRehydration"/>, which re-runs
+        /// the admission gate against the content's CURRENT hash first. A public restore would be a
+        /// door into the queues that bypasses loop 2, which is the one thing admission control exists
+        /// to prevent.
+        /// </remarks>
+        internal QueuedSubmission Restore(
+            AdmissionDecision decision,
+            DownloadQueue queue,
+            string reason,
+            DateTimeOffset enqueuedUtc,
+            int sequence,
+            int waveBoundariesWaited,
+            bool excised)
+        {
+            if (!decision.Admitted)
+            {
+                throw new InvalidOperationException(
+                    "Only an ADMITTED decision may be restored; this one is " + decision.Outcome + ".");
+            }
+
+            var entry = new QueuedSubmission(
+                decision.Submission,
+                decision.Evidence,
+                queue,
+                reason,
+                enqueuedUtc,
+                sequence,
+                excised)
+            {
+                WaveBoundariesWaited = waveBoundariesWaited,
+            };
+
+            _entries.Add(entry);
+            _sequence = Math.Max(_sequence, sequence + 1);
             return entry;
         }
 
@@ -175,10 +244,12 @@ namespace Ladder.Wave
 
             var moved = new QueuedSubmission(
                 existing.Submission,
+                existing.Evidence,
                 DownloadQueue.DeferredQueue,
                 "EXCISED from the wave set (D32 step 5): " + stated,
                 existing.EnqueuedUtc,
-                existing.Sequence)
+                existing.Sequence,
+                excised: true)
             {
                 WaveBoundariesWaited = existing.WaveBoundariesWaited,
             };
