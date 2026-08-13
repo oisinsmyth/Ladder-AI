@@ -12,8 +12,29 @@ namespace GoldenHarness;
 /// </summary>
 public enum DriftDisposition
 {
-    /// <summary>Looked at, consciously accepted, clears when the block is re-exported. Never gates.</summary>
+    /// <summary>
+    /// Looked at, consciously accepted, clears when the block is re-exported. Never gates.
+    ///
+    /// *** A Deferred REASON CAN GO STALE WITHOUT THE ENTRY MOVING, AND THAT HAS NOW HAPPENED TWICE. ***
+    /// It says "our .ir is ahead of the corpus and we will re-export later", which is a claim about the
+    /// REFERENCE DATA. If the block is re-exported and STILL drifts, that claim is disproven and the
+    /// entry must be re-filed — it is not a Deferred any more, whatever it says.
+    ///
+    /// Both prior cases: the three instance DBs sat here as "interface cascade from its FB" when the
+    /// real cause was `converter to-xml` omitting the empty InOut section every real TIA instance-DB
+    /// export declares — OUR DEFECT, FILED AS A PROPERTY OF THE ANSWER KEY, WHICH MAKES IT A CLOSED
+    /// QUESTION (converter `f2a548a`). And `DB_Settings` sat here as "D-7 deferred re-export" through a
+    /// fresh live re-export that did not clear it — see its entry below.
+    /// </summary>
     Deferred,
+
+    /// <summary>
+    /// A real divergence that NOBODY HAS RULED ON. *** THIS GATES. *** It is deliberately not
+    /// <see cref="Deferred"/>: "deferred" claims a decision was made, and writing an undecided thing in
+    /// the shape of a decided one is the whole failure this enum exists to prevent. An entry here is a
+    /// question waiting for an owner, not a tolerance.
+    /// </summary>
+    Unruled,
 
     /// <summary>
     /// The committed EXPORT is not a faithful TIA artifact, so the divergence is in the answer key and
@@ -63,66 +84,64 @@ public class ExportDriftDetectorTests
         new("NodeStatusAlarms", DriftDisposition.IncompleteExport,
             "reference: one of four 2026-07-10 seed artifacts committed with TIA's scaffolding trimmed (they carry no <DocumentInfo> either). On this FC the <Interface> went with the trim, so the export has none while any regenerated FC emits the standard boilerplate. `converter compare` localises exactly ONE difference, ELEMENT-ADDED at /Document/SW.Blocks.FC/AttributeList/Interface — an ADDITION of TIA's own defaults. Our output is right; the answer key is incomplete. Clears on a fresh export. Became visible only with ae62f76."),
 
-        // ---- test-project001: the D-7 deferred re-export ---------------------------------------
-        // The B-5/REQ-028 re-arming fix landed in the .ir and was never re-exported, plus its
-        // interface cascade into the instance DBs. Consciously deferred by the owner, 2026-07-20 —
-        // docs/notes/deferred-items.md D-7. To clear: re-export from TIA and commit the fresh .xml.
-        new("DB_Settings", DriftDisposition.Deferred, "D-7 deferred re-export (owner, 2026-07-20)."),
-        new("FB_PusherControl", DriftDisposition.Deferred, "D-7 deferred re-export (owner, 2026-07-20)."),
-        new("FB_ShredderSequencer", DriftDisposition.Deferred, "D-7 deferred re-export (owner, 2026-07-20)."),
+        // ---- test-project001: D-7 IS DISCHARGED, AND WHAT REMAINS IS NOT D-7 -------------------
+        //
+        // The D-7 deferred re-export (owner, 2026-07-20 - docs/notes/deferred-items.md) listed six
+        // blocks. FIVE ARE NOW IN SYNC and are gone from here: the three instance DBs (removed
+        // 2026-08-13 when converter `f2a548a` showed their reason had never been true - see the block
+        // comment below), and `FB_PusherControl` / `FB_ShredderSequencer`, cleared by the live
+        // re-export committed in `f0fb0cb`. MEASURED after that landed: test-project001 drops to
+        // 1 drifted / 25 match / 0 skipped.
+        //
+        // The sixth, `DB_Settings`, SURVIVED ITS OWN RE-EXPORT - so "deferred re-export" is disproven
+        // for it and re-filing is not optional. See its entry.
 
         // ---- 🔴 THREE ENTRIES REMOVED HERE, 2026-08-13, AND THE REASON THEY CARRIED WAS FALSE ----
         //
         // `iDB_MotorFwdRevSystem_Shredder`, `iDB_PusherControl` and `iDB_ShredderSequencer` sat here
-        // as `Deferred` — "D-7: interface cascade from its FB", i.e. *their FB's fix was never
+        // as `Deferred` - "D-7: interface cascade from its FB", i.e. *their FB's fix was never
         // re-exported, so of course the instance DB differs; re-export clears it*. That reason is
         // WRONG, and it was wrong the whole time.
         //
         // The real cause was in OUR OWN WRITER: `DbSourceWriter` emitted Input, Output, Static for an
         // instance DB where TIA emits Input, Output, InOut, Static, and the Normalizer aligned
-        // interface sections POSITIONALLY — so one missing EMPTY element slid Static into InOut's slot
+        // interface sections POSITIONALLY - so one missing EMPTY element slid Static into InOut's slot
         // and cascaded (26 localized differences on iDB_MotorFwdRevSystem_Shredder). *** NO RE-EXPORT
         // COULD EVER HAVE CLEARED IT ***, which is exactly what a deferred-re-export disposition
-        // promises would happen.
-        //
-        // MEASURED, not argued, and by an authority that is not this fix: while it was being written,
-        // ANOTHER LANE re-exported `iDB_PusherControl` and `iDB_ShredderSequencer` from TIA. Both
-        // stayed DRIFTED under the pre-fix binary against their own fresh exports. And
-        // `iDB_MotorFwdRevSystem_Shredder`, whose export has not been touched since 2026-07-17, went
-        // to MATCH on the fix alone. Same corpus, two binaries: 5 drifted -> 1.
-        //
-        // This is the working agreement's "a plausible mechanism invented to explain" a result nobody
-        // re-examined — the red twin of a false green. Once the cascade had a reason, the 26
-        // differences stopped being read, and underneath them `drift-check` could not see these
-        // blocks' actual content at all. Entries deleted rather than re-filed: there is no residue.
+        // promises would happen. Kept as the worked example of why `Deferred` is a claim with an
+        // expiry date. (Diagnosis and fix: converter lane, `f2a548a`.)
 
-        // ---- test-project001: RULED, REPAIR UNFINISHED -----------------------------------------
-        // Surfaced 2026-08-13 by BlockInterfaceFidelityTests (raw, Normalizer-free) and confirmed by
-        // drift-check once ae62f76 landed. Both UDTs carry the 2026-07-17 C-115 handshake pass — an
-        // `AutoStartSignal : Bool` member plus three member comments — which was never re-exported.
+        // ---- test-project001: REAL, MEASURED, AND NOBODY HAS RULED ON IT ------------------------
         //
-        // *** THE RULING WAS REVERSED, AND THE SECOND ONE IS THE ONE IN FORCE. *** The first reading
-        // was "remove the member, the committed export is the truth driver". Applying it left both
-        // UDTs STILL drifted, because the same pass also added comments (UDT_PusherIO -> Cycling;
-        // UDT_ShredderSequencerIO -> EnableUpstream, InCycle). Putting the bigger question up rather
-        // than deleting three more lines is what produced the actual answer: THE THING THAT DRIFTED IS
-        // ITSELF AN OWNER RULING, deliberately made and never carried into TIA.
+        // `DB_Settings` is the one block still drifting after the live re-export, and it is NOT the
+        // deferred re-export its old reason claimed - that claim died when `f0fb0cb` refreshed the
+        // corpus from a live dump and this block stayed red. Re-filed rather than left sitting under a
+        // disposition that had been disproven, which is the exact mistake the instance DBs above
+        // record.
         //
-        // OWNER RULING (b), 2026-08-13, IN FORCE: THE IR WAS RIGHT AND THE EXPORT IS STALE. Task 09
-        // should have reached the controller. The repair is therefore NOT a deletion — it is: restore
-        // the member, import task 09 into the project, re-export, so simatic-ml/ finally reflects what
-        // the IR has said since July. In flight with lad-coder (Portal).
+        // MEASURED with `converter compare` (2026-08-13), .ir -> to-xml against the fresh export:
+        // EXACTLY ONE difference, VALUE-DIFFERS at
+        //   /Document/SW.Blocks.GlobalDB/ObjectList/MultilingualText/ObjectList/MultilingualTextItem/AttributeList/Text
+        // i.e. the DB's own block comment. The two texts disagree about whether a decision happened:
+        //   export (live controller): "...Fix-wave-1 (2026-07-16) proposed defaults ... PENDING THE
+        //                              OWNER'S SETTINGS SIGN-OFF (gen/GenProject1/fix-wave-1.md is the
+        //                              signature page)."
+        //   .ir                     : "...were given site-practice defaults and SIGNED OFF 2026-07-16."
         //
-        // WHEN THAT LANDS, BOTH ENTRIES SHOULD BE DELETED OUTRIGHT — not re-filed as Deferred, and not
-        // trimmed to some residue. The member coming back is part of the repair, not a new drift.
+        // *** THAT IS A CONTENT DIFFERENCE, SO IT IS NOT IncompleteExport *** (bar condition 4 - and
+        // the export carries a <DocumentInfo>, so it fails condition 1 too). And it is structurally the
+        // SAME CLASS as the C-115/task-09 case that was just repaired under ruling (b): an IR that
+        // records a decision the controller has never been told about. That parallel is why this is
+        // Unruled and not quietly tolerated - but it is a PARALLEL, not a ruling, and the same question
+        // got two different answers last time.
         //
-        // *** AND DO NOT PREDICT THE RESULTING COUNT. *** It has been predicted twice on this exact
-        // pair (6/17 both times, by two independent people) and measured 8/15 both times. Let the
-        // drifted-set assertion above tell you what actually happened, and measure it.
-        new("UDT_PusherIO", DriftDisposition.RepairInProgress,
-            "Owner ruling (b) 2026-08-13: the IR is right and the EXPORT is stale — the 2026-07-17 C-115 pass (member `AutoStartSignal` + the `Cycling` comment) never reached TIA. Repair = restore, import task 09, re-export. Delete this entry when the fresh .xml is committed."),
-        new("UDT_ShredderSequencerIO", DriftDisposition.RepairInProgress,
-            "Owner ruling (b) 2026-08-13: the IR is right and the EXPORT is stale — the 2026-07-17 C-115 pass (member `AutoStartSignal` + the `EnableUpstream`/`InCycle` comments) never reached TIA. Repair = restore, import task 09, re-export. Delete this entry when the fresh .xml is committed."),
+        // NOT VERIFIED BY THIS LANE: the third leg. This measures .ir vs the committed export. Whether
+        // the LIVE project agrees with its own export needs Portal, which this lane does not have.
+        //
+        // The decision needed is one line: which text is true - has fix-wave-1 been signed off? If yes,
+        // the controller comment is stale and this is ruling (b) again. If no, the .ir overstates it.
+        new("DB_Settings", DriftDisposition.Unruled,
+            "One VALUE-DIFFERS, the DB's block comment: the .ir says fix-wave-1 was SIGNED OFF 2026-07-16, the live controller still says PENDING THE OWNER'S SIGN-OFF. Survived the f0fb0cb re-export, so the old 'D-7 deferred re-export' reason is disproven. Needs an owner ruling on which is true; same shape as the C-115 case ruled (b). Third leg (live project vs its export) not checked - no Portal in this lane."),
     };
 
     public static IEnumerable<object[]> Projects()
@@ -182,25 +201,31 @@ public class ExportDriftDetectorTests
     }
 
     /// <summary>
-    /// *** THE GATE THE FLAT LIST COULD NOT PROVIDE. *** A ruling that has been made and not finished
-    /// is not "known drift" — it is an unfinished repair, and the whole point of separating the two is
-    /// that this one must not go quiet. Deferred and IncompleteExport entries never reach here.
+    /// *** THE GATE THE FLAT LIST COULD NOT PROVIDE. *** Two states must not go quiet: a ruling that was
+    /// made and not finished (<see cref="DriftDisposition.RepairInProgress"/>), and a real divergence
+    /// nobody has ruled on (<see cref="DriftDisposition.Unruled"/>). Both are QUESTIONS. `Deferred` and
+    /// `IncompleteExport` are ANSWERS, and never reach here.
+    ///
+    /// <para>Yes, this can hold the suite red. That is the trade, made deliberately: the alternative is
+    /// an open question written in the shape of a settled one, which is how the instance-DB defect
+    /// survived a re-export without being re-examined. The gate is scoped so it can only ever be held
+    /// red by an entry someone has to make ONE decision about — it is not a bucket that fills up.</para>
     /// </summary>
     [Fact]
-    public void NoKnownDrift_IsAnUnfinishedRepair()
+    public void NoDriftEntry_IsAnOpenQuestion()
     {
-        var unfinished = Baseline
-            .Where(d => d.Disposition == DriftDisposition.RepairInProgress)
+        var open = Baseline
+            .Where(d => d.Disposition is DriftDisposition.RepairInProgress or DriftDisposition.Unruled)
             .OrderBy(d => d.Block, StringComparer.Ordinal)
             .ToList();
 
-        Assert.True(unfinished.Count == 0,
-            "A drift repair has been RULED but is not finished, so the baseline is carrying a decision " +
-            "rather than a tolerance:\n  " +
-            string.Join("\n  ", unfinished.Select(d => $"{d.Block} — {d.Reason}")) +
-            "\n\nFinish the repair (then delete the entry), or — if the ruling has changed and this drift " +
-            "is now accepted — re-file it as Deferred WITH the new ruling in its Reason. What must not " +
-            "happen is that it stays here looking like something someone already agreed to.");
+        Assert.True(open.Count == 0,
+            "The drift baseline is carrying an open QUESTION rather than a tolerance:\n  " +
+            string.Join("\n  ", open.Select(d => $"{d.Block} [{d.Disposition}] — {d.Reason}")) +
+            "\n\nRepairInProgress: finish the repair, then DELETE the entry.\n" +
+            "Unruled: get the ruling, then re-file as Deferred/IncompleteExport WITH it, or repair and " +
+            "delete.\nWhat must not happen is that it stays here looking like something someone already " +
+            "agreed to — that is exactly how the three instance DBs survived a re-export unexamined.");
     }
 
     /// <summary>

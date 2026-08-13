@@ -56,30 +56,27 @@ public class BlockInterfaceFidelityTests
     /// </summary>
     private static readonly Dictionary<string, string> KnownInterfaceDrift = new(StringComparer.Ordinal)
     {
-        // ---- found BY THIS TEST, 2026-08-13 -------------------------------------------------
-        // Both UDTs gained `AutoStartSignal : Bool` (the C-115 handshake member) in the .ir and were
-        // never re-exported. Same deferred-re-export class as D-7 below, but invisible to
-        // `drift-check` for the structural reason in this class's summary, so it was never recorded
-        // anywhere. To clear: re-export the type from TIA and commit the fresh .xml.
-        ["UDT_PusherIO"] = "IR declares member 'AutoStartSignal' that the committed export does not; never re-exported. drift-check reports MATCH — see this class's summary.",
-        ["UDT_ShredderSequencerIO"] = "IR declares member 'AutoStartSignal' that the committed export does not; never re-exported. drift-check reports MATCH — see this class's summary.",
-
-        // ---- the D-7 deferred re-export (docs/notes/deferred-items.md), already tracked by
-        // ---- ExportDriftDetectorTests' own baseline. Listed again here because this test asks a
-        // ---- narrower question (the Interface alone) and must not silently agree with it.
-        ["FB_PusherControl"] = "D-7: the B-5/REQ-028 re-arming fix landed in the .ir and was never re-exported.",
-        ["FB_ShredderSequencer"] = "D-7: as above.",
-
-        // 🔴 The three iDB entries that stood here were REMOVED 2026-08-13 — see the matching note in
-        // ExportDriftDetectorTests. They named two causes ("D-7 interface cascade from its FB; also
-        // the empty <Section Name=\"InOut\"/>") and the SECOND one was the whole of it: our writer
-        // omitted the empty InOut section every real instance-DB export carries. This test SAW that —
-        // it is a raw, Normalizer-free interface comparison, so unlike drift-check it was never
-        // blind — and it is written down right here, in the entry's own text, as a co-factor of a
-        // deferred re-export. *** A DEFECT IN OUR OUTPUT WAS RECORDED AS A PROPERTY OF THE ANSWER
-        // KEY, AND THAT IS WHAT KEPT IT ALIVE. *** A "known drift" entry is a closed question; the
-        // moment the InOut clause was written beside a D-7 citation it stopped being read as a bug at
-        // all. Fixed in DbSourceWriter; all three now match.
+        // ---- 🔴 SIX ENTRIES REMOVED HERE, 2026-08-13 - THE REPAIRS LANDED ----------------------
+        //
+        // `UDT_PusherIO` and `UDT_ShredderSequencerIO` were FOUND BY THIS TEST: each declared an
+        // `AutoStartSignal : Bool` member (plus C-115 member comments) that its committed export did
+        // not, while `drift-check` reported MATCH for both, because the Normalizer discarded a UDT's
+        // whole Interface. Owner ruling (b): the IR was right and the EXPORT was stale - the 2026-07-17
+        // task-09 pass had never been carried into the corpus. A lad-coder lane exported the live
+        // project, found task 09 ALREADY IN THE CONTROLLER (so the repair was re-export only, nothing
+        // to import), and committed six fresh .xml files (`f0fb0cb`). Both now match, INCLUDING the
+        // member - its return was the repair, not new drift.
+        //
+        // `FB_PusherControl` and `FB_ShredderSequencer` cleared on the same re-export.
+        //
+        // `iDB_MotorFwdRevSystem_Shredder`, `iDB_PusherControl`, `iDB_ShredderSequencer` were never
+        // listed here (this suite compares the Interface, and their defect was inside it) but are worth
+        // naming: their drift was OUR writer omitting the empty <Section Name="InOut"/> that every real
+        // TIA instance-DB export declares - fixed in converter `f2a548a`.
+        //
+        // Left as the record of what the staleness guard is for: all four of these went RED as
+        // "listed ... but its interface now MATCHES", which is how this lane learned the repair had
+        // landed rather than being told.
 
         // ---- a provenance difference, not a content one -------------------------------------
         // Four committed exports (AlarmWords, CommsProcessData, EquipmentStatus, NodeStatusAlarms)
@@ -119,8 +116,6 @@ public class BlockInterfaceFidelityTests
     public static IEnumerable<object[]> PairedBlocks() =>
         Pairs().Select(p => new object[] { p.Name, p.IrPath, p.ExportPath });
 
-    public static IEnumerable<object[]> KnownDriftNames() =>
-        KnownInterfaceDrift.Keys.OrderBy(k => k, StringComparer.Ordinal).Select(k => new object[] { k });
 
     // ---------------------------------------------------------------------------------------
     // The raw comparison. Deliberately dumber than Normalizer.Strip: local element names,
@@ -242,11 +237,23 @@ public class BlockInterfaceFidelityTests
             "population is indistinguishable in the run output from a corpus that all passed.");
     }
 
-    [Theory]
-    [MemberData(nameof(KnownDriftNames))]
-    public void EveryKnownDriftEntry_NamesABlockThatIsStillInTheCorpus(string block)
+    /// <summary>
+    /// A [Fact] over a KNOWN-PROBLEM LIST, deliberately: as a [Theory] it would fail with "No data
+    /// found" the moment the list empties, which is the state we are working towards. Sibling of the
+    /// same defect in CommittedBlocksRoundTripTests, which did exactly that on 2026-08-13.
+    /// </summary>
+    [Fact]
+    public void EveryKnownDriftEntry_NamesABlockThatIsStillInTheCorpus()
     {
-        Assert.Contains(block, Pairs().Select(p => p.Name));
+        var names = Pairs().Select(p => p.Name).ToHashSet(StringComparer.Ordinal);
+        var orphans = KnownInterfaceDrift.Keys
+            .Where(b => !names.Contains(b))
+            .OrderBy(b => b, StringComparer.Ordinal)
+            .ToList();
+
+        Assert.True(orphans.Count == 0,
+            $"KnownInterfaceDrift names block(s) with no committed .ir/export pair: [{string.Join(", ", orphans)}]. " +
+            "Remove them — an entry for a block that is not in the corpus can never come back into sync.");
     }
 
     /// <summary>

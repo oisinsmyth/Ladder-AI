@@ -393,3 +393,32 @@ dodged by filing in the easiest one):
 The vacuity guard matters as much as the bar: if *no* export carried a `<DocumentInfo>`, "missing
 `<DocumentInfo>`" would distinguish nothing and the check would wave everything through, so that is
 asserted too.
+
+### A known-problem list must not be a `[Theory]` (2026-08-13)
+
+Four guards in this suite are staleness checks over a **known-problem list** — `KnownMissingExports`,
+`KnownInterfaceDrift`, `KnownDroppedProperties`, and the uncovered-block check. As `[Theory]` +
+`MemberData` **every one of them fails with `No data found` the moment its list empties** — which is the
+state the work is driving towards. *** A TEST THAT CANNOT EXPRESS SUCCESS PUNISHES ITS OWN FIX. *** Two
+of the four did exactly that when `c49f5e9` committed the last missing exports. All four are `[Fact]`s
+now: vacuously green on an empty list, and the "empty is not clean" concern is moved to where it belongs
+— the **corpus enumerations**, which stay `[Theory]` precisely because an empty corpus really is broken.
+
+The distinction to apply when adding a guard: *is this list a population, or a list of things wrong with
+the population?* A population must never be empty. A problem list should be trying to become empty.
+
+### `Deferred` is a claim with an expiry date
+
+`Deferred` says *our `.ir` is ahead of the corpus and we will re-export later* — a claim about the
+**reference data**. It has now been disproven twice, both times by a re-export that did not clear the
+entry:
+
+- the three instance DBs sat as *"interface cascade from its FB"* when the real cause was `converter
+  to-xml` omitting the empty `<Section Name="InOut"/>` that every real TIA instance-DB export declares.
+  **Our defect, filed as a property of the answer key — which makes it a closed question.** No re-export
+  could ever have cleared it, which is precisely what the disposition promised would happen. (Converter
+  lane, `f2a548a`.)
+- `DB_Settings` sat as *"D-7 deferred re-export"* straight through the live re-export in `f0fb0cb`.
+
+So: **if a block is re-exported and still drifts, the `Deferred` claim is dead and the entry must be
+re-filed** — it is not a `Deferred` any more, whatever its Reason says. That is what `Unruled` is for.

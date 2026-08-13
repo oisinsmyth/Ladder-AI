@@ -40,9 +40,11 @@ public class CommittedBlocksRoundTripTests
     /// </summary>
     private static readonly string[] KnownMissingExports =
     {
-        // Generated 2026-07-xx and never taken through a live TIA export; its UDT and instance DB are
-        // missing for the same reason, but those are excluded earlier as non-BLOCK content.
-        "FB_HopperBlockageMonitor",
+        // EMPTY, 2026-08-13 — and empty is the GOOD state here, not a broken enumeration. The single
+        // entry was `FB_HopperBlockageMonitor` ("generated 2026-07-xx and never taken through a live
+        // TIA export"); commit `c49f5e9` added the three hopper-blockage exports, so it and its UDT and
+        // instance DB are all covered now. `KnownMissingExport_IsStillMissing` is what noticed, exactly
+        // as it was built to.
     };
 
     /// <summary>
@@ -118,11 +120,6 @@ public class CommittedBlocksRoundTripTests
             .Where(c => c.HasExport)
             .Select(c => new object[] { c.Name, c.IrDir, c.XmlDir });
 
-    public static IEnumerable<object[]> ReadableOnlyBlocksWithoutExport() =>
-        ReadableOnlyBlockCandidates()
-            .Where(c => !c.HasExport)
-            .Select(c => new object[] { c.Name, c.XmlDir });
-
     [Theory]
     [MemberData(nameof(ReadableOnlyBlocks))]
     public void ReadableOnlyBlock_SynthesizesEquivalentToItsExport(string block, string irDir, string xmlDir)
@@ -151,41 +148,75 @@ public class CommittedBlocksRoundTripTests
 
     /// <summary>
     /// The loud half of the exclusion (audit F-20, 2026-08-05). A readable-only block with no export is
-    /// unverifiable by this suite, which is a real hole — so it gets its own named, listed test case
-    /// instead of vanishing from the run. Passing here asserts only "we know about this one"; it does
-    /// NOT assert the block round-trips.
+    /// unverifiable by this suite, which is a real hole — so it is named rather than vanishing from the
+    /// run. Passing asserts only "every uncovered block is one we know about"; it does NOT assert that
+    /// any block round-trips.
+    ///
+    /// <para>*** WAS A [Theory] UNTIL 2026-08-13, AND THAT WAS A DEFECT. *** Its <c>MemberData</c>
+    /// enumerates only the blocks WITH a gap, so the moment the last gap closed — the good state, which
+    /// `c49f5e9` produced — xUnit failed the whole theory with "No data found". A test that cannot
+    /// express success is a test that punishes the fix. It is a <c>[Fact]</c> over the whole population
+    /// now: vacuously true when there are no gaps, and the "empty is not clean" concern is put where it
+    /// actually belongs — on the OVERALL enumeration, which must never be empty, because that would
+    /// mean the corpus walk itself broke.</para>
     /// </summary>
-    [Theory]
-    [MemberData(nameof(ReadableOnlyBlocksWithoutExport))]
-    public void EveryReadableOnlyBlock_IsEitherCovered_OrAKnownGap(string block, string xmlDir)
+    [Fact]
+    public void EveryReadableOnlyBlock_IsEitherCovered_OrAKnownGap()
     {
-        Assert.True(KnownMissingExports.Contains(block),
-            $"'{block}' is committed readable-only but has no export at '{Path.Combine(xmlDir, block + ".xml")}', " +
-            "so nothing in this suite checks that it synthesizes correctly. Export it and commit the .xml, or — if " +
-            "it is deliberately out of corpus — add it to CommittedBlocksRoundTripTests.KnownMissingExports with " +
-            "the reason. Silently leaving it uncovered is the one option this test exists to remove.");
+        var candidates = ReadableOnlyBlockCandidates().ToList();
+        Assert.True(candidates.Count > 0,
+            "no committed readable-only BLOCK .ir found at all — the corpus walk is broken, and an empty " +
+            "population would let every assertion below pass vacuously. Empty is not clean.");
+
+        var uncoveredAndUnnamed = candidates
+            .Where(c => !c.HasExport && !KnownMissingExports.Contains(c.Name))
+            .Select(c => $"{c.Name} (expected {Path.Combine(c.XmlDir, c.Name + ".xml")})")
+            .OrderBy(s => s, StringComparer.Ordinal)
+            .ToList();
+
+        Assert.True(uncoveredAndUnnamed.Count == 0,
+            "committed readable-only block(s) with no export, so nothing in this suite checks that they " +
+            $"synthesize correctly:\n  {string.Join("\n  ", uncoveredAndUnnamed)}\n" +
+            "Export them and commit the .xml, or — if deliberately out of corpus — add them to " +
+            "CommittedBlocksRoundTripTests.KnownMissingExports with the reason. Silently leaving one " +
+            "uncovered is the option this test exists to remove.");
     }
 
     /// <summary>
     /// Staleness guard for the allowlist above: once a gap is closed, the entry must go, or the list
     /// starts documenting a state of the world that is no longer true.
+    ///
+    /// <para>*** A [Fact], NOT A [Theory], AND THAT IS THE POINT. *** A theory over a KNOWN-PROBLEM LIST
+    /// fails with "No data found" the moment the list empties — which is the state you are working
+    /// towards. It punished its own fix here on 2026-08-13 when `c49f5e9` closed the last gap. Sibling
+    /// of the same defect in <see cref="EveryReadableOnlyBlock_IsEitherCovered_OrAKnownGap"/>; both are
+    /// Facts now. (A theory over a CORPUS enumeration is different and stays a theory — an empty corpus
+    /// really is broken.)</para>
     /// </summary>
-    [Theory]
-    [MemberData(nameof(KnownMissingExportNames))]
-    public void KnownMissingExport_IsStillMissing(string block)
+    [Fact]
+    public void KnownMissingExport_IsStillMissing()
     {
-        var covered = ReadableOnlyBlockCandidates().Where(c => c.Name == block).ToList();
+        var candidates = ReadableOnlyBlockCandidates().ToList();
+        var stale = new List<string>();
 
-        Assert.True(covered.Count > 0,
-            $"'{block}' is listed in KnownMissingExports but is no longer a committed readable-only BLOCK .ir " +
-            "in a covered project. Remove the entry.");
+        foreach (var block in KnownMissingExports)
+        {
+            var covered = candidates.Where(c => c.Name == block).ToList();
+            if (covered.Count == 0)
+            {
+                stale.Add($"{block} — no longer a committed readable-only BLOCK .ir in a covered project");
+                continue;
+            }
 
-        Assert.All(covered, c => Assert.False(c.HasExport,
-            $"'{block}' is listed in KnownMissingExports but its export now exists at " +
-            $"'{Path.Combine(c.XmlDir, block + ".xml")}'. Remove the entry — it is covered by the round-trip " +
-            "theory now."));
+            foreach (var c in covered.Where(c => c.HasExport))
+            {
+                stale.Add($"{block} — its export now exists at {Path.Combine(c.XmlDir, block + ".xml")}");
+            }
+        }
+
+        Assert.True(stale.Count == 0,
+            "KnownMissingExports entr(ies) no longer describe the world:" + Environment.NewLine + "  " +
+            string.Join(Environment.NewLine + "  ", stale) + Environment.NewLine +
+            "Remove them — they are covered by the round-trip theory now.");
     }
-
-    public static IEnumerable<object[]> KnownMissingExportNames() =>
-        KnownMissingExports.Select(name => new object[] { name });
 }

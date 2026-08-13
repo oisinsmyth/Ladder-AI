@@ -68,8 +68,6 @@ public class BlockPropertyFidelityTests
     public static IEnumerable<object[]> AllExports() =>
         ExportRoundTripRunner.CommittedExports().Select(e => new object[] { e.Name, e.ExportPath, e.IrDir });
 
-    public static IEnumerable<object[]> DroppedPropertyNames() =>
-        KnownDroppedProperties.Keys.OrderBy(k => k, StringComparer.Ordinal).Select(k => new object[] { k });
 
     /// <summary>
     /// The direct children of the block's OWN <c>&lt;AttributeList&gt;</c> — the one that is a child of
@@ -171,27 +169,46 @@ public class BlockPropertyFidelityTests
     /// or the list starts documenting a world that no longer exists. This is the test that will notice
     /// the day the converter starts carrying one of these through.
     /// </summary>
-    [Theory]
-    [MemberData(nameof(DroppedPropertyNames))]
-    public void EveryKnownDroppedProperty_IsStillBeingDropped(string property)
+    /// <para>*** A [Fact] OVER A KNOWN-PROBLEM LIST, DELIBERATELY. *** As a [Theory] it would fail with
+    /// "No data found" the moment the list empties — i.e. the day all 14 losses are fixed, which is the
+    /// state this file exists to drive towards. Two siblings did exactly that on 2026-08-13
+    /// (`KnownMissingExport_IsStillMissing`, `EveryReadableOnlyBlock_IsEitherCovered_OrAKnownGap`), and
+    /// a test that punishes its own fix is a test people route around. A theory over a CORPUS
+    /// enumeration is a different thing and stays a theory: an empty corpus really is broken.</para>
+    ///
+    /// <para>Also one round trip per EXPORT rather than per (export × property) — 14 full corpus scans
+    /// collapse to one.</para>
+    /// </summary>
+    [Fact]
+    public void EveryKnownDroppedProperty_IsStillBeingDropped()
     {
-        var stillDropped = ExportRoundTripRunner.CommittedExports().Any(e =>
+        var stillDropped = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var e in ExportRoundTripRunner.CommittedExports())
         {
             var expected = BlockProperties(XDocument.Load(e.ExportPath));
-            if (!expected.ContainsKey(property))
+            if (!expected.Keys.Any(KnownDroppedProperties.ContainsKey))
             {
-                return false;
+                continue;
             }
 
             var actual = BlockProperties(ExportRoundTripRunner.Run("block-property-fidelity", e.Name, e.ExportPath, e.IrDir));
-            return !actual.ContainsKey(property);
-        });
+            foreach (var property in expected.Keys.Where(k => KnownDroppedProperties.ContainsKey(k) && !actual.ContainsKey(k)))
+            {
+                stillDropped.Add(property);
+            }
+        }
 
-        Assert.True(stillDropped,
-            $"'{property}' is listed in KnownDroppedProperties but is no longer dropped by any block in " +
-            "the corpus — either it is now carried through (good: remove the entry, it is guarded by " +
-            "EveryBlockProperty_EitherSurvivesTheRoundTrip_OrIsANamedLoss now) or no export carries it " +
-            "any more (in which case the entry is measuring nothing).");
+        var stale = KnownDroppedProperties.Keys
+            .Where(p => !stillDropped.Contains(p))
+            .OrderBy(p => p, StringComparer.Ordinal)
+            .ToList();
+
+        Assert.True(stale.Count == 0,
+            $"KnownDroppedProperties entr(ies) no longer dropped by any block in the corpus: " +
+            $"[{string.Join(", ", stale)}]. Either they are now carried through (good — remove them, " +
+            "EveryBlockProperty_EitherSurvivesTheRoundTrip_OrIsANamedLoss guards them from here on) or no " +
+            "export carries them any more, in which case the entry is measuring nothing.");
     }
 
     /// <summary>
