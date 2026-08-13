@@ -40,9 +40,10 @@ both the wrong shape: the round trip (assumed 79-108 ms, actually 71-78 median w
 and the scan (assumed ~10 ms, actually 23.33 ms). *** THE DESIGN DID NOT
 CHANGE. THE ARITHMETIC DID *** — re-derived in full in the new *** §12a ***, which is now the
 ONLY place a timing constant is chosen; §11, §12, §8, D29, D36, O11, X-A, X-B and X-D all defer
-to it. FIVE consequences that would change a DECISION rather than a number are flagged at the
-foot of §12a (F-1..F-5; F-4 is since ANSWERED by measurement, F-5 is a live proposal) and
-deliberately NOT applied. A further ruling landed the same day:
+to it. SIX consequences that would change a DECISION rather than a number are flagged at the
+foot of §12a — *** F-1 ADOPTED (X-A's read rule), F-4 ANSWERED by measurement, F-2/F-3/F-5/F-6
+still the owner's *** — each with a note on how it interacts with the others. A further ruling
+landed the same day:
 X-C's unreadable-marker case (§16.3). And one figure moved the other way and is worth knowing
 before reading anything about slot sizing: *** WIDTH IS ALL BUT FREE — ~0.040 ms PER REGISTER,
 ~6% OF A ROUND TRIP ACROSS A FULL-WIDTH SLOT — AND ROUND TRIPS ARE NOT. ***
@@ -515,11 +516,15 @@ D29. *** TENSOR WIDTH IS BOUNDED ABOVE BY CONFLICT-FREEDOM AND CAPPED BY POLL BA
           The tension this clause describes then simply does not arise, and the binding
           constraint moves to work memory (§16.13) or the mirror (X-A).
 
-     *** AND ONE THING THIS CLAUSE'S ARITHMETIC NOW MAKES ATTRACTIVE THAT IT MAY NOT DO ON ITS
-     OWN AUTHORITY: packing several WHOLE slots into one FC03 read. *** It would divide the poll
-     cost by `floor(125/W)` and feeds directly back into correction 2 — but it needs X-A's "a
-     read never straddles two slots" changed to "never SPLITS a slot", which is the owner's call.
-     Flagged as §12a F-1; not applied.
+     4. *** AND THE CAP GAINED A MULTIPLIER — F-1, ADOPTED 2026-08-13. *** X-A's rule is now "a
+        read never SPLITS a slot" (it was "never straddles two"), so ONE FC03 read may cover
+        `R = floor(125 / W)` WHOLE slots and the cap becomes
+        *** `K_max = R x floor(S_min x scan / RTT_p99)` ***. This clause's tension — conflict
+        freedom pushing tensors wider, poll bandwidth pushing them narrower — is therefore
+        *** SUBSTANTIALLY RELIEVED, BY A FACTOR THE MAP DESIGNER CONTROLS: *** at a 20-register
+        slot the poll side admits six times what it did. And it puts a NEW cost on padding, since
+        padding reduces `R` — so "size a slot to what it needs" is now an economic rule and not
+        merely a tidy one.
 
 D30. *** THE FEEDBACK-LATENCY LEVER IS INFORMATION DENSITY PER WAVE, NOT WAVE DURATION. ***
      Under D26 a wave is order-of-a-minute, so duration is not what damages IR development —
@@ -1521,14 +1526,18 @@ reading a result are round trips, and round trips are now measured (§12a). Deri
 §12a derivation 3; the result, at this section's own shape of 6 slots x 5 indices with 2 poll
 rounds per test:
 
-    round trips per index  =  K x (ceil(W/123) + P) + 1  =  6 x (1 + 2) + 1  =  19      [D]
-    per wave               =  19 x 5 indices = 95 round trips
-                           =   7.4 s at RTT_typ 78 ms   /   *** 19.1 s at RTT_p99 201 ms ***  [D]
+    round trips per index  =  K x ceil(W/123) + P x ceil(K/R) + 1        R = floor(125/W)   [D]
 
-    row as written above          test half + boundary        + wire (p99)
-    inert  2 s, test  5 s   ~55 s     35 s + ~20 s      ->    *** ~74 s,  +35% ***
-    inert  5 s, test 10 s   ~1.6 min  75 s + ~20 s      ->        ~114 s, +20%
-    inert 10 s, test 60 s   ~6 min   350 s + ~20 s      ->        ~389 s,  +5%
+      W = 123, R = 1 : 6 + 12 + 1 = 19/index = 95/wave = *** 19.1 s at RTT_p99 201 ms ***
+      W =  20, R = 6 : 6 +  2 + 1 =  9/index = 45/wave = ***  9.0 s ***
+
+    (The read term is `P x ceil(K/R)` because ONE FC03 read may cover R WHOLE slots — X-A's rule
+     as amended by F-1, adopted 2026-08-13. It was `P x K` until then.)
+
+    row as written above          test half + boundary      + wire (R=1)      + wire (R=6)
+    inert  2 s, test  5 s   ~55 s     35 s + ~20 s      ->  *** ~74 s, +35% ***  ~64 s, +16%
+    inert  5 s, test 10 s   ~1.6 min  75 s + ~20 s      ->      ~114 s, +20%     ~104 s, +10%
+    inert 10 s, test 60 s   ~6 min   350 s + ~20 s      ->      ~389 s,  +5%     ~379 s,  +2%
 
 *** THE CONCLUSIONS OF THIS SECTION ALL SURVIVE — ~74 s is still order-of-a-minute, downloads are
 still not the bottleneck, and the packed-versus-serial ratio is unaffected because the serial case
@@ -1909,10 +1918,10 @@ CONSTANT IS CHOSEN. *** Every timing figure elsewhere is either one of the input
 [D] pointing here. A timing figure carrying neither tag is stale and predates 2026-08-13.
 
 *** THE DESIGN DOES NOT CHANGE. THE ARITHMETIC DOES. *** Nothing below reverses a decision.
-FIVE consequences are flagged as needing the owner rather than being applied — F-4 is now ANSWERED
-and kept for its reasoning, F-5 is a live proposal — collected at the end of this section under
-WHAT THIS RE-DERIVATION CANNOT DECIDE, followed by a SHAPE-OR-MAGNITUDE table for the lanes
-building against these constants.
+SIX consequences are flagged at the end of this section under WHAT THIS RE-DERIVATION CANNOT
+DECIDE — *** F-1 has since been ADOPTED and its spec half implemented (X-A), F-4 has been ANSWERED
+by measurement, and F-2 / F-3 / F-5 / F-6 remain the owner's *** — followed by a note on how the
+flags interact and a SHAPE-OR-MAGNITUDE table for the lanes building against these constants.
 
 *** CORRECTED THE DAY AFTER IT WAS WRITTEN: `RTT_p99` WAS 173 ms AND IS NOW 201 ms. *** The 173
 came from the 16-register sweep; a full-width re-measurement put two of four run p99s above it.
@@ -2174,51 +2183,68 @@ across a full-width slot) does to the question.
   THE COST MODEL, per wave index (one column of D26a's tensor), K slots in the wave set, slot
   width W registers, P poll rounds per test:
 
-      writes  =  K x ceil(W / 123)     one FC16 per slot; ONE transaction while W <= 123
+      writes  =  K x ceil(W / 123)     one FC16 per slot; ONE transaction while W <= 123.
+                                       *** UNCHANGED BY F-1 — read-side change only ***
       commit  =  1                     all start bools in a single register write (X-A, D37)
-      reads   =  P x K                 one FC03 per slot per poll round; a read never
-                                       straddles a slot (X-A)
+      reads   =  P x ceil(K / R)       *** R = floor(125 / W) WHOLE SLOTS PER FC03 READ ***
+                                       (F-1, adopted 2026-08-13: a read never SPLITS a slot, and
+                                       may cover several whole ones — X-A)
       ------------------------------------------------------------------------
-      round trips per index  =  K x (ceil(W/123) + P) + 1        [D]
+      round trips per index  =  K x ceil(W/123) + P x ceil(K/R) + 1        [D]
 
-  *** REGISTERS APPEAR NOWHERE IN THAT EXPRESSION EXCEPT INSIDE A `ceil` THAT IS 1 FOR EVERY
-  LEGAL SLOT. *** That is the whole finding: W is free, K is not.
+  *** THE READ TERM WAS `P x K` UNTIL F-1 — ONE FC03 PER SLOT. *** It is now `P x ceil(K/R)`, and
+  since `R = floor(125/W)`, *** SLOT WIDTH HAS ENTERED THE ROUND-TRIP COUNT FOR THE FIRST TIME —
+  IN THE DENOMINATOR. *** Registers still do not cost on the wire; what they now do is decide how
+  many slots share a read. `W` is free per-register and expensive per-`R`-step.
 
-  THE BINDING CONSTRAINT. A slot is polled every `K x RTT`. A SAMPLED assertion whose true
-  window is S scans is observed only if that period fits inside it:
+  THE BINDING CONSTRAINT. A slot is polled once per read cycle, and a read cycle is
+  `ceil(K/R) x RTT` — *** NOT `K x RTT`, WHICH IS WHAT IT WAS BEFORE F-1. *** A SAMPLED assertion
+  whose true window is S scans is observed only if that cycle fits inside it:
 
-      K x RTT_p99  <=  S x scan
-      K_max(S)     =  floor( S x 23.33 / 201 )                   [D]  *** 201, RAISED FROM 173
-                                                                      ON 2026-08-13 ***
+      ceil(K/R) x RTT_p99  <=  S x scan
+      *** K_max(S)  =  R x floor( S x 23.33 / 201 )       R = floor(125 / W) ***      [D]
 
-                        S (scans)     K_max NOW    was, at 173
-                        ---------     ---------    -----------
-                             10           1             1        unchanged
-                             20           2             2        unchanged
-                             50        *** 5 ***        6        *** ONE SLOT LOST ***
-                            100        *** 11 ***      13        *** TWO SLOTS LOST ***
-                            200        *** 23 ***      26        *** THREE SLOTS LOST ***
+  *** THE CAP IS NOW PROPORTIONAL TO SLOTS-PER-READ. *** The old table is the `R = 1` column, and
+  it is the WORST case rather than the only one:
 
-      *** THE HAIRCUT IS A UNIFORM 173/201 = 0.86, MADE LUMPY BY THE floor(). *** So the narrow
-      rows — the ones where the cap actually bites hardest — DO NOT MOVE AT ALL, and the wide
-      rows lose about 14%. *** A WAVE SET ALREADY ADMITTED UNDER THE OLD CONSTANT AT S >= 50 IS
-      NOW OVER-ADMITTED AND MUST BE RE-COLOURED, not merely re-costed. ***
+                        S (scans)   R=1 (W=123)   R=5 (W=25)   R=6 (W=20)   R=10 (W=12)
+                        ---------   -----------   ----------   ----------   -----------
+                             10           1            5            6            10
+                             20           2           10           12            20
+                             50           5           25           30            50
+                            100          11           55           66           110
+                            200          23          115          138           230
 
-      (at RTT_typ = 78 ms the same table reads 2 / 5 / 14 / 29 / 59 — unchanged, since RTT_typ
-       did not move — which is exactly why the p99 is the row that must be used: keyed on the
-       median, a wave set admits four to six times more slots than the link can actually
-       observe, and the failure is a MISSED ASSERTION REPORTED AS A PASS.)
+      *** READ THE FIRST COLUMN AS "WHAT A BADLY-SIZED MAP GETS" AND THE REST AS "WHAT SIZING THE
+      SLOT TO ITS CONTENTS BUYS". *** At S = 10 scans — the row where the cap bit hardest and
+      where the p99 correction could not help — a 20-register slot admits SIX slots where a
+      padded 123-register slot admits ONE. *** THAT ROW IS THE POINT OF F-1: the cap that was
+      binding at 1 was an artefact of the map, not of the link. ***
+
+      (at RTT_typ = 78 ms the `R = 1` column reads 2 / 5 / 14 / 29 / 59 — which is why the p99 is
+       the row that must be used: keyed on the median, a wave set admits four to six times more
+       slots than the link can actually observe, and the failure is a MISSED ASSERTION REPORTED
+       AS A PASS.)
 
       LATCHED assertions: the window is unbounded until cleared at test start, so `S` does not
-      exist and *** THE POLL BUDGET IMPOSES NO WIDTH CAP AT ALL. *** The cap then comes from
-      somewhere else entirely — work memory (§16.13), the `%MW` mirror (X-A), wave duration
-      (derivation 3) — and O11 stops being the constraint it was written as.
+      exist and *** THE POLL BUDGET IMPOSES NO WIDTH CAP AT ALL *** — before F-1 and after it.
+      The cap then comes from somewhere else entirely — work memory (§16.13), the `%MW` mirror
+      (X-A), wave duration (derivation 3) — and O11 stops being the constraint it was written as.
 
   SO O11's RE-DERIVED ANSWER, IN ONE LINE:
 
-      *** max tensor width = floor( S_min x scan / RTT_p99 ), where S_min is the SHORTEST
-      DECLARED SAMPLED OBSERVATION WINDOW among the slots admitted; UNBOUNDED by this
-      constraint when every observation in the wave set is latched. ***
+      *** max tensor width = floor(125 / W) x floor( S_min x scan / RTT_p99 ), where W is the
+      wave set's slot size and S_min is the SHORTEST DECLARED SAMPLED OBSERVATION WINDOW among
+      the slots admitted; UNBOUNDED by this constraint when every observation in the set is
+      latched. ***
+
+  *** F-1 CHANGED THIS ANSWER'S SHAPE A SECOND TIME, AND IT IS WORTH NAMING WHAT MOVED. *** The
+  cap was already a FUNCTION rather than a number (of the admitted set's observability mode). It
+  is now a function of TWO per-set quantities — `S_min` AND the slot size — and the second one is
+  *** UNDER THE MAP DESIGNER'S CONTROL IN A WAY THE FIRST IS NOT. *** `S_min` is a property of
+  what the tests need; `W` is a property of how the map was laid out. So the cheapest way to raise
+  the cap is now, in order: LATCH the assertion (removes it entirely), then SIZE THE SLOT TO ITS
+  CONTENTS (multiplies it by `R`), and only then anything about the link.
 
   WHAT THIS DOES AND DOES NOT CLOSE. It closes the arithmetic — the formula needs no rig. It
   does NOT close O11's empirical half, which is whether real submission sets declare sampled
@@ -2232,18 +2258,48 @@ DERIVATION 3 — THE WIRE TERM §8's WAVE MODEL OMITS  [D]
 §8 computes a wave as `download boundary + SUM over tensors ( inert reset + MAX test duration )`.
 *** THAT MODEL HAS NO WIRE TERM, AND THE WIRE TERM IS NOT NEGLIGIBLE AT THE SHORT END. ***
 
-  Worked at §8's own shape — K=6 slots, L=5 indices, P=2 poll rounds, W <= 123:
+  Worked at §8's own shape — K=6 slots, L=5 indices, P=2 poll rounds — and now as a function of
+  slot size, because F-1 put slot size in the read term:
 
-      round trips per index = 6 x (1 + 2) + 1 = 19                       [D, derivation 2]
-      per index   : 19 x  78 ms = 1.48 s typical
-                    19 x 201 ms = 3.82 s at the p99          (was 3.29 s at 173)
-      per wave    : x 5 indices = 7.4 s typical, *** 19.1 s at the p99 ***   (was 16.4 s)
+      round trips per index = K x ceil(W/123) + P x ceil(K/R) + 1        [D, derivation 2]
 
-  AGAINST §8's THREE ROWS (each of which is `5 x (inert + test)` plus a ~20 s download boundary):
+        W = 123, R = 1  :  6 + 12 + 1 = *** 19 ***      the pre-F-1 figure, unchanged
+        W =  25, R = 5  :  6 +  4 + 1 = *** 11 ***      -42%
+        W =  20, R = 6  :  6 +  2 + 1 = ***  9 ***      -53%
 
-      inert  2 s, test  5 s :  35 + 20 =  55 s  ->  +19.1 s =  74 s   *** +35% ***  (was 71 s)
-      inert  5 s, test 10 s :  75 + 20 =  95 s  ->  +19.1 s = 114 s        +20%      (was 111 s)
-      inert 10 s, test 60 s : 350 + 20 = 370 s  ->  +19.1 s = 389 s         +5%      (was 386 s)
+      per index (W=123) : 19 x 78 = 1.48 s typical / 19 x 201 = 3.82 s at the p99
+      per wave  (W=123) : x 5 = 7.4 s typical, *** 19.1 s at the p99 ***
+      per wave  (W= 25) : x 5 = 4.3 s typical, *** 11.1 s at the p99 ***
+      per wave  (W= 20) : x 5 = 3.5 s typical, ***  9.0 s at the p99 ***
+
+  *** WHAT THE WIN ACTUALLY IS, STATED THREE WAYS, BECAUSE "5x" IS TRUE OF ONLY THE FIRST: ***
+
+      on the READ TERM ALONE       12 -> 4 or 2 round trips     *** 3x to 6x ***
+      on ROUND TRIPS PER INDEX     19 -> 11 or 9                *** 1.7x to 2.1x ***
+      on WAVE DURATION             74 s -> 66 s or 64 s         *** 11-13% ***
+
+  *** THE `5x` IS A PROPERTY OF THE READ TERM, NOT OF THE WAVE. *** Three things dilute it, all of
+  them real: the write term and the commit are untouched by F-1; `ceil(K/R)` is a step function, so
+  6 slots at R=5 needs TWO reads and not 1.2; and a wave is mostly inert-plus-test time, into which
+  the whole wire term disappears. *** QUOTE THE 11-13% WHEN TALKING ABOUT WAVES AND THE 3-6x WHEN
+  TALKING ABOUT POLLING. *** The place the full factor really does land undiluted is O11's cap
+  (derivation 2), which is keyed on the READ CYCLE alone — there, `R` multiplies directly.
+
+  *** AND F-1 RELOCATES THE BOTTLENECK, WHICH IS THE MORE INTERESTING CONSEQUENCE: AFTER IT, THE
+  WRITE SIDE IS THE DOMINANT ROUND-TRIP TERM. *** At W=20 the split is 6 writes / 2 reads /
+  1 commit — *** TWO THIRDS OF THE WAVE'S ROUND TRIPS ARE NOW VECTOR WRITES. *** That is NOT an
+  invitation to batch writes the same way: the write side carries A1's coherence guarantee, which
+  was measured at 16 registers per FC16 with one request never split, and F-1 says nothing about
+  it (X-A, "what F-1 does not change"). It is recorded because the next person looking for wire
+  savings will look at the read term first, and the read term is no longer where the cost is.
+
+  AGAINST §8's THREE ROWS (each of which is `5 x (inert + test)` plus a ~20 s download boundary),
+  at the worst case W=123 / R=1 and at a sanely-sized W=20 / R=6:
+
+                                          base      + wire (R=1)     + wire (R=6)
+      inert  2 s, test  5 s :  35 + 20 =   55 s  ->  74 s  (+35%)  ->  64 s  (+16%)
+      inert  5 s, test 10 s :  75 + 20 =   95 s  -> 114 s  (+20%)  -> 104 s  (+10%)
+      inert 10 s, test 60 s : 350 + 20 =  370 s  -> 389 s   (+5%)  -> 379 s   (+2%)
 
   *** "A WAVE IS ORDER-OF-A-MINUTE" SURVIVES — 74 s is still order-of-a-minute — BUT §8's
   FASTEST ROW IS MORE THAN A THIRD OPTIMISTIC, AND §8's ROWS ARE THE ONES EVERY THROUGHPUT
@@ -2385,15 +2441,40 @@ APPLIED ANYWHERE IN THIS DOCUMENT. *** They are recorded here so the arithmetic 
 them is not lost, and so that nobody applies one by reading the numbers and drawing the obvious
 conclusion without the ruling.
 
-  F-1. *** SHOULD ONE FC03 READ BE ALLOWED TO COVER SEVERAL WHOLE SLOTS? *** X-A rules that "a
-       read never straddles two slots". With registers free and round trips scarce, packing
-       `floor(125 / W)` whole slots into one read divides the poll cost of a tensor by that
-       factor — at W = 25 that is 5 slots per read and 5x fewer round trips, which feeds
-       straight back into derivation 2's K_max. *** THE COHERENCE ARGUMENT SURVIVES THE CHANGE:
-       X-A's requirement is that a read never catch a slot's publish half-done, and a read
-       containing several WHOLE slots is still one transaction and still coherent per slot. ***
-       The rule would become "a read never SPLITS a slot" rather than "never straddles two".
-       It is still a change to a stated rule, so it is the owner's.
+  F-1. *** ADOPTED BY THE OWNER, 2026-08-13. X-A's RULE IS NOW "A READ NEVER SPLITS A SLOT". ***
+       The question was: should one FC03 read be allowed to cover several WHOLE slots? It is, and
+       the spec half is implemented — X-A carries the new rule, the coherence argument that
+       motivates it, and *** THE EXPRESSION MECHANISM: reads are addressed as `read(first_slot,
+       slot_count)` so that a split read is UNEXPRESSIBLE rather than merely rejected *** (the
+       `MirrorClient` precedent — an unaddressable operation cannot be reached by a later change,
+       where a skippable validator can).
+
+       THE ORIGINAL REASONING, KEPT: with registers all but free and round trips scarce, packing
+       `R = floor(125 / W)` whole slots into one read divides the READ cost by `R`. The coherence
+       argument survives the change untouched, because the hazard was never "touching two slots"
+       — it was "touching half of one", and a read of several WHOLE slots is still one
+       transaction that catches no slot half-published.
+
+       *** WHAT IT ACTUALLY BOUGHT, NOW THAT THE ARITHMETIC IS RE-RUN (derivations 2 and 3):
+       3-6x on the read term, 1.7-2.1x on round trips per index, 11-13% on wave duration, and —
+       the one place the factor lands undiluted — a straight `x R` on O11's cap. *** The `5x` is
+       true of the read term only; quote the right one for the question being asked.
+
+       *** AND IT MOVED A COST RATHER THAN ONLY REMOVING ONE: padding a slot is no longer free,
+       because padding reduces `R`. *** X-A's "the small slots pay nothing for the padding" was
+       corrected the same day. Size a slot to its contents.
+
+  F-6. *** NEW, RAISED BY F-1's ADOPTION AND NOT DECIDED: SHOULD WAVE-SET ADMISSION GROUP BY SLOT
+       SIZE? *** Slots are FIXED-SIZE within a wave set, sized to the largest member (X-A). Before
+       F-1 that cost nothing. After it, *** ONE WIDE SLOT COLLAPSES `R` FOR THE WHOLE SET *** — a
+       single 123-register slot admitted alongside twenty 20-register slots takes `R` from 6 to 1
+       and sextuples the read cost of every one of them, and cuts O11's cap by the same factor.
+       So slot-size HOMOGENEITY has become worth something, and DB-13's colouring currently knows
+       nothing about it. *** THE CHEAP VERSION IS A PREFERENCE, NOT A CONSTRAINT: prefer to place
+       same-sized slots together when the conflict graph leaves a choice. *** The expensive
+       version — a size dimension in the colouring, or splitting a set on size — is a real change
+       to DB-13 and interacts with F-2. Flagged, not decided; the arithmetic for judging it is
+       derivation 2's `K_max = R x floor(S_min x scan / RTT_p99)`.
 
   F-2. *** DB-13's "MAX TENSOR WIDTH AS AN EXPLICIT INPUT" (D36's condition) IS THE WRONG
        SHAPE. *** Derivation 2 makes the cap a function of the admitted set's own observability
@@ -2495,6 +2576,48 @@ conclusion without the ruling.
        figures from data that already exists.
 
 ................................................................................
+HOW THE FLAGS INTERACT — CHECKED 2026-08-13 AFTER F-1's ADOPTION
+................................................................................
+
+*** ASKED BECAUSE AN ADOPTED FLAG CAN QUIETLY CHANGE WHAT A PENDING ONE IS WORTH, AND THE OWNER
+SHOULD KNOW THAT BEFORE RULING ON THE REST. ***
+
+  *** F-1 x F-2 (DB-13's max-width input) — F-1 MAKES F-2 STRONGER, AND MORE URGENT. *** F-2
+  already argued that an explicit SCALAR max-tensor-width input is the wrong shape because the cap
+  is per-wave-set. After F-1 the cap depends on TWO per-set quantities — `S_min` and the slot size
+  — via `K_max = R x floor(S_min x scan / RTT_p99)`. A single scalar must now be the worst case
+  over both, which is further from adequate than it was this morning. *** AND F-6 IS THE SAME
+  CONVERSATION: *** if admission gains any notion of slot size, F-2's input shape is decided by
+  that work rather than separately. *** RECOMMEND RULING F-2 AND F-6 TOGETHER. ***
+
+  *** F-1 x F-3 (should SAMPLED assertions be admissible at all) — F-1 WEAKENS THE THROUGHPUT
+  ARGUMENT FOR MANDATORY LATCHING AND LEAVES THE CORRECTNESS ARGUMENT EXACTLY WHERE IT WAS. ***
+  Sampled assertions are now `R` times more affordable: an `S = 10` set that admitted ONE slot
+  admits SIX at a 20-register slot size. So "latch everything, the cap is brutal otherwise" is a
+  materially weaker case than it was. *** BUT F-3's REAL ARGUMENT WAS NEVER THROUGHPUT — it is
+  that 0.05% of poll gaps are ~95 scans wide, and a sampled assertion falling in one is a silent
+  wrong answer. *** That is a property of the outlier, not of the read cycle, and F-1 does not
+  touch it. *** SO: F-3 IS NOW A NARROWER, PURELY CORRECTNESS-SHAPED DECISION — WHICH ARGUABLY
+  MAKES IT EASIER TO RULE ON, NOT HARDER. ***
+
+  *** F-1 x F-5 (p90 + exceedance rate) — INDEPENDENT, AND THEY COMPOSE CLEANLY. *** F-1 changes
+  HOW MANY round trips a budget covers; F-5 changes HOW THE COST OF ONE is expressed. Neither
+  blocks or complicates the other. One small favourable interaction: F-1 cuts the round trips per
+  wave (95 -> 45 at W=20), and F-5's exceedance arithmetic multiplies a rate BY that count — so
+  adopting F-1 first makes F-5's exposure figures smaller and its case no harder to make.
+
+  *** F-1 x F-4 (answered) — F-4 IS WHAT MAKES F-1 SAFE, AND THIS IS WORTH STATING BECAUSE THE
+  ORDER LOOKS ACCIDENTAL AND IS NOT. *** F-1's whole win is issuing FEWER, WIDER reads. Had F-4
+  come back the other way — a tail that grows with width — then a 125-register read would have
+  cost tail latency, every budget here is p99-keyed, and *** F-1's saving would have been partly
+  paid back in exactly the currency the budgets are denominated in. *** F-4 found no such effect,
+  at either width, in either arm. So F-1 banks its round-trip saving without a tail penalty, and
+  the two flags should be read as a pair rather than as one answered and one adopted.
+
+  *** NO CONFLICTS FOUND. *** F-1 does not contradict any pending flag, and does not reopen any
+  ruling recorded in this document.
+
+................................................................................
 SHAPE OR MAGNITUDE? — WHAT THE 2026-08-13 p99 CORRECTION DID AND DID NOT DO
 ................................................................................
 
@@ -2552,9 +2675,13 @@ CONCLUSION MOVED" NEED DIFFERENT RESPONSES — ONE IS A RECOMPILE, THE OTHER IS 
       OVER-ADMITTED. That is re-colouring, not re-costing. ***
     - anything keying a per-request timeout on RTT_p99 rather than RTT_max: it was already
       wrong, and the correction does not fix it — the floor is 3,000 ms and comes from RTT_max.
-    - slot-width allocation: *** NO ACTION, AND THE "UNLESS" IS NOW GONE. *** This line used to
-      add "unless it derives a poll budget from width" — F-4 measured that and found no width
-      effect on the tail, so there is no width term to carry into a poll budget.
+    - slot-width allocation: *** NO ACTION FROM THE TAIL, BUT F-1 CHANGED THE PICTURE COMPLETELY
+      IN THE OTHER DIRECTION. *** The "unless it derives a poll budget from width" caveat is gone
+      (F-4 found no width effect on the tail). But F-1 put slot width into the ROUND-TRIP COUNT
+      via `R = floor(125/W)`: *** AN ALLOCATOR THAT PADS SLOTS TO THE FC03 LIMIT "BECAUSE WIDTH
+      IS FREE" NOW COSTS UP TO 6x THE READ ROUND TRIPS AND CUTS O11's CAP BY THE SAME FACTOR. ***
+      That is the one place a lane genuinely has to act on this day's work: size slots to their
+      contents, and read several whole slots per FC03.
 
 --------------------------------------------------------------------------------
 13. G-7 — MEASURED 2026-08-12. THE EXPECTATION WAS REFUTED.
@@ -3060,33 +3187,94 @@ wanted, obtained from a mechanism that exists for another reason.
 test, so a read spanning transactions can catch a publish half-done. Per-SLOT coherence is
 sufficient — slots are independent by construction (D9) — so the rule is:
 
-    *** EACH SLOT'S RESULT REGION MUST FIT IN ONE FC03 READ (125 REGISTERS), AND A READ NEVER
-    STRADDLES TWO SLOTS. *** Refused at MAP-DERIVATION time if a slot exceeds it — a
+    *** EACH SLOT'S RESULT REGION MUST FIT IN ONE FC03 READ (125 REGISTERS), AND *** A READ NEVER
+    *** SPLITS *** A SLOT. *** Refused at MAP-DERIVATION time if a slot exceeds 125 — a
     design-time error, never a runtime one.
+
+*** THIS RULE READ "A READ NEVER STRADDLES TWO SLOTS" UNTIL 2026-08-13 (F-1, ADOPTED BY THE
+OWNER). *** The change is deliberate and it is a RELAXATION IN ONE DIRECTION ONLY: a read may now
+cover SEVERAL WHOLE SLOTS; it may still never return PART of one.
+
+*** THE COHERENCE ARGUMENT IS UNCHANGED, AND IT IS WHY THE NEW WORDING IS SAFE — READ THIS BEFORE
+"OPTIMISING" THE RULE ANY FURTHER. *** What must never happen is *** A READ THAT RETURNS PART OF A
+SLOT ***, because polling runs DURING a test and a partial read can catch that slot's publish
+half-done, yielding a coherent-looking result nobody ever published. A read covering three ENTIRE
+slots does not do that: it is still ONE transaction, and each slot inside it is either wholly
+before or wholly after any publish. *** THE FORBIDDEN THING WAS NEVER "TOUCHING TWO SLOTS" — IT
+WAS "TOUCHING HALF OF ONE". *** The old wording forbade a superset of the actual hazard, and that
+surplus was costing round trips, which §12a establishes are the scarce resource.
+
+................................................................................
+*** HOW A READ IS EXPRESSED — AND THIS IS THE MECHANISM, NOT A STYLE NOTE ***
+................................................................................
+
+*** A SPLIT READ MUST BE UNEXPRESSIBLE, NOT MERELY REJECTED. *** The precedent is `MirrorClient`,
+built so that an out-of-region write is *** UNADDRESSABLE *** rather than caught by a check — and
+the difference matters because a check is something a later change can skip, disable, or fail to
+call, whereas a thing that cannot be written down stays unwritten.
+
+    *** READS ARE ADDRESSED IN SLOT UNITS, NEVER IN REGISTER UNITS. *** The read primitive names
+    a FIRST SLOT and a COUNT OF SLOTS:
+
+        read(first_slot, slot_count)        slot_count >= 1
+
+    and the register range is DERIVED, never supplied:
+
+        start  = mirror_base + first_slot x slot_size
+        length = slot_count  x slot_size          (must be <= 125, checked at map derivation)
+
+*** THERE IS NO PARAMETER IN WHICH A PARTIAL SLOT COULD BE NAMED. *** Not "a register offset that
+happens to be validated" — no register offset at all. A caller wanting half a slot has nothing to
+type. That is the whole of the enforcement, and it is why this clause specifies the SHAPE OF THE
+CALL rather than a constraint on its arguments.
+
+*** DO NOT IMPLEMENT THIS AS A VALIDATOR OVER A REGISTER-RANGE READ. *** A `read(start, length)`
+guarded by `assert(start % slot_size == 0)` satisfies the letter of the rule and abandons its
+mechanism: the unsafe call still exists, still compiles, and is one refactor from being reached.
+If a validator is the only thing standing between the client and a split read, the design has
+already lost the property it is trying to hold.
 
 Slots are FIXED-SIZE, sized to the largest slot in the wave set, so a client's bounds check is
 `base + index x slot_size` (DB-6 point 3 becomes arithmetic rather than a check).
 
-*** AND SIZING THEM COSTS NOTHING ON THE WIRE — MEASURED 2026-08-12, DERIVED §12a. *** Marginal
-cost per register is ~0.040 ms on writes and shows no trend on reads [M at 123 registers,
-2026-08-13], so a fixed slot sized to the LARGEST member of the wave set is not the compromise it
-reads as: the small slots pay ~0.04 ms per padding register, which is noise. *** WHAT COSTS IS THE
-NUMBER OF SLOTS, because each is one FC03 — a full-width slot costs ~4.9 ms more than a
-one-register slot, against 78-201 ms for a second exchange. *** Do not narrow a slot to save wire
-time; there is almost none to save and a narrowing that forces an extra round trip loses by ~16x.
-The only real ceiling on width is the 125-register read itself, and the ceilings on COUNT are the
-mirror (below) and work memory (§16.13). *** THE CAVEAT THIS PARAGRAPH BRIEFLY CARRIED IS CLOSED:
-whether width widens the TAIL was measured (§12a, F-4 — 16,200 interleaved round trips) and NO
-EFFECT IS DETECTABLE, so the advice above is not merely a mean-cost argument. NOTHING ARGUES FOR
-CAPPING SLOT WIDTH ON TIMING GROUNDS; the only ceilings on width remain the 125-register read, the
-mirror and work memory. ***
+*** AND UNDER F-1, SIZING THEM IS NO LONGER FREE — THIS PARAGRAPH IS CORRECTED, 2026-08-13. *** It
+used to say the small slots "pay nothing for the padding", which was true when every slot cost one
+FC03 regardless. It is now false: *** PADDING A SLOT REDUCES HOW MANY SLOTS FIT IN A READ, AND
+THAT IS PAID IN ROUND TRIPS. ***
 
-*** ONE CONSEQUENCE OF THAT WHICH IS NOT APPLIED HERE AND IS THE OWNER'S — §12a F-1: *** with
-registers free, packing several WHOLE slots into ONE FC03 read would divide a tensor's poll cost
-by `floor(125 / slot_size)`, and the coherence argument above survives it unchanged — a read
-containing several whole slots is still one transaction and still catches no slot half-published.
-That would relax "A READ NEVER STRADDLES TWO SLOTS" to "A READ NEVER SPLITS A SLOT". *** THE RULE
-AS WRITTEN STANDS UNTIL RULED ON. ***
+    slots per read      R = floor(125 / slot_size)      [D]
+
+    slot_size  25  ->  R = 5        slot_size  62  ->  R = 2
+    slot_size  20  ->  R = 6        slot_size 123  ->  R = 1
+    slot_size  12  ->  R = 10
+
+*** SO THE TWO COSTS NOW PULL IN OPPOSITE DIRECTIONS, AND THEY ARE NOT THE SAME SIZE: *** widening
+a slot costs ~0.009-0.040 ms per register on the wire (negligible, §12a), but widening it far
+enough to drop `R` costs a WHOLE ROUND TRIP per read per slot-group — 78 ms typical, 201 ms at the
+p99. *** SIZE A SLOT TO WHAT ITS CONTENTS NEED. Padding to the FC03 limit "because width is free"
+is now the expensive mistake, not the cheap one. ***
+
+    *** AND THE FIXED-SIZE RULE ACQUIRES A REAL COST THAT IT DID NOT HAVE: one wide slot in a wave
+    set forces EVERY slot in that set to its width, collapsing `R` for all of them. *** A single
+    123-register slot admitted alongside twenty 20-register slots takes `R` from 6 to 1 and
+    sextuples the read cost of the entire wave. Flagged as F-6 — whether admission should group by
+    slot size — and NOT decided here.
+
+*** WHAT F-1 DOES NOT CHANGE, STATED EXPLICITLY SO IT IS NOT READ AS A LICENCE TO WIDEN ANYTHING
+ELSE: ***
+
+  - *** THE WRITE SIDE IS UNTOUCHED. *** F-1 is a READ-side change. Vector data is still written
+    "across as many transactions as it takes" while nothing is running, and the commit is still
+    ONE transaction raising all start bools. No write is batched differently because of this.
+  - *** A1's COHERENCE GUARANTEE IS UNTOUCHED, AND IT IS NARROWER THAN THE DESIGN ALREADY USES. ***
+    "No tear observed in 3,340 writes" was measured at *** 16 REGISTERS PER FC16, one request never
+    split ***. That evidence does not stretch to a full-width write merely because F-1 made reads
+    cheaper — F-1 says nothing about writes at all. The gap between A1's 16 registers and the
+    width the design actually uses is a PRE-EXISTING item, neither widened nor closed here.
+  - *** THE PER-SLOT COHERENCE REQUIREMENT IS UNTOUCHED *** — it is the thing the new wording
+    exists to preserve, not a cost the relaxation pays.
+  - *** THE 125-REGISTER READ CEILING IS UNTOUCHED. *** `slot_count x slot_size <= 125` still
+    binds, still at map-derivation time.
 
 TWO THINGS THAT FALL OUT AND MUST BE BUILT FOR:
 

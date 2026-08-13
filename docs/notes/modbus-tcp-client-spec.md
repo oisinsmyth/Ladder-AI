@@ -188,6 +188,34 @@ Per ruling 1, the map is the contract. It is data, not code:
 
 `S7TagMap` is the precedent for shape.
 
+### 6a. Slot reads — a split read must be *unexpressible*, not merely rejected
+
+**X-A's rule, as amended 2026-08-13 (F-1, adopted): a read never *splits* a slot.** It may cover
+several **whole** slots — that is the point of the change, and it is worth up to 6x fewer read round
+trips. What it may never do is return *part* of a slot, because polling runs *during* a test and a
+partial read can catch that slot's publish half-done, yielding a coherent-looking result nobody ever
+published.
+
+**The enforcement is the shape of the call, not a check on its arguments:**
+
+```
+read(first_slot, slot_count)          // slot units. There is no register offset to supply.
+    start  = mirror_base + first_slot * slot_size
+    length = slot_count  * slot_size            // <= 125, checked at map-derivation time
+```
+
+> ⚠️ **Do NOT implement this as a validator over a register-range read.** A `read(start, length)`
+> guarded by `assert(start % slot_size == 0)` meets the letter of the rule and throws away its
+> mechanism — the unsafe call still exists, still compiles, and is one refactor from being reached.
+> **`MirrorClient` is the precedent**: an out-of-region write there is *unaddressable*, not caught.
+> A caller wanting half a slot must have nothing to type.
+
+**Consequence for the map, and it reverses earlier guidance:** slots-per-read is `R = floor(125 /
+slot_size)`, so **padding a slot is no longer free** — it is paid in round trips, and in O11's
+concurrency cap, which is proportional to `R`. Size a slot to what its contents need. (Note this is a
+*different* object from the tag-block reads in §5, where "widest legal read" remains right: a read
+should still fill its 125 registers — with **whole slots**.)
+
 ## 7. Fence integration and identity
 
 Reads are authorised by `DeviceAccessGuard`, writes by `DeviceWriteGuard`, as with the S7 transport.
