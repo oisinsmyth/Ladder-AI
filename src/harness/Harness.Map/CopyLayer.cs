@@ -29,6 +29,99 @@ public enum MirrorValueType
 
     /// <summary>A 16-bit word. Declared <c>Int</c> at a word address, and copied by a <c>MOVE</c>.</summary>
     Int,
+
+    /// <summary>
+    /// A 32-bit duration. Declared <c>Time</c> at a <c>%MD</c> address, copied by a <c>MOVE</c>, and
+    /// <b>occupying TWO holding registers</b>.
+    ///
+    /// <para><b>FORCED, not a nicety:</b> scenarios run to 120 000 ms and a holding register is 16 bits,
+    /// so a scenario time cannot be an <c>Int</c> at all. It is the second half of the same defect as
+    /// <see cref="Bool"/> — both were the same hard-coded <c>"Int"</c> — which is why the shape and the
+    /// width are now read out of one table rather than handled as two special cases.</para>
+    ///
+    /// <para>⚠️ <b>ITS TWO REGISTERS INHERIT THE UNCALIBRATED 32-BIT WORD ORDER.</b> The value is one
+    /// <c>%MD</c> on the PLC and two registers on the wire, exactly like the version register and the
+    /// scan counter — and which half lands in the lower register is <c>Harness.Wire</c>'s
+    /// <c>RegisterWordOrder</c>, whose default is an INFERENCE that no measurement has yet distinguished
+    /// from its mirror image. <b>A Time read under the wrong order is out by 65 536 ms and reads as a
+    /// plausible timing bug.</b> The rig session's calibration step settles it; until then a Time result
+    /// is exactly as trustworthy as the version register is.</para>
+    /// </summary>
+    Time,
+}
+
+/// <summary>How a value is copied in a rung. <b>A Bool does not move; a word does not coil.</b></summary>
+public enum MirrorCopyShape
+{
+    /// <summary><c>COIL &lt;destination&gt; := &lt;source&gt;</c>. The only shape TIA accepts for a Bool.</summary>
+    Coil,
+
+    /// <summary><c>MOVE(EN := TRUE, IN := &lt;source&gt;) =&gt; &lt;destination&gt;</c>.</summary>
+    Move,
+}
+
+/// <summary>
+/// How a value is addressed in <c>%M</c>, <b>and therefore how many holding registers it occupies.</b>
+///
+/// <para>The width is DERIVED from this rather than declared beside it, so the two cannot disagree —
+/// a table with an address form saying <c>%MD</c> and a width saying 1 would allocate half a value.</para>
+/// </summary>
+public enum MirrorAddressForm
+{
+    /// <summary><c>%M&lt;byte&gt;.&lt;bit&gt;</c> — one bit, inside one register.</summary>
+    Bit,
+
+    /// <summary><c>%MW&lt;byte&gt;</c> — one register.</summary>
+    Word,
+
+    /// <summary><c>%MD&lt;byte&gt;</c> — <b>TWO registers</b>, the same span the version register and the scan counter already occupy.</summary>
+    DoubleWord,
+}
+
+/// <summary>
+/// Everything the copy layer needs to know about one element type, <b>in one row.</b>
+///
+/// <para>🔴 <b>THIS TABLE IS THE FIX, AND THE TYPES ARE ITS ROWS.</b> <c>Bool</c> and <c>Time</c> were
+/// not two bugs — they were one idea the generator did not have: <i>the mirror's element type is not
+/// always Int</i>. Both came from the same two hard-coded <c>"Int"</c> literals. Adding a third type is
+/// therefore a ROW here, not another branch somewhere; and a type with no row REFUSES BY NAME rather
+/// than falling through to Int, which is precisely how the first two survived every test.</para>
+/// </summary>
+public sealed record MirrorElement(MirrorValueType Type, string IrDataType, MirrorAddressForm Form, MirrorCopyShape Shape)
+{
+    /// <summary>Holding registers this element occupies. Derived from <see cref="Form"/> — never stated twice.</summary>
+    public int Registers => Form == MirrorAddressForm.DoubleWord ? 2 : 1;
+}
+
+/// <summary>The supported element types. <b>Everything not here is a refusal that names the signal.</b></summary>
+public static class MirrorElements
+{
+    private static readonly IReadOnlyDictionary<MirrorValueType, MirrorElement> Table =
+        new[]
+        {
+            new MirrorElement(MirrorValueType.Bool, "Bool", MirrorAddressForm.Bit, MirrorCopyShape.Coil),
+            new MirrorElement(MirrorValueType.Int, "Int", MirrorAddressForm.Word, MirrorCopyShape.Move),
+
+            // Time moves like a word and is addressed like the version register. `MOVE` with Time
+            // operands is confirmed against a real TIA-accepted block in the committed corpus
+            // (FB_HopperBlockageMonitor NETWORK 3 moves a Time member into a Time member).
+            new MirrorElement(MirrorValueType.Time, "Time", MirrorAddressForm.DoubleWord, MirrorCopyShape.Move),
+        }.ToDictionary(e => e.Type);
+
+    /// <summary>Every supported type, in declaration order. Also the order networks are emitted in.</summary>
+    public static IReadOnlyList<MirrorElement> All => Table.Values.ToArray();
+
+    /// <summary>The row for a type, or <b>null when there is none</b> — which is a refusal, never a default.</summary>
+    public static MirrorElement? For(MirrorValueType type) => Table.TryGetValue(type, out var element) ? element : null;
+
+    /// <summary>The row for a type, or a throw. Callers that have already passed the refusal gate use this.</summary>
+    public static MirrorElement Require(MirrorValueType type) =>
+        For(type) ?? throw new InvalidOperationException(
+            $"element type {type} has no row in MirrorElements and reached rendering. The type refusal should have "
+            + "stopped it; treating it as Int is what put an unmirrorable copy layer on a controller.");
+
+    /// <summary>The names of every supported type, for a refusal that offers a route rather than only a wall.</summary>
+    public static string Supported => string.Join(", ", Table.Keys.Select(t => t.ToString()));
 }
 
 /// <summary>
@@ -45,6 +138,21 @@ public sealed record MirroredSignal(string Tag, MirrorValueType Type)
 
     /// <summary>An Int signal — mirrored to a whole register, by a MOVE.</summary>
     public static MirroredSignal Int(string tag) => new(tag, MirrorValueType.Int);
+
+    /// <summary>A Time signal — 32-bit, mirrored to a <c>%MD</c> spanning TWO registers, by a MOVE.</summary>
+    public static MirroredSignal Time(string tag) => new(tag, MirrorValueType.Time);
+
+    /// <summary>Several Time signals, in order.</summary>
+    public static IReadOnlyList<MirroredSignal> Times(params string[] tags) => tags.Select(Time).ToArray();
+
+    /// <summary>
+    /// Holding registers this signal occupies — <b>1 for a Bool or an Int, 2 for a Time.</b>
+    ///
+    /// <para>Zero when the type is unsupported, so a caller summing widths over an unchecked binding
+    /// under-counts rather than silently reserving one register for something that has no shape. The
+    /// generator refuses such a binding before any arithmetic depends on it.</para>
+    /// </summary>
+    public int Registers => MirrorElements.For(Type)?.Registers ?? 0;
 
     /// <summary>Several Bool signals, in order.</summary>
     public static IReadOnlyList<MirroredSignal> Bools(params string[] tags) => tags.Select(Bool).ToArray();
@@ -88,7 +196,65 @@ public sealed record SlotBinding(
     string SlotId,
     IReadOnlyList<MirroredSignal> VectorTargets,
     string? StartCondition,
-    IReadOnlyList<MirroredSignal> ResultSources);
+    IReadOnlyList<MirroredSignal> ResultSources)
+{
+    /// <summary>
+    /// The register offset of each result signal, and the total width — <b>a running sum, not the list
+    /// index.</b>
+    ///
+    /// <para>🔴 <b>THE TWO STOPPED BEING THE SAME NUMBER THE MOMENT A TIME EXISTED.</b> A Time occupies
+    /// two registers, so the signal at list position 1 after a Time sits at register 2. Anything still
+    /// using <c>IndexOf(signal)</c> as a register offset reads the WRONG HALF of the value ahead of it —
+    /// silently, with a plausible number. Every register offset in this system comes from here.</para>
+    /// </summary>
+    public IReadOnlyList<int> ResultRegisterOffsets => Offsets(ResultSources);
+
+    /// <summary>The same running sum over the vector targets.</summary>
+    public IReadOnlyList<int> VectorRegisterOffsets => Offsets(VectorTargets);
+
+    /// <summary>Total result registers this binding needs. <b>Not the signal count.</b></summary>
+    public int ResultRegistersNeeded => (ResultSources ?? Array.Empty<MirroredSignal>()).Sum(s => s.Registers);
+
+    /// <summary>Total vector registers this binding needs.</summary>
+    public int VectorRegistersNeeded => (VectorTargets ?? Array.Empty<MirroredSignal>()).Sum(s => s.Registers);
+
+    /// <summary>
+    /// The register offset a result signal sits at, or -1 when this binding does not carry it.
+    ///
+    /// <para><b>-1 rather than 0</b>, because 0 is a real offset and a caller that cannot tell them apart
+    /// reads the first register for every signal it does not have.</para>
+    /// </summary>
+    public int ResultRegisterOf(string tag)
+    {
+        var offsets = ResultRegisterOffsets;
+
+        for (var i = 0; i < ResultSources.Count; i++)
+        {
+            if (string.Equals(ResultSources[i].Tag, tag, StringComparison.Ordinal))
+                return offsets[i];
+        }
+
+        return -1;
+    }
+
+    /// <summary>The result signal at a list position, by tag — so a reader can ask what type it is about to decode.</summary>
+    public MirroredSignal? ResultSignal(string tag) =>
+        ResultSources.FirstOrDefault(s => string.Equals(s.Tag, tag, StringComparison.Ordinal));
+
+    private static IReadOnlyList<int> Offsets(IReadOnlyList<MirroredSignal>? signals)
+    {
+        var offsets = new List<int>();
+        var next = 0;
+
+        foreach (var signal in signals ?? Array.Empty<MirroredSignal>())
+        {
+            offsets.Add(next);
+            next += signal?.Registers ?? 0;
+        }
+
+        return offsets;
+    }
+}
 
 /// <summary>What one generated network does. The plan is inspectable before any IR is rendered.</summary>
 public enum CopyLayerNetworkKind

@@ -539,4 +539,44 @@ public class LoopRunTests
         Assert.Contains("1 PASS", Run().Result.Summary(), StringComparison.Ordinal);
         Assert.StartsWith("NOTADMISSIBLE —", Run(Request(vector: Vector(author: "agent-a"))).Result.Summary(), StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void THERE_IS_ONE_32_BIT_WORD_ORDER_IN_THIS_SYSTEM_and_it_is_still_UNCALIBRATED()
+    {
+        // ⚠️ A `Time` result is one %MD on the PLC and TWO holding registers on the wire, so decoding it
+        // means choosing which half is the low word — the SAME choice the version register and the scan
+        // counter already make. Two independent defaults would mean two things to calibrate and a way for
+        // them to disagree, so the loop's default is asserted equal to the client's.
+        //
+        // *** AND BOTH ARE AN INFERENCE. *** `RegisterWordOrder`'s own documentation says no measurement
+        // has distinguished it from its mirror image. A Time read under the wrong order is out by
+        // 65 536 ms and reads as a plausible timing bug. The rig session's calibration step settles it;
+        // until then a Time result is exactly as trustworthy as the version register is.
+        var loopDefault = Request().WordOrder;
+
+        // Read off MirrorClient's own constructor rather than restated, so the two cannot drift apart
+        // without this failing.
+        var clientDefault = typeof(MirrorClient).GetConstructors()
+            .SelectMany(c => c.GetParameters())
+            .Where(p => p.ParameterType == typeof(RegisterWordOrder) && p.HasDefaultValue)
+            .Select(p => (RegisterWordOrder)p.DefaultValue!)
+            .Distinct()
+            .ToArray();
+
+        var declared = Assert.Single(clientDefault);
+        Assert.Equal(declared, loopDefault);
+
+        // Writing under one order and reading under the other CANCELS OUT on our own loopback — which is
+        // why agreeing with ourselves proves nothing here and only the device can settle it.
+        const uint pattern = 0xA93F2C71;
+        foreach (var order in Enum.GetValues<RegisterWordOrder>())
+        {
+            var words = RegisterWords.From32(pattern, order);
+            Assert.Equal(pattern, RegisterWords.To32(words[0], words[1], order));
+        }
+
+        // Under the OTHER order the same pair reads as a different number entirely — the failure mode.
+        var high = RegisterWords.From32(pattern, RegisterWordOrder.HighWordFirst);
+        Assert.NotEqual(pattern, RegisterWords.To32(high[0], high[1], RegisterWordOrder.LowWordFirst));
+    }
 }

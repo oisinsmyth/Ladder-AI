@@ -176,12 +176,68 @@ public class CopyLayerAgainstRealTiaExportTests
         foreach (var move in ir.Split('\n').Select(l => l.Trim()).Where(l => l.StartsWith("MOVE(", StringComparison.Ordinal)))
         {
             Assert.DoesNotContain("DB_Unit.Alarm", move, StringComparison.Ordinal);
-            Assert.DoesNotContain("DB_Unit.StopReq", move, StringComparison.Ordinal);
+            Assert.DoesNotContain("DB_Unit.Enable", move, StringComparison.Ordinal);
         }
     }
 
     // ---------------------------------------------------------------------------------------------
-    // Fact 3 — the exact case that was measured on the rig
+    // Fact 3 — how TIA itself copies a Time, and the one thing the corpus CANNOT vouch for
+    // ---------------------------------------------------------------------------------------------
+
+    [Fact]
+    public void A_REAL_TIA_BLOCK_MOVES_TIME_MEMBERS_WITH_MOVE_so_a_Time_is_word_ish_and_does_not_coil()
+    {
+        // FB_HopperBlockageMonitor declares Time statics and TIA accepted `Move` over them. That is the
+        // foreign fact behind the Time row's rung shape — a Time moves, it does not coil.
+        var doc = Export("FB_HopperBlockageMonitor.xml");
+
+        var declaresTime = doc.Descendants()
+            .Any(e => e.Name.LocalName == "Member" && (e.Attribute("Datatype")?.Value ?? string.Empty)
+                .Contains("Time", StringComparison.OrdinalIgnoreCase));
+
+        Assert.True(declaresTime, "FB_HopperBlockageMonitor was expected to declare Time members; without them this proves nothing.");
+
+        var moves = doc.Descendants()
+            .Count(e => e.Name.LocalName == "Part" && (e.Attribute("Name")?.Value ?? string.Empty) == "Move");
+
+        Assert.True(moves > 0, "the block was expected to contain a Move over its Time members.");
+
+        // And the generator agrees: a Time renders as a MOVE, never a COIL.
+        Assert.Equal(MirrorCopyShape.Move, MirrorElements.Require(MirrorValueType.Time).Shape);
+    }
+
+    [Fact]
+    public void THE_CORPUS_CANNOT_VOUCH_FOR_A_TIME_TAG_AT_MD_and_that_is_recorded_rather_than_glossed()
+    {
+        // ⚠️ *** THE HONEST LIMIT OF THIS FILE. *** The corpus contains Bool and Word TAGS only — no Time
+        // tag at any address. So the Time ROW's rung shape is corroborated above by a real block, and its
+        // TAG form (`Time @ %MD<byte>`, two registers) is NOT: it is derived from the 32-bit width and from
+        // the version register, which this same generator already places at %MD and which HAS been through
+        // a live import. That is weaker evidence and it is said out loud rather than left to be assumed.
+        //
+        // If a Time tag ever enters the corpus, this test fails and should be replaced by the real
+        // comparison — which is the point of asserting the absence rather than staying silent about it.
+        var timeTags = RealTagRows().Where(r => r.Type.Equals("Time", StringComparison.OrdinalIgnoreCase)).ToArray();
+
+        Assert.True(timeTags.Length == 0,
+            "a Time tag now exists in the committed export corpus. Good — replace this test with a real "
+            + "comparison of its address form against the generator's, and delete the caveat that says the "
+            + "corpus cannot vouch for it.");
+
+        // What IS vouched for: this generator's own %MD placement, which the version register shares and
+        // which reached a controller.
+        var plan = Mixed().Require();
+
+        var version = plan.Tags.Single(t => t.Name == "HX_ProgramVersion");
+        var times = plan.Tags.Where(t => t.DataType == "Time").ToArray();
+
+        Assert.StartsWith("%MD", version.Address, StringComparison.Ordinal);
+        Assert.NotEmpty(times);
+        Assert.All(times, t => Assert.StartsWith("%MD", t.Address, StringComparison.Ordinal));
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // Fact 4 — the exact case that was measured on the rig
     // ---------------------------------------------------------------------------------------------
 
     [Fact]
@@ -213,13 +269,13 @@ public class CopyLayerAgainstRealTiaExportTests
     {
         var map = MapAllocator.Allocate(new WaveSetRequest(
             MirrorGeometry.ForCpu1214C(retentiveBytes: 256, baseByte: 4000),
-            new[] { new SlotRequest("S0", 2, 3) })).Require();
+            new[] { new SlotRequest("S0", 4, 4) })).Require();
 
         var binding = new SlotBinding(
             "S0",
-            new[] { MirroredSignal.Int("DB_Unit.Setpoint"), MirroredSignal.Bool("DB_Unit.Enable") },
+            new[] { MirroredSignal.Int("DB_Unit.Setpoint"), MirroredSignal.Bool("DB_Unit.Enable"), MirroredSignal.Time("DB_Unit.ScenarioMs") },
             "DB_Unit.StartCmd",
-            new[] { MirroredSignal.Bool("DB_Unit.Alarm"), MirroredSignal.Int("DB_Unit.Actual"), MirroredSignal.Bool("DB_Unit.StopReq") });
+            new[] { MirroredSignal.Bool("DB_Unit.Alarm"), MirroredSignal.Int("DB_Unit.Actual"), MirroredSignal.Time("DB_Unit.Elapsed") });
 
         return CopyLayerGenerator.Generate(map, binding, Naming, Stamp);
     }

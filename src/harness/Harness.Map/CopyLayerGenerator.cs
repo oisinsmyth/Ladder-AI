@@ -42,49 +42,53 @@ public static class CopyLayerGenerator
     private static readonly Regex SafeIdentifier = new("^[A-Za-z_][A-Za-z0-9_]*$", RegexOptions.Compiled);
 
     /// <summary>
-    /// The types this generator can actually render — <b>the whole supported set, in one place.</b>
-    ///
-    /// <para>Everything else is a refusal naming the signal. It is a set rather than a <c>default:</c>
-    /// arm because a <c>default:</c> that falls through to Int is the defect that reached the rig.</para>
-    /// </summary>
-    private static readonly IReadOnlySet<MirrorValueType> Renderable =
-        new HashSet<MirrorValueType> { MirrorValueType.Bool, MirrorValueType.Int };
-
-    /// <summary>
-    /// The order types are emitted in — <b>Bool before Int, and that is the IR's rule, not a preference.</b>
+    /// The order types are emitted in — <b>every COIL type before every MOVE type, and that is the IR's
+    /// rule rather than a preference.</b>
     ///
     /// <para><c>ir/SPEC.md</c>: statements within one network are grouped by kind in a fixed order, and
-    /// <c>COIL</c> comes before <c>MOVE</c>. This generator emits one network per type rather than one
-    /// ordered network, so the rule cannot be broken — but the networks themselves are emitted in the
-    /// same order, so merging them later would still be legal.</para>
+    /// <c>COIL</c> comes before <c>MOVE</c>. This generator emits one network per TYPE rather than one
+    /// ordered network, so the rule cannot be broken — but the networks are emitted in the legal order
+    /// anyway, so merging them later would remain legal. <b>Derived from the element table's own shapes</b>,
+    /// so a new row lands in the right place without anybody editing a second list that could disagree.</para>
     /// </summary>
-    private static readonly MirrorValueType[] RenderOrder = { MirrorValueType.Bool, MirrorValueType.Int };
+    private static IReadOnlyList<MirrorElement> RenderOrder =>
+        MirrorElements.All.OrderBy(e => e.Shape == MirrorCopyShape.Coil ? 0 : 1).ThenBy(e => e.Type).ToArray();
 
     /// <summary>
-    /// The mirror tag for one register, <b>typed and addressed together</b> — the two things the
+    /// The mirror tag for one register, <b>typed, addressed and SIZED together</b> — the three things the
     /// hard-coded <c>"Int"</c> got wrong at once.
     ///
-    /// <para>A Bool takes <b>bit 0 of its own register</b>: the register is not shared, because packing
-    /// is an explicit non-goal and because the client's result index is the register offset. Bit 0 is
-    /// chosen so a client reading the register as a 16-bit word tests <c>value &amp; 1</c> — the same
-    /// convention <see cref="MirrorGeometry.BitAddressOf"/> already applies to the start bools, so
-    /// there is ONE bit-order question in this system and not two.</para>
+    /// <para>Everything here is read out of <see cref="MirrorElements"/>. A Bool takes <b>bit 0 of its own
+    /// register</b> — bit 0 so a client reading the register as a 16-bit word tests <c>value &amp; 1</c>,
+    /// the same convention <see cref="MirrorGeometry.BitAddressOf"/> already applies to the start bools,
+    /// which keeps ONE bit-order question in this system rather than two. A Time takes a <c>%MD</c> and
+    /// therefore <b>two</b> registers — the same span the version register and the scan counter already
+    /// occupy, and the same uncalibrated word order.</para>
     /// </summary>
-    private static MirrorTag MirrorTagFor(string name, MirrorValueType type, MirrorGeometry geometry, int register, string comment) =>
-        type switch
+    private static MirrorTag MirrorTagFor(string name, MirrorValueType type, MirrorGeometry geometry, int register, string comment)
+    {
+        var element = MirrorElements.Require(type);
+
+        var address = element.Form switch
         {
-            MirrorValueType.Bool => new MirrorTag(name, "Bool", geometry.BitAddressOf(register, 0),
-                geometry.ByteAddressOf(register), comment + " Bool, bit 0 of this register."),
-
-            MirrorValueType.Int => new MirrorTag(name, "Int", geometry.WordAddressOf(register),
-                geometry.ByteAddressOf(register), comment),
-
-            // Unreachable: the refusal pass above rejects anything outside Renderable before this runs.
-            // It throws rather than defaulting because a default here is the original defect.
-            _ => throw new InvalidOperationException(
-                $"mirror tag '{name}' has type {type}, which reached rendering. The type refusal should have stopped this; "
-                + "defaulting to Int is what put an unmirrorable copy layer on a controller."),
+            MirrorAddressForm.Bit => geometry.BitAddressOf(register, 0),
+            MirrorAddressForm.Word => geometry.WordAddressOf(register),
+            MirrorAddressForm.DoubleWord => geometry.DoubleWordAddressOf(register),
+            _ => throw new InvalidOperationException($"address form {element.Form} has no rendering."),
         };
+
+        // Said on the TAG, because the register span is what a client has to get right and the word order
+        // inside that span is not yet measured.
+        var note = element.Form switch
+        {
+            MirrorAddressForm.Bit => " Bool, bit 0 of this register.",
+            MirrorAddressForm.DoubleWord =>
+                $" {element.IrDataType}, 32-bit: registers {register} and {register + 1}, reassembled under the configurable word order, WHICH IS UNCALIBRATED.",
+            _ => string.Empty,
+        };
+
+        return new MirrorTag(name, element.IrDataType, address, geometry.ByteAddressOf(register), comment + note);
+    }
 
     /// <summary>Generate the copy layer for a single-slot map, or report every reason it cannot be.</summary>
     /// <param name="stamp">
@@ -154,11 +158,14 @@ public static class CopyLayerGenerator
             if (sources.Count == 0)
                 refusals.Add($"binding for slot '{binding.SlotId}' wires no result sources. A slot that publishes nothing produces a result region of zeros indistinguishable from a real one.");
 
-            if (slot is not null && targets.Count > slot.Vector.Length)
-                refusals.Add($"binding wires {targets.Count} vector targets but slot '{binding.SlotId}' was allocated {slot.Vector.Length} vector registers.");
+            // *** WIDTH, NOT COUNT. *** A Time occupies two registers, so a binding of three signals can
+            // need four. Comparing a signal COUNT against a REGISTER allocation was true only while every
+            // type was one register wide, which is exactly the assumption that broke.
+            if (slot is not null && binding.VectorRegistersNeeded > slot.Vector.Length)
+                refusals.Add($"binding wires {targets.Count} vector target(s) needing {binding.VectorRegistersNeeded} register(s), but slot '{binding.SlotId}' was allocated {slot.Vector.Length} vector register(s). A 32-bit element occupies two.");
 
-            if (slot is not null && sources.Count > slot.Result.Length)
-                refusals.Add($"binding wires {sources.Count} result sources but slot '{binding.SlotId}' was allocated {slot.Result.Length} result registers.");
+            if (slot is not null && binding.ResultRegistersNeeded > slot.Result.Length)
+                refusals.Add($"binding wires {sources.Count} result source(s) needing {binding.ResultRegistersNeeded} register(s), but slot '{binding.SlotId}' was allocated {slot.Result.Length} result register(s). A 32-bit element occupies two.");
 
             foreach (var tag in targets.Concat(sources).Select(s => s?.Tag).Append(binding.StartCondition))
             {
@@ -182,14 +189,14 @@ public static class CopyLayerGenerator
                     continue;
                 }
 
-                if (!Renderable.Contains(signal.Type))
+                if (MirrorElements.For(signal.Type) is null)
                 {
                     refusals.Add(
                         $"{where} '{signal.Tag}' on slot '{binding.SlotId}' has type {signal.Type}, which this generator cannot mirror. "
-                        + $"Supported: {string.Join(", ", Renderable.Select(t => t.ToString()))}. "
+                        + $"Supported: {MirrorElements.Supported}. "
                         + (signal.Type == MirrorValueType.Unstated
                             ? "*** UNSTATED IS A REFUSAL AND NOT A DEFAULT. *** Assuming Int here is exactly the defect this refusal exists to prevent: it renders a plain MOVE, which TIA rejects for a Bool with \"Data type Bool is not permitted here\" — after a full import."
-                            : "Widening this means deciding the TAG TYPE and the RUNG SHAPE together and verifying both against TIA, not adding an enum member."));
+                            : "Widening this is a ROW in MirrorElements - data type, address form (which is where the register width comes from) and rung shape together, verified against TIA. Never an enum member on its own."));
                 }
             }
         }
@@ -232,20 +239,27 @@ public static class CopyLayerGenerator
                     "Latched: the block's own start condition was seen high. Cleared by the client at inert."));
             }
 
+            // *** THE SUFFIX IS THE REGISTER OFFSET, NOT THE LIST POSITION. *** They were the same number
+            // only while every element was one register wide. With a 32-bit element in the list, the tag
+            // after a Time at R000 is R002 — and the gap is the point: it says, in the name, that R001 is
+            // the Time's second half rather than a register nobody wired.
             var vectorTargets = binding.VectorTargets ?? Array.Empty<MirroredSignal>();
+            var vectorOffsets = binding.VectorRegisterOffsets;
 
             for (var i = 0; i < vectorTargets.Count; i++)
             {
-                var register = allocation.Vector.Register + i;
-                tags.Add(MirrorTagFor($"{prefix}{binding.SlotId}_V{i:000}", vectorTargets[i].Type, geometry, register,
-                    $"Vector register {i}."));
+                var offset = vectorOffsets[i];
+                tags.Add(MirrorTagFor($"{prefix}{binding.SlotId}_V{offset:000}", vectorTargets[i].Type, geometry,
+                    allocation.Vector.Register + offset, $"Vector register {offset}."));
             }
+
+            var resultOffsets = binding.ResultRegisterOffsets;
 
             for (var i = 0; i < binding.ResultSources.Count; i++)
             {
-                var register = allocation.Result.Register + i;
-                tags.Add(MirrorTagFor($"{prefix}{binding.SlotId}_R{i:000}", binding.ResultSources[i].Type, geometry, register,
-                    $"Result register {i}."));
+                var offset = resultOffsets[i];
+                tags.Add(MirrorTagFor($"{prefix}{binding.SlotId}_R{offset:000}", binding.ResultSources[i].Type, geometry,
+                    allocation.Result.Register + offset, $"Result register {offset}."));
             }
         }
 
@@ -268,18 +282,20 @@ public static class CopyLayerGenerator
             // type is what keeps the IR's kind-ordering rule (COIL before MOVE) unreachable rather than
             // merely satisfied; keying the register off the position in the binding's list is what keeps
             // the client's `IndexOf(signal)` arithmetic true across the split.
-            foreach (var type in RenderOrder)
+            var targetOffsets = binding.VectorRegisterOffsets;
+
+            foreach (var element in RenderOrder)
             {
                 var ofType = targets
-                    .Select((t, i) => (Signal: t, Index: i))
-                    .Where(x => x.Signal.Type == type)
-                    .Select(x => new CopyLayerCopy($"{prefix}{binding.SlotId}_V{x.Index:000}", x.Signal.Tag, type))
+                    .Select((t, i) => (Signal: t, Offset: targetOffsets[i]))
+                    .Where(x => x.Signal.Type == element.Type)
+                    .Select(x => new CopyLayerCopy($"{prefix}{binding.SlotId}_V{x.Offset:000}", x.Signal.Tag, element.Type))
                     .ToArray();
 
                 if (ofType.Length > 0)
                 {
                     networks.Add(new CopyLayerNetwork(number++, CopyLayerNetworkKind.VectorIn,
-                        $"Vector in - slot {binding.SlotId} - {type}", ofType));
+                        $"Vector in - slot {binding.SlotId} - {element.Type}", ofType));
                 }
             }
 
@@ -301,18 +317,20 @@ public static class CopyLayerGenerator
                     new[] { new CopyLayerCopy($"{prefix}{binding.SlotId}_Ran", binding.StartCondition, MirrorValueType.Bool) }));
             }
 
-            foreach (var type in RenderOrder)
+            var sourceOffsets = binding.ResultRegisterOffsets;
+
+            foreach (var element in RenderOrder)
             {
                 var ofType = binding.ResultSources
-                    .Select((s, i) => (Signal: s, Index: i))
-                    .Where(x => x.Signal.Type == type)
-                    .Select(x => new CopyLayerCopy(x.Signal.Tag, $"{prefix}{binding.SlotId}_R{x.Index:000}", type))
+                    .Select((s, i) => (Signal: s, Offset: sourceOffsets[i]))
+                    .Where(x => x.Signal.Type == element.Type)
+                    .Select(x => new CopyLayerCopy(x.Signal.Tag, $"{prefix}{binding.SlotId}_R{x.Offset:000}", element.Type))
                     .ToArray();
 
                 if (ofType.Length > 0)
                 {
                     networks.Add(new CopyLayerNetwork(number++, CopyLayerNetworkKind.ResultsOut,
-                        $"Results out - slot {binding.SlotId} - {type}", ofType));
+                        $"Results out - slot {binding.SlotId} - {element.Type}", ofType));
                 }
             }
         }
@@ -412,13 +430,13 @@ public static class CopyLayerGenerator
                     // committed export corpus, and the test that reads it).
                     foreach (var copy in network.Moves)
                     {
-                        ir.Append(copy.Type switch
+                        var shape = MirrorElements.Require(copy.Type).Shape;
+
+                        ir.Append(shape switch
                         {
-                            MirrorValueType.Bool => $"  COIL {copy.To} := {copy.From}\n",
-                            MirrorValueType.Int => $"  MOVE(EN := TRUE, IN := {copy.From}) => {copy.To}\n",
-                            _ => throw new InvalidOperationException(
-                                $"copy {copy.From} -> {copy.To} has type {copy.Type}, which reached rendering. "
-                                + "The type refusal should have stopped this; rendering it as a MOVE is the original defect."),
+                            MirrorCopyShape.Coil => $"  COIL {copy.To} := {copy.From}\n",
+                            MirrorCopyShape.Move => $"  MOVE(EN := TRUE, IN := {copy.From}) => {copy.To}\n",
+                            _ => throw new InvalidOperationException($"copy shape {shape} has no rendering."),
                         });
                     }
 

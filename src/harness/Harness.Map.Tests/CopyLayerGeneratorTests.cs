@@ -498,8 +498,8 @@ public class CopyLayerGeneratorTests
         var result = CopyLayerGenerator.Generate(narrow, Binding(), Naming, Stamp);
 
         Assert.False(result.Generated);
-        Assert.Contains(result.Refusals, r => r.Contains("vector targets", StringComparison.Ordinal));
-        Assert.Contains(result.Refusals, r => r.Contains("result sources", StringComparison.Ordinal));
+        Assert.Contains(result.Refusals, r => r.Contains("vector target(s) needing", StringComparison.Ordinal));
+        Assert.Contains(result.Refusals, r => r.Contains("result source(s) needing", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -671,7 +671,132 @@ public class CopyLayerGeneratorTests
         Assert.Contains("DB_Unit.Setpoint", refusal, StringComparison.Ordinal);
         Assert.Contains("vector target", refusal, StringComparison.Ordinal);
         Assert.Contains("cannot mirror", refusal, StringComparison.Ordinal);
-        Assert.Contains("verifying both against TIA", refusal, StringComparison.Ordinal);
+        Assert.Contains("a ROW in MirrorElements", refusal, StringComparison.Ordinal);
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // Time — the second half of the same defect, and the first element wider than one register
+    // ---------------------------------------------------------------------------------------------
+
+    [Fact]
+    public void A_TIME_IS_32_BIT_so_it_is_addressed_as_MD_and_OCCUPIES_TWO_REGISTERS()
+    {
+        // *** FORCED, NOT A NICETY. *** Scenarios run to 120 000 ms and a holding register is 16 bits, so
+        // a scenario time cannot be an Int at all — it would wrap at 32 767 and read as a plausible number.
+        var map = OneSlot(result: 3);
+        var plan = Generate(map, Binding(sources: MirroredSignal.Times("DB_Unit.Elapsed"))).Require();
+
+        var tag = plan.Tags.Single(t => t.Name == "HX_S0_R000");
+        Assert.Equal("Time", tag.DataType);
+        Assert.Equal(map.Geometry.DoubleWordAddressOf(map.Slots[0].Result.Register), tag.Address);
+        Assert.Equal(2, MirrorElements.Require(MirrorValueType.Time).Registers);
+    }
+
+    [Fact]
+    public void THE_TAG_AFTER_A_TIME_IS_R002_because_the_suffix_is_the_REGISTER_not_the_list_position()
+    {
+        // The two were the same number only while every element was one register wide. The GAP is the
+        // point: R001 is the Time's second half, not a register nobody wired.
+        var plan = Generate(OneSlot(result: 4), Binding(sources: new[]
+        {
+            MirroredSignal.Time("DB_Unit.Elapsed"),
+            MirroredSignal.Bool("DB_Unit.Alarm"),
+            MirroredSignal.Int("DB_Unit.Actual"),
+        })).Require();
+
+        var names = plan.Tags
+            .Where(t => t.Name.StartsWith("HX_S0_R0", StringComparison.Ordinal))
+            .Select(t => t.Name)
+            .ToArray();
+
+        Assert.Equal(new[] { "HX_S0_R000", "HX_S0_R002", "HX_S0_R003" }, names);
+        Assert.DoesNotContain("HX_S0_R001", names);
+    }
+
+    [Fact]
+    public void THE_REGISTER_OFFSETS_ARE_A_RUNNING_SUM_OF_WIDTHS_not_the_list_index()
+    {
+        // Everything downstream that turns a signal into an address comes from here. A reader still using
+        // IndexOf would return the Time's SECOND HALF as the next signal's value — silently, plausibly.
+        var binding = Binding(sources: new[]
+        {
+            MirroredSignal.Time("DB_Unit.Elapsed"),
+            MirroredSignal.Bool("DB_Unit.Alarm"),
+            MirroredSignal.Time("DB_Unit.Remaining"),
+        });
+
+        Assert.Equal(new[] { 0, 2, 3 }, binding.ResultRegisterOffsets);
+        Assert.Equal(5, binding.ResultRegistersNeeded);
+
+        Assert.Equal(3, binding.ResultRegisterOf("DB_Unit.Remaining"));
+
+        // -1 rather than 0 for a signal this binding does not carry: 0 is a real offset, and a caller that
+        // cannot tell them apart reads the first register for everything it does not have.
+        Assert.Equal(-1, binding.ResultRegisterOf("DB_Unit.NotHere"));
+    }
+
+    [Fact]
+    public void A_SLOT_IS_SIZED_IN_REGISTERS_NOT_SIGNALS_so_a_Time_that_does_not_fit_is_refused()
+    {
+        // Two signals, three registers needed. The old check compared a COUNT against a register
+        // allocation, which was true only while every element was one register wide.
+        var result = CopyLayerGenerator.Generate(
+            OneSlot(result: 2),
+            Binding(sources: new[] { MirroredSignal.Time("DB_Unit.Elapsed"), MirroredSignal.Int("DB_Unit.Actual") }),
+            Naming, Stamp);
+
+        Assert.False(result.Generated);
+        Assert.Contains(result.Refusals, r => r.Contains("needing 3 register(s)", StringComparison.Ordinal));
+        Assert.Contains(result.Refusals, r => r.Contains("A 32-bit element occupies two", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void A_TIME_MIRRORS_WITH_A_MOVE_because_a_real_TIA_block_moves_Time_members()
+    {
+        // FB_HopperBlockageMonitor NETWORK 3 in the committed corpus does `MOVE(IN := ZeroTime) =>
+        // AccumulatedElapsed`, both Time, and TIA accepted it. A Time is word-ish: it moves, it does not
+        // coil. (A bare Time LITERAL is a different matter and that block's own comment records TIA
+        // rejecting one — the copy layer moves members, never literals.)
+        var ir = Generate(OneSlot(result: 3), Binding(sources: MirroredSignal.Times("DB_Unit.Elapsed")))
+            .Objects.Single(o => o.Kind == HarnessObjectKind.Block).Ir;
+
+        Assert.Contains("MOVE(EN := TRUE, IN := DB_Unit.Elapsed) => HX_S0_R000", ir, StringComparison.Ordinal);
+        Assert.DoesNotContain("COIL HX_S0_R000", ir, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void THE_TIME_TAG_SAYS_ITS_WORD_ORDER_IS_UNCALIBRATED_on_the_tag_itself()
+    {
+        // ⚠️ A Time is two registers on the wire, so reading it back inherits the SAME uncalibrated
+        // 32-bit transform as the version register and the scan counter. Read under the wrong order it is
+        // out by 65 536 ms and looks like a plausible timing bug. The caveat rides on the tag comment
+        // because that is what a person reads in TIA, where no doc comment reaches.
+        var plan = Generate(OneSlot(result: 3), Binding(sources: MirroredSignal.Times("DB_Unit.Elapsed"))).Require();
+
+        var comment = plan.Tags.Single(t => t.Name == "HX_S0_R000").Comment;
+
+        Assert.Contains("registers 9 and 10", comment, StringComparison.Ordinal);
+        Assert.Contains("UNCALIBRATED", comment, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void EVERY_SUPPORTED_TYPE_HAS_A_SHAPE_AN_ADDRESS_FORM_AND_A_WIDTH_from_ONE_table()
+    {
+        // *** Bool AND Time WERE NOT TWO BUGS. *** Both came from the same hard-coded "Int", and the fix
+        // is one table rather than two special cases — so the third type is a ROW, and a type with no row
+        // refuses. This test is the thing that fails if somebody adds an enum member and no row.
+        foreach (var type in Enum.GetValues<MirrorValueType>().Where(t => t != MirrorValueType.Unstated))
+        {
+            var element = MirrorElements.For(type);
+
+            Assert.True(element is not null,
+                $"MirrorValueType.{type} has no row in MirrorElements. Add the row — data type, address form "
+                + "(which is where the width comes from) and rung shape — or the generator will refuse every "
+                + "signal of that type, which is the correct behaviour but not the intended one.");
+
+            Assert.NotEmpty(element!.IrDataType);
+            Assert.True(element.Registers is 1 or 2);
+        }
     }
 
     [Fact]

@@ -82,13 +82,13 @@ public class CopyLayerConverterRoundTripTests
     {
         var map = MapAllocator.Allocate(new WaveSetRequest(
             MirrorGeometry.ForCpu1214C(retentiveBytes: 256, baseByte: 4000),
-            new[] { new SlotRequest("S0", 2, 3) })).Require();
+            new[] { new SlotRequest("S0", 4, 4) })).Require();
 
         var binding = new SlotBinding(
             "S0",
-            new[] { MirroredSignal.Int("DB_Unit.Setpoint"), MirroredSignal.Bool("DB_Unit.Enable") },
+            new[] { MirroredSignal.Int("DB_Unit.Setpoint"), MirroredSignal.Bool("DB_Unit.Enable"), MirroredSignal.Time("DB_Unit.ScenarioMs") },
             "DB_Unit.StartCmd",
-            new[] { MirroredSignal.Bool("DB_Unit.Alarm"), MirroredSignal.Int("DB_Unit.Actual"), MirroredSignal.Bool("DB_Unit.StopReq") });
+            new[] { MirroredSignal.Bool("DB_Unit.Alarm"), MirroredSignal.Int("DB_Unit.Actual"), MirroredSignal.Time("DB_Unit.Elapsed") });
 
         return CopyLayerGenerator.Generate(map, binding, Naming, Stamp);
     }

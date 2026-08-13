@@ -38,7 +38,17 @@ public sealed record LoopRequest(
     // asserting it on the caller's behalf would be the caller-supplied verdict this project has killed
     // three times. Absent means nobody said, and gate 11 reports NOT CHECKED.
     DeploymentDeclaration? Deployment = null,
-    TagMapReach? TagMapReach = null)
+    TagMapReach? TagMapReach = null,
+
+    // ⚠️ *** THE 32-BIT WORD ORDER, AND IT IS THE SAME UNCALIBRATED TRANSFORM AS THE VERSION REGISTER'S. ***
+    // A `Time` result is one %MD on the PLC and TWO holding registers on the wire, so reading it back
+    // means choosing which half is the low word - and `RegisterWordOrder`'s default is an INFERENCE that
+    // no measurement has yet distinguished from its mirror image. It is threaded through here rather than
+    // open-coded at the decode site so there is ONE order in this system to calibrate, not two.
+    //
+    // A Time read under the wrong order is out by 65 536 ms and looks like a plausible timing bug for a
+    // long while. UNVERIFIED until the rig session's calibration step.
+    RegisterWordOrder WordOrder = RegisterWordOrder.HighWordFirst)
 {
     /// <summary>The factor, defaulting to uncompressed only where the caller passed nothing at all.</summary>
     public RuntimeCompression Compression => RuntimeCompression ?? Harness.Wire.RuntimeCompression.Uncompressed;
@@ -168,7 +178,7 @@ public static class LoopRun
             .GroupBy(v => v.Slot, StringComparer.Ordinal)
             .Select(g => new SlotTensor(
                 SlotIndexOf(map, g.Key),
-                g.OrderBy(v => v.Index).Select(v => ToWireVector(v, request.Bindings, map)).ToArray()))
+                g.OrderBy(v => v.Index).Select(v => ToWireVector(v, request.Bindings, map, request.WordOrder)).ToArray()))
             .OrderBy(t => t.SlotIndex)
             .ToArray();
 
@@ -233,7 +243,7 @@ public static class LoopRun
                 stimulus,
                 StimulusExpectation.AtLeastOneScanPerRoundTrip(Math.Max(1, run.PollRounds)),
                 Settling(client, vector, slotIndex, run, distribution!),
-                Assertions(vector, binding, run),
+                Assertions(vector, binding, run, request.WordOrder),
                 distribution!.CoRunning.FirstOrDefault(c => c.WaveIndex == vector.Index).CoRunners ?? Array.Empty<int>(),
                 map,
                 stamp,
@@ -282,19 +292,63 @@ public static class LoopRun
         return SettlingState.NotEstablished;
     }
 
-    private static IReadOnlyList<AssertionOutcome> Assertions(SubmissionVector vector, SlotBinding binding, SlotRunResult run)
+    private static IReadOnlyList<AssertionOutcome> Assertions(
+        SubmissionVector vector, SlotBinding binding, SlotRunResult run, RegisterWordOrder wordOrder)
     {
         var assertionId = vector.Basis?.AssertionId ?? "<uncited>";
 
         return vector.Expectations.Select(e =>
         {
-            var register = binding.ResultSources.Select(s => s.Tag).ToList().IndexOf(e.Signal);
-            var observed = register >= 0 && register < run.Results.Length
-                ? unchecked((short)run.Results[register]).ToString()
-                : null;
+            // *** THE REGISTER OFFSET, NOT THE LIST INDEX. *** They diverge the moment a 32-bit element is
+            // in the list: everything after a Time sits one register later than its position, and reading
+            // by position would return the Time's SECOND HALF as the next signal's value — a plausible
+            // number, silently wrong. -1 rather than 0 for "not here", because 0 is a real offset.
+            var register = binding.ResultRegisterOf(e.Signal);
+            var signal = binding.ResultSignal(e.Signal);
 
-            return AssertionOutcome.Compare(assertionId, e.Signal, e.Expected ?? "<no predicate>", observed);
+            return AssertionOutcome.Compare(assertionId, e.Signal, e.Expected ?? "<no predicate>",
+                Observe(signal, register, run, wordOrder));
         }).ToArray();
+    }
+
+    /// <summary>
+    /// Decode one result, <b>by the type the binding declared</b>.
+    ///
+    /// <para>Reading every result as a signed 16-bit word was true only while every element was an Int. A
+    /// Bool would read 0/1 rather than false/true and never match its predicate; a Time would read its
+    /// high half alone and be wrong by up to 65 536 ms.</para>
+    ///
+    /// <para><b>Null is "not observed", and it is returned rather than a zero</b> — an unread register is
+    /// not a zero one, and <see cref="AssertionOutcome.Compare"/> is what turns null into NotObserved.</para>
+    /// </summary>
+    private static string? Observe(MirroredSignal? signal, int register, SlotRunResult run, RegisterWordOrder wordOrder)
+    {
+        if (signal is null || register < 0 || register >= run.Results.Length)
+            return null;
+
+        var element = MirrorElements.For(signal.Type);
+        if (element is null)
+            return null;
+
+        // A 32-bit element needs BOTH its registers present. Half a value is not a value.
+        if (register + element.Registers > run.Results.Length)
+            return null;
+
+        return element.Form switch
+        {
+            // Bit 0 of the register, matching what the copy layer's COIL writes and what
+            // MirrorGeometry.BitAddressOf places there.
+            MirrorAddressForm.Bit => ((run.Results[register] & 1) == 1).ToString().ToLowerInvariant(),
+
+            MirrorAddressForm.Word => unchecked((short)run.Results[register]).ToString(),
+
+            // ⚠️ The uncalibrated transform. Same order as the version register and the scan counter, on
+            // purpose: one question for the rig to settle rather than two.
+            MirrorAddressForm.DoubleWord => unchecked((int)RegisterWords.To32(
+                run.Results[register], run.Results[register + 1], wordOrder)).ToString(),
+
+            _ => null,
+        };
     }
 
     /// <summary>
@@ -332,18 +386,56 @@ public static class LoopRun
         return slot?.Index ?? throw new ArgumentException($"no slot '{slotId}' in this map.", nameof(slotId));
     }
 
-    private static WireVector ToWireVector(SubmissionVector vector, IReadOnlyList<SlotBinding> bindings, RegisterMap map)
+    private static WireVector ToWireVector(SubmissionVector vector, IReadOnlyList<SlotBinding> bindings, RegisterMap map, RegisterWordOrder wordOrder)
     {
         var binding = bindings.Single(b => b.SlotId == vector.Slot);
-        var values = binding.VectorTargets
-            .Select(t => vector.Inputs.TryGetValue(t.Tag, out var v) && short.TryParse(v, out var parsed) ? (ushort)parsed : (ushort)0)
-            .ToArray();
 
-        var completionRegister = binding.ResultSources.Select(s => s.Tag).ToList().IndexOf(vector.CompletionSignal);
+        // *** THE VECTOR IS LAID OUT BY REGISTER WIDTH, NOT ONE WORD PER SIGNAL. *** A 32-bit input takes
+        // two registers, so a naive one-word-per-target array would put every later input at the wrong
+        // address — and would silently write half of the wide one.
+        var values = new ushort[binding.VectorRegistersNeeded];
+        var targetOffsets = binding.VectorRegisterOffsets;
+
+        for (var i = 0; i < binding.VectorTargets.Count; i++)
+        {
+            var target = binding.VectorTargets[i];
+            var offset = targetOffsets[i];
+
+            if (!vector.Inputs.TryGetValue(target.Tag, out var text))
+                continue;
+
+            var element = MirrorElements.For(target.Type);
+
+            if (element?.Form == MirrorAddressForm.DoubleWord)
+            {
+                // Same uncalibrated order as the read side. Writing under one order and reading under the
+                // other would cancel out on our own loopback and disagree only against the device — the
+                // exact shape of self-agreement this project distrusts, so both ends take the SAME value.
+                if (int.TryParse(text, out var wide))
+                {
+                    var words = RegisterWords.From32(unchecked((uint)wide), wordOrder);
+                    values[offset] = words[0];
+                    values[offset + 1] = words[1];
+                }
+            }
+            else if (element?.Form == MirrorAddressForm.Bit)
+            {
+                values[offset] = bool.TryParse(text, out var flag) && flag ? (ushort)1 : (ushort)0;
+            }
+            else if (short.TryParse(text, out var parsed))
+            {
+                values[offset] = unchecked((ushort)parsed);
+            }
+        }
+
+        var completionRegister = binding.ResultRegisterOf(vector.CompletionSignal);
 
         return new WireVector(
             values,
-            new InertDeclaration(binding.ResultSources.Select((_, i) => (i, (ushort)0)).ToDictionary(x => x.i, x => x.Item2)),
+            // Inert is declared over every RESULT REGISTER, including the second half of a wide element.
+            // Declaring it per signal would leave those halves unclaimed, and an unclaimed register is one
+            // nothing checks is quiet.
+            new InertDeclaration(Enumerable.Range(0, binding.ResultRegistersNeeded).ToDictionary(i => i, _ => (ushort)0)),
             completionRegister >= 0 ? completionRegister : 0,
             // The completion VALUE comes from the vector. It used to be a literal 1 here, which was the
             // loop inventing a convention contract section 2 does not state — and then a DEFAULT of 1 on
