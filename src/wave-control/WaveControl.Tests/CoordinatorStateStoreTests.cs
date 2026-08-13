@@ -194,6 +194,48 @@ namespace Ladder.Wave.Tests
         }
 
         [Fact]
+        public void Beginning_a_wave_over_an_UNREADABLE_state_is_refused()
+        {
+            // A state we cannot read is not one we can overwrite: beginning a wave over it would erase
+            // the only evidence that a previous one never completed, which is what X-C item 3 needs in
+            // order to discard its results.
+            using (var temp = new TempDirectory())
+            {
+                var store = CoordinatorStateStore.InDirectory(temp.Path);
+                File.WriteAllText(store.StatePath, "format=2\nwave=none\n", new UTF8Encoding(false));
+
+                Assert.Equal(CoordinatorStateFileState.Unreadable, store.Read().State);
+
+                Assert.Throws<WaveAlreadyInProgressException>(
+                    () => store.BeginWave(SampleMarker(store.Identity), new WaveQueues()));
+            }
+        }
+
+        [Fact]
+        public void Discarding_after_an_unreadable_state_records_that_the_QUEUE_was_voided_too()
+        {
+            // Under the merge an unreadable file voids both halves, and the discard log has to SAY so —
+            // the agents holding that admitted work are the ones who have to re-submit it.
+            using (var temp = new TempDirectory())
+            {
+                var store = CoordinatorStateStore.InDirectory(temp.Path);
+                File.WriteAllText(store.StatePath, "format=2\nwave=none\n", new UTF8Encoding(false));
+
+                var found = store.Read();
+                var line = store.DiscardInterruptedWave(found, "state unreadable on restart", new WaveQueues());
+
+                Assert.Contains("THE QUEUE WAS VOIDED TOO", line, StringComparison.Ordinal);
+                Assert.Contains("re-submit", line, StringComparison.Ordinal);
+
+                // And the discard leaves a clean, readable, EXPLICIT state behind.
+                var afterwards = store.Read();
+                Assert.Equal(CoordinatorStateFileState.Restored, afterwards.State);
+                Assert.False(afterwards.Wave.WaveWasInProgress);
+                Assert.Equal(0, afterwards.Count);
+            }
+        }
+
+        [Fact]
         public void A_discard_cannot_be_logged_for_a_wave_that_was_never_in_progress()
         {
             using (var temp = new TempDirectory())
