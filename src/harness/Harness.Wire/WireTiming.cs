@@ -89,24 +89,67 @@ public static class WireTiming
     }
 
     /// <summary>
-    /// Round trips one wave index costs: <c>K x (ceil(W / 123) + P) + 1</c> — K slots, W vector
-    /// registers per slot, P poll rounds per index, plus the one-transaction commit. [D, §12a derivation 2]
+    /// Round trips one wave index costs:
+    /// <c>K x ceil(Wv / 123) + P x ceil(K / R) + 1</c> — K slots, <c>Wv</c> vector registers per slot,
+    /// P poll rounds, <c>R = floor(125 / Wr)</c> whole slots per read, plus the one-transaction commit.
+    /// [D, §12a derivation 2]
     ///
-    /// <para><b>Registers appear nowhere except inside a <c>ceil</c> that is 1 for every legal slot.</b>
-    /// That is the whole finding: W is free, K is not. Nothing in this assembly derives a poll budget
-    /// from slot width, and a test holds that mechanically — widening every slot must leave this number
-    /// unchanged while adding a slot must raise it.</para>
+    /// <para><b>The read term was <c>P x K</c> until F-1 was adopted on 2026-08-13</b> — one FC03 per
+    /// slot. It is now <c>P x ceil(K/R)</c>, and since <c>R = floor(125 / Wr)</c>, <b>slot width has
+    /// entered the round-trip count for the first time, in the denominator</b>. Registers still do not
+    /// cost on the wire (~0.040 ms each); what they now do is decide how many slots share a read. Width
+    /// is free per-register and expensive per-R-step.</para>
+    ///
+    /// <para><b>The WRITE term is untouched, and that is deliberate.</b> F-1 is a read-side change.
+    /// Vector data is still written across as many transactions as it takes while nothing is running,
+    /// and the commit is still ONE transaction — that is where A1's coherence guarantee lives, and
+    /// nothing here is an invitation to batch writes differently.</para>
     /// </summary>
-    public static int RoundTripsPerIndex(int slots, int vectorRegistersPerSlot, int pollRounds)
+    public static int RoundTripsPerIndex(int slots, int vectorRegistersPerSlot, int resultRegistersPerSlot, int pollRounds)
     {
         if (slots < 0 || vectorRegistersPerSlot < 0 || pollRounds < 0)
             throw new ArgumentOutOfRangeException(nameof(slots), "a count cannot be negative.");
+
+        if (resultRegistersPerSlot < 1)
+            throw new ArgumentOutOfRangeException(nameof(resultRegistersPerSlot), resultRegistersPerSlot, "a slot that publishes nothing cannot be judged, so it is not a slot the map allocates.");
 
         var writes = vectorRegistersPerSlot == 0
             ? 0
             : (vectorRegistersPerSlot + Harness.Map.ModbusLimits.MaxWriteRegisters - 1) / Harness.Map.ModbusLimits.MaxWriteRegisters;
 
-        return (slots * (writes + pollRounds)) + 1;
+        var slotsPerRead = Math.Max(1, Harness.Map.ModbusLimits.MaxReadRegisters / resultRegistersPerSlot);
+        var reads = pollRounds * ((slots + slotsPerRead - 1) / slotsPerRead);
+
+        return (slots * writes) + reads + 1;
+    }
+
+    /// <summary>
+    /// O11's cap: <c>K_max(S) = R x floor(S x scan / RTT_p99)</c>, the widest tensor the poll budget
+    /// sustains for a SAMPLED assertion whose true window is <paramref name="sMinScans"/> scans.
+    /// [D, §12a derivation 2]
+    ///
+    /// <para><b>F-1's factor lands here undiluted.</b> Elsewhere it is diluted — writes and the commit
+    /// are untouched and <c>ceil(K/R)</c> is a step — but the cap is straight-line proportional to R. At
+    /// S = 10 scans a 20-register slot admits SIX slots where a padded 123-register one admits ONE, and
+    /// that row is the point of the change: the cap that was binding at 1 was an artefact of the map,
+    /// not of the link.</para>
+    ///
+    /// <para><b>REPORTED, NEVER ENFORCED, and D36 is why.</b> The arithmetic needs no rig, but its free
+    /// variable <c>S_min</c> — whether real submission sets declare sampled windows at all, and how
+    /// short — has never been observed. A formula whose free variable has never been measured is a
+    /// prediction, which is the exact thing that deferral exists to prevent. <b>Latched assertions have
+    /// no <c>S</c> at all and this cap does not bind on them</b>, which is most of why F-3 argues for
+    /// making latching mandatory.</para>
+    /// </summary>
+    public static int MaxTensorWidth(int slotsPerRead, int sMinScans)
+    {
+        if (slotsPerRead < 1)
+            throw new ArgumentOutOfRangeException(nameof(slotsPerRead), slotsPerRead, "a read covers at least one whole slot.");
+
+        if (sMinScans < 1)
+            throw new ArgumentOutOfRangeException(nameof(sMinScans), sMinScans, "an observation window of less than one scan is below the floor at any rate; there is no width that observes it.");
+
+        return slotsPerRead * (int)Math.Floor(sMinScans * ScanPeriodMs / RttP99Ms);
     }
 
     /// <summary>Observability floor in scans at the p99 for a K-slot tensor: a slot is polled every <c>K x RTT</c>. [D, §12a derivation 1]</summary>

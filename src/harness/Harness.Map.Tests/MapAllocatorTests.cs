@@ -192,38 +192,78 @@ public class MapAllocatorTests
     }
 
     // ---------------------------------------------------------------------------------------------
-    // The measured premise: registers are free, round trips cost. This pair IS the premise.
+    // The measured premise: registers are free on the wire, round trips cost. F-1 SPLIT THIS PAIR:
+    // vector width is still free, RESULT width is not, because it decides how many slots share a read.
     // ---------------------------------------------------------------------------------------------
 
     [Fact]
-    public void Widening_every_slot_does_not_change_what_a_poll_costs()
+    public void Widening_the_VECTOR_region_does_not_change_what_a_poll_costs()
     {
         var narrow = MapAllocator.Allocate(Wave(
-            new SlotRequest("S0", 1, 1),
-            new SlotRequest("S1", 1, 1))).Require();
+            new SlotRequest("S0", 1, 4),
+            new SlotRequest("S1", 1, 4))).Require();
 
         var wide = MapAllocator.Allocate(Wave(
-            new SlotRequest("S0", 120, 125),
-            new SlotRequest("S1", 120, 125))).Require();
+            new SlotRequest("S0", 120, 4),
+            new SlotRequest("S1", 120, 4))).Require();
 
         Assert.Equal(narrow.PollRoundTrips, wide.PollRoundTrips);
         Assert.Equal(narrow.CommitTransactions, wide.CommitTransactions);
     }
 
     [Fact]
-    public void Adding_a_slot_costs_exactly_one_more_round_trip_per_poll()
+    public void Widening_the_RESULT_region_DOES_change_it_and_before_F1_this_test_asserted_the_opposite()
     {
-        var two = MapAllocator.Allocate(Wave(
-            new SlotRequest("S0", 4, 4),
-            new SlotRequest("S1", 4, 4))).Require();
+        // *** THE CLAIM F-1 FALSIFIES, INVERTED RATHER THAN DELETED. *** Until 2026-08-13 a read covered
+        // one slot whatever its width, so no width could touch the poll cost. Now R = floor(125 / Wr):
+        // padding a slot is paid in round trips, and one wide slot in a fixed-size wave set collapses R
+        // for every slot in it. Whether admission should therefore group by slot size is F-6, and this
+        // test deliberately does not presume an answer — it only records that the cost is real.
+        var sized = MapAllocator.Allocate(Wave(
+            Enumerable.Range(0, 6).Select(i => new SlotRequest($"S{i}", 4, 20)).ToArray())).Require();
 
-        var three = MapAllocator.Allocate(Wave(
-            new SlotRequest("S0", 4, 4),
-            new SlotRequest("S1", 4, 4),
-            new SlotRequest("S2", 4, 4))).Require();
+        var padded = MapAllocator.Allocate(Wave(
+            Enumerable.Range(0, 6).Select(i => new SlotRequest($"S{i}", 4, 123)).ToArray())).Require();
 
-        Assert.Equal(3, two.PollRoundTrips);          // one control read plus one per slot
-        Assert.Equal(two.PollRoundTrips + 1, three.PollRoundTrips);
+        Assert.Equal(6, sized.SlotsPerRead);
+        Assert.Equal(1, padded.SlotsPerRead);
+
+        Assert.Equal(2, sized.PollRoundTrips);        // control + ONE read covering all six slots
+        Assert.Equal(7, padded.PollRoundTrips);       // control + one read per slot
+    }
+
+    [Fact]
+    public void One_wide_slot_collapses_R_for_the_WHOLE_wave_set()
+    {
+        // Slots are fixed-size, sized to the largest member, so this is not a property of the wide slot —
+        // it is a property of every slot beside it. F-6's whole subject, recorded and not decided.
+        var homogeneous = MapAllocator.Allocate(Wave(
+            Enumerable.Range(0, 6).Select(i => new SlotRequest($"S{i}", 4, 20)).ToArray())).Require();
+
+        var withOneWideSlot = MapAllocator.Allocate(Wave(
+            Enumerable.Range(0, 5).Select(i => new SlotRequest($"S{i}", 4, 20))
+                .Append(new SlotRequest("S5", 4, 123)).ToArray())).Require();
+
+        Assert.Equal(6, homogeneous.SlotsPerRead);
+        Assert.Equal(1, withOneWideSlot.SlotsPerRead);
+        Assert.Equal(123, withOneWideSlot.ResultRegistersPerSlot);
+    }
+
+    [Fact]
+    public void Adding_a_slot_costs_a_round_trip_only_when_it_crosses_a_read_boundary()
+    {
+        // The read term is a STEP, not a slope. A slot added inside an existing group rides along free.
+        var slots = (int n, int result) => MapAllocator.Allocate(Wave(
+            Enumerable.Range(0, n).Select(i => new SlotRequest($"S{i}", 4, result)).ToArray())).Require();
+
+        // R = 1: every slot is its own read, so every slot costs one.
+        Assert.Equal(3, slots(2, 123).PollRoundTrips);
+        Assert.Equal(4, slots(3, 123).PollRoundTrips);
+
+        // R = 5: the fifth slot is free, the sixth is not.
+        Assert.Equal(2, slots(4, 25).PollRoundTrips);
+        Assert.Equal(2, slots(5, 25).PollRoundTrips);
+        Assert.Equal(3, slots(6, 25).PollRoundTrips);
     }
 
     [Fact]

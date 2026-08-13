@@ -144,8 +144,10 @@ public static class InertPhase
         if (!WaitScans(client, start, quiescence, maxPolls, out _))
             return Stalled(quiescence);
 
-        // CHECK ONE — start conditions established, on every active slot.
-        var first = active.ToDictionary(s => s.SlotIndex, s => client.ReadResults(s.SlotIndex));
+        // CHECK ONE — start conditions established, on every active slot. ONE read per group of whole
+        // slots (X-A as amended by F-1): the inert phase observes every active slot twice, so reading
+        // them one at a time would cost 2K round trips per index where 2 x ceil(K/R) will do.
+        var first = client.ReadResults(active.Select(s => s.SlotIndex));
 
         var wrong = active.SelectMany(s => s.Declaration.ExpectedResults
             .Where(e => e.Key >= first[s.SlotIndex].Length || first[s.SlotIndex][e.Key] != e.Value)
@@ -165,7 +167,7 @@ public static class InertPhase
         if (!WaitScans(client, afterFirst, quiescence, maxPolls, out var scanAtSecondRead))
             return Stalled(quiescence);
 
-        var second = active.ToDictionary(s => s.SlotIndex, s => client.ReadResults(s.SlotIndex));
+        var second = client.ReadResults(active.Select(s => s.SlotIndex));
 
         var moving = active.SelectMany(s =>
             Enumerable.Range(0, Math.Min(first[s.SlotIndex].Length, second[s.SlotIndex].Length))

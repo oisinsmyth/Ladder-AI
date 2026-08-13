@@ -149,10 +149,11 @@ public static class WaveRun
     /// <summary>
     /// Poll every active slot until each has completed or the longest backstop has elapsed.
     ///
-    /// <para><b>One FC03 per slot per poll round, plus one control read</b> — exactly
-    /// <c>RegisterMap.PollRoundTrips</c>, and exactly §12a's cost model. A slot that has completed is not
-    /// polled again in later rounds: it is finished, and re-reading it would cost a round trip to learn
-    /// nothing.</para>
+    /// <para><b>One FC03 per GROUP of whole slots per poll round, plus one control read</b> — exactly
+    /// <c>RegisterMap.PollRoundTrips</c>, and exactly §12a's cost model with F-1's <c>P x ceil(K/R)</c>
+    /// read term. A slot that has completed is never the REASON for a read, but it may ride along inside
+    /// a group that was happening anyway, which costs nothing: the transaction is the unit, not the
+    /// register.</para>
     /// </summary>
     private static IReadOnlyList<(int SlotIndex, SlotRunResult Result)> Observe(
         MirrorClient client,
@@ -171,7 +172,11 @@ public static class WaveRun
         // appear nowhere in it, which is the point — nothing here is derived from slot width.
         var backstop = WireTiming.BackstopMs(
             outstanding.Values.Max(v => v.DeclaredScans),
-            expectedRoundTrips: active.Count + 1);
+            expectedRoundTrips: WireTiming.RoundTripsPerIndex(
+                active.Count,
+                client.Map.VectorRegistersPerSlot,
+                client.Map.ResultRegistersPerSlot,
+                pollRounds: 1));
 
         var deadline = nowMs() + backstop;
 
@@ -180,10 +185,14 @@ public static class WaveRun
             var control = client.ReadControl();
             polls++;
 
+            // One read per group of whole slots — the map decides the grouping, and there is no register
+            // in the request. A completed slot inside a group is read too and simply ignored.
+            var observed = client.ReadResults(outstanding.Keys);
+
             foreach (var slotIndex in outstanding.Keys.ToArray())
             {
                 var vector = outstanding[slotIndex];
-                var results = client.ReadResults(slotIndex);
+                var results = observed[slotIndex];
 
                 if (vector.CompletionRegister < results.Length && results[vector.CompletionRegister] == vector.CompletionValue)
                 {

@@ -83,32 +83,100 @@ public class WireTimingTests
     // ---------------------------------------------------------------------------------------------
 
     [Fact]
-    public void Widening_every_slot_leaves_the_round_trip_cost_of_an_index_unchanged()
+    public void Widening_the_VECTOR_region_leaves_the_round_trip_cost_of_an_index_unchanged()
     {
-        // Registers appear nowhere in the cost model except inside a ceil that is 1 for every legal slot.
-        // Marginal cost per register is ~0.040 ms — negligible and NOT zero — but nothing derives a poll
-        // budget from it, and a future edit that reintroduced register-thrift fails here.
-        var narrow = WireTiming.RoundTripsPerIndex(slots: 4, vectorRegistersPerSlot: 1, pollRounds: 2);
-        var wide = WireTiming.RoundTripsPerIndex(slots: 4, vectorRegistersPerSlot: 123, pollRounds: 2);
+        // Reads key on the RESULT region, so vector width still appears nowhere except inside a ceil
+        // that is 1 for every legal slot. Marginal cost per register is ~0.040 ms — negligible and NOT
+        // zero — and a future edit that reintroduced register-thrift on the write side fails here.
+        var narrow = WireTiming.RoundTripsPerIndex(slots: 4, vectorRegistersPerSlot: 1, resultRegistersPerSlot: 20, pollRounds: 2);
+        var wide = WireTiming.RoundTripsPerIndex(slots: 4, vectorRegistersPerSlot: 123, resultRegistersPerSlot: 20, pollRounds: 2);
 
         Assert.Equal(narrow, wide);
     }
 
     [Fact]
-    public void Adding_one_slot_raises_the_cost_of_an_index_by_the_poll_rounds_plus_its_own_write()
+    public void Widening_the_RESULT_region_CAN_raise_the_cost_and_before_F1_that_was_false()
     {
-        var four = WireTiming.RoundTripsPerIndex(4, 10, 2);
-        var five = WireTiming.RoundTripsPerIndex(5, 10, 2);
+        // *** THE ONE CLAIM F-1 FALSIFIES, INVERTED RATHER THAN DELETED. *** Until 2026-08-13 the read
+        // term was P x K and no width could touch it. It is now P x ceil(K / R) with R = floor(125 / Wr),
+        // so slot width has entered the round-trip count IN THE DENOMINATOR. Padding a slot is no longer
+        // free: widening it far enough to drop R costs a WHOLE round trip per read per slot-group.
+        var sized = WireTiming.RoundTripsPerIndex(slots: 6, vectorRegistersPerSlot: 4, resultRegistersPerSlot: 20, pollRounds: 2);
+        var padded = WireTiming.RoundTripsPerIndex(slots: 6, vectorRegistersPerSlot: 4, resultRegistersPerSlot: 123, pollRounds: 2);
 
-        Assert.Equal(3, five - four);   // one write + two poll reads
-        Assert.Equal(13, four);         // 4 x (1 + 2) + 1, exactly section 12a derivation 2
+        Assert.Equal(6 * 1 + 2 * 1 + 1, sized);      // R = 6, so all six slots in ONE read per round
+        Assert.Equal(6 * 1 + 2 * 6 + 1, padded);     // R = 1, so six reads per round
+        Assert.True(padded > sized);
     }
 
     [Fact]
-    public void A_slot_past_the_FC16_limit_costs_a_second_write_and_that_is_the_only_way_width_shows_up()
+    public void Adding_one_slot_raises_the_cost_by_its_own_write_and_only_sometimes_by_a_read()
     {
-        Assert.Equal(WireTiming.RoundTripsPerIndex(1, 123, 1), WireTiming.RoundTripsPerIndex(1, 1, 1));
-        Assert.Equal(WireTiming.RoundTripsPerIndex(1, 123, 1) + 1, WireTiming.RoundTripsPerIndex(1, 124, 1));
+        // The read term is a STEP, not a slope: a slot added inside an existing group rides along free,
+        // and the one that crosses an R boundary pays a whole round trip. That is why F-1's factor is
+        // diluted in wave duration and undiluted only in O11's cap.
+        var five = WireTiming.RoundTripsPerIndex(5, 10, 25, 2);   // R = 5: one read per round
+        var six = WireTiming.RoundTripsPerIndex(6, 10, 25, 2);    // R = 5: two reads per round
+
+        Assert.Equal(5 + 2 + 1, five);
+        Assert.Equal(6 + 4 + 1, six);
+
+        var four = WireTiming.RoundTripsPerIndex(4, 10, 25, 2);
+        Assert.Equal(1, five - four);                             // rides along inside the group
+        Assert.Equal(3, six - five);                              // crosses the boundary
+    }
+
+    [Fact]
+    public void A_slot_past_the_FC16_limit_costs_a_second_write()
+    {
+        Assert.Equal(WireTiming.RoundTripsPerIndex(1, 123, 20, 1), WireTiming.RoundTripsPerIndex(1, 1, 20, 1));
+        Assert.Equal(WireTiming.RoundTripsPerIndex(1, 123, 20, 1) + 1, WireTiming.RoundTripsPerIndex(1, 124, 20, 1));
+    }
+
+    [Fact]
+    public void The_write_term_is_untouched_by_F1_which_is_where_A1s_guarantee_lives()
+    {
+        // F-1 is a READ-side change. Nothing about it batches writes differently, and A1's "no tear
+        // observed" was measured at 16 registers per FC16 with one request never split — evidence that
+        // does not stretch merely because reads got cheaper.
+        foreach (var resultWidth in new[] { 1, 12, 20, 25, 62, 123 })
+        {
+            var writes = WireTiming.RoundTripsPerIndex(4, 200, resultWidth, pollRounds: 0) - 1;
+            Assert.Equal(8, writes);   // 4 slots x ceil(200/123) = 8, at every read width
+        }
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // O11's cap — where F-1's factor lands undiluted
+    // ---------------------------------------------------------------------------------------------
+
+    [Theory]
+    [InlineData(1, 10, 1)]      // W = 123, the badly-sized map
+    [InlineData(5, 10, 5)]      // W = 25
+    [InlineData(6, 10, 6)]      // W = 20 — SIX slots where a padded one admits ONE
+    [InlineData(10, 10, 10)]    // W = 12
+    [InlineData(1, 100, 11)]
+    [InlineData(6, 100, 66)]
+    public void The_cap_is_R_times_the_old_one(int slotsPerRead, int sMinScans, int expected)
+    {
+        Assert.Equal(expected, WireTiming.MaxTensorWidth(slotsPerRead, sMinScans));
+    }
+
+    [Fact]
+    public void The_cap_is_proportional_to_slots_per_read_at_every_window()
+    {
+        foreach (var window in new[] { 10, 20, 50, 100, 200 })
+        {
+            var one = WireTiming.MaxTensorWidth(1, window);
+            Assert.Equal(6 * one, WireTiming.MaxTensorWidth(6, window));
+        }
+    }
+
+    [Fact]
+    public void An_unobservable_window_is_refused_rather_than_capped_at_zero()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() => WireTiming.MaxTensorWidth(1, 0));
+        Assert.Throws<ArgumentOutOfRangeException>(() => WireTiming.MaxTensorWidth(0, 10));
     }
 
     [Fact]

@@ -11,11 +11,11 @@ public class WaveRunTests
 {
     private static readonly BuildStamp Stamp = MirrorClientTests.Stamp;
 
-    private static (MirrorClient Client, RecordingTransport Wire, RegisterMap Map) Wired(int slots = 2)
+    private static (MirrorClient Client, RecordingTransport Wire, RegisterMap Map) Wired(int slots = 2, int resultWidth = 2)
     {
         var map = MapAllocator.Allocate(new WaveSetRequest(
             MirrorGeometry.ForCpu1214C(256, 4000),
-            Enumerable.Range(0, slots).Select(i => new SlotRequest($"S{i}", 2, 2)).ToArray())).Require();
+            Enumerable.Range(0, slots).Select(i => new SlotRequest($"S{i}", 2, resultWidth)).ToArray())).Require();
 
         var wire = new RecordingTransport(map, Stamp);
 
@@ -90,18 +90,85 @@ public class WaveRunTests
     }
 
     [Fact]
-    public void A_completed_slot_is_not_polled_again_in_later_rounds()
+    public void A_completed_slot_is_never_the_REASON_for_a_read_though_it_may_ride_along_in_one()
     {
-        // Round trips are the only thing measured to cost. Re-reading a finished slot buys nothing.
-        var (client, wire, map) = Wired();
+        // Restated under F-1. Before it, one slot was one read and "not polled again" was a statement
+        // about transactions. Now the transaction is the unit: a finished slot inside a group that was
+        // happening anyway costs nothing, and excluding it would cost a round trip to save registers —
+        // which is the trade the whole design refuses. What must still hold is that a group is never
+        // issued for a set of slots that are ALL finished.
+        var (client, wire, map) = Wired(3);
 
-        WaveRun.Run(client, new[] { Tensor(0, 2), Tensor(1, 1) });
+        WaveRun.Run(client, new[] { Tensor(0, 3), Tensor(1, 1), Tensor(2, 1) });
 
-        var slot1Reads = wire.Log.Count(t => !t.IsWrite && t.StartRegister == map.Slots[1].Result.Register);
-        var slot0Reads = wire.Log.Count(t => !t.IsWrite && t.StartRegister == map.Slots[0].Result.Register);
+        var reads = wire.Log
+            .Where(t => !t.IsWrite && t.StartRegister >= map.ResultBlock.Register && t.StartRegister < map.ResultBlock.End)
+            .Select(t => (First: (t.StartRegister - map.ResultBlock.Register) / map.ResultRegistersPerSlot,
+                          Count: t.Count / map.ResultRegistersPerSlot))
+            .ToArray();
 
-        Assert.True(slot0Reads > slot1Reads,
-            $"slot 0 ran at two indices and slot 1 at one, so slot 0 must have been read more: {slot0Reads} vs {slot1Reads}.");
+        // Index 0 runs all three slots; indices 1 and 2 run slot 0 alone. So the later reads must start
+        // at slot 0 and must not exist for a group containing only slots 1 and 2.
+        Assert.DoesNotContain(reads, r => r.First > 0);
+        Assert.Contains(reads, r => r.Count == 3);
+        Assert.Contains(reads, r => r.Count == 1);
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // F-1, end to end: counted in transactions that actually happened, not in arithmetic
+    // ---------------------------------------------------------------------------------------------
+
+    [Fact]
+    public void Six_slots_sized_to_their_contents_cost_far_fewer_round_trips_than_six_padded_ones()
+    {
+        // The same wave, the same slot count, the same vectors — only the RESULT width differs, and with
+        // it R. This is the win measured at the wire rather than derived: reads happen three times per
+        // index (two inert observations and one poll round), so R = 6 does in three what R = 1 does in
+        // eighteen. Padding to the FC03 limit "because width is free" is now the expensive mistake.
+        var sized = Wired(slots: 6, resultWidth: 20);
+        var padded = Wired(slots: 6, resultWidth: 123);
+
+        var tensors = Enumerable.Range(0, 6).Select(i => Tensor(i, 1)).ToArray();
+
+        var sizedWave = WaveRun.Run(sized.Client, tensors);
+        var paddedWave = WaveRun.Run(padded.Client, tensors);
+
+        Assert.Equal(6, sized.Map.SlotsPerRead);
+        Assert.Equal(1, padded.Map.SlotsPerRead);
+        Assert.True(paddedWave.RoundTrips > sizedWave.RoundTrips + 10,
+            $"padded {paddedWave.RoundTrips} round trips against sized {sizedWave.RoundTrips} — F-1 bought nothing.");
+    }
+
+    [Fact]
+    public void The_WRITE_count_is_identical_between_the_two_because_F1_is_a_READ_side_change()
+    {
+        // Stated as a test because the tempting next step is to batch writes the same way, and that is
+        // exactly where A1's coherence guarantee lives — measured at 16 registers per FC16 with one
+        // request never split. F-1 says nothing about writes at all.
+        var sized = Wired(slots: 6, resultWidth: 20);
+        var padded = Wired(slots: 6, resultWidth: 123);
+        var tensors = Enumerable.Range(0, 6).Select(i => Tensor(i, 1)).ToArray();
+
+        WaveRun.Run(sized.Client, tensors);
+        WaveRun.Run(padded.Client, tensors);
+
+        Assert.Equal(
+            sized.Wire.Log.Count(t => t.IsWrite),
+            padded.Wire.Log.Count(t => t.IsWrite));
+    }
+
+    [Fact]
+    public void A_group_read_is_trimmed_to_the_last_slot_it_covers()
+    {
+        // Extending to the full reach would cost the same one transaction and read registers nobody
+        // asked for. Registers are ~0.040 ms each — negligible against a round trip and not zero — so
+        // the run stops at the last wanted slot. A slot BETWEEN two wanted ones still rides along,
+        // because excluding it would cost a whole transaction to save a register.
+        var (_, _, map) = Wired(slots: 10, resultWidth: 12);   // R = 10
+
+        Assert.Equal(new[] { new SlotSpan(0, 1) }, map.ReadPlan(new[] { 0 }));
+        Assert.Equal(new[] { new SlotSpan(2, 4) }, map.ReadPlan(new[] { 2, 5 }));
+        Assert.Equal(new[] { new SlotSpan(0, 10) }, map.ReadPlan(Enumerable.Range(0, 10)));
     }
 
     // ---------------------------------------------------------------------------------------------

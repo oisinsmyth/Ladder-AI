@@ -161,11 +161,57 @@ public sealed class MirrorClient
     /// </summary>
     public void ClearStartEcho() => Write(_map.StartEcho.Register, new ushort[_map.StartEcho.Length]);
 
-    /// <summary>Read one slot's results. ONE FC03, never straddling two slots (X-A).</summary>
-    public ushort[] ReadResults(int slotIndex)
+    /// <summary>Read one slot's results. One FC03.</summary>
+    public ushort[] ReadResults(int slotIndex) => ReadResults(new SlotSpan(slotIndex, 1))[0];
+
+    /// <summary>
+    /// <b>Read a run of WHOLE slots in ONE FC03</b> (X-A as amended by F-1), returning one array per
+    /// slot in run order.
+    ///
+    /// <para><b>A split read is unexpressible here, not rejected here.</b> There is no register
+    /// parameter to pass and no register-addressed overload to reach for; the range is derived by
+    /// <c>RegisterMap.ResultRead</c>. And the RESULT is per-slot rather than a flat register array, so a
+    /// caller cannot receive half a slot either — both ends of the call are in slot units.</para>
+    ///
+    /// <para><b>Why that shape rather than a check.</b> X-A: a <c>read(start, length)</c> guarded by an
+    /// assert "satisfies the letter of the rule and abandons its mechanism — the unsafe call still
+    /// exists, still compiles, and is one refactor from being reached". The precedent is this class's
+    /// own write side, where an out-of-region write is unaddressable rather than caught.</para>
+    ///
+    /// <para><b>What it buys:</b> one transaction where there were <c>slotCount</c>, and round trips are
+    /// the scarce resource. The coherence argument is untouched — the hazard was never touching two
+    /// slots, it was touching half of one, and each slot inside one transaction is wholly before or
+    /// wholly after any publish.</para>
+    /// </summary>
+    public IReadOnlyList<ushort[]> ReadResults(SlotSpan run)
     {
-        var slot = Slot(slotIndex);
-        return Read(slot.Result.Register, slot.Result.Length);
+        if (run.FirstSlot < 0 || run.SlotCount < 1 || run.End > _map.Slots.Count)
+            throw new WireException($"{run} is not in this map, which holds {_map.Slots.Count} slot(s).");
+
+        var range = _map.ResultRead(run);
+        var registers = Read(range.Register, range.Length);
+        var width = _map.ResultRegistersPerSlot;
+
+        return Enumerable.Range(0, run.SlotCount)
+            .Select(i => registers[(i * width)..((i + 1) * width)])
+            .ToArray();
+    }
+
+    /// <summary>Read every named slot's results in the fewest whole-slot transactions the map allows.</summary>
+    public IReadOnlyDictionary<int, ushort[]> ReadResults(IEnumerable<int> slotIndices)
+    {
+        ArgumentNullException.ThrowIfNull(slotIndices);
+
+        var results = new Dictionary<int, ushort[]>();
+
+        foreach (var run in _map.ReadPlan(slotIndices))
+        {
+            var read = ReadResults(run);
+            for (var i = 0; i < run.SlotCount; i++)
+                results[run.FirstSlot + i] = read[i];
+        }
+
+        return results;
     }
 
     private SlotAllocation Slot(int index)
