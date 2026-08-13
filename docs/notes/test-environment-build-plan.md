@@ -40,40 +40,49 @@ phase 2 with the copy-layer generator.
 
 > ### 📍 STANDING STATUS — keep this current; it is the ONE place "where are we" lives
 >
-> *** PHASES 0, 1, 2 AND 3 ARE CLOSED — ALL VALIDATED ON THE DEVICE. PHASE 4.3/4.4 BUILT. ***
-> Last updated 2026-08-13.
->
-> **A1 fully retired** — no tear in 3,000 writes of 123 registers on VARIANT 1, 3,200 on VARIANT 2,
-> and 1.4 answered with 0 torn reads in 3,000. **Phase 2's exit criterion met**, GREEN/RED shown by
-> executing the generated IR and the defect shown invisible under another vector. **Phase 4.3/4.4 +
-> queue persistence built.**
+> *** EVERY ASSUMPTION IN THE PLAN IS NOW RETIRED OR DEFERRED. PHASES 0–4 ARE COMPLETE. ***
+> Last updated 2026-08-13, late.
 >
 > | assumption | state |
 > |---|---|
-> | A1 `MB_SERVER` atomicity | ✅ retired at full width, both call orders |
-> | A2 round-trip rate | ✅ measured; `RTT_typ 78`, `RTT_p99 201`, F-4 says the tail is **not** width-sensitive |
+> | A1 `MB_SERVER` atomicity | ✅ retired **at 123 registers, both call orders**, and 1.4's read side |
+> | A2 round-trip rate | ✅ `RTT_typ 78` / `RTT_p90 102.79` / `RTT_p99 201` / `RTT_max 2216`; **partitioned by KIND** |
 > | A3 `%MW` capacity | ✅ 4096 words, outside work memory |
+> | A4 block driveable by its own command | ✅ **on the device** — all four exit-criterion cells, no interpreter |
+> | A5 two slots do not interfere | ✅ **on the device** — two *different* blocks; disjoint indistinguishable, coupled caught |
+> | A6 delegate throw (G4) | ✅ **both directions** — PRE leaves the CPU RUNNING, POST leaves it STOPPED with a **complete** program. *Never half-loaded.* **Both also kill the Portal process.** Recovery 34 s |
 > | A7 run-state read | ✅ measured in both CPU states |
 > | A9 memory budget | ✅ scoped to retain-only by ruling |
-> | ~~**A4**~~ block driveable by its own command | ✅ **RETIRED ON THE DEVICE** — all four exit-criterion cells, no interpreter |
-> | ~~**A5**~~ two slots do not interfere | ✅ **RETIRED ON THE DEVICE** — two *different* blocks, disjoint indistinguishable, coupled caught |
-> | ~~**A6**~~ delegate throw (G4) | ✅ *** ANSWERED IN BOTH DIRECTIONS ON THE DEVICE *** — PRE leaves the CPU RUNNING, POST leaves it STOPPED with a COMPLETE program. **Never half-loaded.** Recovery 34 s |
-> | **A8** structural DB change (G2) | ⏸ deferred by the owner |
+> | **A8** structural DB change (G2) | ⏸ **deferred by the owner, twice** |
 >
-> **Owed on the device:** only the **32-bit build stamp**, blocked by a converter defect (every hex
-> literal is typed `Int`) now in fix. The **bit order** and **word order** are measured — `BitAddressOf`
-> is right, word order is `HighWordFirst`, and both `[I]` markers come off.
+> **BUILT:** phase 0–3 complete and device-validated · **phase 4 complete** (feedback parser, the
+> corrected ladder, admission control, the queues, and the marker **merged into one atomic file**) ·
+> **5.1** contract + skill · **5.3** the loop · **6.3** coverage · the result package · the verifiers ·
+> the assertion enumerator (**agent + skill**) · `compile --station` as the gate · the armed confirm loop.
 >
-> **Adopted and part-implemented:** **F-1** — spec half landed (X-A now says a read never *splits* a
-> slot); **code half queued** for `Harness.Map` + `MirrorClient`. **The drain ruling** needs no code.
+> **IN FLIGHT:** *** 5.2 — THE MILESTONE. *** Enumeration (third party) running; block by `lad-coder`
+> and vectors by a **different** agent to follow; then one rig session. Also: 6.6/6.7, the golden
+> harness's drift dispositions, and task 09's import + re-export.
 >
-> **Open for the owner:** *** MAY AN AUTHOR CHANGE A BLOCK'S INTERFACE PURELY TO MAKE IT TESTABLE? ***
-> (5.1 found the design answers this both ways, and it decides whether design-for-testability is real
-> here); **A6/1.7**; **F-2 + F-6 together**; the **queue/marker joint-consistency** ruling; **F-3**;
-> **F-5**. *(F-4 closed — nothing argues for capping slot width on timing grounds.)*
+> **THE RIG SESSION, AND IT IS THE ONLY DEVICE WORK LEFT:** *** DEPLOYMENT ITSELF — the loop has never
+> put an object on a controller *** (8 items on `LoopResult.OwedOnTheDevice`); **A6 repetition**
+> (*one throw of each kind is one, not six*); whether an **ordinary** delegate exception also kills
+> Portal, *since D32's throw-on-unhandled fires in production*; and **three named exports** that each
+> close a class with zero new test code.
 >
-> **The rule that has earned its place five times in one day:** *a guard written, tested around, and
-> never executed.* See `autonomous-working-agreement.md`.
+> **OPEN FOR THE OWNER — one thing:** *** MAY AN AUTHOR *CREATE* AN OBSERVABLE VALUE, OR ONLY *SURFACE*
+> ONE THAT EXISTS? *** Reads and **additive, non-interruptive** writes are ruled in, with three
+> mechanical checks. **But a one-scan coincidence usually has no existing internal value**, so
+> observing it means computing something new — *which is the case §2.6 raised in the first place.*
+>
+> **NOT SCHEDULED:** A8/G2 · the 14 dropped block properties (**owner: low priority**) · F-2 + F-6
+> (deferred until real slot widths exist) · the mid-transfer half-loaded case (**no configuration is
+> raised there to hang a throw on**).
+>
+> **The rules this project keeps re-earning**, all in `autonomous-working-agreement.md`: *a guard
+> written, tested around, and never executed* · *a proof is only as strong as the most independent
+> authority in its loop* · *a plausible mechanism invented to explain an unexamined green* · *the case
+> a guard exists for gets tested; the case where it did not run does not.*
 
 ---
 
