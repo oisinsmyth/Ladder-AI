@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>Harness.Results</RootNamespace>
+    <AssemblyName>Harness.Results</AssemblyName>
+  </PropertyGroup>
+
+  <!--
+    DB-8, the result package. Filed under build-plan 6.4 and brought forward because PHASE 5's exit
+    criterion depends on it: "a block goes from request to tested without a human in the inner loop,
+    AND the result package tells the authoring agent something it could act on." A bare pass/fail
+    cannot satisfy the second half.
+
+    THE ONE PROPERTY EVERYTHING HERE SERVES: *** A RESULT MUST BE UNABLE TO LOOK CONCLUSIVE WHEN IT
+    IS NOT. *** Every not-conclusive state is modelled as its own thing rather than as an absent
+    field, because an absent field reads as "fine" to everyone who did not write it.
+
+    It sits ABOVE the wire: it consumes what a run produced and what a submission declared, and it
+    opens no socket and derives no address.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\Harness.Wire\Harness.Wire.csproj" />
+  </ItemGroup>
+
+</Project>

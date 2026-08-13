@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <RootNamespace>Harness.Results.Tests</RootNamespace>
+  </PropertyGroup>
+
+  <!-- Versions come from the repo-root Directory.Packages.props (F-38, central package management). -->
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <!--
+    DB-8's package is pure judgement over evidence, so every test here is a constructed evidence
+    set. Most of them are NEGATIVE: the package's whole job is to refuse to look conclusive, and a
+    suite that only fed it healthy runs would be a suite that could not fail.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\Harness.Results\Harness.Results.csproj" />
+  </ItemGroup>
+
+</Project>
