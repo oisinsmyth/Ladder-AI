@@ -37,7 +37,7 @@ namespace Ladder.Wave
     public sealed class QueueRehydration
     {
         internal QueueRehydration(
-            QueueRestoreState state,
+            CoordinatorStateFileState state,
             WaveQueues? queues,
             IReadOnlyList<QueuedSubmission> readmitted,
             IReadOnlyList<RehydrationRejection> rejected,
@@ -51,10 +51,11 @@ namespace Ladder.Wave
         }
 
         /// <summary>The state of the read this rehydration was built from.</summary>
-        public QueueRestoreState State { get; }
+        public CoordinatorStateFileState State { get; }
 
         /// <summary>
-        /// The live queues — NULL unless <see cref="State"/> is <see cref="QueueRestoreState.Restored"/>.
+        /// The live queues — NULL unless <see cref="State"/> is
+        /// <see cref="CoordinatorStateFileState.Restored"/>.
         /// Null rather than empty on purpose: an unreadable or absent state must not hand back
         /// something a caller can use without noticing which of the three it got.
         /// </summary>
@@ -70,7 +71,7 @@ namespace Ladder.Wave
         public string Summary { get; }
 
         /// <summary>TRUE only when every restored entry was re-admitted.</summary>
-        public bool Complete => State == QueueRestoreState.Restored && Rejected.Count == 0;
+        public bool Complete => State == CoordinatorStateFileState.Restored && Rejected.Count == 0;
 
         /// <summary>One line for the log, plus every rejection.</summary>
         public string Describe()
@@ -139,7 +140,7 @@ namespace Ladder.Wave
         /// The CURRENT content hash of an object, by name — `converter ir-hash` or equivalent. Return
         /// null when it cannot be determined; that is a refusal, never a pass.
         /// </param>
-        public static QueueRehydration Rehydrate(QueueRestoreResult restored, Func<string, string?> currentHashOf)
+        public static QueueRehydration Rehydrate(CoordinatorStateResult restored, Func<string, string?> currentHashOf)
         {
             if (restored == null)
             {
@@ -155,20 +156,14 @@ namespace Ladder.Wave
                     "a check.");
             }
 
-            if (restored.State != QueueRestoreState.Restored)
+            if (restored.State != CoordinatorStateFileState.Restored)
             {
                 return new QueueRehydration(
                     restored.State,
                     null,
                     new QueuedSubmission[0],
                     new RehydrationRejection[0],
-                    restored.State == QueueRestoreState.NoStateFileFound
-                        ? "No state file, so there is nothing to re-gate — and NOTHING TO RESUME EITHER. " +
-                          "This is not an empty queue: it is expected on a first start and is lost " +
-                          "admitted work on any other. Declare which through " +
-                          "WaveQueueStore.AcceptNoPersistedState."
-                        : "The state file could not be read (" + restored.Problem + "), so nothing was " +
-                          "restored. A queue that cannot be read is not a queue that is empty.");
+                    DescribeWhyNothingWasRestored(restored));
             }
 
             var queues = new WaveQueues();
@@ -224,7 +219,29 @@ namespace Ladder.Wave
                   "re-gate and are NOT in the queues. Their agents must re-submit; this is reported " +
                   "rather than silently dropped, which is the whole point of persisting them.";
 
-            return new QueueRehydration(QueueRestoreState.Restored, queues, readmitted, rejected, summary);
+            return new QueueRehydration(CoordinatorStateFileState.Restored, queues, readmitted, rejected, summary);
+        }
+
+        private static string DescribeWhyNothingWasRestored(CoordinatorStateResult restored)
+        {
+            switch (restored.State)
+            {
+                case CoordinatorStateFileState.NoStateFileFound:
+                    return "No state file, so there is nothing to re-gate — and NOTHING TO RESUME EITHER. " +
+                           "This is not an empty queue and not 'no wave in flight': both of those are " +
+                           "statements the file makes. It is expected on a first start and is lost " +
+                           "admitted work on any other. Declare which through " +
+                           "CoordinatorStateStore.AcceptNoPersistedState.";
+
+                case CoordinatorStateFileState.LegacyTwoFileStatePresent:
+                    return "Two-file state is present (" + restored.Problem + ") and is REFUSED rather " +
+                           "than migrated. Nothing was read from it — not even the half that would parse.";
+
+                default:
+                    return "The state file could not be read (" + restored.Problem + "), so nothing was " +
+                           "restored. A queue that cannot be read is not a queue that is empty — and " +
+                           "under the merged file this voids the wave as well, deliberately.";
+            }
         }
 
         /// <summary>

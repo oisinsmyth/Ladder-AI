@@ -12,10 +12,10 @@ namespace Ladder.Wave
     /// </summary>
     /// <remarks>
     /// *** THE TYPE DISTINCTION IS THE GUARD. *** A restored entry is not a queued one until
-    /// <see cref="QueueRehydration"/> has re-run the admission gate against the content's CURRENT
+    /// <see cref="QueueRehydrator"/> has re-run the admission gate against the content's CURRENT
     /// hash. Parsing straight into <see cref="QueuedSubmission"/> would make "read from disk" and
     /// "admitted" the same state, and the reload would silently promote a gated item into an ungated
-    /// one — which is exactly the hole this whole component exists to close.
+    /// one — which is exactly the hole this component exists to close.
     /// </remarks>
     public sealed class PersistedQueueEntry
     {
@@ -74,50 +74,108 @@ namespace Ladder.Wave
     }
 
     /// <summary>
-    /// The queues' on-disk form: a line-oriented UTF-8 text file with a DECLARED ENTRY COUNT and a
-    /// trailing sentinel.
+    /// The coordinator's whole persisted state — X-C's wave-in-progress marker AND D23's two queues —
+    /// as ONE line-oriented UTF-8 file.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// *** BOTH TRUNCATION DETECTORS ARE HERE ON PURPOSE, AND THEY CATCH DIFFERENT TEARS. *** The
-    /// sentinel catches a write that stopped part way through the file — the case
-    /// <see cref="WaveMarkerFormat"/> already argues. The declared <c>entries=</c> count catches the
-    /// case a sentinel cannot: a file whose entries were serialised short. A queue file's whole
-    /// content is a COUNT of things, so "parsed cleanly, carrying fewer entries than were written" is
-    /// the failure mode that would otherwise look exactly like a shorter queue — and a shorter queue
-    /// is work that silently never happens.
+    /// *** WHY ONE FILE (owner's ruling, 2026-08-13). *** The two states are only ever read TOGETHER,
+    /// on restart. Splitting them buys nothing and costs a reconciliation rule — and the crash that
+    /// produces a disagreement between them is exactly the one where you cannot ask the coordinator
+    /// what it was doing, so a rule requiring interpretation at that moment is a rule that fails when
+    /// it is needed. The two disagreements now structurally impossible:
+    /// </para>
+    /// <list type="bullet">
+    ///   <item><description>
+    ///     QUEUE WRITTEN, MARKER NOT CLEARED — a restart believes a wave is in flight that is not, and
+    ///     VOIDS RESULTS THAT WERE VALID.
+    ///   </description></item>
+    ///   <item><description>
+    ///     MARKER CLEARED, QUEUE NOT WRITTEN — an item dequeued in memory but never persisted RUNS
+    ///     TWICE, OR IS LOST.
+    ///   </description></item>
+    /// </list>
+    /// <para>
+    /// *** THIS IS A CHANGE OF CONTAINER, NOT OF SEMANTICS. *** Everything both formats did survives:
+    /// the trailing sentinel, the declared entry count, unknown keys as a parse failure, and — the
+    /// point that merging is most likely to lose — *** AN EXPLICIT STATEMENT THAT NO WAVE IS IN
+    /// FLIGHT. *** The file always says <c>wave=none</c> or <c>wave=in-progress</c>. A MISSING
+    /// <c>wave=</c> KEY IS UNREADABLE, never defaulted to "none": otherwise "no wave in flight" and "a
+    /// file that lost that line" become the same read, which is the trap
+    /// <c>DeployedProgram.From</c> refuses an empty list to avoid.
     /// </para>
     /// <para>
-    /// Same format choices and the same reasons as the marker: no JSON (the library references
-    /// nothing, so it stays referenceable from <c>openness-cli</c> on net48 without dragging a package
-    /// graph into the one tool whose every rebuild costs a TIA (Path,FileHash) re-approval), and it is
-    /// readable by a human standing at the machine. UNKNOWN KEYS ARE A PARSE FAILURE, NOT A SKIP.
+    /// TWO TRUNCATION DETECTORS, still both earning their place. The sentinel catches a write that
+    /// stopped part way; the declared <c>entries=</c> count catches what a sentinel cannot — a file
+    /// that parses cleanly and carries FEWER entries than were written. A queue's content is a COUNT
+    /// of things, so "read short" looks exactly like a shorter queue, and a shorter queue is admitted
+    /// work that silently never happens. Under the atomic write in <see cref="CoordinatorStateStore"/>
+    /// neither tear should be reachable any more; they are kept because "should be unreachable" is a
+    /// claim about a mechanism, and these two are the check on it.
+    /// </para>
+    /// <para>
+    /// No JSON, and deliberately: the library references nothing, so it stays referenceable from
+    /// <c>openness-cli</c> (net48) without dragging a package graph into the one tool whose every
+    /// rebuild costs a TIA Openness (Path,FileHash) re-approval. The format is also readable by a
+    /// human standing at the machine at 3am, which is exactly who finds one of these.
     /// </para>
     /// <para>
     /// ONE HONEST LIMIT OF THE ESCAPING, and it fails in the safe direction. Object and evidence lines
     /// pack five fields separated by TAB, and the line escape turns a tab into <c>\t</c> whether it is
-    /// a separator or part of a value. So a name genuinely containing a tab would come back as SIX
-    /// fields — which is a PARSE REFUSAL naming the line, never a silently mis-split value. A refusal
-    /// on a pathological name is the correct trade against a value that reassembles wrongly.
+    /// a separator or part of a value. So a name genuinely containing a tab comes back as SIX fields —
+    /// a PARSE REFUSAL naming the line, never a silently mis-split value.
     /// </para>
     /// </remarks>
-    internal static class WaveQueueFormat
+    internal static class CoordinatorStateFormat
     {
-        internal const int CurrentFormatVersion = 1;
+        /// <summary>
+        /// Format 2 IS the merge. Format 1 was the two-file era and is refused by the version check
+        /// like any other unknown version — see <see cref="CoordinatorStateStore"/> on migration.
+        /// </summary>
+        internal const int CurrentFormatVersion = 2;
+
         internal const string Sentinel = "end";
 
-        private const string HeaderComment =
-            "# ladder wave queues (spec D23) - the RUN queue and the DEFERRED queue, persisted.\n" +
-            "# Its ABSENCE is not an empty queue: absent and unreadable are different states and\n" +
-            "# neither may be read as 'nothing was deferred' (FI-44).\n" +
-            "# Every entry here was ADMITTED - preflight passed, isolated compile passed, hash matched.\n" +
-            "# It is re-gated against the content's CURRENT hash on reload before it may drain.\n";
+        internal const string WaveNone = "none";
+        internal const string WaveInProgress = "in-progress";
 
-        internal static string Serialize(IReadOnlyList<QueuedSubmission> entries)
+        private const string HeaderComment =
+            "# ladder COORDINATOR STATE - X-C's wave-in-progress marker AND D23's two queues, in ONE file.\n" +
+            "# Written atomically (temp + rename): a torn write leaves the PREVIOUS whole state, never half.\n" +
+            "#\n" +
+            "# 'wave=in-progress' means a wave was in flight. Every test and result from it is INVALID\n" +
+            "# and is discarded, never re-read. Finding that on startup is not an error - it is the\n" +
+            "# expected signal after a coordinator death.\n" +
+            "# 'wave=none' is an EXPLICIT statement that none was in flight. The absence of this file is\n" +
+            "# NOT the same thing, and neither is a file that cannot be read (FI-44).\n" +
+            "#\n" +
+            "# Every queue entry here was ADMITTED - preflight passed, isolated compile passed, hash\n" +
+            "# matched - and is re-gated against the content's CURRENT hash on reload before it drains.\n";
+
+        internal static string Serialize(WaveMarker? wave, IReadOnlyList<QueuedSubmission> entries)
         {
             var sb = new StringBuilder();
             sb.Append(HeaderComment);
             Append(sb, "format", CurrentFormatVersion.ToString(CultureInfo.InvariantCulture));
+
+            if (wave == null)
+            {
+                Append(sb, "wave", WaveNone);
+            }
+            else
+            {
+                Append(sb, "wave", WaveInProgress);
+                Append(sb, "wave-id", wave.WaveId);
+                Append(sb, "started-utc", wave.StartedUtc.UtcDateTime.ToString("yyyy-MM-ddTHH:mm:ss.fffffffZ", CultureInfo.InvariantCulture));
+                Append(sb, "program-version", wave.ProgramVersion);
+                Append(sb, "coordinator", wave.Coordinator.ToToken());
+
+                foreach (var slot in wave.Slots)
+                {
+                    Append(sb, "slot", slot);
+                }
+            }
+
             Append(sb, "entries", entries.Count.ToString(CultureInfo.InvariantCulture));
 
             foreach (var entry in entries.OrderBy(e => e.Sequence))
@@ -161,23 +219,44 @@ namespace Ladder.Wave
         }
 
         /// <summary>
-        /// Parses queue-state text. Returns null and sets <paramref name="problem"/> for anything it
-        /// does not fully understand — the caller turns that into "the queue state is UNREADABLE",
-        /// never into "the queues were empty".
+        /// Parses the whole state. Returns false and sets <paramref name="problem"/> for anything it
+        /// does not fully understand — the caller turns that into "the state is UNREADABLE", which
+        /// means a wave WAS in progress and the queue is unknown, never into "clean start, empty queue".
         /// </summary>
-        internal static IReadOnlyList<PersistedQueueEntry>? TryParse(string text, out string problem)
+        internal static bool TryParse(
+            string text,
+            out WaveMarker? wave,
+            out IReadOnlyList<PersistedQueueEntry> entries,
+            out string problem)
         {
+            wave = null;
+            entries = new PersistedQueueEntry[0];
             problem = string.Empty;
 
             if (string.IsNullOrEmpty(text))
             {
-                problem = "the queue-state file is present but empty — the write did not complete";
-                return null;
+                problem = "the state file is present but empty — the write did not complete";
+                return false;
             }
 
-            var meaningful = text
-                .Replace("\r\n", "\n")
-                .Replace('\r', '\n')
+            var normalised = text.Replace("\r\n", "\n").Replace('\r', '\n');
+
+            // *** THE SENTINEL MUST BE TERMINATED, NOT MERELY PRESENT — AND THIS IS A HOLE THE OLD
+            // TWO-FILE FORMATS BOTH HAD. *** A write torn at the VERY LAST BYTE loses only the newline
+            // after "end"; the line-trimming parse below then sees "end" as the last meaningful line and
+            // reads the file as complete. Measured on the merged format: a 2,360-byte state truncated to
+            // 2,359 parsed as fully restored. The marker format's own truncation walk could never have
+            // caught it, because it asserted only "a wave was in progress" — which is equally true of a
+            // file that parsed perfectly. It took the queue half, whose torn state must read as
+            // UNUSABLE rather than merely present, to make the assertion strong enough to bite.
+            if (!normalised.EndsWith("\n", StringComparison.Ordinal))
+            {
+                problem = "the state file does not end with a newline — the write was torn off before the '" +
+                          Sentinel + "' terminator was complete";
+                return false;
+            }
+
+            var meaningful = normalised
                 .Split('\n')
                 .Select(l => l.Trim())
                 .Where(l => l.Length > 0 && !l.StartsWith("#", StringComparison.Ordinal))
@@ -185,21 +264,30 @@ namespace Ladder.Wave
 
             if (meaningful.Count == 0)
             {
-                problem = "the queue-state file carries no content lines — the write did not get past its header";
-                return null;
+                problem = "the state file carries no content lines — the write did not get past its header";
+                return false;
             }
 
             if (!string.Equals(meaningful[meaningful.Count - 1], Sentinel, StringComparison.Ordinal))
             {
-                problem = "the queue-state file has no '" + Sentinel + "' terminator — the write was torn off part way";
-                return null;
+                problem = "the state file has no '" + Sentinel + "' terminator — the write was torn off part way";
+                return false;
             }
 
             meaningful.RemoveAt(meaningful.Count - 1);
 
             string? formatText = null;
+            string? waveText = null;
             string? declaredCountText = null;
-            var entries = new List<PersistedQueueEntry>();
+
+            string? waveId = null;
+            string? startedText = null;
+            string? programVersion = null;
+            string? coordinatorToken = null;
+            var slots = new List<string>();
+
+            var parsed = new List<PersistedQueueEntry>();
+            var entriesHaveBegun = false;
 
             string? id = null;
             string? agent = null;
@@ -258,7 +346,7 @@ namespace Ladder.Wave
                     return "entry '" + id + "' does not state whether it was excised";
                 }
 
-                entries.Add(new PersistedQueueEntry(
+                parsed.Add(new PersistedQueueEntry(
                     new Submission(id, agent, objects.ToArray()),
                     evidence.ToArray(),
                     queue,
@@ -286,29 +374,41 @@ namespace Ladder.Wave
                 var split = line.IndexOf('=');
                 if (split <= 0)
                 {
-                    problem = "the queue-state file carries a line that is not 'key=value': '" + Truncate(line) + "'";
-                    return null;
+                    problem = "the state file carries a line that is not 'key=value': '" + Truncate(line) + "'";
+                    return false;
                 }
 
                 var key = line.Substring(0, split).Trim();
                 var value = Unescape(line.Substring(split + 1));
 
+                // A wave field appearing after the queue entries have begun is not a field we can place:
+                // it belongs to a section that has already ended. Refused rather than folded in, because
+                // guessing which section a line belongs to is how a corrupt file reassembles into a
+                // plausible-looking one.
+                if (entriesHaveBegun && IsWaveKey(key))
+                {
+                    problem = "the state file carries the wave field '" + key + "' after the queue entries began";
+                    return false;
+                }
+
                 switch (key)
                 {
-                    case "format":
-                        formatText = value;
-                        break;
-
-                    case "entries":
-                        declaredCountText = value;
-                        break;
+                    case "format": formatText = value; break;
+                    case "wave": waveText = value; break;
+                    case "wave-id": waveId = value; break;
+                    case "started-utc": startedText = value; break;
+                    case "program-version": programVersion = value; break;
+                    case "coordinator": coordinatorToken = value; break;
+                    case "slot": slots.Add(value); break;
+                    case "entries": declaredCountText = value; break;
 
                     case "entry":
+                        entriesHaveBegun = true;
                         var flushProblem = flush();
                         if (flushProblem != null)
                         {
                             problem = flushProblem;
-                            return null;
+                            return false;
                         }
 
                         id = value;
@@ -328,7 +428,7 @@ namespace Ladder.Wave
                         if (fields.Length != 5)
                         {
                             problem = "an object line has " + fields.Length + " fields, not 5: '" + Truncate(value) + "'";
-                            return null;
+                            return false;
                         }
 
                         ObjectKind kind;
@@ -337,7 +437,7 @@ namespace Ladder.Wave
                         {
                             problem = "an object line states a kind or change class this build does not know: '" +
                                       Truncate(value) + "'";
-                            return null;
+                            return false;
                         }
 
                         var dependsOn = fields[4].Length == 0 ? new string[0] : fields[4].Split(',');
@@ -351,7 +451,7 @@ namespace Ladder.Wave
                         if (fields.Length != 5)
                         {
                             problem = "an evidence line has " + fields.Length + " fields, not 5: '" + Truncate(value) + "'";
-                            return null;
+                            return false;
                         }
 
                         EvidenceOutcome preflight;
@@ -360,7 +460,7 @@ namespace Ladder.Wave
                         {
                             problem = "an evidence line states an outcome this build does not know: '" +
                                       Truncate(value) + "'";
-                            return null;
+                            return false;
                         }
 
                         evidence.Add(new AdmissionEvidence(fields[0], fields[1], preflight, compile, fields[4]));
@@ -368,10 +468,10 @@ namespace Ladder.Wave
                     }
 
                     default:
-                        problem = "the queue-state file carries a key this build does not know ('" + Truncate(key) +
+                        problem = "the state file carries a key this build does not know ('" + Truncate(key) +
                                   "') — either corruption, or a file written by a newer format that did not " +
                                   "bump its version";
-                        return null;
+                        return false;
                 }
             }
 
@@ -379,52 +479,137 @@ namespace Ladder.Wave
             if (tailProblem != null)
             {
                 problem = tailProblem;
-                return null;
+                return false;
             }
 
             int format;
             if (formatText == null || !int.TryParse(formatText, NumberStyles.Integer, CultureInfo.InvariantCulture, out format))
             {
-                problem = "the queue-state file states no readable format version";
-                return null;
+                problem = "the state file states no readable format version";
+                return false;
             }
 
             if (format != CurrentFormatVersion)
             {
-                problem = "the queue-state file is format " + format + "; this build reads format " + CurrentFormatVersion;
-                return null;
+                problem = "the state file is format " + format + "; this build reads format " + CurrentFormatVersion +
+                          (format == 1
+                              ? ". Format 1 is the two-file era (a separate marker and a separate queue file) and " +
+                                "is refused rather than half-read"
+                              : string.Empty);
+                return false;
+            }
+
+            // *** THE DISTINCTION THE MERGE IS MOST LIKELY TO LOSE. *** "No wave in flight" is a
+            // STATEMENT the file makes, not the absence of one. A missing wave= line is a file that
+            // lost a line, and reading that as "none" would make a damaged file indistinguishable from
+            // a clean one.
+            if (waveText == null)
+            {
+                problem = "the state file does not say whether a wave was in flight — there is no 'wave=' line. " +
+                          "'none' is a statement this file has to make; its absence is not that statement";
+                return false;
+            }
+
+            var waveFieldsPresent = waveId != null || startedText != null || programVersion != null ||
+                                    coordinatorToken != null || slots.Count > 0;
+
+            if (string.Equals(waveText, WaveNone, StringComparison.Ordinal))
+            {
+                if (waveFieldsPresent)
+                {
+                    problem = "the state file says 'wave=none' and also carries wave fields — it contradicts itself";
+                    return false;
+                }
+            }
+            else if (string.Equals(waveText, WaveInProgress, StringComparison.Ordinal))
+            {
+                DateTimeOffset startedUtc;
+                if (string.IsNullOrEmpty(waveId) || string.IsNullOrEmpty(programVersion) || slots.Count == 0)
+                {
+                    problem = "the state file says a wave was in progress but is missing a required field " +
+                              "(wave-id, program-version, or at least one slot)";
+                    return false;
+                }
+
+                if (startedText == null ||
+                    !DateTimeOffset.TryParse(
+                        startedText,
+                        CultureInfo.InvariantCulture,
+                        DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal,
+                        out startedUtc))
+                {
+                    problem = "the state file states no readable wave start time";
+                    return false;
+                }
+
+                var coordinator = CoordinatorIdentity.TryParse(coordinatorToken);
+                if (coordinator == null)
+                {
+                    problem = "the state file states no readable coordinator identity";
+                    return false;
+                }
+
+                try
+                {
+                    wave = new WaveMarker(waveId!, slots, programVersion!, startedUtc, coordinator);
+                }
+                catch (ArgumentException ex)
+                {
+                    problem = "the state file's wave fields do not form a valid marker: " + ex.Message;
+                    return false;
+                }
+            }
+            else
+            {
+                problem = "the state file's 'wave=" + Truncate(waveText) + "' is neither '" + WaveNone +
+                          "' nor '" + WaveInProgress + "'";
+                return false;
             }
 
             int declaredCount;
             if (declaredCountText == null ||
                 !int.TryParse(declaredCountText, NumberStyles.Integer, CultureInfo.InvariantCulture, out declaredCount))
             {
-                problem = "the queue-state file declares no readable entry count";
-                return null;
+                problem = "the state file declares no readable entry count";
+                return false;
             }
 
-            // *** THE CHECK THE SENTINEL CANNOT MAKE. *** A file that parses cleanly but carries fewer
-            // entries than it declares is a SHORTER QUEUE, and a shorter queue is admitted work that
-            // silently never happens.
-            if (declaredCount != entries.Count)
+            if (declaredCount != parsed.Count)
             {
-                problem = "the queue-state file declares " + declaredCount + " entries and carries " +
-                          entries.Count + ". A queue read short is work that quietly never happens, so " +
+                problem = "the state file declares " + declaredCount + " entries and carries " +
+                          parsed.Count + ". A queue read short is work that quietly never happens, so " +
                           "this is refused rather than accepted as a shorter queue";
-                return null;
+                return false;
             }
 
-            var duplicate = entries
+            var duplicate = parsed
                 .GroupBy(e => e.Submission.Id, StringComparer.OrdinalIgnoreCase)
                 .FirstOrDefault(g => g.Count() > 1);
 
             if (duplicate != null)
             {
-                problem = "the queue-state file carries submission id '" + duplicate.Key + "' more than once";
-                return null;
+                problem = "the state file carries submission id '" + duplicate.Key + "' more than once";
+                return false;
             }
 
-            return entries;
+            entries = parsed;
+            return true;
+        }
+
+        private static bool IsWaveKey(string key)
+        {
+            switch (key)
+            {
+                case "wave":
+                case "wave-id":
+                case "started-utc":
+                case "program-version":
+                case "coordinator":
+                case "slot":
+                    return true;
+                default:
+                    return false;
+            }
         }
 
         private static bool TryParseQueue(string value, out DownloadQueue queue)
