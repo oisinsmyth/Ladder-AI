@@ -148,6 +148,23 @@ whitelist supplies, or evidence that TIA no longer resolves them, makes the lega
 wrong rather than merely redundant. Tidiness is **not** a trigger — the entries are cheap and the
 evidence they carry is not.
 
+## A8 / G2 — What a structural DB change does to retentive data
+
+**What:** whether restructuring a DB preserves or resets its **retentive** members. It feeds DB-1's
+change-class table in the test-harness design, and therefore the **routing** of a change into the
+RUN-class or STOP-class download queue — so it is not cosmetic.
+
+**Why deferred:** owner ruling, restated 2026-08-13. **It is deferrable because the conservative
+route is already the default and costs little:** an unknown answer routes the change the careful way,
+and R4 already records that `DataBlockReinitialization` resets **all** data including retain [R], so
+the pessimistic assumption is both available and correct-if-unlucky. Nothing is blocked on the
+answer; only an optimisation is.
+
+**Revisit trigger:** when retain pressure makes the optimisation worth having — §16.13 measures
+retain as the tightest budget on the rig by a factor of twelve, so a harness that consumes most of
+the remaining retain makes this answer matter considerably more than it does today. That is the
+signal, not the calendar.
+
 ## Q-04 (test-project001) — Per-type overcurrent setpoint numbers
 
 **What:** REQ-019 needs an overcurrent setpoint pair (`OvercurrentSetpointMedium`,

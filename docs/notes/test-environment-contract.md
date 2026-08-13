@@ -74,6 +74,45 @@ an outlier allowance that must not be trimmed.
 problem (`modbus-tcp-client-spec.md` §5), and the version register plus a round-trip calibration are
 what make that safe.
 
+### 2.1 ✅ RULED 2026-08-13 — ***A SUBMISSION VECTOR MAY NOT BE STEPPED, AND THE REASON IS ARCHITECTURAL***
+
+A vector's `Inputs` are written **once**, before T=0, while nothing is running. **There is no
+mechanism for a second set of inputs to arrive part-way through a test, and this is not a schema
+limitation to be relaxed later.**
+
+Two reasons, and the second is the owner's and is the load-bearing one:
+
+1. **A mid-test stimulus has no defined relationship to T=0.** T=0 is the start bool's rising edge
+   (D37) and every scan-stamp is a difference from it. A second write lands whenever the wire
+   delivers it — subject to the round-trip distribution, not to the controller's scan — so a test
+   whose behaviour depends on *when* it arrived is not reproducible, and the result would be a
+   function of the tunnel rather than of the block.
+2. ***AND THE PC IS THE WRONG PLACE FOR IT: A MODEL IN THE PLC SHOULD SUPPLY THE STIMULUS.*** Owner,
+   2026-08-13. This is the same argument §11 already makes for models generally — *driving raw
+   values over the wire cannot express time* — applied to stimulus rather than to dynamics.
+   **Dynamic stimulus belongs to a model running in the controller, on the controller's own
+   timebase**, where it is generated at scan rate, is reproducible, and is independent of the link.
+   A stepped vector is a request to build a slow, jittery, PC-side model out of the wire protocol.
+
+**What follows for the interface, stated so the refusal is not read as a missing feature:**
+
+- ***THE RUNNER'S STEPPED VECTOR — IF ONE EXISTS INTERNALLY — IS NOT THE SUBMISSION SURFACE.*** A
+  `TestVector` as submitted has a single `Inputs` set. Any stepping the runner performs internally
+  (an inert establish, then a commit) is **protocol**, not test data, and is not authorable.
+- **A test needing changing inputs is a MODEL TASK**, and routes the way M4 already routes fidelity
+  gaps: the vector is refused, the refusal **names the missing model capability**, and that is a
+  model task rather than an untestable requirement (§7's DEFERRED sub-case).
+- **Mechanically checkable:** a submitted vector carrying more than one `Inputs` set, or any
+  time-indexed input structure, is rejected at schema. This is the cheapest gate in the contract.
+
+> **Flagged for the design's own consistency:** nothing in §2 or D33 was found to *assume* PC-supplied
+> stepping — D33's inert establish and D37's later-scan commit are both protocol steps performed by
+> the runner, not authored stimulus, so they are unaffected. **The one place the reading could go
+> wrong is X-A's write phase** — *"write modbusTensor(i) across AS MANY TRANSACTIONS AS IT TAKES"* —
+> which describes **one** vector's data spanning several transactions **while nothing is running**,
+> and must not be read as licence for successive stimuli during a test. Worth a word in X-A if it is
+> ever rewritten.
+
 ---
 
 ## 3. `Basis` — the clause AND the assertion, and why both
@@ -217,6 +256,25 @@ The block's own opinion of its progress is a claim under test, not evidence abou
 **Not mechanically checkable:** that the declared condition really does imply the value is final. That
 is judgement, informed by the model's fidelity declaration (M3/M4).
 
+### 5.1 ✅ RULED 2026-08-13 — keep the caller-supplied model, with `NotEstablished` as the third value
+
+**Recorded as a decision so it is not later re-opened as an oversight.** The settling condition is
+**supplied by the caller**, and where settling cannot be determined the result carries
+**`NotEstablished`** rather than a value — a third outcome beside settled and not-settled.
+
+**The owner's reason, in the owner's words: *"honesty is the best policy."*** A runner that guessed
+at settling would be inventing the one fact the reader most needs, and it would do so invisibly.
+`NotEstablished` says *nobody knows whether this value was final*, which is a usable statement; a
+fabricated settled-value is not.
+
+> 🔴 ***AND THE RECORDED GAP STAYS VISIBLE, BECAUSE THE DECISION DOES NOT CLOSE IT: `WaveRun`
+> OBSERVES COMPLETION, NOT SETTLING.*** Phase 2 measured what that costs — a completion flag raised
+> at 10 while the value ramps on to 15, so **a fast poll reports a wrong answer, not an error**.
+> Keeping the caller-supplied model means the *contract* asks for a settling condition while the
+> *runner* still watches completion, and until those meet, the settling declaration is a promise the
+> harness does not yet enforce. **Recorded here rather than in a backlog, because a gap inside a
+> ruling is the kind that gets read as closed.**
+
 ---
 
 ## 6. Start-bool binding
@@ -316,15 +374,55 @@ clean.**
 
 Raised here rather than resolved; three of them need the owner.
 
-**9.1 — There is no route from "unobservable" back to "testable", and this is the big one.**
-§2.6 says the runner refuses the vector. It does not say what the author then *does*. The declaration
-is frozen for the wave set and must precede the generating download, so an author who discovers
-mid-wave that they need a latch waits a **full download boundary** to get one. Worse, the obvious
-fix — *add a status output to the block so its behaviour is visible* — collides with D13/§2.1, which
-put instrumentation in the copy layer and say `lad-coder` never writes observability code.
-***SO: MAY AN AUTHOR CHANGE A BLOCK'S INTERFACE PURELY TO MAKE IT TESTABLE? *** That is the central
-question of a document called *design for testability*, and the design currently answers both ways.
-**Owner's.**
+**9.1 — There is no route from "unobservable" back to "testable". ✅ RULED 2026-08-13: THE AUTHOR MAY
+CHANGE THE INTERFACE — WITH A LIMIT, AND THE LIMIT IS THE SUBSTANCE.**
+
+The question was: §2.6 says the runner refuses the vector but not what the author then *does*. The
+declaration is frozen for the wave set and must precede the generating download, so an author who
+discovers mid-wave that they need a latch waits a **full download boundary**. The obvious fix — add
+a status output so the behaviour is visible — collided with D13/§2.1.
+
+> ***THE RULING: AN AUTHOR MAY CHANGE A BLOCK'S INTERFACE PURELY TO MAKE IT TESTABLE.***
+>
+> ***AND THE OWNER'S QUALIFICATION, WHICH IS THE HALF THAT MATTERS: THERE MUST BE OCCASIONS WHERE
+> CHANGING THE INTERFACE WOULD INVALIDATE THE TESTING — AND THE JUDGEMENT IS THAT IT IS NOT WORTH
+> THE RISK.***
+
+**Both halves are recorded because a permission without its counter-case becomes automatic.** The
+counter-case is real and it is not hypothetical: an interface change alters what the block *is*, so
+past that point the thing being tested is not the thing that was specified. Concretely — a member
+added to expose an internal value changes the block's memory layout and its instance DB; a member
+that is *read* by anything shifts the block from observed to instrumented; and a block whose
+interface was reshaped to suit its test has had its test participate in its design, which is the
+correlated check this whole pipeline exists to prevent, arriving by a new door.
+
+***SO THE PERMISSION IS FOR THE CASE WHERE THE EXPOSURE IS FREE, AND THE JUDGEMENT IS THE AUTHOR'S
+TO LOSE.*** A proposed convention making it a requirement *where possible* is drafted, unnumbered, in
+`docs/06-lad-conventions.md` under **Proposed rules** — including the reason "where possible" is hard
+to write without making the rule unenforceable.
+
+**9.1a — Reconciling the ruling against D13 and §2.1, and one thing that does NOT reconcile.**
+
+D13 says instrumentation is a property of the **copy layer**; §2.1 says `lad-coder` **never writes
+observability code** and never sees a register number. The ruling does not overturn either — but it
+does not sit inside them unchanged either, so here is the scoping, with the unresolved part named
+rather than smoothed.
+
+| | status |
+|---|---|
+| **§2.1's "never sees a register number"** | ✅ **Untouched.** An exposed member is a **tag**, not a register. The map still assigns registers, the coordinator still generates the mirror, and the author still speaks tag names (D8). |
+| **D13's "instrumentation lives in the copy layer"** | ⚠️ **Needs scoping, and here is the line proposed:** the copy layer still owns **latches, scan-stamps and the mirror** — everything that *observes*. What the ruling permits is an author **exposing a value that already exists inside the block**, so there is something for the copy layer to observe. *Exposing is not instrumenting.* |
+| **§2.1's "never writes observability code"** | ⚠️ **Needs amending, narrowly.** As written it forbids the ruling. Proposed amendment: `lad-coder` writes no **observation logic** — no latching, no stamping, no sampling, no register handling — but **may add a read-only interface member whose only purpose is to make an existing internal value reachable.** |
+
+> 🔴 ***WHAT I COULD NOT RECONCILE, STATED AS UNRESOLVED RATHER THAN PAPERED OVER: "expose an
+> existing value" AND "add a value that does not exist yet" ARE DIFFERENT ACTS, AND THE RULING DOES
+> NOT DISTINGUISH THEM.*** Surfacing a Static that the logic already computes is nearly free and
+> clearly inside the permission. But a requirement whose evidence is a *one-scan coincidence* often
+> has **no existing internal value at all** — making it observable means computing something new,
+> which is new logic, which is squarely what §2.1 forbids and is also the case where the owner's
+> counter-case bites hardest. **That is precisely the case §2.6 raised in the first place**, so the
+> ruling as stated may not reach the motivating example. ***OWNER'S — and worth asking before the
+> proposed convention is numbered, because the convention inherits the same ambiguity.***
 
 **9.2 — "Assertion" is not defined in §2.6. ✅ RESOLVED 2026-08-13.** D35 counts per assertion and §7
 requires the enumeration be spec-derived, but §2.6 predates both, and *neither said what an assertion

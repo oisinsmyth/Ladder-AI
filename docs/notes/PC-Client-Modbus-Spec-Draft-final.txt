@@ -2107,6 +2107,56 @@ THE CONSTANTS EVERY DERIVATION BELOW USES, AND WHICH BAND EACH TAKES
                               the wrong row to budget from — and the difference is only 3%, so
                               taking the pessimistic one costs nothing.
 
+*** 🔴 THE TAIL METRIC IS CHANGING — F-5 ADOPTED BY THE OWNER, 2026-08-13. THE TRANSITION IS STAGED,
+AND THIS BLOCK IS WHERE ITS STATE LIVES. ***
+
+    THE FORM THE DESIGN NOW COMMITS TO:
+
+        RTT_p90        <PENDING EXTRACTION>   the budgeting constant
+        exceed_250     <PENDING EXTRACTION>   fraction of round trips over 250 ms
+                                              (threshold above all six of F-4's pooled cells)
+
+    A budget is then a p90-keyed figure PLUS an expected count of over-threshold exchanges:
+    `exceed_250 x (round trips in the operation)`, which is a number the reader can act on.
+
+    *** BOTH CONSTANTS ARE COMPUTABLE FROM DATA THAT ALREADY EXISTS — F-4's 16,200 round trips —
+    AND NEITHER HAS BEEN EXTRACTED. F-4 REPORTED p90 *DIFFERENCES* (+0.5 / +3.4 ms), NEVER p90
+    *LEVELS*. *** So they are named here as pending rather than filled with a plausible figure:
+    *** THIS DOCUMENT WILL NOT CARRY AN INVENTED p90 IN ORDER TO LOOK FINISHED *** — that is the
+    precise failure `[M]`/`[D]` exists to prevent, and it would be this section's own convention
+    broken in this section.
+
+    *** UNTIL THEY LAND, EVERY BUDGET BELOW CONTINUES TO KEY ON `RTT_p99 = 201`. *** The interim
+    is stated rather than left to be discovered, and it is safe in the right direction: a
+    p99-keyed budget is stricter than the p90-keyed one that will replace it, so nothing built
+    against 201 becomes wrong when the figures arrive — it becomes conservative.
+
+    WHAT TO PRODUCE, PRECISELY, SO WHOEVER TAKES IT DOES NOT HAVE TO GUESS THE INTENT:
+      - `RTT_p90`: pooled across all runs and both arms, nearest-rank, at the widths the design
+        uses. Pooled, NOT a mean of per-run p90s — pooling is the entire point (below).
+      - `exceed_250`: the count of round trips exceeding 250 ms divided by the total, pooled the
+        same way. Report the raw count as well as the fraction; a fraction whose numerator is 3
+        should not be read as though its numerator were 300.
+      - `O11 GAINS A SECOND INPUT.` Its cap is keyed on the read cycle, so it takes the p90 for
+        the cycle time AND the exceedance rate for the residual risk — a wave set admitted on the
+        p90 has a stated, countable number of polls that will miss, rather than an implied 1%.
+
+    *** AND THE HONEST TRADE, RECORDED BECAUSE IT IS THE THING SOMEONE WILL OBJECT TO LATER:
+    BUDGETS BECOME WEAKER AS BOUNDS AND HONESTER AS STATEMENTS. *** A p90-keyed budget is wrong
+    ~10% of the time BY CONSTRUCTION and says so; the p99-keyed one it replaces is wrong ~1% of
+    the time BY ASSERTION, on a p99 nobody could pin down. The second sounds better and is less
+    true.
+
+    WHY THE CHANGE AT ALL — THE ARGUMENT THAT CARRIED IT: *** A p99 POINT ESTIMATE IS EXACTLY WHAT
+    DEFEATED A 16,200-ROUND-TRIP EXPERIMENT. *** An order statistic inherits the variance of the
+    handful of samples in its own tail, so F-4 could not resolve 28 ms at the p99 and would have
+    needed ~170 runs per arm (~17 hours) to do so — while its p90 was adequately powered from the
+    same data. An exceedance rate is a Bernoulli trial per round trip: it POOLS across runs, gains
+    precision linearly with sessions, and makes the constants block's BREADTH revisit trigger
+    cheap to satisfy instead of expensive. *** AND IT IS NOT A NEW IDIOM — IT IS DERIVATION 4's
+    IDIOM GENERALISED *** from the single worst sample to the whole tail; derivation 4 is the most
+    defensible arithmetic in this section precisely because it is already shaped this way.
+
 *** WHY RTT_p99 IS SET AT THE WORST OBSERVED (201) AND NOT THE WEIGHTED ESTIMATE (183) — THE
 REASONING IS EXPLICIT BECAUSE PICKING ONE SILENTLY IS THE FAILURE HERE. ***
 
@@ -2596,10 +2646,11 @@ conclusion without the ruling.
        *** WHAT IT CHANGED ELSEWHERE: the provenance of `RTT_p99`, not its value *** — 201 is a
        SESSION figure, not a width figure, and its revisit trigger is BREADTH. Constants block.
 
-  F-5. *** PROPOSAL, NOT ADOPTED — SPECIFY THE TAIL AS p90 PLUS AN EXPLICIT EXCEEDANCE RATE,
-       INSTEAD OF A p99 POINT ESTIMATE. *** Raised by the rig lane on the strength of F-4, and
-       recorded here unadopted because *** IT CHANGES HOW EVERY BUDGET IN THIS SECTION IS
-       EXPRESSED, *** which is the owner's call and not an arithmetic one.
+  F-5. *** ADOPTED BY THE OWNER, 2026-08-13 — SPECIFY THE TAIL AS p90 PLUS AN EXPLICIT EXCEEDANCE
+       RATE, INSTEAD OF A p99 POINT ESTIMATE. *** The form is now the design's; the two constants
+       it needs have not yet been extracted, so the transition is staged and its state is recorded
+       in the constants block above. What follows is the reasoning as it was put, kept because in
+       six months "why is the tail two numbers?" is exactly the question this answers.
 
        THE FORM PROPOSED:  a p90 constant, plus a stated *** FRACTION OF ROUND TRIPS OVER A NAMED
        THRESHOLD *** (the suggested threshold is 250 ms, which sits above all six of F-4's pooled
@@ -2639,6 +2690,12 @@ conclusion without the ruling.
        (+0.5 / +3.4 ms) and not p90 LEVELS. So this proposal is set out as a shape and a cost,
        with no numbers attached, deliberately. Adopting it starts with producing those two
        figures from data that already exists.
+
+       *** AND ADOPTION DID NOT PRODUCE THEM, SO THEY ARE STILL MISSING — SEE THE STAGED
+       TRANSITION IN THE CONSTANTS BLOCK. *** The ruling changed the FORM the design commits to;
+       it did not conjure the two measurements, and this document will not carry an invented p90
+       to look finished. Until they are extracted, budgets continue to key on `RTT_p99 = 201`,
+       and that is stated at the point of use rather than left to be discovered.
 
 ................................................................................
 HOW THE FLAGS INTERACT — CHECKED 2026-08-13 AFTER F-1's ADOPTION

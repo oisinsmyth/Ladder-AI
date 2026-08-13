@@ -3,9 +3,11 @@
 - **Status:** **ACCEPTED AND IMPLEMENTED — 2026-08-13 (`54b032a`).** `tools/confirm-roundtrip.ps1` is
   armed and fenced. The mechanism is recorded under *The fence as built*; four things this ADR left
   under-specified were decided during implementation and are carried under *What the implementation
-  had to decide* — **two of them are marked for the owner to confirm**, and one place where the
-  implementation **narrowed** this ADR's literal wording is called out explicitly rather than
-  absorbed. The script itself is another lane's file and is not edited from here.
+  had to decide*. **Both items that awaited the owner were CONFIRMED on 2026-08-13** — the fence
+  guards **`-Arm` only**, and junctions are **refused rather than half-resolved**. One place where
+  the implementation **narrowed** this ADR's literal wording is called out explicitly rather than
+  absorbed, and is now confirmed as the intended reading. The script itself is another lane's file
+  and is not edited from here. ***NOTHING IN THIS ADR IS NOW AWAITING A DECISION.***
 - **Date:** ruled 2026-08-13; implemented 2026-08-13.
 - **Relates to:** **ADR-0010** (no IR the AI cannot change — this is the gate that decision hands
   capability widening to) · **ADR-0009** (test-rig write access — same shape of ruling: *the gate is
@@ -128,7 +130,8 @@ this project keeps meeting. Disabling the fence turns **9 of 11** red.
 Recorded with the decision taken, because an ADR that does not say what its gaps were is an ADR
 someone will re-open by accident.
 
-**1. Scope: the whole script, or `-Arm` only? — CHOSEN: `-Arm` ONLY. *** OWNER'S TO CONFIRM. ***
+**1. Scope: the whole script, or `-Arm` only? — CHOSEN: `-Arm` ONLY. ✅ *** CONFIRMED BY THE OWNER,
+2026-08-13. *** The fence guards `-Arm` only; a dry run stays unfenced and available.**
 *** THIS NARROWS THIS ADR'S LITERAL WORDING, AND THAT IS FLAGGED RATHER THAN ABSORBED. *** The
 Decision section says the script "must REFUSE any project path that is not the scratch project",
 unqualified — but every argument offered for it is about the **mutating** half. A dry run writes
@@ -145,7 +148,7 @@ Recorded here as a consequence of the ruling, so that whoever meets the refusal 
 the decision record rather than concluding the script broke.
 
 **3. Junctions: requirement 5 names them, and PowerShell 5.1 cannot resolve them. — CHOSEN: DETECT
-AND REFUSE.** *** OWNER'S TO CONFIRM. *** Requirement 5 assumed resolution was available; on this
+AND REFUSE. ✅ *** CONFIRMED BY THE OWNER, 2026-08-13 — refused rather than half-resolved. *** Requirement 5 assumed resolution was available; on this
 toolchain it is not. Half-resolving would produce a path that is *sometimes* canonical, which is the
 worst of the three options — a fence that is correct except when it isn't. Refusing is strictly safe
 and preserves the requirement's *intent* (a junction cannot walk around the fence) while abandoning
@@ -205,17 +208,20 @@ with extra steps, and an unattended run either hangs on it or is given a flag to
 STRENGTHENED. *** Recorded in these three buckets so a later reader can tell which parts of this ADR
 are still load-bearing as written.
 
-**Narrowed (needs the owner):**
+**Narrowed — ✅ confirmed by the owner 2026-08-13 as the intended reading:**
 - **Scope.** The Decision says "any project path", unqualified; the fence applies to **`-Arm` only**
-  (decision 1). Consistent with every *reason* this ADR gives, inconsistent with its *words*.
+  (decision 1). Consistent with every *reason* this ADR gives, inconsistent with its *words* — and
+  the reasons were what was meant. **This ADR's Decision section should be read as scoped to the
+  mutating path.**
 
-**Mechanism substituted, effect preserved:**
+**Mechanism substituted, effect preserved — ✅ confirmed by the owner 2026-08-13:**
 - **Requirement 5** asked for a comparison of the **resolved canonical path** and named junctions as
   something that must not walk around the fence. PowerShell 5.1 cannot resolve a junction, so the
   build **detects and refuses** one instead (decision 3). The requirement's intent holds — a junction
   cannot get past — but its stated mechanism does not exist on this toolchain, and a *legitimate*
   scratch project behind a junction is now refused. **This ADR's requirement 5 should be read as
-  "must not walk around the fence", not as "must be resolved".**
+  "must not walk around the fence", not as "must be resolved".** The owner confirmed the refusal,
+  including its cost: **a scratch project behind a junction needs its real path allowlisted.**
 
 **Confirmed and strengthened:**
 - **Requirement 1** (allowlist) — the abstract argument was right and the concrete one is far
