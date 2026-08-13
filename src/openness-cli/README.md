@@ -1178,6 +1178,67 @@ under `--json` as `loadManifest`, whose keys are `DownloadFeedback`'s own proper
   `src/download-feedback/DownloadFeedback.Tests/Fixtures/`. A missing fixture is a failure, never a
   skip. Removing the `loadManifest` key turns **7 tests red**.
 
+### 🔴 A FOLDER RUN REPORTED THAT THE SOFTWARE WAS LOADED (found and fixed 2026-08-13)
+
+**Found by the first live rehearsal of the deployment path** — `GenProject1`, `--to-folder`, no wire,
+no CPU stop. The premise in the code was wrong:
+
+> *"an abort, a throw **and a folder run** produce no `DownloadResult` at all."*
+
+*** A FOLDER RUN PRODUCES ONE, AND ITS MESSAGE TREE NAMES OBJECTS AS LOADED. *** On the rehearsal:
+**27 objects**, 3 non-object items, exit 0. So the report contradicted itself three ways in one
+document:
+
+| field | said |
+|---|---|
+| `transferVerdict` | `Undetermined` — correct, but only because of a post-hoc override |
+| `loadManifest.verdict` | **`Transferred`** |
+| top-level `verdict` | **"YES — THE SOFTWARE WAS LOADED"** |
+
+The middle two are exactly a gateway's `Loaded` conditions. **A consumer handed that report computes
+`Loaded = true` for a run that contacted no controller.**
+
+**Two separate faults, and both are fixed at the source:**
+
+1. **The verdict was decided by reading message text.** `TransferVerdicts.Classify` searches for
+   up-to-date phrases and concludes "loaded" from their absence — it **cannot** tell a folder run from
+   a device run, because the two produce the same words. Whether anything reached a controller is a
+   property of **which overload was called**, so it is now decided from the destination
+   (`ProbeSession.ClassifyTransfer`) and the message tree is reported as what it is.
+2. **The old correction was applied too late.** `DownloadToFolder` reassigned `Transfer` *after*
+   `ReportResult` had already rendered the verdict **sentence** from the un-overridden value — which is
+   why the object and the sentence beside it disagreed. **A post-hoc correction only fixes the copy it
+   reaches.** The override is gone; the destination is passed *in*, and the log section, the verdict
+   string and the JSON are all rendered from one verdict.
+
+**`ReportResult` and `ClassifyTransfer` take the destination as a REQUIRED parameter.** A default
+would be a guess about whether a controller was contacted, and a caller that forgets must fail to
+compile rather than fall back to "controller".
+
+**What a folder run now reports:** `available: false` (there is no manifest of what reached a
+*controller*), `target: "folder"`, `describesDeviceTransfer: false`, `verdict: Undetermined`, every
+device-facing field `null` — and **`resultPresent: true`**, which is what keeps a folder run
+distinguishable from an abort now that both are `available: false`. The image facts are **kept in
+full** under `image` (`objects`, `objectCount`, `folder`, and `parserVerdict`, labelled as the
+parser's word about the *image*). Discarding them would trade one dishonesty for another.
+
+> **Why not `available: true` with the device fields nulled?** More honest-looking, and **measured to
+> be worse**: the existing consumer treats a missing `loadedObjects` array as "no first-class
+> manifest" and **falls back to scraping the embedded log** — which names the same 27 objects. The
+> tidy shape would have re-created the false positive one layer down.
+
+**🔴 And the guard for this existed and could not fire.** The consumer's `available is not true`
+branch **names "a folder download" in its own message**, and was proved to work by a **hand-authored
+`available: false` fixture** — a fixture asserting the very premise this run falsified. Written,
+tested around, never executed. The regression tests therefore run on
+`OpennessCli.Tests/Fixtures/folder-run-stdout-20260813.json`, **the recorded stdout of that real
+folder run**: its message tree is the input, its conclusions are what is under test, and a control
+test asserts the recording really does satisfy all three `Loaded` conditions — so "the new output is
+honest" is measured against a recording that demonstrably was not.
+
+Mutation-tested both routes: ignoring the destination in the classifier turns **2 red**; removing the
+folder branch from the manifest builder turns **4 red**.
+
 ### `download-probe --to-folder` — the download's own compile, without the download
 
 `DownloadProvider` has a second overload, `Download(DirectoryInfo, DownloadConfigurationDelegate)`,

@@ -146,6 +146,39 @@ internal static class TransferVerdicts
         new[] { why, "The download did not run to a DownloadResult, so there is nothing to read." },
         matchedPhrase: null);
 
+    /// <summary>
+    /// *** A FOLDER RUN'S VERDICT, DECIDED BY CONSTRUCTION AND NEVER BY READING MESSAGES. ***
+    ///
+    /// MEASURED 2026-08-13, on the first live rehearsal: a folder download DOES return a
+    /// <c>DownloadResult</c>, and its message tree names 27 objects as loaded. <see cref="Classify"/>
+    /// therefore answered *"YES — THE SOFTWARE WAS LOADED"* for a run that contacted no controller,
+    /// and that sentence reached the run's verdict line, the log and the JSON.
+    ///
+    /// The classifier was not wrong about the messages — TIA really did write those objects. It was
+    /// asked the wrong question. <b>Whether anything reached a CONTROLLER is not a property of the
+    /// message text on this path; it is a property of which overload was called</b>, and the folder
+    /// overload takes no connection at all. So the answer is decided here, from the destination, and
+    /// the message tree is reported as what it is: a description of the IMAGE.
+    /// </summary>
+    internal static TransferVerdict ImageOnly(string folder) => new(
+        TransferVerdictKind.Undetermined,
+        "WAS ANYTHING TRANSFERRED? *** NO — NOTHING REACHED ANY CONTROLLER (this was a FOLDER run). ***",
+        new[]
+        {
+            $"The download image was written to: {folder}",
+            "Download(DirectoryInfo, delegate) takes NO connection, so no device was contacted, none was",
+            "even selected, and nothing went on the wire. That is true BY CONSTRUCTION and does not",
+            "depend on reading a single message.",
+            string.Empty,
+            "*** THE OBJECTS NAMED IN THE RESULT DESCRIBE THE IMAGE, NOT A TRANSFER. *** They are real",
+            "and they are reported in full — under `image` in the JSON — but no count of them is",
+            "evidence that a controller holds anything.",
+            string.Empty,
+            "Reported as UNDETERMINED rather than as a negative about a device: no device was chosen, so",
+            "this run says nothing about what any controller holds. What it proves is about THE COMPILE.",
+        },
+        matchedPhrase: null);
+
     internal static TransferVerdict Classify(
         string resultState, int errorCount, IReadOnlyList<DownloadMessageNode> messages)
     {

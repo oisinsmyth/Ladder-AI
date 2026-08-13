@@ -9,6 +9,23 @@ using Siemens.Engineering.Download;
 
 namespace DownloadProbe;
 
+/// <summary>
+/// Where a download wrote. Two overloads, two destinations, and *** THE DIFFERENCE IS NOT VISIBLE IN
+/// THE RESULT'S MESSAGE TEXT *** — which is exactly how a folder run came to report that the software
+/// had been loaded.
+/// </summary>
+internal enum DownloadDestination
+{
+    /// <summary>A real device, via <c>Download(IConfiguration, pre, post, DownloadOptions)</c>.</summary>
+    Controller,
+
+    /// <summary>
+    /// A directory, via <c>Download(DirectoryInfo, delegate)</c>. No connection is passed, no device
+    /// is selected, nothing goes on the wire. A result IS produced and it DOES name objects.
+    /// </summary>
+    Folder,
+}
+
 /// <summary>The whole run, in the shape the JSON report and the exit code are taken from.</summary>
 internal sealed class ProbeOutcome
 {
@@ -91,6 +108,19 @@ internal sealed class ProbeOutcome
     /// hold the first-hand one.
     /// </summary>
     internal string? FeedbackSource { get; set; }
+
+    /// <summary>
+    /// *** WHERE THIS RUN WROTE — AND THE FIELD A "WAS IT LOADED?" CHECK MUST KEY ON. ***
+    ///
+    /// Null means no download ran at all. <see cref="DownloadDestination.Folder"/> means the image
+    /// went to a directory and NO CONTROLLER WAS CONTACTED, however many objects the result names.
+    ///
+    /// This exists because the run that proved it necessary reported <c>Transferred</c>, 27 objects,
+    /// and *"YES — THE SOFTWARE WAS LOADED"* — for a folder run. The destination is a fact about the
+    /// overload that was called, so it is carried as data rather than re-derived from message text
+    /// that cannot possibly express it.
+    /// </summary>
+    internal DownloadDestination? Destination { get; set; }
 
     /// <summary>
     /// The last thing printed, after the verdict. Carries the CPU-run-state advisory — the sentence
@@ -430,20 +460,30 @@ internal static class ProbeSession
 
             if (injection.Fired is not null)
             {
-                return ReportInjection(injection, thrown: null, log, ReportResult(result, log));
+                return ReportInjection(
+                    injection,
+                    thrown: null,
+                    log,
+                    ReportResult(result, log, DownloadDestination.Folder, directory.FullName));
             }
 
-            var reported = ReportResult(result, log);
+            // 🔴 THE OVERRIDE THAT USED TO SIT BELOW THIS LINE IS GONE, AND ITS ABSENCE IS THE FIX.
+            //
+            // It reassigned `reported.Transfer` AFTER ReportResult had already rendered the run's
+            // verdict SENTENCE from the old value — so the object said "undetermined, nothing was
+            // transferred by construction" while the sentence beside it, the log section above it and
+            // the manifest below it all said the software had been loaded. One document, three
+            // answers, measured on the first live rehearsal (27 objects, `Transferred`, exit 0).
+            //
+            // Passing the destination INTO ReportResult fixes all three at once, because all three
+            // are rendered from the one verdict. A post-hoc correction can only ever fix the copy it
+            // reaches.
+            var reported = ReportResult(result, log, DownloadDestination.Folder, directory.FullName);
             reported.DevicePath = devicePath;
             reported.ProviderFound = true;
             reported.DownloadTarget = directory.FullName;
             reported.PreDownloadConfigurations = pre.Recorded;
 
-            // The transfer verdict this path needs is not the wire one. Nothing was transferred by
-            // construction, and saying so keeps a folder run from ever being read as a device write.
-            reported.Transfer = TransferVerdicts.NoResult(
-                "NOTHING WAS TRANSFERRED TO A DEVICE, BY CONSTRUCTION — this run wrote a download image to a " +
-                "folder. What it proves is about the COMPILE, not about the controller.");
             LogConfigurationSummary(pre, new ConfigurationRecorder(log, "POST", arguments.PolicyMode), log);
 
             if (injection.IsArmed)
@@ -481,6 +521,7 @@ internal static class ProbeSession
                 ExceptionText = ex.ToString(),
                 PreDownloadConfigurations = pre.Recorded,
                 Transfer = TransferVerdicts.NoResult("Nothing was transferred to a device: this was a folder run, and it threw."),
+                Destination = DownloadDestination.Folder,
             };
         }
         catch (Exception ex)
@@ -496,6 +537,7 @@ internal static class ProbeSession
                 ProviderFound = true,
                 ExceptionText = ex.ToString(),
                 Transfer = TransferVerdicts.NoResult("Nothing was transferred to a device: this was a folder run, and it threw."),
+                Destination = DownloadDestination.Folder,
             };
         }
     }
@@ -543,10 +585,10 @@ internal static class ProbeSession
             // different once we know a callback threw and was ignored.
             if (injection.Fired is not null)
             {
-                return ReportInjection(injection, thrown: null, log, ReportResult(result, log));
+                return ReportInjection(injection, thrown: null, log, ReportResult(result, log, DownloadDestination.Controller));
             }
 
-            return ReportResult(result, log);
+            return ReportResult(result, log, DownloadDestination.Controller);
         }
         catch (Exception ex) when (injection.Fired is not null)
         {
@@ -777,7 +819,15 @@ internal static class ProbeSession
     /// <see cref="TransferVerdicts"/> can classify, and the verdict goes into the run's own verdict
     /// line rather than into a footnote below a green result.
     /// </summary>
-    private static ProbeOutcome ReportResult(DownloadResult result, ProbeLog log)
+    /// <param name="destination">
+    /// *** REQUIRED, AND DELIBERATELY NOT OPTIONAL. *** A default would be a guess about whether a
+    /// controller was contacted, and the wrong guess is the defect this parameter exists to close: a
+    /// folder run's result names loaded objects exactly like a device run's, so a caller that forgets
+    /// to say where it wrote must fail to COMPILE rather than fall back to "controller".
+    /// </param>
+    /// <param name="folder">The image directory, on the folder path. Null on the device path.</param>
+    private static ProbeOutcome ReportResult(
+        DownloadResult result, ProbeLog log, DownloadDestination destination, string? folder = null)
     {
         log.Blank();
         log.Rule("DOWNLOAD RESULT");
@@ -792,7 +842,8 @@ internal static class ProbeSession
         LogMessages(messages, log, depth: 1);
 
         var resultState = Safe(() => result.State.ToString());
-        var transfer = TransferVerdicts.Classify(resultState, result.ErrorCount, messages);
+
+        var transfer = ClassifyTransfer(destination, folder, resultState, result.ErrorCount, messages);
 
         log.Blank();
         log.Rule("WAS ANYTHING ACTUALLY TRANSFERRED?");
@@ -803,7 +854,19 @@ internal static class ProbeSession
 
         var feedback = BuildFeedback(resultState, result.ErrorCount, result.WarningCount, messages);
         log.Blank();
-        log.Rule("LOAD MANIFEST (Ladder.Download, from the live result — not from this log)");
+        log.Rule(destination == DownloadDestination.Folder
+            ? "IMAGE CONTENTS — NOT A LOAD MANIFEST (this run wrote to a folder)"
+            : "LOAD MANIFEST (Ladder.Download, from the live result — not from this log)");
+
+        if (destination == DownloadDestination.Folder)
+        {
+            log.Line("*** READ THE HEADINGS INSIDE THIS BLOCK AS BEING ABOUT THE IMAGE. *** The parser below");
+            log.Line("says TRANSFERRED because objects are named; they were written to a DIRECTORY. No");
+            log.Line("controller was contacted and none was even selected. In the JSON these facts appear");
+            log.Line("under `image`, and the device-facing manifest is `available: false`.");
+            log.Blank();
+        }
+
         log.Block(feedback.ToReport().Replace("\r\n", "\n").TrimEnd('\n').Split('\n'));
         log.Line("(Emitted as first-class JSON under --json's `loadManifest`. A consumer reads THAT,");
         log.Line(" never this rendering — anything a renderer drops is gone before a scraper sees it.)");
@@ -820,8 +883,33 @@ internal static class ProbeSession
             Transfer = transfer,
             Feedback = feedback,
             FeedbackSource = nameof(Ladder.Download.DownloadResultAdapter),
+            Destination = destination,
         };
     }
+
+    /// <summary>
+    /// *** THE DESTINATION DECIDES THIS, NOT THE MESSAGE TEXT — AND THAT IS THE WHOLE FIX. ***
+    ///
+    /// On the folder path the question "did anything reach a controller" is answered by which
+    /// overload was called, and the answer is no — whatever objects the message tree names.
+    /// <see cref="TransferVerdicts.Classify"/> reads message text and therefore CANNOT tell a folder
+    /// run from a device run: the recorded rehearsal's tree names 27 objects as loaded, exactly as a
+    /// real download's would. Asking it to decide was the defect.
+    ///
+    /// EXTRACTED so the rule is reachable without Portal. A live <c>DownloadResult</c> cannot be
+    /// constructed in a test, so while this ternary lived inline inside
+    /// <see cref="ReportResult"/> the only thing a test could do was restate it — and the first
+    /// version of the regression test did exactly that, setting the verdict it then asserted.
+    /// </summary>
+    internal static TransferVerdict ClassifyTransfer(
+        DownloadDestination destination,
+        string? folder,
+        string resultState,
+        int errorCount,
+        IReadOnlyList<DownloadMessageNode> messages) =>
+        destination == DownloadDestination.Folder
+            ? TransferVerdicts.ImageOnly(folder ?? "(unnamed directory)")
+            : TransferVerdicts.Classify(resultState, errorCount, messages);
 
     /// <summary>
     /// *** THE LIVE PATH <c>DownloadResultAdapter</c> WAS BUILT FOR, AND THIS IS ITS FIRST CALLER. ***

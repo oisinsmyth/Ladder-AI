@@ -397,25 +397,68 @@ internal static class Program
     /// deliberately not a shape invented here: both existing consumers already speak that vocabulary,
     /// so nothing has to change to accept this.
     ///
-    /// *** NULL, NEVER AN EMPTY LIST, WHEN NO RESULT EXISTED. *** An abort, a throw and a folder run
-    /// produce no <c>DownloadResult</c> at all. "Nothing was examined" and "a manifest naming nothing"
-    /// are opposite findings — the second says TIA loaded nothing, the first says nobody knows — and
-    /// an empty array would render them identically. Empty is not clean (FI-44).
+    /// *** NULL, NEVER AN EMPTY LIST, WHEN THERE IS NO DEVICE MANIFEST. *** "Nothing was examined" and
+    /// "a manifest naming nothing" are opposite findings — the second says TIA loaded nothing, the
+    /// first says nobody knows — and an empty array would render them identically. Empty is not clean
+    /// (FI-44).
+    ///
+    /// *** THREE STATES, AND THE THIRD WAS MISSING UNTIL 2026-08-13. *** <c>available</c> answers one
+    /// question only: <b>is there a manifest of what reached a CONTROLLER?</b>
+    ///
+    /// <list type="table">
+    /// <item><term><c>target: "controller"</c>, <c>available: true</c></term><description>a device
+    /// download; the object list is evidence of transfer.</description></item>
+    /// <item><term><c>target: "none"</c>, <c>available: false</c>, <c>resultPresent: false</c></term>
+    /// <description>an abort or a throw. No <c>DownloadResult</c> exists; nobody looked.</description></item>
+    /// <item><term><c>target: "folder"</c>, <c>available: false</c>, <c>resultPresent: TRUE</c></term>
+    /// <description>*** THE ONE THAT WAS WRONG. *** A folder run.</description></item>
+    /// </list>
+    ///
+    /// 🔴 <b>THIS COMMENT USED TO SAY A FOLDER RUN PRODUCES NO <c>DownloadResult</c>. IT PRODUCES ONE,
+    /// AND THAT FALSEHOOD IS WHY THE DEFECT WAS INVISIBLE.</b> Measured on the first live rehearsal
+    /// (2026-08-13, `GenProject1`, no wire, no CPU stop): the folder run returned a result whose
+    /// message tree named <b>27 objects</b>, so this method took its <c>available: true</c> branch and
+    /// reported <c>verdict: Transferred</c> — while <c>transferVerdict</c> in the same document said
+    /// <c>Undetermined</c>. *** THOSE ARE EXACTLY A GATEWAY'S `Loaded` CONDITIONS, FOR A RUN THAT
+    /// CONTACTED NO CONTROLLER. ***
+    ///
+    /// <b>Why <c>available: false</c> rather than a fourth truthy state.</b> A manifest genuinely
+    /// exists for a folder run and it describes a real image, so throwing it away would be its own
+    /// dishonesty — it is kept, in full, under <c>image</c>. But <c>available</c> is not "did we
+    /// derive anything", it is "is there a DEVICE manifest", and for a folder run there is not.
+    /// Emitting <c>true</c> with nulled device fields was considered and rejected on measurement: the
+    /// existing consumer treats a missing <c>loadedObjects</c> array as "no first-class manifest" and
+    /// FALLS BACK TO SCRAPING THE EMBEDDED LOG — which names the same 27 objects. The honest-looking
+    /// shape would have re-created the false positive one layer down. <c>resultPresent</c> keeps the
+    /// folder case distinguishable from an abort, and <c>target</c> names it outright.
     /// </summary>
     private static Dictionary<string, object?> BuildLoadManifest(ProbeOutcome outcome)
     {
+        if (outcome.Destination == DownloadDestination.Folder && outcome.Feedback is { } image)
+        {
+            return FolderImageManifest(outcome, image);
+        }
+
         if (outcome.Feedback is not { } feedback)
         {
             return new Dictionary<string, object?>
             {
                 ["available"] = false,
+                ["target"] = outcome.Destination switch
+                {
+                    DownloadDestination.Folder => "folder",
+                    DownloadDestination.Controller => "controller",
+                    _ => "none",
+                },
+                ["describesDeviceTransfer"] = false,
                 ["source"] = "none",
                 ["resultPresent"] = false,
                 ["verdict"] = Ladder.Download.TransferVerdict.Undetermined.ToString(),
                 ["verdictReason"] =
-                    "No DownloadResult was produced, so no manifest was derived: the download aborted, threw, "
-                    + "or wrote to a folder. NOTHING WAS EXAMINED — which is not the same as nothing having been "
-                    + "loaded, and must not be read as it.",
+                    "No DownloadResult was produced, so no manifest was derived: the download aborted or threw. "
+                    + "NOTHING WAS EXAMINED — which is not the same as nothing having been loaded, and must not "
+                    + "be read as it.",
+                ["image"] = null,
                 ["loadedObjects"] = null,
                 ["loadedObjectCount"] = null,
                 ["loadedObjectMessageCount"] = null,
@@ -436,6 +479,9 @@ internal static class Program
         return new Dictionary<string, object?>
         {
             ["available"] = true,
+            ["target"] = "controller",
+            ["describesDeviceTransfer"] = true,
+            ["image"] = null,
 
             // Which authority produced this, as RECORDED BY WHOEVER BUILT IT — never assumed here.
             // The adapter reads the live Openness objects; the log reader re-derives from a rendering
@@ -481,6 +527,78 @@ internal static class Program
             ["anomalies"] = feedback.Anomalies,
         };
     }
+
+    /// <summary>
+    /// *** A FOLDER RUN'S REPORT: EVERY DEVICE-FACING FIELD NULL, EVERY IMAGE FACT KEPT. ***
+    ///
+    /// The image really was written and the objects really are named — discarding them would trade
+    /// one dishonesty for another. So they move to <c>image</c>, where no key is a word a
+    /// "was it loaded?" check would ever key on, and where <c>parserVerdict</c> is labelled as what
+    /// the manifest parser said ABOUT THE IMAGE rather than about any controller.
+    /// </summary>
+    private static Dictionary<string, object?> FolderImageManifest(
+        ProbeOutcome outcome, Ladder.Download.DownloadFeedback image) => new()
+    {
+        // FALSE, and it is the load-bearing word: there is no manifest of what reached a controller,
+        // because no controller was contacted. See BuildLoadManifest's remarks for why this is not
+        // `true` with nulled fields — the existing consumer would fall back to scraping the log.
+        ["available"] = false,
+        ["target"] = "folder",
+        ["describesDeviceTransfer"] = false,
+
+        // TRUE — and this is what separates a folder run from an abort, which is also `available:
+        // false`. A result exists and was read in full; it simply says nothing about a device.
+        ["resultPresent"] = image.ResultPresent,
+        ["source"] = outcome.FeedbackSource ?? "unknown",
+
+        ["verdict"] = Ladder.Download.TransferVerdict.Undetermined.ToString(),
+        ["verdictReason"] =
+            "*** NOTHING REACHED ANY CONTROLLER — THIS RUN WROTE AN IMAGE TO A FOLDER. *** "
+            + "Download(DirectoryInfo, delegate) takes no connection, so no device was contacted and none was "
+            + "even selected; that is true by construction and does not depend on reading a message. The "
+            + $"{image.LoadedObjectCount} object(s) the result names describe THE IMAGE and are reported under "
+            + "`image` below — no count of them is evidence that a controller holds anything. Reported as "
+            + "UNDETERMINED rather than as a negative about a device, because no device was in play at all.",
+
+        ["image"] = new Dictionary<string, object?>
+        {
+            ["folder"] = outcome.DownloadTarget,
+            ["objects"] = image.LoadedObjects,
+            ["objectCount"] = image.LoadedObjectCount,
+            ["objectMessageCount"] = image.LoadedObjectMessageCount,
+            ["duplicateObjects"] = image.DuplicateLoadedObjects,
+            ["nonObjectSubjects"] = image.NonObjectLoadSubjects,
+            ["nonObjectCount"] = image.NonObjectLoadCount,
+            ["itemCount"] = image.TransferredItemCount,
+
+            // What Ladder.Download said about these messages, kept verbatim and clearly labelled.
+            // It says "Transferred" because objects are named — which is correct about the IMAGE and
+            // says nothing about a device. Hiding it would be hiding the thing that used to mislead.
+            ["parserVerdict"] = image.Verdict.ToString(),
+            ["parserVerdictReason"] = image.VerdictReason,
+
+            ["unrecognisedMessages"] = image.UnrecognisedMessages.Select(m => m.Text).ToList(),
+            ["unrecognisedMessageCount"] = image.UnrecognisedMessageCount,
+            ["anomalies"] = image.Anomalies,
+        },
+
+        // Every device-facing field is NULL. A folder run has no answer to any of these, and a null
+        // is the only rendering that cannot be mistaken for one.
+        ["loadedObjects"] = null,
+        ["loadedObjectCount"] = null,
+        ["loadedObjectMessageCount"] = null,
+        ["duplicateLoadedObjects"] = null,
+        ["nonObjectLoadSubjects"] = null,
+        ["nonObjectLoadCount"] = null,
+        ["transferredItemCount"] = null,
+        ["runStateDisclosed"] = null,
+        ["runStateTransitions"] = null,
+        ["finalRunStateEvent"] = null,
+        ["upToDateSignalPresent"] = null,
+        ["unrecognisedMessages"] = null,
+        ["unrecognisedMessageCount"] = null,
+        ["anomalies"] = null,
+    };
 
     private static Dictionary<string, object?> Describe(RecordedConfiguration record) => new()
     {
