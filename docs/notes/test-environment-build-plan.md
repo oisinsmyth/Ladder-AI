@@ -57,12 +57,13 @@ phase 2 with the copy-layer generator.
 >
 > **BUILT:** phase 0–3 complete and device-validated · **phase 4 complete** (feedback parser, the
 > corrected ladder, admission control, the queues, and the marker **merged into one atomic file**) ·
-> **5.1** contract + skill · **5.3** the loop · **6.3** coverage · the result package · the verifiers ·
-> the assertion enumerator (**agent + skill**) · `compile --station` as the gate · the armed confirm loop.
+> **5.1** contract + skill · **5.3** the loop · **6.3** coverage · **6.6** compression · **6.7**
+> cleanup/timeouts/startup/provenance · the result package · the verifiers · the assertion
+> enumerator (**agent + skill**) · `compile --station` as the gate · the armed confirm loop.
 >
 > **IN FLIGHT:** *** 5.2 — THE MILESTONE. *** Enumeration (third party) running; block by `lad-coder`
-> and vectors by a **different** agent to follow; then one rig session. Also: 6.6/6.7, the golden
-> harness's drift dispositions, and task 09's import + re-export.
+> and vectors by a **different** agent to follow; then one rig session. Also: **6.2** (claims + the
+> reserved range) and task 09's import + re-export.
 >
 > **THE RIG SESSION, AND IT IS THE ONLY DEVICE WORK LEFT:** *** DEPLOYMENT ITSELF — the loop has never
 > put an object on a controller *** (8 items on `LoopResult.OwedOnTheDevice`); **A6 repetition**
@@ -70,10 +71,17 @@ phase 2 with the copy-layer generator.
 > Portal, *since D32's throw-on-unhandled fires in production*; and **three named exports** that each
 > close a class with zero new test code.
 >
-> **OPEN FOR THE OWNER — one thing:** *** MAY AN AUTHOR *CREATE* AN OBSERVABLE VALUE, OR ONLY *SURFACE*
-> ONE THAT EXISTS? *** Reads and **additive, non-interruptive** writes are ruled in, with three
-> mechanical checks. **But a one-scan coincidence usually has no existing internal value**, so
-> observing it means computing something new — *which is the case §2.6 raised in the first place.*
+> **OPEN FOR THE OWNER — two things:**
+>
+> 1. *** MAY AN AUTHOR *CREATE* AN OBSERVABLE VALUE, OR ONLY *SURFACE* ONE THAT EXISTS? *** Reads and
+>    **additive, non-interruptive** writes are ruled in, with three mechanical checks. **But a one-scan
+>    coincidence usually has no existing internal value**, so observing it means computing something
+>    new — *which is the case §2.6 raised in the first place.*
+> 2. *** SHOULD A MULTI-WRITER ON A **DELIVERABLE** SIGNAL REFUSE, OR ONLY REPORT? *** Built as
+>    **report**, because the defect is in the deliverable and the vector author cannot fix it — X-G's
+>    own text says "reported as FINDINGS". It sits in tension with *a warning is not a gate*. What
+>    **does** gate is an **unprovenanced** graph, because *"0 findings"* and *"nobody recorded why"*
+>    produce identical empty reports. One enum member either way.
 >
 > **NOT SCHEDULED:** A8/G2 · the 14 dropped block properties (**owner: low priority**) · F-2 + F-6
 > (deferred until real slot widths exist) · the mid-transfer half-loaded case (**no configuration is
