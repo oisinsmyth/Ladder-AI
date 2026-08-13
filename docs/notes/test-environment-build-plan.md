@@ -3060,6 +3060,82 @@ lets the next enumerator CHECK the work instead of RE-ARGUING it. ***
     ` #` → 19 characters silently lost. *** AND CONFIRMED LIVE: the skill registered with its full
     description intact, which is the stronger check and the one mode 2 would have silently failed. ***
 
+### ✅ THE RESTORE PATH WORKS, AND 1.7's PRE-DELEGATE ANSWER IS ALREADY IN (2026-08-13, `c29c5c0`, `fbadd17`)
+
+**`import-all`'s mechanism was a DENY-LIST, not a positional index.** `ReadRootElement` walked
+elements, skipped the two names it knew — `Document` and `Engineering` — and returned whatever came
+next. Real exports carry a **third** header, `DocumentInfo`, so it returned that, which classifies as
+nothing. *** A GREP FOR THE OFFENDING NAME FINDS NOTHING BECAUSE THE CODE NEVER NAMES THE ELEMENT IT
+TRIPS OVER — A DENY-LIST IS DEFINED BY WHAT IT OMITS. *** Single-file `import` worked all week because
+**it never classifies**: the caller states the kind. That is what made it look like bad files rather
+than a bad reader. The fix is a **locate** — first element whose `LocalName` starts with `SW.`, which
+is what `src/converter` has always done.
+
+  ➜ *** THE CONTRAST IS THE MEASUREMENT: reinstating the deny-list fails 3 new tests, AND THE 24
+    PRE-EXISTING HAND-FIXTURE TESTS STAY GREEN. *** The old fixtures could never have caught this. The
+    permanent guard now reads the committed **real** corpus — 23 genuine de-identified TIA exports, all
+    carrying `DocumentInfo`, not one hand-written document.
+  ➜ **Same class elsewhere: none.** Every other parser locates by name. `CompareRunner`'s positional
+    read operates on a `<Wire>`'s children, **where position *is* the schema**.
+
+**End to end, on the rig lane's rehearsal:** `export-all` 126 → `import-all` **126 imported, 0 failed,
+0 rejected, in 3 passes** — the fixpoint retry resolving dependency order, **now observed rather than
+reasoned**. Fingerprint `aea129c5b9d6837d6aeb2b649b261c89` before and after, **full inventory identical
+item for item**. Gate HEALTHY on both lines.
+
+| phase | wall-clock |
+|---|---|
+| `export-all` | 44 s |
+| `import-all` | **182 s** |
+| `compile-all --force` | **217 s** |
+| `sanity-check` | 4 s |
+| *** RESTORE TOTAL *** | *** 403 s ≈ 6 min 43 s *** |
+
+*** RECOVERY IS A SEVEN-MINUTE OPERATION, WHICH CHANGES 1.7's RISK CALCULUS: A BAD THROW IS AN
+INCONVENIENCE, NOT AN INCIDENT. ***
+
+  ➜ **A trap avoided rather than quoted:** plain `compile-all` right after the import reported
+    **`NOTHING EXAMINED`, exit 14, 32 s** — re-importing identical content dirties nothing. **Quoting
+    that 32 s would have been a four-fold underestimate** of the expensive half; `--force` is the
+    honest bound. *(The tool refusing to call an empty run a pass is FI-44 earning its keep.)*
+  ➜ 🔴 **The limitation, not glossed:** *** THIS WAS A NO-CHANGE RESTORE — the project was put back
+    over itself, nothing was damaged first. *** It proves the path runs, the retry converges, 126 files
+    survive, and it costs seven minutes. It does **not** prove that restoring *damaged* content yields
+    the right project — **a fingerprint match is a weaker claim when nothing moved.**
+
+### 🎯 1.7's PRE-DELEGATE BEHAVIOUR IS MEASURED — at zero risk, before any device was touched
+
+`--to-folder` **does** reach the PRE delegate, so the throw was rehearsed with nothing on the wire:
+
+> *** OPENNESS NEITHER PROPAGATES NOR SWALLOWS — IT *REPLACES*. *** `NonRecoverableException:
+> "Unexpected exception - no exception message available."`, with our exception **nowhere in the
+> chain**.
+
+**So a callback CAN stop a download by throwing — but the reason is destroyed.** The same family as the
+download-compile finding: *the API keeps the fact and discards the detail.* **Anything relying on this
+must log its own reason before throwing.**
+
+  ➜ *** AND THE SESSION SURVIVES, DESPITE THE TYPE NAME *** — a subsequent folder download completed
+    normally. **That materially de-risks the device runs.**
+  ➜ **POST cannot be rehearsed anywhere** — the folder overload takes one delegate — so
+    `--throw-from-post-delegate --to-folder` is **refused by name** rather than arming something that
+    can never fire and exiting clean. **Two flags, never one**; a bare `--throw` is a usage error.
+
+### ⚠️ TWO LANES HELD PORTAL AT ONCE — an orchestration error, evidenced twice
+
+One lane saw `Collection was modified` then `EngineeringObjectDisposedException` **inside a read-only
+plan**, after which `sanity-check` reported **all 84 blocks and 33 types inconsistent**; the other had
+**Portal exit mid-run** with `PROCESSES: 0`. Neither lane observed the other, and **neither asserted a
+cause** — correctly.
+
+*** PORTAL IS A SINGLE-WRITER EXTERNAL RESOURCE, NOT A COMPONENT, AND "ONE AGENT PER COMPONENT" NEVER
+COVERED IT. *** Now in the working agreement as a token held by one lane at a time.
+
+  ➜ **Both incidents cleared, and one demonstrated something useful:** the station-scope `sanity-check`
+    **repaired a whole-program import in a single pass** — the old hardware-only one could not have.
+  ➜ **And a design decision paid off:** `import-all` **saves once at the end** and had already
+    committed, so *** A PORTAL DEATH AFTER THE IMPORT COSTS THE COMPILE TIME, NOT THE RESTORE. ***
+
 ## PHASE 5 — FIRST REAL VALUE
 
 **This is the milestone that matters. Everything before it is infrastructure.**
