@@ -328,6 +328,73 @@ namespace Ladder.Wave.Tests
         }
 
         // =============================================================================================
+        // THE INDEPENDENT RE-VERIFICATION — and it had no did-not-run case until a mutation said so
+        // =============================================================================================
+
+        [Fact]
+        public void The_verifier_catches_a_colouring_that_puts_conflicting_slots_together()
+        {
+            // *** THIS TEST EXISTS BECAUSE DELETING THE RE-VERIFICATION LEFT THE SUITE GREEN. *** The
+            // colourer never produces a bad colouring, so nothing could reach the check — and a guard
+            // that cannot be shown to fire is indistinguishable from a constant. Pointing it at a
+            // deliberately wrong colouring is the only evidence that it checks anything.
+            var bad = new[] { WaveSetAdmission.WaveSetOf(0, new[] { Slot("S1"), Slot("S2") }) };
+
+            var findings = WaveSetAdmission.Verify(bad, new[] { Computed("S1", "S2") }, 6);
+
+            Assert.Contains(findings, f => f.Defect == ColouringDefect.SlotCouldNotBePlaced);
+        }
+
+        [Fact]
+        public void The_verifier_catches_a_wave_set_over_the_cap()
+        {
+            var overCap = new[] { WaveSetAdmission.WaveSetOf(0, new[] { Slot("S1"), Slot("S2"), Slot("S3") }) };
+
+            var findings = WaveSetAdmission.Verify(overCap, null, 2);
+
+            Assert.Contains(findings, f => f.Defect == ColouringDefect.SlotCouldNotBePlaced);
+        }
+
+        [Fact]
+        public void The_verifier_catches_a_slot_placed_in_two_wave_sets()
+        {
+            // Colour classes PARTITION the slots; running one twice double-counts its bandwidth.
+            var duplicated = new[]
+            {
+                WaveSetAdmission.WaveSetOf(0, new[] { Slot("S1") }),
+                WaveSetAdmission.WaveSetOf(1, new[] { Slot("S1") }),
+            };
+
+            var findings = WaveSetAdmission.Verify(duplicated, null, 6);
+
+            Assert.Contains(findings, f => f.Defect == ColouringDefect.DuplicateSlotId);
+        }
+
+        [Fact]
+        public void The_verifier_catches_an_edge_the_colouring_never_placed()
+        {
+            var partial = new[] { WaveSetAdmission.WaveSetOf(0, new[] { Slot("S1") }) };
+
+            var findings = WaveSetAdmission.Verify(partial, new[] { Computed("S1", "S2") }, 6);
+
+            Assert.Contains(findings, f => f.Defect == ColouringDefect.EdgeDoesNotConnectTwoAdmittedSlots);
+        }
+
+        [Fact]
+        public void The_verifier_passes_a_correct_colouring()
+        {
+            // The converse, without which every assertion above would pass against a verifier that
+            // simply reported everything.
+            var good = new[]
+            {
+                WaveSetAdmission.WaveSetOf(0, new[] { Slot("S1"), Slot("S3") }),
+                WaveSetAdmission.WaveSetOf(1, new[] { Slot("S2") }),
+            };
+
+            Assert.Empty(WaveSetAdmission.Verify(good, new[] { Computed("S1", "S2") }, 6));
+        }
+
+        // =============================================================================================
         // WHAT THE PLAN REPORTS BACK
         // =============================================================================================
 

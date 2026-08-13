@@ -424,29 +424,13 @@ namespace Ladder.Wave
                 }
             }
 
-            // --- RE-VERIFY, FROM THE EDGE LIST RATHER THAN FROM THE COLOURING'S OWN BOOKKEEPING. -----
-            // The colourer "knows" its classes are conflict-free by construction, and that conviction is
-            // the blind spot to guard — the same separation DependencyClosure keeps from the packer.
-            foreach (var edge in edgeList)
-            {
-                if (colourOf[edge.FirstSlot] == colourOf[edge.SecondSlot])
-                {
-                    findings.Add(new ColouringFinding(
-                        ColouringDefect.SlotCouldNotBePlaced,
-                        edge.ToString(),
-                        "Both ends were given colour " + colourOf[edge.FirstSlot] + ", so two conflicting " +
-                        "slots would share a wave set. Checked from the edge list rather than from the " +
-                        "colourer's own bookkeeping, which is what makes this a check rather than an echo."));
-                }
-            }
+            var provisional = classes
+                .Select((members, index) => new WaveSet(index, members.OrderBy(s => s.Id, StringComparer.OrdinalIgnoreCase).ToArray()))
+                .ToArray();
 
-            foreach (var oversized in classes.Where(c => c.Count > cap))
-            {
-                findings.Add(new ColouringFinding(
-                    ColouringDefect.SlotCouldNotBePlaced,
-                    string.Join(", ", oversized.Select(s => s.Id).ToArray()),
-                    "A wave set holds " + oversized.Count + " slots against a cap of " + cap + "."));
-            }
+            // *** RE-VERIFIED BY SOMETHING THAT DID NOT BUILD IT. *** See Verify below on why it is a
+            // separate, public method rather than a loop here.
+            findings.AddRange(Verify(provisional, edgeList, cap));
 
             if (findings.Count > 0)
             {
@@ -460,13 +444,9 @@ namespace Ladder.Wave
                     "colourer, not in the submission set.");
             }
 
-            var waveSets = classes
-                .Select((members, index) => new WaveSet(index, members.OrderBy(s => s.Id, StringComparer.OrdinalIgnoreCase).ToArray()))
-                .ToArray();
-
             return new WaveSetPlan(
                 AdmissionPlanOutcome.Admitted,
-                waveSets,
+                provisional,
                 new ColouringFinding[0],
                 slotList.Length,
                 edgeList.Length,
@@ -474,6 +454,97 @@ namespace Ladder.Wave
                 "longer one — wave length is max tensor length across the slots and nothing here changes " +
                 "it. Cap " + cap + " slot(s) per wave set (" + capProvenance!.Trim() + ").");
         }
+
+        /// <summary>
+        /// Check a colouring against the edge list and the cap — *** FROM THE DEFINITION, NOT FROM THE
+        /// COLOURER'S OWN BOOKKEEPING. ***
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// The colourer "knows" its classes are conflict-free by construction, and that conviction is
+        /// exactly the blind spot to guard — the same separation <see cref="DependencyClosure"/> keeps
+        /// from <see cref="WaveBoundaryBatchPlanner"/>'s packer.
+        /// </para>
+        /// <para>
+        /// *** PUBLIC ON PURPOSE, AND THE REASON IS A TEST GAP A MUTATION FOUND. *** While this was a
+        /// private loop inside <see cref="Admit"/>, deleting it left the whole suite GREEN: the colourer
+        /// never produces a bad colouring, so nothing could reach the check. A guard that cannot be
+        /// shown to fire is indistinguishable from a constant — the same finding this lane made about a
+        /// permanently-true flag. Exposed, it can be pointed at a deliberately wrong colouring, which is
+        /// the only evidence that it checks anything.
+        /// </para>
+        /// </remarks>
+        public static IReadOnlyList<ColouringFinding> Verify(
+            IEnumerable<WaveSet>? waveSets,
+            IEnumerable<ConflictEdge>? edges,
+            int maxSlotsPerWaveSet)
+        {
+            var sets = (waveSets ?? Enumerable.Empty<WaveSet>()).Where(w => w != null).ToArray();
+            var edgeList = (edges ?? Enumerable.Empty<ConflictEdge>()).Where(e => e != null).ToArray();
+            var findings = new List<ColouringFinding>();
+
+            var colourOf = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            foreach (var set in sets)
+            {
+                foreach (var slot in set.Slots)
+                {
+                    colourOf[slot.Id] = set.Colour;
+                }
+            }
+
+            foreach (var edge in edgeList)
+            {
+                int first;
+                int second;
+                if (!colourOf.TryGetValue(edge.FirstSlot, out first) ||
+                    !colourOf.TryGetValue(edge.SecondSlot, out second))
+                {
+                    findings.Add(new ColouringFinding(
+                        ColouringDefect.EdgeDoesNotConnectTwoAdmittedSlots,
+                        edge.ToString(),
+                        "The colouring does not place both ends of this edge, so the constraint it " +
+                        "expresses was not applied to anything."));
+                    continue;
+                }
+
+                if (first == second)
+                {
+                    findings.Add(new ColouringFinding(
+                        ColouringDefect.SlotCouldNotBePlaced,
+                        edge.ToString(),
+                        "Both ends were given colour " + first + ", so two conflicting slots would share " +
+                        "a wave set. Checked from the edge list rather than from the colourer's own " +
+                        "bookkeeping, which is what makes this a check rather than an echo."));
+                }
+            }
+
+            foreach (var oversized in sets.Where(w => w.SlotCount > maxSlotsPerWaveSet))
+            {
+                findings.Add(new ColouringFinding(
+                    ColouringDefect.SlotCouldNotBePlaced,
+                    string.Join(", ", oversized.Slots.Select(s => s.Id).ToArray()),
+                    "A wave set holds " + oversized.SlotCount + " slots against a cap of " +
+                    maxSlotsPerWaveSet + "."));
+            }
+
+            foreach (var duplicated in sets
+                .SelectMany(w => w.Slots.Select(s => s.Id))
+                .GroupBy(id => id, StringComparer.OrdinalIgnoreCase)
+                .Where(g => g.Count() > 1))
+            {
+                findings.Add(new ColouringFinding(
+                    ColouringDefect.DuplicateSlotId,
+                    duplicated.Key,
+                    "The slot appears in " + duplicated.Count() + " wave sets. Colour classes PARTITION " +
+                    "the slots; running one twice would double-count its bandwidth and its conflicts."));
+            }
+
+            return findings;
+        }
+
+        /// <summary>Builds one wave set, for a caller checking a colouring it produced itself.</summary>
+        public static WaveSet WaveSetOf(int colour, IEnumerable<TestSlot> slots) =>
+            new WaveSet(colour, (slots ?? Enumerable.Empty<TestSlot>()).Where(s => s != null).ToArray());
 
         private static Dictionary<string, HashSet<string>> BuildAdjacency(
             IReadOnlyList<TestSlot> slots,
