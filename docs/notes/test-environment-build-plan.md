@@ -68,8 +68,9 @@ phase 2 with the copy-layer generator.
 > code).
 >
 > **Open for the owner:** **A6/1.7**; the **queue/marker joint-consistency** ruling (two files, no
-> shared transaction); **F-4's second half** (cap slot width? nothing argues for it on timing
-> grounds); the **p90-plus-exceedance-rate** tail proposal; **F-2**, **F-3**.
+> shared transaction); **F-5** — specify the tail as p90 + an exceedance rate instead of a p99 point
+> estimate, whose strongest argument is that **it is derivation 4's own idiom generalised**; **F-2**,
+> **F-3**. *(F-4 is closed: nothing argues for capping slot width on timing grounds.)*
 >
 > **The rule that has earned its place five times in one day:** *a guard written, tested around, and
 > never executed.* See `autonomous-working-agreement.md`.
@@ -1423,6 +1424,29 @@ caused that latch.
 > `changes == 0`. **Deliberately not code-fixed:** the remedy is one flag at the call site, and
 > hard-coding `--iterations 2` into the advice would be a magic number defended by nothing. Recorded
 > because exact liveness was claimed earlier and this is its one documented exception.
+
+### 🔧 `RTT_p99 = 201` RE-BASED ON PROVENANCE, NOT ON VALUE — 2026-08-13 (`98bd6b3`)
+
+F-4 did not change the constant. *** IT CHANGED WHAT KIND OF NUMBER IT IS. *** 201 is a **session**
+figure, not a width figure — session-to-session variation alone accounts for the whole 173 → 201
+move — and the pessimistic choice stands on its original cost-asymmetry argument, now strengthened
+by the 136–562 ms range measured *within a single width*.
+
+  ➜ *** THE REVISIT TRIGGER IS REWRITTEN FROM "MORE RUNS" TO **BREADTH** — many sessions, at
+    different times of day. *** The old trigger was disproved by F-4 itself: 16,200 round trips in
+    one session could not resolve 28 ms at p99, so **one session measures one draw of what the link
+    was doing that afternoon, however large it is.**
+  ➜ **Three tail caveats withdrawn** (derivation 6, X-A, and the shape-or-magnitude table's *"unless
+    it derives a poll budget from width"*), and *** NOTHING ARGUES FOR CAPPING SLOT WIDTH ON TIMING
+    GROUNDS *** is now stated plainly in three places.
+  ➜ *** NO LANE HAS TO ACT — AND THAT IS THE POINT. *** An unchanged constant needs no propagation,
+    which is precisely why the causal claim was worth refusing rather than writing down. Had "the
+    tail widens with width" been recorded, every lane would have been asked to revisit a cap that
+    the measurement does not support.
+  ➜ **The +1.0 ms median move is kept as a real, tiny body effect** — and noted as ~4x *smaller*
+    than the across-session per-register estimate it refines (~0.009 vs ~0.040 ms/register). The
+    conservative figure stays the headline everywhere, so **nothing in the document turns on which
+    is right.**
 
 ### 📐 F-4 ANSWERED — NO WIDTH EFFECT ON THE TAIL IS DETECTABLE (2026-08-13)
 
