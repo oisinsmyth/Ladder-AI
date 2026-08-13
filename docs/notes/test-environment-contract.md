@@ -1,9 +1,14 @@
 # THE TEST-ENVIRONMENT CONTRACT — what a block must satisfy to be testable
 
-**Status: DRAFT, 2026-08-13. Phase 5.1.** This is the contract half only. **The skill that enforces
-it (`.claude/skills/`) is deliberately not written here** — that frontmatter is strict YAML with two
-silent failure modes, and it is being done separately and deliberately. §10 below says what the skill
-would have to enforce.
+**Status: DRAFT, 2026-08-13. Phase 5.1.** This is the contract half only. **The skill that enforces it
+now exists — `.claude/skills/design-for-testability/`** — and §10 below is the surface it and
+`harness-gate` implement between them. The skill's body deliberately does not live in this document.
+
+> ***AND THE TWO DRIFT.*** §10's table and the skill's gate table are *claims about code*, and the code
+> is under construction: on 2026-08-13 the built gate emitted three gates neither table listed (8c, 10a,
+> 10b), and the runner consumed four fields §2 did not name (§2.2, §2.3). **The fix for that is not to
+> trust either table** — the skill's Step 0 says to verify each verifier against `src/harness/` before
+> calling any gate CHECKED, and that instruction outranks both tables including this one.
 
 **What this is.** `PC-Client-Modbus-Spec-Draft-final.txt` §2.6 says a design can be *unobservable*,
 and that the runner will refuse a vector rather than return a meaningless green. It does not say what
@@ -50,19 +55,44 @@ Plus two guards that are not "elements" but are checked at the same gate:
 A vector is **data**, submitted atomically with its wave set (D31/DB-9). It never contains a register
 number — the author speaks **tag names** (D8).
 
+**The names below are the wire names** — the JSON an author actually writes, read
+case-insensitively. *An abstract field list is a field list an author has to guess the spelling of, and
+this document is the agreement, not a sketch of one.*
+
 ```
-Vector
-  Id                  stable identifier, unique in the submission
-  Slot                which slot (methodology) this vector is an index of
-  Index               its position in the slot's column (D26a)
-  Author              agent identity. Checked against the block's author (D6)
-  Basis               { Clause, Assertion }        -- §3, both required
-  Inputs              tag name -> value            -- what is written before T=0
-  StartBool           the slot's start bool        -- §6
-  Expectations        [ { tag, predicate, Observability, Settling } ]   -- §4, §5
-  MaxDuration         in SCANS, with a wall-clock backstop (X-B, §12a derivation 4)
-  Blacklist           [ { block, reason } ]        -- §7, add-only
-  CompressionFactor   the `comp` this vector's scan counts are stated at  -- §4.4
+Vector                        -- one element of the submission's `vectors` array
+  id                  stable identifier, unique in the submission
+  slot                which slot (methodology) this vector is an index of
+  index               its position in the slot's column (D26a)
+  author              agent identity. Checked against the block's author (D6)
+  clause              `Basis` half one: the specification clause      -- §3
+  assertion           `Basis` half two: the assertion ID              -- §3
+  assertionForm       When | Never -- the form the ENUMERATION records for it. §3; `Unstated` is REFUSED
+  inputs              tag name -> value            -- what is written before T=0
+  startBool           the slot's start bool        -- §6
+  expectations        [ { signal, nature, mode, windowScans, expected } ]   -- §4; `expected` is §2.2
+  settlingCondition   what makes the observed value FINAL   -- §5. PER VECTOR, not per expectation
+  settlingSignals     [ tag ]                               -- §5
+  maxDurationScans    in SCANS, with a wall-clock backstop (X-B, §12a derivation 4)
+  completionSignal    the block's own done-signal              -- §2.2
+  completionValue     the value on it that means "finished"    -- §2.2
+  blacklist           [ { block, reason } ]        -- §7, add-only
+  compressionFactor   the `comp` this vector's scan counts are stated at  -- §4.4
+  assertedBehaviours  [ behaviour ]   -- set-differenced against the model's `represents` (M4)
+  kills               the wrong implementation this vector would catch    -- §2.2
+
+Submission                    -- the top-level object the vectors are submitted inside
+  blockAuthor         agent identity, for D6
+  runtimeCompression  ***the `comp` THE WAVE WILL ACTUALLY RUN AT***  -- §2.3. Not any vector's
+  slotsInWaveSet          \__ feed §12a derivation 1's floor, which scales with tensor width
+  resultRegistersPerSlot  /
+  model               { id, represents, doesNotRepresent, validatedAgainstPlantData, compStable }
+  enumeration         { clauses, assertions, forms, enumerator }   -- §3
+  map                 { providedFor: signal -> [ modes ] }         -- §4.3
+  computedConflicts   [ block ]        -- D9's graph as bare names, carrying NO provenance
+  conflictEdges       [ { blockA, blockB, provenance, signal, class } ]   -- X-G, provenanced
+  blockCompression    { plantMs, budgetMs, presets, negligibleFraction }  -- §2.3
+  vectors             [ Vector ]
 ```
 
 **`MaxDuration` is not optional and is not a formality.** X-B makes it double as the per-test timeout,
@@ -112,6 +142,179 @@ Two reasons, and the second is the owner's and is the load-bearing one:
 > which describes **one** vector's data spanning several transactions **while nothing is running**,
 > and must not be read as licence for successive stimuli during a test. Worth a word in X-A if it is
 > ever rewritten.
+
+---
+
+### 2.2 The four fields the runner requires and §2 did not name — ADDED 2026-08-13
+
+**Each of these was already consumed by the runner while this document said nothing about it**, which
+is the worse half of the failure: not a field an author might omit, but a field an author could not
+know to write. All four come from the same shape.
+
+> ***A FIELD THE RUNNER READS AND THE CONTRACT DOES NOT NAME IS A DEFAULT NOBODY CHOSE.***
+
+**`expected` — the predicate, one per expectation.** §2's format sketch always listed a `predicate` and
+nothing ever specified it, so the checked type carried the field and no document could supply one.
+
+```
+expectations[ ].expected    string. The value this expectation asserts.
+                            REQUIRED. Absent is a REFUSAL at the schema gate.
+```
+
+***And the refusal is not pedantry — measured.*** With no predicate the runner mapped the absent value
+to the literal string `<no predicate>`, compared the observed value against it, and produced a
+**disagreement → FAIL**. *A vector that never said what right looks like told its author the block was
+wrong.* An expectation with nothing to compare against cannot fail, so its pass says nothing and its
+fail says something untrue. Written as a **string** and compared as declared; §2's rule stands — these
+are engineering values, never register contents.
+
+**`completionSignal` and `completionValue` — what the poll is waiting for.** §2 named neither. The
+runner watches one result register and calls the test complete when it reads a stated value; everything
+else is `TIMED-OUT`.
+
+```
+completionSignal   tag. The block's own done-signal. REQUIRED; absent is a REFUSAL.
+completionValue    integer 0..65535 (it is compared against ONE result register).
+                   REQUIRED; absent is a REFUSAL. *** THERE IS DELIBERATELY NO DEFAULT OF 1. ***
+```
+
+> 🔴 ***THE DEFAULT OF 1 IS REMOVED, AND THIS IS A DECISION AGAINST THE CONVENIENT READING.*** A
+> completion flag reading `1` is nearly universal, which is exactly what makes the default dangerous:
+> the rare block that signals completion with a state number (`Step = 90`) is compared against a value
+> nobody stated, never reaches it, and returns **`TIMED-OUT`** — whose own message says *"the condition
+> may simply never have occurred."* **That is the predicate hole one field over**: a verdict about the
+> block, produced from a fact nobody supplied. The two are the same class and cannot have different
+> treatments without the distinction being arbitrary.
+>
+> **What would reverse it:** not inconvenience, and not a corpus in which the answer is always 1 — that
+> is the case *for* requiring it. Only a runner that stops comparing the completion signal **by value**
+> (watching a rising edge instead) would leave the field with no consumer, and it should then be deleted
+> rather than defaulted.
+
+**`kills` — the wrong implementation this vector would catch.** Required by §10's mutation rule, carried
+by the checked type, and absent from §2's format. *A vector that no credible wrong implementation would
+fail only measures uptime.* REQUIRED; absent is a REFUSAL. **This one is a `JUDGEMENT` in substance and
+a schema check in mechanism** — that the string is non-empty is checkable, that it names a credible
+mutant is not.
+
+---
+
+### 2.3 `blockCompression` — X-D's block-level and model-level inputs. ADDED 2026-08-13
+
+**The gap this closes, stated plainly:** the runner computes four X-D ceilings, three of which are
+properties of the **block** and the **model** rather than of the vectors — the timer bound (the term
+X-D says *often binds first*), the model's declared `comp_stable`, and the ratio-distortion bound on
+unscaled literals. Until now **a submission document could express none of them**, so the compressed
+path was permanently `NOT CHECKED` and the gate's own refusal said *"supply them"* against a document
+with nowhere to put them. *A dead end wearing the costume of a build list.*
+
+```
+blockCompression                 OBJECT. Required whenever `runtimeCompression` > 1; ignored at 1.
+  plantMs             number > 0     T_plant  — how long the behaviour takes IN THE PLANT
+  budgetMs            number > 0     T_budget — how long the wave may spend on it
+                                     (together: comp_min = T_plant / T_budget, and comp_min is the
+                                      number to RUN AT — there is no field for comp_max, by design)
+  presets             [ { name, presetMs, source } ]   the block's dwell/debounce presets
+      name            tag or member name
+      presetMs        number > 0, the preset in MILLISECONDS
+      source          "Data" | "Literal"   -- REQUIRED. Absent is a REFUSAL; see below
+  negligibleFraction  number in (0,1]      -- ***A FRACTION, NOT A PERCENTAGE***
+
+model
+  compStable          number >= 1    -- the model's declared comp_stable (M3/M4)
+```
+
+**Why `compStable` sits on `model` and not here.** It is **the model author's number**, declared
+alongside `represents` / `doesNotRepresent` and travelling with every result as part of the fidelity
+declaration. Duplicating it into a block-scoped object would create two authorities for one figure and
+nothing would catch them disagreeing. *(Judgement. **What would reverse it:** a submission that
+legitimately carries block compression inputs and no model at all — at which point `compStable` has no
+declaring artifact and must move.)*
+
+***`negligibleFraction` is a fraction: 2.5% is `0.025`, not `2.5`.*** An author who writes `2.5` has
+declared 250% and will get a ceiling 100x too permissive, silently. **The specification names no value
+for it** — it works an example (0.003% of a four-hour interval becoming 2.5% of a twenty-second one) and
+calls the good state "negligible" without saying where negligible ends. So it has **no default and is
+never invented**: absent, the ratio-distortion bound reports `NOT DECLARED`, which above `comp = 1` is a
+refusal, not an exemption.
+
+**`source` has no fail-safe guess, which is why it is refused rather than assumed.** The two real
+answers push in **opposite directions**: a `Data` preset scales with the factor and lowers the *timer*
+ceiling, a `Literal` one does not scale at all and lowers the *ratio-distortion* ceiling. There is no
+direction in which guessing is conservative.
+
+**`presets: []` is a POSITIVE CLAIM and is not the same as an absent `presets`.** An empty array says
+*this block has no dwell or debounce preset*, so the timer and ratio-distortion ceilings genuinely
+cannot bind and the gate says so as a computed fact. An **absent** `presets` says nobody enumerated
+them, which leaves `blockCompression` incomplete — `NOT CHECKED`. *The empty claim is the author's, and
+nothing verifies it today.* **What would change that:** the block's timers are already enumerable from
+its IR, so an empty declaration contradicted by a `TON`/`TONR`/`TOF` in the block should become a
+refusal as soon as the gate can read the IR. Until then it is reported as a claim, never as a check.
+
+> 🔴 ***`model.compStable` IS REQUIRED AT `runtimeCompression > 1`, NOT AT `comp_min > 1` — AND THE
+> RUNNER TODAY KEYS ON THE WRONG ONE.*** The two are not the same number. `comp_min` is derived from
+> `plantMs / budgetMs` and is `1` whenever the behaviour already fits its budget; `runtimeCompression`
+> is what the wave is actually driven at, and it may legitimately exceed `comp_min` (the gate even
+> prints a note when it does). **Measured on the built code: a wave at `runtimeCompression = 8` whose
+> `comp_min` is 1 passes with no `comp_stable` declared at all** — the model is being asked to behave at
+> 8x on nobody's authority, and the plan's model bound is filed *reported-but-not-gating* because
+> `comp_min` said 1. That contradicts the runner's own recorded resolution that these ceilings key on
+> the **runtime** factor. **The contract's rule is the runtime factor.** Named here rather than worked
+> around: it is a harness defect, and until it is fixed a green on this bound at `comp_min = 1` is worth
+> less than it looks.
+
+**No timing constant appears above, deliberately.** The timer floor is `k x scan_period`; read `k` and
+the scan period from **§12a derivation 5**, which is also where the correction lives that moved this
+floor and cut a 500 ms preset's ceiling from the 10x X-D assumed to roughly 4.3x. *A contract that
+restates it will one day refuse the wrong vectors with great confidence.*
+
+---
+
+### 2.4 ***EVERY ABSENT FIELD HAS A DECIDED TREATMENT, AND NONE OF THEM IS A DEFAULT***
+
+> ***"0 FINDINGS" AND "NOBODY SAID" MUST NEVER PRODUCE THE SAME OUTPUT.***
+
+This is the one table to read before omitting anything. Four treatments, and they are different facts:
+
+| treatment | means | verdict effect |
+|---|---|---|
+| **REFUSED** | the check needs it and the vector is where it belongs. *A pass would say nothing and a fail would lie* | NOT ADMISSIBLE — **fix the vector** |
+| ***NOT CHECKED*** | the input belongs to another artifact (the enumeration, the graph, the block) and a resubmission of the *vector* cannot supply it | NOT ADMISSIBLE — **fix that artifact**. Never a pass |
+| **NOT DECLARED** | a bound nobody computed. ***It is not a ceiling of infinity*** | blocks whenever compression is applied |
+| **reported, does not gate** | computed to be unable to bind, and printed anyway so an absent line never reads as a check that passed | admissible |
+
+| what is absent | treatment | why that one |
+|---|---|---|
+| an expectation's `expected` (predicate) | **REFUSED** | the check needs it; a pass would say nothing and a fail would lie |
+| `completionValue` / `completionSignal` | **REFUSED** | §2.2 — the same shape, one field over: an unstated value yields `TIMED-OUT` on a healthy block |
+| `kills` | **REFUSED** | §10 requires mutation and this is the only mechanism for it |
+| a vector's `assertionForm` (i.e. `Unstated`) | **REFUSED** | the vector had one field to fill and left it. *A dropped form fails the same comparison as a wrong one* |
+| `enumeration.enumerator` | ***NOT CHECKED*** | a property of the **enumeration**; reporting it refused sends the author to edit the wrong artifact |
+| `enumeration.forms` | ***NOT CHECKED*** | the flat projection simply carries no form to be the authority |
+| a form for the **cited** assertion | **REFUSED** | the comparison cannot be made, and an uncomparable form is not a passing one |
+| `computedConflicts` **and** `conflictEdges` both | ***NOT CHECKED*** | a blacklist compared against an absent graph is a blacklist nobody checked |
+| provenance on a conflict edge | ***NOT CHECKED*** | *"0 multi-writer findings"* and *"nobody recorded why these conflict"* produce identical empty reports |
+| `blockCompression`, at `runtimeCompression` > 1 | ***NOT CHECKED*** | three ceilings compared against nothing |
+| `blockCompression`, at `runtimeCompression` = 1 | **CHECKED, a real pass** | nothing is scaled, so none of the three *can* bind — **computed from the submission, not assumed** |
+| a preset's `source` | **REFUSED** | the two real answers push OPPOSITE ways; there is no fail-safe guess |
+| `negligibleFraction` | **NOT DECLARED, never invented** | the spec works an example and never says where negligible ends |
+| `model.compStable`, at `runtimeCompression` > 1 | **REFUSED** | the plan is asking a model to run at a rate nobody declared *(and see §2.3's 🔴 — the runner keys this on `comp_min` today, which is a hole)* |
+| `model.compStable`, at `runtimeCompression` = 1 | **reported, does not gate** | nothing is scaled, so it cannot bind — computed, not assumed |
+| a latched or stamped expectation's `windowScans` | **NOT DECLARED** | legal (exempt from the floor, §4.2) and it still yields no assertion ceiling |
+| a **sampled** expectation's `windowScans` | **REFUSED** | undeclared is not exempt |
+
+**One field is a genuine default and is named as such: none.** *(`presets: []` is a claim, not a
+default; `runtimeCompression`, `slotsInWaveSet` and `resultRegistersPerSlot` default to 1 as the
+smallest real wave, and each is reported in the gate's own output rather than assumed silently.)*
+
+***A partially-supplied object is not a partially-checked one.*** `blockCompression` missing a
+`plantMs` or a `budgetMs` is an **incomplete object**, and the whole of gate 10b is then `NOT CHECKED` —
+not a plan computed from a zero. **The runner today reaches this by a different road** (a non-positive
+`plantMs` throws, and the CLI reports `NOTHING EXAMINED`, exit 2, rather than `NOT ADMISSIBLE`, exit 1).
+Both fail closed and neither is a pass, so the gap between them is between **two failing states** — but
+the diagnostic is worse than it should be, and the fix is the document's own stated rule: *every field
+nullable on the way in, so a missing one reaches the gate as MISSING rather than as a default.* Owed by
+the harness.
 
 ---
 
@@ -236,7 +439,7 @@ conceals: below the floor you get nothing, but at the boundary you get something
 **So the contract requires a settling declaration distinct from the completion condition:**
 
 ```
-Settling
+Settling      -- PER VECTOR (`settlingCondition` + `settlingSignals`), not per expectation
   Condition   what makes the observed value FINAL
               e.g. "value unchanged across N consecutive scans"
                    "the block's own <tag> has fallen"
@@ -466,7 +669,19 @@ of saying so.
 | **settling** | declaration exists; **is not the completion flag alone** | reject, citing phase 2's `Done`-at-10-ramps-to-15 |
 | **start bool** | exactly one per slot; bound by name; later-scan rule against the observed counter | reject |
 | **blacklist** | add-only against computed disjointness; every entry has a reason | reject the *entry*, not the vector |
+| **8c multi-writer provenance** (X-G) | every conflict edge records WHY the two blocks conflict, on which signal, and whether that signal is part of the deliverable | ***the FINDING is reported, not refused*** — the defect is in the deliverable, not in the submission. **An UNPROVENANCED graph is `NOT CHECKED`** and fails closed |
+| **10a assertion ceiling** (X-D) | the run-time `comp` is under every vector's own `T_event / scan_period` ceiling | reject, naming the binding signal and the ceiling. **Catches what gate 5 structurally cannot: LATCHED is exempt from the observability floor, never from the scan-period term** |
+| **10b timer / model / ratio ceilings** (X-D) | at `runtimeCompression` > 1, the block's presets, the model's `comp_stable` and the ratio-distortion threshold (§2.3) | reject with `comp_min` **and** `comp_max` shown. Absent inputs are `NOT CHECKED`, never a pass. At `comp` = 1 a real computed pass |
 | **liveness** *(post-run)* | stimulus check present; counter advanced by the expected amount; manifest presence | verdict `STALE`, never `PASS` |
+
+**Two properties of this table, both learned by getting them wrong.** *(a)* **The gate that reports on
+clean input too.** 8c prints its finding line on a clean graph as well, for the same reason F-6's
+collapse report prints its no-collapse line: *a report that appears only on bad news teaches its reader
+that absence means "not run".* *(b)* **10a and 10b are not one gate split for tidiness.** 10a is a
+property of the **vectors** and a submission can always answer it; 10b is a property of the **block and
+the model**, and §2.3 exists because a submission could not answer it at all.
+
+**Absent inputs: §2.4 is the single table**, and no gate above may invent a treatment that is not in it.
 
 **Two properties the skill must have, both learned the hard way here:**
 

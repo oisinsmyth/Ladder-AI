@@ -73,7 +73,7 @@ Contract §10's surface, in the order a submission meets it, with the **verifier
 | 1 | **schema** | every §2 field present and typed; `MaxDuration` non-empty | `SubmissionGate` — **`harness-gate check`** | **CHECKED** |
 | 2 | **authorship (D6)** | vector author ≠ block author | `AgentIdentity` — **normalised**, so a case/whitespace variant no longer passes it | **CHECKED** |
 | 3 | **basis — clause** | resolves to written text | `Admissibility` against `AssertionEnumeration`, populated from the submission's `enumeration` block | **CHECKED** |
-| 3b | **basis — assertion** | ID drawn from the spec-derived enumeration, never free text | same. An empty enumeration is a **refusal** | **CHECKED** |
+| 3b | **basis — assertion** | ID drawn from the spec-derived enumeration, never free text | same. An empty enumeration is a **refusal**. ⚠️ **The tool emits 3 and 3b as ONE line** — `3 basis — clause AND assertion` — so do not go looking for a `3b` in its output and do not report one as missing | **CHECKED** |
 | 3c | *is the assertion a faithful reading of the clause?* | — | **nothing, ever** | **JUDGEMENT** |
 | **3d** | **enumerator independence** | the enumeration's author ≠ the block's author and ≠ any vector's author — otherwise D6 is lost **at the denominator** and citing into it buys nothing | `AgentIdentity`, **normalised** — measured: `"AGENT-B "` against a vector author `agent-b` is **REFUSED**, so a case or trailing-space variant does not slip past | **CHECKED** *(NOT CHECKED without `enumeration.enumerator`)* |
 | **3e** | **assertion form authority** | the vector's declared `assertionForm` must match the form the **enumeration** records for the assertion it cites | `AssertionEnumeration` — the enumeration is the authority, so the vector can no longer declare its own form and take the permissive path | **CHECKED** *(NOT CHECKED without `enumeration.forms`)* |
@@ -84,7 +84,10 @@ Contract §10's surface, in the order a submission meets it, with the **verifier
 | 7 | **start bool** | exactly one per slot; bound by NAME; raised a later scan than the inert-establish, against the **observed** counter | `SubmissionGate` for the first two. **The later-scan rule is RUN-TIME** (`InertPhase`) and is reported as such, never claimed at submission | **CHECKED** (submission half) |
 | 8 | **blacklist** | add-only against computed disjointness; every entry has a reason | `SubmissionGate`. ***Add-only is a property of the TYPE*** — `BlacklistEntry` carries no negation, so a removal cannot be expressed. **An ABSENT conflict graph is NOT CHECKED**, not a pass | **CHECKED** *(NOT CHECKED without `computedConflicts`)* |
 | 8b | *is it over-broad?* | — | density, reported not gated | **JUDGEMENT** |
+| **8c** | **multi-writer provenance (X-G)** | every conflict edge records WHY two blocks conflict, on which signal, and whether that signal SHIPS | `ConflictGraph`. ***The teeth are on the ABSENCE of provenance***: a multi-writer FINDING on a deliverable signal is **reported, not refused** (the defect is in the deliverable, and a vector author cannot fix it), while an **unprovenanced graph is NOT CHECKED** — *"0 findings"* and *"nobody recorded why"* are the same empty report | **CHECKED** *(NOT CHECKED without provenance on every edge)* |
 | 9 | **liveness** *(post-run)* | stimulus check; counter advanced **by the expected amount**; manifest presence | `StimulusCheck`, at run time. **The separable half is now a submission gate**: a vector whose liveness could never be established is refused *before* a wave is spent | **CHECKED** (preconditions) **+ CHECKED at run time** |
+| **10a** | **time compression — assertion ceiling (X-D)** | the run-time `comp` is under every vector's own `T_event / scan_period` ceiling | `TimeCompression`. ***It catches what gate 5 structurally cannot:*** gate 5 exempts LATCHED and STAMPED from the observability floor, correctly — **X-D does not exempt them from the SCAN-PERIOD term.** An event compressed below one scan is not long enough to be latched either, so a latched declaration that clears gate 5 at every factor can still be void at the one being run | **CHECKED** |
+| **10b** | **time compression — timer / model / ratio ceilings (X-D)** | at `runtimeCompression` > 1: the block's timer presets (`PT / (k x scan)` — the term **X-D says often binds first**), the model's `comp_stable`, and the ratio-distortion bound on unscaled literals | `TimeCompression.Plan`, from contract **§2.3**'s `blockCompression` + `model.compStable`. **At `comp` = 1 this is a REAL computed pass** (nothing is scaled, so none of the three can bind). **Above 1 with the inputs absent it is NOT CHECKED and fails closed** | **CHECKED** *(NOT CHECKED without `blockCompression`, above comp 1)* |
 
 ### The command
 
@@ -112,6 +115,23 @@ The two are different facts and the gate distinguishes them. Measured on the bui
 | `enumeration.forms` | ***NOT CHECKED*** | same — the flat projection simply carries no forms to be the authority |
 | a vector's `assertionForm` (i.e. `Unstated`) | ***REFUSED*** | the vector had one field to fill and left it |
 | a form for the **cited** assertion, or `Unstated` on either side | ***REFUSED*** | the comparison cannot be made, and an uncomparable form is not a passing one |
+| an expectation's `expected` (the predicate) | ***REFUSED*** | measured: a null predicate became the literal `<no predicate>`, was compared against the observed value, and produced a **FAIL** — *a vector that never said what right looks like told its author the block was wrong* |
+| `completionValue` / `completionSignal` | ***REFUSED*** | the same shape one field over: an unstated value yields **`TIMED-OUT`** on a healthy block. **Contract §2.2 removed the default of 1** — a near-universal default is what makes the rare `Step = 90` block invisible |
+| `kills` | ***REFUSED*** | §10 requires mutation and this is the only mechanism there is |
+| the conflict graph (both `computedConflicts` and `conflictEdges`) | ***NOT CHECKED*** | a blacklist compared against an absent graph is a blacklist nobody checked |
+| provenance on any conflict edge | ***NOT CHECKED*** | *"0 multi-writer findings"* and *"nobody recorded why these conflict"* are the same empty report |
+| `blockCompression`, at `runtimeCompression` > 1 | ***NOT CHECKED*** | three of X-D's four ceilings compared against nothing |
+| `blockCompression`, at `runtimeCompression` = 1 | **CHECKED — a real pass** | nothing is scaled, so none of the three *can* bind. **Computed from the submission, not assumed** |
+| a preset's `source` (`Data`/`Literal`) | ***REFUSED*** | the two answers push OPPOSITE ways — a data preset lowers the timer ceiling, a literal one lowers the ratio-distortion ceiling. No fail-safe guess exists |
+| `negligibleFraction` | **NOT DECLARED, never invented** | the spec works an example and never says where "negligible" ends. Above comp 1 this blocks; it is not an exemption |
+| `model.compStable`, above comp 1 | ***REFUSED*** | the plan is asking a model to run at a rate nobody declared |
+
+**Contract §2.4 is the single authoritative version of this table** — it covers the document fields this
+one omits, and no gate may invent a treatment that is not in it. The four treatments are different
+facts: **REFUSED** (fix the vector) · ***NOT CHECKED*** (fix another artifact — never a pass) ·
+**NOT DECLARED** (a bound nobody computed, ***which is not a ceiling of infinity***) ·
+**reported-but-not-gating** (computed to be unable to bind, and printed anyway so an absent line never
+reads as a check that passed).
 
 > 🔴 ***AND THIS IS WHY `AssertionForm.Unstated` IS THE ZERO VALUE.*** It used to be `When = 0`, so an
 > omitted field was silently handed **the permissive form** — the exact hole 3e exists to close,
@@ -144,12 +164,22 @@ Run this even where the gate is NOT CHECKED. A recorded judgement is worth havin
 verification, and you must not label it as one.
 
 ### Gate 1 — schema
-Every field of contract §2 present: `Id`, `Slot`, `Index`, `Author`, `Basis{Clause,Assertion}`,
-`Inputs`, `StartBool`, `Expectations[{tag, predicate, Observability, Settling}]`, `MaxDuration`,
-`Blacklist`, `CompressionFactor`. **`MaxDuration` is not a formality** — X-B makes it the per-test
-timeout and DB-13 needs it for wave length, so a vector without one can neither be packed nor bounded.
-Its wall-clock backstop is **computed** per §12a derivation 4, outlier allowance included; a trimmed
-allowance is a finding.
+Every field of contract §2 present, in the wire spelling the runner reads: `id`, `slot`, `index`,
+`author`, `clause`, `assertion`, `assertionForm`, `inputs`, `startBool`,
+`expectations[{signal, nature, mode, windowScans, expected}]`, `settlingCondition` +
+`settlingSignals` (**per vector, not per expectation**), `maxDurationScans`, `completionSignal`,
+`completionValue`, `blacklist`, `compressionFactor`, `assertedBehaviours`, `kills`.
+
+**`MaxDuration` is not a formality** — X-B makes it the per-test timeout and DB-13 needs it for wave
+length, so a vector without one can neither be packed nor bounded. Its wall-clock backstop is
+**computed** per §12a derivation 4, outlier allowance included; a trimmed allowance is a finding.
+
+***And four of those fields were consumed by the runner before §2 named them at all*** (contract §2.2,
+§2.3, added 2026-08-13): `expected`, `completionSignal`, `completionValue` and `kills`. **All four are
+REFUSALS when absent, and the completion pair no longer defaults to 1** — the near-universal default is
+exactly what made the rare block that signals completion with a state number invisible, returning
+`TIMED-OUT` on a healthy block. *A field the runner reads and the contract does not name is a default
+nobody chose.*
 
 ### Gate 2 — authorship (D6)
 Vector author ≠ block author. **A match is a refusal, not a warning** — this is the correlated check
@@ -210,6 +240,47 @@ Every entry carries a **reason** — the failure mode is defensive over-blacklis
 collapsing toward serial, and nobody noticing *because it still works*. Note for the author: the
 blacklist names **blocks**, but admission colours **slots**, so naming a block excludes every slot
 testing it — usually what was meant, occasionally much wider.
+
+### Gate 8c — multi-writer provenance (X-G)
+Two blocks that both write one coil are a conflict, so the packer puts them in different tensors and
+**both tests pass** — ***the scheduler has silently repaired a defect that will ship.*** So the graph
+must carry, per edge, **why** the two conflict, **on which signal**, and **whether that signal is part
+of the deliverable**.
+
+- **A finding is REPORTED, NOT REFUSED**, and that is a decision: the defect is in the *deliverable*,
+  not in the submission, and refusing here would make a vector author answerable for a program defect
+  they cannot fix. **Whether it should instead be a hard refusal is an open owner question** — flag it,
+  do not settle it. *(It is in tension with the standing "a warning is not a gate" rule; the reading
+  taken is that this warning is about a program the vector author cannot repair.)*
+- ***The teeth are on the ABSENCE of provenance.*** An unprovenanced graph is **NOT CHECKED**: a bare
+  block list and a fully-analysed clean graph produce the identical empty report, and only one of them
+  means anything. Note that `computedConflicts` (bare names) is *legal and unprovenanced* — mixing it
+  with `conflictEdges` leaves the packing set complete and 8c NOT CHECKED, which is the honest answer.
+
+### Gates 10a and 10b — time compression (X-D)
+***A scan count and the `comp` it was stated at are ONE FACT.*** The hazard runs in both directions and
+the same arithmetic causes both: as `comp` **rises** an observation window crosses the observability
+floor and **a missed assertion is reported as a PASS**; as `comp` **falls** the wall-clock backstop
+under-sizes and a healthy test **`TIMED-OUT`s, and is believed**.
+
+- **10a is the vectors' own ceiling and a submission can always answer it.** It catches the case gate 5
+  structurally cannot: ***LATCHED is exempt from the observability floor, never from the scan-period
+  term.*** An event compressed below one scan of real time is not long enough to be latched either, so
+  a latched declaration that clears gate 5 at every factor can still be void at the one being run.
+- **10b belongs to the BLOCK and the MODEL**, and until contract §2.3 there was no way to state it:
+  timer presets, `model.compStable`, and the ratio-distortion threshold on unscaled literals. **At
+  `runtimeCompression` = 1 it is a real computed pass; above 1 with the inputs absent it is NOT
+  CHECKED.**
+- ***USE `comp_min`, NOT `comp_max`.*** The ceiling is a limit, never a target — compression is a
+  fidelity risk and the remainder is margin. There is deliberately no member of the plan that
+  recommends the ceiling.
+- **Read every figure from §12a derivation 5, never from memory.** The measured timer floor is higher
+  than X-D assumed, which pulls a 500 ms preset's ceiling from 10x down to roughly 4.3x — *every
+  marginal case moved toward REFUSE, so a remembered number is a permissive number here.*
+- 🔴 **Known hole, do not paper over it:** 10b's model bound keys on `comp_min` in the built code and on
+  `runtimeCompression` in the contract. **They differ**, and a wave at `runtimeCompression = 8` whose
+  `comp_min` is 1 passes today with **no `comp_stable` declared at all**. If a submission runs above
+  `comp_min`, treat the model ceiling as **NOT CHECKED by hand** whatever the tool printed.
 
 ---
 
@@ -309,18 +380,24 @@ turns on one, escalate rather than picking a reading.
    `{PersistentState, Transient, Coincidence}` — *what the signal is like*. Nothing maps them. The
    natural reading is Transient⇒Latched required, Coincidence⇒Stamped required, PersistentState⇒Sampled
    permitted, **but the contract never says so and no code uses the mode names at all.**
-3. **`Kills` is in the code and absent from §2's format.** §10 requires mutation testing and `Kills` is
-   the only mechanism for it that exists. This skill requires it; whether the contract meant to drop it
-   is unresolved.
+3. ✅ **RESOLVED 2026-08-13 — `kills` is now in contract §2 (§2.2), REQUIRED, and absent is a refusal.**
+   So are `expected`, `completionSignal` and `completionValue`, all four of which the runner consumed
+   while §2 named none of them. **Contract §2.3 adds `blockCompression` + `model.compStable`**, without
+   which the compressed path was permanently NOT CHECKED. *If a submission predates these, it will fail
+   the schema gate for a good reason — do not tell the author the tool is wrong.*
 4. **"Agent identity" is undefined.** D6 turns on vector author ≠ block author, and the code compares
    two strings with `StringComparison.Ordinal`. What makes two agents different — session, model,
    worktree? **Ordinal equality on an unspecified string is a gate that is passed by typing a different
    string.**
-5. **The "map's observability declarations" (§4.3) has no home.** No artifact in the repo is that. An
-   author cannot check their signal is in a list they cannot find.
-6. **The spec-derived assertion enumeration has no source.** `AssertionEnumeration` is a type with a
-   factory; **nothing populates it from a file.** An author cannot cite into an enumeration they cannot
-   read, and §3's whole decorrelating argument rests on citing into it.
+5. **The "map's observability declarations" (§4.3) — half resolved.** The submission's `map.providedFor`
+   is now that list, and gate 5 checks against it. **What is still open is who fills it in:** it is
+   supposed to be built by the coordinator *from the copy layer it generated*, and a submission in which
+   the vector's own author typed it is a declaration checked against itself. Ask which it was.
+6. **The spec-derived assertion enumeration — half resolved.** The submission's `enumeration` block
+   populates it, and `docs/notes/assertion-enumeration.md` defines the decomposition. **The remaining
+   hole is the same one:** nothing binds that block to an enumeration produced by a third party, beyond
+   the `enumerator` identity string gate 3d compares. **The flat projection (clauses + assertions, no
+   `forms`) is legal and costs two gates** — 3d and 3e go NOT CHECKED against it.
 7. **"reject" vs "refuse" in §10's on-failure column** are used differently — *refuse* is emphasised for
    authorship and observability — but `RefusalReason` treats every gate identically. Treated here as one
    outcome (not admissible); if they are meant to differ, §10 should say how.
