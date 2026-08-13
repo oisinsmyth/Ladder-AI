@@ -202,6 +202,15 @@ running does not license:
     ➜ Same lane, same shape, worth pairing: **the converter is an authority on grammar, not on types**
       — measured, because it converted `MOVE(IN := <Bool>)` at exit 0 while TIA refused it. **Knowing
       exactly what a green from a given tool does NOT cover is what makes the green usable.**
+- *** NOT ALL FAILURES GET INVESTIGATED — PREFER THE ONE THAT INVITES AN ARGUMENT. *** Named
+  2026-08-13 and now the stated reason behind several refusals here: *** A `FAIL` INVITES AN ARGUMENT
+  AND SOMEBODY LOOKS. A `TIMED-OUT` READS AS "THE CONDITION NEVER OCCURRED" AND CLOSES THE QUESTION. ***
+  So a spurious `TIMED-OUT` is worse than a spurious `FAIL`, even though both are wrong and the
+  timeout is the more cautious-sounding of the two.
+    ➜ **When choosing which way a check fails, ask which verdict a tired reader will act on.** The
+      correct-but-ignorable outcome is not safer than the arguable one.
+    ➜ Consequence adopted throughout: **refuse rather than mis-compare.** A comparison that cannot be
+      made must not be reported as a comparison that came out negative.
 - *** A WIDTH ERROR WRAPS; AN ORDER ERROR ANNOUNCES ITSELF. *** Same day, on the same 32-bit path:
   81 duration values in the deliverable set exceed 65 535 ms. A **narrow** mapping does not error —
   *** `75 000 ms` ARRIVES AS `9 464 ms`, EVERY BOUNDARY FIRES EARLY, AND THE RUN RETURNS A CONFIDENT
