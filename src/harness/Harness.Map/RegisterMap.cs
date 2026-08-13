@@ -244,6 +244,28 @@ public sealed record RegisterMap(
         ("results", ResultBlock),
     };
 
+    /// <summary>
+    /// Which region a register belongs to — <b>the map's own answer, so nothing downstream has to
+    /// re-derive it.</b>
+    ///
+    /// <para>Used by <see cref="MirrorWriteTarget"/> to say, in a refusal, which region a bad span would
+    /// have landed in. That matters because the region immediately after the vectors is the RESULTS, and a
+    /// write that lands there corrupts an observation rather than failing.</para>
+    /// </summary>
+    public MirrorRegion RegionOf(int register)
+    {
+        if (Contains(Version, register)) return MirrorRegion.Version;
+        if (Contains(ScanCounter, register)) return MirrorRegion.ScanCounter;
+        if (Contains(StartBools, register)) return MirrorRegion.StartBools;
+        if (Contains(StartEcho, register)) return MirrorRegion.StartEcho;
+        if (Contains(VectorBlock, register)) return MirrorRegion.Vector;
+        if (Contains(ResultBlock, register)) return MirrorRegion.Result;
+
+        return MirrorRegion.Unmapped;
+
+        static bool Contains(RegisterRange range, int r) => r >= range.Register && r < range.End;
+    }
+
     /// <summary>Total registers the map occupies, from register 0.</summary>
     public int TotalRegisters => ResultBlock.End;
 

@@ -121,10 +121,13 @@ public sealed class MirrorClient
                 $"slot {slotIndex} was allocated {slot.Vector.Length} vector register(s) and {values.Length} were offered. The map is the bound, and a write past it would land in the next slot's region.");
         }
 
+        // The chunking arithmetic is the one place a write span is computed rather than named, so each
+        // chunk is re-derived through MirrorWriteTarget.Vector, which refuses anything leaving the vector
+        // region. The region after the vectors is the RESULTS.
         for (var written = 0; written < values.Length; written += ModbusLimits.MaxWriteRegisters)
         {
             var chunk = values[written..Math.Min(written + ModbusLimits.MaxWriteRegisters, values.Length)];
-            Write(slot.Vector.Register + written, chunk);
+            Write(MirrorWriteTarget.Vector(_map, slotIndex, written, chunk.Length), chunk);
         }
     }
 
@@ -148,18 +151,18 @@ public sealed class MirrorClient
 
         // One FC16, always. The allocator refuses any wave set where it would not be: split across two
         // transactions it stops being a commit, and a torn data phase stops being a detectable non-event.
-        Write(_map.StartBools.Register, word);
+        Write(MirrorWriteTarget.StartBools(_map), word);
     }
 
     /// <summary>Lower every start bool. The reset level D33 holds asserted for the whole inert period.</summary>
-    public void LowerAllStartBools() => Write(_map.StartBools.Register, new ushort[_map.StartBools.Length]);
+    public void LowerAllStartBools() => Write(MirrorWriteTarget.StartBools(_map), new ushort[_map.StartBools.Length]);
 
     /// <summary>
     /// Clear every echo latch. D33: "latches are released, and the release must COMPLETE before the
     /// first scan of the test" — so this happens during inert, while the start bools are low and the
     /// copy layer's set-coils cannot be firing.
     /// </summary>
-    public void ClearStartEcho() => Write(_map.StartEcho.Register, new ushort[_map.StartEcho.Length]);
+    public void ClearStartEcho() => Write(MirrorWriteTarget.StartEcho(_map), new ushort[_map.StartEcho.Length]);
 
     /// <summary>Read one slot's results. One FC03.</summary>
     public ushort[] ReadResults(int slotIndex) => ReadResults(new SlotSpan(slotIndex, 1))[0];
@@ -228,9 +231,43 @@ public sealed class MirrorClient
         return _transport.ReadHoldingRegisters(register, count);
     }
 
-    private void Write(int register, ushort[] values)
+    /// <summary>
+    /// 🔴 <b>THE ONLY WRITE IN THIS CLIENT, AND IT CANNOT BE POINTED AT A RESULT REGISTER.</b>
+    ///
+    /// <para><b>It used to take a bare register number.</b> That made "the harness never writes the result
+    /// registers" a property of our code and nothing else — <i>a convention, and a convention is not a
+    /// fence</i>. Any future line in this class could have addressed a result register, and the failure
+    /// mode is not an exception: the observation is overwritten and the run reports <b>the harness's own
+    /// value as the block's behaviour</b>, quietly and plausibly.</para>
+    ///
+    /// <para><b>Now it takes a <see cref="MirrorWriteTarget"/>, which has a private constructor and no
+    /// factory that produces a result span.</b> A result write is therefore not refused here — it is
+    /// unaddressable, the same shape as this class's split-read guard and as <c>WireTiming.BackstopMs</c>
+    /// having no bare-<c>int</c> overload. <c>MirrorWriteTargetTests</c> pins that by reflection, because
+    /// re-adding a register-taking overload beside this one is the entire hole and no behavioural test
+    /// would notice it.</para>
+    ///
+    /// <para><b>The assertion below is deliberately unreachable</b> and is kept as the last line of the
+    /// argument rather than as a working check: if a factory is ever added that can produce a result span,
+    /// this throws instead of writing. It is tested directly, since nothing can reach it by construction.</para>
+    ///
+    /// <para>⚠️ <b>THIS PROTECTS THE EVIDENCE FROM US, AND FROM NOBODY ELSE.</b> FC03 holding registers are
+    /// read-write to every Modbus master on the network and <c>MB_SERVER</c> 5.3 exposes exactly one area
+    /// pointer (<c>MB_HOLD_REG</c>), so results cannot be moved to a read-only space. The copy layer
+    /// rewriting every result register every scan is <b>self-correcting, not a fence</b>: a stray write is
+    /// erased within ~23 ms, and a read inside that window still sees the forged value.</para>
+    /// </summary>
+    private void Write(MirrorWriteTarget target, ushort[] values)
     {
+        if (target.Region == MirrorRegion.Result)
+        {
+            throw new WireException(
+                $"a write was addressed at {target}, which is a RESULT region. No factory on MirrorWriteTarget can produce one, "
+                + "so reaching this means a factory was added that can — and a client write to a result register does not fail, "
+                + "it overwrites an observation and makes the run report the harness's own value as the block's behaviour.");
+        }
+
         RoundTrips++;
-        _transport.WriteHoldingRegisters(register, values);
+        _transport.WriteHoldingRegisters(target.Register, values);
     }
 }
