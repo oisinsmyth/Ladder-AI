@@ -2950,6 +2950,57 @@ lane refused to turn a compile-rate extrapolation into a recovery-time figure.
 to baseline; rig on the F-1 ordered build, `Running (8)` read from the device. Only read-only
 operations and one `--dry-run`, which never contacts Portal.
 
+### ✅ THE QUEUE AND THE MARKER ARE ONE ATOMIC FILE — 2026-08-13 (`a52bff5`, `c20a6c2`, `94ceada`)
+
+**168 → 177 tests.** Temp file **in the same directory** → `WriteThrough` + `Flush(flushToDisk:true)`
+→ **rename over the destination**. *** THE ORDERING IS THE POINT: CONTENT DURABLE BEFORE PUBLICATION. ***
+Same directory deliberately — **a cross-volume rename is a copy, and a copy is not atomic** — and if
+the temp cannot be created there the save **fails** rather than falling back to in-place.
+
+**The honest limit, stated rather than implied:** .NET has no portable directory fsync on Windows, so
+the *rename's* durability across a **power cut** cannot be forced. **Safe direction, and that is the
+point:** *a lost save leaves a coherent older state where a half-write leaves an incoherent new one.*
+Does not apply to the process-death case X-C names.
+
+> #### 🔴 THE ATOMICITY TESTS DID NOT TEST ATOMICITY — a mutation proved it
+>
+> *** REPLACING THE WHOLE TEMP-THEN-RENAME WITH A PLAIN IN-PLACE WRITE LEFT THE SUITE GREEN. *** The
+> failed-publish test passed **for the wrong reason** (a locked destination fails at *open*, so the old
+> file survives either way), and the debris test is **trivially satisfied by never creating a temp**.
+> *** NOTHING OBSERVED THE ORDERING, WHICH IS THE ENTIRE GUARANTEE. ***
+>
+> Fixed with an internal seam fired *after flush, before rename*, and a test asserting that **at that
+> instant the new state is already complete elsewhere AND the destination is still byte-for-byte the
+> previous whole state.** Re-run of the mutation: **red, and only that test.**
+
+> #### 🔴 A HOLE BOTH OLD FORMATS HAD, FOUND ONLY BY THE MERGE
+>
+> *** TRUNCATION AT 2,359 OF 2,360 BYTES — LOSING ONLY THE FINAL NEWLINE — PARSED AS COMPLETE. ***
+> Neither old format could have caught it: the marker's walk asserted only `WaveWasInProgress`, **which
+> is equally true of a marker that parsed fine.** It took the queue half, whose torn state must read
+> *unusable*, to make the assertion bite. **The sentinel must now be TERMINATED, not merely present.**
+
+**Point 3 — a strengthening, not an over-reach.** The case it costs (corrupt marker, intact queue) was
+reachable *because a torn write hits one file*; under one atomically-renamed file that state **cannot be
+produced by a tear at all** — only by media corruption or tampering, and *** A FILE DAMAGED IN ONE
+REGION IS NOT EVIDENCE ABOUT ANOTHER REGION. *** Cost asymmetry decides it: voiding the queue costs a
+re-submission of work the agents still hold; trusting half a damaged file costs **running a wave against
+a queue that may be wrong, silently.** Separating them again inside one file would need per-section
+checksums and terminators — **deliberately not built, because what it buys is permission to trust part
+of a file known to be damaged.**
+
+**Migration refused:** legacy two-file state yields `LegacyTwoFileStatePresent` with **nothing loaded,
+not even the parsable half** — checked *before* the merged file is opened, refusal names the files, and
+`format=1` is refused **by name** as the two-file era.
+
+**Every assertion from both deleted test files survives in the merged suite** — that is the evidence
+this was a container change rather than a semantic one. The one deliberate semantic change is stated
+where it occurs: completing a wave writes `wave=none` instead of deleting the file.
+
+  ➜ **Named as untested:** the rename's core property — *a concurrent reader never sees a half-new
+    file* — is **argued from Win32 semantics, not demonstrated**. A real demonstration needs a reader
+    racing a save, which would be flaky as a unit test.
+
 ## PHASE 5 — FIRST REAL VALUE
 
 **This is the milestone that matters. Everything before it is infrastructure.**

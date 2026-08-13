@@ -81,6 +81,7 @@ minutes; five messages over an hour costs them the afternoon.
 | Waited on a merge while three unblocked items sat idle | Treated one blocked lane as everything blocked | The rule at the top |
 | A commit swept another agent's staged files, twice | `git add` + bare `git commit` commits the **whole index**, which is shared | `git commit -- <paths>`. New files need `git add` first |
 | Asked for rulings on `hmi-compile`, `Normalizer`, legacy migration | Reversible, low-stakes, inside the spec | Decide, record the reasoning, report after |
+| A mutation test's `git checkout` restore **silently reverted uncommitted work in the same file** — removing the very seam the test needed, between two runs of the same mutation | `git checkout <file>` restores the file, not the mutation; anything else uncommitted in it goes too | **Grep for your own change before trusting the next mutation result.** Commit the seam first, or mutate a file you are not also editing |
 | A lane's driver picked up **another lane's in-progress Debug DLLs** and computed its inputs one register off | One agent per *component* does not cover a shared **build output** or a **gitignored scratch dir** — both are outside the rule's reach | A lane that consumes another component's code **extracts it at an explicit commit into its own directory, builds it there, and reports the SHA**. Never reference the live tree or a `bin/` under it |
 
 ---
