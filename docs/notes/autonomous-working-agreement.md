@@ -136,6 +136,10 @@ running does not license:
       read ABSENT from the binary and would have been reported as a stale build. *** A FALSE
       "STALE BINARY" IS THE SAME CLASS OF ERROR AS A FALSE GREEN. *** Pick an interpolated
       literal from an output path, and confirm it is one before trusting its absence.
+      ⚠️ *** AND CHECK THE RIGHT ASSEMBLY. *** Measured the same day: a CLI exe was **older than the
+      last commit to its own component** and read stale by timestamp — it was not. The gate names
+      lived in the **library** the shim calls, not in the shim. **Checking the wrong assembly
+      produces a false "stale binary" just as a comment string does.**
     ➜ **And an optional parameter is an invitation.** The same defect had six call sites that simply
       never passed the type; making the parameter **required** fixed the class, where fixing six
       omissions would have left the seventh to be written next year.

@@ -57,7 +57,7 @@ phase 2 with the copy-layer generator.
 > | A9 memory budget | ✅ scoped to retain-only by ruling |
 > | ~~**A4**~~ block driveable by its own command | ✅ **RETIRED ON THE DEVICE** — all four exit-criterion cells, no interpreter |
 > | ~~**A5**~~ two slots do not interfere | ✅ **RETIRED ON THE DEVICE** — two *different* blocks, disjoint indistinguishable, coupled caught |
-> | **A6** delegate throw (G4) | 🔴 **UNMEASURED — needs the owner present.** Widest blast radius left |
+> | ~~**A6**~~ delegate throw (G4) | ✅ *** ANSWERED IN BOTH DIRECTIONS ON THE DEVICE *** — PRE leaves the CPU RUNNING, POST leaves it STOPPED with a COMPLETE program. **Never half-loaded.** Recovery 34 s |
 > | **A8** structural DB change (G2) | ⏸ deferred by the owner |
 >
 > **Owed on the device:** only the **32-bit build stamp**, blocked by a converter defect (every hex
@@ -1684,6 +1684,64 @@ until its real path is allowlisted; and the directory case above.
 **All three `tools/` files verified ASCII-only and CRLF byte-wise**, both `.ps1` tokenise clean, and
 the reason sits in the file headers so nobody "improves" the punctuation later. **Not run against
 Portal** — the rig lane holds it; the live run is scheduled separately.
+
+### ✅✅✅ A6 IS ANSWERED IN BOTH DIRECTIONS — THE LAST UNMEASURED ASSUMPTION (2026-08-13, owner present)
+
+> *** PRE-delegate throw → CPU left `Running (8)`, project bit-for-bit unchanged, program live. ***
+> *** POST-delegate throw → CPU left `NotRunning (4)` — STOPPED, with a COMPLETE program, project
+> bit-for-bit unchanged. ***
+
+Both on this controller, `--options SoftwareOnlyChanges --disruptive`, **one observation of each kind
+at each point.** Stage 2 raised **4 configurations** (3 PRE, 1 POST), so the zero-configuration
+discriminator is satisfied — *this tested what it claims to have tested.* TCP connect was **refused
+entirely** afterwards: `MB_SERVER` not executing.
+
+#### The mechanism — symmetric, and measured in opposite directions rather than inferred once
+
+| stage | answered | the answer said | the CPU did |
+|---|---|---|---|
+| 1 | `StopModules` → `StopAll` | *"stop everything"* | **stayed RUNNING** |
+| 2 | `StartModules` → `StartModule` | *"start it"* | **stayed STOPPED** |
+
+*** THE CONFIGURATION ANSWER IS A SELECTION RECORDED DURING PLANNING; THE ACTION IS APPLIED AFTER THE
+DELEGATE RETURNS. A THROW BETWEEN THOSE POINTS ABORTS BEFORE THE ACTION TAKES EFFECT. *** One sentence
+accounts for both, and it explains the asymmetry: **a PRE throw pre-empts the stop, a POST throw
+pre-empts the start.**
+
+> #### 🎯 THE FEARED FAILURE MODE IS NOT THE REAL ONE
+>
+> D32's circularity is now **observed rather than predicted** — *** BUT NOT HALF-LOADED. The POST
+> delegate fires AFTER the transfer, so the controller held a COMPLETE PROGRAM THAT WASN'T RUNNING. ***
+> **A fully-loaded stopped CPU, not a half-loaded one.** This experiment was deferred for months
+> because its failure mode was believed to be a half-loaded CPU; **that mode was never reachable at
+> either delegate.**
+>
+> *** THE GENUINELY HALF-LOADED CASE STAYS UNCHARACTERISED — it needs a throw DURING transfer, AND
+> THERE IS NO CONFIGURATION RAISED THERE TO HANG ONE ON. ***
+
+**Recovery: 34 seconds, and no owner needed.** A normal `--disruptive` download raised `StartModules`
+in POST, answered it, and the CPU returned to `Running (8)` — program live, 40 reads, 0 torn.
+
+  ➜ *** THE LANE RECORDED THAT ROUTE AS "NOT CONFIRMED" BEFORE THROWING — AND STAGE 2 IS WHAT
+    CONFIRMED IT. *** `StartModules` **is raised only when the download actually stopped the CPU**,
+    which is why earlier runs never raised it: they never stopped anything. The declared fallback
+    (the owner, in TIA) went unused, as did the 126-file restore point.
+  ➜ **Independent corroboration that the restart was real:** `MS_Gen` read **~30,840 before and ~1,032
+    after** — *** `%M` WAS CLEARED BY THE STOP/START CYCLE ***, matching the same day's finding that a
+    download which does *not* stop the CPU preserves `%M` exactly.
+
+#### 🔴 D32's CLASS-A RUNG IS TRUE FOR PRE AND FALSE FOR POST — by direct observation
+
+Class A is **the only class that spends anything** (it calls for a fresh disruptive download), and that
+is sound **only if the abort left the CPU untouched.** After a POST-delegate abort it did not.
+*** A CLASS-A ABORT LANDING AFTER THE TRANSFER MUST EITHER AVOID THE POST DELEGATE OR CARRY A START
+STEP, AND THE RUNG AS WRITTEN DOES NOT DISTINGUISH THEM. *** Together with the separately-recorded
+`StartModules` defect — *"go to step 6" is circular for that entry* — **the ladder needs a per-entry
+rung, not one rung per class.** Both were flagged when the classifier was built; both are now measured.
+
+**What A6 still lacks, stated:** repetition (*one throw of each kind is one, not six*); the
+mid-transfer case; and other download options — **stage 2 showed the raised-configuration set is not
+fixed.**
 
 ## PHASE 2 — THE WALKING SKELETON
 
