@@ -190,6 +190,28 @@ running does not license:
       used to claim, against what supplies its terms, and against the assertions it says it relies on.
       *** CROSS-REFERENCING A DOCUMENT AGAINST ITS OWN DEPENDENCIES IS A DIFFERENT OPERATION FROM
       READING IT, AND ONLY ONE OF THEM FINDS THIS FAMILY. ***
+- *** ASSERT AN ABSENCE, SO THAT ITS FUTURE PRESENCE FORCES THE REAL CHECK. *** Measured 2026-08-13,
+  and it is the neatest way found here of stopping a derived value quietly becoming a corroborated one.
+  A mirror's `Time` tag form could not be corroborated against the committed TIA export corpus, because
+  **the corpus contains no `Time` tag at all** — so the form is *derived* (from the width and another
+  member's address form), not confirmed. Rather than note that in prose, the lane **asserted the
+  absence in a test**: the day a real `Time` export appears, the assertion fails and demands the
+  comparison that was never possible.
+    ➜ **A caveat in a report decays; a caveat that is a red test cannot.** When you must derive
+      something because no authority exists yet, *pin the non-existence of the authority.*
+    ➜ Same lane, same shape, worth pairing: **the converter is an authority on grammar, not on types**
+      — measured, because it converted `MOVE(IN := <Bool>)` at exit 0 while TIA refused it. **Knowing
+      exactly what a green from a given tool does NOT cover is what makes the green usable.**
+- *** A WIDTH ERROR WRAPS; AN ORDER ERROR ANNOUNCES ITSELF. *** Same day, on the same 32-bit path:
+  81 duration values in the deliverable set exceed 65 535 ms. A **narrow** mapping does not error —
+  *** `75 000 ms` ARRIVES AS `9 464 ms`, EVERY BOUNDARY FIRES EARLY, AND THE RUN RETURNS A CONFIDENT
+  WRONG ANSWER. *** A **swapped-word** mapping multiplies by 65 536, the scenario never reaches its
+  next boundary, and the run **times out loudly.**
+    ➜ **Of two failures in the same field, prefer the loud one and design the quiet one out.** A value
+      that does not fit its element must **refuse by name, never modulo.**
+    ➜ And it flips a calibration instinct: **calibrate against a slowly-changing counter, not against
+      a duration** — *a duration cannot tell a correct transform from a broken one*, because both
+      produce a plausible-looking number.
 - *** BEFORE BUILDING A SEAM, CHECK WHETHER THE THING ALREADY SHIPS ONE. *** Measured 2026-08-13. A
   test model needed to drive a block's inputs, and the question was framed as *where to insert it so it
   overrides the field read* — a real question, with a real cost, and an owner ruling behind it. Then
