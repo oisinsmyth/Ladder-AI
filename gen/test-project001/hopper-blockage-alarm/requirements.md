@@ -107,11 +107,20 @@ decision and is **proposed** until then — see RFI-Q-HBA-03.
   true" is refined by NEW-HBA-01 to *cumulatively* high-and-running.
 
 ### REQ-HBA-002 — No alarm below threshold
-- **Text:** If `Hopper_Level_High` undergoes a **debounced clear** — it goes false and stays
-  continuously false for at least the clear-debounce filter time — before the accumulated persistence
-  time reaches the threshold, no hopper-blockage alarm is raised for that high episode. A false
-  reading shorter than the filter time is **not** a clear (Q-HBA-02) and does not, by itself, prevent
-  the alarm.
+- **Text:** Two claims, **both** of which hold. They are independent and neither replaces the other.
+  1. **The unconditional threshold claim (restored by AR-HBA-13).** On a **first, uninterrupted high
+     episode** — no debounced clear and no `FaultReset` since the accumulated persistence time was
+     last zero — **the hopper-blockage alarm does not assert at any point before the full persistence
+     threshold has been accumulated.** The threshold meant here is the **specified** one (AR-HBA-03's
+     bounds table), **not whatever preset the implementation happens to carry**: a block whose preset
+     is shorter than the specified threshold asserts early and **fails this clause**. Because the
+     claim is about *accumulated* time, a run-state pause part-way through does not break the episode
+     — accrual simply stops and resumes (NEW-HBA-01), and the claim still bites on the total.
+  2. **The debounced-clear case (added by AR-HBA-04, unchanged).** If `Hopper_Level_High` undergoes a
+     **debounced clear** — it goes false and stays continuously false for at least the clear-debounce
+     filter time — before the accumulated persistence time reaches the threshold, no hopper-blockage
+     alarm is raised for that high episode. A false reading shorter than the filter time is **not** a
+     clear (Q-HBA-02) and does not, by itself, prevent the alarm.
 - **Class:** alarm
 - **Source:** Request (the testable inverse of REQ-HBA-001's continuous-high condition).
 - **Notes:** Boundary requirement for the functional review; pairs with REQ-HBA-001. Threshold and
@@ -120,6 +129,11 @@ decision and is **proposed** until then — see RFI-Q-HBA-03.
   literally contradicted Q-HBA-02, which says a brief false is not a clear. Q-HBA-02 is the later,
   owner-resolved statement and governs; this clause is reworded to match it rather than left as a
   contradiction for a downstream reader to resolve silently.
+- **Restored by AR-HBA-13 (agent ruling, not owner) — a RESTORATION, NOT A REVERSAL of AR-HBA-04.**
+  Read this before concluding the later ruling overturned the earlier one: **it did not.** AR-HBA-04's
+  debounced-clear case stands **exactly as written** and is limb 2 above. What AR-HBA-13 does is put
+  back limb 1 — the plain threshold claim this clause is *named* for — which AR-HBA-04 inadvertently
+  narrowed away. Both limbs are now live. See AR-HBA-13.
 
 ### REQ-HBA-003 — Momentary clear re-arms the window
 - **Text:** A **debounced clear** of `Hopper_Level_High` (false continuously for at least the
@@ -252,7 +266,9 @@ decision and is **proposed** until then — see RFI-Q-HBA-03.
   `FaultReset`, and re-asserts whenever the alarm re-raises. This holds at **every** transition the
   register describes: raise (REQ-HBA-001), latch (REQ-HBA-004, REQ-HBA-006), reset and re-raise
   (REQ-HBA-005, AR-HBA-07), power-cycle survival and the bounded post-power-cycle window
-  (REQ-HBA-007, AR-HBA-10). There is no state in which one output is asserted and the other is not.
+  (REQ-HBA-007, AR-HBA-10). It holds equally for **non**-assertion: while REQ-HBA-002 forbids the alarm
+  before the threshold is accumulated, `HopperBlockedInhibit` is likewise not asserted (AR-HBA-13).
+  There is no state in which one output is asserted and the other is not.
   **Observability follows the alarm's, identically** — AR-HBA-08's by-case split applies to this output
   in the same terms: a momentary drop is DON'T-CARE while the condition holds, an observable and
   persistent false is REQUIRED once it has cleared.
@@ -702,6 +718,67 @@ keep the two distinct interface members, since Q-HBA-05 requires independent rou
 does not disturb REQ-HBA-006 (hopper clearing drops the accumulator, not the latch — so neither output
 moves); and that AR-HBA-11's rewording leaves nothing else in the register depending on same-scan
 sequencing.
+
+## Fourth round (2026-08-13) — ruling AR-HBA-13
+
+### AR-HBA-13 — restore REQ-HBA-002's unconditional threshold claim *(closes the vector author's dispute)*
+
+**RULING:** restore the unconditional claim to REQ-HBA-002 **alongside** the debounced-clear case.
+**Both, not either.** This is a **RESTORATION, NOT A REVERSAL** — AR-HBA-04's addition stands exactly as
+written.
+
+**The hole, and it was this register's own doing.** An independent vector author found that **no
+assertion forbade the alarm raising EARLY on an uninterrupted first episode.** REQ-HBA-002 is *titled*
+"No alarm below threshold", but after AR-HBA-04 its text conditioned entirely on a debounced clear. The
+consequence, stated bluntly because it is the point:
+
+> ***An under-scaled preset — `T#45S` instead of `T#60S` — left all 25 assertions TRUE.***
+
+That is a whole defect class the coverage denominator could not see, and **the most ordinary
+commissioning error there is**: a mistyped preset.
+
+**AR-HBA-04 caused it.** That ruling reworded REQ-HBA-002 so it no longer literally contradicted
+Q-HBA-02's debounce. It achieved that — and in doing so **narrowed the clause from a plain threshold
+claim to a claim about the post-clear case only**, dropping the very thing the clause is named for.
+**The clause's title survived and its content did not**, which is exactly why it went on reading as
+covered. A narrowing repair is the dangerous kind: it removes a claim while leaving every sign that the
+claim is still there.
+
+**Why the threshold must be the SPECIFIED one.** Limb 1 is written against the threshold in AR-HBA-03's
+bounds table, **not** against whatever preset the block carries. If it were written against the block's
+own preset the claim would be vacuously true of every implementation — a `T#45S` block would assert "at
+its threshold" and pass. Naming the specified value as the reference is what makes the mutation
+detectable, and it is consistent with AR-HBA-03, which already says a vector "reads it from this table
+and says which it used". **No number enters the clause sentence**, so assertion identity is untouched.
+
+**Recorded because it is the mechanism working.** The gap was found by a **vector author**, not by
+review of the register — and raised as a decomposition dispute rather than quietly worked around. That
+is **D6 behaving as designed: the vector author is a second reader by construction**, and this is the
+first time that has actually fired on this project. It is also the fourth distinct way this register has
+produced a defect visible only from outside the reasoning that created it.
+
+**CHANGED:** REQ-HBA-002 Text (limb 1 restored, limb 2 unchanged) + Notes; REQ-HBA-008 Text
+(non-assertion made explicit).
+
+### Consistency re-read — three interactions, all closed here
+
+1. **REQ-HBA-008 × AR-HBA-13.** REQ-HBA-008's transition list named the *raise* clause but not the
+   *non-raise* one, so the inhibit's early-assertion was covered only by the general "no state in which
+   one is asserted and the other is not". **Made explicit** — the inhibit is likewise not asserted
+   before the threshold. Without it, a `T#45S` block could have been read as failing REQ-HBA-002 on the
+   alarm while nothing named the inhibit, which is the operationally worse half.
+2. **NEW-HBA-01 × "uninterrupted".** Since accrual is run-gated, "uninterrupted" could have been read as
+   requiring continuous *running*, which would make limb 1 untestable on any run that pauses. **Defined
+   in the clause** as *no debounced clear and no `FaultReset` since the accumulator was last zero*, and
+   the claim is stated against **accumulated** time — so a pause does not break the episode.
+3. **AR-HBA-03 × limb 1.** Limb 1 references the bounds **table**, never a value, so the
+   no-numbers-in-clause-text property and the zero-re-hash property both survive.
+
+**Checked and found consistent:** limb 1 is the exact inverse of REQ-HBA-001 and the two pin the same
+boundary from opposite sides; AR-HBA-07's re-raise is unaffected (limb 1 governs the first raise, from a
+zero accumulator); and **AR-HBA-10 reinforces rather than conflicts** — the bounded post-power-cycle
+window is bounded by *the same threshold* limb 1 protects, since a power cycle returns the accumulator
+to zero and therefore starts a fresh "first episode".
 
 ## Pre-stamp consistency pass (2026-08-13)
 
