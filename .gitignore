@@ -97,6 +97,13 @@ Desktop.ini
 # Claude Code local-only state — machine/session-specific, not shared project content
 # (.claude/skills/ and other shared config are NOT covered by these and should still be committed)
 .claude/settings.local.json
+# ...AND ANY BACKUP OR TEMP BESIDE IT. Measured 2026-08-13: a `.bak` written by an agent mid-edit
+# sat UNTRACKED-BUT-NOT-IGNORED while carrying a Live Runs project path (identifying name in the
+# allowlisted download-probe invocation). The file itself is ignored; a sibling was not, so one
+# `git add -A` would have committed a restricted identifier. The discipline "never git add -A" is
+# real and is briefed to every lane — but a rule enforced only by discipline is the thing this
+# repo keeps re-learning to make structural instead.
+.claude/settings.local.json.*
 .claude/scheduled_tasks.lock
 
 # S6 gen-block-modify-purpose validation: MotorVSDSystem answer key is a quarantined blind-
