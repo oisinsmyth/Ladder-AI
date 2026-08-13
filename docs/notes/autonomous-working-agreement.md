@@ -167,6 +167,33 @@ running does not license:
   author and evidence, and detect the version drifting. ***It cannot make a false declaration true.***
     ➜ **Print the limit where a reader of RESULTS meets it**, not only where a reader of the design
       does. A caveat that lives in a lane report has already failed the person it was written for.
+- *** THREE DEFECTS THAT LEAVE EVERY OUTWARD SIGN OF CORRECTNESS INTACT — ONE FAMILY, ALL FOUND ON
+  2026-08-13, NONE FINDABLE BY RE-READING. *** They are worth naming together because the instinct
+  each defeats is the same one: *read the thing again and see if it still looks right.*
+    • **The narrowing repair** — *drops a claim while it still looks intact.* Title, clause ID,
+      cross-references and assertion count all survive; only the content goes.
+    • **The self-referential parameter** — *keeps the claim and empties it.* "At its threshold" is
+      true of every implementation, including every wrong one.
+    • **The wrong pointer** — *documents a case as handled and steers the reader away from the real
+      gap.* Worse than a missing pointer, because it satisfies.
+    ➜ **What found all three was CROSS-REFERENCING, never reading**: checking a clause against what it
+      used to claim, against what supplies its terms, and against the assertions it says it relies on.
+      *** CROSS-REFERENCING A DOCUMENT AGAINST ITS OWN DEPENDENCIES IS A DIFFERENT OPERATION FROM
+      READING IT, AND ONLY ONE OF THEM FINDS THIS FAMILY. ***
+- *** A POSITIONAL REFERENCE IN PROSE GOES STALE SILENTLY, AND OUR OWN ID SCHEME SAYS SO. ***
+  §3.2 of the enumeration design rules that an index is never an identifier — *"insert an assertion at
+  index 1 and every later index shifts, so a stored reference silently comes to name a different
+  assertion"* — and a shape check rejects ordinals in a `Basis`. **But ruling PROSE cited display
+  ordinals, and the shape check does not reach prose.** Three such citations were written when a
+  clause held two assertions and never re-checked as it grew to six. **The one that mattered was a
+  ruling whose entire argument was "assertion X already carries it"** — if the ordinal has moved, the
+  justification points at nothing, inside the ruling written to make that assertion testable.
+    ➜ **A rule enforced by a mechanical check applies only where the check reaches.** Ask where else
+      the same identifier appears — comments, commit messages, prose, briefs — because those are
+      exactly the places no shape check runs.
+    ➜ **Fix the mechanism, not the three instances.** Name the *behaviour*, which is stable under
+      re-decomposition by construction; do not "confirm the ordinals and move on", which leaves a
+      defect that recurs on every future round.
 - *** WHEN IDENTITY IS CONTENT-DERIVED, REDUNDANCY IS LOAD-BEARING — AND TIDYING IS THE MOST LIKELY
   FUTURE DAMAGE. *** Measured 2026-08-13, as a hazard caught before it fired. One ruling wrote *"the
   **specified** threshold"*; a later ruling made that adjective redundant everywhere. **Deleting it
