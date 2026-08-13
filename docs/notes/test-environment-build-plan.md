@@ -170,6 +170,14 @@ phase 2 with the copy-layer generator.
 > > | **D3** | `FaultReset` is **edge**-triggered | **level**-sensitive throughout |
 > > | **D4** | **raise**-dominant | **reset**-dominant |
 > >
+> > **NOW SIX, AND ONE OF THEM IS A PREDICTED *PASS*.** `AR-HBA-07` added **D5** (the block gates
+> > accrual through `BlockActive = HighQualified AND IO.PlantRunning`, so its stop-then-reset
+> > behaviour diverges too — checked on the rig by *stop plant → pulse reset → hopper still high;
+> > the alarm must re-raise without the plant restarting*), and `AR-HBA-10` added **D6**, a
+> > prediction of **conformance**: newly assertable, never exercised. *** A PREDICTED PASS IS WORTH
+> > AS MUCH AS A PREDICTED FAIL PROVIDED IT IS WRITTEN FIRST *** — a suite that only ever predicts
+> > failures is being tuned to the answer. Each row now carries a *how the rig checks it* column.
+> >
 > > **D1 vindicates the abstention.** I chose that name from the requirement's own words *without
 > > looking at the block*, precisely so the name could not be laundered out of the implementation —
 > > and it differs. Had I peeked, the spec would have silently agreed with the code and the check
@@ -254,14 +262,27 @@ phase 2 with the copy-layer generator.
 >    **additive, non-interruptive** writes are ruled in, with three mechanical checks. **But a one-scan
 >    coincidence usually has no existing internal value**, so observing it means computing something
 >    new — *which is the case §2.6 raised in the first place.*
-> 0. *** RULED BY ME, OVERTURNABLE AT ONE LINE — flagged because two of them overrule readings of
->    YOUR OWN earlier rulings.*** Six of the enumerator's eight ambiguities are ruled in the register,
->    each marked as mine. The two worth your eye: **(AMB-07)** NEW-HBA-01's *freeze on lost running*
->    and REQ-HBA-003's *discard on debounced clear* collide when the plant is stopped **and** the
->    hopper then clears — **I ruled the DISCARD wins**, because the clear is positive physical
->    evidence the blockage is gone while the freeze only protects against *missing* evidence. And
->    **(AMB-01/02)** a `FaultReset` while the hopper is still blocked **re-raises** the alarm; a reset
->    must not suppress a live fault. Two remain yours below.
+> 0. *** TEN RULINGS BY ME, ALL MARKED AS MINE IN THE REGISTER AND OVERTURNABLE AT ONE LINE
+>    (`AR-HBA-01…10`, verified 10/10/10 on headers, `RULING:` lines and `CHANGED:` lists).*** Flagged
+>    because several overrule readings of **your own** earlier answers. The three worth your eye:
+>    **(07)** the alarm's re-raise keys on the **accumulator alone, never `PlantRunning`** — one
+>    story: the accumulator is evidence about the hopper, `FaultReset` is an acknowledgement and not
+>    evidence about it, so *`PlantRunning` gates accrual, not raising, and not re-raising*. **(06)**
+>    when the plant is stopped **and** the hopper then clears, the **DISCARD wins** over the freeze —
+>    the clear is positive physical evidence, the freeze only protects against *missing* evidence.
+>    **(10)** a power cycle leaves the alarm latched (RETAIN) with the accumulator at zero
+>    (non-retentive), so a reset then clears it **on a still-blocked hopper** — *a live fault
+>    suppressed by a reset, reached without violating any ruling, because the power cycle destroyed
+>    the evidence rather than the reset doing it.* **Accepted and stated, no mechanism added:** the
+>    window is bounded by one further persistence threshold and closes by itself, and both repairs
+>    cost more — retaining the accumulator contradicts a signed REQ *and* asserts something about a
+>    plant state nobody observed while the CPU was off.
+> 0b. *** ONE READING I TOOK OVER AN OWNER ANSWER — SAY IF I READ IT WRONG. *** `Q-HBA-04`'s
+>    parenthetical *"a full hopper at standstill does not alarm"* reads **literally** as contradicting
+>    AR-HBA-07, and **it is your answer, so it outranks my ruling.** In force is the narrow reading —
+>    it governs **accrual**, not the latch — which I hold on grounds independent of my own ruling:
+>    ***the strong reading would require a latched alarm to drop when the plant stops, contradicting
+>    REQ-HBA-004.*** If the strong reading was meant, it overturns AR-HBA-07.
 > 2. *** SHOULD A MULTI-WRITER ON A **DELIVERABLE** SIGNAL REFUSE, OR ONLY REPORT? *** Built as
 >    **report**, because the defect is in the deliverable and the vector author cannot fix it — X-G's
 >    own text says "reported as FINDINGS". It sits in tension with *a warning is not a gate*. What
