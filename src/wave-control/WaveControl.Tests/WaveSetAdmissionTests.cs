@@ -31,7 +31,16 @@ namespace Ladder.Wave.Tests
             // MEANING WHEN AN ENUM GREW *** — and the second was found by the test written for the
             // first. This enum will grow, so the partition is asserted over the WHOLE enum rather than
             // over the cases anybody thought of.
-            var computed = new[] { ConflictEdgeKind.OverlappingReachableState, ConflictEdgeKind.SharedModelInstance };
+            // *** THIS LIST WAS UPDATED ONCE, AND THAT IS THE PIN WORKING. *** 6.5 added
+            // ModelUnderTestByAnotherSlot and this test went red, which forced the classification to be
+            // made deliberately rather than inherited. A partition asserted over the cases somebody
+            // thought of would have stayed green and silently acquired a new member.
+            var computed = new[]
+            {
+                ConflictEdgeKind.OverlappingReachableState,
+                ConflictEdgeKind.SharedModelInstance,
+                ConflictEdgeKind.ModelUnderTestByAnotherSlot,
+            };
             var manual = new[] { ConflictEdgeKind.Blacklist };
             var neither = new[] { ConflictEdgeKind.Unstated };
 

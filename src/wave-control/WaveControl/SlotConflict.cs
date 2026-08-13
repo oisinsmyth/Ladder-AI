@@ -44,6 +44,14 @@ namespace Ladder.Wave
         /// says it conflicts with; computed disjointness is the FLOOR and the blacklist sits on top.
         /// </summary>
         Blacklist = 3,
+
+        /// <summary>
+        /// X-I rule 2 — a slot and the MODEL SLOT that tests a model it uses. *** COMPUTED FROM THE
+        /// DEPENDENCY, NEVER DECLARED. *** Run concurrently, a red result is ambiguous between the
+        /// block and the model (§7a cause 1 versus cause 2), which is the exact ambiguity §7a exists to
+        /// remove — so they cannot share a wave set, and the model's must come FIRST.
+        /// </summary>
+        ModelUnderTestByAnotherSlot = 4,
     }
 
     /// <summary>Facts about conflict-edge kinds, pinned by a test over the whole enum.</summary>
@@ -55,13 +63,25 @@ namespace Ladder.Wave
         /// </summary>
         public static bool IsComputed(ConflictEdgeKind kind) =>
             kind == ConflictEdgeKind.OverlappingReachableState ||
-            kind == ConflictEdgeKind.SharedModelInstance;
+            kind == ConflictEdgeKind.SharedModelInstance ||
+            kind == ConflictEdgeKind.ModelUnderTestByAnotherSlot;
 
         /// <summary>TRUE for edges a person or agent added by hand. Exactly one kind, and it is add-only.</summary>
         public static bool IsManual(ConflictEdgeKind kind) => kind == ConflictEdgeKind.Blacklist;
 
         /// <summary>TRUE when the kind is usable at all — i.e. it is computed or manual, and not the zero value.</summary>
         public static bool IsStated(ConflictEdgeKind kind) => IsComputed(kind) || IsManual(kind);
+
+        /// <summary>
+        /// TRUE for a kind that also carries a DIRECTION — the two ends must not merely be separated,
+        /// one must come FIRST. Only X-I's model dependency does.
+        /// </summary>
+        /// <remarks>
+        /// Separating an ordered pair is not enough: a consumer running BEFORE the model that stands in
+        /// for its equipment gets a result conditioned on a model nobody has tested yet. Every other
+        /// kind is symmetric — "these two cannot run together" says nothing about which runs first.
+        /// </remarks>
+        public static bool IsOrdered(ConflictEdgeKind kind) => kind == ConflictEdgeKind.ModelUnderTestByAnotherSlot;
     }
 
     /// <summary>One conflict edge between two slots.</summary>
@@ -129,14 +149,21 @@ namespace Ladder.Wave
         /// The slot's width on the wire. Reported per wave set and NOT acted on — see
         /// <see cref="WaveSetPlan"/> on F-6.
         /// </param>
+        /// <param name="testsModel">
+        /// The model this slot IS THE TEST OF, when it is a model slot (X-I). Empty for an ordinary
+        /// block slot. A model-testing slot is SIMPLER than a block-testing one — it needs no model
+        /// instance of its own, because its inputs ARE the vector.
+        /// </param>
         public TestSlot(
             string? id,
             string? agent,
             IEnumerable<string>? reachableState,
             string? reachableStateProvenance,
             IEnumerable<string>? modelInstances = null,
-            int widthRegisters = 0)
+            int widthRegisters = 0,
+            string? testsModel = null)
         {
+            TestsModel = (testsModel ?? string.Empty).Trim();
             Id = (id ?? string.Empty).Trim();
             Agent = (agent ?? string.Empty).Trim();
             ReachableState = Clean(reachableState);
@@ -162,6 +189,12 @@ namespace Ladder.Wave
 
         /// <summary>The slot's width on the wire, in registers.</summary>
         public int WidthRegisters { get; }
+
+        /// <summary>The model this slot is the test OF, or empty for an ordinary block slot.</summary>
+        public string TestsModel { get; }
+
+        /// <summary>TRUE when this slot is a model slot (X-I).</summary>
+        public bool IsModelSlot => TestsModel.Length > 0;
 
         /// <inheritdoc />
         public override string ToString() =>
