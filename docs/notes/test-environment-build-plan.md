@@ -1739,6 +1739,69 @@ STEP, AND THE RUNG AS WRITTEN DOES NOT DISTINGUISH THEM. *** Together with the s
 `StartModules` defect — *"go to step 6" is circular for that entry* — **the ladder needs a per-entry
 rung, not one rung per class.** Both were flagged when the classifier was built; both are now measured.
 
+> #### 🔴 A6 AMENDED — BOTH THROWS ALSO KILL THE PORTAL PROCESS
+>
+> **Observed by the owner at the machine, then measured by PID** — which is the whole point, because
+> *** A COUNT ALONE CANNOT SEE IT: 2 → 1 READS AS "AN IDLE INSTANCE CLOSED" UNLESS YOU HOLD THE PIDs. ***
+>
+> | throw | PIDs before | after | verdict |
+> |---|---|---|---|
+> | **PRE** | `11228 16972` | `11228` | *** 16972 died *** |
+> | **POST** | `8256 13912` | `13912` | *** 8256 died *** |
+>
+> **In both cases the process that died is the one the download was attached to**; the survivor was one
+> the tool was not using.
+>
+> *** AND WE NEVER SAW IT BECAUSE OUR OWN TOOLING SILENTLY RELAUNCHES. *** The stage-1 and stage-2
+> observations were made **through the replacement**. So A6's findings stand but were **incomplete**:
+>
+> > After a **PRE** throw: CPU `Running (8)`, project unchanged — **and the Portal process terminated.**
+> > After a **POST** throw: CPU `NotRunning (4)`, complete program, project unchanged — **and the Portal
+> > process terminated.**
+>
+>   ➜ 🔴 **D32's Class A is affected again:** it calls for a fresh disruptive download after an abort
+>     — *** THROUGH A PORTAL THAT JUST CRASHED. *** It works, but **only because the tooling silently
+>     relaunches**, and it costs the launch. Recovery downloads took **34 s and 92 s**, the difference
+>     being *whether a Portal had to be started.*
+>   ➜ **Nothing persistent was harmed** — the project fingerprint is identical through **four throws and
+>     three recoveries** — but *** ANY IN-FLIGHT OPENNESS WORK DIES WITH IT: `EngineeringObjectDisposedException`
+>     IS WHAT A CALLER SEES WHEN PORTAL VANISHES UNDERNEATH. ***
+>   ➜ **Still open, and deliberately not guessed at:** *** WHY Portal dies. The lane measured THAT it
+>     does, not WHAT kills it. ***
+
+> #### ⚖️ MY CONTENTION DIAGNOSIS — partly excluded, and recorded as UNEXAMINED rather than retired
+>
+>     15:01:22  compile-all --force dies (EngineeringObjectDisposedException)
+>     15:01:58  portal-status: PROCESSES: 0
+>     15:23:33  FIRST THROW OF ANY KIND
+>
+> *** THE 15:01 INCIDENT PREDATES EVERY THROW BY TWENTY-TWO MINUTES. NO THROW CAUSED IT. *** That is the
+> one thing the timestamps settle. **They do not settle whether contention did** — so the two-lanes-on-
+> Portal diagnosis is *** NEITHER CONFIRMED NOR REFUTED, AND IS RECORDED AS UNEXAMINED RATHER THAN
+> RETIRED. *** *(The Portal-as-a-token rule stands on its own merits either way.)*
+>
+> Separately, the 15:38 process starts **do** line up with the POST throw ending at 15:36:56 —
+> corroboration for a mechanism that was then measured directly rather than inferred from the timing.
+
+### 🔴 FOUR `openness-cli` DEFECTS THE THROWS EXPOSED — one is the guard failing in the tool built to carry it
+
+  1. *** `launched-instances.json` IS `[]` — BEFORE AND AFTER REPEATED LAUNCHES. *** The registry records
+     nothing, so `portal-status` cannot classify a fresh instance as self-launched and reports it as
+     **in-use**. **Nothing reported a relaunch because nothing recorded a launch.**
+  2. **`portal-status` reported `PROCESSES: 1` while the OS showed two** — the read-only diagnostic this
+     project reaches for when Portal misbehaves **disagreed with the operating system.**
+  3. **It dated PID 16972 `ACQUIRED 14:47:51` when that process started `15:38:09`.** *** A PROCESS
+     CANNOT BE ACQUIRED FIFTY MINUTES BEFORE IT EXISTS *** — and a plausible-looking wrong timestamp is
+     worse than a missing one, because **it invites exactly the temporal reasoning we spent the day
+     avoiding.**
+  4. *** THE WORST, BECAUSE IT IS THE GUARD FAILING INSIDE THE TOOL BUILT TO CARRY IT: *** a POST run was
+     **armed**, raised **zero** POST configurations, **never invoked the delegate**, completed the
+     download — **and exited 0**, where the contract says `12 = armed and the delegate was never
+     invoked`. *"If you get zero configurations you have not tested what you think you are testing"*,
+     **failing to fire.** Caught only by reading the configuration list instead of the exit code.
+     *Forcing `--options Software` made the download stop the CPU and the delegate was reached — so the
+     raised-configuration set depends on the options, which is exactly what exit 12 existed to say.*
+
 **What A6 still lacks, stated:** repetition (*one throw of each kind is one, not six*); the
 mid-transfer case; and other download options — **stage 2 showed the raised-configuration set is not
 fixed.**
