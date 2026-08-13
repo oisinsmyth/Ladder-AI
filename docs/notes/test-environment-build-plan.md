@@ -24,7 +24,7 @@ them (A3) in our favour by a factor of two, and one whole class of work deleted 
 
 | | Assumption | Why it still matters |
 |---|---|---|
-| ~~**A1**~~ | ~~`MB_SERVER` single-scan atomicity~~ | ✅ **ANSWERED 2026-08-12 ON THE RIG — `NO TEAR OBSERVED` in 3,340 writes of 16 registers, VARIANT 1**, with `CHANGE_COUNT` matching the write count exactly. *Absence of evidence at that count/rate/call position, never "atomic"* — see "A1 IS ANSWERED" below for the limits and what to re-run |
+| ~~**A1**~~ | ~~`MB_SERVER` single-scan atomicity~~ | ✅ **FULLY RETIRED 2026-08-13 ON THE RIG.** `NO TEAR OBSERVED` at **123 registers** — the widest slot the design can use — on **both** call orders: 3,000 writes VARIANT 1, 3,200 VARIANT 2, `TEAR_LATCH` 0 throughout, `CHANGE_COUNT` exact on every run. **1.4 answered too:** 0 torn reads in 3,000, 3,000 distinct generations. *Still "no tear observed", never "atomic"* — the one surviving limit is that **two writes have never been inside one scan**, which is a round-trip property (78 ms vs a 23 ms scan), not a width one |
 | ~~**A2**~~ | ~~Modbus round-trip rate~~ | ✅ **MEASURED (1.2, which also settles 0.3): median 71–78 ms, p99 136–173 ms, and the marginal cost per register is ~zero.** The assumed 79–108 ms understates the tail by ~60% — re-derive O11 and the poll budget on the p99, not the median |
 | **A4** | Block driveable by its own command signal | D37, inert, the start-bool mechanism |
 | **A5** | Two slots do not interfere | Everything multi-agent |
@@ -38,20 +38,24 @@ phase 2 with the copy-layer generator.
 
 **The critical path is now A1**, and it runs through the phase-1 spike.
 
-> ### 📍 STATUS, 2026-08-13 — the critical path is one blocked command
+> ### 📍 STATUS, 2026-08-13 — *** PHASE 1 IS CLOSED. A1 IS FULLY RETIRED. ***
 >
-> **A1's two recorded caveats are both built and gated, and neither is answered.** Builds C
-> (N=123, VARIANT 1), D (N=123, VARIANT 2) and A (the 1.4 generator) are authored, converted,
-> preflight-clean, and C is imported and `sanity-check` HEALTHY in the scratch project.
+> Both of A1's recorded caveats fell on the rig the same day they were built. **No tear observed in
+> 3,000 writes of 123 registers on VARIANT 1, 3,200 on VARIANT 2**, and **1.4 answered decisively —
+> 0 torn reads in 3,000, with 3,000 distinct generations.** Liveness exact on every run. The entry
+> below carries the numbers and the limits.
 >
-> *** THE ONLY REMAINING STEP IS THE DOWNLOAD, AND IT IS REFUSED BY THE HARNESS PERMISSION LAYER,
-> NOT BY ANY PROJECT RULE OR BY THE WRITE FENCE. *** Everything either side of it is done. Until it
-> runs, the scratch project holds the 123-register build and the rig still runs the 16-register one
-> — see the warning in the phase-1 entry before pointing any client at the rig.
+> **The one A1 limit that survives is a round-trip property, not a width one:** two writes have
+> still never been put inside a single scan, because the round trip is ~78 ms against a ~23 ms scan.
 >
-> **Phase 2 has started anyway** (2.1, 2.2, 0.1b built, 280 tests) because A1 *was* answered at
-> N=16 and phase 2's gate is A4, not A1's width caveat. **The width caveat is what the allocator
-> would have to be revised for**, which is why it was taken first and why it is worth unblocking.
+> 🔴 **One correction is in flight and it propagates.** `RTT_p99 = 173` was derived at 16 registers
+> and **is too low at 123** — measured 157/201/168/185, n-weighted ~183. O11, X-B's timeout backstop,
+> X-D's ceiling and §8's durations all key on it, and phase 4's admission control is already built
+> against it. `RTT_typ = 78` is confirmed and unaffected.
+>
+> **Phase 2 (2.1, 2.2, 0.1b) and phase 4 (4.3, 4.4) are built.** Phase 2 was started before A1's
+> width caveat fell because phase 2's gate is A4 — and the caveat is what the allocator would have
+> had to be revised for, which is why it was taken first.
 
 ---
 
@@ -76,7 +80,7 @@ Ranked by *how much code dies if it is wrong*, not by how likely it is to be wro
 
 | # | Assumption | Status | What dies if wrong |
 |---|---|---|---|
-| A1 | ~~`MB_SERVER` applies one request's registers within a single scan~~ | ✅ **NO TEAR OBSERVED — 3,340 writes × 16 registers, VARIANT 1, `TEAR_LATCH` 0 throughout.** Not "atomic": untested above 16 registers, above ~14 writes/s, and on VARIANT 2 | *(was: the whole X-A atomicity model → map design, copy layer, client write path — now clear to build, within those limits)* |
+| A1 | ~~`MB_SERVER` applies one request's registers within a single scan~~ | ✅ **RETIRED AT FULL WIDTH AND BOTH CALL ORDERS, 2026-08-13.** 3,000 writes × 123 registers VARIANT 1; 3,200 VARIANT 2; 0 torn reads in 3,000 (1.4). Not "atomic": two writes have still never been inside one scan | *(was: the whole X-A atomicity model → map design, copy layer, client write path — **now clear to build at any slot width up to the FC16/FC03 limits**)* |
 | A2 | ~~Modbus TCP performs on this rig at roughly the assumed rate~~ | ✅ **MEASURED: median 71–78 ms, p90 89–115, p99 136–173, one 2,216 ms outlier in 2,000. Per-register cost ≈ 0** | *(was: poll budget, slot width, O11/D29 arithmetic — the arithmetic needs re-deriving on the p99, the design does not)* |
 | A3 | ~~`%MW` has ~2048 words on a 1214C~~ | ✅ **VERIFIED — it is 4096 words / 8192 bytes**, double the assumption, and **separate from work memory** | *(was: slot sizing, slot count, map layout — the ceiling doubled and the mirror costs no work memory)* |
 | A4 | A block can be driven by its own existing command signal | untested | D37, inert, the entire start-bool mechanism |
@@ -1221,6 +1225,77 @@ defers to it, and a `[D]` marker was added so derived figures stop wearing `[M]`
     "width" means *slots*, never registers, and the cap is a function rather than a constant.
   - *** THE EXTRAPOLATION IS NAMED RATHER THAN BURIED: "width is free to 125/123" is `[I]`, measured
     only to 16 registers. *** Which is exactly what build C above is for.
+
+### ✅✅ A1 IS FULLY RETIRED, AND 1.4 IS ANSWERED — 2026-08-13, ON THE RIG
+
+Three builds, three downloads, all three verdicts read from the device.
+
+| # | run | verdict |
+|---|---|---|
+| **1.1** | N=123, **VARIANT 1** | *** NO TEAR OBSERVED in 3,000 writes of 123 registers. *** `TEAR_LATCH` 0 on both runs |
+| **1.1 / 1.5** | N=123, **VARIANT 2** | *** NO TEAR OBSERVED in 3,200 writes. *** Variant confirmed **from the device** — `--expect-variant 2` against a published `VARIANT = 2`, which is what proves the OB1 swap actually reached the controller rather than merely the project |
+| **1.4** | generator build, N=123 | *** NO TORN READ OBSERVED in 3,000 reads — 0 torn, 3,000 DISTINCT GENERATIONS. *** The earlier exit-4 non-result was the stimulus check working; with a generator running it passes decisively |
+
+**Liveness was exact on every run** — `CHANGE_COUNT` matched the issued count precisely, every time.
+No run returned `Stale`. **Both of A1's recorded limits are retired.** The limit that survives is
+unchanged and is a *round-trip* property rather than a width one: **two writes have still never been
+put inside one scan**, because the round trip is ~78 ms against a ~23 ms scan.
+
+  - ✅ *** "SLOT WIDTH IS FREE" NOW HOLDS AT THE LIMIT RATHER THAN BEING EXTRAPOLATED TO IT ***:
+    ~0.040 ms per register on writes, no trend at all on reads. §12a's `[I]` on this retires.
+  - ✅ **The 123-register chunked checker costs ~+0.17 ms of scan** against the 16-register one —
+    **under 1%.** V1 and V2 scan times are indistinguishable. The chunking was free.
+  - ✅ **Confirmed across all three downloads: no stop, no start, and `M` MEMORY SURVIVES.**
+    `SCAN_COUNTER` continued unbroken and `CHANGE_COUNT` held at exactly 400 across a download. The
+    2-object result from earlier generalises.
+
+### 🔴 `RTT_p99 = 173` IS TOO LOW AT FULL WIDTH — the tail did not scale like the median
+
+§12a's p99 was derived from the **16-register** sweep. Re-measured at **123**: **157 / 201 / 168 /
+185 ms** across four runs — **two of the four exceed 173**, n-weighted **~183**. `RTT_typ = 78` is
+confirmed (medians 75–77) and needs no change.
+
+*** THIS IS THE CASE THE `[D]`/`[M]`/`[I]` CONVENTION WAS ADDED FOR: a figure derived at one width
+and applied at another. *** The median scaled and the tail did not. Correction in flight; O11, X-B's
+timeout backstop, X-D's ceiling and §8's wave durations all key on this constant, and phase 4's
+admission control is already built against it.
+
+### 🔴 TWO WAYS THE RIG HANDED BACK A CONFIDENT WRONG ANSWER
+
+  1. **The first probe read `TEAR_LATCH = 1` and it was not a tear.** `INDEX 16, A=340, B=0` — a new
+     **wide** checker meeting the **old 16-wide** mirror, whose stale values survived the download.
+     `TEAR_VALUE_A/B` diagnosed it in one read, for the **third** time. *** IT IS ALSO POSITIVE
+     EVIDENCE THAT THE CHECKER REALLY DOES INSPECT ALL 123 *** — a checker still looking at 16 could
+     not have seen index 16 at all.
+  2. 🔴 *** THE CLIENT PRINTED "A1 IS FALSE — MB_SERVER TORE" OFF A PRE-EXISTING LATCH. ***
+     `tear-write --no-reset` computed a full tear verdict from a latch set before write 1, and
+     **fabricated a plausible supporting detail** — "first observed after ~5 writes" — for an event
+     that predated the run. That detail is what would have made someone believe it. **One flag away
+     from the most expensive wrong answer available in this project.** Being fixed: the run must
+     refuse rather than interpret prior state as its own result, and exit 4 — which is not a
+     redefinition, since exit 4 already means *"it ran, but the result proves nothing"*.
+
+### 🔴 THE `timing` MIRROR-RESTORE COULD NEVER HAVE RUN — a guard written, believed, never executed
+
+Added earlier the same day to stop a short sweep leaving a latched checker. It never worked on **any**
+invocation: `CmdTiming` **declared no status window**, so the client's own address fence refused its
+own `CONTROL` write — and the tool exited 1 on a usage error *before* its own "MIRROR WAS NOT LEFT
+CLEAN" check could fire. So the mirror was restored and the latch was not, and the guard that existed
+to say so was itself unreachable.
+
+*** THIRD INSTANCE OF THE SAME CLASS IN ONE DAY *** — after `compile`'s exit-code fix that never
+reached its binary and the tag-table rules that reported "not applicable". **Writing a guard, testing
+the code around it, and never executing the guard itself is this project's most reliable failure
+mode.** Fixed and **re-verified on the rig**, which is the only thing that could have established it.
+
+### 📍 RIG AND PROJECT STATE
+
+**Build D on the rig** (checker, N=123, VARIANT 2), CPU `Running (8)`, latch clear, project and rig in
+sync. Deliberately restored off build A rather than left on it, and the reason is worth keeping:
+**the generator holds `TEAR_LATCH` at 0 *and* republishes `CHANGE_COUNT`, so a `tear-write` against
+build A would report "no tear observed" with full liveness while no checker runs** — the stimulus
+check passing because the thing publishing liveness is not the thing that detects the fault.
+`FC_Comms_ModbusTearGen` (FC 101) remains in the project **uncalled**, so `BLOCKS:` is now **74**.
 
 ## PHASE 2 — THE WALKING SKELETON
 
