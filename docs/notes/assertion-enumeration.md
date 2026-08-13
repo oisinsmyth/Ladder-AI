@@ -230,6 +230,31 @@ Listings show `REQ-014.A2` because `REQ-014:3f9a1c` is unreadable aloud. ***THE 
 ONLY. A `Basis` citation in the ordinal form is REJECTED*** — mechanically, by shape — precisely
 because it is the readable one and would otherwise be the one people type.
 
+> ### 🔴 ORDERING WITHIN A CLAUSE IS APPEND-ONLY — ADDED 2026-08-13, AND IT WAS PROTECTING US UNWRITTEN
+>
+> ***NEW ASSERTIONS ARE APPENDED. AN ASSERTION IS NEVER INSERTED BEFORE AN EXISTING ONE, AND EXISTING
+> ONES ARE NEVER REORDERED.*** A clause's text may state its cases in any order; **the reading order
+> of the prose carries no implication whatever about its assertions' ordinals.**
+>
+> **This was true for five re-issues and required by nothing.** The enumerator followed it to keep its
+> own re-hash reports small, and that habit is the only reason three ordinal citations in ruling prose
+> — written when a clause held two assertions, never re-checked as it grew to six — were still correct
+> when they were finally audited. *They survived because nothing ever inserted, not because anything
+> checked them.*
+>
+> **WHY THE RULE IS NEEDED DESPITE §3.2, WHICH IS THE INTERESTING PART.** §3.2 guarantees an ID
+> depends on **nothing positional** — true, and load-bearing. But it *reads* as *"order does not
+> matter"*, and order **does** matter, to every ordinal that appears in prose the shape check cannot
+> reach. So a reorder moves **no ID, no text, fires no gate — and silently retargets every ordinal
+> citation.** *** THE GUARANTEE THAT MAKES THE ID SCHEME SOUND IS EXACTLY WHAT MAKES THE REORDER LOOK
+> FREE. *** A correctness property, correctly stated, that makes an unsafe operation look safe,
+> because the property does not cover the thing that actually depends on it.
+>
+> **And the temptation is real rather than theoretical.** In the first register to use this scheme,
+> a clause states its limbs in one order while the assertion implementing the first limb is the
+> *last* ordinal — appended so the earlier ones would not shift. **The ordinal order disagrees with
+> the clause's own reading order, which looks precisely like an untidiness worth fixing.** It is not.
+
 ### 3.4 Who stamps the IDs — added 2026-08-13, because the first live enumeration could not
 
 ***THE ENUMERATOR ISSUES ITS ARTIFACT WITH `normalised_text:` AND NO `id:` KEY. A SEPARATE STAMPING

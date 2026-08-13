@@ -176,6 +176,16 @@ running does not license:
       true of every implementation, including every wrong one.
     • **The wrong pointer** — *documents a case as handled and steers the reader away from the real
       gap.* Worse than a missing pointer, because it satisfies.
+    • **The guarantee that licenses the damage** — *a correctness property, correctly stated, that
+      makes an unsafe operation look safe, because the property does not cover the thing that actually
+      depends on it.* An ID scheme guaranteed IDs are **non-positional** — true and load-bearing — so
+      reordering reads as free. It **is** free for IDs, and silently retargets every ordinal citation
+      in prose, where the check that rejects ordinals cannot reach. *** THE PROPERTY THAT MAKES THE
+      DESIGN SOUND IS WHAT MAKES THE UNSAFE EDIT LOOK SAFE. ***
+      ➜ **Ask of any guarantee: what does it NOT cover, and who is relying on the uncovered part?**
+      ➜ And the discipline that had actually been protecting us — *append, never insert* — **was
+        written down nowhere.** It was followed as a habit, for an unrelated reason. **An invariant
+        held by habit is one nobody can be asked to keep.**
     ➜ **What found all three was CROSS-REFERENCING, never reading**: checking a clause against what it
       used to claim, against what supplies its terms, and against the assertions it says it relies on.
       *** CROSS-REFERENCING A DOCUMENT AGAINST ITS OWN DEPENDENCIES IS A DIFFERENT OPERATION FROM
