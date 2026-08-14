@@ -76,6 +76,30 @@ the block goes invisible on the wire while every check stays green. **It bites o
   block and see `SERIALISED`, ***that is a correct result, not a failure.***
 - **The gate count is 25**, not the 23 quoted in the test plan.
 
+## THE WRITE FENCES — attacked overnight, and they HELD
+
+**Nothing let anything through.** Every malformed device allowlist (11 forms), every non-allowlisted
+`download-probe` target (**exit 3 in 53–504 ms, zero log artifacts, Portal process count unchanged**),
+every hostile path form against `confirm-roundtrip -Arm` (**exit 4, the stub `openness-cli` never
+launched, the scratch dir never created**) — **including a junction pointing at the real allowlisted
+project, refused BY NAME as a junction.**
+
+**"No socket" was observed rather than quoted:** a refusal returns in **120–135 ms**; the permitted
+control costs the full **10 155 ms** connect timeout. *That gap is the evidence.*
+
+⚠️ ***BUT THE PERMIT HALF IS `NOT CHECKED`.*** The lane deliberately never tried a form that would
+have been permitted, because that would have started a real download. **Read the above as "these
+forms are refused", never as "the fence is correct".**
+
+🔴 **Three gaps found — none a hole in a fence, all holes in the GUARD ON THE GUARD**, being fixed:
+the IL walk certifying the tooling cannot download **passes while examining zero method bodies**; the
+`--yes` gate on `block-layout --set` can be **silently disconnected with 712/712 tests still green**;
+and a `null` entry in a device allowlist **crashes unnamed** instead of refusing *(it does still fail
+closed — the stack ends at the guard and no socket opens)*.
+
+⚠️ **A `repo:`-prefixed allowlist entry means DIFFERENT THINGS to the C# fence and the PowerShell
+fence.** Both fail closed today. **Prefer absolute paths in allowlists until that is reconciled.**
+
 ## HOW TO READ A GREEN FROM THIS TOOLING
 
 This is the habit the whole project is built around, and it is worth thirty seconds:

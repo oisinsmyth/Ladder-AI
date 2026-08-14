@@ -293,6 +293,32 @@ running does not license:
     ➜ **A crash is loud without being NAMED.** A harness cannot tell an unhandled exception from a
       refusal, so a top-level catch that names it is not decoration — it is what makes the difference
       reportable.
+- *** A CONTROL THAT IS NOT EXECUTED IS A NOTE ABOUT A CONTROL. *** Found 2026-08-14 on the single
+  most load-bearing assertion in the repository — the IL walk certifying that **no method in
+  `openness-cli` can reach `DownloadProvider.Download`.** It is genuinely armed *(retargeting the
+  predicate at `Compile` fails it)*, **but force its body-reader to return `null` and it passes while
+  examining ZERO method bodies**: `offenders.Count == 0` is true of *nothing found* and of *nothing
+  looked at*. Its negative control existed only as a **comment recording a manual retarget** — while
+  its **sibling walker in the same repo has a live one.**
+    ➜ **A structural guarantee needs BOTH: a positive control proving the walk detects, and a COUNT of
+      what it examined asserted `> 0`.** Neither alone separates the two zeros.
+    ➜ ***AND WHEN A PATTERN ALREADY EXISTS IN THE REPO, THE QUESTION IS WHICH SIBLINGS DID NOT GET
+      IT.*** One walker had the control and one did not; nothing flagged the difference.
+- *** A GATE HELD IN ONE `if` IS ONLY AS GOOD AS THE TEST THAT ROUTES THROUGH IT. *** Same day: the
+  `--yes` gate on `block-layout --set` — the only thing between a missing flag and a write that
+  **destroys retained data** — can be disconnected with a one-token mutation and **712 of 712 tests
+  stay green.** The test calls the refusal helper **directly**, so it pins the *message* and not the
+  *routing*, and the downstream call site never re-checks. **The gate is connected today, measured on
+  the shipped binary; nothing would notice if it stopped being.**
+    ➜ **Test a fence through the entry point a caller actually uses, and assert the OBSERVABLE
+      CONSEQUENCE** — the sentinel that proves Portal was never contacted — **not the exit code**,
+      which a disconnected gate can still produce by accident.
+- *** A FALSE ALARM IN A DIAGNOSTIC IS THE SAME CLASS AS A FALSE GREEN *** — it teaches its reader to
+  discount the one time it is right. Measured 2026-08-14: `portal-status` warned that a process
+  *"report[s] an ACQUIRED time EARLIER THAN THEIR OWN START TIME — a value that cannot be true"* about
+  a pair that is **in the correct order** (`STARTED 08-13 19:19`, `ACQUIRED 08-14 02:49`), reading as
+  a date-blind comparison. **A diagnostic that cries wolf is worse than a silent one**, because it is
+  the tool people reach for when something is already wrong.
 - *** AN ABSENCE THAT IS CORRECT EXACTLY ONCE IS A BUG FOR THE REST OF TIME. *** The strongest form of
   *empty is not clean* this project has produced, measured 2026-08-14 by killing 27 agents mid-write.
   `File.Replace` is **not atomic against process death**: it leaves a window in which the destination
