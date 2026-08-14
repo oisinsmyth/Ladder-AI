@@ -293,6 +293,38 @@ running does not license:
     ➜ **A crash is loud without being NAMED.** A harness cannot tell an unhandled exception from a
       refusal, so a top-level catch that names it is not decoration — it is what makes the difference
       reportable.
+- *** AN ABSENCE THAT IS CORRECT EXACTLY ONCE IS A BUG FOR THE REST OF TIME. *** The strongest form of
+  *empty is not clean* this project has produced, measured 2026-08-14 by killing 27 agents mid-write.
+  `File.Replace` is **not atomic against process death**: it leaves a window in which the destination
+  **does not exist**. A reader landing there got `FileNotFoundException` and read it as an **empty
+  store** — ***correct exactly once, before anyone has ever submitted, and catastrophic every time
+  after.*** Eight committed wave sets vanished and **the surviving submission reported success.**
+    ➜ **First-run semantics quietly become steady-state semantics**, and the day they diverge nobody
+      is watching. **Qualify the absence** — here, a marker written *before* the first publish — so
+      that *"never"* and *"lost"* are different facts instead of the same one.
+    ➜ *** A REVIEW THAT ESTABLISHES THE WRITER IS ATOMIC SAYS NOTHING ABOUT HOW THE READER INTERPRETS
+      THE WRITER'S FAILURE. *** This was found in a path already reviewed for exactly this class: the
+      rename had been thought about, the **reader's reading of absence** had not.
+    ➜ **And report an unknowable count as `UNKNOWN`, never as `0`** — *`0` says "nothing to lose"
+      about the one case where there may have been a lot.*
+- *** A GUARD THAT BLOCKS ITS OWN RECOVERY PATH TURNS A RECOVERABLE INCIDENT INTO AN OUTAGE. *** The
+  fix above initially refused `reset` as well, because `reset` read the outgoing count before clearing
+  — leaving the store recoverable only by hand-editing `ProgramData`. **Found by running the tool, not
+  by reading it.** ➜ **Whenever you add a fail-closed check, run the ESCAPE HATCH under it.**
+    ➜ *** AND CHECK THE RECOVERY ADVICE YOUR ERROR MESSAGE GIVES, BECAUSE ADVICE IS A CLAIM. *** The
+      message said the newest `.tmp-*` is a complete store; **restoring one recovered 17 slots.** An
+      untested instruction in an error message is a guess offered to someone in trouble.
+- *** A NON-RECURRENCE IS NOT A DEMONSTRATION. *** A second 30-kill round lost nothing — **and never
+  entered the race window**, so it is evidence about nothing. Banking it as confirmation is how a
+  guard comes to be believed on the strength of runs that never reached it. **Say which of your runs
+  actually entered the condition under test**; the rest are background.
+- *** A MISSING RESULT IS NOT A PASSING RESULT — AND ONLY ONE OF THEM ANNOUNCES ITSELF. *** Two
+  instances in one round, 2026-08-14, **both inside the lane's own test harness**: a probe silently
+  failed (Windows Python cannot open a `/c/...` path) so every case read an intact store and exited 0
+  — ***a clean sweep measuring nothing, produced by the instrument built to detect exactly that*** —
+  and a mutation that did not compile emitted **no result line at all**.
+    ➜ **Count your result lines against your case list before reading any of them.** A sweep that
+      cannot say how many cases it ran cannot say that they passed.
 - *** A TEST THAT PASSES FOR THE WRONG REASON IS INDISTINGUISHABLE FROM ONE THAT PASSES. *** Caught by
   the lane that wrote it, 2026-08-14: a test for *"an unknown key is silently dropped"* used
   `specname`, which **binds** — both readers set `PropertyNameCaseInsensitive`. It was green,

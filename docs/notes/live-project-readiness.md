@@ -54,6 +54,17 @@ the block goes invisible on the wire while every check stays green. **It bites o
 
 ## WHAT THE CAMPAIGN FOUND, THAT YOU SHOULD EXPECT TO MATTER
 
+- 🔴 ***COMMITTED WAVE SETS WERE BEING LOST SILENTLY, AND THE SURVIVING SUBMISSION REPORTED SUCCESS.***
+  Found by killing agents mid-write. `File.Replace` is not atomic against process death; a reader
+  landing in the window read the store as **empty** — *correct exactly once, before anyone has ever
+  submitted, and catastrophic every time after.* **Fixed and demonstrated in the live race** (90 kills,
+  guard fired 30 times, zero loss). ***If you ever see a wave store report zero slots after a
+  submission has been made, STOP — do not resubmit*** — the newest `.tmp-*` beside it is a complete
+  store and restoring it has been shown to recover cleanly.
+- ⚠️ **A killed agent LEAKS ITS SLOT permanently.** The colouring stays consistent and fails in the
+  safe direction, but there is **no withdraw verb**, so clearing one dead agent's slot currently costs
+  **every other agent's submission**. **Known, raised, deliberately not fixed overnight** — it is a
+  change to the multi-agent ownership contract, not a defect.
 - ***THE LEASE CRASHED AT 48 CONCURRENT AGENTS AND WAS CLEAN AT 8, 16 AND 32.*** Fixed. Now measured
   flat to 128 (69–122 ms per agent across a 16× range, no knee). **The practical ceiling is the
   caller's timeout — roughly 330 agents at the 30 s default — and the failure there is a NAMED
