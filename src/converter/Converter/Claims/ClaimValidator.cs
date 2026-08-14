@@ -79,6 +79,19 @@ public static class ClaimValidator
         };
     }
 
+    /// <summary>
+    /// Splits a block-number value into its space and number, or null when it is not one. Exposed so
+    /// the band annotation reads the number the SAME way the validator does — two parsers of one
+    /// format is how they come to disagree about an edge case nobody tested.
+    /// </summary>
+    public static (string? Space, int Number) BlockNumberParts(string value)
+    {
+        var match = BlockNumberForm.Match(value);
+        return match.Success
+            ? (match.Groups[1].Value, int.Parse(match.Groups[2].Value))
+            : (null, 0);
+    }
+
     private static ClaimOutcome? RejectBlockNumber(ClaimCorpus corpus, string value)
     {
         var match = BlockNumberForm.Match(value);
@@ -212,7 +225,7 @@ public static class ClaimValidator
                     return Array.Empty<string>();
                 }
 
-                return NumbersFrom(corpus, type, Math.Max(floor, 1));
+                return NumbersFrom(type, Math.Max(floor, 1), out error);
 
             case ClaimKind.BlockNetwork:
                 if (within is null)
@@ -259,10 +272,70 @@ public static class ClaimValidator
         }
     }
 
-    // Bounded rather than unbounded: a runaway that walks to int.MaxValue looking for a free number is
-    // a hang, and 512 candidates past the floor is far beyond any real project's block count.
-    private static IEnumerable<string> NumbersFrom(ClaimCorpus corpus, string type, int floor) =>
-        Enumerable.Range(floor, 512).Select(n => $"{type}{n}");
+    // How far past the floor a deliverable search will look. Bounded rather than unbounded: a runaway
+    // that walks to int.MaxValue looking for a free number is a hang, and 512 candidates is far beyond
+    // any real project's block count.
+    private const int SearchWidth = 512;
+
+    /// <summary>
+    /// 🔴 X-J's ENFORCING HALF (2026-08-14). Block-number candidates, with the reserved band applied.
+    ///
+    /// <para>Before this, `--allocate` had NO KNOWLEDGE of the band and would hand out 9000–9999 to a
+    /// deliverable without comment — the spec's treatment says the range is reserved <b>and the claim
+    /// tool refuses allocations inside it</b>, and only the first half existed.</para>
+    ///
+    /// <para>Two modes, and which one applies is decided by the FLOOR — a property of the range asked
+    /// for, checkable against the declaration, never a boolean about who is asking:</para>
+    /// <list type="bullet">
+    /// <item><b>Deliverable search</b> (the default, and any floor outside the band): the band is
+    /// REMOVED from the candidate set. The walk jumps from the number before the band to the number
+    /// after it, so *** NO PLAIN `--allocate` CAN EVER RETURN A BAND NUMBER *** — it is not a
+    /// preference the search could exhaust its way past.</item>
+    /// <item><b>Band search</b> (a floor inside the band, fed by
+    /// <see cref="Ladder.Wave.HarnessNumberRange.AllocationFloor"/>): candidates are CONFINED to the
+    /// band and stop at its last number. *** WALKING PAST THE END INTO UNRESERVED SPACE IS THE FAILURE
+    /// MODE *** — it hands a harness generator a deliverable number while every check stays green.
+    /// Exhaustion is a REFUSAL naming the band, not a quiet step outside it.</item>
+    /// </list>
+    ///
+    /// <para>A space the band does not cover (OB, per the carve-out) is unaffected in both directions:
+    /// there is no band in OB's number space, so nothing is skipped and nothing is confined. Applying
+    /// one would emit a false finding on <c>OB80</c>, the very first harness object X-J's own treatment
+    /// names, and <i>the first false finding is what gets a check switched off</i>.</para>
+    /// </summary>
+    private static IEnumerable<string> NumbersFrom(string type, int floor, out string? error)
+    {
+        error = null;
+        var band = ReservedBand.Declared;
+
+        if (ReservedBand.IsBandAllocation(type, floor))
+        {
+            // Confined. `Count` is computed from the band's own last number so it cannot run past it —
+            // there is deliberately no width constant here that could drift wider than the band.
+            var count = band.LastNumber - floor + 1;
+            return Enumerable.Range(floor, count).Select(n => $"{type}{n}");
+        }
+
+        // The band is SKIPPED, not merely started past. Written as an explicit walk rather than an
+        // arithmetic shift because the shift is wrong at both ends: it has to leave a floor BELOW the
+        // band alone until the walk reaches it, and leave a floor ABOVE the band alone entirely, and
+        // a `n < First ? n : n + Capacity` displaces the second case into numbers nobody asked for.
+        var candidates = new List<string>(SearchWidth);
+        var number = floor;
+        while (candidates.Count < SearchWidth)
+        {
+            if (band.CoversSpace(type) && band.ContainsNumber(number))
+            {
+                number = band.LastNumber + 1;
+                continue;
+            }
+
+            candidates.Add($"{type}{number}");
+            number++;
+        }
+
+        return candidates;
+    }
 
     private static ClaimOutcome Fail(ClaimResult result, string reason) =>
         new(result, null, null, reason);

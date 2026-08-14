@@ -88,13 +88,23 @@ public sealed record HarnessVerdict(HarnessClass Class, string Basis);
 public sealed class HarnessScope
 {
     /// <summary>
-    /// The reserved band, both bounds inclusive. One constant, consumed everywhere, rather than a
-    /// literal at a call site — the build plan's own follow-up condition when it declared the band.
+    /// 🔴 *** THE BAND IS NOT DECLARED HERE. *** It is read from
+    /// <see cref="Ladder.Wave.HarnessNumberRange.Declared"/>, which is the one place the coordinator's
+    /// ruling names and the one line overturning it would change.
+    ///
+    /// <para>This file carried its own <c>9000</c>/<c>9999</c> constants for a day (2026-08-13), and
+    /// they were right — which is exactly the danger. A second copy of a declared value agrees with
+    /// the original until someone overturns the original, and then it disagrees SILENTLY, in a
+    /// classifier whose whole job is to decide what is exempt from review. Deleted 2026-08-14, when
+    /// `claim --allocate` became the third consumer and made the divergence a matter of when.</para>
     /// </summary>
-    public const int ReservedBandLow = 9000;
+    public static Ladder.Wave.HarnessNumberRange Band { get; } = Ladder.Wave.HarnessNumberRange.Declared();
+
+    /// <summary>The first reserved number, inclusive — read from <see cref="Band"/>, never restated.</summary>
+    public static int ReservedBandLow => Band.FirstNumber;
 
     /// <inheritdoc cref="ReservedBandLow"/>
-    public const int ReservedBandHigh = 9999;
+    public static int ReservedBandHigh => Band.LastNumber;
 
     private readonly Dictionary<string, SortedSet<string>> _tagReferrers = new(StringComparer.Ordinal);
     private readonly Dictionary<string, HarnessVerdict> _corpusBlocks = new(StringComparer.Ordinal);
@@ -271,8 +281,12 @@ public sealed class HarnessScope
             ? v
             : new HarnessVerdict(HarnessClass.Unclassified, $"'{blockName}' was not resolvable to a block in the corpus");
 
+    // Space coverage is asked of the BAND, not assumed from the kind: the declaration names FB/FC/DB
+    // and omits OB, so if the ruling is ever narrowed further this follows it without an edit here.
+    // (The OB branch above still runs first, because an OB outside the band must read Unclassified
+    // rather than Plant — the band cannot classify it in EITHER direction.)
     private static HarnessVerdict ClassifyNumbered(string kind, int number) =>
-        number >= ReservedBandLow && number <= ReservedBandHigh
+        Band.CoversSpace(kind) && Band.ContainsNumber(number)
             ? new HarnessVerdict(
                 HarnessClass.Harness,
                 $"{kind} {number} is inside the reserved harness band {ReservedBandLow}-{ReservedBandHigh} (declared docs/notes/test-environment-build-plan.md, 2026-08-13)")

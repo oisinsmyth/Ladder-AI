@@ -27,7 +27,7 @@ public static class ClaimsRunner
         if (acquired)
         {
             return new ClaimOutcome(ClaimResult.Acquired, winner, null,
-                $"claimed {ClaimKinds.ToToken(kind)} '{value}' for agent '{agent}'");
+                $"claimed {ClaimKinds.ToToken(kind)} '{value}' for agent '{agent}'{BandNote(kind, value)}");
         }
 
         // Re-claiming your own claim is idempotent. An agent that retries after a crash, or that runs
@@ -42,6 +42,38 @@ public static class ClaimsRunner
             $"{ClaimKinds.ToToken(kind)} '{value}' is held by agent '{winner.Agent}' " +
             $"since {winner.CreatedUtc:yyyy-MM-ddTHH:mm:ssZ}" +
             (winner.Purpose is null ? "" : $" ({winner.Purpose})"));
+    }
+
+    // *** AN IN-BAND CLAIM IS ANNOUNCED, BECAUSE IT IS ACCEPTED RATHER THAN CHECKED. ***
+    //
+    // An explicit `--value FC9001` cannot be verified as a harness claim: a block-number claim is an
+    // ALLOCATION, so the block does not exist yet — that is the definition, and ClaimValidator refuses
+    // the claim outright if it does — which leaves HarnessScope's number-derived classification with
+    // nothing to read. A `--harness` flag would be a caller assertion, forgotten exactly when it
+    // matters, so there is none.
+    //
+    // What is available instead is ATTRIBUTION: the claim is recorded against an agent with a purpose,
+    // and this line makes an in-band claim VISIBLE in the outcome rather than indistinguishable from
+    // any other. A silent acceptance and a checked one look identical, which is the failure this
+    // project keeps finding; a stated one at least has a reader.
+    private static string BandNote(ClaimKind kind, string value)
+    {
+        if (kind != ClaimKind.BlockNumber)
+        {
+            return string.Empty;
+        }
+
+        var (space, number) = ClaimValidator.BlockNumberParts(value);
+        if (space is null)
+        {
+            return string.Empty;
+        }
+
+        return ReservedBand.PositionOf(space, number) == BandPosition.Inside
+            ? $" — NOTE: this is INSIDE the reserved harness band ({ReservedBand.Describe()}). Accepted, not verified: the block does " +
+              "not exist yet, so nothing derivable says whether this is a harness object or a deliverable one. Claim a band number only " +
+              "for harness-generated content."
+            : string.Empty;
     }
 
     // Allocation walks the candidates lowest-first and takes the first one that is BOTH free in the
@@ -84,6 +116,23 @@ public static class ClaimsRunner
             {
                 return outcome;
             }
+        }
+
+        // 🔴 BAND EXHAUSTION IS ITS OWN OUTCOME, NOT "no free number". *** THE FAILURE MODE THE BAND
+        // EXISTS TO PREVENT IS SILENTLY ALLOCATING OUTSIDE IT ***: a search that walked past 9999 would
+        // hand a harness generator a deliverable number, and every check downstream would stay green —
+        // the measured `FC 910` collision arriving by a different road. So the candidate list is
+        // confined to the band (ClaimValidator.NumbersFrom) and running out of it says exactly that,
+        // naming the band, its declarer and what to do about it. A caller must not be able to read this
+        // as "try a higher floor".
+        if (kind == ClaimKind.BlockNumber && type is not null && ReservedBand.IsBandAllocation(type, Math.Max(floor, 1)))
+        {
+            return new ClaimOutcome(ClaimResult.BandExhausted, null, null,
+                $"THE RESERVED HARNESS BAND IS EXHAUSTED for {type}: all {candidates.Count} number(s) from {Math.Max(floor, 1)} to " +
+                $"{ReservedBand.Declared.LastNumber} are used in the corpus or already claimed. {ReservedBand.Describe()}. " +
+                "This allocation was CONFINED to the band and did NOT continue past its end — allocating outside it would hand a " +
+                "harness object a deliverable number while every downstream check stayed green. Free band numbers by releasing " +
+                "fulfilled claims or deleting dead harness objects, or have the band widened where it is declared.");
         }
 
         return new ClaimOutcome(ClaimResult.HeldByAnother, null, null,

@@ -47,6 +47,13 @@ public enum ClaimResult
     NotInCorpus,        // an exclusive claim on something that does not exist
     Invalid,            // malformed value for the kind
     NothingExamined,    // FI-44: the corpus was empty, so "free" would mean nothing
+
+    // 🔴 X-J (2026-08-14). A band allocation ran out of RESERVED numbers. Its own result rather than
+    // HeldByAnother, because the two demand opposite responses: "someone got there first" invites a
+    // retry at a higher floor, and *** A HIGHER FLOOR IS EXACTLY WHAT MUST NOT HAPPEN HERE *** — it
+    // walks out of the reserved range and hands a harness object a deliverable number, silently, with
+    // every downstream check still green. The refusal names the band and its declarer.
+    BandExhausted,
 }
 
 public sealed record ClaimOutcome(

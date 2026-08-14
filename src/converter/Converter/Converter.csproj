@@ -11,4 +11,20 @@
     <InternalsVisibleTo Include="Converter.Tests" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!--
+      🔴 THE RESERVED BAND IS DECLARED ONCE, IN `HarnessNumberRange.Declared()`, AND CONSUMED HERE.
+      *** TWO DECLARATIONS OF ONE BAND IS HOW THEY DIVERGE *** — and this repo had briefly grown a
+      second: `HarnessScope` carried its own 9000/9999 constants on 2026-08-13, which would have gone
+      on agreeing with the ruling right up until somebody overturned it "at one line" in the place the
+      ruling names and not in the copy. That copy is deleted; the band now has exactly one home.
+
+      Safe to reference: WaveControl is `netstandard2.0` and REFERENCES NOTHING — no Siemens.Engineering,
+      no Openness, no JSON package, no network — so this adds no dependency to the converter's build
+      beyond one source project in the same repository, and keeps the converter's "pure in-process file
+      transformer" invariant intact.
+    -->
+    <ProjectReference Include="..\..\wave-control\WaveControl\WaveControl.csproj" />
+  </ItemGroup>
+
 </Project>
