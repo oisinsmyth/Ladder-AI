@@ -48,8 +48,12 @@ public static class CandidateScanRunner
 
         var warnings = inventory.Warnings.Concat(graph.Warnings).ToList();
 
+        // Derived from the corpus's own block names, never from fb.Count: an FB with an empty
+        // interface legitimately yields no candidates and is NOT absent.
+        var fbFound = graph.BlockNames.Contains(fbName);
+
         return new CandidateScanReport(projectDir, inventory.FilesScanned, fbName, instance, scopes,
-            typeFilter, direction, io, fb, family, phraseMatches, warnings);
+            typeFilter, direction, io, fb, family, phraseMatches, warnings, fbFound);
     }
 
     // FI-44. --scope was a pure path PREFIX, which silently assumes DB-qualified signals

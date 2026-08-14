@@ -33,7 +33,11 @@ public sealed record CandidateScanReport(
     IReadOnlyList<FbCandidate> FbCandidates,
     FamilyFact Family,
     IReadOnlyList<string> PhraseMatches,
-    IReadOnlyList<string> Warnings)
+    IReadOnlyList<string> Warnings,
+    // Whether the corpus contains a block called FbName at all. DERIVED from the usage graph's block
+    // names, never from the candidate count — an FB with an empty interface has no candidates and is
+    // not absent, and collapsing the two is how "absent" would become unreportable again.
+    bool FbFound = true)
 {
     public int Size => IoCandidates.Count + FbCandidates.Count;
 
@@ -57,4 +61,17 @@ public sealed record CandidateScanReport(
     // offers a choice a human must make; this means the scope is wrong, or the signals are not there
     // yet, and either way nothing has been checked.
     public bool ScopedButFoundNothing => Scopes.Count > 0 && IoCandidates.Count == 0;
+
+    // FI-44, the OTHER door (2026-08-14). ScopedButFoundNothing guards the OPTIONAL --scope axis;
+    // nothing guarded --fb, which is MANDATORY. An FB name present nowhere in the corpus produced
+    // zero candidates, "CANDIDATE SET SIZE: 0" and EXIT 0 - byte-identical to what a real FB with an
+    // unambiguous binding returns, so a typo, a not-yet-written block or a wrong --project all read
+    // as "this binding is fine". `undriven-scan` refuses the same condition and says why; the fix
+    // reached one of the two tools. Measured on the real 43-file export: 43 files scanned, exit 0.
+    public bool UnknownFb => !FbFound;
+
+    // One name for "nothing was examined", covering both doors, so a caller cannot act on one and
+    // miss the other. Kept separate from HasChoice for the reason ScopedButFoundNothing is: a
+    // finding is a defect in the plant, this is a defect in the question.
+    public bool ExaminedNothing => UnknownFb || ScopedButFoundNothing;
 }

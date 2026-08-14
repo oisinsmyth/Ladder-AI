@@ -234,6 +234,56 @@ public class CandidateScanTests : IDisposable
         Assert.False(report.ScopedButFoundNothing);
     }
 
+    // FI-44, the OTHER door (2026-08-14). `ScopedButFoundNothing` guards the --scope axis and nothing
+    // guarded --fb, which is the MANDATORY argument: an FB name that exists nowhere in the corpus
+    // produced zero candidates, "CANDIDATE SET SIZE: 0" and EXIT 0 — byte-identical to the answer a
+    // real FB with an unambiguous binding gives. `undriven-scan` already refuses exactly this
+    // condition ("there is no reading of 'scan a block that does not exist' that ends in success");
+    // the fix landed on one of the two tools and not the other. Measured on the real 43-file
+    // test-project001 export, not on a fixture.
+    [Fact]
+    public void UnknownFb_IsUnjudgeable_NotClean()
+    {
+        var report = CandidateScanRunner.Run(_dir, "FB_DoesNotExistAnywhere", instance: null,
+            scopes: Array.Empty<string>(), typeFilter: null, direction: "any",
+            phrases: Array.Empty<string>());
+
+        Assert.True(report.FilesScanned > 0);       // the corpus WAS read - this is not an empty project
+        Assert.True(report.UnknownFb);
+        Assert.True(report.ExaminedNothing);
+        Assert.False(report.HasChoice);             // "unasked" is not "unambiguous"
+    }
+
+    // The unaffected case, tested as deliberately as the refused one: a real FB must stay a clean
+    // pass, or the guard is noise and gets switched off.
+    [Fact]
+    public void KnownFb_IsNotUnknown_EvenWhenItYieldsNoIoCandidates()
+    {
+        var report = Run(scope: null);
+
+        Assert.False(report.UnknownFb);
+        Assert.False(report.ExaminedNothing);
+    }
+
+    // A block with no FB-interface leaves at all must still not read as "unknown" — the property has
+    // to be derived from the corpus's block names, never from the candidate count, or an FB with an
+    // empty interface is misreported as absent.
+    [Fact]
+    public void KnownFbWithNoInterfaceLeaves_IsStillKnown()
+    {
+        WriteProjectFile("FB_Bare.ir",
+            "BLOCK FB FB_Bare\nROOTID 0\nNUMBER 99\nLANGUAGE LAD\nTITLE \"bare\"\nCOMMENT \"c\"\n\n"
+            + "INTERFACE\n  INPUT\n  OUTPUT\n\nNETWORK 1 \"n\"\n  COMMENT \"c\"\n"
+            + "  COIL DB_In.Other := DB_In.Unit1Op\n");
+
+        var report = CandidateScanRunner.Run(_dir, "FB_Bare", instance: null,
+            scopes: Array.Empty<string>(), typeFilter: null, direction: "any",
+            phrases: Array.Empty<string>());
+
+        Assert.Empty(report.FbCandidates);
+        Assert.False(report.UnknownFb);
+    }
+
     private void WriteProjectFile(string fileName, string content) =>
         File.WriteAllText(Path.Combine(_dir, fileName), content);
 }

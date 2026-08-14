@@ -301,6 +301,49 @@ internal static class Program
     private static bool IsTagTableXml(XDocument document) =>
         document.Root?.Descendants().Any(e => e.Name.LocalName == "SW.Tags.PlcTagTable") ?? false;
 
+    // 2026-08-14. An input file that does not exist was an UNHANDLED FileNotFoundException in
+    // `review`, `digest` and `preflight` — a .NET stack trace on stderr and process exit
+    // 0xE0434352 (bash renders it 127, which conventionally means "command not found"). A crash is
+    // loud without being NAMED, and a caller cannot tell it from a refusal: the three sibling
+    // subcommands that already validate (`diff`, `ir-hash`, and every `--project` path) return a
+    // one-line message and exit 1. One helper rather than three fixes, because the next subcommand
+    // taking file arguments would otherwise inherit the same hole.
+    private static bool RefuseMissingInputs(IReadOnlyList<string> paths)
+    {
+        var missing = paths.Where(p => !File.Exists(p)).ToList();
+        if (missing.Count == 0)
+        {
+            return false;
+        }
+
+        foreach (var path in missing)
+        {
+            Console.Error.WriteLine($"File not found: {path}");
+        }
+
+        return true;
+    }
+
+    // Renders a name so the character that made it unusable is VISIBLE. The whole failure mode being
+    // reported is that a CR vanishes on a terminal, so echoing the raw name back would reproduce it.
+    private static string Quote(string name)
+    {
+        var sb = new System.Text.StringBuilder("'");
+        foreach (var c in name)
+        {
+            sb.Append(c switch
+            {
+                '\r' => "\\r",
+                '\n' => "\\n",
+                '\t' => "\\t",
+                _ when char.IsControl(c) => $"\\u{(int)c:X4}",
+                _ => c.ToString(),
+            });
+        }
+
+        return sb.Append('\'').ToString();
+    }
+
     // FI-65 component 1. Exit codes: 0 acquired / clean, 1 refused or conflict, 2 unusable input.
     // The 1-vs-2 split matters to a calling agent: 1 is a real answer ("someone else has it, pick
     // another"), 2 means nothing was decided and retrying the same way will not help.
@@ -639,7 +682,7 @@ internal static class Program
         }
     }
 
-    private static int RunReview(string[] args)
+    internal static int RunReview(string[] args)
     {
         var files = new List<string>();
         var ignoreErrors = false;
@@ -672,6 +715,11 @@ internal static class Program
         if (files.Count == 0)
         {
             Console.Error.WriteLine("Usage: converter review <file> [<file> ...] [--project <ir-dir>] [--ignore-errors] [--json] [--allow-unchecked]");
+            return 1;
+        }
+
+        if (RefuseMissingInputs(files))
+        {
             return 1;
         }
 
@@ -727,7 +775,7 @@ internal static class Program
         return ReviewOutcome.ExitCode(report, allowUnchecked);
     }
 
-    private static int RunDigest(string[] args)
+    internal static int RunDigest(string[] args)
     {
         var files = new List<string>();
         var ignoreErrors = false;
@@ -759,6 +807,11 @@ internal static class Program
             return 1;
         }
 
+        if (RefuseMissingInputs(files))
+        {
+            return 1;
+        }
+
         DigestReport report;
         try
         {
@@ -775,7 +828,7 @@ internal static class Program
         return report.Files.Any(f => f.FileError is not null) ? 1 : 0;
     }
 
-    private static int RunPreflight(string[] args)
+    internal static int RunPreflight(string[] args)
     {
         var files = new List<string>();
         string? projectDir = null;
@@ -803,6 +856,11 @@ internal static class Program
             return 1;
         }
 
+        if (RefuseMissingInputs(files))
+        {
+            return 1;
+        }
+
         if (!Directory.Exists(projectDir))
         {
             Console.Error.WriteLine($"--project directory not found: {projectDir}");
@@ -815,7 +873,7 @@ internal static class Program
         return report.HasFindings ? 1 : 0;
     }
 
-    private static int RunTagStatus(string[] args)
+    internal static int RunTagStatus(string[] args)
     {
         var names = new List<string>();
         string? projectDir = null;
@@ -851,6 +909,40 @@ internal static class Program
         {
             Console.Error.WriteLine($"--project directory not found: {projectDir}");
             return 1;
+        }
+
+        // 2026-08-14. A name carrying a control character or edge whitespace was CLASSIFIED rather
+        // than refused, and the verdict it produced is the one this tool exists to raise the alarm
+        // on. `DB_Input.Hopper_Level_High` + a trailing CR reports
+        //     MEMBER-NOT-FOUND (root: DB_Input) - no member 'Hopper_Level_High'
+        // which on a terminal is BYTE-IDENTICAL to the report for a genuinely invented member: the
+        // CR is swallowed by the renderer, so nothing in the output says the input was malformed.
+        // A CR inside the root instead reports PROPOSED - "that DB does not exist" - about a DB that
+        // does. This repo's tracked text is CRLF by convention, so piping a name list through
+        // `tr '\n' ' '` produces it on every name but the last; it turned 312 correct paths from the
+        // corpus into 168 MEMBER-NOT-FOUND and 143 PROPOSED with no indication anything was wrong.
+        //
+        // REFUSED, not trimmed: trimming would silently repair the caller's bug and the next list
+        // would arrive malformed again. Exit 2 - nothing was classified, so this is neither a clean
+        // pass nor a hard-rule-3 finding, and it must not be mistaken for either.
+        var malformed = names
+            .Where(n => n.Length == 0 || n.Any(char.IsControl) || n != n.Trim())
+            .ToList();
+        if (malformed.Count > 0)
+        {
+            foreach (var name in malformed)
+            {
+                var reason = name.Length == 0 ? "empty"
+                    : name.Any(char.IsControl) ? "contains a control character (e.g. a CR from a CRLF list)"
+                    : "has leading or trailing whitespace";
+                Console.Error.WriteLine(
+                    $"tagstatus: unusable name {Quote(name)} - {reason}. Nothing was classified for it.");
+            }
+
+            Console.Error.WriteLine(
+                $"tagstatus: {malformed.Count} of {names.Count} name(s) were unusable - refusing rather than classifying them. "
+                + "A malformed name resolves to MEMBER-NOT-FOUND or PROPOSED, which is indistinguishable from a real hard-rule-3 finding.");
+            return ExitUnusable;
         }
 
         var report = TagStatusRunner.Run(names, projectDir, rootsOnly);
@@ -1179,7 +1271,7 @@ internal static class Program
         return report.HasFindings ? 1 : 0;
     }
 
-    private static int RunCandidateScan(string[] args)
+    internal static int RunCandidateScan(string[] args)
     {
         string? projectDir = null;
         string? fb = null;
@@ -1258,6 +1350,18 @@ internal static class Program
         Console.WriteLine(json
             ? CandidateScanOutputFormatter.FormatJson(report)
             : CandidateScanOutputFormatter.FormatText(report));
+
+        // FI-44, the other door (2026-08-14). --fb is MANDATORY and was unguarded: an FB name in no
+        // block of the corpus scanned all 43 files, reported CANDIDATE SET SIZE 0 and exited 0 —
+        // indistinguishable from a real FB whose binding is unambiguous. Checked BEFORE the scope
+        // case: when the block does not exist the scope question never arose.
+        if (report.UnknownFb)
+        {
+            Console.Error.WriteLine(
+                $"candidate-scan: no block named '{report.FbName}' in {projectDir} - nothing was examined. " +
+                "A candidate set computed against a block that does not exist is not evidence the binding is unambiguous.");
+            return 2;
+        }
 
         // FI-44 — a scope that matched nothing exits 2, distinct from both success and a real
         // finding. Before this it exited 0, and scoping to a piece of equipment on a plant whose

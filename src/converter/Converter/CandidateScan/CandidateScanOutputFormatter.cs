@@ -15,6 +15,15 @@ public static class CandidateScanOutputFormatter
         sb.Append("candidate-scan  project=").Append(report.ProjectDir)
             .Append(" (").Append(report.FilesScanned).Append(" file(s) scanned)")
             .Append("  fb=").Append(report.FbName);
+
+        // Said in the HEADER, beside the denominator, because "the block is not in this corpus" is a
+        // fact about the question and every number below it is then vacuous. Silent when the block is
+        // found: the exit code and this line are the two places a caller meets the distinction.
+        if (report.UnknownFb)
+        {
+            sb.Append(" (NOT FOUND in this corpus - nothing below was examined)");
+        }
+
         if (report.Instance is not null)
         {
             sb.Append("  instance=").Append(report.Instance);
@@ -100,6 +109,13 @@ public static class CandidateScanOutputFormatter
             phraseMatches = report.PhraseMatches,
             size = report.Size,
             hasChoice = report.HasChoice,
+            // Both FI-44 guards, so a --json consumer can tell "unambiguous" from "unexamined"
+            // without reading the exit code. Neither was present before 2026-08-14, which meant a
+            // machine reader of this document could not see the distinction at all.
+            fbFound = report.FbFound,
+            unknownFb = report.UnknownFb,
+            scopedButFoundNothing = report.ScopedButFoundNothing,
+            examinedNothing = report.ExaminedNothing,
             warnings = report.Warnings,
         };
 
