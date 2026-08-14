@@ -410,10 +410,25 @@ This is the habit the whole project is built around, and it is worth thirty seco
 
 ## THE STANDING MEASURED FACTS
 
-Rig `10.10.10.10:503` unit 1 via the Talk2m tunnel; `:102` open, `:502` refused. Scan **23.33 ms**.
+Rig `10.10.10.10:503` unit 1 via the Talk2m tunnel; `:102` open, `:502` refused.
 Round trip **min 63 / med 72 / max 106 ms**. **32-bit word order is HIGH-WORD-FIRST — measured off a
-build stamp with distinguishable halves.** Mirror: **35 registers at `%M1000`, exactly full, zero
-spare.**
+build stamp with distinguishable halves, and re-confirmed 2026-08-14 over BOTH transports.**
+
+✅ **Mirror: 37 registers at `%M1000` — widened from 35 on 2026-08-14 for the phase-armed latch band,
+and PINNED ON BOTH SIDES over Modbus rather than bounded from below:** registers **35–36 read
+successfully** (whole-area `FC03(0,37)` *and* single-register probes), and ***register 37 is REFUSED by
+the server*** — Modbus exception 2, *Illegal Data Address*, **in 72 ms, a full round trip, so it was
+ANSWERED rather than rejected locally.** Control: single reads of 34/35/36 *do* answer, so the refusal
+is not a server refusing everything. *A successful read of 35–36 alone would have been equally
+consistent with a server exposing far more than declared.*
+
+🔴 ***SCAN TIME IS CONTESTED — 23.33 ms IS RECORDED, 2.11 ms IS MEASURED.*** The mirror's own
+free-running scan counter, read over Modbus in two independent runs, gives **2.11 ms and 2.07 ms per
+tick** against the recorded **23.33 ms** — an **~11× disagreement**. ***NOT ESTABLISHED IN EITHER
+DIRECTION, and no mechanism is attached to it:*** the counter may tick more than once per OB1 scan, may
+be driven by something other than OB1, or the idle cycle may genuinely be ~2.1 ms while 23.33 ms was
+taken under other conditions. ***DO NOT BUILD ON EITHER FIGURE UNTIL IT IS SETTLED*** — X-D's
+compression ceiling (`k × scan = 116.7 ms`) rests entirely on 23.33, and was already half-measured.
 
 🔴 ***CORRECTED 2026-08-14 — "S7 VARIABLE ACCESS IS REFUSED CPU-WIDE" WAS OVERSTATED, AND THE TOOL'S
 OWN DIAGNOSTIC SAID SO ALL ALONG.*** Measured live this morning in one `rig-read` run:
