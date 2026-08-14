@@ -128,7 +128,15 @@ control costs the full **10 155 ms** connect timeout. *That gap is the evidence.
 have been permitted, because that would have started a real download. **Read the above as "these
 forms are refused", never as "the fence is correct".**
 
-🔴 **Three gaps found — none a hole in a fence, all holes in the GUARD ON THE GUARD**, being fixed:
+🔴 ***THE HARNESS'S STRONGEST SAFETY CLAIM WAS CERTIFIED BY A CONSTANT.*** `rig-write`'s arming — *"the
+capability is absent from the assembly"* — rested on `Assert.False(Arming.CompiledIn)` where
+`CompiledIn` is a **`const bool`**. A class constructing a live socket client was **planted in that
+assembly and all 202 tests stayed green.** ***`rig-write` still cannot write — what changed is that we
+now KNOW it, instead of having been told it.*** Replaced with a structural walk carrying a denominator
+and a live control. **A constant stays true exactly as long as someone remembers to change it, which
+is the one thing a fence must never depend on.**
+
+🔴 **Three more gaps — none a hole in a fence, all holes in the GUARD ON THE GUARD**, now fixed:
 the IL walk certifying the tooling cannot download **passes while examining zero method bodies**; the
 `--yes` gate on `block-layout --set` can be **silently disconnected with 712/712 tests still green**;
 and a `null` entry in a device allowlist **crashes unnamed** instead of refusing *(it does still fail

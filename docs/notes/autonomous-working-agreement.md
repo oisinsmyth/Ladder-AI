@@ -293,6 +293,34 @@ running does not license:
     ➜ **A crash is loud without being NAMED.** A harness cannot tell an unhandled exception from a
       refusal, so a top-level catch that names it is not decoration — it is what makes the difference
       reportable.
+- *** A TEST OF A LITERAL IS EVIDENCE ABOUT THE LITERAL AND NOTHING ELSE. *** The starkest instance
+  this project has found, 2026-08-14: the harness's **strongest safety claim** — *"the capability is
+  absent from the assembly"* — was backed by `Assert.False(Arming.CompiledIn)` where `CompiledIn` is a
+  ***`const bool`***. **A class constructing a live socket client was planted in that assembly and all
+  202 tests stayed green.** ***A CONSTANT STAYS TRUE EXACTLY AS LONG AS SOMEONE REMEMBERS TO CHANGE
+  IT, WHICH IS THE ONE THING A FENCE MUST NEVER DEPEND ON.***
+    ➜ **A claim about an ASSEMBLY needs a walk over the assembly** — with a denominator *and* a live
+      positive control, which catch different failures and neither subsumes the other.
+- *** A CHECK WHOSE EXERCISE REQUIRES EDITING THE CHECK WILL NOT BE EXERCISED. *** Root cause of the
+  decayed IL-walk control, same day: the searched member name was a **literal**, so the only way to
+  run the negative control was to **hand-edit the test** — *which is exactly how it decayed into a
+  comment describing a manual run somebody once did.* **Making it a parameter is what makes the
+  control runnable, and therefore what makes it survive.**
+    ➜ **When you find a control that rotted, ask what it COST to run.** The rot is usually the price,
+      not the diligence.
+- *** AN HONEST REPRESENTATION CAN BE RE-CONSUMED AS DATA ONE LAYER DOWN. *** Measured 2026-08-14: a
+  gateway deliberately left an unknowable timestamp at `default` — *"rather than filled with a
+  plausible-looking value"*, correctly, and said so at the site. **The consumer then compared the
+  default as if it were a measurement**, so `0001-01-01 < any real start` fired a *"this cannot be
+  true"* alarm on every process of that kind. ***DOING THE RIGHT THING AT LAYER N CREATED THE DEFECT
+  AT LAYER N+1*** — nastier than a mistake, because **reviewing the site that "caused" it finds
+  nothing wrong there.**
+    ➜ *** A TEST HELPER'S DEFAULT IS A SILENT ASSUMPTION ABOUT WHICH INPUTS ARE POSSIBLE. *** This one
+      defaulted the field to a real timestamp, so **no fixture ever built the shape production
+      emits**, and an entire real class was untestable while every test passed.
+    ➜ **And the orchestrator's own diagnosis — *"date-blind comparison"* — was wrong.** The lane
+      checked rather than implementing it. ***An orchestrator's guess is a report about the world, not
+      the world.***
 - *** AN ASSERTION THAT CANNOT FAIL IS DOCUMENTATION WEARING A CHECK'S CLOTHES — AND IT IS WORSE THAN
   A MISSING CHECK, BECAUSE IT OCCUPIES THE SLOT. *** Measured 2026-08-14 inside gate 8: it computes
   `effective = computed ∪ declared` and then asserts `computed ⊆ effective` — ***true for every input,
