@@ -97,6 +97,28 @@ the block goes invisible on the wire while every check stays green. **It bites o
   block and see `SERIALISED`, ***that is a correct result, not a failure.***
 - **The gate count is 25**, not the 23 quoted in the test plan.
 
+## 📋 ONE THING WAITING FOR YOU TO DECIDE
+
+**`gen/test-project001/hopper-blockage-alarm/harness-binding.json` exists on disk and is DELIBERATELY
+NOT COMMITTED.** It is a transcription of the coordinator's binding, which exists only as prose
+(`harness-binding.md`), into the data form `--binding` requires — **18 signal entries + 4 latch
+provenances bound, 5 left UNBOUND**, each unbound one citing the prose line that could not be resolved,
+and one invented slot id flagged as invented.
+
+***IT IS NOT COMMITTED BECAUSE A COORDINATOR'S BINDING IS AN AUTHORITY DOCUMENT.*** Its whole purpose
+under D6 is to be a source the submission cannot adjudicate — so an AI transcription of it, committed
+unreviewed, **would silently become that authority.** *A transcription is only a transcription until
+somebody commits it; after that it is the source.*
+
+**Your five-minute job:** read the 5 unbound entries and the flagged token, resolve or reject them,
+then commit it or don't. **Nothing else is waiting on you.**
+
+**What it already bought:** run against gate 5, it took `SignalNotInMap` from **33 to 0** — the name
+join is complete — and returned a real verdict, ***`REFUSED — 13 × MapDoesNotProvideIt`***. Those 13
+are the same signals wanting `Latched` where the map provides `Sampled`: **the gate independently
+identified the phase-armed latch gap from the opposite end, without reading the analysis that found
+it.** It was not tuned to produce that.
+
 ## 🔴 WHY NO WAVE WAS RUN OVERNIGHT — a decision, with its reasoning
 
 **The rig was serving and reachable all night, and a download to it is permitted** (allowlisted bench
