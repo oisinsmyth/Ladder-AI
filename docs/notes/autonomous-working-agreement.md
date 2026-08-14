@@ -362,6 +362,29 @@ running does not license:
       conclusion did not flip to *"expected to work"* — it moved to **NOT ESTABLISHED IN EITHER
       DIRECTION**, because three untested reasons survived that the retired fact never touched. *An
       untested thing does not become true when the argument against it fails.*
+- *** AN INSTRUMENT DOES NOT FAIL BY PRODUCING NOISE. IT FAILS BY PRODUCING A CLEAN, PLAUSIBLE,
+  PUBLISHABLE FINDING ABOUT ITS SUBJECT. *** The sharpest instance yet, 2026-08-14. A concurrency
+  harness launched its children with `Start-Process -RedirectStandardOutput`, which on PS 5.1 pumps
+  the child's stream **in managed code**. Same command, same store, **no concurrency at all**:
+
+      cmd.exe shell redirection to a file      209 ms
+      raw Process + ReadToEndAsync             184-204 ms
+      Start-Process -RedirectStandardOutput  2,559 ms
+
+  The tool's colouring report prints **one line per conflict edge**, so edge-bearing shapes emitted
+  megabytes and edge-free ones almost nothing. Through that launcher the difference read as
+  ***"wave-cli gets super-linearly slower with conflict edges, and refuses submissions on lease
+  timeouts as a result"*** — **exactly the defect anyone would have expected to find.** The child also
+  **blocks when the pipe fills**, so every wall-clock figure in those shapes was inflated too.
+    ➜ ***THE HARNESS WAS MEASURING ITS OWN LAUNCHER AND CALLING IT THE TOOL.*** Found by running the
+      thing it accuses — **which is the method, not a lucky break.**
+    ➜ *** DO NOT CAPTURE WHAT YOU DO NOT MEASURE. *** The rule was already *reconcile against the
+      store on disk, never against what the submitters report* — so stdout was **not an input to the
+      measurement at all.** Redirect it at the OS level and read it *after* the run, if ever. **A
+      harness that reads what it does not measure has given itself a bottleneck for nothing.**
+    ➜ *** A NUMBER WHOSE INSTRUMENT HAS SINCE BEEN FOUND FAULTY IS NOT EVIDENCE UNTIL IT IS RE-TAKEN.***
+      **Check backwards**, and say plainly which earlier figures survive and which do not — *a silent
+      inheritance is how a retracted instrument keeps publishing.*
 - *** A DOCUMENT THAT DRIVES BOTH SIDES OF A COMPARISON CANNOT BE CAUGHT BY THAT COMPARISON. ***
   Measured 2026-08-14: the coordinator's binding listed its `resultSources` in the prose's order while
   the deployed layer used a different one — **and the binding drives BOTH the emitted rungs AND the
