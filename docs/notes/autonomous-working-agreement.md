@@ -239,6 +239,24 @@ running does not license:
       constrain**, since both outputs moving together at the wrong moment satisfies it.
     ➜ And: **clear evidence on the harness DROPPING its start bool, never on the edge.** *A latch
       cleared on the edge is cleared again by a harness restart mid-run, taking the evidence with it.*
+- *** ASK WHICH TRANSPORT ACTUALLY CARRIES THIS. *** Measured 2026-08-14, and it is the **fourth**
+  instance of the unexecuted-guard family — but the first found by a question rather than by a
+  mutation. A scan-counter wrap **is** absorbed, correctly, with a passing test, in the **S7** read
+  path. *** S7 VARIABLE ACCESS IS REFUSED CPU-WIDE ON THIS RIG, SO EVERY DATA READ GOES OVER MODBUS —
+  AND THE MODBUS PATH ABSORBS NOTHING. *** Three call sites then fail closed **with the wrong
+  diagnosis**, and one prints a negative delta as *"after N scan(s)"* on a completed slot.
+    ➜ **A guard is only as reachable as the route its callers actually take.** When two transports
+      exist, "it is handled" is a claim about **one of them** — and the tested one is usually the one
+      that was easy to test.
+    ➜ **The fix is not urgent and the finding is not the wrap** (a `DInt` at 23.33 ms/scan wraps after
+      ~580 days). *The finding is that a guard lived where nothing runs*, which is worth more than the
+      arithmetic it protects.
+- *** WHEN A CONSTANT IS USED CORRECTLY BY CANCELLATION, SAY SO AT THE SITE. *** Same audit: one use of
+  a bound-shaped constant was **not a bound** — it was the algebraic *inverse* of a figure computed
+  with the same constant, and is right only because the two cancel. The project's rule for choosing
+  between constants (durations → p90, bounds → p99) **does not reach it**, and the rule that governs
+  it — *use the same constant the figure you are inverting was computed with* — **was written
+  nowhere.** ➜ **A value that is correct for a reason no rule states is one somebody will "correct".**
 - *** A COMPONENT THAT CAN ONLY BE ASSERTED ABOUT HAS A CLASS OF DEFECT NO ASSERTION REACHES. ***
   Measured 2026-08-14, and it is the strongest argument this project has produced for building a
   driver. `WaveControl` had **no entry point** — 375 unit tests, all green, and the assembly was
