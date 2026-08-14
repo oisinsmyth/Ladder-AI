@@ -125,6 +125,68 @@ public class PortalStatusDefectTests
             PortalStatusClassifier.Classify(new[] { p })), StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// *** THE FALSE ALARM, AND THE CASE NO FIXTURE EVER BUILT (found 2026-08-14). ***
+    ///
+    /// An Openness-INVISIBLE process reports no acquired time at all - the gateway constructs it with
+    /// `Acquired: default`, deliberately, "rather than filled with a plausible-looking value". The
+    /// impossibility check then read that default as a MEASUREMENT, so it was true for EVERY OS-only
+    /// process with a readable start time, and the report announced an impossible ACQUIRED time about
+    /// a process whose ACQUIRED column reads "(not visible to Openness)".
+    ///
+    /// <para>It fired on both real runs of this command on 2026-08-14. It was never caught because
+    /// the Process() helper here DEFAULTS `acquired` to a real timestamp, so no fixture had ever
+    /// reproduced the shape the gateway actually emits - the "did not run" case above covers a
+    /// missing START time and there was no equivalent for a missing ACQUIRED time.</para>
+    ///
+    /// <para><i>A false alarm in a diagnostic is the same class of error as a false green:</i> it
+    /// teaches its reader to discount the one time it is right.</para>
+    /// </summary>
+    [Fact]
+    public void AnOpennessInvisibleProcess_IsNotFlagged_BecauseItReportsNoAcquiredTimeAtAll()
+    {
+        // Exactly what OpennessGateway builds for an OS-only process: no project, no acquired time,
+        // a readable OS start time.
+        var p = new PortalProcessInfo(
+            12028, ProjectPath: null, Acquired: default, HasUserInterface: false, MarkedByThisTool: false,
+            StartedAt: new DateTime(2026, 8, 13, 19, 20, 28), LaunchedByThisTool: false, OpennessVisible: false);
+
+        Assert.False(p.AcquiredPrecedesStart);
+
+        var report = PortalStatusClassifier.Classify(new[] { p });
+        Assert.DoesNotContain("EARLIER THAN THEIR OWN START TIME", report.Note, StringComparison.Ordinal);
+        Assert.DoesNotContain("! BEFORE START", OutputFormatter.FormatPortalStatusTable(report), StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The real-world pair that produced the false alarm, together: a healthy in-use session whose
+    /// ACQUIRED is LATER than its start (correct ordering, must not flag) beside an OS-only process
+    /// with no acquired time (nothing to say, must not flag). This is the exact shape of both
+    /// `portal-status` runs on 2026-08-14, and the report must now be silent on the subject.
+    /// </summary>
+    [Fact]
+    public void TheMeasuredPair_ProducesNoImpossibleTimestampClaim()
+    {
+        var inUse = Process(
+            5252,
+            project: @"C:\p\Thing.ap20",
+            started: new DateTime(2026, 8, 13, 19, 19, 27),
+            acquired: new DateTime(2026, 8, 14, 2, 49, 19));
+
+        var osOnly = new PortalProcessInfo(
+            12028, null, default, false, false,
+            new DateTime(2026, 8, 13, 19, 20, 28), false, OpennessVisible: false);
+
+        var report = PortalStatusClassifier.Classify(new[] { inUse, osOnly });
+
+        Assert.DoesNotContain("EARLIER THAN THEIR OWN START TIME", report.Note, StringComparison.Ordinal);
+
+        // *** THE CONTROL. *** The OS-only finding itself must SURVIVE - the fix silences one claim,
+        // not the whole note. A flag removed by deleting its subject is not a fix.
+        Assert.Contains("OPERATING SYSTEM shows", report.Note, StringComparison.Ordinal);
+        Assert.Equal(1, report.OpennessInvisibleCount);
+    }
+
     [Fact]
     public void WhenTheStartTimeCouldNotBeRead_NothingIsClaimedAboutTheAcquiredTime()
     {

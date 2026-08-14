@@ -63,8 +63,34 @@ public sealed record PortalProcessInfo(
     ///
     /// What <c>AcquisitionTime</c> actually means is NOT established here and is not guessed at —
     /// it is reported as the raw API value it is, and flagged when it contradicts the OS.
+    ///
+    /// 🔴 <b>AND IT FIRED ON EVERY OPENNESS-INVISIBLE PROCESS, WHICH REPORT NO ACQUIRED TIME AT ALL
+    /// (fixed 2026-08-14).</b> Those are built with <c>Acquired: default</c> — deliberately, and the
+    /// gateway says so at the site: <i>"Everything the Openness API would have told us is unknown by
+    /// construction here, and is left at its default rather than filled with a plausible-looking
+    /// value."</i> That was exactly right. <b>This comparison then read the default as a
+    /// measurement</b>, so <c>0001-01-01 &lt; any real start time</c> was true for every one of them,
+    /// and the report announced *"an ACQUIRED time EARLIER THAN THEIR OWN START TIME"* about a
+    /// process whose ACQUIRED column, three characters away, read <c>(not visible to Openness)</c>.
+    ///
+    /// <para><b>The honest representation was re-consumed as data one layer down</b> — the absence
+    /// was correctly modelled and then incorrectly read. It is not a date-blind comparison; the
+    /// comparison is exact. It was asked about a value that does not exist.</para>
+    ///
+    /// <para><i>A false alarm in a diagnostic is the same class of error as a false green:</i> it
+    /// teaches its reader to discount the one time it is right. It fired on the ONLY two runs of this
+    /// command tonight, both times about a process it had nothing to say about.</para>
+    ///
+    /// <para>The guard is on <see cref="OpennessVisible"/> — the property that MEANS "an acquired
+    /// time was actually read" — plus the value's own absence, so a visible process that somehow
+    /// reports <see cref="DateTime.MinValue"/> is not flagged either. Neither alone is enough: the
+    /// flag answers only for processes that reported something.</para>
     /// </summary>
-    public bool AcquiredPrecedesStart => StartedAt is DateTime started && Acquired < started;
+    public bool AcquiredPrecedesStart =>
+        OpennessVisible &&
+        Acquired != default &&
+        StartedAt is DateTime started &&
+        Acquired < started;
 }
 
 /// <summary>
