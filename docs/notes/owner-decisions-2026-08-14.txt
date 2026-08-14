@@ -1,0 +1,344 @@
+================================================================================
+OPEN DECISIONS FOR THE OWNER — 2026-08-14
+================================================================================
+
+HOW TO USE THIS FILE
+  Every item ends with a RESPONSE line pre-filled with AGREE. If you agree with
+  the recommendation, leave it. If not, overwrite it with what you want. A one
+  word answer is enough; anything you write is treated as the ruling.
+
+WHAT IS *NOT* IN HERE
+  Anything I can settle myself, and anything a lane is actively resolving. This
+  is only the set where the answer is genuinely yours: authorisations that carry
+  your signature, rulings on your own specification, and decisions about which
+  of two artifacts is the truth.
+
+  Deliberately excluded, for example: the 3-register discrepancy between the
+  emitted layer (32) and the recorded deployment (35) — I will measure that; the
+  six-slots-versus-one-slot question — a lane is answering it from the prose;
+  wiring SlotJoin — handed to the lane that owns that file; the ResetAtMs
+  binding form — the encoding is fully stated in your prose (md:35-37, 123-130),
+  so it is a transcription and I will do it.
+
+  Older batch, untouched: docs/notes/owner-questions.md
+
+--------------------------------------------------------------------------------
+Q-01   writeEligible on the bench rig
+--------------------------------------------------------------------------------
+WHY YOU        It sits beside isolationAssertedBy/isolationAssertedDate. It is a
+               human authorisation for writing to a physical controller, and the
+               tool refuses to edit it or stand in for it.
+
+RECOMMENDATION Leave it FALSE for now.
+
+REASONING      It was measured today that `download-probe --disruptive` answers
+               StartModules as well as StopModules, so an ordinary download does
+               NOT leave the CPU stopped. rig-control is only needed for the
+               narrower case: an ABORTED download, where StartModules never
+               fires because it sits in the POST delegate.
+               So flipping it now would be a precaution with no live need. If we
+               hit the abort case I will come back and ask, and at that point it
+               is a decision with a concrete reason attached.
+
+COST IF WRONG  If we do hit an abort, the rig sits in STOP until you flip it or
+               start the CPU in TIA. Minutes, not damage.
+
+RESPONSE       AGREE
+
+--------------------------------------------------------------------------------
+Q-02   The slot partition in the coordinator's binding
+--------------------------------------------------------------------------------
+WHY YOU        harness-binding.json is an authority document. Its own _unbound
+               section records the partition as unresolved, and its _warning says
+               generation needs it stated. An AI resolving it makes the
+               transcription an authorship.
+
+RECOMMENDATION State it explicitly, EVEN IF the answer is "one slot".
+
+REASONING      md:41-59 and md:69-80 are flat tables with no slot column, while
+               md:175 names six start bools and set B declares six slot ids. So
+               six ids exist and nothing says which signal belongs to which.
+               md:179-181 says all six drive the SAME instance and the SAME
+               members, and md:173-186 says they are STRICTLY SERIAL — which is
+               consistent with one slot, but "consistent with" is not "stated
+               as", and that gap is exactly what nobody should close silently.
+
+EXAMPLE        A single line in the prose would do it, e.g.:
+                 "All six slot ids address one slot; the ids are the vector
+                  author's grouping key, not six independent test surfaces."
+               ...or the converse, if six really are intended.
+
+COST IF WRONG  Guessing "one slot" when six are meant silently merges six test
+               surfaces. Guessing "six" when one is meant multiplies the mirror
+               from ~34 registers to ~174 and will not fit the area pointer.
+
+RESPONSE       AGREE
+
+--------------------------------------------------------------------------------
+Q-03   HBA_Scenario_Done — the prose states a MODE where the schema needs PROVENANCE
+--------------------------------------------------------------------------------
+WHY YOU        It is your prose, and the fix belongs there rather than in the
+               transcription.
+
+RECOMMENDATION Amend md:74 to name the latching block, or state that it is not
+               latched by a block.
+
+REASONING      md:74 reads `latched` and names no block. The schema's `latchedBy`
+               deliberately takes a BLOCK NAME rather than a boolean, because a
+               name is provenance that can be checked against the deployed object
+               set, whereas `latched: true` is a caller asserting the answer.
+               So the document states the mode and the schema wants the source.
+               Naming a block on your behalf would be an authorship.
+
+IMPACT         Low today — ScenarioDone is every set-B vector's completionSignal
+               rather than an expectation, so gate 5 does not refuse on it. It
+               WOULD be refused if anything ever declares a Latched expectation
+               on it.
+
+RESPONSE       AGREE
+
+--------------------------------------------------------------------------------
+Q-04   F-3 — are SAMPLED assertions admissible at all?
+--------------------------------------------------------------------------------
+WHY YOU        Your specification raises it and leaves it unruled. It is a
+               question about what the test method is allowed to conclude.
+
+RECOMMENDATION Rule them ADMISSIBLE, but only with a declared settling window,
+               and make the gate enforce that.
+
+REASONING      Sampled means the harness reads a value at a moment rather than
+               catching an event. Until today, latching did not exist, so
+               "sampled" was the only mode available and the question was moot in
+               practice. Latching now exists, which makes the question live: a
+               sampled read of a signal that is still moving is a coin toss.
+               A settling window converts it from "what was the value when I
+               happened to look" into "what was the value once it stopped
+               changing", which is a claim worth admitting.
+
+NOTE           Related defect already fixed: every settling declaration was being
+               constructed with 0, so EVERY vector in the project returned
+               NotEstablished. Whatever you rule, that had to be fixed first for
+               the ruling to mean anything.
+
+RESPONSE       AGREE
+
+--------------------------------------------------------------------------------
+Q-05   AMB-15 / AMB-16 — the enumeration's decomposition
+--------------------------------------------------------------------------------
+WHY YOU        It changes the COVERAGE DENOMINATOR, which is the number every
+               completeness claim in the project is measured against.
+
+RECOMMENDATION Rule AMB-15 the way the current enumeration reads (27 assertions),
+               and rule AMB-16 by naming which threshold "the persistence
+               threshold" refers to.
+
+REASONING      If AMB-15 is ruled the other way the denominator goes to 29 and
+               the set needs two more vectors — so this is not a wording
+               question, it decides whether the vector set is complete.
+               AMB-16 is worse in a quieter way: 22 of the assertions say "the
+               persistence threshold" and nothing says which one that is. Every
+               one of those 22 is currently readable two ways.
+
+COST IF WRONG  A wrong AMB-15 ruling makes a 27-vector set look complete when it
+               covers 27 of 29. A wrong AMB-16 leaves 22 assertions ambiguous,
+               and an ambiguous assertion is the exact defect that produced the
+               shipped regression this pipeline was built after.
+
+RESPONSE       AGREE
+
+--------------------------------------------------------------------------------
+Q-06   12.3 — latch polarity: default-on, or opt-in?
+--------------------------------------------------------------------------------
+WHY YOU        The spec says one thing and the implementation does the opposite.
+               One of them should change and it is your call which.
+
+RECOMMENDATION Change the SPEC to opt-in, not the implementation to default-on.
+
+REASONING      12.3 says latching is "default on for coil-shaped signals". The
+               generator makes it opt-in per signal. Default-on would put a latch
+               on every Bool, and each latch costs a register in a mirror that is
+               already tight — the deployed area is 37 registers.
+               More importantly, a latch changes what a signal MEANS: a latched
+               Bool answers "did this ever happen", an unlatched one answers "is
+               this true now". Making that switch by default would silently
+               change the meaning of every existing Bool observation.
+
+CAVEAT WORTH   There is a real asymmetry here that argues for care either way:
+KNOWING        forgetting `transient` fails LOUD (gate 5 refuses), but forgetting
+               `rearmsEachIndex` fails SILENT (you get a one-shot latch that
+               compiles, deploys and reads plausibly). Two flags side by side
+               whose omissions fail in opposite directions.
+
+RESPONSE       AGREE
+
+--------------------------------------------------------------------------------
+Q-07   The `repo:` allowlist form means two different things to the two fences
+--------------------------------------------------------------------------------
+WHY YOU        Changing what an existing allowlist entry MEANS is a decision with
+               a review behind it, not something to alter unattended.
+
+RECOMMENDATION Make BOTH fences reject a rooted path after `repo:` outright,
+               rather than making them agree on an interpretation.
+
+REASONING      `repo:C:\Somewhere\Job.ap20` resolves to C:\Somewhere\Job.ap20 in
+               the C# fence (which ESCAPES THE REPO) and to a nonsense
+               C:\<repo>\C:\... in the PowerShell one. A leading backslash is the
+               likeliest typo in this format and it means two different places.
+               Both happen to fail closed today because no project sits at either
+               location — that is luck, not design.
+               Rejecting is better than harmonising because there is already an
+               unambiguous way to say it: the absolute form, which both fences
+               agree about. A rooted `repo:` entry is always a mistake.
+
+COST IF WRONG  Low either way; both currently fail closed. This is about removing
+               a trap before it is stepped in, not fixing a live hole.
+
+RESPONSE       AGREE
+
+--------------------------------------------------------------------------------
+Q-08   A duplicate JSON key silently upgrades a device's kind
+--------------------------------------------------------------------------------
+WHY YOU        The device allowlist is a file you author, and this changes what
+               it accepts from you.
+
+RECOMMENDATION Reject duplicate keys outright.
+
+REASONING      {"address":"...","kind":"plant","kind":"test-rig"} is ALLOWED
+               today: System.Text.Json keeps the last key, so an entry that READS
+               as plant is HONOURED as a test rig. It is not an attack path — you
+               author the file — but it does not behave as reviewed, and this
+               file is the one that authorises access to physical devices.
+               Rejecting is safe because a duplicate key is never intentional.
+
+EXAMPLE        Today:  reads "plant", behaves as "test-rig", no warning.
+               Wanted: refused by name, pointing at the duplicated key.
+
+RESPONSE       AGREE
+
+--------------------------------------------------------------------------------
+Q-09   Tag-name case sensitivity: the converter is strict, TIA is not
+--------------------------------------------------------------------------------
+WHY YOU        Making comparisons case-insensitive is a change to what "the same
+               tag" means across the whole toolchain.
+
+RECOMMENDATION Keep the converter case-SENSITIVE. Do not add a case-folding pass.
+
+REASONING      TIA treats DB_Shared.CaseTarget and db_shared.casetarget as one
+               tag; the converter treats them as two. Today that is contained:
+               all three converter tools agree with each other and preflight
+               fails closed, so a case-varied name is refused rather than
+               silently accepted.
+               The reason not to "fix" it: a comparator that learns to equate
+               representations is how a comparator starts passing things. The
+               same instinct produced the aliasing that once made cross-check
+               invent three multi-writers that did not exist.
+
+WHAT I WILL DO Take the one Portal measurement that settles what TIA actually
+               does on import, and record it — regardless of your ruling, so the
+               question stops being open.
+
+RESPONSE       AGREE
+
+--------------------------------------------------------------------------------
+Q-10   GenProject1's IR and its controller disagree — which one is the truth?
+--------------------------------------------------------------------------------
+WHY YOU        This decides whether four blocks in a real project get overwritten.
+
+RECOMMENDATION Treat the CONTROLLER as the truth and re-export those four into
+               IR. Do not re-import IR over them.
+
+REASONING      drift-check --complete reports DB_PLC, FB_Comms_ModbusServer,
+               iDB_Comms_ModbusServer and iDB_HopperBlockageStim as DRIFTED, plus
+               MotorIOSet and MotorVSDIOSet present in the controller with no .ir
+               at all. The four are the comms and stimulus blocks touched during
+               the original deployment, so the likeliest story is that the
+               deployed versions are the ones that were actually made to work,
+               and the IR lagged.
+               Re-importing IR would overwrite a working controller with a
+               description that was never verified against it.
+
+NOTE           This is now lower-stakes than it was this morning: TestEnviroment
+               owns the rig, so GenProject1 is no longer deployed from. It still
+               matters because its IR is the corpus every analysis tool reads.
+
+RESPONSE       AGREE
+
+--------------------------------------------------------------------------------
+Q-11   MotorIOSet / MotorVSDIOSet — UDTs in the controller that no IR describes
+--------------------------------------------------------------------------------
+WHY YOU        Scope: whether these become part of the maintained corpus.
+
+RECOMMENDATION Export them into IR and keep them.
+
+REASONING      They are PLC data types, not blocks — which is why `list` never
+               showed them and why they only surfaced under
+               drift-check --complete. Leaving them undescribed means every
+               "the corpus is complete" claim has a permanent hole in it, and
+               --complete will keep reporting them forever.
+               Exporting them is cheap and makes the corpus honest.
+
+RESPONSE       AGREE
+
+--------------------------------------------------------------------------------
+Q-12   The PERMIT half of the write fences has never been tested
+--------------------------------------------------------------------------------
+WHY YOU        Testing it means deliberately letting a download proceed, which
+               needs you present.
+
+RECOMMENDATION Schedule one supervised session, against TestEnviroment only.
+
+REASONING      Everything proved overnight was the REFUSAL direction — every
+               invocation was one that had to be refused, which is why the lane
+               structurally could not reach the rig. That is a page of green that
+               says "these forms are refused" and says NOTHING about whether the
+               fence permits correctly.
+               A fence that refuses everything passes every test that only checks
+               refusals. TestEnviroment is now the right place to find out, since
+               it is restorable and proven so.
+
+RESPONSE       AGREE
+
+--------------------------------------------------------------------------------
+Q-13   NB-7 — OB80, the executing-block register, and the enable bitmask
+--------------------------------------------------------------------------------
+WHY YOU        It is generated code that runs on the controller and its absence
+               has a safety-shaped consequence.
+
+RECOMMENDATION Build it, but only after the first conformance wave has run.
+
+REASONING      A cycle-time overrun STOPs the CPU. Unattended, one bad block
+               turns a whole night's wave into a dead night with no diagnosis.
+               OB80 plus a "block currently executing" register would name which
+               block did it.
+               The reason to sequence it AFTER the first wave: it is PLC-side
+               generated logic on a mirror that is already at 37 registers, and
+               adding it before the harness has ever completed a single run
+               means debugging two new things at once.
+
+NOTE           There is an interaction worth knowing: the model scan-time budget
+               (NB-22b) trips as a cycle-time overrun precisely BECAUSE NB-7 is
+               absent. They are one problem seen from two ends.
+
+RESPONSE       AGREE
+
+--------------------------------------------------------------------------------
+Q-14   Does TestEnviroment get its own IR corpus?
+--------------------------------------------------------------------------------
+WHY YOU        Project-shape decision.
+
+RECOMMENDATION No — keep one corpus (ir/test-project001) and let TestEnviroment
+               be a deployment target rather than a second source.
+
+REASONING      TestEnviroment was created as a copy of GenProject1 and now owns
+               the rig. Forking the IR would give two descriptions of one program
+               that drift independently, and drift between IR and controller is
+               already the thing that bit us this morning.
+               One corpus, one deployment target, and drift-check --complete as
+               the check that they still agree.
+
+RESPONSE       AGREE
+
+================================================================================
+END — 14 items. Nothing here blocks work that is currently in flight; each is
+recorded so it stops being an open question rather than because it is urgent.
+================================================================================
