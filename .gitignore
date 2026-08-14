@@ -21,6 +21,11 @@ venv/
 *.ap[0-9][0-9]
 *.zap[0-9][0-9]
 scratch/
+# ...and any SIBLING a lane invents. Measured 2026-08-14: a lane created
+# `scratch-lane-slots/` at the repo root, untracked and UNIGNORED, while `scratch/`
+# beside it was covered. A pattern protects the directory somebody thought of; this
+# one covers the ones nobody did.
+scratch-*/
 *.plf
 *.backup
 
