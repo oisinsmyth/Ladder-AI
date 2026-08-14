@@ -239,6 +239,23 @@ running does not license:
       constrain**, since both outputs moving together at the wrong moment satisfies it.
     ➜ And: **clear evidence on the harness DROPPING its start bool, never on the edge.** *A latch
       cleared on the edge is cleared again by a harness restart mid-run, taking the evidence with it.*
+- *** A COMPONENT THAT CAN ONLY BE ASSERTED ABOUT HAS A CLASS OF DEFECT NO ASSERTION REACHES. ***
+  Measured 2026-08-14, and it is the strongest argument this project has produced for building a
+  driver. `WaveControl` had **no entry point** — 375 unit tests, all green, and the assembly was
+  reachable only from its own test project. The first time a CLI wrote a real store and read it back:
+  *** THE PARSER TRIMMED EACH LINE, THE LAST FIELD WAS EMPTY FOR EVERY ORDINARY SLOT, AND THE TRIM ATE
+  THE TRAILING TAB — SO EVERY STORE WRITTEN BY A NON-MODEL SLOT WAS UNREADABLE. *** Three concurrent
+  submissions failed the first time the tool met a real file.
+    ➜ **The tests round-tripped through OBJECTS. The defect lived strictly between the file and the
+      parser** — a region no assertion about the objects can enter. Same shape as *a guard nothing can
+      reach*, one level out: there the check was unreachable, here **the whole serialisation boundary
+      was.**
+    ➜ **So: if a component has no way to be driven, that absence is a finding in its own right** — not
+      a convenience gap. Every green it has is scoped to the half somebody could call.
+    ➜ Same round, same component: two conflict-edge kinds **had no producer**, so those edges could
+      only ever arrive **caller-supplied** — *** WHICH MADE THE CONCURRENCY RULE ASPIRATIONAL: A
+      SUBMITTING AGENT COULD DECLARE ITSELF INDEPENDENT. *** **Ask of any rule: who computes its
+      inputs? If the answer is "the party the rule constrains", it is not a rule.**
 - *** WHEN AN OBJECT HAS NO DERIVABLE PROPERTY, LOOK AT WHAT REFERS TO IT. *** Measured 2026-08-13. A
   tag table carries **no number**, so classifying it looked like it had to fall back to its **name** —
   a convention anything can be renamed into. I authorised reporting it *unclassified* as the honest
