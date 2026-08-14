@@ -230,13 +230,15 @@ public static class GateCli
     /// <summary>
     /// One bound signal, off the document. <b>Nothing is defaulted</b> — an absent spec name stays absent.
     ///
-    /// <para><c>Transient</c> and <c>RearmsEachIndex</c> are threaded here because they were NOT, and the
-    /// consequence was that both capabilities were unreachable from a binding: the domain model had the
-    /// fields, the generator read them, and nothing could set them. <b>A field nobody can set is a field
-    /// that does not exist</b>, however well it is implemented downstream.</para>
+    /// <para><c>Transient</c>, <c>RearmsEachIndex</c> and <c>ArmedBy</c> are threaded here because the
+    /// first two were NOT, and the consequence was that both capabilities were unreachable from a
+    /// binding: the domain model had the fields, the generator read them, and nothing could set them.
+    /// <b>A field nobody can set is a field that does not exist</b>, however well it is implemented
+    /// downstream. <c>ArmedBy</c> is threaded in the same commit that gives it a meaning, so it never
+    /// spends a day in that state.</para>
     /// </summary>
     public static Harness.Map.MirroredSignal ToMirroredSignal(MirroredSignalDocument row) =>
-        new(row.Tag ?? string.Empty, row.Type, row.SpecName, row.LatchedBy, row.Transient, row.RearmsEachIndex);
+        new(row.Tag ?? string.Empty, row.Type, row.SpecName, row.LatchedBy, row.Transient, row.RearmsEachIndex, row.ArmedBy);
 
     /// <summary>The enumeration projection, off the document. Public so the runner composes it the same way.</summary>
     public static AssertionEnumeration ToEnumeration(SubmissionDocument document) =>

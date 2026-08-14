@@ -168,13 +168,29 @@ public sealed class MirroredSignalDocument
     /// anyone reasoning by analogy from the loud one will trust the silent one exactly as far, and be
     /// wrong.</i></para>
     ///
-    /// <para>The generator REFUSES BY NAME when this is set, rather than emitting the latch it can emit —
-    /// the copy layer cannot express a per-index arm band. It is on the wire so that the refusal is
-    /// reachable from a binding: <b>a capability gap that can be declared is one a caller meets at the
-    /// gate, and one that cannot is one they meet on the rig</b>, where the symptom is predicted findings
-    /// quietly absent.</para>
+    /// <para><b>The generator now BUILDS it</b> (2026-08-14): the latch becomes
+    /// <c>SCOIL &lt;latch&gt; := &lt;slot start bool&gt; AND [&lt;armedBy&gt;] AND &lt;signal&gt;</c> with
+    /// <c>RCOIL &lt;latch&gt; := NOT &lt;slot start bool&gt;</c>, so every vector index re-arms it. It
+    /// used to be a REFUSAL — that refusal survives for the one case still inexpressible, a slot whose
+    /// <c>startCondition</c> is null and which therefore has no per-index level to arm on.</para>
     /// </summary>
     public bool RearmsEachIndex { get; set; }
+
+    /// <summary>
+    /// 🔴 <b>THE TAG THAT OPENS THE OBSERVATION WINDOW INSIDE ONE INDEX.</b>
+    ///
+    /// <para><see cref="RearmsEachIndex"/> re-arms the latch per index, off the slot's start bool. This
+    /// narrows it further within an index, and it is what the coordinator's capability request asked for
+    /// in those words: <i>"THE LATCHES MUST BE ARMED BY THE STIMULUS MODEL'S PHASE FLAG (HBA_Stim.Armed),
+    /// not free-running from T=0"</i>. Without it a run that legitimately begins with a clear-down fills
+    /// the latch from the clear-down and reads violated whatever the block did.</para>
+    ///
+    /// <para><b>Absent is a claim of NO in-index window</b>, which leaves the whole index armed — correct
+    /// for a signal whose every firing inside an index matters. It is <b>refused on a signal with no
+    /// generated latch</b>, since an arm with nothing to arm is a caller believing they have a
+    /// phase-armed observation when they have a sampled one.</para>
+    /// </summary>
+    public string? ArmedBy { get; set; }
 
     /// <summary>Unknown keys at signal level — where a misspelt <c>specName</c> would otherwise vanish.</summary>
     [JsonExtensionData]

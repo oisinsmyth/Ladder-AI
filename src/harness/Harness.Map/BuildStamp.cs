@@ -80,8 +80,28 @@ public readonly record struct BuildStamp(uint Value)
             foreach (var target in binding.VectorTargets ?? Array.Empty<MirroredSignal>())
                 canonical.Append($"v={target.Tag}:{target.Type}\n");
 
+            // 🔴 *** THE LATCH SHAPE IS PART OF THE PROGRAM, SO IT IS PART OF THE STAMP. *** A signal's
+            // Transient/RearmsEachIndex/ArmedBy decide the RUNGS the copy layer emits — an unconditional
+            // SCOIL, a phase-armed SCOIL+RCOIL, or nothing. Adding an arm window changes the emitted IR
+            // and changes NO WIDTH, so without this the map hash would not move either and two different
+            // programs would carry one stamp: the version register would confirm a build that is not the
+            // one running, which is the single thing it exists to prevent.
+            //
+            // APPENDED, NEVER INSERTED. A signal that shapes no latch emits exactly the line it always
+            // did, so every stamp already computed for a plain binding is unchanged — including the one
+            // in the currently-deployed copy layer.
             foreach (var source in binding.ResultSources ?? Array.Empty<MirroredSignal>())
-                canonical.Append($"r={source.Tag}:{source.Type}\n");
+            {
+                canonical.Append($"r={source.Tag}:{source.Type}");
+
+                if (source.Transient)
+                    canonical.Append(source.RearmsEachIndex ? " latch=phase-armed" : " latch=unconditional");
+
+                if (source.ArmWindowStated)
+                    canonical.Append($" arm={source.ArmWindow}");
+
+                canonical.Append('\n');
+            }
         }
 
         foreach (var obj in (programUnderTest ?? Array.Empty<HarnessObject>()).OrderBy(o => o.Name, StringComparer.Ordinal))

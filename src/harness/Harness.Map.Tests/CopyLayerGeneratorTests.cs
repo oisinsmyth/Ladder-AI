@@ -845,37 +845,239 @@ public class CopyLayerGeneratorTests
     }
 
     // ---------------------------------------------------------------------------------------------
-    // THE REFUSAL — the generator declines to emit a latch it cannot make correct
+    // THE PHASE-ARMED LATCH — built 2026-08-14, replacing the refusal that stood in for it
     // ---------------------------------------------------------------------------------------------
 
     /// <summary>
-    /// *** AN HONEST "CANNOT" IS A DELIVERABLE. ***
+    /// 🔴 <b>THE PROPERTY THE OLD REFUSAL WAS PROTECTING, NOW PROTECTED BY THE CAPABILITY.</b>
     ///
-    /// <para>The generated latch is an unconditional <c>SCOIL</c>: it sets on the first firing and stays
-    /// set for the rest of the wave. For a signal asserted once per INDEX that is wrong — index 2 reads
-    /// identical to index 1, and a signal that never fired again reads as one that did. The generator
-    /// refuses BY NAME rather than emitting the latch it can emit, because <b>the wrong one is only
-    /// discoverable on the rig, where the symptom is predicted findings quietly absent.</b></para>
+    /// <para>The old test asserted that a re-arming signal is REFUSED rather than given a one-shot latch.
+    /// The property underneath it was never the refusal — it was <i>a re-arming signal must never receive
+    /// the unconditional latch</i>, because index 2 would read identical to index 1 and a signal that
+    /// never fired again would read as one that did. That property is asserted here directly, against a
+    /// layer that is actually generated.</para>
     /// </summary>
     [Fact]
-    public void A_SIGNAL_THAT_MUST_RE_ARM_EACH_INDEX_IS_REFUSED_RATHER_THAN_GIVEN_A_ONE_SHOT_LATCH()
+    public void A_SIGNAL_THAT_MUST_RE_ARM_EACH_INDEX_GETS_A_PHASE_ARMED_LATCH_NEVER_A_ONE_SHOT_ONE()
     {
         var result = Generate(OneSlot(result: 4), Binding(sources: new[]
+        {
+            new MirroredSignal("DB_Unit.Pulse", MirrorValueType.Bool,
+                Transient: true, RearmsEachIndex: true, ArmedBy: "DB_Unit.Armed"),
+        }));
+
+        Assert.True(result.Generated);
+        Assert.Empty(result.Refusals);
+
+        var ir = result.Objects.Single(o => o.Kind == HarnessObjectKind.Block).Ir;
+
+        // The SET is guarded by the per-index window AND the in-index arm, with the signal LAST.
+        Assert.Contains(
+            "SCOIL HX_S0_L001 := HX_S0_Start AND DB_Unit.Armed AND DB_Unit.Pulse",
+            ir, StringComparison.Ordinal);
+
+        // The RESET is on a LEVEL, so a harness restart re-clears rather than stranding index 1's
+        // evidence where index 2's reader will find it.
+        Assert.Contains("RCOIL HX_S0_L001 := NOT HX_S0_Start", ir, StringComparison.Ordinal);
+
+        // *** AND THE ONE-SHOT FORM IS ABSENT. *** This is the assertion the whole capability exists for:
+        // the unconditional SCOIL is what silently deletes any finding that turns on a signal FALLING.
+        Assert.DoesNotContain("SCOIL HX_S0_L001 := DB_Unit.Pulse", ir, StringComparison.Ordinal);
+
+        // Reset AFTER set, so reset dominates if the two ever overlapped.
+        Assert.True(
+            ir.IndexOf("SCOIL HX_S0_L001", StringComparison.Ordinal) < ir.IndexOf("RCOIL HX_S0_L001", StringComparison.Ordinal),
+            "the RCOIL must follow the SCOIL: clearing evidence is the loud failure direction and setting it falsely is the quiet one.");
+    }
+
+    /// <summary>
+    /// The arm window is OPTIONAL, and its absence is a claim of no in-index window rather than a
+    /// missing field. The per-index re-arm still holds, because that comes from the start bool.
+    /// </summary>
+    [Fact]
+    public void WITHOUT_AN_ARM_WINDOW_THE_WHOLE_INDEX_IS_ARMED_and_the_start_bool_still_re_arms_it()
+    {
+        var ir = Generate(OneSlot(result: 4), Binding(sources: new[]
+        {
+            new MirroredSignal("DB_Unit.Pulse", MirrorValueType.Bool, Transient: true, RearmsEachIndex: true),
+        })).Objects.Single(o => o.Kind == HarnessObjectKind.Block).Ir;
+
+        Assert.Contains("SCOIL HX_S0_L001 := HX_S0_Start AND DB_Unit.Pulse", ir, StringComparison.Ordinal);
+        Assert.Contains("RCOIL HX_S0_L001 := NOT HX_S0_Start", ir, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// 🔴 <b>THE ARM BAND COSTS NO REGISTER, AND THAT IS A DESIGN CLAIM WORTH PINNING.</b>
+    ///
+    /// <para>The per-index window is the slot's START BOOL, which the mirror already carries and the
+    /// client already drives low before every index. A second client-written arm band would have been a
+    /// register, a <c>MirrorClient</c> verb and a wave step, all duplicating that. If somebody later adds
+    /// an arm register, this goes red and they have to say why the existing seam was not enough.</para>
+    /// </summary>
+    [Fact]
+    public void PHASE_ARMING_COSTS_THE_SAME_REGISTERS_AS_THE_UNCONDITIONAL_LATCH()
+    {
+        var plain = Binding(sources: new[]
+        {
+            new MirroredSignal("DB_Unit.Pulse", MirrorValueType.Bool, Transient: true),
+        });
+
+        var armed = Binding(sources: new[]
+        {
+            new MirroredSignal("DB_Unit.Pulse", MirrorValueType.Bool,
+                Transient: true, RearmsEachIndex: true, ArmedBy: "DB_Unit.Armed"),
+        });
+
+        Assert.Equal(plain.ResultRegistersNeeded, armed.ResultRegistersNeeded);
+        Assert.Equal(plain.LatchRegistersNeeded, armed.LatchRegistersNeeded);
+        Assert.Equal(plain.LatchRegisterOffsets["DB_Unit.Pulse"], armed.LatchRegisterOffsets["DB_Unit.Pulse"]);
+    }
+
+    /// <summary>
+    /// 🔴 <b>THE REFUSAL SURVIVES, FOR THE CASE THAT IS GENUINELY STILL INEXPRESSIBLE.</b>
+    ///
+    /// <para>A phase-armed latch is armed and re-cleared by the slot's start bool. D37 makes a null
+    /// <c>StartCondition</c> a positive CLAIM — "this block is purely reactive and has no start gate" —
+    /// so such a slot has no per-index level at all, and the only latch available is the unconditional
+    /// one. <b>An unreachable refusal is worse than no refusal</b>, so this is the test that says it is
+    /// still reachable.</para>
+    /// </summary>
+    [Fact]
+    public void A_RE_ARMING_SIGNAL_ON_A_SLOT_WITH_NO_START_CONDITION_IS_STILL_REFUSED_BY_NAME()
+    {
+        var result = Generate(OneSlot(result: 4), Binding(start: null, sources: new[]
         {
             new MirroredSignal("DB_Unit.Pulse", MirrorValueType.Bool, Transient: true, RearmsEachIndex: true),
         }));
 
         Assert.False(result.Generated);
-        Assert.Contains(result.Refusals, r => r.Contains("CANNOT EXPRESS IT", StringComparison.Ordinal));
+        Assert.Contains(result.Refusals, r => r.Contains("CANNOT EXPRESS IT ON THIS SLOT", StringComparison.Ordinal));
 
-        // It says WHAT it cannot express, and NAMES THE ROUTE that works today.
-        Assert.Contains(result.Refusals, r => r.Contains("PER-INDEX ARM BAND", StringComparison.Ordinal));
-        Assert.Contains(result.Refusals, r => r.Contains("LatchedBy", StringComparison.Ordinal));
+        // It names the signal, the slot, and BOTH routes that work.
         Assert.Contains(result.Refusals, r => r.Contains("DB_Unit.Pulse", StringComparison.Ordinal));
+        Assert.Contains(result.Refusals, r => r.Contains("D37", StringComparison.Ordinal));
+        Assert.Contains(result.Refusals, r => r.Contains("bind this slot's real start condition", StringComparison.Ordinal));
+        Assert.Contains(result.Refusals, r => r.Contains("LatchedBy", StringComparison.Ordinal));
+    }
 
-        // And it carries the capability gap's width, so the cost of closing it is in the refusal rather
-        // than in somebody's memory.
-        Assert.Contains(result.Refusals, r => r.Contains("35 -> 37", StringComparison.Ordinal));
+    /// <summary>
+    /// <b>An arm window on a signal that gets no latch arms nothing</b>, so it is refused rather than
+    /// accepted and ignored — the "plausible artifact" failure, one field over from the one that made
+    /// this work necessary.
+    /// </summary>
+    [Theory]
+    [InlineData(false, false, null, "it is mirrored Sampled")]
+    [InlineData(true, false, null, "it is mirrored Sampled")]
+    [InlineData(false, false, "FB_Other", "lives INSIDE that block")]
+    public void AN_ARM_WINDOW_ON_A_SIGNAL_WITH_NO_GENERATED_LATCH_IS_REFUSED(
+        bool transient, bool rearms, string? latchedBy, string expected)
+    {
+        var result = Generate(OneSlot(result: 4), Binding(sources: new[]
+        {
+            new MirroredSignal("DB_Unit.Pulse", MirrorValueType.Bool,
+                LatchedBy: latchedBy, Transient: transient, RearmsEachIndex: rearms, ArmedBy: "DB_Unit.Armed"),
+        }));
+
+        Assert.False(result.Generated);
+        Assert.Contains(result.Refusals, r => r.Contains("would arm nothing", StringComparison.Ordinal));
+        Assert.Contains(result.Refusals, r => r.Contains(expected, StringComparison.Ordinal));
+    }
+
+    /// <summary>A blank arm window is a caller who meant to name one, and is not read as an absent one.</summary>
+    [Fact]
+    public void A_BLANK_ARM_WINDOW_IS_REFUSED_rather_than_read_as_an_absent_one()
+    {
+        var result = Generate(OneSlot(result: 4), Binding(sources: new[]
+        {
+            new MirroredSignal("DB_Unit.Pulse", MirrorValueType.Bool,
+                Transient: true, RearmsEachIndex: true, ArmedBy: "   "),
+        }));
+
+        Assert.False(result.Generated);
+        Assert.Contains(result.Refusals, r => r.Contains("BLANK arm window", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// The latch's provenance says WHICH FORM it is, because a reader of the plan cannot tell them apart
+    /// from the register alone — and the two are cleared by different parties.
+    /// </summary>
+    [Fact]
+    public void THE_PROVENANCE_DISTINGUISHES_THE_TWO_GENERATED_FORMS()
+    {
+        var unconditional = new MirroredSignal("Pulse", MirrorValueType.Bool, Transient: true);
+        var armed = new MirroredSignal("Pulse", MirrorValueType.Bool,
+            Transient: true, RearmsEachIndex: true, ArmedBy: "DB_Unit.Armed");
+
+        Assert.Equal(LatchSource.Generated, unconditional.LatchSource);
+        Assert.Equal(LatchSource.Generated, armed.LatchSource);
+
+        Assert.False(unconditional.PhaseArmed);
+        Assert.True(armed.PhaseArmed);
+
+        Assert.DoesNotContain("PHASE-ARMED", unconditional.LatchProvenance!, StringComparison.Ordinal);
+        Assert.Contains("PHASE-ARMED", armed.LatchProvenance!, StringComparison.Ordinal);
+        Assert.Contains("DB_Unit.Armed", armed.LatchProvenance!, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// 🔴 <b>THE LATCH SHAPE MOVES THE BUILD STAMP, AND IT MOVES NO WIDTH — so nothing else would have.</b>
+    ///
+    /// <para>Adding an arm window changes the emitted rungs and changes no register count, so the map
+    /// hash does not move. Without the stamp carrying it, two different programs would share one stamp
+    /// and the version register would confirm a build that is not the one running.</para>
+    /// </summary>
+    [Fact]
+    public void ARMING_A_LATCH_CHANGES_THE_BUILD_STAMP_because_it_is_a_different_program()
+    {
+        var map = OneSlot(result: 4);
+
+        var unconditional = Binding(sources: new[]
+        {
+            new MirroredSignal("DB_Unit.Pulse", MirrorValueType.Bool, Transient: true),
+        });
+
+        var rearming = unconditional with
+        {
+            ResultSources = new[]
+            {
+                new MirroredSignal("DB_Unit.Pulse", MirrorValueType.Bool, Transient: true, RearmsEachIndex: true),
+            },
+        };
+
+        var withWindow = unconditional with
+        {
+            ResultSources = new[]
+            {
+                new MirroredSignal("DB_Unit.Pulse", MirrorValueType.Bool,
+                    Transient: true, RearmsEachIndex: true, ArmedBy: "DB_Unit.Armed"),
+            },
+        };
+
+        var stamps = new[] { unconditional, rearming, withWindow }
+            .Select(b => BuildStamp.Of(map, b, Naming).Value)
+            .ToArray();
+
+        Assert.Equal(3, stamps.Distinct().Count());
+
+        // The widths are identical — which is exactly why the map hash cannot carry this.
+        Assert.Equal(map.MapHash, map.MapHash);
+        Assert.Equal(unconditional.ResultRegistersNeeded, withWindow.ResultRegistersNeeded);
+    }
+
+    /// <summary>
+    /// <b>APPENDED, NEVER INSERTED.</b> A signal that shapes no latch must hash exactly as it always did,
+    /// so every stamp already computed for a plain binding — including the one in the deployed copy layer
+    /// — is unchanged by this work.
+    /// </summary>
+    [Fact]
+    public void A_BINDING_WITH_NO_LATCH_HASHES_TO_THE_SAME_STAMP_AS_BEFORE()
+    {
+        // 🔴 THIS CONSTANT WAS NOT READ OUT OF THIS CODE. It was computed by re-implementing the
+        // PRE-CHANGE canonical form (git HEAD's BuildStamp.Of and RegisterMap.MapHash) in a separate
+        // language and hashing it there — so it is an authority outside the assembly, not a value the
+        // implementation agreed with itself about. If this goes red, a stamp already published to a
+        // controller has silently changed meaning.
+        Assert.Equal(0x055BE3AEu, BuildStamp.Of(OneSlot(), Binding(), Naming).Value);
     }
 
     /// <summary>

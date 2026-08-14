@@ -96,14 +96,110 @@ public static class LoopRun
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(gateway);
 
+        // Steps 1-4 are the same code the generate-and-stop entry point runs, called rather than
+        // duplicated: a second copy of the derive/gate/generate sequence is how the artifact somebody
+        // INSPECTS stops being the artifact that gets DEPLOYED.
+        var generation = Generate(request);
+
+        if (!generation.Generated)
+        {
+            return new LoopResult(generation.Stopped!.Value, generation.Gate, generation.SizeReport,
+                generation.Retention, null, null, null,
+                Array.Empty<ResultPackage>(), generation.Caveats, generation.Detail);
+        }
+
+        var map = generation.Map!;
+        var gate = generation.Gate;
+        var stamp = generation.Stamp;
+        var copyLayer = generation.CopyLayer!;
+        var retention = generation.Retention!;
+        var caveats = generation.Caveats;
+        var compression = request.Compression;
+
+        // ---- 5. DEPLOY — the device boundary --------------------------------------------------------
+        var deployment = gateway.Deploy(copyLayer.Objects.Concat(request.ProgramUnderTest).ToArray(), stamp);
+        if (!deployment.Attempted || !deployment.Loaded)
+        {
+            return new LoopResult(LoopOutcome.NotDeployed, gate, generation.SizeReport, retention, deployment, null, null,
+                Array.Empty<ResultPackage>(), caveats,
+                (deployment.Attempted ? "the deployment was attempted and the device did not load everything: " : "no deployment was attempted: ")
+                + deployment.Detail);
+        }
+
+        using var transport = gateway.Open();
+        var client = new MirrorClient(map, transport, stamp);
+
+        // ---- 6. CONFIRM what is RUNNING -------------------------------------------------------------
+        var version = VersionCheck.Confirm(client, stamp);
+        if (!version.Confirmed)
+        {
+            return new LoopResult(LoopOutcome.NotConfirmed, gate, generation.SizeReport, retention, deployment, version, null,
+                Array.Empty<ResultPackage>(), caveats,
+                "the version register did not confirm the build this loop generated, so the wave was not run: " + version.Detail);
+        }
+
+        // ---- 7. RUN ---------------------------------------------------------------------------------
+        var tensors = request.Vectors
+            .GroupBy(v => v.Slot, StringComparer.Ordinal)
+            .Select(g => new SlotTensor(
+                SlotIndexOf(map, g.Key),
+                g.OrderBy(v => v.Index).Select(v => ToWireVector(v, request.Bindings, map, request.WordOrder)).ToArray()))
+            .OrderBy(t => t.SlotIndex)
+            .ToArray();
+
+        var roundTripsBefore = client.RoundTrips;
+        var wave = WaveRun.Run(client, compression, tensors, nowMs);
+
+        // ---- 8. PACKAGE -----------------------------------------------------------------------------
+        var packages = Package(request, map, stamp, client, wave, deployment, version, roundTripsBefore);
+
+        return new LoopResult(LoopOutcome.Ran, gate, generation.SizeReport, retention, deployment, version, wave,
+            packages, caveats,
+            $"the wave ran to {wave.Length} index(es) over {tensors.Length} slot(s), costing {wave.RoundTrips} round trip(s).");
+    }
+
+    /// <summary>
+    /// 🔴 <b>STEPS 1–4 ONLY: derive, gate, width, GENERATE, assert 0.1b — and then STOP.</b>
+    ///
+    /// <para><b>This seam did not exist, and its absence was itself a defect.</b> The only way to obtain
+    /// a copy layer was <see cref="Execute"/>, which goes on to hand it to a gateway — so the artifact
+    /// could not be INSPECTED without the machinery that DEPLOYS it being in the call. Reviewing generated
+    /// IR, diffing two generations, or measuring a mirror's width all needed a device fence to be
+    /// satisfied first, for work that touches no device at all.</para>
+    ///
+    /// <para><b>It is the same code, called rather than copied.</b> <see cref="Execute"/> runs exactly
+    /// this and continues; a second implementation would be the way the inspected artifact and the
+    /// deployed one quietly stop being the same thing.</para>
+    ///
+    /// <para><b>Nothing here touches a device</b>, and nothing here can: no <see cref="IDeviceGateway"/>
+    /// is a parameter, so there is no gateway to call.</para>
+    /// </summary>
+    /// <param name="stopWhenInadmissible">
+    /// 🔴 <b>Whether an inadmissible submission stops generation. TRUE for anything that will DEPLOY, and
+    /// there is no caller that passes false on the way to a device.</b>
+    ///
+    /// <para>The gate's job is that <i>an inadmissible submission costs nothing beyond this point</i> — no
+    /// copy layer, no deployment, no transport. That is a statement about SPENDING, and a generate-and-stop
+    /// run spends nothing: it constructs no gateway and opens no socket. The gate is also a statement about
+    /// the VECTORS, while the copy layer is a function of the BINDING alone, so a submission held up on a
+    /// NOT-CHECKED declaration says nothing about whether the emitted IR is right.</para>
+    ///
+    /// <para><b>Passing false costs the caller its argument.</b> The gate still runs, its verdict is still
+    /// on the result, and a caller that suppresses the stop becomes the only remaining check — which is
+    /// why <c>harness-run --generate-only</c> prints the whole verdict and exits with a code that a
+    /// deployable run cannot produce.</para>
+    /// </param>
+    public static LoopGeneration Generate(LoopRequest request, bool stopWhenInadmissible = true)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
         var caveats = Caveats(request);
 
         // ---- 1. DERIVE ------------------------------------------------------------------------------
         var mapResult = MapAllocator.Allocate(new WaveSetRequest(request.Geometry, request.Slots));
         if (!mapResult.Allocated)
         {
-            return new LoopResult(LoopOutcome.NotDerivable, null, mapResult.SizeReport, null, null, null, null,
-                Array.Empty<ResultPackage>(), caveats,
+            return LoopGeneration.Stop(LoopOutcome.NotDerivable, null, mapResult.SizeReport, null, caveats,
                 "the map could not be derived, so the gate could not run and nothing was generated: "
                 + string.Join(" | ", mapResult.Refusals));
         }
@@ -140,10 +236,9 @@ public static class LoopRun
             conflictEdgesExplicitlyNull: false,
             unknownFields: Array.Empty<string>());
 
-        if (gate.Verdict != SubmissionVerdict.AdmissibleSubjectToJudgement)
+        if (stopWhenInadmissible && gate.Verdict != SubmissionVerdict.AdmissibleSubjectToJudgement)
         {
-            return new LoopResult(LoopOutcome.NotAdmissible, gate, mapResult.SizeReport, null, null, null, null,
-                Array.Empty<ResultPackage>(), caveats,
+            return LoopGeneration.Stop(LoopOutcome.NotAdmissible, gate, mapResult.SizeReport, null, caveats,
                 $"the submission was {gate.Verdict}, so no copy layer was generated, nothing was deployed and no wave was run. "
                 + $"{gate.Refused.Count} gate(s) refused, {gate.NotChecked.Count} could not run.");
         }
@@ -161,8 +256,7 @@ public static class LoopRun
         var tooWide = WidthRefusals(request);
         if (tooWide.Count > 0)
         {
-            return new LoopResult(LoopOutcome.NotRepresentable, gate, mapResult.SizeReport, null, null, null, null,
-                Array.Empty<ResultPackage>(), caveats,
+            return LoopGeneration.Stop(LoopOutcome.NotRepresentable, gate, mapResult.SizeReport, null, caveats,
                 $"{tooWide.Count} vector value(s) do not fit the mirror element declared to carry them, so no copy layer was "
                 + "generated and nothing was deployed. *** THIS IS A REFUSAL RATHER THAN A TRUNCATION: *** a value silently "
                 + "narrowed produces a confident wrong answer, not an error. " + string.Join(" | ", tooWide));
@@ -174,61 +268,25 @@ public static class LoopRun
 
         if (!copyLayer.Generated)
         {
-            return new LoopResult(LoopOutcome.NotDerivable, gate, mapResult.SizeReport, null, null, null, null,
-                Array.Empty<ResultPackage>(), caveats,
-                "the copy layer could not be generated: " + string.Join(" | ", copyLayer.Refusals));
+            return LoopGeneration.Stop(LoopOutcome.NotDerivable, gate, mapResult.SizeReport, null, caveats,
+                "the copy layer could not be generated: " + string.Join(" | ", copyLayer.Refusals),
+                copyLayer);
         }
 
         // ---- 4. ASSERT 0.1b -------------------------------------------------------------------------
         var retention = RetentionCheck.Check(copyLayer.Objects.Concat(request.ProgramUnderTest), request.Geometry);
         if (!retention.Passed)
         {
-            return new LoopResult(LoopOutcome.NotAssertable, gate, mapResult.SizeReport, retention, null, null, null,
-                Array.Empty<ResultPackage>(), caveats,
-                "the generated objects failed the non-retentive assertion, so nothing was deployed: " + retention.Summary());
+            return LoopGeneration.Stop(LoopOutcome.NotAssertable, gate, mapResult.SizeReport, retention, caveats,
+                "the generated objects failed the non-retentive assertion, so nothing was deployed: " + retention.Summary(),
+                copyLayer);
         }
 
-        // ---- 5. DEPLOY — the device boundary --------------------------------------------------------
-        var deployment = gateway.Deploy(copyLayer.Objects.Concat(request.ProgramUnderTest).ToArray(), stamp);
-        if (!deployment.Attempted || !deployment.Loaded)
-        {
-            return new LoopResult(LoopOutcome.NotDeployed, gate, mapResult.SizeReport, retention, deployment, null, null,
-                Array.Empty<ResultPackage>(), caveats,
-                (deployment.Attempted ? "the deployment was attempted and the device did not load everything: " : "no deployment was attempted: ")
-                + deployment.Detail);
-        }
-
-        using var transport = gateway.Open();
-        var client = new MirrorClient(map, transport, stamp);
-
-        // ---- 6. CONFIRM what is RUNNING -------------------------------------------------------------
-        var version = VersionCheck.Confirm(client, stamp);
-        if (!version.Confirmed)
-        {
-            return new LoopResult(LoopOutcome.NotConfirmed, gate, mapResult.SizeReport, retention, deployment, version, null,
-                Array.Empty<ResultPackage>(), caveats,
-                "the version register did not confirm the build this loop generated, so the wave was not run: " + version.Detail);
-        }
-
-        // ---- 7. RUN ---------------------------------------------------------------------------------
-        var tensors = request.Vectors
-            .GroupBy(v => v.Slot, StringComparer.Ordinal)
-            .Select(g => new SlotTensor(
-                SlotIndexOf(map, g.Key),
-                g.OrderBy(v => v.Index).Select(v => ToWireVector(v, request.Bindings, map, request.WordOrder)).ToArray()))
-            .OrderBy(t => t.SlotIndex)
-            .ToArray();
-
-        var roundTripsBefore = client.RoundTrips;
-        var wave = WaveRun.Run(client, compression, tensors, nowMs);
-
-        // ---- 8. PACKAGE -----------------------------------------------------------------------------
-        var packages = Package(request, map, stamp, client, wave, deployment, version, roundTripsBefore);
-
-        return new LoopResult(LoopOutcome.Ran, gate, mapResult.SizeReport, retention, deployment, version, wave,
-            packages, caveats,
-            $"the wave ran to {wave.Length} index(es) over {tensors.Length} slot(s), costing {wave.RoundTrips} round trip(s).");
+        return new LoopGeneration(null, gate, mapResult.SizeReport, map, stamp, copyLayer, retention, caveats,
+            $"the copy layer was generated: {copyLayer.Objects.Count} object(s), {copyLayer.Require().Networks.Count} network(s), "
+            + $"{copyLayer.Require().Tags.Count} mirror tag(s), {map.TotalRegisters} register(s) of mirror. NOTHING WAS DEPLOYED.");
     }
+
 
     // -------------------------------------------------------------------------------------------------
     // Packaging — evidence assembled, never asserted

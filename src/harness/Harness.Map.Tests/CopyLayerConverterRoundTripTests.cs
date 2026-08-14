@@ -148,6 +148,90 @@ public class CopyLayerConverterRoundTripTests
         }
     }
 
+    /// <summary>
+    /// 🔴 <b>THE PHASE-ARMED LATCH THROUGH THE REAL CONVERTER — a multi-term <c>SCOIL</c> and an
+    /// <c>RCOIL</c> in one network, which is a shape this generator had never emitted.</b>
+    ///
+    /// <para>Everything else about the phase-armed latch is asserted by this component about itself. This
+    /// is the one check with an authority outside it: the converter parses the conjunction, emits
+    /// SimaticML with <c>SCoil</c> and <c>RCoil</c> parts, and reads it back to the same text. The form is
+    /// the one <c>FB_HarnessViolationLatch</c> already uses in the committed corpus, so it is a shape TIA
+    /// has accepted — but that block is HAND-AUTHORED, and this is the first time the GENERATOR produced
+    /// one.</para>
+    ///
+    /// <para><b>It remains a GRAMMAR check.</b> The converter is an authority on grammar and not on types
+    /// (the test below records that, measured), and a compile gate is still owed before this reaches a
+    /// controller.</para>
+    /// </summary>
+    [Fact]
+    public void A_PHASE_ARMED_LATCH_ROUND_TRIPS_THROUGH_THE_REAL_CONVERTER()
+    {
+        var map = MapAllocator.Allocate(new WaveSetRequest(
+            MirrorGeometry.ForCpu1214C(retentiveBytes: 256, baseByte: 4000),
+            new[] { new SlotRequest("S0", 2, 4) })).Require();
+
+        var binding = new SlotBinding(
+            "S0",
+            new[] { MirroredSignal.Int("DB_Unit.Setpoint") },
+            "DB_Unit.StartCmd",
+            new[]
+            {
+                new MirroredSignal("DB_Unit.Alarm", MirrorValueType.Bool,
+                    Transient: true, RearmsEachIndex: true, ArmedBy: "DB_Unit.Armed"),
+
+                // Beside it, the UNCONDITIONAL form — so the network carries both and the converter is
+                // asked about a network holding a guarded SCOIL, a bare SCOIL and an RCOIL together.
+                new MirroredSignal("DB_Unit.Blip", MirrorValueType.Bool, Transient: true),
+            });
+
+        var generated = CopyLayerGenerator.Generate(map, binding, Naming, Stamp);
+        Assert.True(generated.Generated, string.Join(" | ", generated.Refusals));
+
+        var block = generated.Objects.Single(o => o.Kind == HarnessObjectKind.Block);
+        var table = generated.Objects.Single(o => o.Kind == HarnessObjectKind.TagTable);
+
+        // The shape under test is in the text before anything else looks at it — otherwise a generator
+        // that stopped emitting it would leave this test passing on an unrelated round trip.
+        Assert.Contains(
+            "SCOIL HX_S0_L002 := HX_S0_Start AND DB_Unit.Armed AND DB_Unit.Alarm",
+            block.Ir, StringComparison.Ordinal);
+        Assert.Contains("RCOIL HX_S0_L002 := NOT HX_S0_Start", block.Ir, StringComparison.Ordinal);
+        Assert.Contains("SCOIL HX_S0_L003 := DB_Unit.Blip", block.Ir, StringComparison.Ordinal);
+
+        var work = Directory.CreateTempSubdirectory("copylayer-phasearmed-");
+        try
+        {
+            var irPath = Path.Combine(work.FullName, "FC_HarnessCopyLayer.ir");
+            File.WriteAllText(irPath, block.Ir.ReplaceLineEndings("\n"));
+            File.WriteAllText(Path.Combine(work.FullName, "HarnessMirror.ir"), table.Ir.ReplaceLineEndings("\n"));
+
+            var (toXml, xmlOutput) = RunConverter("to-xml", irPath, "--project", work.FullName, "--allow-blind-types", "--out", work.FullName);
+            Assert.True(toXml == 0, $"converter to-xml refused the phase-armed copy layer (exit {toXml}):{Environment.NewLine}{xmlOutput}");
+
+            var xmlPath = Path.Combine(work.FullName, "FC_HarnessCopyLayer.xml");
+            Assert.True(File.Exists(xmlPath), "converter to-xml exited 0 and wrote no XML. Empty is not clean.");
+
+            // BOTH coil kinds survive into the SimaticML. A grammar-only pass would not distinguish an
+            // RCoil that was emitted from one that was silently dropped.
+            var xml = File.ReadAllText(xmlPath);
+            Assert.Contains("\"SCoil\"", xml, StringComparison.Ordinal);
+            Assert.Contains("\"RCoil\"", xml, StringComparison.Ordinal);
+
+            var readBack = Path.Combine(work.FullName, "back");
+            Directory.CreateDirectory(readBack);
+
+            var (toIr, irOutput) = RunConverter("to-ir", xmlPath, "--project", work.FullName, "--no-sidecar", "--out", readBack);
+            Assert.True(toIr == 0, $"converter to-ir refused its own XML (exit {toIr}):{Environment.NewLine}{irOutput}");
+
+            var returned = File.ReadAllText(Path.Combine(readBack, "FC_HarnessCopyLayer.ir"));
+            Assert.Equal(block.Ir.ReplaceLineEndings("\n"), returned.ReplaceLineEndings("\n"));
+        }
+        finally
+        {
+            work.Delete(recursive: true);
+        }
+    }
+
     [Fact]
     public void THE_CONVERTER_IS_AN_AUTHORITY_ON_GRAMMAR_AND_NOT_ON_TYPES_so_this_file_is_not_the_whole_check()
     {

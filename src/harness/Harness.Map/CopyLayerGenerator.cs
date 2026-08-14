@@ -22,7 +22,7 @@ public sealed record CopyLayerNaming(
 ///
 /// <para><b>Minimal means minimal, and the list of absences is the deliverable.</b> No packing (one
 /// register carries one Int-width value; anything wider is packing and is deferred), no multi-slot, no
-/// claims, no coverage, no deferred queue, no cleanup, no time compression, no latched transients, no
+/// claims, no coverage, no deferred queue, no cleanup, no time compression, no
 /// event scan-stamps, no rich result package, no executed-start-bool echo, no version register. All of
 /// that is width, none of it is proven, and building it now is how phase 2 stops being cheap.</para>
 ///
@@ -190,25 +190,60 @@ public static class CopyLayerGenerator
                 .Concat(sources.Select(s => (Signal: s, Where: "result source")))
                 .ToArray();
 
-            // *** THE GENERATOR DECLINES TO EMIT A LATCH IT CANNOT MAKE CORRECT. ***
+            // *** THE PHASE-ARMED LATCH, AND THE ONE CASE THAT IS STILL INEXPRESSIBLE. ***
             //
-            // The generated latch is an unconditional SCOIL: it sets on the first firing and stays set
-            // for the rest of the wave. That is right for a signal asserted once per WAVE and WRONG for
-            // one asserted once per INDEX — index 2's latch is already high from index 1, so every later
-            // firing reads identical to the first and a signal that never fired again reads as one that
-            // did. Emitting it anyway would let a caller discover the difference ON THE RIG, where the
-            // symptom is predicted findings quietly absent.
+            // A transient that re-arms each index gets
+            //     SCOIL <latch> := <slot start bool> AND [<arm>] AND <signal>
+            //     RCOIL <latch> := NOT <slot start bool>
+            // which is the shape the hand-authored FB_HarnessViolationLatch already uses. THE PER-INDEX
+            // WINDOW IS THE START BOOL: InertPhase.Establish lowers every start bool before EVERY index
+            // and Commit raises it after the verify, so the mirror already carries a client-driven level
+            // that goes low between indices. No arm REGISTER and no new client verb were needed — the
+            // seam already ships, and building a second one would have cost a register to duplicate it.
             //
-            // Refused BY NAME, saying what cannot be expressed and naming the route that works. An
-            // honest "cannot" is a deliverable; a plausible latch is not.
-            foreach (var signal in sources.Where(s => s is { Transient: true, RearmsEachIndex: true }))
+            // WHAT IS STILL REFUSED, BY NAME: a slot whose StartCondition is null. D37 makes that null a
+            // CLAIM — "this block is purely reactive and is held inert by its input values alone" — and
+            // such a slot has NO per-index level of any kind. There is nothing to arm on and nothing to
+            // clear on, so the only latch expressible there is the unconditional one, which is exactly
+            // the artifact whose symptom is predicted findings quietly absent on the rig.
+            foreach (var signal in sources.Where(s => s is { PhaseArmed: true }))
+            {
+                if (binding.StartCondition is null)
+                {
+                    refusals.Add(
+                        $"result source '{signal.Tag}' on slot '{binding.SlotId}' declares RearmsEachIndex, and THE COPY LAYER CANNOT EXPRESS IT ON THIS SLOT. "
+                        + "A phase-armed latch is armed and re-cleared by the slot's START BOOL — the one level the client drives low before every index and high at the commit — "
+                        + $"and slot '{binding.SlotId}' binds a NULL start condition, which under D37 is the positive claim that this block has no start gate at all. "
+                        + "With no per-index level there is nothing to arm on and nothing to clear on, so the only latch available is the unconditional one: it would set on the first firing and stay set for the rest of the wave, "
+                        + "index 2 would read identical to index 1, and a signal that never fired again would read as one that did. "
+                        + $"THE TWO ROUTES THAT WORK: bind this slot's real start condition, or latch '{signal.Tag}' in the block under test and declare it with LatchedBy, which is admitted on provenance. "
+                        + "Refusing here rather than emitting the latch that compiles is deliberate: the wrong one is only discoverable on the rig.");
+                }
+
+                if (signal.ArmedBy is not null && !signal.ArmWindowStated)
+                {
+                    refusals.Add(
+                        $"result source '{signal.Tag}' on slot '{binding.SlotId}' states a BLANK arm window. "
+                        + "An empty ArmedBy is not the same as an absent one: absent claims no in-index window and leaves the whole index armed, while blank is a caller who meant to name a signal. "
+                        + "Name the tag, or omit the field.");
+                }
+            }
+
+            // *** AN ARM ON A SIGNAL WITH NO GENERATED LATCH ARMS NOTHING, AND IS REFUSED RATHER THAN
+            // IGNORED. *** A caller who declares a window and gets no latch believes they have a
+            // phase-armed observation; what they actually have is a Sampled one, or a hand-authored latch
+            // whose arming is inside a block this generator does not write. Accepting the field silently
+            // is the "plausible artifact" failure, one field over from the one that made this work
+            // necessary.
+            foreach (var signal in sources.Where(s => s is { ArmWindowStated: true, PhaseArmed: false }))
             {
                 refusals.Add(
-                    $"result source '{signal.Tag}' on slot '{binding.SlotId}' declares RearmsEachIndex, and THE COPY LAYER CANNOT EXPRESS IT. "
-                    + "The latch this generator emits is an unconditional SCOIL: it sets on the first firing and stays set for the rest of the wave, so index 2 reads identical to index 1 and a signal that never fired again reads as one that did. "
-                    + "Expressing it needs a PER-INDEX ARM BAND, and the arm is per vector index while this copy layer is generated per wave — a capability gap (mirror width 35 -> 37), not a defect, and one that needs a re-deploy. "
-                    + $"THE ROUTE THAT WORKS TODAY: latch '{signal.Tag}' in the block under test and declare it with LatchedBy, which is admitted on provenance. "
-                    + "Refusing here rather than emitting the latch that compiles is deliberate: the wrong one is only discoverable on the rig.");
+                    $"result source '{signal.Tag}' on slot '{binding.SlotId}' names an arm window ('{signal.ArmWindow}') but gets NO GENERATED LATCH, so the arm would arm nothing. "
+                    + "An arm window is only meaningful on a signal declared BOTH Transient (so the copy layer emits a latch) AND RearmsEachIndex (so that latch is phase-armed). "
+                    + (string.IsNullOrWhiteSpace(signal.LatchedBy)
+                        ? "This signal declares neither, so it is mirrored Sampled."
+                        : $"This signal declares LatchedBy '{signal.LatchedBy}', and the arming of a hand-authored latch lives INSIDE that block — it is not this generator's to emit.")
+                    + " Declare both flags, or drop the arm window.");
             }
 
             foreach (var (signal, where) in typed)
@@ -298,10 +333,22 @@ public static class CopyLayerGenerator
             // latches sit in their own band so that adding one moves no value offset.
             foreach (var (tag, offset) in binding.LatchRegisterOffsets.OrderBy(e => e.Value))
             {
+                var signal = binding.ResultSignal(tag);
+
+                // *** THE COMMENT SAYS WHICH FORM THIS LATCH IS, because the tag table is what a person
+                // reads in TIA and the two forms are indistinguishable from the address. *** Reading a
+                // phase-armed latch as an unconditional one is how a client comes to clear a bit the copy
+                // layer is already clearing, and reading it the other way is how index 1's firing is
+                // attributed to index 2.
                 tags.Add(MirrorTagFor($"{prefix}{binding.SlotId}_L{offset:000}", MirrorValueType.Bool, geometry,
                     allocation.Result.Register + offset,
-                    $"LATCH for '{tag}'. Sticky: set by the copy layer when the signal is true, cleared by the CLIENT during inert. "
-                    + "A momentary signal cannot be sampled at any rate, so this is the only way it is observable at all."));
+                    signal is { PhaseArmed: true }
+                        ? $"LATCH for '{tag}', PHASE-ARMED. Set only while this slot's start bool is high"
+                          + (signal.ArmWindowStated ? $" AND '{signal.ArmWindow}' is true" : string.Empty)
+                          + ", and RESET by the copy layer whenever the start bool is low - so every vector index re-arms it and index 2 cannot read index 1's firing. "
+                          + "A momentary signal cannot be sampled at any rate, so this is the only way it is observable at all."
+                        : $"LATCH for '{tag}'. Sticky: set by the copy layer when the signal is true, cleared by the CLIENT during inert. "
+                          + "A momentary signal cannot be sampled at any rate, so this is the only way it is observable at all."));
             }
         }
 
@@ -379,15 +426,41 @@ public static class CopyLayerGenerator
             // The latches, as SET coils - the same shape as the start echo (X-E), for the same reason: a
             // level coil would fall again the moment the signal did, and a poll gap is 8.6 scans at the
             // p99, so a one-scan event lands between two polls and the log says it never happened.
-            var latches = binding.LatchRegisterOffsets
+            //
+            // *** A PHASE-ARMED LATCH ADDS THE WINDOW AND THE RESET, AND BOTH COME FROM THE SLOT'S START
+            // BOOL. *** The start bool is ANDed into the SET as well as inverted into the RESET, which is
+            // not redundant: the arm window is a STATIC OF THE BLOCK UNDER TEST, and the harness must not
+            // assume the block clears its own phase flag at inert. Holding the window closed at both ends
+            // costs one contact and removes an assumption about the implementation being tested.
+            var startBoolTag = binding.StartCondition is not null ? $"{prefix}{binding.SlotId}_Start" : null;
+
+            var latchRungs = binding.LatchRegisterOffsets
                 .OrderBy(e => e.Value)
-                .Select(e => new CopyLayerCopy($"{prefix}{binding.SlotId}_L{e.Value:000}", e.Key, MirrorValueType.Bool))
+                .Select(e =>
+                {
+                    var signal = binding.ResultSignal(e.Key);
+                    var latchTag = $"{prefix}{binding.SlotId}_L{e.Value:000}";
+
+                    if (signal is not { PhaseArmed: true } || startBoolTag is null)
+                        return new CopyLayerLatch(latchTag, e.Key, Array.Empty<string>(), ClearLevel: null);
+
+                    var arms = new List<string> { startBoolTag };
+                    if (signal.ArmWindow is { } window)
+                        arms.Add(window);
+
+                    return new CopyLayerLatch(latchTag, e.Key, arms, ClearLevel: startBoolTag);
+                })
                 .ToArray();
 
-            if (latches.Length > 0)
+            if (latchRungs.Length > 0)
             {
+                // Moves are DERIVED from the rungs rather than built beside them: two independently
+                // populated views of one rung set is how a plan comes to describe something other than
+                // what was emitted.
                 networks.Add(new CopyLayerNetwork(number++, CopyLayerNetworkKind.ResultLatch,
-                    $"Result latches - slot {binding.SlotId}", latches));
+                    $"Result latches - slot {binding.SlotId}",
+                    latchRungs.Select(l => new CopyLayerCopy(l.LatchTag, l.Signal, MirrorValueType.Bool)).ToArray(),
+                    latchRungs));
             }
         }
 
@@ -476,8 +549,20 @@ public static class CopyLayerGenerator
                 case CopyLayerNetworkKind.ResultLatch:
                     // SCOIL, never COIL: a set coil is what makes the bit STICKY, and sticky is the whole
                     // point - the client reads it and clears it during inert.
-                    foreach (var latch in network.Moves)
-                        ir.Append($"  SCOIL {latch.From} := {latch.To}\n");
+                    foreach (var latch in network.LatchRungs)
+                        ir.Append($"  SCOIL {latch.LatchTag} := {latch.SetExpression}\n");
+
+                    // *** THE RESETS AFTER THE SETS, SO RESET DOMINATES. *** The two conditions are
+                    // mutually exclusive by construction (the start bool cannot be both high and low), so
+                    // the order is not load-bearing today - but if they ever were both true, clearing the
+                    // evidence is the LOUD direction and setting it falsely is the quiet one, and that is
+                    // the way round to fail.
+                    //
+                    // A LEVEL, never an edge. FB_HarnessViolationLatch network 6 states the reason from
+                    // the other side: a latch cleared on the start EDGE is cleared again by a harness
+                    // restart mid-run and the evidence goes with it.
+                    foreach (var latch in network.LatchRungs.Where(l => l.PhaseArmed))
+                        ir.Append($"  RCOIL {latch.LatchTag} := NOT {latch.ClearLevel}\n");
 
                     break;
 

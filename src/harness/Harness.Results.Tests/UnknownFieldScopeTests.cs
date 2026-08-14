@@ -212,41 +212,76 @@ public class UnknownFieldScopeTests
     }
 
     /// <summary>
-    /// <b>The SAME hole, checked because the second flag travels the same path.</b> A field nobody can
-    /// set is a field that does not exist, however well it is implemented downstream — and
-    /// <c>rearmsEachIndex</c>'s implementation is a REFUSAL, so an unreachable one means a caller meets
-    /// the capability gap on the rig instead of at the gate.
+    /// <b>The SAME hole, checked because the second and third flags travel the same path.</b> A field
+    /// nobody can set is a field that does not exist, however well it is implemented downstream.
     /// </summary>
     [Fact]
-    public void rearmsEachIndex_REACHES_THE_DOMAIN_MODEL_TOO()
+    public void rearmsEachIndex_AND_armedBy_REACH_THE_DOMAIN_MODEL_TOO()
     {
-        var json = Binding.Replace("\"transient\": true", "\"transient\": true, \"rearmsEachIndex\": true", StringComparison.Ordinal);
-        var signal = GateCli.ToMirroredSignal(BindingDocument.Read(json).Slots![0].ResultSources![0]);
+        var signal = GateCli.ToMirroredSignal(BindingDocument.Read(ReArming).Slots![0].ResultSources![0]);
 
         Assert.True(signal.RearmsEachIndex);
+        Assert.True(signal.PhaseArmed);
+        Assert.Equal("DB_Unit.Armed", signal.ArmWindow);
     }
 
     /// <summary>
-    /// And the generator's refusal is now REACHABLE from a binding — which is the whole point of putting
-    /// it on the wire. Before this, the flag could not be set, so the refusal could never fire.
+    /// 🔴 <b>AND THE CAPABILITY IS REACHABLE FROM A BINDING — asserted on the EMITTED IR, not on the
+    /// flag.</b>
+    ///
+    /// <para>This test used to assert the generator's REFUSAL, because <c>rearmsEachIndex</c>'s only
+    /// implementation was one. The property it was protecting was never the refusal — it was that a
+    /// re-arming signal must never receive the unconditional latch, since that is what silently deletes
+    /// every finding turning on a signal FALLING. That property is asserted here against the text the
+    /// generator produces, all the way from a JSON document.</para>
     /// </summary>
     [Fact]
-    public void And_the_generators_REFUSAL_is_now_reachable_from_a_binding()
+    public void And_the_PHASE_ARMED_LATCH_is_reachable_from_a_binding()
     {
-        var json = Binding.Replace("\"transient\": true", "\"transient\": true, \"rearmsEachIndex\": true", StringComparison.Ordinal);
-        var sources = BindingDocument.Read(json).Slots![0].ResultSources!.Select(GateCli.ToMirroredSignal).ToArray();
+        var layer = GenerateFrom(ReArming, startCondition: "HX_Start");
+
+        Assert.True(layer.Generated);
+        Assert.Empty(layer.Refusals);
+
+        var ir = layer.Objects.Single(o => o.Kind == HarnessObjectKind.Block).Ir;
+
+        Assert.Contains("SCOIL HX_S0_L002 := HX_S0_Start AND DB_Unit.Armed AND DB_Unit.Alarm", ir, StringComparison.Ordinal);
+        Assert.Contains("RCOIL HX_S0_L002 := NOT HX_S0_Start", ir, StringComparison.Ordinal);
+        Assert.DoesNotContain("SCOIL HX_S0_L002 := DB_Unit.Alarm", ir, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// <b>The refusal is still reachable from a binding too</b>, for the case that remains inexpressible:
+    /// a slot claiming no start gate (D37) has no per-index level to arm on. <i>An unreachable refusal is
+    /// worse than no refusal — the system looks like it has a guard.</i>
+    /// </summary>
+    [Fact]
+    public void And_the_REFUSAL_is_still_reachable_from_a_binding_when_the_slot_has_no_start_gate()
+    {
+        var layer = GenerateFrom(ReArming, startCondition: null);
+
+        Assert.False(layer.Generated);
+        Assert.Contains(layer.Refusals, r => r.Contains("CANNOT EXPRESS IT ON THIS SLOT", StringComparison.Ordinal));
+    }
+
+    /// <summary>The same binding, with the two latch-shaping flags the capability turns on.</summary>
+    private static readonly string ReArming = Binding.Replace(
+        "\"transient\": true",
+        "\"transient\": true, \"rearmsEachIndex\": true, \"armedBy\": \"DB_Unit.Armed\"",
+        StringComparison.Ordinal);
+
+    private static CopyLayerResult GenerateFrom(string bindingJson, string? startCondition)
+    {
+        var sources = BindingDocument.Read(bindingJson).Slots![0].ResultSources!.Select(GateCli.ToMirroredSignal).ToArray();
 
         var map = MapAllocator.Allocate(new WaveSetRequest(
             MirrorGeometry.ForCpu1214C(256, 1000),
-            new[] { new SlotRequest("S0", 2, 2) }));
+            new[] { new SlotRequest("S0", 2, 3) }));
 
-        var layer = CopyLayerGenerator.Generate(
+        return CopyLayerGenerator.Generate(
             map.Map!,
-            new[] { new SlotBinding("S0", new[] { new MirroredSignal("HX_In", MirrorValueType.Int) }, "HX_Start", sources) },
+            new[] { new SlotBinding("S0", new[] { new MirroredSignal("HX_In", MirrorValueType.Int) }, startCondition, sources) },
             new CopyLayerNaming(BlockNumber: 9000),
             new BuildStamp(1));
-
-        Assert.False(layer.Generated);
-        Assert.Contains(layer.Refusals, r => r.Contains("RearmsEachIndex", StringComparison.Ordinal));
     }
 }

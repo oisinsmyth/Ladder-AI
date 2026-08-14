@@ -242,32 +242,76 @@ public sealed record MirroredSignal(
     /// LAST.</b> A property of the signal, exactly as <see cref="Transient"/> is — the generator DERIVES
     /// the consequence.
     ///
-    /// <para>*** AND THE CONSEQUENCE IT DERIVES IS A REFUSAL, BECAUSE THE COPY LAYER CANNOT EXPRESS
-    /// THIS. *** The generated latch is an UNCONDITIONAL <c>SCOIL</c>: it sets on the first firing and
-    /// stays set for the rest of the wave. That is correct for a signal asserted once per WAVE and wrong
-    /// for one asserted once per INDEX — index 2's latch would already be high from index 1, so every
-    /// later firing reads identical to the first and a signal that never fired again reads as one that
-    /// did. Expressing it needs a per-index ARM band, and the arm is per vector index while the copy
-    /// layer is generated per wave.</para>
+    /// <para>*** THE CONSEQUENCE IT DERIVES IS A PHASE-ARMED LATCH, AND UNTIL 2026-08-14 IT WAS A
+    /// REFUSAL. *** The generated latch used to be an UNCONDITIONAL <c>SCOIL</c>: it set on the first
+    /// firing and stayed set for the rest of the wave. That is correct for a signal asserted once per
+    /// WAVE and wrong for one asserted once per INDEX — index 2's latch would already be high from index
+    /// 1, so every later firing reads identical to the first and a signal that never fired again reads as
+    /// one that did. Rather than emit that, the generator refused by name.</para>
     ///
-    /// <para><b>So the generator refuses by name rather than emitting the latch it can emit.</b> A caller
-    /// must not be able to discover the difference ON THE RIG, where the symptom is predicted findings
-    /// quietly absent. The route that works today is a HAND-AUTHORED latch in the block under test,
-    /// declared through <see cref="LatchedBy"/>.</para>
+    /// <para><b>What it emits instead</b> — the shape the hand-authored <c>FB_HarnessViolationLatch</c>
+    /// already uses, and which that block's own comments justify:</para>
+    /// <code>
+    ///   SCOIL &lt;latch&gt; := &lt;slot start bool&gt; AND &lt;ArmedBy&gt; AND &lt;signal&gt;
+    ///   RCOIL &lt;latch&gt; := NOT &lt;slot start bool&gt;
+    /// </code>
+    ///
+    /// <para><b>THE PER-INDEX WINDOW IS THE START BOOL, WHICH THE MIRROR ALREADY CARRIES AND THE CLIENT
+    /// ALREADY DRIVES.</b> <c>InertPhase.Establish</c> calls <c>LowerAllStartBools()</c> before EVERY
+    /// index and <c>Commit</c> raises it after the verify, so the slot's start bool is already a
+    /// client-written level that goes low between indices. A second client-written arm band would have
+    /// been a new mirror register, a new <c>MirrorClient</c> verb and a new wave step, all doing what the
+    /// start bool already does. <b>The arm band costs ZERO registers because the seam already ships.</b></para>
+    ///
+    /// <para><b>The RESET is on a LEVEL, not on an edge</b>, for the reason
+    /// <c>FB_HarnessViolationLatch</c> network 6 states: a latch cleared on the start EDGE is cleared
+    /// again by a harness restart mid-run and the evidence goes with it, whereas a level re-clears
+    /// whenever the harness is not running an index.</para>
     ///
     /// <para>⚠️ <b>THE DEFAULT'S FAILURE MODE IS SILENT, AND THAT IS THE ASYMMETRY WITH
     /// <see cref="Transient"/>.</b> Forgetting <c>Transient</c> yields no latch and gate 5 refuses a
     /// Latched expectation — loud, and before anything is spent. Forgetting THIS yields the one-shot
-    /// latch, which compiles, deploys and reads plausibly. <b>It cannot be defaulted the other way</b>
-    /// without refusing every ordinary transient, so the asymmetry is recorded here rather than closed:
-    /// it is the reason the capability gap below is worth closing rather than living with.</para>
+    /// latch, which compiles, deploys and reads plausibly. <b>It still cannot be defaulted the other
+    /// way</b> without making every ordinary once-per-wave transient re-arm, so the asymmetry is
+    /// recorded here rather than closed — but the gap it pointed at is now closed, and the loud half is
+    /// no longer the only half that works.</para>
     ///
-    /// <para><b>CAPABILITY GAP (phase-5 item, not a defect):</b> a per-index arm band costs
-    /// <b>35 → 37 registers</b> of the mirror — only +2 while both bands fit one register each — and the
-    /// mirror is currently EXACTLY FULL at 35 of 35. It needs a re-deploy, so it is not a change to make
-    /// under a moving mirror.</para>
+    /// <para><b>WIDTH:</b> one register per latch, in the existing latch band, unchanged. On the
+    /// deliverable hopper vector set that is <b>35 → 37 registers</b> (two block outputs wanting
+    /// <c>Latched</c>), so it needs a re-deploy of a mirror that is exactly full at 35.</para>
+    ///
+    /// <para><b>WHAT IS STILL REFUSED, BY NAME:</b> a re-arming transient on a slot whose
+    /// <see cref="SlotBinding.StartCondition"/> is null. D37 makes that null a CLAIM — "this block is
+    /// purely reactive and has no start gate" — and such a slot has no per-index level of any kind, so
+    /// there is nothing to arm against and nothing to clear on.</para>
     /// </summary>
-    bool RearmsEachIndex = false)
+    bool RearmsEachIndex = false,
+
+    /// <summary>
+    /// 🔴 <b>THE SIGNAL THAT OPENS THE OBSERVATION WINDOW INSIDE AN INDEX — a tag in the program, named
+    /// by the binding, never invented here.</b>
+    ///
+    /// <para>The start bool re-arms the latch per INDEX. This narrows the window further, INSIDE one
+    /// index, and it is what the coordinator's own capability request asked for in those words:
+    /// <i>"THE LATCHES MUST BE ARMED BY THE STIMULUS MODEL'S PHASE FLAG (HBA_Stim.Armed), not
+    /// free-running from T=0"</i>. The reason is in <c>FB_HarnessViolationLatch</c>'s block comment:
+    /// <i>every run legitimately begins by driving the monitor through a clear-down, and a free-running
+    /// latch would fill from that and read violated whatever the monitor did.</i></para>
+    ///
+    /// <para><b>It is ANDed WITH the start bool, not instead of it</b>, and that is deliberate: an arm
+    /// flag is a static of the block under test, and <b>the harness must not assume the block clears its
+    /// own phase flag at inert.</b> Holding the window closed at both ends costs one contact and removes
+    /// an assumption about an implementation the harness is supposed to be testing.</para>
+    ///
+    /// <para>Null is not "always armed" and not "no window" — it is <b>the binding claiming no in-index
+    /// window</b>, which leaves the whole index armed. That is the correct reading for a signal whose
+    /// every firing inside an index is of interest.</para>
+    ///
+    /// <para><b>It is inert on a signal with no generated latch, so it is REFUSED there</b> rather than
+    /// accepted and ignored: a caller who declares an arm and gets no latch believes they have a
+    /// phase-armed observation and has an unconditional one, or none.</para>
+    /// </summary>
+    string? ArmedBy = null)
 {
     /// <summary>
     /// True when the binding has stated a specification name. <b>Distinct from the names being equal</b> —
@@ -312,6 +356,21 @@ public sealed record MirroredSignal(
     public int LatchRegisters => Transient ? 1 : 0;
 
     /// <summary>
+    /// <b>This signal's generated latch is PHASE-ARMED</b> — set only inside the armed window and cleared
+    /// whenever the slot is not running an index.
+    ///
+    /// <para>Both terms are required and neither implies the other: <see cref="Transient"/> alone is the
+    /// once-per-WAVE latch, which the unconditional form expresses correctly and must keep getting.</para>
+    /// </summary>
+    public bool PhaseArmed => Transient && RearmsEachIndex;
+
+    /// <summary>True when the binding names an in-index arm window. <b>Distinct from the window being open.</b></summary>
+    public bool ArmWindowStated => !string.IsNullOrWhiteSpace(ArmedBy);
+
+    /// <summary>The arm tag, or null when the binding named none. <b>Never falls back to anything.</b></summary>
+    public string? ArmWindow => ArmWindowStated ? ArmedBy!.Trim() : null;
+
+    /// <summary>
     /// Who latches it — <b>the provenance a reviewer can check.</b>
     ///
     /// <para>For a GENERATED latch this is the copy layer itself, which is a stronger answer than a block
@@ -320,6 +379,10 @@ public sealed record MirroredSignal(
     /// </summary>
     public string? LatchProvenance => LatchSource switch
     {
+        LatchSource.Generated when PhaseArmed =>
+            "the generated copy layer, PHASE-ARMED (derived: this signal is declared transient and re-arming"
+            + (ArmWindowStated ? $", armed by '{ArmWindow}'" : ", armed by the slot's start bool alone") + ")",
+
         LatchSource.Generated => "the generated copy layer (derived: this signal is declared transient)",
         LatchSource.HandAuthored => LatchedBy!.Trim(),
         _ => null,
@@ -517,6 +580,12 @@ public enum CopyLayerNetworkKind
     /// IS NOT: *** it converts a strong assertion into one that can silently miss. A sampled assertion
     /// landing in a poll gap is a silent wrong answer, not an error — and a poll IS one round trip, so no
     /// polling rate recovers a one-scan event. That is why this network exists rather than a relaxation.</para>
+    ///
+    /// <para><b>It carries BOTH forms</b> — the unconditional latch for a once-per-wave transient, and the
+    /// PHASE-ARMED latch (<c>SCOIL</c> under an arm, <c>RCOIL</c> under the start bool's inverse) for one
+    /// that re-arms each index. They are one network kind because <c>ir/SPEC.md</c> groups
+    /// <c>COIL</c>/<c>SCOIL</c>/<c>RCOIL</c> as ONE statement kind, so the generator's
+    /// one-kind-per-network rule is not broken by putting the resets beside the sets.</para>
     /// </summary>
     ResultLatch,
 }
@@ -528,6 +597,40 @@ public enum CopyLayerNetworkKind
 public sealed record CopyLayerCopy(string From, string To, MirrorValueType Type);
 
 /// <summary>
+/// One generated latch rung set: the mirror bit, the signal that sets it, and <b>the window it is set
+/// inside</b>.
+///
+/// <para><b><see cref="ClearLevel"/> is what separates the two forms, and it is a level rather than a
+/// bool on purpose.</b> An unconditional latch has none — nothing in the copy layer ever clears it, and
+/// the client does that over the wire during inert. A phase-armed one names the signal whose ABSENCE
+/// clears it, which is what makes the emitted <c>RCOIL</c> derivable from this record instead of from a
+/// flag plus a separately-remembered tag.</para>
+/// </summary>
+/// <param name="LatchTag">The mirror bit the latch drives.</param>
+/// <param name="Signal">The observed signal.</param>
+/// <param name="ArmTerms">
+/// Every term ANDed AHEAD of the signal, in emission order. Empty for the unconditional form.
+/// </param>
+/// <param name="ClearLevel">
+/// The level whose inverse resets the latch, or null for the unconditional form.
+/// </param>
+public sealed record CopyLayerLatch(
+    string LatchTag,
+    string Signal,
+    IReadOnlyList<string> ArmTerms,
+    string? ClearLevel)
+{
+    /// <summary>True when this latch is armed and cleared by the copy layer rather than only by the client.</summary>
+    public bool PhaseArmed => ClearLevel is not null;
+
+    /// <summary>
+    /// The <c>SCOIL</c> right-hand side. <b>The signal is LAST</b>, so a reader meets the window before
+    /// the thing being observed — the same order <c>FB_HarnessViolationLatch</c> writes its guards in.
+    /// </summary>
+    public string SetExpression => string.Join(" AND ", ArmTerms.Append(Signal));
+}
+
+/// <summary>
 /// One generated network: its kind, its title, and every copy in it.
 ///
 /// <para><b>A network holds copies of ONE type.</b> IR groups statements within a network by kind in a
@@ -535,11 +638,22 @@ public sealed record CopyLayerCopy(string From, string To, MirrorValueType Type)
 /// than one network that has to be ordered correctly. The generator's standing rule — one KIND per
 /// network makes the ordering rule unreachable rather than merely satisfied.</para>
 /// </summary>
+/// <param name="Latches">
+/// The latch rungs, when this is a <see cref="CopyLayerNetworkKind.ResultLatch"/> network. <b>Empty on
+/// every other kind, and the network's <see cref="Moves"/> are DERIVED from it</b> at the one place both
+/// are built — two independently-populated views of one rung set is exactly how a report comes to
+/// disagree with what was emitted.
+/// </param>
 public sealed record CopyLayerNetwork(
     int Number,
     CopyLayerNetworkKind Kind,
     string Title,
-    IReadOnlyList<CopyLayerCopy> Moves);
+    IReadOnlyList<CopyLayerCopy> Moves,
+    IReadOnlyList<CopyLayerLatch>? Latches = null)
+{
+    /// <summary>The latch rungs, never null.</summary>
+    public IReadOnlyList<CopyLayerLatch> LatchRungs => Latches ?? Array.Empty<CopyLayerLatch>();
+}
 
 /// <summary>One artifact the generator emits, as IR text ready to hand to the converter.</summary>
 public sealed record HarnessObject(string Name, HarnessObjectKind Kind, string Ir);

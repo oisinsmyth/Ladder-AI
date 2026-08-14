@@ -52,6 +52,58 @@ public enum LoopOutcome
 public sealed record LoopCaveat(string Id, string Detail);
 
 /// <summary>
+/// 🔴 <b>What steps 1–4 produced, with the device boundary NOT crossed.</b>
+///
+/// <para><b>This type exists because the copy layer could not be obtained without deploying it.</b>
+/// <c>LoopRun.Execute</c> was the only route to a generated layer and it goes on to hand that layer to a
+/// gateway — so inspecting the artifact, diffing two generations, or measuring the mirror's width all
+/// required a device fence to be satisfied for work that touches no device. <i>A component that can only
+/// be asserted about has a class of defect no assertion reaches.</i></para>
+///
+/// <para><b><see cref="Stopped"/> is the outcome the loop WOULD have reported</b>, or null when the layer
+/// was generated. It is not a bool: "the map would not derive" and "the gate refused" are different
+/// facts, and collapsing them is how a caller comes to report one as the other.</para>
+/// </summary>
+public sealed record LoopGeneration(
+    LoopOutcome? Stopped,
+    SubmissionReport? Gate,
+    SlotSizeReport? SizeReport,
+    RegisterMap? Map,
+    BuildStamp Stamp,
+    CopyLayerResult? CopyLayer,
+    RetentionVerdict? Retention,
+    IReadOnlyList<LoopCaveat> Caveats,
+    string Detail)
+{
+    /// <summary>True only when a copy layer exists. Equivalent to <c>Stopped is null</c> by construction.</summary>
+    public bool Generated => Stopped is null;
+
+    /// <summary>
+    /// The generated objects, or <b>an empty list that is never a clean one</b> — read
+    /// <see cref="Generated"/> first, which is why <see cref="Require"/> exists beside it.
+    /// </summary>
+    public IReadOnlyList<HarnessObject> Objects => CopyLayer?.Objects ?? Array.Empty<HarnessObject>();
+
+    /// <summary>The plan, or an exception naming where the loop stopped. For callers that must not read an empty list as a clean one.</summary>
+    public CopyLayerPlan Require() =>
+        CopyLayer?.Plan ?? throw new InvalidOperationException(
+            $"no copy layer was generated ({Stopped}). {Detail}");
+
+    /// <summary>Every reason generation stopped, whether it was refused at the gate or by the generator itself.</summary>
+    public IReadOnlyList<string> Refusals => CopyLayer?.Refusals ?? Array.Empty<string>();
+
+    internal static LoopGeneration Stop(
+        LoopOutcome outcome,
+        SubmissionReport? gate,
+        SlotSizeReport? sizeReport,
+        RetentionVerdict? retention,
+        IReadOnlyList<LoopCaveat> caveats,
+        string detail,
+        CopyLayerResult? copyLayer = null) =>
+        new(outcome, gate, sizeReport, null, default, copyLayer, retention, caveats, detail);
+}
+
+/// <summary>
 /// What one turn of loop 1 produced.
 ///
 /// <para><b>There is deliberately no <c>Passed</c>, and no verdict of any kind.</b> DB-8 owns verdicts,

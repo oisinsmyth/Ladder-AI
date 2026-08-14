@@ -23,6 +23,25 @@ public static class LoopExit
 
     /// <summary>The device fence refused the target. <b>No socket was opened.</b></summary>
     public const int Refused = 3;
+
+    /// <summary>
+    /// <c>--generate-only</c>: the copy layer was generated, the submission is ADMISSIBLE, and
+    /// <b>nothing was deployed</b>.
+    ///
+    /// <para>Deliberately the same value as <see cref="Ran"/> — both mean "the thing you asked for
+    /// happened" — but named separately, because a caller reading 0 from a generate-only run has NOT run
+    /// a wave and has learned nothing about any block.</para>
+    /// </summary>
+    public const int Generated = 0;
+
+    /// <summary>
+    /// 🔴 <c>--generate-only</c>: <b>the IR was produced AND the submission is NOT ADMISSIBLE.</b>
+    ///
+    /// <para>Its own code, and not <see cref="Generated"/>, because the gate that would have stopped a
+    /// deploying run did not stop this one. The IR is there to be READ; nothing may be deployed from a run
+    /// that exits here, and a caller keying on 0 cannot reach this by accident.</para>
+    /// </summary>
+    public const int GeneratedNotAdmissible = 4;
 }
 
 /// <summary>
@@ -74,6 +93,18 @@ public static class LoopCli
         var unit = byte.TryParse(Option(args, "--unit"), out var u) ? u : (byte)1;
         var outPath = Option(args, "--out");
         var verify = args.Contains("--verify");
+        var generateOnly = args.Contains("--generate-only");
+        var emitDir = Option(args, "--emit");
+
+        // *** THE TWO MODES ARE MUTUALLY EXCLUSIVE, AND THE REFUSAL NAMES WHY. *** --verify reads a build
+        // stamp OFF A DEVICE; --generate-only stops before any gateway is constructed. A run that claimed
+        // both would have to open a socket to satisfy one of them.
+        if (generateOnly && verify)
+        {
+            output.WriteLine("NOTHING EXAMINED — --generate-only and --verify are mutually exclusive. --generate-only stops after the");
+            output.WriteLine("copy layer is generated and constructs no gateway at all; --verify reads the build stamp OFF THE DEVICE.");
+            return LoopExit.NothingExamined;
+        }
 
         if (bindingPath is null)
         {
@@ -108,6 +139,13 @@ public static class LoopCli
             output.WriteLine($"NOTHING EXAMINED — could not read the BINDING '{bindingPath}': {ex.GetType().Name}: {ex.Message}");
             return LoopExit.NothingExamined;
         }
+
+        // ---- GENERATE AND STOP ----------------------------------------------------------------------
+        // Before the fence, because there is nothing to fence: no gateway is constructed on this path and
+        // no host is read. It sits here rather than after the fence so that the absence is structural
+        // rather than a flag somebody could reorder past.
+        if (generateOnly)
+            return GenerateOnly(submissionPath, bindingPath, submission, binding, emitDir, output, writeFile);
 
         // ---- THE FENCE, BEFORE ANYTHING OPENS A SOCKET ----------------------------------------------
         if (verify)
@@ -189,6 +227,138 @@ public static class LoopCli
     /// <summary>The real transport. Behind a factory so every test above reaches none of it.</summary>
     private static IRegisterTransport DefaultConnect(string host, int port, byte unit) =>
         NModbusTransport.Connect(host, port, unit);
+
+    /// <summary>
+    /// 🔴 <b><c>--generate-only</c>: derive → gate → width → GENERATE → 0.1b, then STOP and print the IR.</b>
+    ///
+    /// <para><b>This path constructs no gateway and reads no host.</b> That is the point: until it
+    /// existed, the only way to obtain a copy layer was through <c>LoopRun.Execute</c>, which hands what
+    /// it generates straight to a device. Reviewing the emitted IR, comparing two generations, or
+    /// measuring the mirror's width all needed a device fence satisfied first, for work that touches no
+    /// device — <i>and a missing seam is a finding in its own right, not a convenience gap.</i></para>
+    ///
+    /// <para><b>It prints the MIRROR WIDTH and a LATCH INVENTORY</b>, because both are what a reader has
+    /// to decide on: the width says whether a re-deploy is needed and how big, and the inventory says, per
+    /// latch, whether the copy layer clears it or the client must.</para>
+    /// </summary>
+    private static int GenerateOnly(
+        string submissionPath,
+        string bindingPath,
+        SubmissionDocument submission,
+        BindingDocument binding,
+        string? emitDir,
+        TextWriter output,
+        Action<string, string> writeFile)
+    {
+        LoopRequest request;
+        try
+        {
+            request = Compose(submission, binding);
+        }
+        catch (Exception ex)
+        {
+            output.WriteLine($"NOTHING EXAMINED — the submission and binding could not be COMPOSED: {ex.GetType().Name}: {ex.Message}");
+            output.WriteLine($"  submission: {submissionPath}");
+            output.WriteLine($"  binding   : {bindingPath}");
+            return LoopExit.NothingExamined;
+        }
+
+        output.WriteLine("mode        : GENERATE ONLY — derive, gate, width, generate, 0.1b. NO GATEWAY IS CONSTRUCTED, no host is read,");
+        output.WriteLine("              nothing is imported, compiled or downloaded. The exit code says the IR was PRODUCED, never that");
+        output.WriteLine("              anything ran.");
+        output.WriteLine();
+
+        // *** THE GATE STILL RUNS AND ITS VERDICT IS STILL REPORTED; WHAT IT DOES NOT DO IS STOP THIS. ***
+        // The gate's contract is that an inadmissible submission COSTS NOTHING beyond it — no copy layer,
+        // no deployment, no transport — and this path spends none of those. It is also a verdict about the
+        // VECTORS, while the copy layer is a function of the BINDING alone. The price of suppressing the
+        // stop is paid below: the whole verdict is printed, and the exit code is one a deployable run
+        // cannot produce.
+        var generation = LoopRun.Generate(request, stopWhenInadmissible: false);
+
+        if (!generation.Generated)
+        {
+            output.WriteLine($"NOT GENERATED: {generation.Stopped}");
+            output.WriteLine($"  {generation.Detail}");
+
+            foreach (var refusal in generation.Refusals)
+                output.WriteLine("  - " + refusal);
+
+            return LoopExit.DidNotRun;
+        }
+
+        var admissible = generation.Gate?.Verdict == SubmissionVerdict.AdmissibleSubjectToJudgement;
+
+        output.WriteLine($"SUBMISSION GATE: {generation.Gate?.Verdict.ToString() ?? "<not evaluated>"}"
+                         + $"  ({generation.Gate?.Refused.Count ?? 0} refused, {generation.Gate?.NotChecked.Count ?? 0} could not run)");
+
+        foreach (var refused in generation.Gate?.Refused ?? Array.Empty<GateResult>())
+            output.WriteLine($"  REFUSED     {refused.Gate}: {refused.Detail}");
+
+        foreach (var notChecked in generation.Gate?.NotChecked ?? Array.Empty<GateResult>())
+            output.WriteLine($"  NOT CHECKED {notChecked.Gate}: {notChecked.Detail}");
+
+        if (!admissible)
+        {
+            output.WriteLine();
+            output.WriteLine("🔴 THE GATE DID NOT ADMIT THIS SUBMISSION, AND IT DID NOT STOP THIS GENERATION EITHER.");
+            output.WriteLine("   NOTHING MAY BE DEPLOYED FROM THIS RUN. The IR below is for READING. A deploying run re-runs the");
+            output.WriteLine("   gate with the stop in place and would not get this far, so the only remaining check on what follows");
+            output.WriteLine("   is the person reading it. Exit code is 4, never 0.");
+        }
+
+        output.WriteLine();
+
+        var plan = generation.Require();
+        var map = generation.Map!;
+
+        output.WriteLine($"GENERATED — {generation.Detail}");
+        output.WriteLine();
+        output.WriteLine($"MIRROR WIDTH: {map.TotalRegisters} register(s) at %M{map.Geometry.BaseByte}"
+                         + $"  [control {map.Control.Length}, vectors {map.VectorBlock.Length}, results {map.ResultBlock.Length}]");
+        output.WriteLine($"BUILD STAMP : {generation.Stamp.Literal}");
+        output.WriteLine($"MAP HASH    : {map.MapHash}");
+        output.WriteLine();
+
+        // *** THE LATCH INVENTORY, PRINTED ON EVERY RUN INCLUDING THE EMPTY ONE. *** A report that appears
+        // only when there is something to say teaches a reader that its absence means it was not run.
+        var latches = plan.Networks
+            .Where(n => n.Kind == CopyLayerNetworkKind.ResultLatch)
+            .SelectMany(n => n.LatchRungs)
+            .ToArray();
+
+        output.WriteLine($"LATCHES: {latches.Length}");
+        foreach (var latch in latches)
+        {
+            output.WriteLine(latch.PhaseArmed
+                ? $"  {latch.LatchTag}  PHASE-ARMED  set on [{string.Join(" AND ", latch.ArmTerms)}] AND {latch.Signal}; reset on NOT {latch.ClearLevel}"
+                : $"  {latch.LatchTag}  UNCONDITIONAL  set on {latch.Signal}; NOT reset by the copy layer — THE CLIENT must clear it during inert");
+        }
+
+        if (latches.Length == 0)
+            output.WriteLine("  (none — no result source in this binding is declared transient)");
+
+        output.WriteLine();
+
+        foreach (var obj in generation.Objects)
+        {
+            output.WriteLine($"----- {obj.Kind} {obj.Name} -----");
+            output.WriteLine(obj.Ir.TrimEnd('\n'));
+            output.WriteLine();
+        }
+
+        if (emitDir is not null)
+        {
+            foreach (var obj in generation.Objects)
+            {
+                var path = Path.Combine(emitDir, obj.Name + ".ir");
+                writeFile(path, obj.Ir);
+                output.WriteLine($"WRITTEN: {path}");
+            }
+        }
+
+        return admissible ? LoopExit.Generated : LoopExit.GeneratedNotAdmissible;
+    }
 
     private static LoopRequest Compose(SubmissionDocument submission, BindingDocument binding)
     {
@@ -294,10 +464,16 @@ public static class LoopCli
     private static void Usage(TextWriter output)
     {
         output.WriteLine("usage: harness-run --submission <submission.json> --binding <binding.json>");
+        output.WriteLine("                   [--generate-only [--emit <dir>]]");
         output.WriteLine("                   [--verify --host <ip> [--port 502] [--unit 1] [--allowlist <path>]]");
         output.WriteLine("                   [--out <result.json>]");
         output.WriteLine();
         output.WriteLine("Runs the phase 5.3 inner loop: map -> gate -> copy layer -> 0.1b -> gateway -> version -> wave -> packages.");
+        output.WriteLine();
+        output.WriteLine("--generate-only stops after the copy layer is generated and the 0.1b assertion passes, and prints the IR,");
+        output.WriteLine("         the mirror width and the latch inventory. IT CONSTRUCTS NO GATEWAY AND READS NO HOST: nothing is");
+        output.WriteLine("         imported, compiled or downloaded, and no socket exists on that path. Use it to review what would");
+        output.WriteLine("         be deployed. --emit <dir> also writes one .ir file per generated object.");
         output.WriteLine();
         output.WriteLine("--verify uses the VERIFYING gateway: it reads the build stamp off the device and refuses any mismatch.");
         output.WriteLine("         It imports nothing, compiles nothing, downloads nothing and writes nothing. Use it to run vectors");
