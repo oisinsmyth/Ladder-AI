@@ -41,7 +41,7 @@ wrong is how a campaign produces a large green that means nothing.
 | **§F** DIVERGED | **21** (`DV-1..20` + `DV-8b`) | 29 of the 33; the residue is accounted for, not dropped |
 | **§G** NOT CHECKED | **21** (`NC-1..21`) | one per item — *checkable? by what? at what cost?* |
 | **total test rows** | **108** | of which **30 are multi-agent** (§D's 27 + `SELF-1/2/3`) |
-| **§H** NOT BUILT | **38 + 4 found here + 1 re-bucketed** (`NB-22b`, from `NC-6`) | ***consequence register, NOT test rows*** — and 3 of the 4 found here are now struck as CLOSED, kept visible rather than deleted |
+| **§H** NOT BUILT | **43 rows** = 38 + 4 found here + 1 re-bucketed (`NB-22b`, from `NC-6`) — of which 🔴 **33 are still buildable** (32 main + `NB-D`) | ***consequence register, NOT test rows***. **6 closed and 4 struck, all kept visible rather than deleted.** ⚠️ **The `38` in the header block and the row above is the RECONCILIATION's bucket, not this register's row count** — different quantities, see §H.0's ledger, which is counted in the table rather than carried forward |
 
 **Rows already run: 10** — `SELF-4`, `SELF-9`, `NC-5`, `NC-6`, `NC-7`, `NC-8`, `NC-9`, `NC-18`,
 `NC-20`, `NC-21`, all PC-side, no Portal and no rig. **§J is the log**, and it is kept separate from
@@ -390,11 +390,39 @@ them, none needing the Portal token.
 
 ---
 
-## §H — NOT BUILT (38): CONSEQUENCES, NOT TEST TARGETS
+## §H — NOT BUILT: CONSEQUENCES, NOT TEST TARGETS
 
 > *** THESE ARE LISTED SO THAT THEIR ABSENCE FROM §E–§G IS NEVER READ AS COVERAGE. *** Nothing here
 > is a test row. Each carries the standing risk while it stays absent. **A campaign that omits this
 > section produces a plan whose scope nobody can reconstruct.**
+
+### H.0 The disposition ledger — *** THE REGISTER WAS INFLATING ITSELF ***
+
+**Census taken 2026-08-14, counted in this table rather than carried forward.** The heading used to
+read `NOT BUILT (38)` while the table below held **39** rows, and **six of them were no longer things
+to build** — two already closed, a third closed the same day, and four struck as not-to-be-built on
+this register's own recorded reasoning. *** A READER BUDGETING FROM THE HEADING WAS BUDGETING FOR
+SIX ITEMS THAT DO NOT EXIST. ***
+
+| disposition | n | which |
+|---|---|---|
+| **rows in the main table** | **39** | `NB-1..NB-38` + `NB-22b` |
+| **rows in §H.1** | **4** | `NB-A..NB-D` |
+| **TOTAL ROWS** | **43** | — |
+| ✅ closed, retained | **3** (main) + **3** (§H.1) | `NB-19`, `NB-31`, `NB-38` · `NB-A`, `NB-B`, `NB-C` |
+| ⛔ struck, not to be built | **4** | `NB-5`, `NB-6`, `NB-14`, `NB-36` |
+| 🔴 **STILL BUILDABLE** | **32** (main) + **1** (§H.1 = `NB-D`) | *** 32, NOT 38 *** |
+
+> **Why nothing is deleted.** *An empty slot that reads as a decision does not get refilled; one that
+> reads as an accident does.* A struck row keeps its number, its item and its reason, so the next
+> reader can see it was **ruled on** rather than lost — and so a future measurement that contradicts
+> the ruling has somewhere to land. This is SELF-4's rule applied to the register itself.
+>
+> ⚠️ **The `38` at §A and in the header block is a DIFFERENT NUMBER and is still correct:** it is the
+> **reconciliation's** bucket count, which splits several mechanisms here into separate spec items
+> (see the note after §H.1). *** THE TWO NUMBERS ARE NOT THE SAME QUANTITY AND MUST NOT BE
+> RECONCILED TO EACH OTHER. *** This ledger counts **rows on this register**; §A counts **items in
+> `spec-reconciliation.md`**.
 
 | # | item(s) | consequence while absent |
 |---|---|---|
@@ -402,8 +430,8 @@ them, none needing the Portal token.
 | **NB-2** | 2.2b — the agent does not touch the test project | Governance only; no mechanism in `src/`. `SoftwareOnlyChanges` safety rests on discipline. |
 | **NB-3** | 2.2c — the agent does not take the project online | Openness refuses a download while online; nothing prevents an agent going online. **One agent online blocks the wave loop and the failure appears as a download refusal** — i.e. it blames the wrong half. |
 | **NB-4** | D9 — the **producer** of computed disjointness | 🔴 **RE-BUCKET: partly closed by `converter conflict-graph` (DV-15).** What remains absent is the **storage join** that lets it resolve; disjointness is still *declared by absence*, not computed. And D9 has already bitten by hand — six declared slots all driving one iDB, one `DB_Input.Test[]` and one `DB_Controls.FaultReset` are **six waves of one slot, not one wave of six**. |
-| **NB-5** | DB-10 — agent scheduling | Deliberately demoted. None at a minute a wave; agents wait. |
-| **NB-6** | DB-11 — the rig pool | Deliberately demoted. One rig, one test project — which is what the version register requires anyway. |
+| **NB-5** | ~~DB-10 — agent scheduling~~ | ⛔ **STRUCK — NOT TO BE BUILT (2026-08-14).** On this row's own recorded reasoning: *"Deliberately demoted. None at a minute a wave; agents wait."* **A demotion that stays on a NOT BUILT list is indistinguishable from a backlog item**, and gets re-proposed by the next reader who sees an absence. Revisit only on a measured wave rate that makes waiting cost something. |
+| **NB-6** | ~~DB-11 — the rig pool~~ | ⛔ **STRUCK — NOT TO BE BUILT (2026-08-14).** On this row's own recorded reasoning: *"Deliberately demoted. One rig, one test project — which is what the version register requires anyway."* The single rig is not a shortfall to be closed; **it is what the version register requires**, so a pool would have to be argued for against that, not merely built. Revisit only if a second rig arrives. |
 | **NB-7** | §11 — **OB80**, the executing-block register, the enable bitmask | **No OB80 generator anywhere in `src/`.** ***An overrun STOPs the CPU, and unattended one bad block turns a wave into a dead night*** — the exact cost asymmetry §11 argues from. And §2.1 lists OB80 among the things the coordinator generates. |
 | **NB-8** | **12.3 — latched transients** ("default on for coil-shaped signals") | 🔴 ***THE COPY LAYER PROVIDES SAMPLED AND NOTHING ELSE.*** Every observation is exposed to the ~0.05% ~95-scan poll gap; **O11's cap binds where an all-latched set would have no cap at all**; and **X-F's startup class explicitly requires latched evidence it cannot have**. The four `HBA_Violation_*` latches on the rig are **hand-authored** `FB_HarnessViolationLatch` (FB 9003), not generated. Measured second-order cost: `FromMinimalCopyLayer` hard-codes every signal to `{Sampled}`, so **a real deployed latch is structurally undeclarable** and gate 5 produced **4 false refusals in 17**. |
 | **NB-9** | **12.4 — event scan-stamps** | *"When, relative to T=0"* is unanswerable, so **coincidence and ordering assertions are inadmissible**. |
@@ -411,7 +439,7 @@ them, none needing the Portal token.
 | **NB-11** | F-2 — DB-13's max-width input shape | One number per wave set must be the worst case, discarding most of the width the link sustains. |
 | **NB-12** | F-6 — admission grouping by slot size | `SlotSizeReport` computes the collapse and surfaces it as a `LoopCaveat` — ***a report, never a gate***. One 123-register slot takes R from 6 to 1 and **sextuples every read**, and nothing refuses it. |
 | **NB-13** | `exceed_250 = 0.352%` — no consumer | The *"expected over-threshold exchanges per operation"* figure the spec asks every bound to be quoted with is **produced by nothing**. |
-| **NB-14** | M2 — the physical analysis grounded in the equipment | No mechanism, and **none is possible mechanically**. The spec's blind spots stay untestable; this is the residual §16.9 names. |
+| **NB-14** | ~~M2 — the physical analysis grounded in the equipment~~ | ⛔ **STRUCK — NOT TO BE BUILT (2026-08-14).** On this row's own recorded reasoning: *"No mechanism, and **none is possible mechanically**."* ⚠️ **STRUCK AS IMPOSSIBLE, NOT AS UNIMPORTANT — and the risk it names does not go away with the row.** The spec's blind spots stay untestable; this is the residual §16.9 names, and it remains a **judgement** owed to a human, never a gate. *Retiring it visibly is what stops it being re-filed as buildable work by someone reading only the absence.* |
 | **NB-15** | 7a.2 — a failing test may not be closed by changing the block until the basis is re-confirmed | No mechanism. The worked example — *engineering a correct pre-act offset out of a block* — is prevented only by discipline. |
 | **NB-16** | X-C residual — a PLC-side watchdog | **Nothing survives the PC dying.** Safe only while the rig's outputs cannot actuate (ADR-0009) — ***and that dependency is the condition to revisit on***. |
 | **NB-17** | X-H — the equipment-identity warning | Case 3 written as two case-2 slots passes against two independent tanks and **the coupling is never exercised**. |
@@ -429,14 +457,14 @@ them, none needing the Portal token.
 | **NB-28** | `map.storage` (contract §2.7) on the submission side | The join from a logical signal name to PLC storage. **Its absence is why 16 of 17 signals do not resolve** (DV-15) and why NC-15/NC-16 cannot close. |
 | **NB-29** | A machine-readable **spec-name → block-name alias** | 🔴 ***THE ROOT CAUSE, MEASURED THREE INDEPENDENT WAYS IN ONE SESSION.*** The harness's data model assumes the specification's signal name **is** the block's tag name. The only artifact that could hold the pair was **a prose markdown table, and prose is exactly what no gate reads** — which is *why D1 could be laundered in the first place*. ⚠️ **PARTLY CLOSED, RE-VERIFY (SELF-4):** gate 5 now carries a *"a specName on every bound signal"* branch. **The instrumentation-mode half (NB-8) is still absent**, and that is what produced the 4 false refusals. |
 | **NB-30** | A static **interface check** with its own outcome | `converter interface-check --project … --block … --requires …` is designed, not built. **It needs a NEW outcome**: every existing gate outcome blames the *submission*; a missing response signal is a **FAIL against the block**. Reusing `REFUSED` sends an author to edit the artifact that is correct. ***D6's green is valid only while D1 is reported by this check.*** ⚠️ **The design trap is recorded and must survive into the build:** `FB_HopperBlockageMonitor`'s `INPUT` and `OUTPUT` sections are **both empty** (C-132 single-STATIC-UDT house style, the norm here) — ***a check reading those sections reports BOTH signals missing, including the one that exists***, and one matching **comments** would have found "inhibit" in a network title and **passed D1**. Resolve through the interface UDT; **member names only**. |
-| **NB-31** | Gate 5's CLI path taking its map from the coordinator | ✅ **CLOSED — RE-VERIFIED 2026-08-14, and it is SELF-4's sharpest instance.** `SubmissionGate.cs:659` checks the map's **authority before using the map**: `MapProvenance.SelfDeclared` ⇒ **`NotChecked`**, and `GateCli` stamps its own map `SelfDeclared` **deliberately**, so `harness-gate check` without `--binding` now reports honestly instead of passing. Only `MapProvenance.Bindings` lets gate 5 run. **The row is retained** because the *finding* it records — ***a standalone gate more permissive than its integrated form is worse than an absent one, because it is consulted first and believed*** — is the reusable part, and the campaign must assert the refusal branch rather than assume it. |
+| **NB-31** | Gate 5's CLI path taking its map from the coordinator | ✅ **CLOSED — RE-VERIFIED 2026-08-14, and it is SELF-4's sharpest instance.** `SubmissionGate.cs` (the `MapProvenance` test in `Observability`, **line 903 as of `0b5d4a3` — it was cited here as `:659`, which had already drifted onto a blank comment line; *a positional reference in prose goes stale silently*, so prefer the symbol**) checks the map's **authority before using the map**: `MapProvenance.SelfDeclared` ⇒ **`NotChecked`**, and `GateCli` stamps its own map `SelfDeclared` **deliberately**, so `harness-gate check` without `--binding` now reports honestly instead of passing. Only `MapProvenance.Bindings` lets gate 5 run. **The row is retained** because the *finding* it records — ***a standalone gate more permissive than its integrated form is worse than an absent one, because it is consulted first and believed*** — is the reusable part, and the campaign must assert the refusal branch rather than assume it. |
 | **NB-32** | A six-slot binding | Six slots declaring the same result tags collide on one tag-keyed dictionary (`ArgumentException`). Corroborates structurally that **the deployed mirror is ONE region** — but it means multi-slot binding on one block is inexpressible. *(Minor defect beside it: the CLI reports this as a failure to read the **submission** when the fault is in the **binding**.)* |
 | **NB-33** | `F3` — the `block-layout --set/--expect` sequence has no live exercise | It **fires zero times on every wave the harness generates today** (the mirror is `%MW`, the transport is Modbus). ***A no-op is not evidence the re-assertion works.*** |
 | **NB-34** | `F2` — the gateway cannot reach the live manifest path | It is confined to the probe's **rendering**; anything the renderer drops is invisible to the loop. |
 | **NB-35** | `F4` — `download-probe.exe` has no self-approval | Must be approved by hand or the first attach hangs — indistinguishable from a wedged Portal. |
-| **NB-36** | `F5` — `--disruptive` is not optional | **Every deployment stops the CPU**; there is no per-block download. Granularity is device-level by API, not by choice. |
+| **NB-36** | ~~`F5` — `--disruptive` is not optional~~ | ⛔ **STRUCK — NOT TO BE BUILT (2026-08-14): A VENDOR CONSTRAINT WITH NO ARTIFACT.** On this row's own recorded reasoning: *"**Every deployment stops the CPU**; there is no per-block download. Granularity is device-level by API, not by choice."* `Download()`'s three overloads take a connection, two callbacks and a `DownloadOptions` — **no block, group, selection or exclusion** — so there is nothing here for us to build or fix. ⚠️ **The CONSEQUENCE stands and is not struck with the row:** every deployment is disruptive, which is why the rig's outputs being physically incapable of actuating (ADR-0009) is load-bearing rather than incidental. |
 | **NB-37** | `AMB-15` / `AMB-16` unsettled in the enumeration | AMB-15 bounds what two vectors can claim; if ruled the other way **the denominator goes to 29 and the set needs two more vectors**. AMB-16: 22 assertions say *"the persistence threshold"* and nothing says which. |
-| **NB-38** | The enumeration's `forms:` projection is keyed by **display ordinal** | Gate 3e looks up **by ID**, so the projection makes 3e report `NOT CHECKED` on all 27 citations — ***a NOT-CHECKED wearing the costume of a supplied field***. Both vector authors hit it independently and both re-keyed by ID **in their submissions**; it is **unfixed in the enumeration**. |
+| **NB-38** | ~~The enumeration's `forms:` projection is keyed by **display ordinal**~~ | ✅ **CLOSED AT THE SOURCE, `206c1d9` — VERIFIED BY RUNNING THE GATE, NOT BY READING THE COMMIT (2026-08-14).** The projection is now keyed by assertion ID; measured on `harness-gate` built at `0b5d4a3`, feeding the enumeration's own `forms:` table straight into a submission: **ordinal-keyed ⇒ `>>[REFUSED] 3e`, all 27 citations reporting *"the enumeration carries forms but none for '…'"*; ID-keyed ⇒ `[CHECKED] 3e`, passing.** Re-key verified **against the assertion bodies** (each carries its own `ordinal`/`form`/`id`) rather than against the old table: 27/27, 22 When / 5 Never, **zero mismatches and no assertion ID moved** — which is the property that mattered, since IDs here are SHA-256 of the assertion text. ⚠️ **ONE CORRECTION TO THIS ROW'S OWN WORDING, and it matters:** 3e did **not** report `NOT CHECKED` — the gate **REFUSED**, naming every citation. *A refusal invites an argument and somebody looks; a NOT CHECKED closes the question.* The gate was failing **closed** the whole time, and describing it as a silent not-checked understated it. ***The costume was on the FIELD, never on the gate.*** **Mutation-tested both ways** so the fix is not "3e now passes everything": drop one cited ID ⇒ refused, naming exactly that one citation; flip one `Never`⇒`When` ⇒ refused, naming F-3's walk-around. |
 
 ### H.1 Four absences this plan found that the reconciliation does not carry
 
