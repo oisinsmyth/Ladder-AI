@@ -55,6 +55,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Harness.MirrorRead", "Harne
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Harness.MirrorRead.Tests", "Harness.MirrorRead.Tests\Harness.MirrorRead.Tests.csproj", "{BDFD2B20-AC4A-4F2D-86AC-00D26435E9D1}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Harness.MirrorView", "Harness.MirrorView\Harness.MirrorView.csproj", "{7D80682F-78CC-4A8A-AE61-6CF1A7AB9AF7}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Harness.MirrorView.Tests", "Harness.MirrorView.Tests\Harness.MirrorView.Tests.csproj", "{8716BB5E-AE6A-49C5-846E-32820FBB0F26}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -168,5 +172,13 @@ Global
 		{BDFD2B20-AC4A-4F2D-86AC-00D26435E9D1}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{BDFD2B20-AC4A-4F2D-86AC-00D26435E9D1}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{BDFD2B20-AC4A-4F2D-86AC-00D26435E9D1}.Release|Any CPU.Build.0 = Release|Any CPU
+		{7D80682F-78CC-4A8A-AE61-6CF1A7AB9AF7}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7D80682F-78CC-4A8A-AE61-6CF1A7AB9AF7}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7D80682F-78CC-4A8A-AE61-6CF1A7AB9AF7}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7D80682F-78CC-4A8A-AE61-6CF1A7AB9AF7}.Release|Any CPU.Build.0 = Release|Any CPU
+		{8716BB5E-AE6A-49C5-846E-32820FBB0F26}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{8716BB5E-AE6A-49C5-846E-32820FBB0F26}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{8716BB5E-AE6A-49C5-846E-32820FBB0F26}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{8716BB5E-AE6A-49C5-846E-32820FBB0F26}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

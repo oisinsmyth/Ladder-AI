@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>Harness.MirrorView</RootNamespace>
+    <AssemblyName>harness-mirror-view</AssemblyName>
+  </PropertyGroup>
+
+  <!--
+    THIS BUILD READS HOLDING REGISTERS AND SERVES A PAGE. IT CANNOT WRITE ANYTHING.
+
+    It points at a physical PLC, so read-only is a property of the ASSEMBLY, not an intention. The one
+    wire verb reachable from here is Harness.MirrorRead.IRegisterSource.Read — an interface that carries
+    no write and never hands its transport out — and the claim is CHECKED: MirrorViewStructureTests walks
+    every method body in the compiled assembly and asserts none of them names a write member of
+    Harness.Wire, Harness.Map or NModbus, with a denominator (bodies examined > 0) and a LIVE positive
+    control (a planted class in the test assembly that really does call WriteHoldingRegisters, which the
+    same walk must find). A const bool with an Assert.False on it is what this replaces: measured
+    2026-08-14 on Harness.RigWrite, adding a class that constructed a live socket client left all 202
+    tests green.
+
+    The same walk asserts IPAddress.Any / IPAddress.IPv6Any appear NOWHERE, with its own planted control
+    — a view of a live controller must not be reachable from a network interface.
+
+    NO new transport code. Harness.MirrorRead already owns the read-only handle and Harness.Wire owns the
+    socket, the FC03 bounds checks and ModbusPolicy (Retries = 0, which is load-bearing and is not the
+    library default). A second client here would be an uncalibrated one.
+
+    Web SDK, so Kestrel comes from the in-box Microsoft.AspNetCore.App shared framework: no package
+    restore, no CDN, nothing to install. The page is one static string with its CSS and JS inline.
+  -->
+
+  <ItemGroup>
+    <ProjectReference Include="..\Harness.MirrorRead\Harness.MirrorRead.csproj" />
+    <ProjectReference Include="..\Harness.Wire\Harness.Wire.csproj" />
+    <ProjectReference Include="..\..\device-guard\DeviceGuard\DeviceGuard.csproj" />
+  </ItemGroup>
+
+</Project>
