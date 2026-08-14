@@ -39,10 +39,15 @@ document asserted for its first day of life, including in the reports built on i
 | bucket | **measured, by census** | ~~as originally claimed~~ |
 |---|---|---|
 | **AS SPECIFIED** | **123** | ~~86~~ |
-| **DIVERGED** (spec corrected) | **29** | ~~33~~ |
-| **NOT BUILT** | **23** *(22 + `X-H`, "NOT BUILT (the warning)")* | ~~38~~ |
+| **DIVERGED** (spec corrected) | **30** *(29 + `12.3`, re-bucketed 2026-08-14)* | ~~33~~ |
+| **NOT BUILT** | **22** *(21 + `X-H`, "NOT BUILT (the warning)"; was 23 before `12.3` moved out)* | ~~38~~ |
 | 🔴 **NOT CHECKED** | **14** | ~~21~~ |
 | **TOTAL ROWS** | **189** | ~~178~~ |
+
+> **Re-counted mechanically 2026-08-14 after `12.3` moved**, by reading the bucket cell of every data
+> row in §0–§16 literally — **123 / 30 / 22 / 14 = 189**, which reproduces the census above shifted by
+> exactly the one row that moved. *The total is the invariant here: a re-bucket must conserve it, and
+> a census that does not reproduce is the finding.*
 
 **Two corroborating self-contradictions, both now confirmed:** §NC's named list sums to **20, not
 21**, and the *"six residual rows marked 🔴"* it invokes **do not exist as rows** — the other 🔴 marks
@@ -89,7 +94,7 @@ that §NC's own total is one of the numbers that did not survive the census.**
 
 | item | bucket | evidence / consequence |
 |---|---|---|
-| 2.1 The coordinator generates the mirror, copy layer, latches, scan-stamps, block-enable bitmask, OB80, the register map | **DIVERGED** | `Harness.Map/CopyLayerGenerator.cs` + `MapAllocator` generate the mirror, copy layer and map. ***It generates no latches, no scan-stamps, no block-enable bitmask and no OB80*** — its own doc comment lists them as deliberate absences (`CopyLayerGenerator.cs:26`). §12 corrected. |
+| 2.1 The coordinator generates the mirror, copy layer, latches, scan-stamps, block-enable bitmask, OB80, the register map | **DIVERGED** *(scope narrowed 2026-08-14 — ***this row was stale and was not on the brief***)* | `Harness.Map/CopyLayerGenerator.cs` + `MapAllocator` generate the mirror, copy layer and map. ⚠️ **This row used to say it generates *"no latches"*, and cited the generator's own doc comment as the authority. BOTH halves went stale together:** latches **are** now generated (§12.3, `ca9819b`), and the generator's absence list no longer names them — *so the citation would have gone on reading as corroboration while pointing at text that had changed underneath it.* ***It generates no scan-stamps, no block-enable bitmask and no OB80*** — those three remain deliberate absences. §12 corrected. |
 | 2.1b Agents speak TAG NAMES, never a register number (D8) | AS SPECIFIED | Gate 7 refuses an absolute address by regex (`SubmissionGate.cs:67`, :701). |
 | 2.2a Does not write its own vectors (D6) | AS SPECIFIED | Gate 2 authorship, `SubmissionGate.cs:246`. |
 | 2.2b Does not touch the test project | **NOT BUILT** | Governance only; no mechanism in `src/`. *Consequence: `SoftwareOnlyChanges` safety rests on discipline.* |
@@ -251,7 +256,7 @@ that §NC's own total is one of the numbers that did not survive the census.**
 |---|---|---|
 | 12.1 a one-scan event is invisible to any sampler; no polling rate recovers it | AS SPECIFIED | `WireTiming.ObservabilityFloorScans`; holds at 3.0 / 4.4 / 8.6 scans — a claim that survives every constant. |
 | 12.2 the copy layer provides a **free-running scan counter**, always | AS SPECIFIED | `HX_ScanCount : DInt @ %MD1004`; generated (`CopyLayerGenerator.cs:218`). |
-| 12.3 **latched transients, default on for coil-shaped signals** | **NOT BUILT** | The generator emits result-register MOVEs and **no per-signal latch** (`SubmissionVector.cs:155`). `InstrumentationMode.Latched` is declarable and gate 5 refuses a vector needing it. The four `HBA_Violation_*` latches on the rig are a **hand-authored** `FB_HarnessViolationLatch` (FB 9003), not generated. *Consequence: every observation is SAMPLED, so the whole wave set is exposed to the 0.05% ~95-scan poll gap, and O11's cap binds where an all-latched set would have no cap at all.* |
+| 12.3 **latched transients, default on for coil-shaped signals** | **DIVERGED** *(re-bucketed from NOT BUILT 2026-08-14 — `ca9819b`, `4738e21`, `b9bc470` landed after this document was written)* | **The generator now emits per-signal latches.** `CopyLayerGenerator`'s `ResultLatch` network emits `SCOIL <latch> := <slot start bool> AND [<armedBy>] AND <signal>` and `RCOIL <latch> := NOT <slot start bool>` — RCOILs after SCOILs so **reset dominates**, and on a **level, never an edge**, so a harness restart mid-run does not take the evidence with it. `MirrorObservability.FromBindings` derives `Latched` **with provenance**, and says whether it was *derived* (generated) or *taken on trust* (`LatchedBy` names a block). Round-tripped through the real converter — `SCoil`/`RCoil` parts in SimaticML, byte-identical read-back (`CopyLayerConverterRoundTripTests.cs:157`). 🔴 ***THE RESIDUAL DIVERGENCE IS THE POLARITY, AND IT IS THE OPPOSITE OF THE SPEC'S.*** The spec says **default ON for coil-shaped signals**; the implementation is **OPT-IN** — `Transient` defaults `false`, and `MirroredSignal.Bool(tag)` creates a **non-latched** Bool. The code argues that default deliberately (`CopyLayer.cs:228`): forgetting a transient yields no latch, so a `Latched` expectation is **refused by gate 5** — loud, at the gate, before anything is spent — where over-latching would be the silent direction. ⚠️ **That argument holds for `Transient` and NOT for its neighbour `RearmsEachIndex`**, whose omission yields a one-shot latch that compiles, deploys and reads plausibly (see the working agreement's two-flags entry). **Still true:** the four `HBA_Violation_*` latches on the rig are a **hand-authored** `FB_HarnessViolationLatch` (FB 9003) — ***and no GENERATED latch has been shown running on the rig; the evidence is a converter round trip, not a device.*** |
 | 12.4 **event scan-stamps**, opt-in per signal | **NOT BUILT** | Same source. `InstrumentationMode.Stamped` is declarable and refused. *Consequence: "when, relative to T=0" is unanswerable, so coincidence and ordering assertions are inadmissible.* |
 | 12.5 T=0 is the start bool's rising edge | AS SPECIFIED | `InertPhase.Commit`; stamps would be differences from it. |
 | 12.6 the scan counter wraps; handle it in the subtraction | 🔴 **NOT CHECKED** | I did not verify wrap handling in a long test. |
@@ -276,7 +281,7 @@ that §NC's own total is one of the numbers that did not survive the census.**
 | Derivation 6 — batching got stronger | AS SPECIFIED | `ModbusLimits.MaxReadRegisters = 125` / `MaxWriteRegisters = 123`; `SlotsPerRead = floor(125/Wr)`. |
 | F-1 adopted — a read never SPLITS a slot | AS SPECIFIED | `RegisterMap.ResultRead(SlotSpan)`; **no register-range overload exists**, so a split read is unexpressible rather than validated. |
 | F-2 DB-13's max-width input shape | **NOT BUILT** | Still a scalar input with a provenance requirement. *Consequence: one number per wave set must be the worst case, discarding most of the width the link sustains.* |
-| F-3 should SAMPLED assertions be admissible at all | **NOT BUILT** | Unruled. *Consequence: sampled is not merely admissible, it is currently the **only** mode the generator provides (§12.3), so the correctness question F-3 raises is live rather than hypothetical.* |
+| F-3 should SAMPLED assertions be admissible at all | **NOT BUILT** *(bucket unchanged; consequence corrected 2026-08-14 — ***stale, and not on the brief***)* | Unruled. ⚠️ **The consequence here used to read *"sampled is ... currently the only mode the generator provides"*, which is no longer true** (§12.3 — `Latched` is generated as of `ca9819b`). *Corrected consequence: sampled is no longer the only mode, but it is still the **DEFAULT** one, because latching is opt-in — so F-3's correctness question stays live for every signal nobody explicitly declared `Transient`, which is all of them by default.* **The ruling is still owed**, and note that the closure made it *easier* to ignore: a question that once applied to everything now applies only to what nobody thought about, which is the harder class to notice. |
 | F-4 answered — no width effect on the tail | AS SPECIFIED | Recorded in `WireTiming`'s own doc comment. |
 | F-5 adopted — the tail as p90 + an exceedance rate | **DIVERGED** | ***The spec contradicts itself here and this pass corrects it.*** The constants block records `RTT_p90 = 102.79` and `exceed_250 = 0.352%` as **extracted 2026-08-13**, while F-5's own entry still says *"ADOPTION DID NOT PRODUCE THEM, SO THEY ARE STILL MISSING"* and that budgets key on the p99 *"until they are extracted"*. Both cannot stand. §12a F-5 corrected. |
 | F-6 should admission group by slot size | **NOT BUILT** | Deferred. `SlotSizeReport` computes the collapse and surfaces it as `LoopCaveat("F-6-collapse-seam")` — ***a report, never a gate***. *Consequence: one 123-register slot in a set takes R from 6 to 1 and sextuples every read, and nothing refuses it.* |
@@ -345,7 +350,7 @@ that §NC's own total is one of the numbers that did not survive the census.**
 | X-C residual — a PLC-side watchdog | **NOT BUILT** | Held open deliberately. *Consequence: nothing survives the PC dying; safe only while the rig's outputs cannot actuate (ADR-0009), and that dependency is the condition to revisit on.* |
 | X-D comp_min/comp_max; take the minimum, never the ceiling | **DIVERGED** | Built with four ceilings and no member that returns `CompMax` as a recommendation. **The ceiling is lower than X-D assumed on the term X-D says binds first** — 4.29× at a 500 ms preset. §16.4 corrected. |
 | X-E excision is transitive; closure + threshold + bounded attempts; publish the co-running log from executed start bools | AS SPECIFIED | `ExcisionClosure`, `ExcisionPlan`, `ExcisionDefect`; `CoRunningLog` built from the start **echo**; `RegisterMap` allocates a start-echo block; excision does not move `MapHash`. |
-| X-F a STARTUP TEST class at the disruptive boundary; evidence must be LATCHED | **DIVERGED** | The class is built — `Harness.Results/StartupTests.cs`, `DisruptiveBoundary`, `StartupRefusal`. ***But latching is not generated (§12.3), so the one thing X-F says the evidence must be is unavailable.*** §16.6 corrected. |
+| X-F a STARTUP TEST class at the disruptive boundary; evidence must be LATCHED | **DIVERGED** *(bucket unchanged, REASON REPLACED 2026-08-14 — the blocker it named is gone)* | The class is built — `Harness.Results/StartupTests.cs`, `DisruptiveBoundary`, `StartupRefusal`. ⚠️ **This entry used to read *"latching is not generated (§12.3), so the one thing X-F says the evidence must be is unavailable"* — that is now FALSE:** §12.3 re-buckets to DIVERGED and latches **are** generated. **What remains divergent is narrower and must not be read as the old blocker:** (a) latching is **opt-in**, so a startup vector gets latched evidence only if its signal was declared `Transient` — nothing makes the startup class latched *by virtue of being* the startup class, which is what X-F asks for; and (b) **the startup class cannot be declared in the submission document at all** — `SLOT-HBA-STARTUP` is a naming convention, not a gate, and the coordinator must pass `startupVectors` out of band. So the evidence *can* now be latched, and **nothing checks that it is**. §16.6 corrected. |
 | X-G conflict edges carry provenance; multi-writer on a deliverable signal is a FINDING | **DIVERGED** | Built as gate 8c with `ConflictProvenance`/`SignalClass` — and it **reports rather than refuses**, with the code recording that whether it should refuse is an open owner question. It also prints on a clean graph. Currently `NOT CHECKED` in practice because no provenanced graph is produced (see D9). §16.7 corrected. |
 | X-H withdrawn; per-slot instancing stands unconditionally; warn when two slots model one physical instance | **NOT BUILT** (the warning) | The rule stands; no equipment-identity warning exists. *Consequence: case 3 written as two case-2 slots passes against two independent tanks and the coupling is never exercised.* |
 | X-I models go through their own test wave; four rules | AS SPECIFIED | `ModelReadiness`, `ModelReadinessCheck`, `ModelOrdering`, `OrderingDefect` (7 members, **none informational** — pinned over the whole enum). |
@@ -384,13 +389,19 @@ Nothing below is a pass. Each is something this reconciliation did not reach.
 
 ## §X — DIVERGENCES FOUND THAT WERE NOT ON THE BRIEF
 
-1. 🔴 ***§12's copy layer provides SAMPLED and nothing else.*** Latched transients (spec: *"default on
-   for coil-shaped signals"*) and event scan-stamps are **not generated**. Both modes are declarable
-   and the gate refuses vectors needing them — *the gate working, not a gap in it* — but the design
-   consequences are large and unstated: every observation is exposed to the 0.05% ~95-scan poll gap
-   that F-3 exists to worry about; O11's cap binds where an all-latched set would have **no cap**; and
-   **X-F's startup class explicitly requires latched evidence it cannot have.** The four
-   `HBA_Violation_*` latches on the rig are hand-authored IR, not generated.
+1. ⚠️ ***PARTLY OVERTAKEN 2026-08-14 — HALF OF THIS ITEM IS CLOSED AND THE OTHER HALF IS NOT.***
+   **The struck half, kept visible because a reader who remembers this finding must be able to see it
+   was RULED ON rather than quietly dropped:** ~~latched transients are not generated~~ — they are, as
+   of `ca9819b` / `4738e21` / `b9bc470`; §12.3 is re-bucketed **DIVERGED** and X-F's *"requires latched
+   evidence it cannot have"* no longer holds. **The half that stands:** 🔴 ***event scan-stamps are
+   still not generated*** (§12.4, NOT BUILT), so *"when, relative to T=0"* is unanswerable and
+   coincidence and ordering assertions stay inadmissible. **And a NEW divergence this closure created,
+   which is the reason to re-read rather than tick:** the spec says latching is **default on for
+   coil-shaped signals** and the implementation made it **OPT-IN** — *** THE OPPOSITE POLARITY ***, so
+   a signal nobody thought about is SAMPLED, exactly as before. The poll-gap exposure and O11's cap
+   therefore still bind **by default**; what changed is that they are now **escapable per signal**
+   rather than unavoidable. The four `HBA_Violation_*` latches on the rig remain hand-authored IR, and
+   **no generated latch has yet been shown running on a device.**
 2. 🔴 ***§12a contradicts itself on F-5.*** The constants block records `RTT_p90 = 102.79` and
    `exceed_250 = 0.352%` as extracted, while F-5's own entry says they *"are still missing"* and that
    budgets key on the p99 *"until they are extracted"*. Both cannot stand, and the second reads as a

@@ -3,8 +3,16 @@
 **Written 2026-08-14.** Subject: the whole PC-side toolchain — `converter`, `openness-cli`,
 `src/harness/`, `src/wave-control/`, `src/download-feedback/`, `src/device-guard/`, `tests/golden/`
 and `tools/` — held against `docs/notes/spec-reconciliation.md`, which sorted
-`PC-Client-Modbus-Spec-Draft-final.txt` into four buckets: **86 AS SPECIFIED · 33 DIVERGED · 38 NOT
-BUILT · 21 NOT CHECKED**, 178 items.
+`PC-Client-Modbus-Spec-Draft-final.txt` into four buckets: ~~86 AS SPECIFIED · 33 DIVERGED · 38 NOT
+BUILT · 21 NOT CHECKED~~, ~~178 items~~.
+
+> 🔴 ***THOSE FOUR NUMBERS WERE WITHDRAWN BY THEIR OWN SOURCE ON 2026-08-14 AND ARE STRUCK HERE AT
+> FIRST CONTACT.*** `spec-reconciliation.md`'s **THE COUNTS** section now records that they *"were
+> wrong in all four buckets"* and were never computed from its tables. The measured census is
+> **123 · 30 · 22 · 14 = 189 rows**. They are struck rather than replaced because **§A's bucket
+> methods and row derivations were written against them** and re-basing those is a separate job — but
+> *a stale figure at the top of a document is read as current by everyone who does not reach §H.0*,
+> so the correction belongs here too. **Full reconciliation of the three competing "38"s: §H.0.**
 
 > **The purpose is not to demonstrate the tooling works. It is to find out where it stops working.**
 > (`tooling-hammer-plan.md`.) Every defect that mattered on 2026-08-13 and -14 was found by
@@ -418,11 +426,22 @@ SIX ITEMS THAT DO NOT EXIST. ***
 > reader can see it was **ruled on** rather than lost — and so a future measurement that contradicts
 > the ruling has somewhere to land. This is SELF-4's rule applied to the register itself.
 >
-> ⚠️ **The `38` at §A and in the header block is a DIFFERENT NUMBER and is still correct:** it is the
-> **reconciliation's** bucket count, which splits several mechanisms here into separate spec items
-> (see the note after §H.1). *** THE TWO NUMBERS ARE NOT THE SAME QUANTITY AND MUST NOT BE
-> RECONCILED TO EACH OTHER. *** This ledger counts **rows on this register**; §A counts **items in
-> `spec-reconciliation.md`**.
+> 🔴 ⚠️ **AND THE `38` AT §A IS NOT A LIVE FIGURE — IT IS A RETRACTED ONE.** *This note first said the
+> `38` was "the reconciliation's bucket count, and still correct". **That was wrong, and it is
+> recorded rather than silently replaced because blessing a retracted number is exactly the failure
+> this ledger exists to stop.*** `spec-reconciliation.md`'s own **THE COUNTS** section was corrected
+> on 2026-08-14 and states that its original counts *"were wrong in all four buckets"* and that the
+> section *"claimed they were computed from the tables. They were not."* The measured census is
+> **123 AS SPECIFIED · 30 DIVERGED · 22 NOT BUILT · 14 NOT CHECKED = 189 rows** — so **`38 NOT BUILT`
+> is not the reconciliation's bucket count and never was; that bucket is 22.**
+>
+> *** WHERE THE `38` ACTUALLY COMES FROM: THIS REGISTER. *** It reconstructs only here, and exactly —
+> **23 entries derived from the reconciliation's tables + 15 harness/contract-level absences this plan
+> found for itself = 38.** ⚠️ **The explanation in the note after §H.1 — *"splitting D9/D20/O14 and
+> the §11 triple"* — is ALSO wrong**: that accounts for about four, not fifteen. **So §A's
+> `86 · 33 · 38 · 21 / 178` header block is quoting figures the source document has since withdrawn**,
+> and it is left in place with this pointer rather than rewritten, because §A's numbers are load-bearing
+> for rows already written against them. ***Do not reconcile this register's 43 rows to any of them.***
 
 | # | item(s) | consequence while absent |
 |---|---|---|
