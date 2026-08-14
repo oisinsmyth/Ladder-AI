@@ -479,13 +479,11 @@ internal static class Program
 
         if (result.State != Model.CompileState.Success)
         {
-            Console.WriteLine();
-            Console.WriteLine(
+            WriteAdvisory(options.Json,
                 $"PASSED WITH WARNINGS: 0 errors, so this is a pass. State is {result.State}, which is reported " +
                 "and not decisive — measured on the PLC side, one pre-existing project-wide warning returns a " +
                 "non-Success state on every otherwise-clean compile. Read the messages above before treating the " +
-                "warnings as noise.");
-            Console.WriteLine(
+                "warnings as noise.\n" +
                 "There is no consistency read-back to fall back on here: `IsConsistent` is PLC-only, so an HMI " +
                 "compile's verdict rests entirely on what the compiler reported.");
         }
@@ -988,6 +986,34 @@ internal static class Program
     internal static int EffectiveErrorCount(Model.CompileResult result) =>
         Math.Max(result.ErrorCount, result.Messages.Count(m => m.State == Model.CompileState.Error));
 
+    /// <summary>
+    /// Writes an advisory paragraph to <b>stderr under <c>--json</c></b> and to stdout otherwise.
+    ///
+    /// <para>🔴 <b>Because <c>--json</c> was not emitting JSON (measured 2026-08-14).</b>
+    /// <c>compile --block DB_Input --json</c> printed the JSON object and then a bare
+    /// <c>PASSED WITH WARNINGS: …</c> paragraph on <b>stdout</b>, so the command's whole output
+    /// parsed as nothing at all — <c>ConvertFrom-Json</c> fails with
+    /// <i>"Invalid JSON primitive: ASSED WITH WARNINGS"</i>. This is not an edge case on the
+    /// measured project: it carries a permanent hardware warning, so <b>every</b> per-block compile
+    /// takes the non-Success branch and <b>every</b> <c>--json</c> run was unparseable.</para>
+    ///
+    /// <para>Routed rather than suppressed. The paragraph is the part that says a non-Success STATE
+    /// is not a failure — the single most misread fact about this command — and a human watching a
+    /// <c>--json</c> run in a terminal still sees it, because stderr is not redirected by whatever
+    /// is capturing stdout. <b>Suppressing it would fix the parse by deleting the warning</b>, which
+    /// is the trade this codebase keeps refusing to make.</para>
+    ///
+    /// <para>The sibling paths in <c>RunCompile</c> already did this correctly: every
+    /// <c>COMPILE INCOMPLETE</c> message goes to <c>Console.Error</c>. One branch in each of two
+    /// methods did not, and nothing flagged the difference.</para>
+    /// </summary>
+    internal static void WriteAdvisory(bool json, string text)
+    {
+        var sink = json ? Console.Error : Console.Out;
+        sink.WriteLine();
+        sink.WriteLine(text);
+    }
+
     internal static int RunCompile(IOpennessGateway gateway, CompileCommandOptions options, int timeoutOpenSeconds)
     {
         gateway.OpenProject(options.ProjectIdentifier, TimeSpan.FromSeconds(timeoutOpenSeconds));
@@ -1036,8 +1062,7 @@ internal static class Program
 
         if (result.State != Model.CompileState.Success)
         {
-            Console.WriteLine();
-            Console.WriteLine(
+            WriteAdvisory(options.Json,
                 $"PASSED WITH WARNINGS: 0 errors, so this is a pass. State is {result.State}, which is reported " +
                 "and not decisive — a pre-existing hardware warning anywhere in the project returns a " +
                 "non-Success state on a perfectly clean block. Read the messages above before treating the " +

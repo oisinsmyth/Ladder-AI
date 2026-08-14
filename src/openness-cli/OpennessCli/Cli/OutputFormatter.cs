@@ -1390,6 +1390,13 @@ public static class OutputFormatter
         var payload = new
         {
             clean = result.IsClean,
+
+            // Emitted ALWAYS, including false, and emitted SEPARATELY from `clean` — because
+            // `clean: false` now covers two different failures and a consumer has to be able to tell
+            // them apart. "Compiled with errors" and "compiled nothing" are the exact pair this
+            // command's own record comment refuses to collapse into one count; collapsing them here
+            // would reintroduce it one layer out, in the surface a script actually reads.
+            nothingExamined = result.NothingExamined,
             compiled = result.CompiledCount,
             withErrors = result.WithErrorsCount,
             stillInconsistent = result.StillInconsistentCount,

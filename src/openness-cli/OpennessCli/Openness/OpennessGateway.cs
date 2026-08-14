@@ -3107,6 +3107,70 @@ public sealed class OpennessGateway : IOpennessGateway
         _ => throw new UnrecognizedBlockTypeException(block.GetType().FullName ?? block.GetType().Name),
     };
 
+    /// <summary>
+    /// Applies <c>--device</c> to an already-resolved candidate set, and <b>refuses by name when the
+    /// narrowing is what emptied it</b>.
+    ///
+    /// <para>🔴 <b>Because the emptiness used to be attributed to the OBJECT (measured 2026-08-14).</b>
+    /// Every object-scoped command filtered the set and then reported <c>matches.Count == 0</c> as
+    /// <c>BlockNotFoundException</c> / <c>TypeNotFoundException</c> / <c>TagTableNotFoundException</c>,
+    /// so <c>export GenProject1 --block DB_Input --device NoSuchDevice</c> answered
+    /// <i>"No block named 'DB_Input' found in the project."</i> — <b>about a block that is in the
+    /// project</b>, exported successfully by the same command one second earlier without the flag.
+    /// The device was never mentioned.</para>
+    ///
+    /// <para>The sharpest form was <c>export-all --device NoSuchDevice</c>, which reported
+    /// <b>43 real blocks and types as absent from the project</b>, one line each, and its JSON gave
+    /// every one of them a <c>path</c> naming the device it claimed not to have found them under —
+    /// a record that contradicts itself field to field. <b>"This block is not in the controller" is
+    /// the most consequential wrong conclusion this tool can hand anyone</b>: it is precisely what
+    /// <c>drift-check --complete</c> is built to treat as a finding.</para>
+    ///
+    /// <para>The distinction is exact and needs no judgement: <b>non-empty before, empty after</b>
+    /// means the device matched nothing; empty before means the object really is absent. So a wrong
+    /// <c>--device</c> and a wrong object name stay distinguishable instead of collapsing into the
+    /// scarier of the two.</para>
+    ///
+    /// <para>The device-SCOPED commands already did this — <c>Compile</c>, <c>CompileSoftware</c>,
+    /// <c>CompileStation</c> and <c>BuildDownloadPlan</c> all throw <see cref="DeviceNotFoundException"/>,
+    /// and <c>download-plan --device NoSuchDevice</c> answered <i>"No PLC device matching 'NoSuchDevice'
+    /// found."</i> in the same session. <b>One flag, one binary, two behaviours, and nothing flagged
+    /// the difference</b> — the exception this needed already existed.</para>
+    /// </summary>
+    /// <remarks><b><c>internal</c> so its control can be run without editing it.</b> The rest of this
+    /// class needs a live Portal session to exercise; this decision does not, and a guard whose only
+    /// negative control is "hand-edit the method" is the guard that decays into a comment.</remarks>
+    internal static List<T> NarrowToDevice<T>(List<T> matches, string? deviceFilter, Func<T, string> path)
+    {
+        if (deviceFilter is null)
+        {
+            return matches;
+        }
+
+        var narrowed = matches.Where(m => path(m).IndexOf(deviceFilter, StringComparison.OrdinalIgnoreCase) >= 0).ToList();
+        if (narrowed.Count == 0 && matches.Count > 0)
+        {
+            throw new DeviceNotFoundException(deviceFilter);
+        }
+
+        return narrowed;
+    }
+
+    /// <summary>
+    /// <see cref="NarrowToDevice"/> for the consistency READ-BACK paths, which must not throw.
+    ///
+    /// <para>Kept separate and named rather than folded in behind a flag, because the difference is
+    /// a real one: <c>ReadBlockConsistency</c>/<c>ReadTypeConsistency</c> answer <c>null</c> for
+    /// <i>"could not be read back"</i>, and their caller already treats <c>null</c> as
+    /// <c>COMPILE INCOMPLETE</c> — empty is not clean, handled one level up (FI-44). Throwing here
+    /// would convert a reported non-answer into a hard failure of a compile that had already
+    /// succeeded.</para>
+    /// </summary>
+    private static List<T> NarrowToDeviceQuietly<T>(List<T> matches, string? deviceFilter, Func<T, string> path) =>
+        deviceFilter is null
+            ? matches
+            : matches.Where(m => path(m).IndexOf(deviceFilter, StringComparison.OrdinalIgnoreCase) >= 0).ToList();
+
     public void ExportBlock(string blockName, string? deviceFilter, string outPath)
     {
         if (_project is null)
@@ -3115,10 +3179,7 @@ public sealed class OpennessGateway : IOpennessGateway
         }
 
         var matches = FindMatchingBlocks(_project, blockName).ToList();
-        if (deviceFilter is not null)
-        {
-            matches = matches.Where(m => m.Path.IndexOf(deviceFilter, StringComparison.OrdinalIgnoreCase) >= 0).ToList();
-        }
+        matches = NarrowToDevice(matches, deviceFilter, m => m.Path);
 
         if (matches.Count == 0)
         {
@@ -3167,10 +3228,7 @@ public sealed class OpennessGateway : IOpennessGateway
         }
 
         var matches = FindMatchingTypes(_project, typeName).ToList();
-        if (deviceFilter is not null)
-        {
-            matches = matches.Where(m => m.Path.IndexOf(deviceFilter, StringComparison.OrdinalIgnoreCase) >= 0).ToList();
-        }
+        matches = NarrowToDevice(matches, deviceFilter, m => m.Path);
 
         if (matches.Count == 0)
         {
@@ -3212,10 +3270,7 @@ public sealed class OpennessGateway : IOpennessGateway
         }
 
         var matches = FindMatchingTagTables(_project, tagTableName).ToList();
-        if (deviceFilter is not null)
-        {
-            matches = matches.Where(m => m.Path.IndexOf(deviceFilter, StringComparison.OrdinalIgnoreCase) >= 0).ToList();
-        }
+        matches = NarrowToDevice(matches, deviceFilter, m => m.Path);
 
         if (matches.Count == 0)
         {
@@ -3934,10 +3989,7 @@ public sealed class OpennessGateway : IOpennessGateway
         }
 
         var matches = FindMatchingBlocks(_project, blockName).ToList();
-        if (deviceFilter is not null)
-        {
-            matches = matches.Where(m => m.Path.IndexOf(deviceFilter, StringComparison.OrdinalIgnoreCase) >= 0).ToList();
-        }
+        matches = NarrowToDevice(matches, deviceFilter, m => m.Path);
 
         if (matches.Count == 0)
         {
@@ -3993,10 +4045,7 @@ public sealed class OpennessGateway : IOpennessGateway
         }
 
         var matches = FindMatchingBlocks(_project, blockName).ToList();
-        if (deviceFilter is not null)
-        {
-            matches = matches.Where(m => m.Path.IndexOf(deviceFilter, StringComparison.OrdinalIgnoreCase) >= 0).ToList();
-        }
+        matches = NarrowToDeviceQuietly(matches, deviceFilter, m => m.Path);
 
         return matches.Count == 1 ? matches[0].Block.IsConsistent : null;
     }
@@ -4010,10 +4059,7 @@ public sealed class OpennessGateway : IOpennessGateway
         }
 
         var matches = FindMatchingTypes(_project, typeName).ToList();
-        if (deviceFilter is not null)
-        {
-            matches = matches.Where(m => m.Path.IndexOf(deviceFilter, StringComparison.OrdinalIgnoreCase) >= 0).ToList();
-        }
+        matches = NarrowToDeviceQuietly(matches, deviceFilter, m => m.Path);
 
         return matches.Count == 1 ? matches[0].Type.IsConsistent : null;
     }
@@ -4030,10 +4076,7 @@ public sealed class OpennessGateway : IOpennessGateway
         }
 
         var matches = FindMatchingTypes(_project, typeName).ToList();
-        if (deviceFilter is not null)
-        {
-            matches = matches.Where(m => m.Path.IndexOf(deviceFilter, StringComparison.OrdinalIgnoreCase) >= 0).ToList();
-        }
+        matches = NarrowToDevice(matches, deviceFilter, m => m.Path);
 
         if (matches.Count == 0)
         {
@@ -4074,10 +4117,7 @@ public sealed class OpennessGateway : IOpennessGateway
         }
 
         var matches = FindMatchingBlocks(_project, blockName).ToList();
-        if (deviceFilter is not null)
-        {
-            matches = matches.Where(m => m.Path.IndexOf(deviceFilter, StringComparison.OrdinalIgnoreCase) >= 0).ToList();
-        }
+        matches = NarrowToDevice(matches, deviceFilter, m => m.Path);
 
         if (matches.Count == 0)
         {
@@ -4157,10 +4197,7 @@ public sealed class OpennessGateway : IOpennessGateway
     private (PlcBlock Block, string Path) ResolveOneNonSafetyBlock(string blockName, string? deviceFilter)
     {
         var matches = FindMatchingBlocks(_project!, blockName).ToList();
-        if (deviceFilter is not null)
-        {
-            matches = matches.Where(m => m.Path.IndexOf(deviceFilter, StringComparison.OrdinalIgnoreCase) >= 0).ToList();
-        }
+        matches = NarrowToDevice(matches, deviceFilter, m => m.Path);
 
         if (matches.Count == 0)
         {
