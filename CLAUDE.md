@@ -226,6 +226,15 @@ this project's most expensive failures have all been a green that examined nothi
 - ***`--claims <dir>` MUST BE SHARED BY EVERY AGENT ON THE PROJECT.*** Agents work in separate
   worktrees, and a per-worktree claims dir is **always empty, grants every claim, and looks exactly
   like success.** There is no default on purpose.
+  ✅ **THE SHARED STORE FOR `test-project001` IS `C:\ProgramData\Ladder-AI\claims\test-project001`**
+  — created 2026-08-14, deliberately **outside every worktree** so it cannot be shadowed. Pass it as
+  `--claims` explicitly; do not rely on `$LADDER_CLAIMS_DIR` reaching a subagent.
+  **Verified connected, not assumed:** agent A acquired `FB9020` (**exit 0**), agent B was
+  **REFUSED exit 1 on the same value, the refusal naming A's purpose** — an agent collision rather
+  than an existence check — and agent B then acquired `FB9021` (**exit 0**), so the fence does not
+  simply refuse everything. Self-test claims released; store left empty.
+  ⚠️ **It did not exist until 2026-08-14**, so every block number allocated before that date was
+  taken **by reading the corpus** — which is precisely the race the registry removes.
 - ***PORTAL IS A TOKEN, NOT A COMPONENT.*** One lane holds it at a time; two Openness sessions on
   one project is unsupported and has already produced `Collection was modified` with every block
   reporting inconsistent.
