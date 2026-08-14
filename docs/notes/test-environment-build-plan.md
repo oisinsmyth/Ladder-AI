@@ -4561,3 +4561,69 @@ binds first. Every statement of "the measured timer floor is 116.7 ms" in this f
 Likewise the round-trip figures (**min 63 / med 72 / max 106 ms**) were taken against the **old
 generator build**, so they are a **corroboration** of §12a's constants on the current network path —
 **not a re-derivation**, and nothing was moved on them.
+
+---
+
+## RE-RUN AGAINST §2.8's `specName` / `latchedBy` — 17 REFUSALS FELL TO 13, EXACTLY THE RIGHT 13
+
+2026-08-14, pinned to a clean worktree at **`89afb2e`** (lanes are live in `src/harness`, and
+`Harness.Run/bin` carries stale artifacts, so the run was built from a detached checkout rather than
+the live tree). Binding rebuilt against **commit `8f5a41c`**.
+
+### ✅ THE FIX WORKED, AND IT WORKED IN BOTH DIRECTIONS
+
+| | before (`f4dac50`) | after (`89afb2e` + rebuilt binding) |
+|---|---|---|
+| gate-5 refusals | **17** | **13** |
+| on `HBA_Violation_*` (the FALSE four) | 4 | ✅ **0** |
+| on `HopperBlockedAlarm` / `HopperBlockedInhibit` (the CORRECT thirteen) | 13 | ✅ **13 — none wrongly passed** |
+
+*** THE FOUR FALSE REFUSALS ARE GONE AND NOT ONE OF THE THIRTEEN CORRECT ONES WENT WITH THEM. *** That
+is the property worth stating: a fix that relaxed a gate would have shown up as *both* numbers falling,
+and the thirteen are the reason the gate is worth having.
+
+**D1 is now STATED rather than laundered:** the binding carries `specName: HopperBlockedInhibit` with
+`tag: HopperBlockStopReq`, and D1 is separately reported by the static interface check. **The
+translation is declared, machine-readable and visible to a gate** — which is precisely what a prose
+table could never be.
+
+**`ResetMode` deliberately carries no `specName`** — set B's `HBA_Stim.ResetAtMs` decomposes into two
+IR members and the mode half has no distinct specification name. Giving it `ResetAtMs` would collide
+with the time half; absent is the honest answer, and §2.8 makes absent a named report rather than a
+silent identity.
+
+### 🔴 STILL NOT ADMISSIBLE — AND THE REMAINING BLOCKER IS REAL, NOT PROCEDURAL
+
+`harness-run` → exit 1, `OUTCOME: NotAdmissible`, *"NO PACKAGES — nothing about the block was tested."*
+**No wave ran; `--verify` was never passed and the rig was never contacted. Wave duration: none.**
+
+The thirteen survivors are **a defect in the VECTOR SET, and it is not fixable by the vector author
+without losing test strength**: set B declares `Latched` on `HopperBlockedAlarm` /
+`HopperBlockedInhibit`, and the copy layer mirrors both with a **plain `COIL`**. The two exits are:
+
+1. **Regenerate the copy layer with per-signal latches for those two signals** — which needs a download
+   boundary, currently forbidden; or
+2. **Downgrade the thirteen to `Sampled`** with a window above the 8.6-scan floor — which the contract
+   itself argues against (*"PREFER LATCHED — it is the only mode immune to the tail; a sampled
+   assertion landing in a poll gap is a silent wrong answer, not an error"*).
+
+➜ ***OPTION 2 IS THE ONE THAT LOOKS LIKE PROGRESS AND IS NOT.*** It is exactly *weakening the
+declaration to get through*, and it converts thirteen strong assertions into thirteen that can miss.
+**The declaration was not weakened.** This is now the single item between the project and its
+milestone, and it is a copy-layer capability gap rather than anything about the block.
+
+### Two findings about the fix itself
+
+- ⚠️ **THE CONTRACT AND THE CODE DIVERGE.** §2.8 specifies `modes`, `modeSource`
+  (`Generated`/`HandAuthored`/`SelfDeclared`/`Unstated`) and `instrumentedBy`. **The code implements
+  `specName` and `latchedBy` and nothing else.** The code is a strict *subset*, and the omitted part is
+  the `SelfDeclared` path that §2.8 marks NOT CHECKED anyway — so the binary is **safer than the
+  document, not weaker**. But an author writing to the contract emits three fields the code silently
+  ignores, which is the shape of *a gate whose refusal names a remedy nobody can supply*, inverted.
+- 🔴 **THE LATCH-PROVENANCE ADMISSION PRINTS ONLY ON THE PASS BRANCH.** `SubmissionGate` renders
+  *"LATCHES ARE NOT FROM THE COPY LAYER and are admitted on provenance … this gate takes the name, not
+  the fact"* **only when `problems.Count == 0`.** Gate 5 refused here for other reasons, so **four
+  `Latched` claims were admitted on an unverified caller-supplied block name and nothing in the report
+  said so.** The justification for `latchedBy` being a *block name* rather than a bool rests on that
+  sentence being printed — and in a refusing report it is not. *An admission that appears only when
+  everything passed is missing from every report anyone reads closely.*
