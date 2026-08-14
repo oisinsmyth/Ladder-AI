@@ -15,12 +15,22 @@ namespace Harness.RigRead;
 /// <c>(declared, current)</c> pairs is three independent confirmations, and if they land elsewhere the
 /// arithmetic is wrong and every address derived from it is wrong with it.</para>
 ///
+/// <para><b>It also reads MARKER memory.</b> <c>--marker &lt;byteOffset&gt; --length &lt;bytes&gt;</c>,
+/// mutually exclusive with <c>--db</c>. Added 2026-08-14 because the harness MIRROR lives in <c>%M</c>,
+/// not in a DB — so the build stamp, the vector registers and the result registers were all
+/// unreadable by any committed tool, and the only evidence a download had actually taken was the
+/// download's own report of itself. <b>A manifest says what was sent; the stamp says what is
+/// executing.</b> This adds no transport: <c>MBRead</c> was already being issued by
+/// <see cref="DiagnoseFailedRead"/> as a CPU-wide-vs-block-specific discriminator, and was measured
+/// working on this rig (<c>MBRead(0,1) -> ok</c>) the same morning a DB read on the same session
+/// failed <c>0x00C00000</c>. What is new is a caller being able to say WHICH marker bytes.</para>
+///
 /// <para><b>It cannot write.</b> Not by policy — by construction. The only device operations it
 /// performs are <c>ConnectTo</c>, <c>DBRead</c>, <c>MBRead</c>, <c>GetOrderCode</c> and
 /// <c>PlcGetStatus</c> — the last asks the CPU for its mode and cannot change one; the calls that do
 /// (<c>PlcStop</c>, <c>PlcHotStart</c>, <c>PlcColdStart</c>) are not on <see cref="IS7Client"/> at all
-/// and are unreachable from here. See the project file for the assembly-level statement of the same
-/// property.</para>
+/// and are unreachable from here. <c>MBWrite</c> is never called and appears nowhere in this file.
+/// See the project file for the assembly-level statement of the same property.</para>
 ///
 /// <para><b>The fence runs before the socket.</b> <see cref="DeviceAccessGuard"/> is consulted first
 /// and a refusal returns without a connection attempt. That ordering is the point of the fence — a
@@ -58,11 +68,44 @@ public static class Program
     public static int Main(string[] args)
     {
         var address = Option(args, "--address") ?? "10.10.10.10";
-        var rack = int.Parse(Option(args, "--rack") ?? "0");
-        var slot = int.Parse(Option(args, "--slot") ?? "1");
-        var db = int.Parse(Option(args, "--db") ?? MarkerDbLayout.DbNumber.ToString());
-        var offset = int.Parse(Option(args, "--offset") ?? "0");
-        var length = int.Parse(Option(args, "--length") ?? MarkerDbLayout.TotalBytes.ToString());
+
+        // ---- 0. WHICH AREA, DECIDED BEFORE ANYTHING ELSE ----
+        //
+        // --marker and --db address different AREAS, and a tool that silently preferred one would be
+        // reporting the wrong memory under a heading that reads correct. So the combination is a
+        // NAMED usage error rather than a precedence rule, and so is --offset alongside --marker
+        // (--marker IS the offset; accepting both would leave one of them silently ignored).
+        var markerArg = Option(args, "--marker");
+        var dbArg = Option(args, "--db");
+        var offsetArg = Option(args, "--offset");
+        var lengthArg = Option(args, "--length");
+        var marker = markerArg is not null;
+
+        if (marker && dbArg is not null)
+            return Usage("--marker and --db name DIFFERENT AREAS (M memory vs a data block) and cannot " +
+                         "both be read in one run. Pass one. There is deliberately no precedence rule.");
+        if (marker && offsetArg is not null)
+            return Usage("--offset belongs to --db. With --marker the byte offset IS the --marker value, " +
+                         "so passing both would leave one of them silently ignored.");
+        if (marker && lengthArg is null)
+            return Usage("--marker requires --length. There is no natural default for a marker window, " +
+                         "and the DB default (MarkerDbLayout.TotalBytes) is a BLOCK size — applying it to " +
+                         "M memory would read a plausible-looking window nobody asked for.");
+
+        if (!TryInt(args, "--rack", 0, out var rack) ||
+            !TryInt(args, "--slot", 1, out var slot) ||
+            !TryInt(args, "--db", MarkerDbLayout.DbNumber, out var db) ||
+            !TryInt(args, "--offset", 0, out var dbOffset) ||
+            !TryInt(args, "--marker", 0, out var markerOffset) ||
+            !TryInt(args, "--length", MarkerDbLayout.TotalBytes, out var length))
+            return ExitUsage;
+
+        var offset = marker ? markerOffset : dbOffset;
+        if (offset < 0)
+            return Usage($"a byte offset cannot be negative; got {offset}.");
+        if (length <= 0)
+            return Usage($"--length must be at least 1 byte; got {length}. A zero-length read reports " +
+                         "nothing and would exit 0 — empty is not clean.");
 
         var allowlistPath = AllowlistPath.Resolve(Option(args, "--allowlist"), Environment.GetEnvironmentVariable);
         if (allowlistPath is null)
@@ -75,7 +118,9 @@ public static class Program
 
         Console.WriteLine("rig-read — READ-ONLY. Connect, read, print. No write path exists in this binary.");
         Console.WriteLine($"target      : {address} rack {rack} slot {slot}");
-        Console.WriteLine($"read        : DB{db}.DBB{offset}, {length} bytes");
+        Console.WriteLine(marker
+            ? $"read        : MARKER MEMORY %MB{offset}, {length} bytes (%M{offset}..%M{offset + length - 1})"
+            : $"read        : DB{db}.DBB{offset}, {length} bytes");
         Console.WriteLine($"allowlist   : {allowlistPath}");
         Console.WriteLine();
 
@@ -149,6 +194,9 @@ public static class Program
         Console.WriteLine();
 
         // ---- 5. THE READ ----
+        if (marker)
+            return ReadMarkers(address, rack, slot, offset, length);
+
         Console.WriteLine("== read ==");
         var buffer = new byte[length];
         var clock = System.Diagnostics.Stopwatch.StartNew();
@@ -174,6 +222,149 @@ public static class Program
         Console.WriteLine("Done. Operations performed on the device: ConnectTo, DBRead, GetOrderCode, " +
                           "PlcGetStatus. No write, no mode change.");
         return ExitOk;
+    }
+
+    // ------------------------------------------------------------------ marker memory
+
+    /// <summary>
+    /// Read a window of <c>%M</c> marker memory and print it three ways: raw bytes, 16-bit holding
+    /// registers, and 32-bit doublewords.
+    ///
+    /// <para><b>Why a second session.</b> <see cref="IS7Client"/> has no marker read and this lane is
+    /// fenced to <c>Harness.RigRead</c>, so the call is made on a Sharp7 client owned here — which is
+    /// exactly what <see cref="DiagnoseFailedRead"/> already does, on the same overlap with the main
+    /// client, and is the configuration <c>MBRead(0,1) -> ok</c> was measured in. Widening
+    /// <c>IS7Client</c> is the tidier home for this and belongs to whoever owns that assembly; it is
+    /// not a prerequisite, and doing it from here would touch every fake that implements it.</para>
+    ///
+    /// <para><b>The decode states its convention and shows its working.</b> Bytes are printed before
+    /// any interpretation, so a wrong word order is visible in the report rather than baked into it.
+    /// No expected VALUES are compiled in — same reason <see cref="Measure"/> has none: what a stamp
+    /// or a register should contain belongs to whoever authored the program, not to a general reader,
+    /// and a tool that knows the answer cannot be used to find out.</para>
+    /// </summary>
+    private static int ReadMarkers(string address, int rack, int slot, int offset, int length)
+    {
+        Console.WriteLine("== read (MARKER MEMORY) ==");
+        Console.WriteLine("  a second Sharp7 session, because IS7Client carries no marker read; the same");
+        Console.WriteLine("  overlap the DB-failure diagnostic below uses, and the one MBRead was measured in.");
+
+        var probe = new Sharp7.S7Client { ConnTimeout = 10_000 };
+        try
+        {
+            var rc = probe.ConnectTo(address, rack, slot);
+            Console.WriteLine($"  ConnectTo({address}, {rack}, {slot}) -> {Say(probe, rc)}");
+            if (rc != 0)
+            {
+                Console.WriteLine("  connect FAILED — nothing read.");
+                return ExitConnectFailed;
+            }
+
+            var buffer = new byte[length];
+            var clock = System.Diagnostics.Stopwatch.StartNew();
+            var read = probe.MBRead(offset, length, buffer);
+            clock.Stop();
+            Console.WriteLine($"  MBRead(start={offset}, size={length}) -> {Say(probe, read)}");
+            Console.WriteLine($"  elapsed         : {clock.ElapsedMilliseconds} ms");
+            Console.WriteLine($"  raw Sharp7 code : {read} (0x{read:X8})");
+            Console.WriteLine();
+
+            if (read != 0)
+            {
+                DiagnoseFailedMarkerRead(probe, offset, length);
+                return ExitReadFailed;
+            }
+
+            DumpHex(buffer, offset);
+            Console.WriteLine();
+            MeasureMarkers(buffer, offset);
+
+            Console.WriteLine();
+            Console.WriteLine("Done. Operations performed on the device: ConnectTo, MBRead, GetOrderCode, " +
+                              "PlcGetStatus. No write, no mode change.");
+            return ExitOk;
+        }
+        finally
+        {
+            probe.Disconnect();
+        }
+    }
+
+    /// <summary>
+    /// Is the M area refused, or was it this WINDOW? One byte at <c>%MB0</c> discriminates: a CPU that
+    /// refuses variable access refuses that too, while a window running off the end of bit memory (or
+    /// past what one PDU carries) does not affect it. Without this, a failed marker read has the same
+    /// two candidate causes a failed DB read has, and neither is distinguishable from the other.
+    /// </summary>
+    private static void DiagnoseFailedMarkerRead(Sharp7.S7Client probe, int offset, int length)
+    {
+        Console.WriteLine($"== diagnostic: is M memory refused, or was it the window %M{offset}..%M{offset + length - 1}? ==");
+
+        var one = new byte[1];
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        var mZero = probe.MBRead(0, 1, one);
+        clock.Stop();
+        Console.WriteLine($"  MBRead(0, 1) -> {Say(probe, mZero)}  [{clock.ElapsedMilliseconds} ms]");
+        Console.WriteLine();
+
+        if (mZero == 0)
+        {
+            Console.WriteLine($"  IMPLICATION: M memory IS readable (byte 0 = {one[0]:X2}), so variable access is");
+            Console.WriteLine($"               permitted and the failure is about THIS WINDOW — %M{offset} plus");
+            Console.WriteLine($"               {length} bytes is beyond the CPU's bit memory, or beyond what one");
+            Console.WriteLine("               request carries. Check the offset and the length, not the CPU.");
+        }
+        else
+        {
+            Console.WriteLine("  IMPLICATION: the smallest possible marker read fails too, so the cause is not the");
+            Console.WriteLine("               window: the CPU is refusing variable access (PUT/GET disabled, or");
+            Console.WriteLine("               secure PG/HMI communication only). Nothing about the program is");
+            Console.WriteLine("               implicated and no marker address will read until that changes.");
+        }
+    }
+
+    /// <summary>
+    /// Marker bytes as Modbus holding registers and as 32-bit doublewords.
+    ///
+    /// <para>The register geometry is <c>MB_HOLD_REG = P#M&lt;base&gt;.0 WORD n</c>, so register
+    /// <c>r</c> is the word at <c>base + 2r</c> and the base is whatever <c>--marker</c> named. That
+    /// mapping is only meaningful when <c>--marker</c> was pointed at the mirror base, so the heading
+    /// says which assumption it is under rather than presenting register numbers as a fact about the
+    /// bytes.</para>
+    ///
+    /// <para><b>The doubleword column is HIGH-WORD-FIRST</b> — measured on this rig twice (2026-08-13,
+    /// 2026-08-14) off a build stamp with distinguishable halves. It is printed as a labelled
+    /// convention next to the bytes it was computed from, never instead of them: an order that is
+    /// stated and wrong is correctable from the report, an order that is silently applied is not.</para>
+    /// </summary>
+    private static void MeasureMarkers(byte[] buffer, int baseByte)
+    {
+        Console.WriteLine($"== registers (assuming %M{baseByte} is a mirror base: register r = the word at base + 2r) ==");
+        Console.WriteLine("  reg   addr        bytes    u16 hex   u16 dec   dword (HIGH-WORD-FIRST, measured on this rig)");
+
+        for (var r = 0; (2 * r) + 1 < buffer.Length; r++)
+        {
+            var at = 2 * r;
+            var word = (buffer[at] << 8) | buffer[at + 1];
+
+            // A doubleword is reported on its LOW register only, and only when both halves are in the
+            // buffer — a half-read 32-bit value printed as a number is a wrong measurement wearing the
+            // right shape.
+            var dword = "";
+            if (r % 2 == 0 && at + 3 < buffer.Length)
+            {
+                var high = word;
+                var low = (buffer[at + 2] << 8) | buffer[at + 3];
+                var value = ((uint)high << 16) | (uint)low;
+                dword = $"r{r}:r{r + 1} = 16#{value:X8} ({value})";
+            }
+
+            Console.WriteLine($"  {r,3}   %MW{baseByte + at,-6}  {buffer[at]:X2} {buffer[at + 1]:X2}    16#{word:X4}   {word,7}   {dword}");
+        }
+
+        if (buffer.Length % 2 != 0)
+            Console.WriteLine($"  (the last byte %M{baseByte + buffer.Length - 1} = {buffer[^1]:X2} is not part of a whole register — " +
+                              "an odd --length leaves one, and half a register is not a register)");
     }
 
     // ------------------------------------------------------------------ reporting
@@ -434,5 +625,32 @@ public static class Program
     {
         var i = Array.IndexOf(args, name);
         return i >= 0 && i + 1 < args.Length ? args[i + 1] : null;
+    }
+
+    /// <summary>
+    /// A numeric option, or a NAMED usage error. These were <c>int.Parse</c>, which on a typo threw an
+    /// unhandled FormatException — the exact shape hammer finding 27 objected to elsewhere in this
+    /// file: fail closed, yes, but a harness cannot tell an unhandled exception from a refusal.
+    /// </summary>
+    private static bool TryInt(string[] args, string name, int fallback, out int value)
+    {
+        var raw = Option(args, name);
+        if (raw is null)
+        {
+            value = fallback;
+            return true;
+        }
+
+        if (int.TryParse(raw, out value)) return true;
+
+        Usage($"{name} takes a whole number of {(name == "--length" ? "bytes" : "units")}; got \"{raw}\".");
+        return false;
+    }
+
+    private static int Usage(string message)
+    {
+        Console.Error.WriteLine($"usage error: {message}");
+        Console.Error.WriteLine("  Nothing was read and no connection was attempted.");
+        return ExitUsage;
     }
 }

@@ -13,10 +13,12 @@
     no socket at all (a property its tests assert); this one owns a socket and owns no write. Neither
     project can quietly acquire the other's half, because the halves are not in the same assembly.
 
-    What it may reach: Sharp7Client (the real IS7Client) for ConnectTo/DBRead/GetOrderCode, and Sharp7
-    directly for the ONE fallback diagnostic — a few bytes of M memory, read only when the DB read has
-    already failed, to tell a CPU-wide refusal apart from a block-specific one. Nothing here calls
-    DBWrite, WriteArea, WriteBit, PlcStop, Download or Delete; the last four are not even on IS7Client.
+    What it may reach: Sharp7Client (the real IS7Client) for ConnectTo/DBRead/GetOrderCode/PlcGetStatus,
+    and Sharp7 directly for MBRead — marker memory, which IS7Client does not expose. As of 2026-08-14
+    that is TWO callers, not one: the fallback diagnostic that tells a CPU-wide refusal apart from a
+    block-specific one, and the 'marker' flag, a first-class read of the harness mirror (%M, not
+    in a DB, so no DB read can reach it). Both are reads. Nothing here calls MBWrite, DBWrite,
+    WriteArea, WriteBit, PlcStop, Download or Delete; the last four are not even on IS7Client.
   -->
   <ItemGroup>
     <ProjectReference Include="..\Harness.S7\Harness.S7.csproj" />

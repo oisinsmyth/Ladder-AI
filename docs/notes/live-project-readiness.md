@@ -78,7 +78,7 @@ it parsed as **nothing at all** before the fix, so it is an unambiguous currency
 | | what it is proven to do |
 |---|---|
 | **Deploy** (`Harness.Device`: stage → `to-xml` → `import-all` → layout re-assert → `compile-all` → `sanity-check`) | **45 objects loaded by name**, CPU read back `Running (8)` **from the device** |
-| **`rig-read`** | Run state, device identity, DB read. **Needs a device allowlist or it opens no socket at all** |
+| **`rig-read`** | Run state, device identity, DB read, and **`--marker <byte> --length <n>`: MARKER memory** (2026-08-14) — the mirror lives in `%M`, so no DB read reaches it. Mutually exclusive with `--db`. **Needs a device allowlist or it opens no socket at all** |
 | **The mirror + copy layer** | Deployed and **read back over the wire**. `Bool`→bit/1 reg, `Int`→word/1, `Time`→double word/**2** |
 | **`download-probe`** | The only binary that can transfer a program. **Fenced; exit 3 before Portal is contacted** on a refusal |
 | **The converter's analysis set** | `preflight`, `drift-check`, `compare`, `review`, `tagstatus`, `cross-check` — the daily working tools |
