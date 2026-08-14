@@ -293,6 +293,24 @@ running does not license:
     ➜ **A crash is loud without being NAMED.** A harness cannot tell an unhandled exception from a
       refusal, so a top-level catch that names it is not decoration — it is what makes the difference
       reportable.
+- *** DELETING AN INPUT FROM A SYSTEM THAT REPORTS DERIVED CONCLUSIONS DOES NOT PRODUCE A SMALLER
+  CONCLUSION — IT PRODUCES A WRONG ONE. *** Measured 2026-08-14 while looking for a *safe and small*
+  slot-scoped recovery. With the slot present the store reported two wave sets separated by a conflict
+  edge; with it removed it reported ***`NO CONFLICT EDGES: the slots are disjoint on every computed
+  relation`*** — **a positive claim of disjointness about a hazard it can no longer see.** Acting on
+  it puts two agents on one FB instance: ***the recovery would have caused the incident it was added
+  to clean up after.***
+    ➜ **Rank them: a silent gap is bad; a confident false assurance is worse than either.** Before
+      removing a record, ask **what the system will now ASSERT** in its absence — not merely what it
+      will stop knowing.
+    ➜ **The liveness lesson beside it: the only liveness fact available was RE-SUBMISSION** — a live
+      agent re-submits, a dead one does not. ***Obtained by doing the work, not by asking a question
+      the system cannot answer.*** Both alternatives failed for stated reasons: ownership cannot help
+      (a dead agent cannot clear its own slot — the whole problem), and a timer must not (*an expiry
+      heuristic is a wrong answer delivered on a schedule*).
+    ➜ **And record a defect's DIRECTION in the runbook.** This leak **over-separates** — the safe
+      direction — so it is *not* an emergency, and saying so stops someone reaching for the
+      destructive remedy under time pressure. **A runbook that omits severity causes its own damage.**
 - *** A CONTROL THAT IS NOT EXECUTED IS A NOTE ABOUT A CONTROL. *** Found 2026-08-14 on the single
   most load-bearing assertion in the repository — the IL walk certifying that **no method in
   `openness-cli` can reach `DownloadProvider.Download`.** It is genuinely armed *(retargeting the
