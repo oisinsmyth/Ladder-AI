@@ -238,46 +238,109 @@ public class DownloadPlanTests
     /// added anywhere, including inside a branch no test exercises, and it is not fooled by a
     /// commented-out call being uncommented.
     ///
-    /// NEGATIVE-TESTED, 2026-08-11. A check that has never been shown to detect anything is not a
-    /// check — a green result from a scanner that silently matches nothing is the most reassuring
-    /// output this file could produce and would mean nothing at all. So the predicate was
-    /// temporarily retargeted at a call known to exist in this same assembly
-    /// (<c>ICompilable.Compile</c>, in <c>Siemens.Engineering.Compiler</c>) and the test FAILED,
-    /// naming <c>OpennessCli.Openness.OpennessGateway.RunCompile: calls
-    /// Siemens.Engineering.Compiler.ICompilable.Compile</c>. The IL walk, the token resolution and
-    /// the namespace match are therefore all confirmed working against a real Siemens interface call
-    /// on a real method body; only the name being searched for was then changed back.
+    /// NEGATIVE-TESTED BY <see cref="TheIlScanner_ReallyDetectsASiemensCallThatIsThere"/>, which runs
+    /// every time this does. A check that has never been shown to detect anything is not a check —
+    /// a green result from a scanner that silently matches nothing is the most reassuring output this
+    /// file could produce and would mean nothing at all.
+    ///
+    /// 🔴 <b>That control used to be a COMMENT</b> describing a manual retarget performed once on
+    /// 2026-08-11, and <b>this test had no denominator at all</b>: on 2026-08-14 the walk was forced
+    /// to examine ZERO method bodies and the test stayed GREEN. Both halves are now executed —
+    /// <see cref="IlScan.BodiesExamined"/> proves it LOOKED, the control proves it DETECTS.
     /// </summary>
     [Fact]
     public void NoMethodInTheAssemblyReferencesDownloadProviderDownload()
     {
+        var scan = ScanAssemblyFor("Download", "Siemens.Engineering.Download");
+
+        // *** THE DENOMINATOR, AND IT WAS MISSING UNTIL 2026-08-14. *** `offenders.Count == 0` is
+        // true of "nothing was found" AND of "nothing was looked at", and those are opposite
+        // findings. Measured: forcing SafeGetBody to return null — so the walk examines ZERO bodies —
+        // left this test GREEN. It is the most load-bearing assertion in this repository and it was
+        // vulnerable to the one bug this project keeps finding (FI-44, "empty is not clean").
+        Assert.True(
+            scan.BodiesExamined > 0,
+            "The IL walk examined NO method bodies, so its zero offenders prove nothing. " +
+            $"Types enumerated: {scan.TypesEnumerated}, methods enumerated: {scan.MethodsEnumerated}.");
+
+        Assert.True(
+            scan.Offenders.Count == 0,
+            "This binary must contain no call to DownloadProvider.Download anywhere. Found: " +
+            string.Join("; ", scan.Offenders));
+    }
+
+    /// <summary>
+    /// *** THE LIVE POSITIVE CONTROL, AND THE REASON THE TEST ABOVE MEANS ANYTHING. ***
+    ///
+    /// The control for that assertion used to exist ONLY AS A COMMENT — a note that on 2026-08-11
+    /// somebody temporarily retargeted the predicate at <c>ICompilable.Compile</c> and watched it
+    /// fail. *** A CONTROL THAT IS NOT EXECUTED IS A NOTE ABOUT A CONTROL. *** It cannot notice the
+    /// walk rotting, and this file's sibling walker in <c>DownloadProbeTests</c> already had the
+    /// executable form — the pattern was in the repo and this one did not get it.
+    ///
+    /// So the same walk, over the same assembly, with the same token resolution, is REQUIRED to find
+    /// a Siemens call that provably exists: <c>OpennessGateway.RunCompile</c> calls
+    /// <c>Siemens.Engineering.Compiler.ICompilable.Compile</c>. If this goes red, the zero result
+    /// above is worthless whatever it says.
+    ///
+    /// <b>The denominator and this control are BOTH needed, and neither subsumes the other.</b> A
+    /// walk that enumerates bodies but resolves no tokens has a healthy denominator and detects
+    /// nothing; a walk that detects <c>Compile</c> could still be skipping most of the assembly.
+    /// They fail in different directions.
+    /// </summary>
+    [Fact]
+    public void TheIlScanner_ReallyDetectsASiemensCallThatIsThere()
+    {
+        var scan = ScanAssemblyFor("Compile", "Siemens.Engineering.Compiler");
+
+        Assert.True(scan.BodiesExamined > 0, "the control examined no bodies either — the walk is broken, not the target.");
+        Assert.True(
+            scan.Offenders.Count > 0,
+            "The IL scan found no call to Siemens.Engineering.Compiler.ICompilable.Compile, which " +
+            "OpennessGateway.RunCompile certainly makes. The scanner is broken, so the zero result " +
+            "reported by NoMethodInTheAssemblyReferencesDownloadProviderDownload proves nothing.");
+    }
+
+    /// <summary>
+    /// One walk, used by the assertion and by its control, so the control cannot drift away from the
+    /// thing it is controlling for. It reports WHAT IT EXAMINED alongside what it found — the two
+    /// numbers that a bare <c>offenders.Count</c> conflates.
+    /// </summary>
+    private static IlScan ScanAssemblyFor(string memberName, string namespacePrefix)
+    {
         var assembly = typeof(OpennessGateway).Assembly;
         var offenders = new List<string>();
+        var types = 0;
+        var methods = 0;
+        var bodies = 0;
 
         foreach (var type in assembly.GetTypes())
         {
+            types++;
             foreach (var method in type.GetMethods(
                          BindingFlags.Public | BindingFlags.NonPublic |
                          BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly))
             {
+                methods++;
                 var body = SafeGetBody(method);
                 if (body is null)
                 {
                     continue;
                 }
 
-                if (ReferencesSiemensDownloadCall(assembly, body, method, out var detail))
+                bodies++;
+                if (ReferencesSiemensCall(body, method, memberName, namespacePrefix, out var detail))
                 {
                     offenders.Add($"{type.FullName}.{method.Name}: {detail}");
                 }
             }
         }
 
-        Assert.True(
-            offenders.Count == 0,
-            "This binary must contain no call to DownloadProvider.Download anywhere. Found: " +
-            string.Join("; ", offenders));
+        return new IlScan(offenders, types, methods, bodies);
     }
+
+    private sealed record IlScan(
+        IReadOnlyList<string> Offenders, int TypesEnumerated, int MethodsEnumerated, int BodiesExamined);
 
     // ---- report content ---------------------------------------------------------------------
 
@@ -608,8 +671,9 @@ public class DownloadPlanTests
     }
 
     /// <summary>
-    /// Scans a method's IL for a <c>call</c>/<c>callvirt</c> to a member named <c>Download</c> on a
-    /// type in <c>Siemens.Engineering.Download</c>.
+    /// Scans a method's IL for a <c>call</c>/<c>callvirt</c> to a member named
+    /// <paramref name="memberName"/> on a type whose namespace starts with
+    /// <paramref name="namespacePrefix"/>.
     ///
     /// Deliberately coarse. A precise IL walk would be longer and would have to be right about
     /// operand widths to be trusted; this reads every 4-byte window as a metadata token and asks the
@@ -617,8 +681,13 @@ public class DownloadPlanTests
     /// assertion is that the count is ZERO, over-reporting is the safe direction: a false positive
     /// fails a test and gets read, a false negative would let the one thing this guards against
     /// through unnoticed.
+    ///
+    /// The searched name is a PARAMETER rather than a literal so that the positive control runs the
+    /// SAME code as the assertion. When it was a literal, the only way to exercise the control was to
+    /// edit the literal by hand — which is why the control ended up recorded as a comment.
     /// </summary>
-    private static bool ReferencesSiemensDownloadCall(Assembly assembly, byte[] il, MethodInfo owner, out string detail)
+    private static bool ReferencesSiemensCall(
+        byte[] il, MethodInfo owner, string memberName, string namespacePrefix, out string detail)
     {
         detail = string.Empty;
         var module = owner.Module;
@@ -645,8 +714,8 @@ public class DownloadPlanTests
             }
 
             var declaringNamespace = resolved.DeclaringType?.Namespace ?? string.Empty;
-            if (resolved.Name == "Download" &&
-                declaringNamespace.StartsWith("Siemens.Engineering.Download", StringComparison.Ordinal))
+            if (resolved.Name == memberName &&
+                declaringNamespace.StartsWith(namespacePrefix, StringComparison.Ordinal))
             {
                 detail = $"calls {resolved.DeclaringType?.FullName}.{resolved.Name}";
                 return true;

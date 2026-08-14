@@ -11,7 +11,28 @@ namespace OpennessCli;
 internal static class Program
 {
     [STAThread]
-    private static int Main(string[] args)
+    private static int Main(string[] args) => Run(args, () => new OpennessGateway());
+
+    /// <summary>
+    /// The whole program, with the Portal half injected — the same seam <c>download-probe</c>'s
+    /// <c>Program.Run</c> uses, and for the same reason: <b>everything that decides WHETHER Portal is
+    /// contacted sits before <see cref="IOpennessGateway.Connect"/>, and none of it was reachable
+    /// from a test.</b>
+    ///
+    /// 🔴 <b>Why this exists (2026-08-14).</b> The pre-Connect refusals below — the unconfirmed HMI
+    /// writes, the <c>import-all</c> dry run, and above all <c>block-layout --set</c> without
+    /// <c>--yes</c> — were each tested by calling their refusal helper DIRECTLY. That tests the
+    /// MESSAGE, not the ROUTING. Measured: commenting out the <c>block-layout</c> arm left all 712
+    /// tests green, and <see cref="RunBlockLayout"/> does not re-check <c>Confirm</c>, so that one
+    /// <c>if</c> is the only thing between a missing <c>--yes</c> and a write that destroys the
+    /// block's retained data. A guard that can be silently disconnected is decoration.
+    ///
+    /// <paramref name="gatewayFactory"/> is injected ONLY for that: a test supplies a gateway whose
+    /// <c>Connect</c> records that it was called, so "Portal was not contacted" is OBSERVED rather
+    /// than inferred from an exit code. <see cref="Main"/> passes the real one and there is no
+    /// argument, flag or environment variable that reaches this parameter.
+    /// </summary>
+    internal static int Run(string[] args, Func<IOpennessGateway> gatewayFactory)
     {
         var parseResult = ArgumentParser.Parse(args);
         if (parseResult is ParseResult.Failure failure)
@@ -33,7 +54,7 @@ internal static class Program
             return ExitCodes.EnvironmentError;
         }
 
-        using IOpennessGateway gateway = new OpennessGateway();
+        using IOpennessGateway gateway = gatewayFactory();
         try
         {
             // portal-status is the one command that must NOT go through Connect(): attaching risks

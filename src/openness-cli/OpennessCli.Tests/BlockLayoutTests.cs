@@ -577,8 +577,22 @@ internal sealed class FakeGateway : IOpennessGateway
     {
     }
 
+    /// <summary>
+    /// RECORDED, NOT THROWN (2026-08-14). This used to throw, on the grounds that no command tested
+    /// here reaches it. That is true of the per-command tests and false of
+    /// <see cref="PreConnectRefusalRoutingTests"/>, which drives <c>Program.Run</c> end to end and
+    /// needs to observe whether Portal WOULD have been contacted.
+    ///
+    /// <para>A throw cannot serve that: it also produces a non-zero exit, so "the gate held" and
+    /// "the gate broke and the gateway blew up" would be told apart only by reading a message. A
+    /// counter is a positive observation of the thing that must not happen — the same shape as the
+    /// <c>-Arm</c> fence's stub <c>openness-cli</c> appending to a sentinel file.</para>
+    /// </summary>
+    public int ConnectCalls { get; private set; }
+
+    public void Connect(TimeSpan timeout, string? preferProjectIdentifier = null) => ConnectCalls++;
+
     // Everything below is out of scope for this command and must never be reached from it.
-    public void Connect(TimeSpan timeout, string? preferProjectIdentifier = null) => throw new NotSupportedException();
 
     public IReadOnlyList<PortalProcessInfo> EnumeratePortalProcesses() => throw new NotSupportedException();
 
