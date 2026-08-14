@@ -47,6 +47,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Harness.Run", "Harness.Run\
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DeviceGuard", "..\device-guard\DeviceGuard\DeviceGuard.csproj", "{549AAB8E-63C6-40BE-B325-D2949A81A713}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Harness.RigControl", "Harness.RigControl\Harness.RigControl.csproj", "{4DD6E541-FA91-4C38-88D9-BBD84F7DCDDA}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Harness.RigControl.Tests", "Harness.RigControl.Tests\Harness.RigControl.Tests.csproj", "{57FC957E-4B8D-4EB9-8CCB-568811454F25}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -144,5 +148,13 @@ Global
 		{549AAB8E-63C6-40BE-B325-D2949A81A713}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{549AAB8E-63C6-40BE-B325-D2949A81A713}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{549AAB8E-63C6-40BE-B325-D2949A81A713}.Release|Any CPU.Build.0 = Release|Any CPU
+		{4DD6E541-FA91-4C38-88D9-BBD84F7DCDDA}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{4DD6E541-FA91-4C38-88D9-BBD84F7DCDDA}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{4DD6E541-FA91-4C38-88D9-BBD84F7DCDDA}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{4DD6E541-FA91-4C38-88D9-BBD84F7DCDDA}.Release|Any CPU.Build.0 = Release|Any CPU
+		{57FC957E-4B8D-4EB9-8CCB-568811454F25}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{57FC957E-4B8D-4EB9-8CCB-568811454F25}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{57FC957E-4B8D-4EB9-8CCB-568811454F25}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{57FC957E-4B8D-4EB9-8CCB-568811454F25}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

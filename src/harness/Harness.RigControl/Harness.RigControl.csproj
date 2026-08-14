@@ -1,0 +1,65 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>Harness.RigControl</RootNamespace>
+    <AssemblyName>rig-control</AssemblyName>
+
+    <!--
+      Same open question, same answer, as Harness.S7's project file: Sharp7 is not committed to this
+      repository, and the path is an overridable property defaulting to the machine-local copy. Do not
+      change it here without changing it there — two projects resolving the same DLL differently is a
+      way to build one half against a version the other has never seen.
+    -->
+    <Sharp7Path Condition="'$(Sharp7Path)' == ''">$(USERPROFILE)\.ladder\lib\Sharp7.dll</Sharp7Path>
+  </PropertyGroup>
+
+  <!--
+    THIS BUILD CAN PUT A CPU INTO RUN, AND THE PROJECT FILE IS THE FIRST PLACE THAT IS VISIBLE.
+
+    It is the opposite claim to Harness.RigWrite's, and it is stated here for the same reason: the
+    reference list is what a reader checks first.
+
+      - DeviceGuard comes in through Harness.S7, and is the fence. There is no path to a device in
+        this assembly that does not pass RunTransitionFence first (RigControlCli, section 1).
+      - Harness.S7 is referenced for S7Status and S7RunStateReading — the run-state DECODER
+        specifically, which carries a measured fact about this CPU and a regression guard. Reusing it
+        is strictly better than a second copy that would drift.
+      - Sharp7 is referenced DIRECTLY, because IS7Client deliberately does not expose PlcHotStart and
+        must not start doing so. See IRunTransitionTransport for why the verb lives on its own
+        interface in its own assembly rather than widening that one.
+
+    What this assembly must NOT be able to reach, checked by an IL walk rather than asserted here:
+    PlcStop, PlcColdStart, DBWrite, MBWrite, WriteArea, Download, Delete, PlcCopyRamToRom.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\Harness.S7\Harness.S7.csproj" />
+  </ItemGroup>
+
+  <ItemGroup Condition="Exists('$(Sharp7Path)')">
+    <Reference Include="Sharp7">
+      <HintPath>$(Sharp7Path)</HintPath>
+      <Private>true</Private>
+    </Reference>
+  </ItemGroup>
+
+  <PropertyGroup Condition="Exists('$(Sharp7Path)')">
+    <DefineConstants>$(DefineConstants);SHARP7</DefineConstants>
+  </PropertyGroup>
+
+  <!--
+    Without Sharp7 the live transport is excluded and the composition root hands the CLI a factory
+    that throws with a named reason. The fence, the CLI, every gate and every exit code still build
+    and still test — which is the point: the safety-relevant half of this tool has no dependency on
+    being able to reach a device.
+  -->
+  <ItemGroup Condition="!Exists('$(Sharp7Path)')">
+    <Compile Remove="Sharp7RunTransition.cs" />
+  </ItemGroup>
+
+  <Target Name="WarnMissingSharp7" BeforeTargets="Build" Condition="!Exists('$(Sharp7Path)')">
+    <Message Importance="high"
+             Text="Harness.RigControl: Sharp7 not found at '$(Sharp7Path)' — this build has NO device transport. The fence and the CLI still build and test. Override with -p:Sharp7Path=&lt;path&gt;." />
+  </Target>
+
+</Project>
