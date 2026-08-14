@@ -956,6 +956,7 @@ internal static class Program
         var paths = new List<string>();
         var onlyNetworks = new List<int>();
         var json = false;
+        var allowHeader = false;
 
         for (var i = 0; i < args.Length; i++)
         {
@@ -987,6 +988,12 @@ internal static class Program
                 case "--json":
                     json = true;
                     break;
+                // 2026-08-14. An unclaimed header change under --only is an invariance VIOLATION; this
+                // is how the caller declares it was the point of the modification. gen-block-modify-
+                // purpose changes interfaces deliberately and passes it; gen-block-modify-fix must not.
+                case "--allow-header":
+                    allowHeader = true;
+                    break;
                 default:
                     paths.Add(args[i]);
                     break;
@@ -995,7 +1002,7 @@ internal static class Program
 
         if (paths.Count != 2)
         {
-            Console.Error.WriteLine("Usage: converter diff <old.ir> <new.ir> [--only <network> ...] [--json]");
+            Console.Error.WriteLine("Usage: converter diff <old.ir> <new.ir> [--only <network> ...] [--allow-header] [--json]");
             return 1;
         }
 
@@ -1011,7 +1018,7 @@ internal static class Program
         DiffReport report;
         try
         {
-            report = DiffRunner.Run(paths[0], paths[1], onlyNetworks);
+            report = DiffRunner.Run(paths[0], paths[1], onlyNetworks, allowHeader);
         }
         catch (Exception ex) when (ex is IrFormatException or SimaticMlFormatException)
         {

@@ -69,6 +69,14 @@ rule, and the compound-operand-must-lead synthesis rule). Follow it. **For a pur
   speed feedback) — following **C-115 handshake vocabulary** (take member names from the site pattern, not
   doc 06's illustrative ones). `converter diff`'s **`HEADER changed`** line surfaces the interface delta;
   that's expected here. The as-built's other members stay untouched.
+  🔴 **So this skill's invariance run needs `--allow-header` (2026-08-14) — and that flag is a DECLARATION,
+  not a formality.** Until then an unclaimed header change printed `HEADER changed: interface` and then
+  `INVARIANCE OK: all changes confined to --only {N}`, two lines apart, and **exited 0** — so retyping a
+  member `Bool` → `Int` with no network touched passed the gate whose whole job is *"prove the rest is
+  identical"*, and that is precisely the change that compiles, imports and misbehaves on the controller.
+  An unclaimed header change (or a block rename) is now an **invariance violation, exit 1**.
+  `gen-block-modify-fix` must **never** pass it: a fix that needs an interface member is a purpose change
+  and routes here instead.
 - **Networks may be added and removed**, not only edited — per the manifest (add the new function's control
   networks; retire networks the old purpose made and the new one doesn't need, e.g. a DOL run coil replaced
   by VSD speed control). Added/removed networks appear in `diff` as `Added`/`Removed` and belong in the
@@ -82,8 +90,10 @@ rule, and the compound-operand-must-lead synthesis rule). Follow it. **For a pur
 Hand back (per `lad-coder`'s contract — your summary is not proof):
 
 - **The `converter diff`** showing the changed/added/removed networks **and the interface delta**, plus the
-  **`diff --only` invariance result (exit 0)** proving the kept skeleton is untouched — that pairing is the
-  S7 deliverable.
+  **`diff --only … --allow-header` invariance result (exit 0)** proving the kept skeleton is untouched —
+  that pairing is the S7 deliverable. **Quote the interface delta explicitly in the hand-back**: with
+  `--allow-header` the gate stops arguing about it, so the reader is the only remaining check on whether
+  the members that changed are the ones the manifest named.
 - A **one-paragraph intent**: what purpose change, which REQ(s) it delivers, why it's correct.
 - **preflight** (zero findings) + **compile** evidence: `sanity-check`'s `INCONSISTENT: 0` on **both**
   the `BLOCKS:` and `TYPES:` lines, plus the **error count**. *(Corrected 2026-08-13: this read

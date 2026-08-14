@@ -11,7 +11,8 @@ namespace Converter.Diff;
 // as-built corpus was sidecar-less.
 public static class DiffRunner
 {
-    public static DiffReport Run(string oldPath, string newPath, IReadOnlyList<int> onlyNetworks)
+    public static DiffReport Run(
+        string oldPath, string newPath, IReadOnlyList<int> onlyNetworks, bool allowHeaderChange = false)
     {
         var (oldBlock, oldSidecars) = ParseEither(File.ReadAllText(oldPath));
         var (newBlock, newSidecars) = ParseEither(File.ReadAllText(newPath));
@@ -25,7 +26,8 @@ public static class DiffRunner
             OtherBlockName: oldBlock.Name,
             Header: header,
             Networks: networks,
-            AllowedNetworks: onlyNetworks);
+            AllowedNetworks: onlyNetworks,
+            HeaderChangeAllowed: allowHeaderChange);
     }
 
     // Parse whether or not the input carries a SIDECAR (same branch review/preflight use). A sidecar-less

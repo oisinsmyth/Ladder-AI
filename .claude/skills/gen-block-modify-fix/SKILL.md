@@ -68,6 +68,12 @@ compound-operand-must-lead synthesis rule). Follow it. **For a fix specifically:
 - **Scope = the network(s) the fix-request names — a defect repair, not an interface change.** If the
   "fix" actually needs a new interface member or a new/removed network, it's a *purpose* change → stop
   and route to `gen-block-modify-purpose`; don't grow the fix into a redesign.
+  🔴 **The `--only` gate now ENFORCES that (2026-08-14): a header change you did not declare is an
+  invariance violation, exit 1.** Until then it printed `HEADER changed: interface` and then
+  `INVARIANCE OK: all changes confined to --only {N}` and exited 0, so a member retyped `Bool` → `Int`
+  passed a gate whose whole job is *"prove the rest is identical"*. **`--allow-header` exists and is
+  `gen-block-modify-purpose`'s, not yours** — if you reach for it, you are on the wrong path and the
+  answer is to route, not to declare.
 - **The REQ you restore already exists** — re-check the fixed network against it; a fix that compiles but
   doesn't restore the REQ is a miss (the compile gate never proves behavior).
 - **A requirement-vs-convention tension is a stop-and-route, not a guess** (e.g. a "retentive timer" REQ vs

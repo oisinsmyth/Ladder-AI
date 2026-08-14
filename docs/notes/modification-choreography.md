@@ -47,6 +47,19 @@ reference is worth splitting out" point.)
    gate instead. A `HEADER changed` line surfaces an interface/title/comment delta (expected for a purpose
    change; not for a fix). If diff reports a change you didn't intend, you touched something you shouldn't —
    undo it or stop. This is CLAUDE.md's "untouched-network invariance check", mechanized.
+   🔴 **A HEADER CHANGE UNDER `--only` NOW GATES — `--allow-header` IS HOW YOU DECLARE ONE (2026-08-14).**
+   Until that date the gate printed `HEADER changed: interface` and then, two lines below,
+   **`INVARIANCE OK: all changes confined to --only {N}`, exit 0** — a report disagreeing with itself,
+   with the exit code following the wrong half. Measured: an interface member retyped **`Bool` → `Int`**
+   with **no network touched** passed; so did a block **renamed and renumbered** (a warning only). Those
+   are exactly the changes that compile, import and then misbehave on the controller, and this is the gate
+   whose entire job is *"prove the rest is identical"*. `--only` names networks and so cannot express
+   header intent — that explained why the **check** was absent and never licensed the **claim**. So:
+   unclaimed header change or rename ⇒ **exit 1**; `--allow-header` ⇒ the change is declared and the
+   verdict says so (`… plus the header change, declared via --allow-header`). **Purpose changes pass it;
+   fixes must not** — a fix that needs an interface member is a purpose change, and the answer is to
+   route, not to declare. The clean verdict now also states what it examined (`…, header unchanged`)
+   rather than only that it passed.
 6. **Compile gate** (hard rule 4): `converter preflight` (zero findings) → import to the **scratch** project
    → `openness-cli compile` clean. An **FB with multi-instance timers compiles only after its instance DB
    exists** — `openness-cli create-instance-db` first if there isn't one. Playbook first on any failure;

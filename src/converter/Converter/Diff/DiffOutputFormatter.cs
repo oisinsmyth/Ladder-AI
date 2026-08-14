@@ -72,15 +72,37 @@ public static class DiffOutputFormatter
             {
                 sb.Append("\nINVARIANCE VIOLATION: change(s) outside --only {")
                   .Append(string.Join(", ", report.AllowedNetworks.OrderBy(n => n)))
-                  .Append("}: network(s) ")
-                  .Append(string.Join(", ", report.InvarianceViolations.Select(v => v.Number)))
-                  .Append('\n');
+                  .Append('}');
+
+                if (report.InvarianceViolations.Count > 0)
+                {
+                    sb.Append(": network(s) ")
+                      .Append(string.Join(", ", report.InvarianceViolations.Select(v => v.Number)));
+                }
+
+                // Named separately from the network list because the ACTION differs: a stray network
+                // is an edit to undo, an unclaimed header change is usually an edit to DECLARE.
+                if (report.HasUnclaimedHeaderChange)
+                {
+                    sb.Append(report.InvarianceViolations.Count > 0 ? "; " : ": ")
+                      .Append(report.BlockNameMismatch ? "the block itself was renamed" : "the block HEADER changed")
+                      .Append(" and --only names networks only. Pass --allow-header if that was the point of the change.");
+                }
+
+                sb.Append('\n');
             }
             else
             {
+                // States what was EXAMINED, not merely that it passed. The old wording claimed "all
+                // changes confined to --only {N}" while an unexamined header change sat printed two
+                // lines above it — a report disagreeing with itself, with the exit code following the
+                // wrong half.
                 sb.Append("\nINVARIANCE OK: all changes confined to --only {")
                   .Append(string.Join(", ", report.AllowedNetworks.OrderBy(n => n)))
-                  .Append("}\n");
+                  .Append(report.Header.Changed || report.BlockNameMismatch
+                      ? "} plus the header change, declared via --allow-header"
+                      : "}, header unchanged")
+                  .Append('\n');
             }
         }
 
@@ -124,6 +146,10 @@ public static class DiffOutputFormatter
             }),
             allowedNetworks = report.AllowedNetworks,
             invarianceViolations = report.InvarianceViolations.Select(n => n.Number),
+            // Both halves of the verdict, separately, so a machine reader can tell a stray NETWORK
+            // from an unclaimed HEADER change — different edits, different fixes.
+            headerChangeAllowed = report.HeaderChangeAllowed,
+            hasUnclaimedHeaderChange = report.HasUnclaimedHeaderChange,
             hasInvarianceViolation = report.HasInvarianceViolation,
         };
 

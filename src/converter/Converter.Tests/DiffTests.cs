@@ -214,4 +214,104 @@ public class DiffTests : IDisposable
         Assert.Equal(1, doc.RootElement.GetProperty("summary").GetProperty("changed").GetInt32());
         Assert.True(doc.RootElement.GetProperty("hasInvarianceViolation").GetBoolean());
     }
+
+    // --- the invariance gate and the header (tooling-hammer campaign, 2026-08-14) ----------------
+    //
+    // MEASURED BEFORE: retyping an interface member Bool -> Int, with NO network touched, printed
+    //     HEADER changed: interface
+    //     INVARIANCE OK: all changes confined to --only {1}
+    // two lines apart, the second contradicting the first, and exited 0. This is the S7 modification
+    // gate ("the diff must show every changed network and prove the rest identical"), and a retyped
+    // member is precisely the change that compiles, imports and misbehaves on the controller. Ruled a
+    // violation; --allow-header makes the intent expressible rather than leaving the default a false
+    // assurance.
+
+    private static IReadOnlyList<DbMember> Statics(params (string Name, string Type)[] members) =>
+        members.Select(m => new DbMember(m.Name, m.Type, Retain: false, StartValue: null)).ToArray();
+
+    [Fact]
+    public void OnlyGate_InterfaceMemberRetyped_WithNoNetworkTouched_Violates()
+    {
+        var nets = new[] { Coil(1, "N1", "OutA", "InA") };
+        var before = WriteIr(Block("FB_X", nets, statics: Statics(("A", "Bool"))));
+        var after = WriteIr(Block("FB_X", nets, statics: Statics(("A", "Int"))));
+
+        var report = DiffRunner.Run(before, after, new[] { 1 });
+
+        Assert.Empty(report.InvarianceViolations);      // no NETWORK moved - that was the whole trap
+        Assert.True(report.Header.InterfaceChanged);
+        Assert.True(report.HasUnclaimedHeaderChange);
+        Assert.True(report.HasInvarianceViolation);
+        Assert.Contains("HEADER changed", DiffOutputFormatter.FormatText(report));
+        Assert.DoesNotContain("INVARIANCE OK", DiffOutputFormatter.FormatText(report));
+    }
+
+    [Fact]
+    public void OnlyGate_InterfaceMemberAdded_Violates()
+    {
+        var nets = new[] { Coil(1, "N1", "OutA", "InA") };
+        var before = WriteIr(Block("FB_X", nets, statics: Statics(("A", "Bool"))));
+        var after = WriteIr(Block("FB_X", nets, statics: Statics(("A", "Bool"), ("B", "Bool"))));
+
+        Assert.True(DiffRunner.Run(before, after, new[] { 1 }).HasInvarianceViolation);
+    }
+
+    [Fact]
+    public void OnlyGate_BlockRenamed_Violates_NotMerelyWarns()
+    {
+        var nets = new[] { Coil(1, "N1", "OutA", "InA") };
+        var report = DiffRunner.Run(WriteIr(Block("FB_X", nets)), WriteIr(Block("FB_Y", nets)), new[] { 1 });
+
+        Assert.True(report.BlockNameMismatch);
+        Assert.True(report.HasInvarianceViolation);
+        Assert.Contains("renamed", DiffOutputFormatter.FormatText(report));
+    }
+
+    // The named escape. gen-block-modify-purpose changes interfaces on purpose and says so.
+    [Fact]
+    public void OnlyGate_HeaderChangeDeclared_IsAllowed()
+    {
+        var nets = new[] { Coil(1, "N1", "OutA", "InA") };
+        var before = WriteIr(Block("FB_X", nets, statics: Statics(("A", "Bool"))));
+        var after = WriteIr(Block("FB_X", nets, statics: Statics(("A", "Int"))));
+
+        var report = DiffRunner.Run(before, after, new[] { 1 }, allowHeaderChange: true);
+
+        Assert.True(report.Header.InterfaceChanged);
+        Assert.False(report.HasUnclaimedHeaderChange);
+        Assert.False(report.HasInvarianceViolation);
+        Assert.Contains("declared via --allow-header", DiffOutputFormatter.FormatText(report));
+    }
+
+    // The unaffected case, tested as deliberately as the refused one: an ORDINARY scoped fix - one
+    // network changed, header untouched - must stay a clean pass, or the gate is noise and gets
+    // switched off. And the verdict now says WHAT IT EXAMINED rather than only that it passed.
+    [Fact]
+    public void OnlyGate_OrdinaryScopedFix_IsUntouched()
+    {
+        var statics = Statics(("A", "Bool"));
+        var before = WriteIr(Block("FB_X", new[] { Coil(1, "N1", "OutA", "InA"), Coil(2, "N2", "OutB", "InB") }, statics: statics));
+        var after = WriteIr(Block("FB_X", new[] { Coil(1, "N1", "OutA", "InA_FIXED"), Coil(2, "N2", "OutB", "InB") }, statics: statics));
+
+        var report = DiffRunner.Run(before, after, new[] { 1 });
+
+        Assert.False(report.HasUnclaimedHeaderChange);
+        Assert.False(report.HasInvarianceViolation);
+        Assert.Contains("header unchanged", DiffOutputFormatter.FormatText(report));
+    }
+
+    // Without --only there is no declared change set, so nothing can be "outside" it. A plain diff
+    // must never gate on a header change - that would fire on every re-export comparison.
+    [Fact]
+    public void NoOnlySet_HeaderChangeDoesNotGate()
+    {
+        var nets = new[] { Coil(1, "N1", "OutA", "InA") };
+        var before = WriteIr(Block("FB_X", nets, statics: Statics(("A", "Bool"))));
+        var after = WriteIr(Block("FB_X", nets, statics: Statics(("A", "Int"))));
+
+        var report = DiffRunner.Run(before, after, Array.Empty<int>());
+
+        Assert.True(report.Header.InterfaceChanged);
+        Assert.False(report.HasInvarianceViolation);
+    }
 }
