@@ -84,16 +84,49 @@ public class ClaimReservedBandTests : IDisposable
 
     // ---- Prevention: a plain --allocate CANNOT return a band number -------------------------------
 
+    // *** ASSERTED OVER THE WHOLE CANDIDATE SET, NOT OVER THE NUMBER THAT HAPPENED TO BE RETURNED. ***
+    // On a small corpus a plain allocate takes FC1 and never goes near the band, so an assertion about
+    // the RESULT passes without the fence existing — measured: with the skip disabled, the
+    // result-only form of this test stayed green. "Could any input reach this line?" is the question,
+    // and for the result form the answer was no.
     [Theory]
     [InlineData("FB")]
     [InlineData("FC")]
     [InlineData("DB")]
-    public void PlainAllocate_NeverReturnsABandNumber(string type)
+    public void PlainAllocate_HasNoBandNumberAnywhereInItsCandidateSet(string type)
     {
-        var outcome = Allocate(type);
+        var candidates = ClaimValidator
+            .Candidates(ClaimCorpus.Build(_corpusDir), ClaimKind.BlockNumber, type, 0, null, out var error)
+            .ToList();
 
+        Assert.Null(error);
+        Assert.NotEmpty(candidates);
+        Assert.DoesNotContain(
+            candidates,
+            c => ReservedBand.PositionOf(type, ClaimValidator.BlockNumberParts(c).Number) == BandPosition.Inside);
+
+        var outcome = Allocate(type);
         Assert.True(outcome.Ok, outcome.Reason);
         Assert.Equal(BandPosition.Outside, ReservedBand.PositionOf(type, NumberOf(outcome)));
+    }
+
+    // The same property where the search MUST cross the band to complete: a floor a few hundred below
+    // it, so the 512-wide walk would otherwise run straight through 9000-9999.
+    [Fact]
+    public void AFloorThatWouldWalkThroughTheBand_ProducesNoBandCandidateAtAll()
+    {
+        var floor = ReservedBand.Declared.FirstNumber - 200;
+
+        var candidates = ClaimValidator
+            .Candidates(ClaimCorpus.Build(_corpusDir), ClaimKind.BlockNumber, "FC", floor, null, out var error)
+            .ToList();
+
+        Assert.Null(error);
+        var numbers = candidates.Select(c => ClaimValidator.BlockNumberParts(c).Number).ToList();
+        Assert.DoesNotContain(numbers, n => ReservedBand.Declared.ContainsNumber(n));
+        // and it really did have to cross: the set spans both sides of the band.
+        Assert.Contains(numbers, n => n < ReservedBand.Declared.FirstNumber);
+        Assert.Contains(numbers, n => n > ReservedBand.Declared.LastNumber);
     }
 
     // *** THE ONE THAT PROVES IT IS "CANNOT" AND NOT "PREFERS NOT TO". *** With the floor set just
