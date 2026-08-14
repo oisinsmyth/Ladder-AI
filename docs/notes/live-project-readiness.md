@@ -440,7 +440,7 @@ PROGRAM, NOT OF THE CONTROLLER, AND THIS ONE WAS RECORDED AS A RIG FACT.***
 | figure | program it belongs to | evidence |
 |---|---|---|
 | **22.64 ms idle / 23.33 ms loaded** | ***the A1 SPIKE CHECKER*** — 123-register comparisons every scan. Its own source says *"the 16-register unrolled checker is inside that figure"* | 2026-08-13, n=101 idle (spread 22.20–23.02), n=16 loaded |
-| **~2.1 ms** | ***the HARNESS program now deployed*** — no checker | 2026-08-14, two runs, **2.11 and 2.07 ms** |
+| **~2.1 ms** | ***the HARNESS program now deployed*** — no checker | 2026-08-14, **THREE independent paths**: `harness-mirror-read` **2.11 / 2.07 ms**, and `harness-mirror-view` **2.13 ms** (510 scans in 1087 ms) during a separate 13-minute session |
 
 **That program is no longer on the rig.** The checker was the expensive part, so ~2.1 ms for a program
 without one is not a contradiction — **it is a different program.**
