@@ -144,62 +144,103 @@ function Get-Median {
     return [int](($sorted[$mid - 1] + $sorted[$mid]) / 2)
 }
 
-function Get-QuotedArgument {
-    # Refuses rather than repairs. A fence that mangles its own input is one you cannot tell what it
-    # actually read - and the only caller-supplied value that reaches here is -CapProvenance.
+function Read-TextOrEmpty {
+    # Get-Content -Raw returns $null for an empty file, and $null + $null is not the empty string.
+    # A submitter whose output could not be read must reach the caller as '' so it is classified as
+    # UNNAMED, never silently concatenated into something that happens to match.
+    param([string]$Path)
+    if (-not (Test-Path -LiteralPath $Path)) { return '' }
+    $raw = Get-Content -LiteralPath $Path -Raw
+    if ($null -eq $raw) { return '' }
+    return [string]$raw
+}
+
+function Get-CmdSafeArgument {
+    # Refuses rather than repairs. A fence that repairs its own input is one you cannot tell what it
+    # actually read. The only caller-supplied value that reaches here is -CapProvenance; everything
+    # else is built by this script.
     param([string]$Value)
 
     if ($null -eq $Value) { $Value = '' }
-    if ($Value.Contains('"')) { throw 'An argument contains a double quote, which this harness will not attempt to escape: ' + $Value }
     if ($Value.Length -eq 0) { return '""' }
-    if (($Value.IndexOf(' ') -lt 0) -and ($Value.IndexOf("`t") -lt 0)) { return $Value }
-    if ($Value.EndsWith('\')) { throw 'An argument needing quotes ends in a backslash, which Windows would read as an escape: ' + $Value }
+
+    if ($Value.Contains('"')) {
+        throw 'An argument contains a double quote, which this harness will not attempt to escape: ' + $Value
+    }
+
+    # Quoting protects & | < > ^ from cmd, but NOT % - a %NAME% pair still expands inside quotes, and
+    # a silently expanded provenance string is a submission that did not carry what was asked for.
+    if ($Value.Contains('%')) {
+        throw 'An argument contains a percent sign, which cmd.exe may expand as a variable even inside quotes: ' + $Value
+    }
+
+    if ($Value.EndsWith('\')) {
+        throw 'An argument ends in a backslash, which Windows would read as escaping the closing quote: ' + $Value
+    }
+
     return '"' + $Value + '"'
 }
 
 function Start-Submitter {
     <#
-        *** DELIBERATELY NOT Start-Process, AND THE REASON IS A MEASUREMENT THIS HARNESS ALMOST
-        PUBLISHED AS A DEFECT IN WAVE-CLI. ***
+        *** THE CHILD'S OUTPUT GOES STRAIGHT TO A FILE AT THE OS LEVEL AND THIS HARNESS NEVER READS A
+        BYTE OF IT WHILE THE RUN IS IN FLIGHT. ***
 
-        PowerShell 5.1's `Start-Process -RedirectStandardOutput <file>` pumps the child's output in
-        managed code, and it is catastrophically slow on a large stream. Same command, same store, same
-        2,565,395 bytes of output, no concurrency involved:
+        Two launchers were tried before this one and BOTH manufactured findings about the tool under
+        test. Same command, same store, same 2,565,395 bytes of output, NO concurrency involved:
 
-            cmd.exe shell redirection to a file        209 ms
-            PowerShell pipe                            353 ms
-            raw Process + ReadToEndAsync (this)        184-204 ms
-            Start-Process -RedirectStandardOutput    2,559 ms
+            cmd.exe shell redirection to a file (this)   209 ms
+            raw Process + ReadToEndAsync                 184-204 ms single, but see below
+            PowerShell pipe                              353 ms
+            Start-Process -RedirectStandardOutput      2,559 ms
 
-        The colouring report prints ONE LINE PER CONFLICT EDGE, which is O(n squared) in
-        mutually-conflicting slots, so the edge-bearing shapes produce megabytes and the edge-free
-        shape produces almost nothing. Under Start-Process that difference read as *wave-cli gets
-        super-linearly slower with conflict edges, and refuses submissions on lease timeouts as a
-        result* - a clean, plausible, entirely wrong finding about the tool under test. The child
-        blocks when the pipe fills, so it also inflated every wall-clock and per-agent figure in the
-        edge-bearing shapes.
+        1. `Start-Process -RedirectStandardOutput <file>` pumps the stream in managed code. The
+           colouring report prints ONE LINE PER CONFLICT EDGE - O(n squared) in mutually-conflicting
+           slots - so edge-bearing shapes emit megabytes and the edge-free shape emits almost nothing.
+           Through that launcher the difference read as *wave-cli gets super-linearly slower with
+           conflict edges and refuses submissions on lease timeouts as a result*: clean, plausible,
+           entirely wrong, and shaped exactly like the defect anyone would expect to find.
 
-        Both streams are read asynchronously from the moment the process starts, which is also what
-        stops a full pipe deadlocking the child.
+        2. Raw Process with `ReadToEndAsync` on both pipes is fast for ONE child and starves at scale.
+           The pipes a child process gets are not overlapped, so each async read parks a thread-pool
+           thread; the pool grows about one thread per 500 ms, and at 16 concurrent submitters single
+           agents began reporting 4-5 SECOND service times against a 108 ms median. A child whose pipe
+           fills BLOCKS, so the harness was throttling the thing it was timing.
+
+        *** SO THE READERS ARE GONE, BECAUSE THE OUTPUT IS NOT THE MEASUREMENT. *** Rule 1 is
+        reconcile against the store on disk; stdout is not an input to any number in the table. It is
+        read AFTER the run, off disk, and only to establish that a refusal named itself. A harness that
+        pumps what it does not measure has given itself a bottleneck for nothing.
+
+        The shell is named because the invocation depends on it: cmd.exe, whose `>` and `2>` are
+        performed by the OS on handles the child inherits. Nothing in this process touches them.
     #>
     param([string]$Exe, [string[]]$Arguments, [string]$OutPath, [string]$ErrPath)
 
-    $line = (($Arguments | ForEach-Object { Get-QuotedArgument $_ }) -join ' ')
+    $parts = New-Object System.Collections.Generic.List[string]
+    $parts.Add((Get-CmdSafeArgument $Exe))
+    foreach ($a in $Arguments) { $parts.Add((Get-CmdSafeArgument $a)) }
+
+    # cmd strips the outermost quote pair after /c, which is what lets an exe path with spaces and a
+    # redirection target with spaces coexist in one command line.
+    $commandLine = '/c "' + ($parts.ToArray() -join ' ') +
+                   ' > ' + (Get-CmdSafeArgument $OutPath) +
+                   ' 2> ' + (Get-CmdSafeArgument $ErrPath) + '"'
+
+    $shell = $env:ComSpec
+    if ([string]::IsNullOrWhiteSpace($shell)) { $shell = 'cmd.exe' }
 
     $psi = New-Object System.Diagnostics.ProcessStartInfo
-    $psi.FileName = $Exe
-    $psi.Arguments = $line
+    $psi.FileName = $shell
+    $psi.Arguments = $commandLine
     $psi.UseShellExecute = $false
     $psi.CreateNoWindow = $true
-    $psi.RedirectStandardOutput = $true
-    $psi.RedirectStandardError = $true
 
+    # NO RedirectStandardOutput / RedirectStandardError. That is the entire point.
     $proc = [System.Diagnostics.Process]::Start($psi)
 
     return [PSCustomObject]@{
         Proc    = $proc
-        OutTask = $proc.StandardOutput.ReadToEndAsync()
-        ErrTask = $proc.StandardError.ReadToEndAsync()
         OutPath = $OutPath
         ErrPath = $ErrPath
     }
@@ -617,20 +658,10 @@ foreach ($shape in $Shapes) {
                 }
             }
 
-            # --- MATERIALISE THE OUTPUT. The async readers are complete once the process has exited,
-            # and the text is written to disk so the evidence outlives this process, exactly as it did
-            # when the harness redirected to files - only without the redirection cost that made every
-            # edge-bearing figure wrong.
+            # --- READ THE OUTPUT OFF DISK, AFTER THE FACT. cmd wrote it; nothing here was in the way
+            # while the run was in flight, and nothing here is timing it now.
             foreach ($spec in $specs) {
-                $capturedOut = ''
-                $capturedErr = ''
-                if ($spec.Proc.HasExited) {
-                    $capturedOut = [string]$spec.Job.OutTask.Result
-                    $capturedErr = [string]$spec.Job.ErrTask.Result
-                }
-                [System.IO.File]::WriteAllText($spec.Out, $capturedOut)
-                [System.IO.File]::WriteAllText($spec.Err, $capturedErr)
-                $spec.Text = $capturedOut + $capturedErr
+                $spec.Text = (Read-TextOrEmpty -Path $spec.Out) + (Read-TextOrEmpty -Path $spec.Err)
             }
 
             $lastExit = $releaseUtc
