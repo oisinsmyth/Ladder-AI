@@ -12,7 +12,9 @@ Source of truth for the design: `PC-Client-Modbus-Spec-Draft-final.txt`. This do
 restate it. It answers one question: **in what order do we build this so that no significant
 body of code is written on an assumption that later turns out to be wrong?**
 
-Written 2026-08-12. **Status updated 2026-08-12 (later the same day).**
+Written 2026-08-12. 🏁 ***CLOSED 2026-08-14 — see the closing section at the end of this file, which
+carries the final four-bucket state and names the one item that did not land.*** Nothing further is
+appended here; work continues in the successor documents listed there.
 
 ---
 
@@ -4732,3 +4734,97 @@ assume there is room"* was the right instruction and the answer is that there is
 `CopyLayerGenerator.Generate`'s **only** call site is `LoopRun.cs:173`, inside the pipeline that
 deploys at step 5. There is no entry point that generates and stops. **Same shape as the loop having
 had no entry point**, and it needs its own fix rather than a workaround.
+
+---
+---
+
+# 🏁 CLOSED — 2026-08-14
+
+**This document is closed.** It was a *build* plan, and the thing it planned to build exists and is
+serving on the rig. Work continues, but it continues **elsewhere** — see *Successors* below. Nothing
+further is appended here.
+
+> **Closed does not mean finished.** It means the question this document was opened to answer has
+> been answered, and the remaining work is a different question. **The one item that did not land is
+> named in full below rather than deferred into silence** — *a plan that closes by quietly dropping
+> its last item teaches the next plan to do the same.*
+
+## What it set out to do, and whether it did it
+
+The opening question was: ***in what order do we build this so that no significant body of code is
+written on an assumption that later turns out to be wrong?***
+
+**That worked.** The order was: measure the CPU first, then build the transport, then the harness,
+then the vectors. Assumptions retired *before* code was written on them include the `%MW` capacity
+(**double** the assumption, and separate from work memory), the register-tear question (**A1: no tear
+in 3,340 writes**, then re-opened and re-answered at the width the design actually uses, 123
+registers), and the whole `MB_SERVER` architecture fork — which **closed on a measurement, not a
+preference.**
+
+**Where it failed, it failed the same way each time:** a component was declared finished on the
+strength of its own test suite, and contact with the controller disagreed. The copy layer's suite was
+green when TIA refused its first import. `compile`'s exit-code fix was committed, tested, documented,
+and **had never reached the binary any agent actually ran.** *Every one of those was found by contact.
+None by review.*
+
+## FINAL STATE — four buckets, and the fourth is the one that matters
+
+| | |
+|---|---|
+| ✅ **BUILT AND PROVEN AGAINST THE CONTROLLER** | The rig serves. **45 objects deployed by name**, CPU read back as `Running (8)` **from the device**. The mirror is live at `%M1000`, word order **HIGH-FIRST — measured, not assumed**. Build stamp `0x21D7`/`0x4D35` read back over the wire, so *what is executing* is identified rather than *what TIA reported sending*. RTT min 63 / median 72 / max 106 ms; scan 23.33 ms. **Every wire-vs-written prediction passed.** |
+| ✅ **BUILT AND UNIT-PROVEN, NEVER RUN AGAINST THE CONTROLLER** | The harness gates (**25 of them**, both `0` and `0b` emitted), the assertion enumeration, the wave driver, the claims registry, the admission colouring. **1074 tests green across 8 assemblies.** *This bucket is not a lesser pass — it is a DIFFERENT CLAIM, and `CLAUDE.md` now carries a status column that keeps the two apart.* |
+| 🔴 **NOT BUILT — and named** | The **phase-armed latch** (below). A generate-without-deploy path for the copy layer. A wire representation for `transient`. An expected-duration figure for a wave — *only a p99 backstop exists, so a wave taking 4× too long still fits it.* |
+| ⚠️ **NOT CHECKED** | Carried explicitly into `tooling-test-plan.md` rather than folded into a pass. ***AN UNASKED QUESTION AND AN ANSWERED ONE MUST NOT PRINT ALIKE*** — the rule this whole plan converged on, now enforced in three separate places. |
+
+## 🔴 THE ONE ITEM THAT DID NOT LAND: the 27 vectors have NEVER RUN
+
+**State it plainly: the conformance vectors were authored, admitted as far as the gates, and never
+executed against the block.** The result package does not exist. Anyone citing this document for
+vector results is citing something that was never produced.
+
+**D1 is nonetheless answered — statically, and it is a FAIL:** `HopperBlockedInhibit` is **missing
+from the block**. That finding did not need the rig.
+
+**Why the rest did not run, in dependency order — each measured, none procedural:**
+
+1. ***THE BLOCK LATCHES ITS OWN OUTPUT.*** `NETWORK 5` is a sealed level coil, `NETWORK 6` a zero-lag
+   follower. **So a generated unconditional latch would have SILENTLY DELETED D2, D3 and D4** — all
+   three turn on the alarm *falling*. **The generator cannot emit the phase-armed form that is
+   actually needed** (the arm is per **vector index**; the copy layer is generated per **wave**), and
+   it now **refuses by name** rather than emitting the unconditional form and letting a caller
+   discover the difference on the rig. *An instrument that erases the event it was added to catch is
+   worse than no instrument.*
+2. **`transient` has no wire representation** — third instance of *the domain model gained the field
+   and the wire format did not.*
+3. **Gate `0b` refuses the deliverable over its own `_`-prefixed commentary** — rationale right, scope
+   wrong. *A gate that refuses every ordinary submission is a gate that gets switched off.*
+4. ***THE MIRROR IS EXACTLY FULL AT 35 OF 35.*** A latch band reaches 37, which **overflows the area
+   pointer** — so this is not a copy-layer change: it needs `MB_HOLD_REG` widened, an IR edit, an
+   import **and a download**.
+
+**Two decisions here were mine and were WRONG, and both were refused by the lanes I gave them to** —
+first the ruling to declare the 13 signals `transient`, then the ruling that the 13 declarations were
+factually wrong. **The refusals were correct both times, on evidence I did not have.** That is the
+single most valuable process result in this document, and it is recorded in the working agreement as
+such: *a lane that cannot refuse the orchestrator is not a check.*
+
+## What this document must NOT be used for
+
+- **It quotes the implementation.** The banner at the top is not decoration — **it contaminated a
+  vector author on 2026-08-13**, who had been given a list of forbidden artifacts, read none of them,
+  and was caught by this file, which nobody had thought to forbid. *Briefs now specify inputs as an
+  **allowlist**, and that change came from here.*
+- **It is a running record, so it contains superseded claims by design.** Struck entries are kept with
+  their reasoning because the reasoning is often the useful part. ***Read the strike-throughs as
+  history, never as current fact*** — three figures in this file were quoted as measured and were not,
+  and each was corrected in place with the correction marked.
+
+## Successors
+
+| For | Go to |
+|---|---|
+| What the tooling **is**, versus what the spec says | `docs/notes/spec-reconciliation.md` — **178 items**, spec corrected in place |
+| What must be **tested**, and what deliberately is not | `docs/notes/tooling-test-plan.md` — 107 rows, 30 multi-agent, **42-entry NOT BUILT consequence register** |
+| The **hammer** campaign and its vacuity traps | `docs/notes/tooling-hammer-plan.md` |
+| What has actually **been run, and when** | `docs/notes/test-log.tsv` — *and a log line is a claim, not evidence* |
+| The rules this plan generated the hard way | `docs/notes/autonomous-working-agreement.md` |
