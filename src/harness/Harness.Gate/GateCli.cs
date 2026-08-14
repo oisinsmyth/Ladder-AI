@@ -153,7 +153,34 @@ public static class GateCli
             ToTagMapReach(document, readFile),
             ToSignalStorage(document),
             document.ConflictEdgesExplicitlyNull,
-            document.UnknownFieldPaths());
+            ExtraFields(document, binding).Unknown,
+            ExtraFields(document, binding).Annotations);
+    }
+
+    /// <summary>
+    /// Every field neither schema mapped, from BOTH documents, split into genuine unknowns and deliberate
+    /// annotations.
+    ///
+    /// <para><b>The binding half was missing entirely</b>, and it is the document that carries the
+    /// instrumentation — a misspelt <c>specName</c> there reproduces the run where 1 of 17 signals
+    /// resolved and gate 5, the interface check and the conflict graph all failed together. 0b would have
+    /// said nothing.</para>
+    ///
+    /// <para><b>When no binding is supplied, the binding's unknown set is not empty — it is absent</b>,
+    /// and nothing here pretends otherwise: an unsupplied document contributes no paths and no claim.</para>
+    /// </summary>
+    private static (IReadOnlyList<string> Unknown, IReadOnlyList<string> Annotations) ExtraFields(
+        SubmissionDocument document, BindingDocument? binding)
+    {
+        var submission = document.AllExtraFieldPaths();
+
+        if (binding is null)
+            return submission;
+
+        var fromBinding = binding.AllExtraFieldPaths();
+
+        return (submission.Unknown.Concat(fromBinding.Unknown).ToArray(),
+                submission.Annotations.Concat(fromBinding.Annotations).ToArray());
     }
 
     /// <summary>
@@ -175,9 +202,16 @@ public static class GateCli
             harnessOnly);
     }
 
-    /// <summary>One bound signal, off the document. <b>Nothing is defaulted</b> — an absent spec name stays absent.</summary>
+    /// <summary>
+    /// One bound signal, off the document. <b>Nothing is defaulted</b> — an absent spec name stays absent.
+    ///
+    /// <para><c>Transient</c> and <c>RearmsEachIndex</c> are threaded here because they were NOT, and the
+    /// consequence was that both capabilities were unreachable from a binding: the domain model had the
+    /// fields, the generator read them, and nothing could set them. <b>A field nobody can set is a field
+    /// that does not exist</b>, however well it is implemented downstream.</para>
+    /// </summary>
     public static Harness.Map.MirroredSignal ToMirroredSignal(MirroredSignalDocument row) =>
-        new(row.Tag ?? string.Empty, row.Type, row.SpecName, row.LatchedBy);
+        new(row.Tag ?? string.Empty, row.Type, row.SpecName, row.LatchedBy, row.Transient, row.RearmsEachIndex);
 
     /// <summary>The enumeration projection, off the document. Public so the runner composes it the same way.</summary>
     public static AssertionEnumeration ToEnumeration(SubmissionDocument document) =>

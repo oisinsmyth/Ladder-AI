@@ -126,8 +126,44 @@ public sealed class SubmissionDocument
     [JsonExtensionData]
     public Dictionary<string, object?>? UnknownFields { get; set; }
 
-    /// <summary>Every unknown field in the document, with the path it appeared at.</summary>
-    public IReadOnlyList<string> UnknownFieldPaths()
+    /// <summary>
+    /// The unknown-field marker for a DELIBERATE ANNOTATION.
+    ///
+    /// <para>JSON has no comments, and this project's submissions carry a great deal of reasoning that
+    /// belongs beside the data — the deliverable wave set has <b>82</b> of them. A leading underscore is
+    /// the conventional marker for exactly that, and it is <b>self-identifying</b>: the author had to
+    /// type it.</para>
+    /// </summary>
+    public const string AnnotationPrefix = "_";
+
+    /// <summary>
+    /// 🔴 <b>UNKNOWN fields — the ones gate 0b refuses — with annotations EXCLUDED and COUNTED.</b>
+    ///
+    /// <para>*** THE RATIONALE WAS RIGHT AND THE SCOPE WAS WRONG. *** Gate 0b exists to catch a
+    /// CONTRACT/CODE DIVERGENCE: a field the contract SPECIFIES that this code does not read, which
+    /// vanishes silently and leaves a green built on declarations nobody looked at. <b>An
+    /// <c>_</c>-prefixed key can never be that field</b>, because the contract specifies no
+    /// <c>_</c>-prefixed field and never will — the prefix means "this is not data".</para>
+    ///
+    /// <para><b>And a gate that refuses every ordinary submission is a gate that gets switched off</b> —
+    /// which is worse than no gate, because it still appears in the list looking like a check. It refused
+    /// the deliverable 82 times over its own commentary while the divergence it was built for
+    /// (<c>modes</c>, <c>modeSource</c>, <c>instrumentedBy</c>) would have been items 83, 84 and 85 in
+    /// the same message.</para>
+    ///
+    /// <para><b>The narrowing does not create a smuggling route, and that is checked rather than
+    /// asserted.</b> A real divergence arrives under the name the CONTRACT gives it — nobody writes
+    /// <c>_modes</c> and expects it read — so renaming a field into an annotation is not a mistake
+    /// anybody makes by accident, and doing it deliberately would be forging a comment. The count is
+    /// reported on every run so the convention stays visible instead of becoming a place to hide.</para>
+    /// </summary>
+    public IReadOnlyList<string> UnknownFieldPaths() => AllExtraFieldPaths().Unknown;
+
+    /// <summary>Annotation paths, reported so the convention is visible rather than merely tolerated.</summary>
+    public IReadOnlyList<string> AnnotationPaths() => AllExtraFieldPaths().Annotations;
+
+    /// <summary>Every field the schema did not map, split into genuine unknowns and deliberate annotations.</summary>
+    public (IReadOnlyList<string> Unknown, IReadOnlyList<string> Annotations) AllExtraFieldPaths()
     {
         var found = new List<string>();
         Collect(UnknownFields, string.Empty, found);
@@ -135,6 +171,7 @@ public sealed class SubmissionDocument
         Collect(Enumeration?.UnknownFields, "enumeration", found);
         Collect(Model?.UnknownFields, "model", found);
         Collect(Deployment?.UnknownFields, "deployment", found);
+        Collect(BlockCompression?.UnknownFields, "blockCompression", found);
 
         foreach (var (vector, index) in (Vectors ?? new List<VectorDocument>()).Select((v, i) => (v, i)))
         {
@@ -144,13 +181,36 @@ public sealed class SubmissionDocument
                 Collect(expectation.UnknownFields, $"vectors[{index}].expectations[{j}]", found);
         }
 
-        return found;
+        return Split(found);
 
         static void Collect(Dictionary<string, object?>? unknown, string prefix, List<string> into)
         {
             foreach (var key in (unknown ?? new Dictionary<string, object?>()).Keys)
                 into.Add(prefix.Length == 0 ? key : prefix + "." + key);
         }
+    }
+
+    /// <summary>
+    /// Split paths into unknowns and annotations. <b>The LEAF name decides</b> — a path is
+    /// <c>vectors[3]._why</c>, and only the last segment is the key the author wrote.
+    /// </summary>
+    public static (IReadOnlyList<string> Unknown, IReadOnlyList<string> Annotations) Split(IEnumerable<string> paths)
+    {
+        var unknown = new List<string>();
+        var annotations = new List<string>();
+
+        foreach (var path in paths)
+        {
+            var dot = path.LastIndexOf('.');
+            var leaf = dot >= 0 ? path[(dot + 1)..] : path;
+
+            if (leaf.StartsWith(AnnotationPrefix, StringComparison.Ordinal))
+                annotations.Add(path);
+            else
+                unknown.Add(path);
+        }
+
+        return (unknown, annotations);
     }
 
     public static SubmissionDocument Read(string json) =>
@@ -223,6 +283,13 @@ public sealed class BlockCompressionDocument
     /// "negligible" ends, so this has no default and its absence makes that bound <c>NOT DECLARED</c>.
     /// </summary>
     public double? NegligibleFraction { get; set; }
+
+    /// <summary>
+    /// Unknown keys here were outside gate 0b too — and this object carries X-D's ceilings, where a
+    /// dropped <c>negligibleFraction</c> silently becomes an uncomputed bound rather than a refused one.
+    /// </summary>
+    [JsonExtensionData]
+    public Dictionary<string, object?>? UnknownFields { get; set; }
 }
 
 /// <summary>Contract §4.5's deployment object.</summary>

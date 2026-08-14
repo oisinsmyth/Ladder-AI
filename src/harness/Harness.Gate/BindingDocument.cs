@@ -30,6 +30,48 @@ public sealed class BindingDocument
     /// <summary>Retentive <c>%M</c> extent, for the 0.1b non-retentive assertion.</summary>
     public int? RetentiveBytes { get; set; }
 
+    /// <summary>
+    /// 🔴 <b>THE BINDING DOCUMENT WAS OUTSIDE GATE 0b, AND IT IS THE DOCUMENT WHERE A DROPPED FIELD HAS
+    /// ALREADY COST A RUN.</b>
+    ///
+    /// <para>0b refuses a field the submission schema does not read, because a silently-ignored field
+    /// reads as an accepted one. <b>This document had no extension data at all</b>, so every unknown key
+    /// in it was dropped in silence — and this is the half that carries the INSTRUMENTATION.
+    /// <c>specName</c>'s own history is the argument: while the translation lived only in prose, gate 5,
+    /// the static interface check and the conflict graph all failed in one run with 1 of 17 signals
+    /// resolving. A misspelt <c>specname</c> here would reproduce that exactly, and 0b would have said
+    /// nothing.</para>
+    /// </summary>
+    [JsonExtensionData]
+    public Dictionary<string, object?>? UnknownFields { get; set; }
+
+    /// <summary>Every field the binding schema did not map, split as the submission's are.</summary>
+    public (IReadOnlyList<string> Unknown, IReadOnlyList<string> Annotations) AllExtraFieldPaths()
+    {
+        var found = new List<string>();
+        Collect(UnknownFields, "binding", found);
+
+        foreach (var (slot, index) in (Slots ?? new List<SlotBindingDocument>()).Select((s, i) => (s, i)))
+        {
+            var path = $"binding.slots[{index}]";
+            Collect(slot.UnknownFields, path, found);
+
+            foreach (var (signal, j) in (slot.VectorTargets ?? new List<MirroredSignalDocument>()).Select((v, k) => (v, k)))
+                Collect(signal.UnknownFields, $"{path}.vectorTargets[{j}]", found);
+
+            foreach (var (signal, j) in (slot.ResultSources ?? new List<MirroredSignalDocument>()).Select((r, k) => (r, k)))
+                Collect(signal.UnknownFields, $"{path}.resultSources[{j}]", found);
+        }
+
+        return SubmissionDocument.Split(found);
+
+        static void Collect(Dictionary<string, object?>? unknown, string prefix, List<string> into)
+        {
+            foreach (var key in (unknown ?? new Dictionary<string, object?>()).Keys)
+                into.Add(prefix + "." + key);
+        }
+    }
+
     public static BindingDocument Read(string json) =>
         JsonSerializer.Deserialize<BindingDocument>(json, Options)
         ?? throw new InvalidDataException("the binding document is empty.");
@@ -53,6 +95,10 @@ public sealed class SlotBindingDocument
     public string? StartCondition { get; set; }
 
     public List<MirroredSignalDocument>? ResultSources { get; set; }
+
+    /// <summary>Unknown keys at slot level. Folded into gate 0b — see <see cref="BindingDocument.UnknownFields"/>.</summary>
+    [JsonExtensionData]
+    public Dictionary<string, object?>? UnknownFields { get; set; }
 }
 
 /// <summary>One mirrored signal. <b><c>Type</c> absent parses as <c>Unstated</c>, which the generator refuses by name.</b></summary>
@@ -93,4 +139,44 @@ public sealed class MirroredSignalDocument
     /// checkable against the deployed object set, and printed in the gate's own report.</para>
     /// </summary>
     public string? LatchedBy { get; set; }
+
+    /// <summary>
+    /// 🔴 <b>THE SIGNAL IS A TRANSIENT AND THE COPY LAYER MUST LATCH IT — and until now this could not be
+    /// SAID FROM A BINDING AT ALL.</b>
+    ///
+    /// <para>*** THIRD INSTANCE OF THE SAME SHAPE: THE DOMAIN MODEL GAINED THE FIELD AND THE WIRE FORMAT
+    /// DID NOT. *** <c>MirroredSignal.Transient</c> exists, the generator reads it, and
+    /// <c>ToMirroredSignal</c> never passed it — so the capability was unreachable from the only artifact
+    /// a coordinator writes. A field nobody can set is a field that does not exist, however well it is
+    /// implemented downstream.</para>
+    ///
+    /// <para><b>False is not a claim that the signal is persistent</b> — it is the absence of a claim that
+    /// it is transient, and the generator's own note says the default's failure mode is a REFUSAL: no
+    /// latch is emitted and gate 5 refuses a <c>Latched</c> expectation, loudly, before anything is
+    /// spent.</para>
+    /// </summary>
+    public bool Transient { get; set; }
+
+    /// <summary>
+    /// The signal fires ONCE PER VECTOR INDEX, and each firing must be distinguishable from the last.
+    ///
+    /// <para>⚠️ <b>ITS OMISSION FAILS SILENTLY WHERE <see cref="Transient"/>'s FAILS LOUDLY, AND THE TWO
+    /// SIT SIDE BY SIDE.</b> Forgetting <c>transient</c> yields no latch and gate 5 refuses. Forgetting
+    /// THIS yields the one-shot latch, which <b>compiles, deploys and reads plausibly</b> — index 2's
+    /// latch is already high from index 1, so a signal that never fired again reads as one that did.
+    /// <i>Two flags whose omissions fail in opposite directions is a trap that looks like symmetry:
+    /// anyone reasoning by analogy from the loud one will trust the silent one exactly as far, and be
+    /// wrong.</i></para>
+    ///
+    /// <para>The generator REFUSES BY NAME when this is set, rather than emitting the latch it can emit —
+    /// the copy layer cannot express a per-index arm band. It is on the wire so that the refusal is
+    /// reachable from a binding: <b>a capability gap that can be declared is one a caller meets at the
+    /// gate, and one that cannot is one they meet on the rig</b>, where the symptom is predicted findings
+    /// quietly absent.</para>
+    /// </summary>
+    public bool RearmsEachIndex { get; set; }
+
+    /// <summary>Unknown keys at signal level — where a misspelt <c>specName</c> would otherwise vanish.</summary>
+    [JsonExtensionData]
+    public Dictionary<string, object?>? UnknownFields { get; set; }
 }

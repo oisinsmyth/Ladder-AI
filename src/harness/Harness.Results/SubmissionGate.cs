@@ -119,7 +119,8 @@ public static class SubmissionGate
         /// Fields the document carried that this schema does not know. <b>Named and refused</b> — a
         /// silently-ignored field is worse than a rejected one, because it reads as accepted.
         /// </summary>
-        IReadOnlyList<string>? unknownFields = null)
+        IReadOnlyList<string>? unknownFields = null,
+        IReadOnlyList<string>? annotationFields = null)
     {
         ArgumentNullException.ThrowIfNull(vectors);
         ArgumentNullException.ThrowIfNull(enumeration);
@@ -134,7 +135,7 @@ public static class SubmissionGate
             return new SubmissionReport(gates, 0);
         }
 
-        gates.Add(UnknownFields(unknownFields));
+        gates.Add(UnknownFields(unknownFields, annotationFields));
         gates.Add(Schema(vectors));
         gates.Add(Authorship(vectors, blockAuthor));
         gates.Add(BasisGate(vectors, enumeration));
@@ -181,28 +182,36 @@ public static class SubmissionGate
     /// <para><b>This closes a divergence in the direction that cannot lie, whichever document is stale.</b>
     /// The refusal does not decide who is right; it makes the disagreement impossible to miss.</para>
     /// </summary>
-    private static GateResult UnknownFields(IReadOnlyList<string>? unknown)
+    private static GateResult UnknownFields(IReadOnlyList<string>? unknown, IReadOnlyList<string>? annotations)
     {
         const string name = "0b unknown fields";
+
+        // *** THE ANNOTATION COUNT IS REPORTED ON EVERY RUN, INCLUDING ZERO. *** The narrowing is what
+        // keeps this gate usable, and a narrowing nobody can see is one that quietly becomes a place to
+        // hide. A reader who wonders where 82 fields went finds the answer in the gate's own line.
+        var annotated = annotations is null
+            ? string.Empty
+            : $" {annotations.Count} annotation(s) (leading '_') were EXCLUDED by name, not examined: the contract specifies no '_'-prefixed field, so one can never be the contract/code divergence this gate exists for.";
 
         if (unknown is null)
         {
             return new GateResult(name, GateStatus.NotChecked, false, "the document reader's extension data",
                 "nobody supplied the document's unknown-field set, so a field this schema does not know would have been dropped in "
-                + "silence. That is not a pass: a dropped field reads as an accepted one.");
+                + "silence. That is not a pass: a dropped field reads as an accepted one." + annotated);
         }
 
         if (unknown.Count == 0)
         {
             return new GateResult(name, GateStatus.Checked, true, nameof(SubmissionGate),
-                "every field in the document is one this schema reads. Nothing was silently ignored.");
+                "every field in the submission and the binding is one their schemas read. Nothing was silently ignored." + annotated);
         }
 
         return new GateResult(name, GateStatus.Checked, false, nameof(SubmissionGate),
-            $"{unknown.Count} field(s) in the document are not read by this schema: {string.Join(", ", unknown)}. "
+            $"{unknown.Count} field(s) are not read by these schemas: {string.Join(", ", unknown)}. "
             + "*** THIS IS A REFUSAL AND NOT A WARNING, BECAUSE A SILENTLY-IGNORED FIELD READS AS AN ACCEPTED ONE. *** Either the "
             + "contract has moved ahead of the code or the document is stale; this gate does not decide which, it makes the "
-            + "disagreement impossible to miss. Remove the field, or implement it.");
+            + "disagreement impossible to miss. Remove the field, or implement it."
+            + " (An intentional COMMENT belongs under a leading '_', which is excluded by name.)" + annotated);
     }
 
     private static GateResult Schema(IReadOnlyList<SubmissionVector> vectors)
