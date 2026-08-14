@@ -1,5 +1,6 @@
 using Converter.Ir;
 using Converter.Review;
+using Converter.TagStatus;
 using Converter.SimaticMl;
 
 namespace Converter.Preflight;
@@ -146,27 +147,68 @@ public static class PreflightRunner
 
         // Locals: the block's own declared names resolve internally, everything else must
         // resolve in the project/batch index — the pipeline's `exists`/`proposed` line.
-        var locals = new HashSet<string>(StringComparer.Ordinal);
+        var locals = new Dictionary<string, DbMember>(StringComparer.Ordinal);
         foreach (var members in new[] { block.InputMembers, block.OutputMembers, block.InOutMembers, block.StaticMembers, block.TempMembers, block.ConstantMembers })
         {
             foreach (var member in members ?? Array.Empty<DbMember>())
             {
-                locals.Add(member.Name);
+                locals[member.Name] = member;
             }
         }
 
         var reportedRoots = new HashSet<string>(StringComparer.Ordinal);
+        var reportedPaths = new HashSet<string>(StringComparer.Ordinal);
         foreach (var network in block.Networks)
         {
             foreach (var tagPath in TagReferences.AllTagPaths(network))
             {
                 var root = AccessNode.FromDottedPath(0, "GlobalVariable", tagPath).ComponentPath[0];
-                if (locals.Contains(root) || index.ResolvesAsTagRoot(root) || !reportedRoots.Add(root))
+                var isLocal = locals.TryGetValue(root, out var localDeclaration);
+                if (!isLocal && !index.ResolvesAsTagRoot(root))
                 {
+                    if (reportedRoots.Add(root))
+                    {
+                        findings.Add(new PreflightFinding("tag", $"network {network.Number}: tag root '{root}' (path '{tagPath}') does not resolve to a local declaration, project DB, tag-table entry, or batch file."));
+                    }
+
                     continue;
                 }
 
-                findings.Add(new PreflightFinding("tag", $"network {network.Number}: tag root '{root}' (path '{tagPath}') does not resolve to a local declaration, project DB, tag-table entry, or batch file."));
+                // MEMBER level (2026-08-14). The root resolving was the WHOLE check until today, so a
+                // block reading `DB_Settings.AlsoDoesNotExist`, `iDB_PusherControl.IO.NoSuchMember` and
+                // `IO.NoSuchMember` reported CLEAN, exit 0 — while `tagstatus`, given the same three
+                // paths and the same --project, refused two of them by name. Hard rule 3 says never
+                // invent tags; `preflight` is the gate the coding workflow actually runs, and
+                // `tagstatus` is the one somebody has to remember to run by hand on a name they
+                // already suspect. TagStatusTests' own header asserted the two "never disagree".
+                //
+                // Same walk, same registry, same corpus as tagstatus — MemberPathResolver — so the
+                // two cannot drift. NotEnumerable deliberately does NOT gate: a root whose member
+                // namespace is genuinely unknowable (an IEC timer static, a UDT absent from the
+                // export) is an honest "could not verify", and gating on it would manufacture the
+                // opposite false accusation this check exists to remove.
+                if (index.ResolvesAsTagRoot(tagPath))
+                {
+                    continue;   // whole-name-first: a literal-dot tag (Clock_0.5Hz) has no member part
+                }
+
+                var resolution = isLocal
+                    ? MemberPathResolver.ResolveUnderLocal(tagPath, localDeclaration!, tagTypes)
+                    : MemberPathResolver.Resolve(tagPath, tagTypes);
+
+                var problem = resolution.Outcome switch
+                {
+                    MemberPathOutcome.MemberAbsent =>
+                        $"member path '{tagPath}' does not resolve: {resolution.Detail}",
+                    MemberPathOutcome.IndexOutOfRange =>
+                        $"member path '{tagPath}' names an element outside the declared bounds: {resolution.Detail}",
+                    _ => null,
+                };
+
+                if (problem is not null && reportedPaths.Add(tagPath))
+                {
+                    findings.Add(new PreflightFinding("tag", $"network {network.Number}: {problem}"));
+                }
             }
 
             foreach (var call in network.Calls)

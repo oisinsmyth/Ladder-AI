@@ -23,7 +23,11 @@ public enum MemberPathOutcome
 }
 
 // Outcome plus, where it helps a reader, what exactly was wrong ("Unit[7] outside Array[0..3]").
-public sealed record MemberPathResolution(MemberPathOutcome Outcome, string? Detail = null);
+// ResolvedType is the declared type the walk ENDED on, populated only on Resolved. It exists so a
+// trailing C-501 bit slice (".%X3") can be bounds-checked against the thing it slices without a second
+// walk - and so a caller can tell "resolved, and I know its type" from "resolved, type unknown".
+public sealed record MemberPathResolution(
+    MemberPathOutcome Outcome, string? Detail = null, string? ResolvedType = null);
 
 // Array-aware member-path resolution for `tagstatus` (FI-45 item 1, 2026-08-05).
 //
@@ -61,9 +65,21 @@ public static class MemberPathResolver
         // Plain Split('.'), matching TagTypeRegistry.Resolve: a literal-dot tag name (Clock_0.5Hz) is
         // settled by the caller's whole-name-first check before it ever reaches a member walk.
         var components = dottedPath.Split('.');
+
+        // A trailing ".%X3" is a SLICE, not a member: C-501 alarm-bit addressing, carried on the access
+        // as SliceAccessModifier and re-appended by AccessNode.DottedPath. Walked as a component it
+        // reported MEMBER-NOT-FOUND for EVERY alarm bit in the corpus - hard rule 3's anti-laundering
+        // gate accusing the one construct doc 06 documents an exception for. Found 2026-08-14 by the
+        // corpus sweep that validated preflight's member resolution; the defect was tagstatus's, and
+        // predates it. Split the slice off first, resolve what it slices, then bounds-check the bit.
+        if (SliceOf(components) is string slice)
+        {
+            return CheckSlice(Resolve(string.Join('.', components[..^1]), registry), slice, dottedPath);
+        }
+
         if (components.Length == 1)
         {
-            return new MemberPathResolution(MemberPathOutcome.Resolved);
+            return new MemberPathResolution(MemberPathOutcome.Resolved, ResolvedType: registry.Resolve(dottedPath));
         }
 
         var root = StripSubscript(components[0]);
@@ -96,6 +112,38 @@ public static class MemberPathResolver
         return new MemberPathResolution(MemberPathOutcome.NotEnumerable);
     }
 
+    /// <summary>
+    /// The same walk, rooted at a BLOCK-LOCAL declaration instead of a project DB or tag (2026-08-14).
+    /// <para>
+    /// `preflight` resolved tag references to their ROOT only, so a block reading
+    /// <c>IO.ThisMemberDoesNotExist</c> — where <c>IO</c> is the block's own UDT-typed STATIC, which is
+    /// this project's house style (C-132) — reported CLEAN. The local root resolves, and nothing looked
+    /// further. The registry cannot answer for a local because a local is not in it; the block's own
+    /// declaration is, and it carries the type.
+    /// </para>
+    /// <para>
+    /// <paramref name="rootDeclaration"/> is passed to <c>Walk</c> as the single candidate member, so
+    /// subscript bounds, inline nested members, array-of-UDT descent and the elementary-type stop all
+    /// behave exactly as they do for a global root — one walk, not a second implementation that can
+    /// drift from it.
+    /// </para>
+    /// </summary>
+    public static MemberPathResolution ResolveUnderLocal(
+        string dottedPath, DbMember rootDeclaration, TagTypeRegistry registry)
+    {
+        var components = dottedPath.Split('.');
+        if (SliceOf(components) is string slice)
+        {
+            return CheckSlice(
+                ResolveUnderLocal(string.Join('.', components[..^1]), rootDeclaration, registry),
+                slice, dottedPath);
+        }
+
+        return components.Length == 1
+            ? new MemberPathResolution(MemberPathOutcome.Resolved, ResolvedType: rootDeclaration.Datatype)
+            : Walk(new[] { rootDeclaration }, components, registry);
+    }
+
     private static MemberPathResolution Walk(
         IReadOnlyList<DbMember> members, string[] components, TagTypeRegistry registry)
     {
@@ -114,7 +162,7 @@ public static class MemberPathResolver
 
         if (components.Length == 1)
         {
-            return new MemberPathResolution(MemberPathOutcome.Resolved);
+            return new MemberPathResolution(MemberPathOutcome.Resolved, ResolvedType: member.Datatype);
         }
 
         var rest = components[1..];
@@ -145,6 +193,55 @@ public static class MemberPathResolver
         return ElementaryTypes.Contains(StripQuotes(elementType).Trim())
             ? new MemberPathResolution(MemberPathOutcome.MemberAbsent, $"'{name}' is {elementType}, which has no members")
             : new MemberPathResolution(MemberPathOutcome.NotEnumerable);
+    }
+
+    // Bit widths of the types a ".%Xn" slice can legally address. Anything ABSENT - Real, a UDT, a type
+    // the export does not carry - is neither range-checked nor accused: the slice is accepted and the
+    // base walk's own verdict stands. Like ElementaryTypes above, this table only ever makes the
+    // verdict stricter, so a name missing from it costs a check, never a false accusation.
+    private static readonly Dictionary<string, int> BitWidths = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["Bool"] = 1,
+        ["Byte"] = 8, ["SInt"] = 8, ["USInt"] = 8, ["Char"] = 8,
+        ["Word"] = 16, ["Int"] = 16, ["UInt"] = 16, ["WChar"] = 16,
+        ["DWord"] = 32, ["DInt"] = 32, ["UDInt"] = 32,
+        ["LWord"] = 64, ["LInt"] = 64, ["ULInt"] = 64,
+    };
+
+    // The final component when it is an access-level slice suffix rather than a member name. Only a
+    // LAST component qualifies: SliceAccessModifier was observed on the last <Component> and nowhere
+    // else, and FlgNetParser rejects it mid-path outright, so anything mid-path is not this.
+    private static string? SliceOf(string[] components) =>
+        components.Length > 1 && components[^1].StartsWith('%') ? components[^1] : null;
+
+    // A slice is only ever judged once the thing it slices has RESOLVED. If the base walk could not
+    // resolve, its verdict IS the answer: accusing the slice as well would report one defect twice, in
+    // two vocabularies, and send the reader after the wrong half.
+    private static MemberPathResolution CheckSlice(
+        MemberPathResolution baseResolution, string slice, string dottedPath)
+    {
+        if (baseResolution.Outcome != MemberPathOutcome.Resolved)
+        {
+            return baseResolution;
+        }
+
+        // Only "%X<n>" is range-checked. %B/%W/%D slices exist in TIA and appear in no committed .ir,
+        // so they are accepted UNCHECKED rather than judged against a rule this project has never seen
+        // exercised - an unverifiable slice is accepted, never accused.
+        if (slice.Length < 3
+            || !(slice[1] is 'X' or 'x')
+            || !int.TryParse(slice[2..], out var bit)
+            || baseResolution.ResolvedType is not string type
+            || !BitWidths.TryGetValue(StripQuotes(ElementTypeOf(type)).Trim(), out var width))
+        {
+            return new MemberPathResolution(MemberPathOutcome.Resolved);
+        }
+
+        return bit >= 0 && bit < width
+            ? new MemberPathResolution(MemberPathOutcome.Resolved)
+            : new MemberPathResolution(
+                MemberPathOutcome.IndexOutOfRange,
+                $"{dottedPath} addresses bit {bit} of a {type.Trim()}, which has {width}");
     }
 
     private static IReadOnlyList<DbMember> AllMembers(DbSource db) =>
