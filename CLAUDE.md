@@ -187,6 +187,47 @@ dotnet build -c Release src/converter/converter.sln   # AFTER ANY CONVERTER CHAN
 
 (Exact flags/behavior: `src/openness-cli/README.md`, `src/converter/README.md`. Long operations: TIA project open is slow — be patient, don't kill and retry.)
 
+## The test environment — NEW TOOLING, available 2026-08-14
+
+**A block can now be deployed to a bench rig and observed while it runs.** Design:
+`docs/notes/PC-Client-Modbus-Spec-Draft-final.txt`. Build record:
+`docs/notes/test-environment-build-plan.md`. Submission format: `docs/notes/test-environment-contract.md`.
+
+🔴 ***READ THE STATUS COLUMN BEFORE RELYING ON ANYTHING HERE.*** Most of it is built and
+unit-tested; a smaller part has been run against a controller. **They are different claims**, and
+this project's most expensive failures have all been a green that examined nothing.
+
+| what | where | status |
+|---|---|---|
+| **Deployment to the rig** — stage IR → `to-xml` → `import-all` → layout re-assert → `compile-all` → `sanity-check` → `download-probe` | `src/harness/Harness.Device/` | ✅ **RUN LIVE.** 45 objects loaded by name, CPU `Running (8)` read from the device |
+| **`rig-read`** — READ-ONLY: run state (`PlcGetStatus`), device identity, DB read | `src/harness/Harness.RigRead/` | ✅ **RUN LIVE.** Needs a **device allowlist** (JSON, `entries[].address`) or it opens no socket at all |
+| **`download-probe`** — the ONLY binary that can transfer a program | `src/openness-cli/DownloadProbe/` | ✅ **RUN LIVE.** Fenced by `tools/download-probe.allowlist` (+ a machine-local one); **exit 3 before Portal is contacted** on a refusal |
+| **The submission gate** — 23 gates incl. basis/ID recompute/observability/blacklist/compression/bounds-currency/memory-layout | `src/harness/Harness.Gate/`, `Harness.Results/` | ⚠️ **BUILT, RUN OFFLINE.** Reports `NOT ADMISSIBLE` honestly rather than faking inputs |
+| **The mirror + copy layer** — element table: `Bool`→bit/COIL/1 reg, `Int`→word/MOVE/1, **`Time`→double word/MOVE/2** | `src/harness/Harness.Map/` | ✅ **DEPLOYED AND READ BACK** |
+| **The loop** — author → deploy → run → result package | `src/harness/Harness.Loop/` | 🔴 **NOT YET RUN.** A CLI and a *verifying* gateway are being built |
+| **Multi-agent**: claims registry, wave-set admission, slot colouring, model ordering, escalation | `src/wave-control/`, `converter claim`/`claims` | 🔴 **BUILT, NEVER RUN WITH TWO AGENTS CONTENDING** |
+| **The assertion pipeline** — spec → enumeration → stamped IDs → vectors | `assertion-enumerator` agent, `enumerate-assertions` + `design-for-testability` skills | ✅ **USED END TO END** on one block |
+
+**Measured facts — do not re-derive them:**
+
+- Bench rig **`10.10.10.10:503`**, unit 1, reached **remotely via the Talk2m tunnel**; `:102` open,
+  `:502` refused. Scan **23.33 ms**. Round trip **min 63 / med 72 / max 106 ms** — matching §12a's
+  `RTT_typ 78` / `RTT_p90 102.79`, **re-confirmed on the current path 2026-08-14**.
+- **32-bit word order is HIGH-WORD-FIRST** — measured off a build stamp with distinguishable
+  halves, no longer an assumption. A `Time` spans two registers and inherits it.
+- **X-D's compression ceiling is ~4.3×, not the spec's 10×** (timer floor `k × scan = 116.7 ms`).
+- **Harness objects reserve block numbers 9000–9999** per number space; **OBs are excluded** — an
+  OB's number is fixed by its event class.
+
+🔴 **Two traps that have each cost a day:**
+
+- ***`--claims <dir>` MUST BE SHARED BY EVERY AGENT ON THE PROJECT.*** Agents work in separate
+  worktrees, and a per-worktree claims dir is **always empty, grants every claim, and looks exactly
+  like success.** There is no default on purpose.
+- ***PORTAL IS A TOKEN, NOT A COMPONENT.*** One lane holds it at a time; two Openness sessions on
+  one project is unsupported and has already produced `Collection was modified` with every block
+  reporting inconsistent.
+
 ## Workflow for logic generation (Stage S6+)
 
 **This entire workflow runs inside the dispatched `lad-coder` sub-agent (hard rule 8) — you plan the request, dispatch it, and verify what comes back; you don't execute these steps yourself.** Generation follows the staged pipeline in `docs/15-generation-pipeline.md` (ADR-0004): analyse/design/build/check stages handing off through committed artifacts (`gen/<project>/`), adversarial reviews in fresh context, and two hard engineer gates — architecture sign-off before any coding, final presentation at the end. Quality bar, in order: **function → readability & simplicity → efficiency** (`docs/06-lad-conventions.md` preamble). Stages whose skills don't exist yet (see docs/15's build-order table) are performed manually to the same contract by `lad-coder` — and every stage run, manual or skill-driven, appends one telemetry line per `docs/notes/gen-telemetry.md` when it ends. The per-block inner loop:
