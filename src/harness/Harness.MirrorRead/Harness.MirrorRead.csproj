@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>Harness.MirrorRead</RootNamespace>
+    <AssemblyName>harness-mirror-read</AssemblyName>
+  </PropertyGroup>
+
+  <!--
+    THIS BUILD READS HOLDING REGISTERS AND NOTHING ELSE.
+
+    A SEPARATE executable, for the same reason rig-read and rig-write are separate: neither can quietly
+    acquire the other's half when the halves are not in the same assembly. Here the split is one level
+    up — Harness.Wire owns both the read and the write, because the harness proper must write vectors
+    and raise start bools, so this project narrows rather than excludes. IRegisterSource carries only a
+    read verb and ModbusRegisterSource never hands the transport out, which means no call site above the
+    adapter is holding anything that can write.
+
+    *** THE CLAIM IS CHECKED, NOT DECLARED. *** MirrorReadStructureTests walks every method body in the
+    compiled assembly and asserts that none of them names a write member of Harness.Wire, Harness.Map or
+    NModbus, with a denominator (bodies examined > 0) and a live positive control (a planted class in the
+    test assembly that DOES call WriteHoldingRegisters, which the same walk must find). A const bool with
+    an Assert.False on it is what this replaces: measured 2026-08-14 on Harness.RigWrite, adding a class
+    that constructed a live socket client left all 202 tests green.
+
+    NModbus is referenced DIRECTLY, for one type: SlaveException. The boundary probe has to tell a
+    Modbus exception response (the server received the request and refused it — the measurement) from a
+    timeout (the server said nothing — no measurement at all). Collapsing those two would let a dropped
+    packet be reported as proof of a boundary.
+  -->
+  <ItemGroup>
+    <PackageReference Include="NModbus" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Harness.Wire\Harness.Wire.csproj" />
+    <ProjectReference Include="..\..\device-guard\DeviceGuard\DeviceGuard.csproj" />
+  </ItemGroup>
+
+</Project>

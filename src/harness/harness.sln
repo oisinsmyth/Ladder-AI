@@ -51,6 +51,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Harness.RigControl", "Harne
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Harness.RigControl.Tests", "Harness.RigControl.Tests\Harness.RigControl.Tests.csproj", "{57FC957E-4B8D-4EB9-8CCB-568811454F25}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Harness.MirrorRead", "Harness.MirrorRead\Harness.MirrorRead.csproj", "{1A253277-6CA6-4A8F-B8E9-68E6E195AB37}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Harness.MirrorRead.Tests", "Harness.MirrorRead.Tests\Harness.MirrorRead.Tests.csproj", "{BDFD2B20-AC4A-4F2D-86AC-00D26435E9D1}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -156,5 +160,13 @@ Global
 		{57FC957E-4B8D-4EB9-8CCB-568811454F25}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{57FC957E-4B8D-4EB9-8CCB-568811454F25}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{57FC957E-4B8D-4EB9-8CCB-568811454F25}.Release|Any CPU.Build.0 = Release|Any CPU
+		{1A253277-6CA6-4A8F-B8E9-68E6E195AB37}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{1A253277-6CA6-4A8F-B8E9-68E6E195AB37}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{1A253277-6CA6-4A8F-B8E9-68E6E195AB37}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{1A253277-6CA6-4A8F-B8E9-68E6E195AB37}.Release|Any CPU.Build.0 = Release|Any CPU
+		{BDFD2B20-AC4A-4F2D-86AC-00D26435E9D1}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{BDFD2B20-AC4A-4F2D-86AC-00D26435E9D1}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{BDFD2B20-AC4A-4F2D-86AC-00D26435E9D1}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{BDFD2B20-AC4A-4F2D-86AC-00D26435E9D1}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

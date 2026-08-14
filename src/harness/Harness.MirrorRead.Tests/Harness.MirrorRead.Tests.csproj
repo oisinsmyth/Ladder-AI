@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <RootNamespace>Harness.MirrorRead.Tests</RootNamespace>
+  </PropertyGroup>
+
+  <!-- Versions come from the repo-root Directory.Packages.props (F-38, central package management). -->
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="NModbus" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <!--
+    No device and no socket. The fence tests drive a RECORDING factory, so "the fence refused and
+    nothing connected" is asserted against a counter rather than against an exit code — which is the
+    distinction that matters, because a disconnected gate can still produce the right exit code by
+    accident.
+
+    NOTE: this project deliberately CONTAINS a class that calls WriteHoldingRegisters
+    (PlantedWriteControl). It is the live positive control for the IL walk, and it must stay here and
+    never move into the shipped assembly.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\Harness.MirrorRead\Harness.MirrorRead.csproj" />
+  </ItemGroup>
+
+</Project>
