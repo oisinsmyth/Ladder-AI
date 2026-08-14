@@ -41,27 +41,44 @@ public enum NotCheckedReason
     /// <b>Requires a controller, a download or a wave.</b> It cannot be answered offline by anybody and
     /// no artifact substitutes for it. Nothing to build; it needs the rig session.
     /// </summary>
-    RequiresTheDevice,
+    RequiresTheDevice = 1,
 
-    /// <summary>
-    /// <b>NOT A GAP.</b> The input must come from an authority OTHER than the submitter, and accepting
-    /// the submitter's own would defeat the gate — the author vouching for the artifact the gate exists
-    /// to check them against. <b>This is D6 independence WORKING</b>, and it will read NOT CHECKED for
-    /// ever on a submission that carries its own answer. That is correct, not outstanding.
-    /// </summary>
-    IndependentAuthorityByDesign,
+    // ---------------------------------------------------------------------------------------------
+    // 🔴 2 IS DELIBERATELY VACANT. It was `IndependentAuthorityByDesign`, RETIRED 2026-08-14 BY
+    // MEASUREMENT, and the number is skipped rather than reused so the retirement stays visible in the
+    // source rather than only in a commit message.
+    //
+    // What it claimed: the input must come from an authority OTHER than the submitter, so the gate reads
+    // NOT CHECKED for ever and that is correct rather than outstanding.
+    //
+    // *** BOTH ITS MEMBERS WERE MEASURED AND BOTH RUN. *** Gate 5 (observability map) was reclassified
+    // first: driven with a loadable coordinator binding it BECOMES CHECKED and returns a verdict. That
+    // left gate 4b's no-fidelity-at-all branch as the only path producing it, and the same measurement
+    // was applied — a fidelity declaration that NAMES ITS DECLARER makes 4b return `Checked` and pass.
+    // Neither was a design property; both were an artifact nobody had produced yet.
+    //
+    // *** THE CATEGORY IS RETIRED RATHER THAN LEFT EMPTY, AND THAT IS THE POINT. *** An empty
+    // classification is a slot waiting to be misused: the next gate that is merely INCONVENIENT to check
+    // gets filed under it, and "by design" is unfalsifiable once nobody remembers it was measured empty.
+    //
+    // *** AND THE CLAIM THAT SURVIVES IS STRONGER THAN EITHER TRIAGE: NO `NOT CHECKED` VERDICT IN THIS
+    // SYSTEM IS A PROPERTY OF THE DESIGN. EVERY ONE NAMES AN ARTIFACT THAT COULD EXIST — OR THE RIG. ***
+    // A REFUSAL can still be permanent and correct (a self-declared map is refused for ever, and should
+    // be); what is never permanent is a gate that could not RUN. The two were being conflated, and that
+    // conflation is what let a transcription job be recorded as a law of nature.
+    // ---------------------------------------------------------------------------------------------
 
     /// <summary>
     /// The authority exists, or could, and nobody has produced it yet. <b>A build-list item with an
     /// owner</b> — closable without a rig and without breaking anybody's independence.
     /// </summary>
-    AwaitingAnArtifactThatCouldExist,
+    AwaitingAnArtifactThatCouldExist = 3,
 
     /// <summary>
     /// <b>The harness itself cannot yet compute it.</b> Not the submission's fault and not anybody
     /// else's artifact — this lane's own build list.
     /// </summary>
-    HarnessCapabilityMissing,
+    HarnessCapabilityMissing = 4,
 }
 
 /// <summary>One gate's outcome, with the verifier that produced it named.</summary>
@@ -439,8 +456,18 @@ public static class SubmissionGate
 
         if (fidelity is null)
         {
-            return GateResult.CouldNotRun(name, NotCheckedReason.IndependentAuthorityByDesign, "a model declaration from an authority the vector author does not control",
-                "no fidelity declaration was supplied at all, so there is nothing to attribute. Gate 4 refuses on the absence itself; this reports the separate fact that WHO wrote the Represents set was never established either.");
+            // 🔴 *** RECLASSIFIED 2026-08-14, BY THE SAME MEASUREMENT THAT MOVED GATE 5, AND IT EMPTIED
+            // THE CATEGORY. *** This was IndependentAuthorityByDesign — "the Represents set must come
+            // from an authority the vector author does not control, so it reads NOT CHECKED for ever".
+            // Measured: hand this gate a fidelity declaration that NAMES ITS DECLARER and it returns
+            // `Checked` and passes. So the remedy is an artifact, and an artifact that could exist is a
+            // build-list item — not a design property.
+            //
+            // With gate 5 already moved, this was the LAST path producing that reason, and the enum
+            // member is now retired rather than left empty. See NotCheckedReason's vacant slot 2.
+            return GateResult.CouldNotRun(name, NotCheckedReason.AwaitingAnArtifactThatCouldExist, "a model declaration from an authority the vector author does not control",
+                "no fidelity declaration was supplied at all, so there is nothing to attribute. Gate 4 refuses on the absence itself; this reports the separate fact that WHO wrote the Represents set was never established either. "
+                + "*** THAT IS A MISSING ARTIFACT, NOT A DESIGN PROPERTY: *** measured 2026-08-14, this gate RUNS and returns a verdict as soon as a declaration naming its declarer is supplied.");
         }
 
         if (!fidelity.DeclaredBy.IsRecorded)

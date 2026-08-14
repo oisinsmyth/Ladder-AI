@@ -119,12 +119,70 @@ public class NotCheckedTriageTests
     }
 
     [Fact]
-    public void The_four_reasons_are_distinguishable_and_the_zero_value_is_the_unusable_one()
+    public void The_reasons_are_distinguishable_and_the_zero_value_is_the_unusable_one()
     {
         // default(NotCheckedReason) must never be a real classification: a dropped reason has to fail
         // the same comparison a wrong one fails.
         Assert.Equal(NotCheckedReason.Unstated, default(NotCheckedReason));
-        Assert.Equal(5, Enum.GetValues<NotCheckedReason>().Length);
+        Assert.Equal(4, Enum.GetValues<NotCheckedReason>().Length);
+    }
+
+    /// <summary>
+    /// *** THE CATEGORY IS RETIRED, AND THIS IS WHAT KEEPS IT RETIRED. ***
+    ///
+    /// <para><c>IndependentAuthorityByDesign</c> claimed some gates can never run because their input
+    /// must come from an authority the submitter does not control. <b>Both of its members were measured
+    /// and both run.</b> Gate 5 runs given a loadable coordinator binding; gate 4b runs given a fidelity
+    /// declaration that names its declarer.</para>
+    ///
+    /// <para><b>An empty classification is a slot waiting to be misused</b> — the next gate that is
+    /// merely INCONVENIENT to check gets filed under it, and "by design" is unfalsifiable once nobody
+    /// remembers it was measured empty. So the member is gone, its number is left vacant, and this test
+    /// makes re-adding one a deliberate act rather than a convenience.</para>
+    /// </summary>
+    [Fact]
+    public void NO_REASON_CLAIMS_A_GATE_CAN_NEVER_RUN_BY_DESIGN()
+    {
+        var names = Enum.GetNames<NotCheckedReason>();
+
+        Assert.DoesNotContain(names, n => n.Contains("ByDesign", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(names, n => n.Contains("Never", StringComparison.OrdinalIgnoreCase));
+
+        // The vacant number is not reused. A new member landing on 2 would silently inherit the slot the
+        // retirement emptied — which is precisely the misuse the retirement was for.
+        Assert.DoesNotContain(Enum.GetValues<NotCheckedReason>(), r => (int)r == 2);
+    }
+
+    /// <summary>
+    /// The measurement that emptied the category, kept as a test so the reclassification rests on
+    /// BEHAVIOUR rather than on the constant. A gate that could not run whatever you passed it would
+    /// fail this.
+    /// </summary>
+    [Fact]
+    public void GATE_4b_RUNS_THE_MOMENT_A_FIDELITY_DECLARATION_NAMES_ITS_DECLARER()
+    {
+        var declared = FidelityDeclaration.Of("M_Ramp", new[] { "ramp-to-limit" }, new[] { "overshoot" }, true)
+            with { DeclaredBy = new AgentIdentity("agent-coordinator") };
+
+        var gate = MinimalSubmission(fidelity: declared).Gates
+            .Single(g => g.Gate.StartsWith("4b fidelity authority", StringComparison.Ordinal));
+
+        Assert.Equal(GateStatus.Checked, gate.Status);
+        Assert.True(gate.Passed);
+    }
+
+    /// <summary>
+    /// And the absence is now a BUILD-LIST item rather than a design property — the reclassification
+    /// itself, pinned.
+    /// </summary>
+    [Fact]
+    public void AND_AN_ABSENT_FIDELITY_DECLARATION_IS_NOW_A_BUILD_LIST_ITEM()
+    {
+        var gate = MinimalSubmission(omitFidelity: true).NotChecked
+            .Single(g => g.Gate.StartsWith("4b fidelity authority", StringComparison.Ordinal));
+
+        Assert.Equal(NotCheckedReason.AwaitingAnArtifactThatCouldExist, gate.Reason);
+        Assert.True(gate.IsClosableOffline);
     }
 
     /// <summary>
@@ -153,22 +211,24 @@ public class NotCheckedTriageTests
     }
 
     /// <summary>
-    /// <b>And the one path that still produces it is named</b>, so retiring the category becomes a visible
-    /// decision rather than a test quietly going green on a smaller set.
+    /// <b>The category it guarded is now retired</b>, so what it pins is the property that replaced it:
+    /// every reason the enum still declares names an artifact, or the rig.
     /// </summary>
     [Fact]
-    public void IndependentAuthorityByDesign_is_now_produced_by_EXACTLY_ONE_path_and_it_is_gate_4b()
+    public void EVERY_SURVIVING_REASON_NAMES_AN_ARTIFACT_OR_THE_RIG()
     {
-        var byDesign = MinimalSubmission(omitFidelity: true).NotChecked
-            .Where(g => g.Reason == NotCheckedReason.IndependentAuthorityByDesign)
+        var produced = MinimalSubmission().NotChecked
+            .Concat(MinimalSubmission(omitFidelity: true).NotChecked)
             .ToArray();
 
-        var gate = Assert.Single(byDesign);
-        Assert.StartsWith("4b fidelity authority", gate.Gate, StringComparison.Ordinal);
+        Assert.NotEmpty(produced);
 
-        // And it is genuinely absent when a fidelity declaration IS supplied — so the classification
-        // tracks the input rather than the gate.
-        Assert.DoesNotContain(MinimalSubmission().NotChecked, g => g.Reason == NotCheckedReason.IndependentAuthorityByDesign);
+        Assert.All(produced, g => Assert.True(
+            g.Reason is NotCheckedReason.RequiresTheDevice
+                     or NotCheckedReason.AwaitingAnArtifactThatCouldExist
+                     or NotCheckedReason.HarnessCapabilityMissing,
+            $"{g.Gate} reported {g.Reason}. Since 2026-08-14 there is no reason meaning 'this can never run', "
+            + "and a new one would have to be added deliberately — see NotCheckedReason's vacant slot 2."));
     }
 
     /// <summary>
@@ -190,6 +250,7 @@ public class NotCheckedTriageTests
     /// CHECKED. It is deliberately minimal rather than realistic: the point is coverage of the
     /// classification, not of the block.
     /// </summary>
+
     private static SubmissionReport MinimalSubmission(MirrorObservability? map = null, FidelityDeclaration? fidelity = null, bool omitFidelity = false)
     {
         const string clause = "REQ-014";

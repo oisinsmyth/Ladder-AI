@@ -450,11 +450,11 @@ public static class GateCli
 
             // Grouped in the order a reader should act on them: what is already correct, what needs the
             // rig session, then the two that are somebody's build list.
-            WriteNotCheckedGroup(report, output, NotCheckedReason.IndependentAuthorityByDesign,
-                "BY DESIGN — NOT A GAP. The input must come from an authority OTHER than the submitter,",
-                "and accepting the submitter's own would defeat the gate. This is D6 independence WORKING;",
-                "it will read NOT CHECKED for ever on a submission carrying its own answer, and that is right.");
-
+            // 🔴 THE "BY DESIGN — NOT A GAP" GROUP IS GONE, RETIRED 2026-08-14 BY MEASUREMENT. Both its
+            // members (gate 5's map authority, gate 4b's absent fidelity) were driven and BOTH RUN once
+            // the artifact they name exists. *** NO NOT CHECKED IN THIS REPORT IS A PROPERTY OF THE
+            // DESIGN: every one names an artifact that could exist, or the rig. *** A group heading that
+            // told a reader otherwise was the most comfortable line in the output and the least true.
             WriteNotCheckedGroup(report, output, NotCheckedReason.RequiresTheDevice,
                 "REQUIRES THE DEVICE. A controller, a download or a wave — no artifact substitutes for it,",
                 "and nothing offline can close it. These are the rig session's, and there is nothing to build.",
