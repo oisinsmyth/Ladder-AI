@@ -181,6 +181,20 @@ running does not license:
       this route is untouched"* matters as much as *"the route without its precondition is refused"*.
       A gate refusing every ordinary submission is removed within a week — and it will be removed by
       someone who is right to.
+- *** TWO FLAGS SIDE BY SIDE WHOSE OMISSIONS FAIL IN OPPOSITE DIRECTIONS ARE A TRAP THAT LOOKS LIKE
+  SYMMETRY. *** Measured 2026-08-14 on the copy layer's two signal-level properties. Forgetting
+  `Transient` produces **no latch**, and gate 5 refuses the `Latched` expectation — *loud, before
+  anything is spent*. Forgetting `RearmsEachIndex` produces a **one-shot latch that compiles, deploys
+  and reads plausibly** — and the only symptom is the predicted findings quietly absent from a rig
+  run. **They sit adjacent, they are declared the same way, and they look like a pair.** Anyone
+  reasoning by analogy from the loud one will trust the silent one exactly as far, and be wrong.
+    ➜ **The fix is NOT to flip the silent default**, which here would refuse every ordinary transient
+      — *the asymmetry is an argument for closing the gap, not for moving it.* Where the gap cannot be
+      closed tonight, ***write the asymmetry at the declaration site, where someone tidying the flag
+      will meet it*** — not in a report, which is read once by a person who already knew.
+    ➜ **Ask it of any new optional flag: if this is omitted, does the system SAY so, or does it
+      produce a plausible artifact?** A flag whose omission yields a plausible artifact is not
+      optional; it is a defect with a default.
 - *** A DECLARATION IS A TRANSFERRED RESPONSIBILITY, NOT A VERIFICATION. *** The stamp trick — carry
   *what it was established against* rather than a bare `bool`, so *"nobody did it"* and *"did it
   against a different version"* come out as distinct facts — has been applied four times here and is
@@ -252,6 +266,32 @@ running does not license:
       derivation as readily as with a right one; **per-item evidence does not.** *(The strongest form
       seen: sixteen agents each seeing a distinct count 1…16 — serialisation demonstrated rather than
       inferred from a total of sixteen.)*
+    ➜ *** NOR AGAINST YOUR OWN MODEL OF WHAT THE ARTIFACT SHOULD CONTAIN. *** The sharpest form, and
+      the one that survives the other two: a release script derived `ALLOC-i → FC(399+i)` from
+      **dispatch order**, so half the releases silently did nothing — *allocation order is not
+      dispatch order.* It trusted no agent's report; it trusted **its own prediction of a value it
+      could have simply read.** Third and fourth instance in two sessions. **If the artifact can be
+      read, reading it is never the expensive option.**
+    ➜ **And it applies to a TASKING, not only to a result.** Measured 2026-08-14: the orchestrator
+      briefed a lane from a stale picture, and the lane **checked each item against the source before
+      executing it** — finding most of the work already landed and redoing none. *An instruction is a
+      report about the world too.*
+- *** WHEN A LOCK IS A HANDLE, DELETING THE FILE IT LIVES IN IS NOT CLEANUP — IT IS A SECOND, WEAKER
+  LOCK WITH A DIFFERENT FAILURE MODE. *** Measured 2026-08-14, and it is the campaign's best find
+  because ***it was invisible at 8, 16 and 32 concurrent agents and crashed at 48.*** `Dispose`
+  deleted the lease file; on Windows a **delete-pending** file answers `CreateFile` with
+  **ACCESS_DENIED**, not the `IOException` a sharing violation raises — so it walked straight past an
+  `IOException`-only retry. The exclusive handle was already the lock; **the delete bought nothing and
+  opened the race.**
+    ➜ *** A DEFECT'S CONCURRENCY FLOOR SITS WHERE NOBODY LOOKED. *** Every level anyone had run was
+      clean. **Pick the number that feels sufficient, then go well past it** — and when a sweep is
+      clean end to end, that is evidence about the range, never about the mechanism.
+    ➜ **Retry on the exception the OS actually raises, and separate the persistent case.** Contention
+      raises a sharing violation; an access denial that never clears is a *permissions* problem, and
+      retrying it into a timeout reports it as contention.
+    ➜ **A crash is loud without being NAMED.** A harness cannot tell an unhandled exception from a
+      refusal, so a top-level catch that names it is not decoration — it is what makes the difference
+      reportable.
 - *** ASK WHICH TRANSPORT ACTUALLY CARRIES THIS. *** Measured 2026-08-14, and it is the **fourth**
   instance of the unexecuted-guard family — but the first found by a question rather than by a
   mutation. A scan-counter wrap **is** absorbed, correctly, with a passing test, in the **S7** read
