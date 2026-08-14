@@ -143,7 +143,38 @@ and a `null` entry in a device allowlist **crashes unnamed** instead of refusing
 closed — the stack ends at the guard and no socket opens)*.
 
 ⚠️ **A `repo:`-prefixed allowlist entry means DIFFERENT THINGS to the C# fence and the PowerShell
-fence.** Both fail closed today. **Prefer absolute paths in allowlists until that is reconciled.**
+fence.** Both fail closed today. **Prefer absolute paths in allowlists until that is reconciled** —
+the divergence table is written into both allowlist files, and current behaviour is pinned by tests,
+so a future correction is a decision rather than a drift.
+
+➜ **The lesson the `Arming` constant and the IL walk teach together, because it is the same defect in
+different clothes: *a check whose exercise requires editing the check will not be exercised.*** The
+walk's searched member name was a **literal**, so the only way to run its negative control was to
+hand-edit it — ***which is exactly why that control had decayed into a comment describing a manual run
+done once, months earlier.*** Making the name a **parameter** is what makes the control runnable, and
+therefore what makes it survive. **Ask it of any new guard: can it be exercised without being
+modified?**
+
+### ⚠️ WHAT THE FENCE LANE DID NOT ESTABLISH — read this before quoting anything above
+
+- ***THE PERMIT HALF IS NOT CHECKED.*** Restated here because it is the limit most likely to be lost
+  when the rest of the section reads so green. **No form that would have been PERMITTED was ever
+  tried, on any fence.** Doing so needs a throwaway allowlist entry and a supervised session; it was
+  **refused deliberately overnight, not overlooked.** Everything above means *"these forms are
+  refused"*, never *"the fence is correct"*.
+- 🔴 ***`openness-cli`'s `Program.Main` NOW DELEGATES TO AN INTERNAL `Run(args, gatewayFactory)`.***
+  A behaviour-preserving extraction — same order, same returns — and it is what makes *"Portal was
+  never contacted"* **observable** instead of inferred. **But it changes the entry point of the binary
+  that talks to Portal, and it was written overnight. It wants a look in daylight before the live
+  job.** Nothing else in the fix set touches a code path that runs in normal use.
+- `{"entries": null}` and a top-level `null` in a device allowlist refuse as **`AllowlistEmpty`**
+  rather than `AllowlistUnreadable`. Both refuse and both are named, and the classification was
+  **deliberately left alone** — reclassifying a refusal *reason* is a decision, not a tidy.
+- `rig-read`'s new `FenceFault` (exit 5) is ***correct, wired, and unfalsifiable in place***: after
+  the null-entry fix, **no input in the 21-document fuzz sweep reaches it.** It is kept for the
+  members of the family the sweep could not enumerate. **Do not read its existence as evidence the
+  class is covered** — that limit is stated in the code as well as here.
+- The fuzz sweep is **21 documents, not a proof.** It is evidence about the range it covered.
 
 ## HOW TO READ A GREEN FROM THIS TOOLING
 
