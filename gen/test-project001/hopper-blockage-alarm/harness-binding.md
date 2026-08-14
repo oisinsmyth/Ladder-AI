@@ -21,8 +21,15 @@ expected behaviour, not a defect).
 Three independent reasons, none of them avoidable:
 
 1. **`C-001` forbids underscores outside physical IO.** `HBA_Stim` was refused by `converter
-   preflight`; the member is **`Stim`**. Same rule already forced `HopperBlockedInhibit` to be
-   `HopperBlockStopReq` on the block under test.
+   preflight`; the member is **`Stim`**.
+   > 🔴 **STRUCK 2026-08-14.** This reason previously continued: *"Same rule already forced
+   > `HopperBlockedInhibit` to be `HopperBlockStopReq` on the block under test."* **That was false in
+   > two independent ways.** C-001's rule is *underscore-free member names* and **neither name
+   > contains an underscore** — both comply, so C-001 cannot have forced anything. And
+   > `FB_HopperBlockageMonitor` was authored under S6 request #1 **weeks before the enumeration
+   > existed**, so the block's name predates the spec's and the stated causal direction is
+   > impossible. **The `HopperBlockStopReq` mapping is not a naming-convention consequence. It is
+   > divergence D1** — see §3. *A laundering with a rule number beside it stops being re-read.*
 2. **Set B's names carry a unit suffix the IR type makes wrong.** `...Ms` members are `Time`, not
    integer milliseconds — see §4.
 3. **One set-B field is two IR members.** `ResetAtMs` carries sentinels (`-1`, `HOLD`,
@@ -66,8 +73,48 @@ thing being tested. Set in the instance DB at `T#60S`.
 | `HBA_Stim.Armed` | `.Stim.Armed` | arms the copy layer's observation latches |
 | `HBA_Scenario_Done` | `.Stim.ScenarioDone` | latched |
 | `HopperBlockedAlarm` | `iDB_HopperBlockageMonitor.IO.HopperBlockedAlarm` | `Bool` |
-| `HopperBlockedInhibit` | `iDB_HopperBlockageMonitor.IO.HopperBlockStopReq` | `Bool` — **the rename** |
-| `HBA_Violation_*` (four) | **do not exist** | copy-layer instrumentation, not yet built |
+| `HopperBlockedInhibit` | `iDB_HopperBlockageMonitor.IO.HopperBlockStopReq` | `Bool` — 🔴 **DIVERGENCE D1, NOT A RENAME.** See below |
+| `HBA_Violation_AlarmFellWithoutReset` | `iDB_HarnessViolationLatch.AlarmFellWithoutReset` | `Bool`, published `HX_HBA_R004` @ `%M1063.0` (reg 31) |
+| `HBA_Violation_AlarmLowUnderHeldReset` | `iDB_HarnessViolationLatch.AlarmLowUnderHeldReset` | `Bool`, published `HX_HBA_R005` @ `%M1065.0` (reg 32) |
+| `HBA_Violation_InhibitLowWhileAlarmHigh` | `iDB_HarnessViolationLatch.InhibitLowWhileAlarmHigh` | `Bool`, published `HX_HBA_R006` @ `%M1067.0` (reg 33) |
+| `HBA_Violation_InhibitHighWhileAlarmLow` | `iDB_HarnessViolationLatch.InhibitHighWhileAlarmLow` | `Bool`, published `HX_HBA_R007` @ `%M1069.0` (reg 34) |
+
+> ### 🔴 D1 — THE BLOCK DOES NOT IMPLEMENT `HopperBlockedInhibit`
+>
+> **Re-labelled 2026-08-14 on the coordinator's ruling.** This row previously read *"the rename"*,
+> which made a predicted divergence read as a naming convenience and put it beyond the run's reach.
+> What it actually records:
+>
+> *** THE BLOCK DOES NOT IMPLEMENT `HopperBlockedInhibit`. IT IMPLEMENTS `HopperBlockStopReq`. THIS
+> IS FINDING D1, AND IT IS REPORTED STATICALLY — NOT BY THIS RUN. *** The run proceeds against the
+> real signal **so that the BEHAVIOURAL assertions can still be evaluated**; the naming divergence is
+> not theirs to catch and never was.
+>
+> **Established, not assumed** (`lad-coder` read of `ir/test-project001/`, 2026-08-14): the exact
+> string `HopperBlockedInhibit` occurs **nowhere in the corpus** — not in any of the 36 files, in
+> code or in comments. `HopperBlockStopReq` is a member of `UDT_HopperBlockageIO`, carried on the FB
+> as the STATIC `IO`. The word "inhibit" survives only in prose — network 6's title *"Stop / Inhibit
+> Demand"* and the UDT's own member comment — **which is precisely why a name check must read
+> member names and never comments.**
+>
+> ⚠️ **Anyone reading a green D6 must read this box first.** D6 predicts conformance to the tracking
+> invariant over `HopperBlockedAlarm` and this signal. That prediction is about **behaviour** and it
+> survives — but only while D1 is reported by the independent static check. Without it, D1 hides
+> inside D6: a relational assertion is structurally blind to any error its operands share, and a
+> misbound operand is exactly such an error.
+
+> ### ✅ THE FOUR VIOLATION LATCHES EXIST — this table said they did not, and it was STALE
+>
+> **Corrected 2026-08-14.** The row previously read *"**do not exist** — copy-layer instrumentation,
+> not yet built"*, which would have refused four vectors against four registers nobody backed.
+> **Established by a `lad-coder` read, not assumed from the likelihood:** `FB_HarnessViolationLatch`
+> (FB 9003) exists and declares all four as `Bool` STATICs; `FC_HarnessCopyLayer` network 7 copies
+> each to the `%M` addresses above; `iDB_HarnessViolationLatch` instantiates it; `Main` network 6
+> calls it **before** the copy layer in network 7. The addresses match `wire-prediction.md` §1
+> registers 31–34 exactly.
+>
+> **No other block writes any of the four, and the copy layer is their only reader** — established
+> by a whole-corpus search, which is what makes this an absence rather than a failure to find.
 
 ## 4. Value encodings
 

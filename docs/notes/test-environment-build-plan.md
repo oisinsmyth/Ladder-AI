@@ -4243,3 +4243,199 @@ reason 1 must be struck or corrected, and the `HBA_Violation_*` contradiction re
 > **serving, 35 registers, high-word-first** on 2026-08-14. The commit is stale and will mislead the
 > next reader of `git log` — *a past message describing a verification is the weakest evidence in the
 > repository.*
+
+---
+
+## ✅ D1 RE-FILED AS A STATIC INTERFACE FINDING — coordinator's ruling, 2026-08-14
+
+*** YOU DO NOT NEED TO DRIVE A BLOCK TO DISCOVER IT LACKS AN OUTPUT THE SPEC NAMES. *** D1 was
+mis-filed as a conformance-run row from the outset. It is answerable by a **set difference between
+the response signals the enumeration names and the block's actual interface**, before a scan elapses
+— and **that comparison is the one nothing in the system currently makes**, which is exactly why the
+binding was able to absorb it.
+
+**The input is already there and it is tiny.** `assertion-enumeration.yaml` names exactly **two**
+response signals across all 27 assertions — `HopperBlockedAlarm` (21) and `HopperBlockedInhibit` (6).
+So the whole check is a **two-name set difference**, and that is what makes its absence damning
+rather than merely regrettable: it was never hard, it was simply never asked.
+
+### Where the check belongs, and what it needs
+
+**Split it, because the two halves have incompatible access:** the converter is the only tool that
+reads IR, and *the harness deliberately never does*. Do not give the harness an IR reader to close
+this.
+
+1. **The converter computes the fact.** A new subcommand alongside `tagstatus` — which already has
+   exactly this idiom (*classify names against the export, exit 1 on absent*) — resolving the named
+   block's **interface members** rather than tag existence, which is a different question:
+
+   ```
+   converter interface-check --project ir/<project> --block <FBName> --requires <names|file> [--json]
+   ```
+
+   Reports each required name `PRESENT` / `MISSING`, exit 1 on any missing, **and emits the block's
+   `ir-hash` as the stamp it was established against**.
+
+2. **The harness demands it as a required input**, the way it already demands `computedConflicts` —
+   *absent is NOT CHECKED and fails closed*, never a pass. Carry the stamp, not a bool, so
+   ***"nobody ran it"* and *"ran it against a different version of the block"* come out as distinct
+   facts** — the shape used four times already here.
+
+3. 🔴 **IT NEEDS A NEW OUTCOME, AND THIS IS THE POINT OF THE RULING.** Every existing gate outcome
+   blames the **submission** — `REFUSED` means *fix the vector*. A missing response signal is a
+   **FAIL against the block**, reported by name, and the submission is not at fault. Reusing
+   `REFUSED` would send an author to edit the artifact that is correct. *Same defect as reporting a
+   retuned bound as `FAIL` instead of `STALE`, one gate over.*
+
+**Authoring it is normal PC-side software work** (`src/converter/`, hard rules do not reach it), but
+**running it against the block reads IR, so that invocation is `lad-coder`'s** (hard rule 8).
+
+### D6's dependency, recorded so a future reader knows what the green rests on
+
+D6 predicts **conformance to the tracking invariant** — a claim about *behaviour*, and testing it
+against the block's real output tests the real behaviour. **It survives the ruling.** But it survives
+*conditionally*, and the condition must not be recoverable only by reading this section:
+
+> *** D6's GREEN IS VALID ONLY WHILE D1 IS REPORTED BY THE INDEPENDENT STATIC CHECK. *** Without
+> that check, D1 hides inside D6: `REQ-HBA-008`'s two operands include the renamed output, and a
+> relational assertion is *structurally blind to any error its operands share*. **A misbound operand
+> is exactly such a shared error.** If the static check is ever removed, skipped, or run against a
+> stale `ir-hash`, D6 stops being evidence of anything and reverts to carrying D1's weight silently.
+
+---
+
+## 🔴 A FINDING ABOUT THE GATE SET ITSELF — GATE 5's AUTHORITY DIFFERS BETWEEN ITS TWO PATHS
+
+Recorded on the coordinator's instruction, because it outlives this block. Measured in source, not
+inferred:
+
+| path | where gate 5's map comes from | correlated? |
+|---|---|---|
+| **`harness-gate check <submission.json>`** (`GateCli.cs` l. 106) | `document.Map.ProvidedFor` — **inside the submission the vector author wrote** | 🔴 **YES** |
+| **`LoopRun.Execute`** (`LoopRun.cs`, step 2) | `MirrorObservability.FromMinimalCopyLayer(request.Bindings…)` — **the coordinator's bindings**, i.e. what the copy layer will actually provide | **No** |
+
+*** THE TWO PATHS DISAGREE ABOUT WHO IS THE AUTHORITY, AND THE ONE AN AUTHOR ACTUALLY RUNS IS THE
+SELF-REFERENTIAL ONE. *** Contract §4.3 says a signal "must appear in the map's observability
+declarations", and §4.3 is explicit that the copy layer's latches are **generated from** those
+declarations — so the map is meant to be *the coordinator's record of what the copy layer provides*,
+never the vector's own wish list. In the CLI path it is the wish list.
+
+**Consequences, and none of them are theoretical:**
+
+- **An author can add a signal to `providedFor` and to their expectations in the same edit, and gate
+  5 passes.** The check reduces to *"is this name spelled the same in two places in one file I
+  wrote"*. This is the `design-for-testability` skill's own **open question 5** — *"a declaration
+  checked against itself — ask which it was"* — demonstrated live rather than hypothesised.
+- ***THE CLI IS WEAKER THAN THE LOOP IN EXACTLY THE PLACE THE CLI IS USED TO DECIDE WHETHER TO
+  PROCEED.*** An author gets a green from `harness-gate check` that `LoopRun` would refuse. A gate
+  whose standalone form is more permissive than its integrated form is *worse than one that is
+  simply absent*, because it is consulted first and it is believed.
+- It is why **no mechanical check could see the `HBA_Violation_*` contradiction**: all four names sit
+  in `providedFor` *and* in the expectations of the same file, so they agree with themselves
+  perfectly while the binding says they do not exist.
+
+➜ **The repair is to make the CLI take the map from the same place the loop does** — the
+coordinator's bindings — and to refuse a submission that supplies its own. Failing that, the CLI must
+say **loudly, in its output**, that gate 5 was checked against the submission's own declaration, so a
+reader knows what the green is worth. *A caveat that lives in a lane report has already failed the
+person it was written for.*
+
+---
+
+## THE RUN — WHAT CLOSED, WHAT DID NOT, 2026-08-14
+
+### ✅ D1, ANSWERED STATICALLY, WITHOUT A SCAN
+
+`lad-coder` read `ir/test-project001/` (36 files). Required response signals from
+`assertion-enumeration.yaml`, set-differenced against the block's interface:
+
+| required | on the block | verdict |
+|---|---|---|
+| `HopperBlockedAlarm` | `UDT_HopperBlockageIO` member | **PRESENT** |
+| `HopperBlockedInhibit` | — | 🔴 ***MISSING — D1, FAIL AGAINST THE BLOCK*** |
+
+*** THE EXACT STRING `HopperBlockedInhibit` OCCURS NOWHERE IN THE CORPUS *** — not in any of the 36
+files, in code or comment. What the block implements is `HopperBlockStopReq`. The word "inhibit"
+survives only in prose: network 6's title *"Stop / Inhibit Demand"* and the UDT member's own comment.
+**The ruling is vindicated: this needed no rig, no wave and no scan.**
+
+> ### ⚠️ A DESIGN TRAP THE CHECK MUST AVOID, FOUND BY BUILDING IT
+> `FB_HopperBlockageMonitor`'s `INPUT` and `OUTPUT` sections are **both empty**. Every signal lives on
+> a STATIC member `IO` of type `"UDT_HopperBlockageIO"` — C-132's single-STATIC-UDT house style, which
+> is the NORM here and not an exception. *** A CHECK THAT READS THE INPUT/OUTPUT SECTIONS WOULD REPORT
+> BOTH SIGNALS MISSING, INCLUDING THE ONE THAT EXISTS *** — a false FAIL against a correct block, which
+> is the same class of error as a false green. **It must resolve through the interface UDT**, and it
+> must read member names only: matching comments would have found "inhibit" and passed D1.
+
+### ✅ THE `HBA_Violation_*` BLOCKER IS CLOSED — the binding was STALE, established not assumed
+
+`FB_HarnessViolationLatch` (FB 9003) **exists** and declares all four latches as `Bool` STATICs;
+`FC_HarnessCopyLayer` network 7 publishes them at `%M1063.0` / `%M1065.0` / `%M1067.0` / `%M1069.0`
+— **exactly `wire-prediction.md` §1's registers 31–34**. `Main` network 6 calls the latch block
+*before* the copy layer in network 7. No other block writes any of the four; the copy layer is their
+only reader. `harness-binding.md` §3 is corrected.
+
+### THE GATE — RUN, AND IT MOVED ONE OF THREE
+
+`harness-gate check`, 27 vectors, 22 gates, **NOT ADMISSIBLE** (exit 1), the three NOT CHECKED being
+8, 8c and 11. Gate 5 reports a floor of **8.6 scans at comp=1**; 3g recomputes all 27 assertion IDs;
+3i finds every vector's `boundsUsed` current against the table.
+
+- **Gate 11 — advanced, still open.** `deployment` supplied honestly: `importStamp` `16#21D74D35`
+  (the stamp of the code *actually running* — measured on the wire at registers 0–1 and matching the
+  literal the copy layer writes), `s7Objects: []` as a positive claim, since the transport is Modbus
+  into `%M` and the mirror is not a data block. **The gate refused to take the claim on trust** and
+  now asks for the tag map to set-difference against — which is the gate being *right*.
+  > 🔴 **BUT IT EXPOSES A SCHEMA GAP.** *"The S7 map reaches no DB"* and *"there is no S7 transport
+  > in this run"* are **different claims, and the document can only express the first.** Gate 11
+  > demands a map to verify a claim that a map would be meaningless for. **No tag map exists on
+  > disk.** This is the schema's own `null` vs `[]` care, one level further out — and it needs the
+  > same treatment rather than a map invented to satisfy a set-difference nobody needs.
+- 🔴 **Gates 8 / 8c — NOT CLOSED, AND THE INSTRUCTION FOR CLOSING THEM DOES NOT HOLD.**
+  `converter cross-check --project ir/test-project001 --json` was run (exit 0). *** IT DOES NOT EMIT
+  THE GATE'S SHAPE. *** It emits whole-project `multiWriters` / `deadMembers` / `ioBoundary` /
+  `siblingRefs` / `soleWriters`; the gate wants `computedConflicts` (blocks conflicting with *this
+  submission's targets*) and `conflictEdges` (with provenance, signal and ship-class). There is no
+  transformation between them and nobody has written one.
+  > **And its FB-internal paths are unqualified**, so `IO.Step` and `Time` — distinct members of
+  > three different FBs — report as cross-block multi-writers that **are not**. Feeding that in as a
+  > conflict graph would inject false edges. **So the graph was NOT supplied**, for the same reason
+  > the vector author refused to: *the previous author declined to type an empty array because it
+  > would turn two gates green by typing, and hand-building a wrong one is worse than typing an
+  > empty one.* The honest state is NOT CHECKED **with a measured cause**, which is an advance on
+  > *"no graph was supplied"*.
+
+### 🔴 THE 27 WERE NOT RUN — AND IT IS A BUILD, NOT AN INVOCATION
+
+Established from source, not inferred:
+
+1. **Nothing drives `LoopRun`.** `Harness.Loop` is a **library with no entry point**. The only
+   executables in `src/harness/` are `Harness.Gate`, `Harness.RigRead` and `Harness.RigWrite`. There
+   is no command that runs a vector set end to end.
+2. *** `LoopRun.Execute` ALWAYS DEPLOYS. *** Step 5 calls `gateway.Deploy(...)` unconditionally and
+   returns `NotDeployed` unless the gateway reports `Attempted && Loaded`. The only real gateway,
+   `OpennessDeviceGateway`, performs `import-all` → `compile-all` → `sanity-check` →
+   `download-probe --disruptive`. **The brief forbids re-deploying.**
+
+So running the 27 requires **new PC-side code**: a driver, plus a gateway whose `Deploy` truthfully
+reports the deployment that already happened without performing one. That is a design decision about
+what a gateway may assert, not a scheduling detail — *a gateway that reports `Loaded` without loading
+is one edit away from a gateway that lies*, and `ManifestPresence` and the version check both consume
+it. **Not built unasked.** Note the version check would then do real work: step 6 compares the
+device's stamp against `BuildStamp.Of(...)` recomputed PC-side, so the loop can only proceed if the
+regeneration reproduces `16#21D74D35` exactly.
+
+### Two smaller findings from the same reads
+
+- **A stale comment in deployed code.** `FB_Comms_ModbusServer` network 1's comment reads *"the
+  holding-register area covers 8 words from M1000.0"* while the statement beside it reads
+  `MB_HOLD_REG := P#M1000.0 WORD 35`. The **pointer** is right and matches the measured 35-register
+  span; the comment is wrong and is on the controller. *Same class as the block comment that sat
+  stale for a month behind green checks.*
+- **A question for whoever runs D5, flagged rather than answered.** `DB_Controls.FaultReset` is
+  written `:= Running AND Stim.FaultReset`, and the monitor's `IO.FaultReset` is fed from it via
+  `FC_ControlMain` network 8. D5's check is *stop the plant → pulse reset → the alarm must re-raise*.
+  **If `Running` is false while the plant is stopped, the commanded reset never reaches the block**
+  and the scenario does not do what it says. Whether `Running` means *the plant* or *the scenario* is
+  a `lad-coder` question and is NOT settled here — but it must be settled **before** D5's result is
+  read, because the failure would present as a believable `TIMED-OUT`.
