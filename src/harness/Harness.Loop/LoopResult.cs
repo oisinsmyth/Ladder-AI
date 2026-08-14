@@ -13,6 +13,21 @@ public enum LoopOutcome
     /// <summary>The map could not be derived, so the gate could not even run. Nothing was spent.</summary>
     NotDerivable,
 
+    /// <summary>
+    /// 🔴 <b>A VECTOR NAMES A SLOT NO BINDING DECLARES.</b> Nothing generated, nothing deployed.
+    ///
+    /// <para><b>Distinct from <see cref="NotDerivable"/>: the map derived perfectly.</b> The two
+    /// documents disagree about which slots exist — and they are written by parties who deliberately do
+    /// not read each other's, which is what makes them an independent pair and also what leaves a typo,
+    /// a rename or an unresolved slot partition invisible until something uses both.</para>
+    ///
+    /// <para><b>Measured 2026-08-14, and the exception was never the defect — the POSITION was.</b>
+    /// Before this existed the run threw <c>ArgumentException: no slot 'X' in this map</c> out of step 7,
+    /// with the gateway recording <b>one deployment and one open transport already spent</b>. A
+    /// cross-reference failure that costs a whole download is a check in the wrong place.</para>
+    /// </summary>
+    NotBound,
+
     /// <summary>The submission was refused at the gate. <b>Nothing was generated and nothing was deployed.</b></summary>
     NotAdmissible,
 

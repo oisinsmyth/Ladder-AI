@@ -22,6 +22,43 @@ public static class GateExit
 }
 
 /// <summary>
+/// 🔴 <b>Everything <see cref="SubmissionGate.Check"/> needs that is derived from the DOCUMENTS — in ONE
+/// place, so the two callers cannot answer the same question differently.</b>
+///
+/// <para>*** THE LOOP'S GATE WAS NOT THE GATE, IN BOTH DIRECTIONS. *** <c>harness-gate</c> derived these
+/// twelve values from the submission and the binding; <c>harness-run</c> re-derived four of them, passed
+/// <c>null</c> for four more and passed a HARD-CODED empty set for the last two. Measured on the
+/// deliverable set: the loop reported <b>gates 8, 8s, 8c, 10b and 11 as NOT CHECKED where the standalone
+/// gate ran them</b>, and gate <b>0b passed unconditionally</b> because the loop asserted, on the
+/// document's behalf, that no unknown field could arrive — true of a caller composing TYPED objects and
+/// false of one PARSING A DOCUMENT, which is exactly what <c>LoopCli</c> does.</para>
+///
+/// <para><b>A submission could pass the loop's gate and fail the real one, and the loop is what spends
+/// rig time.</b> Two independently-maintained derivations of one input set is how that happens, so there
+/// is now one — <i>called rather than copied</i>, the same argument that made <c>LoopRun.Generate</c> the
+/// code <c>LoopRun.Execute</c> runs rather than a second copy of it.</para>
+///
+/// <para><b>What is deliberately NOT here:</b> the observability map and the observability floor. Both
+/// are legitimately different questions for the two callers — the loop derives its floor from the
+/// ALLOCATED map's read plan, the CLI from the submission's declared wave-set width — and folding them in
+/// would replace a real difference with a false agreement.</para>
+/// </summary>
+public sealed record GateInputs(
+    IReadOnlyList<SubmissionVector> Vectors,
+    AssertionEnumeration Enumeration,
+    FidelityDeclaration? Fidelity,
+    AgentIdentity BlockAuthor,
+    ConflictGraph? Conflicts,
+    BlockCompressionInputs? CompressionInputs,
+    DeploymentDeclaration? Deployment,
+    TagMapReach? TagMapReach,
+    SignalStorageMap? Storage,
+    bool ConflictEdgesExplicitlyNull,
+    IReadOnlyList<string> UnknownFields,
+    IReadOnlyList<string> AnnotationFields,
+    int RuntimeCompression);
+
+/// <summary>
 /// The runnable gate. <c>harness-gate check &lt;submission.json&gt;</c>.
 ///
 /// <para><b>Split from <c>Program</c> so it is testable</b> — the CLI's own behaviour (what it refuses,
@@ -122,11 +159,10 @@ public static class GateCli
     {
         ArgumentNullException.ThrowIfNull(document);
 
-        var vectors = (document.Vectors ?? new List<VectorDocument>()).Select(ToSubmissionVector).ToArray();
-
-        var enumeration = ToEnumeration(document);
-
-        var fidelity = ToFidelity(document);
+        // *** ONE DERIVATION, SHARED WITH THE LOOP. *** See GateInputs: everything below that is not the
+        // observability map or the floor comes from here, so a value this CLI checks and a value the loop
+        // checks are the same value rather than two derivations that agree today.
+        var inputs = InputsOf(document, binding, readFile);
 
         var map = new MirrorObservability(
             (document.Map?.ProvidedFor ?? new Dictionary<string, List<string>>())
@@ -165,21 +201,52 @@ public static class GateCli
         var floor = WireTiming.ObservabilityFloorScans(readsPerCycle);
 
         return SubmissionGate.Check(
-            vectors,
-            enumeration,
-            fidelity,
-            new AgentIdentity(document.BlockAuthor ?? string.Empty),
+            inputs.Vectors,
+            inputs.Enumeration,
+            inputs.Fidelity,
+            inputs.BlockAuthor,
             map,
             floor,
-            Math.Max(1, document.RuntimeCompression),
+            inputs.RuntimeCompression,
+            inputs.Conflicts,
+            inputs.CompressionInputs,
+            inputs.Deployment,
+            inputs.TagMapReach,
+            inputs.Storage,
+            inputs.ConflictEdgesExplicitlyNull,
+            inputs.UnknownFields,
+            inputs.AnnotationFields);
+    }
+
+    /// <summary>
+    /// 🔴 <b>Derive every document-sourced gate input, once.</b> See <see cref="GateInputs"/> for why this
+    /// exists and for what is deliberately left out of it.
+    /// </summary>
+    /// <param name="readFile">
+    /// Used only to read the tag map named by <c>tagMapPath</c>. <b>Absent means gate 11's set-difference
+    /// could not be made</b> and the gate reports NOT CHECKED — never an empty reachable set, which is the
+    /// opposite claim.
+    /// </param>
+    public static GateInputs InputsOf(SubmissionDocument document, BindingDocument? binding = null, Func<string, string>? readFile = null)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+
+        var extra = ExtraFields(document, binding);
+
+        return new GateInputs(
+            (document.Vectors ?? new List<VectorDocument>()).Select(ToSubmissionVector).ToArray(),
+            ToEnumeration(document),
+            ToFidelity(document),
+            new AgentIdentity(document.BlockAuthor ?? string.Empty),
             ToConflicts(document),
             ToCompressionInputs(document),
             ToDeploymentDeclaration(document),
             ToTagMapReach(document, readFile),
             ToSignalStorage(document),
             document.ConflictEdgesExplicitlyNull,
-            ExtraFields(document, binding).Unknown,
-            ExtraFields(document, binding).Annotations);
+            extra.Unknown,
+            extra.Annotations,
+            Math.Max(1, document.RuntimeCompression));
     }
 
     /// <summary>
@@ -372,7 +439,11 @@ public static class GateCli
         v.AssertionForm,
         string.IsNullOrWhiteSpace(v.SettlingCondition)
             ? null
-            : new SettlingDeclaration(v.SettlingCondition, v.SettlingSignals ?? new List<string>()),
+            // *** UnchangedForScans IS READ FROM THE DOCUMENT AND NOT DEFAULTED. *** It used to be
+            // constructed as 0 here with no wire field behind it, so LoopRun.Settling returned
+            // NotEstablished on its first line for every vector in every submission — a settling claim
+            // that could not be evaluated, reported as one that was not established.
+            : new SettlingDeclaration(v.SettlingCondition, v.SettlingSignals ?? new List<string>(), v.SettlingUnchangedForScans),
         v.MaxDurationScans,
         v.CompletionValue,
         (v.Blacklist ?? new List<BlacklistDocument>())

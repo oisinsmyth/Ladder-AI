@@ -55,7 +55,26 @@ public sealed record LoopRequest(
 
     // Contract 2.7's join: signal -> controller storage, or a positive `harnessOnly` claim. Gates 8 and
     // 8c are statements about STORAGE and are NOT CHECKED without it. Null means nobody declared it.
-    SignalStorageMap? SignalStorage = null)
+    SignalStorageMap? SignalStorage = null,
+
+    // 🔴 *** THE DOCUMENT'S EXTRA FIELDS, AND NULL IS "NOBODY SAID" RATHER THAN "THERE WERE NONE". ***
+    //
+    // Generate used to pass `Array.Empty<string>()` here unconditionally, on the reasoning that the loop
+    // composes from TYPED objects so no unknown field could arrive. That is true of a caller building a
+    // LoopRequest by hand and FALSE of LoopCli, which PARSES two documents - so gate 0b passed
+    // unconditionally under the loop while harness-gate refused the same submission by name.
+    //
+    // An empty list is still the right value for a typed caller, and it is now the CALLER'S CLAIM rather
+    // than this class asserting it on their behalf - the same treatment Deployment gets four fields up,
+    // and for the same reason. Absent is NOT CHECKED, which is loud; the alternative default fails silent.
+    IReadOnlyList<string>? UnknownFields = null,
+    IReadOnlyList<string>? AnnotationFields = null,
+
+    // Gate 8 refuses an explicit `conflictEdges: null` by name - it is neither the earned `[]` claim nor
+    // the honest omission, and a lenient deserializer turns it back into an empty list one layer down. A
+    // typed caller cannot express it at all, so false is the computed answer there; a document CAN, and
+    // LoopCli now carries what the document said.
+    bool ConflictEdgesExplicitlyNull = false)
 {
     /// <summary>The factor, defaulting to uncompressed only where the caller passed nothing at all.</summary>
     public RuntimeCompression Compression => RuntimeCompression ?? Harness.Wire.RuntimeCompression.Uncompressed;
@@ -207,6 +226,29 @@ public static class LoopRun
         var map = mapResult.Map!;
         caveats = caveats.Append(CollapseSeam(mapResult.SizeReport!)).ToArray();
 
+        // ---- 1b. THE JOIN BETWEEN THE TWO DOCUMENTS, BEFORE ANYTHING IS SPENT -----------------------
+        //
+        // 🔴 *** THE SLOT ID IS THE ONLY THING TYING A VECTOR TO A BINDING, AND NOTHING COMPARED THEM
+        // UNTIL THE WAVE WAS ALREADY RUNNING. *** Measured 2026-08-14 against the committed hopper files:
+        // a vector naming an unbound slot passed map derivation, the gate, the width check, generation
+        // and 0.1b; the program was DEPLOYED; the version register was CONFIRMED; and only then did
+        // SlotIndexOf throw out of step 7 with one deployment and one open transport already spent.
+        //
+        // The exception was never the defect - the POSITION was. It sits here, above the gate, because
+        // the gate is a statement about the VECTORS and this is a statement about whether the two
+        // documents refer to the same wave set at all. The decision procedure is Harness.Results.SlotJoin
+        // (unit-tested there); this is only the call site, and SlotIndexOf's throw stays where it is,
+        // now unreachable - the same shape as the phase-armed-latch throw further down.
+        var join = SlotJoin.Check(
+            request.Vectors.Select(v => (v.Id, v.Slot)),
+            map.Slots.Select(s => s.SlotId).ToArray());
+
+        if (join.Any)
+        {
+            return LoopGeneration.Stop(LoopOutcome.NotBound, null, mapResult.SizeReport, null, caveats,
+                join.Detail + " Nothing was generated and nothing was deployed.");
+        }
+
         // ---- 2. GATE — before anything is spent -----------------------------------------------------
         // The floor is a property of the WAVE SET, so it is computed from the map rather than declared:
         // a slot is polled once per read cycle, and a read cycle is ceil(K/R) round trips.
@@ -229,12 +271,16 @@ public static class LoopRun
             mirror, floor, compression.Factor, request.ComputedConflicts, request.CompressionInputs,
             request.Deployment, request.TagMapReach, request.SignalStorage,
 
-            // The loop composes a request from TYPED objects rather than parsing a document, so there is
-            // no channel by which an unknown field could arrive - which is a computed empty set, not an
-            // unasked question. Passing null here would report NOT CHECKED for a question that cannot
-            // have an answer.
-            conflictEdgesExplicitlyNull: false,
-            unknownFields: Array.Empty<string>());
+            // 🔴 *** CARRIED FROM THE REQUEST, NEVER ASSERTED HERE. *** These two lines used to read
+            // `false` and `Array.Empty<string>()`, justified by "the loop composes from TYPED objects, so
+            // no unknown field can arrive". That is true of a hand-built request and false of LoopCli,
+            // which parses a submission AND a binding - so gate 0b passed unconditionally under the loop
+            // while the standalone gate refused the same document by name, and gate 8's explicit-null
+            // refusal was unreachable from the loop entirely. A caller with no document channel says so by
+            // passing an empty list; nobody says it for them.
+            conflictEdgesExplicitlyNull: request.ConflictEdgesExplicitlyNull,
+            unknownFields: request.UnknownFields,
+            annotationFields: request.AnnotationFields);
 
         if (stopWhenInadmissible && gate.Verdict != SubmissionVerdict.AdmissibleSubjectToJudgement)
         {

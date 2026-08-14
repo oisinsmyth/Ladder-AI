@@ -73,7 +73,8 @@ public static class LoopCli
         Func<string, string> readFile,
         Action<string, string> writeFile,
         Func<string, int, byte, IRegisterTransport>? connect = null,
-        Func<string, string?>? env = null)
+        Func<string, string?>? env = null,
+        Func<string, IReadOnlyList<string>>? expandProgramPath = null)
     {
         ArgumentNullException.ThrowIfNull(args);
         ArgumentNullException.ThrowIfNull(output);
@@ -89,12 +90,13 @@ public static class LoopCli
         var submissionPath = Option(args, "--submission")!;
         var bindingPath = Option(args, "--binding");
         var host = Option(args, "--host");
-        var port = int.TryParse(Option(args, "--port"), out var p) ? p : 502;
         var unit = byte.TryParse(Option(args, "--unit"), out var u) ? u : (byte)1;
         var outPath = Option(args, "--out");
         var verify = args.Contains("--verify");
         var generateOnly = args.Contains("--generate-only");
         var emitDir = Option(args, "--emit");
+        var programPaths = Values(args, "--program");
+        var noProgram = args.Contains("--no-program-under-test");
 
         // *** THE TWO MODES ARE MUTUALLY EXCLUSIVE, AND THE REFUSAL NAMES WHY. *** --verify reads a build
         // stamp OFF A DEVICE; --generate-only stops before any gateway is constructed. A run that claimed
@@ -111,6 +113,46 @@ public static class LoopCli
             output.WriteLine("NOTHING EXAMINED — --binding is required. The bindings say which signal each register carries, and");
             output.WriteLine("their TYPES decide both the mirror tag and the rung shape. There is no default: a guessed binding");
             output.WriteLine("produces a copy layer that compiles and mirrors the wrong things.");
+            return LoopExit.NothingExamined;
+        }
+
+        // 🔴 *** THE PROGRAM UNDER TEST IS DECLARED OR ITS ABSENCE IS, AND THERE IS NO THIRD OPTION. ***
+        // It used to be `Array.Empty<HarnessObject>()`, hard-coded, with no flag that could change it. Two
+        // consequences, and neither announced itself: the BUILD STAMP was computed over an empty program
+        // set, so it could never match a rig carrying the block under test — the one thing the stamp
+        // exists to establish — and ManifestOf returned NotAvailable, putting a permanent caveat on every
+        // result package. `--no-program-under-test` is the same shape as `s7Objects: []`: a POSITIVE claim
+        // somebody typed, not a silence the tool filled in.
+        if (programPaths.Count > 0 && noProgram)
+        {
+            output.WriteLine("NOTHING EXAMINED — --program and --no-program-under-test contradict each other. One names the blocks under");
+            output.WriteLine("test; the other claims there are none. Choosing between them would be this tool deciding what you meant.");
+            return LoopExit.NothingExamined;
+        }
+
+        if (programPaths.Count == 0 && !noProgram)
+        {
+            output.WriteLine("NOTHING EXAMINED — no program under test was declared. Pass --program <file-or-dir>... , or");
+            output.WriteLine("--no-program-under-test to claim there is none.");
+            output.WriteLine("*** THERE IS NO DEFAULT, BECAUSE THE EMPTY SET IS NOT A SAFE ONE. *** The BUILD STAMP is a hash of what is");
+            output.WriteLine("about to run, and a stamp taken over no program CANNOT MATCH a rig carrying the block under test — the");
+            output.WriteLine("verify path would then refuse every healthy device, and the deploy path would publish a stamp naming a");
+            output.WriteLine("program that is not the one loaded. The load-manifest check also reports NotAvailable over an empty set,");
+            output.WriteLine("which makes every result package non-conclusive. An empty program set is a real and sayable claim; it is");
+            output.WriteLine("just not one this tool may make on your behalf.");
+            return LoopExit.NothingExamined;
+        }
+
+        IReadOnlyList<HarnessObject> program;
+        try
+        {
+            program = ProgramUnderTest.Load(programPaths, readFile, expandProgramPath ?? DefaultExpand);
+        }
+        catch (Exception ex) when (ex is InvalidDataException or IOException)
+        {
+            output.WriteLine($"NOTHING EXAMINED — the PROGRAM UNDER TEST could not be loaded: {ex.Message}");
+            output.WriteLine("Nothing was gated, generated or deployed. An object the loader could not classify is a REFUSAL naming it,");
+            output.WriteLine("never a skip: a file quietly left out of the stamp is a program the version register would confirm wrongly.");
             return LoopExit.NothingExamined;
         }
 
@@ -140,20 +182,43 @@ public static class LoopCli
             return LoopExit.NothingExamined;
         }
 
+        WriteProgramInventory(program, noProgram, output);
+
         // ---- GENERATE AND STOP ----------------------------------------------------------------------
         // Before the fence, because there is nothing to fence: no gateway is constructed on this path and
         // no host is read. It sits here rather than after the fence so that the absence is structural
         // rather than a flag somebody could reorder past.
         if (generateOnly)
-            return GenerateOnly(submissionPath, bindingPath, submission, binding, emitDir, output, writeFile);
+            return GenerateOnly(submissionPath, bindingPath, submission, binding, program, readFile, emitDir, output, writeFile);
 
         // ---- THE FENCE, BEFORE ANYTHING OPENS A SOCKET ----------------------------------------------
+        var port = 0;
+
         if (verify)
         {
             if (host is null)
             {
                 output.WriteLine("NOTHING EXAMINED — --verify needs --host. Verification reads the build stamp OFF THE DEVICE; there is");
                 output.WriteLine("no offline form of it, because a stamp nobody read is not evidence.");
+                return LoopExit.NothingExamined;
+            }
+
+            // 🔴 *** --port HAS NO DEFAULT, AND THE ONE IT HAD WAS WRONG FOR THE ONLY RIG THAT EXISTS. ***
+            // It defaulted to 502 — the IANA Modbus port — and this rig serves 503 with :502 REFUSED
+            // (measured). A refused connect is loud, so a wrong default looks survivable; what makes it
+            // not survivable is that 502 is the port EVERY OTHER Modbus device on a network answers on, so
+            // the quiet failure is reading a DIFFERENT DEVICE and believing it. Defaulting to 503 instead
+            // would only bake one rig's measurement into the tool and move the same hazard elsewhere.
+            //
+            // So it is stated, like --host and --allowlist, and for the same reason: nothing about which
+            // endpoint gets opened is inferred.
+            if (!int.TryParse(Option(args, "--port"), out port) || port is < 1 or > 65535)
+            {
+                output.WriteLine($"NOTHING EXAMINED — --verify needs --port <1-65535>, and there is no default. (Read: '{Option(args, "--port") ?? "<absent>"}'.)");
+                output.WriteLine("*** THE OLD DEFAULT OF 502 WAS WRONG FOR THIS RIG: it serves 503, and :502 is REFUSED — measured. *** A");
+                output.WriteLine("wrong port is not reliably a loud failure either: 502 is the port every other Modbus device on a network");
+                output.WriteLine("answers on, so the failure that is not loud is reading the WRONG DEVICE and believing what it says. The");
+                output.WriteLine("port an endpoint is opened on is stated here, never inferred — as with --host and --allowlist.");
                 return LoopExit.NothingExamined;
             }
 
@@ -182,7 +247,7 @@ public static class LoopCli
         LoopRequest request;
         try
         {
-            request = Compose(submission, binding);
+            request = Compose(submission, binding, program, readFile);
         }
         catch (Exception ex)
         {
@@ -246,6 +311,8 @@ public static class LoopCli
         string bindingPath,
         SubmissionDocument submission,
         BindingDocument binding,
+        IReadOnlyList<HarnessObject> program,
+        Func<string, string> readFile,
         string? emitDir,
         TextWriter output,
         Action<string, string> writeFile)
@@ -253,7 +320,7 @@ public static class LoopCli
         LoopRequest request;
         try
         {
-            request = Compose(submission, binding);
+            request = Compose(submission, binding, program, readFile);
         }
         catch (Exception ex)
         {
@@ -276,8 +343,17 @@ public static class LoopCli
         // cannot produce.
         var generation = LoopRun.Generate(request, stopWhenInadmissible: false);
 
+        // *** THE GATE'S VERDICT IS PRINTED BEFORE ANY STOP, NOT AFTER THE ONE THAT DID NOT HAPPEN. ***
+        // It used to be reported only on the path where generation SUCCEEDED, so a copy layer that failed
+        // to generate — for a reason that has nothing to do with the vectors, such as a slot id the tag
+        // namer will not take — threw away a gate report that had already been computed. A reader then had
+        // no way to learn what the gate said about a submission short of making the unrelated fault go
+        // away first, and no way at all to compare this gate against `harness-gate`'s.
+        var admissible = WriteGate(generation.Gate, generation.Stopped, output);
+
         if (!generation.Generated)
         {
+            output.WriteLine();
             output.WriteLine($"NOT GENERATED: {generation.Stopped}");
             output.WriteLine($"  {generation.Detail}");
 
@@ -286,17 +362,6 @@ public static class LoopCli
 
             return LoopExit.DidNotRun;
         }
-
-        var admissible = generation.Gate?.Verdict == SubmissionVerdict.AdmissibleSubjectToJudgement;
-
-        output.WriteLine($"SUBMISSION GATE: {generation.Gate?.Verdict.ToString() ?? "<not evaluated>"}"
-                         + $"  ({generation.Gate?.Refused.Count ?? 0} refused, {generation.Gate?.NotChecked.Count ?? 0} could not run)");
-
-        foreach (var refused in generation.Gate?.Refused ?? Array.Empty<GateResult>())
-            output.WriteLine($"  REFUSED     {refused.Gate}: {refused.Detail}");
-
-        foreach (var notChecked in generation.Gate?.NotChecked ?? Array.Empty<GateResult>())
-            output.WriteLine($"  NOT CHECKED {notChecked.Gate}: {notChecked.Detail}");
 
         if (!admissible)
         {
@@ -360,11 +425,34 @@ public static class LoopCli
         return admissible ? LoopExit.Generated : LoopExit.GeneratedNotAdmissible;
     }
 
-    private static LoopRequest Compose(SubmissionDocument submission, BindingDocument binding)
+    /// <summary>
+    /// 🔴 <b>The submission and the binding, as the request the loop runs — and <c>public</c> so the
+    /// gate-parity test can compare this against <c>harness-gate</c>'s own evaluation of the same pair.</b>
+    ///
+    /// <para>*** EVERY DOCUMENT-SOURCED GATE INPUT COMES FROM <see cref="GateCli.InputsOf"/>. *** It used
+    /// to re-derive four of them here, pass <c>null</c> for four more and hard-code the last two, which
+    /// made the loop's gate both weaker and stronger than the standalone one in different places. A
+    /// submission could pass here and fail there, and this is the path that spends rig time.</para>
+    /// </summary>
+    /// <param name="program">
+    /// The blocks and tag tables under test. <b>It feeds the BUILD STAMP</b>, which is the whole reason it
+    /// must not be inferred: a stamp over an empty set names a program nobody downloaded.
+    /// </param>
+    /// <param name="readFile">
+    /// Used only to read the tag map named by the submission's <c>tagMapPath</c>, for gate 11. Omitting it
+    /// leaves that gate NOT CHECKED rather than comparing against an empty reachable set.
+    /// </param>
+    public static LoopRequest Compose(
+        SubmissionDocument submission,
+        BindingDocument binding,
+        IReadOnlyList<HarnessObject> program,
+        Func<string, string>? readFile = null)
     {
-        var gateReport = GateCli.Evaluate(submission);
+        ArgumentNullException.ThrowIfNull(submission);
+        ArgumentNullException.ThrowIfNull(binding);
+        ArgumentNullException.ThrowIfNull(program);
 
-        var vectors = (submission.Vectors ?? new List<VectorDocument>()).Select(GateCli.ToSubmissionVector).ToArray();
+        var inputs = GateCli.InputsOf(submission, binding, readFile);
 
         var bindings = (binding.Slots ?? new List<SlotBindingDocument>())
             .Select(s => new SlotBinding(
@@ -384,14 +472,12 @@ public static class LoopCli
                 Math.Max(1, b.ResultRegistersNeeded)))
             .ToArray();
 
-        _ = gateReport; // the loop re-runs the gate itself; this only proves the document parses.
-
         return new LoopRequest(
-            vectors,
-            GateCli.ToEnumeration(submission),
-            GateCli.ToFidelity(submission),
-            new AgentIdentity(submission.BlockAuthor ?? string.Empty),
-            GateCli.ToConflicts(submission),
+            inputs.Vectors,
+            inputs.Enumeration,
+            inputs.Fidelity,
+            inputs.BlockAuthor,
+            inputs.Conflicts,
             MirrorGeometry.ForCpu1214C(
                 retentiveBytes: binding.RetentiveBytes ?? 256,
                 baseByte: binding.BaseByte ?? 1000),
@@ -402,17 +488,96 @@ public static class LoopCli
                 binding.BlockNumber ?? 0,
                 binding.TagTableName ?? "HarnessMirror",
                 binding.TagPrefix ?? "HX_"),
-            Array.Empty<HarnessObject>(),
-            RuntimeCompression: new RuntimeCompression(Math.Max(1, submission.RuntimeCompression)),
-            CompressionInputs: null,
-            Deployment: GateCli.ToDeploymentDeclaration(submission),
-            TagMapReach: null);
+
+            // *** THE STAMP IS COMPUTED OVER WHAT IS ACTUALLY DEPLOYED. *** That is the entire point of
+            // it: a manifest says what TIA reported sending, the stamp says what is EXECUTING. This was
+            // Array.Empty<HarnessObject>() with no way to change it.
+            program,
+            RuntimeCompression: new RuntimeCompression(inputs.RuntimeCompression),
+            CompressionInputs: inputs.CompressionInputs,
+            Deployment: inputs.Deployment,
+            TagMapReach: inputs.TagMapReach,
+            SignalStorage: inputs.Storage,
+            UnknownFields: inputs.UnknownFields,
+            AnnotationFields: inputs.AnnotationFields,
+            ConflictEdgesExplicitlyNull: inputs.ConflictEdgesExplicitlyNull);
     }
 
     private static IReadOnlyList<MirroredSignal> Signals(List<MirroredSignalDocument>? rows) =>
         (rows ?? new List<MirroredSignalDocument>())
         .Select(GateCli.ToMirroredSignal)
         .ToArray();
+
+    /// <summary>
+    /// The gate's verdict and every refusal and NOT CHECKED, <b>printed whatever happens next</b>. Returns
+    /// whether it admitted the submission.
+    ///
+    /// <para><b>When there is no verdict it reports WHICH STAGE STOPPED, and never a cause it cannot
+    /// know.</b> This line first read <i>"the map could not be derived, so the gate never ran"</i> — true
+    /// of the only pre-gate stop that existed when it was written, and false the moment the slot join
+    /// landed above the gate, where the map derives perfectly. <b>An error message that asserts a
+    /// conclusion its code cannot reach is a false claim shipped in the product</b>, and this project has
+    /// now been bitten three times by one naming the wrong artifact — most recently a failed BINDING read
+    /// printing the SUBMISSION's filename, which sends its reader to inspect a healthy file.</para>
+    /// </summary>
+    private static bool WriteGate(SubmissionReport? gate, LoopOutcome? stopped, TextWriter output)
+    {
+        output.WriteLine($"SUBMISSION GATE: {gate?.Verdict.ToString() ?? $"<not evaluated — the run stopped at {stopped?.ToString() ?? "an unreported stage"}, which is BEFORE the gate>"}"
+                         + (gate is null ? string.Empty : $"  ({gate.Gates.Count} gate(s) run, {gate.Refused.Count} refused, {gate.NotChecked.Count} could not run)"));
+
+        foreach (var refused in gate?.Refused ?? Array.Empty<GateResult>())
+            output.WriteLine($"  REFUSED     {refused.Gate}: {refused.Detail}");
+
+        foreach (var notChecked in gate?.NotChecked ?? Array.Empty<GateResult>())
+            output.WriteLine($"  NOT CHECKED {notChecked.Gate}: {notChecked.Detail}");
+
+        return gate?.Verdict == SubmissionVerdict.AdmissibleSubjectToJudgement;
+    }
+
+    /// <summary>
+    /// What the stamp was taken over, <b>on every run including the empty one</b> — a report that appears
+    /// only when there is something to say teaches its reader that absence means it did not run.
+    /// </summary>
+    private static void WriteProgramInventory(IReadOnlyList<HarnessObject> program, bool noProgram, TextWriter output)
+    {
+        if (noProgram)
+        {
+            output.WriteLine("program     : NONE — `--no-program-under-test` was declared. *** THIS IS A POSITIVE CLAIM AND IT HAS TEETH: ***");
+            output.WriteLine("              the build stamp is taken over the copy layer alone, so it will only confirm against a device");
+            output.WriteLine("              carrying no block under test, and the load-manifest check reports NotAvailable — which makes");
+            output.WriteLine("              every result package non-conclusive about any block.");
+            output.WriteLine();
+            return;
+        }
+
+        output.WriteLine($"program     : {program.Count} object(s) under test, and THE BUILD STAMP IS TAKEN OVER THEM.");
+        foreach (var obj in program)
+            output.WriteLine($"              {obj.Kind,-9} {obj.Name}  ({obj.Ir.Length} chars of IR)");
+        output.WriteLine();
+    }
+
+    /// <summary>Every value after <paramref name="name"/>, for a flag that may repeat or take a list.</summary>
+    private static IReadOnlyList<string> Values(IReadOnlyList<string> args, string name)
+    {
+        var values = new List<string>();
+
+        for (var i = 0; i < args.Count; i++)
+        {
+            if (!string.Equals(args[i], name, StringComparison.Ordinal))
+                continue;
+
+            for (var j = i + 1; j < args.Count && !args[j].StartsWith("--", StringComparison.Ordinal); j++)
+                values.Add(args[j]);
+        }
+
+        return values;
+    }
+
+    /// <summary>A directory becomes its <c>.ir</c> files, in a stable order; anything else is itself.</summary>
+    private static IReadOnlyList<string> DefaultExpand(string path) =>
+        Directory.Exists(path)
+            ? Directory.GetFiles(path, "*.ir").OrderBy(p => p, StringComparer.Ordinal).ToArray()
+            : new[] { path };
 
     private static void Write(LoopResult result, TextWriter output)
     {
@@ -464,11 +629,22 @@ public static class LoopCli
     private static void Usage(TextWriter output)
     {
         output.WriteLine("usage: harness-run --submission <submission.json> --binding <binding.json>");
+        output.WriteLine("                   (--program <file-or-dir>... | --no-program-under-test)");
         output.WriteLine("                   [--generate-only [--emit <dir>]]");
-        output.WriteLine("                   [--verify --host <ip> [--port 502] [--unit 1] [--allowlist <path>]]");
+        output.WriteLine("                   [--verify --host <ip> --port <n> [--unit 1] [--allowlist <path>]]");
         output.WriteLine("                   [--out <result.json>]");
         output.WriteLine();
         output.WriteLine("Runs the phase 5.3 inner loop: map -> gate -> copy layer -> 0.1b -> gateway -> version -> wave -> packages.");
+        output.WriteLine();
+        output.WriteLine("--program names the blocks and tag tables UNDER TEST, as .ir files (a directory contributes its *.ir).");
+        output.WriteLine("         THE BUILD STAMP IS COMPUTED OVER THEM — a manifest says what TIA reported sending, the stamp says");
+        output.WriteLine("         what is EXECUTING — so a stamp taken over an empty set cannot match a rig carrying the block. There");
+        output.WriteLine("         is no default; --no-program-under-test is the positive claim that there is none, and it is checked");
+        output.WriteLine("         rather than assumed. An .ir this loader cannot classify is a REFUSAL naming the file, never a skip.");
+        output.WriteLine();
+        output.WriteLine("--port has NO DEFAULT and is required with --verify. It defaulted to 502; this rig serves 503 and refuses 502");
+        output.WriteLine("         (measured). 502 is also the port every other Modbus device answers on, so the failure that is NOT");
+        output.WriteLine("         loud is reading a different device and believing it.");
         output.WriteLine();
         output.WriteLine("--generate-only stops after the copy layer is generated and the 0.1b assertion passes, and prints the IR,");
         output.WriteLine("         the mirror width and the latch inventory. IT CONSTRUCTS NO GATEWAY AND READS NO HOST: nothing is");

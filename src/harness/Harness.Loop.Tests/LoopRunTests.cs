@@ -124,7 +124,16 @@ public class LoopRunTests
 
             // The 2.7 join, complete - see Storage(). This is what lets gates 8 and 8c RUN rather than
             // report NOT CHECKED, which is the control the whole change needs.
-            SignalStorage: Storage());
+            SignalStorage: Storage(),
+
+            // 🔴 *** THE CLAIM IS THE CALLER'S TO MAKE, AND HERE IT IS TRUE. *** This fixture composes a
+            // request from TYPED objects, so there is genuinely no channel by which an unknown field could
+            // arrive and the empty set is COMPUTED rather than assumed. It has to be said out loud because
+            // LoopRun used to say it for everybody - including LoopCli, which PARSES two documents and for
+            // which it is false. Omitting these now yields NOT CHECKED on gate 0b, which is the loud
+            // failure the default was chosen to produce.
+            UnknownFields: Array.Empty<string>(),
+            AnnotationFields: Array.Empty<string>());
 
     private static (LoopResult Result, SimulatedGateway Gateway) Run(LoopRequest? request = null, SimulatedGateway? gateway = null)
     {

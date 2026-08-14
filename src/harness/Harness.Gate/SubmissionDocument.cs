@@ -517,6 +517,25 @@ public sealed class VectorDocument
     public int? CompletionValue { get; set; }
     public string? SettlingCondition { get; set; }
     public List<string>? SettlingSignals { get; set; }
+
+    /// <summary>
+    /// 🔴 <b>The one settling form the runner can EVALUATE: the observed value unchanged across this many
+    /// consecutive scans.</b>
+    ///
+    /// <para>*** THE FIELD EXISTED ON THE CHECKED TYPE AND HAD NO WIRE REPRESENTATION, SO EVERY VECTOR IN
+    /// EVERY SUBMISSION RETURNED <c>SettlingState.NotEstablished</c>. *** <c>SettlingDeclaration</c> has
+    /// carried <c>UnchangedForScans</c> since the runner could check it, and <c>ToSubmissionVector</c>
+    /// constructed every declaration with <c>0</c> — the value that means <i>"prose the runner cannot
+    /// check"</i>. <c>LoopRun.Settling</c> returns on that first line, so <b>every settling claim this
+    /// project has made through a document was vacuous</b>: not wrong, not refused, simply never evaluated.
+    /// Third instance of <i>the domain model gained a field and the wire format did not</i>.</para>
+    ///
+    /// <para><b>Zero remains a legal, meaningful value and is NOT refused</b> — it says the declared
+    /// condition is prose, which is the honest state for a condition no structural form captures. Gate 6
+    /// still requires a <c>settlingCondition</c>, and whether the condition implies finality is gate 6b's
+    /// judgement either way. What zero must never be is a value nobody chose.</para>
+    /// </summary>
+    public int SettlingUnchangedForScans { get; set; }
     public int MaxDurationScans { get; set; }
     public List<BlacklistDocument>? Blacklist { get; set; }
     public int CompressionFactor { get; set; } = 1;
