@@ -4442,6 +4442,94 @@ regeneration reproduces `16#21D74D35` exactly.
 
 ---
 
+## THE RUN ATTEMPT WITH `harness-run` — STOPPED AT THE GATE, AND ONE ROOT CAUSE EXPLAINS ALL OF IT
+
+2026-08-14, against `harness-run` / `harness-gate --binding` (commit `359d657`) and
+`converter conflict-graph` (`4ea56ea`). **No wave ran. No rig traffic. No write grant was created.**
+
+### What was authored: the coordinator-side binding
+
+No binding JSON existed, so one was written (`binding-b-1slot.json`, job scratch — the machine-readable
+counterpart of `harness-binding.md`): `FC_HarnessCopyLayer` **FC 9001**, tag table `HarnessMirror`,
+prefix `HX_`, `baseByte` 1000, 12 vector targets (3 `Int` + 9 `Time` = 21 registers) and 8 `Bool`
+result sources — **the deployed geometry exactly, and it sums to the measured 35**.
+
+> **A six-slot binding is not expressible, and the tool proved it.** Set B names six slots. Six slots
+> declaring the same result tags is an **`ArgumentException: An item with the same key has already been
+> added. Key: HopperBlockedAlarm`** — the map is one dictionary keyed by tag across all slots. That
+> corroborates from a second direction what §6 of the binding argued structurally: **the deployed
+> mirror is ONE region.** *(Minor defect: the CLI reports this as "could not read <the SUBMISSION>"
+> when the fault is in the BINDING. It names the wrong file.)*
+
+### 🔴 GATE 5 REFUSED — the predicted defect landed on the real submission
+
+**17 expectations across 11 vectors, all `MapDoesNotProvideIt`.** Measured, correcting the brief's
+figure: set B declares **17 `Latched` expectations across 11 of 27 vectors** (not 16 of 27), against
+17 `Sampled`.
+
+*** BUT THE 17 REFUSALS ARE NOT ALL THE SAME, AND THE DIFFERENCE MATTERS: ***
+
+| | count | verdict on the refusal |
+|---|---|---|
+| `Latched` on `HopperBlockedAlarm` / `HopperBlockedInhibit` | **13** | ✅ **CORRECT.** The copy layer mirrors these with a plain `COIL` and **no per-signal latch**. The self-declared map was asserting a capability that does not exist — exactly the fixture defect, now on the real submission |
+| `Latched` on the four `HBA_Violation_*` | **4** | 🔴 **FALSE REFUSAL.** These signals **genuinely ARE latched on the device** — `FB_HarnessViolationLatch` (FB 9003) is deployed and latching is its whole purpose |
+
+The cause of the false four: **`MirroredSignalDocument` carries `Tag` and `Type` and NO instrumentation
+mode**, and `FromMinimalCopyLayer` hard-codes **every** signal to `{Sampled}`. So a real, deployed latch
+is **structurally undeclarable**, and the gate refuses a vector that was right.
+
+➜ ***BOTH FAILURE DIRECTIONS, IN ONE GATE RUN, FROM ONE MISSING FIELD.*** And the standing rule applies
+to the four: *an over-firing gate decays into a warning* — a gate that refuses correct submissions is
+noise, and noise gets switched off, after which the 13 it was right about go through unchecked.
+**The declaration was NOT weakened to get through.**
+
+### Gates 8 / 8c — the converter fix landed, ran, and CORRECTLY WITHHELD
+
+`converter conflict-graph --project ir/test-project001 --submission … --json` → **exit 2, key withheld,
+gate stays NOT CHECKED.** It refused rather than emitting an empty list, which is the tool working.
+Its reason is the finding:
+
+> *** 16 OF 17 SUBMISSION SIGNALS COULD NOT BE RESOLVED TO A STORAGE PATH. THE ONE THAT RESOLVED IS
+> `HopperBlockedAlarm` — THE ONLY SIGNAL WHOSE SPEC NAME AND BLOCK NAME COINCIDE. ***
+
+The 16 are the eleven `HBA_Stim.*Ms` command members, the four `HBA_Violation_*`, and
+`HopperBlockedInhibit` — **precisely the set the harness binding document exists to translate.**
+
+### 🔴 THE ROOT CAUSE, MEASURED THREE INDEPENDENT WAYS IN ONE SESSION
+
+*** THE HARNESS'S DATA MODEL ASSUMES THE SPECIFICATION'S SIGNAL NAME **IS** THE BLOCK'S TAG NAME.
+WHEREVER THEY DIFFER, EVERY MECHANICAL PATH FAILS — AND THE ONLY PLACE THE TRANSLATION WAS EVER
+RECORDED IS A PROSE MARKDOWN TABLE. ***
+
+1. **The static interface check** — `HopperBlockedInhibit` is absent from the corpus (D1).
+2. **Gate 5 / the binding schema** — cannot express the rename, and cannot express instrumentation mode.
+3. **The conflict graph** — 16 of 17 unresolvable; the sole success is the sole name collision.
+
+➜ ***THAT IS WHY D1 COULD BE LAUNDERED IN THE FIRST PLACE: THERE WAS NOWHERE ELSE FOR THE TRANSLATION
+TO LIVE.*** A prose table is the only artifact in the system that can hold a spec-name → block-name
+pair, and prose is exactly what no gate reads. The repair is a **declared, machine-readable alias with
+its own field** — `MirroredSignalDocument` gaining `specName` beside `tag`, and a mode — so the
+translation becomes data that gates can check, instead of a sentence that absorbs a finding.
+
+### The run itself
+
+`harness-run --submission … --binding …` → **exit 1**, `OUTCOME: NotAdmissible`, *"no copy layer was
+generated, nothing was deployed and no wave was run"*, and:
+
+> `NO PACKAGES — nothing about the block was tested. That is a statement about the RUN, not about the
+> block.`
+
+**The loop failed closed before the device boundary**, so `--verify` was never reached and the rig was
+never contacted. **Wave duration: none — no wave ran.** The measured **high-word-first** order is
+carried forward unused.
+
+**D1–D7:** D1 surfaced — three times, all statically. **D2, D3, D4, D5 and D6 did NOT surface**, and
+cannot until a wave runs; D7 remains settled from the earlier read and needed no run. *A predicted
+finding that fails to appear is as interesting as one that does* — here five failed to appear for a
+reason that has nothing to do with the block.
+
+---
+
 ## ✅ THE RIG SERVES — AND TWO CONTRADICTIONS IN THIS FILE, STRUCK 2026-08-14
 
 **The `:503 REFUSED three of three` entry above is SUPERSEDED and must not be read as current.** It
