@@ -98,11 +98,49 @@ namespace Ladder.Wave.Cli
             var agent = options.Required("--agent");
             var store = options.Store();
 
+            // *** THE COMPUTED PATH AND THE DECLARED PATH ARE MUTUALLY EXCLUSIVE, BY REFUSAL. ***
+            // Accepting both would mean silently choosing which to believe, and the one a submitting
+            // agent typed is the one D9 forbids.
+            var closureFile = options.Value("--reachable-state");
+            var declared = options.Many("--reaches");
+            var declaredFrom = options.Value("--reaches-from");
+
+            IReadOnlyList<string> reaches;
+            string reachesFrom;
+
+            if (closureFile != null)
+            {
+                if (declared.Count > 0 || declaredFrom != null)
+                {
+                    Console.Error.WriteLine(
+                        "REFUSED: --reachable-state cannot be combined with --reaches / --reaches-from. " +
+                        "One is COMPUTED from the IR by `converter reachable-state`, the other is DECLARED by " +
+                        "the submitting agent; taking both would mean choosing which to believe, and D9's " +
+                        "whole claim is that the choice is not the submitter's to make.");
+                    return ExitUnusable;
+                }
+
+                var read = ReachableStateDocument.Read(closureFile, options.Required("--reachable-block"));
+                if (!read.Ok)
+                {
+                    Console.Error.WriteLine("REFUSED: " + read.Refusal);
+                    return ExitRefused;
+                }
+
+                reaches = read.ReachableState;
+                reachesFrom = read.Provenance;
+            }
+            else
+            {
+                reaches = declared;
+                reachesFrom = declaredFrom ?? string.Empty;
+            }
+
             var slot = new TestSlot(
                 slotId,
                 agent,
-                options.Many("--reaches"),
-                options.Value("--reaches-from") ?? string.Empty,
+                reaches,
+                reachesFrom,
                 options.Many("--model"),
                 options.Int("--width") ?? 0,
                 options.Value("--tests-model"));
@@ -329,10 +367,19 @@ namespace Ladder.Wave.Cli
             Console.WriteLine(@"wave-cli — drive wave-set admission and slot colouring.
 
   wave-cli submit --store <dir> --agent <id> --slot <id>
-                  [--reaches <name>]...      state this slot can reach (D9), computed by cross-check
-                  [--reaches-from <text>]    WHERE that closure came from. Required by admission:
-                                             'computed and found empty' and 'nobody computed it' are
-                                             the same empty set and opposite actions
+                  --reachable-state <file> --reachable-block <name>
+                                             THE COMPUTED PATH. Reads the closure and its provenance
+                                             out of `converter reachable-state --project <ir-dir>
+                                             --json`. A block whose closure the producer WITHHELD is
+                                             a REFUSAL here, never a submission with no reachable
+                                             state. Cannot be combined with the two flags below.
+                  [--reaches <name>]...      THE DECLARED PATH — the submitting agent states its own
+                  [--reaches-from <text>]    closure, which is the shape D9 forbids. Kept for fixtures
+                                             and for a corpus the converter cannot read; prefer
+                                             --reachable-state. WHERE the closure came from is
+                                             required by admission: 'computed and found empty' and
+                                             'nobody computed it' are the same empty set and opposite
+                                             actions
                   [--model <name>]...        model instances this slot parametrises (D28)
                   [--tests-model <name>]     this slot IS the test of that model (X-I)
                   [--width <registers>]      slot width on the wire
