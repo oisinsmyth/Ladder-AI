@@ -8,8 +8,12 @@ tooling ready to use in the morning on a live project.* This is the answer, and 
 > run against a real controller. The **closed-loop test path is NOT** — no conformance wave has ever
 > executed end to end. Use the first. Do not build a plan on the second today.
 
-> ✅ **THE RELEASE BINARY IS NOW CURRENT — resolved 05:5x, nothing owed.** It was stale and it is not
-> any more. See *THE RELEASE BINARY WAS STALE* below for what it means and how it was proved.
+> ✅ **THE RELEASE BINARY IS NOW CURRENT — rebuilt and verified, nothing owed.** It was stale and it is
+> not any more. See *THE RELEASE BINARY WAS STALE* below for how that was proved.
+
+> 📋 **AND ONE FIVE-MINUTE JOB IS WAITING FOR YOU, WHICH IS THE ONLY THING THAT IS:** review the
+> transcribed coordinator binding and decide whether to commit it. See *ONE THING WAITING FOR YOU TO
+> DECIDE*. **Nothing else in this document needs a person before you start.**
 
 ---
 

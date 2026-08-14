@@ -301,6 +301,17 @@ running does not license:
     ➜ **When a fix turns an existing test red, read the test's INTENT before assuming the fix is
       wrong** — and when the test guarded a real property (here: a committed corpus may legitimately
       lag), **keep the property and re-test it against a run that actually compares something.**
+- *** AN EDIT THAT SUPERSEDES A SECTION MUST DELETE THE SUPERSEDED ONE — AND WHEN A DOCUMENT
+  CONTRADICTS ITSELF, THE READER OBEYS THE MOST ACTIONABLE HALF. *** The orchestrator rewrote the
+  readiness page's headline to *"the binary is current, nothing owed"* on 2026-08-14 and **left the
+  whole obsolete section below it**, still saying *"Run this first thing"* and *"UNTIL YOU DO, TWO
+  DIAGNOSTICS ARE LYING."* ***THE STALE HALF WAS THE ONE WITH A COMMAND IN IT*** — so a morning reader
+  would have rebuilt an already-current binary and gone on distrusting two diagnostics that had just
+  started telling the truth. **Caught by a lane, not by its author.**
+    ➜ **After editing a status claim, grep the document for the claim you just reversed.** *A stale
+      instruction outranks a fresh statement, because one of them tells the reader what to do.*
+    ➜ **And do not leave a placeholder in a delivered document** — a literal `05:5x` shipped in the
+      same edit. *If the exact value does not matter, do not print one.*
 - *** THE CRLF RULE IS NOT UNIFORM, AND `.gitattributes` IS THE AUTHORITY — NOT THE GENERAL RULE. ***
   The orchestrator did this on 2026-08-14, having spent the night telling lanes to verify endings with
   `file`: it converted a tool-written `.json` fixture to CRLF **because the repo convention is CRLF**,
