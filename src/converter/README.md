@@ -2912,6 +2912,128 @@ including the laundering test), and scope crept to include C-103 (1 red). 25 new
 reviews the *same block with the same defect and one number changed*. Without it, a classifier that
 called everything harness would leave every other assertion in the file green.
 
+## 🔴 `cross-check` — FB-internal paths were unqualified, so it reported multi-writers that do not exist (2026-08-14)
+
+The usage graph keys every path **verbatim**, and an FB addresses its own interface member with **no
+root at all** — `IO.Step`, `Time`. So three FBs, each with its own `IO` static of its own UDT type
+and its own `Time : Real` temp, all landed on **one key**, and `cross-check` reported them as
+**cross-block multi-writers**. They are different members of different instances that share a leaf
+name and nothing else.
+
+**Measured on `ir/test-project001`.** Of the four multi-writer paths spanning more than one block:
+
+| path | writers | verdict |
+|---|---|---|
+| `IO.Step` | FB_PusherControl + FB_ShredderSequencer | ❌ **fictitious** — members of `UDT_PusherIO` and `UDT_ShredderSequencerIO` |
+| `Time` | FB_MotorFwdRevSystem + FB_PusherControl + FB_ShredderSequencer | ❌ **fictitious** — a `Real` temp declared separately in each |
+| `iDB_MotorFwdRevSystem_Shredder.IO.FaultFB` | FC_ControlMain + OB100 | ✅ real |
+| `iDB_MotorFwdRevSystem_Shredder.IO.RecentStart` | FC_ControlMain + OB100 | ✅ real |
+
+After the fix the cross-block set is **exactly the two real ones**. *A false finding is the equal of
+a false green here — the first one is what gets a check switched off* — and this was caught only
+because a lane refused to feed the output into a submission gate it did not trust.
+
+**The fix keys on whether the block DECLARES the root**, never on whether the path has a dot. *"Is
+this bare name the block's own member or a global PLC tag?"* cannot be answered from the name —
+`PressureTripCount` (an FB static) and `Start_PB` (a tag-table tag) are both bare single-component
+references — and is answered exactly by the block's own declarations, which the IR states outright.
+Temps and constants are included: a temp named `Time` **is** the collision.
+
+`multiWriters` and `soleWriters` now regroup by **storage identity** and carry an `owner` field —
+the owning block for a block-local path, `null` for a global one. **A consumer must key on `owner`
+rather than parse the path: an emitted string is not a schema.**
+
+⚠️ **What it deliberately does NOT do: it does not pool an FB-internal member with the
+`iDB.<suffix>` form.** Those are one storage when the FB has one instance, but an FB with **two** has
+an internal write landing in **both**, and pooling with either would invent a conflict exactly as the
+bug did. The aliases are **reported** on the fact (`instanceAliases`) so a consumer can join them
+knowingly. Every FB in `test-project001` has exactly one instance DB — *which is precisely why
+designing only for that would be designing for the case that happens to exist.*
+
+**Sibling analyses checked.** `deadMembers`' interface half already restricted the bare form to the
+owning FB; `ioBoundary` and `siblingRefs` carry the block on every row. All three are
+**byte-identical across the fix** on the committed corpus, so `multiWriters`/`soleWriters` were the
+only two affected.
+
+**`soleWriters` was under-reporting**, which is the more dangerous direction: two FBs each writing
+their own member once pooled into a two-writer path, so it read as multi-written — *not vulnerable to
+a deletion* — when each was its FB's **sole** writer. That did **not** bite on this corpus (no path
+moved between the tables) and is recorded as constructed-not-observed; a test builds the case
+deliberately.
+
+11 new tests, **every aliasing assertion paired with a genuine cross-block multi-writer that must
+still be found** — a fix that silences the false one by silencing everything is the obvious failure
+mode. Mutation-tested three ways: qualification disconnected (6 red), everything qualified (6 red,
+including two pre-existing tests), and the plausible **name-shape heuristic** (2 red — exactly the
+two tests written for it). *The pre-existing suite stayed green through both the defect and the fix
+and could not tell them apart.*
+
+## `conflict-graph` — the submission-scoped emission the harness gate consumes (2026-08-14)
+
+```
+converter conflict-graph --project <ir-dir> (--submission <file> | --signals <file>) [--json] [--allow-unresolved]
+```
+
+**Not `cross-check` with a filter.** `cross-check` emits whole-project **fact tables keyed on a
+storage path**; `Harness.Results.SubmissionGate` gates 8/8c consume **edges between blocks** carrying
+a provenance and a signal class. Those are not the same shape — an instruction to bridge them was
+withdrawn as wrong, and the lane that received it correctly supplied nothing rather than reshaping
+one into the other. The emitted `conflictEdges` matches `ConflictEdgeDocument` field for field
+(`blockA`/`blockB`/`provenance`/`signal`/`class`), **read off the consumer** rather than written and
+handed over for the harness to accept.
+
+### *** An absent graph and an empty one are different documents ***
+
+`conflictEdges: []` is the **positive claim that the graph ran and found nothing**; a missing key is
+`NOT CHECKED` and gates. So when the graph did not run the key is **omitted** — not `[]`, and **not
+`null`**, because a null would let a lenient deserializer round it to the empty list and *restore the
+false claim one layer down*. Three states withhold it, each printing its reason:
+
+| state | why the key is withheld |
+|---|---|
+| **partial corpus** (any project file unparseable) | an unread file can hold the second writer that makes a signal a conflict |
+| **no signals supplied** | nothing was scoped and nothing was examined (FI-44) |
+| **signals that did not resolve** to exactly one storage path | an edge list over a scope nobody looked at is empty for a reason that has nothing to do with conflicts |
+
+`--allow-unresolved` is the named escape for the third, never the default, and the gap is still
+reported in full beside the edges it does emit.
+
+### Only `MultiWriter`, and that is a refusal rather than an omission
+
+`CallGraph` **is** derivable — the graph records every CALL — but a call edge is about no signal, so
+it could only carry an `Unstated` class, and the consumer's `ProvenanceComplete` is **all-or-nothing**:
+*** one such edge would turn gate 8c to `NOT CHECKED` for the entire submission. *** A helpful-looking
+extra edge would silently disable the report it was added beside. `computedConflicts` is never
+emitted for the same reason (a bare name carries `Unstated` provenance); gate 8's packing set derives
+from the edges.
+
+### Signal class, derived and never declared
+
+From the same reserved 9000–9999 band `converter review`'s harness scope uses, read off each **writing
+block's own number**. Any **plant** writer ⇒ `Deliverable` (the multi-writer ships); **all harness** ⇒
+`HarnessInstrumentation`; anything **unclassifiable** ⇒ `Unstated`, which fails the gate closed. Exit
+**3** names that last case, because at the gate it appears as a flat `NOT CHECKED` for the whole
+submission with nothing naming the cause — and the operator who can fix it is the one running this.
+
+### Ambiguity is refused, not guessed
+
+A signal name matching **more than one distinct storage** is `AMBIGUOUS` with both candidates named —
+*picking a candidate is exactly the aliasing above, wearing a different hat.* Instance aliases of one
+storage are collapsed first, so a determinate signal is never falsely refused (which is what
+`instanceAliases` buys). Measured: `IO.Step` is refused, naming `FB_PusherControl.IO.Step` and
+`FB_ShredderSequencer.IO.Step`.
+
+**Exit codes**: 0 computed (an empty list is the *earned* claim) · 1 usage · 2 **NOT COMPUTED, key
+withheld** · 3 emitted but an edge is unprovenanced.
+
+Every edge is derived from the **corrected** storage grouping (`StorageGroups`, one producer for both
+consumers), so the fictitious cross-block multi-writers above are **structurally incapable** of
+becoming edges: a block-local storage has all its writers in one block, and one block is not a
+conflict.
+
+15 tests; mutation-tested three ways — emit the key unconditionally (2 red), never declare ambiguity
+(1 red), guess `Deliverable` instead of `Unstated` (1 red).
+
 ## Rules (docs/05-architecture.md, 04 §8/§10)
 
 - Unknown elements are hard errors, never warnings or best-effort.
