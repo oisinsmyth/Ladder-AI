@@ -414,11 +414,21 @@ public static class RigControlCli
     ///
     /// <para>*** A NARROWING NOBODY CAN SEE BECOMES A PLACE TO HIDE, and a check that only speaks when
     /// it exempts something cannot be told from one that has stopped working. *** The serial number is
-    /// the stronger identifier and this transport cannot read one: SZL 0x001C was refused at every
-    /// index on this CPU, and the marker-DB route needs S7 variable access, which this rig refuses
-    /// CPU-wide in both RUN and STOP. Refusing on it would make the gate permanently unsatisfiable —
-    /// and a gate that refuses every legitimate run is removed within a week, by somebody right to
-    /// remove it. So it is EXCLUDED, BY NAME, OUT LOUD.</para>
+    /// the stronger identifier and this transport cannot read one. Two routes, two different reasons:
+    /// SZL 0x001C is RECORDED as refused at every index on this CPU (2026-08-11, not re-taken — the
+    /// entry's <c>useCpuInfoSerial</c> is false, so nothing has tried it since); and the marker DB
+    /// reads back 0x00C00000, <i>item not available</i>, meaning DB38 is OPTIMIZED (invisible to
+    /// classic S7comm) or absent.</para>
+    ///
+    /// <para>⚠️ <b>This comment used to blame the second on "S7 variable access refused CPU-wide",
+    /// which is not the cause and is no longer even true</b> — PUT/GET was enabled on this CPU and
+    /// <c>MBRead</c> now succeeds (re-measured read-only 2026-08-14). The conclusion is unchanged; the
+    /// mechanism was wrong, and *** a plausible mechanism attached to a correct conclusion is how a
+    /// wrong reading of a device stays unexamined. ***</para>
+    ///
+    /// <para>Refusing on the serial would make the gate permanently unsatisfiable — and a gate that
+    /// refuses every legitimate run is removed within a week, by somebody right to remove it. So it is
+    /// EXCLUDED, BY NAME, OUT LOUD.</para>
     /// </summary>
     private static string DescribeIdentityNarrowing(AllowlistEntry entry)
     {

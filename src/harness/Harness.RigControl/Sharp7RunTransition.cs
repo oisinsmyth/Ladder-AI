@@ -12,18 +12,33 @@ namespace Harness.RigControl;
 /// therefore has to be verifiable by eye. Every decision worth arguing about is above this line and has
 /// tests.</para>
 ///
-/// <para>🔴 <b>WHETHER THE RUN REQUEST WORKS ON THIS CPU IS NOT ESTABLISHED, AND THE ANALYSIS PREDICTS
-/// IT DOES NOT.</b> <c>PlcHotStart</c> sends the classic S7comm PI service <c>P_PROGRAM</c>, function
-/// <c>0x28</c>, inside a JOB pdu (<c>32 01</c>) — read out of Sharp7 1.1.82's own
-/// <c>S7_HOT_START</c> telegram, 2026-08-14. Measured on this rig on 2026-08-12, in BOTH RUN and STOP:
-/// job-class VARIABLE services (<c>DBRead</c>, <c>MBRead</c>) are refused CPU-wide with
-/// <c>0x00040000</c> — a well-formed reply too short to be a read response, i.e. a negative
-/// acknowledgement from the CPU — while USERDATA/SZL requests (<c>GetOrderCode</c>,
-/// <c>PlcGetStatus</c>) are served throughout. *** THE RUN REQUEST SITS ON THE REFUSED SIDE OF THAT
-/// SPLIT, WHICH HAS NOW DECIDED FOUR THINGS ON THIS DEVICE. *** It has never been sent, because the
-/// fence refuses first. If it is ever sent and comes back refused, that is a RESULT and not a bug:
-/// compare the elapsed time against the order-code round trip to tell a CPU refusal from a local
-/// rejection, and record it.</para>
+/// <para>🔴 <b>WHETHER THE RUN REQUEST WORKS ON THIS CPU IS NOT ESTABLISHED, IN EITHER DIRECTION.</b>
+/// <c>PlcHotStart</c> sends the classic S7comm PI service <c>P_PROGRAM</c>, function <c>0x28</c>,
+/// inside a JOB pdu (<c>32 01</c>) — read out of Sharp7 1.1.82's own <c>S7_HOT_START</c> telegram,
+/// 2026-08-14. It has NEVER BEEN SENT, because the fence refuses first, and nothing here predicts
+/// what it would do.</para>
+///
+/// <para>⚠️ <b>THIS PARAGRAPH PREVIOUSLY PREDICTED REFUSAL, AND THE PREDICTION WAS BUILT ON A STALE
+/// RECORD. RETRACTED 2026-08-14.</b> It argued that job-class VARIABLE services were refused CPU-wide
+/// with <c>0x00040000</c> — true when measured on 2026-08-12 — so the run request, being job-class,
+/// sat on the refused side of that split. *** THAT FACT HAS SINCE CHANGED: PUT/GET WAS ENABLED ON THIS
+/// CPU. *** Re-measured read-only on 2026-08-14, twice by two parties: <c>MBRead(0,1)</c> SUCCEEDS at
+/// a full round trip (79 ms), and <c>DBRead(38,...)</c> fails with <c>0x00C00000</c> — <i>item</i> not
+/// available, a BLOCK-SPECIFIC code (DB38 is optimized or absent), not the CPU-wide negative
+/// acknowledgement. Job-class variable access is SERVED here today, so the argument for expecting a
+/// refusal is gone.</para>
+///
+/// <para><b>But do not read that as "expected to work" — it moves this to a different KIND of unknown,
+/// not to a positive.</b> Three things stand between "PUT/GET is on" and "this telegram will be
+/// answered", and none of them has been tested: PUT/GET governs the VARIABLE services (Read/Write Var,
+/// <c>0x04</c>/<c>0x05</c>), and <c>0x28</c> is a different function that happens to share the job
+/// class; whether an S7-1200 implements the classic <c>P_PROGRAM</c> PI service AT ALL is unknown here
+/// (TIA's own mode control for a 1200 does not go over classic S7comm); and a CPU may gate mode
+/// control on its protection level independently of PUT/GET. *** AN UNTESTED TELEGRAM IS UNTESTED. ***</para>
+///
+/// <para>If it is ever sent and comes back refused, that is a RESULT and not a bug: compare the
+/// elapsed time against the order-code round trip (~80–110 ms measured) to tell a CPU refusal from a
+/// local rejection, and record it.</para>
 ///
 /// <para><b>What is NOT reachable from here, deliberately:</b> <c>PlcStop</c>, <c>PlcColdStart</c>,
 /// <c>DBWrite</c>, <c>MBWrite</c>, <c>WriteArea</c>, <c>Download</c>, <c>Delete</c>,

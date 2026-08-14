@@ -31,10 +31,48 @@ for it.
 | route | verdict | basis |
 |---|---|---|
 | **Openness, inside a download** (`download-probe --disruptive`) | ✅ **REACHABLE — MEASURED** | `StopModules+StartModules answered, exit 0` (2026-08-14); `rig-read` then read `Running (8)` |
-| **Classic S7comm PI service** (`PlcHotStart`), i.e. *this tool* | ⚠️ **NOT ESTABLISHED — ANALYSIS PREDICTS REFUSED** | see below |
+| **Classic S7comm PI service** (`PlcHotStart`), i.e. *this tool* | ⚠️ **NOT ESTABLISHED, IN EITHER DIRECTION — NEVER SENT** | see below |
 | **Modbus TCP** (the data path) | 🔴 **STRUCTURALLY IMPOSSIBLE** | `MB_SERVER` is a *program block*; in STOP the program does not execute, so nothing answers on `:503`. The transport that would report the problem is the one the problem switches off |
 
-### Why the S7comm route is predicted refused
+### 🔴 RETRACTION, 2026-08-14 — this section used to say "predicted refused". It was wrong.
+
+**What it argued:** `PlcHotStart` is job-class; job-class variable access is refused CPU-wide on this
+rig with `0x00040000`; therefore the run request sits on the refused side of that split.
+
+**Why it was wrong, and it is the more instructive half:** the second premise was a fact I **read from
+a 2026-08-12 record and never re-took**. ***PUT/GET WAS ENABLED ON THIS CPU IN THE MEANTIME.***
+Re-measured read-only on 2026-08-14, independently by two parties with `rig-read`:
+
+```
+DBRead(db=38, start=0, size=1) -> rc=12582912 (0x00C00000): CPU: Item not available  [93 ms]
+MBRead(0, 1)                   -> ok  [79 ms]      <- job-class variable access, ANSWERED
+GetOrderCode (SZL)             -> ok  [108 ms]
+CPU run state                  -> Running (8)
+```
+
+`MBRead` **is** job-class variable access and it succeeds, at a full round trip. `DBRead(38)` fails
+with `0x00C00000` — *item* not available, a **block-specific** code meaning DB38 is optimized or
+absent — **not** the CPU-wide negative acknowledgement `0x00040000`. So the split the prediction rested
+on no longer exists.
+
+> ***A RECORDED FACT ABOUT A DEVICE HAS A DATE, AND A CONFIGURATION CHANGE DOES NOT ANNOUNCE ITSELF TO
+> THE DOCUMENT THAT RECORDED IT.*** The failure was not the inference — the inference was sound on its
+> premises. It was **citing a measurement instead of re-taking one**, on a claim that was load-bearing
+> for the whole ruling, when re-taking it cost one read-only command.
+
+**This does NOT make the route "expected to work."** It moves it to a *different kind of unknown*.
+Three things stand between "PUT/GET is on" and "this telegram is answered", and none has been tested:
+
+1. PUT/GET governs the **variable** services (Read/Write Var, `0x04`/`0x05`); `0x28` is a **different
+   function** that merely shares the job class.
+2. Whether an S7-1200 implements the classic `P_PROGRAM` PI service **at all** is unknown here — TIA's
+   own mode control for a 1200 does not go over classic S7comm.
+3. A CPU may gate mode control on its **protection level**, independently of PUT/GET.
+
+***AN UNTESTED TELEGRAM IS UNTESTED.*** The only way to settle it is to send it, which requires
+`writeEligible: true`. When that happens, the elapsed-time discriminator below still applies.
+
+### What the telegram is
 
 Read out of Sharp7 1.1.82's own `S7_HOT_START` telegram on 2026-08-14:
 
@@ -44,27 +82,15 @@ S7_HOT_START = 03 00 00 25 02 F0 80 32 01 00 00 0C 00 00 14 00 00 28 ... 50 5F 5
                                           32 01 = S7comm JOB      0x28 = PI service
 ```
 
-So `PlcHotStart` is a **job-class** request — the same PDU class as Read Var / Write Var, and a
-*different* class from the userdata/SZL requests `GetOrderCode` and `PlcGetStatus` ride on.
-
-Measured on this rig 2026-08-12, **in both RUN and STOP**:
-
-- **job-class variable services are refused CPU-wide** — `DBRead(38,0,1)`, `DBRead(38,0,104)` and
-  `MBRead(0,1)` all return `0x00040000`, which Sharp7 sets *after* `RecvIsoPacket()` has already
-  succeeded: a well-formed reply too short to be a read response, i.e. **a negative acknowledgement
-  from the CPU**, confirmed by each failure costing a full round trip;
-- **userdata/SZL requests are served throughout** — `GetOrderCode` and `PlcGetStatus` answer in both
-  states.
-
-***THE RUN REQUEST SITS ON THE REFUSED SIDE OF THAT SPLIT, WHICH HAS NOW DECIDED FOUR THINGS ON THIS
-DEVICE.*** It has **never been sent**, because the fence refuses first, so this is an inference and
-is labelled as one. Two further unknowns are stated rather than papered over: whether PUT/GET (the
-recorded likely cause of the variable-access refusal) gates PI services at all, and whether an
-S7-1200 implements the classic `P_PROGRAM` PI service in the first place.
+So `PlcHotStart` is a **job-class** request (`32 01`) — the same PDU class as Read Var / Write Var,
+and a *different* class from the userdata/SZL requests `GetOrderCode` and `PlcGetStatus` ride on. That
+is a fact about the **telegram**, and it is the only settled fact here. It was the load-bearing half of
+the retracted prediction and it survives the retraction intact; what did not survive was the claim
+about how this CPU treats that class.
 
 **If it is ever sent and comes back refused, that is a RESULT, not a bug.** Compare its elapsed time
-against the order-code round trip (~72 ms median): a failure costing a full round trip was
-**answered** by the CPU; one returning immediately was rejected locally.
+against the order-code round trip (79–108 ms measured 2026-08-14): a failure costing a full round trip
+was **answered** by the CPU; one returning immediately was rejected locally.
 
 ### What this tool is actually for — the premise, corrected
 
@@ -114,9 +140,19 @@ restated in `RunTransitionFence` in the same order and with the same fail-closed
 
 ### What the fence does NOT cover, printed on every run
 
-The **serial number** is the stronger identifier and this transport cannot read one: SZL `0x001C` was
-refused at every index on this CPU, and the marker-DB route needs S7 variable access, which this rig
-refuses CPU-wide. Refusing on it would make the gate **permanently unsatisfiable**, and a gate that
+The **serial number** is the stronger identifier and this transport cannot read one. Two routes, two
+different reasons, and *the second reason was also stated wrongly here until 2026-08-14*:
+
+- **SZL `0x001C`** — recorded as refused at every index on this CPU (2026-08-11). Not re-taken; the
+  entry's `useCpuInfoSerial` is `false`, so today's `rig-read` never tried it. **A recorded fact,
+  labelled as one.**
+- **The marker DB** — `DB38` reads back `0x00C00000`, *item not available*: the block is **optimized
+  (invisible to classic S7comm) or absent**. This README previously blamed CPU-wide refusal of S7
+  variable access, which is **not the cause and is no longer even true** — `MBRead` succeeds. The
+  conclusion survives; ***the mechanism I gave for it did not, and a plausible mechanism attached to a
+  correct conclusion is how a wrong reading of a device stays unexamined.***
+
+Refusing on the serial would make the gate **permanently unsatisfiable**, and a gate that
 refuses every legitimate run is removed within a week by somebody right to remove it. So it is
 excluded **by name, with a count, on every run — including the runs that exclude nothing**:
 
