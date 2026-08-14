@@ -1,0 +1,32 @@
+BLOCK FB FB_HxDwellTimer
+ROOTID 0
+NUMBER 9011
+LANGUAGE LAD
+TITLE "Harness corpus - dwell timer"
+COMMENT "Generated test material for the tooling campaign, not plant logic - numbered in the 9000-9999 harness band and never called by the plant program. It reproduces a timed response against a commanded preset: DwellDone asserts once DwellCommand has been held continuously for DwellPreset, DwellElapsed publishes how far the current dwell has run, and DwellReset returns the timer to zero. The preset is an input rather than a constant so the block cannot satisfy a timing requirement by defining its own terms, and DwellPresetEcho returns the preset unchanged through the same 32-bit path it arrived on, so a word-order error in the mirror shows up as a value that differs from what was written rather than only as a duration that looks plausible. Every member it reads or writes lives in its own instance DB, including its timer instance; it names no PLC tag, no global DB and no other block's data, so it shares no signal with any other block in the project and can be driven at the same time as all of them."
+
+INTERFACE
+  INPUT
+  OUTPUT
+  STATIC
+    DwellCommand : Bool COMMENT "Commanded input, written every scan by the harness copy layer. The dwell runs while this is held and no reset is present."
+    DwellReset : Bool COMMENT "Commanded reset, written every scan by the harness copy layer. Returns the elapsed time to zero and drops DwellDone while it is held."
+    DwellPreset : Time COMMENT "Commanded dwell time, written by the harness copy layer as a 32-bit value across two mirror registers. An unwritten preset is T#0S, in which case the dwell completes on the first scan the command is held."
+    DwellDone : Bool COMMENT "The commanded dwell has completed and the command is still held."
+    DwellElapsed : Time COMMENT "How long the current dwell has run, published every scan. 32-bit, read back across two mirror registers."
+    DwellPresetEcho : Time COMMENT "The commanded preset returned unchanged. Written and read on the same 32-bit path, so it pins the mirror's word order to something outside the timing behaviour rather than leaving both to be judged from one duration."
+    DwellTimer : TON_TIME VERSION 1.0 SETPOINT
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool
+
+NETWORK 1 "Dwell Timer"
+  COMMENT "Times the command being held. The reset is folded into the timer's own enable rather than clearing the outputs downstream, so a reset returns the elapsed time to zero instead of hiding a still-running dwell."
+  TON(DwellTimer, IN := DwellCommand AND NOT DwellReset, PT := DwellPreset)
+
+NETWORK 2 "Published Timer State"
+  COMMENT "Publishes the timer's own state and returns the commanded preset. It follows the timer network so all three carry this scan's values rather than the previous scan's."
+  COIL DwellDone := DwellTimer.Q
+  MOVE(EN := TRUE, IN := DwellTimer.ET) => DwellElapsed
+  MOVE(EN := TRUE, IN := DwellPreset) => DwellPresetEcho

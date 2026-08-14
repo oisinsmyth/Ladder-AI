@@ -1,0 +1,23 @@
+BLOCK FB FB_HxSealLatch
+ROOTID 0
+NUMBER 9013
+LANGUAGE LAD
+TITLE "Harness corpus - sealed latches"
+COMMENT "Generated test material for the tooling campaign, not plant logic - numbered in the 9000-9999 harness band and never called by the plant program. It reproduces a latched response that only a clear releases: SealTrigger seals both outputs on, and neither falls again until SealClear is asserted. The two latches differ in exactly one respect - which input wins while both are asserted at once - so the pair discriminates a clear-dominant seal from a set-dominant one, which is the failure a single latch cannot report. Both are built as self-holding coils rather than set/reset pairs, so each output has one writer. Nothing is retained, so a run starts from a known-clear state without a clear-down step. Every member it reads or writes lives in its own instance DB; it names no PLC tag, no global DB and no other block's data, so it shares no signal with any other block in the project and can be driven at the same time as all of them."
+
+INTERFACE
+  INPUT
+  OUTPUT
+  STATIC
+    SealTrigger : Bool COMMENT "Commanded input, written every scan by the harness copy layer. A single scan of this seals both outputs on."
+    SealClear : Bool COMMENT "Commanded clear, written every scan by the harness copy layer. The only thing that releases either latch."
+    SealHeld : Bool COMMENT "Clear-dominant seal: released whenever the clear is asserted, whatever the trigger is doing."
+    SealPriority : Bool COMMENT "Set-dominant seal: the trigger holds it on even while the clear is asserted, and it releases only once the trigger has gone away and the clear is still present."
+
+NETWORK 1 "Clear-Dominant Seal"
+  COMMENT "Seals on the trigger and holds itself on until the clear is asserted. The clear is applied to the whole rung including the trigger, so it wins while both are present."
+  COIL SealHeld := (SealTrigger OR SealHeld) AND NOT SealClear
+
+NETWORK 2 "Set-Dominant Seal"
+  COMMENT "Seals on the trigger and holds itself on until the clear is asserted, but the trigger is taken outside the clear so it wins while both are present. This is the only respect in which the two outputs differ, and it is what makes a wrong dominance visible rather than merely a differently-timed fall."
+  COIL SealPriority := SealTrigger OR SealPriority AND NOT SealClear

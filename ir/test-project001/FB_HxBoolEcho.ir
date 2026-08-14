@@ -1,0 +1,20 @@
+BLOCK FB FB_HxBoolEcho
+ROOTID 0
+NUMBER 9010
+LANGUAGE LAD
+TITLE "Harness corpus - Bool echo"
+COMMENT "Generated test material for the tooling campaign, not plant logic - numbered in the 9000-9999 harness band and never called by the plant program. It reproduces a purely combinational Bool response: EchoResponse follows EchoCommand in the same scan, EchoInverse is high when the command is low, and EchoReset forces both outputs clear while it is held. It holds no memory at all, so a run needs no clear-down and no arming window and the outputs are a function of this scan's commanded inputs alone. Every member it reads or writes lives in its own instance DB; it names no PLC tag, no global DB, no other block's data and no timer, so it shares no signal with any other block in the project and can be driven at the same time as all of them."
+
+INTERFACE
+  INPUT
+  OUTPUT
+  STATIC
+    EchoCommand : Bool COMMENT "Commanded input, written every scan by the harness copy layer. Nothing in the program writes it."
+    EchoReset : Bool COMMENT "Commanded reset, written every scan by the harness copy layer. Holds both outputs clear while asserted and leaves no trace once released."
+    EchoResponse : Bool COMMENT "Follows EchoCommand while EchoReset is clear. Read back through the copy layer."
+    EchoInverse : Bool COMMENT "High when EchoCommand is clear and EchoReset is clear, so the mirror carries a signal that is high in the state where EchoResponse is low - a stuck-low result register cannot then read as a correct answer for both."
+
+NETWORK 1 "Echoed Response And Its Complement"
+  COMMENT "Both outputs are written unconditionally on every scan from this scan's commanded inputs, so neither can carry a value forward from an earlier scan and neither needs clearing between runs. The reset dominates both."
+  COIL EchoResponse := EchoCommand AND NOT EchoReset
+  COIL EchoInverse := NOT EchoCommand AND NOT EchoReset

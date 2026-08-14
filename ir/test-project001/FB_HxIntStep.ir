@@ -1,0 +1,26 @@
+BLOCK FB FB_HxIntStep
+ROOTID 0
+NUMBER 9012
+LANGUAGE LAD
+TITLE "Harness corpus - Int sum and threshold"
+COMMENT "Generated test material for the tooling campaign, not plant logic - numbered in the 9000-9999 harness band and never called by the plant program. It reproduces a computed 16-bit response: StepSum is the sum of two commanded numbers, StepOverThreshold reports whether that sum has passed a commanded threshold, and StepReset forces the sum to zero. The threshold is an input rather than a constant so the block cannot satisfy a requirement about it by defining its own terms. StepSum has two writers and they are provably disjoint - one is enabled by the reset and the other by its negation - so there is no same-scan race and no next-scan cleanup. Every member it reads or writes lives in its own instance DB; it names no PLC tag, no global DB and no other block's data, so it shares no signal with any other block in the project and can be driven at the same time as all of them."
+
+INTERFACE
+  INPUT
+  OUTPUT
+  STATIC
+    StepInput : Int COMMENT "First commanded number, written every scan by the harness copy layer."
+    StepIncrement : Int COMMENT "Second commanded number, written every scan by the harness copy layer."
+    StepThreshold : Int COMMENT "Commanded threshold the sum is compared against."
+    StepReset : Bool COMMENT "Commanded reset, written every scan by the harness copy layer. Holds the sum at zero while asserted."
+    StepSum : Int COMMENT "The two commanded numbers added, or zero while the reset is held. Read back through the copy layer as a single 16-bit register."
+    StepOverThreshold : Bool COMMENT "The sum has passed the commanded threshold. Derived from StepSum rather than from the two inputs, so it reports the number that was actually published rather than one computed a second way."
+
+NETWORK 1 "Computed Sum"
+  COMMENT "The sum is written by exactly one of two statements each scan: the reset path zeroes it, and the arithmetic path is enabled only when no reset is present. Zeroing is listed first so that on a scan where the reset is released both are evaluated in the order a reader sees them."
+  MOVE(EN := StepReset, IN := 0) => StepSum
+  ADD(EN := NOT StepReset, IN1 := StepInput, IN2 := StepIncrement) => StepSum
+
+NETWORK 2 "Threshold Crossing"
+  COMMENT "Compares the published sum against the commanded threshold. It follows the network that writes the sum, so the comparison is made on this scan's value."
+  COIL StepOverThreshold := StepSum > StepThreshold

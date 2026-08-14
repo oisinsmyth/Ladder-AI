@@ -1,0 +1,14 @@
+DB iDB_HxIntStep
+  ROOTID 0
+  NUMBER 9012
+  INSTANCEOF FB_HxIntStep
+  COMMENT "The only instance of FB_HxIntStep. Nothing here is retained: a sum surviving a download would be a sum belonging to a previous run. No member carries a start value - every number is commanded per run."
+  INPUT
+  OUTPUT
+  MEMBERS
+    StepInput : Int
+    StepIncrement : Int
+    StepThreshold : Int
+    StepReset : Bool
+    StepSum : Int
+    StepOverThreshold : Bool

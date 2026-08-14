@@ -1,0 +1,12 @@
+DB iDB_HxSealLatch
+  ROOTID 0
+  NUMBER 9013
+  INSTANCEOF FB_HxSealLatch
+  COMMENT "The only instance of FB_HxSealLatch. Nothing here is retained: a seal that survived a download would report a latch belonging to a previous run, and the run blamed for it would be the one after."
+  INPUT
+  OUTPUT
+  MEMBERS
+    SealTrigger : Bool
+    SealClear : Bool
+    SealHeld : Bool
+    SealPriority : Bool

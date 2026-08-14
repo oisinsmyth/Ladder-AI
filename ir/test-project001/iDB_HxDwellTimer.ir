@@ -1,0 +1,19 @@
+DB iDB_HxDwellTimer
+  ROOTID 0
+  NUMBER 9011
+  INSTANCEOF FB_HxDwellTimer
+  COMMENT "The only instance of FB_HxDwellTimer, including its own timer instance. Nothing here is retained: an elapsed time surviving a download would be an elapsed time belonging to a previous run. The preset carries no start value on purpose - it is commanded per run, and a defaulted preset is the one value that would make a wrong commanded preset look right."
+  INPUT
+  OUTPUT
+  MEMBERS
+    DwellCommand : Bool
+    DwellReset : Bool
+    DwellPreset : Time
+    DwellDone : Bool
+    DwellElapsed : Time
+    DwellPresetEcho : Time
+    DwellTimer : TON_TIME VERSION 1.0 SETPOINT
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool

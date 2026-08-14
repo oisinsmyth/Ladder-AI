@@ -1,0 +1,12 @@
+DB iDB_HxBoolEcho
+  ROOTID 0
+  NUMBER 9010
+  INSTANCEOF FB_HxBoolEcho
+  COMMENT "The only instance of FB_HxBoolEcho. Nothing here is retained: the block holds no memory, and a corpus block that carried state across a download would report a result belonging to a previous run."
+  INPUT
+  OUTPUT
+  MEMBERS
+    EchoCommand : Bool
+    EchoReset : Bool
+    EchoResponse : Bool
+    EchoInverse : Bool
