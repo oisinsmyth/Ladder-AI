@@ -1,4 +1,4 @@
-
+﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.0.31903.59
@@ -6,6 +6,8 @@ MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WaveControl", "WaveControl\WaveControl.csproj", "{4B4634AA-45D3-4810-B63D-C53484B0C8BE}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WaveControl.Tests", "WaveControl.Tests\WaveControl.Tests.csproj", "{BA2FF0B0-2877-4B62-AA79-148E164DFAF2}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WaveControl.Cli", "WaveControl.Cli\WaveControl.Cli.csproj", "{B6F74877-A42D-4A17-8802-3ABCFAF1EED0}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -24,5 +26,9 @@ Global
 		{BA2FF0B0-2877-4B62-AA79-148E164DFAF2}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{BA2FF0B0-2877-4B62-AA79-148E164DFAF2}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{BA2FF0B0-2877-4B62-AA79-148E164DFAF2}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B6F74877-A42D-4A17-8802-3ABCFAF1EED0}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B6F74877-A42D-4A17-8802-3ABCFAF1EED0}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B6F74877-A42D-4A17-8802-3ABCFAF1EED0}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B6F74877-A42D-4A17-8802-3ABCFAF1EED0}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

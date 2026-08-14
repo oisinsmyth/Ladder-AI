@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>Ladder.Wave.Cli</RootNamespace>
+    <AssemblyName>wave-cli</AssemblyName>
+    <IsPackable>false</IsPackable>
+
+    <!--
+      THE ENTRY POINT THE COMPONENT DID NOT HAVE. Until this existed, WaveControl could be asserted
+      about in xUnit and exercised by nothing else: admission and colouring had no caller at all
+      (src/converter references the assembly, but only for HarnessNumberRange's declared band). Thirty
+      multi-agent rows of the test plan were unrunnable for want of a way to invoke it.
+
+      net8.0, not net48: nothing here touches Siemens.Engineering, and the library it drives is
+      netstandard2.0 so both can consume it.
+    -->
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\WaveControl\WaveControl.csproj" />
+  </ItemGroup>
+
+</Project>
