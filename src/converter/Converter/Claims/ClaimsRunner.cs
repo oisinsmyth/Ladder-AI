@@ -189,6 +189,7 @@ public static class ClaimsRunner
         }
 
         conflicts.AddRange(CrossKindConflicts(claims));
+        conflicts.AddRange(SharedObjectConflicts(claims, corpus));
 
         var threshold = staleAfter ?? DefaultStaleAfter;
         var stale = claims.Where(c => nowUtc - c.CreatedUtc > threshold).ToList();
@@ -202,6 +203,69 @@ public static class ClaimsRunner
             stale,
             warnings,
             corpus.IsEmpty);
+    }
+
+    /// <summary>
+    /// 🔴 2026-08-14. *** EDITING ONE OBJECT SILENTLY CHANGES ANOTHER, AND TWO DIFFERENT NAMES ARE
+    /// TWO DIFFERENT FILES, SO THE FILESYSTEM REFUSES NEITHER. *** The same shape as
+    /// <see cref="CrossKindConflicts"/>, one relation out — and the one that will bite under
+    /// contention, because the artificial corpus is made almost entirely of DBs and UDTs.
+    ///
+    /// <list type="bullet">
+    /// <item><b>A UDT against anything declaring it.</b> A shared UDT is the widest blast radius in
+    /// the project: agent A holds <c>block-edit UDT_HopperBlockageIO</c> and agent B holds
+    /// <c>block-edit FB_HopperBlockageMonitor</c>, which declares a member of that type. Both
+    /// acquisitions are legitimate, both `diff --only` invariance checks pass, and the conflict exists
+    /// only BETWEEN them.</item>
+    /// <item><b>An FB against its instance DBs.</b> An iDB mirrors its FB's interface, so editing the
+    /// FB moves the iDB with it.</item>
+    /// </list>
+    ///
+    /// <para><b>Same agent is never a conflict</b> — an agent editing a UDT and its instantiating
+    /// block is doing one coordinated change, and refusing that would make the ordinary case
+    /// unworkable, after which the check gets switched off and the cases it was right about go
+    /// through unchecked. Only DIFFERENT agents conflict.</para>
+    /// </summary>
+    private static IEnumerable<ClaimConflict> SharedObjectConflicts(IReadOnlyList<Claim> claims, ClaimCorpus corpus)
+    {
+        var edits = claims.Where(c => c.Kind == ClaimKind.BlockEdit).ToList();
+        if (edits.Count < 2)
+        {
+            yield break;
+        }
+
+        foreach (var held in edits)
+        {
+            // The UDT relation. DeclarersOfType is empty for a block or DB name, so this loop simply
+            // does not fire unless the claim really is on a type.
+            foreach (var declarer in corpus.Index.DeclarersOfType(held.Value))
+            {
+                foreach (var other in edits.Where(e =>
+                             string.Equals(e.Value, declarer, StringComparison.Ordinal) &&
+                             !string.Equals(e.Agent, held.Agent, StringComparison.Ordinal)))
+                {
+                    yield return new ClaimConflict(other,
+                        $"agent '{other.Agent}' holds an exclusive edit on '{other.Value}', which DECLARES a member of type " +
+                        $"'{held.Value}' — and agent '{held.Agent}' holds an exclusive edit on that type. Editing the type changes " +
+                        $"'{other.Value}' underneath them; the filesystem cannot see this because the two claims name two different objects.");
+                }
+            }
+
+            // The instance relation, in the iDB -> FB direction.
+            if (!corpus.Index.InstanceOf.TryGetValue(held.Value, out var instantiatedFb))
+            {
+                continue;
+            }
+
+            foreach (var other in edits.Where(e =>
+                         string.Equals(e.Value, instantiatedFb, StringComparison.Ordinal) &&
+                         !string.Equals(e.Agent, held.Agent, StringComparison.Ordinal)))
+            {
+                yield return new ClaimConflict(held,
+                    $"agent '{held.Agent}' holds an exclusive edit on instance DB '{held.Value}', while agent '{other.Agent}' holds one on " +
+                    $"'{instantiatedFb}', the FB it instantiates. An instance DB mirrors its FB's interface, so the FB edit moves this DB with it.");
+            }
+        }
     }
 
     // The filesystem stops two agents claiming the same VALUE, but not two agents claiming the same

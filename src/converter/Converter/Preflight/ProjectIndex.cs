@@ -23,6 +23,13 @@ public sealed class ProjectIndex
     private readonly Dictionary<(string Kind, int Number), string> _numberOwners = new();
     private readonly Dictionary<string, IReadOnlyList<int>> _blockNetworks = new(StringComparer.Ordinal);
 
+    // 2026-08-14. The two relations an EXCLUSIVE edit claim has to reason about, because editing one
+    // object silently changes another: a UDT is edited and every object declaring a member of that
+    // type moves with it; an FB is edited and its instance DBs' interfaces move with it. Both are
+    // invisible to the filesystem — two agents take two different names and neither is refused.
+    private readonly Dictionary<string, HashSet<string>> _typeUsers = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, string> _instanceOf = new(StringComparer.Ordinal);
+
     public IReadOnlyList<string> Warnings => _warnings;
 
     // Keyed on (kind, number) because the number spaces are per-kind: FB50 and DB50 coexist, FB50 and
@@ -65,6 +72,27 @@ public sealed class ProjectIndex
 
     public bool ResolvesAsType(string name) => _typeNames.Contains(name);
 
+    /// <summary>
+    /// A DB by its own name. Distinct from <see cref="ResolvesAsTagRoot"/>, which is tags ∪ DBs: a
+    /// tag is addressable but is not an editable OBJECT, and conflating them would let an exclusive
+    /// edit claim be taken on a tag name.
+    /// </summary>
+    public bool ResolvesAsDb(string name) => _dbNames.Contains(name);
+
+    /// <summary>
+    /// Objects that DECLARE a member of the named type — the blast radius of editing a UDT.
+    ///
+    /// <para>Recorded here because this class already parses every block and DB to get their names; a
+    /// separate walk would be a second corpus dispatch, and this file's own header states the
+    /// invariant that the corpus is read one way "so the three can never disagree about what a corpus
+    /// contains".</para>
+    /// </summary>
+    public IReadOnlyCollection<string> DeclarersOfType(string typeName) =>
+        _typeUsers.TryGetValue(typeName, out var users) ? users : Array.Empty<string>();
+
+    /// <summary>Instance DB name → the FB it instantiates. Editing the FB changes the iDB's interface.</summary>
+    public IReadOnlyDictionary<string, string> InstanceOf => _instanceOf;
+
     private void AddFile(string path)
     {
         try
@@ -76,6 +104,15 @@ public sealed class ProjectIndex
                 var db = DbIrParser.ParseDb(text);
                 _dbNames.Add(db.Name);
                 _numberOwners[("DB", db.Number)] = db.Name;
+                if (db.InstanceOfName is { } instantiated)
+                {
+                    _instanceOf[db.Name] = Unquote(instantiated);
+                }
+
+                RecordTypeUsers(db.Name, db.Members);
+                RecordTypeUsers(db.Name, db.InputMembers);
+                RecordTypeUsers(db.Name, db.OutputMembers);
+                RecordTypeUsers(db.Name, db.InOutMembers);
                 return;
             }
 
@@ -101,12 +138,43 @@ public sealed class ProjectIndex
             _blockNames.Add(block.Name);
             _numberOwners[(block.Kind, block.Number)] = block.Name;
             _blockNetworks[block.Name] = block.Networks.Select(n => n.Number).ToList();
+            RecordTypeUsers(block.Name, block.InputMembers);
+            RecordTypeUsers(block.Name, block.OutputMembers);
+            RecordTypeUsers(block.Name, block.InOutMembers);
+            RecordTypeUsers(block.Name, block.StaticMembers);
+            RecordTypeUsers(block.Name, block.TempMembers);
+            RecordTypeUsers(block.Name, block.ConstantMembers);
         }
         catch (Exception ex) when (ex is SimaticMlFormatException or UnsupportedConstructException or NonReducibleNetworkException or IrFormatException)
         {
             _warnings.Add($"{path}: not indexed ({ex.GetType().Name}: {ex.Message})");
         }
     }
+
+    // Recurses nested members: a UDT reached three structs down is still edited by whoever edits it.
+    private void RecordTypeUsers(string owner, IReadOnlyList<DbMember>? members)
+    {
+        foreach (var member in members ?? Array.Empty<DbMember>())
+        {
+            var type = Unquote(member.Datatype);
+            if (type.Length > 0)
+            {
+                if (!_typeUsers.TryGetValue(type, out var users))
+                {
+                    users = new HashSet<string>(StringComparer.Ordinal);
+                    _typeUsers[type] = users;
+                }
+
+                users.Add(owner);
+            }
+
+            RecordTypeUsers(owner, member.NestedMembers);
+        }
+    }
+
+    // A UDT-typed member is written `IO : "UDT_PusherIO"`; an elementary one is bare. The quotes are
+    // syntax, not part of the name, so they are stripped before the name is used as a key.
+    private static string Unquote(string? value) => (value ?? string.Empty).Trim().Trim('"');
 
     internal static bool HasSidecarSection(string text) => IrParser.HasSidecarSection(text);
 }

@@ -205,10 +205,41 @@ public static class ClaimValidator
             ? Fail(ClaimResult.AlreadyUsedInCorpus, $"tag '{value}' already exists — nothing to reserve")
             : null;
 
+    /// <summary>
+    /// 🔴 2026-08-14. *** THE ENTIRE DB AND UDT SURFACE OF EVERY PROJECT WAS UNRESERVABLE. ***
+    ///
+    /// <para>Measured with a positive control in the same run — five FB/OB edit claims succeeded
+    /// while <c>iDB_HxBoolEcho</c>, <c>DB_Settings</c> and <c>UDT_HopperBlockageIO</c> were all
+    /// refused <i>"does not exist in this project"</i>, about objects that demonstrably exist.</para>
+    ///
+    /// <para><b>The cause, established before anything was changed: it was ONE LOOKUP</b> — not a
+    /// missing index and not a resolution path that cannot see them. <see cref="ProjectIndex"/>
+    /// already indexes DBs and types in their own sets and already exposes them; this method asked
+    /// only <c>ResolvesAsBlock</c>, which is FB/FC/OB. The message was literally true and completely
+    /// misleading: <c>iDB_HxBoolEcho</c> is not a <i>block</i>, it is a DB, and the kind is spelled
+    /// <c>block-edit</c>.</para>
+    ///
+    /// <para><b>Widened rather than given a new kind, and that is the load-bearing choice.</b> Two
+    /// kinds with the same EXCLUSIVE semantics over overlapping resources would let agent A take
+    /// <c>block-edit FB_X</c> and agent B take <c>object-edit FB_X</c> — *** BOTH GRANTED, THE
+    /// REGISTRY FORKED IN THE KIND DIMENSION *** , which is the failure just closed in the path
+    /// dimension wearing different clothes. One token, one namespace, one conflict domain. The token
+    /// stays <c>block-edit</c> because it is a published contract; what it MEANS is any existing named
+    /// object a change is written to.</para>
+    ///
+    /// <para><c>db-member</c> does NOT cover this, and its name is why that had to be checked rather
+    /// than assumed: it is <see cref="ClaimSemantics.Allocation"/> and REFUSES a member that already
+    /// exists, so it reserves the ADDITION of a new member. Editing an existing DB is the opposite
+    /// question.</para>
+    /// </summary>
     private static ClaimOutcome? RejectBlockEdit(ClaimCorpus corpus, string value) =>
         corpus.Index.ResolvesAsBlock(value)
+        || corpus.Index.ResolvesAsDb(value)
+        || corpus.Index.ResolvesAsType(value)
             ? null
-            : Fail(ClaimResult.NotInCorpus, $"block '{value}' does not exist in this project");
+            : Fail(ClaimResult.NotInCorpus,
+                $"'{value}' does not exist in this project as a block, a DB or a PLC data type — an exclusive edit claim " +
+                "names an object that EXISTS (a tag is addressable but is not an editable object, and is deliberately not accepted here)");
 
     // The allocation candidates for a kind, in the order they should be tried. Lowest-first so
     // numbering stays dense and predictable rather than drifting upward with every race.
