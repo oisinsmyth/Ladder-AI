@@ -109,6 +109,53 @@ the block goes invisible on the wire while every check stays green. **It bites o
   no network touched used to print `INVARIANCE OK … exit 0`. It now **fails closed**, with
   `--allow-header` as the named escape — **which `gen-block-modify-fix` must never pass**, since a fix
   needing an interface member *routes*, it does not *declare*.
+- ✅ **Three more checks stopped passing on an empty denominator, and each will bite an old habit.**
+  `drift-check` exits 1 with **`NOTHING COMPARED — this is not a pass`** where three routes used to
+  give a green over **zero comparisons**: both dirs empty (*even with `--complete`*), every `.ir`
+  unparseable, or ***either path one level ABOVE the files*** — both walks are top-level only, and that
+  is the likeliest real mistake of the three. `COMPARED: <n>` now prints on **every** run.
+  `reuse-scan` exits **2** when every queried `--tag` is absent from the corpus — it used to print
+  `0 block(s) matched` with **no denominator at all**, and *exit 0 there licenses "nothing to reuse,
+  write a new block"*. `candidate-scan` exits **2** for an `--fb` in no block — it used to scan all 43
+  files and print `CANDIDATE SET SIZE: 0`, **byte-identical to a real FB with an unambiguous binding**.
+- ⚠️ **Two tools now state what they do NOT cover, on every run — read those lines.**
+  ***A `drift-check` MATCH is silent about `MemoryLayout`, and `compare` REFUSES (exit 2) the very pair
+  it calls a MATCH*** (converter output declares no layout; a TIA export declares `Optimized` — measured
+  on `FB_PusherControl`). **Do not "fix" that in the `Normalizer`** — it breaks every export-vs-output
+  comparison wholesale until the converter can *emit* the attribute. And **`cross-check` multi-writer
+  lines count writes from blocks that may never execute**, now annotated `[NOT REACHABLE from any OB: …]`
+  — ***reported, never subtracted***, because wiring the block up restores the contention. Zero of these
+  fire on `ir/test-project001`.
+- 🔴 ***THE `%Xn` DEFECT WAS FOUND BY A WHOLE-CORPUS SWEEP AND BY NOTHING ELSE.*** Every targeted probe
+  passed, because **the input you would have to guess was already sitting in the repository.** So when
+  you validate a check, **run it over all 92 committed `.ir` files and require silence** — one command,
+  a validation Portal cannot add to, and the only reason this was caught.
+
+## 📋 OPEN — what the converter lane would attack next, in order
+
+**None of this blocks a live project today.** Recorded so it is not re-derived from scratch.
+
+1. **Tag-name comparison is case-sensitive (`Ordinal`); TIA's symbol resolution is not.** Full write-up
+   with the reproduction: `16-future-ideas.md` → *"OPEN QUESTION — the converter's tag resolution is
+   CASE-SENSITIVE"*. **Contained today** — `preflight` refuses a case-varied reference outright, so the
+   pipeline fails closed — **but `cross-check`'s C-308 analysis is structurally blind to a case-varied
+   second writer** that entered the project another way (hand-authored in TIA, or an import whose casing
+   differs). ***One Portal measurement settles it***: import two blocks writing the same DB member in
+   different casing, and compile. 🔴 **Do NOT close it with a `ToLower()`** — *a comparator that learns
+   to equate representations is how a comparator starts passing things*, and that would silently merge
+   two paths in the usage graph on **every** project, for a defect nobody has yet seen on real data.
+2. **`preflight` cannot check members under a LOCAL root whose type the export does not carry** — an
+   IEC-timer static, or a UDT absent from the export. It reports **nothing** rather than guessing
+   (`NotEnumerable` deliberately does not gate, so the fix cannot manufacture the opposite false
+   accusation). Honest, and still a hole.
+3. **`review` and `digest` have never had a whole-corpus validation of their own.** The sweep that found
+   the `%Xn` defect covered only `preflight`/`tagstatus`. **The same 92-file run against those two is one
+   command and has not been done** — and item 1 of this list exists because the first sweep found
+   something.
+4. **`compare` is the only check in this family with an authority outside the converter** — it has been
+   through TIA. `drift-check`, `diff` and `ir-hash` are converter-vs-converter and are **structurally
+   blind to anything the round trip preserves.** A property to remember when quoting them, not a defect
+   to fix.
 
 ## 📋 ONE THING WAITING FOR YOU TO DECIDE
 
