@@ -362,6 +362,27 @@ running does not license:
       conclusion did not flip to *"expected to work"* — it moved to **NOT ESTABLISHED IN EITHER
       DIRECTION**, because three untested reasons survived that the retired fact never touched. *An
       untested thing does not become true when the argument against it fails.*
+- *** WHEN YOU FIX A DEFECT IN ONE COMPONENT, GREP FOR ITS SIBLINGS BEFORE YOU CLOSE IT. *** Measured
+  2026-08-14, hours apart, in one codebase: `WaveStore`'s reader treated `File.Replace`'s absent
+  window as *"no state file"* — ***the one state the caller proceeds from*** — and was fixed that
+  morning (`dac4a36`). **`CoordinatorStateStore` had the identical defect and was never touched, and
+  nothing anywhere flagged the pair.** A second lane found it independently that afternoon.
+    ➜ **A fix commit should name what else it searched**, not only what it changed. *The cheapest
+      moment to find the second instance is while the first is still in your head.*
+    ➜ **Two more in the same store, both worth the shape:** a reader without `FileShare.Delete` broke
+      the writer's own `File.Replace` — and the store blamed *"an antivirus scanner or an indexer"*,
+      ***a plausible mechanism that stopped anyone testing the real one*** (second instance of that
+      rule in one day). And a rename briefly refuses opens, which the reader reported as `Unreadable`
+      — a verdict that **voids both the wave and the queue by design**, so *sub-millisecond contention
+      was destroying admitted work.*
+- *** A ROW'S SIZE ROTS AS READILY AS ITS TRUTH, AND NOBODY RE-CHECKS THE SIZE. *** Same day: a
+  backlog triage confirmed six absence claims still accurate — **and found two materially
+  mis-sized.** `NB-18` was recorded as a missing mechanism; the mechanism (`ClaimStore.Release`,
+  `converter claims --release`) had **always existed** and only its *caller* was absent. `NB-17` was
+  recorded as cheap and needs **two new declared data with no producer.**
+    ➜ ***A STANDING INSTRUCTION TO A PERSON IS WHAT AN UNBUILT AUTOMATION LOOKS LIKE FROM OUTSIDE.***
+      Two shipped messages asked a human to release claims by hand. **Read every "please remember
+      to…" in a tool's own output as a candidate backlog item.**
 - *** A DOCUMENTED COMMAND THAT ONLY WORKS IN ONE UNNAMED SHELL IS A DEFECT IN THE DOCUMENT. ***
   2026-08-14: a README showed a `cmd` invocation (`%USERPROFILE%`, `^` continuations) with no shell
   named; run in PowerShell the variable does not expand, so the tool was handed a literal path and
