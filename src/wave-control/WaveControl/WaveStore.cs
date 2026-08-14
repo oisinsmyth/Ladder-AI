@@ -63,20 +63,24 @@ namespace Ladder.Wave
         public bool Contended => Attempts > 1;
 
         /// <inheritdoc />
+        /// <remarks>
+        /// 🔴 *** THE LEASE FILE IS NOT DELETED, AND THAT IS A FIX RATHER THAN AN OMISSION. *** It
+        /// used to be, and at 48 concurrent agents that produced an UNHANDLED
+        /// <see cref="UnauthorizedAccessException"/> — measured 2026-08-14, 3 crashes at 48 and 1 at
+        /// 64, none at 32 or below. *** THE LOCK IS THE EXCLUSIVE HANDLE, NOT THE FILE'S EXISTENCE ***
+        /// (<see cref="FileShare.None"/>), so deleting it bought nothing and opened a race: on Windows
+        /// a file that is deleted while another handle is open enters DELETE-PENDING, and a concurrent
+        /// <c>CreateFile</c> on it returns ACCESS_DENIED — surfaced as
+        /// <see cref="UnauthorizedAccessException"/>, NOT the <see cref="IOException"/> a sharing
+        /// violation raises, so it escaped the retry loop entirely.
+        /// <para>
+        /// Leaving the file also makes the LAST HOLDER readable after the fact, which is the direction
+        /// this type was already going: the queueing is meant to be observable, not merely correct.
+        /// </para>
+        /// </remarks>
         public void Dispose()
         {
             _handle.Dispose();
-
-            try
-            {
-                File.Delete(_leasePath);
-            }
-            catch (IOException)
-            {
-            }
-            catch (UnauthorizedAccessException)
-            {
-            }
         }
 
         /// <inheritdoc />
@@ -240,6 +244,8 @@ namespace Ladder.Wave
             var who = string.IsNullOrWhiteSpace(agent) ? "<unnamed agent>" : agent.Trim();
             var clock = Stopwatch.StartNew();
             var attempts = 0;
+            var sawSharingViolation = false;
+            var lastAccessDenied = (UnauthorizedAccessException?)null;
 
             while (true)
             {
@@ -259,8 +265,46 @@ namespace Ladder.Wave
 
                     return new LeaseAcquisition(handle, LeasePath, who, clock.Elapsed, attempts);
                 }
+                catch (UnauthorizedAccessException ex)
+                {
+                    // *** ACCESS_DENIED IS TRANSIENT HERE, AND IT IS NOT THE EXCEPTION YOU EXPECT. ***
+                    // A lease file in Windows' delete-pending state answers CreateFile with
+                    // ACCESS_DENIED rather than a sharing violation. Releasing no longer deletes the
+                    // file, so this should not arise — it is kept because "should not arise" is a claim
+                    // about a mechanism, and an unhandled exception here crashes an agent mid-campaign
+                    // with a stack trace instead of a named refusal.
+                    lastAccessDenied = ex;
+
+                    if (clock.Elapsed >= timeout)
+                    {
+                        // Persistent ACCESS_DENIED with no sharing violation ever seen is a PERMISSIONS
+                        // problem, not contention — and retrying will NOT help, which is exit 2's
+                        // meaning. Reporting it as retryable would send a harness into a backoff loop
+                        // against a directory it will never be allowed to write.
+                        if (!sawSharingViolation)
+                        {
+                            throw new WaveStoreException(
+                                "'" + who + "' was denied access to the wave-store lease at '" + LeasePath +
+                                "' for the whole " + (int)timeout.TotalMilliseconds + " ms (" + attempts +
+                                " attempts) and never once saw a sharing violation. That is a PERMISSIONS " +
+                                "problem rather than contention: another agent holding the lease produces " +
+                                "a sharing violation, not an access denial. Retrying will not help.",
+                                lastAccessDenied);
+                        }
+
+                        throw new WaveStoreContendedException(
+                            "'" + who + "' could not take the wave-store lease at '" + LeasePath +
+                            "' within " + (int)timeout.TotalMilliseconds + " ms (" + attempts +
+                            " attempts), the last attempt denied access. Another agent holds it. BACK OFF " +
+                            "AND RETRY.");
+                    }
+
+                    System.Threading.Thread.Sleep(25);
+                }
                 catch (IOException)
                 {
+                    sawSharingViolation = true;
+
                     if (clock.Elapsed >= timeout)
                     {
                         throw new WaveStoreContendedException(
@@ -272,9 +316,9 @@ namespace Ladder.Wave
                             "REFUSAL (exit 1) and not an unusable store (exit 2).");
                     }
 
-#if NETSTANDARD2_0
+                    // Unconditional: this used to sit behind #if NETSTANDARD2_0, which would have
+                    // become a BUSY SPIN the moment the library gained a second target framework.
                     System.Threading.Thread.Sleep(25);
-#endif
                 }
             }
         }

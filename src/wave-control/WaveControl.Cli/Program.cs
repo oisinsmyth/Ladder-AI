@@ -69,6 +69,20 @@ namespace Ladder.Wave.Cli
                 Console.Error.WriteLine("BAD INVOCATION: " + ex.Message);
                 return ExitUnusable;
             }
+            catch (Exception ex)
+            {
+                // *** NOTHING MAY LEAVE THIS PROCESS AS A STACK TRACE. *** Measured 2026-08-14: an
+                // UnauthorizedAccessException escaped the lease loop at 48 concurrent agents and four
+                // agents died with an unhandled exception and whatever exit code the runtime chose.
+                // The reconciliation still closed, so nothing was lost — but a crash is LOUD WITHOUT
+                // BEING NAMED, and a campaign harness cannot tell it from a refusal. An unexpected
+                // exception is exit 2: nothing was decided, and the caller should not retry blindly.
+                Console.Error.WriteLine(
+                    "UNEXPECTED (" + ex.GetType().Name + "): " + ex.Message +
+                    " — nothing was decided. This is a defect in wave-cli, not a verdict about the " +
+                    "submission.");
+                return ExitUnusable;
+            }
         }
 
         // =================================================================================================
