@@ -362,6 +362,20 @@ running does not license:
       conclusion did not flip to *"expected to work"* — it moved to **NOT ESTABLISHED IN EITHER
       DIRECTION**, because three untested reasons survived that the retired fact never touched. *An
       untested thing does not become true when the argument against it fails.*
+- *** A DOCUMENTED COMMAND THAT ONLY WORKS IN ONE UNNAMED SHELL IS A DEFECT IN THE DOCUMENT. ***
+  2026-08-14: a README showed a `cmd` invocation (`%USERPROFILE%`, `^` continuations) with no shell
+  named; run in PowerShell the variable does not expand, so the tool was handed a literal path and
+  **refused at the wrong gate** — never reaching the fence the run existed to exercise. *This repo
+  already documents PS 5.1 quirks as a hazard; the fix is to NAME THE SHELL and mark which form was
+  actually run.*
+    ➜ **The tool's own repair is the model: it EXPANDS NOTHING and says so** — *"a fence that repairs
+      its own input is one you cannot tell what it actually read."* **And the hint was then COPIED
+      OUT OF THE TOOL'S OUTPUT AND RUN**, because advice is a claim.
+    ➜ *** GATE A DIAGNOSTIC ON THE FAILURE, NOT ON THE PATTERN *** — this one fires only when the path
+      **also does not resolve**, proved by a test that creates a real directory named
+      `%TEMP%-not-a-variable` and asserts silence. **And mutate a diagnostic in the OVER-firing
+      direction**: made to fire on everything it went 5 red. *A diagnostic that fires on working input
+      is noise, and noise gets switched off.*
 - *** A PLAUSIBLE MECHANISM ATTACHED TO A CORRECT CONCLUSION IS HOW A WRONG READING OF A DEVICE STAYS
   UNEXAMINED. *** Found in the same pass: a note explained an unreadable identity source by *"S7
   variable access is refused CPU-wide"*. **The conclusion was right — the serial is not checkable, so
