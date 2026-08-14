@@ -100,8 +100,8 @@ public sealed record ObservabilityDeclaration(
 /// <remarks>
 /// <b>The contract names this artifact and nothing in the repo was it</b> — an author could not check
 /// their signal was in a list they could not find. It is a declared set built by the coordinator from
-/// the copy layer it generated, and <see cref="FromMinimalCopyLayer"/> is the honest constructor for
-/// what phase 2's layer actually emits.
+/// the copy layer it generated — see <see cref="MirrorObservability.FromBindings"/>, which is the only
+/// constructor that derives it rather than taking a caller's word for it.
 /// </remarks>
 public enum MapProvenance
 {
@@ -141,9 +141,21 @@ public sealed record MirrorObservability(IReadOnlyDictionary<string, IReadOnlySe
     /// <summary>
     /// For each signal offering <c>Latched</c>, <b>the block that does the latching</b>.
     ///
-    /// <para>The copy-layer generator emits no per-signal latch, so a Latched mode here always came from
-    /// somewhere else — and this says where. <b>Carried so the gate's report can name it</b>: "Latched,
-    /// provided by FB_X" is checkable against the deployed objects, where a bare "Latched" is not.</para>
+    /// <para><b>Carried so the gate's report can name it</b>: "Latched, provided by FB_X" is checkable
+    /// against the deployed objects, where a bare "Latched" is not.</para>
+    ///
+    /// <para>🔴 <b>IT NO LONGER SAYS "THE GENERATOR EMITS NO PER-SIGNAL LATCH".</b> That was true when this
+    /// was written and stopped being true when the transient latch landed —
+    /// <c>MirroredSignal.LatchClaimed</c> reads <c>… || Transient</c>, one line below its own copy of the
+    /// same stale sentence. <b>Both went stale together</b>, and
+    /// <c>docs/notes/spec-reconciliation.md</c> item 2.1 cited one of them as its authority for the claim
+    /// that no latches are generated, so the citation kept reading as corroboration while pointing at
+    /// changed text.</para>
+    ///
+    /// <para>So a value here is one of two things, and <c>MirroredSignal.LatchProvenance</c> says which:
+    /// the GENERATED copy layer (derived from the signal being declared transient, and readable out of the
+    /// emitted IR), or a named block that latches it OUTSIDE the copy layer (taken on trust, and reported
+    /// as taken on trust).</para>
     /// </summary>
     public IReadOnlyDictionary<string, string> LatchProvenance { get; init; } =
         new Dictionary<string, string>(StringComparer.Ordinal);
@@ -190,26 +202,25 @@ public sealed record MirrorObservability(IReadOnlyDictionary<string, IReadOnlySe
             e => (IReadOnlySet<InstrumentationMode>)e.Modes.ToHashSet(),
             StringComparer.Ordinal));
 
-    /// <summary>
-    /// What the MINIMAL copy layer provides: <b>Sampled, and nothing else.</b>
-    ///
-    /// <para>Phase 2's generator emits result-register MOVEs and no per-signal latch or scan-stamp at
-    /// all — those are listed in its own doc comment as deliberate absences. So a Transient or
-    /// Coincidence vector against this map is refused for a TRUE, COMPUTED reason rather than because
-    /// somebody passed a false. That refusal is the gate working, not a gap in it.</para>
-    /// </summary>
-    public static MirrorObservability FromMinimalCopyLayer(IEnumerable<string> resultSignals) =>
-        new(resultSignals.ToDictionary(
-            s => s,
-            _ => (IReadOnlySet<InstrumentationMode>)new HashSet<InstrumentationMode> { InstrumentationMode.Sampled },
-            StringComparer.Ordinal));
+    // 🔴 *** `FromMinimalCopyLayer` WAS DELETED HERE (2026-08-14), NOT FIXED. *** It built a map by keying
+    // on the BLOCK'S TAG NAME and hard-coding every signal to `{ Sampled }`. Both halves are now wrong:
+    // the key is the SPECIFICATION's name (a bare tag entered a signal nobody had joined, so gate 5
+    // CHECKED it instead of reporting NOT CHECKED and naming it), and the mode set is DERIVED by
+    // `FromBindings`, which reads a generated latch out of `Transient` and a hand-authored one out of
+    // `LatchedBy`.
+    //
+    // *** ITS ONLY CALLER WAS A TEST, AND THAT IS THE ARGUMENT FOR DELETING RATHER THAN REPAIRING IT. ***
+    // A second, more permissive constructor that nothing in production reaches is worse than an absent
+    // one: it is consulted first by whoever finds it and believed, and its permissiveness is invisible
+    // because no run exercises it. The behaviour its test actually pinned - a Sampled-only map refuses a
+    // Latched expectation - is covered by the test above it, which builds that map directly.
 
     /// <summary>
     /// 🔴 <b>THE MAP DERIVED FROM THE COORDINATOR'S BINDINGS — KEYED ON THE SPECIFICATION'S SIGNAL NAMES,
     /// AND WITH THE MODES COMPUTED RATHER THAN DECLARED.</b>
     ///
-    /// <para><b>Two defects met here in one gate run.</b> <c>FromMinimalCopyLayer</c> keys on the BLOCK's
-    /// tag name and hard-codes every signal to <c>Sampled</c>. A vector cites the SPECIFICATION's name, so
+    /// <para><b>Two defects met here in one gate run</b>, both in the constructor this replaced (since
+    /// deleted): it keyed on the BLOCK's tag name and hard-coded every signal to <c>Sampled</c>. A vector cites the SPECIFICATION's name, so
     /// wherever the two differ the lookup misses entirely — measured at <b>16 of 17 signals</b>, the sole
     /// success being the sole name collision. And a real, deployed hand-authored latch was structurally
     /// undeclarable, so <b>4 of 17 refusals were FALSE while 13 were correct</b>.</para>

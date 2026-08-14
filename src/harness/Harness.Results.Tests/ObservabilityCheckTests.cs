@@ -192,18 +192,16 @@ public class ObservabilityCheckTests
         Assert.Contains("open with the owner", finding.Detail, StringComparison.Ordinal);
     }
 
-    [Fact]
-    public void THE_MINIMAL_COPY_LAYER_PROVIDES_SAMPLED_AND_NOTHING_ELSE_so_a_transient_vector_is_refused_for_a_TRUE_reason()
-    {
-        // Phase 2's generator emits result-register MOVEs and no per-signal latch or scan-stamp — listed
-        // in its own doc comment as deliberate absences. So this refusal is the gate WORKING, computed
-        // from what the copy layer actually generates, rather than somebody passing a false.
-        var minimal = MirrorObservability.FromMinimalCopyLayer(new[] { "Sig" });
-
-        Assert.Equal(new[] { InstrumentationMode.Sampled }, minimal.For("Sig"));
-        Assert.Equal(ObservabilityOutcome.MapDoesNotProvideIt,
-            Evaluate(SignalNature.Transient, InstrumentationMode.Latched, map: minimal).Findings[0].Outcome);
-    }
+    // 🔴 *** `THE_MINIMAL_COPY_LAYER_PROVIDES_SAMPLED_AND_NOTHING_ELSE…` WAS DELETED HERE (2026-08-14)
+    // ALONG WITH THE CONSTRUCTOR IT PINNED. *** `MirrorObservability.FromMinimalCopyLayer` keyed on the
+    // BLOCK'S TAG and hard-coded `{ Sampled }`, and this test was its only caller in the whole repository -
+    // so it asserted the behaviour of a path nothing in production took, while `FromBindings` (which every
+    // production path uses) derives both the key and the modes. Leaving a test asserting the old behaviour
+    // is how a deleted permissive path comes back.
+    //
+    // The property it actually exercised - a Sampled-only map refuses a Latched expectation - is the test
+    // directly above, which builds that map with `Map(InstrumentationMode.Sampled)` and does not need a
+    // second constructor to say it.
 
     [Fact]
     public void A_signal_absent_from_the_map_is_refused_and_says_the_declaration_must_predate_the_download()

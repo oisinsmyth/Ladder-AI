@@ -202,7 +202,7 @@ public sealed record MirroredSignal(
     /// <para>*** FOUR OF THE SEVENTEEN GATE-5 REFUSALS WERE FALSE, AND THIS IS WHY. *** Those signals
     /// genuinely ARE latched on the device, by a hand-authored latch block that the copy-layer generator
     /// did not emit — and the schema had no way to say so, so <b>a real, deployed latch was structurally
-    /// undeclarable</b> while <c>FromMinimalCopyLayer</c> hard-coded every signal to Sampled. Gate 5
+    /// undeclarable</b> while the map constructor of the day hard-coded every signal to Sampled. Gate 5
     /// failed in BOTH directions in one run: 13 correct refusals and 4 false ones, from one missing field.</para>
     ///
     /// <para>🔴 <b>IT NAMES A BLOCK RATHER THAN ASSERTING A MODE, AND THAT DISTINCTION IS THE WHOLE
@@ -326,14 +326,23 @@ public sealed record MirroredSignal(
     /// <summary>
     /// <b>The instrumentation modes this signal can actually be watched in — DERIVED, never declared.</b>
     ///
-    /// <para><c>Sampled</c> is what the copy layer provides for every mirrored signal: the generator emits
-    /// a result-register MOVE or COIL and <b>no per-signal latch and no scan stamp</b> — those are named
-    /// absences in its own documentation, not oversights. So Sampled is computed from what the generator
-    /// does, and it is the floor.</para>
+    /// <para><c>Sampled</c> is the FLOOR, and it is computed rather than declared: the generator emits a
+    /// result-register MOVE or COIL for every mirrored signal, and <b>no scan stamp</b> — a named absence
+    /// in its own documentation, not an oversight.</para>
     ///
-    /// <para>A latch is claimed ONLY when <see cref="LatchedBy"/> names the block that does it — the one
-    /// thing the generator cannot know, because the latch is not its output — and it is admitted on
-    /// PROVENANCE rather than on a caller's word.</para>
+    /// <para>🔴 <b>IT NO LONGER SAYS "THE GENERATOR EMITS NO PER-SIGNAL LATCH", BECAUSE THE LINE BELOW
+    /// FALSIFIES IT.</b> <see cref="LatchClaimed"/> reads <c>… || Transient</c>, and the generator has
+    /// emitted <c>ResultLatch</c> networks since the transient latch landed. The stale sentence was cited
+    /// by <c>docs/notes/spec-reconciliation.md</c> item 2.1 as its authority for "no latches are
+    /// generated", so <i>both went stale together and the citation kept reading as corroboration while
+    /// pointing at changed text</i> — a comment something else cites is not a comment, it is a
+    /// load-bearing claim with a footnote.</para>
+    ///
+    /// <para><b>A latch is claimed two ways, and the difference is the whole point of
+    /// <see cref="LatchSource"/>.</b> <see cref="Transient"/> makes it GENERATED — a computed fact about
+    /// the artifact this harness emits, readable out of the emitted IR. <see cref="LatchedBy"/> makes it
+    /// HAND-AUTHORED, naming the block that does it, which the generator cannot know because that latch is
+    /// not its output; that one is admitted on PROVENANCE rather than on a caller's word.</para>
     ///
     /// <para><b>The mode SET is assembled in <c>Harness.Results</c>, not here</b>, because
     /// <c>InstrumentationMode</c> lives downstream and this assembly stays dependency-free. What lives
