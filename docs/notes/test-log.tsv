@@ -1,0 +1,11 @@
+utc	tool	target	outcome	detail	agent	elapsed_ms
+2026-08-14T00:52:00Z	download-probe	GenProject1	SoftwareLoaded	45 objects loaded by name; StopModules+StartModules answered; exit 0	rig-enablement	-
+2026-08-14T00:58:00Z	rig-read	10.10.10.10	Running(8)	PlcGetStatus; order code 6ES7 214-1AG40-0XB0; DB+M reads refused CPU-wide	orchestrator	81
+2026-08-14T01:10:00Z	modbus-probe	10.10.10.10:503	ALL-PREDICTIONS-PASS	span 35; stamp 21D7/4D35 constant; counter advancing; word order HIGH-FIRST	orchestrator	-
+2026-08-14T02:40:00Z	openness-cli	GenProject1	HEALTHY	import-all 9/9; compile-all 9 compiled 0 errors; BLOCKS 36 INCONSISTENT 0; TYPES 7 INCONSISTENT 0	corpus	-
+2026-08-14T02:45:00Z	converter	ir/test-project001	MATCH	drift-check --complete: 9 corpus objects MATCH; 4 DRIFTED and 3 EXPORT-ONLY pre-existing	corpus	-
+2026-08-14T03:05:00Z	harness-run	conformance-vectors-b	NotAdmissible	gate 0b + gate 5; 0 packages; no wave; rig not contacted; exit 1	loop-run	-
+2026-08-14T03:20:00Z	wave-cli	wave/test-project001	SERIALISED	4 slots on one block: 4 wave sets, ACHIEVED CONCURRENCY 1 - a result, not a failure	wave-control	-
+2026-08-14T03:22:00Z	wave-cli	wave/test-project001	CONCURRENCY-4	4 disjoint Hx blocks: 1 wave set over 4 slots	wave-control	-
+2026-08-14T03:30:00Z	wave-cli	wave/test-project001	DEGRADED-CORRECTLY	16 agents at --lease-timeout-ms 200: 8 admitted, 8 refused by name, 8 on disk, K reconciles	wave-control	-
+2026-08-14T03:35:00Z	converter	claims/test-project001	REFUSAL-OBSERVED	A acquired FB9020 exit 0; B refused exit 1 naming A's purpose; B acquired FB9021 exit 0	orchestrator	-
