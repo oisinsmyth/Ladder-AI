@@ -1,0 +1,192 @@
+{
+  "_note": "TRANSCRIPTION of harness-binding.md into the loadable form. NOT AN AUTHORING.",
+  "_note1": "Owner remains the coordinator. Every entry below is traceable to a numbered line of that",
+  "_note2": "document (cited per entry as `md:<line>`), and where the prose is AMBIGUOUS the entry is LEFT",
+  "_note3": "UNBOUND and recorded under `_unbound` rather than resolved. A transcription that resolves an",
+  "_note4": "ambiguity has silently become an authorship, and the coordinator's authority over this mapping is",
+  "_note5": "the entire point of the document.",
+  "_note6": "Transcribed 2026-08-14 by the harness lane. 18 signal entries bound (10 command, 8 published)",
+  "_note6b": "plus 4 latch provenances (md:111). FIVE things left UNBOUND - see _unbound.",
+  "_note7": "SLOT STRUCTURE IS ITSELF UNBOUND - see _unbound.slotPartition. Sections 2 and 3 are FLAT tables",
+  "_note8": "with no slot column, so the prose states no partition of signals across slots. One slot carries",
+  "_note9": "them all. `SLOT-HBA-ALL` is the ONLY invented token in this file and it is flagged: it does not",
+  "_note10": "appear in the prose, and gate 5 flattens slots so it does not affect that gate's answer.",
+  "blockName": "FC_HarnessCopyLayer",
+  "blockNumber": 9001,
+  "tagTableName": "HarnessMirror",
+  "tagPrefix": "HX_",
+  "baseByte": 1000,
+  "slots": [
+    {
+      "slotId": "SLOT-HBA-ALL",
+      "_note": "startCondition from md:59 - `startBool (per slot)` -> `.Stim.Start`.",
+      "startCondition": "iDB_HopperBlockageStim.Stim.Start",
+      "vectorTargets": [
+        {
+          "tag": "iDB_HopperBlockageStim.Stim.Profile",
+          "specName": "HBA_Stim.Profile",
+          "type": "Int",
+          "_note": "md:47"
+        },
+        {
+          "tag": "iDB_HopperBlockageStim.Stim.Precondition",
+          "specName": "HBA_Stim.Precondition",
+          "type": "Int",
+          "_note": "md:48"
+        },
+        {
+          "tag": "iDB_HopperBlockageStim.Stim.P1",
+          "specName": "HBA_Stim.P1Ms",
+          "type": "Time",
+          "_src": "md:49"
+        },
+        {
+          "tag": "iDB_HopperBlockageStim.Stim.P2",
+          "specName": "HBA_Stim.P2Ms",
+          "type": "Time",
+          "_src": "md:50"
+        },
+        {
+          "tag": "iDB_HopperBlockageStim.Stim.P3",
+          "specName": "HBA_Stim.P3Ms",
+          "type": "Time",
+          "_src": "md:51"
+        },
+        {
+          "tag": "iDB_HopperBlockageStim.Stim.P4",
+          "specName": "HBA_Stim.P4Ms",
+          "type": "Time",
+          "_src": "md:52"
+        },
+        {
+          "tag": "iDB_HopperBlockageStim.Stim.PreBoundaryHighRunning",
+          "specName": "HBA_Stim.PreBoundaryHighRunningMs",
+          "type": "Time",
+          "_src": "md:53"
+        },
+        {
+          "tag": "iDB_HopperBlockageStim.Stim.ArmAt",
+          "specName": "HBA_Stim.ArmAtMs",
+          "type": "Time",
+          "_src": "md:54"
+        },
+        {
+          "tag": "iDB_HopperBlockageStim.Stim.ArmUntil",
+          "specName": "HBA_Stim.ArmUntilMs",
+          "type": "Time",
+          "_src": "md:55"
+        },
+        {
+          "tag": "iDB_HopperBlockageStim.Stim.EndAt",
+          "specName": "HBA_Stim.EndMs",
+          "type": "Time",
+          "_src": "md:56, and md:61 for why End became EndAt"
+        }
+      ],
+      "resultSources": [
+        {
+          "tag": "iDB_HopperBlockageStim.Stim.Armed",
+          "specName": "HBA_Stim.Armed",
+          "type": "Bool",
+          "_src": "md:73"
+        },
+        {
+          "tag": "iDB_HopperBlockageStim.Stim.ScenarioDone",
+          "specName": "HBA_Scenario_Done",
+          "type": "Bool",
+          "_src": "md:74 - the completion signal of all 27 set-B vectors"
+        },
+        {
+          "tag": "iDB_HopperBlockageMonitor.IO.HopperBlockedAlarm",
+          "specName": "HopperBlockedAlarm",
+          "type": "Bool",
+          "_src": "md:75"
+        },
+        {
+          "tag": "iDB_HopperBlockageMonitor.IO.HopperBlockStopReq",
+          "specName": "HopperBlockedInhibit",
+          "type": "Bool",
+          "_src": "md:76 - DIVERGENCE D1, NOT A RENAME (md:82-104). The spec name is bound to the tag the block ACTUALLY has so the BEHAVIOURAL assertions can be evaluated; D1 is reported by the independent static check and never by this run."
+        },
+        {
+          "tag": "iDB_HarnessViolationLatch.AlarmFellWithoutReset",
+          "specName": "HBA_Violation_AlarmFellWithoutReset",
+          "type": "Bool",
+          "latchedBy": "FB_HarnessViolationLatch",
+          "_src": "md:77"
+        },
+        {
+          "tag": "iDB_HarnessViolationLatch.AlarmLowUnderHeldReset",
+          "specName": "HBA_Violation_AlarmLowUnderHeldReset",
+          "type": "Bool",
+          "latchedBy": "FB_HarnessViolationLatch",
+          "_src": "md:78"
+        },
+        {
+          "tag": "iDB_HarnessViolationLatch.InhibitLowWhileAlarmHigh",
+          "specName": "HBA_Violation_InhibitLowWhileAlarmHigh",
+          "type": "Bool",
+          "latchedBy": "FB_HarnessViolationLatch",
+          "_src": "md:79"
+        },
+        {
+          "tag": "iDB_HarnessViolationLatch.InhibitHighWhileAlarmLow",
+          "specName": "HBA_Violation_InhibitHighWhileAlarmLow",
+          "type": "Bool",
+          "latchedBy": "FB_HarnessViolationLatch",
+          "_src": "md:80"
+        }
+      ]
+    }
+  ],
+  "_unbound": {
+    "_note": "FOUR THINGS THE PROSE DOES NOT DETERMINE. Each is RECORDED, not resolved. Resolving any of",
+    "_note2": "them here would make this file an authorship, and the coordinator owns the mapping.",
+    "HBA_Stim.ResetAtMs": {
+      "prose": "md:57 - `HBA_Stim.ResetAtMs` -> `.Stim.ResetMode` AND `.Stim.ResetAt`; md:35-37 and md:123-130 give the split and its encoding table.",
+      "why": "ONE set-B field maps to TWO IR members, and a binding entry is one tag per specName. The prose states the VALUE encoding (-1 -> mode 0, a number -> mode 1 + that duration, HOLD -> 2, COINCIDENT_WITH_THRESHOLD -> 3) but does not say how a single cited name binds to two tags in the loadable form - whether as two entries sharing a specName, a compound name, or a transform the copy layer applies.",
+      "consequence": "All 27 set-B vectors supply `HBA_Stim.ResetAtMs` as an input. Any check joining vector INPUTS to the binding will report it unbound. Gate 5 reads resultSources only, so this does not affect its verdict."
+    },
+    "iDB_HopperBlockageStim.Stim.ModelThreshold": {
+      "prose": "md:58 and md:64-67 - `(no set B name)`, `Time`, set in the instance DB at T#60S.",
+      "why": "The prose states DELIBERATELY that this member has no set-B name, and gives the reason: read from the block under test it would stop being a stimulus decision and become a reading of the thing being tested. A specName invented here would undo that.",
+      "consequence": "Correctly absent from the map. This is an intended absence, not a gap."
+    },
+    "slotPartition": {
+      "prose": "md:41-59 and md:69-80 are FLAT tables with no slot column. md:175 names six start bools (HBA_Start_Raise, _Clear, _Latch, _Reset, _Startup, _Pair); set B declares six slot ids (SLOT-HBA-RAISE/CLEAR/LATCH/RESET/STARTUP/PAIR).",
+      "why": "The prose never says which slot carries which signal, nor which start bool belongs to which slot id. md:179-181 states all six drive the SAME instance and the SAME members, which is consistent with sharing - but 'consistent with' is not 'stated as'.",
+      "consequence": "One slot carries every signal. Gate 5 flattens slots, so its verdict is unaffected; a copy-layer GENERATION from this file would need the partition stated."
+    },
+    "HBA_Scenario_Done.latch": {
+      "prose": "md:74 - the row reads `latched`, and names no latching block.",
+      "why": "`latchedBy` deliberately takes a BLOCK NAME and not a boolean: `latched: true` would be a caller asserting the answer, where a block name is PROVENANCE checkable against the deployed object set. The prose states the MODE and not the PROVENANCE, so the schema requires something the document does not say. Naming a block here would be an authorship.",
+      "consequence": "ScenarioDone is instrumented Sampled in the derived map. It is every set-B vector's completionSignal rather than an expectation, so gate 5 does not refuse on it - but a Latched expectation on it would be refused."
+    },
+    "startBoolPerSlot": {
+      "prose": "md:59 - `startBool (per slot)` -> `.Stim.Start`, ONE member.",
+      "why": "Set B declares six DISTINCT start-bool names and the prose gives one IR member. Whether all six resolve to that member (coherent, since md:173-186 says the slots are STRICTLY SERIAL) or whether six members are intended is not stated.",
+      "consequence": "The single slot above carries the single member, which is the only reading the prose supports without inventing five more."
+    }
+  },
+  "_notTranscribed": {
+    "_note": "Sections of the prose that carry no binding entry, listed so their absence is visible.",
+    "section1": "md:19-38 - why a mapping is needed. Rationale; the struck C-001 claim (md:25-32) is a correction, not a binding.",
+    "section4": "md:119-147 - value encodings and the Profile decade table. These are VALUE semantics, not name bindings; the binding schema carries no encoding field.",
+    "section5": "md:151-169 - register width and the uncalibrated word order. A property of the mirror, carried by `type` on each entry (ten Time entries above are 32-bit).",
+    "section6": "md:173-189 - six slots are strictly serial. A WAVE-SET width statement (slotsInWaveSet: 1) belonging to the submission, not to this binding."
+  },
+  "_review": {
+    "_note": "INDEPENDENT REVIEW, 2026-08-14, by the orchestrator - who did NOT transcribe this file.",
+    "_note2": "That independence is the point: D6 requires the reviewer be someone other than the",
+    "_note3": "transcriber, NOT that it be a particular person. Reviewing it was mine to do.",
+    "method": "Spot-checked all 8 resultSources against the cited prose lines md:73-80 directly, rather than against the transcriber's notes about them. All 8 bind verbatim, INCLUDING the D1 row, where specName 'HopperBlockedInhibit' binds to 'HopperBlockStopReq' - the tag the block ACTUALLY has - which is correct per the prose's explicit 'DIVERGENCE D1, NOT A RENAME' and the coordinator's 2026-08-14 ruling. Binding the spec name to the real tag is what lets the BEHAVIOURAL assertions run; D1 is reported separately by the independent check, not laundered here.",
+    "verdict": "FAITHFUL on the half gate 5 reads. Committed on that basis.",
+    "unbound_triage": "THE FIVE UNBOUND ITEMS ARE NOT FIVE OPEN QUESTIONS. Reviewed individually:",
+    "ModelThreshold": "NOT A GAP - an INTENDED absence. The prose states deliberately that it has no set-B name, with its reason: read from the block under test it stops being a stimulus decision and becomes a reading of the thing being tested. Inventing a specName would undo that. Close it as intentional.",
+    "HBA_Scenario_Done.latch": "NOT A GAP IN THE TRANSCRIPTION - the SCHEMA demands provenance the SOURCE does not carry. 'latchedBy' takes a block NAME (checkable against the deployed object set) and the prose states only the MODE ('latched'). The fix belongs in the coordinator's prose, not here. Leaving it unbound is correct.",
+    "slotPartition + startBoolPerSlot": "ONE QUESTION, NOT TWO - both are the slot partition. And the prose supports exactly ONE reading without invention: md:179-181 says all six drive the SAME instance and SAME members, md:173-186 says the slots are STRICTLY SERIAL. The single-slot flattening is therefore the only reading available, and 'SLOT-HBA-ALL' is correctly flagged as the one invented token.",
+    "ResetAtMs": "A SCHEMA QUESTION, NOT AN AUTHORITY QUESTION. The coordinator's INTENT is fully stated (the encoding table at md:35-37 / md:123-130). What is missing is how one specName binds to two tags in the loadable form - a property of the binding FORMAT, answerable by whoever defines the schema. It is an INPUT, and gate 5 reads resultSources only, so it does not affect the verdict.",
+    "residual": "SO: 5 unbound -> ONE genuine coordinator question (state the slot partition explicitly, even if the answer is 'one slot') + ONE tooling question (does the schema admit a multi-tag entry?). NEITHER blocks gate 5.",
+    "_warning": "IF A COPY LAYER IS EVER GENERATED FROM THIS FILE, THE SLOT PARTITION MUST BE STATED FIRST. Gate 5 flattens slots so its verdict is unaffected, but generation is not gate 5."
+  }
+}
