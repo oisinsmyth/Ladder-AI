@@ -11,9 +11,9 @@ tooling ready to use in the morning on a live project.* This is the answer, and 
 > ✅ **THE RELEASE BINARY IS NOW CURRENT — rebuilt and verified, nothing owed.** It was stale and it is
 > not any more. See *THE RELEASE BINARY WAS STALE* below for how that was proved.
 
-> 📋 **AND ONE FIVE-MINUTE JOB IS WAITING FOR YOU, WHICH IS THE ONLY THING THAT IS:** review the
-> transcribed coordinator binding and decide whether to commit it. See *ONE THING WAITING FOR YOU TO
-> DECIDE*. **Nothing else in this document needs a person before you start.**
+> ✅ **NOTHING IN THIS DOCUMENT IS WAITING ON YOU.** The coordinator binding has been **independently
+> reviewed and committed** — see *THE COORDINATOR BINDING* below. **Two open questions are recorded
+> there for when you next touch that block; neither blocks anything today.**
 
 ---
 
@@ -274,21 +274,39 @@ the block goes invisible on the wire while every check stays green. **It bites o
    blind to anything the round trip preserves.** A property to remember when quoting them, not a defect
    to fix.
 
-## 📋 ONE THING WAITING FOR YOU TO DECIDE
+## ✅ THE COORDINATOR BINDING — transcribed, independently reviewed, COMMITTED
 
-**`gen/test-project001/hopper-blockage-alarm/harness-binding.json` exists on disk and is DELIBERATELY
-NOT COMMITTED.** It is a transcription of the coordinator's binding, which exists only as prose
-(`harness-binding.md`), into the data form `--binding` requires — **18 signal entries + 4 latch
-provenances bound, 5 left UNBOUND**, each unbound one citing the prose line that could not be resolved,
-and one invented slot id flagged as invented.
+`gen/test-project001/hopper-blockage-alarm/harness-binding.json` is the coordinator's binding — which
+existed only as prose (`harness-binding.md`) — in the data form `--binding` requires. **18 signal
+entries + 4 latch provenances bound.**
 
-***IT IS NOT COMMITTED BECAUSE A COORDINATOR'S BINDING IS AN AUTHORITY DOCUMENT.*** Its whole purpose
-under D6 is to be a source the submission cannot adjudicate — so an AI transcription of it, committed
-unreviewed, **would silently become that authority.** *A transcription is only a transcription until
-somebody commits it; after that it is the source.*
+***REVIEWED BY SOMEONE OTHER THAN THE TRANSCRIBER, WHICH IS WHAT D6 ACTUALLY REQUIRES.*** The concern
+was never that a *particular person* had to look at it — it is that ***a transcription must not become
+the authority without an independent reading***, since after it is committed it *is* the source. The
+review is recorded in the file's own `_review` block, and it was done **against the cited prose lines
+directly, not against the transcriber's notes about them.**
 
-**Your five-minute job:** read the 5 unbound entries and the flagged token, resolve or reject them,
-then commit it or don't. **Nothing else is waiting on you.**
+**Verdict: FAITHFUL** on the half gate 5 reads — all 8 `resultSources` bind verbatim to `md:73-80`,
+**including the D1 row**, where `HopperBlockedInhibit` binds to `HopperBlockStopReq`, *the tag the
+block actually has.* That is correct and deliberate: **binding the spec name to the real tag is what
+lets the behavioural assertions run at all, and D1 is reported by the independent check rather than
+laundered into a rename.**
+
+### The triage: 5 unbound items were never 5 open questions
+
+| item | verdict |
+|---|---|
+| `ModelThreshold` | ***NOT A GAP — an INTENDED absence.*** The prose deliberately gives it no set-B name, with its reason: read from the block under test, it stops being a *stimulus decision* and becomes a *reading of the thing being tested* |
+| `HBA_Scenario_Done.latch` | ***NOT A GAP IN THE TRANSCRIPTION*** — the schema demands **provenance** (`latchedBy` takes a block *name*, checkable against the deployed object set) where the prose states only the **mode**. The fix belongs in the coordinator's prose |
+| `slotPartition` + `startBoolPerSlot` | ***ONE QUESTION, NOT TWO.*** And the prose supports exactly one reading without invention — all six drive the same instance and the same members, strictly serial. `SLOT-HBA-ALL` is correctly flagged as the single invented token |
+| `ResetAtMs` | ***A SCHEMA QUESTION, NOT AN AUTHORITY ONE.*** The coordinator's intent is fully stated; what is missing is how one spec name binds to two tags in the loadable form. It is an *input*, and gate 5 reads results only |
+
+➜ **Residual: one coordinator question** (state the slot partition explicitly, even if the answer is
+*"one slot"*) **and one tooling question** (does the schema admit a multi-tag entry?). **Neither
+blocks gate 5 or anything today.**
+
+⚠️ ***IF A COPY LAYER IS EVER GENERATED FROM THIS FILE, THE SLOT PARTITION MUST BE STATED FIRST.***
+Gate 5 flattens slots so its verdict is unaffected — **but generation is not gate 5.**
 
 **What it already bought:** run against gate 5, it took `SignalNotInMap` from **33 to 0** — the name
 join is complete — and returned a real verdict, ***`REFUSED — 13 × MapDoesNotProvideIt`***. Those 13
