@@ -3034,6 +3034,73 @@ conflict.
 15 tests; mutation-tested three ways — emit the key unconditionally (2 red), never declare ambiguity
 (1 red), guess `Deliverable` instead of `Unstated` (1 red).
 
+## 🔴 `claim` — X-J's enforcing half: `--allocate` now knows the reserved band (2026-08-14)
+
+X-J's treatment reads *"a NUMBER RANGE IS RESERVED for harness-generated objects **and the claim tool
+refuses allocations inside it**"*. The range existed; **`--allocate` had no knowledge of it and would
+hand out 9000–9999 to a deliverable without comment.** This is the missing half.
+
+**The band is READ, never restated.** `Converter.csproj` references `WaveControl` (netstandard2.0,
+references nothing) so `HarnessNumberRange.Declared()` — the one place the ruling names, overturnable
+at the one line the ruling says — is the only declaration. *Two declarations of one band is how they
+diverge*, and this repo had grown a second the previous day: `HarnessScope` carried its own
+`9000`/`9999` constants, correct at the time, which would have gone on agreeing with the ruling right
+up until somebody overturned it in the place the ruling names and not in the copy. Deleted.
+
+### What is enforced — needing no judgement about who is asking
+
+| | behaviour |
+|---|---|
+| **plain `--allocate`** | **cannot** return a band number — the band is **removed** from the candidate set, not deprioritised. A floor just below the band **steps over** it and lands on the first number past it. |
+| **`--allocate --floor 9000`** (fed by `HarnessNumberRange.AllocationFloor`) | the search is **confined to the band** and stops at its last number. |
+| **band exhausted** | `BandExhausted` — its own result, naming the band and its declarer. **Not** `HeldByAnother`, because that invites a retry at a higher floor, and *** a higher floor is exactly what must not happen: it walks out of the reserved range and hands a harness object a deliverable number while every downstream check stays green *** — the measured `FC 910` collision by a different road. |
+| **OB** | **excluded structurally**, via the declaration's own `CoversSpace`: no skip, no confinement, no exhaustion rule, no annotation. An OB's number is fixed by its event class and the spec names `OB80` as a harness object; a band applied to OBs emits a false finding on a correct project. |
+
+The skip is written as an **explicit walk**, not an arithmetic shift: a shift has to leave a floor
+*below* the band alone until the walk reaches it and leave a floor *above* the band alone entirely,
+and `n < First ? n : n + Capacity` displaces the second case into numbers nobody asked for.
+
+### What is NOT enforced, and why a flag would have been worse than the gap
+
+An explicit `--value` inside the band is **accepted and announced**, not refused:
+
+- **Nothing at claim time can derive harness-ness.** A block-number claim is an **allocation** — the
+  block does not exist yet, that being the definition, and `ClaimValidator` refuses the claim outright
+  if it does. So `HarnessScope`'s number-derived classification has nothing to read. A `--harness`
+  switch would close the gap in appearance only: *a caller assertion is forgotten exactly when it
+  matters.*
+- **Refusing it would break X-J's own interoperation point.** `HarnessNumberRange.ClaimArgumentsFor`
+  renders `claim … --value FC9001`, so the harness ledger could no longer record its own allocations —
+  the collision the band exists to prevent, reintroduced by the fence.
+
+What is available instead is **attribution**: the outcome says the claim is in-band, quotes the
+declaration, and says it was *accepted, not verified*.
+
+### ⚠️ The obvious closure is a tautology — written down so it is not added back
+
+*"Once the block exists, classify it and check the claim against it"* **cannot work**: `HarnessScope`
+decides harness-ness **by reading this same band**, so the comparison reduces to `band(n) == band(n)`
+and could not fire on any input, in either direction. *** A check that shares its subject's blind spot
+is not a check ***, and a guard that is correct, wired in and unfalsifiable in place is one of this
+project's named failure modes. Closing it needs an authority that classifies a block by something
+**other than its number** — the harness ledger's own record of what it generated would be one — and no
+such authority is reachable from the converter today.
+
+### Testing
+
+19 tests, **every refusal paired with a legitimate case that must still succeed** — above all a
+harness object taking 9000, and an explicit `--value FC9000`. *A fence that refuses everything passes
+every test that only checks refusals.* Mutation-tested four ways: band not skipped (2 red), **band
+allocation unconfined so it escapes past 9999** (2 red), band unreachable (6 red), OB carve-out
+removed (2 red).
+
+*** TWO OF THOSE TESTS EXIST BECAUSE MUTATION FOUND THEM MISSING. *** The first draft's
+"plain allocate never returns a band number" asserted a property of the number *returned*, and on a
+small corpus a plain allocate takes `FC1` and never goes near 9000 — so it held with the fence
+removed. Worse, **the confinement mutation left the entire suite green**: the exhaustion test used
+floor 9000, where a 512-wide walk ends at 9511 and never leaves the band. Both are now asserted over
+the **candidate set**, from a floor high enough that the walk must cross or stop.
+
 ## Rules (docs/05-architecture.md, 04 §8/§10)
 
 - Unknown elements are hard errors, never warnings or best-effort.
