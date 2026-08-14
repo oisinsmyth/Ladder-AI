@@ -1106,29 +1106,54 @@ public static partial class IrParser
         return expr;
     }
 
+    // A recursive-descent parser has no bound on its own stack, and .NET makes a StackOverflowException
+    // UNCATCHABLE: no catch, no finally, no exit code of ours - the runtime kills the process and prints
+    // its own trace. Measured 2026-08-14: ~1,700 nested parentheses in one expression killed `digest`
+    // (and therefore every subcommand that parses IR, including the project-wide walks that otherwise
+    // degrade an IrFormatException to a per-file warning) with process exit 0xC00000FD. One pathological
+    // file ended the whole run and a caller could not tell it from a crash of any other kind.
+    //
+    // So the depth is bounded and the refusal is NAMED, like every other malformed-input path here. The
+    // limit is deliberately far above anything real: the deepest expression in any committed .ir is 3
+    // levels, and doc 06's readability rules (C-601) would have condemned a rung long before 500.
+    private const int MaxExpressionNestingDepth = 500;
+
+    private static void GuardNestingDepth(string text, int depth)
+    {
+        if (depth > MaxExpressionNestingDepth)
+        {
+            var preview = text.Length <= 80 ? text : text[..80] + "...";
+            throw new IrFormatException(
+                $"Expression nests deeper than {MaxExpressionNestingDepth} levels in '{preview}'. "
+                + "Refusing rather than recursing: the parser is recursive-descent and a deeper expression "
+                + "overflows the stack, which .NET cannot catch and which would kill the whole run.");
+        }
+    }
+
     // AND binds tighter than OR (standard precedence, confirmed with the project owner,
     // 2026-07-11, S1 item 11 — mirrors IrSerializer.SerializeExpr's own precedence note). Real
     // recursive descent, not the old naive substring split: that approach never correctly
     // handled mixed AND+OR (it always matched " AND " first regardless of an OR's lower
     // precedence) — it just never got exercised by anything more complex than a single flat
     // AND-chain or OR-of-single-leaves until OR-merge branches became compound expressions.
-    private static Expr ParseOrExpr(string text, ref int pos)
+    private static Expr ParseOrExpr(string text, ref int pos, int depth = 0)
     {
-        var operands = new List<Expr> { ParseAndExpr(text, ref pos) };
+        GuardNestingDepth(text, depth);
+        var operands = new List<Expr> { ParseAndExpr(text, ref pos, depth) };
         while (TryConsumeToken(text, ref pos, " OR "))
         {
-            operands.Add(ParseAndExpr(text, ref pos));
+            operands.Add(ParseAndExpr(text, ref pos, depth));
         }
 
         return operands.Count == 1 ? operands[0] : new Expr.Or(operands);
     }
 
-    private static Expr ParseAndExpr(string text, ref int pos)
+    private static Expr ParseAndExpr(string text, ref int pos, int depth = 0)
     {
-        var operands = new List<Expr> { ParseUnaryExpr(text, ref pos) };
+        var operands = new List<Expr> { ParseUnaryExpr(text, ref pos, depth) };
         while (TryConsumeToken(text, ref pos, " AND "))
         {
-            operands.Add(ParseUnaryExpr(text, ref pos));
+            operands.Add(ParseUnaryExpr(text, ref pos, depth));
         }
 
         return operands.Count == 1 ? operands[0] : new Expr.And(operands);
@@ -1139,21 +1164,25 @@ public static partial class IrParser
     // element may carry a trailing fan-out marker (ADR-0006), consumed here so it binds the whole element
     // (a `NOT X{recv 1}` binds to `NOT X`, not to the inner `X` — the operand parse below uses ParseElement,
     // which deliberately does NOT consume the marker itself).
-    private static Expr ParseUnaryExpr(string text, ref int pos) =>
-        ConsumeMarker(text, ref pos, ParseElement(text, ref pos));
+    private static Expr ParseUnaryExpr(string text, ref int pos, int depth = 0) =>
+        ConsumeMarker(text, ref pos, ParseElement(text, ref pos, depth));
 
     // One chain element, without its trailing fan-out marker.
-    private static Expr ParseElement(string text, ref int pos)
+    private static Expr ParseElement(string text, ref int pos, int depth = 0)
     {
+        // Checked HERE as well as in ParseOrExpr because `NOT` recurses on its own path: a chain of
+        // `NOT NOT NOT ...` never re-enters ParseOrExpr, so a guard placed only there increments a
+        // counter nothing reads. Caught by the test for exactly that chain.
+        GuardNestingDepth(text, depth);
         if (TryConsumeToken(text, ref pos, "NOT "))
         {
             // `NOT ( ... )` is a standalone Not part (invert-RLO of a group); a bare `NOT A` is a
             // negated contact (Gap H). The serializer emits exactly `NOT (` for the standalone form.
             var standalone = pos < text.Length && text[pos] == '(';
-            return new Expr.Not(ParseElement(text, ref pos), standalone);
+            return new Expr.Not(ParseElement(text, ref pos, depth + 1), standalone);
         }
 
-        return ParsePrimaryExpr(text, ref pos);
+        return ParsePrimaryExpr(text, ref pos, depth);
     }
 
     // A trailing `{split N}`/`{recv N}` fan-out marker (ADR-0006), if present, attached to `expr`. The
@@ -1191,12 +1220,12 @@ public static partial class IrParser
     }
 
     // A parenthesized group (recurses to the top of the grammar) or a comparison-or-leaf.
-    private static Expr ParsePrimaryExpr(string text, ref int pos)
+    private static Expr ParsePrimaryExpr(string text, ref int pos, int depth = 0)
     {
         if (pos < text.Length && text[pos] == '(')
         {
             pos++;
-            var inner = ParseOrExpr(text, ref pos);
+            var inner = ParseOrExpr(text, ref pos, depth + 1);
             if (pos >= text.Length || text[pos] != ')')
             {
                 throw new IrFormatException($"Expected ')' in expression '{text}' at position {pos}.");
