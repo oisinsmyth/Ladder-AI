@@ -10,12 +10,48 @@ then **proving it did**. Built 2026-08-14 under the owner's explicit approval, f
 
 ## THE EXACT COMMAND A PERSON WOULD RUN
 
-```
-src\harness\Harness.RigControl\bin\Release\net8.0\rig-control.exe ^
-    --run --target 10.10.10.10 ^
-    --allowlist %USERPROFILE%\.ladder\device-allowlist.json ^
+🔴 **PowerShell — this is the form that was RUN, 2026-08-14, and the one to use.** It reached the
+`NotWriteEligible` gate, which is the correct refusal today.
+
+```powershell
+& "src\harness\Harness.RigControl\bin\Release\net8.0\rig-control.exe" `
+    --run --target 10.10.10.10 `
+    --allowlist "$env:USERPROFILE\.ladder\device-allowlist.json" `
     --yes
 ```
+
+⚠️ **This block previously showed the `cmd` form (`%USERPROFILE%`, `^` continuations) and the owner
+pasted it into PowerShell.** `%VAR%` is `cmd`/batch syntax; **PowerShell does not expand it**, so the
+tool was handed the literal string, refused at `AllowlistUnusable`, and **never reached the gate we
+actually wanted to see.** The fence behaved perfectly and echoing the literal back is what made it
+diagnosable in seconds — but a documented command that only works in one shell is a defect in the
+document, so the shell is now named and the variable is quoted. The `cmd` form, if you want it:
+
+```bat
+rig-control.exe --run --target 10.10.10.10 ^
+    --allowlist "%USERPROFILE%\.ladder\device-allowlist.json" --yes
+```
+
+**And the tool now says this itself.** A path that contains `%…%` **and does not resolve** gets one
+extra line — it still refuses identically, and it **does not expand anything for you**:
+
+```
+  gate    : AllowlistUnusable
+  verdict : Allowlist file not found: %USERPROFILE%\.ladder\device-allowlist.json
+  hint    : that path contains %USERPROFILE%, which is cmd/batch variable syntax. PowerShell does
+            NOT expand it, so the literal string above is what this tool was handed — it was not the
+            file that was missing, it was the substitution.
+            In PowerShell, quote it: "$env:USERPROFILE\.ladder\device-allowlist.json"
+            Nothing here expanded it for you, on purpose: a fence that repairs its own input is one
+            you cannot tell what it actually read.
+```
+
+***THE PRINTED FORM WAS COPIED OUT OF THAT OUTPUT AND RUN*** — because *an error message's advice is
+a claim*, and an untested instruction is a guess offered to somebody already in trouble. It expanded
+to `C:\Users\User\.ladder\device-allowlist.json` and the fence advanced to `NotWriteEligible`.
+It fires **only** when the path does not resolve: `%` is legal in a Windows filename, and a directory
+genuinely called `%TEMP%-not-a-variable` is left alone (there is a test that builds one on the real
+filesystem).
 
 Without `--yes` the plan prints, **no transport is constructed**, and it exits `10`. Run it that way
 first; that is what the flag is for.

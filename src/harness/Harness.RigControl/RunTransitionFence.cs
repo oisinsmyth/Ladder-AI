@@ -123,8 +123,12 @@ public static class RunTransitionFence
         var load = AllowlistFile.Load(allowlistPath);
         if (!load.Loaded)
         {
+            // The hint is APPENDED to the refusal, never substituted for it, and it changes no verdict
+            // and no exit code: a run that refused before refuses identically now. It fires only when
+            // the path does not resolve, so a real directory containing a '%' is left alone. See
+            // PathSyntaxHint for the user error it exists for and for why it does not expand anything.
             return RunTransitionDecision.Refuse(RunGate.AllowlistUnusable,
-                load.Message ?? "the allowlist could not be loaded.");
+                (load.Message ?? "the allowlist could not be loaded.") + PathSyntaxHint.For(allowlistPath));
         }
 
         // Gate 1-2: listed, exact-matched, and marked test-rig. Delegated whole to the read guard.
