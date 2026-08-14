@@ -190,6 +190,27 @@ public static class CopyLayerGenerator
                 .Concat(sources.Select(s => (Signal: s, Where: "result source")))
                 .ToArray();
 
+            // *** THE GENERATOR DECLINES TO EMIT A LATCH IT CANNOT MAKE CORRECT. ***
+            //
+            // The generated latch is an unconditional SCOIL: it sets on the first firing and stays set
+            // for the rest of the wave. That is right for a signal asserted once per WAVE and WRONG for
+            // one asserted once per INDEX — index 2's latch is already high from index 1, so every later
+            // firing reads identical to the first and a signal that never fired again reads as one that
+            // did. Emitting it anyway would let a caller discover the difference ON THE RIG, where the
+            // symptom is predicted findings quietly absent.
+            //
+            // Refused BY NAME, saying what cannot be expressed and naming the route that works. An
+            // honest "cannot" is a deliverable; a plausible latch is not.
+            foreach (var signal in sources.Where(s => s is { Transient: true, RearmsEachIndex: true }))
+            {
+                refusals.Add(
+                    $"result source '{signal.Tag}' on slot '{binding.SlotId}' declares RearmsEachIndex, and THE COPY LAYER CANNOT EXPRESS IT. "
+                    + "The latch this generator emits is an unconditional SCOIL: it sets on the first firing and stays set for the rest of the wave, so index 2 reads identical to index 1 and a signal that never fired again reads as one that did. "
+                    + "Expressing it needs a PER-INDEX ARM BAND, and the arm is per vector index while this copy layer is generated per wave — a capability gap (mirror width 35 -> 37), not a defect, and one that needs a re-deploy. "
+                    + $"THE ROUTE THAT WORKS TODAY: latch '{signal.Tag}' in the block under test and declare it with LatchedBy, which is admitted on provenance. "
+                    + "Refusing here rather than emitting the latch that compiles is deliberate: the wrong one is only discoverable on the rig.");
+            }
+
             foreach (var (signal, where) in typed)
             {
                 if (signal is null)

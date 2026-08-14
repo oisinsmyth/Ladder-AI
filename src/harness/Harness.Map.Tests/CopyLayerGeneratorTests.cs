@@ -844,6 +844,96 @@ public class CopyLayerGeneratorTests
         Assert.Contains("SCOIL HX_S0_L001 := DB_Unit.Pulse", ir, StringComparison.Ordinal);
     }
 
+    // ---------------------------------------------------------------------------------------------
+    // THE REFUSAL — the generator declines to emit a latch it cannot make correct
+    // ---------------------------------------------------------------------------------------------
+
+    /// <summary>
+    /// *** AN HONEST "CANNOT" IS A DELIVERABLE. ***
+    ///
+    /// <para>The generated latch is an unconditional <c>SCOIL</c>: it sets on the first firing and stays
+    /// set for the rest of the wave. For a signal asserted once per INDEX that is wrong — index 2 reads
+    /// identical to index 1, and a signal that never fired again reads as one that did. The generator
+    /// refuses BY NAME rather than emitting the latch it can emit, because <b>the wrong one is only
+    /// discoverable on the rig, where the symptom is predicted findings quietly absent.</b></para>
+    /// </summary>
+    [Fact]
+    public void A_SIGNAL_THAT_MUST_RE_ARM_EACH_INDEX_IS_REFUSED_RATHER_THAN_GIVEN_A_ONE_SHOT_LATCH()
+    {
+        var result = Generate(OneSlot(result: 4), Binding(sources: new[]
+        {
+            new MirroredSignal("DB_Unit.Pulse", MirrorValueType.Bool, Transient: true, RearmsEachIndex: true),
+        }));
+
+        Assert.False(result.Generated);
+        Assert.Contains(result.Refusals, r => r.Contains("CANNOT EXPRESS IT", StringComparison.Ordinal));
+
+        // It says WHAT it cannot express, and NAMES THE ROUTE that works today.
+        Assert.Contains(result.Refusals, r => r.Contains("PER-INDEX ARM BAND", StringComparison.Ordinal));
+        Assert.Contains(result.Refusals, r => r.Contains("LatchedBy", StringComparison.Ordinal));
+        Assert.Contains(result.Refusals, r => r.Contains("DB_Unit.Pulse", StringComparison.Ordinal));
+
+        // And it carries the capability gap's width, so the cost of closing it is in the refusal rather
+        // than in somebody's memory.
+        Assert.Contains(result.Refusals, r => r.Contains("35 -> 37", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// 🔴 *** THE DID-NOT-RUN TEST FOR THE REFUSAL ITSELF. ***
+    ///
+    /// <para><b>A refusal that fires on everything passes every test that only checks refusals</b>, and
+    /// this component has been caught by that shape twice. So: an ordinary transient — one asserted once
+    /// per WAVE, which the unconditional latch expresses correctly — must STILL GET ITS LATCH.</para>
+    /// </summary>
+    [Fact]
+    public void THE_DID_NOT_RUN_TEST_an_ordinary_transient_STILL_GETS_its_unconditional_latch()
+    {
+        var result = Generate(OneSlot(result: 4), Binding(sources: new[]
+        {
+            new MirroredSignal("DB_Unit.Pulse", MirrorValueType.Bool, Transient: true),
+        }));
+
+        Assert.True(result.Generated);
+        Assert.Empty(result.Refusals);
+
+        var ir = result.Objects.Single(o => o.Kind == HarnessObjectKind.Block).Ir;
+        Assert.Contains("SCOIL HX_S0_L001 := DB_Unit.Pulse", ir, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The refusal is scoped to the LATCH, not to the signal. A re-arming signal that is not transient
+    /// has no generated latch to be wrong, so there is nothing to refuse — and refusing it anyway would
+    /// be the gate firing outside its subject.
+    /// </summary>
+    [Fact]
+    public void A_NON_TRANSIENT_SIGNAL_DECLARING_RE_ARM_IS_NOT_REFUSED_BECAUSE_NO_LATCH_IS_EMITTED()
+    {
+        var result = Generate(OneSlot(result: 4), Binding(sources: new[]
+        {
+            new MirroredSignal("DB_Unit.Actual", MirrorValueType.Int, RearmsEachIndex: true),
+        }));
+
+        Assert.True(result.Generated);
+        Assert.Empty(result.Refusals);
+    }
+
+    /// <summary>
+    /// A HAND-AUTHORED latch is the route the refusal names, so it must actually be open: a re-arming
+    /// signal latched by the block under test is admitted on provenance, with no generated latch involved.
+    /// </summary>
+    [Fact]
+    public void THE_NAMED_ROUTE_IS_OPEN_a_hand_authored_latch_on_a_re_arming_signal_is_admitted()
+    {
+        var signal = new MirroredSignal("DB_Unit.Pulse", MirrorValueType.Bool,
+            LatchedBy: "FB_UnitUnderTest", RearmsEachIndex: true);
+
+        var result = Generate(OneSlot(result: 4), Binding(sources: new[] { signal }));
+
+        Assert.True(result.Generated);
+        Assert.Empty(result.Refusals);
+        Assert.Equal(LatchSource.HandAuthored, signal.LatchSource);
+    }
+
     [Fact]
     public void THE_DID_NOT_RUN_TEST_a_signal_that_needs_no_latch_does_not_acquire_one()
     {

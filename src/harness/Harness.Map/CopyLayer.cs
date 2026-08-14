@@ -235,7 +235,39 @@ public sealed record MirroredSignal(
     /// own output is a VALUE UNDER TEST, not instrumentation.</b> Those stay Sampled; latching them again
     /// in the copy layer would mean the harness observing its own latch rather than the block's.</para>
     /// </summary>
-    bool Transient = false)
+    bool Transient = false,
+
+    /// <summary>
+    /// 🔴 <b>THE SIGNAL FIRES ONCE PER VECTOR INDEX, AND EACH FIRING MUST BE DISTINGUISHABLE FROM THE
+    /// LAST.</b> A property of the signal, exactly as <see cref="Transient"/> is — the generator DERIVES
+    /// the consequence.
+    ///
+    /// <para>*** AND THE CONSEQUENCE IT DERIVES IS A REFUSAL, BECAUSE THE COPY LAYER CANNOT EXPRESS
+    /// THIS. *** The generated latch is an UNCONDITIONAL <c>SCOIL</c>: it sets on the first firing and
+    /// stays set for the rest of the wave. That is correct for a signal asserted once per WAVE and wrong
+    /// for one asserted once per INDEX — index 2's latch would already be high from index 1, so every
+    /// later firing reads identical to the first and a signal that never fired again reads as one that
+    /// did. Expressing it needs a per-index ARM band, and the arm is per vector index while the copy
+    /// layer is generated per wave.</para>
+    ///
+    /// <para><b>So the generator refuses by name rather than emitting the latch it can emit.</b> A caller
+    /// must not be able to discover the difference ON THE RIG, where the symptom is predicted findings
+    /// quietly absent. The route that works today is a HAND-AUTHORED latch in the block under test,
+    /// declared through <see cref="LatchedBy"/>.</para>
+    ///
+    /// <para>⚠️ <b>THE DEFAULT'S FAILURE MODE IS SILENT, AND THAT IS THE ASYMMETRY WITH
+    /// <see cref="Transient"/>.</b> Forgetting <c>Transient</c> yields no latch and gate 5 refuses a
+    /// Latched expectation — loud, and before anything is spent. Forgetting THIS yields the one-shot
+    /// latch, which compiles, deploys and reads plausibly. <b>It cannot be defaulted the other way</b>
+    /// without refusing every ordinary transient, so the asymmetry is recorded here rather than closed:
+    /// it is the reason the capability gap below is worth closing rather than living with.</para>
+    ///
+    /// <para><b>CAPABILITY GAP (phase-5 item, not a defect):</b> a per-index arm band costs
+    /// <b>35 → 37 registers</b> of the mirror — only +2 while both bands fit one register each — and the
+    /// mirror is currently EXACTLY FULL at 35 of 35. It needs a re-deploy, so it is not a change to make
+    /// under a moving mirror.</para>
+    /// </summary>
+    bool RearmsEachIndex = false)
 {
     /// <summary>
     /// True when the binding has stated a specification name. <b>Distinct from the names being equal</b> —
