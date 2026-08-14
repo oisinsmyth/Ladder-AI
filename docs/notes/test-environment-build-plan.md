@@ -4168,3 +4168,78 @@ nothing had ever attempted S7 variable access on this rig before today.
 
 **Consequence: symptom 2 blocks diagnosing symptom 1**, because `MB_SERVER`'s `STATUS`/`ERROR`
 outputs live in an instance DB nobody can currently read.
+
+---
+
+## 🔴 THE LOOP RUN WAS STOPPED BEFORE IT STARTED — THE BINDING LAUNDERS D1 (2026-08-14)
+
+**Nothing ran: no gate, no vector, no rig traffic, no Portal attach.** The pre-run check ordered by
+the brief came back positive, so the run did not begin. Full report:
+`jobs/f24f6b1a/tmp/lane-reports/loop-run-1.md`.
+
+`harness-binding.md` §3 maps `HopperBlockedInhibit` → `iDB_HopperBlockageMonitor.IO.HopperBlockStopReq`,
+labelled *"the rename"*. **Set B cites `HopperBlockedInhibit` 68 times and `HopperBlockStopReq` zero
+times**, so the row is load-bearing: with it, D1 resolves silently and reports `PASS`; without it, six
+expectations do not bind. *** A PREDICTED DIVERGENCE THAT CAN ONLY COME BACK GREEN IS MEASURING
+NOTHING. *** The mapping is *disclosed* — which changes what a reader of the binding knows, and
+changes nothing about what the run can observe.
+
+**Three things make this worth recording rather than merely fixing:**
+
+1. *** THE SAME DOCUMENT REFUSES THE IDENTICAL LAUNDERING ONE SECTION EARLIER. *** §2 declines to
+   derive `ModelThreshold` from the block because *"read from the block under test it would stop being
+   a stimulus decision and become a reading of the thing being tested."* That argument is correct and
+   it covers identities exactly as it covers values. **The principle was understood, written down, and
+   applied to one field and not the other.**
+2. **The stated justification is false, and it is the kind that stops re-reading.** §1 reason 1 claims
+   C-001 *"already forced `HopperBlockedInhibit` to be `HopperBlockStopReq`"*. C-001's rule is
+   *underscore-free member names* — **neither name has an underscore**; both comply. And the block was
+   authored under S6 request #1 **weeks before the enumeration existed**, so the block's name predates
+   the spec's and the causal direction is impossible. ➜ *A laundering with a rule number beside it
+   acquires a reason, and once a green has a reason nobody looks again.*
+3. **It contaminates D6, the one predicted *conformance*.** D6 rests on `REQ-HBA-008`, the symmetric
+   invariant over the alarm and inhibit outputs — **one of whose two operands is the renamed output.**
+   Compounded by the standing rule that *a simultaneity claim is satisfied by a synchronised error*:
+   those assertions are already blind to anything the operands share, and a misbound operand is
+   precisely that. **The loop's headline positive result is the row least safe to run through an
+   unresolved binding.**
+
+### No gate could have caught it, and gate 5 is self-referential here
+
+**No gate in contract §10 compares a specification's signal names against the block's interface
+names.** The one that looks close — gate 5, *signal in the map* — is checked against
+`map.providedFor`, which lives **inside `conformance-vectors-b.json`** and declares
+`HopperBlockedInhibit`. That is the vector author's list checked against the vector author's own map:
+verbatim the `design-for-testability` skill's open question 5, *"a declaration checked against
+itself — ask which it was."* Asked; it was. **And nothing mechanical consumes the binding at all** —
+there is no submission file, the binding is prose, and the only place the two names appear together is
+a markdown table no checker reads.
+
+### D2–D7 are clean; the binding is one row from usable
+
+D2 (profiles 11/32), D3 (profile 12 + `ResetMode 2`), D4 (profile 13 + `ResetMode 3`, against a
+`ModelThreshold` §2 protects), D5 (shape 4 / profile 41) and D7 (already settled) are **not laundered
+and their stimulus apparatus is present and well designed** — D3 and D4 notably so. Only D1 is
+erased, and D6 is compromised through it.
+
+### Second, independent blocker — four cited signals the binding says do not exist
+
+Binding §3 records `HBA_Violation_*` (four) as *"do not exist — copy-layer instrumentation, not yet
+built"*, while `wire-prediction.md` §1 — written **19 minutes later** — assigns the same four to
+registers **31–34** (unprefixed), and set B cites all four in expectations *and* in `map.providedFor`.
+No harness `.cs` computes them. Either four mirror registers have no mapping row, or ≥4 vectors are
+`REFUSED` at gate 5 and four of the 35 registers are unbacked. **Resolving it needs a `lad-coder` read
+of the copy layer (hard rule 8); not done here.**
+
+### Owner's call, deliberately not taken by this lane
+
+(a) rule D1 out of the conformance run and give it a separate mechanical name check — *and repair D6's
+contamination*; (b) refuse the mapping and let the six expectations come back `REFUSED`, accepting
+that `REFUSED` blames the wrong artifact; (c) rename in the block — which **closes D1 and destroys it
+as evidence**, the outcome this plan already warns against. **Independently of that ruling**, §1
+reason 1 must be struck or corrected, and the `HBA_Violation_*` contradiction resolved.
+
+> **Also noted:** commit `9285693` records *"deploy landed, rig not serving"*. The rig was measured
+> **serving, 35 registers, high-word-first** on 2026-08-14. The commit is stale and will mislead the
+> next reader of `git log` — *a past message describing a verification is the weakest evidence in the
+> repository.*
