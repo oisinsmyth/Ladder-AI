@@ -4627,3 +4627,108 @@ milestone, and it is a copy-layer capability gap rather than anything about the 
   said so.** The justification for `latchedBy` being a *block name* rather than a bool rests on that
   sentence being printed — and in a refusing report it is not. *An admission that appears only when
   everything passed is missing from every report anyone reads closely.*
+
+---
+
+## THE LATCH CAPABILITY LANDED BUT CANNOT BE REACHED — AND THE CONVERSE TRAP CATCHES BOTH SIGNALS
+
+2026-08-14, pinned to a clean worktree at `a672f12`. **Four blockers, all measured. The thirteen were
+not cleared, and after the fourth finding they should not be cleared this way at all.**
+
+### 1. 🔴 `transient` HAS NO WIRE REPRESENTATION — the capability is unreachable from a binding
+
+`MirroredSignal.Transient` exists in the domain model (`Harness.Map/CopyLayer.cs`), and the generator
+derives a latch from it. **But `MirroredSignalDocument` contains ZERO occurrences of `Transient`**, and
+both entry points build the record through one four-argument factory:
+
+```
+GateCli.ToMirroredSignal:  new(row.Tag, row.Type, row.SpecName, row.LatchedBy)
+LoopCli.Signals:           .Select(GateCli.ToMirroredSignal)
+```
+
+So `Transient` always takes its `false` default, from every document, on both paths. **Measured, not
+inferred:** a binding declaring `transient: true` on both signals produced **13 refusals — unchanged
+from 13.** The comment above that factory reads *"Nothing is defaulted - an absent spec name stays
+absent"*, which is true of `SpecName` and silently untrue of `Transient` one line below it.
+
+***THIS IS THE THIRD INSTANCE OF THE SAME SHAPE*** - instrumentation mode was undeclarable (fixed by
+`latchedBy`), the specification name was undeclarable (fixed by `specName`), and now transience is
+undeclarable. **The domain model gained the field and the wire format did not.**
+
+### 2. 🔴 GATE 0b DOES NOT INSPECT THE BINDING DOCUMENT
+
+The unknown `transient` field was **silently ignored, not refused**. Gate 0b names 79 unknown fields in
+the SUBMISSION and none in the BINDING, because it reads `SubmissionDocument.UnknownFields` only.
+*** THAT IS PRECISELY THE FAILURE 0b EXISTS TO PREVENT - "a silently-ignored field reads as an accepted
+one" - OCCURRING IN THE SIBLING DOCUMENT THE GATE DOES NOT LOOK AT. *** An author following the
+contract would have had no signal at all that the field did nothing.
+
+### 3. 🔴 GATE 0b REFUSES THE DELIVERABLE OVER ITS OWN COMMENTARY
+
+79 refusals, and **every one is an `_`-prefixed annotation** - the vector author's `_scenario`,
+`_observability`, `_conflictGraphOmitted`, `_deploymentOmitted` (load-bearing provenance recording WHY
+those fields were left out), and my own `_deploymentSuppliedBy`. The gate's own remedies are *"Remove
+the field, or implement it"*, and **neither fits commentary that was never meant to be schema.**
+
+The rationale is right and the scope is wrong: an underscore prefix is the conventional JSON comment
+idiom, and a gate that refuses every ordinary submission is *noise, and noise gets switched off - by
+someone who is right to.* ➜ **Exempt a declared comment prefix, counted and named rather than silent.**
+
+### 4. 🔴 THE CONVERSE TRAP CATCHES BOTH SIGNALS — so the thirteen must NOT be cleared by `transient`
+
+`lad-coder` read `FB_HopperBlockageMonitor` (FB 50). Verbatim, NETWORK 5:
+
+```
+COIL IO.HopperBlockedAlarm := (CumulativeElapsed >= IO.BlockedTimeThreshold OR IO.HopperBlockedAlarm) AND NOT IO.FaultReset
+```
+
+*** THE RUNG'S OWN CONDITION CONTAINS THE SIGNAL. IT IS A SEALED LEVEL COIL — THE BLOCK LATCHES ITS OWN
+OUTPUT. *** And NETWORK 6 is `COIL IO.HopperBlockStopReq := IO.HopperBlockedAlarm` — no seal of its
+own, a zero-lag level follower whose persistence is **inherited from the block's latch**.
+
+So **both** signals are the converse case, and adding a copy-layer sticky bit would mean *the harness
+observing its own latch rather than the block's*. Worse, it would be actively destructive:
+
+> **D2, D3 and D4 all turn on the alarm FALLING** — on reset, under a held reset, and on
+> raise-vs-reset dominance. *** A GENERATED LATCH GOES TRUE ON THE FIRST RAISE AND STAYS TRUE, SO THE
+> FALL BECOMES UNOBSERVABLE. *** Declaring `transient` here would not clear a blocker; it would
+> silently delete three of the six predicted findings.
+
+**The 1-scan case is real and is already correctly instrumented.** The alarm can be true for a single
+scan (trip at scan N, `IO.FaultReset` true at N+1) — but the instrument for that is the **hand-authored
+`FB_HarnessViolationLatch`**, which `SCOIL`s the four violation bits and `RCOIL`s them on
+`NOT Stim.Start` (a LEVEL, so a harness restart re-clears rather than stranding evidence — the shape
+the working agreement asks for). Those four already pass gate 5 on `latchedBy`.
+
+➜ ***THE THIRTEEN ARE A VECTOR-AUTHORING ERROR, NOT A CAPABILITY GAP.*** They declare `Latched` on two
+signals the block already holds. The fix belongs to the **vector author** — `Sampled` with a window
+above the 8.6-scan floor for the persistent claims, and the existing violation latches for the
+transient ones. **It is not a copy-layer capability that is missing.**
+
+**And the four `HBA_Violation_*` did NOT derive as `Generated`** — they cannot, since `Transient` is
+unreachable; they remain `HandAuthored` on `latchedBy`, which is correct for hand-authored IR.
+
+### The width answer: THERE IS NO ROOM. ZERO SPARE REGISTERS.
+
+| | registers |
+|---|---|
+| build stamp | 2 |
+| scan counter | 2 |
+| start bool + echo | 2 |
+| `Profile` / `Precondition` / `ResetMode` | 3 |
+| 9 x `Time` at 2 each | 18 |
+| 8 x `Bool` result | 8 |
+| **TOTAL** | **35** |
+| `MB_HOLD_REG = P#M1000.0 WORD 35` | **35** |
+| ***SPARE*** | ***0*** |
+
+*** THE DEPLOYED MIRROR IS EXACTLY FULL. *** A latch band of one register per transient signal would
+take it to 37 and **overflow the area pointer** — so it is not a copy-layer change alone: it needs
+`MB_HOLD_REG` widened in `FB_Comms_ModbusServer`, i.e. an IR edit, an import and a download. *"Do not
+assume there is room"* was the right instruction and the answer is that there is none.
+
+### 5. Confirmed: the copy layer cannot be regenerated without deploying
+
+`CopyLayerGenerator.Generate`'s **only** call site is `LoopRun.cs:173`, inside the pipeline that
+deploys at step 5. There is no entry point that generates and stops. **Same shape as the loop having
+had no entry point**, and it needs its own fix rather than a workaround.
