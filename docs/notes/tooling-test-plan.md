@@ -1,0 +1,528 @@
+# THE TOOLING TEST PLAN — what must be tested, how, and what a pass licenses
+
+**Written 2026-08-14.** Subject: the whole PC-side toolchain — `converter`, `openness-cli`,
+`src/harness/`, `src/wave-control/`, `src/download-feedback/`, `src/device-guard/`, `tests/golden/`
+and `tools/` — held against `docs/notes/spec-reconciliation.md`, which sorted
+`PC-Client-Modbus-Spec-Draft-final.txt` into four buckets: **86 AS SPECIFIED · 33 DIVERGED · 38 NOT
+BUILT · 21 NOT CHECKED**, 178 items.
+
+> **The purpose is not to demonstrate the tooling works. It is to find out where it stops working.**
+> (`tooling-hammer-plan.md`.) Every defect that mattered on 2026-08-13 and -14 was found by
+> **contact**, not by review: the copy layer's suite was green and TIA refused its output on the
+> first import; a binding passed every gate and laundered a predicted finding; a project-wide
+> analysis reported three multi-writers that do not exist; 1,069 tests were green either side of a
+> type defect that failed every 32-bit import.
+
+**This plan does not run anything.** It is the specification of the campaign. The live position —
+which rows have run, against what, with what result — belongs in the `/plan` file, per the
+*autonomous working agreement*'s "keeping the plan and the position in separate places".
+
+---
+
+## §A — THE SPINE: FOUR BUCKETS, FOUR METHODS
+
+*** THE BUCKETS ARE NOT TESTED THE SAME WAY. *** This is the plan's organising claim, and getting it
+wrong is how a campaign produces a large green that means nothing.
+
+| bucket | n | the test is written against | why that source, and not another |
+|---|---|---|---|
+| **AS SPECIFIED** | 86 | ***the specification*** | *A test derived from the implementation is a change detector.* It will keep passing when the code changes in a way the spec forbids, and it will fail when the code is improved. The row cites a spec clause; it may **not** cite a source file as its expectation. |
+| **DIVERGED** | 33 | ***the corrected spec text***, plus a re-check of **the evidence that justified the correction** | These are the places the spec was wrong and development was right. **A regression here is silent** — the document now agrees with the code, so nothing disagrees with a reverted change. Two artifacts are needed: a test against the corrected text, and a re-runnable form of the measurement that moved it. |
+| **NOT BUILT** | 38 | ***nothing — these are not test targets*** | Listed in §H with its **consequence**, so that its absence from the test rows is never read as coverage. A campaign that silently omits them produces a plan whose scope nobody can reconstruct. |
+| 🔴 **NOT CHECKED** | 21 | ***the question of whether it is checkable at all***, and at what cost | **The highest-value rows in this plan.** Nobody has established these either way. Each row says: checkable? by what? what does it cost? and what does its continued absence license. §G. |
+
+### A.1 What this plan contains
+
+| section | rows | covers |
+|---|---|---|
+| **§C** self-tests | **8** (`SELF-1..8`) | the campaign's assertions about itself — **three of them are multi-agent and run first** |
+| **§D** multi-agent | **27** (`MA-1..26` + `MA-2b`) | the axis: claims registry, admission and colouring, ordering, the fences, submission under contention |
+| **§E** AS SPECIFIED | **30** (`AS-1..30`) | the 86 items, each row naming what it discharges |
+| **§F** DIVERGED | **21** (`DV-1..20` + `DV-8b`) | 29 of the 33; the residue is accounted for, not dropped |
+| **§G** NOT CHECKED | **21** (`NC-1..21`) | one per item — *checkable? by what? at what cost?* |
+| **total test rows** | **107** | of which **30 are multi-agent** (§D's 27 + `SELF-1/2/3`) |
+| **§H** NOT BUILT | **38 + 4** | ***consequence register, NOT test rows*** |
+
+### The three buckets a reader will conflate, and the sentence that separates them
+
+- **NOT BUILT** — *we know it is absent.* The consequence is known and stated.
+- **NOT CHECKED** — *nobody looked.* Not compliant, not clean, **not a pass**.
+- **CHECKED and empty** — *we looked and there was nothing.* A positive claim, and the only one of
+  the three that is evidence.
+
+> *** "0 FINDINGS" AND "NOBODY SAID" MUST NEVER PRODUCE THE SAME OUTPUT *** (contract §2.4). Every
+> row below is required to distinguish them, and §B's did-not-run field is how.
+
+---
+
+## §B — THE ROW CONTRACT
+
+Every row in §C–§G carries six things. A row missing any of them is not a test, it is an intention.
+
+| field | what it must say | the defect it exists to stop |
+|---|---|---|
+| **establishes** | the single fact a pass adds to the record | a row whose pass means whatever the reader hoped |
+| ✗ **does not license** | what a pass explicitly does **not** support | *a green with a reason attached stops being questioned* |
+| **method** | the exact invocation or observation, not a description of one | *"run the vectors"* is a heading; the state is what the tool is actually given |
+| **authority** | ***who in this loop could disagree with us*** | a proof is only as strong as the most independent authority in its loop |
+| **did-not-run** | how a reader tells *the check ran and found nothing* from *the check did not run* | the unexamined pass — this project's most expensive defect class |
+| **verdict** | which failure state a failure produces, and it must be **the loud one** | *a `FAIL` invites an argument and somebody looks; a `TIMED-OUT` reads as "the condition never occurred" and closes the question* |
+
+### B.1 The authority ladder — name the rung, in the row
+
+Ranked by how much of the loop is our own code. **A row that cannot name a rung above 4 is measuring
+self-consistency and must say so in its own output.**
+
+| rung | authority | examples here |
+|---|---|---|
+| **1** | **the device** | a Modbus read of the mirror; `PlcGetStatus`; a torn-read count; the run-state after an abort |
+| **2** | **TIA Portal** | `openness-cli compile --station`; an `Import()` that resolves or refuses; a **fresh export** taken from the controller |
+| **3** | **a foreign artifact** | a real TIA `.xml` export read as a fixture; the four recorded live download logs; a vendor datasheet |
+| **4** | **a second independent agent** | set A vs set B; the assertion enumerator vs the vector author; an independent re-implementation of an ID hash |
+| **5** | **our own code, two halves** | `to-xml` → `to-ir`; `diff`; `ir-hash`; a fixture authored by reading our output — ***these agree with themselves and nothing else*** |
+
+> **Measured, 2026-08-13, and it is why this ladder exists:** the converter typed every hex literal
+> `Int` regardless of destination, so every 32-bit build stamp failed to import — and
+> `to-xml` → `to-ir --no-sidecar` passed **byte-identically**, because both halves are converter
+> code. **All 1,069 tests were green before the fix and after it.**
+>
+> Three more instances found the same week: **both hand-authored instance-DB fixtures declared
+> `Static` alone — our writer's own shape — so no round trip over them could ever have failed**; the
+> golden harness ran green (46/46) against the pre-fix converter; and `converter cross-check` and its
+> whole suite stayed green **through both the defect and the fix**.
+
+### B.2 The did-not-run field is not a formality
+
+Three shapes, and the plan requires the strongest available:
+
+1. **Unconstructible** — the not-run state cannot be represented (`BackstopMs` has no `int`
+   overload; `MirrorWriteTarget` has no factory producing a result region; a required parameter).
+2. **Separately counted** — a denominator the report prints even at zero (`AddressesExamined`,
+   `UNCHECKED: 0`, `HARNESS-SCOPE:` printed on plant files it did not exempt).
+3. **Asserted** — a test that fails if the guard stops running.
+
+> *** AN ABSENT VALUE IS ONLY EVIDENCE IF YOU KNOW THE REPORT POPULATES THAT FIELD WHEN IT IS
+> PRESENT. *** So a row whose evidence is an absence must name **one positive case, run through the
+> same path**, in which the field is populated. A control that cannot fail is the same defect as a
+> test that cannot fail, one level out — and on 2026-08-13 the cheapest check in the project produced
+> **two false absences in one day** because its control landed on a metadata identifier rather than a
+> string literal.
+
+### B.3 Prefer the loud failure — the verdict rule
+
+| prefer | over | because |
+|---|---|---|
+| `FAIL` | `TIMED-OUT` | a timeout reads as *the condition never occurred* and closes the question |
+| `REFUSED` naming the value | a modulo | `75 000 ms` arriving as `9 464 ms` is a plausible dwell nobody questions |
+| `STALE` | `FAIL` | the block may be right and the vector's premise expired; `FAIL` sends an agent to edit correct logic |
+| a **FAIL against the block** | `REFUSED` | `REFUSED` blames the submission; a missing response signal is the block's defect and the submission is not at fault |
+| exit 2 `NOTHING EXAMINED` | exit 0 | empty is not clean |
+| a **swapped-word** error | a **narrow** one | an order error announces itself; a width error wraps and returns a confident wrong answer |
+
+---
+
+## §C — ROW ZERO: THE CAMPAIGN'S ASSERTIONS ABOUT ITSELF
+
+**These run first, and a failure here voids every row after it.** Three of them are the traps from
+`tooling-hammer-plan.md` §2; the other five are conditions this project has already been caught by.
+
+| ID | establishes / ✗ does not license | method | authority | did-not-run | verdict |
+|---|---|---|---|---|---|
+| **SELF-1** 🔴 | **The claims directory is SHARED.** ✗ Does not license any conclusion about *which* resources the registry protects — only that it is connected at all. | Two agents in **separate worktrees**, one `--claims <dir>`, both claiming **the same resource**. ***Observe the REFUSAL.*** Then release and re-acquire to show the grant path also works. | **4** — a second agent process; the refusal is produced by state the first agent wrote | If no refusal is ever observed, the campaign has **not shown the registry is connected** and every later MA row is void. A per-worktree dir *grants every claim and looks exactly like success*. | `FAIL` the campaign, not the tool. Record it as a **precondition failure**, never as a passing concurrency run |
+| **SELF-2** 🔴 | **Concurrent submission is under test; concurrent Portal work SERIALISES.** ✗ Does not license two lanes attaching to one project — that is unsupported, not merely discouraged. | Dispatch N submitting agents; **exactly one** holds the Portal token. Record, per attach, which lane held it and for how long. Cross-check with `openness-cli portal-status` before each dispatch. | **1/2** — the Portal process table and the device | A run in which **no lane ever waited** has not demonstrated serialisation; it has demonstrated that only one lane needed Portal. Say which. | `FAIL`, loudly. The observed collision signature is `Collection was modified` → `EngineeringObjectDisposedException` inside a *read-only* plan, with `sanity-check` then reporting **all 84 blocks and 33 types inconsistent** |
+| **SELF-3** 🔴 | **N slots on N DIFFERENT blocks is N slots.** ✗ A run of N slots against one FB instance is **one** slot under D9 and licenses nothing about concurrency. | Use the **Hx corpus** (`FB_HxBoolEcho` / `HxDwellTimer` / `HxIntStep` / `HxSealLatch`, blocks 9010+), whose register states pairwise-disjoint reference sets. Report the **wave-set colouring** alongside the slot count: *k slots → j wave sets*. | **5 → 4** — the colourer is our code; the disjointness claim is corroborated by `cross-check` over generated SimaticML, which is a different tool | A report giving a slot count and **no wave-set count** has not answered the question. `j = k` means the run was serial. | `FAIL`. And per `tooling-hammer-plan.md` §4, reporting "N concurrent" over mutually-conflicting slots is named in advance as **dishonest**, not as an error |
+| **SELF-4** 🔴 | **Every row in the reconciliation and the lane reports that asserts an ABSENCE is current.** ✗ Does not license treating the reconciliation as a spec — it is a survey with a date, and **five of its absences were measured stale while this plan was being written**. | Re-verify each such row against `git log` and against the code. **The five, all measured 2026-08-14:** (a) §X.10 *"No driver exists"* — `src/harness/Harness.Run/` is an `Exe` (`359d657`); (b) D9 *"the producer does not exist"* — `converter conflict-graph` exists (`4ea56ea`); **both commits predate the reconciliation**; (c) *"gate 5 is self-referential and believed"* — `SubmissionGate.cs:659` now refuses a `MapProvenance.SelfDeclared` map as **`NotChecked`**, and `GateCli` stamps its own map `SelfDeclared` deliberately; (d) *"`ScratchProjectGuard.RequiredSuffix` is `" scratch.ap20"`"* — replaced by a **path allowlist** (`ScratchAllowlist`, two files, *no allowlist found anywhere is a refusal*); (e) the harness binding has gained a **`specName` on every bound signal** sub-gate. | **2/5** — `git log`, the code, and the binary's own emitted strings | A row asserting an absence with no re-verification date is `NOT CHECKED`, not `NOT BUILT`. **This is the same class as the sole-source problem in §H: a plan built on a stale absence removes a test target.** | `FAIL` the row and **re-bucket it**. ***A stale NOT BUILT is worse than a stale AS SPECIFIED*** — it deletes work from the plan silently, and nothing disagrees with it |
+| **SELF-5** | **The binary under test is the build the source describes.** ✗ Does not license a claim about any *other* configuration — Debug and Release hold independent approvals and independent code. | Pick an **interpolated string literal from an output path** — never from a comment — and probe the binary for it in **both ASCII and UTF-16**. Positive control must land on a literal, not on a metadata identifier. Confirm the **right assembly**: gate names live in the library, not the shim. | **5**, but it is the cheapest check in the project and settles staleness in under a minute | A probe reporting every marker ABSENT — *including the control* — means the probe is broken (`strings` does not exist on this machine). | `FAIL`. *** A FALSE "STALE BINARY" IS THE SAME CLASS OF ERROR AS A FALSE GREEN *** — it costs a Portal window |
+| **SELF-6** | **Every gate/rule enumeration in this plan was derived from behaviour, not from one syntactic form.** ✗ Does not license quoting a gate count from any table, including this plan's. | Enumerate gates by running `harness-gate check` and reading its output, **and** by grepping both forms — `new GateResult("…")` **and** labels bound to a `const string` first. At HEAD the second form carries **3g, 3h, 3i and 11**; an audit on the first form alone misses four. | **5** for the grep; **2/5** for the run (the exe is ours, the enumeration is behavioural) | A count with no method beside it is a claim. Print the method. | `FAIL` the enumeration, and re-derive. *An enumeration built on one syntactic form is a denominator with a blind spot; two earlier audits here were right by luck of style* |
+| **SELF-7** | **The corpus can distinguish the states this campaign asks it to.** ✗ Does not license a green from a check whose corpus contains only one value of the property under test. | For each property a row keys on, ask what the corpus holds. **Measured gaps:** no committed export declares `MemoryLayout: Standard`, so the corpus **cannot distinguish "carries TIA's value" from "hardcodes Optimized"**; the corpus contains **no `Time` tag at all**; **7 of 22** `VolatileElementNames` entries have **zero occurrences** in any export and are *inherited, not measured*. | **3** — foreign TIA exports; and its **limits** are the finding | A check run over a corpus with one value of the property is a **vacuous pass**. It must report the corpus census beside the verdict. | `FAIL` the row's authority claim, not the tool. Remedy is an **artifact, not code**: see §I.3 |
+| **SELF-8** | **A guard in this plan can fail.** ✗ Does not license "the suite is green" as evidence about any guard. | For every gate, fence and refusal this plan relies on: **mutate it and observe red**, committing the fix first (`git checkout` reverting an uncommitted extraction has bitten twice). Where the producer never generates a bad input, **extract the verifier and drive it directly**, and test the converse in the same breath. | **5**, and it is the only rung available for this question | ***Ask of every guard: what happens if it silently stops running?*** If the answer is "everything still passes", the guard is decoration. Prefer designs where the not-run state is unconstructible. | `FAIL`. Three instances in one day on 2026-08-13: a fix that never reached the binary; 18 review rules reporting *not applicable* at exit 0; a mirror-restore guard that **could never have run at all** |
+
+---
+
+## §D — MULTI-AGENT: THE AXIS, NOT A SECTION AT THE END
+
+> *** IT IS BUILT AND IT HAS NEVER RUN WITH TWO AGENTS CONTENDING. *** Claims registry, wave-set
+> admission, slot colouring, model-before-consumer ordering, the escalation ladder, the reserved
+> band, the write fence. **Plan it as the thing most likely to be wrong.**
+
+**SELF-1, SELF-2 and SELF-3 are multi-agent rows and run first.** Nothing in §D means anything until
+all three have passed.
+
+### D.0a What can actually be driven, and from where
+
+**Eight executables exist, not the five the record names.** Establishing this first, because a row
+whose method is *"run the coordinator"* has no coordinator to run.
+
+| binary | needs | relevance here |
+|---|---|---|
+| `converter` (`claim` / `claims` / `conflict-graph` / `cross-check` / …) | **nothing** | the whole registry, real filesystem races included |
+| `harness-gate check <submission.json> [--binding <b.json>]` | **nothing** — *"no socket, no Portal, no file written"* | the whole gate table, exits 0/1/2 |
+| `harness-run --submission … --binding … [--verify --host …]` | nothing **without `--verify`**; rig with it | steps 1–5 end to end, stopping at deployment with a **real** refusal — ***there is no fake-gateway flag*** |
+| `rig-write plan …` | nothing | the client factory is `() => throw Arming.Refuse()`; every arming flag is refused **before the verb** |
+| `device-guard check <address>` | nothing | the ADR-0009 write fence as a **pure decision function, zero I/O** |
+| `rig-read`, `device-fetch` | rig | |
+| `openness-cli`, `download-probe` | Portal | |
+
+> 🔴 ***AND THE ONE THAT MATTERS MOST FOR §D: `WaveControl` HAS NO ENTRY POINT AND IS REFERENCED BY
+> EXACTLY ONE PROJECT — ITS OWN TEST PROJECT.*** There is no CLI, no coordinator process, and **no
+> serialization format for a wave set.** Admission, colouring, the queues, the drain, the batch
+> planner and the coordinator state store are exercised **only by xUnit**. So MA-7..MA-12 and MA-15..MA-17
+> are **library-level rows**, and a campaign that reports them as "run under concurrency" has
+> misdescribed what it ran. *The concurrency they are exposed to in a test is the test's, not an
+> agent's.*
+
+> 🔴 ***TWO DIFFERENT TYPES ARE CALLED `ConflictEdge`. DO NOT CONFLATE THEM.***
+>
+> | type | shape | producer |
+> |---|---|---|
+> | `WaveControl.ConflictEdge` | `(firstSlot, secondSlot, kind, reason)` — **between SLOTS** | ⚠️ `ModelUnderTestByAnotherSlot` only, from `ModelOrdering.EdgesFor`. ***`OverlappingReachableState`, `SharedModelInstance` and `Blacklist` have NO producer anywhere in `src/`***, and nothing wires `converter cross-check` into `TestSlot.ReachableState` |
+> | `Harness.Results.ConflictEdge` | `(blockA, blockB, provenance, signal, class)` — **between BLOCKS** | ✅ `converter conflict-graph`, with a hand-writable JSON shape (`ConflictEdgeDocument`) |
+>
+> **Both are hand-constructible as fixtures**, which is what makes MA-7..MA-10 runnable at all. It is
+> also why a green from them says nothing about the *production* of edges — three of the four slot-level
+> kinds are supplied only by the test that asserts on them, which is rung **5** and must be printed
+> as such.
+
+### D.0 The concurrency schedule
+
+Levels **1 → 2 → 3 → 4**, each level re-running the *same* materials so that **concurrency is the
+only variable**. At every level, and **stated separately rather than rolled into a pass**:
+
+1. the registry refuses what it should — and **grants what it should**;
+2. admission colours correctly, **including the unaffected case**;
+3. **nothing is lost** — every submission ran or was refused **by name**;
+4. **wave duration**, recorded with its slot count and concurrency level, **for reference only**.
+
+> **Wave duration is never quoted as a capability figure.** It is one rig, one set of conditions,
+> over a remote tunnel with a measured median round trip of ~72 ms.
+
+### D.1 The claims registry
+
+| ID | establishes / ✗ does not license | method | authority | did-not-run | verdict |
+|---|---|---|---|---|---|
+| **MA-1** | **A second claim on the same `(kind, value)` is REFUSED.** ✗ Does not license any claim about kinds not exercised, nor about the **two** refusal halves being both live — the corpus check and the store race are independent and a test must reach each. | Per kind — `block-number`, `alarm-bit`, `db-member`, `block-network`, `tag`, `block-edit` — two agents, one value, shared `--claims`. Expect **exit 0 then exit 1**. Note the semantics differ: the first five are **allocation** (refused if the corpus *already uses* it), `block-edit` alone is **exclusive** (refused if it does *not* exist). **Inspect the store**: one `.claim` file per claim, `{kind}-{value}-{sha256[..8]}.claim`, six `key SP value` lines (`project/kind/value/agent/purpose/created`), under `<claimsRoot>/<slug>`. | **4** | A kind never exercised is `NOT CHECKED`, listed by name. Six kinds, six lines, **including the ones that passed**. An **empty corpus** short-circuits to `NothingExamined` (exit 2) — assert that path exists, or a run against an empty `ir/` reads as six clean grants. | `FAIL`; a *grant* where a refusal was due is the dangerous direction and must be reported first. **Exit 1 is a real answer; exit 2 means nothing was decided and retrying will not help** — never collapse them |
+| **MA-2** | **`--allocate` is atomic.** ✗ Does not license "no race exists" — only that none was observed at the concurrency tried. | N agents allocating from the same floor **simultaneously**, repeated. Assert **N distinct values, no gaps below the max, no duplicates**. The mutex is `File.Move(temp, path, overwrite: false)`; the loser reads the winner's file and reports the holder. Assert the loser **names the holder** rather than merely failing. | **4** — and the filesystem is a genuine outside arbiter here, which is unusually strong for this codebase | An allocation run where the agents did not actually overlap in time measures nothing. **Record the overlap**, from timestamps, not from the dispatch order. | `FAIL`. A duplicate allocation is the defect this whole mechanism exists to prevent |
+| **MA-2b** | **There is no read-only "suggest".** ✗ Does not license adding one. | Assert `--allocate` performs the full `Acquire` on each candidate, and that no code path returns a candidate without claiming it. | **5** | — | `FAIL`. *A non-binding suggestion is the exact race this mechanism removes* |
+| **MA-3** | **The cross-kind conflict the filesystem cannot see is caught.** ✗ Does not license the general case — this is one pair. | A holds `block-edit FC_ControlMain`; B claims `block-network FC_ControlMain:8`. **Two different values; both acquisitions legitimately succeed.** `claims --check` must report the conflict. | **4/5** | `--check` on a registry with nothing in it must say **nothing examined**, not *no conflicts*. | `FAIL` |
+| **MA-4** | **`claims --check` gates on CONFLICTS and not on fulfilment.** ✗ Does not license skipping stale-claim review — stale claims are *reported*, never auto-released. | Drive a fulfilled allocation claim (the block now exists) and assert `--check` does **not** gate. Then an exclusive claim on a vanished block and assert it **does**. | **5** | The pass case is the one that matters: *a gate that refuses everything passes every test that only checks refusals.* | `FAIL`; and an over-firing `--check` is filed as **noise that will get the check switched off**, not as caution |
+| **MA-5** | **A per-worktree claims dir is DETECTED, not merely discouraged.** ✗ Does not license leaving the sharing unproven per campaign — SELF-1 still runs every time. | Deliberately point two agents at different dirs and confirm the campaign's own precondition check catches it **before** any submission. | **5** | This is the trap that *looks exactly like success*. The detector must be a **gate on the campaign**, not a note in a brief. | `FAIL` the campaign |
+| **MA-6** 🔴 | **`converter claim --allocate` refuses inside the reserved band 9000–9999.** ✗ Nothing — **this is X-J's second half and it is NOT BUILT** (`ClaimValidator.Candidates` takes a bare `--floor`). Row retained as a **target**, not a test. | When built: allocate with a floor below the band and assert the band is skipped, per number space (FB/FC/DB), with **OBs excluded**. | **5** | Until built, the row's status is **NOT BUILT** in §H and must not appear in a pass tally. | n/a |
+
+### D.2 Wave-set admission and slot colouring
+
+| ID | establishes / ✗ does not license | method | authority | did-not-run | verdict |
+|---|---|---|---|---|---|
+| **MA-7** | **Conflicting slots land in different wave sets.** ✗ Does not license a claim about the *number* of waves. | Supply hand-built conflict edges (fixture) over the Hx corpus: an isolated pair, a path, a blacklist edge between an already-isolated pair. **Assert the invariant — "do these two slots share a wave set?" — never a wave count.** | **5** | A colouring run over an empty edge set must report **nothing examined**. | `FAIL`. *Three wave-set fixtures asserted a guessed wave COUNT and failed; a path graph two-colours correctly and a blacklist edge between an already-isolated pair changes nothing.* **Assert the invariant, not the count** |
+| **MA-8** | **The unaffected case is untouched.** ✗ Does not license the refusal cases — they are MA-7. | A submission that uses none of the conflicting routes passes **unchanged**, with the same wave-set count as with no edges at all. | **5** | An admission run where every submission was refused proves the gate fires, not that it discriminates. | `FAIL`, and treat it as **higher priority than a missed refusal**: *conservative is not the same as correct; a gate that fires outside its scope is noise, and noise gets switched off* |
+| **MA-9** | **`WaveSetAdmission.Verify` can fail.** ✗ Does not license "the colourer is correct" — only that the independent re-verification is reachable. | **Extract `Verify` and drive it against colourings the producer would never generate.** Deleting it as a private loop left the suite green, which is why it is public. Test the **converse** in the same breath: a correct colouring produces no finding. | **5** | *Could any input reach this line?* — not *is this line called?* The second question answers yes and tells you nothing. | `FAIL` |
+| **MA-10** | **`ColouringDefect.WidthCapNotSupplied` means UNCHECKED, never passed.** ✗ Does not license enforcing the cap — `MaxTensorWidth` is **reported, never enforced**, because D36's `S_min` has never been observed. | Submit with and without a cap; assert the two verdicts differ **in the report** and neither is a silent pass. | **5** | An absent cap that produces the same output as a supplied one is the defect. | `FAIL` |
+| **MA-11** | **The blacklist is add-only under contention.** ✗ Does not license the blacklist's *content* — over-blacklisting is measurable, not preventable. | Two agents, one submission set; assert no entry can be negated, allowed or overridden, and that **`BlacklistEntry` has no such member** (reflection). Record blacklist **density** per level. | **5** | Density must print at every level **including zero**, or a collapse toward serial is invisible. | `FAIL` for a removal; **report, do not gate**, on density |
+| **MA-12** | **The blacklist names BLOCKS while admission colours SLOTS.** ✗ Does not license an author's intent — naming a block excludes every slot testing it, which is *occasionally much wider than intended*. | Assert the widening explicitly with two slots on one block and one entry. | **5** | — | `FAIL` if the widening does not occur; **report** it in the run summary either way |
+
+### D.3 Ordering, escalation, and the fences
+
+| ID | establishes / ✗ does not license | method | authority | did-not-run | verdict |
+|---|---|---|---|---|---|
+| **MA-13** | **Model-before-consumer ordering holds under contention.** ✗ Does not license reading (b) — `RunLoopGateState`'s zero value is `NotDeclared` and **refuses**, and the stop-on-failed-wave-set gate **is not established**, so (b) fails closed today. | Two agents submit a model and its consumer in **both** orders. Assert the consumer is refused until the model has a passing result; assert `DeclaredForADifferentRunLoop` is kept **distinct** from `NotDeclared`. | **5** | `OrderingDefect` has 7 members and **none is informational** — pinned over the whole enum. A run producing no `OrderingDefect` must say which orderings it examined. | `FAIL` |
+| **MA-14** | **The ordering gate is asked in the RIGHT ORDER.** ✗ Does not license the gate's correctness in general. | Submit something carrying **both** a model slot and an already-passing result, and assert it is **not** refused. | **5** | This is the exact defect measured 2026-08-13: a model-ordering check asked *"is a model slot present?"* **before** *"is there already a passing result?"*, refusing submissions that did not depend on it. Three existing tests caught it. | `FAIL`, and file it as *an over-firing gate decaying into a warning* |
+| **MA-15** | **Escalation is bounded and a second abort is a TOTAL TEST ABORT.** ✗ Does not license the ladder's *classification* — that is MA-16. | Drive `EscalationLadder` to loop; assert `LadderAttempts` bounds it and the second abort produces `EscalationOutcome` total-abort, not another rung. | **5** | A ladder that never looped in the run has not exercised the bound. | `FAIL` |
+| **MA-16** | **Class A/B/C decides the rung, and `StartModules` gets a per-entry rung.** ✗ Does not license safety inferred from a current selection. | `MutantClassifiers` mutation doubles; assert `UnknownReason` has an **explicit branch** and that `ClassAEntry`/`ClassBEntry` are enumerated per selection rather than derived from a zero value. | **5** | A classifier run with no unknown branch exercised has not tested the branch that matters. | `FAIL` |
+| **MA-17** | **`DownloadConfigurationPolicy` never accepts everything.** ✗ Does not license unattended download of anything — the guard is *refuse to answer*. | Assert by reflection that `ConfigurationResponse` has **no accept-all**, and that an unhandled configuration throws `DownloadAbortedByPolicyException` from the delegate. | **5** | — | `FAIL` |
+| **MA-18** 🔴 | **The scratch write fence refuses a non-allowlisted project BEFORE contacting Portal.** ✗ Does not license the fence's *coverage* — `S7Transport → WriteArea(S7Area.DB, …)` reaches **any DB via a hand-written JSON tag map**, and the fence is scoped on an **area name from that same map**. | Stub `openness-cli` as a `.cmd` appending to a sentinel; assert the sentinel is **absent** on a refusal and **present** on a controlled positive case. Same instrument as `confirm-roundtrip-fence.tests.ps1`. | **3/5** — the sentinel is a direct observation that the process was never launched, not an inference from a log line | A fence test with **no positive control** proves only that nothing ran. | `FAIL` |
+| **MA-19** | **The scratch fence admits the allowlisted projects and refuses everything else.** ✗ Does not license the old suffix rule — 🔴 **`RequiredSuffix = " scratch.ap20"` was measured wrong in BOTH directions** (it blocked `GenProject1.ap20`, and *any* of ~19 private projects could satisfy it **by rename**) and has been **replaced by a path allowlist**. **Re-verify before relying on either statement.** | `ScratchAllowlist.Evaluate(projectPath, startDirectory)` — a pure function with the start directory **injected**, so it is fully testable. Two allowlist files (committed `tools/download-probe.allowlist`, machine-local `%ProgramData%\Ladder-AI\`); assert a bare relative entry is **refused, not guessed**, and that **no allowlist found anywhere is a REFUSAL**. | **5**, but the constants are pinned by `ScratchFenceTests` against `download-probe`'s **independent second implementation** (net48 vs net8.0) — that duplication is the authority | A fence that refuses **everything** passes every test that only checks refusals (MA-4's shape). ***The positive case is the load-bearing one here***, and it is exactly the case the old suffix rule failed. | `FAIL`, in the permissive direction first: a rename must never be a route past the fence |
+| **MA-20** | **`download-plan` cannot perform a download.** ✗ Does not license any statement about whether a download would be *permitted* — that is the write fence's question. | The existing IL walk over every method in the assembly; **re-run it negative-tested** by retargeting at `ICompilable.Compile`. Assert `--yes` and `--force` are refused **by name**. | **5**, but the IL walk is structural rather than behavioural | A walk that examined zero methods must fail. | `FAIL` |
+
+### D.4 Submission under contention — the end-to-end rows
+
+| ID | establishes / ✗ does not license | method | authority | did-not-run | verdict |
+|---|---|---|---|---|---|
+| **MA-21** | **Nothing is lost.** ✗ Does not license "all submissions succeeded" — a refusal by name is a success of the mechanism. | At each level: submit K, and reconcile **K = ran + refused-by-name**. Any residue is the failure this campaign exists to find. | **4** — the agents' own dispatch ledger is an independent count | A reconciliation with no denominator is not a reconciliation. Print K. | `FAIL`. A vanished submission is reported **before** any timing figure |
+| **MA-22** | **Submission is atomic and precedes packing.** ✗ Does not license partial admission — a partial submission is a **refusal with reasons**. | Two agents submitting overlapping sets; assert `AdmissionDecision` is whole-set and that no half-submission is packed. | **5** | — | `FAIL` |
+| **MA-23** | **A wave runs with 2, 3 and 4 genuinely-independent slots.** ✗ Does not license anything about the **plant** blocks — the Hx corpus is artificial material and deliberately so. | The Hx corpus, one slot per block, after its two integration steps land (§I.4). Record wave duration, slot count, wave-set count, and **run-state at each step**. | **1** — the device | ***A wave has never run.*** Until MA-23 passes, every throughput row in §8 of the spec is a prediction, and §8.1 stays `NOT CHECKED`. | `FAIL`; and a `TIMED-OUT` here must be **calibrated before it is believed** — a word-swapped duration arrives as ~7 days |
+| **MA-24** | **The co-running log is built from the start ECHO, never from the plan.** ✗ Does not license "the co-running slice was benign" — only that nothing was detected. | Run a wave with a slot deliberately excised; assert the log reflects the **executed** start bools, and that `ExcisionClosure` is transitive and does not move `MapHash`. | **1/5** | A co-running log with no excision exercised has not tested the echo path. | `FAIL` |
+| **MA-25** | **Coordinator death is survivable.** ✗ Does not license surviving the *PC* dying — X-C's residual PLC-side watchdog is **NOT BUILT** (§H). | Kill the coordinator mid-wave; assert `CoordinatorStateStore`'s single atomically-renamed file rehydrates, the legacy two-file form is **refused, not read**, and an unreadable file **voids the wave AND the queue**. | **5**, plus the filesystem | A restart that had nothing to rehydrate has not tested rehydration. | `FAIL` |
+| **MA-26** | **Two lanes never hold Portal at once, and the orchestrator can prove it.** ✗ Does not license judging lane liveness from an output file — ***a live agent's output file sits at 0 bytes indefinitely***. | A dispatched-lane ledger read **before** dispatch; liveness taken **only** from the notification stream; `portal-status` before each attach. | **1/2** | An orchestrator with no ledger cannot distinguish a finished lane from a running one and has twice killed the wrong one. | `FAIL` the run, and record it as an **orchestration** failure so it is not attributed to the tooling |
+
+---
+
+## §E — AS SPECIFIED (86 items): TESTED AGAINST THE SPEC
+
+> *** THE EXPECTATION IN AN AS-SPECIFIED ROW CITES A SPEC CLAUSE. IT MAY NOT CITE A SOURCE FILE. ***
+> A test derived from the implementation is a change detector: it keeps passing when the code changes
+> in a way the spec forbids, and it fails when the code improves. Measured instance: a check
+> simplified until it still passed against the current implementation *had silently become a change
+> detector* — a violation latch needed **two** terms because the block's internal timing is not the
+> harness's to assume, and the one-term form would have passed.
+
+The 86 items are covered by **30 rows**. Each row names the items it discharges; an item named in no
+row is `NOT CHECKED` and belongs in §G, not here.
+
+| ID | items | establishes / ✗ does not license | method | authority | did-not-run | verdict |
+|---|---|---|---|---|---|---|
+| **AS-1** | 0.1, 0.2, DB-1, D23, R1 | **A change is classified and routed by class; the download OPTION carries no STOP semantics.** ✗ Does not license the routing of any class not exercised. | Drive `ChangeRouter` with one change of **every** class the spec's DB-1 table names; assert the verdict per class against **the table**, not against the code's enum. | 5 | Print the class census: a router run over 3 of 9 classes reports 3, not "clean". | `FAIL` |
+| **AS-2** | 1.4, D24, DB-4 | **Two queues; STOP-class accumulates; the deferred queue drains when no test can progress.** ✗ Does not license a drain policy tuned to DB-4's twenty — **ruled: twenty does not bind the drain**. | Assert `DrainPolicy` keys on `ProgressBlockKind` and that **zero value authorises nothing**. | 5 | A drain that never blocked has not tested the policy. | `FAIL` |
+| **AS-3** | 1.2, D31, DB-9, R6 | **Admission is atomic and precedes packing; a partial submission is a refusal with reasons.** ✗ Does not license the *content* of any gate — that is AS-8..AS-14. | `AdmissionController` against whole and partial submissions. | 5 | — | `FAIL` |
+| **AS-4** | 1.3, D26, D26a, D26b, D11, D34, D5, D33, D37, §11 inert | **The wave is inert → verify → raise start bools → observe → distribute; inert is returned to and VERIFIED; the commit is on a later scan.** ✗ Does not license the observation *content* — only the sequence. | Drive `WaveRun`/`SlotRun`/`InertPhase` on the device with the Hx corpus. Assert `InertPhase.Establish`'s **two** checks and the scan re-read after the second; assert `Commit` requires a scan **strictly later** than the verify, against the **observed** counter. | **1** | `InertOutcome` must distinguish `Established` / `StartConditionsWrong` / `NotQuiescent` / `ScanCounterStalled` — four outcomes, and a run reporting none of them examined nothing. | `FAIL`; `NotInert` is a **wave-blocking** state, never a test failure |
+| **AS-5** | X-A.1, X-A.2, F-1, derivation 6 | **The start bools are the commit, raised in ONE transaction; a read never SPLITS a slot.** ✗ Does not license bit ORDER within the start register — that is `[I]`, and the simulator and `BitAddressOf` agree **from the same premise**. **Bind by name.** | Assert `CommitTransactions => 1` and `SlotsPerStartRegister = 16` against the spec; assert `RegisterMap.ResultRead(SlotSpan)` has **no register-range overload**, so a split read is *unexpressible rather than validated*. | **1** for the transaction; **5** for the reflection | A 3-slot map whose start bools fit one register makes a per-register loop and a single transaction **indistinguishable** — phase 2 found exactly this, and only mutation found it. **Size the fixture past one register.** | `FAIL` |
+| **AS-6** | X-A.4, X-L, §6 | **The mirror is `%M` above the retentive window; retain is a HARD restriction; the `%M` ceiling is 8,192 bytes separate from work memory.** ✗ Does not license a hard-coded retentive size — `MirrorGeometry.RetentiveBytes` has **no default**, on D36's grounds. | Assert an odd base is refused; a base inside the retentive window is refused; `RetentionCheck` re-checks **every** generated tag. | **1/3** — the datasheet and the device | A retention check that examined zero tags must fail. | `FAIL`, naming the tag |
+| **AS-7** | D2, D10, D15, D28, DB-6, 16.12b | **The map is PC-authored, authoritative, frozen for a wave set; per-slot instancing; models and iDBs share the ≤20 budget.** ✗ Does not license excision moving the map — it does not, and that is asserted separately. | `MapHash` stability across excision; `BatchPlan` counting models **and** instance DBs; `MirrorWriteTarget`'s private ctor pinned by reflection (**no factory produces a result region**). | 5 | A budget check with an empty batch reports nothing examined. | `FAIL` |
+| **AS-8** | 2.2a, D6, M1, 3d | **The vector author is not the block author, and the ENUMERATOR is neither.** ✗ Does not license "the author did not read the implementation" — ***that is isolated, not enforced***; `Read` cannot be fenced to a subdirectory by any frontmatter this harness offers. | Gate 2 and gate 3d, with identity comparison **not** defeatable by whitespace or case — measured: `StringComparison.Ordinal` made `"Agent-A "` *independent of* `"agent-a"`. | **4** for the substance; **5** for the gate | An identity check over a submission naming one author has not tested independence. | `FAIL`; and **a contamination disclosure is graded, not merely penalised** — the author that disclosed unprompted and refused to say which vectors matched the divergences preserved a clean re-derivation |
+| **AS-9** | 2.1b, D8 | **Agents speak TAG NAMES; an absolute address is refused.** ✗ Does not license the *translation* — see §G's NC-17 and the root cause in §F. | Gate 7's regex against a vector carrying `%MW100`; assert refusal. | 5 | — | `FAIL` |
+| **AS-10** | 2.5, D22, 8 (partly) | **A blacklist may only ADD.** ✗ Does not license the blacklist being *checked* against anything — gate 8 is `NOT CHECKED` on every real submission (§G). | Reflection over `BlacklistEntry` for any negation/allow/override member; plus MA-11. | 5 | — | `FAIL` |
+| **AS-11** | 7.1, 7.2, 7.3, D35, O8 | **Coverage is per spec-derived assertion, four buckets exactly one each, gated on `UNCLASSIFIED = 0` computed as a set difference — and it stops the CLAIM, not the run.** ✗ Does not license a coverage percentage: *a percentage without all four bucket counts and the oldest deferral age is not an available output*. | `CoverageAnalyser` over the hopper enumeration. **Current true state: `UNCLASSIFIED = 2` (`002.A3`, `008.A3`), so the gate should be failing right now — and that is correct behaviour.** | **4** — the enumerator is a third party to both authors | A denominator defined by what somebody wrote a vector for is always 100%. Assert the denominator comes from the **enumeration**, never from the vector set. | `FAIL` |
+| **AS-12** | 7.4 (ID scheme half), 3f, 3g | **IDs are `clause:hash6`, content-derived, nothing positional; every ID recomputes from the `normalisedTexts` it claims.** ✗ Does not license the *enumeration's* correctness — recomputation is what permits a stamper to have no independence, nothing more. | Gate 3f (ordinal refused) and 3g (all IDs re-hash). Corroborate with an **independent re-implementation**: 27/27 recomputed in Python. | **4** | Absent `normalisedTexts` is `NOT CHECKED` — *and the omission is exactly what a compromised stamper would emit*. | `FAIL` |
+| **AS-13** | 3h, §11 provenance, §3 | **A `Basis` carries clause AND assertion, and every signal the cited assertion depends on appears in this vector's expectations.** ✗ Does not license the assertion being a **faithful reading** of the clause — judgement, and it is what the independent author is for. | Gate 3 + gate 3h set-difference. | 5 | A relational assertion has more than one required observation; observing one tests neither the other nor the relation. Assert on a **two-signal** assertion or the gate is untested. | `FAIL` naming the unobserved signals |
+| **AS-14** | M3, M4, O4 | **A vector may only assert behaviours the model claims.** ✗ ***Does not license anything about the model's truth*** — gate 4 set-differences against a list **the vector author wrote**, and on both live sets the model `M-HBA-STIM-01` **does not exist**. | Gate 4 with `FidelityExceeded` / `FidelityUnusable` / `NothingExamined` distinguished. | **5, and self-referential** — say so in the output | `NothingExamined` must be reachable and must not be a pass. | `FAIL` |
+| **AS-15** | D12, 10a, derivation 5 (arithmetic half) | **Over-declared compression is REFUSED; the assertion ceiling binds where the observability floor cannot.** ✗ Does not license any compressed **wave** — ***no wave has ever run compressed***; every ceiling is arithmetic over measured inputs, exercised against the simulator only. | Gate 10a on each vector's `T_event / scan_period` ceiling. Measured tightest on set B: **49.79×**. | 5 | 10b is `NOT CHECKED` even for a submission that could answer it, because `GateCli.Evaluate` **never passes** `compressionInputs`. Print that. | `FAIL`; and see §F's DV-9 for the `comp_min` vs `runtimeCompression` defect |
+| **AS-16** | D14, §9, D18, §10, 16.12a | **The version register is a program-version constant over Modbus at registers 0–1; disconnect → download → reconnect → version check is the normal path; a stable-but-unexpected value REFUSES to test.** ✗ Does not license reading identity over classic S7comm — that path is **dead on this rig** (§F, DV-3). | Read the stamp on the device; assert `VersionOutcome` separates *unexpected* from *still settling* from `WordOrderSuspect`. Live: `16#21D74D35`. | **1** | *"Every register agrees" is also what a mirror no write ever reached looks like.* Liveness must come from the **change counter advancing by the expected amount**, not "moved". | `STALE`, never `PASS` |
+| **AS-17** | §9a, DB-3 | **The load manifest is per-object and the COUNT is reported.** ✗ Does not license `ManifestPresence` as built — measured: `LoopRun.ManifestOf` required **every** `ProgramUnderTest` object, the real 19-object manifest names **no tag table**, so every package was non-conclusive on every real download, and it passed only because `SimulatedGateway` echoed back what it was handed. | Parse the **four recorded live rig download logs**, named individually in the `.csproj` so a vanished one is an MSBuild error. Live: 45 objects by name on the 2026-08-14 deploy. | **3** — real logs | A manifest parser proven only against a simulator that echoes its input has proven nothing. | `FAIL` |
+| **AS-18** | §9b, D25, R5, R7, D32 + its three caveats, R4, R4a, 15a.3, O10, 15b.2 | **A disruptive download is FULL, device-scope only, every unhandled configuration aborts and WE abort it; Class A/B/C reaches a human.** ✗ Does not license an assumption about a **TIA-caused** abort — that is G4's literal question and nothing exercises it (§F, DV-13). | The three pinned fixtures (`differential-one-object`, `full-ninety-nine-objects`, `hardware-three-wordings`); `DownloadOption` offering device scope only. | **3** for the fixtures; **1** for the abort behaviour | `MutantClassifiers` doubles must be exercised, or the classifier's unknown branch is untested. | `FAIL` |
+| **AS-19** | §9c (parser half) | **Five extractions, six design rules; `state=Success` is reported and never consulted; transfer is never inferred from an absent phrase.** ✗ Does not license `openness-cli`'s own path — ***the parser is not wired into it***; `DownloadProbe/TransferVerdict.cs` carries a duplicate (§F, DV-8). | `src/download-feedback/` against the recorded logs. | **3** | A verdict concluded from message **text** cannot recover *which call was made* — folder runs and device runs emit the same words. | `FAIL` |
+| **AS-20** | DB-8, 2.4, D21, D30, 7a.1, 7a.3 | **The result package carries seven named contents, verdict precedence is admissibility → liveness → run → settling → content, and the co-running log comes from the ECHO.** ✗ Does not license reading a green past its fidelity declaration or its validity stamp. | `ResultPackageBuilder`; assert content is computed **last**. | 5 | ***An absence of disagreement is not a result.*** Zero torn reads against a frozen block is evidence of nothing. | `STALE` |
+| **AS-21** | DB-2, D15 | **Every result carries `ValidityStamp(ProgramVersion, MapHash, Caveats)`.** ✗ Does not license a green obtained before the change that invalidated it. | Assert a stamp mismatch invalidates. | 5 | A stamp that is always equal has not been tested. Mutate the program version. | `STALE` |
+| **AS-22** | X-B, derivation 4 | **`TIMED-OUT` is distinct from `FAILED`; the backstop is COMPUTED, with the 2,216 ms outlier term untrimmed.** ✗ Does not license a bare scan count as a backstop — `BackstopMs` has **no `int` overload**, so it is *unexpressible rather than validated*, and a reflection test is the only thing standing between it and a caller with a bare scan count. | Assert `PerRequestTimeoutMs = 3000`, `ModbusPolicy.Default` sets `Retries: 0` (against NModbus's default 3), and a timeout below `RttMaxObservedMs` is refused. | **1** for the constants' provenance; **5** for the arithmetic | — | `FAIL` |
+| **AS-23** | 12a: `RTT_typ`, `RTT_p99`, `RTT_max`, `scan`, F-5 kind rule, F-4, derivation 3 | **Every bound keys on p99 or `RTT_max`; duration-shaped figures may key on p90; the wire term is `K × ceil(W/123) + P × ceil(K/R) + 1`.** ✗ Does not license quoting the 2026-08-13 live figures (min 63 / med 72 / max 106 ms) as a re-derivation — they were taken against the **old 121-register generator build** and are a **corroboration**; **no constant was moved on them**, which is the correct treatment. | `WireTiming` against §12a; p90 substitutions negative-tested at every bound. | **1** for the constants, **5** for their use | The kind rule is enforced by **absence**: there is no `RttP90` constant, only an anti-assertion in tests. Assert the absence. | `FAIL` |
+| **AS-24** | 12.1, 12.2, 12.5 | **A one-scan event is invisible to any sampler at any polling rate; the copy layer always provides a free-running scan counter; T=0 is the start bool's rising edge.** ✗ Does not license latched or stamped observation — **neither is generated** (§H). | `ObservabilityFloorScans` holding at 3.0 / 4.4 / 8.6 scans — *a claim that survives every constant*; `HX_ScanCount : DInt @ %MD1004` generated. | **1** for the counter; **5** for the floor | Gate 5 reported the floor at **8.6 scans at comp=1** on the live run; a floor with no `comp` beside it is void. | `FAIL` |
+| **AS-25** | X-C | **The coordinator's state is ONE atomically-renamed file; the legacy two-file form is REFUSED, not read; an unreadable file voids the wave AND the queue.** ✗ Does not license surviving PC death (§H). | See MA-25. | 5 + filesystem | — | `FAIL` |
+| **AS-26** | X-E | **Excision is transitive, closure-bounded, and does not move `MapHash`.** ✗ Does not license unbounded retries — attempts are bounded. | `ExcisionClosure`/`ExcisionPlan`/`ExcisionDefect`. | 5 | — | `FAIL` |
+| **AS-27** | X-I, X-K, X-K residual, R8 (device half) | **Models go through their own test wave; run state keys on `== 8`; S7 variable access is refused CPU-wide and all data reads go over Modbus.** ✗ Does not license `S7RunState` gaining a `Stopped` member — it has none, and a pinning test fails if one is added. | Re-confirmed on the rig 2026-08-14: `Running (8)`; `DBRead(38)` and `MBRead(0)` both `0x00040000` while SZL answers. **Verified against Sharp7's own IL:** the code is set by `if (Length < 25)` *after* `RecvIsoPacket()` succeeded — a well-formed **negative acknowledgement**, not a bad buffer. | **1**, and the IL read is **3** | — | `FAIL` |
+| **AS-28** | DB-5, DB-7, D17, R3, 15b.1, 15b.3 | **Two projects; cleanup is graph-proven and recorded; stop-class refusal is two-stage; a block with no discoverable start condition is handled.** ✗ Does not license cleanup releasing claims — **that half is NOT BUILT** (§H). | `CleanupEligibility`/`ReferenceGraph`/`RemovalKind`; `preflight` then `AdmissionController` against `DeployedProgram`. | 5 | A cleanup run with an empty reference graph reports nothing examined. | `FAIL` |
+| **AS-29** | §13, §13a, G5, G8, O3, O5, O6, O12, O13, D1, D7, D19 | **Closed, superseded and retained-for-numbering items carry no obligation and the document does exactly that.** ✗ Does not license reading a superseded item as current — D27 in particular still states the superseded model with no marker (§F, DV-6). | Documentary. Assert each is marked, and that `§13a` still says **DO NOT ACT ON**. | **5**, documentary only — the weakest row class here, and it says so | — | `FAIL` the document |
+| **AS-30** | 8.2, F-1, F-4, derivation 6 | **`RoundTripsPerIndex` is the spec's expression; `MaxReadRegisters = 125` / `MaxWriteRegisters = 123`; padding a slot is not free.** ✗ Does not license the **wave cost model** — §8.1's three worked rows are `NOT CHECKED` because no wave has run (§G, NC-4). | Arithmetic against §12a. | **1** for the limits; **5** for the arithmetic | — | `FAIL` |
+
+---
+
+## §F — DIVERGED (33 items): TESTED AGAINST THE CORRECTED TEXT, WITH THE EVIDENCE RE-CHECKABLE
+
+> *** THESE ARE WHERE THE SPEC WAS WRONG. A REGRESSION HERE IS SILENT. *** The document now agrees
+> with the code, so a reverted change disagrees with nothing. **Every DIVERGED row therefore carries
+> two tests:** one against the corrected text, and one that makes the *measurement which moved the
+> text* re-runnable — or, where it cannot be re-run, **asserts the absence of the authority**, so the
+> day one appears the assertion fails and demands the comparison that was never possible.
+
+| ID | items | establishes / ✗ does not license | method + **re-checkable evidence** | authority | did-not-run | verdict |
+|---|---|---|---|---|---|---|
+| **DV-1** | 2.1 | **The coordinator generates the mirror, copy layer and map — and NOT latches, scan-stamps, a block-enable bitmask or OB80.** ✗ Does not license §2.1's original list. | Assert `CopyLayerGenerator` emits none of the four. **Evidence:** its own doc comment lists them as deliberate absences (`CopyLayerGenerator.cs:26`) — pin the *behaviour*, not the comment. | 5 | A generator run producing zero networks must fail. | `FAIL` |
+| **DV-2** | 2.6, 7.4 (governance half) | **The design-for-testability contract exists, with 23 gates, and grew surfaces the spec never described.** ✗ Does not license either gate table — the contract's §10 and the skill's both **drift**, and the code is the authority. | Enumerate gates from **behaviour** (SELF-6). **Evidence:** on 2026-08-13 the built gate emitted three gates neither table listed (8c, 10a, 10b) and the runner consumed four fields §2 did not name. | **5**, behavioural | A gate count quoted from a table is a claim. | `FAIL` the table |
+| **DV-3** | D3 | **Identity comes from the PLC over MODBUS, not from a marker DB over classic S7comm.** ✗ Does not license the marker-DB path being *broken by our code* — it is refused **CPU-wide** and is almost certainly pre-existing. | **Evidence, re-runnable:** `DBRead(38)` and `MBRead(0)` both `0x00040000` while SZL answers, with the Sharp7 IL reading behind it. **Assert the absence:** the day S7 variable access answers, this assertion fails and demands the comparison. | **1** | An S7 read that failed at connect is a different fact from one that failed at the first **data** transfer. Record which. | `FAIL` |
+| **DV-4** | D6, 3d | **D6 extends to the ENUMERATOR, closing §7's open question.** ✗ Does not license "the enumerator saw nothing" — it is fenced from `Bash`, **and that same fence removes every way to compute a SHA-256**, so it cannot produce the identifiers it is cited by. The hand-off is the gap. | Gate 3d. **Evidence:** the enumerator emitted `normalised_text:` and **no** `id:` rather than fabricating hex. | **4** | — | `FAIL` |
+| **DV-5** | D29, derivation 2, F-2 | **`MaxTensorWidth` is REPORTED, NEVER ENFORCED**, because D36's `S_min` has never been observed. ✗ Does not license treating the cap as a bound. | MA-10. **Evidence to re-check:** `ColouringDefect.WidthCapNotSupplied` = *unchecked, never passed*. | 5 | A run that supplied a cap has not tested the absent case, which is the normal one. | `FAIL` |
+| **DV-6** | D27, DB-13, 15b.4 | **Admission colours SLOTS into WAVE SETS, not tests into tensors; the sticky key carries nothing positional.** ✗ Does not license D27's own wording, which **still says "pack the submitted tests into the fewest tensors"** with no marker, nor §15b.4's superseded positional key. | MA-7/MA-8. **Evidence:** gate 3f refuses an ordinal. **Documentary half:** assert both spec sections carry the correction. | 5 | — | `FAIL`, and **fix the document** — *a reader arriving at D27 first gets the superseded model* |
+| **DV-7** | DB-12, derivation 5, X-D | **Four ceilings, take the MINIMUM; a 500 ms preset caps at 4.29×, not 10×.** ✗ 🔴 ***Does not license "the measured timer floor is 116.65 ms"*** — the scan term is measured, **`k ≈ 5` is X-D's own number and never has been**, and it is the term X-D says binds first. The figure is **half-measured**. | Assert 4.29 to two places **and** `NotEqual(10.0)`; mutating the floor back to 50 ms reddens six tests. **The missing evidence is a device measurement of `k`** — see §G, NC-18. | **5**, and one of its two inputs is **assumed** | No wave has run compressed. Every ceiling is arithmetic over one measured and one assumed input. **Print that beside the number.** | `FAIL` |
+| **DV-8** | §9c (wiring half) | **The parser is built and excludes both forbidden readings by construction — and is NOT wired into `openness-cli`.** ✗ Does not license `openness-cli`'s duplicate in `DownloadProbe/TransferVerdict.cs`. | Assert the duplicate exists and is separately tested, **or delete it**. **Evidence:** the harness gateway uses the real one. | 5 | Two implementations of one verdict have as many truths as they have readers. | `FAIL` |
+| **DV-8b** | §9c, DB-3 — ***the worked example this plan holds up as the standard for a DIVERGED row*** | 🔴 **Measured: a `--to-folder` run reported itself as a successful DEVICE LOAD.** One run rendered three ways — `transferVerdict = Undetermined` ✅, `loadManifest.verdict = Transferred` ❌, and a top-level *"YES — THE SOFTWARE WAS LOADED"* ❌ — and **the consumer read the wrong one**: a gateway handed that report computed `Loaded = true` for a run that **contacted no controller**. ✗ Does not license *"the gateway never emits `--to-folder`"* as safety: **there is no check** — the only thing preventing the misread was that the flag is not emitted, and ***the mechanism that makes folder mode safe (no wire) is invisible to the field the verdict keys on***. | **The fix is verified with a DIFFERENTIAL CONTROL, and that is the re-runnable evidence:** the *same parser binary* against the old report → `True / Transferred / 27`, against the new → `False / Undetermined / 0`. **So the change is in the probe's output, not the parser.** The 27 objects are **quarantined, not deleted**, under `loadManifest.image` with the message-parser's own opinion preserved and **labelled**. | **3/5** — a real recorded probe output on both sides of the fix | ***The guard written for this exact case never fired.*** Its `available is not true` branch names *"an abort, a throw, or a folder download"* — and its test **proves the branch with a hand-authored fixture, i.e. asserts the premise this run falsified**. The suite was green and could not have caught it. **Assert the branch is REACHABLE from a real run, not from a fixture.** | `FAIL`. And note the residual, deliberately: one layer up, a message still carries the old false premise *"meaning NO DownloadResult existed"* while the probe now reports `resultPresent: True` — *right conclusion, wrong stated basis*, changing no decision |
+| **DV-9** | 2.3 (contract), 10b | 🔴 **A measured harness defect:** gate 10b keys on `runtimeCompression`, `TimeCompression.Plan`'s model branch keys on `comp_min`, and `comp_min = max(1, plantMs/budgetMs)`. ***A wave at `runtimeCompression = 8` whose `comp_min` is 1 passes with no `comp_stable` declared at all.*** ✗ A green on this bound at `comp_min = 1` is worth less than it looks. | Fix is a one-line predicate change **plus the mutation that proves it**. **Contract's rule is the RUNTIME factor.** | 5 | An incomplete `blockCompression` reaches `NOTHING EXAMINED` (exit 2) rather than `NOT ADMISSIBLE` (exit 1) — *both fail closed, so the gap is between two failing states*, but the diagnostic is worse than it should be. | `FAIL` |
+| **DV-10** | §11 word order | **The order is HIGH-WORD-FIRST**, measured twice. ✗ 🔴 Does not license the transform being *in use*: one lane records it *"was never applied — high-word-first is carried forward unused"*, **no lane report records `wire-prediction.md` §2's calibration suite as having been run**, and `Harness.Wire/RegisterWordOrder.cs` **still declares the transform UNCALIBRATED**. | **Evidence 1:** `16#00001111` read back as reg0 `0x0000` / reg1 `0x1111`, cross-checked against the scan counter (745 vs an absurd 48,824,320). **Evidence 2:** the build stamp `16#21D74D35` — halves `0x21D7`/`0x4D35`, *distinguishable constants* — read at registers 0–1 matching the literal the copy layer writes. | **1** | *** CALIBRATE AGAINST A SLOWLY-CHANGING COUNTER, NOT AGAINST A DURATION *** — a duration cannot tell a correct transform from a broken one, because both produce a plausible number. | `FAIL`; and strike the stale source comments (§G, NC-21) |
+| **DV-11** | 2.6 element table, §X.15, §X.16 | **Every value travels in a mirror element and the ELEMENT decides its range; `Int` is SIGNED (32 767, not 65 535); out of range is a REFUSAL BY NAME that prints what the value WOULD have become.** ✗ Does not license one register as the norm — **81 duration values in the deliverable set exceed 65 535 ms**, so 32-bit is the ordinary case. | Assert `75 000` refuses **by name**, printing `9 464`. **Evidence:** the table was forced by a defect — a hard-coded `"Int"` reached the controller and TIA refused it (`Data type Bool is not permitted here`), because **`MOVE` will not take a `Bool` into an `Int` on an S7-1200**. Corroborated against TIA's own `FC_Outputs`: **18 Coil parts, zero Move**. | **2** — TIA refused it | **NO MODULO ANYWHERE.** A range check that never refused has not been tested. | `REFUSED` naming the value — never a modulo, never a `TIMED-OUT` |
+| **DV-12** | §16.1 / X-A.5 | **`MB_SERVER` applies one request's registers within a single scan — measured at 123 REGISTERS, not 16.** ✗ ***Never "atomic" — only "no tear observed"***, and **two writes have never been inside one scan** (a round-trip property: 78 ms vs a 23 ms scan). | **Evidence, re-runnable on the rig:** no tear in 3,000 writes (variant 1) and 3,200 (variant 2), `TEAR_LATCH` 0 throughout, `CHANGE_COUNT` exact on every run; **no torn READ in 3,000 reads across 3,000 distinct generations**. | **1** | Zero torn reads against a **frozen** block is evidence of nothing. The change counter must have advanced. | `FAIL` |
+| **DV-13** | G4, 15a.1, O9 | **Our abort is measured in both directions: PRE leaves the CPU RUNNING; POST leaves it STOPPED with a COMPLETE program. Never half-loaded. Both kill the Portal process; recovery is 34 s.** ✗ 🔴 ***Does not license G4's literal question*** — **a TIA-caused abort is what G4 asks and nothing exercises it.** | **Evidence:** A6, both directions, owner present. **Re-check:** *one throw of each kind is one, not six* — repetition is owed. And: does an **ordinary** delegate exception also kill Portal? D32's throw-on-unhandled fires in production, so this is the operationally important one. | **1** | A session recording outcomes but not **run-state at each step** cannot tell a CPU that kept running from one that stopped and was recovered. | `FAIL` |
+| **DV-14** | 15a.4, §X.10 | 🔴 **STALE ROW — RE-VERIFY.** The reconciliation says *"a driver was not [built]"*; `src/harness/Harness.Run/` is an `Exe` (`359d657`), **committed before the reconciliation**. ✗ Does not license the driver being *exercised* — `harness-run` has run and **failed closed at gate 5 before the device boundary**; no wave ran, no rig traffic, no wave duration. | Re-bucket, then test: does the gateway **prove** the device carries the code **without changing it**? *A gateway that reports `Loaded` without loading is one edit away from a gateway that lies*, and both `ManifestPresence` and the version check consume it. | **2/5** | A `Deploy` that reports `Loaded` must be distinguishable from one that deployed. Assert the distinction exists in the type, not in a log line. | `FAIL` |
+| **DV-15** | D9 (producer), §X (gate 8/8c) | 🔴 **STALE ROW — RE-VERIFY.** `converter conflict-graph` exists (`4ea56ea`, before the reconciliation) and emits `conflictEdges` matching `ConflictEdgeDocument` field for field. ✗ ***Does not license gates 8/8c being feedable*** — measured on the real submission: ***16 of 17 signals resolve to no PLC storage path***, so the tool **withholds the graph at exit 2** and both gates stay `NOT CHECKED` **with a measured cause**, which is an advance on *"no graph was supplied"*. | Assert the three withholding states (partial corpus, no signals, signals not resolving to exactly one path) and that `--allow-unresolved` is the **named** escape. Assert `IO.Step` is **REFUSED AS AMBIGUOUS**, naming both candidates. | **5**, but the refusal is corroborated by a second author independently declining to type `[]` | ***`conflictEdges: []` IS THE EARNED POSITIVE CLAIM; A MISSING KEY IS `NOT CHECKED`; AND `null` IS NEITHER*** — a lenient deserializer rounds null to empty and restores the false claim one layer down. Assert all three. | `FAIL`. `computedConflicts` is **never** emitted, deliberately: one unprovenanced edge turns gate 8c to `NOT CHECKED` **for the entire submission** |
+| **DV-16** | X-G, 8c | **Conflict edges carry provenance; a multi-writer on a deliverable signal is a FINDING, reported not refused — and 8c prints on a CLEAN graph too.** ✗ Does not license the report/refuse choice — **it is an open owner question recorded in the code**. | Assert the clean-graph line prints. **Evidence:** *a report that appears only on bad news teaches its reader that absence means "not run"*. | 5 | — | `FAIL` |
+| **DV-17** | X-J | **The reserved band is DECLARED: 9000–9999, per number space, FB/FC/DB, OBs EXCLUDED.** ✗ Does not license `claim --allocate` refusing inside it — **NOT BUILT** (§H, MA-6). | **Evidence, and it was measured rather than feared:** TIA accepted an import declaring `FC 910` while another block held 910 and created **two blocks at that number**, with import, per-block compile, device compile and `sanity-check` **all green**. Re-runnable. | **2** | The OB carve-out is load-bearing: a band applied to OBs is violated by **OB80**, the first object §2.1 lists, and **the first false finding is what gets an audit switched off**. | `FAIL` |
+| **DV-18** | X-F | **The startup class is built at the disruptive boundary.** ✗ 🔴 ***Does not license its evidence*** — X-F says the evidence **must be LATCHED**, and latching is **not generated** (§H). The one thing X-F requires is unavailable. | Assert `StartupRefusal` fires rather than silently degrading to sampled. **Open, and it blocks four vectors:** whether the boundary preserves RETAIN memory is unestablished. | 5 | A startup class that never refused has not been tested. | `FAIL` |
+| **DV-19** | X-I rule 2 | **Reading (b) is refused until a stop-on-failed-wave-set gate demonstrably exists; `RunLoopGateState`'s zero value is `NotDeclared` and refuses; `DeclaredForADifferentRunLoop` is kept separate.** ✗ Does not license reading (b) — **the gate is not established, so (b) fails closed today**. | MA-13. | 5 | *A declaration is a transferred responsibility, not a verification* — carry **what it was established against**, never a bare bool. | `FAIL` |
+| **DV-20** | R8, derivation 1, F-5, §12a p90 | **R8's eyeball requirement is retired and mechanised; the observability floor is quantised on ROUND TRIPS, not slots; the p90 is enforced by being UNAVAILABLE.** ✗ Does not license a duration-shaped figure being computed anywhere — **none is**, and §8's planning numbers therefore have no implementation. | **Evidence, and the identity IS the evidence:** correcting `slotsInWaveSet` 6 → 1 moved the floor **not at all** (6 × 8 = 48 registers, inside one 125-register read) and every gate-5/10a figure came back **byte-identical**. A test pins the floor monotonically non-decreasing over slots 1..48. | **1** for R8 (`Running (8)` on 2026-08-14); **5** for the floor | 🔴 ***THE PERMISSIVE DIRECTION IS THE OPPOSITE OF THE OBVIOUS ONE:*** over-declaring slots gives a floor that is too **high**; **under-declaring is what admits an unobservable window.** A submission declaring 1 while running in a 40-slot wave gets a floor ~1/3 of the true one. | `FAIL` |
+
+**Coverage note.** DV-1..DV-20 (21 rows, DV-8b included) name 29 of the reconciliation's 33 DIVERGED items. The residue —
+`D19` (superseded inside the spec itself), `§6` (folded into AS-6), `§12a`'s corroboration row and
+`X-D`'s ceiling framing (folded into DV-7) — carry no independent test obligation, and that is stated
+here rather than left as a gap in the numbering.
+
+---
+
+## §G — 🔴 NOT CHECKED (21): THE PLAN'S HIGHEST-VALUE ROWS
+
+**Nobody has established these either way.** Each row says whether it is **checkable**, by what, and
+what it costs. *An honest NOT CHECKED beats a gate number that implies a check.*
+
+> **First, an arithmetic finding about the source.** The reconciliation's tables carry **14** rows
+> whose bucket cell reads `NOT CHECKED`; §NC's own enumeration reaches those 14 plus *"the six
+> residual rows marked 🔴"* = **20**, against a stated total of **21**. The enumeration below names
+> 14 + 7 residuals = 21 and is offered as the reconciliation's own list to confirm — *a count with no
+> method beside it is a claim, including ours.*
+
+| ID | item | checkable? | how, and **what it costs** | verdict if it fails | what the continued absence licenses |
+|---|---|---|---|---|---|
+| **NC-1** | **2.2d** — an agent does not revise a shared UDT mid-wave-set | ✅ **Yes, cheaply** | A freeze check at admission: hash the wave set's UDT set at admission and re-hash at each submission. **Cost: hours, PC-side, no Portal.** Note the interaction with `converter claim --kind block-edit`, which is the natural carrier. | `FAIL` the submission | ***A UDT revision is `RUN (Init)` for every DB on it — the widest blast radius available — with no gate.*** |
+| **NC-2** | **D16** — the freeze as a decision | ✅ Yes | Same mechanism as NC-1; this row is the **decision**, NC-1 the agent behaviour. | `FAIL` | as NC-1 |
+| **NC-3** | **R2** — the freeze as a design rule | ✅ Yes | Same. Three spec items, one mechanism — recorded as three rows so the count reconciles. | `FAIL` | as NC-1 |
+| **NC-4** | **§8.1** — the wave cost model's three worked rows | ✅ **Yes, and it is MA-23** | Run a wave. **Cost: the Hx corpus integration (§I.4) plus one rig session.** Compare measured wave duration against each of the three rows. | `FAIL` the **model**, not the tooling | *"A wave is order-of-a-minute" remains a prediction, and every throughput argument in the document descends from it.* |
+| **NC-5** | **M5** — a model gets MORE review than a block | ⚠️ **Partly** | The *fact* is checkable (has any model been through `review-*`? Today: no model exists — `M-HBA-STIM-01` is named by both vector sets and **does not exist**). The *"more"* is judgement. **Cost: minutes to establish the fact; the rule needs an owner.** | `FAIL` on the fact; **judgement** on the comparative | ***A wrong model silently corrupts every vector that uses it***, and gate 4 set-differences against a list the vector author wrote — so nothing else catches it. |
+| **NC-6** | **M6** — models compete for scan time; the declared budget has a consumer | ✅ **Yes** | Grep for a consumer of the model's scan-time budget; if none, it is `NOT BUILT` and moves to §H. **Cost: minutes.** | `FAIL` | *The ceiling is discovered as a cycle-time trip mid-wave rather than before* — and an overrun **STOPs the CPU** (§H). |
+| **NC-7** | **M7** — models are provisional until reviewed and validated | ✅ **Yes** | Look for a promotion mechanism; `ModelReadiness`/`ModelReadinessCheck` exist — establish whether either *is* the promotion or merely reports readiness. **Cost: under an hour.** | `FAIL` | a model is used at whatever readiness it declares for itself |
+| **NC-8** | **§12.6** — the scan counter wraps; handled in the subtraction | ✅ **Yes, and cheaply, WITHOUT a long test** | Do **not** run a long test. Drive the subtraction directly across the wrap boundary (`DInt` at `%MD1004`), with a fixture at `int.MaxValue - n`. **Cost: an hour, PC-side.** | `FAIL` | a long wave silently reports a negative or enormous elapsed scan count, which reads as a timing bug in the block |
+| **NC-9** | **15b.5** — the same wrap, as a risk item | ✅ Yes | Same as NC-8; recorded separately so the count reconciles. | `FAIL` | as NC-8 |
+| **NC-10** | **G1** — which V4+ CPUs lack download-without-reinit | ⚠️ **Externally checkable only** | Vendor documentation. **Cost: a search, and it may not resolve.** ***Not checkable by us on this rig*** — one CPU is not a population. | n/a — record as **unresolved**, never as *no* | the change-class table's applicability beyond the 1214C is unestablished |
+| **NC-11** | **G3** — does a hardware download wipe retentive data | ✅ **Yes, on the rig — and it is DESTRUCTIVE** | Write a known retentive pattern, hardware-download, read back. **Cost: one rig session with a recovery download owed (34 s, measured), and it must go LAST in the session** — the same ordering rule A6 taught. | `FAIL` the assumption, not the tool | DB-1's change-class table asserts a retentive behaviour nothing has confirmed |
+| **NC-12** | **G6** — `MB_HOLD_REG` refusing optimized DBs, primary-sourced | ⚠️ **Materially defused** | The deployed mirror is an **area pointer over `%M`**, so no DB is on the wire and the question gates nothing. The `16#818C` refusal is already recorded first-hand. **Cost: the vendor sentence is a search; the behaviour is already measured.** | n/a | nothing today; it re-arms the moment a harness DB goes on the wire |
+| **NC-13** | **G7** — is a start-values-only edit RUN or RUN (Init) | ✅ **Yes, on the rig** | Change one start value, download, observe the reinit dialogue and the retentives. **Cost: one deploy cycle. Destructive-adjacent — schedule with NC-11.** | `FAIL` the routing assumption | `ChangeRouter` routes a class whose blast radius is unmeasured |
+| **NC-14** 🔴 | **X-A.3** — ***is `MB_SERVER` actually called FIRST in the deployed `Main`?*** | ✅ ***YES — AND IT IS THE TEN-MINUTE ROW*** | ***Not from the committed IR.*** `ir/` is what we believe is deployed; the authority is a **fresh export from the controller**. So: `openness-cli export <project> --block Main --out <dir>` (or `export-all` + `drift-check --complete`), then a **`lad-coder` read of the network order** (hard rule 8 — reading IR is never the orchestrator's). Already partly established second-hand: *`Main` network 6 calls the latch block before the copy layer in network 7* — **which says nothing about where `MB_SERVER` sits.** **Cost: one Portal attach + one `lad-coder` dispatch. Ten minutes, and it needs the Portal token.** | `FAIL` — and it is a **FAIL against the deployed program**, not against a submission | ***A TORN READ ACROSS BLOCKS BEHIND A PERFECTLY ATOMIC WRITE.*** X-A.5 measured no tear in 3,000 writes *within* `MB_SERVER`; if the copy layer runs **between** the server's read and its publish, that atomicity buys nothing. **This is the one row where a green everywhere else is compatible with silently wrong data.** |
+| **NC-15** | **X-G / gate 8c in practice** | ✅ **Yes, and DV-15 measured the cause** | The gate is built; **no provenanced graph reaches it**. Closing it needs the storage join (contract §2.7 `map.storage`) implemented on the submission side. **Cost: a schema change plus an author pass — days, not hours.** | `NOT CHECKED`, printed, never a pass | ***"0 multi-writer findings" and "nobody recorded why these conflict" produce identical empty reports.*** |
+| **NC-16** | **Gate 8 (blacklist vs computed disjointness) in practice** | ✅ Yes, same route as NC-15 | Gate 8's packing set derives from the edges; with no graph, *a blacklist compared against an absent graph is a blacklist nobody checked.* | `NOT CHECKED` | the 50-entry blacklist on set B **may be wholly redundant** and nothing can say so |
+| **NC-17** | **Gate 11 (memory layout) in practice** | ⚠️ **Blocked on a schema gap, not on effort** | Gate 11 demands a tag map to set-difference against; **no tag map exists on disk**; and *"the S7 map reaches no DB"* and *"there is no S7 transport in this run"* are **different claims and the document can only express the first**. ***Do not invent a map to satisfy a set-difference nobody needs.*** **Cost: a schema decision (`null` vs `[]`, one level further out), then hours.** | `NOT CHECKED` | the invariant *the harness never touches a deliverable block's data* is **true today and enforced by nothing** — the mechanism is `S7Transport → WriteArea(S7Area.DB, …)` through a hand-written map, and the write fence is scoped on an area name **from that same map** |
+| **NC-18** | **§12a derivation 5's `k ≈ 5`** | ✅ **Yes, on the rig, and it is CHEAP once a wave runs** | Command a preset scaled to ~5 scans on `FB_HxDwellTimer` and observe whether it still behaves like a timer on a 1214C. **Cost: fold into MA-23; no separate session.** | `FAIL` the constant | ***every "measured timer floor of 116.65 ms" and the 4.29× ceiling rest on one measured and one ASSUMED input***, on the term X-D itself says binds first |
+| **NC-19** | **§11 word order — the transform's APPLICATION** | ✅ **Yes** | Two questions, and they are different: (a) has `wire-prediction.md` §2's calibration suite ever run? — **no lane report records it**; (b) is the transform applied at all? — one lane says *"never applied; high-word-first carried forward unused"*. **Cost: hours to establish; the measurement itself is already taken.** | `FAIL` | a measured fact sits in a document while the code path that would use it is unexercised — *the shape of a guard written, believed, and never executed* |
+| **NC-20** | **§12a's live corroboration — and its un-audited call sites** | ✅ **Two halves. The first needs no work; the second does.** | **(a)** The 2026-08-13 figures (min 63 / med 72 / max 106 ms) were taken against the **old 121-register generator build** and are *faster than every recorded constant*. **No constant was moved on them** — the correct treatment; this row exists to stop a future reader promoting a corroboration into a re-derivation. **Cost: zero.** **(b)** 🔴 ***`RTT_p99` moved 173 → 201 and the §12a CALL SITES WERE NOT AUDITED.*** **Cost: an hour, PC-side.** And the rule that must survive the audit: ***`RTT_p90` may never be substituted into a bound*** — by definition 10% of round trips exceed it (**1,620 of 16,200 measured**, max observed **837 ms**). | `FAIL` on (b) | a stale-but-flattering number becoming the basis of a bound; and a bound silently keyed on a figure that moved underneath it |
+| **NC-21** | **Three stale source artifacts** | ✅ **Yes, minutes** | `Harness.Wire/RegisterWordOrder.cs` still declares the transform **UNCALIBRATED**; `Harness.Map/MirrorGeometry.BitAddressOf` still carries `[I] — INFERRED, NOT MEASURED` for a bit order **settled by writing `0x0001` and `0x0100`**; `Harness/TestVector.cs:11` (a project with **0 tests**) still documents `RTT_p99 = 173 ms` and *"7.4 scans"*. **Cost: three edits, in the harness lane's files.** | `FAIL` the artifact | ***a caveat that lives in a source comment is read as current*** — and a reader who greps for the calibration finds the word UNCALIBRATED |
+
+### G.1 If only one NOT CHECKED row is run, run NC-14
+
+It is the only row in this bucket that is **about a block on the controller right now**, is answerable
+without a wave, costs ten minutes, and whose failure mode is invisible to every other row in this
+plan. **NC-8, NC-6, NC-7 and NC-21 are the next cheapest** — all PC-side, all under a day between
+them, none needing the Portal token.
+
+---
+
+## §H — NOT BUILT (38): CONSEQUENCES, NOT TEST TARGETS
+
+> *** THESE ARE LISTED SO THAT THEIR ABSENCE FROM §E–§G IS NEVER READ AS COVERAGE. *** Nothing here
+> is a test row. Each carries the standing risk while it stays absent. **A campaign that omits this
+> section produces a plan whose scope nobody can reconstruct.**
+
+| # | item(s) | consequence while absent |
+|---|---|---|
+| **NB-1** | 1.1 / D20 — Loop 1's review bracket | The bracket is a human/skill discipline. *"Its last verified state would not be its final state"* is **unprevented**. |
+| **NB-2** | 2.2b — the agent does not touch the test project | Governance only; no mechanism in `src/`. `SoftwareOnlyChanges` safety rests on discipline. |
+| **NB-3** | 2.2c — the agent does not take the project online | Openness refuses a download while online; nothing prevents an agent going online. **One agent online blocks the wave loop and the failure appears as a download refusal** — i.e. it blames the wrong half. |
+| **NB-4** | D9 — the **producer** of computed disjointness | 🔴 **RE-BUCKET: partly closed by `converter conflict-graph` (DV-15).** What remains absent is the **storage join** that lets it resolve; disjointness is still *declared by absence*, not computed. And D9 has already bitten by hand — six declared slots all driving one iDB, one `DB_Input.Test[]` and one `DB_Controls.FaultReset` are **six waves of one slot, not one wave of six**. |
+| **NB-5** | DB-10 — agent scheduling | Deliberately demoted. None at a minute a wave; agents wait. |
+| **NB-6** | DB-11 — the rig pool | Deliberately demoted. One rig, one test project — which is what the version register requires anyway. |
+| **NB-7** | §11 — **OB80**, the executing-block register, the enable bitmask | **No OB80 generator anywhere in `src/`.** ***An overrun STOPs the CPU, and unattended one bad block turns a wave into a dead night*** — the exact cost asymmetry §11 argues from. And §2.1 lists OB80 among the things the coordinator generates. |
+| **NB-8** | **12.3 — latched transients** ("default on for coil-shaped signals") | 🔴 ***THE COPY LAYER PROVIDES SAMPLED AND NOTHING ELSE.*** Every observation is exposed to the ~0.05% ~95-scan poll gap; **O11's cap binds where an all-latched set would have no cap at all**; and **X-F's startup class explicitly requires latched evidence it cannot have**. The four `HBA_Violation_*` latches on the rig are **hand-authored** `FB_HarnessViolationLatch` (FB 9003), not generated. Measured second-order cost: `FromMinimalCopyLayer` hard-codes every signal to `{Sampled}`, so **a real deployed latch is structurally undeclarable** and gate 5 produced **4 false refusals in 17**. |
+| **NB-9** | **12.4 — event scan-stamps** | *"When, relative to T=0"* is unanswerable, so **coincidence and ordering assertions are inadmissible**. |
+| **NB-10** | F-3 — should SAMPLED assertions be admissible at all | Unruled — and sampled is currently the **only** mode the generator provides, so F-3's correctness question is **live rather than hypothetical**. |
+| **NB-11** | F-2 — DB-13's max-width input shape | One number per wave set must be the worst case, discarding most of the width the link sustains. |
+| **NB-12** | F-6 — admission grouping by slot size | `SlotSizeReport` computes the collapse and surfaces it as a `LoopCaveat` — ***a report, never a gate***. One 123-register slot takes R from 6 to 1 and **sextuples every read**, and nothing refuses it. |
+| **NB-13** | `exceed_250 = 0.352%` — no consumer | The *"expected over-threshold exchanges per operation"* figure the spec asks every bound to be quoted with is **produced by nothing**. |
+| **NB-14** | M2 — the physical analysis grounded in the equipment | No mechanism, and **none is possible mechanically**. The spec's blind spots stay untestable; this is the residual §16.9 names. |
+| **NB-15** | 7a.2 — a failing test may not be closed by changing the block until the basis is re-confirmed | No mechanism. The worked example — *engineering a correct pre-act offset out of a block* — is prevented only by discipline. |
+| **NB-16** | X-C residual — a PLC-side watchdog | **Nothing survives the PC dying.** Safe only while the rig's outputs cannot actuate (ADR-0009) — ***and that dependency is the condition to revisit on***. |
+| **NB-17** | X-H — the equipment-identity warning | Case 3 written as two case-2 slots passes against two independent tanks and **the coupling is never exercised**. |
+| **NB-18** | 16.12c — every removal path releases its claim | `Cleanup` computes eligibility; **nothing releases a `converter claim`**. Numbers leak until the reserved range is exhausted. |
+| **NB-19** | X-J second half — `claim --allocate` refusing inside the band | `ClaimValidator.Candidates` takes a bare `--floor`. **The exact mechanism X-J's treatment named.** (= MA-6.) |
+| **NB-20** | DB-12 levers A and B (setpoints, tick period) | Only the narrow lever exists; the throughput argument rests on tensor count alone. |
+| **NB-21** | 15a.8 / O14 — conflict density | Unmeasured. **§8's 6× packing figure rests on tests packing 6–10 wide, and nothing has ever measured whether they do.** |
+| **NB-22** | 15a.9 — O11's `S_min` | Unmeasured, and the deployed wave set has **one** slot. This is why `MaxTensorWidth` reports and does not enforce (DV-5). |
+| **NB-23** | G2 / A8 — whole-DB vs added-tags reinit; whether a memory reserve protects retentives | Tracked as `deferred-items.md` "A8 / G2". **DB-1's change-class table asserts "retentives included" and tags it `[R]` on exactly the half the vendor contradicts itself on.** |
+| **NB-24** | `SettlingDeclaration.UnchangedForScans` has no wire field | 🔴 **Measured:** `GateCli.ToVector` constructs every settling declaration with `0`, so ***every vector in every submission returns `SettlingState.NotEstablished`***. The contract asks for a settling condition; the runner still watches **completion**. Phase 2 measured what that costs: `Done` raised at 10 while the value ramps on to 15 — **a fast poll reports a wrong answer, not an error.** |
+| **NB-25** | The startup class cannot be declared in the submission document | `SLOT-HBA-STARTUP` is **a convention, not a gate**; the coordinator must pass `startupVectors` out of band. |
+| **NB-26** | `expected` is a string compared for equality | The canonical `WITHIN …` clause **cannot be expressed**; one vector works around it via a latch arming window, *which works only because a latch is available* — and latches are NB-8. |
+| **NB-27** | Preconditions and ordering **between** vectors | `index` within a slot is *"a reading, not a guarantee"*. Five vectors depend on an unestablished RETAIN-across-boundary premise. |
+| **NB-28** | `map.storage` (contract §2.7) on the submission side | The join from a logical signal name to PLC storage. **Its absence is why 16 of 17 signals do not resolve** (DV-15) and why NC-15/NC-16 cannot close. |
+| **NB-29** | A machine-readable **spec-name → block-name alias** | 🔴 ***THE ROOT CAUSE, MEASURED THREE INDEPENDENT WAYS IN ONE SESSION.*** The harness's data model assumes the specification's signal name **is** the block's tag name. The only artifact that could hold the pair was **a prose markdown table, and prose is exactly what no gate reads** — which is *why D1 could be laundered in the first place*. ⚠️ **PARTLY CLOSED, RE-VERIFY (SELF-4):** gate 5 now carries a *"a specName on every bound signal"* branch. **The instrumentation-mode half (NB-8) is still absent**, and that is what produced the 4 false refusals. |
+| **NB-30** | A static **interface check** with its own outcome | `converter interface-check --project … --block … --requires …` is designed, not built. **It needs a NEW outcome**: every existing gate outcome blames the *submission*; a missing response signal is a **FAIL against the block**. Reusing `REFUSED` sends an author to edit the artifact that is correct. ***D6's green is valid only while D1 is reported by this check.*** ⚠️ **The design trap is recorded and must survive into the build:** `FB_HopperBlockageMonitor`'s `INPUT` and `OUTPUT` sections are **both empty** (C-132 single-STATIC-UDT house style, the norm here) — ***a check reading those sections reports BOTH signals missing, including the one that exists***, and one matching **comments** would have found "inhibit" in a network title and **passed D1**. Resolve through the interface UDT; **member names only**. |
+| **NB-31** | Gate 5's CLI path taking its map from the coordinator | ✅ **CLOSED — RE-VERIFIED 2026-08-14, and it is SELF-4's sharpest instance.** `SubmissionGate.cs:659` checks the map's **authority before using the map**: `MapProvenance.SelfDeclared` ⇒ **`NotChecked`**, and `GateCli` stamps its own map `SelfDeclared` **deliberately**, so `harness-gate check` without `--binding` now reports honestly instead of passing. Only `MapProvenance.Bindings` lets gate 5 run. **The row is retained** because the *finding* it records — ***a standalone gate more permissive than its integrated form is worse than an absent one, because it is consulted first and believed*** — is the reusable part, and the campaign must assert the refusal branch rather than assume it. |
+| **NB-32** | A six-slot binding | Six slots declaring the same result tags collide on one tag-keyed dictionary (`ArgumentException`). Corroborates structurally that **the deployed mirror is ONE region** — but it means multi-slot binding on one block is inexpressible. *(Minor defect beside it: the CLI reports this as a failure to read the **submission** when the fault is in the **binding**.)* |
+| **NB-33** | `F3` — the `block-layout --set/--expect` sequence has no live exercise | It **fires zero times on every wave the harness generates today** (the mirror is `%MW`, the transport is Modbus). ***A no-op is not evidence the re-assertion works.*** |
+| **NB-34** | `F2` — the gateway cannot reach the live manifest path | It is confined to the probe's **rendering**; anything the renderer drops is invisible to the loop. |
+| **NB-35** | `F4` — `download-probe.exe` has no self-approval | Must be approved by hand or the first attach hangs — indistinguishable from a wedged Portal. |
+| **NB-36** | `F5` — `--disruptive` is not optional | **Every deployment stops the CPU**; there is no per-block download. Granularity is device-level by API, not by choice. |
+| **NB-37** | `AMB-15` / `AMB-16` unsettled in the enumeration | AMB-15 bounds what two vectors can claim; if ruled the other way **the denominator goes to 29 and the set needs two more vectors**. AMB-16: 22 assertions say *"the persistence threshold"* and nothing says which. |
+| **NB-38** | The enumeration's `forms:` projection is keyed by **display ordinal** | Gate 3e looks up **by ID**, so the projection makes 3e report `NOT CHECKED` on all 27 citations — ***a NOT-CHECKED wearing the costume of a supplied field***. Both vector authors hit it independently and both re-keyed by ID **in their submissions**; it is **unfixed in the enumeration**. |
+
+### H.1 Four absences this plan found that the reconciliation does not carry
+
+Listed separately so they are not counted into the 38, and so the reconciliation's author can rule on
+whether they are items or consequences of items already listed.
+
+| # | absence | consequence |
+|---|---|---|
+| **NB-A** | 🔴 **`WaveControl` has no entry point and no wave-set serialization format**, and is referenced by exactly one project — its own test project | ***The entire admission, colouring, queue, drain, batch-planning and coordinator-state machinery is unreachable from any command line.*** It cannot be driven by an agent, so it cannot be exercised *by* concurrency — only *about* it, in xUnit. **Every §D row over it is rung 5.** |
+| **NB-B** | 🔴 **Three of the four slot-level `ConflictEdge` kinds have no producer** — `OverlappingReachableState`, `SharedModelInstance`, `Blacklist`. Only `ModelUnderTestByAnotherSlot` has one (`ModelOrdering.EdgesFor`). Nothing wires `converter cross-check` into `TestSlot.ReachableState`. | Computed disjointness at the **slot** level is supplied only by the test that asserts on it. (Distinct from `Harness.Results.ConflictEdge`, which *does* have a producer — see §D.0a; **the two types share a name and nothing else**.) |
+| **NB-C** | **`TestSlot.reachableStateProvenance` empty ⇒ `ReachableStateNotComputed`** — the design is right, but nothing populates it | *"Computed and found empty"* and *"nobody computed it"* would otherwise arrive as the same empty set. The distinction exists in the type and has no producer to exercise it. |
+| **NB-D** | **No portable directory `fsync` on Windows**, so the atomically-renamed coordinator state's durability across a **power cut** is unforced | Safe direction — you may find the *previous* state. Recorded because the rename's core property (*a concurrent reader never observes a half-new file*) is **argued from Win32 semantics and is not demonstrated by a test**; it needs a reader racing a save. |
+
+> **On the count.** The reconciliation reaches 38 by splitting several of the above (D9/D20/O14 and
+> the §11 triple, among others) into their separate spec items. The register here is organised by
+> **mechanism**, because a consequence is a property of a missing mechanism and not of a numbering
+> scheme. **Nothing above is a test target, and no row in §E–§G may cite one as evidence.**
+
+---
+
+## §I — WHAT A FULL PASS LICENSES, AND WHAT IT NEVER LICENSES
+
+### I.1 What a complete green from this plan licenses
+
+> **That the tooling behaves as the corrected specification says, at the concurrency levels actually
+> run, on one rig, against artificial materials, with the buckets in §G and §H still open.**
+
+That is worth having and it is not more than that.
+
+### I.2 What it never licenses — say these out loud in the run report
+
+- **It does not generalise past the model's fidelity declaration.** A pass against a model declared
+  approximate is a different fact from one against a model declared exact — and today **no model
+  exists**; both live vector sets name one that does not.
+- **It does not survive its validity stamp.** A green obtained before the change that invalidated it
+  is not a green.
+- **It does not mean the co-running slice was benign** — only that nothing detected interference.
+- **It says nothing about the plant blocks.** The materials are artificial by design (`Hx` corpus),
+  precisely so the hopper block stays evidence.
+- **It says nothing about a live project.** `tools/confirm-roundtrip.allowlist` admits exactly
+  `GenProject1` and `SampleProject`, and this machine carries ~19 real production `.ap20` projects in
+  sibling folders.
+- ***It does not license a wave duration as a capability figure.*** One rig, one tunnel, ~72 ms
+  median round trip.
+- **It does not license reading a `NOT CHECKED` as clean, ever** — including this plan's own.
+
+### I.3 Three artifacts no test code can substitute
+
+From the golden-harness lane, and they close whole classes at **zero new test code**. Each is an
+**export**, not code:
+
+1. **One post-import/compile re-export.** Settles all **7 unmeasurable** `VolatileElementNames`
+   date entries at once.
+2. **One block carrying a non-default semantic property** — `MemoryLayout = Standard`, or
+   `DBAccessibleFromOPCUA = false`. Today **no committed export declares `Standard`**, so the corpus
+   *cannot distinguish "carries TIA's value" from "hardcodes Optimized"* (SELF-7).
+3. **One block with a base-prefixed literal on a `MOVE` / `CALL` / compare port.** The corpus
+   contains exactly one base-prefixed literal, and it lands on the one already-correct site.
+
+**Schedule these in the first Portal session of the campaign.** They are read-only and free while the
+project is open.
+
+### I.4 Preconditions — what must be true before §D can start
+
+| # | precondition | state today |
+|---|---|---|
+| 1 | **SELF-1, SELF-2, SELF-3 all pass** | not run |
+| 2 | **The scratch fence admits the allowlisted projects** | ⚠️ the old suffix rule is **replaced by a path allowlist**; **re-verify** (MA-19, SELF-4) |
+| 3 | **The Hx corpus is callable** — four `CALL` networks **appended at the end** of `Main` (a head insertion makes `converter diff` report every following network touched, which is an artefact of comparing by network number and *not evidence about logic*) | authored, **not called** |
+| 4 | **Four copy-layer slot bindings generated** by `Harness.Map`'s `CopyLayerGenerator` — **not hand-authored**, or a second author enters a generated file | not generated |
+| 5 | 🔴 **`CopyLayerGenerator` must emit an element type per signal, not a hard-coded `"Int"`** | ***measured: TIA REFUSED the generated copy layer*** — `Data type Bool is not permitted here`, twice, because `MOVE` will not take a `Bool` into an `Int` on an S7-1200. The Hx corpus is **`Bool` + `Int` + `Time`**, so it hits all three paths. **This blocks precondition 4.** |
+| 6 | **A precondition sweep in one pass** (`git` · binaries · permissions · Portal · rig), reporting **all failures together, once** | per the working agreement |
+| 7 | **The Portal token is explicitly held by one lane**, with a dispatched-lane ledger read **before** dispatch | orchestration discipline, twice violated |
+| 8 | **Two permission blockers that are the owner's, not an agent's** | `import-all` / `import` / `download-probe` have been **refused by the Claude Code auto-mode classifier** — *not a project rule, not the write fence, not a refusal by the tool* — on invocations byte-identical in shape to ones that succeeded. Recurred at least twice, in two lanes. |
+
+> ⚠️ **Which program is on the rig — and the lane reports disagree because they were written on different days.** `rig-experiments.md` describes the **JOB9004 scratch** program (`%M5000 WORD 121`, 84 blocks); `rig-enablement.md` states `GenProject1` **had never reached a controller**. **Both are superseded:** the deploy landed on 2026-08-14 (45 objects by name), and the rig was then measured **serving 35 registers at `%M1000`, build stamp `16#21D74D35` constant across reads a second apart, scan counter advancing, word order high-first.** ***Read the device, not a lane report, before planning a wire test.***
+
+### I.5 Sequencing
+
+1. **§C row zero** — the campaign's assertions about itself. A failure here voids everything after.
+2. **The read-only Portal session** — §I.3's three exports, plus **NC-14** (`MB_SERVER` call order),
+   plus the cheap `NOT CHECKED` rows that need no device (NC-6, NC-7, NC-8, NC-21).
+3. **§E / §F PC-side rows** — everything not needing the device.
+4. **MA-23** — the first wave, at concurrency 1, on the Hx corpus.
+5. **§D levels 2 → 3 → 4**, same materials, concurrency the only variable.
+6. **The destructive rows LAST** — NC-11, NC-13, DV-13's A6 repetition. ***A6's POST-abort throw
+   leaves the CPU STOPPED with a 34 s recovery download owed***, so every question needing a healthy
+   loaded controller is answered before the first deliberate abort, or the session becomes
+   download-recover-download.
+7. **Record the run-state at every step.** A session that records only outcomes cannot tell a CPU
+   that kept running from one that stopped and was recovered.
+
+### I.6 What would make this campaign dishonest — written down in advance
+
+- Reporting a green from a run where **the claims dir was per-worktree** (SELF-1).
+- Reporting **N concurrent agents** where the slots were mutually conflicting and ran serially
+  (SELF-3).
+- Treating a **`TIMED-OUT`** as a tooling limit without checking calibration.
+- Quoting **wave duration** as a capability figure.
+- **Typing `"computedConflicts": []`.** Seven characters, and it turns gates 8 and 8c green because
+  an empty array is read as *the graph ran and found no conflicts*. **Two authors have already
+  declined to.**
+- **Counting a `NOT CHECKED` in a pass tally**, or a `NOT BUILT` row as covered.
+- **Discharging `LoopResult.OwedOnTheDevice` by more than a session earns.** *A clean session takes it
+  from 8 to 4 — anything claiming more has counted something twice.*
