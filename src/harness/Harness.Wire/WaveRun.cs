@@ -113,7 +113,7 @@ public static class WaveRun
             {
                 foreach (var t in active)
                 {
-                    collected[t.SlotIndex].Add(new SlotRunResult(SlotOutcome.NotInert, Array.Empty<ushort>(), 0, 0, 0, 0, inert,
+                    collected[t.SlotIndex].Add(new SlotRunResult(SlotOutcome.NotInert, Array.Empty<ushort>(), default, default, 0, 0, inert,
                         "the test never started, which is not a test failure: " + inert.Detail));
                 }
 
@@ -168,7 +168,7 @@ public static class WaveRun
         RuntimeCompression compression,
         IReadOnlyList<SlotTensor> active,
         int index,
-        long startScan,
+        ScanCount startScan,
         InertReport inert,
         Func<long> nowMs)
     {
@@ -212,7 +212,7 @@ public static class WaveRun
                 {
                     done.Add((slotIndex, new SlotRunResult(SlotOutcome.Completed, results, startScan, control.ScanCounter,
                         polls, 0, inert,
-                        $"completion register R{vector.CompletionRegister:000} reached {vector.CompletionValue} after {control.ScanCounter - startScan} scan(s) and {polls} poll round(s).")));
+                        $"completion register R{vector.CompletionRegister:000} reached {vector.CompletionValue} after {control.ScanCounter.Since(startScan)} scan(s) and {polls} poll round(s).")));
 
                     outstanding.Remove(slotIndex);
                 }

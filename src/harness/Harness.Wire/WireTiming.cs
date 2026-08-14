@@ -15,7 +15,26 @@ namespace Harness.Wire;
 /// </summary>
 public static class WireTiming
 {
-    /// <summary>Worst of the measured median band. <b>Expected durations only</b> — never a budget. [D, §12a]</summary>
+    /// <summary>
+    /// Worst of the measured median band. <b>Expected durations only</b> — never a budget. [D, §12a]
+    ///
+    /// <para>🔴 <b>IT HAS ZERO CONSUMERS, AND THAT IS OWED RATHER THAN DEAD.</b> Measured 2026-08-14:
+    /// nothing outside this class and its own tests reads it. That is a STRONGER statement than the
+    /// reconciliation's "no duration-shaped figure is computed" — not merely that none is computed with
+    /// the wrong constant, but that <b>none is computed at all</b>.</para>
+    ///
+    /// <para><b>Kept, deliberately, and the reason is F-5's own rule.</b> The rule keys the constant on
+    /// the QUANTITY'S KIND, so it needs both kinds to exist for the distinction to be checkable; deleting
+    /// this leaves only the p99 and the next expected-duration figure gets keyed on a bound because that
+    /// is the only constant in the file. The pair is also what
+    /// <c>WireTimingTests</c> asserts an ORDER over (<c>p99 &gt; typical</c>), which is the cheapest
+    /// guard there is against the two being transposed.</para>
+    ///
+    /// <para><b>What is owed:</b> an EXPECTED-duration figure for a wave — how long a run should take,
+    /// as distinct from the backstop that bounds it. Nothing reports one today, so a wave that takes four
+    /// times longer than it should still completes inside its budget and nobody notices. That is a real
+    /// gap and this constant is the half of it that already exists.</para>
+    /// </summary>
     public const int RttTypicalMs = 78;
 
     /// <summary>

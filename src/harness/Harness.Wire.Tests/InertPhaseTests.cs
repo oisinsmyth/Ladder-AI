@@ -57,7 +57,7 @@ public class InertPhaseTests
 
         var t0 = InertPhase.Commit(client, report, new[] { 0 });
 
-        Assert.True(t0 > report.ScanAtVerify,
+        Assert.True(t0.Since(report.ScanAtVerify) > 0,
             $"T=0 was scan {t0} and the verify was scan {report.ScanAtVerify}. D37: releasing a reset and starting in one scan makes the outcome depend on rung order inside the block.");
         Assert.Equal(1, wire.StartBoolRegisters[0]);
     }

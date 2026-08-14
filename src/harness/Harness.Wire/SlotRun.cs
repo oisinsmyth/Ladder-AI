@@ -53,15 +53,16 @@ public enum SlotOutcome
 public sealed record SlotRunResult(
     SlotOutcome Outcome,
     ushort[] Results,
-    long StartScan,
-    long EndScan,
+    ScanCount StartScan,
+    ScanCount EndScan,
     int PollRounds,
     int RoundTrips,
     InertReport Inert,
     string Detail)
 {
     /// <summary>Scans from T=0 to the observation that recognised completion.</summary>
-    public long ElapsedScans => EndScan - StartScan;
+    /// <summary>Scans from T=0, taken MODULARLY so the count is right across the counter's wrap.</summary>
+    public long ElapsedScans => EndScan.Since(StartScan);
 }
 
 /// <summary>
@@ -102,7 +103,7 @@ public static class SlotRun
         var inert = InertPhase.Establish(client, slotIndex, vector.Values, vector.Inert);
         if (!inert.Established)
         {
-            return new SlotRunResult(SlotOutcome.NotInert, Array.Empty<ushort>(), 0, 0, 0,
+            return new SlotRunResult(SlotOutcome.NotInert, Array.Empty<ushort>(), default, default, 0,
                 client.RoundTrips - roundTripsBefore, inert,
                 "the test never started, which is not a test failure: " + inert.Detail);
         }
@@ -125,7 +126,7 @@ public static class SlotRun
             {
                 return new SlotRunResult(SlotOutcome.Completed, results, startScan, control.ScanCounter, polls,
                     client.RoundTrips - roundTripsBefore, inert,
-                    $"completion register R{vector.CompletionRegister:000} reached {vector.CompletionValue} after {control.ScanCounter - startScan} scan(s) and {polls} poll round(s).");
+                    $"completion register R{vector.CompletionRegister:000} reached {vector.CompletionValue} after {control.ScanCounter.Since(startScan)} scan(s) and {polls} poll round(s).");
             }
 
             if (nowMs() >= deadline)

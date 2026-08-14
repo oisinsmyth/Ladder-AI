@@ -147,6 +147,7 @@ public static class SubmissionGate
         gates.Add(new GateResult("3c basis — faithful reading of the clause", GateStatus.Judgement, true, "none, ever",
             "whether the cited assertion is a faithful reading of the clause is what the independent author is for. It is recorded, never verified."));
         gates.Add(Fidelity(vectors, fidelity));
+        gates.Add(FidelityAuthority(vectors, fidelity, blockAuthor));
         gates.Add(Observability(vectors, enumeration, map, floorScans, runtimeCompression));
         gates.Add(Settling(vectors));
         gates.Add(new GateResult("6b settling — does the condition imply the value is final", GateStatus.Judgement, true, "none, ever",
@@ -339,6 +340,60 @@ public static class SubmissionGate
 
         return new GateResult("4 fidelity (M4)", GateStatus.Checked, problems.Length == 0, nameof(Admissibility),
             problems.Length == 0 ? $"every asserted behaviour is in model '{fidelity?.ModelId}'s Represents set." : string.Join(" | ", problems));
+    }
+
+    /// <summary>
+    /// *** GATE 5's DEFECT, ONE ARTIFACT OVER: WHO SUPPLIED THE FIDELITY LIST? ***
+    ///
+    /// <para>M4 lets a vector assert only behaviours the model claims to represent — so <b>the Represents
+    /// set is what LICENSES the vector's assertions</b>. If the vector's own author wrote that set, the
+    /// licence is self-issued and gate 4 compares a claim against its own author's other claim. Measured
+    /// 2026-08-14 on a live submission: a model BLOCK existed, a model DECLARATION did not, and the model
+    /// id occurred <b>only inside the vector file</b>.</para>
+    ///
+    /// <para><b>Third instance of this family.</b> The enumeration (3d) was the first; the observability
+    /// map was the second, where <c>GateCli</c> read the map out of the submission the vector author
+    /// wrote and the CLI was weaker than the loop <i>in exactly the place the CLI decides whether to
+    /// proceed</i>. Fixed the same way: name an authority, compare it, and report NOT CHECKED when there
+    /// is none.</para>
+    /// </summary>
+    private static GateResult FidelityAuthority(IReadOnlyList<SubmissionVector> vectors, FidelityDeclaration? fidelity, AgentIdentity blockAuthor)
+    {
+        const string name = "4b fidelity authority (M3/M4)";
+
+        if (fidelity is null)
+        {
+            return new GateResult(name, GateStatus.NotChecked, false, "a model declaration from an authority the vector author does not control",
+                "no fidelity declaration was supplied at all, so there is nothing to attribute. Gate 4 refuses on the absence itself; this reports the separate fact that WHO wrote the Represents set was never established either.");
+        }
+
+        if (!fidelity.DeclaredBy.IsRecorded)
+        {
+            return new GateResult(name, GateStatus.NotChecked, false, "the model declaration's own identity field",
+                $"model '{fidelity.ModelId}' does not record who declared it, so the list that LICENSES every asserted behaviour (M4) cannot be shown independent of the party it licenses. "
+                + "That is the shape found live: a model BLOCK existed, a model DECLARATION did not, and the model id occurred only inside the vector file. Unknown is not independent.");
+        }
+
+        var problems = new List<string>();
+
+        foreach (var v in vectors.Where(v => v.Author.IsRecorded && fidelity.DeclaredBy.SameAs(v.Author)))
+        {
+            problems.Add($"{v.Id}: '{fidelity.DeclaredBy}' both wrote this vector and declared what model '{fidelity.ModelId}' represents. "
+                + "*** THE FIDELITY LIST IS SUPPLIED BY THE PARTY WHOSE VECTORS IT LICENSES *** — M4 permits an assertion only if the model claims that behaviour, so an author who writes both permits their own assertions.");
+        }
+
+        // The block author is a DIFFERENT conflict and gets its own sentence: a model declared by the
+        // block's author describes what the implementation is believed to do, which is the correlated
+        // reading this pipeline exists to break.
+        if (blockAuthor.IsRecorded && fidelity.DeclaredBy.SameAs(blockAuthor))
+        {
+            problems.Add($"'{fidelity.DeclaredBy}' both wrote the block and declared what model '{fidelity.ModelId}' represents. The model then describes what the implementation is believed to do, and a vector admitted against it is agreeing with the block by construction.");
+        }
+
+        return new GateResult(name, GateStatus.Checked, problems.Count == 0, nameof(AgentIdentity),
+            problems.Count == 0
+                ? $"model '{fidelity.ModelId}' was declared by '{fidelity.DeclaredBy}', who is neither the block's author nor any vector's — so the Represents set licensing these assertions came from a third party."
+                : string.Join(" | ", problems));
     }
 
     private static GateResult Settling(IReadOnlyList<SubmissionVector> vectors)
@@ -1140,7 +1195,28 @@ public static class SubmissionGate
         var plan = TimeCompression.Plan(
             new CompressionRequest(inputs.PlantMs!.Value, inputs.BudgetMs!.Value,
                 vectors.SelectMany(v => v.Expectations).ToArray(),
-                declaredFactors.Max(), Math.Max(1, (int)Math.Round(floorScans * Harness.Wire.WireTiming.ScanPeriodMs / Harness.Wire.WireTiming.RttP99Ms)),
+                declaredFactors.Max(),
+
+                // 🔴 *** THIS RTT_p99 IS NOT A BOUND, AND IT IS CORRECT ONLY BY CANCELLATION. ***
+                //
+                // F-5's rule keys the constant on the QUANTITY'S KIND — durations take the p90, bounds
+                // take the p99 — and this is NEITHER. It is the algebraic INVERSE of
+                // `WireTiming.ObservabilityFloorScans`, which is `slots * RttP99Ms / ScanPeriodMs`;
+                // multiplying back by ScanPeriodMs and dividing by RttP99Ms recovers `slots`, the
+                // reads-per-cycle the caller already had. The two constants cancel.
+                //
+                // *** THE RULE THAT DOES REACH IT IS NOT WRITTEN ANYWHERE ELSE, SO IT IS WRITTEN HERE:
+                // USE THE SAME CONSTANT THE FLOOR WAS COMPUTED WITH. *** Not the p99 because a ceiling is
+                // bound-shaped — that reasoning is about the FLOOR, not about this inversion. If
+                // ObservabilityFloorScans is ever re-keyed, this must move WITH it; and "correcting" it
+                // to the duration-shaped RttTypicalMs would break the cancellation and silently return a
+                // reads-per-cycle roughly 2.6x too large, which widens every assertion ceiling derived
+                // from it.
+                //
+                // The honest fix is for the floor to expose its own inverse so there is nothing to keep
+                // in step. Recorded rather than done here: that is a Harness.Wire change, and this site
+                // is the one that would go wrong meanwhile.
+                Math.Max(1, (int)Math.Round(floorScans * Harness.Wire.WireTiming.ScanPeriodMs / Harness.Wire.WireTiming.RttP99Ms)),
                 inputs.Presets, inputs.ModelCompStable, inputs.NegligibleFraction,
                 // *** THE RUNTIME FACTOR REACHES THE ARITHMETIC. *** Without it, Plan's own branches keyed
                 // on comp_min and a wave at comp=8 with comp_min=1 was told nothing was being scaled.

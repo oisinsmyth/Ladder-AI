@@ -39,6 +39,14 @@ public enum InertOutcome
 
     /// <summary>The scan counter did not advance far enough to make either check meaningful.</summary>
     ScanCounterStalled,
+
+    /// <summary>
+    /// The scan counter moved BACKWARDS by more than a wrap explains — a CPU restart, a reload, or a
+    /// different program. <b>Deliberately not <see cref="ScanCounterStalled"/>:</b> the counter did move,
+    /// and reading a backwards step as a stall sends a reader to the wrong place. Reading it as an
+    /// ADVANCE would be worse still, because the modular difference makes it a very large positive.
+    /// </summary>
+    ScanCounterWentBackwards,
 }
 
 /// <summary>
@@ -50,7 +58,7 @@ public enum InertOutcome
 /// </summary>
 public sealed record InertReport(
     InertOutcome Outcome,
-    long ScanAtVerify,
+    ScanCount ScanAtVerify,
     ushort[] FirstObservation,
     ushort[] SecondObservation,
     string Detail)
@@ -141,8 +149,8 @@ public static class InertPhase
 
         // Let the program act on them before asking whether it has.
         var start = client.ReadControl().ScanCounter;
-        if (!WaitScans(client, start, quiescence, maxPolls, out _))
-            return Stalled(quiescence);
+        if (!WaitScans(client, start, quiescence, maxPolls, out _, out var backwards))
+            return backwards ? WentBackwards() : Stalled(quiescence);
 
         // CHECK ONE — start conditions established, on every active slot. ONE read per group of whole
         // slots (X-A as amended by F-1): the inert phase observes every active slot twice, so reading
@@ -164,8 +172,8 @@ public static class InertPhase
 
         // CHECK TWO — dynamics quiescent. The values are right; are they STILL right, and unchanged?
         var afterFirst = client.ReadControl().ScanCounter;
-        if (!WaitScans(client, afterFirst, quiescence, maxPolls, out var scanAtSecondRead))
-            return Stalled(quiescence);
+        if (!WaitScans(client, afterFirst, quiescence, maxPolls, out var scanAtSecondRead, out var backwardsAgain))
+            return backwardsAgain ? WentBackwards() : Stalled(quiescence);
 
         var second = client.ReadResults(active.Select(s => s.SlotIndex));
 
@@ -200,7 +208,7 @@ public static class InertPhase
     /// D37's commit: raise the start bools on a LATER scan than the verify, in ONE transaction. Returns
     /// the scan counter at the commit — the tests' T=0.
     /// </summary>
-    public static long Commit(MirrorClient client, InertReport verified, IEnumerable<int> slotIndices, int maxPolls = 200)
+    public static ScanCount Commit(MirrorClient client, InertReport verified, IEnumerable<int> slotIndices, int maxPolls = 200)
     {
         ArgumentNullException.ThrowIfNull(client);
         ArgumentNullException.ThrowIfNull(verified);
@@ -214,7 +222,7 @@ public static class InertPhase
         // A LATER scan than the verify, never the same one — observed, not inferred from the round-trip
         // time. Releasing a reset and starting in one scan makes the outcome depend on rung order inside
         // the block under test.
-        if (!WaitScans(client, verified.ScanAtVerify, 1, maxPolls, out var scanAtCommit))
+        if (!WaitScans(client, verified.ScanAtVerify, 1, maxPolls, out var scanAtCommit, out _))
         {
             throw new WireException(
                 $"the scan counter did not advance past the inert verify within {maxPolls} poll(s), so the start bools cannot be raised on a later scan than the verify (D37). The PLC may be stopped.");
@@ -224,18 +232,45 @@ public static class InertPhase
         return scanAtCommit;
     }
 
+    /// <summary>
+    /// The counter moved BACKWARDS by more than a wrap explains. Its own outcome, because "it stalled"
+    /// and "it restarted" send a reader to two different places — and because the modular difference
+    /// would otherwise have made this look like an enormous ADVANCE, which is the dangerous direction.
+    /// </summary>
+    private static InertReport WentBackwards() => new(
+        InertOutcome.ScanCounterWentBackwards, default, Array.Empty<ushort>(), Array.Empty<ushort>(),
+        "the scan counter went BACKWARDS by more than the counter's wrap explains, so no inert check could be made. "
+        + "A wrap is absorbed (the difference is modular); this is not one. The realistic causes are a CPU restart, a reload, or a different program running — "
+        + "and the version register is the other half of that question.");
+
     private static InertReport Stalled(int scans) => new(
-        InertOutcome.ScanCounterStalled, 0, Array.Empty<ushort>(), Array.Empty<ushort>(),
+        InertOutcome.ScanCounterStalled, default, Array.Empty<ushort>(), Array.Empty<ushort>(),
         $"the scan counter did not advance {scans} scan(s), so neither inert check could be made. Empty is not clean: this is not an inert state, it is an unobserved one.");
 
-    private static bool WaitScans(MirrorClient client, long from, int scans, int maxPolls, out long reached)
+    /// <summary>
+    /// Poll until the counter has advanced <paramref name="scans"/>.
+    ///
+    /// <para><b>It asks TWO questions, not one.</b> The difference is modular, so it can never be
+    /// negative — a counter that went BACKWARDS therefore reads as a very large forward number and would
+    /// satisfy any threshold. <see cref="ScanCount.IsPlausibleAdvanceFrom"/> is what separates an advance
+    /// from a discontinuity, and without it this loop would report a restarted CPU as instantly quiescent.</para>
+    /// </summary>
+    private static bool WaitScans(MirrorClient client, ScanCount from, int scans, int maxPolls, out ScanCount reached, out bool wentBackwards)
     {
         reached = from;
+        wentBackwards = false;
 
         for (var poll = 0; poll < maxPolls; poll++)
         {
             reached = client.ReadControl().ScanCounter;
-            if (reached - from >= scans)
+
+            if (!reached.IsPlausibleAdvanceFrom(from))
+            {
+                wentBackwards = true;
+                return false;
+            }
+
+            if (reached.Since(from) >= scans)
                 return true;
         }
 

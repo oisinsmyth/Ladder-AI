@@ -4,14 +4,18 @@ namespace Harness.Wire;
 
 /// <summary>One FC03 over the control region: the build stamp, the scan counter, the start bools and the echo.</summary>
 /// <param name="Version">The build stamp the running program publishes (§9).</param>
-/// <param name="ScanCounter">The free-running scan counter. Wraps; stamps are differences from T=0.</param>
+/// <param name="ScanCounter">
+/// The free-running scan counter. <b>Wraps</b>, so it is a <see cref="ScanCount"/> and not a number:
+/// the difference is modular and the wrong subtraction does not compile. See that type for why the
+/// absorption that existed on <c>S7Transport</c> did nothing for the live path.
+/// </param>
 /// <param name="StartBools">The start-bool registers as read back — what the client COMMANDED.</param>
 /// <param name="StartEcho">
 /// The echo registers — what the program ACTUALLY RAN, latched by the copy layer from each block's own
 /// start condition (X-E). Different fact from <paramref name="StartBools"/>, and only this one is
 /// evidence.
 /// </param>
-public sealed record ControlSnapshot(uint Version, long ScanCounter, ushort[] StartBools, ushort[] StartEcho)
+public sealed record ControlSnapshot(uint Version, ScanCount ScanCounter, ushort[] StartBools, ushort[] StartEcho)
 {
     /// <summary>Whether slot <paramref name="index"/>'s start bool reads as raised — the COMMAND.</summary>
     public bool StartRaised(int index) => BitSet(StartBools, index);
@@ -87,7 +91,9 @@ public sealed class MirrorClient
 
         return new ControlSnapshot(
             RegisterWords.To32(registers[versionOffset], registers[versionOffset + 1], WordOrder),
-            unchecked((int)RegisterWords.To32(registers[scanOffset], registers[scanOffset + 1], WordOrder)),
+            // *** UNSIGNED, NEVER SIGN-EXTENDED. *** `unchecked((int)...)` into a long is what turned a
+            // one-scan advance across the DInt boundary into -4 294 967 295.
+            ScanCount.FromRegisters(registers[scanOffset], registers[scanOffset + 1], WordOrder),
             registers[startOffset..(startOffset + _map.StartBools.Length)],
             registers[echoOffset..(echoOffset + _map.StartEcho.Length)]);
     }

@@ -104,7 +104,9 @@ public class WalkingSkeletonTests
         Assert.True(run.Inert.Established, run.Inert.Detail);
         Assert.Equal(new ushort[] { 0, 0 }, run.Inert.FirstObservation);
         Assert.Equal(new ushort[] { 0, 0 }, run.Inert.SecondObservation);
-        Assert.True(run.StartScan > run.Inert.ScanAtVerify);
+        // `>` does not compile on a ScanCount, deliberately: comparing two counters with a relational
+        // operator is wrong across the wrap in exactly the way the subtraction was. Since() is modular.
+        Assert.True(run.StartScan.Since(run.Inert.ScanAtVerify) > 0);
     }
 
     [Fact]

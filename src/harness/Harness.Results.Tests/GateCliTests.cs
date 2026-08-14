@@ -19,7 +19,7 @@ public class GateCliTests
       "slotsInWaveSet": 1,
       "resultRegistersPerSlot": 20,
       "computedConflicts": [],
-      "model": { "id": "M_Ramp", "represents": ["ramp-to-limit"], "validatedAgainstPlantData": true },
+      "model": { "id": "M_Ramp", "represents": ["ramp-to-limit"], "validatedAgainstPlantData": true, "declaredBy": "agent-m" },
       "enumeration": { "clauses": ["REQ-014"], "assertions": ["REQ-014:ffcc38"],
                        "forms": { "REQ-014:ffcc38": "When" }, "enumerator": "agent-c",
                        "normalisedTexts": { "REQ-014:ffcc38": "WHEN the step is applied THEN the count reaches the limit" },
@@ -163,7 +163,70 @@ public class GateCliTests
 
         Assert.Equal(GateExit.NotAdmissible, exit);
         Assert.Contains("[NOT CHECKED] 8 blacklist", output, StringComparison.Ordinal);
-        Assert.Contains("NOT CHECKED — what is missing (this is the build list)", output, StringComparison.Ordinal);
+        Assert.Contains("QUESTIONS NOBODY ASKED", output, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// *** AN UNASKED QUESTION AND AN ANSWERED ONE MUST NOT PRINT ALIKE. ***
+    ///
+    /// <para>Found live: a <c>Never</c> expectation was flipped to <c>Sampled</c> in a scratch copy and
+    /// <b>the gate output did not move</b>, because gate 5 is NOT CHECKED whenever the map is
+    /// self-declared — so F-3's refusal is masked and the vector would slip through today, to be refused
+    /// the moment real bindings arrive. Reading "gate 5 did not complain" was reading a question nobody
+    /// asked.</para>
+    /// </summary>
+    [Fact]
+    public void A_NOT_CHECKED_GATE_IS_MARKED_IN_THE_MARGIN_AND_COUNTED_BEFORE_THE_LIST()
+    {
+        var (_, output) = Run(Good.Replace("\"computedConflicts\": [],", string.Empty, StringComparison.Ordinal));
+
+        // Counted BEFORE the gate list, so a reader meets it before the lines it qualifies.
+        var banner = output.IndexOf("GATE(S) WERE NOT CHECKED", StringComparison.Ordinal);
+        var gates = output.IndexOf("GATES", StringComparison.Ordinal);
+        Assert.True(banner >= 0 && banner < gates, "the NOT CHECKED count must precede the gate list, not follow it.");
+
+        Assert.Contains("A GATE THAT DID NOT RUN DID NOT PASS", output, StringComparison.Ordinal);
+
+        // Marked in the LEFT MARGIN, which is what a reader skimming for trouble scans — and NOT marked
+        // on the passing lines, or the marker means nothing.
+        Assert.Contains("!![NOT CHECKED] 8 blacklist", output, StringComparison.Ordinal);
+        Assert.Contains("  [CHECKED   ] 1 schema", output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_REFUSED_GATE_IS_MARKED_DIFFERENTLY_FROM_ONE_THAT_NEVER_RAN()
+    {
+        var refused = Run(Good.Replace("\"kills\": \"a ramp that overshoots by one step\"", "\"kills\": \"\"", StringComparison.Ordinal)).Output;
+
+        Assert.Contains(">>[REFUSED   ] 1 schema", refused, StringComparison.Ordinal);
+        Assert.DoesNotContain("!![REFUSED", refused, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Gate 4b, through the document: the model declaration must name an authority the vector author
+    /// does not control, or the list that licenses every asserted behaviour is self-issued.
+    /// </summary>
+    [Fact]
+    public void A_MODEL_DECLARED_BY_THE_VECTORS_OWN_AUTHOR_IS_REFUSED()
+    {
+        var selfIssued = Good.Replace("\"declaredBy\": \"agent-m\"", "\"declaredBy\": \"agent-b\"", StringComparison.Ordinal);
+
+        var (exit, output) = Run(selfIssued);
+
+        Assert.Equal(GateExit.NotAdmissible, exit);
+        Assert.Contains("SUPPLIED BY THE PARTY WHOSE VECTORS IT LICENSES", output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_MODEL_WITH_NO_DECLARER_IS_NOT_CHECKED_RATHER_THAN_PASSING()
+    {
+        var anonymous = Good.Replace(", \"declaredBy\": \"agent-m\"", string.Empty, StringComparison.Ordinal);
+
+        var (exit, output) = Run(anonymous);
+
+        Assert.Equal(GateExit.NotAdmissible, exit);
+        Assert.Contains("!![NOT CHECKED] 4b fidelity authority", output, StringComparison.Ordinal);
+        Assert.Contains("only inside the vector file", output, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -256,7 +319,7 @@ public class GateCliTests
           "slotsInWaveSet": 1,
           "resultRegistersPerSlot": 20,
           "computedConflicts": [],
-          "model": { "id": "M_Ramp", "represents": ["ramp-to-limit"], "validatedAgainstPlantData": true },
+          "model": { "id": "M_Ramp", "represents": ["ramp-to-limit"], "validatedAgainstPlantData": true, "declaredBy": "agent-m" },
           "enumeration": { "clauses": ["REQ-014"], "assertions": ["REQ-014:ffcc38"] },
           "map": { "providedFor": { "Demo_Count": ["Latched"] } },
           "tagMapPath": "tags.json",

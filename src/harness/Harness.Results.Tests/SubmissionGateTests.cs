@@ -98,7 +98,7 @@ public class SubmissionGateTests
             vectors ?? new[] { Vector() },
             enumeration ?? AssertionEnumeration.Of(new[] { "REQ-014" }, new[] { AssertionIdValue },
                 new Dictionary<string, AssertionForm> { [AssertionIdValue] = AssertionForm.When }, "agent-c", Texts, Observations, SpecifiedBounds),
-            FidelityDeclaration.Of("M_Ramp", new[] { "ramp-to-limit" }, new[] { "overshoot" }, true),
+            FidelityDeclaration.Of("M_Ramp", new[] { "ramp-to-limit" }, new[] { "overshoot" }, true, declaredBy: "agent-m"),
             new AgentIdentity(blockAuthor),
             // The DEFAULT fixture stands for a COMPLETE submission, which means the map came from the
             // coordinator's bindings. A caller-supplied map keeps its own provenance, because the whole
@@ -883,7 +883,7 @@ public class SubmissionGateTests
             new[] { Vector() },
             AssertionEnumeration.Of(new[] { "REQ-014" }, new[] { AssertionIdValue },
                 new Dictionary<string, AssertionForm> { [AssertionIdValue] = AssertionForm.When }, "agent-c", Texts, Observations, SpecifiedBounds),
-            FidelityDeclaration.Of("M_Ramp", new[] { "ramp-to-limit" }, new[] { "overshoot" }, true),
+            FidelityDeclaration.Of("M_Ramp", new[] { "ramp-to-limit" }, new[] { "overshoot" }, true, declaredBy: "agent-m"),
             new AgentIdentity("agent-a"),
             MirrorObservability.Of(("Demo_Count", new[] { InstrumentationMode.Latched })) with { Provenance = MapProvenance.Bindings },
             9, 1, ConflictGraph.Empty, null,
@@ -905,7 +905,7 @@ public class SubmissionGateTests
             new[] { Vector() },
             AssertionEnumeration.Of(new[] { "REQ-014" }, new[] { AssertionIdValue },
                 new Dictionary<string, AssertionForm> { [AssertionIdValue] = AssertionForm.When }, "agent-c", Texts, Observations, SpecifiedBounds),
-            FidelityDeclaration.Of("M_Ramp", new[] { "ramp-to-limit" }, new[] { "overshoot" }, true),
+            FidelityDeclaration.Of("M_Ramp", new[] { "ramp-to-limit" }, new[] { "overshoot" }, true, declaredBy: "agent-m"),
             new AgentIdentity("agent-a"),
             MirrorObservability.Of(("Demo_Count", new[] { InstrumentationMode.Latched })) with { Provenance = MapProvenance.Bindings },
             9, 1, ConflictGraph.Empty, null,

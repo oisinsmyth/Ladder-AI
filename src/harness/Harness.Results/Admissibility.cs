@@ -145,17 +145,32 @@ public sealed record AssertionEnumeration(
 /// M5: where no real plant data exists, that ABSENCE is part of the declaration. It is a fact about the
 /// result's strength, not a footnote.
 /// </param>
+/// <param name="DeclaredBy">
+/// Who declared the model's <c>Represents</c> set.
+///
+/// <para>🔴 <b>THE FIDELITY LIST IS WHAT LICENSES A VECTOR'S ASSERTED BEHAVIOURS (M4), SO A LIST
+/// SUPPLIED BY THE VECTOR'S OWN AUTHOR LICENSES ITSELF.</b> Measured 2026-08-14: a model BLOCK existed
+/// and a model DECLARATION did not — the model id occurred <b>only inside the vector file</b> — so the
+/// gate compared each vector's asserted behaviours against a set the same party had written.</para>
+///
+/// <para><b>Third instance of this family</b>, after the enumeration (3d) and the observability map
+/// (gate 5). Unrecorded is NOT CHECKED, never a pass: unknown is not independent, and the alternative
+/// admits every submission that simply says less.</para>
+/// </param>
 public sealed record FidelityDeclaration(
     string ModelId,
     IReadOnlySet<string> Represents,
     IReadOnlySet<string> DoesNotRepresent,
-    bool ValidatedAgainstPlantData)
+    bool ValidatedAgainstPlantData,
+    AgentIdentity DeclaredBy = default)
 {
     public static FidelityDeclaration Of(string modelId, IEnumerable<string> represents,
-        IEnumerable<string>? doesNotRepresent = null, bool validatedAgainstPlantData = false) =>
+        IEnumerable<string>? doesNotRepresent = null, bool validatedAgainstPlantData = false,
+        string declaredBy = "") =>
         new(modelId, represents.ToHashSet(StringComparer.Ordinal),
             (doesNotRepresent ?? Array.Empty<string>()).ToHashSet(StringComparer.Ordinal),
-            validatedAgainstPlantData);
+            validatedAgainstPlantData,
+            new AgentIdentity(declaredBy));
 }
 
 /// <summary>

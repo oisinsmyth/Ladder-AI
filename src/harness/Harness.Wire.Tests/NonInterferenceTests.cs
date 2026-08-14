@@ -19,8 +19,8 @@ public class NonInterferenceTests
             0, 1, new ScanBudget(1, 1))).ToArray());
 
     private static SlotRunResult Result(SlotOutcome outcome, params ushort[] results) =>
-        new(outcome, results, 0, 0, 1, 1,
-            new InertReport(InertOutcome.Established, 0, Array.Empty<ushort>(), Array.Empty<ushort>(), "stub"), "stub");
+        new(outcome, results, new ScanCount(0), new ScanCount(0), 1, 1,
+            new InertReport(InertOutcome.Established, new ScanCount(0), Array.Empty<ushort>(), Array.Empty<ushort>(), "stub"), "stub");
 
     /// <summary>A wave whose per-slot results are dictated by the caller, keyed on the set of slots run.</summary>
     private static Func<IReadOnlyList<SlotTensor>, WaveResult> Waves(
@@ -49,7 +49,7 @@ public class NonInterferenceTests
         foreach (var slot in commanded)
             word[0] |= (ushort)(1 << slot);
 
-        log.Record(0, commanded, new ControlSnapshot(1, 0, word, word), map.Slots.Count);
+        log.Record(0, commanded, new ControlSnapshot(1, default, word, word), map.Slots.Count);
         return log;
     }
 
@@ -128,7 +128,7 @@ public class NonInterferenceTests
         var map = MapAllocator.Allocate(new WaveSetRequest(
             MirrorGeometry.ForCpu1214C(256, 4000),
             new[] { new SlotRequest("S0", 1, 1), new SlotRequest("S1", 1, 1) })).Require();
-        broken.Record(0, new[] { 0, 1 }, new ControlSnapshot(1, 0, new ushort[] { 0b11 }, new ushort[] { 0b01 }), 2);
+        broken.Record(0, new[] { 0, 1 }, new ControlSnapshot(1, default, new ushort[] { 0b11 }, new ushort[] { 0b01 }), 2);
 
         var report = NonInterference.Compare(new[] { Tensor(0), Tensor(1) },
             Waves((_, slot) => new[] { Result(SlotOutcome.Completed, (ushort)(10 + slot)) }, broken));

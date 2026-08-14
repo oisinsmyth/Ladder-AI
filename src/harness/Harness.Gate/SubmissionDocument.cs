@@ -185,6 +185,14 @@ public sealed class ModelDocument
     /// and this is absent, X-D's model bound is <c>NOT DECLARED</c> and the plan is not runnable.</para>
     /// </summary>
     public double? CompStable { get; set; }
+
+    /// <summary>
+    /// Who declared this model's <c>Represents</c> set.
+    ///
+    /// <para><b>That list LICENSES every asserted behaviour (M4)</b>, so one written by the vector's own
+    /// author is self-issued. Absent means gate 4b is NOT CHECKED — never a pass.</para>
+    /// </summary>
+    public string? DeclaredBy { get; set; }
 }
 
 /// <summary>

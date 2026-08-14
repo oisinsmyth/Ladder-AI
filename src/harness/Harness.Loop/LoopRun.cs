@@ -318,7 +318,7 @@ public static class LoopRun
         var from = client.ReadControl().ScanCounter;
         for (var poll = 0; poll < 200; poll++)
         {
-            if (client.ReadControl().ScanCounter - from >= settling.UnchangedForScans)
+            if (client.ReadControl().ScanCounter.Since(from) >= settling.UnchangedForScans)
             {
                 return client.ReadResults(slotIndex).SequenceEqual(run.Results)
                     ? SettlingState.Settled

@@ -47,7 +47,7 @@ public class ContractOwedTests
         SubmissionGate.Check(
             new[] { vector ?? Vector() },
             Enumeration(),
-            FidelityDeclaration.Of("M_Ramp", new[] { "ramp-to-limit" }, new[] { "overshoot" }, true),
+            FidelityDeclaration.Of("M_Ramp", new[] { "ramp-to-limit" }, new[] { "overshoot" }, true, declaredBy: "agent-m"),
             new AgentIdentity("agent-a"),
             MirrorObservability.Of(("Demo_Count", new[] { InstrumentationMode.Latched })),
             floorScans: 9,
@@ -233,7 +233,7 @@ public class ContractOwedTests
       "slotsInWaveSet": 1,
       "resultRegistersPerSlot": 20,
       "computedConflicts": [],
-      "model": { "id": "M_Ramp", "represents": ["ramp-to-limit"], "validatedAgainstPlantData": true, "compStable": 100 },
+      "model": { "id": "M_Ramp", "represents": ["ramp-to-limit"], "validatedAgainstPlantData": true, "compStable": 100, "declaredBy": "agent-m" },
       "blockCompression": {
         "plantMs": 240000, "budgetMs": 30000, "negligibleFraction": 0.01,
         "presets": [{ "name": "T_Dwell", "presetMs": 60000, "source": "Data" }]

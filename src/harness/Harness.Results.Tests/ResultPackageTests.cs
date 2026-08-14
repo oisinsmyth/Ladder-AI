@@ -59,8 +59,8 @@ public class ResultPackageTests
         MirrorObservability.Of(("Demo_Count", new[] { InstrumentationMode.Latched })), 9, 1, 1);
 
     private static SlotRunResult Run(SlotOutcome outcome = SlotOutcome.Completed) =>
-        new(outcome, new ushort[] { 10, 1 }, 100, 140, 2, 8,
-            new InertReport(InertOutcome.Established, 90, Array.Empty<ushort>(), Array.Empty<ushort>(), "established"),
+        new(outcome, new ushort[] { 10, 1 }, new ScanCount(100), new ScanCount(140), 2, 8,
+            new InertReport(InertOutcome.Established, new ScanCount(90), Array.Empty<ushort>(), Array.Empty<ushort>(), "established"),
             "stub");
 
     private static ResultPackage Package(

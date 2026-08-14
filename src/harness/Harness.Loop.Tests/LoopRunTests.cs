@@ -104,7 +104,7 @@ public class LoopRunTests
             // The bounds table is derived from the vector's own declaration, so these fixtures are
             // bounds-CURRENT whatever `limit` a test picks. See the note on Vector's BoundsUsed.
             enumeration ?? Enumeration(bounds: (vector ?? Vector()).BoundsUsed),
-            fidelity ?? FidelityDeclaration.Of("M_Ramp", new[] { "ramp-to-limit" }, new[] { "overshoot" }, true),
+            fidelity ?? FidelityDeclaration.Of("M_Ramp", new[] { "ramp-to-limit" }, new[] { "overshoot" }, true, declaredBy: "agent-m"),
             new AgentIdentity("agent-a"),
             conflicts ?? ConflictGraph.Empty,
             Geometry(),

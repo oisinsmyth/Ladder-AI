@@ -40,7 +40,7 @@ public class MirrorClientTests
 
         Assert.Single(wire.Log);
         Assert.Equal(Stamp.Value, control.Version);
-        Assert.Equal(wire.ScanCounter, control.ScanCounter);
+        Assert.Equal(new ScanCount(unchecked((uint)wire.ScanCounter)), control.ScanCounter);
         Assert.False(control.StartRaised(0));
     }
 

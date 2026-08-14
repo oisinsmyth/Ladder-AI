@@ -200,7 +200,8 @@ public static class GateCli
             : FidelityDeclaration.Of(document.Model.Id ?? string.Empty,
                 document.Model.Represents ?? Enumerable.Empty<string>(),
                 document.Model.DoesNotRepresent,
-                document.Model.ValidatedAgainstPlantData);
+                document.Model.ValidatedAgainstPlantData,
+                document.Model.DeclaredBy ?? string.Empty);
 
     public static DeploymentDeclaration? ToDeploymentDeclaration(SubmissionDocument document) =>
         document.Deployment is null
@@ -337,6 +338,26 @@ public static class GateCli
         output.WriteLine("  There is deliberately no plain ADMISSIBLE: judgement gates can never be verified.");
         output.WriteLine();
 
+        // *** AN UNASKED QUESTION AND AN ANSWERED ONE MUST NOT PRINT ALIKE. ***
+        //
+        // Found live: a Never expectation was flipped to Sampled in a scratch copy AND THE GATE OUTPUT
+        // DID NOT MOVE, because gate 5 is NOT CHECKED whenever the map is self-declared — so F-3's
+        // refusal is masked, and the flipped vector would slip through today and be refused the moment
+        // real bindings arrive. That is the authority fix working as designed, and it makes the CURRENT
+        // report weaker than it looks. Anybody reading "gate 5 did not complain" is reading a question
+        // nobody asked.
+        //
+        // So a NOT CHECKED line is marked in the margin as well as in the label, and the summary counts
+        // them before the gate list rather than after it.
+        if (report.NotChecked.Count > 0)
+        {
+            output.WriteLine($"*** {report.NotChecked.Count} GATE(S) WERE NOT CHECKED. A GATE THAT DID NOT RUN DID NOT PASS. ***");
+            output.WriteLine("    Nothing below marked NOT CHECKED is evidence about this submission — its silence is an");
+            output.WriteLine("    UNASKED QUESTION, and a defect it would have caught is still there. They are listed again");
+            output.WriteLine("    at the end with what each one needs.");
+            output.WriteLine();
+        }
+
         output.WriteLine("GATES");
         foreach (var gate in report.Gates)
         {
@@ -347,14 +368,25 @@ public static class GateCli
                 _ => "NOT CHECKED",
             };
 
-            output.WriteLine($"  [{status}] {gate.Gate}  (by {gate.Verifier})");
+            // The margin marker is deliberately loud and deliberately NOT on the passing lines: a reader
+            // skimming for trouble scans the left edge, and NOT CHECKED has to be trouble there.
+            var margin = gate.Status switch
+            {
+                GateStatus.NotChecked => "!!",
+                GateStatus.Checked when !gate.Passed => ">>",
+                _ => "  ",
+            };
+
+            output.WriteLine($"{margin}[{status}] {gate.Gate}  (by {gate.Verifier})");
             output.WriteLine($"      {gate.Detail}");
         }
 
         if (report.NotChecked.Count > 0)
         {
             output.WriteLine();
-            output.WriteLine("NOT CHECKED — what is missing (this is the build list)");
+            output.WriteLine("!! NOT CHECKED — QUESTIONS NOBODY ASKED (this is the build list, not a clean bill)");
+            output.WriteLine("   Each of these needs an input from an authority the submission's author does not control.");
+            output.WriteLine("   Until it arrives the gate is silent, and its silence licenses nothing.");
             foreach (var gate in report.NotChecked)
                 output.WriteLine($"  - {gate.Gate}: needs {gate.Verifier}");
         }

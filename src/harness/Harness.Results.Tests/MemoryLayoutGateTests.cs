@@ -39,7 +39,7 @@ public class MemoryLayoutGateTests
                 {
                     [AssertionIdValue] = new HashSet<string>(StringComparer.Ordinal) { "Demo_Count" },
                 }),
-            FidelityDeclaration.Of("M_Ramp", new[] { "ramp-to-limit" }, new[] { "overshoot" }, true),
+            FidelityDeclaration.Of("M_Ramp", new[] { "ramp-to-limit" }, new[] { "overshoot" }, true, declaredBy: "agent-m"),
             new AgentIdentity("agent-a"),
             MirrorObservability.Of(("Demo_Count", new[] { InstrumentationMode.Latched })),
             floorScans: 9,
