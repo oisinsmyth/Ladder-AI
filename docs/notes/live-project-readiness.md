@@ -25,12 +25,33 @@ tooling ready to use in the morning on a live project.* This is the answer, and 
 
 | | why |
 |---|---|
-| **The conformance loop end to end** | ***A WAVE HAS NEVER RUN.*** The 27 vectors were authored, admitted as far as the gates, and never executed. There is no result package in existence |
+| **The conformance loop end to end** | ***A WAVE HAS NEVER RUN.*** The 27 vectors were authored, admitted as far as the gates, and never executed. There is no result package in existence. **This was a DECISION, not a drift** — see below |
 | **The phase-armed latch** | **Not built.** The generator now **refuses by name** rather than emitting the unconditional form — *which would silently delete any finding that turns on a signal FALLING* |
 | **Wave duration as a planning figure** | Measured on one rig over one tunnel. **Reference only.** Nothing is scheduled against it |
 | **The permit half of the write fences** | Tonight's fence work attacked **refusals**. The permit path is `NOT CHECKED` |
 
 ---
+
+## 🔴 THE SCRATCH PROJECT'S IR DOES NOT DESCRIBE WHAT IS IN THE CONTROLLER
+
+**Measured 2026-08-14 05:10** — `export-all --tagtables` (45 objects, 0 refused, 0 failed) then
+`drift-check --complete`, which is the only comparison that puts the **IR on disk** against **what is
+actually in the controller**. Result: **38 match, `exit 1`.**
+
+| | |
+|---|---|
+| **DRIFTED — 4** | `DB_PLC` · `FB_Comms_ModbusServer` · `iDB_Comms_ModbusServer` · `iDB_HopperBlockageStim` |
+| **IN THE CONTROLLER, NO `.ir` AT ALL — 2** | `MotorIOSet` · `MotorVSDIOSet` |
+
+***CONSEQUENCE: RE-IMPORTING FROM IR WOULD CHANGE THOSE FOUR BLOCKS IN THE CONTROLLER.*** The four are
+the comms and stimulus blocks touched during deployment, so this is most likely authored-vs-imported
+divergence rather than corruption — **but it has not been reconciled, and until it is, the `.ir` is
+not a description of what is running.** ***Reconcile before importing anything into `GenProject1`.***
+
+⚠️ **And a `drift-check` defect found by the same run:** a tag table whose TIA name contains spaces
+fails to pair, and is then reported **both** as `EXPORT-ONLY` *and* as `SKIPPED` — **one object, two
+contradictory absence rows**, one of which reads as the serious finding *"in the controller and no
+`.ir` describes it"*. Being fixed. **Treat a tag-table absence row with suspicion until it is.**
 
 ## 🔴 THE FOUR TRAPS THAT HAVE EACH COST A DAY
 
@@ -75,6 +96,22 @@ the block goes invisible on the wire while every check stays green. **It bites o
 - **A slot set that all drives one FB instance is ONE slot, not N.** If you submit N slots against one
   block and see `SERIALISED`, ***that is a correct result, not a failure.***
 - **The gate count is 25**, not the 23 quoted in the test plan.
+
+## 🔴 WHY NO WAVE WAS RUN OVERNIGHT — a decision, with its reasoning
+
+**The rig was serving and reachable all night, and a download to it is permitted** (allowlisted bench
+rig, outputs physically incapable of actuating, ADR-0009). ***I chose not to.*** The reasoning, so it
+can be disagreed with:
+
+1. **Widening the mirror is an IR edit + import + download**, and the mirror is exactly full at 35/35.
+   That is a *deploy*, not a test run.
+2. ***AND IT WOULD NOT HAVE PRODUCED THE RESULT ANYWAY.*** The phase-armed latch does not exist, so
+   13 of the vectors' signals still could not be instrumented. **The wave would have returned a
+   partial result whose gaps are precisely the ones already known** — near-zero new information.
+3. **Against that: leaving a known-good, verified-serving rig in place for the morning.**
+
+***THE MARGINAL INFORMATION WAS SMALL AND THE RISK WAS REAL, SO THE RIG WAS LEFT AS IT IS.*** The
+first wave should be run **with a person present**, and it is the single highest-value next step.
 
 ## THE WRITE FENCES — attacked overnight, and they HELD
 
