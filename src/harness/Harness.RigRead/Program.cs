@@ -34,6 +34,27 @@ public static class Program
     private const int ExitConnectFailed = 3;
     private const int ExitReadFailed = 4;
 
+    /// <summary>
+    /// The fence itself threw. Distinct from <see cref="ExitRefused"/> because they are different
+    /// facts — one is a decision, the other is the decision not having been reached — and a caller
+    /// that could not tell them apart would report a broken allowlist as a refused device.
+    ///
+    /// <para>*** WHY THIS EXISTS: A CRASH IS LOUD WITHOUT BEING NAMED. *** Measured 2026-08-14 on
+    /// <c>{"entries": [null]}</c>: the guard raised a NullReferenceException, the process exited
+    /// -1073741819, and the word REFUSED appeared nowhere. The specific defect is fixed in
+    /// <see cref="AllowlistFile"/>, but one hand-found instance implies a family, so the phase is
+    /// wrapped as well. A harness cannot tell an unhandled exception from a refusal.</para>
+    ///
+    /// <para>⚠️ <b>KNOWN LIMIT: as of the 2026-08-14 fuzz sweep, NO INPUT REACHES THIS CATCH.</b>
+    /// Twenty-one malformed documents — null/array/number/string/bool entries, a null or non-array
+    /// <c>entries</c>, null members at three depths, a type mismatch, a 201-entry file — all produce
+    /// a named refusal from <see cref="AllowlistFile"/> or <see cref="DeviceAccessGuard"/> instead.
+    /// So this is currently <i>correct, wired and unfalsifiable in place</i>, and it is kept for the
+    /// members of the family that sweep could not enumerate. Say so rather than let a future reader
+    /// take its existence as evidence that the class was covered.</para>
+    /// </summary>
+    private const int ExitFenceFault = 5;
+
     public static int Main(string[] args)
     {
         var address = Option(args, "--address") ?? "10.10.10.10";
@@ -59,8 +80,28 @@ public static class Program
         Console.WriteLine();
 
         // ---- 1. THE FENCE, BEFORE ANY SOCKET ----
-        var load = AllowlistFile.Load(allowlistPath);
-        var decision = new DeviceAccessGuard(load).Check(address);
+        //
+        // Wrapped, and the claim it makes on the way out is EXACT. This block sits entirely above
+        // the `new Sharp7Client()` below, so on any throw here "no connection was attempted" is true
+        // BY CONSTRUCTION rather than by inspection — which is the only kind of claim a catch-all is
+        // entitled to make about something it did not see.
+        GuardDecision decision;
+        try
+        {
+            var load = AllowlistFile.Load(allowlistPath);
+            decision = new DeviceAccessGuard(load).Check(address);
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine("== read fence (device-guard) ==");
+            Console.Error.WriteLine($"  reason  : FenceFault ({ex.GetType().Name})");
+            Console.Error.WriteLine($"  verdict : REFUSED — the fence could not reach a decision: {ex.Message}");
+            Console.Error.WriteLine($"  where   : {ex.StackTrace}");
+            Console.Error.WriteLine("  REFUSED — no connection attempted. This is a FAULT IN THE FENCE, not a verdict");
+            Console.Error.WriteLine("  about the device: nothing examined the target at all. Fix the allowlist or the");
+            Console.Error.WriteLine("  guard before reading anything from this exit code about the device.");
+            return ExitFenceFault;
+        }
 
         Console.WriteLine("== read fence (device-guard) ==");
         Console.WriteLine($"  reason  : {decision.Reason}");

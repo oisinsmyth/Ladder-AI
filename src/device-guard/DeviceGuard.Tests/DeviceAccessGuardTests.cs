@@ -122,4 +122,35 @@ public class DeviceAccessGuardTests
         Assert.False(d.Allowed);
         Assert.Equal(GuardReason.AllowlistFileMissing, d.Reason);
     }
+
+    // ---- fail-closed is PRESERVED across the null-entry fix (2026-08-14) -----------------------
+
+    /// <summary>
+    /// *** THE PROPERTY THE FIX MUST NOT TRADE AWAY. *** Before the fix, a null entry crashed the
+    /// guard - badly, but CLOSED: nothing was allowed. The repair turns the crash into a named
+    /// refusal, and this asserts the "closed" half survived it, because a fix that made the document
+    /// merely warn-and-continue would be strictly worse than the crash it replaced.
+    ///
+    /// <para>The load result is what the guard is handed, so this is the guard's own view of it: no
+    /// exception, and NOT allowed.</para>
+    /// </summary>
+    [Fact]
+    public void A_null_entry_refuses_without_throwing()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "device-guard-null-" + Guid.NewGuid() + ".json");
+        File.WriteAllText(path, "{\"entries\": [null, {\"address\":\"192.0.2.99\",\"kind\":\"test-rig\"}]}");
+        try
+        {
+            var decision = new DeviceAccessGuard(AllowlistFile.Load(path)).Check("192.0.2.99");
+
+            // The address IS in the file and IS marked test-rig. It is refused anyway, because the
+            // document it sits in could not be read - an unverified target is not a permitted one.
+            Assert.False(decision.Allowed);
+            Assert.Equal(GuardReason.AllowlistUnreadable, decision.Reason);
+        }
+        finally
+        {
+            if (File.Exists(path)) File.Delete(path);
+        }
+    }
 }

@@ -169,4 +169,90 @@ public class AllowlistFileTests : IDisposable
         Assert.False(marker!.IsUsable);
         Assert.Contains("no byteOffset", marker.Problem());
     }
+
+    // ---- null elements: the crash class, found by fuzzing the fence on 2026-08-14 ---------------
+
+    /// <summary>
+    /// *** THE ONE THAT CRASHED. *** `{"entries": [null]}` parses cleanly into a list holding a
+    /// null, so Load used to return Loaded == true and DeviceAccessGuard.Check then dereferenced it:
+    /// NullReferenceException, process exit -1073741819, and the word REFUSED nowhere in the output.
+    ///
+    /// <para>It DID fail closed - the stack ended at the guard and no socket was opened - and that
+    /// property is asserted separately in DeviceAccessGuardTests so this fix cannot quietly trade it
+    /// away. What was wrong is that a harness cannot tell an unhandled exception from a refusal: a
+    /// crash is loud without being NAMED.</para>
+    /// </summary>
+    [Fact]
+    public void Null_entry_is_unreadable_not_a_crash()
+    {
+        var path = WriteTemp("{\"entries\": [null]}");
+        var r = AllowlistFile.Load(path);
+
+        Assert.False(r.Loaded);
+        Assert.Equal(GuardReason.AllowlistUnreadable, r.FailureReason);
+        Assert.Contains("entries[0]", r.Message);
+    }
+
+    /// <summary>
+    /// Refused, never silently filtered. Dropping the null would repair a file somebody wrote wrong
+    /// and hand the next reader a shorter list than they authored - and the real rig entry sitting
+    /// beside it would make the result look entirely healthy.
+    /// </summary>
+    [Fact]
+    public void Null_entry_beside_a_real_one_still_refuses_the_whole_document()
+    {
+        var path = WriteTemp("{\"entries\": [{\"address\":\"192.0.2.99\",\"kind\":\"test-rig\"}, null]}");
+        var r = AllowlistFile.Load(path);
+
+        Assert.False(r.Loaded);
+        Assert.Empty(r.Entries);
+        Assert.Contains("entries[1]", r.Message);
+    }
+
+    /// <summary>Every null is named, not just the first - a reader fixing one at a time is a reader
+    /// running this three times.</summary>
+    [Fact]
+    public void Every_null_entry_is_named()
+    {
+        var path = WriteTemp("{\"entries\": [null, {\"address\":\"192.0.2.99\",\"kind\":\"test-rig\"}, null]}");
+        var r = AllowlistFile.Load(path);
+
+        Assert.False(r.Loaded);
+        Assert.Contains("entries[0]", r.Message);
+        Assert.Contains("entries[2]", r.Message);
+    }
+
+    /// <summary>
+    /// *** THE CONTROL. *** Without it, "Loaded == false" above is also what a Load that rejects
+    /// everything looks like - and a fence that refuses every document is as broken as one that
+    /// refuses none, it just fails more quietly.
+    /// </summary>
+    [Fact]
+    public void A_document_with_no_nulls_still_loads()
+    {
+        var path = WriteTemp("{\"entries\": [{\"address\":\"192.0.2.99\",\"kind\":\"test-rig\"}]}");
+        var r = AllowlistFile.Load(path);
+
+        Assert.True(r.Loaded, r.Message);
+        Assert.Single(r.Entries);
+    }
+
+    /// <summary>
+    /// The rest of the null family, swept rather than met one at a time. A null INSIDE an entry is
+    /// not the same defect - every AllowlistEntry member is nullable by declaration, so these are
+    /// well-formed documents and must LOAD. They are pinned so that a future "reject nulls" tidy
+    /// cannot widen the rule above into refusing ordinary entries.
+    /// </summary>
+    [Theory]
+    [InlineData("{\"entries\": [{\"address\":\"192.0.2.99\",\"kind\":\"test-rig\",\"label\":null}]}")]
+    [InlineData("{\"entries\": [{\"address\":\"192.0.2.99\",\"kind\":\"test-rig\",\"marker\":null}]}")]
+    [InlineData("{\"entries\": [{\"address\":\"192.0.2.99\",\"kind\":\"test-rig\",\"orderNumber\":null}]}")]
+    [InlineData("{\"entries\": [{\"address\":\"192.0.2.99\",\"kind\":\"test-rig\",\"writableAreas\":null}]}")]
+    public void A_null_MEMBER_is_not_a_null_ENTRY_and_still_loads(string json)
+    {
+        var r = AllowlistFile.Load(WriteTemp(json));
+
+        Assert.True(r.Loaded, r.Message);
+        Assert.Single(r.Entries);
+    }
 }

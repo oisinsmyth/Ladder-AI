@@ -75,6 +75,40 @@ public static class AllowlistFile
         }
 
         var entries = parsed?.Entries ?? new List<AllowlistEntry>();
+
+        // *** A NULL ELEMENT IS A MALFORMED DOCUMENT, AND IT USED TO BE AN UNNAMED CRASH. ***
+        // Measured 2026-08-14: `{"entries": [null]}` parses cleanly into a list containing a null,
+        // so this method returned Loaded == true and the guard then dereferenced it —
+        // NullReferenceException out of DeviceAccessGuard.Check, exit -1073741819, and NOT ONE WORD
+        // of refusal printed.
+        //
+        // It did fail closed: the stack ended at the guard and no socket was ever opened. But an
+        // exit code no caller vocabulary contains is unusable to a harness, which cannot tell an
+        // unhandled exception from a refusal — so the fence held while saying nothing, and that is
+        // the half being fixed. The class comment above already promised that "a malformed document"
+        // produces Loaded == false; a null entry simply was not recognised as one.
+        //
+        // Refused rather than filtered out. Dropping the null would be a silent repair of a file
+        // somebody wrote wrong, and the next reader would see a shorter list than they authored.
+        var nullAt = new List<int>();
+        for (var i = 0; i < entries.Count; i++)
+        {
+            if (entries[i] is null)
+            {
+                nullAt.Add(i);
+            }
+        }
+
+        if (nullAt.Count > 0)
+        {
+            return Result.Fail(GuardReason.AllowlistUnreadable,
+                $"Malformed allowlist '{resolvedPath}': entries[{string.Join("], entries[", nullAt)}] " +
+                (nullAt.Count == 1 ? "is" : "are") + " null. An entry that names no device is not an " +
+                "entry, and a document containing one is not readable. Nothing was refused or allowed " +
+                "on the strength of it, and no connection was attempted.",
+                resolvedPath);
+        }
+
         return Result.Ok(entries, resolvedPath);
     }
 }
