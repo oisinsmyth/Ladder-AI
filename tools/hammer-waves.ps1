@@ -144,15 +144,65 @@ function Get-Median {
     return [int](($sorted[$mid - 1] + $sorted[$mid]) / 2)
 }
 
-function Read-TextOrEmpty {
-    # Get-Content -Raw returns $null for an empty file, and $null + $null is not the empty string.
-    # A submitter whose output could not be read must reach the caller as '' so it is classified as
-    # UNNAMED, never silently concatenated into something that happens to match.
-    param([string]$Path)
-    if (-not (Test-Path -LiteralPath $Path)) { return '' }
-    $raw = Get-Content -LiteralPath $Path -Raw
-    if ($null -eq $raw) { return '' }
-    return [string]$raw
+function Get-QuotedArgument {
+    # Refuses rather than repairs. A fence that mangles its own input is one you cannot tell what it
+    # actually read - and the only caller-supplied value that reaches here is -CapProvenance.
+    param([string]$Value)
+
+    if ($null -eq $Value) { $Value = '' }
+    if ($Value.Contains('"')) { throw 'An argument contains a double quote, which this harness will not attempt to escape: ' + $Value }
+    if ($Value.Length -eq 0) { return '""' }
+    if (($Value.IndexOf(' ') -lt 0) -and ($Value.IndexOf("`t") -lt 0)) { return $Value }
+    if ($Value.EndsWith('\')) { throw 'An argument needing quotes ends in a backslash, which Windows would read as an escape: ' + $Value }
+    return '"' + $Value + '"'
+}
+
+function Start-Submitter {
+    <#
+        *** DELIBERATELY NOT Start-Process, AND THE REASON IS A MEASUREMENT THIS HARNESS ALMOST
+        PUBLISHED AS A DEFECT IN WAVE-CLI. ***
+
+        PowerShell 5.1's `Start-Process -RedirectStandardOutput <file>` pumps the child's output in
+        managed code, and it is catastrophically slow on a large stream. Same command, same store, same
+        2,565,395 bytes of output, no concurrency involved:
+
+            cmd.exe shell redirection to a file        209 ms
+            PowerShell pipe                            353 ms
+            raw Process + ReadToEndAsync (this)        184-204 ms
+            Start-Process -RedirectStandardOutput    2,559 ms
+
+        The colouring report prints ONE LINE PER CONFLICT EDGE, which is O(n squared) in
+        mutually-conflicting slots, so the edge-bearing shapes produce megabytes and the edge-free
+        shape produces almost nothing. Under Start-Process that difference read as *wave-cli gets
+        super-linearly slower with conflict edges, and refuses submissions on lease timeouts as a
+        result* - a clean, plausible, entirely wrong finding about the tool under test. The child
+        blocks when the pipe fills, so it also inflated every wall-clock and per-agent figure in the
+        edge-bearing shapes.
+
+        Both streams are read asynchronously from the moment the process starts, which is also what
+        stops a full pipe deadlocking the child.
+    #>
+    param([string]$Exe, [string[]]$Arguments, [string]$OutPath, [string]$ErrPath)
+
+    $line = (($Arguments | ForEach-Object { Get-QuotedArgument $_ }) -join ' ')
+
+    $psi = New-Object System.Diagnostics.ProcessStartInfo
+    $psi.FileName = $Exe
+    $psi.Arguments = $line
+    $psi.UseShellExecute = $false
+    $psi.CreateNoWindow = $true
+    $psi.RedirectStandardOutput = $true
+    $psi.RedirectStandardError = $true
+
+    $proc = [System.Diagnostics.Process]::Start($psi)
+
+    return [PSCustomObject]@{
+        Proc    = $proc
+        OutTask = $proc.StandardOutput.ReadToEndAsync()
+        ErrTask = $proc.StandardError.ReadToEndAsync()
+        OutPath = $OutPath
+        ErrPath = $ErrPath
+    }
 }
 
 function Invoke-WaveCli {
@@ -500,6 +550,7 @@ foreach ($shape in $Shapes) {
                     Out     = (Join-Path $outDir ('r' + $round + '-i' + $i + '.out'))
                     Err     = (Join-Path $outDir ('r' + $round + '-i' + $i + '.err'))
                     Args    = @()
+                    Job     = $null
                     Proc    = $null
                     Exit    = $null
                     Text    = ''
@@ -528,18 +579,8 @@ foreach ($shape in $Shapes) {
 
             $launchStart = [DateTime]::UtcNow
             foreach ($spec in $specs) {
-                $spec.Proc = Start-Process -FilePath $WaveCli -ArgumentList $spec.Args -PassThru `
-                    -WindowStyle Hidden -RedirectStandardOutput $spec.Out -RedirectStandardError $spec.Err
-
-                # *** TOUCHING .Handle IS WHAT MAKES .ExitCode READABLE AT ALL, AND WITHOUT IT THIS
-                # HARNESS SILENTLY MEASURES NOTHING. *** Measured 2026-08-14 while building this: a
-                # Start-Process -PassThru object whose handle is never cached comes back with
-                # HasExited = True and ExitCode = $null, so every submission would have been classified
-                # from a null and the run would have reported a clean sweep of unreadable verdicts.
-                # Caching the handle here populates ExitCode and ExitTime. The text-derived verdict
-                # below is the SECOND, INDEPENDENT reading, kept because a single source that can fail
-                # silently is exactly the shape this campaign exists to find.
-                $null = $spec.Proc.Handle
+                $spec.Job = Start-Submitter -Exe $WaveCli -Arguments $spec.Args -OutPath $spec.Out -ErrPath $spec.Err
+                $spec.Proc = $spec.Job.Proc
                 if ($mode -eq 'Staggered') {
                     if ($StaggerMs -gt 0) { Start-Sleep -Milliseconds $StaggerMs }
                 }
@@ -576,6 +617,22 @@ foreach ($shape in $Shapes) {
                 }
             }
 
+            # --- MATERIALISE THE OUTPUT. The async readers are complete once the process has exited,
+            # and the text is written to disk so the evidence outlives this process, exactly as it did
+            # when the harness redirected to files - only without the redirection cost that made every
+            # edge-bearing figure wrong.
+            foreach ($spec in $specs) {
+                $capturedOut = ''
+                $capturedErr = ''
+                if ($spec.Proc.HasExited) {
+                    $capturedOut = [string]$spec.Job.OutTask.Result
+                    $capturedErr = [string]$spec.Job.ErrTask.Result
+                }
+                [System.IO.File]::WriteAllText($spec.Out, $capturedOut)
+                [System.IO.File]::WriteAllText($spec.Err, $capturedErr)
+                $spec.Text = $capturedOut + $capturedErr
+            }
+
             $lastExit = $releaseUtc
             foreach ($spec in $specs) {
                 if ($spec.Proc.HasExited) {
@@ -594,8 +651,7 @@ foreach ($shape in $Shapes) {
             foreach ($spec in $specs) {
                 $submitted++
 
-                $text = (Read-TextOrEmpty -Path $spec.Out) + (Read-TextOrEmpty -Path $spec.Err)
-                $spec.Text = $text
+                $text = $spec.Text
 
                 if (-not $spec.Proc.HasExited) {
                     $noResult++
