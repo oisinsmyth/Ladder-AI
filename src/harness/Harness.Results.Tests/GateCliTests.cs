@@ -163,7 +163,46 @@ public class GateCliTests
 
         Assert.Equal(GateExit.NotAdmissible, exit);
         Assert.Contains("[NOT CHECKED] 8 blacklist", output, StringComparison.Ordinal);
-        Assert.Contains("QUESTIONS NOBODY ASKED", output, StringComparison.Ordinal);
+
+        // *** AND IT PRINTS WHICH KIND OF NOT CHECKED, NOT JUST HOW MANY. *** A flat count is the shape
+        // that reads as a pass to a tired reader; the blacklist gate's silence is a build-list item, and
+        // the report has to say so rather than filing it beside gate 11, which needs a controller.
+        Assert.Contains("FOUR DIFFERENT FACTS", output, StringComparison.Ordinal);
+        Assert.Contains("AWAITING AN ARTIFACT THAT COULD EXIST", output, StringComparison.Ordinal);
+        Assert.Contains("- 8 blacklist: needs", output, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The three groups a reader must never conflate, printed distinctly on one report: <b>by design</b>
+    /// (not a gap), <b>requires the device</b> (no artifact closes it), and <b>awaiting an artifact</b>
+    /// (the build list). And an UNCLASSIFIED group must not appear at all — that one is a defect in a
+    /// gate rather than in the submission.
+    /// </summary>
+    [Fact]
+    public void THE_NOT_CHECKED_GROUPS_ARE_PRINTED_SEPARATELY_AND_NONE_IS_UNCLASSIFIED()
+    {
+        // The flat projection with no deployment: gate 5 (by design), gate 11 (device), and several
+        // enumeration-fed gates (build list) all report NOT CHECKED at once.
+        var (_, output) = Run(Good
+            .Replace("\"computedConflicts\": [],", string.Empty, StringComparison.Ordinal)
+            .Replace("\"deployment\"", "\"deploymentRemoved\"", StringComparison.Ordinal));
+
+        // This fixture supplies specNames, so gate 5 RUNS here — its by-design refusal is pinned
+        // directly in NotCheckedTriageTests rather than asserted through a fixture that does not trip it.
+        Assert.Contains("REQUIRES THE DEVICE", output, StringComparison.Ordinal);
+        Assert.Contains("AWAITING AN ARTIFACT THAT COULD EXIST", output, StringComparison.Ordinal);
+
+        // The two groups are SEPARATE sections, not one list: gate 11 needs a controller and the
+        // blacklist needs an artifact, and a reader must not be able to file them together.
+        var device = output.IndexOf("REQUIRES THE DEVICE", StringComparison.Ordinal);
+        var awaiting = output.IndexOf("AWAITING AN ARTIFACT THAT COULD EXIST", StringComparison.Ordinal);
+        Assert.True(device < awaiting, "the device-bound group must print before the build list: it is the one nothing offline can close.");
+        Assert.Contains("11 memory layout", output[device..awaiting], StringComparison.Ordinal);
+        Assert.DoesNotContain("8 blacklist", output[device..awaiting], StringComparison.Ordinal);
+
+        // *** THE ONE THAT MUST NEVER PRINT. *** It only appears when a gate failed to say which kind of
+        // NOT CHECKED it is, which is the entry the whole grouping exists to make impossible.
+        Assert.DoesNotContain("UNCLASSIFIED", output, StringComparison.Ordinal);
     }
 
     /// <summary>

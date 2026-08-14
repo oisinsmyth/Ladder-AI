@@ -20,8 +20,75 @@ public enum GateStatus
     NotChecked,
 }
 
+/// <summary>
+/// *** WHY A GATE COULD NOT RUN — AND THESE ARE FOUR DIFFERENT FACTS. ***
+///
+/// <para>A flat <c>NOT CHECKED</c> label flattens them, and <b>a count of unexplained NOT CHECKEDs is
+/// exactly the shape that reads as a pass to a tired reader</b> — the failure this component exists to
+/// avoid. One of these is not a gap at all; one can never be closed off the rig; two are build-list
+/// items with different owners.</para>
+/// </summary>
+public enum NotCheckedReason
+{
+    /// <summary>
+    /// Nobody said. <b>Unusable, and a defect in the GATE rather than in the submission</b> — a
+    /// <c>NOT CHECKED</c> that does not say which kind it is has put an unexplained entry on the list
+    /// this enum exists to empty. Asserted against by test.
+    /// </summary>
+    Unstated = 0,
+
+    /// <summary>
+    /// <b>Requires a controller, a download or a wave.</b> It cannot be answered offline by anybody and
+    /// no artifact substitutes for it. Nothing to build; it needs the rig session.
+    /// </summary>
+    RequiresTheDevice,
+
+    /// <summary>
+    /// <b>NOT A GAP.</b> The input must come from an authority OTHER than the submitter, and accepting
+    /// the submitter's own would defeat the gate — the author vouching for the artifact the gate exists
+    /// to check them against. <b>This is D6 independence WORKING</b>, and it will read NOT CHECKED for
+    /// ever on a submission that carries its own answer. That is correct, not outstanding.
+    /// </summary>
+    IndependentAuthorityByDesign,
+
+    /// <summary>
+    /// The authority exists, or could, and nobody has produced it yet. <b>A build-list item with an
+    /// owner</b> — closable without a rig and without breaking anybody's independence.
+    /// </summary>
+    AwaitingAnArtifactThatCouldExist,
+
+    /// <summary>
+    /// <b>The harness itself cannot yet compute it.</b> Not the submission's fault and not anybody
+    /// else's artifact — this lane's own build list.
+    /// </summary>
+    HarnessCapabilityMissing,
+}
+
 /// <summary>One gate's outcome, with the verifier that produced it named.</summary>
-public sealed record GateResult(string Gate, GateStatus Status, bool Passed, string Verifier, string Detail);
+/// <param name="Reason">
+/// Why it could not run. <b>Meaningful only when <see cref="Status"/> is
+/// <see cref="GateStatus.NotChecked"/></b>, and required there — see <see cref="NotCheckedReason"/>.
+/// </param>
+public sealed record GateResult(
+    string Gate,
+    GateStatus Status,
+    bool Passed,
+    string Verifier,
+    string Detail,
+    NotCheckedReason Reason = NotCheckedReason.Unstated)
+{
+    /// <summary>
+    /// The only way a <c>NOT CHECKED</c> result should be built: <b>the reason is a required
+    /// parameter</b>, so a gate cannot join the list without saying which kind it is.
+    /// </summary>
+    public static GateResult CouldNotRun(string gate, NotCheckedReason reason, string verifier, string detail) =>
+        new(gate, GateStatus.NotChecked, false, verifier, detail, reason);
+
+    /// <summary>True when this gate's silence is a build-list item rather than a design property.</summary>
+    public bool IsClosableOffline =>
+        Status == GateStatus.NotChecked
+        && Reason is NotCheckedReason.AwaitingAnArtifactThatCouldExist or NotCheckedReason.HarnessCapabilityMissing;
+}
 
 /// <summary>The submission's verdict. <b>There is deliberately no plain "ADMISSIBLE".</b></summary>
 public enum SubmissionVerdict
@@ -195,7 +262,7 @@ public static class SubmissionGate
 
         if (unknown is null)
         {
-            return new GateResult(name, GateStatus.NotChecked, false, "the document reader's extension data",
+            return GateResult.CouldNotRun(name, NotCheckedReason.HarnessCapabilityMissing, "the document reader's extension data",
                 "nobody supplied the document's unknown-field set, so a field this schema does not know would have been dropped in "
                 + "silence. That is not a pass: a dropped field reads as an accepted one." + annotated);
         }
@@ -372,13 +439,13 @@ public static class SubmissionGate
 
         if (fidelity is null)
         {
-            return new GateResult(name, GateStatus.NotChecked, false, "a model declaration from an authority the vector author does not control",
+            return GateResult.CouldNotRun(name, NotCheckedReason.IndependentAuthorityByDesign, "a model declaration from an authority the vector author does not control",
                 "no fidelity declaration was supplied at all, so there is nothing to attribute. Gate 4 refuses on the absence itself; this reports the separate fact that WHO wrote the Represents set was never established either.");
         }
 
         if (!fidelity.DeclaredBy.IsRecorded)
         {
-            return new GateResult(name, GateStatus.NotChecked, false, "the model declaration's own identity field",
+            return GateResult.CouldNotRun(name, NotCheckedReason.AwaitingAnArtifactThatCouldExist, "the model declaration's own identity field",
                 $"model '{fidelity.ModelId}' does not record who declared it, so the list that LICENSES every asserted behaviour (M4) cannot be shown independent of the party it licenses. "
                 + "That is the shape found live: a model BLOCK existed, a model DECLARATION did not, and the model id occurred only inside the vector file. Unknown is not independent.");
         }
@@ -433,7 +500,7 @@ public static class SubmissionGate
     {
         if (!enumeration.Enumerator.IsRecorded)
         {
-            return new GateResult("3d enumerator independence", GateStatus.NotChecked, false, "the enumeration's own identity field",
+            return GateResult.CouldNotRun("3d enumerator independence", NotCheckedReason.AwaitingAnArtifactThatCouldExist, "the enumeration's own identity field",
                 "the enumeration does not record who produced it, so it cannot be shown independent of the block's author. If the block's author decomposed the requirement, D6's independence is lost AT THE DENOMINATOR and citing into it buys nothing. Unknown is not independent.");
         }
 
@@ -505,7 +572,7 @@ public static class SubmissionGate
 
         if (enumeration.CarriesNoNormalisedText)
         {
-            return new GateResult(name, GateStatus.NotChecked, false, "normalised_text in the enumeration projection",
+            return GateResult.CouldNotRun(name, NotCheckedReason.AwaitingAnArtifactThatCouldExist, "normalised_text in the enumeration projection",
                 "the enumeration carries no normalised text, so no ID could be recomputed and the STAMPER'S OUTPUT WAS TAKEN ON TRUST. "
                 + "§3.4 permits a stamper with no independence from the block or vector author ONLY because this recomputation happens; without it "
                 + "a hand-written or altered hex string is indistinguishable from a computed one. Emit `normalisedTexts` alongside `assertions`.");
@@ -585,7 +652,7 @@ public static class SubmissionGate
 
         if (enumeration.CarriesNoRequiredObservations)
         {
-            return new GateResult(name, GateStatus.NotChecked, false, "response_signal + also_requires_observation_of in the enumeration",
+            return GateResult.CouldNotRun(name, NotCheckedReason.AwaitingAnArtifactThatCouldExist, "response_signal + also_requires_observation_of in the enumeration",
                 "the enumeration declares no required observations, so no citation was checked against the signals it depends on. "
                 + "A RELATIONAL assertion is the case that matters: cite one, expect on one of its two outputs, never observe the other, and the relation is untested while everything reports green.");
         }
@@ -663,7 +730,7 @@ public static class SubmissionGate
 
         if (enumeration.CarriesNoBounds)
         {
-            return new GateResult(name, GateStatus.NotChecked, false, verifier,
+            return GateResult.CouldNotRun(name, NotCheckedReason.AwaitingAnArtifactThatCouldExist, verifier,
                 $"the enumeration supplied no `bounds` table, so the number each of these {vectors.Count} vector(s) was written against was compared against nothing. "
                 + "*** AN ABSENT TABLE IS NOT AN AGREEING ONE. *** This is AMB-19's channel wide open: a bound can be retuned, every assertion referring to it changes what it is true of, "
                 + "no assertion ID moves, and every other gate here stays green. Supply the enumeration's `bounds:` table as `enumeration.bounds`.");
@@ -695,7 +762,7 @@ public static class SubmissionGate
                     + string.Join(" | ", stale.Select(f => f.Detail));
             }
 
-            return new GateResult(name, GateStatus.NotChecked, false, verifier, detail);
+            return GateResult.CouldNotRun(name, NotCheckedReason.AwaitingAnArtifactThatCouldExist, verifier, detail);
         }
 
         if (stale.Length > 0)
@@ -728,7 +795,7 @@ public static class SubmissionGate
     {
         if (enumeration.CarriesNoForms)
         {
-            return new GateResult("3e assertion form authority", GateStatus.NotChecked, false, "per-assertion form in the enumeration",
+            return GateResult.CouldNotRun("3e assertion form authority", NotCheckedReason.AwaitingAnArtifactThatCouldExist, "per-assertion form in the enumeration",
                 "the enumeration is the flat projection (clause and assertion IDs only) and carries no canonical form, so a vector's declared form was compared against nothing. F-3's refusal of a SAMPLED NEVER is therefore enforced against WHAT THE VECTOR CLAIMS: cite a NEVER, declare WHEN, take the permissive path.");
         }
 
@@ -794,7 +861,7 @@ public static class SubmissionGate
         // absent one. It refuses to be the deciding voice rather than being quietly permissive.
         if (map.Provenance != MapProvenance.Bindings)
         {
-            return new GateResult("5 observability", GateStatus.NotChecked, false, "a map derived from the coordinator's bindings",
+            return GateResult.CouldNotRun("5 observability", NotCheckedReason.IndependentAuthorityByDesign, "a map derived from the coordinator's bindings",
                 map.Provenance == MapProvenance.SelfDeclared
                     ? "the observability map came out of the SUBMISSION — the vector author declaring what the copy layer provides, "
                       + "which is the author vouching for the artifact this gate exists to check them against. *** A SELF-DECLARED MAP "
@@ -814,7 +881,7 @@ public static class SubmissionGate
         // as a default. So an unjoined tag is named here instead.
         if (map.TagsWithNoSpecName.Count > 0)
         {
-            return new GateResult("5 observability", GateStatus.NotChecked, false, "a specName on every bound signal",
+            return GateResult.CouldNotRun("5 observability", NotCheckedReason.AwaitingAnArtifactThatCouldExist, "a specName on every bound signal",
                 $"{map.TagsWithNoSpecName.Count} bound signal(s) state no specification name, so nothing could join what a vector CITES to what "
                 + $"the copy layer CARRIES: {string.Join(", ", map.TagsWithNoSpecName)}. "
                 + "*** ABSENT DOES NOT MEAN 'THE SAME AS THE TAG'. *** That silent identity is the assumption this field exists to remove, and "
@@ -956,8 +1023,10 @@ public static class SubmissionGate
 
             // An ambiguity or a contradiction was COMPARED and found wrong; an absent join was not
             // compared at all. Two different statuses, because they call for different repairs.
-            return new GateResult(name, refusal ? GateStatus.Checked : GateStatus.NotChecked, false,
-                "map.storage / map.harnessOnly", gap);
+            return refusal
+                ? new GateResult(name, GateStatus.Checked, false, "map.storage / map.harnessOnly", gap)
+                : GateResult.CouldNotRun(name, NotCheckedReason.AwaitingAnArtifactThatCouldExist,
+                    "map.storage / map.harnessOnly", gap);
         }
 
         var signals = vectors.SelectMany(v => v.Expectations).Select(e => e.Signal).Distinct(StringComparer.Ordinal).ToArray();
@@ -992,7 +1061,7 @@ public static class SubmissionGate
         // 2.7. Gate 8's packing set derives from the edges, and an edge is a statement about STORAGE.
         if (StorageJoinIncomplete(vectors, storage) is { } gap)
         {
-            return new GateResult("8 blacklist", GateStatus.NotChecked, false, "map.storage / map.harnessOnly (2.7)",
+            return GateResult.CouldNotRun("8 blacklist", NotCheckedReason.AwaitingAnArtifactThatCouldExist, "map.storage / map.harnessOnly (2.7)",
                 "the blacklist could not be checked against a computed graph, because the graph is a statement about STORAGE and " + gap);
         }
 
@@ -1000,7 +1069,7 @@ public static class SubmissionGate
 
         if (computedConflicts is null)
         {
-            return new GateResult("8 blacklist", GateStatus.NotChecked, false, "cross-check conflict graph",
+            return GateResult.CouldNotRun("8 blacklist", NotCheckedReason.AwaitingAnArtifactThatCouldExist, "cross-check conflict graph",
                 "no computed disjointness graph was supplied, so the add-only property was compared against nothing. A blacklist checked against an absent graph is a blacklist nobody checked, and reporting it as passed is exactly the failure this gate exists to prevent.");
         }
 
@@ -1065,20 +1134,20 @@ public static class SubmissionGate
         // question could even be asked about.
         if (storage is null || storage.IsEmpty)
         {
-            return new GateResult("8c multi-writer provenance (X-G)", GateStatus.NotChecked, false, "map.storage / map.harnessOnly (2.7)",
+            return GateResult.CouldNotRun("8c multi-writer provenance (X-G)", NotCheckedReason.AwaitingAnArtifactThatCouldExist, "map.storage / map.harnessOnly (2.7)",
                 "no multi-writer fact could be reported: a multi-writer is two blocks writing the same STORAGE, and no `map.storage` / "
                 + "`map.harnessOnly` join was declared (2.7). Measured on a live submission: 1 of 17 signals resolved.");
         }
 
         if (conflicts is null)
         {
-            return new GateResult("8c multi-writer provenance (X-G)", GateStatus.NotChecked, false, "cross-check conflict graph with provenance",
+            return GateResult.CouldNotRun("8c multi-writer provenance (X-G)", NotCheckedReason.AwaitingAnArtifactThatCouldExist, "cross-check conflict graph with provenance",
                 "no conflict graph was supplied, so no multi-writer fact could be reported. An absent graph and a graph with no multi-writers produce the same empty report, which is why this is NOT CHECKED rather than a pass.");
         }
 
         if (!conflicts.ProvenanceComplete)
         {
-            return new GateResult("8c multi-writer provenance (X-G)", GateStatus.NotChecked, false, "provenance on every conflict edge",
+            return GateResult.CouldNotRun("8c multi-writer provenance (X-G)", NotCheckedReason.AwaitingAnArtifactThatCouldExist, "provenance on every conflict edge",
                 conflicts.Render()
                 + " Edges without provenance are the state this gate exists for: the packer will still separate the blocks, both tests will still pass, and nothing will have said that a multi-writer on a deliverable signal is what is being separated.");
         }
@@ -1183,7 +1252,7 @@ public static class SubmissionGate
 
         if (inputs is null)
         {
-            return new GateResult("10b time compression — timer / model / ratio ceilings (X-D)", GateStatus.NotChecked, false, "TimeCompression.Plan, via BlockCompressionInputs",
+            return GateResult.CouldNotRun("10b time compression — timer / model / ratio ceilings (X-D)", NotCheckedReason.AwaitingAnArtifactThatCouldExist, "TimeCompression.Plan, via BlockCompressionInputs",
                 $"this wave runs at comp={runtimeCompression} with declared factor(s) {string.Join(", ", declaredFactors.Distinct().OrderBy(f => f))}, so compression IS being applied — and three of X-D's four ceilings were compared against nothing. "
                 + $"No timer presets were supplied (the term X-D says OFTEN BINDS FIRST: PT / (k x scan), floor {TimeCompression.TimerFloorMs:0.#} ms, so a 500 ms preset caps at {500 / TimeCompression.TimerFloorMs:0.0}x), no model comp_stable, and no negligible-fraction threshold for the ratio-distortion bound. "
                 + "Supply them as `blockCompression` (with `model.compStable`). An unknown ceiling is not a high one.");
@@ -1195,7 +1264,7 @@ public static class SubmissionGate
         // was wrong, and it sent the reader looking at the wrong thing.
         if (inputs.Missing.Count > 0)
         {
-            return new GateResult("10b time compression — timer / model / ratio ceilings (X-D)", GateStatus.NotChecked, false, "TimeCompression.Plan, via BlockCompressionInputs",
+            return GateResult.CouldNotRun("10b time compression — timer / model / ratio ceilings (X-D)", NotCheckedReason.AwaitingAnArtifactThatCouldExist, "TimeCompression.Plan, via BlockCompressionInputs",
                 $"this wave runs at comp={runtimeCompression}, so compression IS being applied, and the block compression inputs are incomplete: "
                 + string.Join(" | ", inputs.Missing)
                 + ". The rest of the submission is fine; these fields are what is missing.");
@@ -1280,7 +1349,7 @@ public static class SubmissionGate
 
         if (deployment is null)
         {
-            return new GateResult(name, GateStatus.NotChecked, false, "deployment declaration + the tag map's reach",
+            return GateResult.CouldNotRun(name, NotCheckedReason.RequiresTheDevice, "deployment declaration + the tag map's reach",
                 "no `deployment` was declared, so nothing was compared. It is a property of the DOWNLOAD and resubmitting the vector cannot supply it — "
                 + "and ABSENT IS NOT `s7Objects: []`, which is the positive claim that no classic-S7comm path reaches a data block.");
         }
@@ -1314,7 +1383,7 @@ public static class SubmissionGate
         // wrong import" has nothing to compare against.
         if (rows.Count > 0 && string.IsNullOrWhiteSpace(deployment.ImportStamp))
         {
-            return new GateResult(name, GateStatus.NotChecked, false, "deployment.importStamp",
+            return GateResult.CouldNotRun(name, NotCheckedReason.RequiresTheDevice, "deployment.importStamp",
                 $"{rows.Count} s7Object(s) are declared and no `importStamp` is. Every layout claim is DATED against it, so without one a `layoutSetAfterImport` cannot be told from a stale one — "
                 + "and a stale one means the layout was re-asserted against a previous import and has reverted since.");
         }
@@ -1366,7 +1435,7 @@ public static class SubmissionGate
                 ? "The declaration claims `s7Objects: []` — no classic-S7comm path reaches a data block — and that claim was NOT compared against a tag map."
                 : $"The {rows.Count} declared row(s) were checked for layout and stamp, and NOT compared against what a tag map can actually reach.";
 
-            return new GateResult(name, GateStatus.NotChecked, false, "the tag map's reachable (area, dbNumber) set",
+            return GateResult.CouldNotRun(name, NotCheckedReason.AwaitingAnArtifactThatCouldExist, "the tag map's reachable (area, dbNumber) set",
                 declared + " *** THE SET-DIFFERENCE IS THE POINT OF THIS GATE *** — S7Transport reaches any DB through a hand-written map, and the write fence is scoped on an area name from that same map, so it cannot see what KIND of object an area is. "
                 + (problems.Count > 0 ? "Findings on what WAS checked: " + string.Join(" | ", problems) : string.Empty));
         }

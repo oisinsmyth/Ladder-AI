@@ -418,13 +418,69 @@ public static class GateCli
         if (report.NotChecked.Count > 0)
         {
             output.WriteLine();
-            output.WriteLine("!! NOT CHECKED — QUESTIONS NOBODY ASKED (this is the build list, not a clean bill)");
-            output.WriteLine("   Each of these needs an input from an authority the submission's author does not control.");
-            output.WriteLine("   Until it arrives the gate is silent, and its silence licenses nothing.");
-            foreach (var gate in report.NotChecked)
-                output.WriteLine($"  - {gate.Gate}: needs {gate.Verifier}");
+            output.WriteLine("!! NOT CHECKED — AND THESE ARE FOUR DIFFERENT FACTS, NOT ONE LIST");
+            output.WriteLine("   A flat count of NOT CHECKEDs is exactly the shape that reads as a pass to a tired reader.");
+            output.WriteLine("   One group below is not a gap at all; one can never be closed off the rig; two are build-list");
+            output.WriteLine("   items with different owners. Read the group, not the number.");
+
+            // Grouped in the order a reader should act on them: what is already correct, what needs the
+            // rig session, then the two that are somebody's build list.
+            WriteNotCheckedGroup(report, output, NotCheckedReason.IndependentAuthorityByDesign,
+                "BY DESIGN — NOT A GAP. The input must come from an authority OTHER than the submitter,",
+                "and accepting the submitter's own would defeat the gate. This is D6 independence WORKING;",
+                "it will read NOT CHECKED for ever on a submission carrying its own answer, and that is right.");
+
+            WriteNotCheckedGroup(report, output, NotCheckedReason.RequiresTheDevice,
+                "REQUIRES THE DEVICE. A controller, a download or a wave — no artifact substitutes for it,",
+                "and nothing offline can close it. These are the rig session's, and there is nothing to build.",
+                null);
+
+            WriteNotCheckedGroup(report, output, NotCheckedReason.AwaitingAnArtifactThatCouldExist,
+                "AWAITING AN ARTIFACT THAT COULD EXIST. Closable without a rig and without breaking anybody's",
+                "independence — the authority exists or could, and nobody has produced it yet. THIS IS THE BUILD LIST.",
+                null);
+
+            WriteNotCheckedGroup(report, output, NotCheckedReason.HarnessCapabilityMissing,
+                "THE HARNESS CANNOT YET COMPUTE IT. Not the submission's fault and not anybody else's artifact:",
+                "this one is the harness lane's own build list.",
+                null);
+
+            // *** A GATE THAT DID NOT SAY WHICH KIND IT IS. *** Its own defect, reported here rather than
+            // silently joining one of the groups above — an unexplained NOT CHECKED is the entry this
+            // whole grouping exists to make impossible.
+            WriteNotCheckedGroup(report, output, NotCheckedReason.Unstated,
+                "*** UNCLASSIFIED — THIS IS A DEFECT IN THE GATE, NOT IN THE SUBMISSION. ***",
+                "It did not say whether it needs the rig, an independent authority, or an artifact nobody has",
+                "written. Fix the gate: build it with GateResult.CouldNotRun, which requires the reason.");
         }
 
+        WriteJudgements(report, output);
+    }
+
+    /// <summary>
+    /// One reason-group of NOT CHECKED gates, or nothing when the group is empty.
+    ///
+    /// <para><b>An empty group prints nothing rather than "0"</b>: the point of the grouping is to stop a
+    /// reader counting, and a row of zeroes invites exactly that.</para>
+    /// </summary>
+    private static void WriteNotCheckedGroup(
+        SubmissionReport report, TextWriter output, NotCheckedReason reason, string line1, string? line2, string? line3)
+    {
+        var gates = report.NotChecked.Where(g => g.Reason == reason).ToArray();
+        if (gates.Length == 0)
+            return;
+
+        output.WriteLine();
+        output.WriteLine($"   [{gates.Length}] {line1}");
+        if (line2 is not null) output.WriteLine("       " + line2);
+        if (line3 is not null) output.WriteLine("       " + line3);
+
+        foreach (var gate in gates)
+            output.WriteLine($"     - {gate.Gate}: needs {gate.Verifier}");
+    }
+
+    private static void WriteJudgements(SubmissionReport report, TextWriter output)
+    {
         if (report.Judgements.Count > 0)
         {
             output.WriteLine();
