@@ -10,7 +10,28 @@ public sealed record ReaderRef(string Block, int Network);
 
 // C-308 support: a full path written by >1 site (a fact; the AI judges whether it's a violation — a
 // legitimate Set+Reset pair vs two conflicting Assigns is why each writer carries its kind).
-public sealed record MultiWriterFact(string Path, IReadOnlyList<WriterRef> Writers);
+//
+// 🔴 Owner (2026-08-14) is the block whose own declaration the path resolves inside, or null when
+// the path is GLOBAL (a DB member, a PLC tag, an `iDB_…` reference, a physical address). It exists
+// because this table used to key on the verbatim path, and an FB addresses its own interface member
+// WITH NO ROOT — so `IO.Step` in FB_PusherControl and `IO.Step` in FB_ShredderSequencer, members of
+// two DIFFERENT UDTs, were reported as one cross-block multi-writer. *** A NON-NULL Owner MEANS THE
+// WRITERS ARE ALL INSIDE ONE BLOCK BY CONSTRUCTION, AND THE FACT SAYS NOTHING ABOUT CROSS-BLOCK
+// CONFLICT. *** Path carries the same information as `<Owner>.<path>` for display, but a consumer
+// deciding anything must read Owner rather than parse Path — an emitted string is not a schema.
+//
+// InstanceAliases lists the `iDB.<suffix>` forms naming the same storage. They are REPORTED rather
+// than pooled into this fact: for an FB with one instance DB they are the same storage, but an FB
+// with TWO has an internal write landing in BOTH, and picking either would re-create the invented
+// conflict this field exists to have stopped.
+public sealed record MultiWriterFact(
+    string Path,
+    IReadOnlyList<WriterRef> Writers,
+    string? Owner = null,
+    IReadOnlyList<string>? InstanceAliases = null)
+{
+    public IReadOnlyList<string> InstanceAliases { get; init; } = InstanceAliases ?? Array.Empty<string>();
+}
 
 // Whether a dead member is a global-DB member (unambiguous full path) or an interface-UDT member of
 // an FB (aliased between the FB-internal bare form and the external iDB-qualified form — correlated
@@ -66,7 +87,18 @@ public sealed record SiblingRefFact(string Block, IReadOnlyList<string> Calls, I
 /// worse than leaving the caller to intersect this set with the declarations. Facts, not verdicts —
 /// the same contract as every other table in this report.
 /// </summary>
-public sealed record SoleWriterFact(string Path, WriterRef Writer, IReadOnlyList<ReaderRef> Readers);
+/// <remarks>
+/// Owner: see <see cref="MultiWriterFact"/>. 🔴 The path-aliasing defect fixed 2026-08-14 was
+/// UNDER-REPORTING this table, which is the more dangerous direction of the same bug: two FBs each
+/// writing their own `Time` once pooled into a single two-writer path, so the member read as
+/// multi-written — <b>not vulnerable to a deletion</b> — when each was in fact its own FB's SOLE
+/// writer. A back-out consulting this table was told the safe thing about a member that was not safe.
+/// </remarks>
+public sealed record SoleWriterFact(
+    string Path,
+    WriterRef Writer,
+    IReadOnlyList<ReaderRef> Readers,
+    string? Owner = null);
 
 public sealed record CrossCheckReport(
     IReadOnlyList<MultiWriterFact> MultiWriters,

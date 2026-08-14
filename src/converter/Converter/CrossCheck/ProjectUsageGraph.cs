@@ -63,6 +63,29 @@ public sealed class ProjectUsageGraph
     private readonly Dictionary<string, IReadOnlyList<DbMember>> _blockInterfaces =
         new(StringComparer.Ordinal);
 
+    // 🔴 2026-08-14. EVERY ROOT NAME A BLOCK DECLARES FOR ITSELF — inputs, outputs, in-outs, statics,
+    // temps and constants. This is the index that tells a BLOCK-LOCAL path from a GLOBAL one, and its
+    // absence was a live defect that MANUFACTURED FALSE FINDINGS.
+    //
+    // `_usages` is keyed on the path VERBATIM, and an FB addresses its own interface member with no
+    // root at all — `IO.Step`, `Time`. So three different FBs, each with its own `IO` member of its
+    // own UDT type and its own `Time : Real`, all landed on ONE key and `cross-check` reported them
+    // as CROSS-BLOCK MULTI-WRITERS. *** THEY ARE NOT THE SAME STORAGE AND THERE WAS NO CONFLICT. ***
+    // Measured on `ir/test-project001`: of four multi-writer paths spanning more than one block, TWO
+    // were entirely fictitious and two were real.
+    //
+    // A false finding is treated here as the equal of a false green — *the first one is what gets a
+    // check switched off* — and this one was caught only because a lane refused to feed the output
+    // into a gate it did not trust. Had it been trusted, fictitious conflict edges would have entered
+    // a submission's conflict graph and separated slots that never conflicted.
+    //
+    // WHY A DECLARATION SET RATHER THAN A NAME HEURISTIC: the question "is this bare name the block's
+    // own member or a global PLC tag?" cannot be answered from the name — `PressureTripCount` (an
+    // FB static) and `Start_PB` (a tag-table tag) are both bare single-component references. It is
+    // answered exactly by whether the referencing block DECLARES that root, which the IR states
+    // outright.
+    private readonly Dictionary<string, HashSet<string>> _blockLocalRoots = new(StringComparer.Ordinal);
+
     // FI-44: every block name the corpus actually contains. Exists so a check can tell
     // "this block is not here" from "this block is here and has nothing wrong with it" — the
     // difference between those two is the whole of FI-44, and no other index carries it. `_flat`
@@ -358,6 +381,19 @@ public sealed class ProjectUsageGraph
             .Concat(block.StaticMembers ?? Array.Empty<DbMember>())
             .ToList();
 
+        // TEMPS AND CONSTANTS ARE INCLUDED HERE AND DELIBERATELY NOT IN `_blockInterfaces` ABOVE.
+        // That index answers "what does an instance of this FB contain", where a temp does not
+        // belong; this one answers "does this name resolve inside this block", where it does — a
+        // temp named `Time` is exactly the collision that produced the false finding.
+        _blockLocalRoots[block.Name] = (block.InputMembers ?? Array.Empty<DbMember>())
+            .Concat(block.OutputMembers ?? Array.Empty<DbMember>())
+            .Concat(block.InOutMembers)
+            .Concat(block.StaticMembers ?? Array.Empty<DbMember>())
+            .Concat(block.TempMembers)
+            .Concat(block.ConstantMembers ?? Array.Empty<DbMember>())
+            .Select(m => m.Name)
+            .ToHashSet(StringComparer.Ordinal);
+
         foreach (var network in block.Networks)
         {
             foreach (var call in network.Calls)
@@ -493,6 +529,69 @@ public sealed class ProjectUsageGraph
         return _instanceToFb.TryGetValue(root, out var fb)
             ? fb + "|" + path.Substring(dot + 1)
             : null;
+    }
+
+    /// <summary>
+    /// The block that OWNS the storage <paramref name="path"/> names when referenced from inside
+    /// <paramref name="block"/>, or null when the path is global (a DB path, a PLC tag, a physical
+    /// address, an `iDB_…` reference — anything whose root the block does not declare).
+    ///
+    /// <para>*** THIS IS THE TEST THAT SEPARATES A REAL CROSS-BLOCK CONFLICT FROM AN ALIAS. *** A
+    /// non-null answer means the path is block-local and CANNOT be the same storage as an
+    /// identically-spelled path inside a different block.</para>
+    /// </summary>
+    public string? OwnerOf(string block, string path)
+    {
+        var root = StripSubscripts(path);
+        var dot = root.IndexOf('.');
+        if (dot > 0)
+        {
+            root = root.Substring(0, dot);
+        }
+
+        return _blockLocalRoots.TryGetValue(block, out var roots) && roots.Contains(root) ? block : null;
+    }
+
+    /// <summary>
+    /// The STORAGE-IDENTITY key for a usage: a block-local path keyed under its owner, a global path
+    /// left exactly as written. Two usages share a key if and only if they can name the same storage.
+    ///
+    /// <para>⚠️ <b>WHAT THIS KEY DELIBERATELY DOES NOT DO: it does not pool an FB-internal member with
+    /// the `iDB.&lt;suffix&gt;` form of the same member.</b> Those genuinely are one storage when the FB
+    /// has one instance — but an FB with TWO instance DBs has an internal write landing in BOTH, and
+    /// pooling it with either one would invent a conflict exactly as the bug this replaces did.
+    /// Rather than choose, the alias set is REPORTED on the fact (<c>MultiWriterFact.InstanceAliases</c>)
+    /// so a consumer can join them knowingly. Facts, not verdicts — and no answer invented for a case
+    /// the corpus has not yet produced (every FB in `ir/test-project001` has exactly one instance DB,
+    /// which is precisely why designing only for that would be designing for the case that happens to
+    /// exist).</para>
+    /// </summary>
+    public string QualifiedPath(string block, string path) =>
+        OwnerOf(block, path) is { } owner ? owner + "|" + path : path;
+
+    /// <summary>
+    /// Every `iDB.&lt;path&gt;` form that names the same storage as <paramref name="path"/> inside FB
+    /// <paramref name="owner"/> — empty for a temp or constant (which no instance DB contains), and
+    /// empty for an FB with no instance DB yet. Read off the instance DBs' OWN declared members, so a
+    /// name that is not really in the instance interface never produces a phantom alias.
+    /// </summary>
+    public IReadOnlyList<string> InstanceAliasesOf(string owner, string path)
+    {
+        var stripped = StripSubscripts(path);
+        var aliases = new List<string>();
+        foreach (var (instanceDb, suffix) in _instanceMemberPaths)
+        {
+            if (!string.Equals(suffix, stripped, StringComparison.Ordinal)
+                || !_instanceToFb.TryGetValue(instanceDb, out var fb)
+                || !string.Equals(fb, owner, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            aliases.Add(instanceDb + "." + path);
+        }
+
+        return aliases.Distinct(StringComparer.Ordinal).OrderBy(a => a, StringComparer.Ordinal).ToList();
     }
 
     private PathUsage GetOrAdd(string path)

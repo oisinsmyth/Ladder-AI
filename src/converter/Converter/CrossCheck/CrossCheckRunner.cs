@@ -15,23 +15,37 @@ public static class CrossCheckRunner
     {
         var graph = ProjectUsageGraph.Build(projectDir);
 
-        var multiWriters = graph.Usages
-            .Where(kv => kv.Value.Writers.Count >= 2)
-            .OrderBy(kv => kv.Key, StringComparer.Ordinal)
-            .Select(kv => new MultiWriterFact(kv.Key, kv.Value.Writers.Select(ToWriter).ToList()))
+        // 🔴 Regrouped by STORAGE IDENTITY, not by the verbatim path string (2026-08-14). Both of
+        // these tables read the writer graph directly, and `_usages` keys an FB-internal member with
+        // no root — so `IO.Step` in three different FBs was one key, and `cross-check` reported a
+        // cross-block multi-writer between blocks that share nothing but a leaf name. See
+        // ProjectUsageGraph._blockLocalRoots for the measurement.
+        var byStorage = GroupByStorage(graph);
+
+        var multiWriters = byStorage
+            .Where(g => g.Writers.Count >= 2)
+            .OrderBy(g => g.Path, StringComparer.Ordinal)
+            .Select(g => new MultiWriterFact(g.Path, g.Writers.Select(ToWriter).ToList(), g.Owner, g.InstanceAliases))
             .ToList();
 
         // FI-67: the complement multiWriters structurally omits. Exactly one writer is what makes a
         // member vulnerable to a deletion — remove that writer and nothing can ever set it again.
         // Readers travel with it because a member whose readers die with the same feature is inert,
         // while one with a surviving reader is live; both answers come off this one graph.
-        var soleWriters = graph.Usages
-            .Where(kv => kv.Value.Writers.Count == 1)
-            .OrderBy(kv => kv.Key, StringComparer.Ordinal)
-            .Select(kv => new SoleWriterFact(
-                kv.Key,
-                ToWriter(kv.Value.Writers[0]),
-                kv.Value.Readers.Select(ToReader).ToList()))
+        //
+        // *** THE ALIASING BUG WAS UNDER-REPORTING THIS TABLE, WHICH IS THE MORE DANGEROUS HALF. ***
+        // Two FBs each writing their own `Time` once pooled into a two-writer path, so the member
+        // read as multi-written — i.e. as NOT vulnerable to a deletion — when each was in fact its
+        // FB's SOLE writer. A back-out consulting this table was told the safe thing about a member
+        // that was not safe.
+        var soleWriters = byStorage
+            .Where(g => g.Writers.Count == 1)
+            .OrderBy(g => g.Path, StringComparer.Ordinal)
+            .Select(g => new SoleWriterFact(
+                g.Path,
+                ToWriter(g.Writers[0]),
+                g.Readers.Select(ToReader).ToList(),
+                g.Owner))
             .ToList();
 
         var deadMembers = new List<DeadMemberFact>();
@@ -65,6 +79,59 @@ public static class CrossCheckRunner
         var siblingRefs = BuildSiblingRefs(graph);
 
         return new CrossCheckReport(multiWriters, deadMembers, ioBoundary, siblingRefs, graph.Warnings, soleWriters);
+    }
+
+    // One storage location and everything that touches it. Path is the DISPLAY form (`<Owner>.<path>`
+    // when block-local, the path verbatim when global); Owner is null for a global path, so a
+    // consumer never has to parse the display string to tell the two apart.
+    private sealed record StorageGroup(
+        string Path,
+        string? Owner,
+        IReadOnlyList<string> InstanceAliases,
+        List<ProjectUsageGraph.UsageSite> Writers,
+        List<ProjectUsageGraph.UsageSite> Readers);
+
+    // Re-key every usage from its verbatim path onto its storage identity. A block-local root cannot
+    // be the same storage as an identically-spelled root in another block, so those are keyed under
+    // their owner; a global path (DB member, PLC tag, `iDB_…`, physical address) is already unique
+    // and is left exactly as written — which is what keeps the two GENUINE cross-block multi-writers
+    // in `ir/test-project001` reporting unchanged.
+    private static List<StorageGroup> GroupByStorage(ProjectUsageGraph graph)
+    {
+        var groups = new Dictionary<string, StorageGroup>(StringComparer.Ordinal);
+
+        void Add(string path, ProjectUsageGraph.UsageSite site, bool isWriter)
+        {
+            var owner = graph.OwnerOf(site.Block, path);
+            var key = graph.QualifiedPath(site.Block, path);
+            if (!groups.TryGetValue(key, out var group))
+            {
+                group = new StorageGroup(
+                    owner is null ? path : owner + "." + path,
+                    owner,
+                    owner is null ? Array.Empty<string>() : graph.InstanceAliasesOf(owner, path),
+                    new List<ProjectUsageGraph.UsageSite>(),
+                    new List<ProjectUsageGraph.UsageSite>());
+                groups[key] = group;
+            }
+
+            (isWriter ? group.Writers : group.Readers).Add(site);
+        }
+
+        foreach (var kv in graph.Usages)
+        {
+            foreach (var site in kv.Value.Writers)
+            {
+                Add(kv.Key, site, isWriter: true);
+            }
+
+            foreach (var site in kv.Value.Readers)
+            {
+                Add(kv.Key, site, isWriter: false);
+            }
+        }
+
+        return groups.Values.ToList();
     }
 
     // Interface-UDT dead members. Each FB interface member aliases between the FB-internal bare form

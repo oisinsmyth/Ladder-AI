@@ -15,7 +15,23 @@ public static class CrossCheckOutputFormatter
         foreach (var m in report.MultiWriters)
         {
             sb.Append("  ").Append(m.Path).Append(": ")
-                .Append(string.Join(", ", m.Writers.Select(w => $"{w.Block} N{w.Network} ({w.Kind})"))).Append('\n');
+                .Append(string.Join(", ", m.Writers.Select(w => $"{w.Block} N{w.Network} ({w.Kind})")));
+
+            // Stated on the line rather than left to be inferred from the path's shape: a block-local
+            // path's writers are all inside one block BY CONSTRUCTION, so this fact is NOT evidence of
+            // a cross-block conflict, and reading it as one is the defect this annotation ends.
+            if (m.Owner is not null)
+            {
+                sb.Append("  [block-local to ").Append(m.Owner).Append(" — not a cross-block conflict");
+                if (m.InstanceAliases.Count > 0)
+                {
+                    sb.Append("; also addressable as ").Append(string.Join(", ", m.InstanceAliases));
+                }
+
+                sb.Append(']');
+            }
+
+            sb.Append('\n');
         }
 
         sb.Append("== DEAD MEMBERS (dead-wiring: no writer and/or no reader — global-DB + FB interface-UDT) ==\n");
@@ -71,6 +87,10 @@ public static class CrossCheckOutputFormatter
             multiWriters = report.MultiWriters.Select(m => new
             {
                 path = m.Path,
+                // owner is the field a CONSUMER must key on. Emitted always, including the null, so
+                // "this path is global" and "this emitter predates the field" are distinguishable.
+                owner = m.Owner,
+                instanceAliases = m.InstanceAliases,
                 writers = m.Writers.Select(w => new { block = w.Block, network = w.Network, kind = w.Kind }),
             }),
             deadMembers = report.DeadMembers.Select(d => new
@@ -90,6 +110,7 @@ public static class CrossCheckOutputFormatter
             soleWriters = report.SoleWriters.Select(s => new
             {
                 path = s.Path,
+                owner = s.Owner,
                 writer = new { block = s.Writer.Block, network = s.Writer.Network, kind = s.Writer.Kind },
                 readers = s.Readers.Select(r => new { block = r.Block, network = r.Network }),
             }),
