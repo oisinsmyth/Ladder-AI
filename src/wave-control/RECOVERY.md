@@ -6,6 +6,30 @@ For the operator of `wave-cli` when something has gone wrong with the shared sto
 **The store has exactly two failure states an operator will meet.** They look nothing alike and
 their remedies are opposite, so identify which one you have before doing anything.
 
+> ⚠️ **THE SAME TWO STATES NOW EXIST ON THE COORDINATOR STATE FILE TOO (added 2026-08-14).**
+> `CoordinatorStateStore` — `coordinator.state`, the wave marker plus both queues — **had the
+> identical defect and never got the fix**, and it was found by a reader racing a save, not by anyone
+> noticing the sibling. *When a pattern already exists in the repo, the question is which siblings did
+> not get it.*
+>
+> On the coordinator file the consequence is **worse** than on the wave store, because
+> `NoStateFileFound` is the one state `DeclareNoStateFile` lets a coordinator proceed from: an absence
+> misread there discards a wave marker **and** a whole admitted queue, and the coordinator carries on
+> as though nothing had ever been written. It now writes `coordinator.state.initialised` **before**
+> the first publish and refuses by name, with the same wording and the same remedy as State 1 below —
+> **take the newest `coordinator.state.tmp-<guid>`.**
+>
+> Two more measured facts about that file, both of which an operator can meet:
+> - **A `wave-cli status` running while the coordinator saves used to break the SAVE.** The reader held
+>   the destination without `FileShare.Delete`, so the rename failed and the coordinator was told it
+>   *MUST NOT continue*. The store's own note blamed *"an antivirus scanner or an indexer"*; the real
+>   cause was **this system's own read path**. Fixed — but if you see that error, a concurrent reader
+>   is no longer the explanation to reach for first.
+> - **A rename briefly refuses opens of its destination**, and a reader landing there reported
+>   `Unreadable` — which **voids both the wave and the queue by design**. A sub-millisecond contention
+>   was therefore destroying admitted work. The reader now retries briefly and **names how long it
+>   waited** in the refusal, so a persistent lock and a save in flight are different messages.
+
 ---
 
 ## State 1 — the store REFUSES: "has been published before … THIS IS NOT AN EMPTY STORE"

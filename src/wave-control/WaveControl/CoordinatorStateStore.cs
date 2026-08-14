@@ -263,6 +263,29 @@ namespace Ladder.Wave
         public string StatePath { get; }
 
         /// <summary>
+        /// Written once, before the state file is ever published. *** ITS ONLY PURPOSE IS TO MAKE THE
+        /// ABSENCE OF THE STATE FILE MEAN SOMETHING. ***
+        /// </summary>
+        /// <remarks>
+        /// 🔴 *** THIS IS <see cref="WaveStore"/>'s FIX, APPLIED TO THE SIBLING THAT DID NOT GET IT. ***
+        /// `WaveStore` was repaired on 2026-08-14 after 27 agents killed mid-write left a store of eight
+        /// committed slots reading as ONE — <c>File.Replace</c> is not atomic against process death and
+        /// has a window in which THE DESTINATION DOES NOT EXIST. **The identical defect sat here
+        /// untouched**, and it was found by a reader racing a save rather than by anybody noticing the
+        /// sibling: *when a pattern already exists in the repo, the question is which siblings did not
+        /// get it.* Here the consequence is worse than an empty answer, because
+        /// <see cref="CoordinatorStateFileState.NoStateFileFound"/> is the ONE state from which
+        /// <c>DeclareNoStateFile</c> lets a coordinator proceed as though nothing had ever been written.
+        ///
+        /// <para><b>ORDERING IS THE WHOLE GUARANTEE.</b> The marker is written BEFORE the first publish.
+        /// One written afterwards would leave exactly the state this catches, unmarked.</para>
+        ///
+        /// <para><b>An old state file predating this marker is not made worse by it</b> — no marker means
+        /// the absence is read as it always was, and the next <c>Save</c> writes one.</para>
+        /// </remarks>
+        public string InitialisedPath => StatePath + ".initialised";
+
+        /// <summary>
         /// TEST SEAM — invoked with the temporary file's path after it has been written and flushed,
         /// and BEFORE it is renamed over the destination.
         /// </summary>
@@ -304,29 +327,84 @@ namespace Ladder.Wave
             // Deliberately NOT File.Exists first: it swallows every error and returns false, so an
             // unreadable directory or a permissions problem would read as "no state file" — the most
             // benign-looking of the four states, and therefore the worst one to land on by accident.
-            try
+            // *** CONTENTION WITH A CONCURRENT SAVE IS NOT CORRUPTION, AND UNREADABLE VOIDS THE QUEUE. ***
+            // Measured 2026-08-14 by a reader racing a save (CoordinatorStateRaceTests):
+            //
+            //   * FileShare.Delete IS REQUIRED, and its absence broke the WRITER, not this reader. While
+            //     a reader held the destination open WITHOUT it, `File.Replace`/`File.Move` failed with
+            //     `The process cannot access the file because it is being used by another process`, so
+            //     `Save` threw and the coordinator was told it MUST NOT continue — caused by nothing
+            //     worse than `wave-cli status` running at the same moment. The store's own note blamed
+            //     "an antivirus scanner or an indexer" for that class of failure; the measured cause is
+            //     THIS SYSTEM'S OWN READ PATH, which is a different fact and a fixable one.
+            //
+            //   * A RENAME BRIEFLY REFUSES OPENS OF ITS DESTINATION. A reader landing inside that window
+            //     got a sharing violation and this method classified it `Unreadable` — and an unreadable
+            //     state file VOIDS BOTH THE WAVE AND THE QUEUE by deliberate design. So a sub-millisecond
+            //     contention was destroying admitted work as though the file were corrupt.
+            //
+            // Hence: retry on the exception the OS actually raises, and SEPARATE THE PERSISTENT CASE. A
+            // violation that clears is contention; one that never clears is a genuine lock or a
+            // permissions problem, and reporting it as contention would hide it. The wait is bounded and
+            // the elapsed time is NAMED in the refusal, so a reader of the failure can tell how hard
+            // this tried rather than guessing.
+            const int contentionAttempts = 40;
+            const int contentionPauseMs = 5;
+
+            var attempt = 0;
+            while (true)
             {
-                using (var stream = new FileStream(StatePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
-                using (var reader = new StreamReader(stream, Utf8NoBom, detectEncodingFromByteOrderMarks: true))
+                try
                 {
-                    text = reader.ReadToEnd();
+                    using (var stream = new FileStream(
+                        StatePath,
+                        FileMode.Open,
+                        FileAccess.Read,
+                        FileShare.ReadWrite | FileShare.Delete))
+                    using (var reader = new StreamReader(stream, Utf8NoBom, detectEncodingFromByteOrderMarks: true))
+                    {
+                        text = reader.ReadToEnd();
+                    }
+
+                    break;
                 }
-            }
-            catch (FileNotFoundException)
-            {
-                return NoFile();
-            }
-            catch (DirectoryNotFoundException)
-            {
-                return NoFile();
-            }
-            catch (IOException ex)
-            {
-                return Unreadable("the state file exists but could not be opened (" + ex.Message + ")");
-            }
-            catch (UnauthorizedAccessException ex)
-            {
-                return Unreadable("the state file exists but could not be opened (" + ex.Message + ")");
+                catch (Exception ex) when (ex is FileNotFoundException || ex is DirectoryNotFoundException)
+                {
+                    // *** ABSENT IS ONLY "NOBODY EVER WROTE ONE" IF NOTHING WAS EVER PUBLISHED. ***
+                    // Otherwise it is the File.Replace window, and reading it as absent hands the
+                    // coordinator the one state DeclareNoStateFile lets it proceed from — discarding a
+                    // wave marker and a whole admitted queue. See InitialisedPath.
+                    if (!File.Exists(InitialisedPath))
+                    {
+                        return NoFile();
+                    }
+
+                    if (++attempt >= contentionAttempts)
+                    {
+                        return Unreadable(
+                            "the state file is ABSENT although '" + InitialisedPath + "' records that this store " +
+                            "HAS been published — so this is not an empty store, and it was still absent after " +
+                            attempt + " attempt(s) over " + (attempt * contentionPauseMs) + " ms. A publish leaves a " +
+                            "window in which the destination does not exist; one that never closes means the rename " +
+                            "died. DO NOT proceed as though nothing was ever written: look for a '" +
+                            System.IO.Path.GetFileName(StatePath) + ".tmp-*' beside it, which is a complete state.");
+                    }
+
+                    System.Threading.Thread.Sleep(contentionPauseMs);
+                }
+                catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
+                {
+                    if (++attempt >= contentionAttempts)
+                    {
+                        return Unreadable(
+                            "the state file exists but could not be opened after " + attempt + " attempt(s) over " +
+                            (attempt * contentionPauseMs) + " ms (" + ex.Message + "). That is long enough that this " +
+                            "is a persistent lock or a permissions problem rather than a save in flight — the two are " +
+                            "indistinguishable from a single attempt, which is why this waited.");
+                    }
+
+                    System.Threading.Thread.Sleep(contentionPauseMs);
+                }
             }
 
             WaveMarker? wave;
@@ -381,6 +459,20 @@ namespace Ladder.Wave
 
             try
             {
+                // *** BEFORE THE PUBLISH, NEVER AFTER — THE ORDER IS THE GUARANTEE. *** A marker written
+                // after the rename would leave the very window it exists to qualify, unmarked. It costs
+                // one stat on every save after the first, and it is what stops a mid-publish absence
+                // being read as "nobody ever wrote one here". See InitialisedPath.
+                if (!File.Exists(InitialisedPath))
+                {
+                    File.WriteAllText(
+                        InitialisedPath,
+                        "This store HAS been published at least once." + Environment.NewLine +
+                        "If '" + System.IO.Path.GetFileName(StatePath) + "' is missing while this file exists, the " +
+                        "state was NOT never-written - a publish did not complete. Do not proceed as though the " +
+                        "coordinator had no state; look for a '.tmp-*' beside it." + Environment.NewLine);
+                }
+
                 using (var stream = new FileStream(
                     temporaryPath,
                     FileMode.CreateNew,

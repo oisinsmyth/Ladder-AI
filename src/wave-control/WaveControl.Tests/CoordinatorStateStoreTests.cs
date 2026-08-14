@@ -888,7 +888,18 @@ namespace Ladder.Wave.Tests
                 store.Save(null, new WaveQueues());
 
                 Assert.Empty(Directory.GetFiles(dir.Path, "*.tmp-*"));
-                Assert.Single(Directory.GetFiles(dir.Path));
+
+                // *** THE PROPERTY IS "NO DEBRIS ACCUMULATES", AND IT IS RE-STATED RATHER THAN RELAXED. ***
+                // This used to assert `Single`, i.e. exactly one file in the directory. That went red when
+                // the `.initialised` marker landed (2026-08-14) — and `Single` was never the property: it
+                // was a proxy for it that happened to hold while the store wrote exactly one file. The
+                // whole set is now named, so a THIRD file appearing still fails, which is what the test is
+                // for; a bare `Empty(*.tmp-*)` would have stopped catching that.
+                Assert.Equal(
+                    new[] { System.IO.Path.GetFileName(store.StatePath), System.IO.Path.GetFileName(store.InitialisedPath) }
+                        .OrderBy(f => f, StringComparer.Ordinal).ToArray(),
+                    Directory.GetFiles(dir.Path).Select(System.IO.Path.GetFileName)
+                        .OrderBy(f => f, StringComparer.Ordinal).ToArray());
             }
         }
 
