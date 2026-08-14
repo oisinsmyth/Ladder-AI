@@ -181,6 +181,12 @@ namespace Ladder.Wave
         /// <summary>The lease file inside the store directory.</summary>
         public const string LeaseFileName = "wave-store.lease";
 
+        /// <summary>
+        /// Written once, the first time the store is ever published. *** ITS PURPOSE IS TO MAKE THE
+        /// ABSENCE OF THE SLOTS FILE MEAN SOMETHING. ***
+        /// </summary>
+        public const string InitialisedFileName = "wave-store.initialised";
+
         private const string Sentinel = "end";
         private const int FormatVersion = 1;
 
@@ -230,6 +236,9 @@ namespace Ladder.Wave
 
         /// <summary>The lease file.</summary>
         public string LeasePath => Path.Combine(Directory, LeaseFileName);
+
+        /// <summary>The marker recording that this store has been published at least once.</summary>
+        public string InitialisedPath => Path.Combine(Directory, InitialisedFileName);
 
         /// <summary>
         /// Take the exclusive lease. Reports what it cost.
@@ -293,10 +302,12 @@ namespace Ladder.Wave
                         }
 
                         throw new WaveStoreContendedException(
-                            "'" + who + "' could not take the wave-store lease at '" + LeasePath +
-                            "' within " + (int)timeout.TotalMilliseconds + " ms (" + attempts +
-                            " attempts), the last attempt denied access. Another agent holds it. BACK OFF " +
-                            "AND RETRY.");
+                            "'" + who + "' did not obtain the wave-store lease at '" + LeasePath +
+                            "' in " + (int)timeout.TotalMilliseconds + " ms (" + attempts +
+                            " attempts). OBSERVED: sharing violations, and access denied on the last " +
+                            "attempt. NOT OBSERVABLE FROM HERE: whether the holder is working or hung. " +
+                            "BACK OFF AND RETRY. If it persists, read the lease file — it names its " +
+                            "last writer — and judge the holder yourself.");
                     }
 
                     System.Threading.Thread.Sleep(25);
@@ -307,13 +318,27 @@ namespace Ladder.Wave
 
                     if (clock.Elapsed >= timeout)
                     {
+                        // *** THIS MESSAGE STATES WHAT WAS OBSERVED AND HANDS THE JUDGEMENT OVER,
+                        // AND THAT IS A CORRECTION. *** It used to assert "another agent holds it" and
+                        // "the contention is transient" — and earlier still, that a long timeout "means
+                        // the holder is stuck rather than busy". *** NONE OF THOSE ARE REACHABLE FROM
+                        // HERE. *** What the code knows is that an exclusive open failed with a sharing
+                        // violation, repeatedly; it cannot see whose handle it is, whether that process
+                        // is progressing, or whether it is hung. A human reads this AT THE MOMENT THEY
+                        // ARE DECIDING WHAT TO DO, under time pressure — and a sentence asserting a
+                        // conclusion the code could not reach will send them to kill a process that was
+                        // merely slow. An error message that ships a false claim is worse than a wrong
+                        // comment, because the comment is read at leisure and this is not.
                         throw new WaveStoreContendedException(
-                            "'" + who + "' could not take the wave-store lease at '" + LeasePath +
-                            "' within " + (int)timeout.TotalMilliseconds + " ms (" + attempts +
-                            " attempts). Another agent holds it. THIS IS THE MECHANISM WORKING, not a " +
-                            "fault - concurrent submission is serialised deliberately. BACK OFF AND " +
-                            "RETRY: nothing was decided, but the contention is transient, so this is a " +
-                            "REFUSAL (exit 1) and not an unusable store (exit 2).");
+                            "'" + who + "' did not obtain the wave-store lease at '" + LeasePath +
+                            "' in " + (int)timeout.TotalMilliseconds + " ms (" + attempts +
+                            " attempts). OBSERVED: the lease file was open elsewhere with exclusive " +
+                            "access on every attempt. NOT OBSERVABLE FROM HERE: whether the holder is " +
+                            "working normally or is hung — a busy holder and a stuck one are " +
+                            "indistinguishable from this side, and no timeout length distinguishes " +
+                            "them. Serialised submission is the design, so this is a REFUSAL (exit 1), " +
+                            "not an unusable store (exit 2). BACK OFF AND RETRY. If it persists, read " +
+                            "the lease file — it names its last writer — and judge the holder yourself.");
                     }
 
                     // Unconditional: this used to sit behind #if NETSTANDARD2_0, which would have
@@ -344,20 +369,73 @@ namespace Ladder.Wave
             }
             catch (FileNotFoundException)
             {
-                return new StoredSlot[0];
+                return NoSlotsFile();
             }
             catch (DirectoryNotFoundException)
             {
-                return new StoredSlot[0];
+                return NoSlotsFile();
             }
 
             return Parse(text);
+        }
+
+        /// <summary>
+        /// The slots file is not there. *** THAT IS ONLY "NOBODY HAS SUBMITTED YET" IF THE STORE WAS
+        /// NEVER PUBLISHED — otherwise it is a WRITE THAT DIED MID-REPLACE, AND READING IT AS EMPTY
+        /// DISCARDS THE WHOLE WAVE SET. ***
+        /// </summary>
+        /// <remarks>
+        /// 🔴 *** MEASURED 2026-08-14, AND IT IS THE WORST DEFECT THIS COMPONENT HAS HAD. *** 27 agents
+        /// were killed mid-write against a store holding 8 committed slots. The file never tore — the
+        /// temp-then-rename held — but the store came back holding ONE slot, a LATER one, and the eight
+        /// seeds were gone. <c>File.Replace</c> is not atomic against process death: it leaves
+        /// <c>~RF*.TMP</c> backups and has a window in which the DESTINATION DOES NOT EXIST. A reader
+        /// landing in that window got <see cref="FileNotFoundException"/>, treated it as an empty store,
+        /// and the next submission wrote only its own slot — *** REPORTING SUCCESS. ***
+        /// <para>
+        /// So absence now has to be qualified, exactly as <c>DeployedProgram.From</c> refuses an empty
+        /// list: "the device holds nothing" and "we could not read the device" are the same empty list
+        /// and opposite actions. Here it is "nobody has submitted" versus "a write died". The marker
+        /// file is what separates them, and it is written BEFORE the first publish so that a crash
+        /// during the very first write is caught too.
+        /// </para>
+        /// </remarks>
+        private IReadOnlyList<StoredSlot> NoSlotsFile()
+        {
+            if (File.Exists(InitialisedPath))
+            {
+                throw new WaveStoreException(
+                    "The wave store at '" + Directory + "' has been published before — '" +
+                    InitialisedFileName + "' is present — but '" + SlotsFileName + "' is ABSENT. *** THIS " +
+                    "IS NOT AN EMPTY STORE. *** A write was interrupted between removing the old file and " +
+                    "publishing the new one, and reading it as empty would DISCARD EVERY SUBMITTED SLOT " +
+                    "and report success. Recover the newest '" + SlotsFileName + ".tmp-*' or " +
+                    "'" + SlotsFileName + "~RF*.TMP' beside it, or reset the store deliberately.");
+            }
+
+            return new StoredSlot[0];
         }
 
         /// <summary>Replace the store's contents. Atomic: temp file, flushed, then renamed.</summary>
         public void Write(IEnumerable<StoredSlot> slots)
         {
             System.IO.Directory.CreateDirectory(Directory);
+
+            // BEFORE the first publish, so a crash during the very first write is caught too. An
+            // absent marker is the ONLY thing that makes an absent slots file mean "nobody submitted".
+            if (!File.Exists(InitialisedPath))
+            {
+                using (var marker = new FileStream(InitialisedPath, FileMode.Create, FileAccess.Write, FileShare.None, 1, FileOptions.WriteThrough))
+                {
+                    var note = Utf8NoBom.GetBytes(
+                        "This store has been published at least once. Its presence is what makes an ABSENT\n" +
+                        "wave-slots.state a REFUSAL rather than an empty store: a write interrupted mid-replace\n" +
+                        "leaves no slots file, and reading that as empty discards every submitted slot.\n");
+
+                    marker.Write(note, 0, note.Length);
+                    marker.Flush(flushToDisk: true);
+                }
+            }
 
             var payload = Utf8NoBom.GetBytes(Serialize(slots.ToArray()));
             var temporary = SlotsPath + ".tmp-" + Guid.NewGuid().ToString("N");

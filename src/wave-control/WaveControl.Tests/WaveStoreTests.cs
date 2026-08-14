@@ -190,9 +190,20 @@ namespace Ladder.Wave.Tests
 
                     // The PROPERTY is the contract; the wording is decoration. Asserting on the word
                     // alone would pass against a message that said it and a type that did not mean it.
+                    // The PROPERTY is the contract; the wording is decoration. Asserting on the word
+                    // alone would pass against a message that said it and a type that did not mean it.
                     Assert.True(ex.Retryable);
                     Assert.Contains("BACK OFF AND RETRY", ex.Message, StringComparison.Ordinal);
-                    Assert.Contains("THIS IS THE MECHANISM WORKING", ex.Message, StringComparison.Ordinal);
+
+                    // *** AND THE MESSAGE MUST NOT ASSERT WHAT THE CODE CANNOT SEE. *** It once said a
+                    // long timeout "means the holder is stuck rather than busy", then that "another
+                    // agent holds it" and "the contention is transient". A human reads this while
+                    // deciding what to do, so a conclusion the code could not reach sends them to kill
+                    // a process that was merely slow.
+                    Assert.Contains("OBSERVED:", ex.Message, StringComparison.Ordinal);
+                    Assert.Contains("NOT OBSERVABLE FROM HERE", ex.Message, StringComparison.Ordinal);
+                    Assert.DoesNotContain("stuck rather than busy", ex.Message, StringComparison.Ordinal);
+                    Assert.DoesNotContain("contention is transient", ex.Message, StringComparison.Ordinal);
                 }
 
                 // ... and it is released, so the next agent gets it.
@@ -292,6 +303,67 @@ namespace Ladder.Wave.Tests
             Assert.Equal(AdmissionPlanOutcome.Admitted, plan.Outcome);
             Assert.Equal(4, plan.WaveCount);
             Assert.All(plan.WaveSets, w => Assert.Equal(1, w.SlotCount));
+        }
+
+
+        // ------------------------------------------------------------------------------------------
+        // AN ABSENT SLOTS FILE: "nobody submitted" versus "a write died". Same absence, opposite actions.
+        // Regression tests for the 27-kill mid-write run of 2026-08-14, which silently lost 8 of 9 slots.
+        // ------------------------------------------------------------------------------------------
+
+        [Fact]
+        public void An_absent_slots_file_after_a_publish_is_REFUSED_and_the_message_says_it_is_not_empty()
+        {
+            // *** THE DEFECT, REPRODUCED AS A UNIT TEST. *** File.Replace has a window in which the
+            // destination does not exist. A reader landing there used to get an empty list, and the
+            // next submission then wrote only its own slot AND REPORTED SUCCESS.
+            using (var dir = new TempDirectory())
+            {
+                var store = StoreIn(dir);
+                store.Write(new[] { WaveStore.Stored(Slot("A"), "A", At), WaveStore.Stored(Slot("B"), "A", At), WaveStore.Stored(Slot("C"), "A", At) });
+                Assert.True(File.Exists(store.InitialisedPath));
+
+                File.Delete(store.SlotsPath);   // exactly what the interrupted replace leaves behind
+
+                var ex = Assert.Throws<WaveStoreException>(() => store.Read());
+
+                Assert.Contains("has been published before", ex.Message, StringComparison.Ordinal);
+                Assert.Contains("THIS IS NOT AN EMPTY STORE", ex.Message, StringComparison.Ordinal);
+                Assert.False(ex.Retryable);     // exit 2 - nothing was decided and retrying will not help
+            }
+        }
+
+        [Fact]
+        public void A_store_that_was_NEVER_published_still_reads_as_empty()
+        {
+            // *** THE CONVERSE, AND THE ONE THAT MATTERS. *** Without it the guard above passes against
+            // a Read() that refuses unconditionally - which would break the first submission of every
+            // wave the tool will ever run. The FIRST agent legitimately finds nothing.
+            using (var dir = new TempDirectory())
+            {
+                var store = StoreIn(dir);
+
+                Assert.False(File.Exists(store.InitialisedPath));
+                Assert.Empty(store.Read());
+            }
+        }
+
+        [Fact]
+        public void The_marker_is_written_BEFORE_the_first_publish_so_a_crash_during_it_is_caught_too()
+        {
+            // The marker cannot be written after the slots file: a process killed between the two would
+            // leave the exact state this guard exists to catch, unmarked and therefore read as empty.
+            // Ordering is the whole guarantee, so it is asserted rather than assumed - by deleting the
+            // slots file the first write produced and requiring the refusal.
+            using (var dir = new TempDirectory())
+            {
+                var store = StoreIn(dir);
+                store.Write(new[] { WaveStore.Stored(Slot("ONLY"), "A", At) });
+
+                File.Delete(store.SlotsPath);
+
+                Assert.Throws<WaveStoreException>(() => store.Read());
+            }
         }
 
         [Fact]
