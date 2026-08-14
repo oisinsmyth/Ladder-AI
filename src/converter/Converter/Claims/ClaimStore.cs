@@ -28,8 +28,59 @@ public sealed class ClaimStore
     public ClaimStore(string claimsRoot, string projectDir, Func<DateTime>? nowUtc = null)
     {
         ProjectSlug = SlugOf(projectDir);
+        RejectDoubledRoot(claimsRoot, ProjectSlug);
         _root = Path.Combine(claimsRoot, ProjectSlug);
         _nowUtc = nowUtc ?? (() => DateTime.UtcNow);
+    }
+
+    /// <summary>
+    /// 🔴 *** THE REGISTRY-FORKING ARGUMENT, REFUSED BY NAME (2026-08-14). ***
+    ///
+    /// <para>MEASURED, not feared. Two processes claiming ONE resource on ONE project were BOTH
+    /// granted at exit 0 — because one passed the shared root <c>…\claims</c> and the other passed
+    /// <c>…\claims\test-project001</c>, the path a report had quoted as "the shared claims store".
+    /// The second is the RESOLVED store, not the argument: this constructor appends the project slug,
+    /// so passing it yields <c>…\claims\test-project001\test-project001</c> — *** A SECOND, EMPTY,
+    /// PRIVATE REGISTRY THAT GRANTS EVERY CLAIM AND LOOKS EXACTLY LIKE SUCCESS. ***</para>
+    ///
+    /// <para><b>Nothing downstream can catch this and nothing ever will:</b> each store is
+    /// individually well-formed, correctly named and legitimately empty. There is no state to compare
+    /// against — the whole point of a registry is that it is the only copy. So the refusal has to
+    /// happen HERE, at the moment the argument is interpreted, and it is placed in the CONSTRUCTOR so
+    /// every entry point inherits it: acquire, allocate, list, check and release all build a store
+    /// first, and a guard on one command is a guard the next command routes around.</para>
+    ///
+    /// <para><b>What it does NOT refuse</b>, because a fence that refuses everything is worse than no
+    /// fence: a root whose last segment merely resembles a project name (<c>…\claims\test-project002</c>
+    /// while working <c>ir/test-project001</c>) is a perfectly good shared root and is accepted. Only
+    /// the EXACT doubling — last segment equals THIS project's slug — is refused, because only that
+    /// one silently forks the registry for this project.</para>
+    ///
+    /// <para>Case-insensitively, deliberately: Windows paths are, so <c>…\claims\Test-Project001</c>
+    /// doubles just as effectively and would otherwise slip through on a capital letter.</para>
+    /// </summary>
+    private static void RejectDoubledRoot(string claimsRoot, string slug)
+    {
+        var trimmed = (claimsRoot ?? string.Empty)
+            .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        var lastSegment = Path.GetFileName(trimmed);
+
+        if (lastSegment.Length == 0 ||
+            !string.Equals(lastSegment, slug, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        throw new ClaimFormatException(
+            $"--claims '{claimsRoot}' ends with the project name '{slug}', so the store would be " +
+            $"'{Path.Combine(claimsRoot!, slug)}' — the project name TWICE. That is almost always the " +
+            "RESOLVED STORE PATH passed back in as the ROOT, and it is the one mistake this registry " +
+            "cannot detect later: the doubled store is well-formed, correctly named and empty, so it " +
+            "GRANTS EVERY CLAIM while another agent on the real store holds the same resource. " +
+            "Measured 2026-08-14: two agents, one resource, both granted, both convinced. " +
+            $"Pass the shared ROOT instead — '{Path.GetDirectoryName(trimmed)}' — and this tool will " +
+            $"append '{slug}' itself. (If the root really is meant to be named after the project, " +
+            "rename it: one shared root serves every project.)");
     }
 
     public string ProjectSlug { get; }

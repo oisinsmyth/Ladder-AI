@@ -6,10 +6,28 @@ namespace Converter.Claims;
 // Mirrors the Review/Preflight/SignalSweep "one record, two renderers" pattern.
 public static class ClaimsOutputFormatter
 {
-    public static string FormatOutcomeText(ClaimOutcome outcome)
+    // storeDirectory (2026-08-14): WHERE the grant or refusal was recorded, printed at the moment of
+    // the act. Judged worth exactly one line, and no more.
+    //
+    // The doubled-root refusal (ClaimStore.RejectDoubledRoot) removes the fork this project actually
+    // hit. It cannot remove the general one: two agents passing two ENTIRELY DIFFERENT roots fork the
+    // registry, and no process can detect that from inside — each store is well-formed and legitimately
+    // empty. `claims` already echoed its store; `claim` echoed nothing, so the one command that
+    // performs the act was the one command that never said where.
+    //
+    // *** AN ECHOED VALUE NOBODY READS IS NOT A SAFEGUARD *** — this line is not claimed as one. It is
+    // here because it is the line that would have let any of the three readers who missed the fork
+    // notice it, and because a grant that does not say where it was recorded cannot be cross-checked
+    // between two lane reports afterwards.
+    public static string FormatOutcomeText(ClaimOutcome outcome, string? storeDirectory = null)
     {
         var sb = new StringBuilder();
         sb.Append(outcome.Ok ? "CLAIMED   " : "REFUSED   ").Append(outcome.Reason).Append('\n');
+
+        if (storeDirectory is not null)
+        {
+            sb.Append("  store   ").Append(storeDirectory).Append('\n');
+        }
 
         if (outcome.Claim is not null)
         {
@@ -30,11 +48,12 @@ public static class ClaimsOutputFormatter
         return sb.ToString();
     }
 
-    public static string FormatOutcomeJson(ClaimOutcome outcome) => JsonSerializer.Serialize(new
+    public static string FormatOutcomeJson(ClaimOutcome outcome, string? storeDirectory = null) => JsonSerializer.Serialize(new
     {
         result = outcome.Result.ToString(),
         ok = outcome.Ok,
         reason = outcome.Reason,
+        store = storeDirectory,
         claim = outcome.Claim is null ? null : Describe(outcome.Claim),
         holder = outcome.Holder is null ? null : Describe(outcome.Holder),
     }, JsonOptions);

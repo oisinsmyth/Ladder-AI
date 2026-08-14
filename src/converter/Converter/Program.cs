@@ -399,8 +399,8 @@ internal static class Program
                 : ClaimsRunner.Acquire(corpus, store, projectDir, kind, value!, agent, purpose);
 
             var text = json
-                ? ClaimsOutputFormatter.FormatOutcomeJson(outcome)
-                : ClaimsOutputFormatter.FormatOutcomeText(outcome);
+                ? ClaimsOutputFormatter.FormatOutcomeJson(outcome, store.Directory)
+                : ClaimsOutputFormatter.FormatOutcomeText(outcome, store.Directory);
 
             if (outcome.Ok)
             {
@@ -461,7 +461,20 @@ internal static class Program
             return ExitUnusable;
         }
 
-        var store = new ClaimStore(resolved, projectDir);
+        // The doubled-root refusal lives in ClaimStore's constructor so every entry point inherits it;
+        // this catch is what makes `claims` (list / --check / --release) report it the SAME WAY the
+        // `claim` command does, instead of as an unhandled stack trace. A guard whose message is
+        // legible from one command and a crash from the next is half a guard.
+        ClaimStore store;
+        try
+        {
+            store = new ClaimStore(resolved, projectDir);
+        }
+        catch (ClaimFormatException ex)
+        {
+            Console.Error.WriteLine(ex.Message);
+            return ExitUnusable;
+        }
 
         if (release)
         {
