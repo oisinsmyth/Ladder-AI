@@ -22,10 +22,24 @@ public static class CrossCheckRunner
         // ProjectUsageGraph._blockLocalRoots for the measurement.
         var byStorage = StorageGroups.Build(graph);
 
+        // Reachability from an OB, computed once. Empty when the corpus has no OB, which is UNKNOWN
+        // rather than "nothing executes" — the flag carries that distinction to the report.
+        var reachable = graph.ReachableFromAnOb;
+        var reachabilityKnown = graph.OrganizationBlocks.Count > 0;
+
         var multiWriters = byStorage
             .Where(g => g.Writers.Count >= 2)
             .OrderBy(g => g.Path, StringComparer.Ordinal)
-            .Select(g => new MultiWriterFact(g.Path, g.Writers.Select(ToWriter).ToList(), g.Owner, g.InstanceAliases))
+            .Select(g =>
+            {
+                var writers = g.Writers.Select(ToWriter).ToList();
+                var unreachable = reachabilityKnown
+                    ? writers.Select(w => w.Block).Distinct(StringComparer.Ordinal)
+                        .Where(b => !reachable.Contains(b))
+                        .OrderBy(b => b, StringComparer.Ordinal).ToList()
+                    : new List<string>();
+                return new MultiWriterFact(g.Path, writers, g.Owner, g.InstanceAliases, unreachable, reachabilityKnown);
+            })
             .ToList();
 
         // FI-67: the complement multiWriters structurally omits. Exactly one writer is what makes a

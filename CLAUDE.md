@@ -147,7 +147,14 @@ converter diff <old.ir> <new.ir> [--only <network>...] [--allow-header] [--json]
                                     # the gate whose whole job is *"prove the rest is identical"*. `--only` names NETWORKS and cannot express header intent — which explained why the CHECK was absent and never licensed the CLAIM.
                                     # **`--allow-header` is the named escape (FI-71's shape): `gen-block-modify-purpose` passes it and declares the interface delta in its hand-back; `gen-block-modify-fix` must NEVER pass it** —
                                     # a fix needing an interface member is a purpose change, so the answer is to route, not to declare. The clean verdict now states what it EXAMINED (`…, header unchanged`), not merely that it passed
-converter reuse-scan --project <ir-dir> [--tag <tag>...] [--kind <kind>...] [--json]   # reuse-first: which blocks reference tag(s)/implement kind(s) (FI-29); exit 1 if any candidate found
+converter reuse-scan --project <ir-dir> [--tag <tag>...] [--kind <kind>...] [--json]   # reuse-first: which blocks reference tag(s)/implement kind(s) (FI-29); exit 1 if any candidate found.
+                                    # 🔴 **EXIT 0 HERE LICENSES "NOTHING TO REUSE, WRITE A NEW BLOCK" — AND UNTIL 2026-08-14 A `--tag` NAMING NOTHING IN THE CORPUS PRODUCED IT.** `SUMMARY: 0 block(s) matched`,
+                                    # exit 0, **and no denominator printed at all** — so a typo'd tag or a wrong `--project` read exactly like a thorough scan of 43 files. Note the asymmetry it already had:
+                                    # **`--kind` IS validated against a known set and refuses an unknown value by name; `--tag` was validated against nothing.** Now: `SUMMARY: … of <n> file(s) scanned` on every
+                                    # run, an `ABSENT:` line naming roots that appear in no block, and **exit 2 when EVERY queried root is absent** (the question landed on nothing). Deliberately keyed on ALL
+                                    # roots, not any — a Design-stage query legitimately mixes existing tags with proposed ones (gen-architecture designs AGAINST gaps), and refusing that would be a gate firing
+                                    # outside its scope. `--tag` matching is ROOT-level by design (digest aggregates tag roots per block), so `--tag DB_X.Member` matches every block touching `DB_X`; the MATCH
+                                    # line shows the root it actually matched
 converter target-scan --requirements <register.md> --project <ir-dir> [--json]   # S6 new-block target gap-hunter: REQ x tag-status x as-built, bucketed candidate/likely-impl/disqualified (FI-30); exit 1 if no clean candidate
 converter drift-check --project <ir-dir> --exports <simatic-ml-dir> [--complete] [--json]   # detect silent ir<->simatic-ml export drift, Normalizer-compared (FI-26); exit 1 if any block drifted.
                                     # --complete (FI-70) declares the exports dir the WHOLE picture (a fresh controller dump, not a possibly-lagging committed corpus), so an absence FAILS in either
@@ -187,7 +194,13 @@ converter compare <first.xml> <second.xml> [--json] [--max-differences <n>] [--a
                                     # allowlisted. A dry run is unfenced and still available. Sequencing: the Normalizer/`MemoryLayout` fix lands before a GREEN from this loop is relied on — a comparator blind to layout is a
                                     # gate that passes when it should fail, which is worse than no gate. And `.ps1` here is ASCII-ONLY + CRLF: PS 5.1 reads a BOM-less script as ANSI, a UTF-8 em dash decodes to a QUOTE
                                     # DELIMITER, and the parse error points a hundred lines away from the real one
-converter cross-check --project <ir-dir> [--json]   # whole-project cross-block reference-graph FACTS (multi-writer C-308 / dead-wiring global-DB+interface-UDT / IO-boundary C-304 / sibling-ref C-127) the reviewer reasons over (FI-22); facts not verdicts; exit 0
+converter cross-check --project <ir-dir> [--json]   # whole-project cross-block reference-graph FACTS (multi-writer C-308 / dead-wiring global-DB+interface-UDT / IO-boundary C-304 / sibling-ref C-127) the reviewer reasons over (FI-22); facts not verdicts; exit 0.
+                                    # ⚠️ **A MULTI-WRITER LINE COUNTS WRITES FROM BLOCKS THAT MAY NEVER EXECUTE, AND NOW SAYS SO (2026-08-14).** A path written by two blocks, one of which no OB can reach, was
+                                    # reported as a C-308 multi-writer with **exactly one runtime writer** — and the call graph that settles it was already in the same report, under SIBLING REFERENCES, unused.
+                                    # Lines now carry `[NOT REACHABLE from any OB: <blocks> — <n> writing block(s) actually execute]`. **REPORTED, NEVER SUBTRACTED:** an unreachable block is usually one somebody
+                                    # means to call, and dropping its write would hide the conflict that appears the moment it is wired up. Reachability is derived from each block's KIND (an OB is called by the
+                                    # operating system and nothing else is) — never from a name prefix, which anything can be renamed into, and never from "nothing calls it", which would make every uncalled block
+                                    # its own root, i.e. exactly the state being detected. **A corpus with NO OB reports `unreachableKnown: false` — that is UNKNOWN, not "all reachable"**
 converter trace --binding <bindings.json> --project <ir-dir> [--json]   # forward-pass REQ trace: per-hop facts (output-path/interface-chain/disarmed/number-constraint/timing) over the reader/writer graph (FI-25); facts not verdicts; exit 0
 converter ir-hash <file.ir...> [--json]   # stable readable-IR content hash (SerializeBlockReadable/SHA-256) keying FI-17 explanation sidecars; immune to SIDECAR/UId churn; exit 1 on error
 # --- the mechanical floor (FI-36/FI-39, 2026-08-05): checks that survive an agent choosing not to look ---

@@ -31,6 +31,18 @@ public static class CrossCheckOutputFormatter
                 sb.Append(']');
             }
 
+            // Reported, never subtracted (2026-08-14). A writer in a block no OB can reach does not
+            // execute, so this path has fewer runtime writers than the list above suggests — which is
+            // how a C-308 "multi-writer" with exactly ONE real writer arises. The call graph that
+            // settles it was already in this same report, under SIBLING REFERENCES, and unused.
+            if (m.UnreachableWriterBlocks.Count > 0)
+            {
+                sb.Append("  [NOT REACHABLE from any OB: ")
+                  .Append(string.Join(", ", m.UnreachableWriterBlocks))
+                  .Append(" — ").Append(m.ReachableWriterCount)
+                  .Append(" writing block(s) actually execute. Reported, not subtracted: wiring the block up restores the contention]");
+            }
+
             sb.Append('\n');
         }
 
@@ -92,6 +104,11 @@ public static class CrossCheckOutputFormatter
                 owner = m.Owner,
                 instanceAliases = m.InstanceAliases,
                 writers = m.Writers.Select(w => new { block = w.Block, network = w.Network, kind = w.Kind }),
+                // Emitted always, including when unknown, so a consumer can tell "every writer
+                // executes" from "the corpus carries no OB, so nobody could ask".
+                unreachableWriterBlocks = m.UnreachableWriterBlocks,
+                unreachableKnown = m.UnreachableKnown,
+                reachableWriterCount = m.ReachableWriterCount,
             }),
             deadMembers = report.DeadMembers.Select(d => new
             {

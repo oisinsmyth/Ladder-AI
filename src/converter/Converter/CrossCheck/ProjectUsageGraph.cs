@@ -92,6 +92,7 @@ public sealed class ProjectUsageGraph
     // and `_calls` come close but only hold blocks that reference a tag or make a call, so a
     // block that does neither would read as absent.
     private readonly HashSet<string> _blockNames = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _organizationBlocks = new(StringComparer.Ordinal);
 
     public IReadOnlyDictionary<string, PathUsage> Usages => _usages;
     public IReadOnlyList<string> GlobalDbMemberPaths => _globalDbMemberPaths;
@@ -104,6 +105,43 @@ public sealed class ProjectUsageGraph
 
     // FI-44. Read this before concluding a scan found nothing wrong.
     public IReadOnlyCollection<string> BlockNames => _blockNames;
+
+    // Blocks reachable from an OB through the CALL graph — i.e. blocks that actually execute. Empty
+    // when the corpus contains no OB at all (a partial export), and callers must treat that as
+    // "unknown", never as "nothing executes": an absent root set cannot distinguish the two.
+    public IReadOnlyCollection<string> ReachableFromAnOb
+    {
+        get
+        {
+            if (_organizationBlocks.Count == 0)
+            {
+                return Array.Empty<string>();
+            }
+
+            var reachable = new HashSet<string>(_organizationBlocks, StringComparer.Ordinal);
+            var queue = new Queue<string>(_organizationBlocks);
+            var callsFrom = _calls
+                .GroupBy(c => c.Block, StringComparer.Ordinal)
+                .ToDictionary(g => g.Key, g => g.Select(c => c.CalledBlock).ToList(), StringComparer.Ordinal);
+
+            while (queue.Count > 0)
+            {
+                if (!callsFrom.TryGetValue(queue.Dequeue(), out var callees))
+                {
+                    continue;
+                }
+
+                foreach (var callee in callees.Where(c => reachable.Add(c)))
+                {
+                    queue.Enqueue(callee);
+                }
+            }
+
+            return reachable;
+        }
+    }
+
+    public IReadOnlyCollection<string> OrganizationBlocks => _organizationBlocks;
 
     // Every leaf interface member of every instance DB, as (iDB name, member suffix relative to the
     // iDB root) — e.g. ("iDB_ShredderSequencer", "IO.Step"), ("iDB_ShredderSequencer", "StopCmd").
@@ -367,6 +405,15 @@ public sealed class ProjectUsageGraph
     {
         _blockNames.Add(block.Name); // FI-44 — recorded before any usage walk, so a block with no
                                      // tag references and no calls is still known to exist.
+
+        // The cyclic-execution ROOTS. Kept as a derived property of the block (its KIND), never as a
+        // name convention: "starts with OB" would be a rule anything can be renamed into, and
+        // "nothing calls it" would make every uncalled block its own root — which is precisely the
+        // state being detected. An OB is called by the operating system, and nothing else is.
+        if (string.Equals(block.Kind, "OB", StringComparison.OrdinalIgnoreCase))
+        {
+            _organizationBlocks.Add(block.Name);
+        }
 
         // FI-50. A static whose datatype names another FB is a multi-instance. Recorded now,
         // resolved after the walk — the named block may not have been read yet.

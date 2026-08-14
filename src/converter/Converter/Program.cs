@@ -1456,6 +1456,20 @@ internal static class Program
         var report = ReuseScanRunner.Run(projectDir, tags, kinds);
         Console.WriteLine(json ? ReuseScanOutputFormatter.FormatJson(report) : ReuseScanOutputFormatter.FormatText(report));
 
+        // FI-44, 2026-08-14. Exit 0 here LICENSES "nothing to reuse, write a new block" — so a query
+        // whose tag roots are in no block of the corpus must not produce it. A partly-absent query
+        // still answers (the Design stage legitimately mixes existing tags with proposed ones); a
+        // wholly-absent one asked about nothing. Distinct from 1, which is a real answer: a candidate
+        // exists, go and look at it.
+        if (report.AskedAboutNothing)
+        {
+            Console.Error.WriteLine(
+                $"reuse-scan: every queried tag root ({string.Join(", ", report.Absent)}) is absent from {projectDir} "
+                + $"({report.FilesScanned} file(s) scanned) - nothing was examined. "
+                + "\"0 matched\" is not evidence there is nothing to reuse.");
+            return ExitUnusable;
+        }
+
         return report.HasMatches ? 1 : 0;
     }
 

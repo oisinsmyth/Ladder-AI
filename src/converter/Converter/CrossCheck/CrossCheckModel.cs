@@ -28,9 +28,30 @@ public sealed record MultiWriterFact(
     string Path,
     IReadOnlyList<WriterRef> Writers,
     string? Owner = null,
-    IReadOnlyList<string>? InstanceAliases = null)
+    IReadOnlyList<string>? InstanceAliases = null,
+    // 2026-08-14. Writers living in blocks NOT reachable from any OB through the call graph — they do
+    // not execute, so they cannot contend at runtime. Reported, never subtracted: an unreachable block
+    // is usually a block someone means to call, and silently dropping its write would hide the
+    // conflict that appears the moment it is wired up. Measured: a two-writer path where one writer's
+    // block was called by nothing read as a C-308 multi-writer with exactly one runtime writer — and
+    // the call graph needed to say so was already in the same report, under SIBLING REFERENCES.
+    //
+    // Empty ALSO when the corpus contains no OB at all, which is "unknown", not "all reachable" —
+    // hence UnreachableKnown, which says whether the question could be asked.
+    IReadOnlyList<string>? UnreachableWriterBlocks = null,
+    bool UnreachableKnown = false)
 {
     public IReadOnlyList<string> InstanceAliases { get; init; } = InstanceAliases ?? Array.Empty<string>();
+
+    public IReadOnlyList<string> UnreachableWriterBlocks { get; init; } =
+        UnreachableWriterBlocks ?? Array.Empty<string>();
+
+    // The writers that actually execute. A count of 1 here beside a Writers count of 2+ is the exact
+    // shape of the false finding: reported as a fact, judged by the reader.
+    public int ReachableWriterCount => UnreachableKnown
+        ? Writers.Select(w => w.Block).Distinct(StringComparer.Ordinal)
+            .Count(b => !UnreachableWriterBlocks.Contains(b, StringComparer.Ordinal))
+        : Writers.Select(w => w.Block).Distinct(StringComparer.Ordinal).Count();
 }
 
 // Whether a dead member is a global-DB member (unambiguous full path) or an interface-UDT member of

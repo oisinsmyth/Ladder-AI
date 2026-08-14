@@ -72,7 +72,14 @@ public static class ReuseScanRunner
             }
         }
 
-        return new ReuseScanReport(tagRoots, queryKinds, matches, fileErrors);
+        // Which queried roots the corpus knows about AT ALL — computed from every parseable file, not
+        // from the matches, so "no block satisfies the whole query" stays distinguishable from "that
+        // tag is not in this project".
+        var knownRoots = new HashSet<string>(
+            digest.Files.Where(f => f.FileError is null).SelectMany(f => f.TagRoots), StringComparer.Ordinal);
+        var absent = tagRoots.Where(r => !knownRoots.Contains(r)).ToList();
+
+        return new ReuseScanReport(tagRoots, queryKinds, matches, fileErrors, files.Count, absent);
     }
 
     // Splits a digest statement summary ("coil:2, timer:1" or "-") into the set of kind labels present.

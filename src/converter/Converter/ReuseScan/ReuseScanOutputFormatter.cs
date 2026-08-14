@@ -42,7 +42,26 @@ public static class ReuseScanOutputFormatter
             sb.Append("FILE ERROR: ").Append(error).Append('\n');
         }
 
-        sb.Append("SUMMARY: ").Append(report.Matches.Count).Append(" block(s) matched\n");
+        // THE DENOMINATOR. "0 block(s) matched" over 43 files and over 0 files are different facts, and
+        // this report printed neither of them until 2026-08-14 — so a wrong --project read exactly like
+        // a thorough scan, and exit 0 here LICENSES "nothing to reuse, write a new block".
+        sb.Append("SUMMARY: ").Append(report.Matches.Count).Append(" block(s) matched of ")
+            .Append(report.FilesScanned).Append(" file(s) scanned\n");
+
+        if (report.Absent.Count > 0)
+        {
+            // Named whether or not it gates: a partly-absent query is a real answer with a caveat, and
+            // a wholly-absent one is not an answer at all.
+            sb.Append("ABSENT: ").Append(string.Join(", ", report.Absent))
+                .Append(" — queried tag root(s) that appear in NO block of this corpus. ")
+                .Append("`--kind` is validated against a known set; `--tag` is only checkable against the corpus itself.\n");
+        }
+
+        if (report.AskedAboutNothing)
+        {
+            sb.Append("NOTHING TO ANSWER FROM — every queried tag root is absent from this corpus, so ")
+                .Append("\"0 matched\" is not evidence there is nothing to reuse.\n");
+        }
 
         return sb.ToString().TrimEnd('\n', '\r');
     }
@@ -67,6 +86,9 @@ public static class ReuseScanOutputFormatter
                 }),
             }),
             fileErrors = report.FileErrors,
+            filesScanned = report.FilesScanned,
+            absentTagRoots = report.Absent,
+            askedAboutNothing = report.AskedAboutNothing,
         };
 
         return JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true });
