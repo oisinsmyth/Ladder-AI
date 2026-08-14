@@ -38,3 +38,19 @@ NETWORK 7 "Harness Mirror Copy Layer"
 NETWORK 8 "Modbus Server"
   COMMENT "Serves the harness mirror in marker memory to a Modbus TCP client. It runs last so the whole transfer between the wire and marker memory happens with no other block touching those registers in between: what the client reads is the mirror exactly as this scan left it, and what the client writes is in place before the next scan reads it."
   CALL FB_Comms_ModbusServer(iDB_Comms_ModbusServer, EN := TRUE)
+
+NETWORK 9 "Corpus Block - Bool Echo"
+  COMMENT "Test material for the tooling campaign, not plant logic. It reads and writes members of its own instance DB and nothing else, so it touches none of the marker registers the server above transfers and the network order of everything before it is unaffected. Placement after the copy layer rather than before it is latency-neutral and was checked rather than assumed: before the layer the block computes from the previous scan's commanded inputs and the layer publishes the result immediately, after it the block computes from this scan's inputs and the layer publishes on the next scan - two scans from command to observation either way."
+  CALL FB_HxBoolEcho(iDB_HxBoolEcho, EN := TRUE)
+
+NETWORK 10 "Corpus Block - Dwell Timer"
+  COMMENT "Test material for the tooling campaign, not plant logic. Same placement reasoning as the network above, and the same isolation: it touches only its own instance DB, including its own timer instance."
+  CALL FB_HxDwellTimer(iDB_HxDwellTimer, EN := TRUE)
+
+NETWORK 11 "Corpus Block - Int Sum"
+  COMMENT "Test material for the tooling campaign, not plant logic. Same placement reasoning as the networks above, and the same isolation: it touches only its own instance DB."
+  CALL FB_HxIntStep(iDB_HxIntStep, EN := TRUE)
+
+NETWORK 12 "Corpus Block - Sealed Latches"
+  COMMENT "Test material for the tooling campaign, not plant logic. Same placement reasoning as the networks above, and the same isolation: it touches only its own instance DB. Its two outputs are seals the block holds itself; they are values under test and not harness instrumentation, so an expectation on either is sampled against a copy-layer coil rather than declared latched."
+  CALL FB_HxSealLatch(iDB_HxSealLatch, EN := TRUE)

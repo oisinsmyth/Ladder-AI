@@ -132,9 +132,17 @@ contain either. Concretely —
 - Every output holds its value for as long as the commanded inputs hold theirs, so every observation
   is `PersistentState` and every expectation is admissible as `Latched` or as `Sampled` with a window.
 - **Nothing requires `Stamped`.** No clause asks *when* something happened relative to T=0.
-- **The one transient in the corpus is on the STIMULUS side, not the observation side**:
-  REQ-HXL-001's single-scan `SealTrigger`. A commanded transient is deterministic, and what is
-  observed is the *latch it produces*, which holds. That is the right way round.
+- ***There is no transient anywhere in this corpus, on either side, and that is enforced by a
+  constraint rather than by care.*** This corpus has **no stimulus model** — its inputs are commanded
+  straight from the mirror — so the finest stimulus a client can produce is one *held across at
+  least one poll round trip*, never one scan. A clause needing a one-scan stimulus would therefore be
+  **unstimulatable**, exactly as a clause needing a one-scan observation is unobservable, and both
+  classes are excluded below.
+- 🔴 **`SealHeld` and `SealPriority` are latches, and an expectation on them must NOT be declared
+  `Latched`.** Contract §2.8's thirteen correct gate-5 refusals are this mistake: the mode describes
+  the **instrument**, and the copy layer emits a plain coil for these. The block latching its own
+  output is a *value under test*, not instrumentation. Declare `Sampled`; the window is generous
+  because the value persists until cleared.
 - ***Do not carry a window figure from this file.*** The floor is read from §12a derivation 1 at the
   `comp` actually used, and it has moved twice; a restated constant would one day refuse the wrong
   vectors with confidence.
@@ -332,13 +340,18 @@ a published value rather than recomputed from the inputs.
 Exercises latched output and clear semantics: two seals that differ in **one** respect, so that the
 pair discriminates a wrong dominance instead of merely reporting a differently-timed fall.
 
-### REQ-HXL-001 — A momentary trigger seals the output on
-- **Text:** A single scan of `SealTrigger` true, with `SealClear` false, makes `SealHeld` true, and
-  `SealHeld` remains true after `SealTrigger` returns false.
+### REQ-HXL-001 — A trigger seals the output on and it stays on
+- **Text:** `SealTrigger` going true, with `SealClear` false, makes `SealHeld` true, and `SealHeld`
+  remains true after `SealTrigger` returns false.
 - **Class:** control
 - **Source:** Lane brief — "one with a latched output requiring a reset".
-- **Notes:** A latch is the only admissible instrument for a state that may last one scan: a sampler
-  that looks a hundred times still looks between scans, and a miss reports as a pass.
+- **Notes:** It deliberately does **not** say "a single scan of `SealTrigger`". This corpus has no
+  stimulus model, so its inputs are commanded straight from the mirror and the finest stimulus
+  granularity a client can achieve is *held across at least one poll round trip* — not one scan. A
+  clause requiring a one-scan stimulus would be **unstimulatable**, which is the same defect as the
+  unobservable clauses in "Excluded by design", reached from the input side. What this clause does
+  test is the seal itself: the mutant it kills is a block that follows its trigger instead of
+  holding.
 
 ### REQ-HXL-002 — Only the clear releases the seal
 - **Text:** Once `SealHeld` is true, no input other than `SealClear` makes it false. It remains true

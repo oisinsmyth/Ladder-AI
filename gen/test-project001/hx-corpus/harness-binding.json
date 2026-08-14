@@ -1,0 +1,66 @@
+{
+  "//": "Hx corpus slot bindings. ADDITIVE - see harness-binding.md 2. These four slots must be",
+  "//2": "CONCATENATED with the existing HBA slot's binding, never substituted for it: the generator",
+  "//3": "emits the WHOLE copy layer from the binding list, so generating from this file alone would",
+  "//4": "produce an FC_HarnessCopyLayer with no HBA slot and silently unwire the hopper block.",
+  "blockName": "FC_HarnessCopyLayer",
+  "blockNumber": 9001,
+  "tagTableName": "HarnessMirror",
+  "tagPrefix": "HX_",
+  "baseByte": 1000,
+
+  "slots": [
+    {
+      "slotId": "HXE",
+      "startCondition": null,
+      "vectorTargets": [
+        { "tag": "iDB_HxBoolEcho.EchoCommand", "specName": "EchoCommand", "type": "Bool" },
+        { "tag": "iDB_HxBoolEcho.EchoReset",   "specName": "EchoReset",   "type": "Bool" }
+      ],
+      "resultSources": [
+        { "tag": "iDB_HxBoolEcho.EchoResponse", "specName": "EchoResponse", "type": "Bool" },
+        { "tag": "iDB_HxBoolEcho.EchoInverse",  "specName": "EchoInverse",  "type": "Bool" }
+      ]
+    },
+    {
+      "slotId": "HXD",
+      "startCondition": null,
+      "vectorTargets": [
+        { "tag": "iDB_HxDwellTimer.DwellCommand", "specName": "DwellCommand", "type": "Bool" },
+        { "tag": "iDB_HxDwellTimer.DwellReset",   "specName": "DwellReset",   "type": "Bool" },
+        { "tag": "iDB_HxDwellTimer.DwellPreset",  "specName": "DwellPreset",  "type": "Time" }
+      ],
+      "resultSources": [
+        { "tag": "iDB_HxDwellTimer.DwellDone",       "specName": "DwellDone",       "type": "Bool" },
+        { "tag": "iDB_HxDwellTimer.DwellElapsed",    "specName": "DwellElapsed",    "type": "Time" },
+        { "tag": "iDB_HxDwellTimer.DwellPresetEcho", "specName": "DwellPresetEcho", "type": "Time" }
+      ]
+    },
+    {
+      "slotId": "HXS",
+      "startCondition": null,
+      "vectorTargets": [
+        { "tag": "iDB_HxIntStep.StepInput",     "specName": "StepInput",     "type": "Int"  },
+        { "tag": "iDB_HxIntStep.StepIncrement", "specName": "StepIncrement", "type": "Int"  },
+        { "tag": "iDB_HxIntStep.StepThreshold", "specName": "StepThreshold", "type": "Int"  },
+        { "tag": "iDB_HxIntStep.StepReset",     "specName": "StepReset",     "type": "Bool" }
+      ],
+      "resultSources": [
+        { "tag": "iDB_HxIntStep.StepSum",           "specName": "StepSum",           "type": "Int"  },
+        { "tag": "iDB_HxIntStep.StepOverThreshold", "specName": "StepOverThreshold", "type": "Bool" }
+      ]
+    },
+    {
+      "slotId": "HXL",
+      "startCondition": null,
+      "vectorTargets": [
+        { "tag": "iDB_HxSealLatch.SealTrigger", "specName": "SealTrigger", "type": "Bool" },
+        { "tag": "iDB_HxSealLatch.SealClear",   "specName": "SealClear",   "type": "Bool" }
+      ],
+      "resultSources": [
+        { "tag": "iDB_HxSealLatch.SealHeld",     "specName": "SealHeld",     "type": "Bool" },
+        { "tag": "iDB_HxSealLatch.SealPriority", "specName": "SealPriority", "type": "Bool" }
+      ]
+    }
+  ]
+}
