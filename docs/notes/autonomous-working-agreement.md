@@ -362,6 +362,21 @@ running does not license:
       conclusion did not flip to *"expected to work"* — it moved to **NOT ESTABLISHED IN EITHER
       DIRECTION**, because three untested reasons survived that the retired fact never touched. *An
       untested thing does not become true when the argument against it fails.*
+- *** A DOCUMENT THAT DRIVES BOTH SIDES OF A COMPARISON CANNOT BE CAUGHT BY THAT COMPARISON. ***
+  Measured 2026-08-14: the coordinator's binding listed its `resultSources` in the prose's order while
+  the deployed layer used a different one — **and the binding drives BOTH the emitted rungs AND the
+  result decode**, so it was **internally consistent**. Nothing could flag it; the next deploy would
+  simply have moved four signals to different registers and read them there.
+    ➜ **Found only by diffing the emitted layer against the IR** — an authority *outside* the
+      document under test. ***Ask of any self-consistent artifact: what would notice if it were
+      wrong?*** If the answer is only itself, it needs an outside reading.
+    ➜ **Same family as the round-trip that passes byte-identically because both halves are your own
+      code.** *A proof is only as strong as the most independent authority in its loop.*
+- *** RECONSTRUCT A MISMATCH, DO NOT EXPLAIN IT. *** Same day, the model of how to close a hash
+  difference: not *"the delta is probably the slot id"* but **recomputing SHA-256 over the canonical
+  string with the two candidate inputs substituted, and landing on the expected digest exactly.** That
+  converts a mismatch into an *accounted-for identity*. **A plausible account of a difference is a
+  hypothesis; a reproduction of the other value is a measurement.**
 - *** WHEN YOU FIX A DEFECT IN ONE COMPONENT, GREP FOR ITS SIBLINGS BEFORE YOU CLOSE IT. *** Measured
   2026-08-14, hours apart, in one codebase: `WaveStore`'s reader treated `File.Replace`'s absent
   window as *"no state file"* — ***the one state the caller proceeds from*** — and was fixed that
