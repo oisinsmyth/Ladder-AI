@@ -110,3 +110,10 @@ Desktop.ini
 # isolation ground truth (Green/sanitized, docs/13 2026-07-20). Never commit it - the blind
 # generator must never be able to discover it in the tree.
 gen/_validation/MotorVSDSystem-purpose/answerkey/
+
+# The test-environment project the owner gave the tooling outright (2026-08-14). A TIA project
+# folder, ignored for the same reason as GenProject1/ and SampleProject/ above: it is a live
+# Openness-managed workspace, not source. It was UNTRACKED AND UNIGNORED for several hours, which
+# is one `git add -A` from committing it - the same shape as the stray settings .bak found on
+# 2026-08-13.
+/Test Enviroment/

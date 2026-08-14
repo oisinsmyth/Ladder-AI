@@ -83,3 +83,10 @@
 # The S6 sandbox / validation project. Called test-project001 everywhere in docs and IR; the live
 # Portal folder on disk keeps its original name (CLAUDE.md, "Codename note").
 repo:GenProject1/GenProject1.ap20
+
+# The test-environment project, added 2026-08-14 on the owner's explicit decision in session.
+# THE RESTORE POINT, as this file's header requires one to be named: a full 45-object
+# `export-all --tagtables` baseline, plus the delete-all -> `import-all` restore sequence, both
+# PROVEN against this project the same day (36 blocks deleted, 45 restored in 3 fixpoint passes,
+# 45/45 Normalizer-equivalent to the baseline by `converter compare`).
+repo:Test Enviroment/TestEnviroment/TestEnviroment.ap20

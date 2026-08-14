@@ -89,7 +89,7 @@ it parsed as **nothing at all** before the fix, so it is an unambiguous currency
 | | why |
 |---|---|
 | **The conformance loop end to end** | ***A WAVE HAS NEVER RUN.*** The 27 vectors were authored, admitted as far as the gates, and never executed. There is no result package in existence. **This was a DECISION, not a drift** — see below |
-| **The phase-armed latch** | **Not built.** The generator now **refuses by name** rather than emitting the unconditional form — *which would silently delete any finding that turns on a signal FALLING* |
+| ~~**The phase-armed latch**~~ | ✅ ***BUILT 2026-08-14*** (`4738e21`, `b9bc470`) — this row is retained struck-through because **it was stale for several hours and was quoted onward while stale.** The generator emits `SCOIL <latch> := <start bool> AND [<arm>] AND <signal>` / `RCOIL := NOT <start bool>` — clear on a **level, never an edge** — and it **cost ZERO arm registers**, because `InertPhase.Establish` already lowers every start bool before each index. ⚠️ **Reachability caveat: the COMMITTED binding does not yet declare `transient`/`rearmsEachIndex`/`armedBy`, so it will not generate the latches until it does.** The refusal survives only for a slot with **no start condition**, where the sole expressible latch is the unconditional one |
 | **Wave duration as a planning figure** | Measured on one rig over one tunnel. **Reference only.** Nothing is scheduled against it |
 | **The permit half of the write fences** | Tonight's fence work attacked **refusals**. The permit path is `NOT CHECKED` |
 

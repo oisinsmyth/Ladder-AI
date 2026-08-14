@@ -31,16 +31,41 @@ consequence names the missing half.
 
 ## THE COUNTS
 
-| bucket | count |
-|---|---|
-| **AS SPECIFIED** | **86** |
-| **DIVERGED** (spec corrected) | **33** |
-| **NOT BUILT** | **38** |
-| 🔴 **NOT CHECKED** | **21** |
-| **TOTAL ITEMS** | **178** |
+🔴 ***CORRECTED 2026-08-14. THE ORIGINAL COUNTS WERE WRONG IN ALL FOUR BUCKETS, AND THIS SECTION
+CLAIMED THEY WERE COMPUTED FROM THE TABLES. THEY WERE NOT.*** A mechanical census of every data row
+in §0–§16 — bucket cell read literally — gives the left column. The right column is what this
+document asserted for its first day of life, including in the reports built on it.
 
-🔴 **The 21 `NOT CHECKED` are enumerated by name in §NC below.** A reconciliation reporting no
-`NOT CHECKED` had better have examined everything; this one did not, and says which.
+| bucket | **measured, by census** | ~~as originally claimed~~ |
+|---|---|---|
+| **AS SPECIFIED** | **123** | ~~86~~ |
+| **DIVERGED** (spec corrected) | **29** | ~~33~~ |
+| **NOT BUILT** | **23** *(22 + `X-H`, "NOT BUILT (the warning)")* | ~~38~~ |
+| 🔴 **NOT CHECKED** | **14** | ~~21~~ |
+| **TOTAL ROWS** | **189** | ~~178~~ |
+
+**Two corroborating self-contradictions, both now confirmed:** §NC's named list sums to **20, not
+21**, and the *"six residual rows marked 🔴"* it invokes **do not exist as rows** — the other 🔴 marks
+are inline caveats inside `DIVERGED` rows.
+
+### ⚠️ WHERE THE FAMOUS "38" ACTUALLY LIVES
+
+**It is not in this document and never was.** It is reconstructible only from
+`tooling-test-plan.md` §H, and there it reconstructs *exactly*: **23 entries derived from these
+tables + 15 harness/contract-level absences the test plan found for itself = 38.** §H's own stated
+explanation of that arithmetic — *"splitting D9/D20/O14 and the §11 triple"* — **is also wrong**;
+that adds about four, not fifteen. ***§H's 38 is a DIFFERENT SET from the 38 this document claimed,
+and this document's 38 does not exist anywhere.*** The register is **43 rows**, not the 42 reported.
+
+> 🔴 **THE LESSON, WHICH IS THE POINT OF RECORDING THIS RATHER THAN QUIETLY FIXING IT.** These counts
+> were reported onward as a *result* — into a campaign summary, into `CLAUDE.md`'s neighbourhood, into
+> a plan — when they were a **claim**. *A number is evidence only if something counted it.* The census
+> that found this took one pass over the tables; it was never run because the total was already
+> written down. **Re-run `SELF-4` before quoting any figure from this document or the test plan.**
+
+🔴 **The `NOT CHECKED` rows are enumerated by name in §NC below.** A reconciliation reporting no
+`NOT CHECKED` had better have examined everything; this one did not, and says which — **though note
+that §NC's own total is one of the numbers that did not survive the census.**
 
 ---
 
