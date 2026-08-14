@@ -301,6 +301,19 @@ running does not license:
     ➜ **When a fix turns an existing test red, read the test's INTENT before assuming the fix is
       wrong** — and when the test guarded a real property (here: a committed corpus may legitimately
       lag), **keep the property and re-test it against a run that actually compares something.**
+- *** THE CRLF RULE IS NOT UNIFORM, AND `.gitattributes` IS THE AUTHORITY — NOT THE GENERAL RULE. ***
+  The orchestrator did this on 2026-08-14, having spent the night telling lanes to verify endings with
+  `file`: it converted a tool-written `.json` fixture to CRLF **because the repo convention is CRLF**,
+  without checking that `.gitattributes` **exempts tool-written text formats and forces LF on purpose**
+  — *"so fresh checkouts and worktrees match the converter's own output"*, owner-approved 2026-07-16.
+  ***HAD THAT FILE BEEN ONE OF THE BYTE-COMPARED FIXTURES, APPLYING THE HOUSE STYLE WOULD HAVE BROKEN
+  THE TESTS THE EXEMPTION EXISTS FOR.*** It was harmless only because `.gitattributes` overrode it.
+    ➜ **Check `.gitattributes` before normalising anything.** *A convention applied where it was
+      deliberately suspended is indistinguishable from not knowing the convention.*
+    ➜ **And a second-order slip from the same minutes: `git show --stat | tail -3` read the COMMIT
+      MESSAGE, not the file list**, because a long body pushes the stat out of the window — briefly
+      suggesting the wrong file had been committed. ***A truncated view of a verification is not a
+      verification;*** the follow-up that settled it counted the actual keys in the committed blob.
 - *** A WHOLE-CORPUS SWEEP REACHES DEFECTS NO TARGETED PROBE CAN, BECAUSE THE INPUT YOU WOULD HAVE TO
   GUESS IS ALREADY SITTING IN THE REPOSITORY. *** The strongest instance, 2026-08-14: validating a new
   `preflight` gate over **all 92 committed `.ir` files** produced **154 findings, every one false** —
