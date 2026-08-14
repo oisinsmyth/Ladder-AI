@@ -106,6 +106,28 @@ What worked, condensed — put this in the opening message:
 
 ---
 
+## KEEPING THE PLAN AND THE POSITION IN SEPARATE PLACES
+
+**Owner instruction, 2026-08-14.** Durable plans live in `docs/` — they are committed, reviewed, and
+they stop the work deviating. ***BUT A PLAN DOES NOT RECORD WHERE YOU ARE IN IT***, and that has been
+the gap: the position lived only in lane reports and in whatever the orchestrator happened to
+remember.
+
+> **The `/plan` file holds the LIVE EXECUTION STATE: the phase now in progress, in detail, with its
+> exit criterion and its actual blockers. It is updated at every phase and stage transition.**
+
+- **A plan says what we intend; the plan file says what is true right now.** Keep them apart — a
+  planning document that is edited to track progress stops being a plan and becomes a log.
+- **Write the detail of the CURRENT stage**, not a checklist of stage names. *"Run the vectors"* is a
+  heading; *"the loop is a library with no entry point, and `Execute` always deploys"* is the state.
+- **Update it on transition, not at the end.** The value is entirely in being able to pick the work
+  up cold without reconstructing it from lane reports — which is exactly the situation a crash, a
+  compaction or a handover produces, and all three have happened here.
+- **Carry the measured facts forward in it** so they are not re-derived. Re-measuring is cheap;
+  re-deriving from memory is how a stale number gets quoted as current.
+
+---
+
 ## THE STANDARD THAT DOES NOT RELAX
 
 Autonomy is about **who is asked**, never about **how carefully the work is done**. Unattended
