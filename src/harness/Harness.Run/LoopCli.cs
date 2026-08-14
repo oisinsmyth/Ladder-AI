@@ -420,8 +420,15 @@ public static class LoopCli
         // program. It is not refused here because no party in this loop can measure it and a gate nobody
         // can satisfy blocks its own recovery path — so it is PRINTED, on every run, beside the number it
         // decides.
-        output.WriteLine(binding.RetentiveBytes is { } stated
-            ? $"  retentive M : {stated} byte(s), STATED by the binding."
+        // 🔴 *** THE NUMBER COMES FROM THE GEOMETRY THE MAP WAS DERIVED WITH, AND THE LABEL COMES FROM THE
+        // DOCUMENT. *** This printed `binding.RetentiveBytes` for an hour, which is a SECOND, independent
+        // reading of the same field — so a `Compose` that stopped honouring it would print
+        // `16 byte(s), STATED` beside a hash computed at 256. MEASURED by mutation: reverting Compose to a
+        // hard-coded 256 left this line, and every test of it, perfectly green. *** A VALUE WITH TWO
+        // READERS HAS AS MANY TRUTHS AS IT HAS READERS *** — so the value is read once, from the object
+        // that actually decided the hash, and the document is asked only whether anybody stated it.
+        output.WriteLine(binding.RetentiveBytes is not null
+            ? $"  retentive M : {map.Geometry.RetentiveBytes} byte(s), STATED by the binding."
             : $"  retentive M : {map.Geometry.RetentiveBytes} byte(s), DEFAULTED — the binding does not state it. It is an input to the map"
               + Environment.NewLine
               + "                hash above and therefore to the build stamp, so this identity is only as measured as that number is.");

@@ -41,6 +41,25 @@ public class LoopCliTests
     """;
 
     /// <summary>
+    /// The same binding with TWO served groups and <b>no stated order</b> — the shape a many-to-one slot
+    /// map produces, and the one the wave cannot be built from.
+    /// </summary>
+    private const string BindingTwoGroupsNoOrder = """
+    {
+      "blockNumber": 9001,
+      "baseByte": 1000,
+      "retentiveBytes": 16,
+      "slots": [{
+        "slotId": "HBA",
+        "serves": ["G-ONE", "G-TWO"],
+        "vectorTargets": [{ "tag": "Stim_Total", "type": "Time" }],
+        "startCondition": "Stim_Start",
+        "resultSources": [{ "tag": "Alarm", "type": "Bool" }]
+      }]
+    }
+    """;
+
+    /// <summary>
     /// One block under test, as IR. <b>Not a fixture standing in for one</b> — the loader classifies it
     /// from this header exactly as it will classify a real export.
     /// </summary>
@@ -72,6 +91,7 @@ public class LoopCliTests
             {
                 "sub.json" => Submission,
                 "binding.json" => Binding,
+                "binding-two-groups.json" => BindingTwoGroupsNoOrder,
                 "ramp.ir" => BlockIr,
                 "empty.ir" => "\n\n",
                 "type.ir" => "TYPE TypeDOL\n  MEMBERS\n",
@@ -81,6 +101,12 @@ public class LoopCliTests
                 "hold.ir" => SecondBlockIr,
                 "good-sub.json" => GateParityTests.SubmissionJson(),
                 "good-binding.json" => GateParityTests.BindingJson(),
+
+                // The SAME admissible pair, with the slot serving TWO specification ids and no stated
+                // order. Built by injection rather than by hand so it cannot drift from the fixture the
+                // gate actually admits — which is what makes exit 5 reachable at all.
+                "good-binding-two-groups.json" => GateParityTests.BindingJson()
+                    .Replace("\"slotId\": \"S0\",", "\"slotId\": \"S0\", \"serves\": [\"S0\", \"G-TWO\"],", StringComparison.Ordinal),
                 _ => throw new FileNotFoundException(path),
             },
             (path, _) => written.Add(path),
@@ -335,6 +361,87 @@ public class LoopCliTests
         Assert.Equal(LoopExit.NothingExamined, exit);
         Assert.Contains("the PROGRAM UNDER TEST could not be loaded", output, StringComparison.Ordinal);
         Assert.Contains(expected, output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AN_ADMISSIBLE_SUBMISSION_WITH_NO_STATED_GROUP_ORDER_EXITS_5_never_0()
+    {
+        // *** THE COPY LAYER BEING RIGHT SAYS NOTHING ABOUT THE RUN BEING POSSIBLE. *** The layer is a
+        // pure function of the BINDING; the order is a property of merging the VECTORS into it. So this
+        // path emits the IR — it is worth reading — and says, in the same report, that nothing may be run
+        // from these two documents. A caller reading 0 would conclude the pair is ready to deploy.
+        //
+        // 🔴 IT USES THE ADMISSIBLE FIXTURE DELIBERATELY. Against the ordinary one the gate refuses first
+        // and the exit is 4, so an `Assert.NotEqual(Generated, exit)` here would have been satisfied by a
+        // code this change did not introduce — a test passing for the wrong reason, and indistinguishable
+        // from one that passes. Measured: it returns 4 on that fixture, and 5 on this one.
+        var (exit, output, _) = Run(new[]
+        {
+            "--submission", "good-sub.json", "--binding", "good-binding-two-groups.json",
+            "--generate-only", "--program", "ramp.ir",
+        });
+
+        Assert.Equal(LoopExit.GeneratedNotRunnable, exit);
+        Assert.Contains("THE ORDER THEY RUN IN IS NOT STATED", output, StringComparison.Ordinal);
+        Assert.Contains("NOTHING MAY BE RUN FROM THESE TWO DOCUMENTS", output, StringComparison.Ordinal);
+
+        // The IR is still printed, because it is correct and a reader needs it.
+        Assert.Contains("TAGTABLE HarnessMirror", output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AN_INADMISSIBLE_SUBMISSION_STILL_EXITS_4_because_the_gate_is_the_stronger_statement()
+    {
+        // Precedence, asserted rather than assumed: reporting the weaker verdict would send a reader to
+        // fix the ORDER of a submission that would still be refused at the gate.
+        var (exit, _, _) = Run(new[]
+        {
+            "--submission", "sub.json", "--binding", "binding-two-groups.json", "--generate-only", "--program", "ramp.ir",
+        });
+
+        Assert.Equal(LoopExit.GeneratedNotAdmissible, exit);
+    }
+
+    [Fact]
+    public void A_STATED_ORDER_LEAVES_THE_SAME_RUN_ALONE()
+    {
+        // The unaffected case, and it is what stops the check above being noise: state the order and the
+        // wave-order report goes green while nothing else about the run changes.
+        var output = Run(new[]
+        {
+            "--submission", "sub.json", "--binding", "binding.json", "--generate-only", "--program", "ramp.ir",
+        }).Output;
+
+        Assert.Contains("WAVE ORDER  : ORDERED:", output, StringComparison.Ordinal);
+        Assert.DoesNotContain("NOTHING MAY BE RUN FROM THESE TWO DOCUMENTS", output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void THE_MAP_HASH_RESTS_ON_A_DEFAULTED_RETENTIVE_EXTENT_AND_SAYS_SO()
+    {
+        // `retentiveBytes` is a property of the PROGRAM, and MirrorGeometry gives it no default on
+        // purpose - a deferred measurement must never acquire one that could be mistaken for a
+        // measurement. `Compose` supplies 256 when the binding is silent, and that number is an input to
+        // the MAP HASH and therefore to the BUILD STAMP. It is not refused - nobody in this loop can
+        // measure it, and a gate nobody can satisfy blocks its own recovery path - so it is PRINTED,
+        // beside the number it decides.
+        var output = Run(new[]
+        {
+            "--submission", "sub.json", "--binding", "binding.json", "--generate-only", "--program", "ramp.ir",
+        }).Output;
+
+        Assert.Contains("retentive M : 256 byte(s), DEFAULTED", output, StringComparison.Ordinal);
+        Assert.Contains("only as measured as that number is", output, StringComparison.Ordinal);
+
+        // *** AND THE STATED BRANCH, WHICH IS A WIRE FIELD LIKE ANY OTHER. *** A reader that dropped
+        // `retentiveBytes` would print 256 here and the map hash would be a different number for the same
+        // program — silently, because both readings look like a measurement.
+        var stated = Run(new[]
+        {
+            "--submission", "sub.json", "--binding", "binding-two-groups.json", "--generate-only", "--program", "ramp.ir",
+        }).Output;
+
+        Assert.Contains("retentive M : 16 byte(s), STATED by the binding", stated, StringComparison.Ordinal);
     }
 
     [Fact]
