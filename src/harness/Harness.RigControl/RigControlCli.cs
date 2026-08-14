@@ -7,10 +7,20 @@ namespace Harness.RigControl;
 /// <summary>
 /// <c>rig-control --run</c> — ask an allowlisted bench rig to go to RUN, then PROVE it did.
 ///
-/// <para><b>Why this exists.</b> <c>download-probe</c> requires <c>--disruptive</c> and therefore
-/// leaves the CPU stopped, and the conformance vectors cannot run against a stopped CPU. This is the
-/// one transition that closes that gap. It is a NEW CLASS OF WRITE to physical hardware and it is
-/// fenced accordingly.</para>
+/// <para><b>Why this exists — CORRECTED AGAINST THE ARTIFACT, 2026-08-14.</b> The brief for this tool
+/// said <i>"download-probe requires --disruptive and therefore stops the CPU"</i>. That is half true
+/// and the half it omits changes what this tool is for. <c>--disruptive</c> answers
+/// <c>StopModules/StopAll</c> AND <c>StartModules/StartModule</c>, and
+/// <c>NoActionFirstPolicy.DisruptiveAllowances</c> already calls the latter <i>"the only route to RUN
+/// this tool has"</i>. Measured live on 2026-08-14: <c>StopModules+StartModules answered, exit 0</c>,
+/// and <c>rig-read</c> six minutes later read <c>Running (8)</c>. *** SO AN ORDINARY DOWNLOAD DOES NOT
+/// LEAVE THE CPU STOPPED, AND THIS TOOL IS NOT THE ROUTINE RECOVERY PATH. ***</para>
+///
+/// <para><b>What it IS for is narrower and is named in the download probe's own source:</b>
+/// <c>StartModules</c> is raised in the POST delegate, <i>after</i> the download has already stopped
+/// the modules, so an abort there leaves the CPU stopped <b>"with no route to start it from inside
+/// that download"</b>. This is that route, from outside — together with the plainer case of a CPU a
+/// person stopped. It is a NEW CLASS OF WRITE to physical hardware and it is fenced accordingly.</para>
 ///
 /// <para><b>The shape of the thing, in order.</b> Fence (no device contacted) → plan → <c>--yes</c> →
 /// connect → identity → run state BEFORE → request → run state AFTER. Every step above the connect is
