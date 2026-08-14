@@ -577,7 +577,7 @@ internal static class Program
             }
         }
 
-        var result = new Model.ExportAllResult(options.OutDir, entries);
+        var result = new Model.ExportAllResult(options.OutDir, entries, options.IncludeTagTables);
         Console.WriteLine(options.Json
             ? OutputFormatter.FormatExportAllJson(result)
             : OutputFormatter.FormatExportAllTable(result));

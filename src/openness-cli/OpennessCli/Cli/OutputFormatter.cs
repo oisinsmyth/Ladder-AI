@@ -1152,10 +1152,27 @@ public static class OutputFormatter
             .Append(result.RefusedCount).Append(" refused, ")
             .Append(result.FailedCount).Append(" failed\n");
 
-        if (result.IsComplete)
+        if (result.IsComplete && result.TagTablesIncluded)
         {
-            sb.Append("COMPLETE: every block and type in the project was exported. Safe to compare against with\n")
-                .Append("          converter drift-check --project <ir-dir> --exports ").Append(result.OutDir).Append(" --complete\n");
+            sb.Append("COMPLETE: every block, type and tag table in the project was exported. Safe to compare against\n")
+                .Append("          with converter drift-check --project <ir-dir> --exports ").Append(result.OutDir).Append(" --complete\n");
+        }
+        else if (result.IsComplete)
+        {
+            // The scope the old wording dropped. `COMPLETE: every block and type` was accurate; the
+            // recommendation that followed it was not, because `--complete` means "treat this
+            // directory as EVERYTHING" and this directory has no tag tables in it. A reader followed
+            // that advice literally and got two SKIPPED rows for tag tables that were never exported
+            // — findings about the dump, wearing the costume of findings about the controller.
+            // ADVICE IS A CLAIM, and it is read at exactly the moment the reader is deciding what to
+            // do next, which is the worst possible moment for a sentence narrower than its wording.
+            sb.Append("COMPLETE: every block and type in the project was exported.\n")
+                .Append("          *** TAG TABLES ARE NOT IN THIS DIRECTORY — --tagtables was not given. *** So it is\n")
+                .Append("          NOT the whole project, and it must NOT be handed to drift-check --complete as-is:\n")
+                .Append("          that flag means 'treat this directory as everything', so every tag table would come\n")
+                .Append("          back SKIPPED — a finding about this dump, reported as one about the controller.\n")
+                .Append("          Re-run with --tagtables for a directory --complete can be pointed at, or drop\n")
+                .Append("          --complete to ask the weaker question (does everything PAIRED here match?).\n");
         }
         else
         {
@@ -1175,6 +1192,15 @@ public static class OutputFormatter
         {
             outDir = result.OutDir,
             complete = result.IsComplete,
+
+            // Carried so a MACHINE consumer cannot make the mistake the human advice used to invite:
+            // `complete` answers "was everything ATTEMPTED produced?", which is silent about tag
+            // tables. `safeForDriftCheckComplete` answers the question a caller reaching for
+            // `--complete` is actually asking, and the two differ exactly when --tagtables was not
+            // given.
+            tagTablesIncluded = result.TagTablesIncluded,
+            safeForDriftCheckComplete = result.IsComplete && result.TagTablesIncluded,
+
             exported = result.ExportedCount,
             refused = result.RefusedCount,
             failed = result.FailedCount,

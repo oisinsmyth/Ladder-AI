@@ -109,6 +109,9 @@ public class ExportAllTests
 
     private static ExportAllResult Result(params ExportAllEntry[] entries) => new(OutDir, entries);
 
+    private static ExportAllResult ResultWithTagTables(params ExportAllEntry[] entries) =>
+        new(OutDir, entries, TagTablesIncluded: true);
+
     private static ExportAllEntry Entry(string name, ExportAllOutcome outcome, string? detail = null) =>
         new(name, "Block", "PLC_1/Program blocks", outcome == ExportAllOutcome.Refused ? null : @"C:\dump\x.xml", outcome, detail);
 
@@ -143,6 +146,70 @@ public class ExportAllTests
         // The consequence has to be stated, not left to be inferred from a count.
         Assert.Contains("not in the controller", partial);
         Assert.DoesNotContain("COMPLETE: every block", partial);
+    }
+
+    // ---- the ADVICE, which was narrower than its wording (2026-08-14) --------------------------
+
+    /// <summary>
+    /// *** A COMPLETE DUMP WITHOUT --tagtables MUST NOT RECOMMEND --complete. ***
+    ///
+    /// The old report said "COMPLETE: every block and type in the project was exported" - accurate,
+    /// and appropriately scoped - and then recommended `drift-check --complete`, WHOSE ENTIRE MEANING
+    /// IS "treat this directory as everything". A reader followed it literally and got two spurious
+    /// SKIPPED rows for tag tables that were never exported: findings about the dump, presented as
+    /// findings about the controller.
+    ///
+    /// <para>ADVICE IS A CLAIM. The recommendation dropped the scope the sentence above it had been
+    /// careful to state, at exactly the moment the reader was deciding what to do next.</para>
+    /// </summary>
+    [Fact]
+    public void Table_WithoutTagTables_NamesTheOmission_AndWithholdsTheCompleteRecommendation()
+    {
+        var text = OutputFormatter.FormatExportAllTable(Result(Entry("A", ExportAllOutcome.Exported)));
+
+        // The accurate half is kept. It was never the problem.
+        Assert.Contains("COMPLETE: every block and type in the project was exported.", text);
+
+        Assert.Contains("TAG TABLES ARE NOT IN THIS DIRECTORY", text);
+        Assert.Contains("must NOT be handed to drift-check --complete", text);
+        Assert.Contains("Re-run with --tagtables", text);
+
+        // And the recommendation itself is gone - naming the hazard while still printing the command
+        // underneath it would be a warning, and a warning is not a gate.
+        Assert.DoesNotContain("Safe to compare against", text);
+    }
+
+    /// <summary>
+    /// *** THE CONTROL. *** With --tagtables the directory really is the whole project, and the
+    /// recommendation must come back - otherwise this is a report that never recommends anything,
+    /// which passes the test above for the wrong reason and helps nobody.
+    /// </summary>
+    [Fact]
+    public void Table_WithTagTables_DoesRecommendComplete()
+    {
+        var text = OutputFormatter.FormatExportAllTable(ResultWithTagTables(Entry("A", ExportAllOutcome.Exported)));
+
+        Assert.Contains("every block, type and tag table", text);
+        Assert.Contains("Safe to compare against", text);
+        Assert.Contains("--complete", text);
+        Assert.DoesNotContain("TAG TABLES ARE NOT IN THIS DIRECTORY", text);
+    }
+
+    /// <summary>
+    /// The machine consumer gets the same distinction as the human one. `complete` answers "was
+    /// everything ATTEMPTED produced?" and is silent about tag tables; `safeForDriftCheckComplete`
+    /// answers the question a caller reaching for `--complete` is actually asking.
+    /// </summary>
+    [Fact]
+    public void Json_SeparatesCompleteFromSafeForDriftCheckComplete()
+    {
+        var without = OutputFormatter.FormatExportAllJson(Result(Entry("A", ExportAllOutcome.Exported)));
+        Assert.Contains("\"complete\": true", without);
+        Assert.Contains("\"tagTablesIncluded\": false", without);
+        Assert.Contains("\"safeForDriftCheckComplete\": false", without);
+
+        var with = OutputFormatter.FormatExportAllJson(ResultWithTagTables(Entry("A", ExportAllOutcome.Exported)));
+        Assert.Contains("\"safeForDriftCheckComplete\": true", with);
     }
 
     [Fact]
