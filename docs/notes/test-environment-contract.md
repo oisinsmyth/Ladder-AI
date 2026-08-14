@@ -328,6 +328,9 @@ This is the one table to read before omitting anything. Four treatments, and the
 | a signal's **instrumentation mode** | **CHECKED — DERIVED, a real pass** | there is no field for it. The mode is read off what the copy layer generates, which emits no per-signal latch, so `Sampled` is the derived answer and a `Latched` expectation on such a signal is refused |
 | `latchedBy` | **the binding claims NO latch** — a derivation, not a default | the generator emits no latch, so an unnamed latcher is the *true* state. It fails closed: `Sampled` stands and any `Latched` expectation is refused |
 | **verification that a named `latchedBy` block is deployed** | ***never performed — the gate takes the NAME, not the FACT*** | §2.8. Stated in this document so it survives independently of any rendering path, after an admission rendered **only on the no-problems branch** let four claims through unremarked |
+| a slot binding's `startCondition` (**null**) | **ADMISSIBLE — a CLAIM**: *this block has no start gate* | §6.1. Inventing one would **fabricate a stimulus**. ***But it costs the per-slot T=0 AND the X-E start echo, which sit behind one guard*** — so no timing claim, and a `Never` cannot be told from *the block never ran* |
+| a **drifted** model or block (`drift-check`) | **NOT ADMISSIBLE — verdict `STALE`** | §2.9. Not `FAIL` (the block may be correct), not `REFUSED` (the author broke no rule): ***the vector's premise expired underneath it***, the same road AMB-19 travels |
+| an **export-only** object (in the controller, no `.ir`) | ***NOT CHECKED***, and **named, never counted** | §2.9. The corpus is partial, so nothing can say what it writes or models — the same refusal the conflict graph already makes |
 | ***an UNKNOWN field, anywhere in a submission*** | ***REFUSED, NAMING IT*** | see below — the complement of this whole table |
 | `blockCompression`, at `runtimeCompression` > 1 | ***NOT CHECKED*** | three ceilings compared against nothing |
 | `blockCompression`, at `runtimeCompression` = 1 | **CHECKED, a real pass** | nothing is scaled, so none of the three *can* bind — **computed from the submission, not assumed** |
@@ -780,6 +783,63 @@ see anything — which would make the assertion true by construction, and is the
 pipeline exists to prevent arriving through a new door. **`latchedBy` names an INSTRUMENT: something
 that exists so a value can be observed, and would be pointless otherwise.**
 
+#### ✅ How to introduce a translation WITHOUT touching the thing under test
+
+**Measured, and it is the pattern to copy.** A corpus lane needed its objects' spec names to differ from
+their tag names — otherwise the `specName` join is exercised only by pairs that happen to be equal,
+which is the accident that hid this in the first place. It renamed **in the register, not the block**,
+and re-ran `drift-check`: ***all eight objects still MATCH.***
+
+> *** IT CREATED THE DIVERGENCE IN THE REGISTER, NOT IN THE BLOCK — THE ONE EDIT THAT CANNOT CREATE A
+> DIVERGENCE. *** Renaming the block's members instead would have moved **both** names together and left
+> them equal again: the same accident, more work, and a modified block under test into the bargain.
+
+**So: to make a translation testable, move the name the specification uses. Never the name the
+controller uses.**
+
+---
+
+### 2.9 What a submission may assume about the PROJECT it is submitted against. ADDED 2026-08-14
+
+**Right now it assumes silently, and the assumption has been measured false.** The first whole-project
+`drift-check --complete` against a fresh controller dump reported **4 DRIFTED** and **3 EXPORT-ONLY**.
+
+#### A DRIFTED model is NOT admissible, and the verdict is `STALE`
+
+> 🔴 **One of the four is `iDB_HopperBlockageStim` — *the stimulus model the live vector set depends
+> on*.** ***A stimulus model that has drifted from its IR is a model whose behaviour nobody has
+> checked.***
+
+M4 is already a gate: a vector may assert only behaviours the model **claims to represent**. But that
+declaration describes the model **as its IR states it** — so if the deployed object has drifted, ***the
+fidelity declaration describes a different object from the one that will run***, and every M4 pass is a
+set-difference against the wrong set.
+
+> ***THE VERDICT IS `STALE`, NEVER `FAIL`, AND NEVER `REFUSED`.***
+>
+> - Not `FAIL`: **the block may be perfectly correct.** Blaming it for a model that drifted underneath
+>   it sends an agent to edit correct logic — the identical defect to §2.5 and to the missing predicate.
+> - Not `REFUSED`: `REFUSED` reads as ***the author broke a rule***, and this author broke none.
+> - **`STALE` is exactly right**, and it is the *same road* AMB-19 travels: **the vector's premise
+>   expired underneath it.** The premise there was a bound; here it is a model.
+
+#### An EXPORT-ONLY object makes the corpus PARTIAL — `NOT CHECKED`, and NAMED
+
+An object **in the controller with no `.ir` at all** is not a drift, it is a **gap in the project's
+description**. Nothing can say what it writes, what it models or whether it conflicts — so it is the
+partial-corpus case the conflict graph already refuses on: *an unread object may hold the second writer
+that makes a signal a conflict.*
+
+**Report them BY NAME, never as a count.** *"3 export-only"* is a number; the names are what let a reader
+tell a forgotten harness object from a deliverable nobody exported.
+
+#### The rule, stated once
+
+> **A submission is made against a project state, and that state is part of the result.** A green
+> obtained against a drifted stimulus model is not a green — the same way a green does not survive its
+> validity stamp (§8.3). ***Run `drift-check --complete` before a wave, and read the SCOPE line***: a
+> green summary without it only means *everything paired matched*, which is a different question.
+
 ---
 
 ## 3. `Basis` — the clause AND the assertion, and why both
@@ -1092,6 +1152,61 @@ against the *observed* scan counter rather than assumed, and T=0 recorded rather
 > is worth nothing. **Bind by name.** An author who reasons about bit positions is relying on an
 > unverified premise, and this is the contract's one live "do not do that" on the write side.
 
+### 6.1 ✅ RULED 2026-08-14 — ***`startCondition: null` IS ADMISSIBLE, AND IT IS A CLAIM***
+
+> 🔴 ***WHY THIS IS WRITTEN DOWN AT ALL: A RULING THAT LIVES ONLY IN A LANE MESSAGE IS ONE THE NEXT
+> READER CANNOT FIND.*** We have already watched that produce a real defect — the spec-to-block name
+> translation existed **only in a prose table**, which is exactly why a predicted finding could be
+> laundered in it and why three mechanical paths broke on the same missing field (§2.8). *A ruling in a
+> message has a half-life.*
+
+**The contradiction was in the prose above.** §6 says *one per slot, and exactly one*; **D37 reads the
+opposite way** — *"not every block has one, and the absence is meaningful rather than a default."* A
+corpus of purely reactive blocks — a comparator, a level alarm, held inert by its input values alone —
+cannot satisfy both.
+
+#### The reconciliation: these are TWO OBJECTS, and the prose conflated them
+
+| | |
+|---|---|
+| **the slot's start bool** | a **mirror bit**, allocated per slot and raised at the commit. ***Exactly one per slot, always*** — §6's rule is untouched |
+| **`startCondition`** | the ***block's own existing start gate***, which that mirror bit is copied into. **Not every block has one** |
+
+> ***RULING: a slot whose block has no start gate declares `startCondition: null`, and that is
+> admissible. Null is a CLAIM — "this block has no start gate" — never a blank.***
+
+**Inventing one would be FABRICATING A STIMULUS**, which this contract already refuses one field over:
+*zero is a value a block could legitimately be driven with, so supplying one invents the stimulus*
+(§2.6). And binding to a test-only input **added for the purpose** is scaffolding inside the block under
+test — ***what ships would then not be what was tested.***
+
+#### 🔴 THE COST IS REAL, AND IS STATED RATHER THAN SMOOTHED
+
+***The generator guards the start-bool network AND the X-E start echo behind the SAME test.*** A
+null-start slot gets **neither**:
+
+- **No per-slot T=0 *for the block*.** The commit still raises the slot's bit — **but nothing in this
+  block observes it.** The block began reacting when its inputs were written, at the inert establish, so
+  the rising edge D37 makes T=0 **is not an event in this block's history.**
+- **No per-slot evidence the code ran.** X-E's echo reads back the block's *own* start condition — the
+  thing the program actually ran on, rather than what the client wrote. With no condition, there is
+  nothing to echo.
+
+##### What a result from a null-start slot does NOT license
+
+- ***No "when".*** Every scan-stamp is a difference from T=0 and this slot has none of its own. **Do not
+  admit a `Stamped` assertion, or any timing claim, on a null-start slot.** `MaxDuration` still bounds
+  it — but from the *wave's* commit, not from this block's start.
+- ***No per-slot liveness.*** "This slot ran" rests on wave-level evidence alone. The stimulus check and
+  manifest presence still apply; the per-slot echo does not exist.
+- 🔴 ***AND THE SHARP ONE: A `NEVER` ASSERTION PASSING ON A NULL-START SLOT CANNOT DISTINGUISH "THE
+  FORBIDDEN STATE NEVER OCCURRED" FROM "THE BLOCK NEVER RAN."*** A `Never` passes by having seen
+  nothing, and the per-slot evidence that anything happened at all is precisely what is absent. **Treat
+  it as carrying no weight until liveness is established some other way.**
+
+**So a PASS here says: *these assertions held somewhere in this wave* — never *after this slot
+started*.**
+
 ---
 
 ## 7. The blacklist
@@ -1132,10 +1247,11 @@ and manifest presence.
 | ***STALE*** | ***the experiment never ran*** — **or the vector's premise expired** (§2.5) | anything whatsoever about the block |
 | **REFUSED** | the vector was inadmissible (observability, fidelity, authorship, basis) | a defect in the block |
 
-***`STALE` HAS TWO ROADS AND THEY NEED DIFFERENT INSTRUCTIONS*** (§2.5). A frozen mirror is a **RIG**
-problem — the experiment never ran. An out-of-date `boundsUsed` is a **VECTOR** problem — the experiment
-ran fine and measured the wrong number. **Read which one the result names before acting**, and in
-neither case edit the block.
+***`STALE` HAS THREE ROADS AND THEY NEED DIFFERENT INSTRUCTIONS.*** A frozen mirror is a **RIG** problem
+— the experiment never ran. An out-of-date `boundsUsed` is a **VECTOR** problem (§2.5) — the experiment
+ran fine and measured the wrong number. A **drifted model** is a **PROJECT** problem (§2.9) — the
+experiment ran fine against an object that is not the one the fidelity declaration describes. **Read
+which one the result names before acting**, and in none of the three edit the block.
 
 ### 8.2 ***`Stale` must be unmistakable, and here is why it is hard***
 

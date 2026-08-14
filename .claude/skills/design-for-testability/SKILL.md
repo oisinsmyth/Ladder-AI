@@ -82,6 +82,7 @@ Contract §10's surface, in the order a submission meets it, with the **verifier
 
 | # | gate | what the contract requires | verifier today | outcome |
 |---|---|---|---|---|
+| **0b** | **unknown fields** | every field in the document is one the schema reads | `SubmissionGate`. ***A field the schema does not know is a REFUSAL NAMING IT, never a silent drop*** — and if nobody supplied the unknown-field set at all, that is **NOT CHECKED**, because a dropped field reads as an accepted one | **CHECKED** *(NOT CHECKED if the reader supplied no extension data)* |
 | 1 | **schema** | every §2 field present and typed; `MaxDuration` non-empty | `SubmissionGate` — **`harness-gate check`** | **CHECKED** |
 | 2 | **authorship (D6)** | vector author ≠ block author | `AgentIdentity` — **normalised**, so a case/whitespace variant no longer passes it | **CHECKED** |
 | 3 | **basis — clause** | resolves to written text | `Admissibility` against `AssertionEnumeration`, populated from the submission's `enumeration` block | **CHECKED** |
@@ -283,6 +284,13 @@ Set-difference: every asserted behaviour must be in the model's `Represents`. A 
 nothing, or that claims and disclaims the same behaviour, is **unusable** — a declaration that says two
 things says nothing.
 
+> 🔴 ***AND THE DECLARATION DESCRIBES THE MODEL AS ITS IR STATES IT.*** If the deployed object has
+> **drifted**, the fidelity declaration describes a *different object from the one that will run*, and
+> every M4 pass is a set-difference against the wrong set. ***A stimulus model that has drifted from its
+> IR is a model whose behaviour nobody has checked*** — measured: `iDB_HopperBlockageStim`, the stimulus
+> model the live vector set depends on, was one of four drifted objects. **Not admissible; the verdict is
+> `STALE`, never `FAIL` and never `REFUSED`** (contract §2.9).
+
 ### Gate 5 — observability, ***the one with teeth***
 Read the floor from **§12a derivation 1**. Do not carry the number here or in your report: it has moved
 twice, and a restated constant will one day refuse the wrong vectors with great confidence.
@@ -350,6 +358,24 @@ refused. The block's own opinion of its progress is *a claim under test*, not ev
 observation.
 
 ### Gate 7 — start bool
+> 🔴 ***A SLOT MAY DECLARE `startCondition: null`, AND IT IS ADMISSIBLE*** (contract §6.1, ruled
+> 2026-08-14). ***The two objects are different and the prose used to conflate them:*** the slot's start
+> **bool** is a mirror bit, always exactly one per slot; `startCondition` is the ***block's own existing
+> start gate***, and a purely reactive block — a comparator, a level alarm — has none. Inventing one
+> would **fabricate a stimulus**, and binding to a test-only input added for the purpose is scaffolding
+> inside the block under test.
+>
+> **But price it, because the generator guards the start bool and the X-E start echo behind the SAME
+> test — a null-start slot gets neither:**
+> - ***No "when".*** No per-slot T=0, so **do not admit a `Stamped` assertion or any timing claim** on
+>   such a slot. `MaxDuration` bounds it from the *wave's* commit, not this block's start.
+> - ***No per-slot evidence the code ran.*** X-E echoes the block's own condition; there is none.
+> - 🔴 ***A `NEVER` PASSING ON A NULL-START SLOT CANNOT BE TOLD FROM "THE BLOCK NEVER RAN"*** — a
+>   `Never` passes by seeing nothing, and the per-slot evidence that anything happened is exactly what is
+>   missing. **It carries no weight until liveness is established some other way.**
+>
+> A pass here says *these assertions held somewhere in this wave*, never *after this slot started*.
+
 Exactly one per slot. ***Bound by NAME, never by bit position*** — the bit order within the start-bool
 register is `[I]`, not `[M]`, and the simulator and `BitAddressOf` agree *from the same premise*, so
 their agreement is worth nothing. Raised in one transaction with every other slot's start bool (X-A,
@@ -520,10 +546,17 @@ So for every vector, require and record:
 |---|---|---|
 | frozen mirror / no stimulus confirmed | ***RIG*** problem | the experiment never ran. Nothing here is evidence about anything |
 | an out-of-date `boundsUsed` (AMB-19) | ***VECTOR*** problem | the experiment ran fine and **measured the wrong number**. Re-read the vector against the current bounds table and re-submit |
+| a **drifted** model or block (§2.9) | ***PROJECT*** problem | the experiment ran fine **against an object that is not the one the fidelity declaration describes**. Re-export or re-import, then re-run |
 
-**In neither case do you edit the block** — and telling somebody *"the experiment never ran"* when it
-was the premise that expired sends them to the wrong place entirely. **Read which road the result
-names.**
+**In none of the three do you edit the block** — and telling somebody *"the experiment never ran"* when
+it was the premise that expired, or the project that moved, sends them to the wrong place entirely.
+**Read which road the result names.**
+
+> 🔴 ***AND CHECK THE PROJECT BEFORE THE WAVE, NOT AFTER.*** `drift-check --complete` against a fresh
+> controller dump — **and read its SCOPE line**, because a green summary without it only means
+> *everything paired matched*. Measured on the first whole-project run: **4 DRIFTED, one of them the
+> stimulus model the live vector set depends on**, and **3 EXPORT-ONLY** — objects in the controller with
+> no `.ir` at all, which make the corpus partial and are ***named, never counted***.
 
 ### `Stale` is the one that will fool you
 
