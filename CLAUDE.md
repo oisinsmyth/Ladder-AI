@@ -191,7 +191,14 @@ dotnet build -c Release src/converter/converter.sln   # AFTER ANY CONVERTER CHAN
 
 **A block can now be deployed to a bench rig and observed while it runs.** Design:
 `docs/notes/PC-Client-Modbus-Spec-Draft-final.txt`. Build record:
-`docs/notes/test-environment-build-plan.md`. Submission format: `docs/notes/test-environment-contract.md`.
+`docs/notes/test-environment-build-plan.md` (**CLOSED 2026-08-14**). Submission format:
+`docs/notes/test-environment-contract.md`.
+
+➜ ***BEFORE USING ANY OF THIS ON A REAL JOB, READ `docs/notes/live-project-readiness.md` FIRST.*** One
+page, written to be read once before you start: what is proven **against the controller** versus what
+is proven only against its own tests, the four traps that have each cost a day, and the one-line
+answer — **deploy / read-back / analyse is ready; the closed-loop conformance path has never run a
+wave end to end.**
 
 🔴 ***READ THE STATUS COLUMN BEFORE RELYING ON ANYTHING HERE.*** Most of it is built and
 unit-tested; a smaller part has been run against a controller. **They are different claims**, and
