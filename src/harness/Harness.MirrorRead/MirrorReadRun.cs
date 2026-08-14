@@ -172,6 +172,14 @@ public static class MirrorReadRun
         ReportControl(controlA, output);
         output.WriteLine();
 
+        // *** THE INTERVAL IS MEASURED, NOT THE REQUESTED WAIT. *** The scan advance is only a rate
+        // when it is divided by the time that actually passed, and the requested wait is not that time:
+        // the whole-area read and the boundary sweep happen in between, and each costs a round trip.
+        // Dividing by the requested figure would report a per-scan period that is wrong by however long
+        // the intervening probes took, which is exactly the kind of derived-then-quoted number this
+        // project keeps having to retract.
+        var betweenControls = System.Diagnostics.Stopwatch.StartNew();
+
         // ---- 4. THE WHOLE DECLARED AREA, IN ONE TRANSACTION ----
         //
         // One request over the full width, because that is the question in its plainest form: can a
@@ -224,12 +232,13 @@ public static class MirrorReadRun
         }
 
         var controlB = RegisterRead.Perform(source, 0, 4);
+        betweenControls.Stop();
         output.WriteLine($"  FC03(0, 4)  {controlB.Describe()}");
         ReportControl(controlB, output);
         output.WriteLine();
 
         // ---- 7. VERDICTS ----
-        var exit = Verdict(options, controlA, controlB, wide, probes, findings, output);
+        var exit = Verdict(options, controlA, controlB, wide, probes, betweenControls.ElapsedMilliseconds, findings, output);
 
         output.WriteLine();
         output.WriteLine("Operations performed on the device: TCP connect, FC03 read holding registers, disconnect.");
@@ -275,6 +284,7 @@ public static class MirrorReadRun
         RegisterRead controlB,
         RegisterRead wide,
         IReadOnlyList<RegisterRead> probes,
+        long measuredIntervalMs,
         List<string> findings,
         TextWriter output)
     {
@@ -368,9 +378,23 @@ public static class MirrorReadRun
             }
             else
             {
-                output.WriteLine($"  scan counter: {scanA.Raw} -> {scanB.Raw}, advance {advance} scan(s) over " +
-                                 $"{options.IntervalMs} ms of requested wait. The copy layer is EXECUTING, over " +
-                                 "Modbus — not a stale value in memory.");
+                output.WriteLine($"  scan counter: {scanA.Raw} -> {scanB.Raw}, advance {advance} scan(s) over a " +
+                                 $"MEASURED {measuredIntervalMs} ms between the two reads ({options.IntervalMs} ms " +
+                                 "of it a requested wait, the rest the intervening probes). The copy layer is " +
+                                 "EXECUTING, over Modbus — not a stale value in memory.");
+
+                // Reported as a DERIVED figure with both of its inputs beside it, and deliberately not
+                // compared against any compiled-in expectation. This tool does not know what the scan
+                // period ought to be, and one that did could not be used to find out; a reader who has a
+                // recorded figure can compare it against this and see a disagreement, which is the whole
+                // value of printing it.
+                if (advance > 0)
+                {
+                    output.WriteLine($"                derived: {measuredIntervalMs / (double)advance:F2} ms per scan " +
+                                     $"({measuredIntervalMs} ms / {advance} scans). DERIVED, from two reads in one " +
+                                     "session — not a scan-time measurement, and it includes whatever the counter " +
+                                     "actually counts, which this tool does not know.");
+                }
             }
 
             if (controlA.Values[0] != controlB.Values[0] || controlA.Values[1] != controlB.Values[1])

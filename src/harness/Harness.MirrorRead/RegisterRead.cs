@@ -100,10 +100,34 @@ public sealed record RegisterRead(
         ReadOutcome.Ok => $"OK              [{ElapsedMs,5} ms]  {Hex}",
         ReadOutcome.RefusedByServer =>
             $"REFUSED BY SERVER [{ElapsedMs,3} ms]  Modbus exception code {SlaveExceptionCode} " +
-            $"({ExceptionCodeName(SlaveExceptionCode)}) — {Failure}",
+            $"({ExceptionCodeName(SlaveExceptionCode)}) — {DeviceFactsFrom(Failure)}",
         _ => $"NOT ESTABLISHED [{ElapsedMs,5} ms]  no answer from the server, so this probe measured " +
              $"NOTHING about the address space — {Failure}",
     };
+
+    /// <summary>
+    /// The part of an NModbus <c>SlaveException</c> message that came from the DEVICE, without the
+    /// library's stock 150-word explanation of what exception code 2 means in general.
+    ///
+    /// <para>The first two lines carry the function code and the exception code — the facts the server
+    /// sent. Everything after them is the same paragraph for every occurrence, and printing it on every
+    /// probe row buries the measurement in boilerplate.</para>
+    ///
+    /// <para><b>The truncation is announced rather than silent.</b> A narrowing nobody can see becomes a
+    /// place to hide: the marker says text was dropped and how much, so a reader can tell "the library
+    /// said nothing more" from "something was cut".</para>
+    /// </summary>
+    public static string DeviceFactsFrom(string? failure)
+    {
+        if (string.IsNullOrEmpty(failure)) return "<no message>";
+
+        var lines = failure.Split('\n').Select(l => l.TrimEnd('\r')).ToArray();
+        var kept = lines.Take(2).Select(l => l.Length > 120 ? l[..120] : l).ToArray();
+        var dropped = failure.Length - kept.Sum(l => l.Length);
+
+        return string.Join(" | ", kept) +
+               (dropped > 0 ? $" [+{dropped} chars of NModbus's stock explanation, not device data]" : string.Empty);
+    }
 
     /// <summary>The standard names, so a code does not have to be looked up to be read.</summary>
     public static string ExceptionCodeName(byte? code) => code switch

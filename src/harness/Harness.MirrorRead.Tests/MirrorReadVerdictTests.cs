@@ -183,6 +183,37 @@ public class MirrorReadVerdictTests : IDisposable
         Assert.Contains("5678", output, StringComparison.Ordinal);
     }
 
+    // ---- the truncation announces itself ---------------------------------------------------------
+
+    /// <summary>
+    /// NModbus attaches a 150-word stock explanation of exception code 2 to every refusal, and printing
+    /// it on every probe row buries the measurement. The device's own facts — the function code and the
+    /// exception code — are kept, and *** THE DROP IS ANNOUNCED WITH ITS SIZE ***, because a narrowing
+    /// nobody can see becomes a place to hide: a reader must be able to tell "the library said nothing
+    /// more" from "something was cut".
+    /// </summary>
+    [Fact]
+    public void TheStockExplanationIsDropped_AndTheDropIsAnnounced()
+    {
+        var message = "NModbus.SlaveException: thrown.\nFunction Code: 131\nException Code: 2 - " +
+                      new string('x', 500);
+
+        var kept = RegisterRead.DeviceFactsFrom(message);
+
+        Assert.Contains("Function Code: 131", kept, StringComparison.Ordinal);
+        Assert.Contains("chars of NModbus's stock explanation", kept, StringComparison.Ordinal);
+        Assert.DoesNotContain(new string('x', 200), kept, StringComparison.Ordinal);
+    }
+
+    /// <summary>A short message loses nothing, and says so by NOT announcing a drop.</summary>
+    [Fact]
+    public void AShortMessageIsNotTruncated_AndAnnouncesNoDrop()
+    {
+        var kept = RegisterRead.DeviceFactsFrom("scripted refusal");
+
+        Assert.Equal("scripted refusal", kept);
+    }
+
     /// <summary>A source that throws whatever it was handed, for the classification tests.</summary>
     private sealed class ThrowingSource : IRegisterSource
     {
