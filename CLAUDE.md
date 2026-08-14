@@ -226,9 +226,16 @@ this project's most expensive failures have all been a green that examined nothi
 - ***`--claims <dir>` MUST BE SHARED BY EVERY AGENT ON THE PROJECT.*** Agents work in separate
   worktrees, and a per-worktree claims dir is **always empty, grants every claim, and looks exactly
   like success.** There is no default on purpose.
-  ✅ **THE SHARED STORE FOR `test-project001` IS `C:\ProgramData\Ladder-AI\claims\test-project001`**
-  — created 2026-08-14, deliberately **outside every worktree** so it cannot be shadowed. Pass it as
-  `--claims` explicitly; do not rely on `$LADDER_CLAIMS_DIR` reaching a subagent.
+  ✅ **THE SHARED STORE ROOT IS `C:\ProgramData\Ladder-AI\claims`** — created 2026-08-14,
+  deliberately **outside every worktree** so it cannot be shadowed. Pass **exactly that** as
+  `--claims`; do not rely on `$LADDER_CLAIMS_DIR` reaching a subagent.
+  🔴 ***PASS THE ROOT, NOT THE PROJECT FOLDER — THE TOOL APPENDS THE PROJECT NAME ITSELF.*** Passing
+  `…\claims\test-project001` yields a store at `…\claims\test-project001\test-project001`: **a
+  second, empty store with the same name that grants every claim.** That is the shadowing the store
+  was moved out of the worktrees to prevent, *reintroduced by one path segment* — and it is
+  invisible, because **two agents making the same mistake agree with each other perfectly.**
+  Verified 2026-08-14 by running both forms and reading the `store=` line each printed; the stray
+  nested store was deleted. **Read the `store=` line the tool echoes; do not trust the argument.**
   **Verified connected, not assumed:** agent A acquired `FB9020` (**exit 0**), agent B was
   **REFUSED exit 1 on the same value, the refusal naming A's purpose** — an agent collision rather
   than an existence check — and agent B then acquired `FB9021` (**exit 0**), so the fence does not
