@@ -215,7 +215,9 @@ this project's most expensive failures have all been a green that examined nothi
   `RTT_typ 78` / `RTT_p90 102.79`, **re-confirmed on the current path 2026-08-14**.
 - **32-bit word order is HIGH-WORD-FIRST** — measured off a build stamp with distinguishable
   halves, no longer an assumption. A `Time` spans two registers and inherits it.
-- **X-D's compression ceiling is ~4.3×, not the spec's 10×** (timer floor `k × scan = 116.7 ms`).
+- **X-D's compression ceiling is ~4.3×, not the spec's 10×** (timer floor `k × scan = 116.7 ms`) —
+  ⚠️ **HALF-MEASURED, and on the term X-D says binds first: the scan is measured, `k ≈ 5` is X-D's
+  own number and has never been.** Treat 4.29× as *derived from one measured and one assumed input*.
 - **Harness objects reserve block numbers 9000–9999** per number space; **OBs are excluded** — an
   OB's number is fixed by its event class.
 

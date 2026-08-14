@@ -4439,3 +4439,37 @@ regeneration reproduces `16#21D74D35` exactly.
   and the scenario does not do what it says. Whether `Running` means *the plant* or *the scenario* is
   a `lad-coder` question and is NOT settled here — but it must be settled **before** D5's result is
   read, because the failure would present as a believable `TIMED-OUT`.
+
+---
+
+## ✅ THE RIG SERVES — AND TWO CONTRADICTIONS IN THIS FILE, STRUCK 2026-08-14
+
+**The `:503 REFUSED three of three` entry above is SUPERSEDED and must not be read as current.** It
+was true when written. After the owner enabled PUT/GET — which entails a hardware download and
+therefore **a CPU restart** — the port came up and **every predicted row passed**: span **35**,
+`start 35` → exception 2, the old 121-register span gone, the build stamp `21D7/4D35` **constant
+across reads a second apart**, the scan counter advancing, and the word order decoding **HIGH-FIRST**.
+
+🔴 **WHY IT CAME UP IS RECORDED AS UNEXPLAINED, WITH TWO CANDIDATES.** The owner's reading is the
+PUT/GET setting; mine is **the restart that came with it**, which is independently sufficient — it
+clears connection resources and re-executes the passive open, and `MB_SERVER` serves one connection
+per instance against a tunnel that had held a session. *** NEITHER WAS OBSERVED. *** Writing down
+"Modbus needs PUT/GET" would send the next person after a setting that was never the cause. The
+discriminating experiment — disable PUT/GET, which also restarts — is recorded and **not run**,
+because the rig is working and the question only matters when something next refuses.
+
+**The second contradiction is on the controller, not in this file:** a comment reading *"8 words from
+M1000.0"* sits beside a pointer of **`WORD 35`**. **The pointer is right and the comment is stale** —
+it is a leftover from the pre-widening geometry. Fix it when that block is next opened; do not
+re-derive the span from the comment.
+
+## ⚠️ AND A CORRECTION TO A FIGURE THIS DOCUMENT HAS BEEN QUOTING AS MEASURED
+
+*** X-D's `4.29×` COMPRESSION CEILING IS HALF-MEASURED. *** The scan period under it (23.33 ms) is
+measured; **`k ≈ 5` is X-D's own number and never has been** — and it is the term X-D itself says
+binds first. Every statement of "the measured timer floor is 116.7 ms" in this file should be read as
+*derived from one measured and one assumed input*. Corrected in `CLAUDE.md` too.
+
+Likewise the round-trip figures (**min 63 / med 72 / max 106 ms**) were taken against the **old
+generator build**, so they are a **corroboration** of §12a's constants on the current network path —
+**not a re-derivation**, and nothing was moved on them.
