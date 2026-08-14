@@ -203,6 +203,18 @@ the block goes invisible on the wire while every check stays green. **It bites o
   safe direction, but there is **no withdraw verb**, so clearing one dead agent's slot currently costs
   **every other agent's submission**. **Known, raised, deliberately not fixed overnight** — it is a
   change to the multi-agent ownership contract, not a defect.
+- ✅ ***THE CONCURRENCY CAMPAIGN IS NOW REPRODUCIBLE — `tools/hammer-waves.ps1`, COMMITTED.*** It was
+  ad-hoc scratch until 2026-08-14. Re-run against the current build: **2,330 submissions across 56
+  scenarios — 0 refused, 0 unusable, 0 no-result, 0 unnamed, 0 vanished, on-disk = admitted
+  everywhere, no strays.** `ACHIEVED CONCURRENCY` correct **both** ways at every level to 128: N slots
+  on one block → **N waves of 1, `SERIALISED`**; 4 corpus blocks → **4**. Full table:
+  `docs/notes/hammer-waves-rerun.md`.
+  ⚠️ **`Simultaneous` is a real barrier, not a hopeful one** — the parent holds the store's own lease
+  with `FileShare.None` while launching, then releases; **`lease-contended=yes` for 128 of 128.**
+  🔴 **WHAT IT DOES NOT SAY**, in the lane's own words: *no ceiling was reached*, so it says **nothing**
+  about the overnight *"~330 agents"* figure; **achieved concurrency above 4 on COMPUTED closures is
+  unmeasured** — the 128-wide number uses *declared* closures, and 4 is a **corpus** ceiling, not a
+  tool one; and the durations are **one machine, four logical processors, one build.**
 - ***THE LEASE CRASHED AT 48 CONCURRENT AGENTS AND WAS CLEAN AT 8, 16 AND 32.*** Fixed. Now measured
   flat to 128 (69–122 ms per agent across a 16× range, no knee). **The practical ceiling is the
   caller's timeout — roughly 330 agents at the 30 s default — and the failure there is a NAMED

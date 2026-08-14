@@ -362,8 +362,26 @@ running does not license:
       conclusion did not flip to *"expected to work"* — it moved to **NOT ESTABLISHED IN EITHER
       DIRECTION**, because three untested reasons survived that the retired fact never touched. *An
       untested thing does not become true when the argument against it fails.*
+- *** A FIX JUSTIFIED BY A MEASUREMENT MUST BE RE-JUSTIFIED WHEN THE MEASUREMENT IS RETRACTED — AND
+  USUALLY IT EVAPORATES. *** 2026-08-14, volunteered by the lane that wrote it: a buffering stdout
+  writer for `wave-cli`, **401 tests green, output byte-identical**, built to cure a super-linearity
+  that turned out to be the harness's own launcher. Re-measured under a sane launcher: **unbuffered
+  188-193 ms, buffered 209 ms.** ***It bought nothing, and its entire justification was a property of
+  the instrument.*** **It was not committed.**
+    ➜ **When an instrument is retracted, walk the changes it motivated** — not only the numbers it
+      produced. *A correct-looking, fully-tested change with a dead reason is harder to remove later
+      than to decline now.*
+- *** "SUPERSEDED, NOT CONFIRMED" IS THE HONEST VERDICT ON AN EARLIER FIGURE YOU CANNOT RE-TAKE. ***
+  Same run: the overnight drivers had never been committed, so the old timings could not be checked
+  for the launcher defect. The new figures are *consistent* with them — and the lane recorded that as
+  ***"an absence of the symptom, not a clean instrument"***, marking the old numbers superseded rather
+  than corroborated. **Agreement between a suspect instrument and a good one is not evidence about the
+  suspect one.**
 - *** AN INSTRUMENT DOES NOT FAIL BY PRODUCING NOISE. IT FAILS BY PRODUCING A CLEAN, PLAUSIBLE,
-  PUBLISHABLE FINDING ABOUT ITS SUBJECT. *** The sharpest instance yet, 2026-08-14. A concurrency
+  PUBLISHABLE FINDING ABOUT ITS SUBJECT. *** ⚠️ **TWICE IN SUCCESSION, 2026-08-14** — the replacement
+  launcher (raw `Process` + `ReadToEndAsync`) **starved the thread pool** and gave *single* agents
+  **4-5 SECOND** service times at n=16. **The cure was deleting the readers, not tuning them**, after
+  which all three shapes fell together at **1523 / 1512 / 1450 ms.** The sharpest instance yet, 2026-08-14. A concurrency
   harness launched its children with `Start-Process -RedirectStandardOutput`, which on PS 5.1 pumps
   the child's stream **in managed code**. Same command, same store, **no concurrency at all**:
 
