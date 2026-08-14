@@ -64,6 +64,30 @@ width figure, so it is revisited on BREADTH — many sessions, different times o
 measuring more widths. *** NOTHING ARGUES FOR CAPPING SLOT WIDTH ON TIMING GROUNDS. *** A live
 proposal to stop specifying the tail as a p99 point estimate at all — p90 plus an explicit
 exceedance rate — sits UNADOPTED as F-5, for the owner.
+(*** F-5 WAS SUBSEQUENTLY ADOPTED AND ITS TWO CONSTANTS WERE EXTRACTED. *** This line, and the F-5
+entry in §12a, both went on saying otherwise for a day — see the correction in §12a.)
+
+*** WHAT CHANGED AFTER THAT — 2026-08-14, AND IT IS A RECONCILIATION RATHER THAN A REDESIGN. ***
+Every item in this document has been compared against what actually exists in `src/`, in `ir/` and on
+the rig. The full three-way table, with a bucket and a citation per item, is
+*** `docs/notes/spec-reconciliation.md` ***. Counts: 86 AS SPECIFIED, 33 DIVERGED, 38 NOT BUILT and
+*** 21 NOT CHECKED, WHICH ARE NAMED RATHER THAN OMITTED *** — a spec item nobody examined is not a
+compliant one, and an audit that quietly drops what it could not reach is the exact failure this
+project keeps re-earning. Where development was right and this document was wrong, the correction is
+made BELOW, at the section it belongs to, with its date and its evidence, and saying what the text
+used to claim. Nothing has been silently replaced.
+
+  THE CORRECTIONS THAT CHANGE A NUMBER OR A DECISION, so they can be found without reading the table:
+  §2.6 (the contract exists and grew surfaces this section never named) · §6 and X-A (the mirror is an
+  ELEMENT TABLE, deployed at 35 registers over `%M1000`, reached by an AREA POINTER) · §7 and D6 (who
+  performs the enumeration is RULED, and gated) · §9c (built, and not wired into `openness-cli`) · §11
+  (the word order is CALIBRATED: HIGH-WORD-FIRST) · §12 (the copy layer provides SAMPLED and nothing
+  else — no latches, no scan-stamps) · §12a (F-5's two constants were extracted, so that section
+  contradicted itself; derivation 1 quantises on ROUND TRIPS; derivation 5's ceiling is 4.29x and its
+  `k` is unmeasured; the cap is REPORTED, never enforced) · §14 G4 and §15a.1 (the delegate throw is
+  MEASURED in both directions and never leaves the CPU half-loaded) · §15b.4 (the sticky key lost its
+  positional term) · X-A (A1's 16-register limit is CLOSED at 123) · X-I (rule 2's reading (b) is
+  ruled and fails closed) · X-J (the band is DECLARED: 9000-9999, OBs excluded).
 
 WHERE THE TOOLING ACTUALLY STANDS, so no section below is read as more or less proven than
 it is. This tooling HAS delivered a program to the CPU — three completed downloads on
@@ -324,6 +348,38 @@ whether it is MECHANICALLY CHECKABLE and by what.
   never writes observability code. That is the central question of a document called
   design-for-testability, and the design currently answers it both ways.
 
+  *** CORRECTED 2026-08-14 BY RECONCILIATION AGAINST WHAT WAS BUILT. THIS SECTION CALLED THE SKILL
+  "A FUTURE SKILL" AND SAID IT WAS "PREMATURE TO WRITE UNTIL THE ENVIRONMENT EXISTS". BOTH EXIST. ***
+  `docs/notes/test-environment-contract.md` and the `design-for-testability` skill are written, and
+  the enforcement surface is *** 23 GATES *** in `src/harness/Harness.Results/SubmissionGate.cs`,
+  measured on a real submission at 22 gates over 27 vectors. Six of them answer questions this section
+  never asked, and they are named here because a reader arriving at §2.6 would otherwise not know they
+  must be satisfied:
+
+    3d  ENUMERATOR INDEPENDENCE  the assertion enumerator is neither the block author nor a vector
+                                 author. §7 left this OPEN; it is now ruled and gated.
+    3e  ASSERTION FORM AUTHORITY the enumeration's WHEN/THEN vs NEVER form outranks the vector's.
+    3f  CITATION SHAPE           the citation is the content-derived ID, never a display ordinal.
+    3g  IDs RECOMPUTE            every assertion ID re-hashes from the text it claims to come from —
+                                 *** the only reason a stamper is permitted to have no independence. ***
+    3h  REQUIRED OBSERVATIONS    every signal the cited assertion depends on appears in this vector's
+                                 expectations. A relational assertion has more than one, and observing
+                                 one tests neither the other nor the relation.
+    3i  BOUNDS CURRENCY          each `boundsUsed` value matches the enumeration's bounds table, and a
+                                 mismatch is *** STALE, NEVER FAIL *** — a retune changes the truth
+                                 conditions of an assertion while moving zero assertion IDs.
+    11  MEMORY LAYOUT            §4.5 — see §6 and X-A.
+
+  And FOUR SUBMISSION FIELDS this section does not mention, each of which is a refusal when absent:
+  `blockCompression` (X-D's block- and model-level inputs, contract §2.3), `boundsUsed` (§2.5),
+  `deployment` (§4.5 — a property of the DOWNLOAD, never of a vector, so an absent one is NOT CHECKED
+  rather than a default), and the enumeration's `requiredObservations`.
+
+  *** AND THE HONEST STATE OF THE SET, BECAUSE A GATE LIST READS AS COVERAGE: *** on the live run
+  three gates came back NOT CHECKED — 8, 8c and 11 — each for a measured reason rather than an
+  omission, and `harness-gate check`'s gate 5 reads the map out of the submission the vector author
+  wrote, which is *a declaration checked against itself*. The loop's own path does not.
+
 *** THE SECOND UNTESTABLE SHAPE, FROM D37: A BLOCK WITH NO DISCOVERABLE START CONDITION. ***
 D37's start bool binds to a command signal the block ALREADY has, found via
 `converter candidate-scan --direction command` — never to a test-only input, because an input
@@ -501,6 +557,14 @@ D27. *** TENSOR PACKING IS A GRAPH COLOURING OVER THE CONFLICT GRAPH. *** Pack t
      tests into the FEWEST tensors such that no two tests in a tensor conflict. Nodes are
      tests, edges are conflicts, colours are tensors (DB-13). Greedy colouring is sufficient —
      this does not need to be optimal and the graph is small.
+
+     🔴 *** READ DB-13 BEFORE ACTING ON THIS — POINTER ADDED 2026-08-14. *** The COLOURING survives
+     and is built (greedy, deterministic); WHAT IT COLOURS does not. Under D26a every slot runs at
+     every index, so there is no packing decision inside a wave at all: *** THE NODES ARE SLOTS AND
+     EACH COLOUR CLASS IS A WAVE SET ***, and conflicting slots cost an EXTRA WAVE rather than a
+     longer one. This clause's own wording — "pack the submitted tests into the fewest tensors" — is
+     the superseded model, and it was left standing here with the correction only at DB-13, so a
+     reader arriving at D27 first got the wrong shape with no marker.
 
 D28. *** MODELS ARE INSTANCED PER TEST, NOT SHARED — this EXTENDS D10 from instance DBs to the
      models. *** The reason is D27 and it is the sharpest consequence in this draft: a model
@@ -1215,6 +1279,14 @@ R8. *** THE ENTAILMENT OF D25, AND THE ONE PLACE THE GUARD IS DELIBERATELY OPENE
     withdrawal of "be at the machine" stands on a verified mechanism rather than on a
     message. This is one look at a rig, not a standing requirement for a person.
 
+    *** THE ONE LOOK IS NO LONGER OWED — RETIRED 2026-08-14, AND BY THE BETTER ROUTE §16.11
+    PREDICTED. *** `IS7Client.ReadRunState` keys on `Status == 8` over SZL, and after the disruptive
+    deploy the rig answered *** `Running (8)` *** as a DEVICE READ rather than as TIA's account of
+    its own actions. That is strictly better evidence than an eyeball and it is repeatable, so the
+    first unattended disruptive boundary needs no person. What is NOT retired is the reason the
+    requirement existed: `PLC_1 started.` remains a REQUEST, not a READING, and anything that keys on
+    the message rather than on the read has learned nothing.
+
     STILL TRUE, and the reason the allowance list must include `StartModules`: if a download
     stops the CPU and `StartModule` is NOT answered, nothing else in the public API can bring
     it back. `StartModulesSelections.NoAction` is the ZERO value AND it applies cleanly — so a
@@ -1266,6 +1338,47 @@ Four independent arguments, each arrived at from a different direction:
 
 Any design that re-derives the map at a boundary is safe ONLY on `%MW`. On a DB mirror every
 re-derivation is a silent wipe.
+
+*** WHAT THE MIRROR ACTUALLY IS — ADDED 2026-08-14, BECAUSE THIS SECTION ARGUES FOR `%MW` AND NEVER
+SAYS WHAT SITS IN IT, AND THE THING THAT SITS IN IT IS NOT ONE REGISTER PER SIGNAL. ***
+
+  IT IS AN ELEMENT TABLE, KEYED ON TYPE, WITH THE ADDRESS FORM DECIDING THE WIDTH:
+
+      element   IR type   address form   registers   rung shape
+      -------   -------   ------------   ---------   -----------------------------------
+      Bool      Bool      `%M<b>.<bit>`      1       *** COIL *** — `COIL <dest> := <src>`
+      Int       Int       `%MW<b>`           1       MOVE
+      Time      Time      `%MD<b>`      *** 2 ***    MOVE
+
+  Offsets are a RUNNING SUM of those widths, never the signal's index in a list. Deployed geometry,
+  measured on the wire: *** 35 REGISTERS AT `%M1000` — `%M1000`-`%M1069` *** (`MB_HOLD_REG :=
+  P#M1000.0 WORD 35`).
+
+  *** THREE THINGS THIS CORRECTS, EACH OF WHICH WAS GOT WRONG BEFORE IT WAS GOT RIGHT: ***
+
+    1. *** `MOVE` WILL NOT TAKE A `Bool` INTO AN `Int` ON AN S7-1200, AND A HARD-CODED `"Int"`
+       REACHED THE CONTROLLER. *** TIA refused it: `Data type Bool is not permitted here.` This is
+       not a corner case — EVERY signal both conformance vector sets observe is a `Bool`. A Bool
+       therefore travels as a COIL and occupies a WHOLE register (bit packing is an explicit
+       non-goal), and the table exists so the type can never again be assumed.
+    2. *** COUNTING SIGNALS UNDERSTATES THE WIDTH, AND THE GAP BETWEEN THE TWO WAYS OF COUNTING IS
+       THE DEFECT. *** Sixteen signals were read as sixteen registers; ten of them are 32-bit. The
+       span went 8 -> 31 -> 35 registers as it was recomputed rather than assumed.
+    3. *** 32-BIT IS THE ORDINARY CASE HERE, NOT THE EXCEPTION *** — 81 duration values in the
+       deliverable vector set exceed 65,535 ms. And `Int` is SIGNED, so its ceiling is 32,767: a
+       value that does not fit its element is *** A REFUSAL BY NAME, NEVER A MODULO ***, because
+       `75 000 ms` through a single register arrives as `9 464 ms`, which is a perfectly reasonable
+       dwell and is precisely why nobody would question it.
+
+  *** AND `MB_HOLD_REG` IS AN AREA POINTER OVER MARKER MEMORY, WHICH REMOVES A PROBLEM THIS DOCUMENT
+  EXPECTED TO HAVE. *** It is `P#M1000.0 WORD 35`, not a reference to an `Array[..] of Int` static —
+  so the structured interface the Siemens SAMPLE block needs (`Array[1..10] of Struct`, TCON/TSEND/
+  TRCV/T_DIAG, ~90 members) NEVER ARISES for a purpose-built server FB, and the whole "the converter
+  cannot model this block" objection was true of the sample and irrelevant to ours. It also means
+  *** NO DATA BLOCK IS ON THE WIRE AT ALL ***, which is argument 2 of this section discharged
+  structurally rather than argued: bit memory carries no `MemoryLayout` attribute, so it cannot
+  silently revert to Optimized and go invisible. (External gap G6 is therefore defused rather than
+  answered — it no longer gates anything.)
 
 --------------------------------------------------------------------------------
 7. WHAT THE TEST ENVIRONMENT REPLACES
@@ -1433,6 +1546,21 @@ generous rather than because the unit was self-referential. *** The definition, 
   who rules on it; and *** WHO PERFORMS THE ENUMERATION — because if it is the block's author,
   D6's independence is lost AT THE DENOMINATOR, which undoes most of the protection this section
   is built on. That should be ruled before the 5.1 skill is built. ***
+
+  *** THE THIRD IS RULED AND MECHANISED — 2026-08-14, RECORDED HERE BECAUSE THIS PARAGRAPH ASKED FOR
+  IT AND WOULD OTHERWISE GO ON ASKING. *** The enumeration is performed by a THIRD PARTY: the
+  `assertion-enumerator` agent, which works from the specification only and never reads the
+  implementation. It is enforced, not merely stated — *** GATE 3d REFUSES A SUBMISSION WHOSE
+  ENUMERATOR IS THE BLOCK AUTHOR OR ANY VECTOR AUTHOR ***, and an unrecorded enumerator is
+  NOT CHECKED rather than a pass. Two consequences worth carrying:
+    - the agent is fenced from `Bash` so the implementation cannot contaminate the denominator — and
+      an assertion ID is a SHA-256, so *** THE AGENT THE DESIGN MAKES RESPONSIBLE FOR THE DENOMINATOR
+      CANNOT PRODUCE THE IDENTIFIERS IT IS CITED BY. *** A separate stamper does that, and
+      *** GATE 3g RECOMPUTING EVERY ID IS THE ONLY REASON A STAMPER IS PERMITTED TO HAVE NO
+      INDEPENDENCE *** — without it a hand-written hex string is indistinguishable from a computed one.
+    - D6's own gate was once passed by WHITESPACE: identity compared `Ordinal` on an unspecified
+      string, so `"Agent-A "` was independent of `"agent-a"`. The one check this pipeline exists for,
+      defeated by a trailing space.
 
 *** ONE CONSEQUENCE OF THE ASSERTION UNIT THAT MUST BE BUILT FOR, NOT DISCOVERED: RE-READING A
 CLAUSE CAN CHANGE ITS DECOMPOSITION. *** A clause previously read as one assertion may later
@@ -1791,6 +1919,23 @@ WHERE IT IS USED: post-download verification (with §9's version register), the 
 cross-check, run-state tracking for DB-3's settling window, and the per-agent results that
 carry the co-running log (§2.4).
 
+*** BUILT — 2026-08-14, `src/download-feedback/` (`Ladder.Download`), AND BOTH NAMED DEFECTS ARE
+EXCLUDED BY CONSTRUCTION RATHER THAN FIXED. *** `state=Success` is reported and takes no part in the
+verdict — the report says so on its own face — and transfer is never inferred from the absence of an
+up-to-date phrase. The verdict is `Transferred` / `NothingTransferred` / *** `Undetermined` ***, and
+the third never collapses into the second. Unrecognised message shapes are carried in full and
+counted; an empty result is an anomaly, not a clean one. Measured live on 2026-08-14: 45 objects
+loaded BY NAME.
+
+  *** TWO RESIDUALS, STATED SO THE GREEN IS NOT READ WIDER THAN IT IS: ***
+    - *** IT IS NOT WIRED INTO `openness-cli`. *** `DownloadProbe/TransferVerdict.cs` still carries a
+      SEPARATE implementation of the same question. The harness gateway uses the real one; the tool
+      that actually talks to Portal does not. A second implementation of a verdict is a second answer.
+    - RUN-STATE TRANSITIONS are extracted, and the library states in its own code that they are
+      *** TIA'S WORDS ABOUT WHAT THE DOWNLOAD DID, NOT A READING OF THE CPU'S MODE. *** An empty
+      transition list means the download said nothing — *"a gap, not a reassurance"*. The reading is
+      X-K's `PlcGetStatus`, over a different protocol.
+
 --------------------------------------------------------------------------------
 10. PROTOCOL COEXISTENCE
 --------------------------------------------------------------------------------
@@ -1902,6 +2047,38 @@ the halves agree. ONE RESIDUAL: `MB_SERVER`'s own byte-to-register presentation 
 behaviour, which no fake we write can validate. Build swap as a configurable transform and
 CALIBRATE with a known bit pattern — one measurement, once.
 
+*** THE MEASUREMENT HAS BEEN MADE. IT IS HIGH-WORD-FIRST — MOST SIGNIFICANT WORD IN THE LOWER-
+NUMBERED REGISTER, THE S7 `%MD` CONVENTION. [M, 2026-08-13, CORROBORATED 2026-08-14.] *** This
+paragraph read as an outstanding action until 2026-08-14 and is now a recorded result.
+
+    the calibration : `16#00001111` written and read back as reg0 `0x0000`, reg1 `0x1111`, with the
+                      scan counter as the cross-check (745, against an absurd 48,824,320 under the
+                      other order).
+    corroboration   : the deployed build stamp `16#21D74D35` — halves `0x21D7` and `0x4D35`, both
+                      KNOWN CONSTANTS AND DISTINGUISHABLE — read at registers 0-1 and matching the
+                      literal the copy layer writes, which it could not do under the other order.
+                      *** ONE READ SETTLES IT: no timing, no second observation, no inference. ***
+
+  *** THE TRANSFORM STAYS CONFIGURABLE, AND THAT IS DELIBERATE *** — `VersionCheck` reports a value
+  that WOULD have matched under the other order as its own outcome (`WordOrderSuspect`) rather than
+  as a failed download, which is the one place the calibration can regress and announce it.
+
+  🔴 *** AND THE RULE THAT CAME OUT OF DOING IT: DO NOT CALIBRATE AGAINST A DURATION. *** Every
+  scenario duration here is 1,000-120,000 ms, so a swap multiplies the low half by 65,536 and
+  `75 000 ms` arrives as about seven days — the scenario never reaches its boundary and the run
+  TIMES OUT LOUDLY. Loud is safe and useless for calibration. The dangerous direction is the
+  OBSERVATION one: the scan counter is a `DInt` whose high word moves slowly, so a swapped read is a
+  plausible-looking number. *** CALIBRATE AGAINST A SLOWLY-CHANGING COUNTER OR A KNOWN CONSTANT,
+  NEVER AGAINST A DURATION — A DURATION CANNOT TELL A CORRECT TRANSFORM FROM A BROKEN ONE. ***
+
+  RESIDUAL, NAMED RATHER THAN SMOOTHED: `src/harness/Harness.Wire/RegisterWordOrder.cs` still carries
+  a header declaring the transform UNCALIBRATED and its default "an inference, not a measurement".
+  The DEFAULT is correct; the COMMENT is stale, and a stale caveat on a correct value is how a
+  measured fact gets re-litigated. Same for the bit-within-register order in
+  `Harness.Map/MirrorGeometry.BitAddressOf`, which still reads `[I]` and was settled by writing
+  `0x0001` (block ran) and `0x0100` (did not) *** WITH THE PLC AS THE INSTRUMENT, so it is independent
+  of the premise the simulator and the address arithmetic shared. ***
+
 --------------------------------------------------------------------------------
 12. THE OBSERVABILITY FLOOR
 --------------------------------------------------------------------------------
@@ -1965,6 +2142,37 @@ on a non-real-time host); LATCHED TRANSIENTS (default on for coil-shaped signals
 in the copy layer, cleared at TEST START rather than read-then-clear, so an observation does not
 drag the write fence in); and EVENT SCAN-STAMPS (opt-in per signal in the map — a latch answers
 "did it happen", a stamp answers "when, relative to what", at roughly 32x the memory).
+
+🔴 *** CORRECTED 2026-08-14 AGAINST THE BUILT COPY LAYER, AND THIS IS THE LARGEST SINGLE GAP THE
+RECONCILIATION FOUND. THE GENERATED COPY LAYER PROVIDES **SAMPLED, AND NOTHING ELSE.** *** The
+sentence above describes three provisions; ONE of them exists.
+
+    scan counter      *** BUILT *** — `HX_ScanCount : DInt @ %MD1004`, free-running, unconditional.
+    latched transients *** NOT GENERATED. *** The generator emits result-register copies and no
+                       per-signal latch at all; its own doc comment lists this as a deliberate
+                       absence. The four violation latches on the rig are a HAND-AUTHORED block
+                       (`FB_HarnessViolationLatch`, FB 9003), not something the map produced.
+    event scan-stamps  *** NOT GENERATED. ***
+
+  *** THE GATE IS DOING THE RIGHT THING AND THAT IS WHY THIS IS EASY TO MISS: *** `Latched` and
+  `Stamped` are both DECLARABLE modes, and a vector needing either is refused for a TRUE, COMPUTED
+  reason — the observability check reads what the minimal copy layer actually provides. That is the
+  gate working, not a gap in it. The gap is one level up, and it has three consequences this
+  document draws conclusions from as though they were settled:
+
+    1. *** EVERY OBSERVATION IS SAMPLED, SO THE WHOLE WAVE SET IS EXPOSED TO THE 0.05% ~95-SCAN POLL
+       GAP *** (§12a derivation 1). "A sampled assertion is never guaranteed" is not a caveat about
+       an option here — it is a property of every assertion currently expressible.
+    2. *** O11's CAP BINDS. *** §12a derivation 2's "when every observation is latched this cap does
+       not bind at all" is the case that CANNOT arise today, and F-3 ("should sampled assertions be
+       admissible at all?") is therefore a live question rather than a hypothetical one.
+    3. *** X-F's STARTUP CLASS REQUIRES LATCHED EVIDENCE IT CANNOT HAVE. *** §16.6 says first-scan
+       evidence "must be LATCHED in the copy layer and read after reconnect — it can never be sampled
+       live". Nothing generates that latch, so the startup class is presently unsatisfiable in
+       practice even though its scheduling half is built.
+
+  A latch is a handful of rungs and the hand-authored one proves the shape. This is recorded as a
+  BUILD ITEM rather than a design question.
 
 *** AND THE "WHAT" A SCAN-STAMP IS RELATIVE TO IS NOW DEFINED: THE START BOOL'S RISING EDGE
 (D37). *** Until that decision existed this section asked stamps to answer "when relative to
@@ -2346,6 +2554,22 @@ period of `K x RTT`. For K=1:
   CAUGHT AGAINST THE WORST GAP EVER MEASURED. *** (ceil of floor_p99 and floor_tail.) Multiply
   both by K for a K-slot tensor.
 
+  🔴 *** "MULTIPLY BOTH BY K" IS THE PRE-F-1 FORM AND IS WRONG AS THE MULTIPLIER — CORRECTED
+  2026-08-14. THE FLOOR IS QUANTISED ON ROUND TRIPS, NOT ON SLOTS. *** A slot is polled once per READ
+  CYCLE, and after F-1 a read cycle is `ceil(K/R)` reads rather than `K`. The built form passes the
+  READ PLAN'S LENGTH, so the correct multiplier is `ceil(K / R)`.
+
+    MEASURED, and the measurement is what makes it more than a tidy-up: correcting a wave set's
+    declared width from *** 6 SLOTS TO 1 *** — six slots at 8 result registers is 48, inside one
+    125-register read — *** MOVED THE FLOOR NOT AT ALL, AND EVERY GATE-5 AND GATE-10a FIGURE CAME
+    BACK BYTE-IDENTICAL. *** That identity is the evidence, not a reason for suspicion. A test pins
+    the floor monotonically non-decreasing in slot count across 1..48.
+
+    *** AND THE PERMISSIVE DIRECTION IS THE OPPOSITE OF THE INTUITIVE ONE, WHICH IS WORTH HOLDING:
+    OVER-DECLARING SLOTS GIVES A FLOOR THAT IS TOO HIGH (conservative). UNDER-DECLARING IS WHAT
+    ADMITS AN UNOBSERVABLE WINDOW *** — a submission declaring 1 while running in a 40-slot wave gets
+    a floor roughly a third of the true one, and the symptom is a missed assertion reported as a pass.
+
   *** THE PERSISTENCE REQUIREMENT IS A BOUND AND KEEPS THE p99 — F-5 CHANGES NOTHING HERE, AND
   THE TEMPTATION TO "UPDATE" IT IS EXACTLY WHAT THE KIND RULE EXISTS TO STOP. *** At the p90 the
   same arithmetic gives 4.4 scans, which would let an author declare a 5-scan window — and
@@ -2458,6 +2682,16 @@ across a full-width slot) does to the question.
   does NOT close O11's empirical half, which is whether real submission sets declare sampled
   windows at all and how short they are; that stays deferred under D36, and the deferral's
   condition is now sharper rather than weaker (see the flags at the end of this section).
+
+  *** AS BUILT, 2026-08-14: THE CAP IS REPORTED AND NEVER ENFORCED, AND THAT IS D36 BEING OBEYED
+  RATHER THAN A SHORTFALL. *** `WireTiming.MaxTensorWidth(slotsPerRead, sMinScans)` computes exactly
+  the expression above; nothing refuses a wave set on it, because *** A FORMULA WHOSE FREE VARIABLE
+  HAS NEVER BEEN OBSERVED IS A PREDICTION ***, which is the thing the deferral exists to prevent.
+  Where the cap DOES reach admission it arrives as an EXPLICIT INPUT with a required provenance
+  string, and its absence is a defect named `WidthCapNotSupplied` — *** UNCHECKED, NEVER PASSED. ***
+  The reason it is an input and not a constant is recorded in the component itself: `RTT_p99` moved
+  from 173 to 201 while it was being written, so *** ANYTHING HOLDING A BAKED-IN `K_max` WOULD NOW BE
+  OVER-ADMITTING. ***
 
 ................................................................................
 DERIVATION 3 — THE WIRE TERM §8's WAVE MODEL OMITS  [D]
@@ -2621,6 +2855,20 @@ replaced, and *** THE TIMER TERM — THE ONE X-D SAYS OFTEN BINDS FIRST — IS H
   WORKED, on X-D's own example — a 500 ms preset:
 
       comp_max(timer) = 500 / 116.7 = *** 4.3x ***   was 500 / 50 = 10x                  [D]
+
+  *** AS BUILT, 2026-08-14: THE COMPUTED FIGURE IS 4.29x (500 / 116.65), ASSERTED TO TWO PLACES
+  ALONGSIDE AN EXPLICIT `NotEqual(10.0)`, AND MUTATING THE FLOOR BACK TO X-D's 50 ms REDDENS SIX
+  TESTS. *** So the ceiling is not merely written down, it is pinned in both directions. Two things
+  must travel with the number:
+
+    - 🔴 *** IT IS HALF-MEASURED, AND THIS DOCUMENT HAS NOT SAID SO. *** `k x scan` has a MEASURED
+      scan and an UNMEASURED `k`: the 5 is X-D's own figure, carried forward. What is unverified is
+      precisely whether a preset scaled to five scan times still behaves like a timer on a 1214C.
+      Under the evidence convention the product is therefore [D] over one [M] and one [I], and the
+      honest caution is that the term this section says BINDS FIRST is the one resting on the
+      weakest input.
+    - *** NO WAVE HAS EVER RUN COMPRESSED. *** Every ceiling here is arithmetic over measured
+      inputs, exercised against the simulator. `comp = 1` is the only factor anything has run at.
 
   *** AND THE TERM THIS SECTION SAYS BINDS FIRST IS THE ONE THE 2026-08-13 CORRECTION DID NOT
   TOUCH. *** The timer bound is a function of the SCAN, and the scan is the best-determined
@@ -2838,6 +3086,29 @@ conclusion without the ruling.
        it did not conjure the two measurements, and this document will not carry an invented p90
        to look finished. Until they are extracted, budgets continue to key on `RTT_p99 = 201`,
        and that is stated at the point of use rather than left to be discovered.
+
+       🔴 *** THE PARAGRAPH DIRECTLY ABOVE IS STALE AND WAS CONTRADICTED BY THIS SECTION'S OWN
+       CONSTANTS BLOCK — CORRECTED 2026-08-14. *** The two figures WERE extracted, from the same
+       16,200 round trips, and they are recorded above: `RTT_p90 = 102.79 ms` (pooled, nearest-rank,
+       n = 16,200, CI [101.77, 103.93]) and `exceed_250 = 0.352%` (57 events, CI [0.261%, 0.443%]).
+       The F-5 AUDIT TABLE further down this section already lists the nine duration-shaped figures
+       as MOVED to the p90. So *** "still missing" and "budgets continue to key on the p99 until
+       they are extracted" describe a state that ended the same day, and both cannot stand beside
+       the constants block. *** Two things must be read from the corrected version:
+
+         - *** BOUNDS KEEP `RTT_p99` PERMANENTLY, NOT PENDING ANYTHING. *** The kind rule is the
+           reason, and it does not expire. Reading the sentence above as a temporary arrangement is
+           exactly the error that would put a p90 into a backstop.
+         - *** THE IMPLEMENTATION ENFORCES THE PARTITION BY ABSENCE, WHICH IS STRONGER THAN THIS
+           SECTION ASKS FOR, AND IT HAS A COST. *** `Harness.Wire.WireTiming` carries `RTT_typ`,
+           `RTT_p99`, `RTT_max`, the scan and the per-register cost — and *** NO p90 CONSTANT AT
+           ALL. *** 102.79 appears only as an ANTI-ASSERTION in the tests
+           (`Assert.NotEqual(102.79, TimeCompression.PollPeriodMs(1))`), so a p90 cannot be
+           substituted into a bound because it cannot be named. The cost is that *** NO
+           DURATION-SHAPED FIGURE IS COMPUTED ANYWHERE IN CODE ***: §8's planning numbers, the wire
+           term and the batching win are arithmetic in this document with no implementation behind
+           them. `exceed_250` likewise has no consumer, so the "expected over-threshold exchanges
+           per operation" figure a bound is supposed to be quoted with is not produced by anything.
 
 ................................................................................
 HOW THE FLAGS INTERACT — CHECKED 2026-08-13 AFTER F-1's ADOPTION
@@ -3138,6 +3409,15 @@ running this should expect to be at the machine.
       BEFORE the download proceeds and therefore says nothing at all about how the DEVICE
       handles an abort. *** G4 IS THEREFORE WIDE OPEN, AND IT IS ON D32's CRITICAL PATH ***
       — the throw-from-delegate policy assumes precisely what G4 does not establish.
+      *** ANSWERED FOR OUR OWN ABORT — MEASURED 2026-08-14, BOTH DELEGATE STAGES [M]. *** A throw
+      from the *PRE* delegate leaves the CPU *** RUNNING ***; a throw from the *POST* delegate leaves
+      it *** STOPPED WITH A COMPLETE PROGRAM ***. *** NEITHER LEAVES IT HALF-LOADED ***, which is the
+      assumption D32 rests on, and it is now a measurement rather than a hope. Recovery from the POST
+      case is a 34-second download. Both stages also KILL THE PORTAL PROCESS, which is a cost worth
+      knowing and is not a data risk.
+      *** WHAT REMAINS OPEN IS WHAT G4 LITERALLY ASKS: A TIA-CAUSED ABORT. *** Nothing here exercises
+      one, and the distinction matters — the guard model only ever needed OUR abort to be safe, so
+      D32 is no longer "a plan" (§15a.1), while the vendor question is untouched.
   G2  *** RESTORED 2026-08-12 BY AUDIT — IT WAS DROPPED BETWEEN DRAFTS, NOT DECIDED. *** On a
       classic S7-1200, does a structural change to a DB reinitialise the WHOLE DB or only the
       ADDED tags, and does a memory reserve protect RETENTIVE tags? Three Siemens pages give
@@ -3200,6 +3480,11 @@ it being reopened from scratch. What follows is disposition, not open work.
        it is the one item where the design is decided but the mechanism is unproven.
        VERIFY: that a throw inside the delegate propagates AND leaves the CPU untouched
        rather than half-loaded — external G4. Until that is measured, D32 is a plan.
+       *** BUILT AND MEASURED — 2026-08-14, BOTH DIRECTIONS. D32 IS NO LONGER A PLAN. *** PRE leaves
+       the CPU RUNNING; POST leaves it STOPPED with a COMPLETE program; never half-loaded. Recovery
+       34 s. Both stages kill the Portal process. The sentence "until that is measured, D32 is a plan"
+       is retired — see §14 G4, which retains the half that is still genuinely open (a TIA-caused
+       abort, which nothing here exercises).
     2. *** THE DOWNLOAD FEEDBACK PARSER (§9c). *** Two known defects to fix while building
        it: the transfer verdict must key on the LOAD MANIFEST rather than infer from the
        absence of an up-to-date phrase (it currently infers while sitting on 99 positive load
@@ -3243,6 +3528,12 @@ all are worth recognising on sight rather than rediscovering:
   - ASSERTION DECOMPOSITION DRIFT (§7) — a clause re-read into a different number of
     assertions. Handled by the (clause hash, assertion index, assertion text hash) key, and
     the failure mode if it is not is silent under-counting.
+    🔴 *** THAT KEY IS THE SUPERSEDED ONE — CORRECTED 2026-08-14. *** §7's own correction removed the
+    POSITIONAL middle term: insert an assertion above and every later index shifts, so a stored
+    reference silently comes to name a different assertion. The key is `REQ-nnn:<hash6>` — clause ID
+    plus a hash of the normalised assertion text, *** WITH NOTHING POSITIONAL IN IT *** — and gate 3f
+    REFUSES a citation in display-ordinal form. Drift is detected by the decomposition yielding a
+    different SET, not a different count at an index.
   - THE SCAN-COUNTER WRAP (§12) — immune between waves once stamps are differences from T=0,
     still needs handling within a long test.
 
@@ -3597,6 +3888,14 @@ ELSE: ***
     split ***. That evidence does not stretch to a full-width write merely because F-1 made reads
     cheaper — F-1 says nothing about writes at all. The gap between A1's 16 registers and the
     width the design actually uses is a PRE-EXISTING item, neither widened nor closed here.
+    *** THAT GAP IS NOW CLOSED — MEASURED AT 123 REGISTERS, 2026-08-14 [M]. *** No tear observed in
+    3,000 writes of 123 registers under one build variant and 3,200 under a second, and — the half
+    the design also needed and never had — *** NO TORN READ IN 3,000 READS ACROSS 3,000 DISTINCT
+    GENERATIONS. *** So the coherence premise now holds at the width the map actually uses, on both
+    sides of the wire.
+    *** IT IS STILL "NO TEAR OBSERVED", NEVER "ATOMIC", AND THE WORDING IS DELIBERATE *** — this is
+    a bound on an observed rate, not a proof of a property, and the instruction's single-scan
+    behaviour remains vendor behaviour we cannot inspect.
   - *** THE PER-SLOT COHERENCE REQUIREMENT IS UNTOUCHED *** — it is the thing the new wording
     exists to preserve, not a cost the relaxation pays.
   - *** THE 125-REGISTER READ CEILING IS UNTOUCHED. *** `slot_count x slot_size <= 125` still
@@ -3949,6 +4248,30 @@ DELIVERABLE signal are reported as FINDINGS as well as being used for packing. S
 is the right thing to do for testing and the wrong thing to do silently. Cheap: the fact is
 already computed, only the reporting is missing.
 
+🔴 *** "THE FACT IS ALREADY COMPUTED, ONLY THE REPORTING IS MISSING" IS THE PART THAT TURNED OUT TO
+BE FALSE — CORRECTED 2026-08-14. *** The CONSUMER is built: conflict edges carry a provenance and a
+ship-class, the finding is reported (and printed on a clean graph too, so absence never reads as
+"not run"). *** THE PRODUCER DOES NOT EXIST, AND IT IS THE SAME MISSING PIECE AS D9's. ***
+
+  `converter cross-check` emits whole-project `multiWriters` / `deadMembers` / `ioBoundary` /
+  `siblingRefs` / `soleWriters`. The gate wants `computedConflicts` — the blocks conflicting with
+  THIS submission's targets — and `conflictEdges` carrying provenance, signal and ship-class.
+  *** THERE IS NO TRANSFORMATION BETWEEN THEM AND NOBODY HAS WRITTEN ONE. *** Worse, its FB-internal
+  paths are UNQUALIFIED, so `IO.Step` and `Time` — distinct members of three different FBs — report
+  as cross-block multi-writers that are not. *** FEEDING THAT IN AS A CONFLICT GRAPH WOULD INJECT
+  FALSE EDGES. ***
+
+  So on the live run gates 8 and 8c came back *** NOT CHECKED WITH A MEASURED CAUSE ***, which is an
+  advance on "no graph was supplied" and is not a pass. The graph was deliberately NOT hand-built,
+  on the grounds that *** TYPING AN EMPTY ARRAY WOULD TURN TWO GATES GREEN BY TYPING, AND HAND-
+  BUILDING A WRONG ONE IS WORSE THAN TYPING AN EMPTY ONE. ***
+
+  CONSEQUENCE FOR D9, STATED HERE BECAUSE THIS IS WHERE IT BITES: computed disjointness is currently
+  *** DECLARED BY ABSENCE RATHER THAN COMPUTED. *** It has nonetheless already decided something by
+  hand — the six declared slots all drive one monitor instance, one `Test[]` array and one reset, so
+  every pair conflicts and the wave set is *** SIX WAVES OF ONE SLOT, NOT ONE WAVE OF SIX. *** That
+  is D9 doing its job through a person, which is exactly what the graph exists to remove.
+
 ................................................................................
 16.8  X-H  *** D28's PER-TEST MODEL INSTANCING IS WRONG WHERE THE PLANT GENUINELY SHARES ***
 ................................................................................
@@ -4026,6 +4349,25 @@ FOUR RULES, and each is an existing rule applied rather than a new one:
      an EARLIER wave set than the slots depending on them. Run concurrently, a red result is
      ambiguous between the block and the model (§7a cause 1 versus cause 2) — which is the
      exact ambiguity §7a exists to remove. Enforced at admission (R6).
+
+     *** THIS RULE SUPPORTS TWO READINGS AND THE WORDING ABOVE GIVES BOTH — RULED AND BUILT
+     2026-08-14. *** (a) *"a model must PASS before a slot using it is ADMITTED"* requires a passing
+     result to ALREADY EXIST. (b) *"model slots run in an EARLIER wave set"* permits submitting a
+     model and its consumer TOGETHER, with the ordering enforcing precedence.
+     *** (b) HAS A HOLE (a) DOES NOT: wave sets in one plan are ordered but still run SEQUENTIALLY,
+     so if the model's set FAILS the consumer's runs anyway unless the run loop refuses to continue.
+     Nothing in this document ever described that gate. ***
+       RULED: *** (b) IS PERMITTED, BUT ONLY ONCE A STOP-ON-FAILED-WAVE-SET GATE DEMONSTRABLY
+       EXISTS. UNTIL THEN (b) FAILS CLOSED. ***
+     Built that way: the gate is a DECLARATION carrying what it was established against — the same
+     stamp shape as `layoutSetAfterImport` — with three states whose *** ZERO VALUE IS "NOT
+     DECLARED" AND REFUSES ***, and a separate `DeclaredForADifferentRunLoop`, because *"nobody did
+     it"* and *"somebody did it against a different loop"* call for opposite fixes and a stale
+     declaration is the more dangerous of the two. A plan resting on (b) without the gate is refused
+     by name. *** THE GATE IS NOT CURRENTLY ESTABLISHED, SO (b) IS REFUSED TODAY. ***
+     And its ceiling is stated rather than assumed away: a declaration is a TRANSFERRED
+     RESPONSIBILITY, not a verification — it can make absence a refusal and detect the version
+     drifting, and it cannot make a false declaration true.
   3. *** COVERAGE APPLIES, WITH THE PHYSICAL ANALYSIS AS THE SPECIFICATION. *** §7's machinery
      transfers unchanged: assertions are enumerated from rung A's equipment-grounded analysis
      the way block assertions are enumerated from requirement clauses (D35). Same denominator
@@ -4057,6 +4399,43 @@ TREATMENT — either the coordinator claims like anybody else, or a NUMBER RANGE
 harness-generated objects and the claim tool refuses allocations inside it. The reserved range
 is simpler and has a second benefit: harness objects become recognisable by number in every
 listing, which also tells DB-7's cleanup what it owns.
+
+*** THE RANGE IS DECLARED — 2026-08-14. THIS TREATMENT NAMED NO NUMBERS, AND A RESERVATION WITH NO
+DECLARER IS THE CONVENTION X-J EXISTS TO REPLACE. ***
+
+    *** BLOCK NUMBERS 9000-9999 ARE RESERVED FOR HARNESS-GENERATED OBJECTS, INDEPENDENTLY IN EACH
+    NUMBER SPACE (FB, FC, DB — global and instance DBs share one space). ***
+
+  FOUR DIGITS BEGINNING WITH 9 because this treatment's second benefit is recognisability in a
+  listing; A THOUSAND rather than a hundred because per-slot instance DBs scale with slots x tests
+  and the band costs nothing. Overturnable at one line.
+
+  🔴 *** OBs ARE EXCLUDED, AND THE RULE BREAKS ON ITS OWN FIRST EXAMPLE WITHOUT THE CARVE-OUT. ***
+  This section names OB80 as a harness-generated object, and *** AN OB's NUMBER IS FIXED BY ITS EVENT
+  CLASS — IDENTIFIED, NOT CHOSEN ***, so the band cannot classify one in EITHER direction: it would
+  either emit a false finding on a correct harness OB or exempt every OB in the 9000s. An OB is
+  therefore UNCLASSIFIED and its findings gate as normal. *** THE FIRST FALSE FINDING IS WHAT GETS AN
+  AUDIT SWITCHED OFF ***, so this is not a footnote.
+
+  *** WHY THE BAND IS PREVENTION AND NOT TIDINESS — MEASURED, NOT FEARED: TIA ACCEPTED AN IMPORT
+  DECLARING `FC 910` WHILE ANOTHER BLOCK ALREADY HELD 910, AND CREATED TWO BLOCKS AT THAT NUMBER ***
+  — import exit 0, per-block compile exit 0 with `CONSISTENT: yes`, device compile `Success`,
+  `sanity-check OVERALL: HEALTHY`. *** THE HARD-RULE-4 GATE PASSED GREEN OVER A DUPLICATE. ***
+  `sanity-check` now catches it (exit 19), and *** DETECTION IS NOT PREVENTION. ***
+
+  🔴 *** THE SECOND HALF OF THIS TREATMENT IS NOT BUILT, AND IT IS THE HALF THIS PARAGRAPH NAMES:
+  `converter claim --allocate` HAS NO KNOWLEDGE OF THE BAND AND WILL NOT REFUSE AN ALLOCATION INSIDE
+  IT. *** It takes a bare `--floor` and walks upward. The band is consumed by two independent readers
+  — the wave-control number ledger and the reviewer's harness scope — and by neither of the two
+  places an allocation actually happens. Until that lands, the band is a CONVENTION with an audit
+  behind it rather than a reservation.
+
+  AND THE CLASSIFICATION RULE THE BAND MADE POSSIBLE IS WORTH CARRYING, because it answers a question
+  this section did not ask: *** A TAG TABLE HAS NO NUMBER ***, so classifying one would fall back to
+  its NAME — and a name is a convention anything can be renamed into. Classification is therefore
+  PER TAG, off the reference graph: a tag is harness only when every block referencing it is a
+  harness block. *** TO LAUNDER A PLANT TAG YOU MUST MOVE EVERY REFERENCE INTO THE RESERVED BAND,
+  WHICH BREAKS THE PLANT PROGRAM, WHERE A RENAME COSTS NOTHING. ***
 
 ................................................................................
 16.11 X-K  *** A STOPPED CPU AND A DROPPED LINK LOOK THE SAME, AND THE API CANNOT TELL YOU ***
