@@ -136,6 +136,11 @@ The two are different facts and the gate distinguishes them. Measured on the bui
 | a `storage` entry's `owner` | **a POSITIVE claim, not an omission** | the path is **global** — DB member, PLC tag, `iDB_…`, physical address — and already unique |
 | a declared join resolving to **more than one** storage | ***REFUSED, naming EVERY candidate*** | ***never resolved to one***; picking a candidate is the aliasing that manufactured fictional multi-writers |
 | a conflict edge's **signal class** | ***NOT CHECKED*** (`Unstated`) | **derived from the writing blocks, never declared.** There is no field for it, and an unclassifiable signal fails closed |
+| a mirrored signal's `specName` | ***REFUSED*** | §2.8. ***Never "same as `tag`"*** — that defaulting rule **is** the assumption being removed, and in the format it would look like a decision somebody made |
+| a signal's `modes`, with `modeSource: Generated` | **CHECKED — DERIVED, a real pass** | read off the shape the copy layer generates. ***A declared mode is a caller assertion, forgotten exactly when it matters*** |
+| a signal's `modeSource` | ***NOT CHECKED*** | zero value `Unstated`, failing closed: the mode's authority is the question, so a blank cannot be the trustworthy answer |
+| `instrumentedBy`, with `modeSource: HandAuthored` | ***REFUSED*** | an unnamed hand-authored instrument is a bare assertion **wearing a provenance field** — worse than no field, because it looks checked |
+| a declared mode the copy layer **contradicts** | ***REFUSED, naming BOTH*** | never a silent preference either way |
 | `blockCompression`, at `runtimeCompression` > 1 | ***NOT CHECKED*** | three of X-D's four ceilings compared against nothing |
 | `blockCompression`, at `runtimeCompression` = 1 | **CHECKED — a real pass** | nothing is scaled, so none of the three *can* bind. **Computed from the submission, not assumed** |
 | a preset's `source` (`Data`/`Literal`) | ***REFUSED*** | the two answers push OPPOSITE ways — a data preset lowers the timer ceiling, a literal one lowers the ratio-distortion ceiling. No fail-safe guess exists |
@@ -280,6 +285,30 @@ twice, and a restated constant will one day refuse the wrong vectors with great 
 - **The declaration must exist before the download that generates the copy layer**, and is frozen for
   the wave set. This is the single most common way an author is surprised.
 
+> 🔴 ***DECLARING `Latched` DOES NOT MAKE A SIGNAL LATCHED — AND THIS GATE HAS FAILED IN BOTH DIRECTIONS
+> AT ONCE.*** Measured on one live run: **17 `Latched` expectations across 11 of 27 vectors.** **13
+> refusals were CORRECT** — the copy layer emits a plain **coil** for those signals, and a coil is not a
+> latch. ***4 were FALSE REFUSALS***: those signals genuinely **are** latched on the device by a
+> deployed hand-authored block, and there was **no mode field to say so** while the code hard-coded
+> every signal to `Sampled`. *A real, deployed latch was structurally undeclarable.*
+>
+> **So the mode is DERIVED from what the copy layer generates, wherever it can be** (contract §2.8) — a
+> declared mode is a caller assertion and *those are forgotten exactly when they matter*. A hand-authored
+> instrument is statable, but **only with its provenance**: `modeSource: HandAuthored` plus
+> `instrumentedBy` naming the block that performs it. ***`HandAuthored` with no `instrumentedBy` is a
+> refusal*** — a bare assertion wearing a provenance field looks checked, which is worse than no field.
+> **A declared mode the copy layer contradicts is refused naming BOTH**, never silently resolved either
+> way.
+
+> 🔴 ***AND CHECK WHICH NAME YOU ARE READING.*** The harness assumed **the specification's signal name
+> IS the block's tag name**. One run, three mechanical paths broken by that one assumption: gate 5's 17
+> refusals, a static interface check reporting a signal missing, and the conflict graph resolving **1 of
+> 17** signals — *the one being `HopperBlockedAlarm`, **the only signal whose two names coincide***.
+> A mirrored signal carries **both**: `tag` (on the controller) and `specName` (in the specification).
+> ***An absent `specName` is a REFUSAL and never "same as tag"*** — that defaulting rule is the
+> assumption being removed. *The translation had only ever lived in a prose markdown table, which is why
+> a predicted finding could be laundered in it: prose is what no gate reads.*
+
 **If a vector is refused here, STOP AND ESCALATE — do not fix it by editing the block.** The obvious
 repair (add a status output so the behaviour is visible) collides with D13/§2.1, and whether an author
 may change a block's interface purely to make it testable is **open with the owner** (contract §9.1).
@@ -331,6 +360,10 @@ because they write *the same location*. **A submission names signals; nothing jo
 - **A signal in neither map is NOT CHECKED; in both, REFUSED.** `harnessOnly` is a claim the author
   makes, and it is what turns *"this may be a mirror-only signal, or the name may be wrong"* — two
   entirely different repairs behind one silence — into a fact.
+- ⚠️ ***AND THE JOIN NEEDS TO KNOW WHICH NAME IT IS KEYING ON.*** `map.storage` says where a **tag**
+  lives; the specification cites a **spec name**. The one signal that resolved out of seventeen resolved
+  because those two strings happen to be identical (§2.8). **A submission carrying no `specName` cannot
+  be fixed by declaring storage** — check §2.8 first.
 
 ### Gate 8c — multi-writer provenance (X-G)
 Two blocks that both write one coil are a conflict, so the packer puts them in different tensors and

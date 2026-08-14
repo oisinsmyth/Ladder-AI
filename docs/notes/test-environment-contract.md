@@ -324,6 +324,11 @@ This is the one table to read before omitting anything. Four treatments, and the
 | a `storage` entry's `owner` | **not an omission — a POSITIVE claim** | the path is **global** (DB member, PLC tag, `iDB_…`, physical address) and is already unique |
 | a declared join that still resolves to **more than one** storage | **REFUSED, naming EVERY candidate** | ***never resolved to one.*** Instance aliases are collapsed first, so this means genuinely different storage — and picking a candidate is the aliasing that manufactured fictional multi-writers |
 | a conflict edge's **signal class** | ***NOT CHECKED*** (carried through as `Unstated`) | it is **derived from the writing blocks, never declared** — there is no field for it, and an unclassifiable signal fails the gate closed rather than being guessed |
+| a mirrored signal's `specName` | ***REFUSED*** | §2.8. ***It does NOT mean "same as `tag`"*** — that defaulting rule **is** the assumption being removed, and writing it into the format would reinstate it invisibly while looking like a decision somebody made |
+| a signal's `modes`, with `modeSource: Generated` | **CHECKED — DERIVED, a real pass** | the mode is read off the shape the copy layer generates. ***A declared mode is a caller assertion, forgotten exactly when it matters*** |
+| a signal's `modeSource` | ***NOT CHECKED*** | the zero value is `Unstated` and fails closed — the mode's authority is the question, so a blank cannot be the trustworthy answer |
+| `instrumentedBy`, with `modeSource: HandAuthored` | ***REFUSED*** | a hand-authored instrument whose author is unnamed is a bare assertion **wearing a provenance field** — worse than no field, because it looks checked |
+| a declared mode the copy layer **contradicts** | ***REFUSED, naming BOTH*** | never a silent preference: preferring the shape hides an author who believed something false about the device, preferring the declaration reinstates the caller assertion |
 | `blockCompression`, at `runtimeCompression` > 1 | ***NOT CHECKED*** | three ceilings compared against nothing |
 | `blockCompression`, at `runtimeCompression` = 1 | **CHECKED, a real pass** | nothing is scaled, so none of the three *can* bind — **computed from the submission, not assumed** |
 | a preset's `source` | **REFUSED** | the two real answers push OPPOSITE ways; there is no fail-safe guess |
@@ -644,6 +649,95 @@ author's blacklist**, which is add-only for precisely this reason (§7).
 themselves; there is no flag and no field for it, and an unclassifiable one carries `Unstated` through to
 the gate rather than being guessed. *The refusal is carried across, not resolved.*
 
+> ⚠️ **§2.7 treats a symptom. The root cause is §2.8** — the harness assumed a specification's signal
+> name *is* the block's tag name. Of the 17 signals in the deliverable submission the conflict graph
+> resolved **one**, and it is `HopperBlockedAlarm`: ***the only signal whose spec name and block name
+> coincide.***
+
+---
+
+### 2.8 ***THE MAP IS A TRANSLATION, AND THE MODE IS DERIVED.*** ADDED 2026-08-14
+
+> *** THE HARNESS ASSUMED THE SPECIFICATION'S SIGNAL NAME **IS** THE BLOCK'S TAG NAME. *** Three
+> mechanical paths broke on that single assumption in one live run: gate 5 refused 17 `Latched`
+> declarations, the static interface check reported a signal missing, and the conflict graph resolved
+> **1 of 17** signals.
+
+> 🔴 *** AND THE ONLY PLACE THE TRANSLATION HAD EVER BEEN RECORDED WAS A PROSE MARKDOWN TABLE — WHICH IS
+> WHY A PREDICTED FINDING COULD BE LAUNDERED IN IT. *** There was nowhere else for it to live, and
+> **prose is what no gate reads.** A fact that only exists in prose is a fact that can be quietly
+> restated; this section is that fact given somewhere to live.
+
+#### `specName` beside `tag`
+
+```
+resultSources[ ]                -- one mirrored signal, in the coordinator's binding
+  tag          the tag the signal occupies ON THE CONTROLLER
+  specName     THE SPECIFICATION'S NAME for the same signal
+  type         the element type (§2.6)
+  modes        [ mode ]         -- see below. Only for a HAND-AUTHORED instrument
+  modeSource   where the mode came from -- see below
+  instrumentedBy   the block that performs the instrumentation
+                   -- REQUIRED when `modeSource` is HandAuthored
+```
+
+> 🔴 ***AN ABSENT `specName` DOES NOT MEAN "SAME AS `tag`". IT IS A REFUSAL.***
+>
+> **That defaulting rule is precisely the assumption being removed**, and writing it into the format
+> would reinstate it invisibly — with the difference that it would then look like a decision somebody
+> made. The two names coincide *sometimes*, and the case where they coincide is exactly the case that
+> hid this for as long as it did: **one signal in seventeen resolved, and it resolved because its two
+> names happen to be the same string.**
+
+This is also what §2.7's join needs to be *about*: `map.storage` says where a **tag** lives, and the
+specification cites a **spec name**. Without the translation the join has nothing to key on.
+
+#### The instrumentation mode — ***DERIVED WHEREVER IT CAN BE***
+
+Gate 5 failed in **both directions at once**, which is the fact that shapes this field. Of **17
+`Latched` expectations across 11 of 27 vectors**:
+
+| | |
+|---|---|
+| **13 refusals were CORRECT** | `Latched` was claimed where the copy layer emits a plain **coil**. A coil is not a latch, and the claim was a caller assertion nothing checked |
+| 🔴 **4 refusals were FALSE** | those signals ***genuinely are latched on the device***, by a deployed hand-authored block — and the document has **no mode field at all**, while the code hard-codes every signal to `Sampled`. *** A REAL, DEPLOYED LATCH WAS STRUCTURALLY UNDECLARABLE. *** |
+
+So the rule is not "let the author declare the mode". It is:
+
+> ***THE MODE IS DERIVED FROM WHAT THE COPY LAYER GENERATES, WHEREVER IT CAN BE.*** A declared mode is a
+> caller assertion, and a caller assertion is **forgotten exactly when it matters** — the 13 wrong claims
+> are what that looks like at scale.
+
+**And derivation alone cannot cover the other four**, because the generator did not emit them: they are
+hand-authored IR already on the rig. A real instrument that no generator produced must be **statable —
+but statable WITH ITS PROVENANCE**, never as a bare mode.
+
+#### `modeSource` — one vocabulary, extended, not a parallel one
+
+The map already carries a provenance that decides whether gate 5 may be **a verdict at all**. The same
+vocabulary is used per signal rather than a second one being invented beside it:
+
+| value | means | effect |
+|---|---|---|
+| **`Generated`** | the copy layer emits this instrument, and the mode is **read off the shape it generates** | ✅ **CHECKED — a computation, not a claim** |
+| **`HandAuthored`** | a deployed instrument the generator did not emit. **`instrumentedBy` names the block that performs it** | ✅ **CHECKED as a provenanced claim** — and the named block is a thing that either exists and writes the signal, or does not |
+| **`SelfDeclared`** | the vector author asserted it | ***NOT CHECKED*** — the author vouching for the artifact the gate exists to check them against |
+| **`Unstated`** (the zero value) | nobody said | ***NOT CHECKED***, failing closed |
+
+***`HandAuthored` WITHOUT `instrumentedBy` IS A REFUSAL***, not a weaker claim. A hand-authored
+instrument whose author is unnamed is a bare assertion wearing a provenance field — which is worse than
+no field, because it looks checked.
+
+#### A declared mode the copy layer contradicts is a REFUSAL NAMING BOTH
+
+> ***Not a silent preference for either.*** Preferring the generated shape hides an author who believed
+> something false about the device; preferring the declaration reinstates the caller assertion this
+> whole field exists to remove. **Both are named, and the submission does not proceed.**
+
+The one case that is not a contradiction is `HandAuthored`: the generator emitting nothing for a signal
+is *consistent* with an instrument it never generated. **That is why the provenance is required — it is
+the only thing separating "a latch the generator did not emit" from "a latch nobody implemented".**
+
 ---
 
 ## 3. `Basis` — the clause AND the assertion, and why both
@@ -720,6 +814,11 @@ vectors with great confidence.
 | **SAMPLED** | *was it true when we looked?* | free | **fully** — the declared window must exceed the floor |
 | **STAMPED** | *when, relative to T=0?* | ~32x the memory of a latch | **exempt for occurrence**, applies to the *resolution* of the answer |
 
+> ⚠️ ***DECLARING `Latched` DOES NOT MAKE A SIGNAL LATCHED.*** Measured on one live run: **17 `Latched`
+> expectations across 11 of 27 vectors**, of which **13 named signals the copy layer emits as a plain
+> coil.** The mode is a property of **what was generated or deployed**, not of what a vector wants — it
+> is derived, and a declaration that contradicts the generated shape is refused naming both. **§2.8.**
+
 ***PREFER LATCHED. IT IS NOT MERELY CHEAPER — IT IS THE ONLY MODE IMMUNE TO THE TAIL.*** §12a
 derivation 1 measures a small but real fraction of poll gaps that are enormous; a sampled assertion
 falling in one is **a silent wrong answer, not an error**. A latch cannot fall in a gap. (Whether
@@ -735,8 +834,11 @@ Observability
   Signal      the tag, which must appear in the map's observability declarations
 ```
 
-***The map has a second half, and it is not this one.*** `providedFor` says **how** a signal can be
-watched; it says nothing about **where the signal is**, and gates 8/8c need that. See **§2.7**.
+***The map has two further halves, and neither is this one.*** `providedFor` says **how** a signal can
+be watched. It says nothing about **where the signal is** (§2.7), and nothing about **what the
+specification calls it** (§2.8) — and the mode above is ***derived from what the copy layer generates***,
+never taken from an author's declaration. **`Signal` here is the `tag`; the specification cites the
+`specName`.**
 
 ***AND THE DECLARATION MUST EXIST BEFORE THE DOWNLOAD THAT GENERATES THE COPY LAYER*** (D15 + D31).
 The copy layer's latches and scan-stamps are *generated* from these declarations, and the set is
