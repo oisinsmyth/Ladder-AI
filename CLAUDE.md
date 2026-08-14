@@ -288,13 +288,16 @@ this project's most expensive failures have all been a green that examined nothi
 **Measured facts — do not re-derive them:**
 
 - Bench rig **`10.10.10.10:503`**, unit 1, reached **remotely via the Talk2m tunnel**; `:102` open,
-  `:502` refused. Scan **23.33 ms** — 🔴 ***CONTESTED 2026-08-14, DO NOT BUILD ON IT UNTIL SETTLED:*** the
-  mirror's own free-running scan counter, read over Modbus in two independent runs, ticks at **2.11 ms and
-  2.07 ms** — an **~11× disagreement**. **NOT ESTABLISHED IN EITHER DIRECTION and no mechanism attached:** the
-  counter may tick more than once per OB1 scan, may be driven by something other than OB1, or the cycle with
-  no scenario running may genuinely be ~2.1 ms while 23.33 ms was taken under other conditions.
-  ***IT MATTERS BECAUSE X-D's COMPRESSION CEILING (`k × scan = 116.7 ms`) RESTS ENTIRELY ON THE 23.33 FIGURE***
-  — and that ceiling was already flagged as half-measured. Round trip **min 63 / med 72 / max 106 ms** — matching §12a's
+  `:502` refused. 🔴 ***SCAN TIME: A PROPERTY OF THE PROGRAM, NOT OF THE CONTROLLER — AND IT WAS RECORDED HERE
+  AS A RIG FACT (settled 2026-08-14).*** The long-quoted **23.33 ms** (and **22.64 ms** idle) belong to the **A1
+  SPIKE CHECKER**, which did 123-register comparisons every scan — its own source says *"the 16-register unrolled
+  checker is inside that figure"* and labels it *"loaded"*. **That program is no longer on the rig.** The deployed
+  **harness** program measures **~2.1 ms** (2.11 and 2.07 across two runs), from the mirror's own counter — whose
+  meaning is verified in the IR rather than assumed: **one `ADD(HX_ScanCount, 1)` in `FC_HarnessCopyLayer`, called
+  ONCE from `Main` (OB1), no other caller, only other OB is `OB100`** ⇒ one tick = one OB1 scan. ***CONSEQUENCE:
+  X-D's compression ceiling (`k × scan = 116.7 ms` ⇒ `k ≈ 5`) RESTS ON A PROGRAM THAT IS NOT RUNNING; at 2.1 ms the
+  floor is ~10.6 ms and the achievable compression is FAR HIGHER than the recorded ~4.3×. Re-derive before quoting.***
+  **The qualifier existed in the source and was lost in the copy.** Round trip **min 63 / med 72 / max 106 ms** — matching §12a's
   `RTT_typ 78` / `RTT_p90 102.79`, **re-confirmed on the current path 2026-08-14**.
 - **32-bit word order is HIGH-WORD-FIRST** — measured off a build stamp with distinguishable
   halves, no longer an assumption. A `Time` spans two registers and inherits it.

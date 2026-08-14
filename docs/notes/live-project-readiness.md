@@ -422,13 +422,30 @@ ANSWERED rather than rejected locally.** Control: single reads of 34/35/36 *do* 
 is not a server refusing everything. *A successful read of 35–36 alone would have been equally
 consistent with a server exposing far more than declared.*
 
-🔴 ***SCAN TIME IS CONTESTED — 23.33 ms IS RECORDED, 2.11 ms IS MEASURED.*** The mirror's own
-free-running scan counter, read over Modbus in two independent runs, gives **2.11 ms and 2.07 ms per
-tick** against the recorded **23.33 ms** — an **~11× disagreement**. ***NOT ESTABLISHED IN EITHER
-DIRECTION, and no mechanism is attached to it:*** the counter may tick more than once per OB1 scan, may
-be driven by something other than OB1, or the idle cycle may genuinely be ~2.1 ms while 23.33 ms was
-taken under other conditions. ***DO NOT BUILD ON EITHER FIGURE UNTIL IT IS SETTLED*** — X-D's
-compression ceiling (`k × scan = 116.7 ms`) rests entirely on 23.33, and was already half-measured.
+✅ ***SCAN TIME — SETTLED 2026-08-14, AND IT WAS NEVER A CONFLICT. A SCAN TIME IS A PROPERTY OF THE
+PROGRAM, NOT OF THE CONTROLLER, AND THIS ONE WAS RECORDED AS A RIG FACT.***
+
+| figure | program it belongs to | evidence |
+|---|---|---|
+| **22.64 ms idle / 23.33 ms loaded** | ***the A1 SPIKE CHECKER*** — 123-register comparisons every scan. Its own source says *"the 16-register unrolled checker is inside that figure"* | 2026-08-13, n=101 idle (spread 22.20–23.02), n=16 loaded |
+| **~2.1 ms** | ***the HARNESS program now deployed*** — no checker | 2026-08-14, two runs, **2.11 and 2.07 ms** |
+
+**That program is no longer on the rig.** The checker was the expensive part, so ~2.1 ms for a program
+without one is not a contradiction — **it is a different program.**
+
+**The counter's meaning is verified from the IR, not assumed:** exactly one `ADD(HX_ScanCount, 1)`, in
+`FC_HarnessCopyLayer`, called **once** from `Main` (OB1), **no other caller**, and the only other OB is
+`OB100` (startup, once). ***So one tick = one OB1 scan.***
+
+🔴 ***THE CONSEQUENCE IS NOT COSMETIC: X-D's COMPRESSION CEILING RESTS ON 23.33 ms, WHICH BELONGS TO A
+PROGRAM THAT IS NOT RUNNING.*** Its timer floor `k × scan = 116.7 ms` implies `k ≈ 5`; at **2.1 ms** the
+floor is **~10.6 ms** and the achievable compression is *far higher* than the recorded ~4.3×.
+**Re-derive it against the deployed program before quoting either number** — and note the ceiling was
+already flagged half-measured, because `k` has never been measured at all.
+
+➜ ***THE LESSON: THE QUALIFIER WAS IN THE SOURCE AND WAS LOST IN THE COPY.*** The build plan says
+*"scan 23.33 **loaded**"* and names the checker. `CLAUDE.md` and this page both carried it as a bare
+*"Scan 23.33 ms"* — **a measured number stripped of the conditions that made it true.**
 
 🔴 ***CORRECTED 2026-08-14 — "S7 VARIABLE ACCESS IS REFUSED CPU-WIDE" WAS OVERSTATED, AND THE TOOL'S
 OWN DIAGNOSTIC SAID SO ALL ALONG.*** Measured live this morning in one `rig-read` run:
