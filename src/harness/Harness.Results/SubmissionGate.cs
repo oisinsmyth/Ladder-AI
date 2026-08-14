@@ -649,6 +649,27 @@ public static class SubmissionGate
 
     private static GateResult Observability(IReadOnlyList<SubmissionVector> vectors, AssertionEnumeration enumeration, MirrorObservability map, double floorScans, int runtimeCompression)
     {
+        // 🔴 *** THE MAP'S AUTHORITY IS CHECKED BEFORE THE MAP IS USED. *** This gate compares what a
+        // vector asks to observe against what the copy layer PROVIDES — so a map supplied by the vector
+        // author is the author vouching for the artifact they are being checked against. Measured: the
+        // standalone CLI took its map from the submission while the loop took the same map from the
+        // coordinator's bindings, which made the CLI WEAKER than the loop in exactly the place the CLI
+        // decides whether to proceed — and it is consulted FIRST, so a weaker gate there is worse than an
+        // absent one. It refuses to be the deciding voice rather than being quietly permissive.
+        if (map.Provenance != MapProvenance.Bindings)
+        {
+            return new GateResult("5 observability", GateStatus.NotChecked, false, "a map derived from the coordinator's bindings",
+                map.Provenance == MapProvenance.SelfDeclared
+                    ? "the observability map came out of the SUBMISSION — the vector author declaring what the copy layer provides, "
+                      + "which is the author vouching for the artifact this gate exists to check them against. *** A SELF-DECLARED MAP "
+                      + "CANNOT BE THE DECIDING VOICE, *** and this gate is consulted before anything is spent, so being quietly "
+                      + "permissive here is worse than not running. Supply the coordinator's bindings (harness-run --binding), which is "
+                      + "the source the loop itself uses."
+                    : "nothing said where the observability map came from. That is NOT CHECKED rather than trusted: the whole value of "
+                      + "this gate is that the map is a THIRD-PARTY statement of what the copy layer provides, and an unattributed map "
+                      + "is indistinguishable from one the vector author wrote.");
+        }
+
         var problems = new List<string>();
 
         foreach (var v in vectors)
@@ -969,8 +990,29 @@ public static class SubmissionGate
                 + "and ABSENT IS NOT `s7Objects: []`, which is the positive claim that no classic-S7comm path reaches a data block.");
         }
 
-        var problems = new List<string>();
         var rows = deployment.S7Objects ?? Array.Empty<S7ObjectDeclaration>();
+
+        // *** "THERE IS NO S7 TRANSPORT" IS NOW SAYABLE, AND IT IS A DIFFERENT CLAIM FROM "THE MAP REACHES
+        // NO DB". *** Without it, a Modbus-only deployment had to invent a tag map it does not use or sit
+        // permanently NOT CHECKED — and a gate nobody can satisfy stops being read.
+        if (deployment.NoS7Transport)
+        {
+            if (rows.Count > 0)
+            {
+                return new GateResult(name, GateStatus.Checked, false, nameof(DeploymentDeclaration),
+                    $"`noS7Transport` is declared AND {rows.Count} s7Object(s) are enumerated. Those contradict: a deployment cannot both "
+                    + "have no classic-S7comm path and list the objects one reaches. One of the two is stale, and guessing which would be "
+                    + "the gate deciding what the declaration meant.");
+            }
+
+            return new GateResult(name, GateStatus.Checked, true, nameof(DeploymentDeclaration),
+                "`noS7Transport` is declared: this deployment carries NO classic-S7comm client at all, so there is no reachable set to "
+                + "difference against a deliverable and §4.5's optimized-block hazard cannot arise. *** THIS IS A POSITIVE CLAIM, NOT A "
+                + "SKIP: *** it is refused if any s7Object is also declared, and it says something different from `s7Objects: []`, which "
+                + "asserts that a classic-S7comm path exists and reaches no data block.");
+        }
+
+        var problems = new List<string>();
 
         // The stamp dates every layout claim, so a declaration with rows and no stamp cannot be checked
         // at all — the comparison that distinguishes "nobody re-asserted it" from "re-asserted after the

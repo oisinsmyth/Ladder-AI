@@ -25,7 +25,11 @@ public class GateCliTests
                        "normalisedTexts": { "REQ-014:ffcc38": "WHEN the step is applied THEN the count reaches the limit" },
                        "requiredObservations": { "REQ-014:ffcc38": ["Demo_Count"] },
                        "bounds": { "ramp_limit": "10" } },
-      "map": { "providedFor": { "Demo_Count": ["Latched"] } },
+      // *** Sampled, NOT Latched, AND THAT IS A FINDING RATHER THAN A FIXTURE TWEAK. *** The minimal copy
+      // layer emits result-register MOVEs and no per-signal latch, so `Latched` on a RESULT was never
+      // available — and this fixture claimed it for as long as the CLI took the map from the submission.
+      // With --binding the map is derived from what the copy layer actually provides, and the claim fails.
+      "map": { "providedFor": { "Demo_Count": ["Sampled"] } },
       "tagMapPath": "tags.json",
       "deployment": {
         "importStamp": "import-A",
@@ -36,7 +40,7 @@ public class GateCliTests
         "id": "V-1", "slot": "S0", "index": 0, "author": "agent-b",
         "clause": "REQ-014", "assertion": "REQ-014:ffcc38",
         "startBool": "Demo_Start",
-        "expectations": [{ "signal": "Demo_Count", "nature": "PersistentState", "mode": "Latched", "windowScans": 0, "expected": "10" }],
+        "expectations": [{ "signal": "Demo_Count", "nature": "PersistentState", "mode": "Sampled", "windowScans": 20, "expected": "10" }],
         "settlingCondition": "count unchanged across 3 scans", "settlingSignals": ["Demo_Count"],
         "maxDurationScans": 20,
         "blacklist": [{ "block": "FC_Other", "reason": "shares the plant model" }],
@@ -60,12 +64,61 @@ public class GateCliTests
     { "tags": [ { "name": "Marker_Build", "area": "DB_HarnessMarker", "db": 100, "byte": 0, "type": "DInt" } ] }
     """;
 
+    /// <summary>
+    /// The coordinator's bindings — <b>what makes this CLI as strong as the loop.</b>
+    ///
+    /// <para>🔴 Gate 5 compares what a vector asks to observe against what the copy layer PROVIDES. Taken
+    /// from the submission, that map is the vector author vouching for the artifact the gate exists to
+    /// check them against — and this CLI is consulted FIRST, so being quietly permissive there is worse
+    /// than not running. Every test below therefore passes <c>--binding</c>; the one that does not is the
+    /// test of the refusal.</para>
+    /// </summary>
+    private const string Binding = """
+    {
+      "slots": [{
+        "slotId": "S0",
+        "vectorTargets": [{ "tag": "Demo_Step", "type": "Int" }],
+        "startCondition": "Demo_Start",
+        "resultSources": [{ "tag": "Demo_Count", "type": "Int" }]
+      }]
+    }
+    """;
+
     private static (int Exit, string Output) Run(string json, string[]? args = null)
     {
         var writer = new StringWriter();
-        var exit = GateCli.Run(args ?? new[] { "check", "sub.json" }, writer,
-            path => string.Equals(path, "tags.json", StringComparison.Ordinal) ? TagMap : json);
+        var exit = GateCli.Run(args ?? new[] { "check", "sub.json", "--binding", "binding.json" }, writer,
+            path => path switch
+            {
+                "tags.json" => TagMap,
+                "binding.json" => Binding,
+                _ => json,
+            });
         return (exit, writer.ToString());
+    }
+
+    [Fact]
+    public void WITHOUT_A_BINDING_THE_CLI_REFUSES_TO_BE_THE_DECIDING_VOICE_ON_GATE_5()
+    {
+        // *** THE AUTHORITY GAP, MEASURED AND CLOSED. *** GateCli took its map from the submission while
+        // LoopRun took the same map from the coordinator's bindings, so the standalone tool was WEAKER
+        // than the loop in exactly the place the tool decides whether to proceed. It is also why nothing
+        // mechanical could see a stale binding row.
+        var writer = new StringWriter();
+        var exit = GateCli.Run(new[] { "check", "sub.json" }, writer,
+            path => string.Equals(path, "tags.json", StringComparison.Ordinal) ? TagMap : Good);
+
+        Assert.Equal(GateExit.NotAdmissible, exit);
+        Assert.Contains("SELF-DECLARED MAP", writer.ToString(), StringComparison.Ordinal);
+        Assert.Contains("NOT CHECKED", writer.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void And_WITH_the_binding_the_same_submission_is_admissible()
+    {
+        // The did-not-run half: a fence that refuses everything passes every test that only checks
+        // refusals. Supplying the coordinator's bindings must actually restore the pass.
+        Assert.Equal(GateExit.AdmissibleSubjectToJudgement, Run(Good).Exit);
     }
 
     [Fact]
@@ -143,7 +196,7 @@ public class GateCliTests
     [Fact]
     public void An_unknown_instrumentation_mode_in_the_document_is_NOTHING_EXAMINED_not_a_silent_default()
     {
-        var (exit, output) = Run(Good.Replace("[\"Latched\"]", "[\"Sticky\"]", StringComparison.Ordinal));
+        var (exit, output) = Run(Good.Replace("[\"Sampled\"]", "[\"Sticky\"]", StringComparison.Ordinal));
 
         Assert.Equal(GateExit.NothingExamined, exit);
         Assert.Contains("is not an instrumentation mode", output, StringComparison.Ordinal);
@@ -156,8 +209,7 @@ public class GateCliTests
         // The document says which form it cites; omitting the field gets `When`, so an author who means
         // NEVER must say so - and saying so is what makes the refusal reachable.
         var never = Good
-            .Replace("\"mode\": \"Latched\", \"windowScans\": 0", "\"mode\": \"Sampled\", \"windowScans\": 100", StringComparison.Ordinal)
-            .Replace("[\"Latched\"]", "[\"Sampled\"]", StringComparison.Ordinal)
+            .Replace("\"windowScans\": 20", "\"windowScans\": 100", StringComparison.Ordinal)
             .Replace("\"REQ-014:ffcc38\": \"When\"", "\"REQ-014:ffcc38\": \"Never\"", StringComparison.Ordinal)
             .Replace("\"assertionForm\": \"When\"", "\"assertionForm\": \"Never\"", StringComparison.Ordinal);
 
@@ -340,8 +392,7 @@ public class GateCliTests
         // The same vector, the same declared window, two wave-set widths. The floor is a property of the
         // set, not of the vector, and the CLI derives it rather than taking it.
         var sampled = Good
-            .Replace("\"mode\": \"Latched\", \"windowScans\": 0", "\"mode\": \"Sampled\", \"windowScans\": 12", StringComparison.Ordinal)
-            .Replace("[\"Latched\"]", "[\"Sampled\"]", StringComparison.Ordinal);
+            .Replace("\"windowScans\": 20", "\"windowScans\": 12", StringComparison.Ordinal);
 
         Assert.Equal(GateExit.AdmissibleSubjectToJudgement, Run(sampled).Exit);
 

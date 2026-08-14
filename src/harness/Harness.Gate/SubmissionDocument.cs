@@ -163,6 +163,14 @@ public sealed class DeploymentDocument
     /// is not declared fails regardless of what anybody called deliverable.</para>
     /// </summary>
     public List<string>? DeliverableObjects { get; set; }
+
+    /// <summary>
+    /// <b>"There is no classic-S7comm transport in this deployment at all."</b> A positive claim, distinct
+    /// from <c>s7Objects: []</c> (which asserts a path exists and reaches no data block) and from absent
+    /// (which is "nobody said"). Declaring it alongside any <c>s7Objects</c> row is a contradiction and is
+    /// refused.
+    /// </summary>
+    public bool NoS7Transport { get; set; }
 }
 
 /// <summary>One <c>s7Objects</c> row. <b><c>Layout</c> absent parses as <c>Unstated</c>, which is refused.</b></summary>

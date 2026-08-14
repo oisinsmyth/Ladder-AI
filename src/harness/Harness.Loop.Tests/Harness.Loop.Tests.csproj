@@ -25,6 +25,7 @@
   -->
   <ItemGroup>
     <ProjectReference Include="..\Harness.Loop\Harness.Loop.csproj" />
+    <ProjectReference Include="..\Harness.Run\Harness.Run.csproj" />
 
     <!--
       Harness.Skeleton, so the loop can be run END TO END against the LAD interpreter and the simulated

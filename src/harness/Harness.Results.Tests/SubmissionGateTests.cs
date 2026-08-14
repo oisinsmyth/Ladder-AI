@@ -85,7 +85,11 @@ public class SubmissionGateTests
                 new Dictionary<string, AssertionForm> { [AssertionIdValue] = AssertionForm.When }, "agent-c", Texts, Observations, SpecifiedBounds),
             FidelityDeclaration.Of("M_Ramp", new[] { "ramp-to-limit" }, new[] { "overshoot" }, true),
             new AgentIdentity(blockAuthor),
-            map ?? MirrorObservability.Of(("Demo_Count", new[] { InstrumentationMode.Latched })),
+            // The DEFAULT fixture stands for a COMPLETE submission, which means the map came from the
+            // coordinator's bindings. A caller-supplied map keeps its own provenance, because the whole
+            // point of the gate-5 tests below is that a self-declared map is adjudicated differently.
+            map ?? MirrorObservability.Of(("Demo_Count", new[] { InstrumentationMode.Latched }))
+                with { Provenance = MapProvenance.Bindings },
             floor, runtimeCompression,
             omitConflictGraph ? null : conflicts ?? ConflictGraph.Empty,
             compressionInputs,
@@ -269,7 +273,7 @@ public class SubmissionGateTests
         var report = Check(both,
             map: MirrorObservability.Of(
                 ("Demo_Count", new[] { InstrumentationMode.Latched }),
-                ("Demo_Inhibit", new[] { InstrumentationMode.Latched })),
+                ("Demo_Inhibit", new[] { InstrumentationMode.Latched })) with { Provenance = MapProvenance.Bindings },
             enumeration: Relational("Demo_Count", "Demo_Inhibit"));
 
         Assert.True(Gate(report, "3h required observations").Passed);
@@ -381,7 +385,7 @@ public class SubmissionGateTests
         var report = Check(
             new[] { Vector(form: AssertionForm.When, expectations: new[]
                 { new ObservabilityDeclaration("Demo_Count", SignalNature.PersistentState, InstrumentationMode.Sampled, 40, "10") }) },
-            map: MirrorObservability.Of(("Demo_Count", new[] { InstrumentationMode.Sampled })),
+            map: MirrorObservability.Of(("Demo_Count", new[] { InstrumentationMode.Sampled })) with { Provenance = MapProvenance.Bindings },
             enumeration: enumeration);
 
         Assert.Contains("SampledCannotAnswerANeverAssertion", Gate(report, "5 observability").Detail, StringComparison.Ordinal);
@@ -802,5 +806,93 @@ public class SubmissionGateTests
         Assert.False(gate.Passed);
         Assert.Contains("does not contain", gate.Detail, StringComparison.Ordinal);
         Assert.Contains("never to the block", gate.Detail, StringComparison.Ordinal);
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // Gate 5's AUTHORITY — the standalone tool was weaker than the loop, in the place it decides
+    // ---------------------------------------------------------------------------------------------
+
+    [Fact]
+    public void A_SELF_DECLARED_OBSERVABILITY_MAP_MAKES_GATE_5_NOT_CHECKED_never_a_pass()
+    {
+        // 🔴 The map says what the copy layer PROVIDES, and this gate compares a vector's demands against
+        // it. A map out of the submission is the vector author vouching for the artifact the gate exists
+        // to check them against — and because this gate is consulted FIRST, being quietly permissive here
+        // is worse than not running at all.
+        var selfDeclared = MirrorObservability.Of(("Demo_Count", new[] { InstrumentationMode.Latched }))
+            with { Provenance = MapProvenance.SelfDeclared };
+
+        var report = Check(map: selfDeclared);
+        var gate = Gate(report, "5 observability");
+
+        Assert.Equal(GateStatus.NotChecked, gate.Status);
+        Assert.False(gate.Passed);
+        Assert.Equal(SubmissionVerdict.NotAdmissible, report.Verdict);
+        Assert.Contains("CANNOT BE THE DECIDING VOICE", gate.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void An_UNATTRIBUTED_map_is_NOT_CHECKED_too_because_the_default_must_fail_closed()
+    {
+        // Unstated is the enum's zero value deliberately: a field that defaulted to the trustworthy answer
+        // would hand every caller who omitted it the permissive path.
+        var unattributed = MirrorObservability.Of(("Demo_Count", new[] { InstrumentationMode.Latched }));
+
+        Assert.Equal(MapProvenance.Unstated, unattributed.Provenance);
+
+        var gate = Gate(Check(map: unattributed), "5 observability");
+
+        Assert.Equal(GateStatus.NotChecked, gate.Status);
+        Assert.Contains("indistinguishable from one the vector author wrote", gate.Detail, StringComparison.Ordinal);
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // Gate 11 — "there is no S7 transport" was previously inexpressible
+    // ---------------------------------------------------------------------------------------------
+
+    [Fact]
+    public void NO_S7_TRANSPORT_IS_A_POSITIVE_CLAIM_and_is_CHECKED_rather_than_skipped()
+    {
+        // Gate 11 rightly refused a bare `s7Objects: []` and asked for a tag map. But "the map reaches no
+        // DB" and "there is no map" are different claims, and only the first was sayable — so a
+        // Modbus-only deployment had to invent a tag map it does not use or sit permanently NOT CHECKED.
+        var report = SubmissionGate.Check(
+            new[] { Vector() },
+            AssertionEnumeration.Of(new[] { "REQ-014" }, new[] { AssertionIdValue },
+                new Dictionary<string, AssertionForm> { [AssertionIdValue] = AssertionForm.When }, "agent-c", Texts, Observations, SpecifiedBounds),
+            FidelityDeclaration.Of("M_Ramp", new[] { "ramp-to-limit" }, new[] { "overshoot" }, true),
+            new AgentIdentity("agent-a"),
+            MirrorObservability.Of(("Demo_Count", new[] { InstrumentationMode.Latched })) with { Provenance = MapProvenance.Bindings },
+            9, 1, ConflictGraph.Empty, null,
+            new DeploymentDeclaration("fixture-import", Array.Empty<S7ObjectDeclaration>(), NoS7Transport: true),
+            null);
+
+        var gate = Gate(report, "11 memory layout");
+
+        Assert.Equal(GateStatus.Checked, gate.Status);
+        Assert.True(gate.Passed);
+        Assert.Contains("POSITIVE CLAIM, NOT A SKIP", gate.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void And_declaring_NO_S7_TRANSPORT_beside_an_s7Object_is_a_CONTRADICTION_and_is_refused()
+    {
+        var report = SubmissionGate.Check(
+            new[] { Vector() },
+            AssertionEnumeration.Of(new[] { "REQ-014" }, new[] { AssertionIdValue },
+                new Dictionary<string, AssertionForm> { [AssertionIdValue] = AssertionForm.When }, "agent-c", Texts, Observations, SpecifiedBounds),
+            FidelityDeclaration.Of("M_Ramp", new[] { "ramp-to-limit" }, new[] { "overshoot" }, true),
+            new AgentIdentity("agent-a"),
+            MirrorObservability.Of(("Demo_Count", new[] { InstrumentationMode.Latched })) with { Provenance = MapProvenance.Bindings },
+            9, 1, ConflictGraph.Empty, null,
+            new DeploymentDeclaration("fixture-import",
+                new[] { new S7ObjectDeclaration("DB_X", 100, "DB_X", DeclaredLayout.Standard, "fixture-import") },
+                NoS7Transport: true),
+            TagMapReach.Of(Array.Empty<S7Reach>()));
+
+        var gate = Gate(report, "11 memory layout");
+
+        Assert.False(gate.Passed);
+        Assert.Contains("Those contradict", gate.Detail, StringComparison.Ordinal);
     }
 }

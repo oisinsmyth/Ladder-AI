@@ -55,10 +55,21 @@ public static class GateCli
         {
             document = SubmissionDocument.Read(readFile(args[1]));
 
+            // 🔴 *** --binding IS WHAT MAKES THIS CLI AS STRONG AS THE LOOP. *** Without it the
+            // observability map comes out of the submission — the vector author declaring what the copy
+            // layer provides — and gate 5 reports NOT CHECKED rather than passing. Measured: the CLI took
+            // its map from the submission while the loop took it from the coordinator's bindings, so the
+            // standalone tool was WEAKER than the loop in exactly the place it decides whether to proceed,
+            // and it is consulted FIRST.
+            var bindingIndex = args.ToList().IndexOf("--binding");
+            var binding = bindingIndex >= 0 && bindingIndex + 1 < args.Count
+                ? BindingDocument.Read(readFile(args[bindingIndex + 1]))
+                : null;
+
             // Evaluate is INSIDE the try: a document that parses as JSON and then names a mode nothing
             // implements is still a document that could not be read, and it must reach the same
             // NOTHING EXAMINED outcome rather than escaping as an unhandled throw.
-            report = Evaluate(document, readFile);
+            report = Evaluate(document, readFile, binding);
         }
         catch (Exception ex)
         {
@@ -78,30 +89,19 @@ public static class GateCli
     }
 
     /// <summary>Turn the document into the checked types and run every gate.</summary>
-    public static SubmissionReport Evaluate(SubmissionDocument document, Func<string, string>? readFile = null)
+    /// <param name="binding">
+    /// The coordinator's bindings. <b>Supplying them is what gives gate 5 an authority other than the
+    /// vector author</b>; without them the map is self-declared and gate 5 refuses to be the deciding voice.
+    /// </param>
+    public static SubmissionReport Evaluate(SubmissionDocument document, Func<string, string>? readFile = null, BindingDocument? binding = null)
     {
         ArgumentNullException.ThrowIfNull(document);
 
-        var vectors = (document.Vectors ?? new List<VectorDocument>()).Select(ToVector).ToArray();
+        var vectors = (document.Vectors ?? new List<VectorDocument>()).Select(ToSubmissionVector).ToArray();
 
-        var enumeration = AssertionEnumeration.Of(
-            document.Enumeration?.Clauses ?? Enumerable.Empty<string>(),
-            document.Enumeration?.Assertions ?? Enumerable.Empty<string>(),
-            document.Enumeration?.Forms,
-            document.Enumeration?.Enumerator ?? string.Empty,
-            document.Enumeration?.NormalisedTexts,
-            document.Enumeration?.RequiredObservations?.ToDictionary(
-                e => e.Key,
-                e => (IReadOnlySet<string>)e.Value.ToHashSet(StringComparer.Ordinal),
-                StringComparer.Ordinal),
-            document.Enumeration?.Bounds);
+        var enumeration = ToEnumeration(document);
 
-        var fidelity = document.Model is null
-            ? null
-            : FidelityDeclaration.Of(document.Model.Id ?? string.Empty,
-                document.Model.Represents ?? Enumerable.Empty<string>(),
-                document.Model.DoesNotRepresent,
-                document.Model.ValidatedAgainstPlantData);
+        var fidelity = ToFidelity(document);
 
         var map = new MirrorObservability(
             (document.Map?.ProvidedFor ?? new Dictionary<string, List<string>>())
@@ -112,7 +112,28 @@ public static class GateCli
                         ? parsed
                         : throw new InvalidDataException($"'{m}' is not an instrumentation mode. Expected one of: {string.Join(", ", Enum.GetNames<InstrumentationMode>())}."))
                     .ToHashSet(),
-                StringComparer.Ordinal));
+                StringComparer.Ordinal))
+        {
+            // *** THE SUBMISSION'S OWN MAP, AND IT IS LABELLED AS SUCH. *** Gate 5 then reports NOT
+            // CHECKED rather than passing, because a map the vector author wrote cannot adjudicate the
+            // vector author. `harness-run --binding` supplies the coordinator's, which is what the loop uses.
+            Provenance = MapProvenance.SelfDeclared,
+        };
+
+        // The coordinator's bindings, derived exactly as LoopRun derives them — same source, same
+        // authority. This is the "make the CLI no weaker" half; the branch above is the "refuse to be the
+        // deciding voice" half, and both are needed because the CLI must remain usable without a binding.
+        if (binding is not null)
+        {
+            map = MirrorObservability.FromMinimalCopyLayer(
+                (binding.Slots ?? new List<SlotBindingDocument>())
+                    .SelectMany(sl => sl.ResultSources ?? new List<MirroredSignalDocument>())
+                    .Select(r => r.Tag ?? string.Empty))
+                with
+                {
+                    Provenance = MapProvenance.Bindings,
+                };
+        }
 
         // *** THE FLOOR IS COMPUTED FROM SECTION 12a, NEVER CARRIED HERE. *** It scales with the number
         // of slots sharing the poll and with slots-per-read, so it is a property of the WAVE SET.
@@ -128,13 +149,36 @@ public static class GateCli
             map,
             floor,
             Math.Max(1, document.RuntimeCompression),
-            ToConflictGraph(document),
+            ToConflicts(document),
             ToCompressionInputs(document),
-            ToDeployment(document),
+            ToDeploymentDeclaration(document),
             ToTagMapReach(document, readFile));
     }
 
-    private static DeploymentDeclaration? ToDeployment(SubmissionDocument document) =>
+    /// <summary>The enumeration projection, off the document. Public so the runner composes it the same way.</summary>
+    public static AssertionEnumeration ToEnumeration(SubmissionDocument document) =>
+        AssertionEnumeration.Of(
+            document.Enumeration?.Clauses ?? Enumerable.Empty<string>(),
+            document.Enumeration?.Assertions ?? Enumerable.Empty<string>(),
+            document.Enumeration?.Forms,
+            document.Enumeration?.Enumerator ?? string.Empty,
+            document.Enumeration?.NormalisedTexts,
+            document.Enumeration?.RequiredObservations?.ToDictionary(
+                e => e.Key,
+                e => (IReadOnlySet<string>)e.Value.ToHashSet(StringComparer.Ordinal),
+                StringComparer.Ordinal),
+            document.Enumeration?.Bounds);
+
+    /// <summary>The model's fidelity declaration, off the document.</summary>
+    public static FidelityDeclaration? ToFidelity(SubmissionDocument document) =>
+        document.Model is null
+            ? null
+            : FidelityDeclaration.Of(document.Model.Id ?? string.Empty,
+                document.Model.Represents ?? Enumerable.Empty<string>(),
+                document.Model.DoesNotRepresent,
+                document.Model.ValidatedAgainstPlantData);
+
+    public static DeploymentDeclaration? ToDeploymentDeclaration(SubmissionDocument document) =>
         document.Deployment is null
             ? null
             : new DeploymentDeclaration(
@@ -142,7 +186,8 @@ public static class GateCli
                 (document.Deployment.S7Objects ?? new List<S7ObjectDocument>())
                     .Select(o => new S7ObjectDeclaration(
                         o.Area ?? string.Empty, o.DbNumber, o.HarnessObject ?? string.Empty, o.Layout, o.LayoutSetAfterImport))
-                    .ToArray());
+                    .ToArray(),
+                document.Deployment.NoS7Transport);
 
     /// <summary>
     /// The reachable set, <b>COMPUTED FROM THE TAG MAP</b> with the same reader the transport uses.
@@ -206,7 +251,7 @@ public static class GateCli
     /// is NOT CHECKED because part of the graph never said why. Null on BOTH means no graph at all, which
     /// is a third state again.</para>
     /// </summary>
-    private static ConflictGraph? ToConflictGraph(SubmissionDocument document)
+    public static ConflictGraph? ToConflicts(SubmissionDocument document)
     {
         if (document.ComputedConflicts is null && document.ConflictEdges is null)
             return null;
@@ -225,7 +270,7 @@ public static class GateCli
         return new ConflictGraph(edges);
     }
 
-    private static SubmissionVector ToVector(VectorDocument v) => new(
+    public static SubmissionVector ToSubmissionVector(VectorDocument v) => new(
         v.Id ?? string.Empty,
         v.Slot ?? string.Empty,
         v.Index,

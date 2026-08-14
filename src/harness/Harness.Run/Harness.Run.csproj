@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>Harness.Run</RootNamespace>
+    <AssemblyName>harness-run</AssemblyName>
+  </PropertyGroup>
+
+  <!--
+    THE LAST LINK: spec -> map -> IR -> deploy -> run -> results.
+
+    Harness.Loop was a library with no entry point - it could be unit-tested and could not be RUN, so
+    the loop existed and nothing could invoke it. This is the composition root.
+
+    IT OWNS NO DEVICE POLICY OF ITS OWN. The fence is DeviceGuard's, consulted before any socket; the
+    only gateways reachable from here are the VERIFYING one (reads the build stamp, refuses any
+    mismatch, changes nothing) and the REFUSING one. *** THERE IS NO FLAG THAT ASSERTS A DEPLOYMENT
+    INSTEAD OF MEASURING ONE *** - a gateway reporting Loaded without loading is one edit from a
+    gateway that lies, and that edit must not be available in a binary an operator runs.
+
+    Every decision lives in LoopCli, which takes its transport as a FACTORY, so the whole CLI is
+    exercised in tests without a process and without a socket.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\Harness.Gate\Harness.Gate.csproj" />
+    <ProjectReference Include="..\Harness.Loop\Harness.Loop.csproj" />
+    <ProjectReference Include="..\Harness.Wire\Harness.Wire.csproj" />
+    <ProjectReference Include="..\..\device-guard\DeviceGuard\DeviceGuard.csproj" />
+  </ItemGroup>
+
+</Project>

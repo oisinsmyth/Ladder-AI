@@ -103,8 +103,41 @@ public sealed record ObservabilityDeclaration(
 /// the copy layer it generated, and <see cref="FromMinimalCopyLayer"/> is the honest constructor for
 /// what phase 2's layer actually emits.
 /// </remarks>
+public enum MapProvenance
+{
+    /// <summary>
+    /// 🔴 <b>NOBODY SAID WHERE THE MAP CAME FROM — and that is the DEFAULT, so it fails closed.</b>
+    ///
+    /// <para>The zero value, following <c>AssertionForm.Unstated</c>: a field that silently defaulted to
+    /// the trustworthy answer would hand every caller who omitted it the permissive path.</para>
+    /// </summary>
+    Unstated = 0,
+
+    /// <summary>
+    /// 🔴 <b>THE MAP CAME OUT OF THE SUBMISSION THE VECTOR AUTHOR WROTE — i.e. the author vouching for the
+    /// artifact the gate exists to check them against.</b>
+    ///
+    /// <para>This is the authority gap that was measured. <c>GateCli</c> took its map from the submission
+    /// while <c>LoopRun</c> took the same map from the COORDINATOR'S BINDINGS, so <b>the standalone CLI
+    /// was weaker than the loop in exactly the place the CLI decides whether to proceed</b> — and it is
+    /// consulted FIRST, which makes a weaker gate worse than an absent one. It is also why nothing
+    /// mechanical could see a stale binding row. Gate 5 therefore refuses to be the deciding voice on a
+    /// self-declared map: NOT CHECKED, never a pass.</para>
+    /// </summary>
+    SelfDeclared,
+
+    /// <summary>
+    /// The map was derived from the coordinator's bindings — <b>the same source the loop uses</b>, which
+    /// is what makes the CLI's authority no weaker than the loop's.
+    /// </summary>
+    Bindings,
+}
+
 public sealed record MirrorObservability(IReadOnlyDictionary<string, IReadOnlySet<InstrumentationMode>> ProvidedFor)
 {
+    /// <summary>Where this map came from. <b>Decides whether gate 5 may be a verdict at all.</b></summary>
+    public MapProvenance Provenance { get; init; } = MapProvenance.Unstated;
+
     public bool IsEmpty => ProvidedFor.Count == 0;
 
     public IReadOnlySet<InstrumentationMode> For(string signal) =>
