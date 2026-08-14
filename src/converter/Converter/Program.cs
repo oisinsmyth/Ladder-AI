@@ -2,6 +2,7 @@
 using Converter.CandidateScan;
 using Converter.Claims;
 using Converter.Compare;
+using Converter.ConflictGraph;
 using Converter.CrossCheck;
 using Converter.Diff;
 using Converter.Digest;
@@ -106,6 +107,11 @@ internal static class Program
             return RunCrossCheck(args[1..]);
         }
 
+        if (args.Length >= 1 && args[0] == "conflict-graph")
+        {
+            return RunConflictGraph(args[1..]);
+        }
+
         if (args.Length >= 1 && args[0] == "trace")
         {
             return RunTrace(args[1..]);
@@ -152,6 +158,7 @@ internal static class Program
             Console.Error.WriteLine("       converter compare <first.xml> <second.xml> [--json] [--max-differences <n>] [--allow-silent-layout]   # the CONFIRM LOOP's judgement half: Normalizer-compare two SimaticML exports and report WHAT differs");
             Console.Error.WriteLine("                    exit 0 equivalent / 1 differs / 2 NOT COMPARED (missing, unparseable, not a block export, same file twice, or a MemoryLayout premise that did not hold)");
             Console.Error.WriteLine("       converter cross-check --project <ir-dir> [--json]   # whole-project cross-block reference-graph FACTS the reviewer reasons over (FI-22); never verdicts; exit 0");
+            Console.Error.WriteLine("       converter conflict-graph --project <ir-dir> (--submission <file> | --signals <file>) [--json] [--allow-unresolved]   # SUBMISSION-SCOPED `conflictEdges` for harness gates 8/8c, in the exact shape ConflictEdgeDocument deserializes. NOT cross-check with a filter: that emits whole-project fact tables keyed on a storage path, this emits EDGES between BLOCKS with a provenance and a signal class. Only MultiWriter provenance is ever emitted - a CallGraph edge is about no signal, so it could only carry an Unstated class, and ProvenanceComplete is ALL-or-nothing, so ONE such edge would turn gate 8c to NOT CHECKED for the whole submission. `computedConflicts` is never emitted for the same reason (a bare name is Unstated provenance); gate 8's packing set derives from the edges. Exit 0 = computed (an EMPTY list is the EARNED claim that the graph ran and found nothing), 2 = NOT COMPUTED and the key is WITHHELD so the gate reports NOT CHECKED, 3 = emitted but an edge is unprovenanced");
             Console.Error.WriteLine("       converter trace --binding <bindings.json> --project <ir-dir> [--json]   # forward-pass REQ trace: per-hop facts over the reader/writer graph (FI-25); facts not verdicts; exit 0. Hops incl. guard-containment (FI-36-min): every spec-listed condition must appear in the coil's guard");
             Console.Error.WriteLine("       converter candidate-scan --project <ir-dir> --fb <FBName> [--scope <prefix> ...] [--type <T>] [--direction status|command|any] [--json]   # compute every signal that could satisfy a requirement (FI-39); exit 1 if the IO half has >1 candidate");
             Console.Error.WriteLine("       converter undriven-scan --project <ir-dir> --fb <FBName> [--instance <iDB> ...] [--caller <file.ir> ...] [--hints] [--json]   # per-instance interface drive states (FI-39); exit 1 on undriven/disarmed");
@@ -1523,6 +1530,112 @@ internal static class Program
         Console.WriteLine(json ? CrossCheckOutputFormatter.FormatJson(report) : CrossCheckOutputFormatter.FormatText(report));
 
         // A facts provider, not a gate — always exit 0 (like the `converter review` dump the skills embed).
+        return 0;
+    }
+
+    /// <summary>
+    /// `conflict-graph` — the SUBMISSION-SCOPED emission `Harness.Results.SubmissionGate` gates 8 and
+    /// 8c consume. Distinct from `cross-check` on purpose: that command emits whole-project FACT
+    /// TABLES keyed on a storage path, and the gate consumes EDGES between BLOCKS carrying a
+    /// provenance and a signal class. Reshaping one into the other was tried and correctly refused.
+    ///
+    /// <para>Exit codes are the refusal semantics, carried across from the consumer:
+    /// <list type="bullet">
+    /// <item><b>0</b> — computed. `conflictEdges` is present, and an EMPTY list is the earned claim
+    /// that the graph ran and found nothing.</item>
+    /// <item><b>1</b> — usage error.</item>
+    /// <item><b>2</b> — NOT COMPUTED. The key is withheld entirely, so the gate reports NOT CHECKED
+    /// and fails closed rather than reading an unearned empty list as a clean program.</item>
+    /// <item><b>3</b> — computed, but at least one edge carries an Unstated provenance or class. The
+    /// graph IS emitted; this exists because at the gate that state appears as a flat NOT CHECKED for
+    /// the whole submission with nothing naming the cause, and the operator who can fix it is the one
+    /// running this command.</item>
+    /// </list></para>
+    /// </summary>
+    private static int RunConflictGraph(string[] args)
+    {
+        string? projectDir = null;
+        string? submission = null;
+        string? signalsFile = null;
+        var json = false;
+        var allowUnresolved = false;
+
+        for (var i = 0; i < args.Length; i++)
+        {
+            switch (args[i])
+            {
+                case "--project":
+                    projectDir = RequireValue(args, ref i, "--project");
+                    break;
+                case "--submission":
+                    submission = RequireValue(args, ref i, "--submission");
+                    break;
+                case "--signals":
+                    signalsFile = RequireValue(args, ref i, "--signals");
+                    break;
+                case "--allow-unresolved":
+                    allowUnresolved = true;
+                    break;
+                case "--json":
+                    json = true;
+                    break;
+                default:
+                    Console.Error.WriteLine($"Unexpected argument: {args[i]}");
+                    return 1;
+            }
+        }
+
+        if (projectDir is null || (submission is null && signalsFile is null))
+        {
+            Console.Error.WriteLine("Usage: converter conflict-graph --project <ir-dir> (--submission <file> | --signals <file>) [--json] [--allow-unresolved]");
+            return 1;
+        }
+
+        if (!Directory.Exists(projectDir))
+        {
+            Console.Error.WriteLine($"--project directory not found: {projectDir}");
+            return 1;
+        }
+
+        List<string> signals = new();
+        try
+        {
+            if (submission is not null)
+            {
+                signals.AddRange(ConflictGraphRunner.SignalsFromSubmission(submission));
+            }
+
+            if (signalsFile is not null)
+            {
+                signals.AddRange(ConflictGraphRunner.SignalsFromList(signalsFile));
+            }
+        }
+        catch (Exception ex) when (ex is IOException or System.Text.Json.JsonException)
+        {
+            Console.Error.WriteLine($"could not read the signal set: {ex.GetType().Name}: {ex.Message}");
+            return 1;
+        }
+
+        var report = ConflictGraphRunner.Run(projectDir, signals, allowUnresolved);
+        Console.WriteLine(json ? ConflictGraphOutputFormatter.FormatJson(report) : ConflictGraphOutputFormatter.FormatText(report));
+
+        if (!report.Computed)
+        {
+            Console.Error.WriteLine(
+                "NOT COMPUTED — `conflictEdges` was NOT emitted, so gates 8/8c will report NOT CHECKED. "
+                + "That is deliberate: an empty edge list is the positive claim that the graph ran and found nothing, and it has not been earned here. "
+                + report.NotComputedReason);
+            return 2;
+        }
+
+        if (report.WithoutRecordedProvenance.Count > 0)
+        {
+            Console.Error.WriteLine(
+                $"{report.WithoutRecordedProvenance.Count} edge(s) carry an Unstated provenance or signal class. The graph IS emitted, but the consumer's "
+                + "ProvenanceComplete is ALL-or-nothing, so gate 8c will report NOT CHECKED for the WHOLE submission and will not name which edge caused it.");
+            return 3;
+        }
+
         return 0;
     }
 

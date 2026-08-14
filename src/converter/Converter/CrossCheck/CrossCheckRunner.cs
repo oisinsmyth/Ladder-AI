@@ -20,7 +20,7 @@ public static class CrossCheckRunner
         // no root — so `IO.Step` in three different FBs was one key, and `cross-check` reported a
         // cross-block multi-writer between blocks that share nothing but a leaf name. See
         // ProjectUsageGraph._blockLocalRoots for the measurement.
-        var byStorage = GroupByStorage(graph);
+        var byStorage = StorageGroups.Build(graph);
 
         var multiWriters = byStorage
             .Where(g => g.Writers.Count >= 2)
@@ -79,59 +79,6 @@ public static class CrossCheckRunner
         var siblingRefs = BuildSiblingRefs(graph);
 
         return new CrossCheckReport(multiWriters, deadMembers, ioBoundary, siblingRefs, graph.Warnings, soleWriters);
-    }
-
-    // One storage location and everything that touches it. Path is the DISPLAY form (`<Owner>.<path>`
-    // when block-local, the path verbatim when global); Owner is null for a global path, so a
-    // consumer never has to parse the display string to tell the two apart.
-    private sealed record StorageGroup(
-        string Path,
-        string? Owner,
-        IReadOnlyList<string> InstanceAliases,
-        List<ProjectUsageGraph.UsageSite> Writers,
-        List<ProjectUsageGraph.UsageSite> Readers);
-
-    // Re-key every usage from its verbatim path onto its storage identity. A block-local root cannot
-    // be the same storage as an identically-spelled root in another block, so those are keyed under
-    // their owner; a global path (DB member, PLC tag, `iDB_…`, physical address) is already unique
-    // and is left exactly as written — which is what keeps the two GENUINE cross-block multi-writers
-    // in `ir/test-project001` reporting unchanged.
-    private static List<StorageGroup> GroupByStorage(ProjectUsageGraph graph)
-    {
-        var groups = new Dictionary<string, StorageGroup>(StringComparer.Ordinal);
-
-        void Add(string path, ProjectUsageGraph.UsageSite site, bool isWriter)
-        {
-            var owner = graph.OwnerOf(site.Block, path);
-            var key = graph.QualifiedPath(site.Block, path);
-            if (!groups.TryGetValue(key, out var group))
-            {
-                group = new StorageGroup(
-                    owner is null ? path : owner + "." + path,
-                    owner,
-                    owner is null ? Array.Empty<string>() : graph.InstanceAliasesOf(owner, path),
-                    new List<ProjectUsageGraph.UsageSite>(),
-                    new List<ProjectUsageGraph.UsageSite>());
-                groups[key] = group;
-            }
-
-            (isWriter ? group.Writers : group.Readers).Add(site);
-        }
-
-        foreach (var kv in graph.Usages)
-        {
-            foreach (var site in kv.Value.Writers)
-            {
-                Add(kv.Key, site, isWriter: true);
-            }
-
-            foreach (var site in kv.Value.Readers)
-            {
-                Add(kv.Key, site, isWriter: false);
-            }
-        }
-
-        return groups.Values.ToList();
     }
 
     // Interface-UDT dead members. Each FB interface member aliases between the FB-internal bare form
