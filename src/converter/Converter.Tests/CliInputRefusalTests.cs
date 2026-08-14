@@ -149,4 +149,22 @@ public class CliInputRefusalTests : IDisposable
     {
         Assert.Equal(1, Program.RunTagStatus(new[] { "DB_Real.NotAMember", "--project", _dir }));
     }
+
+    // --- 3. candidate-scan's unknown --fb, at the EXIT CODE ------------------------------------
+    //
+    // Deliberately here and not only in CandidateScanTests. The report-level assertion
+    // (UnknownFb == true) passes with the Program-level `if` disconnected — a mutation run proved
+    // it: ten tests went red and that one stayed green. A property nothing keys an exit code on is
+    // a guard that can be silently unwired, which is the failure mode this repo finds most often.
+    [Fact]
+    public void CandidateScan_UnknownFb_ExitsTwo()
+    {
+        Assert.Equal(2, Program.RunCandidateScan(new[] { "--project", _dir, "--fb", "FB_NotInThisCorpus" }));
+    }
+
+    [Fact]
+    public void CandidateScan_KnownFb_StillExitsZero()
+    {
+        Assert.Equal(0, Program.RunCandidateScan(new[] { "--project", _dir, "--fb", "FB_Ok" }));
+    }
 }
