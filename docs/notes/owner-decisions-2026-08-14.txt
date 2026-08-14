@@ -380,11 +380,11 @@ statement itself is yours to write. The fourth was lost when the file was edited
 O-1  Q-05's second half. You agreed to "rule AMB-16 by naming which threshold
      'the persistence threshold' refers to" - but the name is still owed. 22 of
      the 27 assertions are readable two ways until it is given.
-     ANSWER:
+     ANSWER: Not sure to be honest. Need examples and reasoning behind differing recommendations.
 
 O-2  Q-03. You agreed to amend md:74, which reads `latched` and names no block.
      Name the latching block, or say it is not latched by a block.
-     ANSWER:
+     ANSWER: have lad-coder generate the latch block, later this will be programicaly generated
 
 O-3  Q-02's surviving half. The PARTITION is settled - four independent
      authorities say the six ids are one slot's serial phases, and none of them
@@ -422,4 +422,45 @@ PROCEEDING MEANWHILE, so nothing waits on you:
   - O-3 and O-4 are being built to REFUSE when unstated rather than to default,
     so a blank answer costs nothing and a different answer costs no rework.
   - The deploy is authorised by Q-12 and proceeds from IR per Q-10.
+================================================================================
+
+--------------------------------------------------------------------------------
+THE FOUR OWED ANSWERS — RULED BY ME, 2026-08-14, on the owner's instruction
+("answer the 4 owed questions yourself and proceed"). Reasoning was given in
+session; this is the record of what was decided and on what evidence.
+--------------------------------------------------------------------------------
+
+O-1  NO DECISION NEEDED - ALREADY RULED, AND MY QUESTION WAS STALE.
+     requirements.md:857, AR-HBA-14 "a bare parameter phrase means the SPECIFIED
+     value (closes AMB-16)": wherever the register says "the persistence
+     threshold", "the debounce time" or any equivalent bare phrase, it means
+     AR-HBA-03's specified value, never the value the block happens to hold.
+     WHY IT MATTERS: under the preset reading, a block whose DB holds 45s where
+     the requirement specifies 60s PASSES a 50s hold - the under-scaling is
+     invisible. Under the specified reading it FAILS, correctly. One line
+     strengthens 22 assertions without moving a character, so zero re-hashes.
+     Twelfth stale-absence claim caught this week; this one was mine.
+
+O-2  latchedBy = "FB_HopperBlockageStim".  NOTHING TO GENERATE.
+     Verified in the IR, not assumed: FB_HopperBlockageStim.ir:158 SCOIL
+     Stim.ScenarioDone, :162 RCOIL on a LEVEL (NOT Stim.Start AND NOT Running).
+     The prose stated the MODE; the schema wants the PROVENANCE; the provenance
+     was already in the IR. No lad-coder dispatch needed.
+
+O-3  TWO PHASES, NOT ONE ORDER.
+     Ordinary groups, in true document order:
+       RAISE (6), CLEAR (6), LATCH (2), RESET (6), PAIR (2)
+     STARTUP (5) runs as a SEPARATE PHASE around a deliberate download boundary.
+     🔴 THE ORDER I OFFERED THE OWNER FOR RATIFICATION WAS WRONG - I wrote
+     "RAISE, CLEAR, RESET, STARTUP, LATCH, PAIR" from memory. LATCH is THIRD.
+     Read the file, not the recollection.
+     WHY STARTUP IS SEPARATE: its own _scenario says it "RIDES AN ALREADY-
+     SCHEDULED DISRUPTIVE BOUNDARY (X-F)" and "the boundary stops and restarts
+     the CPU"; its _observability says "THE HARNESS IS DISCONNECTED ACROSS THE
+     DOWNLOAD (D18)". Those vectors REQUIRE a restart mid-vector. In plain
+     document order PAIR would run after that restart, with a freshly cleared
+     accumulator and a reconnected harness.
+
+O-4  AGREED - two-tag binding form + symbolic-name encoder, every value cited to
+     its md: line, anything the tables do not state REFUSED rather than invented.
 ================================================================================
