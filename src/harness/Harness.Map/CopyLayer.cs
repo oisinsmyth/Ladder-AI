@@ -151,8 +151,83 @@ public static class MirrorElements
 /// block publishes two Bools, and a counter-style block publishes Ints. <b>There is no constructor that
 /// takes a name alone</b>: use <see cref="Bool"/> or <see cref="Int"/>, which put the type in the call.</para>
 /// </summary>
-public sealed record MirroredSignal(string Tag, MirrorValueType Type)
+public sealed record MirroredSignal(
+    string Tag,
+    MirrorValueType Type,
+
+    /// <summary>
+    /// 🔴 <b>THE SPECIFICATION'S NAME FOR THIS SIGNAL, WHICH IS NOT ALWAYS THE BLOCK'S TAG NAME — AND
+    /// UNTIL NOW THE HARNESS ASSUMED IT WAS.</b>
+    ///
+    /// <para>*** MEASURED THREE INDEPENDENT WAYS IN ONE RUN. *** Gate 5 refused 17 declarations, the
+    /// static interface check reported a signal absent from the corpus, and the conflict graph resolved
+    /// <b>1 of 17</b> signals to storage — and the one that resolved was the ONLY signal whose spec name
+    /// and block name coincide. Wherever the two differ, every mechanical path fails.</para>
+    ///
+    /// <para><b>The translation had nowhere to live but a prose markdown table, and prose is what no gate
+    /// reads.</b> That is why a D1 finding could be laundered: a sentence absorbs a finding, a field does
+    /// not. This is the field.</para>
+    ///
+    /// <para><b>NULL DOES NOT MEAN "SAME AS TAG".</b> That silent identity is the assumption being
+    /// removed, so re-introducing it as a default would remove nothing. Null means <i>the binding says
+    /// nothing about this signal's specification name</i>, and <see cref="SpecNameStated"/> makes that
+    /// visible: a citation that needs the join is NOT CHECKED, naming the signal, rather than being
+    /// matched by accident. Two names that genuinely coincide are STATED as coinciding.</para>
+    /// </summary>
+    string? SpecName = null,
+
+    /// <summary>
+    /// <b>The block that LATCHES this signal, when something does — a positive claim, naming who.</b>
+    ///
+    /// <para>*** FOUR OF THE SEVENTEEN GATE-5 REFUSALS WERE FALSE, AND THIS IS WHY. *** Those signals
+    /// genuinely ARE latched on the device, by a hand-authored latch block that the copy-layer generator
+    /// did not emit — and the schema had no way to say so, so <b>a real, deployed latch was structurally
+    /// undeclarable</b> while <c>FromMinimalCopyLayer</c> hard-coded every signal to Sampled. Gate 5
+    /// failed in BOTH directions in one run: 13 correct refusals and 4 false ones, from one missing field.</para>
+    ///
+    /// <para>🔴 <b>IT NAMES A BLOCK RATHER THAN ASSERTING A MODE, AND THAT DISTINCTION IS THE WHOLE
+    /// POINT.</b> Replacing the generator's assumption with a caller's assertion would not be a fix — a
+    /// caller assertion is forgotten exactly when it matters. A BLOCK NAME IS PROVENANCE: it says which
+    /// deployed object does the latching, so the claim is falsifiable against the object set and a
+    /// reviewer can go and look. <c>latched: true</c> would have been the caller assertion; this is not
+    /// that.</para>
+    ///
+    /// <para>Null is not "not latched" in the world — it is <b>"this binding claims no latch"</b>, and the
+    /// derived observability then offers Sampled alone, which is what the generator actually provides.</para>
+    /// </summary>
+    string? LatchedBy = null)
 {
+    /// <summary>
+    /// True when the binding has stated a specification name. <b>Distinct from the names being equal</b> —
+    /// an unstated name is a join nobody made, and a stated identity is a join somebody made and found
+    /// trivial.
+    /// </summary>
+    public bool SpecNameStated => !string.IsNullOrWhiteSpace(SpecName);
+
+    /// <summary>The name a vector cites, or null when the binding never said. <b>Never falls back to <see cref="Tag"/>.</b></summary>
+    public string? CitableName => SpecNameStated ? SpecName!.Trim() : null;
+
+    /// <summary>
+    /// <b>The instrumentation modes this signal can actually be watched in — DERIVED, never declared.</b>
+    ///
+    /// <para><c>Sampled</c> is what the copy layer provides for every mirrored signal: the generator emits
+    /// a result-register MOVE or COIL and <b>no per-signal latch and no scan stamp</b> — those are named
+    /// absences in its own documentation, not oversights. So Sampled is computed from what the generator
+    /// does, and it is the floor.</para>
+    ///
+    /// <para>A latch is claimed ONLY when <see cref="LatchedBy"/> names the block that does it — the one
+    /// thing the generator cannot know, because the latch is not its output — and it is admitted on
+    /// PROVENANCE rather than on a caller's word.</para>
+    ///
+    /// <para><b>The mode SET is assembled in <c>Harness.Results</c>, not here</b>, because
+    /// <c>InstrumentationMode</c> lives downstream and this assembly stays dependency-free. What lives
+    /// here is the FACT — whether a latch is claimed, and by whom.</para>
+    /// </summary>
+    public bool LatchClaimed => !string.IsNullOrWhiteSpace(LatchedBy);
+
+    /// <summary>Who latches it, trimmed — the provenance a reviewer can go and check against the deployed objects.</summary>
+    public string? LatchProvenance => LatchClaimed ? LatchedBy!.Trim() : null;
+
     /// <summary>A Bool signal — mirrored to one bit of its own register, by a coil.</summary>
     public static MirroredSignal Bool(string tag) => new(tag, MirrorValueType.Bool);
 
@@ -180,7 +255,9 @@ public sealed record MirroredSignal(string Tag, MirrorValueType Type)
     /// <summary>Several Int signals, in order.</summary>
     public static IReadOnlyList<MirroredSignal> Ints(params string[] tags) => tags.Select(Int).ToArray();
 
-    public override string ToString() => $"{Tag} : {Type}";
+    public override string ToString() =>
+        $"{Tag} : {Type}" + (SpecNameStated ? $" (spec '{SpecName}')" : " (spec name UNSTATED)")
+        + (string.IsNullOrWhiteSpace(LatchedBy) ? string.Empty : $" latched by {LatchedBy}");
 }
 
 /// <summary>

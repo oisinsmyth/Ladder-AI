@@ -65,4 +65,32 @@ public sealed class MirroredSignalDocument
     /// unmirrorable copy layer on a controller, and <c>Unstated</c> refuses naming the signal.
     /// </summary>
     public MirrorValueType Type { get; set; } = MirrorValueType.Unstated;
+
+    /// <summary>
+    /// 🔴 <b>THE SPECIFICATION'S NAME FOR THIS SIGNAL — the join the harness never had.</b>
+    ///
+    /// <para><c>tag</c> is what the BLOCK calls it; this is what the SPECIFICATION calls it, and a vector
+    /// cites the second. *** MEASURED: WHEREVER THEY DIFFER, EVERY MECHANICAL PATH FAILED *** — gate 5,
+    /// the static interface check and the conflict graph, all in one run, with 1 of 17 signals resolving
+    /// and that one being the only name collision. The translation had lived only in a prose table, and
+    /// prose is what no gate reads.</para>
+    ///
+    /// <para><b>Absent is NOT "the same as tag".</b> That identity is the assumption being removed. Absent
+    /// means the binding said nothing, gate 5 reports NOT CHECKED and names the tag, and a genuinely
+    /// identical pair is STATED as identical.</para>
+    /// </summary>
+    public string? SpecName { get; set; }
+
+    /// <summary>
+    /// <b>The block that latches this signal, when one does.</b> Absent means this binding claims no latch.
+    ///
+    /// <para>*** FOUR TRUE LATCHES WERE REFUSED IN ONE RUN BECAUSE THIS COULD NOT BE SAID. *** The
+    /// copy-layer generator emits no per-signal latch, so <c>Sampled</c> is all it can derive; a
+    /// hand-authored latch block on the device is real and was undeclarable.</para>
+    ///
+    /// <para>🔴 <b>It names a BLOCK, not a mode.</b> <c>latched: true</c> would be a caller asserting the
+    /// answer, and a caller assertion is forgotten exactly when it matters. A block name is PROVENANCE —
+    /// checkable against the deployed object set, and printed in the gate's own report.</para>
+    /// </summary>
+    public string? LatchedBy { get; set; }
 }

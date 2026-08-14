@@ -138,6 +138,27 @@ public sealed record MirrorObservability(IReadOnlyDictionary<string, IReadOnlySe
     /// <summary>Where this map came from. <b>Decides whether gate 5 may be a verdict at all.</b></summary>
     public MapProvenance Provenance { get; init; } = MapProvenance.Unstated;
 
+    /// <summary>
+    /// For each signal offering <c>Latched</c>, <b>the block that does the latching</b>.
+    ///
+    /// <para>The copy-layer generator emits no per-signal latch, so a Latched mode here always came from
+    /// somewhere else — and this says where. <b>Carried so the gate's report can name it</b>: "Latched,
+    /// provided by FB_X" is checkable against the deployed objects, where a bare "Latched" is not.</para>
+    /// </summary>
+    public IReadOnlyDictionary<string, string> LatchProvenance { get; init; } =
+        new Dictionary<string, string>(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Block tags the binding carried <b>without stating a specification name</b> — so nothing could join
+    /// them to what a vector cites.
+    /// </summary>
+    /// <remarks>
+    /// <b>Kept rather than dropped.</b> A signal missing from the map because nobody stated its spec name
+    /// and a signal missing because the copy layer does not carry it are different facts with different
+    /// repairs, and collapsing them is how "the harness assumed the two names were the same" survived.
+    /// </remarks>
+    public IReadOnlyList<string> TagsWithNoSpecName { get; init; } = Array.Empty<string>();
+
     public bool IsEmpty => ProvidedFor.Count == 0;
 
     public IReadOnlySet<InstrumentationMode> For(string signal) =>
@@ -162,6 +183,71 @@ public sealed record MirrorObservability(IReadOnlyDictionary<string, IReadOnlySe
             s => s,
             _ => (IReadOnlySet<InstrumentationMode>)new HashSet<InstrumentationMode> { InstrumentationMode.Sampled },
             StringComparer.Ordinal));
+
+    /// <summary>
+    /// 🔴 <b>THE MAP DERIVED FROM THE COORDINATOR'S BINDINGS — KEYED ON THE SPECIFICATION'S SIGNAL NAMES,
+    /// AND WITH THE MODES COMPUTED RATHER THAN DECLARED.</b>
+    ///
+    /// <para><b>Two defects met here in one gate run.</b> <c>FromMinimalCopyLayer</c> keys on the BLOCK's
+    /// tag name and hard-codes every signal to <c>Sampled</c>. A vector cites the SPECIFICATION's name, so
+    /// wherever the two differ the lookup misses entirely — measured at <b>16 of 17 signals</b>, the sole
+    /// success being the sole name collision. And a real, deployed hand-authored latch was structurally
+    /// undeclarable, so <b>4 of 17 refusals were FALSE while 13 were correct</b>.</para>
+    ///
+    /// <para><b>What is DERIVED:</b> <c>Sampled</c>, for every mirrored signal, because that is what the
+    /// generator emits — a result-register MOVE or COIL, with no per-signal latch and no scan stamp, both
+    /// named absences in its own documentation. Nothing here takes a caller's word for it.</para>
+    ///
+    /// <para><b>What is STATED, and only with provenance:</b> <c>Latched</c>, and only when the binding
+    /// NAMES THE BLOCK that latches the signal. The generator cannot derive that — the latch is not its
+    /// output — so the alternative was leaving a deployed capability undeclarable. <b>A block name is
+    /// checkable against the object set; <c>latched: true</c> would have been a caller assertion, and a
+    /// caller assertion is forgotten exactly when it matters.</b></para>
+    ///
+    /// <para><b>A signal whose spec name the binding never stated is NOT in this map at all</b>, rather
+    /// than being entered under its tag name. Entering it under the tag would be the silent identity this
+    /// whole change removes; leaving it out makes gate 5 say NOT CHECKED and name it.</para>
+    /// </summary>
+    public static MirrorObservability FromBindings(IEnumerable<Harness.Map.MirroredSignal> signals)
+    {
+        ArgumentNullException.ThrowIfNull(signals);
+
+        var provided = new Dictionary<string, IReadOnlySet<InstrumentationMode>>(StringComparer.Ordinal);
+        var latchedBy = new Dictionary<string, string>(StringComparer.Ordinal);
+        var unjoined = new List<string>();
+
+        foreach (var signal in signals)
+        {
+            if (signal is null)
+                continue;
+
+            if (signal.CitableName is not { } citable)
+            {
+                // Recorded rather than dropped: "the binding named no spec name for this tag" is the
+                // finding, and a signal that simply vanished from the map would be indistinguishable from
+                // one the copy layer does not carry.
+                unjoined.Add(signal.Tag);
+                continue;
+            }
+
+            var modes = new HashSet<InstrumentationMode> { InstrumentationMode.Sampled };
+
+            if (signal.LatchClaimed)
+            {
+                modes.Add(InstrumentationMode.Latched);
+                latchedBy[citable] = signal.LatchProvenance!;
+            }
+
+            provided[citable] = modes;
+        }
+
+        return new MirrorObservability(provided)
+        {
+            Provenance = MapProvenance.Bindings,
+            LatchProvenance = latchedBy,
+            TagsWithNoSpecName = unjoined,
+        };
+    }
 }
 
 /// <summary>

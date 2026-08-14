@@ -125,14 +125,12 @@ public static class GateCli
         // deciding voice" half, and both are needed because the CLI must remain usable without a binding.
         if (binding is not null)
         {
-            map = MirrorObservability.FromMinimalCopyLayer(
+            // Keyed on the SPECIFICATION's names and with the modes DERIVED - see FromBindings. Keying on
+            // the tag is the assumption that failed 16 times in 17 in one run.
+            map = MirrorObservability.FromBindings(
                 (binding.Slots ?? new List<SlotBindingDocument>())
                     .SelectMany(sl => sl.ResultSources ?? new List<MirroredSignalDocument>())
-                    .Select(r => r.Tag ?? string.Empty))
-                with
-                {
-                    Provenance = MapProvenance.Bindings,
-                };
+                    .Select(ToMirroredSignal));
         }
 
         // *** THE FLOOR IS COMPUTED FROM SECTION 12a, NEVER CARRIED HERE. *** It scales with the number
@@ -154,6 +152,10 @@ public static class GateCli
             ToDeploymentDeclaration(document),
             ToTagMapReach(document, readFile));
     }
+
+    /// <summary>One bound signal, off the document. <b>Nothing is defaulted</b> — an absent spec name stays absent.</summary>
+    public static Harness.Map.MirroredSignal ToMirroredSignal(MirroredSignalDocument row) =>
+        new(row.Tag ?? string.Empty, row.Type, row.SpecName, row.LatchedBy);
 
     /// <summary>The enumeration projection, off the document. Public so the runner composes it the same way.</summary>
     public static AssertionEnumeration ToEnumeration(SubmissionDocument document) =>

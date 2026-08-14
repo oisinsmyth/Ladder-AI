@@ -670,6 +670,22 @@ public static class SubmissionGate
                       + "is indistinguishable from one the vector author wrote.");
         }
 
+        // 🔴 *** A TAG WITH NO STATED SPECIFICATION NAME IS A JOIN NOBODY MADE, AND IT IS NOT CHECKED. ***
+        // The harness assumed the spec's signal name WAS the block's tag name; measured, that assumption
+        // held for exactly one signal in seventeen, and the one it held for was the only name collision.
+        // A tag entered into the map under its own name would be matched by accident wherever the two
+        // happen to coincide and missed silently everywhere else - which is the assumption, re-introduced
+        // as a default. So an unjoined tag is named here instead.
+        if (map.TagsWithNoSpecName.Count > 0)
+        {
+            return new GateResult("5 observability", GateStatus.NotChecked, false, "a specName on every bound signal",
+                $"{map.TagsWithNoSpecName.Count} bound signal(s) state no specification name, so nothing could join what a vector CITES to what "
+                + $"the copy layer CARRIES: {string.Join(", ", map.TagsWithNoSpecName)}. "
+                + "*** ABSENT DOES NOT MEAN 'THE SAME AS THE TAG'. *** That silent identity is the assumption this field exists to remove, and "
+                + "re-introducing it as a default would remove nothing - it matches by accident where the names coincide and misses everywhere "
+                + "else. If a signal's two names genuinely are the same, STATE that they are.");
+        }
+
         var problems = new List<string>();
 
         foreach (var v in vectors)
@@ -696,6 +712,14 @@ public static class SubmissionGate
         return new GateResult("5 observability", GateStatus.Checked, problems.Count == 0, nameof(ObservabilityCheck),
             problems.Count == 0
                 ? $"every expectation is supportable by the map, against a floor of {floorScans:0.0} scan(s) at comp={runtimeCompression}."
+                  // Named, because a Latched mode NEVER comes from the copy layer - the generator emits no
+                  // per-signal latch - so every one of these came from somewhere else, and saying WHERE is
+                  // what makes the claim checkable against the deployed objects.
+                  + (map.LatchProvenance.Count == 0
+                      ? " No signal claims a latch: the copy layer emits none, and none was declared."
+                      : " LATCHES ARE NOT FROM THE COPY LAYER and are admitted on provenance: "
+                        + string.Join("; ", map.LatchProvenance.OrderBy(e => e.Key, StringComparer.Ordinal).Select(e => $"{e.Key} latched by {e.Value}"))
+                        + ". Verify those blocks are in the deployment - this gate takes the name, not the fact.")
                 : string.Join(" | ", problems));
     }
 

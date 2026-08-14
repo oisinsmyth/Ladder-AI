@@ -83,16 +83,29 @@ public static class LoopCli
             return LoopExit.NothingExamined;
         }
 
+        // 🔴 *** READ SEPARATELY SO A FAILURE NAMES THE RIGHT FILE. *** Measured: a six-slot binding whose
+        // slots repeat the same result tags threw from the MAP construction, and one shared try/catch
+        // reported it as "could not read <the SUBMISSION>" — blaming the artifact that was fine while the
+        // faulty one went unnamed. An operator then reads and re-reads a correct file.
         SubmissionDocument submission;
-        BindingDocument binding;
         try
         {
             submission = SubmissionDocument.Read(readFile(submissionPath));
+        }
+        catch (Exception ex)
+        {
+            output.WriteLine($"NOTHING EXAMINED — could not read the SUBMISSION '{submissionPath}': {ex.GetType().Name}: {ex.Message}");
+            return LoopExit.NothingExamined;
+        }
+
+        BindingDocument binding;
+        try
+        {
             binding = BindingDocument.Read(readFile(bindingPath));
         }
         catch (Exception ex)
         {
-            output.WriteLine($"NOTHING EXAMINED — could not read the inputs: {ex.GetType().Name}: {ex.Message}");
+            output.WriteLine($"NOTHING EXAMINED — could not read the BINDING '{bindingPath}': {ex.GetType().Name}: {ex.Message}");
             return LoopExit.NothingExamined;
         }
 
@@ -135,7 +148,12 @@ public static class LoopCli
         }
         catch (Exception ex)
         {
-            output.WriteLine($"NOTHING EXAMINED — the submission and binding could not be composed: {ex.GetType().Name}: {ex.Message}");
+            output.WriteLine($"NOTHING EXAMINED — the submission and binding could not be COMPOSED: {ex.GetType().Name}: {ex.Message}");
+            output.WriteLine($"  submission: {submissionPath}");
+            output.WriteLine($"  binding   : {bindingPath}");
+            output.WriteLine("  Both files PARSED; what failed is building the map and request from them, so this is a fault in what they");
+            output.WriteLine("  SAY rather than in how they are written. A known case: several slots declaring the SAME result tags — the");
+            output.WriteLine("  map is one dictionary keyed by signal across all slots, so identical tags collide. That is a BINDING fault.");
             return LoopExit.NothingExamined;
         }
 
@@ -223,7 +241,7 @@ public static class LoopCli
 
     private static IReadOnlyList<MirroredSignal> Signals(List<MirroredSignalDocument>? rows) =>
         (rows ?? new List<MirroredSignalDocument>())
-        .Select(r => new MirroredSignal(r.Tag ?? string.Empty, r.Type))
+        .Select(GateCli.ToMirroredSignal)
         .ToArray();
 
     private static void Write(LoopResult result, TextWriter output)

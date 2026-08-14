@@ -79,7 +79,7 @@ public class GateCliTests
         "slotId": "S0",
         "vectorTargets": [{ "tag": "Demo_Step", "type": "Int" }],
         "startCondition": "Demo_Start",
-        "resultSources": [{ "tag": "Demo_Count", "type": "Int" }]
+        "resultSources": [{ "tag": "Demo_Count", "type": "Int", "specName": "Demo_Count" }]
       }]
     }
     """;

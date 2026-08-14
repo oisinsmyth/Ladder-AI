@@ -1,3 +1,4 @@
+using Harness.Map;
 using Harness.Results;
 
 namespace Harness.Results.Tests;
@@ -894,5 +895,144 @@ public class SubmissionGateTests
 
         Assert.False(gate.Passed);
         Assert.Contains("Those contradict", gate.Detail, StringComparison.Ordinal);
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // THE SPEC NAME -> BLOCK TAG JOIN. Measured: the harness assumed they were the same name.
+    // ---------------------------------------------------------------------------------------------
+
+    [Fact]
+    public void THE_DID_NOT_RUN_TEST_a_signal_whose_TWO_NAMES_COINCIDE_still_resolves_when_STATED()
+    {
+        // 🔴 *** A FENCE THAT REFUSES EVERYTHING PASSES EVERY TEST THAT ONLY CHECKS REFUSALS. *** The
+        // whole change is about not matching by accident, so the case that MUST keep working is the one
+        // where the accident would have succeeded: the two names are the same, and the binding SAYS so.
+        var map = MirrorObservability.FromBindings(new[]
+        {
+            new MirroredSignal("Demo_Count", MirrorValueType.Int, SpecName: "Demo_Count", LatchedBy: "FB_DemoLatch"),
+        });
+
+        var gate = Gate(Check(map: map), "5 observability");
+
+        Assert.Equal(GateStatus.Checked, gate.Status);
+        Assert.True(gate.Passed);
+        Assert.Empty(map.TagsWithNoSpecName);
+    }
+
+    [Fact]
+    public void A_RENAMED_SIGNAL_RESOLVES_UNDER_THE_SPEC_NAME_and_NOT_under_the_block_tag()
+    {
+        // The measured case: the block calls it one thing, the specification another, and a vector cites
+        // the specification. 16 of 17 real signals were in this position and every mechanical path missed
+        // them.
+        var map = MirrorObservability.FromBindings(new[]
+        {
+            new MirroredSignal("HBA_Inhibit", MirrorValueType.Bool, SpecName: "Demo_Count", LatchedBy: "FB_DemoLatch"),
+        });
+
+        Assert.True(map.ProvidedFor.ContainsKey("Demo_Count"));
+        Assert.False(map.ProvidedFor.ContainsKey("HBA_Inhibit"));
+
+        Assert.True(Gate(Check(map: map), "5 observability").Passed);
+    }
+
+    [Fact]
+    public void AN_UNSTATED_SPEC_NAME_IS_NOT_CHECKED_AND_IS_NAMED_never_matched_by_accident()
+    {
+        // *** ABSENT DOES NOT MEAN "THE SAME AS THE TAG". *** That silent identity is the assumption being
+        // removed, so re-introducing it as a default would remove nothing.
+        var map = MirrorObservability.FromBindings(new[]
+        {
+            new MirroredSignal("Demo_Count", MirrorValueType.Int),
+        });
+
+        Assert.Equal(new[] { "Demo_Count" }, map.TagsWithNoSpecName);
+        Assert.Empty(map.ProvidedFor);
+
+        var report = Check(map: map);
+        var gate = Gate(report, "5 observability");
+
+        Assert.Equal(GateStatus.NotChecked, gate.Status);
+        Assert.Equal(SubmissionVerdict.NotAdmissible, report.Verdict);
+        Assert.Contains("Demo_Count", gate.Detail, StringComparison.Ordinal);
+        Assert.Contains("ABSENT DOES NOT MEAN", gate.Detail, StringComparison.Ordinal);
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // The mode is DERIVED, and a latch is admitted only on PROVENANCE
+    // ---------------------------------------------------------------------------------------------
+
+    [Fact]
+    public void SAMPLED_IS_DERIVED_and_a_signal_claiming_no_latch_gets_SAMPLED_ALONE()
+    {
+        // The copy layer emits a result-register MOVE or COIL and NO per-signal latch — named absences in
+        // its own documentation. So Sampled is computed from what the generator does; nothing takes a
+        // caller's word for it. Thirteen of the seventeen refusals in the live run were exactly this, and
+        // they were CORRECT.
+        var map = MirrorObservability.FromBindings(new[]
+        {
+            new MirroredSignal("Alarm", MirrorValueType.Bool, SpecName: "Alarm"),
+        });
+
+        Assert.Equal(new[] { InstrumentationMode.Sampled }, map.For("Alarm").ToArray());
+        Assert.Empty(map.LatchProvenance);
+    }
+
+    [Fact]
+    public void A_LATCH_IS_ADMITTED_ONLY_WHEN_THE_BINDING_NAMES_THE_BLOCK_THAT_DOES_IT()
+    {
+        // *** FOUR OF SEVENTEEN REFUSALS WERE FALSE: those signals genuinely ARE latched on the device, by
+        // a hand-authored block the generator did not emit, and the schema could not say so. *** The fix
+        // is not `latched: true` — a caller assertion is forgotten exactly when it matters — but a BLOCK
+        // NAME, which is provenance and is checkable against the deployed object set.
+        var map = MirrorObservability.FromBindings(new[]
+        {
+            new MirroredSignal("HBA_Violation_1", MirrorValueType.Bool, SpecName: "Violation1", LatchedBy: "FB_HarnessViolationLatch"),
+        });
+
+        Assert.Contains(InstrumentationMode.Latched, map.For("Violation1"));
+        Assert.Contains(InstrumentationMode.Sampled, map.For("Violation1"));
+        Assert.Equal("FB_HarnessViolationLatch", map.LatchProvenance["Violation1"]);
+    }
+
+    [Fact]
+    public void And_the_GATE_PRINTS_the_latch_provenance_so_the_claim_can_be_CHECKED_rather_than_taken()
+    {
+        var map = MirrorObservability.FromBindings(new[]
+        {
+            new MirroredSignal("Demo_Count", MirrorValueType.Int, SpecName: "Demo_Count", LatchedBy: "FB_HarnessViolationLatch"),
+        });
+
+        var gate = Gate(Check(map: map), "5 observability");
+
+        Assert.True(gate.Passed);
+        Assert.Contains("LATCHES ARE NOT FROM THE COPY LAYER", gate.Detail, StringComparison.Ordinal);
+        Assert.Contains("Demo_Count latched by FB_HarnessViolationLatch", gate.Detail, StringComparison.Ordinal);
+
+        // It says outright that it took the NAME and not the FACT — the gate cannot see the deployment.
+        Assert.Contains("this gate takes the name, not the fact", gate.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AND_IT_DOES_NOT_MANUFACTURE_A_LATCH_FOR_THE_THIRTEEN_THAT_HAVE_NONE()
+    {
+        // *** WHAT THIS DOES NOT FIX, AS A TEST RATHER THAN A SENTENCE. *** Giving the translation a home
+        // does not make the copy layer emit latches. A Latched expectation on a signal no block latches is
+        // still refused, and that refusal was one of the thirteen CORRECT ones.
+        var map = MirrorObservability.FromBindings(new[]
+        {
+            new MirroredSignal("Demo_Count", MirrorValueType.Int, SpecName: "Demo_Count"),
+        });
+
+        var latchedExpectation = new[]
+        {
+            new ObservabilityDeclaration("Demo_Count", SignalNature.PersistentState, InstrumentationMode.Latched, 0, "10"),
+        };
+
+        var gate = Gate(Check(new[] { Vector(expectations: latchedExpectation) }, map: map), "5 observability");
+
+        Assert.Equal(GateStatus.Checked, gate.Status);
+        Assert.False(gate.Passed);
+        Assert.Contains("MapDoesNotProvideIt", gate.Detail, StringComparison.Ordinal);
     }
 }

@@ -124,7 +124,12 @@ public static class PeakBlock
         // an Int 0/1 rather than a Bool. Stated, never assumed.
         MirroredSignal.Ints(LevelTag, TripTag),
         StartTag,
-        MirroredSignal.Ints(PeakTag, AlarmTag));
+        // Spec names stated, and here they coincide with the tags. Stated identity, never assumed identity.
+        new[]
+        {
+            new MirroredSignal(PeakTag, MirrorValueType.Int, SpecName: PeakTag),
+            new MirroredSignal(AlarmTag, MirrorValueType.Int, SpecName: AlarmTag),
+        });
 }
 
 /// <summary>What the model says the peak block should produce.</summary>

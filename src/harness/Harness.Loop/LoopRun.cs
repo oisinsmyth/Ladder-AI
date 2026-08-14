@@ -115,13 +115,10 @@ public static class LoopRun
 
         // What the copy layer WILL provide, derived from the bindings — available before it is generated,
         // which is what lets the observability gate run before anything is spent.
-        var mirror = MirrorObservability.FromMinimalCopyLayer(request.Bindings.SelectMany(b => b.ResultSources.Select(s => s.Tag)))
-            with
-            {
-                // The COORDINATOR'S bindings, which is what makes gate 5 a verdict here rather than the
-                // vector author checking their own homework.
-                Provenance = MapProvenance.Bindings,
-            };
+        // The COORDINATOR'S bindings, which is what makes gate 5 a verdict here rather than the vector
+        // author checking their own homework - and keyed on the SPECIFICATION's names, with the modes
+        // DERIVED. Keying on the block tag is the assumption that failed 16 times in 17 in one run.
+        var mirror = MirrorObservability.FromBindings(request.Bindings.SelectMany(b => b.ResultSources));
 
         // *** ONE COMPRESSION VALUE, READ ONCE. *** It goes to the gate below and to the wave at step 7,
         // and the local is what makes it impossible for the two to be different numbers.
@@ -263,7 +260,7 @@ public static class LoopRun
                 new VectorDeclaration(vector.Id, vector.Basis, request.Fidelity, vector.Settling,
                     vector.AssertedBehaviours, vector.CompletionSignal, vector.Author, request.BlockAuthor,
                     ObservabilityCheck.Evaluate(vector.Expectations, vector.Form,
-                        MirrorObservability.FromMinimalCopyLayer(binding.ResultSources.Select(s => s.Tag)),
+                        MirrorObservability.FromBindings(binding.ResultSources),
                         WireTiming.ObservabilityFloorScans(1), vector.CompressionFactor, request.Compression.Factor)),
                 request.Enumeration,
                 run,

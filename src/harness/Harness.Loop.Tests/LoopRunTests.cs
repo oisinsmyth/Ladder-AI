@@ -587,7 +587,11 @@ public class LoopRunTests
             "S0",
             MirroredSignal.Ints(TrivialBlock.StepTag, TrivialBlock.LimitTag),
             TrivialBlock.StartTag,
-            new[] { MirroredSignal.Int(TrivialBlock.CountTag), MirroredSignal.Time(TrivialBlock.DoneTag) });
+            new[]
+            {
+                new MirroredSignal(TrivialBlock.CountTag, MirrorValueType.Int, SpecName: TrivialBlock.CountTag),
+                new MirroredSignal(TrivialBlock.DoneTag, MirrorValueType.Time, SpecName: TrivialBlock.DoneTag),
+            });
 
         var request = Request() with { Bindings = new[] { binding }, Slots = new[] { new SlotRequest("S0", 2, 4) } };
 

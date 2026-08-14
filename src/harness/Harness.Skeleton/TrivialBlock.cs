@@ -154,5 +154,13 @@ public static class TrivialBlock
         // unmirrorable copy layer on a controller.
         MirroredSignal.Ints(StepTag, LimitTag),
         StartTag,
-        MirroredSignal.Ints(CountTag, DoneTag));
+        // *** THE SPEC NAME IS STATED EVEN THOUGH IT EQUALS THE TAG. *** This block's specification and
+        // its tag table use the same names, and that is now SAID rather than assumed. Absent would mean
+        // "nobody stated the join", which is a different fact and is NOT CHECKED - the silent identity is
+        // exactly the assumption that failed on 16 of 17 real signals.
+        new[]
+        {
+            new MirroredSignal(CountTag, MirrorValueType.Int, SpecName: CountTag),
+            new MirroredSignal(DoneTag, MirrorValueType.Int, SpecName: DoneTag),
+        });
 }
