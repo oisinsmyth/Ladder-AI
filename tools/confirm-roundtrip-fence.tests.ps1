@@ -338,6 +338,67 @@ Test-Case 'Fence_DryRunAgainstAnyProject_IsNotFencedAndStaysOffline' {
     Assert-PortalNeverContacted $ws 'offline dry run'
 }
 
+# -------------------------------------------------- path forms the fence CLAIMS to handle
+#
+# Added by the fence-hammering campaign, 2026-08-14. The script's own header says a junction and an
+# 8.3 short name are "a REFUSAL, not a pass", and NOTHING EXERCISED EITHER. An untested fence claim
+# is the same family as a guard that was written and never executed - and the junction case is the
+# sharp one, because the junction's TARGET really is the allowlisted project, so a half-resolution
+# would look exactly like correct behaviour.
+
+Test-Case 'Fence_JunctionToTheAllowlistedProject_IsRefusedNotHalfResolved' {
+    if (-not $allowlistedFolder) { throw 'SETUP: no allowlist entry resolves to a file on this machine.' }
+
+    $ws = New-Workspace
+    $link = Join-Path $ws.Dir 'viaJunction'
+    New-Item -ItemType Junction -Path $link -Target $allowlistedFolder -ErrorAction Stop | Out-Null
+    try {
+        $viaLink = Join-Path $link (Split-Path -Leaf $allowlisted)
+        $r = Invoke-Loop $ws @('-Project', $viaLink, '-Group', 'Dev/Program blocks', '-Arm')
+
+        Assert-PortalNeverContacted $ws 'junction to the allowlisted project'
+        Assert-Equal $EXIT_REFUSED $r.Exit 'exit code'
+        # The REASON matters as much as the verdict: refusing because the file looked absent would
+        # pass this assertion for the wrong cause and would not be evidence about junctions at all.
+        Assert-Contains $r.Output 'junction or symlink' 'reason names the reparse point'
+    } finally {
+        # Non-recursive: this removes the LINK, never anything behind it.
+        if (Test-Path -LiteralPath $link) { [System.IO.Directory]::Delete($link) }
+    }
+}
+
+Test-Case 'Fence_EightDotThreeLookingComponent_IsRefusedWithTheFixNamed' {
+    # A real long directory name that merely LOOKS like an 8.3 alias. Refusing it is the fail-closed
+    # direction and the right one, but it IS a false refusal, so it is pinned as a known cost rather
+    # than discovered by somebody whose run stopped for no visible reason.
+    $ws = New-Workspace
+    $dir = Join-Path $ws.Dir 'Sand~1'
+    New-Item -ItemType Directory -Path $dir -Force | Out-Null
+    $project = Join-Path $dir 'GenProject1.ap20'
+    Set-Content -LiteralPath $project -Encoding ASCII -Value 'a project in a folder whose REAL name contains ~1'
+
+    $r = Invoke-Loop $ws @('-Project', $project, '-Group', 'Dev/Program blocks', '-Arm')
+
+    Assert-PortalNeverContacted $ws '8.3-looking component'
+    Assert-Equal $EXIT_REFUSED $r.Exit 'exit code'
+    Assert-Contains $r.Output '8.3 short name' 'reason'
+    Assert-Contains $r.Output 'supply the long path' 'the fix is named'
+}
+
+Test-Case 'Fence_Refusal_CreatesNoScratchDirectory' {
+    # The script's header claims the fence is evaluated "before any directory is created". That is a
+    # claim about ORDER, and an exit code cannot distinguish a fence that ran first from one that ran
+    # after a side effect - so it is observed directly, the same way the sentinel observes Portal.
+    $ws = New-Workspace
+    $project = New-NonScratchProject $ws
+    $r = Invoke-Loop $ws @('-Project', $project, '-Group', 'Dev/Program blocks', '-Arm')
+
+    Assert-Equal $EXIT_REFUSED $r.Exit 'exit code'
+    if (Test-Path -LiteralPath $ws.ScratchDir) {
+        throw 'the refused run created its ScratchDir, so the fence did not run before every side effect'
+    }
+}
+
 Write-Host ''
 Write-Host '=============================================================================='
 Write-Host ("RESULT: {0} passed, {1} failed" -f $script:Pass, $script:Fail)
