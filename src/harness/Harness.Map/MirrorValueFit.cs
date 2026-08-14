@@ -97,7 +97,53 @@ public static class MirrorValueFit
             + $"block that may be perfectly correct. If the value is right, the signal needs a wider element — {NextWiderThan(element)}.");
     }
 
-    /// <summary>Every value in a binding's inputs, checked. Empty when they all fit.</summary>
+    /// <summary>
+    /// 🔴 <b>THE KEY A VECTOR WRITES ITS INPUTS UNDER — AND UNTIL 2026-08-14 THIS JOINED ON THE WRONG
+    /// ONE, SO THE WIDTH GATE EXAMINED NOTHING ON THE ONLY VECTOR SET IT WAS EVER WRITTEN FOR.</b>
+    ///
+    /// <para>A vector cites the SPECIFICATION's name; the binding's <c>Tag</c> is what the BLOCK calls the
+    /// member. <see cref="CheckAll"/> looked values up by <c>Tag</c> alone. <b>Measured on the deliverable
+    /// shape: an input keyed <c>HBA_Stim.P1Ms</c> against a target tagged
+    /// <c>iDB_HopperBlockageStim.Stim.P1</c> produced ZERO refusals, while the identical value keyed by
+    /// the tag produced one.</b> The doc comment above cites <i>81 duration values exceeding 65 535 ms in
+    /// the deliverable vector set</i> as this class's reason to exist — and not one of them could be
+    /// reached, because all 27 vectors key their inputs by spec name.</para>
+    ///
+    /// <para><b>Same defect, same cause, third place found:</b> the observability map keyed on the tag and
+    /// resolved 1 of 17 signals; this keyed on the tag and resolved 0 of 10. <i>A green that examined
+    /// nothing is indistinguishable from a green that examined everything.</i></para>
+    ///
+    /// <para><b>The stated name WINS EXCLUSIVELY — the tag is not also tried.</b> Falling back to the tag
+    /// when a spec name IS stated would re-introduce the silent identity the <c>specName</c> field exists
+    /// to remove. The tag is used only where the binding stated no spec name at all, which is a weaker
+    /// join and is already reported as such on the observation side.</para>
+    /// </summary>
+    private static string JoinKey(MirroredSignal signal) => signal.CitableName ?? signal.Tag;
+
+    /// <summary>
+    /// Every value in a binding's inputs, checked — <b>and every input the binding consumes under no name
+    /// at all.</b> Empty when they all fit and all land somewhere.
+    /// </summary>
+    /// <remarks>
+    /// <para>🔴 <b>AN INPUT NO TARGET CONSUMES IS A COMMANDED STIMULUS THAT WILL NEVER BE WRITTEN, AND IT
+    /// USED TO BE DROPPED IN SILENCE.</b> The wave builder walks the binding's TARGETS and looks each one
+    /// up in the vector's inputs; anything the vector supplies that no target claims is simply never
+    /// visited. The run then proceeds with that register at zero — <b>and zero is a legal value for every
+    /// element the mirror carries</b>, so the block is driven with a stimulus nobody asked for and the
+    /// result is reported as though the requested one had been applied.</para>
+    ///
+    /// <para><b>Measured on the deliverable:</b> all 27 vectors supply <c>HBA_Stim.ResetAtMs</c>, and the
+    /// coordinator's binding deliberately leaves it unbound (one set-B field maps to TWO IR members —
+    /// <c>harness-binding.md:57</c>, recorded at <c>_unbound["HBA_Stim.ResetAtMs"]</c>). That absence is an
+    /// honest record; what was NOT honest was the run silently proceeding without it, with
+    /// <c>ResetMode</c> reading 0 — which the encoding table at <c>md:123-130</c> defines as <i>never
+    /// reset</i>, a perfectly valid scenario that is not the one the vector asked for.</para>
+    ///
+    /// <para><b>It refuses rather than warns, and it cannot over-fire:</b> <c>CheckAll</c> is called with
+    /// the vector's OWN slot's binding, so every input a vector carries is supposed to be consumed by that
+    /// binding. There is no legitimate reading in which a vector commands a signal its own slot does not
+    /// wire.</para>
+    /// </remarks>
     public static IReadOnlyList<string> CheckAll(
         IReadOnlyList<MirroredSignal> signals,
         IReadOnlyDictionary<string, string> values)
@@ -105,20 +151,37 @@ public static class MirrorValueFit
         ArgumentNullException.ThrowIfNull(values);
 
         var refusals = new List<string>();
+        var consumed = new HashSet<string>(StringComparer.Ordinal);
 
         foreach (var signal in signals ?? Array.Empty<MirroredSignal>())
         {
             if (signal is null)
                 continue;
 
+            var key = JoinKey(signal);
+            consumed.Add(key);
+
             // A signal the vector says nothing about is NOT checked here: leaving an input undriven is a
             // legitimate choice, and it is the inert declaration's business rather than the width rule's.
-            if (!values.TryGetValue(signal.Tag, out var text))
+            if (!values.TryGetValue(key, out var text))
                 continue;
 
-            var result = Check(signal.Tag, signal.Type, text);
+            var result = Check(key, signal.Type, text);
             if (!result.Fits)
                 refusals.Add(result.Refusal!);
+        }
+
+        foreach (var orphan in values.Keys.Where(k => !consumed.Contains(k)).OrderBy(k => k, StringComparer.Ordinal))
+        {
+            refusals.Add(
+                $"'{orphan}' is supplied as a vector input and NO BOUND TARGET CONSUMES IT, so it would never be written. "
+                + "*** THAT IS A SILENT SUBSTITUTION, NOT A MISSING FEATURE: *** the register stays at zero, zero is a legal "
+                + "value for every element the mirror carries, and the run reports a result as though the commanded stimulus "
+                + "had been applied. Either the binding is short a vectorTarget for it, or the vector is citing a name the "
+                + "coordinator did not bind. "
+                + (consumed.Count == 0
+                    ? "This binding wires NO vector targets at all."
+                    : $"Bound target names: {string.Join(", ", consumed.OrderBy(k => k, StringComparer.Ordinal))}."));
         }
 
         return refusals;
