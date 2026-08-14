@@ -413,7 +413,29 @@ This is the habit the whole project is built around, and it is worth thirty seco
 Rig `10.10.10.10:503` unit 1 via the Talk2m tunnel; `:102` open, `:502` refused. Scan **23.33 ms**.
 Round trip **min 63 / med 72 / max 106 ms**. **32-bit word order is HIGH-WORD-FIRST — measured off a
 build stamp with distinguishable halves.** Mirror: **35 registers at `%M1000`, exactly full, zero
-spare.** ***S7 variable access is refused CPU-wide on this rig, so every data read goes over Modbus.***
+spare.**
+
+🔴 ***CORRECTED 2026-08-14 — "S7 VARIABLE ACCESS IS REFUSED CPU-WIDE" WAS OVERSTATED, AND THE TOOL'S
+OWN DIAGNOSTIC SAID SO ALL ALONG.*** Measured live this morning in one `rig-read` run:
+
+| probe | result |
+|---|---|
+| `DBRead(db=38, …)` | ❌ `CPU: Item not available` (`0x00C00000`) |
+| **`MBRead(0, 1)`** | ✅ **ok** — *marker-memory reads over classic S7comm WORK* |
+| `GetOrderCode` (SZL) | ✅ ok — `6ES7 214-1AG40-0XB0` |
+| SZL `0x001C` (serial) | ❌ refused |
+
+`rig-read` prints the implication itself: *"general data access WORKS (M read 42), so PUT/GET is
+permitted and the refusal is specific to DB38 — it is OPTIMIZED (invisible to classic S7comm) or it is
+not on the CPU at all."* **The old wording generalised one DB's refusal into a CPU-wide property.**
+
+➜ **Why it matters rather than being a pedantic fix: the mirror lives in `%M` marker memory**, so it is
+readable over **both** transports. ***That is an independent second authority on the wire — the thing
+this project values most and assumed it did not have here.*** Modbus remains the harness's transport;
+S7 marker reads are now available as a cross-check.
+
+⚠️ **Unchanged and still true:** an **optimized DB is invisible to classic S7comm** — which is what
+DB38 demonstrates, and why `block-layout --set Standard` matters for any DB a classic client must see.
 Harness objects reserve block numbers **9000–9999** per number space; **OBs excluded.**
 
 ⚠️ **X-D's compression ceiling of ~4.3× is HALF-MEASURED** — the scan is measured, `k ≈ 5` is X-D's own
