@@ -95,11 +95,20 @@ public sealed record DeploymentPlan(
         // A tag table is not a downloadable object and never appears in a load manifest. Naming that
         // here — rather than letting the manifest comparison quietly fail — is the whole point of
         // carrying the set separately.
-        var downloadable = objects.Where(o => o.Kind != HarnessObjectKind.TagTable).ToArray();
+        //
+        // A PLC DATA TYPE is on the same side of this one line and the other side of the import one: it IS
+        // staged, converted, imported and compiled (types first), and it produces NO load message. Both
+        // halves matter — leaving it out of the deployment would drop it from the download, and leaving it
+        // IN the manifest comparison would report Absent on every healthy download that carries a UDT.
+        var downloadable = objects
+            .Where(o => o.Kind is not (HarnessObjectKind.TagTable or HarnessObjectKind.DataType))
+            .ToArray();
+
         if (downloadable.Length == 0 && objects.Count > 0)
         {
             refusals.Add(
-                "every object supplied is a tag table. A PLC tag table carries no load message, so a download of this set could produce no positive evidence of transfer at all.");
+                "no object supplied produces a load message — every one is a tag table or a PLC data type. Both are imported and "
+                + "compiled and neither appears in a load manifest, so a download of this set could produce no positive evidence of transfer at all.");
         }
 
         var dataBlocks = objects.Where(o => o.Kind == HarnessObjectKind.DataBlock).Select(o => o.Name).ToArray();

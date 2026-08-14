@@ -298,16 +298,59 @@ public class LoopRunTests
     [Fact]
     public void The_0_1b_assertion_runs_before_the_device_too()
     {
-        // A program whose own tags sit inside the retentive window. Generated, asserted, refused - and
-        // no deployment attempted.
-        var request = Request() with { ProgramUnderTest = TrivialBlock.Generate(100, 901) };
+        // 🔴 *** RE-TARGETED, AND THE PROPERTY IS KEPT. *** This used to put the PROGRAM UNDER TEST inside
+        // the retentive window and assert NotAssertable. 0.1b is `every HARNESS object is asserted
+        // non-retentive`, and the program under test is neither generated nor the harness's to constrain —
+        // measured the moment `--program` could name the real corpus: 159 findings over 45 objects, every
+        // one a property of correct plant code, including a member that is retentive ON PURPOSE so it
+        // survives the CPU restart the boundary-spanning vectors ride.
+        //
+        // What survives is the ORDER: the assertion runs, over a non-empty denominator, BEFORE the device.
+        var (result, gateway) = Run();
+
+        Assert.True(result.Retention!.Passed);
+        Assert.True(result.Retention.ObjectsExamined > 0);
+        Assert.True(result.Retention.AddressesExamined > 0);
+        Assert.Equal(1, gateway.Deployments);
+    }
+
+    [Fact]
+    public void The_0_1b_FAILING_direction_is_UNREACHABLE_from_this_loop_and_that_is_asserted_rather_than_assumed()
+    {
+        // *** A GUARD WIRED IN THAT NOTHING CAN REACH IS NOT THE SAME AS A GUARD THAT IS WRONG, AND IT IS
+        // NOT THE SAME AS ONE THAT IS RIGHT EITHER. *** With 0.1b scoped to the GENERATED objects, its two
+        // failing conditions — an address below the retentive window, an address past the top of bit
+        // memory — are functions of the same two numbers the ALLOCATOR refuses on first. So the loop
+        // cannot produce NotAssertable from generated objects, and a test asserting it would be pinning a
+        // state nothing constructs.
+        //
+        // That is recorded as an ORDERING fact instead: the earlier gate fires, by name. If a later change
+        // makes 0.1b reachable through this loop, this test goes red and demands the real one be written.
+        var request = Request() with { Geometry = MirrorGeometry.ForCpu1214C(retentiveBytes: MirrorBase + 2, baseByte: MirrorBase) };
         var gateway = new SimulatedGateway(Geometry());
 
         var result = LoopRun.Execute(request, gateway);
 
-        Assert.Equal(LoopOutcome.NotAssertable, result.Outcome);
+        Assert.Equal(LoopOutcome.NotDerivable, result.Outcome);
+        Assert.Contains("INSIDE the retentive M window", result.Detail, StringComparison.Ordinal);
         Assert.Equal(0, gateway.Deployments);
-        Assert.False(result.Retention!.Passed);
+
+        // The refusal itself is tested directly, against inputs the allocator would never let through:
+        // see RetentionCheckTests, which drives RetentionCheck rather than the loop.
+        Assert.Null(result.Retention);
+    }
+
+    [Fact]
+    public void A_RETENTIVE_PROGRAM_UNDER_TEST_DOES_NOT_FAIL_0_1b_and_its_retain_is_reported_instead()
+    {
+        // The converse of the re-targeting above, and the case the deliverable actually is: the plant
+        // program sits inside the retentive window and declares retentive members, and the harness runs.
+        var request = Request() with { ProgramUnderTest = TrivialBlock.Generate(100, 901) };
+
+        var result = LoopRun.Execute(request, new SimulatedGateway(Geometry()));
+
+        Assert.Equal(LoopOutcome.Ran, result.Outcome);
+        Assert.True(result.Retention!.Passed);
     }
 
     [Fact]

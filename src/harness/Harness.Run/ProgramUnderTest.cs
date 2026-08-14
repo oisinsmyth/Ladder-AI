@@ -120,18 +120,24 @@ public static class ProgramUnderTest
                 // The REST of the line: a real tag table is called `Default tag table`.
                 return new HarnessObject(header["TAGTABLE".Length..].Trim(), HarnessObjectKind.TagTable, ir!);
 
-            case "TYPE":
-                throw new InvalidDataException(
-                    $"'{file}' declares a PLC data type (`{header}`). HarnessObjectKind has no member for one, and mapping it onto "
-                    + "DataBlock would hand it a data block's retention rules and put it in the downloadable set the load manifest is "
-                    + "compared against. *** REFUSED BY NAME RATHER THAN CLASSIFIED WRONGLY *** — a type in the program under test is a "
-                    + "capability this loader does not have yet.");
+            // ✅ A PLC DATA TYPE. This was a REFUSAL until 2026-08-14, correctly — HarnessObjectKind had no
+            // member for one, and mapping it onto DataBlock would have handed it a data block's retention
+            // rules AND put it in the downloadable set the load manifest is compared against.
+            //
+            // *** BUT THE REFUSAL BLOCKED THE DELIVERABLE FROM BEING SUPPLIED AT ALL: *** the hopper
+            // program's FB and its instance DB both reference UDT_HopperBlockageIO, so `--program` could
+            // not name the program under test whole, and the BUILD STAMP is a hash of what is about to
+            // run. The fix is the missing member, not a nearest-fit — see HarnessObjectKind.DataType for
+            // which side of each line a type sits on.
+            case "TYPE" when parts.Length >= 2:
+                return new HarnessObject(parts[1], HarnessObjectKind.DataType, ir!);
 
             default:
                 throw new InvalidDataException(
                     $"'{file}' begins `{header}`, which is not one of the IR top-level forms this loader reads: `BLOCK <FB|FC|OB> <Name>`, "
-                    + "`DB <Name>` or `TAGTABLE <Name>`. It is refused rather than skipped: a file silently left out of the program set is "
-                    + "left out of the BUILD STAMP too, and the version register would then confirm a build that is not the one running.");
+                    + "`DB <Name>`, `TYPE <Name>` or `TAGTABLE <Name>`. It is refused rather than skipped: a file silently left out of the "
+                    + "program set is left out of the BUILD STAMP too, and the version register would then confirm a build that is not the "
+                    + "one running.");
         }
     }
 }

@@ -28,6 +28,40 @@ public enum LoopOutcome
     /// </summary>
     NotBound,
 
+    /// <summary>
+    /// 🔴 <b>THE VECTORS CANNOT BE PUT IN ONE ORDER.</b> The copy layer generated; <b>nothing was
+    /// deployed and no wave was run.</b>
+    ///
+    /// <para><b>Distinct from <see cref="NotBound"/>: every vector's slot resolves.</b> What is missing is
+    /// the SEQUENCE. Once several specification slot ids serve one mirror slot, their vectors merge into
+    /// one tensor — and the submission carries no total order, because every group restarts <c>index</c>
+    /// at 0. A merge made anyway gives one vector per group reading <c>Results[0]</c> and the rest
+    /// carrying another vector's run, <b>reported confidently, with no error</b>.</para>
+    ///
+    /// <para><b>It stops the run rather than generation, because the order is a property of the WAVE and
+    /// the copy layer is a pure function of the binding.</b> So <c>--generate-only</c> still produces the
+    /// IR to read and prints this refusal beside it; a deploying run stops here, before the device
+    /// boundary, having spent nothing but PC time.</para>
+    /// </summary>
+    NotOrdered,
+
+    /// <summary>
+    /// 🔴 <b>A VECTOR NEEDS A CPU RESTART TO HAPPEN IN THE MIDDLE OF IT, AND THIS LOOP RUNS ONE INLINE
+    /// SEQUENCE.</b> The copy layer generated; <b>nothing was deployed and no wave was run.</b>
+    ///
+    /// <para><b>Distinct from <see cref="NotOrdered"/>, and the difference is the REMEDY.</b> An unstated
+    /// order is fixed by stating one. This is fixed by running the group around the download boundary its
+    /// own vectors declare — <i>"RIDES AN ALREADY-SCHEDULED DISRUPTIVE BOUNDARY… the boundary stops and
+    /// restarts the CPU"</i>, <i>"THE HARNESS IS DISCONNECTED ACROSS THE DOWNLOAD and nobody is polling
+    /// while the first scan happens"</i> — which is a deployment-sequencing act, not a loop setting.</para>
+    ///
+    /// <para><b>Explicitly unrunnable beats implicitly mis-run.</b> Folded into the inline sequence these
+    /// vectors would execute with no restart, and every group after them would run against a freshly
+    /// cleared accumulator and a reconnected harness. Every rung would run, every package would arrive,
+    /// and the experiment would not be the one anybody asked for.</para>
+    /// </summary>
+    NotSchedulable,
+
     /// <summary>The submission was refused at the gate. <b>Nothing was generated and nothing was deployed.</b></summary>
     NotAdmissible,
 
@@ -88,7 +122,20 @@ public sealed record LoopGeneration(
     CopyLayerResult? CopyLayer,
     RetentionVerdict? Retention,
     IReadOnlyList<LoopCaveat> Caveats,
-    string Detail)
+    string Detail,
+
+    /// <summary>
+    /// 🔴 <b>Where every vector sits in its slot's merged run — or the reasons no such order exists.</b>
+    ///
+    /// <para><b>Computed here and GATED in <see cref="LoopRun.Execute"/>, which is not a warning/gate
+    /// split but a scope one.</b> The order decides how vectors merge into a tensor; it decides nothing
+    /// about the copy layer, which is a pure function of the binding. So generation reports it and the
+    /// path that reaches a device refuses on it — and both read the SAME report, so the two cannot drift
+    /// into disagreeing about whether a submission is runnable.</para>
+    ///
+    /// <para>Null only when the run stopped before it could be computed at all.</para>
+    /// </summary>
+    WaveOrderReport? Order = null)
 {
     /// <summary>True only when a copy layer exists. Equivalent to <c>Stopped is null</c> by construction.</summary>
     public bool Generated => Stopped is null;

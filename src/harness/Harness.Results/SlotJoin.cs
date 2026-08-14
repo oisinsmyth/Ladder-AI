@@ -37,10 +37,18 @@ public sealed record SlotJoinReport(int Vectors, int Slots, string Detail)
 /// deployment and one open transport. <i>A cross-reference failure that costs a download is a check in
 /// the wrong place, not a rare case.</i></para>
 ///
-/// <para><b>This is the live shape of the hopper deliverable</b>, not a hypothetical: the committed
-/// coordinator binding declares one slot, <c>SLOT-HBA-ALL</c>, and all 27 conformance vectors cite six
-/// other ids. Run against those two files it reports
-/// <c>27 vector(s) name 6 slot(s) that no binding declares</c>.</para>
+/// <para><b>This WAS the live shape of the hopper deliverable, and it is not any more.</b> The committed
+/// binding declared one slot, <c>SLOT-HBA-ALL</c>, while all 27 conformance vectors cited six other ids,
+/// and this reported <c>27 vector(s) name 6 slot(s) that no binding declares</c> — correctly, and with no
+/// route past it that was not an invention. <b>The route is now
+/// <c>SlotBinding.Serves</c>:</b> one slot answers to several specification ids, so the bound set passed
+/// in is the CITABLE ids rather than the map's internal slot ids. <i>The check is unchanged; what changed
+/// is what it is given.</i></para>
+///
+/// <para>⚠️ <b>Do not re-read that as "the join is satisfied by declaring it".</b> The ids a binding
+/// serves are still the coordinator's statement about which vectors address which mirror region, and a
+/// vector citing an id nobody serves is refused exactly as before — including the slot's OWN id once
+/// <c>serves</c> is stated, because such a vector has no position in the merged run.</para>
 ///
 /// <para><b>IT IS DELIBERATELY ONE-SIDED.</b> A vector naming a slot nobody bound cannot run. A BOUND
 /// slot with no vectors is a different fact — a slot held inert, or one whose vectors were excised

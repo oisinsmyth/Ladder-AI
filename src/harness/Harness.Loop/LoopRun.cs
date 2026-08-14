@@ -135,6 +135,40 @@ public static class LoopRun
         var caveats = generation.Caveats;
         var compression = request.Compression;
 
+        // ---- 4b. THE MERGED ORDER, BEFORE THE DEVICE BOUNDARY ---------------------------------------
+        //
+        // 🔴 *** A MANY-TO-ONE SLOT MAP MERGES SEVERAL GROUPS' VECTORS INTO ONE TENSOR, AND THE SUBMISSION
+        // CARRIES NO TOTAL ORDER. *** Measured on the deliverable: every group restarts `index` at 0, so 27
+        // vectors carry six distinct index values. `Package` below reads distribution.Results[ordinal] — so
+        // merging without a major key gives one vector per group reading Results[0] and 21 of 27 packages
+        // carrying another vector's run, with no error raised anywhere.
+        //
+        // It is checked HERE rather than inside Generate because the order is a property of the WAVE: the
+        // copy layer is a pure function of the binding and generating it is free. That split is what lets
+        // `--generate-only` print the IR AND this refusal, while a deploying run stops before the device.
+        var order = generation.Order;
+
+        if (order is null || !order.Ordered)
+        {
+            // *** TWO OUTCOMES, BECAUSE THE REMEDIES DIFFER. *** An unstated order is fixed by stating
+            // one; a boundary-spanning group is fixed by running it around the download boundary it
+            // needs, which is not a thing this loop can do. Collapsing them would send a reader to state
+            // an order that would not have helped.
+            var spanning = order?.BoundarySpanningVectors ?? Array.Empty<string>();
+
+            return new LoopResult(
+                spanning.Count > 0 ? LoopOutcome.NotSchedulable : LoopOutcome.NotOrdered,
+                gate, generation.SizeReport, retention, null, null, null,
+                Array.Empty<ResultPackage>(), caveats,
+                (spanning.Count > 0
+                    ? $"{spanning.Count} vector(s) cannot be scheduled in this wave, so nothing was deployed and no wave was run: "
+                    : "the vectors could not be put in one order, so nothing was deployed and no wave was run: ")
+                + (order?.Detail ?? "no order was computed at all")
+                + (order is null ? string.Empty : " " + string.Join(" | ", order.Refusals)));
+        }
+
+        var ordinalOf = order.OrdinalOf;
+
         // ---- 5. DEPLOY — the device boundary --------------------------------------------------------
         var deployment = gateway.Deploy(copyLayer.Objects.Concat(request.ProgramUnderTest).ToArray(), stamp);
         if (!deployment.Attempted || !deployment.Loaded)
@@ -158,11 +192,14 @@ public static class LoopRun
         }
 
         // ---- 7. RUN ---------------------------------------------------------------------------------
+        // *** GROUPED BY THE MIRROR SLOT AND ORDERED BY THE MERGED ORDINAL, NOT BY THE CITED ID AND NOT BY
+        // THE VECTOR'S OWN INDEX. *** Six ids serving one slot produce ONE tensor here, laid out in the
+        // coordinator's stated group order — which is the whole reason the ordinal exists.
         var tensors = request.Vectors
-            .GroupBy(v => v.Slot, StringComparer.Ordinal)
+            .GroupBy(v => SlotIndexOf(map, request.Bindings, v.Slot))
             .Select(g => new SlotTensor(
-                SlotIndexOf(map, g.Key),
-                g.OrderBy(v => v.Index).Select(v => ToWireVector(v, request.Bindings, map, request.WordOrder)).ToArray()))
+                g.Key,
+                g.OrderBy(v => ordinalOf[v.Id]).Select(v => ToWireVector(v, request.Bindings, map, request.WordOrder)).ToArray()))
             .OrderBy(t => t.SlotIndex)
             .ToArray();
 
@@ -170,7 +207,7 @@ public static class LoopRun
         var wave = WaveRun.Run(client, compression, tensors, nowMs);
 
         // ---- 8. PACKAGE -----------------------------------------------------------------------------
-        var packages = Package(request, map, stamp, client, wave, deployment, version, roundTripsBefore);
+        var packages = Package(request, map, stamp, client, wave, deployment, version, roundTripsBefore, ordinalOf);
 
         return new LoopResult(LoopOutcome.Ran, gate, generation.SizeReport, retention, deployment, version, wave,
             packages, caveats,
@@ -239,9 +276,16 @@ public static class LoopRun
         // documents refer to the same wave set at all. The decision procedure is Harness.Results.SlotJoin
         // (unit-tested there); this is only the call site, and SlotIndexOf's throw stays where it is,
         // now unreachable - the same shape as the phase-armed-latch throw further down.
+        //
+        // *** THE BOUND SET IS THE CITABLE IDS, NOT THE MAP'S SLOT IDS. *** With a many-to-one map a slot
+        // answers to the specification ids it SERVES, and its own id is an internal key — the tag fragment
+        // and a map-hash input. Comparing against the map's ids would refuse every vector of a served
+        // group, which is exactly what the committed deliverable did before `serves` existed.
+        var citable = request.Bindings.SelectMany(b => b.CitableSlotIds).ToArray();
+
         var join = SlotJoin.Check(
             request.Vectors.Select(v => (v.Id, v.Slot)),
-            map.Slots.Select(s => s.SlotId).ToArray());
+            citable);
 
         if (join.Any)
         {
@@ -320,7 +364,29 @@ public static class LoopRun
         }
 
         // ---- 4. ASSERT 0.1b -------------------------------------------------------------------------
-        var retention = RetentionCheck.Check(copyLayer.Objects.Concat(request.ProgramUnderTest), request.Geometry);
+        //
+        // 🔴 *** OVER THE GENERATED OBJECTS ALONE, AND THAT IS A CORRECTION. *** This read
+        // `copyLayer.Objects.Concat(request.ProgramUnderTest)` — the same set that gets DEPLOYED — which
+        // conflated "what this download contains" with "what this rule is about". Build-plan 0.1b is
+        // `every HARNESS object is asserted non-retentive`, and RetentionCheck's own summary says
+        // `Run the assertion over every generated harness object`. The program under test is neither
+        // generated nor the harness's to constrain.
+        //
+        // *** MEASURED THE MOMENT `--program` COULD NAME THE REAL PROGRAM: 159 FINDINGS OVER 45 OBJECTS,
+        // AND EVERY ONE OF THEM WAS A PROPERTY OF CORRECT PLANT CODE. *** Plant DBs declare no
+        // MEMORYLAYOUT (they are not mirrors), `DB_Settings` legitimately RETAINs 22 commissioning
+        // setpoints, and the default tag table legitimately carries 101 `%I`/`%Q` addresses, which the
+        // rule reads as "not a bit-memory address".
+        //
+        // AND THE DECISIVE CASE, because it is not a matter of taste: `FB_HopperBlockageStim` declares
+        // `PreBoundaryDone : Bool RETAIN` *deliberately* — its own comment says clearing it there rather
+        // than on the start edge `is what lets it survive the CPU restart it exists for`. That retentive
+        // member is exactly what the boundary-spanning STARTUP vectors depend on. A 0.1b applied to the
+        // program under test would refuse the deliverable for containing the thing the deliverable needs.
+        //
+        // The program's retain is still a real claim on a shared budget, so it is REPORTED — see
+        // ProgramRetain below — counted, labelled and gating nothing.
+        var retention = RetentionCheck.Check(copyLayer.Objects, request.Geometry);
         if (!retention.Passed)
         {
             return LoopGeneration.Stop(LoopOutcome.NotAssertable, gate, mapResult.SizeReport, retention, caveats,
@@ -330,8 +396,25 @@ public static class LoopRun
 
         return new LoopGeneration(null, gate, mapResult.SizeReport, map, stamp, copyLayer, retention, caveats,
             $"the copy layer was generated: {copyLayer.Objects.Count} object(s), {copyLayer.Require().Networks.Count} network(s), "
-            + $"{copyLayer.Require().Tags.Count} mirror tag(s), {map.TotalRegisters} register(s) of mirror. NOTHING WAS DEPLOYED.");
+            + $"{copyLayer.Require().Tags.Count} mirror tag(s), {map.TotalRegisters} register(s) of mirror. NOTHING WAS DEPLOYED.",
+            OrderOf(request));
     }
+
+    /// <summary>
+    /// The merged <c>(group, index)</c> order for this request — <b>one computation, read by generation
+    /// and by the run.</b>
+    ///
+    /// <para>Kept out of <see cref="Generate"/>'s stop sequence deliberately: a missing group order does
+    /// not make the copy layer wrong, and refusing to EMIT the IR over it would deny a reader the artifact
+    /// while telling them nothing extra. <see cref="Execute"/> refuses on the same object, before the
+    /// device boundary.</para>
+    /// </summary>
+    private static WaveOrderReport OrderOf(LoopRequest request) =>
+        WaveOrder.Of(
+            request.Vectors.Select(v => (v.Id, v.Slot, v.Index)),
+            request.Bindings
+                .Select(b => new WaveSlotGroups(b.SlotId, b.CitableSlotIds, b.ServesRunInOrder, b.BoundarySpanning))
+                .ToArray());
 
 
     // -------------------------------------------------------------------------------------------------
@@ -340,17 +423,24 @@ public static class LoopRun
 
     private static IReadOnlyList<ResultPackage> Package(
         LoopRequest request, RegisterMap map, BuildStamp stamp, MirrorClient client,
-        WaveResult wave, DeploymentOutcome deployment, VersionReport version, int roundTripsBefore)
+        WaveResult wave, DeploymentOutcome deployment, VersionReport version, int roundTripsBefore,
+        IReadOnlyDictionary<string, int> ordinalOf)
     {
         var packages = new List<ResultPackage>();
         var slotsCoveredByOneRead = map.ReadPlan(Enumerable.Range(0, map.Slots.Count)).Max(r => r.SlotCount);
 
         foreach (var vector in request.Vectors)
         {
-            var slotIndex = SlotIndexOf(map, vector.Slot);
+            var slotIndex = SlotIndexOf(map, request.Bindings, vector.Slot);
+
+            // 🔴 *** THE MERGED ORDINAL, NEVER `vector.Index`. *** The index is the vector's position
+            // WITHIN ITS GROUP and every group restarts at 0, so on a many-to-one slot map several vectors
+            // share one index — and reading Results[index] hands each of them the first vector's run.
+            var waveIndex = ordinalOf[vector.Id];
+
             var distribution = wave.Distributions.SingleOrDefault(d => d.SlotIndex == slotIndex);
-            var run = distribution is not null && vector.Index < distribution.Results.Count
-                ? distribution.Results[vector.Index]
+            var run = distribution is not null && waveIndex < distribution.Results.Count
+                ? distribution.Results[waveIndex]
                 : null;
 
             if (run is null)
@@ -360,8 +450,8 @@ public static class LoopRun
                 continue;
             }
 
-            var logIndex = wave.Log.Indices.ElementAtOrDefault(vector.Index);
-            var binding = request.Bindings.Single(b => b.SlotId == vector.Slot);
+            var logIndex = wave.Log.Indices.ElementAtOrDefault(waveIndex);
+            var binding = BindingFor(request.Bindings, vector.Slot);
 
             var stimulus = new StimulusEvidence(
                 Commanded: logIndex?.Commanded.Contains(slotIndex) ?? false,
@@ -380,12 +470,12 @@ public static class LoopRun
                 request.Enumeration,
                 run,
                 slotIndex,
-                vector.Index,
+                waveIndex,
                 stimulus,
                 StimulusExpectation.AtLeastOneScanPerRoundTrip(Math.Max(1, run.PollRounds)),
-                Settling(client, vector, slotIndex, run, distribution!),
+                Settling(client, vector, slotIndex, waveIndex, run, distribution!),
                 Assertions(vector, binding, run, request.WordOrder),
-                distribution!.CoRunning.FirstOrDefault(c => c.WaveIndex == vector.Index).CoRunners ?? Array.Empty<int>(),
+                distribution!.CoRunning.FirstOrDefault(c => c.WaveIndex == waveIndex).CoRunners ?? Array.Empty<int>(),
                 map,
                 stamp,
                 slotsCoveredByOneRead));
@@ -408,12 +498,15 @@ public static class LoopRun
     /// <see cref="SettlingState.NotEstablished"/>, which is not the same as settled. And it cannot see a
     /// value that moved and came back.</para>
     /// </summary>
-    private static SettlingState Settling(MirrorClient client, SubmissionVector vector, int slotIndex, SlotRunResult run, SlotDistribution distribution)
+    private static SettlingState Settling(MirrorClient client, SubmissionVector vector, int slotIndex, int waveIndex, SlotRunResult run, SlotDistribution distribution)
     {
         if (vector.Settling is not { UnchangedForScans: > 0 } settling)
             return SettlingState.NotEstablished;
 
-        if (vector.Index != distribution.CompletedAtIndex)
+        // The MERGED ordinal, matching CompletedAtIndex, which counts positions in the tensor the wave
+        // actually ran. `vector.Index` counts positions within a GROUP, and on a many-to-one slot the two
+        // are different numbers — so comparing the old one would call several vectors "last".
+        if (waveIndex != distribution.CompletedAtIndex)
             return SettlingState.NotEstablished;
 
         if (run.Outcome != SlotOutcome.Completed)
@@ -512,7 +605,15 @@ public static class LoopRun
         if (deployment.Manifest.Count == 0)
             return ManifestPresence.NotAvailable;
 
-        var downloadable = programUnderTest.Where(o => o.Kind != HarnessObjectKind.TagTable).ToArray();
+        // A PLC DATA TYPE is excluded on the same ground as a tag table and with the same [I] marker: it is
+        // imported and compiled, and nothing has ever observed one in a load manifest. The one measured
+        // 19-object manifest from this rig names an FC, an FB, its instance DB, OB1, MB_SERVER and nine
+        // TCP_MB_* helpers — no tag table and no type. Including it would report Absent on every healthy
+        // download carrying a UDT, and Absent makes every package non-conclusive, which is the failure
+        // direction that gets a check switched off.
+        var downloadable = programUnderTest
+            .Where(o => o.Kind is not (HarnessObjectKind.TagTable or HarnessObjectKind.DataType))
+            .ToArray();
         if (downloadable.Length == 0)
             return ManifestPresence.NotAvailable;
 
@@ -521,10 +622,42 @@ public static class LoopRun
             : ManifestPresence.Absent;
     }
 
-    private static int SlotIndexOf(RegisterMap map, string slotId)
+    /// <summary>
+    /// 🔴 <b>The mirror slot a CITED specification id resolves to — through the many-to-one map, never by
+    /// string equality with the map's own slot ids.</b>
+    ///
+    /// <para>Unreachable throws: <c>SlotJoin</c> refuses an unbound id above the gate, before anything is
+    /// generated. They stay because the alternative to a throw here is a default, and a defaulted slot
+    /// index is one agent's vector written into another slot's mirror region.</para>
+    /// </summary>
+    private static int SlotIndexOf(RegisterMap map, IReadOnlyList<SlotBinding> bindings, string citedSlotId)
     {
-        var slot = map.Slot(slotId);
-        return slot?.Index ?? throw new ArgumentException($"no slot '{slotId}' in this map.", nameof(slotId));
+        var binding = BindingFor(bindings, citedSlotId);
+        var slot = map.Slot(binding.SlotId);
+
+        return slot?.Index ?? throw new ArgumentException(
+            $"binding slot '{binding.SlotId}' (serving '{citedSlotId}') is not in this map.", nameof(citedSlotId));
+    }
+
+    /// <summary>The binding whose <see cref="SlotBinding.CitableSlotIds"/> contain the id a vector cited.</summary>
+    private static SlotBinding BindingFor(IReadOnlyList<SlotBinding> bindings, string citedSlotId)
+    {
+        var matches = bindings
+            .Where(b => b.CitableSlotIds.Contains(citedSlotId, StringComparer.Ordinal))
+            .ToArray();
+
+        return matches.Length switch
+        {
+            1 => matches[0],
+            0 => throw new ArgumentException($"no binding serves slot '{citedSlotId}'.", nameof(citedSlotId)),
+
+            // WaveOrder refuses a group served twice by name and before the device boundary; this is the
+            // backstop, and it throws rather than taking the first because "the first" is decided by the
+            // order the bindings happen to be listed in.
+            _ => throw new ArgumentException(
+                $"slot '{citedSlotId}' is served by {matches.Length} bindings ({string.Join(", ", matches.Select(m => m.SlotId))}).",
+                nameof(citedSlotId)),
+        };
     }
 
     /// <summary>
@@ -543,7 +676,7 @@ public static class LoopRun
 
         foreach (var vector in request.Vectors)
         {
-            var binding = request.Bindings.FirstOrDefault(b => b.SlotId == vector.Slot);
+            var binding = request.Bindings.FirstOrDefault(b => b.CitableSlotIds.Contains(vector.Slot, StringComparer.Ordinal));
             if (binding is null)
                 continue;
 
@@ -599,7 +732,7 @@ public static class LoopRun
     /// </summary>
     private static WireVector ToWireVector(SubmissionVector vector, IReadOnlyList<SlotBinding> bindings, RegisterMap map, RegisterWordOrder wordOrder)
     {
-        var binding = bindings.Single(b => b.SlotId == vector.Slot);
+        var binding = BindingFor(bindings, vector.Slot);
 
         // *** THE VECTOR IS LAID OUT BY REGISTER WIDTH, NOT ONE WORD PER SIGNAL. *** A 32-bit input takes
         // two registers, so a naive one-word-per-target array would put every later input at the wrong
@@ -612,12 +745,21 @@ public static class LoopRun
             var target = binding.VectorTargets[i];
             var offset = targetOffsets[i];
 
-            if (!vector.Inputs.TryGetValue(target.Tag, out var text))
+            // 🔴 *** THE KEY A VECTOR ACTUALLY WRITES ITS INPUTS UNDER — AND THIS LINE READ `target.Tag`
+            // UNTIL 2026-08-14, WHICH ON THE DELIVERABLE MATCHED NOTHING AT ALL. *** A vector cites the
+            // SPECIFICATION's name; `Tag` is what the block calls the member, and on this deliverable the
+            // two differ for all ten stimulus inputs. So every stimulus register stayed at ZERO and the
+            // block ran a scenario nobody asked for — while `MirrorValueFit`, corrected the same day, was
+            // checking the very values that were then not written. *** A GATE THAT EXAMINES THE RIGHT
+            // THING BESIDE A WRITER THAT WRITES THE WRONG ONE IS WORSE THAN BOTH BEING WRONG, *** because
+            // the gate's green then reads as evidence about the writer. One definition, on the signal.
+            if (!vector.Inputs.TryGetValue(target.JoinKey, out var text))
                 continue;
 
-            // ONE parse and ONE range check, shared with the refusal above. A second, laxer parse here is
-            // how a value refused at step 2b could still be written narrowed — so there isn't one.
-            var fit = MirrorValueFit.Check(target.Tag, target.Type, text);
+            // ONE parse, ONE encode and ONE range check, shared with the refusal above. A second, laxer
+            // path here is how a value refused at step 2b could still be written narrowed — so there isn't
+            // one, and the ENCODING travels with it for the same reason.
+            var fit = MirrorValueFit.Check(target.JoinKey, target.Type, text, target.Encoding);
             if (!fit.Fits)
             {
                 // Unreachable: step 2b refuses the whole run before any wave is built. A throw rather than

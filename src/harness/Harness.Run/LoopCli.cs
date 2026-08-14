@@ -42,6 +42,17 @@ public static class LoopExit
     /// that exits here, and a caller keying on 0 cannot reach this by accident.</para>
     /// </summary>
     public const int GeneratedNotAdmissible = 4;
+
+    /// <summary>
+    /// 🔴 <c>--generate-only</c>: <b>the IR was produced AND NO WAVE COULD BE BUILT FROM THESE TWO
+    /// DOCUMENTS.</b>
+    ///
+    /// <para>Its own code because the copy layer being right says nothing about the run being possible.
+    /// The two live at different levels: the layer is a pure function of the BINDING, while the order is a
+    /// property of merging the VECTORS into it. A caller that reads 0 here would conclude the pair is
+    /// ready to deploy, and a deploying run would stop at <c>NotOrdered</c> or <c>NotSchedulable</c>.</para>
+    /// </summary>
+    public const int GeneratedNotRunnable = 5;
 }
 
 /// <summary>
@@ -360,6 +371,23 @@ public static class LoopCli
             foreach (var refusal in generation.Refusals)
                 output.WriteLine("  - " + refusal);
 
+            // *** THE 0.1b FINDINGS THEMSELVES, NOT ONLY THEIR COUNT. *** `REFUSED: 159 finding(s) across
+            // 45 object(s)` is a number a reader cannot act on, and the objects are named in the findings
+            // and nowhere else — so the one path that could tell you WHICH object and WHICH address was
+            // printing a total. Grouped by object, because 159 findings over 45 objects read one at a time
+            // is a refusal nobody finishes, and a refusal nobody finishes gets skimmed.
+            foreach (var byObject in (generation.Retention?.Findings ?? Array.Empty<RetentionFinding>())
+                         .GroupBy(f => f.Object, StringComparer.Ordinal)
+                         .OrderBy(g => g.Key, StringComparer.Ordinal))
+            {
+                output.WriteLine($"  - {byObject.Key}: {byObject.Count()} finding(s)");
+                foreach (var finding in byObject.Take(3))
+                    output.WriteLine($"      {finding.Detail}");
+
+                if (byObject.Count() > 3)
+                    output.WriteLine($"      ... and {byObject.Count() - 3} more on this object.");
+            }
+
             return LoopExit.DidNotRun;
         }
 
@@ -383,6 +411,40 @@ public static class LoopCli
                          + $"  [control {map.Control.Length}, vectors {map.VectorBlock.Length}, results {map.ResultBlock.Length}]");
         output.WriteLine($"BUILD STAMP : {generation.Stamp.Literal}");
         output.WriteLine($"MAP HASH    : {map.MapHash}");
+
+        // 🔴 *** THE HASH RESTS ON A NUMBER NOBODY MEASURED, AND A READER OF THE HASH HAS TO KNOW THAT. ***
+        // `retentiveBytes` is a property of the PROGRAM, not of the CPU, and MirrorGeometry gives it no
+        // default deliberately — "a caller that does not know the program's retentive M extent must go and
+        // read it". `Compose` supplies 256 when the binding is silent, and that value is a MAP HASH INPUT
+        // and therefore a BUILD STAMP input: two runs disagreeing about it produce two identities for one
+        // program. It is not refused here because no party in this loop can measure it and a gate nobody
+        // can satisfy blocks its own recovery path — so it is PRINTED, on every run, beside the number it
+        // decides.
+        output.WriteLine(binding.RetentiveBytes is { } stated
+            ? $"  retentive M : {stated} byte(s), STATED by the binding."
+            : $"  retentive M : {map.Geometry.RetentiveBytes} byte(s), DEFAULTED — the binding does not state it. It is an input to the map"
+              + Environment.NewLine
+              + "                hash above and therefore to the build stamp, so this identity is only as measured as that number is.");
+
+        output.WriteLine();
+
+        // *** THE MERGED ORDER, PRINTED HERE AND GATED IN THE DEPLOYING RUN. *** Not a warning/gate split
+        // but a scope one: the order decides how vectors merge into a tensor and decides nothing about the
+        // IR below. Both paths read the same report object, so they cannot come to disagree.
+        var order = generation.Order;
+        var runnable = order is not null && order.Ordered;
+
+        output.WriteLine($"WAVE ORDER  : {order?.Detail ?? "<not computed>"}");
+
+        foreach (var refusal in order?.Refusals ?? Array.Empty<string>())
+            output.WriteLine("  REFUSED   " + refusal);
+
+        if (!runnable)
+        {
+            output.WriteLine("  *** NOTHING MAY BE RUN FROM THESE TWO DOCUMENTS AS THEY STAND. *** The IR below is correct and is a pure");
+            output.WriteLine("      function of the BINDING; what is missing is above, and it is a property of merging the VECTORS into it.");
+        }
+
         output.WriteLine();
 
         // *** THE LATCH INVENTORY, PRINTED ON EVERY RUN INCLUDING THE EMPTY ONE. *** A report that appears
@@ -422,7 +484,12 @@ public static class LoopCli
             }
         }
 
-        return admissible ? LoopExit.Generated : LoopExit.GeneratedNotAdmissible;
+        // *** THE GATE'S VERDICT WINS THE EXIT CODE WHEN BOTH ARE BAD. *** An inadmissible submission is
+        // the stronger statement — the vectors themselves are not accepted — and reporting the weaker one
+        // would send a reader to fix the order of a submission that would still be refused.
+        return admissible
+            ? runnable ? LoopExit.Generated : LoopExit.GeneratedNotRunnable
+            : LoopExit.GeneratedNotAdmissible;
     }
 
     /// <summary>
@@ -459,7 +526,14 @@ public static class LoopCli
                 s.SlotId ?? string.Empty,
                 Signals(s.VectorTargets),
                 s.StartCondition,
-                Signals(s.ResultSources)))
+                Signals(s.ResultSources))
+            {
+                // The many-to-one map, off the wire. Absent stays absent: an empty `serves` is a slot that
+                // answers to its own id, which is what every binding written before this meant.
+                Serves = s.Serves?.ToArray() ?? Array.Empty<string>(),
+                ServesRunInOrder = s.ServesRunInOrder,
+                BoundarySpanning = s.BoundarySpanning?.ToArray() ?? Array.Empty<string>(),
+            })
             .ToArray();
 
         if (bindings.Length == 0)
@@ -553,6 +627,21 @@ public static class LoopCli
         output.WriteLine($"program     : {program.Count} object(s) under test, and THE BUILD STAMP IS TAKEN OVER THEM.");
         foreach (var obj in program)
             output.WriteLine($"              {obj.Kind,-9} {obj.Name}  ({obj.Ir.Length} chars of IR)");
+
+        // *** THE PROGRAM'S CLAIM ON RETAIN — REPORTED, GATING NOTHING, AND PRINTED WHEN IT IS ZERO. ***
+        // 0.1b constrains the objects the harness GENERATES; the plant's retain is the plant's, and at
+        // least one retentive member here exists precisely so it survives the CPU restart the
+        // boundary-spanning vectors ride. But retain is one shared budget and the tightest on this rig, so
+        // a harness that says nothing about the program's share of it is hiding a real number.
+        var retain = RetentionCheck.RetainDeclarations(program);
+
+        output.WriteLine($"              RETAIN in the program under test: {retain.Count} declaration(s) — REPORTED, NOT GATED. 0.1b is about the");
+        output.WriteLine("              objects this harness GENERATES; the program's retain is not the harness's to refuse. It is a claim on the");
+        output.WriteLine("              same budget, which is why it is counted.");
+
+        foreach (var byObject in retain.GroupBy(f => f.Object, StringComparer.Ordinal).OrderBy(g => g.Key, StringComparer.Ordinal))
+            output.WriteLine($"                {byObject.Key}: {byObject.Count()}");
+
         output.WriteLine();
     }
 

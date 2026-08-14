@@ -305,7 +305,12 @@ public static class GateCli
     /// spends a day in that state.</para>
     /// </summary>
     public static Harness.Map.MirroredSignal ToMirroredSignal(MirroredSignalDocument row) =>
-        new(row.Tag ?? string.Empty, row.Type, row.SpecName, row.LatchedBy, row.Transient, row.RearmsEachIndex, row.ArmedBy);
+        new(row.Tag ?? string.Empty, row.Type, row.SpecName, row.LatchedBy, row.Transient, row.RearmsEachIndex, row.ArmedBy,
+            // *** THREADED IN THE SAME COMMIT THAT GIVES IT A MEANING. *** `Transient` and
+            // `RearmsEachIndex` each spent time as fields the generator read and nothing could set — a
+            // field nobody can set is a field that does not exist, however well it is implemented
+            // downstream, and that is the third instance of it this file records.
+            row.Encoding?.ToEncoding());
 
     /// <summary>The enumeration projection, off the document. Public so the runner composes it the same way.</summary>
     public static AssertionEnumeration ToEnumeration(SubmissionDocument document) =>

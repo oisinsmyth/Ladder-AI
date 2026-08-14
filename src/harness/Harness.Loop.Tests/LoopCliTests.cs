@@ -321,7 +321,9 @@ public class LoopCliTests
 
     [Theory]
     [InlineData("junk.ir", "not one of the IR top-level forms")]
-    [InlineData("type.ir", "declares a PLC data type")]
+    // `type.ir` WAS a row here and is now a POSITIVE case — see the test below. The refusal was correct
+    // while HarnessObjectKind had no member for a PLC data type; what it also did was make the hopper
+    // program undeclarable, because its FB and instance DB both reference a UDT.
     [InlineData("empty.ir", "holds no IR at all")]
     [InlineData("emptydir", "expanded to no .ir file")]
     public void AN_IR_FILE_THIS_LOADER_CANNOT_CLASSIFY_IS_A_REFUSAL_NAMING_IT_never_a_skip(string path, string expected)
@@ -333,6 +335,41 @@ public class LoopCliTests
         Assert.Equal(LoopExit.NothingExamined, exit);
         Assert.Contains("the PROGRAM UNDER TEST could not be loaded", output, StringComparison.Ordinal);
         Assert.Contains(expected, output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_PLC_DATA_TYPE_LOADS_AS_ONE_so_a_program_that_uses_a_UDT_can_be_declared_WHOLE()
+    {
+        // *** THE REFUSAL THIS REPLACES WAS RIGHT AND STILL BLOCKED THE DELIVERABLE. *** `HarnessObjectKind`
+        // had no member for a PLC data type, and the nearest fit would have handed a UDT a data block's
+        // retention rules AND put it in the downloadable set the load manifest is compared against. The fix
+        // is the missing member: a type is imported and compiled like a block, and produces no load message
+        // like a tag table, so it is on a different side of each line and needs its own kind.
+        var (exit, output, _) = Run(new[]
+        {
+            "--submission", "sub.json", "--binding", "binding.json", "--generate-only", "--program", "type.ir",
+        });
+
+        Assert.NotEqual(LoopExit.NothingExamined, exit);
+        Assert.DoesNotContain("could not be loaded", output, StringComparison.Ordinal);
+        Assert.Contains("DataType", output, StringComparison.Ordinal);
+        Assert.Contains("TypeDOL", output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void THE_PROGRAMS_RETAIN_IS_REPORTED_AND_NOT_GATED_and_the_line_appears_when_it_is_zero()
+    {
+        // 0.1b constrains the objects the harness GENERATES. The plant's retain is the plant's — and at
+        // least one retentive member in the real corpus exists precisely so it survives the CPU restart
+        // the boundary-spanning vectors ride. But retain is ONE shared budget and the tightest on this
+        // rig, so a harness that says nothing about the program's share of it is hiding a real number.
+        var output = Run(new[]
+        {
+            "--submission", "sub.json", "--binding", "binding.json", "--generate-only", "--program", "ramp.ir",
+        }).Output;
+
+        Assert.Contains("RETAIN in the program under test: 0 declaration(s)", output, StringComparison.Ordinal);
+        Assert.Contains("REPORTED, NOT GATED", output, StringComparison.Ordinal);
     }
 
     [Fact]

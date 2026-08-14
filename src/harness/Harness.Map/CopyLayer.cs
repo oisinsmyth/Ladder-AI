@@ -311,7 +311,23 @@ public sealed record MirroredSignal(
     /// accepted and ignored: a caller who declares an arm and gets no latch believes they have a
     /// phase-armed observation and has an unconditional one, or none.</para>
     /// </summary>
-    string? ArmedBy = null)
+    string? ArmedBy = null,
+
+    /// <summary>
+    /// 🔴 <b>HOW A CITED VALUE BECOMES THE INTEGER THIS MEMBER HOLDS — and its absence is why 81 values
+    /// of the deliverable could not be written at all.</b>
+    ///
+    /// <para>Null is <b>"the cited text IS the value"</b>, which is right for every plain duration and is
+    /// the shape every existing binding entry has. It is not a claim that no encoding exists; it is the
+    /// absence of one, and a symbolic value meeting it is refused by <see cref="MirrorValueFit"/> rather
+    /// than coerced.</para>
+    ///
+    /// <para><b>TWO ENTRIES MAY SHARE A <see cref="SpecName"/>, EACH WITH ITS OWN ENCODING.</b> That is
+    /// the whole of the two-tag form <c>harness-binding.md:57</c> needs: one set-B field, two IR members,
+    /// one cited value read twice under two different rules. Nothing special-cases it — the join key is
+    /// the spec name and an encoding is per entry, so the capability falls out of both.</para>
+    /// </summary>
+    ValueEncoding? Encoding = null)
 {
     /// <summary>
     /// True when the binding has stated a specification name. <b>Distinct from the names being equal</b> —
@@ -322,6 +338,24 @@ public sealed record MirroredSignal(
 
     /// <summary>The name a vector cites, or null when the binding never said. <b>Never falls back to <see cref="Tag"/>.</b></summary>
     public string? CitableName => SpecNameStated ? SpecName!.Trim() : null;
+
+    /// <summary>
+    /// 🔴 <b>THE KEY A VECTOR'S <c>inputs</c> DICTIONARY IS ACTUALLY WRITTEN UNDER — ONE DEFINITION, USED
+    /// BY EVERY PATH THAT JOINS THE TWO DOCUMENTS.</b>
+    ///
+    /// <para>*** IT EXISTS BECAUSE TWO PATHS DERIVED IT SEPARATELY AND ONLY ONE OF THEM WAS FIXED. ***
+    /// <c>MirrorValueFit</c> was corrected on 2026-08-14 to join on the SPEC name, with the finding that
+    /// joining on the tag made the width gate examine ZERO of the deliverable's 27 vectors.
+    /// <c>LoopRun.ToWireVector</c> — <b>the code that actually writes the stimulus</b> — kept joining on
+    /// <c>Tag</c>, so on the deliverable it matched nothing, wrote nothing, and left every stimulus
+    /// register at ZERO while the width gate reported the values it had checked as fitting. <b>A gate that
+    /// examines the right thing and a writer that writes the wrong one is worse than both being wrong</b>,
+    /// because the gate's green is then evidence for the writer.</para>
+    ///
+    /// <para>The tag is used <b>only</b> where the binding stated no spec name at all, which is a weaker
+    /// join and is reported as such wherever it is made.</para>
+    /// </summary>
+    public string JoinKey => CitableName ?? Tag;
 
     /// <summary>
     /// <b>The instrumentation modes this signal can actually be watched in — DERIVED, never declared.</b>
@@ -464,6 +498,90 @@ public sealed record SlotBinding(
     string? StartCondition,
     IReadOnlyList<MirroredSignal> ResultSources)
 {
+    /// <summary>
+    /// 🔴 <b>THE SPECIFICATION SLOT IDS THIS ONE BINDING SLOT SERVES — the many-to-one map, and it is what
+    /// makes six ids resolve to one mirror region.</b>
+    ///
+    /// <para>*** FOUR INDEPENDENT AUTHORITIES SAY THE HOPPER SET'S SIX IDS ARE ONE SLOT'S SERIAL PHASES,
+    /// AND NONE OF THEM IS AN AGENT'S OPINION: *** the coordinator's prose
+    /// (<c>harness-binding.md:173-186</c>, <c>:179-181</c> — all six drive the SAME instance and the SAME
+    /// members); D9's computed 15 conflict edges; the submission's own <c>slotsInWaveSet: 1</c>, whose note
+    /// reads <i>"how many slots run CONCURRENTLY, not how many exist"</i>; and the multi-writer refusal in
+    /// <see cref="CopyLayerGenerator"/>, which makes six real slots UNBUILDABLE on one stimulus instance.</para>
+    ///
+    /// <para><b>It needs NO PARTITION, which is part of why it is right.</b> A many-to-one map assigns no
+    /// signal to any group: every served id addresses the same vector band, the same result band and the
+    /// same start bool. The alternative — six real slots — would need six monitor instances, six stimulus
+    /// instances and six input buffers, which the prose itself calls a project-shape decision
+    /// (<c>md:187-189</c>).</para>
+    ///
+    /// <para><b>Empty means the slot serves ITSELF</b> — the ordinary one-id case, unchanged, and the
+    /// shape every binding had before this existed. When it is non-empty the slot's own
+    /// <see cref="SlotId"/> stops being citable: it is then an internal key (it is the tag fragment, and
+    /// the map's hash input), and a vector citing it would have no group rank at all. <b>There is no
+    /// correct rank to give such a vector, and inventing one is the defect this whole field exists to
+    /// avoid</b>, so it falls out as unbound and <c>SlotJoin</c> says so by name.</para>
+    /// </summary>
+    public IReadOnlyList<string> Serves { get; init; } = Array.Empty<string>();
+
+    /// <summary>
+    /// 🔴 <b>A POSITIVE CLAIM THAT <see cref="Serves"/>' ORDER IS THE ORDER THE GROUPS RUN IN. Without it
+    /// a multi-group slot REFUSES, and it does not fall back to the order the ids happen to be listed
+    /// in.</b>
+    ///
+    /// <para>*** THE SUBMISSION CARRIES NO TOTAL ORDER, MEASURED: *** each group restarts <c>index</c> at
+    /// 0, so the deliverable's 27 vectors carry only six distinct index values. The wave reads
+    /// <c>distribution.Results[ordinal]</c>, so merging six groups without a total order gives <b>six
+    /// vectors all reading <c>Results[0]</c> and 21 of 27 packages carrying another vector's run</b> —
+    /// reported confidently, with no error anywhere. The id therefore has to become the MAJOR key of a
+    /// two-level ordinal <c>(group, index)</c>.</para>
+    ///
+    /// <para><b>WHY THE ARRAY'S ORDER IS NOT ENOUGH ON ITS OWN.</b> A list is a set until somebody says it
+    /// is a sequence. Reading the order out of it anyway would be a default — and <i>a default here is a
+    /// guess wearing a mechanism's clothes</i>, which is precisely the class of thing that produces a
+    /// plausible artifact instead of a refusal. The group order is also not a free choice: one of the
+    /// hopper groups is a CPU stop/restart across a disruptive download boundary, so where it sits changes
+    /// what the groups after it start from.</para>
+    ///
+    /// <para><b>When the coordinator states it, the DATA supplies the answer and nothing in this code
+    /// changes.</b> That is the test of whether this is a mechanism or a decision.</para>
+    /// </summary>
+    public bool ServesRunInOrder { get; init; }
+
+    /// <summary>
+    /// 🔴 <b>SERVED GROUPS THAT DO NOT RUN INLINE, BECAUSE A DOWNLOAD BOUNDARY HAPPENS INSIDE THEM.</b>
+    ///
+    /// <para>*** THE PROPERTY IS THE VECTORS' OWN AND IT IS WRITTEN IN THEIR OWN FIELDS. *** The hopper
+    /// set's <c>STARTUP</c> vectors declare that they ride an already-scheduled disruptive boundary which
+    /// <b>stops and restarts the CPU</b>, and that the harness is <b>disconnected across the download</b>
+    /// with nobody polling while the first scan happens.</para>
+    ///
+    /// <para><b>They are not a late group in a serial sequence — they are not IN one.</b> Folding such a
+    /// group into the inline order runs a restart-spanning scenario with no restart, and leaves every
+    /// group after it running against a cleared accumulator and a reconnected harness that the sequence
+    /// never accounted for. It reads as a clean pass, which is why the model has to be able to say this
+    /// rather than the scheduler having to be careful.</para>
+    ///
+    /// <para><b>Position inside <see cref="Serves"/> is not read</b> — a boundary-spanning group takes no
+    /// inline ordinal at all — so it may be listed anywhere.</para>
+    /// </summary>
+    public IReadOnlyList<string> BoundarySpanning { get; init; } = Array.Empty<string>();
+
+    /// <summary>
+    /// The specification slot ids a vector may cite for this slot, in the order they were declared.
+    /// <b>Never empty</b> — a slot always answers to at least its own id.
+    ///
+    /// <para><b>It includes the boundary-spanning ones.</b> Such a vector IS bound — it addresses this
+    /// slot's mirror region perfectly well — and it is UNSCHEDULABLE here, which is a different fact.
+    /// Dropping it from the citable set would make <c>SlotJoin</c> report it as naming a slot nobody
+    /// bound, sending its reader to fix the wrong document.</para>
+    /// </summary>
+    public IReadOnlyList<string> CitableSlotIds =>
+        Serves.Count > 0 ? Serves : new[] { SlotId };
+
+    /// <summary>True when this slot answers to more than one specification id, and therefore needs an order.</summary>
+    public bool ServesSeveralGroups => Serves.Count > 1;
+
     /// <summary>
     /// The register offset of each result signal, and the total width — <b>a running sum, not the list
     /// index.</b>
@@ -678,6 +796,23 @@ public enum HarnessObjectKind
 
     /// <summary>A data block. The harness generates none in phase 2; the rule exists because it is where retain bites.</summary>
     DataBlock,
+
+    /// <summary>
+    /// 🔴 <b>A PLC DATA TYPE (a UDT) — and its absence is why the hopper program could not be supplied to
+    /// <c>--program</c> WHOLE.</b>
+    ///
+    /// <para>*** MEASURED: <c>FB_HopperBlockageMonitor</c> AND ITS INSTANCE DB BOTH REFERENCE
+    /// <c>UDT_HopperBlockageIO</c>. *** With no member for a type, <c>ProgramUnderTest</c> refused a
+    /// <c>TYPE</c> header by name — correctly, since the nearest member would have handed a UDT a data
+    /// block's retention rules and put it in the downloadable set the load manifest is compared against —
+    /// but the refusal blocked the block under test from being declared at all, and <b>the build stamp is
+    /// a hash of what is about to run</b>.</para>
+    ///
+    /// <para><b>It is imported and compiled like a block, and it produces NO LOAD MESSAGE, like a tag
+    /// table.</b> It is a distinct member rather than a re-use of either because it is on a different side
+    /// of each of those two lines, and a kind that is wrong about one of them is wrong silently.</para>
+    /// </summary>
+    DataType,
 }
 
 /// <summary>

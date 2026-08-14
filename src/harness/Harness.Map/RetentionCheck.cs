@@ -98,11 +98,58 @@ public static class RetentionCheck
     private static readonly Regex MemoryAddress =
         new(@"^%M(?<size>[BWDXL]?)(?<byte>\d+)(?:\.(?<bit>\d+))?$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
-    /// <summary>Any absolute PLC address, wherever it appears — not only after an <c>@</c> in a tag table.</summary>
+    /// <summary>
+    /// Any absolute PLC address, wherever it appears — not only after an <c>@</c> in a tag table.
+    ///
+    /// <para>⚠️ <b>It matches <c>%X0</c>, which is a C-501 ALARM-BIT SLICE and not an address at all.</b>
+    /// Harmless where this runs — the generated harness objects contain no slice — and it produced ten
+    /// false findings on <c>FC_AlarmsMain</c> the one time this check was pointed at plant IR. Recorded
+    /// here rather than fixed because the fix is to stop pointing it at plant IR, which is done; anyone
+    /// widening the scope again meets this first.</para>
+    /// </summary>
     private static readonly Regex AbsoluteAddress =
         new(@"(?<![A-Za-z0-9_])%[A-Za-z]{0,2}\d+(?:\.\d+)?", RegexOptions.Compiled);
 
-    /// <summary>Run the assertion over every generated harness object.</summary>
+    /// <summary>
+    /// 🔴 <b>Every <c>RETAIN</c> declaration in a set of objects, as a REPORT — no verdict, no refusal.</b>
+    ///
+    /// <para><b>For the PROGRAM UNDER TEST, which this assertion is not about.</b> 0.1b constrains the
+    /// objects the harness GENERATES; the plant program's retain is the plant's, and
+    /// <c>FB_HopperBlockageStim.PreBoundaryDone</c> is retentive on purpose — its own comment says that is
+    /// what lets it survive the CPU restart it exists for. Refusing it would refuse the deliverable for
+    /// containing the thing the deliverable needs.</para>
+    ///
+    /// <para><b>But retain is one shared budget, and the tightest on this rig by a factor of twelve</b>, so
+    /// a harness that says nothing about the program's claim on it is hiding a real number. This is that
+    /// number, reported on every run <b>including when it is zero</b> — a report that appears only when it
+    /// has something to say cannot be told from one that has stopped running.</para>
+    /// </summary>
+    public static IReadOnlyList<RetentionFinding> RetainDeclarations(IEnumerable<HarnessObject> objects)
+    {
+        var found = new List<RetentionFinding>();
+
+        foreach (var obj in objects ?? Array.Empty<HarnessObject>())
+        {
+            var name = string.IsNullOrWhiteSpace(obj.Name) ? "<unnamed>" : obj.Name;
+
+            foreach (var line in (obj.Ir ?? string.Empty).Replace("\r\n", "\n").Split('\n'))
+            {
+                var text = StripComments(line);
+                if (RetainToken.IsMatch(text))
+                    found.Add(new RetentionFinding(name, Truncate(text.Trim())));
+            }
+        }
+
+        return found;
+    }
+
+    /// <summary>
+    /// Run the assertion over every GENERATED harness object.
+    ///
+    /// <para>🔴 <b>Not over the program under test.</b> The two are deployed together and are governed by
+    /// different rules — see <see cref="RetainDeclarations"/>, and the note at
+    /// <c>LoopRun.Generate</c> step 4, which records the 159 findings that measured the difference.</para>
+    /// </summary>
     public static RetentionVerdict Check(IEnumerable<HarnessObject> objects, MirrorGeometry geometry)
     {
         ArgumentNullException.ThrowIfNull(geometry);
@@ -156,6 +203,16 @@ public static class RetentionCheck
             case HarnessObjectKind.DataBlock:
                 CheckMemoryLayout(name, lines, findings);
                 CheckRetain(name, lines, findings, allOrNothing: true);
+                return CheckInlineAddresses(name, lines, geometry, findings);
+
+            // *** A PLC DATA TYPE GETS THE RETAIN AND ADDRESS RULES AND NOT THE LAYOUT ONE. *** A UDT is a
+            // shape, not storage: MEMORYLAYOUT belongs to the DB that instantiates it, and demanding one
+            // here would refuse every real type on the strength of a line that cannot legally appear in it.
+            // Before `DataType` existed a `TYPE` header classified as Block — so a UDT was silently held to
+            // a CODE BLOCK's rules, which are the same two but arrived at by accident rather than by a
+            // decision anybody could read.
+            case HarnessObjectKind.DataType:
+                CheckRetain(name, lines, findings, allOrNothing: false);
                 return CheckInlineAddresses(name, lines, geometry, findings);
 
             default:
@@ -314,7 +371,7 @@ public static class RetentionCheck
         header.StartsWith("TAGTABLE ", StringComparison.Ordinal) ? HarnessObjectKind.TagTable
         : header.StartsWith("DB ", StringComparison.Ordinal) ? HarnessObjectKind.DataBlock
         : header.StartsWith("BLOCK ", StringComparison.Ordinal) ? HarnessObjectKind.Block
-        : header.StartsWith("TYPE ", StringComparison.Ordinal) ? HarnessObjectKind.Block
+        : header.StartsWith("TYPE ", StringComparison.Ordinal) ? HarnessObjectKind.DataType
         : null;
 
     /// <summary>

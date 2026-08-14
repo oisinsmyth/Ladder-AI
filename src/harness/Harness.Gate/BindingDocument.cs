@@ -57,10 +57,21 @@ public sealed class BindingDocument
             Collect(slot.UnknownFields, path, found);
 
             foreach (var (signal, j) in (slot.VectorTargets ?? new List<MirroredSignalDocument>()).Select((v, k) => (v, k)))
+            {
                 Collect(signal.UnknownFields, $"{path}.vectorTargets[{j}]", found);
 
+                // The encoding is a nested object and gate 0b has to reach INSIDE it: a misspelt `source`
+                // there would silently drop the citation the encoding refuses without, and a misspelt
+                // `whenNumeric` would silently leave the safe `Refuse` in place — which looks like working
+                // strictness and is actually a dropped field.
+                Collect(signal.Encoding?.UnknownFields, $"{path}.vectorTargets[{j}].encoding", found);
+            }
+
             foreach (var (signal, j) in (slot.ResultSources ?? new List<MirroredSignalDocument>()).Select((r, k) => (r, k)))
+            {
                 Collect(signal.UnknownFields, $"{path}.resultSources[{j}]", found);
+                Collect(signal.Encoding?.UnknownFields, $"{path}.resultSources[{j}].encoding", found);
+            }
         }
 
         return SubmissionDocument.Split(found);
@@ -89,6 +100,48 @@ public sealed class BindingDocument
 public sealed class SlotBindingDocument
 {
     public string? SlotId { get; set; }
+
+    /// <summary>
+    /// 🔴 <b>The specification slot ids this ONE slot serves — the wire half of the many-to-one map.</b>
+    ///
+    /// <para>Absent or empty means the slot answers to its own <see cref="SlotId"/> and nothing else,
+    /// which is every binding written before this existed. When it is stated, the slot's own id stops
+    /// being citable — see <c>Harness.Map.SlotBinding.Serves</c>, which carries the reasoning and the four
+    /// authorities behind it.</para>
+    ///
+    /// <para><b>The domain model has had no way to express this at all</b>, so a set of vectors written
+    /// against six phase ids of one physical slot could not be run: <c>SlotJoin</c> reported
+    /// <c>27 vector(s) name 6 slot(s) that no binding declares</c>, correctly, with no route past it that
+    /// was not an invention.</para>
+    /// </summary>
+    public List<string>? Serves { get; set; }
+
+    /// <summary>
+    /// 🔴 <b>A POSITIVE CLAIM THAT <see cref="Serves"/>' ORDER IS THE ORDER THEY RUN IN.</b>
+    ///
+    /// <para><b>Its absence on a multi-group slot is a REFUSAL, not a fallback to the listed order.</b>
+    /// The submission carries no total order of its own — measured, every group restarts <c>index</c> at 0
+    /// — so the merge needs a major key, and taking one from the array's incidental order would be a
+    /// default. <i>A default here is a guess wearing a mechanism's clothes.</i></para>
+    ///
+    /// <para>Ignored on a single-group slot, deliberately: a gate that fires on submissions it has nothing
+    /// to say about is noise, and noise gets switched off.</para>
+    /// </summary>
+    public bool ServesRunInOrder { get; set; }
+
+    /// <summary>
+    /// 🔴 <b>Served groups that do NOT run inline, because a DOWNLOAD BOUNDARY happens inside them.</b>
+    ///
+    /// <para>A group listed here takes no position in the inline sequence, so where it appears in
+    /// <see cref="Serves"/> is not read. A run carrying its vectors is refused BY NAME — see
+    /// <c>LoopOutcome.NotSchedulable</c> — because a restart-spanning scenario executed without the
+    /// restart reads as a clean pass, and so does every group scheduled after it.</para>
+    ///
+    /// <para>Naming a group that is not served is itself a refusal: an exclusion from a sequence the group
+    /// was never in reads as a handled case and handles nothing.</para>
+    /// </summary>
+    public List<string>? BoundarySpanning { get; set; }
+
     public List<MirroredSignalDocument>? VectorTargets { get; set; }
 
     /// <summary><b>Null is a CLAIM</b> — "this block has no start gate" (D37) — never a blank.</summary>
@@ -192,7 +245,58 @@ public sealed class MirroredSignalDocument
     /// </summary>
     public string? ArmedBy { get; set; }
 
+    /// <summary>
+    /// 🔴 <b>HOW A CITED VALUE BECOMES THE INTEGER THIS MEMBER HOLDS — the field whose absence made 81 of
+    /// the deliverable's values unwritable.</b>
+    ///
+    /// <para>All 27 conformance vectors write symbolic decade names (<c>"RAISE_UNINTERRUPTED"</c>,
+    /// <c>"CLEARDOWN"</c>) into members the IR declares <c>Int</c>. The tables that resolve them are stated
+    /// in the coordinator's prose, so supplying one is a TRANSCRIPTION — <b>and the schema had nowhere to
+    /// put it</b>, so the values reached the range check as text and were refused by name.</para>
+    ///
+    /// <para><b>Two entries may share a <c>specName</c> and carry DIFFERENT encodings over the same cited
+    /// value.</b> That is the whole of the two-tag form: one set-B field, two IR members, read twice under
+    /// two stated rules. Nothing special-cases it.</para>
+    ///
+    /// <para>Absent means the cited text IS the value, which is right for every plain duration.</para>
+    /// </summary>
+    public ValueEncodingDocument? Encoding { get; set; }
+
     /// <summary>Unknown keys at signal level — where a misspelt <c>specName</c> would otherwise vanish.</summary>
     [JsonExtensionData]
     public Dictionary<string, object?>? UnknownFields { get; set; }
+}
+
+/// <summary>
+/// One value encoding, on the wire. See <c>Harness.Map.ValueEncoding</c> for the semantics; this type is
+/// only its JSON shape.
+/// </summary>
+public sealed class ValueEncodingDocument
+{
+    /// <summary>Cited text → the integer written. Compared ordinally, after trimming.</summary>
+    public Dictionary<string, long>? Values { get; set; }
+
+    /// <summary>What to do with a cited integer the table does not name. <c>Refuse</c> is the zero value.</summary>
+    public NumericFallback WhenNumeric { get; set; } = NumericFallback.Refuse;
+
+    /// <summary>The fixed integer for <c>Literal</c>. Refused when absent there, and refused when present anywhere else.</summary>
+    public long? NumericLiteral { get; set; }
+
+    /// <summary>
+    /// 🔴 <b>The prose line this table transcribes. REQUIRED — an encoding without one refuses.</b>
+    ///
+    /// <para>Held as a mapped field rather than as an <c>_</c>-prefixed annotation on purpose: an
+    /// annotation is not read by anything, so a citation kept there is a convention somebody eventually
+    /// drops. Here, dropping it makes the encoding fail loudly instead — which is the difference between
+    /// a transcription and a number somebody invented.</para>
+    /// </summary>
+    public string? Source { get; set; }
+
+    /// <summary>Unknown keys inside an encoding, folded into gate 0b like every other level.</summary>
+    [JsonExtensionData]
+    public Dictionary<string, object?>? UnknownFields { get; set; }
+
+    /// <summary>The domain form.</summary>
+    public ValueEncoding ToEncoding() =>
+        new(Values ?? new Dictionary<string, long>(StringComparer.Ordinal), WhenNumeric, NumericLiteral, Source);
 }

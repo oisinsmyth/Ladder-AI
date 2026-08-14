@@ -40,12 +40,43 @@ public static class MirrorValueFit
     /// <param name="signal">The signal's name, so a refusal points at something the author can find.</param>
     /// <param name="type">The declared element type. An unsupported one refuses rather than defaulting.</param>
     /// <param name="text">The value as the vector wrote it.</param>
-    public static MirrorFitResult Check(string signal, MirrorValueType type, string? text)
+    public static MirrorFitResult Check(string signal, MirrorValueType type, string? text) =>
+        Check(signal, type, text, encoding: null);
+
+    /// <summary>
+    /// 🔴 <b>Parse, ENCODE, and range-check one value — the one place a cited value becomes a number.</b>
+    ///
+    /// <para><b>The encoding runs FIRST and its output is then held to exactly the same width rule.</b>
+    /// That ordering is the point: an encoding decides <i>what integer this member holds</i>, and the
+    /// element decides <i>whether that integer survives the register</i>. Collapsing them would let a
+    /// table smuggle a value past the width refusal, which is the one refusal measured to be load-bearing
+    /// on this deliverable.</para>
+    ///
+    /// <para><b>A null encoding is not "encode as identity by a rule nobody wrote"</b> — it is the absence
+    /// of an encoding, and the cited text is then required to BE the value. A symbolic value meeting that
+    /// is refused with the ordinary "is not an integer" sentence, which is what happened to 54 of the
+    /// deliverable's values before this existed.</para>
+    /// </summary>
+    public static MirrorFitResult Check(string signal, MirrorValueType type, string? text, ValueEncoding? encoding)
     {
         var name = string.IsNullOrWhiteSpace(signal) ? "<unnamed signal>" : signal;
         var raw = (text ?? string.Empty).Trim();
 
         var element = MirrorElements.For(type);
+
+        if (encoding is not null && element is not null)
+        {
+            var encoded = encoding.Encode(name, raw);
+
+            if (!encoded.Encoded)
+                return new MirrorFitResult(false, 0, encoded.Refusal);
+
+            // The ENCODED number, re-entered through the ordinary path so it meets the same width rule and
+            // the same refusal sentence. Rendered back to text rather than short-circuited, because a
+            // second range check written beside this one is how the two come to disagree.
+            raw = encoded.Value.ToString(CultureInfo.InvariantCulture);
+            text = raw;
+        }
         if (element is null)
         {
             return new MirrorFitResult(false, 0,
@@ -118,7 +149,13 @@ public static class MirrorValueFit
     /// to remove. The tag is used only where the binding stated no spec name at all, which is a weaker
     /// join and is already reported as such on the observation side.</para>
     /// </summary>
-    private static string JoinKey(MirroredSignal signal) => signal.CitableName ?? signal.Tag;
+    /// <remarks>
+    /// 🔴 <b>MOVED ONTO <see cref="MirroredSignal.JoinKey"/> — this was the SECOND of two independent
+    /// derivations of one rule, and the OTHER one was never fixed.</b> <c>LoopRun.ToWireVector</c> kept
+    /// looking its inputs up by <c>Tag</c> long after this was corrected, so on the deliverable this class
+    /// checked ten values that the writer then failed to write at all. One definition, used by both.
+    /// </remarks>
+    private static string JoinKey(MirroredSignal signal) => signal.JoinKey;
 
     /// <summary>
     /// Every value in a binding's inputs, checked — <b>and every input the binding consumes under no name
@@ -166,7 +203,7 @@ public static class MirrorValueFit
             if (!values.TryGetValue(key, out var text))
                 continue;
 
-            var result = Check(key, signal.Type, text);
+            var result = Check(key, signal.Type, text, signal.Encoding);
             if (!result.Fits)
                 refusals.Add(result.Refusal!);
         }

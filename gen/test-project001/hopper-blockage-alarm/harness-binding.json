@@ -5,12 +5,17 @@
   "_note3": "UNBOUND and recorded under `_unbound` rather than resolved. A transcription that resolves an",
   "_note4": "ambiguity has silently become an authorship, and the coordinator's authority over this mapping is",
   "_note5": "the entire point of the document.",
-  "_note6": "Transcribed 2026-08-14 by the harness lane. 18 signal entries bound (10 command, 8 published)",
-  "_note6b": "plus 4 latch provenances (md:111). FIVE things left UNBOUND - see _unbound.",
-  "_note7": "SLOT STRUCTURE IS ITSELF UNBOUND - see _unbound.slotPartition. Sections 2 and 3 are FLAT tables",
-  "_note8": "with no slot column, so the prose states no partition of signals across slots. One slot carries",
-  "_note9": "them all. `SLOT-HBA-ALL` is the ONLY invented token in this file and it is flagged: it does not",
-  "_note10": "appear in the prose, and gate 5 flattens slots so it does not affect that gate's answer.",
+  "_note6": "Transcribed 2026-08-14 by the harness lane. 20 signal entries bound (12 command, 8 published)",
+  "_note6b": "plus 5 latch provenances (md:111 and the ScenarioDone latch, O-2). ONE thing left UNBOUND - see _unbound.",
+  "_note7": "SLOT STRUCTURE: RESOLVED 2026-08-14 by the coordinator's rulings O-2 and O-3, and NOT by this file.",
+  "_note8": "Sections 2 and 3 are FLAT tables with no slot column, and md:173-186 says the six ids are one slot's",
+  "_note9": "SERIAL PHASES. That is now SAID rather than flattened silently: `serves` carries the six specification",
+  "_note10": "ids, `servesRunInOrder` claims the stated order, and `boundarySpanning` names the one group that does",
+  "_note10b": "NOT run inline. `SLOT-HBA-ALL` remains the ONLY invented token in this file: it does not appear in the",
+  "_note10c": "prose, it is now purely an internal key (the tag fragment and a map-hash input), and no vector cites it.",
+  "_note10d": "🔴 CONSEQUENCE, MEASURED: the copy layer generated from this file is 35 registers - vector band 21, not",
+  "_note10e": "18 - because md:57's ONE set-B field now binds TWO IR members. The three registers the deployed mirror",
+  "_note10f": "carried and this file did not are exactly .Stim.ResetMode (Int, 1) + .Stim.ResetAt (Time, 2).",
   "blockName": "FC_HarnessCopyLayer",
   "blockNumber": 9001,
   "tagTableName": "HarnessMirror",
@@ -21,18 +26,87 @@
       "slotId": "SLOT-HBA-ALL",
       "_note": "startCondition from md:59 - `startBool (per slot)` -> `.Stim.Start`.",
       "startCondition": "iDB_HopperBlockageStim.Stim.Start",
+      "_serves": "THE MANY-TO-ONE MAP. md:173-186 - the six ids are ONE SLOT'S SERIAL PHASES, not six slots: md:179-181 states all six drive the SAME instance, the SAME DB_Input.Test members and the SAME DB_Controls.FaultReset. The ids themselves are taken from the submission's own `slot` fields, which is the authority for its own ids. It needs no partition, which is part of why it is right: every served id addresses the same vector band, the same result band and the same start bool.",
+      "serves": [
+        "SLOT-HBA-RAISE",
+        "SLOT-HBA-CLEAR",
+        "SLOT-HBA-LATCH",
+        "SLOT-HBA-RESET",
+        "SLOT-HBA-PAIR",
+        "SLOT-HBA-STARTUP"
+      ],
+      "_servesRunInOrder": "THE GROUP ORDER IS THE COORDINATOR'S SENTENCE AND NOT THIS FILE'S. Stated by ruling O-3, 2026-08-14: the five ORDINARY groups run RAISE, CLEAR, LATCH, RESET, PAIR - true document order, verified against conformance-vectors-b.json (first appearance: RAISE VB-HBA-001, CLEAR VB-HBA-005, LATCH VB-HBA-011, RESET VB-HBA-013, PAIR VB-HBA-024). Needed because the submission carries NO total order of its own: MEASURED, every group restarts `index` at 0, so 27 vectors carry only six distinct index values, and a merge without a major key gives one vector per group reading Results[0] while 21 of 27 packages carry another vector's run.",
+      "servesRunInOrder": true,
+      "_boundarySpanning": "🔴 SLOT-HBA-STARTUP IS NOT IN THAT SEQUENCE, AND ITS POSITION IN `serves` ABOVE IS NOT READ. Ruling O-3, 2026-08-14, from the vectors' OWN fields rather than from a decision handed down: VB-HBA-019.._scenario reads `STARTUP - RIDES AN ALREADY-SCHEDULED DISRUPTIVE BOUNDARY (X-F) ... The boundary stops and restarts the CPU`, and its _observability reads `THE HARNESS IS DISCONNECTED ACROSS THE DOWNLOAD (D18) and nobody is polling while the first scan happens`. Those five vectors REQUIRE a CPU restart inside them. Run inline they would execute with no restart, and PAIR would then run after a restart nobody sequenced, against a freshly cleared accumulator and a reconnected harness - a confident wrong answer that reads as a clean pass. A run carrying them is refused BY NAME (LoopOutcome.NotSchedulable). EXPLICITLY UNRUNNABLE BEATS IMPLICITLY MIS-RUN.",
+      "boundarySpanning": [
+        "SLOT-HBA-STARTUP"
+      ],
+      "_vectorTargetOrder": "REGISTER ORDER IS TRANSCRIBED FROM THE COMMITTED IR, NOT CHOSEN. `ir/test-project001/FC_HarnessCopyLayer.ir` lines 19-32 put ResetMode THIRD (V002) and ResetAt LAST (V019); md's own table (md:47-57) lists ResetAtMs last and states no order for the split. The width is 21 registers either way, so this changes no total - it keeps the generated tag table the same shape as the one on disk.",
       "vectorTargets": [
         {
           "tag": "iDB_HopperBlockageStim.Stim.Profile",
           "specName": "HBA_Stim.Profile",
           "type": "Int",
-          "_note": "md:47"
+          "_note": "md:47. The encoding below is the decade table at md:132-143, transcribed - all 22 profiles, and all 22 are cited by the 27 vectors.",
+          "encoding": {
+            "source": "md:132-143",
+            "whenNumeric": "Refuse",
+            "values": {
+              "RAISE_UNINTERRUPTED": 10,
+              "RESET_CONDITION_HOLDS_RUNNING": 11,
+              "RESET_HELD_ON": 12,
+              "RESET_AT_THE_CROSSING": 13,
+              "STARTUP_NO_ALARM_LATCHED": 14,
+              "STARTUP_RESET_ON_BLOCKED_HOPPER": 16,
+              "STARTUP_RESET_THEN_REARM": 17,
+              "HIGH_AT_STANDSTILL": 20,
+              "DEBOUNCED_CLEAR_BELOW_THRESHOLD": 30,
+              "CHATTER_BELOW_FILTER": 31,
+              "REARM_RUNNING": 32,
+              "CHATTER_NEAR_THRESHOLD": 33,
+              "LATCH_HOLDS": 34,
+              "HOPPER_CLEARS_WHILE_LATCHED": 35,
+              "RESET_CONDITION_CLEARED": 36,
+              "PAIR_ALARM_HIGH": 37,
+              "PAIR_ALARM_LOW": 38,
+              "PAUSE_AND_RESUME": 40,
+              "STOP_THEN_RESET": 41,
+              "DISCARD_BEATS_FREEZE": 50,
+              "FREEZE_BELOW_FILTER": 51,
+              "STARTUP_ALARM_LATCHED": 60
+            }
+          }
         },
         {
           "tag": "iDB_HopperBlockageStim.Stim.Precondition",
           "specName": "HBA_Stim.Precondition",
           "type": "Int",
-          "_note": "md:48"
+          "_note": "md:48. Encoding transcribed from md:121.",
+          "encoding": {
+            "source": "md:121",
+            "whenNumeric": "Refuse",
+            "values": {
+              "CLEARDOWN": 0,
+              "CLEARDOWN_BEFORE_BOUNDARY": 1
+            }
+          }
+        },
+        {
+          "_note": "🔴 THE FIRST HALF OF THE TWO-TAG FORM. md:57 maps ONE set-B field, `HBA_Stim.ResetAtMs`, to TWO IR members, and until 2026-08-14 the schema was one tag per specName - so the entry was honestly recorded as UNBOUND and the register was never written, leaving ResetMode at 0, which md:127 defines as `never reset`: a valid scenario, and not the one any of the 27 vectors asked for. TWO ENTRIES MAY NOW SHARE A specName, each reading the same cited value under its own stated rule. Position transcribed from FC_HarnessCopyLayer.ir:21.",
+          "tag": "iDB_HopperBlockageStim.Stim.ResetMode",
+          "specName": "HBA_Stim.ResetAtMs",
+          "type": "Int",
+          "encoding": {
+            "source": "md:123-130",
+            "_note": "md:127 `-1` -> 0 (never); md:129 `HOLD` -> 2 (held true, no edge inside the scenario); md:130 `COINCIDENT_WITH_THRESHOLD` -> 3 (one pulse at ModelThreshold); md:128 `a number, e.g. 90000` -> 1 (one pulse) - the NUMBER is carried by the other member, and this one holds the CLASSIFICATION, which is what `whenNumeric: Literal` says.",
+            "whenNumeric": "Literal",
+            "numericLiteral": 1,
+            "values": {
+              "-1": 0,
+              "HOLD": 2,
+              "COINCIDENT_WITH_THRESHOLD": 3
+            }
+          }
         },
         {
           "tag": "iDB_HopperBlockageStim.Stim.P1",
@@ -81,32 +155,50 @@
           "specName": "HBA_Stim.EndMs",
           "type": "Time",
           "_src": "md:56, and md:61 for why End became EndAt"
+        },
+        {
+          "_note": "🔴 THE SECOND HALF OF THE TWO-TAG FORM - same specName as the ResetMode entry above, different member, different rule. Position transcribed from FC_HarnessCopyLayer.ir:32 (V019, the last vector register).",
+          "tag": "iDB_HopperBlockageStim.Stim.ResetAt",
+          "specName": "HBA_Stim.ResetAtMs",
+          "type": "Time",
+          "encoding": {
+            "source": "md:123-130",
+            "_note": "md:128 - a number is `that duration`, so the number is written as itself. The three SENTINELS are recorded as 0 and NOT as the durations they are not: md:127, md:129 and md:130 all read `ignored` for this member, so its value is never read by the model in those modes. ⚠️ ZERO IS A CHOICE THE PROSE DOES NOT MAKE - `ignored` admits any value - and it is recorded here rather than left to the schema so that a reader meets it. It is safe only because ResetMode carries the mode; if that binding ever changed, this would stop being arbitrary.",
+            "whenNumeric": "Passthrough",
+            "values": {
+              "-1": 0,
+              "HOLD": 0,
+              "COINCIDENT_WITH_THRESHOLD": 0
+            }
+          }
         }
       ],
+      "_resultSourceOrder": "🔴 ORDER CORRECTED 2026-08-14, AND THE DIVERGENCE IT CLOSES WAS SILENT. This list was in md:73-80 order (Armed, ScenarioDone, Alarm, StopReq); the DEPLOYED layer is in the order below (Alarm, StopReq, Armed, ScenarioDone) - `ir/test-project001/FC_HarnessCopyLayer.ir:41-44` and `wire-prediction.md` section 1, registers 27/28/29/30. MEASURED by generating from this file and diffing against the committed IR: the tag TABLE came out identical, and the copy layer's result network had four signals in two different orders. Since the binding drives BOTH the emitted rungs AND the result decode (`SlotBinding.ResultRegisterOf`), the md order was internally consistent and would simply have moved four signals to different registers at the next deploy, with nothing to flag it - a re-deploy is exactly when a client mirror written against the old map goes quietly wrong. md's table is a NAME mapping and states no register order, so this is a transcription of the artifact, not a choice between two claims. The four violation latches were already in the deployed order (md:77-80 = registers 31-34) and are unmoved.",
       "resultSources": [
-        {
-          "tag": "iDB_HopperBlockageStim.Stim.Armed",
-          "specName": "HBA_Stim.Armed",
-          "type": "Bool",
-          "_src": "md:73"
-        },
-        {
-          "tag": "iDB_HopperBlockageStim.Stim.ScenarioDone",
-          "specName": "HBA_Scenario_Done",
-          "type": "Bool",
-          "_src": "md:74 - the completion signal of all 27 set-B vectors"
-        },
         {
           "tag": "iDB_HopperBlockageMonitor.IO.HopperBlockedAlarm",
           "specName": "HopperBlockedAlarm",
           "type": "Bool",
-          "_src": "md:75"
+          "_src": "md:75; register 27 per FC_HarnessCopyLayer.ir:41"
         },
         {
           "tag": "iDB_HopperBlockageMonitor.IO.HopperBlockStopReq",
           "specName": "HopperBlockedInhibit",
           "type": "Bool",
-          "_src": "md:76 - DIVERGENCE D1, NOT A RENAME (md:82-104). The spec name is bound to the tag the block ACTUALLY has so the BEHAVIOURAL assertions can be evaluated; D1 is reported by the independent static check and never by this run."
+          "_src": "md:76 - DIVERGENCE D1, NOT A RENAME (md:82-104). The spec name is bound to the tag the block ACTUALLY has so the BEHAVIOURAL assertions can be evaluated; D1 is reported by the independent static check and never by this run. Register 28 per FC_HarnessCopyLayer.ir:42."
+        },
+        {
+          "tag": "iDB_HopperBlockageStim.Stim.Armed",
+          "specName": "HBA_Stim.Armed",
+          "type": "Bool",
+          "_src": "md:73; register 29 per FC_HarnessCopyLayer.ir:43"
+        },
+        {
+          "tag": "iDB_HopperBlockageStim.Stim.ScenarioDone",
+          "specName": "HBA_Scenario_Done",
+          "type": "Bool",
+          "latchedBy": "FB_HopperBlockageStim",
+          "_src": "md:74 - the completion signal of all 27 set-B vectors. THE LATCH PROVENANCE WAS IN THE IR ALL ALONG: md:74 states the MODE (`latched`) and names no block, and `latchedBy` deliberately takes a BLOCK NAME because a name is provenance checkable against the deployed object set. Ruling O-2, 2026-08-14, verified against the artifact rather than assumed: `ir/test-project001/FB_HopperBlockageStim.ir:158` SCOIL Stim.ScenarioDone := Running AND NOT InCleardown AND ... AND ScenarioT >= Stim.EndAt, and `:162` RCOIL Stim.ScenarioDone := NOT Stim.Start AND NOT Running - a set coil, a reset coil, and cleared on a LEVEL rather than an edge. A whole-corpus search finds no other writer; the copy layer only READS it (FC_HarnessCopyLayer.ir:44). So nothing is owed here and nothing is generated: the latch already exists in the block, and this field says WHICH. Register 30 per FC_HarnessCopyLayer.ir:44."
         },
         {
           "tag": "iDB_HarnessViolationLatch.AlarmFellWithoutReset",
@@ -139,47 +231,41 @@
       ]
     }
   ],
-  "_unbound": {
-    "_note": "FOUR THINGS THE PROSE DOES NOT DETERMINE. Each is RECORDED, not resolved. Resolving any of",
-    "_note2": "them here would make this file an authorship, and the coordinator owns the mapping.",
+  "_resolved": {
+    "_note": "🔴 FOUR OF THE FIVE FORMERLY-UNBOUND ITEMS ARE NOW BOUND. They are moved HERE rather than left above",
+    "_note2": "with a correction under them: a stale claim with a retraction beneath it is still read top-down, and the",
+    "_note3": "half with an instruction in it is the half a reader acts on. NONE of them was resolved by this file's",
+    "_note4": "transcriber deciding - each names the authority that settled it.",
     "HBA_Stim.ResetAtMs": {
-      "prose": "md:57 - `HBA_Stim.ResetAtMs` -> `.Stim.ResetMode` AND `.Stim.ResetAt`; md:35-37 and md:123-130 give the split and its encoding table.",
-      "why": "ONE set-B field maps to TWO IR members, and a binding entry is one tag per specName. The prose states the VALUE encoding (-1 -> mode 0, a number -> mode 1 + that duration, HOLD -> 2, COINCIDENT_WITH_THRESHOLD -> 3) but does not say how a single cited name binds to two tags in the loadable form - whether as two entries sharing a specName, a compound name, or a transform the copy layer applies.",
-      "consequence": "All 27 set-B vectors supply `HBA_Stim.ResetAtMs` as an input. Any check joining vector INPUTS to the binding will report it unbound. Gate 5 reads resultSources only, so this does not affect its verdict.",
-      "_measured_2026-08-14": "*** THIS ENTRY IS WHERE THE DEPLOYED MIRROR'S THREE MISSING REGISTERS WENT, AND IT WAS NOT SILENT BY DESIGN - IT WAS SILENT BY DEFECT. *** (1) THE REGISTERS: the deployed mirror is 35 (`wire-prediction.md` section 1: `ResetMode` at register 8, `ResetAt` at register 25); this file as written generates 32. The difference is exactly `.Stim.ResetMode` (Int, 1 register) + `.Stim.ResetAt` (Time, 2 registers) = 3, which is this entry. So the committed binding is NOT the binding the deployed mirror was generated from: its vector band is 21 registers against this file's 18, every result register therefore sits 3 lower here, and the map hash differs (deployed `f50e6b44...`, this file `798afaf9...`). A run generated from this file would not confirm against the device. (2) THE SILENCE: until 2026-08-14 an input no target consumed was DROPPED WITHOUT A WORD - the wave builder walks the binding's TARGETS and looks each up in the vector's inputs, so `HBA_Stim.ResetAtMs` was never visited, the register stayed at zero, and `ResetMode` 0 is `never reset` in the md:123-130 table - A VALID SCENARIO, AND NOT THE ONE ANY OF THE 27 VECTORS ASKED FOR. It is now refused by name (`MirrorValueFit.CheckAll`). Nothing about the binding decision changed; what changed is that its absence is now loud."
+      "resolvedBy": "Ruling O-4, 2026-08-14: the two-tag form and the symbolic encoder approved, every value cited to its md: line, anything the tables do not state REFUSED rather than invented.",
+      "how": "TWO vectorTargets now share the specName `HBA_Stim.ResetAtMs` - `.Stim.ResetMode` (Int) and `.Stim.ResetAt` (Time) - each carrying its own `encoding` over the same cited value, both cited to md:123-130. Nothing special-cases 'two tags': the join key is the SPEC name and an encoding is per entry, so the capability falls out of both.",
+      "measured": "*** THE THREE REGISTERS ARE BACK. *** The vector band goes 18 -> 21 and the mirror 32 -> 35, which is exactly `.Stim.ResetMode` (Int, 1) + `.Stim.ResetAt` (Time, 2). Every result register moves up by 3 with it.",
+      "whatWasSilent": "Until 2026-08-14 an input no target consumed was DROPPED WITHOUT A WORD: the wave builder walks the binding's TARGETS and looks each up in the vector's inputs, so `HBA_Stim.ResetAtMs` was never visited, the register stayed at zero, and `ResetMode` 0 is `never reset` in the md:123-130 table - A VALID SCENARIO, AND NOT THE ONE ANY OF THE 27 VECTORS ASKED FOR. That orphan refusal (`MirrorValueFit.CheckAll`) is retained and still fires on an input no target claims."
     },
+    "slotPartition + startBoolPerSlot": {
+      "resolvedBy": "Ruling O-3, 2026-08-14, and the four authorities recorded in the slot's own `_serves` note. ONE QUESTION, NOT TWO - both were the slot partition, and the answer is that there is no partition to state.",
+      "how": "`serves` carries the six specification ids on ONE slot; `servesRunInOrder` claims the stated order for the five ordinary groups; `boundarySpanning` names SLOT-HBA-STARTUP, which does not run inline at all. The single `.Stim.Start` member stands: md:59 gives one member, md:173-186 makes the phases serial, and six start bools resolving to one member is the only reading the prose supports without inventing five more.",
+      "supersedes": "The earlier record of this entry predicted that `harness-run` would stop with `27 vector(s) name 6 slot(s) that no binding declares`. It did, it was the honest position, and it no longer applies: the bound set is now the CITABLE ids rather than the map's internal slot ids."
+    },
+    "HBA_Scenario_Done.latch": {
+      "resolvedBy": "Ruling O-2, 2026-08-14. `latchedBy` takes a BLOCK NAME because a name is provenance checkable against the deployed object set, and the prose (md:74) states only the MODE. The provenance was in the IR all along.",
+      "how": "`latchedBy: FB_HopperBlockageStim`, cited on the resultSource itself to FB_HopperBlockageStim.ir:158 (SCOIL) and :162 (RCOIL). Verified against the artifact, and a whole-corpus search finds no other writer.",
+      "consequence": "Nothing is generated for it: the latch exists in the block under test, and the copy layer only reads the member. A `Latched` expectation on it is now admissible on provenance rather than refused."
+    }
+  },
+  "_unbound": {
+    "_note": "ONE THING THE PROSE DOES NOT DETERMINE, and it is an INTENDED absence rather than a gap. Recorded,",
+    "_note2": "not resolved: resolving it here would make this file an authorship, and the coordinator owns the mapping.",
     "iDB_HopperBlockageStim.Stim.ModelThreshold": {
       "prose": "md:58 and md:64-67 - `(no set B name)`, `Time`, set in the instance DB at T#60S.",
       "why": "The prose states DELIBERATELY that this member has no set-B name, and gives the reason: read from the block under test it would stop being a stimulus decision and become a reading of the thing being tested. A specName invented here would undo that.",
       "consequence": "Correctly absent from the map. This is an intended absence, not a gap."
-    },
-    "slotPartition": {
-      "prose": "md:41-59 and md:69-80 are FLAT tables with no slot column. md:175 names six start bools (HBA_Start_Raise, _Clear, _Latch, _Reset, _Startup, _Pair); set B declares six slot ids (SLOT-HBA-RAISE/CLEAR/LATCH/RESET/STARTUP/PAIR).",
-      "why": "The prose never says which slot carries which signal, nor which start bool belongs to which slot id. md:179-181 states all six drive the SAME instance and the SAME members, which is consistent with sharing - but 'consistent with' is not 'stated as'.",
-      "consequence": "One slot carries every signal. Gate 5 flattens slots, so its verdict is unaffected; a copy-layer GENERATION from this file would need the partition stated.",
-      "_measured_2026-08-14": "*** THE PARTITION IS STILL UNRESOLVED AND IS STILL NOT RESOLVED HERE. What changed is that the CONSEQUENCES are now measured rather than predicted. *** Four facts, from running `harness-run --generate-only` against this file and against scratch variants of it - none of them a binding decision, and none of them taken:",
-      "_measured1": "(a) THIS FILE NOW GENERATES A COPY LAYER; IT DID NOT BEFORE, AT ANY SLOT COUNT. `SLOT-HBA-ALL` was refused outright - `slot id 'SLOT-HBA-ALL' is not a plain identifier, and it is part of every generated tag name` - because the generator required the slot id to be legal inside a PLC tag name. The id is also the only join to a vector's `slot` field, and set B's ids carry hyphens too, so the requirement was unsatisfiable from both ends. The generator now keeps the id as the key and transliterates it for the tag fragment (`HX_SLOT_HBA_ALL_Start`), reporting the derivation per slot. No id in this file changed.",
-      "_measured2": "(b) SIX SLOTS AS THE PROSE DESCRIBES THEM ARE NOW REFUSED BY NAME, AND WERE PREVIOUSLY EMITTED SILENTLY. md:179-181 says all six drive the SAME instance and the SAME members. A copy layer for six such slots emits six writers of every stimulus member and six writers of `.Stim.Start`; rungs run in order every scan, so the LAST slot owns the block and the other five drive nothing - measured on a two-slot equivalent, which compiled, deployed and returned a package per slot. The generator now refuses it, naming all eleven shared destinations and the two routes md:187-189 already gives: six instances (a project-shape decision), or ONE slot per wave set run in sequence.",
-      "_measured3": "(c) SHARING THE OBSERVATIONS IS FINE AND IS ADMITTED. The eight `resultSources` here are READ by the copy layer, and each slot writes them into its own register band, so any number of slots may observe them. That is now counted and reported rather than silently absorbed. The write direction is the only one that collides.",
-      "_measured4": "(d) WIDTH, MEASURED FROM THE EMITTED LAYER RATHER THAN FROM THE DESIGN. This file as committed: 32 registers (control 6, vectors 18, results 8, 0 latches). With the two block outputs declared transient+rearming, as set B's map._capabilityRequest asks: 34 (results 10, 2 latches). Six slots each driving their own stimulus instance: 162 (vectors 108, results 48); with the same two latches per slot, 174. *** THE DEPLOYED MIRROR IS 35 REGISTERS AND THE AREA POINTER IS `P#M1000.0 WORD 35`, SO THE SIX-SLOT FORMS ARE 4.6x AND 5x THE POINTER AND WOULD CHANGE THE DEPLOY. *** One slot fits either way.",
-      "_stillOwedFromTheCoordinator": "The partition itself. The prose states no slot column, and nothing above supplies one. Until it is stated, `harness-run` stops before deploying with `27 vector(s) name 6 slot(s) that no binding declares` - which is the honest position and costs nothing."
-    },
-    "HBA_Scenario_Done.latch": {
-      "prose": "md:74 - the row reads `latched`, and names no latching block.",
-      "why": "`latchedBy` deliberately takes a BLOCK NAME and not a boolean: `latched: true` would be a caller asserting the answer, where a block name is PROVENANCE checkable against the deployed object set. The prose states the MODE and not the PROVENANCE, so the schema requires something the document does not say. Naming a block here would be an authorship.",
-      "consequence": "ScenarioDone is instrumented Sampled in the derived map. It is every set-B vector's completionSignal rather than an expectation, so gate 5 does not refuse on it - but a Latched expectation on it would be refused."
-    },
-    "startBoolPerSlot": {
-      "prose": "md:59 - `startBool (per slot)` -> `.Stim.Start`, ONE member.",
-      "why": "Set B declares six DISTINCT start-bool names and the prose gives one IR member. Whether all six resolve to that member (coherent, since md:173-186 says the slots are STRICTLY SERIAL) or whether six members are intended is not stated.",
-      "consequence": "The single slot above carries the single member, which is the only reading the prose supports without inventing five more."
     }
   },
   "_notTranscribed": {
     "_note": "Sections of the prose that carry no binding entry, listed so their absence is visible.",
     "section1": "md:19-38 - why a mapping is needed. Rationale; the struck C-001 claim (md:25-32) is a correction, not a binding.",
-    "section4": "md:119-147 - value encodings and the Profile decade table. These are VALUE semantics, not name bindings; the binding schema carries no encoding field.",
-    "section4_measured_2026-08-14": "*** THIS ABSENCE IS NOW MEASURED AS BLOCKING, AND IT IS A FOURTH THING - NOT THE SLOT PARTITION. *** The vectors write the SYMBOLIC names: `HBA_Stim.Profile` = `RAISE_UNINTERRUPTED`, `HBA_Stim.Precondition` = `CLEARDOWN`. The IR members are `Int`. With no encoding field there is no encoder, so those values reach a range check as text and are refused: `its value 'RAISE_UNINTERRUPTED' is not an integer`. Run against this file with the vectors re-slotted (a scratch copy, so the run gets past the slot join), the loop reports 81 findings - 27 Profile + 27 Precondition + 27 ResetAtMs-orphan - and NONE of them is a width overflow. *** ALL 81 WERE SILENT BEFORE 2026-08-14: *** the width gate joined on the block TAG while every vector keys its inputs by the SPEC name, so it examined none of them. The tables that resolve this are STATED in the prose (md:121, md:123-130, md:132-143), so supplying them is a TRANSCRIPTION and not an authorship - but the binding SCHEMA has nowhere to put them, which is a tooling question of the same kind `_review.ResetAtMs` already records.",
+    "section4_NOW_TRANSCRIBED_2026-08-14": "✅ md:119-147 - value encodings and the Profile decade table. NO LONGER AN ABSENCE: the schema gained an `encoding` field, and md:121, md:123-130 and md:132-143 are transcribed onto the four members that need them, each citing its own line. This entry previously read that the schema carried no encoding field and that 81 findings followed - 27 Profile + 27 Precondition + 27 ResetAtMs-orphan, none of them a width overflow. That is history now, and it is left here as the reason the field exists rather than deleted: the values reached the range check as TEXT and were refused by name, which is what a missing encoder looks like when it is behaving well. What remains NOT transcribed from section 4 is md:145-147 - the segment-boundary and hopper/plant-running arithmetic, which is the stimulus MODEL's behaviour and is implemented in FB_HopperBlockageStim, not a name binding.",
     "section5": "md:151-169 - register width and the uncalibrated word order. A property of the mirror, carried by `type` on each entry (ten Time entries above are 32-bit).",
     "section6": "md:173-189 - six slots are strictly serial. A WAVE-SET width statement (slotsInWaveSet: 1) belonging to the submission, not to this binding."
   },
@@ -189,13 +275,11 @@
     "_note3": "transcriber, NOT that it be a particular person. Reviewing it was mine to do.",
     "method": "Spot-checked all 8 resultSources against the cited prose lines md:73-80 directly, rather than against the transcriber's notes about them. All 8 bind verbatim, INCLUDING the D1 row, where specName 'HopperBlockedInhibit' binds to 'HopperBlockStopReq' - the tag the block ACTUALLY has - which is correct per the prose's explicit 'DIVERGENCE D1, NOT A RENAME' and the coordinator's 2026-08-14 ruling. Binding the spec name to the real tag is what lets the BEHAVIOURAL assertions run; D1 is reported separately by the independent check, not laundered here.",
     "verdict": "FAITHFUL on the half gate 5 reads. Committed on that basis.",
-    "unbound_triage": "THE FIVE UNBOUND ITEMS ARE NOT FIVE OPEN QUESTIONS. Reviewed individually:",
+    "unbound_triage": "FOUR OF THE FIVE ARE NOW BOUND - see `_resolved`, which names the authority for each. ONE remains, and it is an intended absence:",
     "ModelThreshold": "NOT A GAP - an INTENDED absence. The prose states deliberately that it has no set-B name, with its reason: read from the block under test it stops being a stimulus decision and becomes a reading of the thing being tested. Inventing a specName would undo that. Close it as intentional.",
-    "HBA_Scenario_Done.latch": "NOT A GAP IN THE TRANSCRIPTION - the SCHEMA demands provenance the SOURCE does not carry. 'latchedBy' takes a block NAME (checkable against the deployed object set) and the prose states only the MODE ('latched'). The fix belongs in the coordinator's prose, not here. Leaving it unbound is correct.",
-    "slotPartition + startBoolPerSlot": "ONE QUESTION, NOT TWO - both are the slot partition. And the prose supports exactly ONE reading without invention: md:179-181 says all six drive the SAME instance and SAME members, md:173-186 says the slots are STRICTLY SERIAL. The single-slot flattening is therefore the only reading available, and 'SLOT-HBA-ALL' is correctly flagged as the one invented token.",
-    "ResetAtMs": "A SCHEMA QUESTION, NOT AN AUTHORITY QUESTION. The coordinator's INTENT is fully stated (the encoding table at md:35-37 / md:123-130). What is missing is how one specName binds to two tags in the loadable form - a property of the binding FORMAT, answerable by whoever defines the schema. It is an INPUT, and gate 5 reads resultSources only, so it does not affect the verdict.",
-    "residual": "SO: 5 unbound -> ONE genuine coordinator question (state the slot partition explicitly, even if the answer is 'one slot') + ONE tooling question (does the schema admit a multi-tag entry?). NEITHER blocks gate 5.",
-    "_warning": "IF A COPY LAYER IS EVER GENERATED FROM THIS FILE, THE SLOT PARTITION MUST BE STATED FIRST. Gate 5 flattens slots so its verdict is unaffected, but generation is not gate 5.",
-    "_warningStatus_2026-08-14": "*** STILL TRUE, AND HALF OF IT IS NOW MECHANICAL. *** ENFORCED: six slots sharing one stimulus are refused BY NAME by the copy-layer generator, instead of emitting a layer whose last slot silently owns the block. NOT YET ENFORCED, AND SAY SO PLAINLY: a vector naming a slot no binding declares still passes generation and is only caught in the WAVE - after the download and after the version confirm (measured, gateway recording one deployment and one open transport). The decision procedure is `Harness.Results.SlotJoin`, committed and tested; its CALL SITE in `Harness.Loop` belongs to another lane and was handed over rather than committed across a fence. THAT LANE HAS SINCE WIRED IT: measured 2026-08-14, `harness-run --generate-only` against this file and set B stops at `NOT GENERATED: NotBound` with `27 vector(s) name 6 slot(s) that no binding declares`, before anything is generated or deployed. See `_unbound.slotPartition._measured_2026-08-14` for the four measured consequences and the widths."
+    "residual": "SO: 1 unbound, deliberately, and it does not block anything. The two questions this review recorded are both answered - the coordinator stated the slot structure (O-3) and the schema now admits a multi-tag entry (O-4).",
+    "_warningStatus_2026-08-14b": "🔴 THE OLD WARNING - `IF A COPY LAYER IS EVER GENERATED FROM THIS FILE, THE SLOT PARTITION MUST BE STATED FIRST` - IS DISCHARGED AND IS DELETED RATHER THAN LEFT WITH A CORRECTION UNDER IT, because a stale instruction outranks a fresh statement: it is the half with a command in it. The partition IS now stated, and both halves of the join are mechanical: six slots sharing one stimulus are refused BY NAME by the copy-layer generator (rather than emitting a layer whose last slot silently owns the block), and a vector naming a slot no binding declares is refused by `SlotJoin` ABOVE the gate, before anything is generated or deployed.",
+    "_whatIsNowEnforcedThatWasNot": "(a) An input NO BOUND TARGET CONSUMES is refused by name - it used to be dropped in silence, leaving the register at zero. (b) A cited value the encoding tables do not name is refused by name rather than given an invented code. (c) A many-to-one slot with no stated group order is refused - `index` alone is not a position, and a merge without a major key gives 21 of 27 packages another vector's run. (d) A BOUNDARY-SPANNING group is refused from an inline wave: SLOT-HBA-STARTUP's own vectors say the boundary stops and restarts the CPU and that the harness is disconnected across the download, so running them inline would be a confident wrong answer that reads as a clean pass.",
+    "_whatThisFileStillCannotSay": "The program's RETENTIVE %M EXTENT. `MirrorGeometry` gives it no default deliberately - it is a property of the program, not of the CPU - and `harness-run` supplies 256 when the binding is silent. That number is an input to the MAP HASH and therefore to the BUILD STAMP, so the identity of a generated build rests on a value nobody has measured. It is printed on every generate-only run, labelled DEFAULTED, rather than refused: no party in this loop can measure it, and a gate nobody can satisfy blocks its own recovery path."
   }
 }
