@@ -3161,6 +3161,98 @@ removed. Worse, **the confinement mutation left the entire suite green**: the ex
 floor 9000, where a 512-wide walk ends at 9511 and never leaves the band. Both are now asserted over
 the **candidate set**, from a floor high enough that the walk must cross or stop.
 
+## `interface-check` — the static comparison D6's green rests on (2026-08-14, NB-30)
+
+```
+converter interface-check --project <ir-dir> --block <name> (--requires <n1,n2,...> | --requires-file <path>) [--json]
+```
+
+*** YOU DO NOT NEED TO DRIVE A BLOCK TO DISCOVER IT LACKS AN OUTPUT THE SPEC NAMES. *** D1 — a
+response signal the enumeration names and the block does not provide — rode inside a *relational*
+conformance assertion for a week, and a relational assertion is **structurally blind to any error its
+two operands share**. A misbound operand is exactly such an error. The comparison that finds it is a
+**two-name set difference** over the block's interface, answerable before a scan elapses, and
+**nothing in the system made it**.
+
+Measured on the real artifacts, through the Release binary:
+
+```
+EXAMINED: 25 interface member name(s) - INPUT 0, OUTPUT 0, INOUT 0, STATIC 25, CONSTANT 0
+  PRESENT HopperBlockedAlarm  @ STATIC/IO/HopperBlockedAlarm
+  MISSING HopperBlockedInhibit
+*** FAIL AGAINST THE BLOCK: 1 of 2 required response signal(s) are absent ***
+```
+
+### 🔴 Exit 1 is a FAIL AGAINST THE BLOCK, and that is the point of the subcommand
+
+Every other outcome in this pipeline blames the **submission** — a `REFUSED` means *fix the vector*.
+A missing response signal is a fail against the **block**, and the submission is correct. Reusing a
+submission-blaming outcome here would send an author to edit the artifact that is right. The finding
+also says outright **not to close it by renaming in the block** — that closes the finding and
+destroys it as evidence.
+
+`0` all present · `1` **the block does not carry a required signal** · `2` NOT CHECKED.
+
+### The two wrong implementations were predicted before the build, and are pinned by tests
+
+On this corpus's house style (C-132) an FB's `INPUT` and `OUTPUT` sections are **both empty** and the
+whole caller interface is one STATIC member of a UDT — the measured line above says so.
+
+1. **Reading INPUT/OUTPUT only** reports *both* signals missing, including the one that exists. *A
+   gate that accuses correct work of the most serious offence in the project is one that gets
+   disbelieved, and the day it is right nobody looks.*
+2. **Matching comments** finds the word *"inhibit"* in the block's own comment and **passes the
+   defect**. So: member names only — never a comment, never a network title.
+
+Both are asserted, and both assert their own **premise** first (that the sections really are empty,
+that the word really is in the text), so neither test can quietly stop being about anything.
+
+### Where it declines to judge — three verdicts, not two
+
+- A **dotted path** is `NotAMemberName`, not a fail: the same member is reachable by different paths
+  from different callers, so a path makes the answer depend on who is asking. The leaf name is named
+  in the refusal.
+- A **case-only difference is PRESENT** (TIA identifiers are case-insensitive) **with the block's own
+  spelling reported** — two artifacts spelling one member differently is how a name drifts.
+- A member whose **type could not be opened** withdraws any MISSING into NOT CHECKED, naming it. A
+  MISSING is the positive claim that a block does not carry a name, and that is sound only over a
+  **complete** member set. PRESENT survives a partial walk; only the negative half is withdrawn —
+  the same asymmetry `reachable-state` chooses on a partial corpus.
+- **TEMP is excluded by name and COUNTED ON EVERY RUN, including zero.** A temp cannot be observed
+  from outside the block. A requirement found *only* in TEMP is MISSING **and says so**, rather than
+  reading as absent for no stated reason.
+
+`--requires-file` reads a plain name list **or an assertion-enumeration YAML directly** (its
+`response_signal:` values), and **reports which form it read with a count**. That second form is the
+one with a producer: a hand-typed required set is the same self-referential check this exists to
+break — *ask of any rule: who computes its inputs?*
+
+The report carries the block's **`ir-hash`** as the stamp it was established against, so a consumer
+holds the stamp rather than a bool and *"nobody ran it"* stays distinct from *"ran it against a
+different version of the block"*.
+
+### Testing — 22 tests, mutated five ways, and the fifth mutation found a missing test
+
+Both whole-corpus sweeps run against `ir/test-project001` with **closed denominators**
+(`swept + skipped == blocks`), because *a gate that refuses everything passes every test that only
+checks refusals*: 18 blocks, 12 with an interface — every one accepts its own members, every one
+reports an impossible name as a fail.
+
+| mutation | result |
+|---|---|
+| STATIC dropped (wrong implementation 1) | **16 red** |
+| always MISSING | **7 red** |
+| always PRESENT | **8 red** |
+| TEMP included in the walk | **1 red** |
+| **cross-file UDT descent disabled** | 🔴 **0 red — every test stayed green** |
+
+*** THE LAST ONE IS THE FINDING. *** Every UDT-typed interface member in the committed corpus carries
+its members **inlined** in the block's own IR, so `TryGetUdt` never ran and the branch was a note
+about a branch. Two tests were added: one fixture with a non-inlined member that **exercises** it
+(the mutation now goes red), and one that **asserts the absence** — every corpus member is inlined
+*today*, so the day a real non-inlined one appears, that test fails and demands the resolution be
+re-checked against real data instead of a hand-written fixture.
+
 ## Rules (docs/05-architecture.md, 04 §8/§10)
 
 - Unknown elements are hard errors, never warnings or best-effort.

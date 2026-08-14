@@ -117,6 +117,11 @@ internal static class Program
             return RunReachableState(args[1..]);
         }
 
+        if (args.Length >= 1 && args[0] == "interface-check")
+        {
+            return RunInterfaceCheck(args[1..]);
+        }
+
         if (args.Length >= 1 && args[0] == "trace")
         {
             return RunTrace(args[1..]);
@@ -165,6 +170,7 @@ internal static class Program
             Console.Error.WriteLine("       converter cross-check --project <ir-dir> [--json]   # whole-project cross-block reference-graph FACTS the reviewer reasons over (FI-22); never verdicts; exit 0");
             Console.Error.WriteLine("       converter conflict-graph --project <ir-dir> (--submission <file> | --signals <file>) [--json] [--allow-unresolved]   # SUBMISSION-SCOPED `conflictEdges` for harness gates 8/8c, in the exact shape ConflictEdgeDocument deserializes. NOT cross-check with a filter: that emits whole-project fact tables keyed on a storage path, this emits EDGES between BLOCKS with a provenance and a signal class. Only MultiWriter provenance is ever emitted - a CallGraph edge is about no signal, so it could only carry an Unstated class, and ProvenanceComplete is ALL-or-nothing, so ONE such edge would turn gate 8c to NOT CHECKED for the whole submission. `computedConflicts` is never emitted for the same reason (a bare name is Unstated provenance); gate 8's packing set derives from the edges. Exit 0 = computed (an EMPTY list is the EARNED claim that the graph ran and found nothing), 2 = NOT COMPUTED and the key is WITHHELD so the gate reports NOT CHECKED, 3 = emitted but an edge is unprovenanced");
             Console.Error.WriteLine("       converter reachable-state --project <ir-dir> [--block <name>]... [--json]   # D9's PRODUCER (2026-08-14): per block, the transitive closure through its CALL tree of every storage location it touches, keyed on STORAGE IDENTITY. Feeds `TestSlot.ReachableState` + `ReachableStateProvenance`, after which `SlotConflictDerivation.OverlappingReachableState` makes the edges by set intersection with no further work. Until this existed the set arrived from `wave-cli submit --reaches`, i.e. DECLARED BY THE SUBMITTING AGENT — the shape D9 forbids. Reads count as well as writes (two tests cannot share a signal one drives and the other observes). Closes DOWNWARD only: closing upward through callers reaches OB1 from any leaf and would make every pair conflict. An `iDB.<suffix>` reference is CANONICALISED onto the FB's own `<FB>|<suffix>` before intersecting, and every rewrite is reported — without it a slot testing an FB and one testing its caller read as disjoint while driving one location. Exit 0 = computed / 2 = NOT COMPUTED, key withheld / 3 = emitted, but at least one block's closure was withheld BY NAME");
+            Console.Error.WriteLine("       converter interface-check --project <ir-dir> --block <name> (--requires <n1,n2,...> | --requires-file <path>) [--json]   # NB-30 (2026-08-14): does the BLOCK carry the response signals the SPECIFICATION names? A set difference over the block's interface MEMBER NAMES, answerable before a scan elapses — which is why D1 (a spec signal the block does not provide) was able to ride inside a relational conformance assertion for a week. Walks INPUT/OUTPUT/INOUT/STATIC/CONSTANT and descends through inlined nested members AND named PLC data types, because on this corpus's house style (C-132) INPUT and OUTPUT are BOTH EMPTY and the whole caller interface is one STATIC UDT member — a check reading those two sections reports every signal missing, including the ones that exist. Matches MEMBER NAMES ONLY: one matching comments would find 'inhibit' in a block comment and pass the defect. TEMP is excluded BY NAME and COUNTED on every run. 🔴 EXIT 1 IS A **FAIL AGAINST THE BLOCK**, NOT AGAINST THE SUBMISSION — every other outcome in the pipeline means 'fix the vector', and reusing one here would send an author to edit the artifact that is correct. Exit 0 = all present / 1 = the block does not carry a required signal / 2 = NOT CHECKED (block absent or ambiguous, empty interface, no required names, an unjudgeable required token, or a member whose type could not be opened — a MISSING verdict is only sound over a COMPLETE member set). Emits the block's ir-hash as the STAMP the result was established against; a consumer carries the stamp, never a bool, so 'nobody ran it' and 'ran it against a different version' stay distinct facts. --requires-file reads one name per line, OR an assertion-enumeration YAML directly (its `response_signal:` values), which is the form with a producer");
             Console.Error.WriteLine("       converter trace --binding <bindings.json> --project <ir-dir> [--json]   # forward-pass REQ trace: per-hop facts over the reader/writer graph (FI-25); facts not verdicts; exit 0. Hops incl. guard-containment (FI-36-min): every spec-listed condition must appear in the coil's guard");
             Console.Error.WriteLine("       converter candidate-scan --project <ir-dir> --fb <FBName> [--scope <prefix> ...] [--type <T>] [--direction status|command|any] [--json]   # compute every signal that could satisfy a requirement (FI-39); exit 1 if the IO half has >1 candidate");
             Console.Error.WriteLine("       converter undriven-scan --project <ir-dir> --fb <FBName> [--instance <iDB> ...] [--caller <file.ir> ...] [--hints] [--json]   # per-instance interface drive states (FI-39); exit 1 on undriven/disarmed");
@@ -1849,6 +1855,149 @@ internal static class Program
                 + $"({string.Join(", ", report.NotComputedBlocks.Select(b => b.Block))}). The rest ARE emitted and usable: "
                 + "reporting every block it can and withholding the rest by name is a stronger statement than refusing the lot.");
             return 3;
+        }
+
+        return 0;
+    }
+
+    // NB-30. See the usage line above for what this is and why exit 1 blames the BLOCK.
+    private static int RunInterfaceCheck(string[] args)
+    {
+        string? projectDir = null;
+        string? block = null;
+        string? requiresFile = null;
+        var required = new List<string>();
+        var json = false;
+
+        for (var i = 0; i < args.Length; i++)
+        {
+            switch (args[i])
+            {
+                case "--project":
+                    projectDir = RequireValue(args, ref i, "--project");
+                    break;
+                case "--block":
+                    block = RequireValue(args, ref i, "--block");
+                    break;
+                case "--requires":
+                    var names = RequireValue(args, ref i, "--requires");
+                    if (names is null)
+                    {
+                        return 1;
+                    }
+
+                    required.AddRange(names.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries));
+                    break;
+                case "--requires-file":
+                    requiresFile = RequireValue(args, ref i, "--requires-file");
+                    break;
+                case "--json":
+                    json = true;
+                    break;
+                default:
+                    Console.Error.WriteLine($"Unexpected argument: {args[i]}");
+                    return 1;
+            }
+        }
+
+        if (projectDir is null || block is null || (required.Count == 0 && requiresFile is null))
+        {
+            Console.Error.WriteLine(
+                "Usage: converter interface-check --project <ir-dir> --block <name> (--requires <n1,n2,...> | --requires-file <path>) [--json]");
+            return 1;
+        }
+
+        if (!Directory.Exists(projectDir))
+        {
+            Console.Error.WriteLine($"--project directory not found: {projectDir}");
+            return 1;
+        }
+
+        var source = required.Count == 0 ? string.Empty : $"--requires ({required.Count} name(s))";
+
+        if (requiresFile is not null)
+        {
+            if (!File.Exists(requiresFile))
+            {
+                Console.Error.WriteLine($"--requires-file not found: {requiresFile}");
+                return 1;
+            }
+
+            var lines = File.ReadAllLines(requiresFile);
+
+            // *** THE FORM WITH A PRODUCER IS ACCEPTED DIRECTLY. *** A hand-typed list of required
+            // signals is the same self-referential check this exists to break: the party being checked
+            // supplies the question. An assertion enumeration is written by a THIRD party from the
+            // specification, so reading its `response_signal:` values straight is what makes the input
+            // independent. Which form was read is REPORTED, never inferred silently by the caller.
+            var fromEnumeration = lines
+                .Select(l => l.Trim())
+                .Where(l => l.StartsWith("response_signal:", StringComparison.Ordinal))
+                .Select(l => l["response_signal:".Length..].Trim().Trim('"', '\''))
+                .Where(n => n.Length > 0)
+                .Distinct(StringComparer.Ordinal)
+                .OrderBy(n => n, StringComparer.Ordinal)
+                .ToList();
+
+            if (fromEnumeration.Count > 0)
+            {
+                required.AddRange(fromEnumeration);
+                source = $"{requiresFile} — read as an assertion enumeration: {fromEnumeration.Count} distinct "
+                    + $"response_signal value(s) over {lines.Count(l => l.Trim().StartsWith("response_signal:", StringComparison.Ordinal))} citation(s)";
+            }
+            else
+            {
+                var plain = lines
+                    .Select(l => l.Trim())
+                    .Where(l => l.Length > 0 && !l.StartsWith('#'))
+                    .Distinct(StringComparer.Ordinal)
+                    .ToList();
+                required.AddRange(plain);
+                source = $"{requiresFile} — read as a plain name list: {plain.Count} name(s)";
+            }
+        }
+
+        var report = Converter.InterfaceCheck.InterfaceCheckRunner.Run(
+            projectDir, block, required.Distinct(StringComparer.Ordinal).ToList(), source);
+
+        Console.WriteLine(json
+            ? Converter.InterfaceCheck.InterfaceCheckOutputFormatter.FormatJson(report)
+            : Converter.InterfaceCheck.InterfaceCheckOutputFormatter.FormatText(report));
+
+        if (!report.Checked)
+        {
+            Console.Error.WriteLine(
+                "NOT CHECKED — this run answers neither half of the question. It is NOT a pass and it is NOT a fail "
+                + "against the block; nothing downstream may cite it as evidence about a required signal. "
+                + report.NotCheckedReason);
+            return 2;
+        }
+
+        // An unjudgeable input is reported whichever way the run goes — but it does NOT mask a real
+        // FAIL. A missing response signal is a finding about the block that stands entirely on the
+        // names that WERE judged; downgrading it to "not checked" because a different input was a typo
+        // would retire a real defect on an unrelated technicality.
+        if (report.Unjudgeable.Count > 0)
+        {
+            Console.Error.WriteLine(
+                $"{(report.BlockFails ? "ALSO NOT CHECKED" : "NOT CHECKED")} — {report.Unjudgeable.Count} of "
+                + $"{report.Requirements.Count} required name(s) could not be judged: "
+                + string.Join("; ", report.Unjudgeable.Select(r => $"'{r.Name}' — {r.Detail}")));
+
+            if (!report.BlockFails)
+            {
+                return 2;
+            }
+        }
+
+        if (report.BlockFails)
+        {
+            Console.Error.WriteLine(
+                $"FAIL AGAINST THE BLOCK — '{report.Block}' does not carry {report.Missing.Count} of "
+                + $"{report.Requirements.Count} required response signal(s): "
+                + string.Join(", ", report.Missing.Select(r => r.Name))
+                + ". The submission is not at fault. Established against ir-hash " + report.IrHash + ".");
+            return 1;
         }
 
         return 0;
