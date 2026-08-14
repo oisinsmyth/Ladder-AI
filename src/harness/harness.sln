@@ -45,6 +45,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DownloadFeedback", "..\down
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Harness.Run", "Harness.Run\Harness.Run.csproj", "{C0A7926E-2695-4948-B844-5871E46F0CE6}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DeviceGuard", "..\device-guard\DeviceGuard\DeviceGuard.csproj", "{549AAB8E-63C6-40BE-B325-D2949A81A713}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -138,5 +140,9 @@ Global
 		{C0A7926E-2695-4948-B844-5871E46F0CE6}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{C0A7926E-2695-4948-B844-5871E46F0CE6}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{C0A7926E-2695-4948-B844-5871E46F0CE6}.Release|Any CPU.Build.0 = Release|Any CPU
+		{549AAB8E-63C6-40BE-B325-D2949A81A713}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{549AAB8E-63C6-40BE-B325-D2949A81A713}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{549AAB8E-63C6-40BE-B325-D2949A81A713}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{549AAB8E-63C6-40BE-B325-D2949A81A713}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal
