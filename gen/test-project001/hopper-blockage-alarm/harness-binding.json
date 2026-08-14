@@ -11,11 +11,13 @@
   "_note8": "Sections 2 and 3 are FLAT tables with no slot column, and md:173-186 says the six ids are one slot's",
   "_note9": "SERIAL PHASES. That is now SAID rather than flattened silently: `serves` carries the six specification",
   "_note10": "ids, `servesRunInOrder` claims the stated order, and `boundarySpanning` names the one group that does",
-  "_note10b": "NOT run inline. `SLOT-HBA-ALL` remains the ONLY invented token in this file: it does not appear in the",
-  "_note10c": "prose, it is now purely an internal key (the tag fragment and a map-hash input), and no vector cites it.",
-  "_note10d": "🔴 CONSEQUENCE, MEASURED: the copy layer generated from this file is 35 registers - vector band 21, not",
-  "_note10e": "18 - because md:57's ONE set-B field now binds TWO IR members. The three registers the deployed mirror",
-  "_note10f": "carried and this file did not are exactly .Stim.ResetMode (Int, 1) + .Stim.ResetAt (Time, 2).",
+  "_note10b": "NOT run inline. THERE IS NO LONGER AN INVENTED TOKEN IN THIS FILE: the slot id is `HBA`, which is what",
+  "_note10c": "the deployed mirror already uses, and `serves` made it non-citable so it costs nothing to keep.",
+  "_note10d": "🔴 CONSEQUENCE, MEASURED FROM THE EMITTED LAYER: 37 registers - control 6, vectors 21, results 10.",
+  "_note10e": "Vectors 18 -> 21 because md:57's ONE set-B field now binds TWO IR members (.Stim.ResetMode Int 1 +",
+  "_note10f": ".Stim.ResetAt Time 2 - exactly the three the deployed mirror carried and this file did not). Results",
+  "_note10g": "8 -> 10 because the two block outputs now carry phase-armed latches, which the submission requested",
+  "_note10h": "and which MB_HOLD_REG was already widened for: `P#M1000.0 WORD 37` (FB_Comms_ModbusServer.ir:31).",
   "blockName": "FC_HarnessCopyLayer",
   "blockNumber": 9001,
   "tagTableName": "HarnessMirror",
@@ -23,7 +25,8 @@
   "baseByte": 1000,
   "slots": [
     {
-      "slotId": "SLOT-HBA-ALL",
+      "_slotId": "🔴 `HBA`, RULED 2026-08-14 BY THE COORDINATOR, AND THE RULING IS FREE BECAUSE `serves` MADE IT COSMETIC. This read `SLOT-HBA-ALL` - an invented token, flagged as the only one in the file - back when the slot id was the ONLY join to a vector's `slot` field. It is not any more: `serves` carries the citable ids, so the slot id is now purely an internal key (the tag fragment, and a map-hash input) that no vector cites. `HBA` is what the DEPLOYED mirror uses - `ir/test-project001/HarnessMirror.ir` declares HX_HBA_Start, HX_HBA_V000..V019, HX_HBA_R000..R007 - so keeping it leaves 35 tag names unchanged, where the invented token would rename every one of them to express a grouping key that no longer addresses anything. Cost with no purchaser.",
+      "slotId": "HBA",
       "_note": "startCondition from md:59 - `startBool (per slot)` -> `.Stim.Start`.",
       "startCondition": "iDB_HopperBlockageStim.Stim.Start",
       "_serves": "THE MANY-TO-ONE MAP. md:173-186 - the six ids are ONE SLOT'S SERIAL PHASES, not six slots: md:179-181 states all six drive the SAME instance, the SAME DB_Input.Test members and the SAME DB_Controls.FaultReset. The ids themselves are taken from the submission's own `slot` fields, which is the authority for its own ids. It needs no partition, which is part of why it is right: every served id addresses the same vector band, the same result band and the same start bool.",
@@ -176,16 +179,23 @@
       "_resultSourceOrder": "🔴 ORDER CORRECTED 2026-08-14, AND THE DIVERGENCE IT CLOSES WAS SILENT. This list was in md:73-80 order (Armed, ScenarioDone, Alarm, StopReq); the DEPLOYED layer is in the order below (Alarm, StopReq, Armed, ScenarioDone) - `ir/test-project001/FC_HarnessCopyLayer.ir:41-44` and `wire-prediction.md` section 1, registers 27/28/29/30. MEASURED by generating from this file and diffing against the committed IR: the tag TABLE came out identical, and the copy layer's result network had four signals in two different orders. Since the binding drives BOTH the emitted rungs AND the result decode (`SlotBinding.ResultRegisterOf`), the md order was internally consistent and would simply have moved four signals to different registers at the next deploy, with nothing to flag it - a re-deploy is exactly when a client mirror written against the old map goes quietly wrong. md's table is a NAME mapping and states no register order, so this is a transcription of the artifact, not a choice between two claims. The four violation latches were already in the deployed order (md:77-80 = registers 31-34) and are unmoved.",
       "resultSources": [
         {
+          "_latch": "🔴 THE LATCH, GRANTED 2026-08-14 BY THE COORDINATOR - AND IT IS A TRANSCRIPTION OF A REQUEST, NOT AN AUTHORSHIP. The trace has two halves and both are in artifacts that already exist. (1) THE SUBMISSION ASKS FOR IT IN WRITING: conformance-vectors-b.json `map._capabilityRequest` - `(a) Sampled and Latched on the two block outputs. (b) THE LATCHES MUST BE ARMED BY THE STIMULUS MODEL'S PHASE FLAG (HBA_Stim.Armed), not free-running from T=0`. (2) THE ARM SOURCE IS THE COORDINATOR'S OWN PROSE: md:73 - `HBA_Stim.Armed | .Stim.Armed | arms the copy layer's observation latches`, in those words. So this grants a capability the vector author requested, using the arm source the coordinator's prose names. WHY BOTH FLAGS: `transient` alone yields the once-per-WAVE latch, which sets on the first firing and stays set - index 2 would read identical to index 1 and a signal that never fired again would read as one that did. `rearmsEachIndex` makes it phase-armed off the slot's start bool, which the client already drives low before every index. WHY `armedBy` ON TOP: FB_HarnessViolationLatch's own block comment gives the reason - every run legitimately begins by driving the monitor through a clear-down, and a free-running latch would fill from that and read violated whatever the monitor did. COST: one register each, in the latch band AFTER the values, so no value offset moves. Results 8 -> 10, mirror 35 -> 37 - and MB_HOLD_REG is ALREADY `P#M1000.0 WORD 37` (FB_Comms_ModbusServer.ir:31).",
           "tag": "iDB_HopperBlockageMonitor.IO.HopperBlockedAlarm",
           "specName": "HopperBlockedAlarm",
           "type": "Bool",
-          "_src": "md:75; register 27 per FC_HarnessCopyLayer.ir:41"
+          "transient": true,
+          "rearmsEachIndex": true,
+          "armedBy": "iDB_HopperBlockageStim.Stim.Armed",
+          "_src": "md:75; register 27 per FC_HarnessCopyLayer.ir:41. Latch: conformance-vectors-b.json map._capabilityRequest (a)+(b), and md:73 for the arm source. `armedBy` names the IR TAG rather than the spec name because it is emitted as an operand in the generated rung."
         },
         {
           "tag": "iDB_HopperBlockageMonitor.IO.HopperBlockStopReq",
           "specName": "HopperBlockedInhibit",
           "type": "Bool",
-          "_src": "md:76 - DIVERGENCE D1, NOT A RENAME (md:82-104). The spec name is bound to the tag the block ACTUALLY has so the BEHAVIOURAL assertions can be evaluated; D1 is reported by the independent static check and never by this run. Register 28 per FC_HarnessCopyLayer.ir:42."
+          "transient": true,
+          "rearmsEachIndex": true,
+          "armedBy": "iDB_HopperBlockageStim.Stim.Armed",
+          "_src": "md:76 - DIVERGENCE D1, NOT A RENAME (md:82-104). The spec name is bound to the tag the block ACTUALLY has so the BEHAVIOURAL assertions can be evaluated; D1 is reported by the independent static check and never by this run. Register 28 per FC_HarnessCopyLayer.ir:42. Latch: same two-halved trace as the row above - map._capabilityRequest names `the two block outputs`, and this is the second."
         },
         {
           "tag": "iDB_HopperBlockageStim.Stim.Armed",
