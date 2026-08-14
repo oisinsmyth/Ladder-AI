@@ -441,8 +441,25 @@ public static class CopyLayerGenerator
                     var signal = binding.ResultSignal(e.Key);
                     var latchTag = $"{prefix}{binding.SlotId}_L{e.Value:000}";
 
-                    if (signal is not { PhaseArmed: true } || startBoolTag is null)
+                    if (signal is not { PhaseArmed: true })
                         return new CopyLayerLatch(latchTag, e.Key, Array.Empty<string>(), ClearLevel: null);
+
+                    // 🔴 *** A THROW, NEVER A FALLBACK TO THE UNCONDITIONAL FORM. *** Unreachable: the
+                    // refusal above stops a phase-armed signal on a slot with no start condition. This
+                    // said `|| startBoolTag is null -> unconditional` for one hour, and MUTATION TESTING
+                    // MEASURED WHAT THAT COSTS: disconnecting the refusal with a one-token edit made the
+                    // generator emit the unconditional latch for a re-arming signal, silently, and the
+                    // CLI printed it as an ordinary copy layer. A guard whose bypass produces a PLAUSIBLE
+                    // artifact is the exact shape this whole capability exists to remove — so the
+                    // fallback is gone and disconnecting the refusal now fails loudly instead.
+                    if (startBoolTag is null)
+                    {
+                        throw new InvalidOperationException(
+                            $"signal '{e.Key}' on slot '{binding.SlotId}' is phase-armed and the slot has no start condition, so there is no "
+                            + "per-index level to arm on or clear on. The refusal gate should have stopped this binding before rendering. "
+                            + "Emitting the unconditional latch here instead would produce a latch that sets once and stays set for the whole "
+                            + "wave — which compiles, deploys, reads plausibly, and silently deletes every finding that turns on the signal falling.");
+                    }
 
                     var arms = new List<string> { startBoolTag };
                     if (signal.ArmWindow is { } window)
