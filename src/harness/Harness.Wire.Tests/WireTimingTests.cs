@@ -76,7 +76,8 @@ public class WireTimingTests
     }
 
     // ---------------------------------------------------------------------------------------------
-    // The word order, which is configurable BECAUSE it is uncalibrated
+    // The word order, which stays configurable even though it is now measured: the presentation is
+    // MB_SERVER's behaviour, and measuring one rig does not make it a property of the instruction.
     // ---------------------------------------------------------------------------------------------
 
     // ---------------------------------------------------------------------------------------------

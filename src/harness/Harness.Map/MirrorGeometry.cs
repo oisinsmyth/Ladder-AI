@@ -71,11 +71,27 @@ public sealed record MirrorGeometry(int TotalBytes, int RetentiveBytes, int Base
     /// Bit 0 of the register value therefore lands in the SECOND byte, not the first — which is the
     /// counter-intuitive half and the reason this is a method rather than an open-coded expression.
     /// The phase-1 spike wrote and compared whole words, so it exercised word order and NOT bit order
-    /// within a word; nothing measured has yet distinguished this mapping from its mirror image.</para>
+    /// within a word.</para>
     ///
-    /// <para><b>The experiment that settles it costs one write:</b> put <c>16#0001</c> in the
-    /// start-bool register and read back which <c>%M</c> bit rose. If it is <c>M[byte+1].0</c> this is
-    /// right; if it is <c>M[byte].0</c> the two bytes swap here and nowhere else.</para>
+    /// <para>🔴 <b>THE MARKER STAYS AFTER A PARTIAL READING ON 2026-08-14, AND THE REASON IS THE MARKER'S
+    /// OWN.</b> The bit was read on the device that day and came back <b>FALSE</b>. That RULES OUT the
+    /// byte-swapped mapping; it does <b>not</b> CONFIRM this one. A false reading is equally consistent
+    /// with <i>"the mapping is wrong and the bit we happened to land on is also false"</i> — so what was
+    /// eliminated is one alternative, not the doubt. <b>Downgrading <c>[I]</c> on that would be replacing
+    /// a weak inference with a slightly-less-weak one, which is not progress</b>, and this marker exists
+    /// precisely because the simulator and this method agree FROM THE SAME PREMISE and their agreement is
+    /// therefore worth nothing.</para>
+    ///
+    /// <para><b>The experiment that settles it is unchanged and still costs one write:</b> put
+    /// <c>16#0001</c> in the start-bool register and read back which <c>%M</c> bit ROSE. A bit going
+    /// TRUE where nothing else could have put it is positive evidence; a bit reading false is not. If it
+    /// is <c>M[byte+1].0</c> this is right; if it is <c>M[byte].0</c> the two bytes swap here and nowhere
+    /// else.</para>
+    ///
+    /// <para><b>Contrast with the 32-bit word order, which WAS discharged</b> (<c>RegisterWordOrder</c>):
+    /// there the readings were of patterns with DISTINGUISHABLE HALVES, so each observation could only
+    /// have come out one way under one hypothesis. That is what a calibration looks like, and it is what
+    /// this one still lacks.</para>
     /// </summary>
     public string BitAddressOf(int register, int bitInRegister)
     {

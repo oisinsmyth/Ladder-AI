@@ -40,14 +40,17 @@ public sealed record LoopRequest(
     DeploymentDeclaration? Deployment = null,
     TagMapReach? TagMapReach = null,
 
-    // ⚠️ *** THE 32-BIT WORD ORDER, AND IT IS THE SAME UNCALIBRATED TRANSFORM AS THE VERSION REGISTER'S. ***
+    // *** THE 32-BIT WORD ORDER, AND IT IS THE SAME TRANSFORM AS THE VERSION REGISTER'S. ***
     // A `Time` result is one %MD on the PLC and TWO holding registers on the wire, so reading it back
     // means choosing which half is the low word - and `RegisterWordOrder`'s default is an INFERENCE that
     // no measurement has yet distinguished from its mirror image. It is threaded through here rather than
     // open-coded at the decode site so there is ONE order in this system to calibrate, not two.
     //
-    // A Time read under the wrong order is out by 65 536 ms and looks like a plausible timing bug for a
-    // long while. UNVERIFIED until the rig session's calibration step.
+    // ✅ MEASURED HIGH-WORD-FIRST, twice: 2026-08-13 against a known pattern and 2026-08-14 against the
+    // deployed build stamp. It stays configurable because the presentation is MB_SERVER's rather than
+    // ours - a measurement of one rig is not a property of the instruction. A Time read under the wrong
+    // order would be out by 65 536 ms and look like a plausible timing bug, which is why the default is
+    // now evidence rather than an inference.
     RegisterWordOrder WordOrder = RegisterWordOrder.HighWordFirst)
 {
     /// <summary>The factor, defaulting to uncompressed only where the caller passed nothing at all.</summary>
@@ -368,8 +371,8 @@ public static class LoopRun
 
             MirrorAddressForm.Word => unchecked((short)run.Results[register]).ToString(),
 
-            // ⚠️ The uncalibrated transform. Same order as the version register and the scan counter, on
-            // purpose: one question for the rig to settle rather than two.
+            // The same order as the version register and the scan counter, on purpose: ONE calibration
+            // for the whole system rather than two. Measured HighWordFirst (2026-08-13, 2026-08-14).
             MirrorAddressForm.DoubleWord => unchecked((int)RegisterWords.To32(
                 run.Results[register], run.Results[register + 1], wordOrder)).ToString(),
 
@@ -516,9 +519,10 @@ public static class LoopRun
 
             if (element.Form == MirrorAddressForm.DoubleWord)
             {
-                // Same uncalibrated order as the read side. Writing under one order and reading under the
+                // The SAME order value as the read side. Writing under one order and reading under the
                 // other would cancel out on our own loopback and disagree only against the device — the
-                // exact shape of self-agreement this project distrusts, so both ends take the SAME value.
+                // exact shape of self-agreement this project distrusts, which is why the order was settled
+                // by reading the DEVICE (2026-08-13, 2026-08-14) and not by a round trip through us.
                 var words = RegisterWords.From32(unchecked((uint)(int)fit.Value), wordOrder);
                 values[offset] = words[0];
                 values[offset + 1] = words[1];

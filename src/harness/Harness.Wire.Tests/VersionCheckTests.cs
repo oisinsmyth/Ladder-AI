@@ -59,18 +59,26 @@ public class VersionCheckTests
     }
 
     [Fact]
-    public void A_register_holding_the_stamp_with_its_halves_swapped_names_the_uncalibrated_word_order()
+    public void A_register_holding_the_stamp_with_its_halves_swapped_names_the_WORD_ORDER_not_a_failed_download()
     {
         // The residual §11 records: MB_SERVER's byte-to-register presentation is Siemens' behaviour and
         // no fake we write can validate it. Reporting this as a failed download would send someone
         // looking at TIA for a whole afternoon.
+        //
+        // *** THE ORDER IS NOW MEASURED (2026-08-13, 2026-08-14) AND THIS OUTCOME IS STILL KEPT. *** One
+        // rig's presentation is not a property of the instruction, so the distinct outcome still earns
+        // its place — and its job is now to say "set the order to match THIS device" rather than
+        // "re-download a program that is already correct".
         var (client, _) = Wired(RegisterWords.Swapped(Stamp.Value));
 
         var report = VersionCheck.Confirm(client, Stamp);
 
         Assert.Equal(VersionOutcome.WordOrderSuspect, report.Outcome);
         Assert.Contains("swapped", report.Detail, StringComparison.Ordinal);
-        Assert.Contains("Calibrate", report.Detail, StringComparison.Ordinal);
+        Assert.Contains("not a failed download", report.Detail, StringComparison.Ordinal);
+
+        // And it must NOT tell the reader to go and calibrate something that has been calibrated.
+        Assert.DoesNotContain("Calibrate with a known bit pattern", report.Detail, StringComparison.Ordinal);
     }
 
     [Fact]

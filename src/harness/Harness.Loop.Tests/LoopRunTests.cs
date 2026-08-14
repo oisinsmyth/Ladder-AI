@@ -643,17 +643,18 @@ public class LoopRunTests
     }
 
     [Fact]
-    public void THERE_IS_ONE_32_BIT_WORD_ORDER_IN_THIS_SYSTEM_and_it_is_still_UNCALIBRATED()
+    public void THERE_IS_ONE_32_BIT_WORD_ORDER_IN_THIS_SYSTEM_and_it_is_now_MEASURED()
     {
-        // ⚠️ A `Time` result is one %MD on the PLC and TWO holding registers on the wire, so decoding it
+        // A `Time` result is one %MD on the PLC and TWO holding registers on the wire, so decoding it
         // means choosing which half is the low word — the SAME choice the version register and the scan
         // counter already make. Two independent defaults would mean two things to calibrate and a way for
         // them to disagree, so the loop's default is asserted equal to the client's.
         //
-        // *** AND BOTH ARE AN INFERENCE. *** `RegisterWordOrder`'s own documentation says no measurement
-        // has distinguished it from its mirror image. A Time read under the wrong order is out by
-        // 65 536 ms and reads as a plausible timing bug. The rig session's calibration step settles it;
-        // until then a Time result is exactly as trustworthy as the version register is.
+        // ✅ *** AND THE CHOICE IS NOW MEASURED: HighWordFirst. *** 2026-08-13 against a known pattern
+        // (16#00001111) and 2026-08-14 by decoding the deployed build stamp at registers 0-1 — both with
+        // DISTINGUISHABLE HALVES, which is what makes a reading identify the order rather than merely
+        // agree with itself. A Time read under the wrong order would be out by 65 536 ms and read as a
+        // plausible timing bug; that hazard is why it was worth measuring, and it is now closed.
         var loopDefault = Request().WordOrder;
 
         // Read off MirrorClient's own constructor rather than restated, so the two cannot drift apart

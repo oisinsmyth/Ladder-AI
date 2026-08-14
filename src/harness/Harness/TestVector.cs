@@ -9,12 +9,21 @@ namespace Harness;
 ///
 /// MEASURED ON THE RIG, 2026-08-12, and the numbers this comment used to carry (~100 ms poll against
 /// a ~10 ms scan, "roughly ten times") were all wrong: the scan is 23.33 ms under load, the Modbus
-/// round trip is 78 ms typical and 173 ms at the p99, and A POLL IS ONE ROUND TRIP - there is no
-/// separate poll period to tune. So a one-scan event sits ~3.3 scans below the sampler typically and
-/// ~7.4 at the p99, with 3.0 the irreducible floor at the fastest median observed. The floor is
+/// round trip is 78 ms typical and *** 201 ms AT THE p99 ***, and A POLL IS ONE ROUND TRIP - there is
+/// no separate poll period to tune. So a one-scan event sits ~3.3 scans below the sampler typically
+/// and ~8.6 at the p99, with 3.0 the irreducible floor at the fastest median observed. The floor is
 /// SMALLER than was believed, and it is a distribution rather than a number. No polling rate
 /// recovers a one-scan event, which is the part that was right and is why this enum exists.
-/// The single source for these constants is the spec's section 12a; do not re-choose them here.
+///
+/// *** THE p99 WAS 173 HERE UNTIL 2026-08-14 AND THAT WAS STALE BY A DAY. *** It was raised to 201 on
+/// 2026-08-13: 173 came from a 1..16-register sweep applied to full-width slots, and re-measuring at
+/// 123 registers over four runs gave per-run p99s of 157 / 201 / 168 / 185 - two of them above 173.
+/// A figure that SIZES BOUNDS is exactly the kind that gets copied out of a doc comment into new code,
+/// so a stale one here is not cosmetic.
+///
+/// The single source for these constants is the spec's section 12a and, in this codebase,
+/// <see cref="Harness.Wire.WireTiming"/>, which carries the provenance. Do not re-choose them here and
+/// do not restate them anywhere a reader could take the copy for the original.
 /// </summary>
 public enum Observability
 {

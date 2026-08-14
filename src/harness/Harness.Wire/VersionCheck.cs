@@ -16,7 +16,8 @@ public enum VersionOutcome
 
     /// <summary>
     /// Stable, and equal to the expected stamp WITH ITS TWO HALVES SWAPPED. Almost certainly the
-    /// uncalibrated word order rather than a failed download — see <see cref="RegisterWordOrder"/>.
+    /// word order rather than a failed download — see <see cref="RegisterWordOrder"/>, where the order is
+    /// now measured but the outcome is deliberately kept.
     /// </summary>
     WordOrderSuspect,
 
@@ -115,7 +116,7 @@ public static class VersionCheck
         if (RegisterWords.Swapped(observed) == expected.Value)
         {
             return new VersionReport(VersionOutcome.WordOrderSuspect, observed, expected.Value, reads, readsToSettle,
-                $"16#{observed:X8} is the expected stamp 16#{expected.Value:X8} with its two halves swapped. That is the UNCALIBRATED register word order, not a failed download — MB_SERVER's byte-to-register presentation is Siemens' behaviour and no fake we write can validate it. Calibrate with a known bit pattern (one measurement, once) and set RegisterWordOrder accordingly.");
+                $"16#{observed:X8} is the expected stamp 16#{expected.Value:X8} with its two halves swapped. That is a register WORD ORDER difference, not a failed download. The configured order was MEASURED on this rig (2026-08-13 against a known pattern, 2026-08-14 against the deployed stamp), so this reading says the device in front of you presents them the other way round — MB_SERVER's byte-to-register presentation is Siemens' behaviour and one rig's measurement is not a property of the instruction. Set RegisterWordOrder to match this device rather than re-downloading a program that is already correct.");
         }
 
         return new VersionReport(VersionOutcome.Stale, observed, expected.Value, reads, readsToSettle,

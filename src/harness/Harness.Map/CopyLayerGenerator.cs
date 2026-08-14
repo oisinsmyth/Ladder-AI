@@ -63,7 +63,7 @@ public static class CopyLayerGenerator
     /// the same convention <see cref="MirrorGeometry.BitAddressOf"/> already applies to the start bools,
     /// which keeps ONE bit-order question in this system rather than two. A Time takes a <c>%MD</c> and
     /// therefore <b>two</b> registers — the same span the version register and the scan counter already
-    /// occupy, and the same uncalibrated word order.</para>
+    /// occupy, and the same (now measured) word order.</para>
     /// </summary>
     private static MirrorTag MirrorTagFor(string name, MirrorValueType type, MirrorGeometry geometry, int register, string comment)
     {
@@ -78,7 +78,16 @@ public static class CopyLayerGenerator
         };
 
         // Said on the TAG, because the register span is what a client has to get right and the word order
-        // inside that span is not yet measured.
+        // inside it is the thing a client can get wrong.
+        //
+        // 🔴 *** THE WORD "UNCALIBRATED" BELOW IS NOW STALE AND IS DELIBERATELY NOT CHANGED YET. *** The
+        // order was measured HighWordFirst on 2026-08-13 and 2026-08-14 (see RegisterWordOrder). This
+        // string is GENERATED IR TEXT, not a doc comment: editing it changes the copy layer's tag table
+        // on disk, and a lane is running against a deployed build right now. It would NOT move the build
+        // stamp — BuildStamp hashes the program under test, the map, the bindings and the naming, not the
+        // generated text — so the change would be invisible to the verifying gateway while making the
+        // committed IR differ from what is loaded. That is the quiet divergence this project keeps
+        // getting bitten by, so it waits for a window with no run in flight.
         var note = element.Form switch
         {
             MirrorAddressForm.Bit => " Bool, bit 0 of this register.",

@@ -242,10 +242,16 @@ public sealed record CompressionPlan(
 /// events being observed</b>, so past a point it pushes an assertion below the sampling floor and
 /// <i>every check still reports green because the assertion was simply never sampled.</i></para>
 ///
-/// <para><b>THE MEASURED CEILING IS LOWER THAN X-D ASSUMED, AND IT IS THE TERM X-D SAYS BINDS FIRST.</b>
+/// <para><b>THE CEILING IS LOWER THAN X-D ASSUMED, AND IT IS THE TERM X-D SAYS BINDS FIRST.</b>
 /// X-D carried <c>~10 ms</c> for the scan and <c>~100 ms</c> for the poll; §12a derivation 5 replaces both.
 /// The timer floor is <c>k x scan = 5 x 23.33 = 116.7 ms</c>, not 50 ms, so <b>on X-D's own 500 ms preset
-/// <c>comp_max(timer)</c> is 4.3x and not the 10x originally assumed</b>. No verdict in X-D's worked
+/// <c>comp_max(timer)</c> is 4.3x and not the 10x originally assumed</b>.
+///
+/// 🔴 <b>THE 4.29x IS HALF-MEASURED, AND CALLING IT "MEASURED" WAS WRONG.</b> The scan period is measured;
+/// <b><c>k ~ 5</c> IS X-D'S OWN NUMBER AND NEVER HAS BEEN</b> — and it is the term X-D says binds first, so
+/// the assumed half is the load-bearing one. Read 116.7 ms as <b>DERIVED FROM ONE MEASURED AND ONE ASSUMED
+/// INPUT</b>, not as a measurement. It is a plausible engineering figure and it is not evidence; what would
+/// settle it is a preset scaled to five scans on a 1214C, observed to still behave like a timer. No verdict in X-D's worked
 /// example flips — a 4-hour behaviour in a 60 s budget needs 240x and is refused either way — but every
 /// marginal case moves toward REFUSE.</para>
 ///
@@ -261,10 +267,19 @@ public static class TimeCompression
     /// X-D's <c>k</c>: how many scan periods a preset must remain above once scaled. <b>k ~ 5</b>, so the
     /// floor is <c>5 x 23.33 = 116.7 ms</c>. A preset scaled below a few scan times stops behaving like a
     /// timer — it rounds toward zero, and the block then passes or fails for reasons unrelated to its logic.
+    ///
+    /// <para>🔴 <b>[A] — ASSUMED. THIS IS X-D'S NUMBER AND NOTHING HAS MEASURED IT</b>, which matters more
+    /// than it looks: it multiplies the one measured term to produce the floor, and X-D says the timer term
+    /// binds first. Every figure downstream of it — the 116.7 ms floor, the 4.29x cap on a 500 ms preset —
+    /// is therefore DERIVED FROM ONE MEASURED AND ONE ASSUMED INPUT and must not be described as measured.</para>
     /// </summary>
     public const int TimerScanMultiple = 5;
 
-    /// <summary>The timer floor in milliseconds: <c>k x scan_period</c>. <b>116.7 ms, not X-D's original 50.</b> [D, §12a derivation 5]</summary>
+    /// <summary>
+    /// The timer floor in milliseconds: <c>k x scan_period</c>. <b>116.7 ms, not X-D's original 50.</b>
+    /// [D, §12a derivation 5] — <b>D for DERIVED, and one of its two inputs is
+    /// <see cref="TimerScanMultiple"/>, which is ASSUMED.</b> Not a measurement, whatever its precision suggests.
+    /// </summary>
     public static double TimerFloorMs => TimerScanMultiple * WireTiming.ScanPeriodMs;
 
     /// <summary>

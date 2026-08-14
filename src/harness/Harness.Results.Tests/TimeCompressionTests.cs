@@ -7,9 +7,15 @@ namespace Harness.Results.Tests;
 /// <summary>
 /// <b>Build-plan 6.6 — X-D's <c>comp_min</c> calculation and the ceilings it must clear.</b>
 ///
-/// <para>The measured ceiling is the headline: <b>the timer floor is 116.7 ms, so a 500 ms preset caps
-/// compression at 4.3x and not the 10x X-D originally assumed.</b> Every constant below is read from
+/// <para>The ceiling is the headline: <b>the timer floor is 116.7 ms, so a 500 ms preset caps compression
+/// at 4.3x and not the 10x X-D originally assumed.</b> Every constant below is read from
 /// <c>WireTiming</c>, which transcribes §12a — nothing is chosen in the tests either.</para>
+///
+/// <para>🔴 <b>IT IS NOT A MEASURED CEILING, AND THIS COMMENT USED TO SAY IT WAS.</b> The scan period is
+/// measured; <c>k ~ 5</c> is X-D's own number and never has been — and it is the term X-D says binds
+/// first, so the assumed half is the load-bearing one. Read every figure here as <b>derived from one
+/// measured and one assumed input</b>. The tests below pin the ARITHMETIC, which is exactly as sound as
+/// its inputs and no sounder.</para>
 /// </summary>
 public class TimeCompressionTests
 {

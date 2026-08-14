@@ -39,13 +39,14 @@ public enum MirrorValueType
     /// <see cref="Bool"/> — both were the same hard-coded <c>"Int"</c> — which is why the shape and the
     /// width are now read out of one table rather than handled as two special cases.</para>
     ///
-    /// <para>⚠️ <b>ITS TWO REGISTERS INHERIT THE UNCALIBRATED 32-BIT WORD ORDER.</b> The value is one
+    /// <para><b>ITS TWO REGISTERS INHERIT THE 32-BIT WORD ORDER, WHICH IS NOW MEASURED.</b> The value is one
     /// <c>%MD</c> on the PLC and two registers on the wire, exactly like the version register and the
     /// scan counter — and which half lands in the lower register is <c>Harness.Wire</c>'s
-    /// <c>RegisterWordOrder</c>, whose default is an INFERENCE that no measurement has yet distinguished
-    /// from its mirror image. <b>A Time read under the wrong order is out by 65 536 ms and reads as a
-    /// plausible timing bug.</b> The rig session's calibration step settles it; until then a Time result
-    /// is exactly as trustworthy as the version register is.</para>
+    /// <c>RegisterWordOrder</c> — <b>measured HighWordFirst on 2026-08-13 and again on 2026-08-14</b>, so
+    /// the default is evidence rather than an inference. <b>A Time read under the wrong order would be out
+    /// by 65 536 ms and read as a plausible timing bug</b>, which is why it was worth measuring. A Time
+    /// result is exactly as trustworthy as the version register is — and that is now a statement about
+    /// two measurements rather than about two guesses.</para>
     /// </summary>
     Time,
 }

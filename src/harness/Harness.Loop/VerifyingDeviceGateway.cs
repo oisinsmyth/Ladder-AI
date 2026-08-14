@@ -81,10 +81,12 @@ public sealed class VerifyingDeviceGateway : IDeviceGateway
     /// exists and looking like a configuration error.
     /// </param>
     /// <param name="wordOrder">
-    /// ⚠️ The 32-bit order the stamp is reassembled under — <b>the same uncalibrated transform as every
-    /// other 32-bit value in this system</b>. Measured on the rig as <c>HighWordFirst</c>, which is the
-    /// default; a mismatch under one order that would have MATCHED under the other is reported as its own
-    /// outcome rather than as a failed verification, because those are different facts.
+    /// The 32-bit order the stamp is reassembled under — <b>the same transform as every other 32-bit value
+    /// in this system, and it is MEASURED: <c>HighWordFirst</c></b> (2026-08-13 against a known pattern,
+    /// 2026-08-14 against this very stamp at registers 0–1). It remains a parameter because MB_SERVER's
+    /// byte-to-register presentation is Siemens' behaviour, not ours; and a mismatch that would have
+    /// MATCHED under the other order is still reported as its own outcome, because those are different
+    /// facts and the distinction is what stops a needless re-download.
     /// </param>
     public VerifyingDeviceGateway(
         RegisterMap map,
@@ -170,7 +172,7 @@ public sealed class VerifyingDeviceGateway : IDeviceGateway
         {
             return new DeploymentOutcome(Attempted: true, Loaded: false, empty,
                 $"REFUSED — the device reads 16#{observed:X8} and the staged build is 16#{stamp.Value:X8}, which are the same value "
-                + $"WITH THE TWO 16-BIT HALVES SWAPPED. That is almost certainly the uncalibrated word order ({_wordOrder}) rather "
+                + $"WITH THE TWO 16-BIT HALVES SWAPPED. The order in use is {_wordOrder}, which was measured on this rig — so this is more likely a device presenting them the other way round than "
                 + "than a different build — see RegisterWordOrder. It is still a REFUSAL: a verifier that accepted a value it had to "
                 + "reinterpret would accept anything.");
         }
