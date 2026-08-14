@@ -437,11 +437,27 @@ without one is not a contradiction — **it is a different program.**
 `FC_HarnessCopyLayer`, called **once** from `Main` (OB1), **no other caller**, and the only other OB is
 `OB100` (startup, once). ***So one tick = one OB1 scan.***
 
-🔴 ***THE CONSEQUENCE IS NOT COSMETIC: X-D's COMPRESSION CEILING RESTS ON 23.33 ms, WHICH BELONGS TO A
-PROGRAM THAT IS NOT RUNNING.*** Its timer floor `k × scan = 116.7 ms` implies `k ≈ 5`; at **2.1 ms** the
-floor is **~10.6 ms** and the achievable compression is *far higher* than the recorded ~4.3×.
-**Re-derive it against the deployed program before quoting either number** — and note the ceiling was
-already flagged half-measured, because `k` has never been measured at all.
+🔴 ***THE CONSEQUENCE, DERIVED RATHER THAN GESTURED AT.*** The spec's own derivation is
+`timer floor = k × scan` with `k ≈ 5`, giving `500 / 116.65 = 4.29×`. **It is linear in the scan** —
+so ***a "ceiling" that reads like a constant inherits the scan's program-dependence entirely.***
+
+| | scan | floor | `comp_max` on a 500 ms preset |
+|---|---|---|---|
+| as pinned in code | 23.33 ms *(spike checker)* | 116.65 ms | **4.29×** |
+| deployed harness program | ~2.1 ms | ~10.5 ms | ***~47×*** |
+
+✅ ***THE DIRECTION IS SAFE, WHICH IS WHY THIS IS NOT URGENT.*** `comp_max` is a **ceiling**, so
+enforcing 4.29× where ~47× is achievable is **over-restrictive, never permissive** — it refuses
+compressions that would in fact resolve. **Nothing built on it is unsound; it is simply leaving ~11×
+of compression unused.**
+
+⚠️ **Two things stop this being a one-line fix.** The spec line reads *"UNCHANGED — it depends only on
+the scan, **which did not move**"* — **true when written, and now the sentence to repair.** And the
+4.29× is **pinned in both directions by six tests**, so changing it is a deliberate act, not an edit.
+
+🔴 ***AND IT WOULD STILL BE HALF-MEASURED AFTERWARDS: `k ≈ 5` IS X-D's OWN NUMBER AND HAS NEVER BEEN
+MEASURED.*** Re-deriving now swaps one assumed input for a measured one and leaves the other assumed.
+***Measure `k` before re-deriving, or the new figure is exactly as trustworthy as the old one.***
 
 ➜ ***THE LESSON: THE QUALIFIER WAS IN THE SOURCE AND WAS LOST IN THE COPY.*** The build plan says
 *"scan 23.33 **loaded**"* and names the checker. `CLAUDE.md` and this page both carried it as a bare
