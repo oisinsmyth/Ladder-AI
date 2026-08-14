@@ -216,6 +216,54 @@ public class ClaimReservedBandTests : IDisposable
         Assert.Contains("did NOT continue past its end", outcome.Reason);
     }
 
+    // 🔴 *** THE TEST THAT ACTUALLY PINS "DOES NOT ESCAPE", AND THE ONE THE FIRST DRAFT LACKED. ***
+    // Measured: with the confinement removed (count := the 512-wide search width instead of the band's
+    // own remaining length), THE WHOLE SUITE STAYED GREEN. The exhaustion test above uses floor 9000,
+    // where a 512-wide walk ends at 9511 and never leaves the band, so it could not tell a confined
+    // search from an unconfined one. A HIGH floor is what makes the escape reachable: from 9800 an
+    // unconfined walk runs to 10311, handing out deliverable numbers.
+    //
+    // The assertion is on the CANDIDATE SET, not on the outcome, so it fires whether or not the
+    // numbers happen to be free — "could any input reach this line?" answered directly.
+    [Fact]
+    public void ABandAllocationFromAHighFloor_StopsAtTheBandEnd_AndNeverOffersADeliverableNumber()
+    {
+        var highFloor = ReservedBand.Declared.LastNumber - 199;
+
+        var candidates = ClaimValidator
+            .Candidates(ClaimCorpus.Build(_corpusDir), ClaimKind.BlockNumber, "FC", highFloor, null, out var error)
+            .ToList();
+
+        Assert.Null(error);
+        var numbers = candidates.Select(c => ClaimValidator.BlockNumberParts(c).Number).ToList();
+
+        Assert.Equal(highFloor, numbers.Min());
+        Assert.Equal(ReservedBand.Declared.LastNumber, numbers.Max());
+        Assert.All(numbers, n => Assert.True(
+            ReservedBand.Declared.ContainsNumber(n),
+            $"a band allocation offered {n}, which is OUTSIDE the reserved band — that hands a harness object a deliverable number"));
+    }
+
+    // ...and end to end: with every number from a high floor to the band end taken, the allocation
+    // REFUSES rather than stepping to the first free number past 9999.
+    [Fact]
+    public void ABandAllocationFromAHighFloor_WithTheRemainderTaken_RefusesInsteadOfEscaping()
+    {
+        var highFloor = ReservedBand.Declared.LastNumber - 9;
+        var store = new ClaimStore(_claimsRoot, _corpusDir);
+        var corpus = ClaimCorpus.Build(_corpusDir);
+        for (var n = highFloor; n <= ReservedBand.Declared.LastNumber; n++)
+        {
+            ClaimsRunner.Acquire(corpus, store, _corpusDir, ClaimKind.BlockNumber, $"FC{n}", "other", "fill");
+        }
+
+        var outcome = Allocate("FC", floor: highFloor, agent: "a1");
+
+        Assert.False(outcome.Ok);
+        Assert.Equal(ClaimResult.BandExhausted, outcome.Result);
+        Assert.Null(outcome.Claim);
+    }
+
     // Exhaustion is its OWN result, not HeldByAnother — the two demand opposite responses, and
     // "someone got there first" invites the retry at a higher floor that must never happen here.
     [Fact]
