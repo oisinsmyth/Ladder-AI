@@ -346,13 +346,29 @@ running does not license:
     ➜ **Ask of any recovery route: does it survive the state it exists to recover from?** Here the
       answer put the capability on a different transport, and made the honest limit printable — *this
       binary can start that CPU and cannot stop it.*
-- *** A PREDICTION INHERITS THE AGE OF THE FACT IT RESTS ON. *** Same day, two agents measured the same
-  device and disagreed: one reported job-class S7 access *"refused CPU-wide"*, the other measured
-  `MBRead(0,1) -> ok` **with a different error code entirely**. The likely reconciliation is that
-  **the owner enabled PUT/GET part-way through the project**, so both were right about different days
-  — and an inference built on the older reading (*"a run request would be refused"*) had quietly lost
-  its basis. ➜ **When quoting a measurement to support a prediction, say WHEN IT WAS TAKEN and WHETHER
-  YOU TOOK IT.** *A recorded fact and a fresh one are different evidence, and only one of them ages.*
+- *** A PREDICTION INHERITS THE AGE OF THE FACT IT RESTS ON. *** ***RESOLVED 2026-08-14, and the lane
+  that made the claim settled it against itself.*** Two agents measured the same device and disagreed:
+  one reported job-class S7 access *"refused CPU-wide"* (`0x00040000`), the other measured
+  `MBRead(0,1) -> ok` with `0x00C00000` on a **different, block-specific** failure. **The first was a
+  RECORD dated 2026-08-12, quoted as though it had been taken** — PUT/GET was enabled on the CPU
+  between then and now, so both were right about different days, ***and the inference built on the
+  older reading had silently lost its basis.***
+    ➜ **Say WHEN a measurement was taken and WHETHER YOU TOOK IT.** *A recorded fact and a fresh one
+      are different evidence, and only one of them ages.*
+    ➜ **The lane's own summary is the rule:** *"the inference was sound on its premises; the failure
+      was citing a premise instead of re-taking one — on the single claim the whole ruling turned on,
+      when re-taking it cost one read-only command."*
+    ➜ ***AND RE-RULE TO THE OTHER KIND OF UNKNOWN, NOT TO THE OPPOSITE.*** When the basis died, the
+      conclusion did not flip to *"expected to work"* — it moved to **NOT ESTABLISHED IN EITHER
+      DIRECTION**, because three untested reasons survived that the retired fact never touched. *An
+      untested thing does not become true when the argument against it fails.*
+- *** A PLAUSIBLE MECHANISM ATTACHED TO A CORRECT CONCLUSION IS HOW A WRONG READING OF A DEVICE STAYS
+  UNEXAMINED. *** Found in the same pass: a note explained an unreadable identity source by *"S7
+  variable access is refused CPU-wide"*. **The conclusion was right — the serial is not checkable, so
+  the device is excluded by name — and the mechanism was wrong**, and being right about the
+  *consequence* is exactly what stops anyone testing the *cause*. ➜ **When retracting a mechanism,
+  check whether anything else was resting on it**, and ***delete the superseded text rather than
+  leaving it below the retraction*** — a stale claim with a correction under it is still read top-down.
 - *** A FAIL-CLOSED GATE MEETING AN UNANTICIPATED LEGITIMATE CASE IS THE EXPECTED COST OF FAILING
   CLOSED — AND FAR CHEAPER THAN THE CONVERSE. *** First real contact with `diff --only`'s new
   fail-closed header rule, 2026-08-14, hours after it landed: a `lad-coder` run repaired two **stale
