@@ -843,7 +843,11 @@ internal static class ProbeSession
 
         var resultState = Safe(() => result.State.ToString());
 
-        var transfer = ClassifyTransfer(destination, folder, resultState, result.ErrorCount, messages);
+        // THE FEEDBACK IS BUILT FIRST AND USED FOR BOTH, so the verdict and the manifest can never be
+        // two readings of the same download. Before 2026-08-14 the verdict came from this file's own
+        // phrase search and the manifest from Ladder.Download — one input, two rules.
+        var feedback = BuildFeedback(resultState, result.ErrorCount, result.WarningCount, messages);
+        var transfer = ClassifyTransfer(destination, folder, resultState, feedback);
 
         log.Blank();
         log.Rule("WAS ANYTHING ACTUALLY TRANSFERRED?");
@@ -852,7 +856,6 @@ internal static class ProbeSession
         log.Blank();
         log.Block(TransferVerdicts.DescribeRunState(messages));
 
-        var feedback = BuildFeedback(resultState, result.ErrorCount, result.WarningCount, messages);
         log.Blank();
         log.Rule(destination == DownloadDestination.Folder
             ? "IMAGE CONTENTS — NOT A LOAD MANIFEST (this run wrote to a folder)"
@@ -905,11 +908,10 @@ internal static class ProbeSession
         DownloadDestination destination,
         string? folder,
         string resultState,
-        int errorCount,
-        IReadOnlyList<DownloadMessageNode> messages) =>
+        Ladder.Download.DownloadFeedback feedback) =>
         destination == DownloadDestination.Folder
             ? TransferVerdicts.ImageOnly(folder ?? "(unnamed directory)")
-            : TransferVerdicts.Classify(resultState, errorCount, messages);
+            : TransferVerdicts.FromFeedback(feedback, resultState);
 
     /// <summary>
     /// *** THE LIVE PATH <c>DownloadResultAdapter</c> WAS BUILT FOR, AND THIS IS ITS FIRST CALLER. ***

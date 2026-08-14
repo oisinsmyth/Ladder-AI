@@ -157,18 +157,22 @@ public class DownloadProbeFolderRunTests
     {
         var messages = RecordedMessageNodes();
         Assert.NotEmpty(messages);
+        var feedback = RecordedFolderRunFeedback();
 
         var asDevice = ProbeSession.ClassifyTransfer(
-            DownloadDestination.Controller, null, "Success", 0, messages);
+            DownloadDestination.Controller, null, "Success", feedback);
         var asFolder = ProbeSession.ClassifyTransfer(
-            DownloadDestination.Folder, @"C:\somewhere\image", "Success", 0, messages);
+            DownloadDestination.Folder, @"C:\somewhere\image", "Success", feedback);
 
-        // THE CONTROL: this tree really does produce the misleading answer when read as a device run.
-        Assert.Contains("THE SOFTWARE WAS LOADED", asDevice.Headline, StringComparison.Ordinal);
+        // THE CONTROL: read as a DEVICE run this very tree is positive evidence of a transfer — 27
+        // objects named. That is correct for a device run, and it is what makes the folder assertion
+        // below a fact about the destination rather than about a harmless input.
+        Assert.Equal(TransferVerdictKind.SoftwareLoaded, asDevice.Kind);
         Assert.True(asDevice.SoftwareLoaded);
+        Assert.Contains("REPORTED LOADED BY NAME", asDevice.Headline, StringComparison.Ordinal);
 
         // And the folder run, from the same bytes, does not.
-        Assert.DoesNotContain("THE SOFTWARE WAS LOADED", asFolder.Headline, StringComparison.Ordinal);
+        Assert.Equal(TransferVerdictKind.Undetermined, asFolder.Kind);
         Assert.Contains("NOTHING REACHED ANY CONTROLLER", asFolder.Headline, StringComparison.Ordinal);
         Assert.Null(asFolder.SoftwareLoaded);
         Assert.Contains(@"C:\somewhere\image", string.Join("\n", asFolder.Evidence), StringComparison.Ordinal);
@@ -196,7 +200,7 @@ public class DownloadProbeFolderRunTests
                 // test chose. The first version of this test set the verdict it then asserted, which
                 // is the shape of check this whole task exists to remove.
                 Transfer = ProbeSession.ClassifyTransfer(
-                    DownloadDestination.Folder, @"C:\somewhere\image", "Success", 0, RecordedMessageNodes()),
+                    DownloadDestination.Folder, @"C:\somewhere\image", "Success", RecordedFolderRunFeedback()),
             },
             repo.BinaryDirectory);
 

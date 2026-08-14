@@ -677,9 +677,21 @@ public class DownloadProbeDisruptiveTests
             line => line.IndexOf("The software has not been loaded, because it is up-to-date.", StringComparison.Ordinal) >= 0);
     }
 
-    /// <summary>The other half of the same claim: a completed download with no such sentence.</summary>
+    /// <summary>
+    /// 🔴 *** THIS TEST ASSERTED THE DEFECT, AND ITS EXPECTATION IS INVERTED (2026-08-14). ***
+    ///
+    /// It was called <c>ASuccessWithoutUpToDate_IsReportedAsTRANSFERRED</c> and it required
+    /// <c>SoftwareLoaded = true</c> for a result that <b>names nothing loaded</b> — a verdict inferred
+    /// from the ABSENCE of an up-to-date phrase. `Ladder.Download`'s parser was written later the same
+    /// day to make exactly that inference impossible ("absence of a denial is not evidence of an
+    /// act"), and the probe now derives its verdict from it.
+    ///
+    /// *** A DEFECT WRITTEN DOWN AS AN EXPECTATION IS THE MOST DURABLE KIND: *** while this test
+    /// stood, the correct behaviour was a failing build. It is kept, renamed and inverted rather than
+    /// deleted, so the change of mind is visible in the file rather than only in the history.
+    /// </summary>
     [Fact]
-    public void ASuccessWithoutUpToDate_IsReportedAsTRANSFERRED()
+    public void ASuccessThatNamesNothingLoaded_IsUNDETERMINED_NotTransferred()
     {
         var messages = new[]
         {
@@ -689,13 +701,43 @@ public class DownloadProbeDisruptiveTests
 
         var verdict = TransferVerdicts.Classify("Success", errorCount: 0, messages);
 
+        Assert.Equal(TransferVerdictKind.Undetermined, verdict.Kind);
+
+        // Tri-state, and this is the value that matters: not true, and NOT false either — nobody knows.
+        Assert.Null(verdict.SoftwareLoaded);
+
+        Assert.DoesNotContain("THE SOFTWARE WAS LOADED", verdict.Headline, StringComparison.Ordinal);
+        Assert.Contains("NAMES NOTHING LOADED", verdict.Headline, StringComparison.Ordinal);
+        Assert.Contains(
+            verdict.Evidence,
+            line => line.IndexOf("THAT IS NOT A NEGATIVE, AND IT IS NOT A POSITIVE", StringComparison.Ordinal) >= 0);
+    }
+
+    /// <summary>
+    /// The positive half, restated on POSITIVE evidence: a load message, by name. This is what a real
+    /// transfer looks like, and it is the only thing that now yields "loaded".
+    /// </summary>
+    [Fact]
+    public void AResultNamingALoadedObject_IsReportedAsTRANSFERRED()
+    {
+        var messages = new[]
+        {
+            Message("Success", "Start downloading to device."),
+            Message("Success", "'DB_Data01' was loaded successfully."),
+        };
+
+        var verdict = TransferVerdicts.Classify("Success", errorCount: 0, messages);
+
         Assert.Equal(TransferVerdictKind.SoftwareLoaded, verdict.Kind);
         Assert.True(verdict.SoftwareLoaded);
         Assert.Contains("YES", verdict.Headline, StringComparison.Ordinal);
-        Assert.Contains("THE SOFTWARE WAS LOADED", verdict.Headline, StringComparison.Ordinal);
+        Assert.Contains("REPORTED LOADED BY NAME", verdict.Headline, StringComparison.Ordinal);
 
-        // And it says the basis is an ABSENCE rather than a positive confirmation, because it is.
-        Assert.Contains(verdict.Evidence, line => line.IndexOf("THE BASIS IS AN ABSENCE", StringComparison.Ordinal) >= 0);
+        // The basis is now POSITIVE evidence, and the evidence block says so where it used to say the
+        // opposite ("THE BASIS IS AN ABSENCE").
+        Assert.Contains(
+            verdict.Evidence,
+            line => line.IndexOf("THE BASIS IS POSITIVE EVIDENCE", StringComparison.Ordinal) >= 0);
     }
 
     /// <summary>
@@ -717,16 +759,55 @@ public class DownloadProbeDisruptiveTests
         Assert.Equal(TransferVerdictKind.NothingTransferred, TransferVerdicts.Classify("Success", 0, messages).Kind);
     }
 
+    /// <summary>
+    /// The MEASURED up-to-date sentence, in the casings TIA has actually produced. Recognition is
+    /// case-insensitive, and this is the wording that made a green run carry nothing.
+    /// </summary>
     [Theory]
     [InlineData("The software has not been loaded, because it is up-to-date.")]
-    [InlineData("The hardware configuration is up to date.")]
     [InlineData("THE SOFTWARE HAS NOT BEEN LOADED, BECAUSE IT IS UP-TO-DATE.")]
-    public void EveryUpToDateSpelling_IsCaught(string text)
+    public void TheMeasuredUpToDateSentence_IsCaught_InAnyCasing(string text)
     {
         var verdict = TransferVerdicts.Classify("Success", 0, new[] { Message("Success", text) });
 
         Assert.Equal(TransferVerdictKind.NothingTransferred, verdict.Kind);
         Assert.NotNull(verdict.MatchedPhrase);
+    }
+
+    /// <summary>
+    /// *** AN EXPECTATION THAT CHANGED, AND THE ARGUMENT BEHIND IT THAT DID NOT. ***
+    ///
+    /// This wording ("the hardware configuration is up to date", unhyphenated, and not a statement
+    /// that anything was withheld) used to be a third row of the theory above, asserting
+    /// <c>NothingTransferred</c> — because the probe matched three LOOSE substrings and the stated
+    /// reason was that matching wide is the safe direction: *"a false 'nothing transferred' costs a
+    /// re-run, a false 'transferred' costs a wrong conclusion."*
+    ///
+    /// <b>That argument is preserved exactly where it matters and is no longer served by guessing.</b>
+    /// The verdict is now keyed on the load manifest, so an unrecognised sentence can never produce a
+    /// false "transferred" — it produces <c>Undetermined</c>, the conservative answer — AND the
+    /// message is reported as unrecognised, which is how `Ladder.Download` is designed to go out of
+    /// date rather than silently wrong. A guess would have hidden that signal.
+    /// </summary>
+    [Fact]
+    public void AnUnrecognisedUpToDateWording_IsUndetermined_AndIsSurfaced()
+    {
+        var text = "The hardware configuration is up to date.";
+        var verdict = TransferVerdicts.Classify("Success", 0, new[] { Message("Success", text) });
+
+        // Never "transferred" — the direction the old wide matching existed to protect.
+        Assert.NotEqual(TransferVerdictKind.SoftwareLoaded, verdict.Kind);
+        Assert.Equal(TransferVerdictKind.Undetermined, verdict.Kind);
+        Assert.Null(verdict.SoftwareLoaded);
+
+        // And it is not silently swallowed: the parser reports the shape it did not recognise.
+        var feedback = Ladder.Download.DownloadFeedbackParser.Parse(
+            new Ladder.Download.DownloadResultSummary(
+                "Success", 0, 0,
+                new[] { new Ladder.Download.DownloadMessageNode(text, "Success", 0, 0, null, null) }));
+
+        Assert.Equal(1, feedback.UnrecognisedMessageCount);
+        Assert.Contains(feedback.UnrecognisedMessages, m => m.Text == text);
     }
 
     /// <summary>Empty is not clean — the project's own rule, applied to the transfer question.</summary>

@@ -89,39 +89,36 @@ internal enum TransferVerdictKind
 /// real device, five aborted and the one that returned <c>Success</c> reported "The software has not
 /// been loaded, because it is up-to-date" — it carried nothing. <c>DownloadResult.State</c> was
 /// <c>Success</c> and <c>ErrorCount</c> was 0 in that run, so state and counts CANNOT answer this
-/// question: the answer lives only in the message text, and only a reader who happened to read it
-/// would have known. That is not evidence, that is luck.
+/// question.
 ///
-/// The rule, stated so a reviewer can check it against the log in one read:
-///   - no result at all, or a result with no messages          -> Undetermined
-///   - any message matching an UP-TO-DATE phrase               -> NothingTransferred
-///   - otherwise                                               -> SoftwareLoaded
+/// *** THE DECISION IS NO LONGER MADE HERE. IT IS `Ladder.Download`'s, AND THIS TYPE IS ITS
+/// PRESENTATION (2026-08-14). ***
 ///
-/// The third arm is an INFERENCE FROM ABSENCE and is labelled as one everywhere it is printed. TIA
-/// does not emit a "the software was loaded" sentence this tool can key on positively, so the honest
-/// report is "the download completed and did not say it skipped the transfer", with every message
-/// quoted verbatim underneath so the reader can disagree.
+/// This class carried its own classifier — three loose up-to-date phrases, and "otherwise, loaded".
+/// <c>DownloadFeedbackParser</c> landed LATER THE SAME DAY (`79f1596` then `ccaae5a`) written to
+/// replace exactly that rule; its remarks name the two things it excludes by construction, and both
+/// were live here. The duplicate was simply left behind, and *** TWO IMPLEMENTATIONS OF ONE RULE
+/// DIVERGE, AND THE ONE THAT DIVERGES IS THE ONE NOBODY RUNS TESTS AGAINST. ***
+///
+/// **They agreed on all seven recorded downloads — and that was a property of the corpus, not of the
+/// rules.** `TransferVerdictParityTests` measures it, and constructs the two shapes the corpus does
+/// not contain, where they parted in OPPOSITE directions:
+///
+///   * a result carrying messages but naming nothing loaded — the old rule inferred
+///     **"YES — THE SOFTWARE WAS LOADED"** from the ABSENCE of an up-to-date phrase, which is the
+///     precise defect `DownloadFeedbackParser` exists to make impossible;
+///   * a REWORDED up-to-date sentence — the old rule's loose substrings matched it and concluded
+///     `NothingTransferred`, where the library declines to conclude AND reports the message as
+///     unrecognised, which is how that parser is designed to go out of date rather than silently
+///     wrong.
+///
+/// So the verdict is now DERIVED from <see cref="Ladder.Download.DownloadFeedback"/> — keyed on the
+/// LOAD MANIFEST, positive evidence, never on <c>state</c> and never on an absence. What stays here is
+/// the thing the library does not produce and this tool needs: the one-line headline and the verbatim
+/// evidence block that go in the log a person reads.
 /// </summary>
 internal static class TransferVerdicts
 {
-    /// <summary>
-    /// Phrases that mean the transfer did NOT happen. Case-insensitive substring matches on the
-    /// verbatim message text.
-    ///
-    /// The first is MEASURED — it is the sentence the live 2026-08-12 run returned, whole. The other
-    /// two are the same claim spelled the two other ways Siemens renders it, included because a
-    /// classifier that missed the phrasing by a hyphen would produce the exact false "TRANSFERRED"
-    /// this type exists to prevent. Matching wide is the safe direction here: a false
-    /// "nothing transferred" costs a re-run, a false "transferred" costs a wrong conclusion about
-    /// whether the tooling can deliver a program at all.
-    /// </summary>
-    internal static readonly IReadOnlyList<string> UpToDatePhrases = new[]
-    {
-        "has not been loaded",
-        "up-to-date",
-        "up to date",
-    };
-
     /// <summary>
     /// Words whose appearance in a result message means the message is TALKING ABOUT the CPU's run
     /// state. Not a reading of the run state — this tool never asks the CPU anything — which is why
@@ -179,69 +176,105 @@ internal static class TransferVerdicts
         },
         matchedPhrase: null);
 
+    /// <summary>
+    /// Convenience for a caller holding only the message tree: adapt, parse, derive. The probe's own
+    /// session does NOT use this — it already has the feedback and passes it to
+    /// <see cref="FromFeedback"/>, so the tree is never classified twice.
+    /// </summary>
     internal static TransferVerdict Classify(
         string resultState, int errorCount, IReadOnlyList<DownloadMessageNode> messages)
     {
-        var all = messages.SelectMany(m => m.SelfAndDescendants()).ToList();
-        var texts = all
-            .Select(m => m.Text)
-            .Where(t => !string.IsNullOrWhiteSpace(t))
-            .Select(t => t!)
-            .ToList();
+        var summary = Ladder.Download.DownloadResultAdapter.Adapt<DownloadMessageNode>(
+            resultState, errorCount, 0, messages,
+            m => m.Text, m => m.State, m => m.ErrorCount, m => m.WarningCount, _ => null, m => m.Children);
 
-        if (texts.Count == 0)
+        return FromFeedback(Ladder.Download.DownloadFeedbackParser.Parse(summary), resultState);
+    }
+
+    /// <summary>
+    /// *** THE SINGLE RULE, RENDERED. *** The verdict is <see cref="Ladder.Download.DownloadFeedback"/>'s
+    /// and is not recomputed, second-guessed or overridden here; only the wording is this tool's.
+    ///
+    /// The mapping is 1:1 and total, so there is no arm in which this type can hold an opinion the
+    /// library does not: Transferred → loaded, NothingTransferred → not loaded, Undetermined → null.
+    /// </summary>
+    internal static TransferVerdict FromFeedback(Ladder.Download.DownloadFeedback feedback, string resultState)
+    {
+        var upToDate = feedback.UpToDateSignals.Count > 0 ? feedback.UpToDateSignals[0].Text : null;
+
+        switch (feedback.Verdict)
         {
-            return new TransferVerdict(
-                TransferVerdictKind.Undetermined,
-                "WAS ANYTHING TRANSFERRED? *** UNDETERMINED — THE RESULT CARRIES NO MESSAGES. ***",
-                new[]
+            case Ladder.Download.TransferVerdict.Transferred:
+                return new TransferVerdict(
+                    TransferVerdictKind.SoftwareLoaded,
+                    $"WAS ANYTHING TRANSFERRED? *** YES — {feedback.TransferredItemCount} ITEM(S) WERE REPORTED LOADED BY NAME " +
+                    $"(state={resultState}). ***",
+                    new[]
+                    {
+                        feedback.VerdictReason,
+                        string.Empty,
+                        "*** THE BASIS IS POSITIVE EVIDENCE — the load manifest — NOT the absence of an",
+                        "up-to-date sentence, and NOT state=Success. The one live run that returned Success",
+                        "carried nothing, and an earlier version of this tool read ninety-nine load messages",
+                        "as unremarkable while deriving its answer from a phrase that was not there.",
+                        string.Empty,
+                        $"{feedback.LoadedObjectCount} program object(s) + {feedback.NonObjectLoadCount} non-object item(s).",
+                        "The full manifest is listed in the LOAD MANIFEST section below, and every message is",
+                        "logged verbatim above — check it.",
+                    },
+                    matchedPhrase: upToDate);
+
+            case Ladder.Download.TransferVerdict.NothingTransferred:
+                return new TransferVerdict(
+                    TransferVerdictKind.NothingTransferred,
+                    $"WAS ANYTHING TRANSFERRED? *** NO — NOTHING WAS TRANSFERRED (state={resultState}). ***",
+                    new[]
+                    {
+                        feedback.VerdictReason,
+                        "state and error count say otherwise and are not the evidence: the one previously-",
+                        "'successful' live run reported exactly this.",
+                        string.Empty,
+                        "the statement, verbatim:",
+                        "    | " + (upToDate ?? "(none)").Replace("\r\n", " ").Replace("\n", " "),
+                    },
+                    matchedPhrase: upToDate);
+
+            default:
+                var evidence = new List<string> { feedback.VerdictReason };
+
+                if (!feedback.ResultPresent)
                 {
-                    $"state={resultState}, errors={errorCount}, and not one message under it.",
-                    "EMPTY IS NOT CLEAN: a green state with nothing beneath it is the absence of an",
-                    "observation, not an observation that the transfer happened. Do not read it as a pass.",
-                },
-                matchedPhrase: null);
+                    evidence.Add("There is no DownloadResult to read at all.");
+                }
+                else if (feedback.AllMessages.Count == 0)
+                {
+                    evidence.Add($"state={resultState}, and not one message under it.");
+                    evidence.Add("EMPTY IS NOT CLEAN: a green state with nothing beneath it is the absence of an");
+                    evidence.Add("observation, not an observation that the transfer happened. Do not read it as a pass.");
+                }
+                else
+                {
+                    evidence.Add($"The result carries {feedback.AllMessages.Count} message(s) and names NOTHING loaded.");
+                    evidence.Add("*** THAT IS NOT A NEGATIVE, AND IT IS NOT A POSITIVE. *** An earlier version of this");
+                    evidence.Add("tool answered YES here, from the absence of an up-to-date phrase. Read the device.");
+                }
+
+                if (feedback.UnrecognisedMessageCount > 0)
+                {
+                    evidence.Add(string.Empty);
+                    evidence.Add($"{feedback.UnrecognisedMessageCount} message(s) of a shape the parser does not recognise —");
+                    evidence.Add("a new TIA vocabulary is the expected way it goes out of date, and they are listed in the");
+                    evidence.Add("LOAD MANIFEST section rather than counted as anything.");
+                }
+
+                return new TransferVerdict(
+                    TransferVerdictKind.Undetermined,
+                    feedback.ResultPresent
+                        ? $"WAS ANYTHING TRANSFERRED? *** UNDETERMINED — THE RESULT NAMES NOTHING LOADED (state={resultState}). ***"
+                        : "WAS ANYTHING TRANSFERRED? *** UNDETERMINED — NO DOWNLOAD RESULT EXISTS. ***",
+                    evidence,
+                    matchedPhrase: upToDate);
         }
-
-        foreach (var phrase in UpToDatePhrases)
-        {
-            var hit = texts.FirstOrDefault(t => t.IndexOf(phrase, StringComparison.OrdinalIgnoreCase) >= 0);
-            if (hit is null)
-            {
-                continue;
-            }
-
-            var evidence = new List<string>
-            {
-                $"A result message contains the up-to-date phrase '{phrase}', so the target already had",
-                "this software and the download CARRIED NOTHING. state and error count say otherwise and",
-                "are not the evidence: the one previously-'successful' live run reported exactly this.",
-                string.Empty,
-                "every message containing the phrase, verbatim:",
-            };
-            evidence.AddRange(
-                texts.Where(t => t.IndexOf(phrase, StringComparison.OrdinalIgnoreCase) >= 0)
-                     .Select(t => "    | " + t.Replace("\r\n", " ").Replace("\n", " ")));
-
-            return new TransferVerdict(
-                TransferVerdictKind.NothingTransferred,
-                $"WAS ANYTHING TRANSFERRED? *** NO — NOTHING WAS TRANSFERRED (state={resultState}). ***",
-                evidence,
-                phrase);
-        }
-
-        return new TransferVerdict(
-            TransferVerdictKind.SoftwareLoaded,
-            $"WAS ANYTHING TRANSFERRED? *** YES — THE SOFTWARE WAS LOADED (state={resultState}, errors={errorCount}). ***",
-            new[]
-            {
-                $"The download ran to a result over {texts.Count} message(s) and NONE of them says the target",
-                $"was already up to date (searched for: {string.Join(", ", UpToDatePhrases.Select(p => $"'{p}'"))}).",
-                "THE BASIS IS AN ABSENCE, and is stated as one: TIA emits no positive 'the software was",
-                "loaded' sentence to key on, so this reads 'the download completed and did not say it",
-                "skipped the transfer'. Every message is logged verbatim above — check it.",
-            },
-            matchedPhrase: null);
     }
 
     /// <summary>

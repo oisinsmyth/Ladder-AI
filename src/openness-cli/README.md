@@ -1178,6 +1178,49 @@ under `--json` as `loadManifest`, whose keys are `DownloadFeedback`'s own proper
   `src/download-feedback/DownloadFeedback.Tests/Fixtures/`. A missing fixture is a failure, never a
   skip. Removing the `loadManifest` key turns **7 tests red**.
 
+### 🔴 TWO IMPLEMENTATIONS OF THE TRANSFER RULE — measured, then collapsed to one (2026-08-14)
+
+`download-probe` grew its own transfer classifier (`TransferVerdicts`, commit `79f1596`) and
+`Ladder.Download`'s `DownloadFeedbackParser` landed **later the same day** (`ccaae5a`) written to
+replace it — its remarks name the two things it excludes by construction, and **both were live in the
+probe's copy**. The duplicate was simply left behind when `download-probe` gained its reference to the
+library for `DownloadResultAdapter`.
+
+**Established before fixing, because "they will diverge" is a prediction and not a measurement:**
+
+| | |
+|---|---|
+| **Seven recorded downloads** (six `download-feedback` fixtures + the live deployment's stdout) | **AGREE — every one.** |
+| **Two constructed shapes the corpus does not contain** | **DISAGREE, in opposite directions.** |
+
+*** THE AGREEMENT WAS A PROPERTY OF THE CORPUS, NOT OF THE RULES. *** No recorded run has a result
+that carries messages while naming nothing loaded — and that is exactly where they part:
+
+* **A result naming nothing loaded.** The probe answered **"YES — THE SOFTWARE WAS LOADED"**, inferred
+  from the *absence* of an up-to-date phrase. The library answers `Undetermined` from the manifest.
+  This is the dangerous direction, and it is the precise defect `DownloadFeedbackParser` exists to
+  make impossible.
+* **A reworded up-to-date sentence.** The probe matched three *loose substrings* and concluded
+  `NothingTransferred`; the library declines to conclude **and reports the message as unrecognised**,
+  which is how that parser is designed to go out of date rather than silently wrong.
+
+**The verdict is now `Ladder.Download`'s and is not recomputed here.** `TransferVerdicts.FromFeedback`
+maps its three-valued verdict 1:1 and total, so this type cannot hold an opinion the library does not;
+what stays is the **presentation** the library does not produce — the headline and the verbatim
+evidence block for the log a person reads. `ProbeSession` builds the feedback **once** and uses it for
+both the verdict and the manifest, so they can never be two readings of one download.
+
+**`TransferVerdictParityTests` is kept after the answer**, because it is what proves the derivation did
+not quietly reintroduce a second opinion: reintroducing the absence-inference turns **4 red**.
+
+> 🔴 **Two existing tests asserted the old rule, and one of them asserted the defect.**
+> `ASuccessWithoutUpToDate_IsReportedAsTRANSFERRED` *required* `SoftwareLoaded = true` for a result
+> naming nothing loaded. **While it stood, the correct behaviour was a failing build.** It is renamed
+> and inverted rather than deleted, so the change of mind is visible in the file. The other encoded
+> the wide-substring matching; its *argument* ("a false 'transferred' costs a wrong conclusion") is
+> preserved exactly where it matters — an unrecognised wording can never now produce a false
+> "transferred", it produces the conservative `Undetermined` **and** surfaces the message.
+
 ### 🔴 A FOLDER RUN REPORTED THAT THE SOFTWARE WAS LOADED (found and fixed 2026-08-13)
 
 **Found by the first live rehearsal of the deployment path** — `GenProject1`, `--to-folder`, no wire,
