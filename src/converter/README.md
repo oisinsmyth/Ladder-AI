@@ -2968,6 +2968,66 @@ including two pre-existing tests), and the plausible **name-shape heuristic** (2
 two tests written for it). *The pre-existing suite stayed green through both the defect and the fix
 and could not tell them apart.*
 
+## `reachable-state` — D9's producer: slot disjointness COMPUTED, not declared (2026-08-14)
+
+```
+converter reachable-state --project <ir-dir> [--block <name>]... [--json]
+```
+
+Per block, the **transitive closure through its CALL tree of every storage location it touches** —
+the set `Ladder.Wave.SlotConflictDerivation.OverlappingReachableState` intersects to produce a
+slot↔slot conflict edge, and the provenance `Ladder.Wave.WaveSetAdmission` refuses a slot for
+lacking. **Every consumer already existed; nothing computed the sets.** They arrived from
+`wave-cli submit --reaches`, i.e. from the submitting agent — *ask of any rule: who computes its
+inputs? If the answer is "the party the rule constrains", it is not a rule.*
+
+**Reads count as well as writes.** Two slots cannot share a signal one of them drives and the other
+observes, whichever way round; the question is *"could these two tests see each other?"*, never
+*"would they collide on a write?"*.
+
+### *** The direction of error is chosen, and it is not symmetric ***
+
+An **over-large** closure separates two slots that could have run together: concurrency lost, nothing
+unsafe. An **under-large** one produces the positive claim *"the slots are disjoint on every computed
+relation"* about a hazard it cannot see, and puts two agents on one FB instance. Where the two are
+traded off, **the larger closure wins.** Three consequences:
+
+- **Instance aliases are canonicalised before intersecting.** An FB writes `IO.Step`; its caller
+  writes `iDB_X.IO.Step`. One location, two strings — and left alone a slot testing the FB and a slot
+  testing its caller read as **disjoint while driving the same storage**. This deliberately **pools
+  where `ProjectUsageGraph.QualifiedPath` does not**: there, pooling *invents* a multi-writer (a false
+  accusation against correct work); here it can only *add* an overlap. *Computed disjointness is the
+  FLOOR* (D22). Every rewrite is reported, never applied silently — and the converse is pinned:
+  `FB_PusherControl|IO.Step` and `FB_ShredderSequencer|IO.Step` stay distinct.
+- **Array subscripts are stripped.** Two tests driving different elements of one injection array are
+  not independent — `DB_Input.Test[0]` disconnects every physical terminal for both.
+- **It closes DOWNWARD only.** Closing upward through callers reaches OB1 from any leaf and would make
+  every pair of slots in a plant program conflict. Coupling that exists only in a common caller is the
+  author's blacklist to state (§2.5 / D22, add-only).
+
+### *** Absent is not empty, at both levels ***
+
+`reachableState: []` is the positive claim *"computed, and it reaches nothing"*. A closure nobody could
+compute **omits the key, and its `provenance` with it** — which is what makes admission raise
+`ColouringDefect.ReachableStateNotComputed` and refuse, instead of admitting the most
+independent-looking slot in the set. An unparseable corpus file withholds the **whole report**; a call
+to a block the corpus lacks withholds **that block, by name**, and the rest are still emitted.
+
+Exit **0** computed · **2** NOT COMPUTED, key withheld · **3** emitted with at least one block withheld.
+
+### The proofs, against `ir/test-project001` rather than a fixture
+
+- **Six slots on `FB_HopperBlockageMonitor` → 15 `OverlappingReachableState` edges → SIX WAVE SETS OF
+  ONE.** That answer was reached by hand and written into `conformance-vectors-b.json` as a correction
+  (`slotsInWaveSet` 6 → 1) **by an author who said outright it was not verified against `ir/`.**
+- **The four `FB_Hx*` blocks → NO edges → one wave set of four.** Not optional: *a producer that finds
+  conflicts everywhere passes every test that only checks for conflicts.* Each closure is asserted
+  non-empty, so neither green can be the empty-set one.
+
+Mutation-tested: disconnecting the alias canonicalisation reds exactly the test written for it (the
+corpus proofs stay green — that rule needed its own); emitting a withheld closure as `Computed: true`
+reds two.
+
 ## `conflict-graph` — the submission-scoped emission the harness gate consumes (2026-08-14)
 
 ```
