@@ -8,15 +8,41 @@ tooling ready to use in the morning on a live project.* This is the answer, and 
 > run against a real controller. The **closed-loop test path is NOT** — no conformance wave has ever
 > executed end to end. Use the first. Do not build a plan on the second today.
 
-> 🔴 **AND ONE THING NEEDS A PERSON BEFORE YOU START:** the `openness-cli` **Release** binary — the
-> one every skill and every lane invokes — **was built at 02:21 and does not carry the fixes committed
-> after it**, including four found by hammering it. **One command fixes it**, and it was blocked by
-> the permission classifier overnight. See *THE RELEASE BINARY IS STALE* below. **Nothing is broken;
-> two diagnostics are lying, and it is cheap to stop them.**
+> ✅ **THE RELEASE BINARY IS NOW CURRENT — resolved 05:5x, nothing owed.** It was stale and it is not
+> any more. See *THE RELEASE BINARY WAS STALE* below for what it means and how it was proved.
 
 ---
 
-## 🔴 THE RELEASE BINARY IS STALE — one command, needs a person
+## ✅ THE RELEASE BINARY WAS STALE — REBUILT AND VERIFIED, 2026-08-14
+
+**Resolved.** `dotnet build -c Release src/openness-cli/openness-cli.sln` — **build succeeded, 0
+warnings, 0 errors**, hash `6554775…` → `49351c4b…`.
+
+***AND VERIFIED BEHAVIOURALLY, NOT BY TIMESTAMP*** — this machine has read a stale apphost before:
+
+| check | result |
+|---|---|
+| **It attaches** — `openness-cli list GenProject1` | **exit 0, 36 blocks listed.** ***Self-approval worked with nobody at the machine***, which is the claim FI-74 makes and this is another live confirmation of it |
+| `portal-status` false alarm | ***GONE.*** Zero occurrences of *"cannot be true"*; the real OS-only finding survives |
+| `compile --json` | ***STDOUT NOW PARSES AS JSON*** (`state, errors, warnings, consistentAfterCompile, messages`) with the prose paragraph on **stderr**. It had never emitted valid JSON on this project, because the permanent hardware warning sent **every** run down the prose branch |
+| bogus `--device` | Now names ***`DeviceNotFoundException: No PLC device matching 'NoSuchDevice' found`*** instead of reporting 43 present blocks as absent |
+
+⚠️ **One residual, cosmetic, not a false claim:** a bogus `--device` still emits **one row per block**
+(43 of them) for a single cause. **The reason each row gives is now correct** — it was the *claim* that
+was wrong before, and that is fixed. **Noisy, not lying.**
+
+## 🔴 THE DEFECT THAT MATTERS MOST FROM THAT SWEEP
+
+***`sanity-check` — THE HARD-RULE-4 GATE — RETURNED `OVERALL: HEALTHY`, EXIT 0, ON A PROJECT IT NEVER
+EXAMINED.*** `IsHealthy`'s last term is `DeviceCompiles.All(…)`, and ***`All` over an empty sequence is
+`true`*** — so no PLC device meant a clean pass with nothing compiled. Reachable via an HMI-only
+project, or a device walk emptied by a concurrent Openness session. **Fixed, with a converse test so a
+device with zero blocks is still legitimately healthy.**
+
+**And its sibling:** `compile-all --json` reported `"clean": true` on a run that examined nothing —
+`0 && 0` is vacuously true. **The TEXT formatter had guarded this all along** and printed *"NOTHING
+EXAMINED … proves nothing about the project"*; **the JSON formatter had no guard, three lines from a
+comment stating the rule.** *Two formatters, one verdict, one of them honest.*
 
 `src/openness-cli/OpennessCli/bin/Release/net48/openness-cli.exe` was built **2026-08-14 02:21**.
 Six commits to `src/openness-cli` landed after it. **Run this first thing:**
