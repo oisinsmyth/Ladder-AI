@@ -239,6 +239,19 @@ running does not license:
       constrain**, since both outputs moving together at the wrong moment satisfies it.
     ➜ And: **clear evidence on the harness DROPPING its start bool, never on the edge.** *A latch
       cleared on the edge is cleared again by a harness restart mid-run, taking the evidence with it.*
+- *** RECONCILE AGAINST THE ARTIFACT, NEVER THE REPORT ABOUT IT — ESPECIALLY WHEN THE RESULT LOOKS
+  LIKE THE FAILURE YOU WERE HUNTING. *** Measured 2026-08-14 by a lane that nearly filed a false
+  finding **twice in one session**: `$?` after a pipe read the *last* command's status rather than the
+  tool's, and a bad `sort` made a correct run look like exactly the headline failure it was testing
+  for. Reading the store on disk settled both. The orchestrator made the identical `$?` mistake the
+  same day, on the same kind of check.
+    ➜ *** A MEASUREMENT THAT MATCHES YOUR HYPOTHESIS IS THE ONE TO RE-TAKE. *** The moment a result
+      confirms the defect you went looking for is the moment the instrument stops being questioned.
+    ➜ **Prefer the artifact to any summary of it** — the store, the export, the emitted bytes — and
+      when a count is the finding, **count it in the thing itself.** A total agrees with a wrong
+      derivation as readily as with a right one; **per-item evidence does not.** *(The strongest form
+      seen: sixteen agents each seeing a distinct count 1…16 — serialisation demonstrated rather than
+      inferred from a total of sixteen.)*
 - *** ASK WHICH TRANSPORT ACTUALLY CARRIES THIS. *** Measured 2026-08-14, and it is the **fourth**
   instance of the unexecuted-guard family — but the first found by a question rather than by a
   mutation. A scan-counter wrap **is** absorbed, correctly, with a passing test, in the **S7** read
