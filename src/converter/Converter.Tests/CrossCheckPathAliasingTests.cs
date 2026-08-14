@@ -240,6 +240,48 @@ public class CrossCheckPathAliasingTests : IDisposable
         Assert.Empty(fact.InstanceAliases);
     }
 
+    // ---- 🔴 WHAT COVERS THE ALIASING DEFECT, AND WHAT ONLY LOOKS LIKE IT DOES --------------------
+
+    /// <summary>
+    /// *** SELF-3's Hx corpus CANNOT detect the aliasing defect, and this test is what does. ***
+    ///
+    /// <para>Measured 2026-08-14: the four Hx blocks (`FB_HxBoolEcho` / `HxDwellTimer` / `HxIntStep` /
+    /// `HxSealLatch`) share NO bare member name — their interfaces are prefixed `Echo*` / `Dwell*` /
+    /// `Step*` / `Seal*`. So the disjointness green `cross-check` reports over them <b>would have been
+    /// green with the bug present</b>: a corpus holding one value of the property under test yields a
+    /// vacuous pass. SELF-3 does not cover this defect; THIS FILE does.</para>
+    ///
+    /// <para><b>And the guarantee is pinned by its PROPERTY, not by a count or a name</b>, so it
+    /// breaks visibly at the moment the protection is breached: if someone ever "tidies" `FB_One` and
+    /// `FB_Two` to have distinct member names — the very tidy that made the Hx corpus blind — this
+    /// suite silently loses its ability to catch the aliasing bug, and this assertion fails instead of
+    /// outliving the protection it describes.</para>
+    /// </summary>
+    [Fact]
+    public void ThisSuiteContainsBlocksSharingABareLeafName_WithoutWhichItCannotSeeTheAliasingDefect()
+    {
+        var report = CrossCheckRunner.Run(_dir);
+
+        // Every block-local storage, grouped by the path BELOW its owner. At least one such path must
+        // be owned by two different blocks, or nothing in this corpus can alias.
+        var byLocalPath = report.MultiWriters
+            .Concat(report.SoleWriters.Select(s => new MultiWriterFact(s.Path, Array.Empty<WriterRef>(), s.Owner)))
+            .Where(m => m.Owner is not null)
+            .GroupBy(m => m.Path[(m.Owner!.Length + 1)..], StringComparer.Ordinal)
+            .Select(g => new { LocalPath = g.Key, Owners = g.Select(m => m.Owner!).Distinct(StringComparer.Ordinal).ToList() })
+            .Where(x => x.Owners.Count > 1)
+            .ToList();
+
+        Assert.True(
+            byLocalPath.Count > 0,
+            "no two blocks in this corpus share a bare member name, so every assertion in this file " +
+            "would pass with the path-aliasing defect present. Restore a shared leaf name (it was " +
+            "`IO.Step` across FB_One and FB_Two) or this suite is decoration.");
+
+        // And name it, so the report says WHICH collision is carrying the coverage.
+        Assert.Contains(byLocalPath, x => x.LocalPath == "IO.Step" && x.Owners.Count == 2);
+    }
+
     // ---- The sibling analyses walk the same graph, so they were checked too ----------------------
 
     // deadMembers' interface half already restricted the bare form to the owning FB (it always had
