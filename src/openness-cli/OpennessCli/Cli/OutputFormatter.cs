@@ -1419,7 +1419,14 @@ public static class OutputFormatter
     public static string FormatSanityCheckTable(SanityCheckResult result)
     {
         var sb = new StringBuilder();
-        sb.Append("OVERALL: ").Append(result.IsHealthy ? "HEALTHY" : "ISSUES FOUND").Append('\n');
+
+        // Three states, not two. "ISSUES FOUND" with an empty findings list is the worst of the
+        // three readings: it sends a reader hunting for a problem that is not there, when the real
+        // answer is that the check never had a subject. Named separately for the same reason
+        // `compile-all` names its own empty work set.
+        sb.Append("OVERALL: ")
+            .Append(result.NothingExamined ? "NOTHING EXAMINED" : result.IsHealthy ? "HEALTHY" : "ISSUES FOUND")
+            .Append('\n');
         sb.Append("BLOCKS: ").Append(result.TotalBlocks)
             .Append("  INCONSISTENT: ").Append(result.InconsistentBlocks.Count)
             // Printed ALWAYS, including at zero, for FI-62's reason applied to a new question: a
@@ -1483,6 +1490,19 @@ public static class OutputFormatter
         // `Success (errors=0, warnings=0)` over a program containing a hard compile error. A reader
         // had no way to tell from the output which question had been asked.
         sb.Append('\n').Append("Device compiles:\n");
+
+        // An empty section used to be the whole story here: the heading printed, nothing followed,
+        // and OVERALL said HEALTHY because All() over no devices is true. A heading with nothing
+        // under it reads as "checked, all fine" and meant "there was nothing to check".
+        if (result.NothingExamined)
+        {
+            sb.Append("  (none)\n")
+                .Append("  -> NOTHING EXAMINED: no PLC device was found, so no compile ran and the block and type\n")
+                .Append("     counts above describe nothing. This is NOT a pass. An HMI-only project reads like this\n")
+                .Append("     legitimately; so does a device walk that came back empty because a second Openness\n")
+                .Append("     session was open on the same project, which is the case worth ruling out first.\n");
+        }
+
         foreach (var device in result.DeviceCompiles)
         {
             var errors = SanityCheckResult.EffectiveErrors(device.Compile);
@@ -1653,6 +1673,11 @@ public static class OutputFormatter
         var payload = new
         {
             healthy = result.IsHealthy,
+
+            // Separate from `healthy` for the same reason compile-all's is: `healthy: false` now
+            // covers both "found problems" and "found no device to look at", and a consumer has to
+            // be able to tell a broken project from an unexamined one.
+            nothingExamined = result.NothingExamined,
             totalBlocks = result.TotalBlocks,
             inconsistentBlocks = result.InconsistentBlocks.Select(b => new { name = b.Name, path = b.Path, language = b.Language }),
             totalTypes = result.TotalTypes,

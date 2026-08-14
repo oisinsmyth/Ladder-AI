@@ -67,8 +67,32 @@ public sealed record SanityCheckResult(
     //
     // Fail-closed on the count itself, same as `compile`: the larger of the compiler's own
     // ErrorCount and the number of Error messages in its tree, because the two demonstrably disagree.
+    /// <summary>
+    /// TRUE when NO PLC device was found, so nothing was compiled and the block and type walks had no
+    /// subject to walk.
+    ///
+    /// <para>🔴 <b>Added 2026-08-14, because <see cref="IsHealthy"/> was vacuously true here.</b> Its
+    /// last term is <c>DeviceCompiles.All(…)</c>, and <c>All</c> over an empty sequence is
+    /// <b>true</b> — so a run that found no device at all returned <c>OVERALL: HEALTHY</c> and exit 0,
+    /// with the text report printing a <c>Device compiles:</c> heading and nothing under it. Every
+    /// other count in this record is printed even at zero, precisely so a reader can see the check
+    /// ran (FI-62 for types, the duplicate-number line for numbers); <b>the one condition that could
+    /// be satisfied by having examined nothing had no such treatment.</b></para>
+    ///
+    /// <para>It is reachable, not theoretical: an HMI-only project has no PLC device, and this
+    /// project has already seen the device walk return nothing under a second concurrent Openness
+    /// session. <b>Hard rule 4 names <c>sanity-check</c> as THE gate</b>, so a zero-denominator pass
+    /// here is a zero-denominator pass in the gate.</para>
+    ///
+    /// <para>Deliberately NOT extended to <c>TotalBlocks == 0</c>. A device with no blocks yet is an
+    /// ordinary state, it was genuinely examined, and failing it would be a gate firing outside its
+    /// scope — which is how a gate becomes noise and then gets switched off.</para>
+    /// </summary>
+    public bool NothingExamined => DeviceCompiles.Count == 0;
+
     public bool IsHealthy =>
-        InconsistentBlocks.Count == 0
+        !NothingExamined
+        && InconsistentBlocks.Count == 0
         && InconsistentTypes.Count == 0
         && DuplicateNumbers.Count == 0
         && DeviceCompiles.All(d => EffectiveErrors(d.Compile) == 0);

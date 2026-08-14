@@ -212,6 +212,92 @@ public class ReadOnlySurfaceDefectTests
         Assert.Single(OpennessGateway.NarrowToDevice(matches, null, m => m.Path));
     }
 
+    // ---- 4. sanity-check must not pass a project it never examined -------------------------
+
+    /// <summary>
+    /// <c>IsHealthy</c>'s last term is <c>DeviceCompiles.All(…)</c>, and <c>All</c> over an empty
+    /// sequence is TRUE — so a run that found no PLC device returned <c>OVERALL: HEALTHY</c> and
+    /// exit 0 while having compiled nothing. Hard rule 4 names this command as THE gate.
+    ///
+    /// <para>MUTATION: drop the <c>!NothingExamined</c> term from <c>IsHealthy</c> and this goes
+    /// red.</para>
+    /// </summary>
+    [Fact]
+    public void SanityCheck_NoPlcDeviceFound_IsNotHealthy()
+    {
+        var result = EmptyDeviceSanityResult();
+
+        Assert.True(result.NothingExamined);
+        Assert.False(result.IsHealthy);
+    }
+
+    /// <summary>
+    /// And it must SAY which of the two it is. "ISSUES FOUND" with an empty findings list sends a
+    /// reader hunting for a problem that does not exist; the real answer is that there was no
+    /// subject.
+    /// </summary>
+    [Fact]
+    public void SanityCheck_NoPlcDeviceFound_SaysNothingExaminedRatherThanIssuesFound()
+    {
+        var text = OutputFormatter.FormatSanityCheckTable(EmptyDeviceSanityResult());
+
+        Assert.Contains("OVERALL: NOTHING EXAMINED", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("OVERALL: HEALTHY", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("OVERALL: ISSUES FOUND", text, StringComparison.Ordinal);
+        Assert.Contains("no PLC device was found", text, StringComparison.Ordinal);
+    }
+
+    /// <summary>The JSON keeps the two apart too — `healthy: false` alone cannot.</summary>
+    [Fact]
+    public void SanityCheckJson_NoPlcDeviceFound_CarriesNothingExamined()
+    {
+        using var doc = JsonDocument.Parse(OutputFormatter.FormatSanityCheckJson(EmptyDeviceSanityResult()));
+
+        Assert.False(doc.RootElement.GetProperty("healthy").GetBoolean());
+        Assert.True(doc.RootElement.GetProperty("nothingExamined").GetBoolean());
+    }
+
+    /// <summary>
+    /// THE ANTI-OVER-FIRING CONTROL, and the reason the guard is scoped to devices and not to blocks.
+    /// A real device carrying a permanent hardware warning, zero blocks and zero types is
+    /// <b>examined and healthy</b>. A gate that refused this would be firing outside its scope, and a
+    /// gate that fires on ordinary submissions gets switched off by someone who is right to.
+    /// </summary>
+    [Fact]
+    public void SanityCheck_DeviceWithNoBlocksButAWarning_IsStillHealthyAndExamined()
+    {
+        var result = new SanityCheckResult(
+            TotalBlocks: 0,
+            InconsistentBlocks: Array.Empty<BlockConsistencyIssue>(),
+            DeviceCompiles: new[]
+            {
+                new DeviceCompileSummary(
+                    "S7-1200 station_1/PLC1",
+                    new CompileResult(
+                        CompileState.Warning,
+                        ErrorCount: 0,
+                        WarningCount: 1,
+                        Messages: new[] { new CompileMessage(CompileState.Warning, "hardware warning", "PLC_1") },
+                        ConsistentAfterCompile: null),
+                    "station (hardware + program)"),
+            },
+            TotalTypes: 0,
+            InconsistentTypes: Array.Empty<TypeConsistencyIssue>(),
+            DuplicateNumbers: Array.Empty<DuplicateBlockNumber>());
+
+        Assert.False(result.NothingExamined);
+        Assert.True(result.IsHealthy);
+        Assert.Contains("OVERALL: HEALTHY", OutputFormatter.FormatSanityCheckTable(result), StringComparison.Ordinal);
+    }
+
+    private static SanityCheckResult EmptyDeviceSanityResult() => new(
+        TotalBlocks: 0,
+        InconsistentBlocks: Array.Empty<BlockConsistencyIssue>(),
+        DeviceCompiles: Array.Empty<DeviceCompileSummary>(),
+        TotalTypes: 0,
+        InconsistentTypes: Array.Empty<TypeConsistencyIssue>(),
+        DuplicateNumbers: Array.Empty<DuplicateBlockNumber>());
+
     // ---- helpers ---------------------------------------------------------------------------
 
     private static FakeGateway WarningStateGateway() => new()
