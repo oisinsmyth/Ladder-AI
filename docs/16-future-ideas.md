@@ -1901,3 +1901,38 @@ per-call timing or a real run records agents actually contending for the canonic
   without `--complete` and 1 with it. **`export-all` is not live-verified** — that needs a Release
   rebuild, which revokes the binary's Openness approval until a person re-approves it at the machine
   (FI-61), so it waits for a moment when no Portal work is in flight.
+
+### OPEN QUESTION — the converter's tag resolution is CASE-SENSITIVE; TIA's symbol resolution is not
+
+**Raised 2026-08-14 by the converter check-tool hammer. Reported rather than changed, because I could
+not establish what correct is without Portal, and a session was holding it.**
+
+Every tag-name comparison in the converter is `StringComparer.Ordinal`. So `db_shared.casetarget` and
+`DB_Shared.CaseTarget` are **two different storage paths**, and the three tools agree with each other
+on that — which is why nothing has ever flagged it:
+
+```
+converter cross-check --project <lab>     # DB_Shared.CaseTarget: written-but-never-consumed;
+                                          #   writers: FC_CaseA N1        <- FC_CaseB's write INVISIBLE
+                                          # and NO multi-writer reported, though two blocks write it
+converter preflight   FC_CaseB.ir --project <lab>   # exit 1: tag root 'db_shared' does not resolve
+converter tagstatus   db_shared.casetarget --project <lab>   # PROPOSED (root: db_shared)
+```
+
+**Why it is contained today, and why that is not the same as settled.** `preflight` REFUSES the
+lower-case reference outright, so a block written that way never reaches the compile gate — the
+pipeline fails closed. The exposure is confined to a block that entered the project by another route
+(authored in TIA by hand, or imported from an export whose casing differs), where **`cross-check`'s
+C-308 multi-writer analysis would be structurally blind to a case-varied second writer** — a false
+NEGATIVE on the one check a reviewer reasons over for write conflicts.
+
+**What would settle it, in one measurement:** import two blocks writing the same DB member in
+different casing and compile. If TIA resolves them to one symbol, `Ordinal` is wrong for the
+usage-graph key (though probably still right for `preflight`'s refusal, which enforces a house style
+rather than the compiler's tolerance) and `StorageGroups` needs an `OrdinalIgnoreCase` key. If TIA
+refuses, the current behaviour is correct throughout and this entry closes.
+
+**Do NOT "fix" it by making every comparison case-insensitive on the strength of the reasoning
+above.** That is a comparator learning to equate more representations, which is how a comparator
+starts passing things — and it would silently merge two paths in the usage graph on every project,
+for a defect nobody has yet observed on real data.
