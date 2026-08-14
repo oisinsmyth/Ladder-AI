@@ -338,6 +338,21 @@ running does not license:
     ➜ **And prefer three verdicts to two**: the fix distinguishes *invented member* from
       `IndexOutOfRange` from **accepted-unchecked** (slice widths it cannot know). ***Declining to
       judge is the correct verdict when you cannot; inventing one is what caused this.***
+- *** THE TRANSPORT THAT WOULD REPORT THE PROBLEM IS SOMETIMES THE ONE THE PROBLEM SWITCHES OFF. ***
+  Found 2026-08-14 while asking whether a CPU could be started over Modbus: **`MB_SERVER` is a PROGRAM
+  BLOCK, and in STOP the program does not execute** — so nothing answers on `:503` precisely when a
+  stopped CPU is the thing you need to observe and fix. ***A diagnostic path that shares a dependency
+  with the fault it diagnoses is not a diagnostic path.***
+    ➜ **Ask of any recovery route: does it survive the state it exists to recover from?** Here the
+      answer put the capability on a different transport, and made the honest limit printable — *this
+      binary can start that CPU and cannot stop it.*
+- *** A PREDICTION INHERITS THE AGE OF THE FACT IT RESTS ON. *** Same day, two agents measured the same
+  device and disagreed: one reported job-class S7 access *"refused CPU-wide"*, the other measured
+  `MBRead(0,1) -> ok` **with a different error code entirely**. The likely reconciliation is that
+  **the owner enabled PUT/GET part-way through the project**, so both were right about different days
+  — and an inference built on the older reading (*"a run request would be refused"*) had quietly lost
+  its basis. ➜ **When quoting a measurement to support a prediction, say WHEN IT WAS TAKEN and WHETHER
+  YOU TOOK IT.** *A recorded fact and a fresh one are different evidence, and only one of them ages.*
 - *** A FAIL-CLOSED GATE MEETING AN UNANTICIPATED LEGITIMATE CASE IS THE EXPECTED COST OF FAILING
   CLOSED — AND FAR CHEAPER THAN THE CONVERSE. *** First real contact with `diff --only`'s new
   fail-closed header rule, 2026-08-14, hours after it landed: a `lad-coder` run repaired two **stale
