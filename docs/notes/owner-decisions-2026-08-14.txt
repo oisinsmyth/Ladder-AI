@@ -13,24 +13,12 @@ WHAT IS *NOT* IN HERE
   your signature, rulings on your own specification, and decisions about which
   of two artifacts is the truth.
 
-  Deliberately excluded, for example: wiring SlotJoin — done, by the lane that
-  owns that file; the six-slots-versus-one question — ANSWERED, see Q-02.
-
-  🔴 CORRECTION, made an hour after this file was written. I excluded two items
-  as "I will just do that", and BOTH turned out to be blockers rather than
-  chores. They are now Q-02 and Q-15, and the misjudgement is left visible here
-  rather than quietly repaired:
-
-    - "the 3-register discrepancy — I will measure that". It measured out as
-      .Stim.ResetMode (1) + .Stim.ResetAt (2), which is EXACTLY the one entry
-      the binding honestly records as unbound. The deployed mirror carries the
-      three registers the committed binding does not. See Q-15.
-    - "the ResetAtMs binding form — a transcription, I will do it". The encoding
-      IS stated, but there is nowhere in the schema to put it, and its absence
-      is why the committed binding cannot reproduce the deployed mirror.
-
-  The lesson, since it is the same one this project keeps paying for: I called
-  them trivial from the size of the change, not from having looked.
+  Deliberately excluded, for example: the 3-register discrepancy between the
+  emitted layer (32) and the recorded deployment (35) — I will measure that; the
+  six-slots-versus-one-slot question — a lane is answering it from the prose;
+  wiring SlotJoin — handed to the lane that owns that file; the ResetAtMs
+  binding form — the encoding is fully stated in your prose (md:35-37, 123-130),
+  so it is a transcription and I will do it.
 
   Older batch, untouched: docs/notes/owner-questions.md
 
@@ -65,42 +53,24 @@ WHY YOU        harness-binding.json is an authority document. Its own _unbound
                generation needs it stated. An AI resolving it makes the
                transcription an authorship.
 
-✅ THE PARTITION QUESTION IS ANSWERED — and not by me. Four independent
-   authorities say the six ids are ONE SLOT'S SERIAL PHASES, and no partition is
-   needed at all: your prose (md:179-181, md:173-186); D9's computed 15 conflict
-   edges; the submission's OWN corrected slotsInWaveSet: 1, whose note reads
-   "how many slots run CONCURRENTLY, not how many exist"; and the new
-   multi-writer refusal, which makes six real slots UNBUILDABLE on one stimulus
-   instance. Width agrees: ~34 registers against 162/174.
+RECOMMENDATION State it explicitly, EVEN IF the answer is "one slot".
 
-   A many-to-one map assigns no signal to any group, so this collapses BOTH
-   _unbound.slotPartition and _unbound.startBoolPerSlot into a single yes/no.
+REASONING      md:41-59 and md:69-80 are flat tables with no slot column, while
+               md:175 names six start bools and set B declares six slot ids. So
+               six ids exist and nothing says which signal belongs to which.
+               md:179-181 says all six drive the SAME instance and the SAME
+               members, and md:173-186 says they are STRICTLY SERIAL — which is
+               consistent with one slot, but "consistent with" is not "stated
+               as", and that gap is exactly what nobody should close silently.
 
-🔴 WHAT IS STILL YOURS IS SMALLER AND SHARPER: THE ORDER OF THE SIX GROUPS.
+EXAMPLE        A single line in the prose would do it, e.g.:
+                 "All six slot ids address one slot; the ids are the vector
+                  author's grouping key, not six independent test surfaces."
+               ...or the converse, if six really are intended.
 
-RECOMMENDATION Confirm the six groups run in DOCUMENT ORDER, i.e. the order they
-               appear in conformance-vectors-b.json.
-
-REASONING      The six ids stop being an addressing key and become a SEQUENCING
-               key — the major half of a two-level ordinal (group, index).
-               That is needed because the submission carries no total order:
-               MEASURED, each group restarts `index` at 0, so there are six
-               distinct index values across 27 vectors. LoopRun.Package reads
-               distribution.Results[vector.Index], so a naive merge gives SIX
-               VECTORS ALL READING Results[0], and 21 of 27 packages carrying
-               another vector's run — reported confidently, with no error.
-               Document order is the obvious candidate and has the merit of being
-               a property of the artifact rather than a choice. But it is still a
-               sentence only you can write.
-
-NOT FREE       STARTUP is the group whose model `represents` entry is an X-F CPU
-               stop/restart across a disruptive download boundary with retentive
-               memory preserved. Where it sits in the order is not arbitrary.
-
-EXAMPLE        One line in the prose:
-                 "The six groups run in the order they appear in the submission:
-                  RAISE, CLEAR, RESET, STARTUP, LATCH, PAIR."
-               ...or any other order you want, stated.
+COST IF WRONG  Guessing "one slot" when six are meant silently merges six test
+               surfaces. Guessing "six" when one is meant multiplies the mirror
+               from ~34 registers to ~174 and will not fit the area pointer.
 
 RESPONSE       AGREE
 
@@ -291,7 +261,7 @@ NOTE           This is now lower-stakes than it was this morning: TestEnviroment
                owns the rig, so GenProject1 is no longer deployed from. It still
                matters because its IR is the corpus every analysis tool reads.
 
-RESPONSE       AGREE
+RESPONSE       IR is the truth drive the controller and project from the IR. 
 
 --------------------------------------------------------------------------------
 Q-11   MotorIOSet / MotorVSDIOSet — UDTs in the controller that no IR describes
@@ -326,7 +296,7 @@ REASONING      Everything proved overnight was the REFUSAL direction — every
                refusals. TestEnviroment is now the right place to find out, since
                it is restorable and proven so.
 
-RESPONSE       AGREE
+RESPONSE       You are free to download overwrite, anything ypu need to do in the test environment and the current rig
 
 --------------------------------------------------------------------------------
 Q-13   NB-7 — OB80, the executing-block register, and the enable bitmask
@@ -366,48 +336,90 @@ REASONING      TestEnviroment was created as a copy of GenProject1 and now owns
                One corpus, one deployment target, and drift-check --complete as
                the check that they still agree.
 
-RESPONSE       AGREE
-
---------------------------------------------------------------------------------
-Q-15   🔴 THE COMMITTED BINDING CANNOT REPRODUCE THE DEPLOYED MIRROR
-        (added an hour after this file was written — this one IS urgent)
---------------------------------------------------------------------------------
-WHY YOU        It needs a schema field added to an authority document, and it is
-               the reason the conformance run cannot confirm against the device.
-
-RECOMMENDATION Approve adding a two-tag form to the binding schema, so one spec
-               name may bind to `.Stim.ResetMode` AND `.Stim.ResetAt`.
-
-REASONING      md:57 maps ONE set-B field, HBA_Stim.ResetAtMs, to TWO IR members,
-               and the schema is one tag per specName. So the transcription
-               honestly recorded it as unbound — and those two members are
-               exactly the three registers (Int 1 + Time 2) that the deployed
-               mirror carries and a layer generated from the committed binding
-               does not.
-
-               MEASURED: deployed vector band 21 vs generated 18; map hash
-               f50e6b44… deployed vs 798afaf9… generated.
-               *** THE COMMITTED BINDING IS NOT THE BINDING THE DEPLOYED MIRROR
-               WAS GENERATED FROM. A RUN FROM IT WOULD NOT CONFIRM AGAINST THE
-               DEVICE. *** Every result register also sits 3 lower.
-
-WORSE, AND     All 27 vectors supply HBA_Stim.ResetAtMs. The wave builder walks
-NOW REFUSED    the BINDING'S targets and looks each up in the vector's inputs —
-               so an input no target claims was never visited, the register
-               stayed 0, and ResetMode 0 means "never reset" in your md:123-130
-               table. A VALID SCENARIO, AND NOT THE ONE ANY OF THE 27 ASKED FOR.
-               Silent by defect, not by design. It is now refused by name.
-
-ALSO OWED      There is no ENCODER for the symbolic decade names either —
-               "RAISE_UNINTERRUPTED", "CLEARDOWN" — into the Ints they stand for.
-               Your tables state them (md:121, md:123-130, md:132-143), so
-               supplying them is transcription; the schema simply has nowhere to
-               put them. Same approval covers it.
-
-RESPONSE       AGREE
+RESPONSE       AGREE (kind of); test-project001 is the truth
 
 ================================================================================
-END — 15 items. Q-15 blocks the conformance run; Q-02's remaining half blocks it
-too. The other thirteen are recorded so they stop being open questions rather
-than because they are urgent.
+END — 14 items. Nothing here blocks work that is currently in flight; each is
+recorded so it stops being an open question rather than because it is urgent.
+================================================================================
+
+================================================================================
+ADDENDUM — 2026-08-14, after the answers came back
+================================================================================
+
+RECORDED: 11 recommendations accepted, 3 changed.
+
+  Q-10  OVERRIDDEN -> "IR is the truth, drive the controller and project from
+        the IR."  I had recommended the opposite (controller as truth). Taken as
+        the ruling: the four drifted blocks get IR re-imported OVER them, not
+        re-exported out of them.
+  Q-12  WIDENED -> "You are free to download overwrite, anything you need to do
+        in the test environment and the current rig."  Broader than the
+        supervised session I asked for. Taken as standing authorisation for the
+        deploy and for redeploys.
+  Q-14  QUALIFIED -> "AGREE (kind of); test-project001 is the truth."  Consistent
+        with Q-10. One corpus, and it is ir/test-project001.
+
+MEASURED RATHER THAN ASKED (so it is not a question):
+  Q-01's answer (leave writeEligible FALSE) does NOT block the conformance run.
+  harness-run --verify consults DeviceAccessGuard.Check(host) - the READ guard,
+  which checks kind: test-rig. DeviceWriteGuard, which is what reads
+  writeEligible, is referenced only by RigControl, RigWrite and S7Transport.
+  Harness.Wire - where MirrorClient lives, the thing that writes stimulus into
+  the PLC - does not reference DeviceGuard at all.
+  *** SO THE MODBUS WRITE PATH IS FENCED ONLY BY THE READ GUARD. *** That is
+  recorded as a finding, not used as a convenience; it is on the list to close.
+
+--------------------------------------------------------------------------------
+STILL OWED — FOUR ONE-LINE ANSWERS
+--------------------------------------------------------------------------------
+Three of these are items where AGREE meant "yes, that should be stated" and the
+statement itself is yours to write. The fourth was lost when the file was edited
+(my later revision was overwritten) and is the one that currently blocks the run.
+
+O-1  Q-05's second half. You agreed to "rule AMB-16 by naming which threshold
+     'the persistence threshold' refers to" - but the name is still owed. 22 of
+     the 27 assertions are readable two ways until it is given.
+     ANSWER:
+
+O-2  Q-03. You agreed to amend md:74, which reads `latched` and names no block.
+     Name the latching block, or say it is not latched by a block.
+     ANSWER:
+
+O-3  Q-02's surviving half. The PARTITION is settled - four independent
+     authorities say the six ids are one slot's serial phases, and none of them
+     is an agent's opinion (your prose md:179-181 and md:173-186; D9's computed
+     15 conflict edges; the submission's own slotsInWaveSet: 1; and the new
+     multi-writer refusal, which makes six real slots unbuildable on one
+     stimulus instance).
+     WHAT IS OWED IS THE ORDER OF THE SIX GROUPS. The submission carries no
+     total order - each group restarts index at 0 - so a naive merge gives six
+     vectors all reading Results[0] and 21 of 27 packages carrying another
+     vector's run. My recommendation: document order, i.e.
+       RAISE, CLEAR, RESET, STARTUP, LATCH, PAIR
+     Not free: STARTUP is the group that spans a CPU stop/restart across a
+     disruptive download boundary, so where it sits is not arbitrary.
+     ANSWER (blank = document order as above):
+
+O-4  Q-15, lost in the edit. THE COMMITTED BINDING CANNOT REPRODUCE THE DEPLOYED
+     MIRROR: deployed vector band 21 vs generated 18, map hash f50e6b44 vs
+     798afaf9. The missing three registers are .Stim.ResetMode (1) +
+     .Stim.ResetAt (2) - exactly the entry the binding records as _unbound,
+     because md:57 maps ONE set-B field to TWO IR members and the schema allows
+     one tag per spec name.
+     RECOMMENDATION: approve a two-tag form in the binding schema, plus an
+     encoder for the symbolic decade names ("RAISE_UNINTERRUPTED", "CLEARDOWN")
+     whose tables you already state at md:121, md:123-130, md:132-143.
+     Under Q-10 this is now less about matching the deployed mirror - IR is the
+     truth, so we regenerate and redeploy - but it still blocks the run: all 27
+     vectors supply ResetAtMs, and an input no target claims is never visited,
+     leaving ResetMode at 0, which your own table defines as "never reset". A
+     valid scenario, and not the one any of the 27 asked for.
+     ANSWER (blank = AGREE, and I proceed):
+
+--------------------------------------------------------------------------------
+PROCEEDING MEANWHILE, so nothing waits on you:
+  - O-3 and O-4 are being built to REFUSE when unstated rather than to default,
+    so a blank answer costs nothing and a different answer costs no rework.
+  - The deploy is authorised by Q-12 and proceeds from IR per Q-10.
 ================================================================================
