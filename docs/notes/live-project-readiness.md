@@ -96,6 +96,19 @@ the block goes invisible on the wire while every check stays green. **It bites o
 - **A slot set that all drives one FB instance is ONE slot, not N.** If you submit N slots against one
   block and see `SERIALISED`, ***that is a correct result, not a failure.***
 - **The gate count is 25**, not the 23 quoted in the test plan.
+- 🔴 ***`tagstatus` WAS ACCUSING LEGITIMATE ALARM-BIT SLICES OF BEING INVENTED MEMBERS*** — `DB_X.Alarm0.%X0`
+  returned `MEMBER-NOT-FOUND`, the **hard-rule-3 verdict**, on the one construct doc 06 documents an
+  exception for. **154 false findings across the 92 committed `.ir` files.** *Fixed*, and slices are now
+  bounds-checked (`.%X16` of a `Word` is `IndexOutOfRange` — a **different fact** from an invented
+  member), while widths the tool cannot know are **accepted unchecked, never accused.**
+  **If you saw that verdict before today and dismissed it, you were right to.**
+- ✅ **`preflight` now resolves tag references to MEMBER level.** Until today it stopped at the DB root,
+  so **a block reading three invented members passed `CLEAN, exit 0`** while `tagstatus` refused them.
+  ***Nothing in the static pipeline caught an invented member; now `preflight` does.***
+- ✅ **`diff --only` no longer claims invariance it did not check.** Retyping an interface member with
+  no network touched used to print `INVARIANCE OK … exit 0`. It now **fails closed**, with
+  `--allow-header` as the named escape — **which `gen-block-modify-fix` must never pass**, since a fix
+  needing an interface member *routes*, it does not *declare*.
 
 ## 📋 ONE THING WAITING FOR YOU TO DECIDE
 

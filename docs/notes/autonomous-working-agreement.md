@@ -293,6 +293,33 @@ running does not license:
     ➜ **A crash is loud without being NAMED.** A harness cannot tell an unhandled exception from a
       refusal, so a top-level catch that names it is not decoration — it is what makes the difference
       reportable.
+- *** A TEST CAN PIN THE DEFECT AS THE CONTRACT — AND THEN THE NEXT PERSON TO FIX IT GOES RED AND
+  CONCLUDES THEY BROKE SOMETHING. *** Found 2026-08-14: `drift-check`'s `Run_UnpairedIrDoesNotFail_…`
+  asserted `HasDrift == false` **with a comment naming the condition outright** — *"Nothing is COMPARED
+  here at all — and without `--complete` none of it fails."* ***THE BUG WAS NOT UNDETECTED; IT WAS
+  DOCUMENTED, ASSERTED, AND DEFENDED.*** That is how a defect acquires tenure.
+    ➜ **When a fix turns an existing test red, read the test's INTENT before assuming the fix is
+      wrong** — and when the test guarded a real property (here: a committed corpus may legitimately
+      lag), **keep the property and re-test it against a run that actually compares something.**
+- *** A WHOLE-CORPUS SWEEP REACHES DEFECTS NO TARGETED PROBE CAN, BECAUSE THE INPUT YOU WOULD HAVE TO
+  GUESS IS ALREADY SITTING IN THE REPOSITORY. *** The strongest instance, 2026-08-14: validating a new
+  `preflight` gate over **all 92 committed `.ir` files** produced **154 findings, every one false** —
+  and the cause was **older than the change and in a different tool.** `tagstatus` — *the
+  anti-laundering tool, the one enforcing hard rule 3* — was returning `MEMBER-NOT-FOUND` on **C-501
+  alarm-bit slices**, the one construct doc 06 documents an exception for, which the converter has
+  handled since 2026-07-10. **A night of adversarial probes had not reached it.**
+    ➜ *** A GATE THAT ACCUSES CORRECT WORK OF THE MOST SERIOUS OFFENCE IN THE PROJECT IS ONE THAT GETS
+      DISBELIEVED *** — and the day it is right, nobody looks. **Validate a new gate against the real
+      corpus before believing it, and report the FILE COUNT you swept.**
+    ➜ **And prefer three verdicts to two**: the fix distinguishes *invented member* from
+      `IndexOutOfRange` from **accepted-unchecked** (slice widths it cannot know). ***Declining to
+      judge is the correct verdict when you cannot; inventing one is what caused this.***
+- *** A GATE LANDED WITHOUT ITS CALLERS IS A BROKEN PIPELINE. *** Same day: `diff --only` was made to
+  fail closed on unclaimed header changes, and **the calling skills were updated in the same commit** —
+  `modify-purpose` may pass the new `--allow-header` **and must then quote the interface delta**;
+  `modify-fix` must **never** pass it, *because a fix needing an interface member routes, it does not
+  declare.* ➜ **An escape flag must cost something**: with it the gate stops arguing, so **the reader
+  becomes the only remaining check** and must be told that in the same breath.
 - *** A TEST OF A LITERAL IS EVIDENCE ABOUT THE LITERAL AND NOTHING ELSE. *** The starkest instance
   this project has found, 2026-08-14: the harness's **strongest safety claim** — *"the capability is
   absent from the assembly"* — was backed by `Assert.False(Arming.CompiledIn)` where `CompiledIn` is a
