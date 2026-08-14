@@ -86,7 +86,7 @@ namespace Ladder.Wave
     }
 
     /// <summary>Raised when the store cannot be used at all.</summary>
-    public sealed class WaveStoreException : Exception
+    public class WaveStoreException : Exception
     {
         /// <summary>Creates the exception.</summary>
         public WaveStoreException(string message) : base(message)
@@ -97,6 +97,43 @@ namespace Ladder.Wave
         public WaveStoreException(string message, Exception inner) : base(message, inner)
         {
         }
+
+        /// <summary>
+        /// FALSE for an unusable store. *** THE DISTINCTION IS THE EXIT CODE, AND IT DECIDES WHAT A
+        /// HARNESS DOES NEXT. *** See <see cref="WaveStoreContendedException"/>.
+        /// </summary>
+        public virtual bool Retryable => false;
+    }
+
+    /// <summary>
+    /// Raised when the store's lease could not be taken because ANOTHER AGENT HELD IT. *** THIS IS
+    /// THE MECHANISM WORKING, AND IT IS RETRYABLE. ***
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// 🔴 *** RULED 2026-08-14, AND THIS TYPE EXISTS BECAUSE THE FIRST BUILD GOT THE EXIT CODE
+    /// WRONG. *** A lease timeout originally raised a plain <see cref="WaveStoreException"/>, which
+    /// the driver reported as exit 2. The campaign's contract defines exit 2 as *"nothing was decided
+    /// and RETRYING WILL NOT HELP"* — and here retrying WOULD help, because the contention is
+    /// transient by construction. *** A HARNESS KEYING ON THAT CODE GIVES UP WHERE IT SHOULD BACK
+    /// OFF, which is a wrong answer rather than a rough edge. ***
+    /// </para>
+    /// <para>
+    /// So a lease timeout is now *** exit 1 — REFUSED, and the reason names it RETRYABLE. *** Exit 2
+    /// keeps its meaning for a store that is genuinely unusable: malformed, inside a worktree, or an
+    /// argument that cannot be honoured. Widening exit 2 to cover contention would have made the code
+    /// useless for the case it exists for.
+    /// </para>
+    /// </remarks>
+    public sealed class WaveStoreContendedException : WaveStoreException
+    {
+        /// <summary>Creates the exception.</summary>
+        public WaveStoreContendedException(string message) : base(message)
+        {
+        }
+
+        /// <summary>TRUE — the contention is transient and the caller should back off, not give up.</summary>
+        public override bool Retryable => true;
     }
 
     /// <summary>
@@ -226,12 +263,13 @@ namespace Ladder.Wave
                 {
                     if (clock.Elapsed >= timeout)
                     {
-                        throw new WaveStoreException(
+                        throw new WaveStoreContendedException(
                             "'" + who + "' could not take the wave-store lease at '" + LeasePath +
                             "' within " + (int)timeout.TotalMilliseconds + " ms (" + attempts +
                             " attempts). Another agent holds it. THIS IS THE MECHANISM WORKING, not a " +
-                            "fault — concurrent submission is serialised deliberately — but a timeout " +
-                            "this long means the holder is stuck rather than busy.");
+                            "fault - concurrent submission is serialised deliberately. BACK OFF AND " +
+                            "RETRY: nothing was decided, but the contention is transient, so this is a " +
+                            "REFUSAL (exit 1) and not an unusable store (exit 2).");
                     }
 
 #if NETSTANDARD2_0

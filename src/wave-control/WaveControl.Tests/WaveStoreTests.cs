@@ -91,6 +91,31 @@ namespace Ladder.Wave.Tests
         }
 
         [Fact]
+        public void An_UNUSABLE_store_is_not_retryable_and_a_CONTENDED_one_is()
+        {
+            // *** THE DID-NOT-RUN CASE FOR THE NEW DISTINCTION. *** Without this, Retryable could be
+            // hardcoded true and every test above would still pass — the exact "a flag that is
+            // permanently true is indistinguishable from a constant" shape this lane keeps finding.
+            using (var dir = new TempDirectory())
+            {
+                var store = StoreIn(dir);
+                File.WriteAllText(store.SlotsPath, "format=1\nslots=2\nend\n");
+
+                var unusable = Assert.Throws<WaveStoreException>(() => store.Read());
+                Assert.False(unusable.Retryable);
+                Assert.IsNotType<WaveStoreContendedException>(unusable);
+
+                using (store.AcquireLease("A", TimeSpan.FromSeconds(5)))
+                {
+                    var contended = Assert.Throws<WaveStoreContendedException>(
+                        () => store.AcquireLease("B", TimeSpan.FromMilliseconds(80)));
+
+                    Assert.True(contended.Retryable);
+                }
+            }
+        }
+
+        [Fact]
         public void A_store_with_no_directory_is_refused_rather_than_defaulted()
         {
             Assert.Throws<WaveStoreException>(() => new WaveStore(null));
@@ -156,9 +181,17 @@ namespace Ladder.Wave.Tests
 
                 using (store.AcquireLease("A", TimeSpan.FromSeconds(5)))
                 {
-                    var ex = Assert.Throws<WaveStoreException>(
+                    // *** RULED 2026-08-14: CONTENTION IS ITS OWN EXCEPTION AND ITS OWN EXIT CODE. ***
+                    // A lease timeout used to raise a plain WaveStoreException, which the driver
+                    // reported as exit 2 — "nothing was decided and retrying will not help". Retrying
+                    // WOULD help here, so a harness keying on exit 2 gave up where it should back off.
+                    var ex = Assert.Throws<WaveStoreContendedException>(
                         () => store.AcquireLease("B", TimeSpan.FromMilliseconds(120)));
 
+                    // The PROPERTY is the contract; the wording is decoration. Asserting on the word
+                    // alone would pass against a message that said it and a type that did not mean it.
+                    Assert.True(ex.Retryable);
+                    Assert.Contains("BACK OFF AND RETRY", ex.Message, StringComparison.Ordinal);
                     Assert.Contains("THIS IS THE MECHANISM WORKING", ex.Message, StringComparison.Ordinal);
                 }
 

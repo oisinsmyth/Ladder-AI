@@ -48,6 +48,17 @@ namespace Ladder.Wave.Cli
                         return ExitUnusable;
                 }
             }
+            catch (WaveStoreContendedException ex)
+            {
+                // *** RULED 2026-08-14: A LEASE TIMEOUT IS A REFUSAL, NOT AN UNUSABLE STORE. *** Exit 2
+                // means "nothing was decided and RETRYING WILL NOT HELP"; here retrying WOULD help,
+                // because the contention is transient by construction — so a harness keying on exit 2
+                // would give up where it should back off, which is a wrong answer rather than a rough
+                // edge. Caught BEFORE WaveStoreException, which keeps exit 2 for a store that is
+                // genuinely unusable.
+                Console.Error.WriteLine("REFUSED (RETRYABLE): " + ex.Message);
+                return ExitRefused;
+            }
             catch (WaveStoreException ex)
             {
                 Console.Error.WriteLine("STORE UNUSABLE: " + ex.Message);
@@ -300,6 +311,9 @@ namespace Ladder.Wave.Cli
   wave-cli reset  --store <dir> --agent <id>
 
 EXIT: 0 admitted · 1 refused · 2 unusable (nothing was checked).
+      A LEASE TIMEOUT IS EXIT 1 AND ITS REASON SAYS 'RETRYABLE' — back off and retry. Exit 2 is
+      reserved for a store that cannot be used at all: malformed, inside a worktree, or an argument
+      that cannot be honoured. Retrying an exit 2 will not help.
 
 THE STORE IS SHARED AND HAS NO DEFAULT. A per-worktree store is always empty, admits everything and
 looks exactly like success — put it beside the claims registry, outside every worktree.");
