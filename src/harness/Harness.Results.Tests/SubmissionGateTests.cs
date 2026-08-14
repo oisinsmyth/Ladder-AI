@@ -70,6 +70,19 @@ public class SubmissionGateTests
     private static readonly IReadOnlyDictionary<string, string> SpecifiedBounds =
         new Dictionary<string, string>(StringComparer.Ordinal) { ["ramp_limit"] = "10", ["dwell"] = "T#5S" };
 
+    /// <summary>
+    /// The 2.7 join for these fixtures, complete — <b>the DID-NOT-RUN control.</b>
+    ///
+    /// <para>A join that refuses everything passes every test that only checks refusals. So the default
+    /// fixture DECLARES a full join and gates 8 / 8c must actually RUN; the refusing states have their
+    /// own tests below.</para>
+    /// </summary>
+    private static readonly SignalStorageMap Joined = SignalStorageMap.Of(new[]
+    {
+        ("Demo_Count", new SignalStorage("DemoUnit", "Demo_Count")),
+        ("Demo_Inhibit", new SignalStorage("DemoUnit", "Demo_Inhibit")),
+    });
+
     private static SubmissionReport Check(
         IReadOnlyList<SubmissionVector>? vectors = null,
         string blockAuthor = "agent-a",
@@ -79,7 +92,8 @@ public class SubmissionGateTests
         int runtimeCompression = 1,
         bool omitConflictGraph = false,
         AssertionEnumeration? enumeration = null,
-        BlockCompressionInputs? compressionInputs = null) =>
+        BlockCompressionInputs? compressionInputs = null,
+        SignalStorageMap? storage = null) =>
         SubmissionGate.Check(
             vectors ?? new[] { Vector() },
             enumeration ?? AssertionEnumeration.Of(new[] { "REQ-014" }, new[] { AssertionIdValue },
@@ -98,7 +112,10 @@ public class SubmissionGateTests
             // Contract 4.5, and TRUE of these fixtures rather than convenient: the mirror is %MW bit
             // memory, nothing here generates a data block, and the reachable set really is empty.
             new DeploymentDeclaration("fixture-import", Array.Empty<S7ObjectDeclaration>()),
-            TagMapReach.Of(Array.Empty<S7Reach>()));
+            TagMapReach.Of(Array.Empty<S7Reach>()),
+
+            // 2.7's join, complete. Gates 8/8c are statements about STORAGE and are NOT CHECKED without it.
+            storage ?? Joined);
 
     /// <summary>
     /// One vector whose expectation declares a WINDOW, so X-D's assertion ceiling is computable for it.
@@ -866,7 +883,8 @@ public class SubmissionGateTests
             MirrorObservability.Of(("Demo_Count", new[] { InstrumentationMode.Latched })) with { Provenance = MapProvenance.Bindings },
             9, 1, ConflictGraph.Empty, null,
             new DeploymentDeclaration("fixture-import", Array.Empty<S7ObjectDeclaration>(), NoS7Transport: true),
-            null);
+            null,
+            Joined);
 
         var gate = Gate(report, "11 memory layout");
 
@@ -889,7 +907,8 @@ public class SubmissionGateTests
             new DeploymentDeclaration("fixture-import",
                 new[] { new S7ObjectDeclaration("DB_X", 100, "DB_X", DeclaredLayout.Standard, "fixture-import") },
                 NoS7Transport: true),
-            TagMapReach.Of(Array.Empty<S7Reach>()));
+            TagMapReach.Of(Array.Empty<S7Reach>()),
+            Joined);
 
         var gate = Gate(report, "11 memory layout");
 
@@ -1034,5 +1053,141 @@ public class SubmissionGateTests
         Assert.Equal(GateStatus.Checked, gate.Status);
         Assert.False(gate.Passed);
         Assert.Contains("MapDoesNotProvideIt", gate.Detail, StringComparison.Ordinal);
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // 2.7 — the SUBMISSION-side join: WHERE a signal lives, not only how it is watched
+    // ---------------------------------------------------------------------------------------------
+
+    [Fact]
+    public void THE_DID_NOT_RUN_TEST_a_fully_joined_submission_lets_gates_8_and_8c_ACTUALLY_RUN()
+    {
+        // A join that refuses everything passes every test that only checks refusals, and that shape has
+        // been caught here repeatedly. This is the control.
+        var report = Check();
+
+        Assert.Equal(GateStatus.Checked, Gate(report, "8s signal storage join").Status);
+        Assert.True(Gate(report, "8s signal storage join").Passed);
+        Assert.Equal(GateStatus.Checked, Gate(report, "8 blacklist").Status);
+        Assert.Equal(GateStatus.Checked, Gate(report, "8c multi-writer").Status);
+    }
+
+    [Fact]
+    public void WITH_NO_JOIN_AT_ALL_gates_8_and_8c_are_NOT_CHECKED_because_a_graph_is_about_STORAGE()
+    {
+        // *** MEASURED: 1 OF 17 SIGNALS RESOLVED ON A LIVE SUBMISSION, AND THAT ONE ONLY BECAUSE ITS SPEC
+        // NAME AND BLOCK TAG HAPPEN TO BE THE SAME STRING. *** providedFor says HOW a signal is watched
+        // and never WHERE it is.
+        var report = Check(storage: SignalStorageMap.None);
+
+        Assert.Equal(GateStatus.NotChecked, Gate(report, "8s signal storage join").Status);
+        Assert.Equal(GateStatus.NotChecked, Gate(report, "8 blacklist").Status);
+        Assert.Equal(GateStatus.NotChecked, Gate(report, "8c multi-writer").Status);
+        Assert.Contains("says HOW a signal is watched and never WHERE it is", Gate(report, "8s signal storage join").Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void HARNESS_ONLY_IS_A_POSITIVE_CLAIM_and_turns_a_NOT_CHECKED_into_a_COMPUTED_FACT()
+    {
+        // *** THE THIRD STATE IS THE ONE THAT MAKES THE OTHER TWO MEAN ANYTHING. *** The converter's own
+        // unresolved reason is "this may be a mirror-only signal, or the name may be wrong" - two entirely
+        // different repairs behind one silence. Without this state a legitimately mirror-only signal is
+        // indistinguishable from a typo for ever.
+        var mirrorOnly = SignalStorageMap.Of(Array.Empty<(string, SignalStorage)>(), new[] { "Demo_Count" });
+
+        var report = Check(storage: mirrorOnly);
+        var gate = Gate(report, "8s signal storage join");
+
+        Assert.Equal(GateStatus.Checked, gate.Status);
+        Assert.True(gate.Passed);
+        Assert.Contains("POSITIVE CLAIM AND NOT AN OMISSION", gate.Detail, StringComparison.Ordinal);
+        Assert.Equal(StorageJoin.HarnessOnly, mirrorOnly.Resolve("Demo_Count"));
+    }
+
+    [Fact]
+    public void A_SIGNAL_IN_BOTH_IS_A_CONTRADICTION_AND_IS_REFUSED_naming_it()
+    {
+        var both = SignalStorageMap.Of(
+            new[] { ("Demo_Count", new SignalStorage("DemoUnit", "Demo_Count")) },
+            new[] { "Demo_Count" });
+
+        Assert.Equal(StorageJoin.Contradiction, both.Resolve("Demo_Count"));
+
+        var gate = Gate(Check(storage: both), "8s signal storage join");
+
+        // CHECKED-and-failed, not NOT CHECKED: this was COMPARED and found wrong, which is a different
+        // repair from a join nobody made.
+        Assert.Equal(GateStatus.Checked, gate.Status);
+        Assert.False(gate.Passed);
+        Assert.Contains("Demo_Count", gate.Detail, StringComparison.Ordinal);
+        Assert.Contains("cannot both occupy storage and occupy none", gate.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AN_AMBIGUOUS_JOIN_IS_REFUSED_NAMING_EVERY_CANDIDATE_never_resolved_to_one()
+    {
+        // Picking a candidate is the aliasing that manufactured fictional multi-writers - two of the four
+        // cross-block findings this project has ever recorded - not the fix.
+        var ambiguous = SignalStorageMap.Of(new[]
+        {
+            ("Demo_Count", new SignalStorage("UDT_A", "IO.Step")),
+            ("Demo_Count", new SignalStorage("UDT_B", "IO.Step")),
+        });
+
+        var ambiguity = Assert.Single(ambiguous.Ambiguities);
+        Assert.Equal(2, ambiguity.Candidates.Count);
+        Assert.Empty(ambiguous.Storage);
+
+        var gate = Gate(Check(storage: ambiguous), "8s signal storage join");
+
+        Assert.False(gate.Passed);
+        Assert.Contains("UDT_A", gate.Detail, StringComparison.Ordinal);
+        Assert.Contains("UDT_B", gate.Detail, StringComparison.Ordinal);
+        Assert.Contains("GENUINELY DIFFERENT STORAGE", gate.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void INSTANCE_ALIASES_OF_ONE_STORAGE_COLLAPSE_before_ambiguity_is_declared()
+    {
+        // Otherwise every signal declared twice identically would read as ambiguous, and the refusal would
+        // stop meaning "genuinely different storage".
+        var same = SignalStorageMap.Of(new[]
+        {
+            ("Demo_Count", new SignalStorage("DemoUnit", "Demo_Count")),
+            ("Demo_Count", new SignalStorage("DemoUnit", "Demo_Count")),
+        });
+
+        Assert.Empty(same.Ambiguities);
+        Assert.Equal(StorageJoin.InStorage, same.Resolve("Demo_Count"));
+    }
+
+    [Fact]
+    public void OWNER_AND_PATH_ARE_TWO_KEYS_so_a_dotted_string_cannot_collide_with_a_qualified_one()
+    {
+        // "an emitted string is not a schema": joining them would make (owner A, path B.C) and
+        // (owner null, path A.B.C) the same identity, which is exactly the parse this shape removes.
+        var qualified = new SignalStorage("A", "B.C");
+        var global = new SignalStorage(null, "A.B.C");
+
+        Assert.NotEqual(qualified.Identity, global.Identity);
+        Assert.True(global.IsGlobal);
+        Assert.False(qualified.IsGlobal);
+    }
+
+    [Fact]
+    public void NOTHING_RESOLVES_A_SIGNAL_BY_THE_SHAPE_OF_ITS_NAME()
+    {
+        // 🔴 The forbidden shortcut: find the storage whose PATH ENDS WITH the signal's name. It was built,
+        // examined and declined - two of the four cross-block multi-writer findings this project has ever
+        // recorded were fiction produced exactly that way. The declared join REPLACES name matching.
+        var map = SignalStorageMap.Of(new[]
+        {
+            ("Demo_Count", new SignalStorage("DemoUnit", "Some.Path.Demo_Count")),
+        });
+
+        // The declared KEY resolves; the leaf of the PATH does not, however suggestive it looks.
+        Assert.Equal(StorageJoin.InStorage, map.Resolve("Demo_Count"));
+        Assert.Equal(StorageJoin.NotStated, map.Resolve("Some.Path.Demo_Count"));
+        Assert.Equal(StorageJoin.NotStated, map.Resolve("Path.Demo_Count"));
     }
 }

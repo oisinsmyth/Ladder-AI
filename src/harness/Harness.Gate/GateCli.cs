@@ -150,7 +150,28 @@ public static class GateCli
             ToConflicts(document),
             ToCompressionInputs(document),
             ToDeploymentDeclaration(document),
-            ToTagMapReach(document, readFile));
+            ToTagMapReach(document, readFile),
+            ToSignalStorage(document),
+            document.ConflictEdgesExplicitlyNull);
+    }
+
+    /// <summary>
+    /// Contract 2.7's join, off the document. <b>Null only when NEITHER key is present</b> — an empty
+    /// `storage` beside a populated `harnessOnly` is a real declaration and must not collapse to "nobody
+    /// said".
+    /// </summary>
+    public static SignalStorageMap? ToSignalStorage(SubmissionDocument document)
+    {
+        var storage = document.Map?.Storage;
+        var harnessOnly = document.Map?.HarnessOnly;
+
+        if (storage is null && harnessOnly is null)
+            return null;
+
+        return SignalStorageMap.Of(
+            (storage ?? new Dictionary<string, StorageDocument>())
+                .Select(e => (e.Key, new SignalStorage(e.Value?.Owner, e.Value?.Path ?? string.Empty))),
+            harnessOnly);
     }
 
     /// <summary>One bound signal, off the document. <b>Nothing is defaulted</b> — an absent spec name stays absent.</summary>

@@ -99,7 +99,21 @@ public static class SubmissionGate
         ConflictGraph? conflicts,
         BlockCompressionInputs? compressionInputs = null,
         DeploymentDeclaration? deployment = null,
-        TagMapReach? tagMapReach = null)
+        TagMapReach? tagMapReach = null,
+
+        /// <summary>
+        /// Contract §2.7's join: signal → controller storage. <b>Null is the same as empty</b> — nobody
+        /// declared it — and both leave gates 8 and 8c NOT CHECKED, because a conflict graph is a
+        /// statement about storage and nothing said where these signals live.
+        /// </summary>
+        SignalStorageMap? storage = null,
+
+        /// <summary>
+        /// <b>True when the document CARRIED a <c>conflictEdges</c> key that was explicitly null.</b>
+        /// Distinct from omitted: <c>[]</c> is the earned claim that the graph ran and found nothing,
+        /// omitted is the honest NOT CHECKED, and an explicit null is neither — see gate 8.
+        /// </summary>
+        bool conflictEdgesExplicitlyNull = false)
     {
         ArgumentNullException.ThrowIfNull(vectors);
         ArgumentNullException.ThrowIfNull(enumeration);
@@ -131,10 +145,11 @@ public static class SubmissionGate
         gates.Add(new GateResult("6b settling — does the condition imply the value is final", GateStatus.Judgement, true, "none, ever",
             "whether the declared settling condition really implies finality is judgement, informed by the model's fidelity declaration."));
         gates.Add(StartBool(vectors));
-        gates.Add(Blacklist(vectors, conflicts));
+        gates.Add(SignalStorageJoin(vectors, storage));
+        gates.Add(Blacklist(vectors, conflicts, storage, conflictEdgesExplicitlyNull));
         gates.Add(new GateResult("8b blacklist — over-broad?", GateStatus.Judgement, true, "density, reported not gated",
             $"blacklist density is {vectors.Sum(v => v.Blacklist.Count)} entr(ies) across {vectors.Count} vector(s). Over-blacklisting is measurable and not preventable."));
-        gates.Add(MultiWriterProvenance(conflicts));
+        gates.Add(MultiWriterProvenance(conflicts, storage));
         gates.Add(LivenessPreconditions(vectors, map));
         gates.Add(CompressionCeiling(vectors, floorScans, runtimeCompression));
         gates.Add(CompressionBoundsNotInTheSubmission(vectors, runtimeCompression, floorScans, compressionInputs));
@@ -753,8 +768,110 @@ public static class SubmissionGate
     // 8 — blacklist
     // -------------------------------------------------------------------------------------------------
 
-    private static GateResult Blacklist(IReadOnlyList<SubmissionVector> vectors, ConflictGraph? conflicts)
+    /// <summary>
+    /// The reason gates 8/8c cannot run, or null when the join is complete.
+    ///
+    /// <para><b>Three states, and the middle one is a CLAIM rather than a silence.</b> In <c>storage</c>
+    /// it is resolvable. In <c>harnessOnly</c> no edge is possible, and <b>that is a computed fact</b>.
+    /// In neither, NOT CHECKED. In both, refused. Without the third state a legitimately mirror-only
+    /// signal is indistinguishable from a typo for ever — which is precisely what the converter's own
+    /// unresolved reason says: <i>"this may be a mirror-only signal, or the name may be wrong"</i>, two
+    /// entirely different repairs behind one silence.</para>
+    /// </summary>
+    private static string? StorageJoinIncomplete(IReadOnlyList<SubmissionVector> vectors, SignalStorageMap? storage)
     {
+        if (storage?.Ambiguities.Count > 0)
+        {
+            return "the declared join is AMBIGUOUS and is refused rather than resolved to one candidate: "
+                 + string.Join(" | ", storage.Ambiguities.Select(a => $"'{a.Signal}' -> " + string.Join(", ", a.Candidates.Select(c => c.ToString()))))
+                 + ". Instance aliases of one storage are collapsed first, so this means GENUINELY DIFFERENT STORAGE - and picking a "
+                 + "candidate is the aliasing that manufactured fictional multi-writers, not the fix.";
+        }
+
+        if (storage is null || storage.IsEmpty)
+        {
+            return "no `map.storage` / `map.harnessOnly` was declared (contract 2.7), so no submission signal could be joined to a "
+                 + "controller location. `map.providedFor` says HOW a signal is watched and never WHERE it is. *** MEASURED ON A LIVE "
+                 + "SUBMISSION: 1 OF 17 SIGNALS RESOLVED, AND THAT ONE ONLY BECAUSE ITS SPEC NAME AND BLOCK TAG HAPPEN TO BE THE SAME "
+                 + "STRING. *** Declare each signal's storage, or declare it `harnessOnly` - which is a POSITIVE claim that it occupies "
+                 + "no PLC storage, not an omission.";
+        }
+
+        var signals = vectors.SelectMany(v => v.Expectations).Select(e => e.Signal).Distinct(StringComparer.Ordinal).ToArray();
+
+        var contradictions = signals.Where(sig => storage.Resolve(sig) == StorageJoin.Contradiction).ToArray();
+        if (contradictions.Length > 0)
+        {
+            return $"{contradictions.Length} signal(s) are declared in BOTH `storage` and `harnessOnly`: {string.Join(", ", contradictions)}. "
+                 + "A signal cannot both occupy storage and occupy none, and choosing which declaration to believe would be the gate "
+                 + "deciding what the author meant.";
+        }
+
+        var unstated = signals.Where(sig => storage.Resolve(sig) == StorageJoin.NotStated).ToArray();
+        if (unstated.Length > 0)
+        {
+            return $"{unstated.Length} of {signals.Length} signal(s) are in NEITHER `storage` nor `harnessOnly`: {string.Join(", ", unstated)}. "
+                 + "*** NOBODY STATED THE JOIN, AND THAT IS NOT THE SAME AS 'IT OCCUPIES NO STORAGE'. *** If these are mirror-side logical "
+                 + "names, say so with `harnessOnly` - that turns a NOT CHECKED into a fact.";
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// 2.7 as its own gate, so the join's state is REPORTED rather than only felt as two NOT CHECKEDs.
+    /// </summary>
+    private static GateResult SignalStorageJoin(IReadOnlyList<SubmissionVector> vectors, SignalStorageMap? storage)
+    {
+        const string name = "8s signal storage join (2.7)";
+
+        if (StorageJoinIncomplete(vectors, storage) is { } gap)
+        {
+            var refusal = storage is not null && (storage.Ambiguities.Count > 0 || vectors.SelectMany(v => v.Expectations)
+                .Any(e => storage.Resolve(e.Signal) == StorageJoin.Contradiction));
+
+            // An ambiguity or a contradiction was COMPARED and found wrong; an absent join was not
+            // compared at all. Two different statuses, because they call for different repairs.
+            return new GateResult(name, refusal ? GateStatus.Checked : GateStatus.NotChecked, false,
+                "map.storage / map.harnessOnly", gap);
+        }
+
+        var signals = vectors.SelectMany(v => v.Expectations).Select(e => e.Signal).Distinct(StringComparer.Ordinal).ToArray();
+        var resolvable = signals.Count(sig => storage!.Resolve(sig) == StorageJoin.InStorage);
+        var mirrorOnly = signals.Length - resolvable;
+
+        return new GateResult(name, GateStatus.Checked, true, nameof(SignalStorageMap),
+            $"every one of {signals.Length} signal(s) is joined: {resolvable} to controller storage, {mirrorOnly} declared `harnessOnly`. "
+            + "*** `harnessOnly` IS A POSITIVE CLAIM AND NOT AN OMISSION: *** those signals occupy no PLC storage, so no conflict edge is "
+            + "possible for them and that is a COMPUTED FACT rather than a silence. Nothing here matched a signal by the shape of its name - "
+            + "the declared join REPLACES suffix matching, which is what manufactured two of the four cross-block multi-writer findings this "
+            + "project has ever recorded.");
+    }
+
+    private static GateResult Blacklist(
+        IReadOnlyList<SubmissionVector> vectors, ConflictGraph? conflicts, SignalStorageMap? storage, bool edgesExplicitlyNull)
+    {
+        // *** null IS NOT THE SAME AS OMITTED, AND THIS IS WHERE THAT BITES. *** `[]` is the EARNED
+        // positive claim that the graph ran over a whole corpus and found nothing; OMITTING the key is the
+        // weaker and TRUE statement that it did not run. An explicit null is neither - and a lenient
+        // deserializer turns it back into an empty collection one layer down, restoring the false claim
+        // AFTER the refusal was correctly made. So it is refused by name rather than normalised.
+        if (edgesExplicitlyNull)
+        {
+            return new GateResult("8 blacklist", GateStatus.Checked, false, nameof(SubmissionGate),
+                "`conflictEdges` is present and NULL. *** THAT IS NEITHER OF THE TWO THINGS IT COULD MEAN. *** `[]` is the earned claim "
+                + "that the graph RAN over a whole corpus and found nothing; omitting the key is the honest 'it did not run'. A null is a "
+                + "third thing that a lenient deserializer will quietly turn into an empty list one layer down, restoring the very claim "
+                + "the omission was refusing to make. Omit the key, or carry edges.");
+        }
+
+        // 2.7. Gate 8's packing set derives from the edges, and an edge is a statement about STORAGE.
+        if (StorageJoinIncomplete(vectors, storage) is { } gap)
+        {
+            return new GateResult("8 blacklist", GateStatus.NotChecked, false, "map.storage / map.harnessOnly (2.7)",
+                "the blacklist could not be checked against a computed graph, because the graph is a statement about STORAGE and " + gap);
+        }
+
         var computedConflicts = conflicts?.BlocksForPacking;
 
         if (computedConflicts is null)
@@ -818,8 +935,17 @@ public static class SubmissionGate
     /// vector author responsible for a program defect they cannot fix. <b>Whether it should instead be a
     /// hard refusal is an owner question</b>, and it is recorded rather than decided in the code.</para>
     /// </summary>
-    private static GateResult MultiWriterProvenance(ConflictGraph? conflicts)
+    private static GateResult MultiWriterProvenance(ConflictGraph? conflicts, SignalStorageMap? storage)
     {
+        // A multi-writer is two blocks writing THE SAME STORAGE, so with no join there is nothing the
+        // question could even be asked about.
+        if (storage is null || storage.IsEmpty)
+        {
+            return new GateResult("8c multi-writer provenance (X-G)", GateStatus.NotChecked, false, "map.storage / map.harnessOnly (2.7)",
+                "no multi-writer fact could be reported: a multi-writer is two blocks writing the same STORAGE, and no `map.storage` / "
+                + "`map.harnessOnly` join was declared (2.7). Measured on a live submission: 1 of 17 signals resolved.");
+        }
+
         if (conflicts is null)
         {
             return new GateResult("8c multi-writer provenance (X-G)", GateStatus.NotChecked, false, "cross-check conflict graph with provenance",

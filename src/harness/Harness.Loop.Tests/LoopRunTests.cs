@@ -77,6 +77,21 @@ public class LoopRunTests
             // SubmissionGateTests, where the table and the vector are set independently.
             BoundsUsed: new Dictionary<string, string>(StringComparer.Ordinal) { ["ramp_limit"] = limit.ToString() });
 
+    /// <summary>
+    /// The 2.7 join for these fixtures — <b>and this is the DID-NOT-RUN control.</b>
+    ///
+    /// <para>A join that refuses everything passes every test that only checks refusals, and that shape
+    /// has been caught here repeatedly. So the default fixture DECLARES a complete join: both result
+    /// signals are real PLC tags in the skeleton block's own tag table, with the tag table as their
+    /// owner. Gates 8 and 8c must therefore actually RUN — not be NOT CHECKED — and the tests that
+    /// assert a full green depend on that.</para>
+    /// </summary>
+    internal static SignalStorageMap Storage() => SignalStorageMap.Of(new[]
+    {
+        (TrivialBlock.CountTag, new SignalStorage("DemoUnit", TrivialBlock.CountTag)),
+        (TrivialBlock.DoneTag, new SignalStorage("DemoUnit", TrivialBlock.DoneTag)),
+    });
+
     internal static LoopRequest Request(
         SubmissionVector? vector = null,
         AssertionEnumeration? enumeration = null,
@@ -105,7 +120,11 @@ public class LoopRunTests
             // in play - so no classic-S7comm path reaches one. Declared as the positive claim it is, and
             // compared against a reachable set that really is empty.
             Deployment: new DeploymentDeclaration("loop-test-import", Array.Empty<S7ObjectDeclaration>()),
-            TagMapReach: TagMapReach.Of(Array.Empty<S7Reach>()));
+            TagMapReach: TagMapReach.Of(Array.Empty<S7Reach>()),
+
+            // The 2.7 join, complete - see Storage(). This is what lets gates 8 and 8c RUN rather than
+            // report NOT CHECKED, which is the control the whole change needs.
+            SignalStorage: Storage());
 
     private static (LoopResult Result, SimulatedGateway Gateway) Run(LoopRequest? request = null, SimulatedGateway? gateway = null)
     {

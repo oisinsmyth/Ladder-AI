@@ -51,7 +51,11 @@ public sealed record LoopRequest(
     // ours - a measurement of one rig is not a property of the instruction. A Time read under the wrong
     // order would be out by 65 536 ms and look like a plausible timing bug, which is why the default is
     // now evidence rather than an inference.
-    RegisterWordOrder WordOrder = RegisterWordOrder.HighWordFirst)
+    RegisterWordOrder WordOrder = RegisterWordOrder.HighWordFirst,
+
+    // Contract 2.7's join: signal -> controller storage, or a positive `harnessOnly` claim. Gates 8 and
+    // 8c are statements about STORAGE and are NOT CHECKED without it. Null means nobody declared it.
+    SignalStorageMap? SignalStorage = null)
 {
     /// <summary>The factor, defaulting to uncompressed only where the caller passed nothing at all.</summary>
     public RuntimeCompression Compression => RuntimeCompression ?? Harness.Wire.RuntimeCompression.Uncompressed;
@@ -127,7 +131,7 @@ public static class LoopRun
         var gate = SubmissionGate.Check(
             request.Vectors, request.Enumeration, request.Fidelity, request.BlockAuthor,
             mirror, floor, compression.Factor, request.ComputedConflicts, request.CompressionInputs,
-            request.Deployment, request.TagMapReach);
+            request.Deployment, request.TagMapReach, request.SignalStorage);
 
         if (gate.Verdict != SubmissionVerdict.AdmissibleSubjectToJudgement)
         {

@@ -49,7 +49,36 @@ public sealed class SubmissionDocument
     /// whole point is that the packer separating two writers of one deliverable coil is right for testing
     /// and wrong to do silently.</para>
     /// </summary>
-    public List<ConflictEdgeDocument>? ConflictEdges { get; set; }
+    public List<ConflictEdgeDocument>? ConflictEdges
+    {
+        get => _conflictEdges;
+        set
+        {
+            _conflictEdges = value;
+            ConflictEdgesKeyPresent = true;
+        }
+    }
+
+    private List<ConflictEdgeDocument>? _conflictEdges;
+
+    /// <summary>
+    /// Whether the document CARRIED a <c>conflictEdges</c> key at all — set by the setter, which
+    /// System.Text.Json calls even for an explicit <c>null</c>.
+    ///
+    /// <para>*** OMITTED, `[]` AND `null` ARE THREE DIFFERENT THINGS AND ONLY TWO OF THEM ARE LEGAL. ***
+    /// <c>[]</c> is the EARNED positive claim that the graph ran over a whole corpus and found nothing.
+    /// Omitting the key is the weaker and TRUE statement that it did not run — which is the right answer
+    /// when a file in the corpus could not be parsed, because <b>the file that failed to parse may hold
+    /// the second writer that makes a signal a conflict</b>. An explicit null is neither, and it is the
+    /// dangerous one: <b>a lenient deserializer turns it back into an empty collection one layer down,
+    /// restoring the false claim after the refusal was correctly made.</b> Gate 8 refuses it by name.</para>
+    /// </summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool ConflictEdgesKeyPresent { get; private set; }
+
+    /// <summary>True for the one illegal form: the key is there and its value is null.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool ConflictEdgesExplicitlyNull => ConflictEdgesKeyPresent && _conflictEdges is null;
 
     /// <summary>
     /// X-D's three BLOCK-level ceilings — the inputs contract §2 gives an author nowhere to state.
@@ -267,8 +296,50 @@ public sealed class EnumerationDocument
 
 public sealed class MapDocument
 {
-    /// <summary>signal → instrumentation modes the copy layer provides for it.</summary>
+    /// <summary>signal → instrumentation modes the copy layer provides for it. <b>HOW it is watched.</b></summary>
     public Dictionary<string, List<string>>? ProvidedFor { get; set; }
+
+    /// <summary>
+    /// signal → <b>WHERE it lives on the controller</b> (contract 2.7).
+    ///
+    /// <para>*** GATES 8 AND 8c COULD NOT BE FED FROM A REAL SUBMISSION AT ALL — NOT MERELY UNSUPPLIED,
+    /// BUT INEXPRESSIBLE. *** A conflict graph is a statement about STORAGE: two blocks conflict because
+    /// they write the same location. <c>providedFor</c> carries observability modes only — it says how a
+    /// signal is watched and never where it is. Measured on a live submission: <b>1 of 17 signals
+    /// resolved, and that one only because its spec name and block tag happen to be the same string.</b></para>
+    /// </summary>
+    public Dictionary<string, StorageDocument>? Storage { get; set; }
+
+    /// <summary>
+    /// Signals that occupy <b>NO PLC storage at all</b> — a POSITIVE CLAIM, not an omission.
+    ///
+    /// <para><b>The third state, and it is the one that makes the other two mean anything.</b> The
+    /// tooling names an ambiguity it cannot settle: an unresolved signal reports <i>"this may be a
+    /// mirror-only signal, or the name may be wrong"</i> — two entirely different repairs behind one
+    /// silence. <b>The claim is the author's to make, and making it turns a NOT CHECKED into a fact:</b>
+    /// no conflict edge is possible for these, computed rather than assumed.</para>
+    /// </summary>
+    public List<string>? HarnessOnly { get; set; }
+}
+
+/// <summary>
+/// One <c>map.storage</c> entry. <b>Two keys, deliberately not one dotted string.</b>
+/// </summary>
+/// <remarks>
+/// The contract's words: <i>an emitted string is not a schema.</i> A consumer handed <c>A.B.C</c> cannot
+/// tell whether <c>A</c> is an owning block or a DB without parsing — and a parse is a lookup, which is
+/// the thing this field exists to remove.
+/// </remarks>
+public sealed class StorageDocument
+{
+    /// <summary>
+    /// The block or tag table that DECLARES the root. <b>Omitted for a global path</b> — a DB member, a
+    /// PLC tag, an <c>iDB_…</c> member or a physical address is already unique.
+    /// </summary>
+    public string? Owner { get; set; }
+
+    /// <summary>The path within that owner, or the global path verbatim.</summary>
+    public string? Path { get; set; }
 }
 
 public sealed class VectorDocument

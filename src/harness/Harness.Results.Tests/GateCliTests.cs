@@ -29,7 +29,9 @@ public class GateCliTests
       // layer emits result-register MOVEs and no per-signal latch, so `Latched` on a RESULT was never
       // available — and this fixture claimed it for as long as the CLI took the map from the submission.
       // With --binding the map is derived from what the copy layer actually provides, and the claim fails.
-      "map": { "providedFor": { "Demo_Count": ["Sampled"] } },
+      "map": { "providedFor": { "Demo_Count": ["Sampled"] },
+                // 2.7: WHERE the signal lives. providedFor says only HOW it is watched.
+                "storage": { "Demo_Count": { "owner": "DemoUnit", "path": "Demo_Count" } } },
       "tagMapPath": "tags.json",
       "deployment": {
         "importStamp": "import-A",
