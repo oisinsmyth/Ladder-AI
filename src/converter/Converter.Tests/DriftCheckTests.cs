@@ -76,26 +76,39 @@ public class DriftCheckTests : IDisposable
         Assert.True(report.HasDrift);
     }
 
+    // REWRITTEN 2026-08-14, and the old version is worth reading: it set up a project sharing NO name
+    // with the exports dir and asserted `HasDrift == false`, with a comment that named the condition
+    // outright — "Nothing is COMPARED here at all — and without --complete none of it fails". That is
+    // the defect, asserted as the contract. The property it was protecting is real and is kept below:
+    // a COMMITTED corpus may legitimately lag the IR in both directions, so unpaired files must not
+    // fail without --complete. What does not follow is that a run comparing NOTHING is a pass.
     [Fact]
-    public void Run_UnpairedIrDoesNotFail_WhenTheExportsDirIsNotDeclaredComplete()
+    public void Run_UnpairedFilesDoNotFail_WhenSomethingWasActuallyCompared()
     {
-        // A project holding one .ir with no export, against an exports dir holding two .xml with no
-        // .ir. Nothing is COMPARED here at all — and without --complete none of it fails, because a
-        // committed corpus is allowed to lag the IR in both directions (FI-26's own use).
-        var onlyMatchProject = Path.Combine(Path.GetTempPath(), $"drift-ir-clean-{Guid.NewGuid():N}");
-        Directory.CreateDirectory(onlyMatchProject);
+        // DB_Match pairs and matches; DB_Lonely has no export; DB_Drift's export... also pairs, so
+        // remove it from the comparison by using a project that keeps only the first two.
+        var project = Path.Combine(Path.GetTempPath(), $"drift-ir-lag-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(project);
         try
         {
-            var db = Db("DB_Solo", new DbMember("X", "Bool", Retain: false, StartValue: null));
-            File.WriteAllText(Path.Combine(onlyMatchProject, "DB_Solo.ir"), DbIrSerializer.Serialize(db));
+            var match = Db("DB_Match", new DbMember("A", "Bool", Retain: false, StartValue: null));
+            File.WriteAllText(Path.Combine(project, "DB_Match.ir"), DbIrSerializer.Serialize(match));
+            File.WriteAllText(Path.Combine(project, "DB_Solo.ir"), DbIrSerializer.Serialize(
+                Db("DB_Solo", new DbMember("X", "Bool", Retain: false, StartValue: null))));
 
-            var report = DriftCheckRunner.Run(onlyMatchProject, _exportsDir); // exportsDir has no DB_Solo.xml
-            Assert.False(report.HasDrift);
+            // _exportsDir carries DB_Match.xml (pairs) and DB_Drift.xml (export-only). Both absences
+            // are ordinary states for a lagging corpus, and one real comparison happened.
+            var report = DriftCheckRunner.Run(project, _exportsDir);
+
+            Assert.Equal(1, report.ComparedCount);
+            Assert.False(report.ExaminedNothing);
             Assert.Equal(DriftStatus.Skipped, report.Entries.Single(e => e.Name == "DB_Solo").Status);
+            Assert.Equal(DriftStatus.ExportOnly, report.Entries.Single(e => e.Name == "DB_Drift").Status);
+            Assert.False(report.HasDrift);
         }
         finally
         {
-            Directory.Delete(onlyMatchProject, recursive: true);
+            Directory.Delete(project, recursive: true);
         }
     }
 

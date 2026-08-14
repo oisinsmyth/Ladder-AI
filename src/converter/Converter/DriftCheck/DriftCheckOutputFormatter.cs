@@ -13,7 +13,8 @@ public static class DriftCheckOutputFormatter
 
         foreach (var status in new[]
                  {
-                     DriftStatus.Drifted, DriftStatus.ExportOnly, DriftStatus.Error, DriftStatus.Skipped, DriftStatus.Match,
+                     DriftStatus.Drifted, DriftStatus.PairingFailure, DriftStatus.ExportOnly,
+                     DriftStatus.Error, DriftStatus.Skipped, DriftStatus.Match,
                  })
         {
             foreach (var e in report.Entries.Where(e => e.Status == status))
@@ -34,7 +35,39 @@ public static class DriftCheckOutputFormatter
             .Append(Count(counts, DriftStatus.Match)).Append(" match, ")
             .Append(Count(counts, DriftStatus.Skipped)).Append(" skipped, ")
             .Append(Count(counts, DriftStatus.ExportOnly)).Append(" export-only, ")
-            .Append(Count(counts, DriftStatus.Error)).Append(" error\n");
+            .Append(Count(counts, DriftStatus.Error)).Append(" error, ")
+            .Append(Count(counts, DriftStatus.PairingFailure)).Append(" pairing-failure\n");
+
+        // THE DENOMINATOR, printed on every run (2026-08-14). Every other number in the summary is a
+        // reason a comparison did NOT happen; this is the count that did. Without it "0 drifted" reads
+        // identically whether ninety objects matched, the directory was empty, every .ir failed to
+        // parse, or the path pointed one level above the files — all three of those measured, all three
+        // exited 0.
+        sb.Append("COMPARED: ").Append(report.ComparedCount).Append(" object(s) put through the Normalizer");
+        if (report.ProjectDir is not null && report.ExportsDir is not null)
+        {
+            sb.Append("  (project=").Append(report.ProjectDir).Append("  exports=").Append(report.ExportsDir).Append(')');
+        }
+
+        sb.Append('\n');
+
+        if (report.ExaminedNothing)
+        {
+            sb.Append("NOTHING COMPARED — this is not a pass. No object reached the Normalizer, so nothing is\n")
+                .Append("       known about drift in either direction. Check that both paths hold the files themselves:\n")
+                .Append("       each walk is top-level only, so a parent directory finds nothing and reports it clean.\n");
+        }
+
+        // What drift-check does NOT compare, said on every run rather than only when it bites.
+        // `converter compare` prints a MEMORYLAYOUT line every time; this had no counterpart, so a MATCH
+        // here read as a stronger claim than it is — and `compare` REFUSES (exit 2, NOT COMPARED) the
+        // very pair this reports as a MATCH, because converter output declares no MemoryLayout while a
+        // TIA export declares one. Measured on FB_PusherControl, 2026-08-14.
+        if (report.ComparedCount > 0)
+        {
+            sb.Append("SCOPE: MemoryLayout is NOT compared — converter output never emits it, so the Normalizer\n")
+                .Append("       holds neither side to the other's. `converter compare` on two TIA exports does check it.\n");
+        }
 
         // FI-70. Whether an absence is a finding depends entirely on what filled the exports directory,
         // and the tool cannot know that — so it says which question it answered rather than letting a
@@ -62,6 +95,7 @@ public static class DriftCheckOutputFormatter
         DriftStatus.Skipped => "SKIPPED",
         DriftStatus.ExportOnly => "EXPORT-ONLY",
         DriftStatus.Error => "ERROR",
+        DriftStatus.PairingFailure => "PAIRING-FAILURE",
         _ => s.ToString(),
     };
 
@@ -80,6 +114,12 @@ public static class DriftCheckOutputFormatter
                 status = e.Status.ToString(),
                 detail = e.Detail,
             }),
+            // The denominator and the examined-nothing flag, so a --json consumer can tell "nothing
+            // drifted" from "nothing was compared" without parsing the text.
+            comparedCount = report.ComparedCount,
+            examinedNothing = report.ExaminedNothing,
+            projectDir = report.ProjectDir,
+            exportsDir = report.ExportsDir,
             hasDrift = report.HasDrift,
         };
 
