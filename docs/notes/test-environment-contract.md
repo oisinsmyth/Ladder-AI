@@ -324,11 +324,11 @@ This is the one table to read before omitting anything. Four treatments, and the
 | a `storage` entry's `owner` | **not an omission — a POSITIVE claim** | the path is **global** (DB member, PLC tag, `iDB_…`, physical address) and is already unique |
 | a declared join that still resolves to **more than one** storage | **REFUSED, naming EVERY candidate** | ***never resolved to one.*** Instance aliases are collapsed first, so this means genuinely different storage — and picking a candidate is the aliasing that manufactured fictional multi-writers |
 | a conflict edge's **signal class** | ***NOT CHECKED*** (carried through as `Unstated`) | it is **derived from the writing blocks, never declared** — there is no field for it, and an unclassifiable signal fails the gate closed rather than being guessed |
-| a mirrored signal's `specName` | ***REFUSED*** | §2.8. ***It does NOT mean "same as `tag`"*** — that defaulting rule **is** the assumption being removed, and writing it into the format would reinstate it invisibly while looking like a decision somebody made |
-| a signal's `modes`, with `modeSource: Generated` | **CHECKED — DERIVED, a real pass** | the mode is read off the shape the copy layer generates. ***A declared mode is a caller assertion, forgotten exactly when it matters*** |
-| a signal's `modeSource` | ***NOT CHECKED*** | the zero value is `Unstated` and fails closed — the mode's authority is the question, so a blank cannot be the trustworthy answer |
-| `instrumentedBy`, with `modeSource: HandAuthored` | ***REFUSED*** | a hand-authored instrument whose author is unnamed is a bare assertion **wearing a provenance field** — worse than no field, because it looks checked |
-| a declared mode the copy layer **contradicts** | ***REFUSED, naming BOTH*** | never a silent preference: preferring the shape hides an author who believed something false about the device, preferring the declaration reinstates the caller assertion |
+| a mirrored signal's `specName` | ***NOT CHECKED***, naming the tag | §2.8. A property of the **binding**, so resubmitting the vector cannot supply it. ***It does NOT mean "same as `tag`"*** — that identity **is** the assumption being removed, and as a default it would match by accident where the names coincide and miss everywhere else. **If the two names genuinely are the same, STATE that they are** |
+| a signal's **instrumentation mode** | **CHECKED — DERIVED, a real pass** | there is no field for it. The mode is read off what the copy layer generates, which emits no per-signal latch, so `Sampled` is the derived answer and a `Latched` expectation on such a signal is refused |
+| `latchedBy` | **the binding claims NO latch** — a derivation, not a default | the generator emits no latch, so an unnamed latcher is the *true* state. It fails closed: `Sampled` stands and any `Latched` expectation is refused |
+| **verification that a named `latchedBy` block is deployed** | ***never performed — the gate takes the NAME, not the FACT*** | §2.8. Stated in this document so it survives independently of any rendering path, after an admission rendered **only on the no-problems branch** let four claims through unremarked |
+| ***an UNKNOWN field, anywhere in a submission*** | ***REFUSED, NAMING IT*** | see below — the complement of this whole table |
 | `blockCompression`, at `runtimeCompression` > 1 | ***NOT CHECKED*** | three ceilings compared against nothing |
 | `blockCompression`, at `runtimeCompression` = 1 | **CHECKED, a real pass** | nothing is scaled, so none of the three *can* bind — **computed from the submission, not assumed** |
 | a preset's `source` | **REFUSED** | the two real answers push OPPOSITE ways; there is no fail-safe guess |
@@ -361,6 +361,29 @@ Both fail closed and neither is a pass, so the gap between them is between **two
 the diagnostic is worse than it should be, and the fix is the document's own stated rule: *every field
 nullable on the way in, so a missing one reaches the gate as MISSING rather than as a default.* Owed by
 the harness.
+
+#### 🔴 AND THE COMPLEMENT: ***AN UNKNOWN FIELD IS A REFUSAL NAMING IT, NEVER SILENTLY IGNORED***
+
+Everything above decides what an **absent** field means. This decides what an **unrecognised** one does,
+and it is the rule that makes a divergence between this document and the runner harmless in either
+direction.
+
+> *** A SILENTLY-IGNORED FIELD IS WORSE THAN A REJECTED ONE, BECAUSE IT READS AS ACCEPTED. *** An author
+> who writes a field this contract specifies and the runner has not yet implemented gets a green,
+> believes the thing was checked, and has in fact submitted a document with a hole in exactly the place
+> they were most careful.
+
+**This is not hypothetical and it is not rare.** It has happened in one direction or the other **every
+single time these two artifacts have been compared** — the contract ahead of the code, the code ahead of
+the contract, a gate table short by three rows, then by four, a field specified with three keys and built
+with one. **The refusal is what makes staleness announce itself instead of accumulating.**
+
+- **A field the runner does not recognise is REFUSED, and the refusal NAMES the field**, so the author
+  can tell "not implemented yet" from "misspelled".
+- It applies **anywhere in the document** — a vector, an expectation, the map, a binding row, the
+  enumeration, the deployment.
+- ***It has no relaxing flag.*** The precedent is every other gate here: a skip flag is a flag that gets
+  used at 2 a.m.
 
 ---
 
@@ -675,11 +698,18 @@ resultSources[ ]                -- one mirrored signal, in the coordinator's bin
   tag          the tag the signal occupies ON THE CONTROLLER
   specName     THE SPECIFICATION'S NAME for the same signal
   type         the element type (§2.6)
-  modes        [ mode ]         -- see below. Only for a HAND-AUTHORED instrument
-  modeSource   where the mode came from -- see below
-  instrumentedBy   the block that performs the instrumentation
-                   -- REQUIRED when `modeSource` is HandAuthored
+  latchedBy    the BLOCK that latches this signal, when one does
 ```
+
+> ✅ **NARROWED 2026-08-14 TO MATCH THE CODE, AND THE CODE IS THE SAFER SHAPE.** This section first
+> specified `modes`, a `modeSource` of `Generated`/`HandAuthored`/`SelfDeclared`/`Unstated`, and an
+> `instrumentedBy`. What was built is a **strict subset**: `specName` and `latchedBy`, and nothing else.
+>
+> ***That subset is stronger, because it makes `SelfDeclared` INEXPRESSIBLE rather than merely NOT
+> CHECKED.*** There is no field in which a vector author can assert a mode at all, so there is no
+> assertion to catch, report or forget to catch. **A field that cannot be written cannot be written
+> wrongly** — the same property that makes the blacklist add-only and the split read unnameable. The
+> ruling is that the contract narrows to the code, not the other way round.
 
 > 🔴 ***AN ABSENT `specName` DOES NOT MEAN "SAME AS `tag`". IT IS A REFUSAL.***
 >
@@ -704,39 +734,51 @@ Gate 5 failed in **both directions at once**, which is the fact that shapes this
 
 So the rule is not "let the author declare the mode". It is:
 
-> ***THE MODE IS DERIVED FROM WHAT THE COPY LAYER GENERATES, WHEREVER IT CAN BE.*** A declared mode is a
-> caller assertion, and a caller assertion is **forgotten exactly when it matters** — the 13 wrong claims
-> are what that looks like at scale.
+> ***THE MODE IS DERIVED FROM WHAT THE COPY LAYER GENERATES.*** The generator emits **no per-signal
+> latch**, so `Sampled` is all it can derive — and there is no field in which anyone may say otherwise.
+> A declared mode would be a caller assertion, and a caller assertion is **forgotten exactly when it
+> matters**: the 13 wrong claims are what that looks like at scale.
 
-**And derivation alone cannot cover the other four**, because the generator did not emit them: they are
-hand-authored IR already on the rig. A real instrument that no generator produced must be **statable —
-but statable WITH ITS PROVENANCE**, never as a bare mode.
+#### `latchedBy` names a BLOCK, not a mode — and that is why it is admissible at all
 
-#### `modeSource` — one vocabulary, extended, not a parallel one
+Derivation cannot reach the other four, because the generator did not emit them: they are hand-authored
+IR already on the rig. So one thing is statable — **not the mode, but who performs it.**
 
-The map already carries a provenance that decides whether gate 5 may be **a verdict at all**. The same
-vocabulary is used per signal rather than a second one being invented beside it:
+> ***`latched: true` WOULD SWAP THE GENERATOR'S ASSUMPTION FOR A CALLER'S***, which is no improvement.
+> **A block name is PROVENANCE**: it is checkable against the deployed object set, it is printed in the
+> gate's own report, and it either exists and does the latching or it does not. That is the entire
+> reason this field is allowed to exist where a mode flag is not.
 
-| value | means | effect |
-|---|---|---|
-| **`Generated`** | the copy layer emits this instrument, and the mode is **read off the shape it generates** | ✅ **CHECKED — a computation, not a claim** |
-| **`HandAuthored`** | a deployed instrument the generator did not emit. **`instrumentedBy` names the block that performs it** | ✅ **CHECKED as a provenanced claim** — and the named block is a thing that either exists and writes the signal, or does not |
-| **`SelfDeclared`** | the vector author asserted it | ***NOT CHECKED*** — the author vouching for the artifact the gate exists to check them against |
-| **`Unstated`** (the zero value) | nobody said | ***NOT CHECKED***, failing closed |
+**Absent `latchedBy` means this binding claims no latch** — so `Sampled` stands, and a `Latched`
+expectation on that signal is refused. That fails closed, and it is a derivation rather than a default:
+*the copy layer emits no latch, so the absence of a named latcher is the true state.*
 
-***`HandAuthored` WITHOUT `instrumentedBy` IS A REFUSAL***, not a weaker claim. A hand-authored
-instrument whose author is unnamed is a bare assertion wearing a provenance field — which is worse than
-no field, because it looks checked.
+#### 🔴 THE GATE TAKES THE NAME, NOT THE FACT
 
-#### A declared mode the copy layer contradicts is a REFUSAL NAMING BOTH
+**Stated here so the caveat survives independently of any rendering path**, which is the lesson as much
+as the limit:
 
-> ***Not a silent preference for either.*** Preferring the generated shape hides an author who believed
-> something false about the device; preferring the declaration reinstates the caller assertion this
-> whole field exists to remove. **Both are named, and the submission does not proceed.**
+> The gate **does not verify that the named block is deployed, or that it latches this signal.** It
+> records the claim and prints it. ***Verify those blocks are in the deployment yourself.***
 
-The one case that is not a contradiction is `HandAuthored`: the generator emitting nothing for a signal
-is *consistent* with an instrument it never generated. **That is why the provenance is required — it is
-the only thing separating "a latch the generator did not emit" from "a latch nobody implemented".**
+> ⚠️ ***AND THE ADMISSION WAS RENDERED ONLY WHEN THE REPORT HAD NO PROBLEMS*** — so four claims were
+> admitted on an unverified block name and **no reader was told**. *** AN ADMISSION THAT APPEARS ONLY
+> WHEN EVERYTHING PASSED IS MISSING FROM EVERY REPORT ANYONE READS CLOSELY. *** The reports people study
+> are the ones with findings in them. A caveat attached to the clean branch is a caveat nobody meets.
+
+#### A block that latches ITS OWN OUTPUT is a VALUE UNDER TEST, not instrumentation
+
+**This is the one place a reader is tempted to name the block under test as its own instrumenter**, and
+an artificial corpus invites the mistake unusually strongly.
+
+> If the sealing, the latching or the holding **is the behaviour the vector is asserting**, then the
+> latch is ***what is being tested***, not what makes it observable. Such expectations are declared
+> **`Sampled`**, and `latchedBy` is left absent.
+
+Naming the block under test in `latchedBy` claims that the thing being tested is the reason the test can
+see anything — which would make the assertion true by construction, and is the correlated check this
+pipeline exists to prevent arriving through a new door. **`latchedBy` names an INSTRUMENT: something
+that exists so a value can be observed, and would be pointless otherwise.**
 
 ---
 

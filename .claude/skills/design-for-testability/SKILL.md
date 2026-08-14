@@ -61,6 +61,18 @@ CHECKED, confirm the verifier still exists and is reachable —
 If you find a verifier the table does not list, use it, and say the table is out of date. If a listed
 one has gone, say that too. **Never report a gate as checked because this file said a tool existed.**
 
+> 🔴 ***AND THE RULE THAT MAKES A DIVERGENCE HARMLESS EITHER WAY: AN UNKNOWN FIELD IS A REFUSAL NAMING
+> IT, NEVER SILENTLY IGNORED*** (contract §2.4).
+>
+> **A silently-ignored field is worse than a rejected one, because it reads as ACCEPTED.** An author who
+> writes a field the contract specifies and the runner has not yet built gets a green, believes it was
+> checked, and has submitted a document with a hole in exactly the place they were most careful.
+>
+> **This is not hypothetical.** Something has been stale in one direction or the other *every single time
+> these two artifacts have been compared* — the gate table short by three rows, then by four; a field
+> specified with three keys and built with one. **Expect it, look for it, and report which artifact is
+> behind.** The refusal is what makes staleness announce itself instead of accumulating.
+
 ---
 
 ## Step 1 — the gates, and what actually checks each one
@@ -86,7 +98,8 @@ Contract §10's surface, in the order a submission meets it, with the **verifier
 | 6 | **settling exists, and is not the completion flag** | both halves | `Admissibility` | **CHECKED** |
 | 6b | *does the condition really imply the value is final?* | — | **nothing, ever** | **JUDGEMENT** |
 | 7 | **start bool** | exactly one per slot; bound by NAME; raised a later scan than the inert-establish, against the **observed** counter | `SubmissionGate` for the first two. **The later-scan rule is RUN-TIME** (`InertPhase`) and is reported as such, never claimed at submission | **CHECKED** (submission half) |
-| 8 | **blacklist** | add-only against computed disjointness; every entry has a reason | `SubmissionGate`. ***Add-only is a property of the TYPE*** — `BlacklistEntry` carries no negation, so a removal cannot be expressed. **An ABSENT conflict graph is NOT CHECKED**, not a pass | **CHECKED** *(NOT CHECKED without `conflictEdges`, which needs `map.storage` — see below)* |
+| **8s** | **signal storage join** — contract **§2.7** | every signal a vector expects on is joined: either in `map.storage` (controller storage) or declared `map.harnessOnly` | `SignalStorageMap`. **Two statuses, deliberately: an ambiguity or a contradiction was COMPARED and found wrong (refusal); an absent join was never compared (NOT CHECKED)** — different repairs. ***Nothing matches a signal by the shape of its name***, and the pass names how many resolved each way | **CHECKED** *(NOT CHECKED without the join)* |
+| 8 | **blacklist** | add-only against computed disjointness; every entry has a reason | `SubmissionGate`. ***Add-only is a property of the TYPE*** — `BlacklistEntry` carries no negation, so a removal cannot be expressed. **An ABSENT conflict graph is NOT CHECKED**, not a pass; ***a `conflictEdges` that is present and NULL is REFUSED BY NAME*** rather than normalised | **CHECKED** *(NOT CHECKED without `conflictEdges`, which needs `map.storage` — gate 8s)* |
 | 8b | *is it over-broad?* | — | density, reported not gated | **JUDGEMENT** |
 | **8c** | **multi-writer provenance (X-G)** | every conflict edge records WHY two blocks conflict, on which signal, and whether that signal SHIPS | `ConflictGraph`. ***The teeth are on the ABSENCE of provenance***: a multi-writer FINDING on a deliverable signal is **reported, not refused** (the defect is in the deliverable, and a vector author cannot fix it), while an **unprovenanced graph is NOT CHECKED** — *"0 findings"* and *"nobody recorded why"* are the same empty report | **CHECKED** *(NOT CHECKED without provenance on every edge)* |
 | 9 | **liveness** *(post-run)* | stimulus check; counter advanced **by the expected amount**; manifest presence | `StimulusCheck`, at run time. **The separable half is now a submission gate**: a vector whose liveness could never be established is refused *before* a wave is spent | **CHECKED** (preconditions) **+ CHECKED at run time** |
@@ -136,11 +149,11 @@ The two are different facts and the gate distinguishes them. Measured on the bui
 | a `storage` entry's `owner` | **a POSITIVE claim, not an omission** | the path is **global** — DB member, PLC tag, `iDB_…`, physical address — and already unique |
 | a declared join resolving to **more than one** storage | ***REFUSED, naming EVERY candidate*** | ***never resolved to one***; picking a candidate is the aliasing that manufactured fictional multi-writers |
 | a conflict edge's **signal class** | ***NOT CHECKED*** (`Unstated`) | **derived from the writing blocks, never declared.** There is no field for it, and an unclassifiable signal fails closed |
-| a mirrored signal's `specName` | ***REFUSED*** | §2.8. ***Never "same as `tag`"*** — that defaulting rule **is** the assumption being removed, and in the format it would look like a decision somebody made |
-| a signal's `modes`, with `modeSource: Generated` | **CHECKED — DERIVED, a real pass** | read off the shape the copy layer generates. ***A declared mode is a caller assertion, forgotten exactly when it matters*** |
-| a signal's `modeSource` | ***NOT CHECKED*** | zero value `Unstated`, failing closed: the mode's authority is the question, so a blank cannot be the trustworthy answer |
-| `instrumentedBy`, with `modeSource: HandAuthored` | ***REFUSED*** | an unnamed hand-authored instrument is a bare assertion **wearing a provenance field** — worse than no field, because it looks checked |
-| a declared mode the copy layer **contradicts** | ***REFUSED, naming BOTH*** | never a silent preference either way |
+| a mirrored signal's `specName` | ***NOT CHECKED***, naming the tag | §2.8. A property of the **binding**, so resubmitting the vector cannot supply it. ***Never "same as `tag`"*** — as a default it matches by accident where the names coincide and misses everywhere else. **If they genuinely are the same, STATE it** |
+| a signal's **instrumentation mode** | **CHECKED — DERIVED, a real pass** | there is no field for it, so a caller assertion is **inexpressible**. The generator emits no per-signal latch, so `Sampled` is the derived answer |
+| `latchedBy` | **no latch is claimed** — a derivation, not a default | fails closed: `Sampled` stands and any `Latched` expectation is refused |
+| **proof that a `latchedBy` block is deployed** | ***never performed*** | ***the gate takes the NAME, not the FACT.*** Verify it yourself |
+| ***an UNKNOWN field, anywhere in a submission*** | ***REFUSED, NAMING IT*** | ***a silently-ignored field reads as ACCEPTED*** — the author is most careful exactly where the hole is. §2.4 |
 | `blockCompression`, at `runtimeCompression` > 1 | ***NOT CHECKED*** | three of X-D's four ceilings compared against nothing |
 | `blockCompression`, at `runtimeCompression` = 1 | **CHECKED — a real pass** | nothing is scaled, so none of the three *can* bind. **Computed from the submission, not assumed** |
 | a preset's `source` (`Data`/`Literal`) | ***REFUSED*** | the two answers push OPPOSITE ways — a data preset lowers the timer ceiling, a literal one lowers the ratio-distortion ceiling. No fail-safe guess exists |
@@ -292,13 +305,27 @@ twice, and a restated constant will one day refuse the wrong vectors with great 
 > deployed hand-authored block, and there was **no mode field to say so** while the code hard-coded
 > every signal to `Sampled`. *A real, deployed latch was structurally undeclarable.*
 >
-> **So the mode is DERIVED from what the copy layer generates, wherever it can be** (contract §2.8) — a
-> declared mode is a caller assertion and *those are forgotten exactly when they matter*. A hand-authored
-> instrument is statable, but **only with its provenance**: `modeSource: HandAuthored` plus
-> `instrumentedBy` naming the block that performs it. ***`HandAuthored` with no `instrumentedBy` is a
-> refusal*** — a bare assertion wearing a provenance field looks checked, which is worse than no field.
-> **A declared mode the copy layer contradicts is refused naming BOTH**, never silently resolved either
-> way.
+> **So the mode is DERIVED from what the copy layer generates** (contract §2.8), and ***there is no field
+> in which anyone may declare one*** — which makes a caller assertion **inexpressible rather than merely
+> unchecked**. A field that cannot be written cannot be written wrongly.
+>
+> The one statable thing is **who performs a latch**: `latchedBy`, naming the **BLOCK**. `latched: true`
+> would swap the generator's assumption for a caller's and improve nothing; **a block name is provenance**
+> — checkable against the deployed object set. **Absent `latchedBy` means no latch is claimed**, so
+> `Sampled` stands and a `Latched` expectation is refused. *A derivation, not a default.*
+>
+> 🔴 ***BUT THE GATE TAKES THE NAME, NOT THE FACT.*** It does not verify that the named block is deployed
+> or that it latches this signal. **Verify that yourself.** *(And note how this nearly stayed hidden: the
+> gate's own admission was rendered only when the report had no problems, so four claims went through
+> unremarked. **An admission that appears only when everything passed is missing from every report anyone
+> reads closely** — the reports people study are the ones with findings in them.)*
+>
+> ⚠️ ***A BLOCK THAT LATCHES ITS OWN OUTPUT IS A VALUE UNDER TEST, NOT INSTRUMENTATION.*** If the
+> sealing or holding **is the behaviour being asserted**, declare those expectations **`Sampled`** and
+> leave `latchedBy` absent. Naming the block under test as its own instrumenter claims that the thing
+> being tested is why the test can see anything — true by construction, and the correlated check arriving
+> through a new door. **`latchedBy` names an INSTRUMENT: something that exists so a value can be
+> observed, and would be pointless otherwise.**
 
 > 🔴 ***AND CHECK WHICH NAME YOU ARE READING.*** The harness assumed **the specification's signal name
 > IS the block's tag name**. One run, three mechanical paths broken by that one assumption: gate 5's 17
