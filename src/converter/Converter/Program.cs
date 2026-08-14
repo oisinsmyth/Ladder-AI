@@ -112,6 +112,11 @@ internal static class Program
             return RunConflictGraph(args[1..]);
         }
 
+        if (args.Length >= 1 && args[0] == "reachable-state")
+        {
+            return RunReachableState(args[1..]);
+        }
+
         if (args.Length >= 1 && args[0] == "trace")
         {
             return RunTrace(args[1..]);
@@ -159,6 +164,7 @@ internal static class Program
             Console.Error.WriteLine("                    exit 0 equivalent / 1 differs / 2 NOT COMPARED (missing, unparseable, not a block export, same file twice, or a MemoryLayout premise that did not hold)");
             Console.Error.WriteLine("       converter cross-check --project <ir-dir> [--json]   # whole-project cross-block reference-graph FACTS the reviewer reasons over (FI-22); never verdicts; exit 0");
             Console.Error.WriteLine("       converter conflict-graph --project <ir-dir> (--submission <file> | --signals <file>) [--json] [--allow-unresolved]   # SUBMISSION-SCOPED `conflictEdges` for harness gates 8/8c, in the exact shape ConflictEdgeDocument deserializes. NOT cross-check with a filter: that emits whole-project fact tables keyed on a storage path, this emits EDGES between BLOCKS with a provenance and a signal class. Only MultiWriter provenance is ever emitted - a CallGraph edge is about no signal, so it could only carry an Unstated class, and ProvenanceComplete is ALL-or-nothing, so ONE such edge would turn gate 8c to NOT CHECKED for the whole submission. `computedConflicts` is never emitted for the same reason (a bare name is Unstated provenance); gate 8's packing set derives from the edges. Exit 0 = computed (an EMPTY list is the EARNED claim that the graph ran and found nothing), 2 = NOT COMPUTED and the key is WITHHELD so the gate reports NOT CHECKED, 3 = emitted but an edge is unprovenanced");
+            Console.Error.WriteLine("       converter reachable-state --project <ir-dir> [--block <name>]... [--json]   # D9's PRODUCER (2026-08-14): per block, the transitive closure through its CALL tree of every storage location it touches, keyed on STORAGE IDENTITY. Feeds `TestSlot.ReachableState` + `ReachableStateProvenance`, after which `SlotConflictDerivation.OverlappingReachableState` makes the edges by set intersection with no further work. Until this existed the set arrived from `wave-cli submit --reaches`, i.e. DECLARED BY THE SUBMITTING AGENT — the shape D9 forbids. Reads count as well as writes (two tests cannot share a signal one drives and the other observes). Closes DOWNWARD only: closing upward through callers reaches OB1 from any leaf and would make every pair conflict. An `iDB.<suffix>` reference is CANONICALISED onto the FB's own `<FB>|<suffix>` before intersecting, and every rewrite is reported — without it a slot testing an FB and one testing its caller read as disjoint while driving one location. Exit 0 = computed / 2 = NOT COMPUTED, key withheld / 3 = emitted, but at least one block's closure was withheld BY NAME");
             Console.Error.WriteLine("       converter trace --binding <bindings.json> --project <ir-dir> [--json]   # forward-pass REQ trace: per-hop facts over the reader/writer graph (FI-25); facts not verdicts; exit 0. Hops incl. guard-containment (FI-36-min): every spec-listed condition must appear in the coil's guard");
             Console.Error.WriteLine("       converter candidate-scan --project <ir-dir> --fb <FBName> [--scope <prefix> ...] [--type <T>] [--direction status|command|any] [--json]   # compute every signal that could satisfy a requirement (FI-39); exit 1 if the IO half has >1 candidate");
             Console.Error.WriteLine("       converter undriven-scan --project <ir-dir> --fb <FBName> [--instance <iDB> ...] [--caller <file.ir> ...] [--hints] [--json]   # per-instance interface drive states (FI-39); exit 1 on undriven/disarmed");
@@ -1771,6 +1777,77 @@ internal static class Program
             Console.Error.WriteLine(
                 $"{report.WithoutRecordedProvenance.Count} edge(s) carry an Unstated provenance or signal class. The graph IS emitted, but the consumer's "
                 + "ProvenanceComplete is ALL-or-nothing, so gate 8c will report NOT CHECKED for the WHOLE submission and will not name which edge caused it.");
+            return 3;
+        }
+
+        return 0;
+    }
+
+    private static int RunReachableState(string[] args)
+    {
+        string? projectDir = null;
+        var blocks = new List<string>();
+        var json = false;
+
+        for (var i = 0; i < args.Length; i++)
+        {
+            switch (args[i])
+            {
+                case "--project":
+                    projectDir = RequireValue(args, ref i, "--project");
+                    break;
+                case "--block":
+                    // A missing value is a REFUSAL, never a silently narrowed scope: `--block` with
+                    // nothing after it would otherwise mean "every block", the opposite of what was asked.
+                    var name = RequireValue(args, ref i, "--block");
+                    if (name is null)
+                    {
+                        return 1;
+                    }
+
+                    blocks.Add(name);
+                    break;
+                case "--json":
+                    json = true;
+                    break;
+                default:
+                    Console.Error.WriteLine($"Unexpected argument: {args[i]}");
+                    return 1;
+            }
+        }
+
+        if (projectDir is null)
+        {
+            Console.Error.WriteLine("Usage: converter reachable-state --project <ir-dir> [--block <name>]... [--json]");
+            return 1;
+        }
+
+        if (!Directory.Exists(projectDir))
+        {
+            Console.Error.WriteLine($"--project directory not found: {projectDir}");
+            return 1;
+        }
+
+        var report = ReachableState.ReachableStateRunner.Run(projectDir, blocks);
+        Console.WriteLine(json
+            ? ReachableState.ReachableStateOutputFormatter.FormatJson(report)
+            : ReachableState.ReachableStateOutputFormatter.FormatText(report));
+
+        if (!report.Computed)
+        {
+            Console.Error.WriteLine(
+                "NOT COMPUTED — no closure was emitted, so no slot may be built from this run. A slot whose "
+                + "closure has no provenance is refused at admission (ColouringDefect.ReachableStateNotComputed) "
+                + "rather than treated as independent. " + report.NotComputedReason);
+            return 2;
+        }
+
+        if (report.NotComputedBlocks.Count > 0)
+        {
+            Console.Error.WriteLine(
+                $"{report.NotComputedBlocks.Count} of {report.Blocks.Count} block(s) had their closure WITHHELD by name "
+                + $"({string.Join(", ", report.NotComputedBlocks.Select(b => b.Block))}). The rest ARE emitted and usable: "
+                + "reporting every block it can and withholding the rest by name is a stronger statement than refusing the lot.");
             return 3;
         }
 
