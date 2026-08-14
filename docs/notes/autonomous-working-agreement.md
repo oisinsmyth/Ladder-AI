@@ -86,6 +86,7 @@ minutes; five messages over an hour costs them the afternoon.
 | **The orchestrator re-dispatched a lane that was already running, then killed the WRONG one of the two** — the survivor was mid-work (*"Now I'll write the submission"*) while the replacement had just started | After a machine crash the orchestrator judged liveness from the agent's **output file being 0 bytes**. ***THAT FILE IS NOT WRITTEN UNTIL THE AGENT FINISHES — a live agent's output sits at 0 bytes indefinitely***, so size and mtime carry **no** liveness information. Measured twice within ten minutes, including on the replacement | *** LIVENESS COMES ONLY FROM THE NOTIFICATION STREAM *** — the "still running, do NOT spawn a duplicate" reminders and the completion/stopped notifications. **Keep a running ledger of dispatched lanes and read it BEFORE dispatching, not after a user points at the duplicate.** When unsure whether a lane is alive, **message it** — a message to a finished agent resumes it harmlessly; a duplicate dispatch does not. And it is the same *empty is not clean* error, made by the orchestrator about its own tooling |
 | **A path-scoped commit carried every MODIFIED file and NONE of the five NEW ones** — the recorded history built only because the working tree still had them | `git commit -- <path>` commits **the index** for that path, and a new file is not in the index until it is added. ***The rule above already said "New files need `git add` first" — the ORCHESTRATOR'S BRIEFINGS PARAPHRASED IT AS "commit path-scoped, never `git add -A`" AND DROPPED THAT HALF***, to every lane, all day | `git add` the new files, **then** `git commit -- <paths>`, **then read `git status`**. *A commit that succeeds is not a commit that carried what you meant.* And the meta-fix: **a rule quoted from memory into a brief is a rule half-transmitted** — link or paste it, and put the *check* in the brief, not just the instruction |
 | A lane's driver picked up **another lane's in-progress Debug DLLs** and computed its inputs one register off | One agent per *component* does not cover a shared **build output** or a **gitignored scratch dir** — both are outside the rule's reach | A lane that consumes another component's code **extracts it at an explicit commit into its own directory, builds it there, and reports the SHA**. Never reference the live tree or a `bin/` under it |
+| **The ORCHESTRATOR's path-scoped commit swept in a lane's uncommitted append** to the same file (`9366e57`, the shared test log) | *** PATH-SCOPING PROTECTS THE COMMITTER, NOT THE OTHER LANE'S UNCOMMITTED WORK IN THAT PATH. *** The rule above is about not committing files you did not touch; this is its blind side — **a file that MANY lanes append to is shared mutable state between them**, and no commit discipline reaches it. Benign here only because an append-only file cannot lose content this way | **Treat a shared append-only artifact as a shared resource: append and commit in one step, never leave an append sitting in the tree.** *Prompt committing is cheaper than coordination.* And when reviewing a swept commit, **check the content survived** — the sweep is not automatically a loss, and reporting it as one is its own false finding |
 
 ---
 
@@ -292,6 +293,25 @@ running does not license:
     ➜ **A crash is loud without being NAMED.** A harness cannot tell an unhandled exception from a
       refusal, so a top-level catch that names it is not decoration — it is what makes the difference
       reportable.
+- *** A DEFENCE BUILT ON TOP OF A GUARANTEE YOU ALREADY HAVE IS PURE RISK — IT CANNOT ADD SAFETY, AND
+  IT CAN SUBTRACT IT. *** The closing half of the 48-agent crash, measured 2026-08-14 by killing the
+  holder: `kill -9` on a lease holder yields the next acquirer **exit 0, immediately**. ***THERE IS NO
+  STALE-LEASE STATE TO DETECT*** — the lock is the handle, so the OS releases it on process death.
+  **The delete that opened the ACCESS_DENIED race was doing a job the operating system already did**,
+  and the crash was the entire return on it.
+    ➜ **So the fix retires the stale-lease detector as UNNECESSARY, not as deferred** — say which,
+      because a "deferred" item gets built later by someone who reads the list and not the reason.
+    ➜ **Before hardening anything, ask what already guarantees it.** A redundant guard has no upside
+      to weigh against its own defects, and it will be defended on the grounds that it is *safe*.
+- *** AN ERROR MESSAGE THAT ASSERTS A CONCLUSION ITS CODE CANNOT REACH IS A FALSE CLAIM SHIPPED IN THE
+  PRODUCT. *** Found 2026-08-14 by the lane that wrote it: a lease timeout printed *"a timeout this
+  long means the holder is stuck rather than busy"* — **a hung holder and a busy one are
+  indistinguishable from there, permanently.** Worse than a wrong comment, because **a human reads it
+  at the moment they are deciding what to do, under time pressure**, and it will send them to kill a
+  process that was merely slow.
+    ➜ **State the facts and hand the judgement over**: how long it waited, that the holder is alive,
+      that the two cases cannot be told apart from here. *Declining to add the heuristic is only half
+      the fix if the sentence claiming it stays.*
 - *** ASK WHICH TRANSPORT ACTUALLY CARRIES THIS. *** Measured 2026-08-14, and it is the **fourth**
   instance of the unexecuted-guard family — but the first found by a question rather than by a
   mutation. A scan-counter wrap **is** absorbed, correctly, with a passing test, in the **S7** read
