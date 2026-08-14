@@ -40,14 +40,14 @@
       "slotId": "HXS",
       "startCondition": null,
       "vectorTargets": [
-        { "tag": "iDB_HxIntStep.StepInput",     "specName": "StepInput",     "type": "Int"  },
-        { "tag": "iDB_HxIntStep.StepIncrement", "specName": "StepIncrement", "type": "Int"  },
-        { "tag": "iDB_HxIntStep.StepThreshold", "specName": "StepThreshold", "type": "Int"  },
-        { "tag": "iDB_HxIntStep.StepReset",     "specName": "StepReset",     "type": "Bool" }
+        { "tag": "iDB_HxIntStep.StepInput",     "specName": "AddendA",     "type": "Int"  },
+        { "tag": "iDB_HxIntStep.StepIncrement", "specName": "AddendB", "type": "Int"  },
+        { "tag": "iDB_HxIntStep.StepThreshold", "specName": "Limit", "type": "Int"  },
+        { "tag": "iDB_HxIntStep.StepReset",     "specName": "ClearRequest",     "type": "Bool" }
       ],
       "resultSources": [
-        { "tag": "iDB_HxIntStep.StepSum",           "specName": "StepSum",           "type": "Int"  },
-        { "tag": "iDB_HxIntStep.StepOverThreshold", "specName": "StepOverThreshold", "type": "Bool" }
+        { "tag": "iDB_HxIntStep.StepSum",           "specName": "Total",           "type": "Int"  },
+        { "tag": "iDB_HxIntStep.StepOverThreshold", "specName": "LimitExceeded", "type": "Bool" }
       ]
     },
     {

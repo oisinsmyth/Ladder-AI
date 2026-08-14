@@ -112,11 +112,29 @@ omitted and `path` is written verbatim, per §2.7. Nothing here belongs in `harn
 manufactured two of the four cross-block multi-writer findings this project has ever recorded. The
 table is the join; it is not a hint that a leaf name can be matched against.
 
+🔴 ***`FB_HxIntStep` USES A DIFFERENT VOCABULARY IN THE SPECIFICATION FROM THE ONE THE BLOCK USES,
+AND IT IS DELIBERATE.*** Its clauses below say `AddendA`, `AddendB`, `Limit`, `ClearRequest`, `Total`
+and `LimitExceeded`; the block's members are `StepInput`, `StepIncrement`, `StepThreshold`,
+`StepReset`, `StepSum` and `StepOverThreshold`. Nothing is wrong — **the divergence is the point.**
+
+Contract §2.8 exists because *the harness assumed the specification's signal name is the block's tag
+name*, and three mechanical paths broke on it in one live run, with **one signal in seventeen
+resolving because its two names happened to be the same string.** The other three blocks in this
+corpus are that coincidence, twenty-in-twenty, because I wrote both the spec and the blocks — so
+without this one divergence **the corpus could not exercise §2.8's translation at all**, and a
+campaign green against it would mean nothing. Owner-ruled 2026-08-14: this is artificial material and
+the specification is ours to set, so introducing the divergence is not the spec drift it would be on
+a real register.
+
+**No block member was renamed and no IR changed.** The divergence is created in the *specification*,
+which is the only side that can create one — renaming the block's members would move both names
+together and leave them equal.
+
 | Block | Commanded in — `path` | Observed out — `path` |
 |---|---|---|
 | `FB_HxBoolEcho` | `iDB_HxBoolEcho.EchoCommand` (Bool), `iDB_HxBoolEcho.EchoReset` (Bool) | `iDB_HxBoolEcho.EchoResponse` (Bool), `iDB_HxBoolEcho.EchoInverse` (Bool) |
 | `FB_HxDwellTimer` | `iDB_HxDwellTimer.DwellCommand` (Bool), `iDB_HxDwellTimer.DwellReset` (Bool), `iDB_HxDwellTimer.DwellPreset` (Time) | `iDB_HxDwellTimer.DwellDone` (Bool), `iDB_HxDwellTimer.DwellElapsed` (Time), `iDB_HxDwellTimer.DwellPresetEcho` (Time) |
-| `FB_HxIntStep` | `iDB_HxIntStep.StepInput` (Int), `iDB_HxIntStep.StepIncrement` (Int), `iDB_HxIntStep.StepThreshold` (Int), `iDB_HxIntStep.StepReset` (Bool) | `iDB_HxIntStep.StepSum` (Int), `iDB_HxIntStep.StepOverThreshold` (Bool) |
+| `FB_HxIntStep` 🔴 | `AddendA` → `iDB_HxIntStep.StepInput` (Int), `AddendB` → `iDB_HxIntStep.StepIncrement` (Int), `Limit` → `iDB_HxIntStep.StepThreshold` (Int), `ClearRequest` → `iDB_HxIntStep.StepReset` (Bool) | `Total` → `iDB_HxIntStep.StepSum` (Int), `LimitExceeded` → `iDB_HxIntStep.StepOverThreshold` (Bool) |
 | `FB_HxSealLatch` | `iDB_HxSealLatch.SealTrigger` (Bool), `iDB_HxSealLatch.SealClear` (Bool) | `iDB_HxSealLatch.SealHeld` (Bool), `iDB_HxSealLatch.SealPriority` (Bool) |
 
 **The copy layer is generated, not hand-written**, so binding these slots is `Harness.Map`'s job and
@@ -184,8 +202,8 @@ one is **not** specified by this register and any result from it is unjudgeable,
 | Value | Type | Domain a vector must stay inside | Why the bound exists |
 |---|---|---|---|
 | `DwellPreset` | `Time` | `T#0MS` … `T#24D20H31M23S647MS` | The `Time` element is 32-bit signed milliseconds. |
-| `StepInput`, `StepIncrement`, `StepThreshold` | `Int` | −32768 … 32767 each | 16-bit signed. |
-| `StepInput` + `StepIncrement` | — | the **sum** must also lie in −32768 … 32767 | An `Int` addition that leaves the range does not error at the register — *a width error wraps, and a wrapped sum is a confident wrong answer*. The corpus refuses to specify it rather than specifying a wrap. |
+| `AddendA`, `AddendB`, `Limit` | `Int` | −32768 … 32767 each | 16-bit signed. |
+| `AddendA` + `AddendB` | — | the **sum** must also lie in −32768 … 32767 | An `Int` addition that leaves the range does not error at the register — *a width error wraps, and a wrapped sum is a confident wrong answer*. The corpus refuses to specify it rather than specifying a wrap. |
 
 **`DwellPreset` above 65 535 ms is not merely permitted, it is the point.** A preset that fits in one
 register cannot distinguish a correct two-register transform from a broken one, and a broken *word
@@ -307,7 +325,7 @@ Exercises the single-register `Int` `MOVE` path, an arithmetic result, and a com
 a published value rather than recomputed from the inputs.
 
 ### REQ-HXS-001 — The sum is the two commanded numbers added
-- **Text:** While `StepReset` is false, `StepSum` equals `StepInput` plus `StepIncrement`, on the
+- **Text:** While `ClearRequest` is false, `Total` equals `AddendA` plus `AddendB`, on the
   same scan those values are presented.
 - **Class:** control
 - **Source:** Lane brief — "one with an `Int` computed output (single-register `MOVE` path)".
@@ -315,8 +333,8 @@ a published value rather than recomputed from the inputs.
   range. Outside it, this clause states nothing.
 
 ### REQ-HXS-002 — The reset holds the sum at zero
-- **Text:** While `StepReset` is true, `StepSum` is 0, whatever `StepInput` and `StepIncrement` are.
-  After `StepReset` returns false, `StepSum` is the sum again.
+- **Text:** While `ClearRequest` is true, `Total` is 0, whatever `AddendA` and `AddendB` are.
+  After `ClearRequest` returns false, `Total` is the sum again.
 - **Class:** control
 - **Source:** Lane brief — "its own reset".
 - **Notes:** The second sentence is the load-bearing half. A block that latched zero permanently
@@ -324,9 +342,9 @@ a published value rather than recomputed from the inputs.
   the first scan after" — see "Excluded by design" below.
 
 ### REQ-HXS-003 — The threshold output reports the published sum
-- **Text:** `StepOverThreshold` is true when `StepSum` is greater than `StepThreshold`, and false
-  otherwise — including while `StepReset` holds `StepSum` at 0, where it is false unless
-  `StepThreshold` is itself below 0.
+- **Text:** `LimitExceeded` is true when `Total` is greater than `Limit`, and false
+  otherwise — including while `ClearRequest` holds `Total` at 0, where it is false unless
+  `Limit` is itself below 0.
 - **Class:** control
 - **Source:** Lane brief; chosen so one commanded `Int` is judged against another commanded `Int`
   rather than against a constant.
@@ -390,9 +408,9 @@ pair discriminates a wrong dominance instead of merely reporting a differently-t
 
 Recorded so the reasoning survives and nobody re-adds them as an oversight.
 
-**A one-scan lag claim, on any block.** An earlier draft carried "`StepOverThreshold` reflects the
-value `StepSum` holds on the same scan, not the value it held on the previous one", and the same
-shape appeared as "on the first scan after `StepReset` returns false" and "on the same scan" in the
+**A one-scan lag claim, on any block.** An earlier draft carried "`LimitExceeded` reflects the
+value `Total` holds on the same scan, not the value it held on the previous one", and the same
+shape appeared as "on the first scan after `ClearRequest` returns false" and "on the same scan" in the
 preset echo. All three were removed. They are attractive — a one-scan lag is invisible on a
 slowly-changing signal, it is exactly what an intra-network ordering mistake produces, and it raises
 no error at import or compile — but contract §4.1 is decisive: ***a one-scan event is unobservable at

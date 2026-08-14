@@ -46,26 +46,30 @@ The `HBA` slot's binding is **deliberately not reproduced here.** It would have 
 reading the generated `FC_HarnessCopyLayer.ir` — and *a fixture authored by reading our own output is
 not a fixture, it is a mirror.* Whoever holds the `HBA` binding supplies it.
 
-## 3. `specName` — every pair coincides, and that is the corpus's one blind spot
+## 3. `specName` — 14 pairs coincide, 6 diverge, and the divergence is deliberate
 
 Contract §2.8 requires `specName` beside `tag`, and is explicit that **absent does not mean "same as
-tag"** — that identity is the assumption being removed. So every signal states its `specName`
-explicitly, and in this corpus **every one of them is the same string as its `tag`.**
+tag"** — that identity is the assumption being removed. Every signal states its `specName`
+explicitly. Of the 20:
 
-That is honest, and it is also the thing to know about this corpus:
+| | |
+|---|---|
+| **14 coincide** (`HXE`, `HXD`, `HXL`) | I wrote both the spec and the blocks, so the two vocabularies are one |
+| 🔴 **6 diverge** (`HXS`, every signal) | `AddendA`/`AddendB`/`Limit`/`ClearRequest`/`Total`/`LimitExceeded` against `StepInput`/`StepIncrement`/`StepThreshold`/`StepReset`/`StepSum`/`StepOverThreshold` |
 
-> *** THE Hx CORPUS CANNOT EXERCISE §2.8's TRANSLATION AT ALL. *** §2.8 was written because *one
-> signal in seventeen resolved, and it resolved because its two names happen to be the same string.*
-> **Every** signal here is that case. A campaign that validates the `specName` path against this
-> corpus validates it against the one shape that cannot fail.
+**The divergence was introduced on purpose, and it is what makes this corpus able to test §2.8 at
+all.** §2.8 was written because *one signal in seventeen resolved, and it resolved because its two
+names happen to be the same string.* Before this change **every** signal here was that case, so a
+green from the translation path would have meant nothing. Owner-ruled 2026-08-14: this is artificial
+material and the specification is ours to set.
 
-The cause is structural, not an oversight: I am both the spec author and the block author, so the
-spec's vocabulary *is* the block's vocabulary. **Recommendation, not a decision I made:** if the
-campaign wants §2.8 exercised, one block should be given a deliberately divergent spec name — a
-rename inside `gen/test-project001/hx-corpus/requirements.md` costs nothing **today** and will cost
-every citation into the enumeration once one exists. `FB_HxIntStep` is the cheapest place (three
-clauses, no timing). **I did not do it: renaming signals in a requirements register is a change to
-the specification, and that is an escalation rather than an implementation choice.**
+Note what was changed and what was not: ***the divergence lives in the REQUIREMENTS REGISTER, and no
+block member was renamed — no IR changed and no re-import was needed.*** Renaming the block's members
+would have moved both names together and left them equal, which is the one edit that cannot create a
+divergence.
+
+**So the corpus now exercises both paths**: three slots where the join is an identity and one where
+every signal needs translating. A gate that resolves `HXE` but not `HXS` has found the real defect.
 
 ## 4. The instrumentation mode — `Generated` for all 20 signals, stated rather than left unstated
 
@@ -102,17 +106,15 @@ visible rather than silent.
   for these four rests on the mirror's own `HX_ScanCount` advancing and on the results changing —
   which is weaker, and *"every register agrees" is also what a mirror no write ever reached looks
   like.*
-- **Contract gate 7 requires exactly one start bool per slot.** Whether a `startCondition: null` slot
-  satisfies gate 7 by way of D37, or is refused by it, ***is not something I can settle from the
-  contract text*** — §6 and D37 point opposite ways and I would be guessing.
+✅ **RULED ADMISSIBLE, 2026-08-14.** A `startCondition: null` slot is admissible: these blocks have no
+start gate, and *inventing one to satisfy a schema would be fabricating a stimulus.* **No workaround
+was implemented and none should be** — in particular, giving each block a `Start` member that no
+network reads would produce an echo proving the *copy layer* ran rather than the *block*, which is an
+echo that proves the wrong thing and is worse than none.
 
-> **ESCALATION, with the options, because this is a design decision that changes the spec.** Giving
-> each block a `Start` member is ~8 small edits, but a start member **no network reads** produces an
-> echo that proves the copy layer ran rather than that the block ran — an echo that proves the wrong
-> thing, which is worse than none. Making it genuinely gate each block adds a condition to every
-> clause in the register and stops the blocks being trivial, which was the brief. **The third option
-> is to rule that a null-start slot is admissible and say so in the contract.** I recommend the third
-> and have implemented none of them.
+**Still to do, and it is not mine:** the ruling needs writing into the contract, because gate 7's own
+text ("exactly one start bool per slot") and D37 read opposite ways, and a ruling that lives only in
+a lane message is one the next reader cannot find. *A caveat in a report decays.*
 
 ## 6. Two gaps I did not fill, rather than filling them with a guess
 
@@ -120,14 +122,13 @@ visible rather than silent.
   assertion is checked against, and it is a property of the **hardware configuration**, which I have
   not read. A plausible number here would silently void that assertion — the same shape as a defaulted
   build stamp. Whoever knows the rig's retentive window supplies it.
-- **Contract §2.8 and `BindingDocument.cs` do not agree on the shape**, and the JSON is written to the
-  **code**, since the code is what will read it. §2.8 specifies `modes`, `modeSource` ∈
-  `{Generated, HandAuthored, SelfDeclared, Unstated}` and `instrumentedBy`; the class has `SpecName`
-  and a single `LatchedBy` naming a block. They are reconcilable — `latchedBy` absent ⇒ `Generated`,
-  `latchedBy: X` ⇒ `HandAuthored` + `instrumentedBy: X` — and the code's shape is arguably the better
-  one, because it makes `SelfDeclared` **inexpressible** rather than merely NOT CHECKED. But a
-  submission written to §2.8's field names will not deserialize, and **that is a live divergence for
-  the lane building the code side.**
+- ~~Contract §2.8 and `BindingDocument.cs` disagree on shape.~~ ***RESOLVED 2026-08-14 (`e663fb0`):
+  §2.8 has narrowed to `specName` and `latchedBy` and nothing else — `modes`, `modeSource` and
+  `instrumentedBy` are gone.*** This JSON was written to the code and is checked against the narrowed
+  text rather than assumed to match it: `tag`, `specName`, `type`, and `latchedBy` absent. **No
+  change was needed.** The narrowed contract also states independently the trap in §4 above —
+  `latchedBy` names an **instrument**, so naming the block under test would claim the thing being
+  tested is the reason the test can see it.
 
 ## 7. How to check the bindings actually landed
 
