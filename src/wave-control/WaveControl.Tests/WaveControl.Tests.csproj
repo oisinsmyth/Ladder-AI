@@ -22,6 +22,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\WaveControl\WaveControl.csproj" />
+    <ProjectReference Include="..\WaveControl.Cli\WaveControl.Cli.csproj" />
   </ItemGroup>
 
 </Project>

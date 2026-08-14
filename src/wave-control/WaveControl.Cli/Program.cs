@@ -200,9 +200,31 @@ namespace Ladder.Wave.Cli
 
             using (store.AcquireLease(agent, TimeSpan.FromMilliseconds(options.Int("--lease-timeout-ms") ?? 30000)))
             {
-                var before = store.Read().Count;
+                // *** RESET MUST WORK ON A STORE NOTHING ELSE CAN READ. THAT IS THE ENTIRE POINT OF IT. ***
+                // Measured 2026-08-14, and it is the guard I had just added biting the hand that clears
+                // it: after 90 kill-mid-write cycles the store was left with its marker present and its
+                // slots file gone, Read() correctly REFUSED - and `reset` refused too, because it read
+                // the outgoing count first. The deliberate escape was closed by the guard it exists to
+                // escape, so the store was unrecoverable through the tool and the only route left was
+                // hand-editing files in ProgramData. An over-firing guard does not stay respected; it
+                // gets worked around, and the workaround is worse than the state it prevented.
+                //
+                // So the count is DECORATION and is treated as such. What was destroyed is reported when
+                // it is knowable and NAMED AS UNKNOWN when it is not - never quietly printed as 0, which
+                // would say "there was nothing to lose" about precisely the case where there may have
+                // been a great deal.
+                string outgoing;
+                try
+                {
+                    outgoing = store.Read().Count + " slot(s)";
+                }
+                catch (WaveStoreException ex)
+                {
+                    outgoing = "an UNKNOWN number of slots (the store could not be read: " + ex.Message + ")";
+                }
+
                 store.Clear();
-                Console.WriteLine("RESET '" + store.Directory + "': " + before + " slot(s) removed by " + agent + ".");
+                Console.WriteLine("RESET '" + store.Directory + "': " + outgoing + " removed by " + agent + ".");
                 return ExitAdmitted;
             }
         }
