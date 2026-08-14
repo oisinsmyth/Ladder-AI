@@ -228,6 +228,10 @@ dotnet build -c Release src/converter/converter.sln   # AFTER ANY CONVERTER CHAN
 `docs/notes/test-environment-build-plan.md` (**CLOSED 2026-08-14**). Submission format:
 `docs/notes/test-environment-contract.md`.
 
+➜ **Full campaign record — 42 defects, what was measured, what was deliberately not done, and the
+orchestrator's own errors: `docs/notes/hammer-campaign-results.md`.** *Read that for provenance;
+read the readiness page below to actually use the tooling.*
+
 ➜ ***BEFORE USING ANY OF THIS ON A REAL JOB, READ `docs/notes/live-project-readiness.md` FIRST.*** One
 page, written to be read once before you start: what is proven **against the controller** versus what
 is proven only against its own tests, the four traps that have each cost a day, and the one-line
