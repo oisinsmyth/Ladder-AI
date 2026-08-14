@@ -78,18 +78,44 @@ public class NotCheckedTriageTests
     }
 
     /// <summary>
-    /// *** GATE 5 IS D6 INDEPENDENCE WORKING, NOT A GAP. *** The observability map must come from the
-    /// coordinator's bindings; the submission's own map is the author vouching for the artifact the gate
-    /// exists to check them against. It will read NOT CHECKED for ever on a self-declaring submission,
-    /// and that is the correct output.
+    /// *** GATE 5 WAS FILED "BY DESIGN" AND THE MEASUREMENT SAYS OTHERWISE. ***
+    ///
+    /// <para>The old classification reasoned that the observability map must come from an authority other
+    /// than the submitter, so the gate reads NOT CHECKED for ever. <b>The REFUSAL of a self-declared map
+    /// is indeed permanent and correct. The NOT CHECKED is not.</b> Driven with a loadable coordinator
+    /// binding the gate RUNS and returns a verdict — measured 2026-08-14 against the live 27-vector
+    /// submission, where supplying one turned it from NOT CHECKED into <c>REFUSED</c>, naming every
+    /// signal the binding did not carry.</para>
+    ///
+    /// <para><b>So the remedy is an artifact, and an artifact that could exist is a build-list item.</b>
+    /// What the measurement actually found is the useful half: the coordinator binding for this block
+    /// EXISTS — as PROSE. A document that exists and cannot be loaded is not the same as one nobody
+    /// wrote, and "by design" would have retired a transcription job as a law of nature.</para>
     /// </summary>
     [Fact]
-    public void GATE_5_IS_BY_DESIGN_AND_MUST_NOT_BE_FILED_AS_OUTSTANDING_WORK()
+    public void GATE_5_IS_AWAITING_AN_ARTIFACT_AND_THAT_WAS_ESTABLISHED_BY_RUNNING_IT()
     {
         var gate = MinimalSubmission().NotChecked.Single(g => g.Gate.StartsWith("5 observability", StringComparison.Ordinal));
 
-        Assert.Equal(NotCheckedReason.IndependentAuthorityByDesign, gate.Reason);
-        Assert.False(gate.IsClosableOffline);
+        Assert.Equal(NotCheckedReason.AwaitingAnArtifactThatCouldExist, gate.Reason);
+        Assert.True(gate.IsClosableOffline);
+    }
+
+    /// <summary>
+    /// The other half of the same measurement: <b>supplying a binding makes gate 5 RUN.</b> Without this,
+    /// the reclassification above rests on the classification constant rather than on the behaviour, and
+    /// a gate that could not run whatever you passed it would still satisfy it.
+    /// </summary>
+    [Fact]
+    public void AND_SUPPLYING_A_BINDING_SOURCED_MAP_MAKES_GATE_5_ACTUALLY_RUN()
+    {
+        var fromBindings = MirrorObservability.Of(("Demo_Count", new[] { InstrumentationMode.Latched }))
+            with { Provenance = MapProvenance.Bindings };
+
+        var gate = MinimalSubmission(map: fromBindings).Gates
+            .Single(g => g.Gate.StartsWith("5 observability", StringComparison.Ordinal));
+
+        Assert.NotEqual(GateStatus.NotChecked, gate.Status);
     }
 
     [Fact]
@@ -109,13 +135,40 @@ public class NotCheckedTriageTests
     [Fact]
     public void Every_declared_reason_except_Unstated_is_produced_by_some_gate()
     {
-        var produced = MinimalSubmission().NotChecked.Select(g => g.Reason).ToHashSet();
+        // *** THE UNION, WHICH IS WHAT THE COMMENT ABOVE ALWAYS SAID AND THE CODE DID NOT DO. *** It read
+        // one submission, and passed only because gate 5 was then filed IndependentAuthorityByDesign.
+        // Reclassifying gate 5 on the measurement left that category produced by exactly one path — 4b's
+        // no-fidelity-at-all branch — which the default fixture does not drive. A one-submission union is
+        // how a category comes to look maintained by a gate that no longer emits it.
+        var produced = MinimalSubmission().NotChecked
+            .Concat(MinimalSubmission(omitFidelity: true).NotChecked)
+            .Select(g => g.Reason)
+            .ToHashSet();
 
         foreach (var reason in Enum.GetValues<NotCheckedReason>().Where(r => r != NotCheckedReason.Unstated))
         {
             Assert.True(produced.Contains(reason),
                 $"no gate produced {reason}. A classification nothing emits is a category nobody maintains, and the report's group for it prints nothing for ever.");
         }
+    }
+
+    /// <summary>
+    /// <b>And the one path that still produces it is named</b>, so retiring the category becomes a visible
+    /// decision rather than a test quietly going green on a smaller set.
+    /// </summary>
+    [Fact]
+    public void IndependentAuthorityByDesign_is_now_produced_by_EXACTLY_ONE_path_and_it_is_gate_4b()
+    {
+        var byDesign = MinimalSubmission(omitFidelity: true).NotChecked
+            .Where(g => g.Reason == NotCheckedReason.IndependentAuthorityByDesign)
+            .ToArray();
+
+        var gate = Assert.Single(byDesign);
+        Assert.StartsWith("4b fidelity authority", gate.Gate, StringComparison.Ordinal);
+
+        // And it is genuinely absent when a fidelity declaration IS supplied — so the classification
+        // tracks the input rather than the gate.
+        Assert.DoesNotContain(MinimalSubmission().NotChecked, g => g.Reason == NotCheckedReason.IndependentAuthorityByDesign);
     }
 
     /// <summary>
@@ -137,7 +190,7 @@ public class NotCheckedTriageTests
     /// CHECKED. It is deliberately minimal rather than realistic: the point is coverage of the
     /// classification, not of the block.
     /// </summary>
-    private static SubmissionReport MinimalSubmission()
+    private static SubmissionReport MinimalSubmission(MirrorObservability? map = null, FidelityDeclaration? fidelity = null, bool omitFidelity = false)
     {
         const string clause = "REQ-014";
         const string text = "WHEN the step is applied THEN the count reaches the limit";
@@ -167,12 +220,13 @@ public class NotCheckedTriageTests
             AssertionEnumeration.Of(new[] { clause }, new[] { id }),
 
             // A model with no declaring authority: gate 4 can run, gate 4b cannot.
-            FidelityDeclaration.Of("M_Ramp", new[] { "ramp-to-limit" }, new[] { "overshoot" }, true),
+            omitFidelity ? null : fidelity ?? FidelityDeclaration.Of("M_Ramp", new[] { "ramp-to-limit" }, new[] { "overshoot" }, true),
 
             new AgentIdentity("agent-a"),
 
-            // A SELF-DECLARED map — gate 5's by-design refusal.
-            MirrorObservability.Of(("Demo_Count", new[] { InstrumentationMode.Latched })),
+            // A SELF-DECLARED map by default — the vector author vouching for the artifact gate 5
+            // exists to check them against.
+            map ?? MirrorObservability.Of(("Demo_Count", new[] { InstrumentationMode.Latched })),
 
             floorScans: 9,
             runtimeCompression: 8,          // > 1, so gate 10b needs inputs nobody supplied

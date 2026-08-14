@@ -49,22 +49,47 @@ public static class GateCli
             return GateExit.NothingExamined;
         }
 
+        // 🔴 *** --binding IS WHAT MAKES THIS CLI AS STRONG AS THE LOOP. *** Without it the observability
+        // map comes out of the submission — the vector author declaring what the copy layer provides — and
+        // gate 5 reports NOT CHECKED rather than passing. Measured: the CLI took its map from the
+        // submission while the loop took it from the coordinator's bindings, so the standalone tool was
+        // WEAKER than the loop in exactly the place it decides whether to proceed, and it is consulted FIRST.
+        var bindingIndex = args.ToList().IndexOf("--binding");
+        var bindingPath = bindingIndex >= 0 && bindingIndex + 1 < args.Count ? args[bindingIndex + 1] : null;
+
+        if (bindingIndex >= 0 && bindingPath is null)
+        {
+            output.WriteLine("NOTHING EXAMINED — `--binding` was given with no path after it.");
+            output.WriteLine("It names the COORDINATOR's binding document, which is what gate 5 needs an authority from. A flag with no value is not one.");
+            return GateExit.NothingExamined;
+        }
+
+        // *** THE BINDING IS READ IN ITS OWN try, NAMING ITS OWN FILE. *** Measured 2026-08-14: pointing
+        // --binding at the real coordinator binding (which is MARKDOWN) produced
+        // "could not read '<the submission>'" — the submission was fine, and the message sent the reader
+        // to the wrong artifact entirely. One catch over two reads cannot say which one failed, and the
+        // one it names is the one it did not.
+        BindingDocument? binding = null;
+        if (bindingPath is not null)
+        {
+            try
+            {
+                binding = BindingDocument.Read(readFile(bindingPath));
+            }
+            catch (Exception ex)
+            {
+                output.WriteLine($"NOTHING EXAMINED — could not read the BINDING '{bindingPath}': {ex.GetType().Name}: {ex.Message}");
+                output.WriteLine("*** THE SUBMISSION IS NOT WHAT FAILED HERE. *** `--binding` takes a MACHINE-READABLE binding document (JSON).");
+                output.WriteLine("A coordinator binding written as prose is a real document and still not a loadable one — gate 5 needs the slot bindings as data.");
+                return GateExit.NothingExamined;
+            }
+        }
+
         SubmissionDocument document;
         SubmissionReport report;
         try
         {
             document = SubmissionDocument.Read(readFile(args[1]));
-
-            // 🔴 *** --binding IS WHAT MAKES THIS CLI AS STRONG AS THE LOOP. *** Without it the
-            // observability map comes out of the submission — the vector author declaring what the copy
-            // layer provides — and gate 5 reports NOT CHECKED rather than passing. Measured: the CLI took
-            // its map from the submission while the loop took it from the coordinator's bindings, so the
-            // standalone tool was WEAKER than the loop in exactly the place it decides whether to proceed,
-            // and it is consulted FIRST.
-            var bindingIndex = args.ToList().IndexOf("--binding");
-            var binding = bindingIndex >= 0 && bindingIndex + 1 < args.Count
-                ? BindingDocument.Read(readFile(args[bindingIndex + 1]))
-                : null;
 
             // Evaluate is INSIDE the try: a document that parses as JSON and then names a mode nothing
             // implements is still a document that could not be read, and it must reach the same
@@ -73,7 +98,7 @@ public static class GateCli
         }
         catch (Exception ex)
         {
-            output.WriteLine($"NOTHING EXAMINED — could not read '{args[1]}': {ex.GetType().Name}: {ex.Message}");
+            output.WriteLine($"NOTHING EXAMINED — could not read the SUBMISSION '{args[1]}': {ex.GetType().Name}: {ex.Message}");
             output.WriteLine("An unreadable submission is not an admissible one. Empty is not clean.");
             return GateExit.NothingExamined;
         }

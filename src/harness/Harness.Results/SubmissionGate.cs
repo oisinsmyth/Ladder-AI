@@ -861,13 +861,26 @@ public static class SubmissionGate
         // absent one. It refuses to be the deciding voice rather than being quietly permissive.
         if (map.Provenance != MapProvenance.Bindings)
         {
-            return GateResult.CouldNotRun("5 observability", NotCheckedReason.IndependentAuthorityByDesign, "a map derived from the coordinator's bindings",
+            // 🔴 *** RECLASSIFIED 2026-08-14, BY MEASUREMENT RATHER THAN BY ARGUMENT. *** This was
+            // IndependentAuthorityByDesign — "it reads NOT CHECKED for ever, and that is correct". The
+            // REFUSAL of a self-declared map is indeed permanent and correct; the NOT CHECKED is not.
+            // Driven with `--binding` pointed at a real, loadable coordinator binding, this gate BECOMES
+            // CHECKED and returns a verdict. So the remedy is an artifact, and an artifact that could
+            // exist is a build-list item, not a design property.
+            //
+            // What the measurement actually found, and it is the useful half: the HBA coordinator binding
+            // EXISTS — as PROSE (`harness-binding.md`). `--binding` needs it as DATA. A document that
+            // exists and cannot be loaded is not the same as one nobody wrote, and calling it "by design"
+            // would have retired a transcription job as a law of nature.
+            return GateResult.CouldNotRun("5 observability", NotCheckedReason.AwaitingAnArtifactThatCouldExist, "a map derived from the coordinator's bindings",
                 map.Provenance == MapProvenance.SelfDeclared
                     ? "the observability map came out of the SUBMISSION — the vector author declaring what the copy layer provides, "
                       + "which is the author vouching for the artifact this gate exists to check them against. *** A SELF-DECLARED MAP "
                       + "CANNOT BE THE DECIDING VOICE, *** and this gate is consulted before anything is spent, so being quietly "
-                      + "permissive here is worse than not running. Supply the coordinator's bindings (harness-run --binding), which is "
-                      + "the source the loop itself uses."
+                      + "permissive here is worse than not running. Supply the coordinator's bindings (`--binding`), which is the "
+                      + "source the loop itself uses. *** THAT IS A USAGE FACT, NOT A DESIGN PROPERTY: *** measured 2026-08-14, this "
+                      + "gate runs and returns a verdict the moment a loadable binding is passed. The one for this block exists as "
+                      + "PROSE and not as data, so what is owed is a transcription, not a decision."
                     : "nothing said where the observability map came from. That is NOT CHECKED rather than trusted: the whole value of "
                       + "this gate is that the map is a THIRD-PARTY statement of what the copy layer provides, and an unattributed map "
                       + "is indistinguishable from one the vector author wrote.");
