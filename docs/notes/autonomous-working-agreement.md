@@ -293,6 +293,27 @@ running does not license:
     ➜ **A crash is loud without being NAMED.** A harness cannot tell an unhandled exception from a
       refusal, so a top-level catch that names it is not decoration — it is what makes the difference
       reportable.
+- *** AN ASSERTION THAT CANNOT FAIL IS DOCUMENTATION WEARING A CHECK'S CLOTHES — AND IT IS WORSE THAN
+  A MISSING CHECK, BECAUSE IT OCCUPIES THE SLOT. *** Measured 2026-08-14 inside gate 8: it computes
+  `effective = computed ∪ declared` and then asserts `computed ⊆ effective` — ***true for every input,
+  by construction.*** Nobody looking at that gate would think a blacklist check was owed.
+    ➜ *** WHEN A MUTATION YOU EXPECTED TO GO RED STAYS GREEN, THE FINDING IS USUALLY IN THE ASSERTION,
+      NOT IN THE MUTATION. *** That is how this was found — the obvious mutation could not fail.
+    ➜ **Labelling beats deleting when the line still communicates intent**: the tautology stays, now
+      pinned by a test that says it is unfalsifiable, *so nobody later reads it as evidence.*
+- *** AN ARCHITECTURAL-SOUNDING EXPLANATION IS THE MOST DURABLE WAY TO BURY A CHORE. *** Same day: a
+  gate was triaged `NOT CHECKED — by design, the submission cannot adjudicate its own author`. True,
+  principled, and **wrong**: handed a loadable binding the gate *ran* and returned `REFUSED`.
+  ***A GATE THAT RETURNS A VERDICT IS NOT ONE THAT CANNOT RUN.*** The real state was a third thing —
+  the coordinator's binding **exists as PROSE** and the flag needs **data**, so ***what was owed was a
+  TRANSCRIPTION, not a decision.*** "By design" would have retired a transcription job as a law of
+  nature.
+    ➜ **Triage by measurement, not by category.** Before filing anything as *by design*, **supply what
+      it says it lacks and watch what it does.**
+    ➜ *** AN EMPTY CLASSIFICATION IS A SLOT WAITING TO BE MISUSED. *** If a triage category ends up
+      with no members, **retire it visibly, with the reason** — otherwise the next merely-inconvenient
+      case gets filed under it, and *by design* is unfalsifiable once nobody remembers it was measured
+      empty.
 - *** DELETING AN INPUT FROM A SYSTEM THAT REPORTS DERIVED CONCLUSIONS DOES NOT PRODUCE A SMALLER
   CONCLUSION — IT PRODUCES A WRONG ONE. *** Measured 2026-08-14 while looking for a *safe and small*
   slot-scoped recovery. With the slot present the store reported two wave sets separated by a conflict
