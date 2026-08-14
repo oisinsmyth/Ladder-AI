@@ -44,28 +44,28 @@ device with zero blocks is still legitimately healthy.**
 EXAMINED … proves nothing about the project"*; **the JSON formatter had no guard, three lines from a
 comment stating the rule.** *Two formatters, one verdict, one of them honest.*
 
-`src/openness-cli/OpennessCli/bin/Release/net48/openness-cli.exe` was built **2026-08-14 02:21**.
-Six commits to `src/openness-cli` landed after it. **Run this first thing:**
+### All four fixes re-verified in the SHIPPED Release binary, 07:05
 
-```
-dotnet build -c Release src/openness-cli/openness-cli.sln
-```
+Each was only ever seen in Debug before, and *Release is what everything actually invokes* — which
+is the entire reason the staleness mattered. MD5 `49351C4B7B3E0132F2DDA70DB3880294`:
 
-Self-approval is in place and working unattended (the whitelist grew by five entries during
-overnight Debug builds with nobody at the machine), so this needs **no approval dialog** — it needs
-only the permission to run it. **Do it while no Portal work is in flight**, then confirm with
-`tools/openness-approve-build.ps1 -Status -Exe <the Release exe>` that one entry matches its hash.
-
-***UNTIL YOU DO, TWO DIAGNOSTICS ARE LYING, AND BOTH WERE MEASURED SAYING SO*** — the fixes are
-committed and tested; they are simply not in the binary you are running:
-
-| what you will see | what is true |
+| fix | confirmed in Release |
 |---|---|
-| `portal-status` says a process *"report[s] an ACQUIRED time EARLIER THAN THEIR OWN START TIME — a value that cannot be true"* | **False alarm.** It fires on every **Openness-invisible** process, whose ACQUIRED column three characters away reads `(not visible to Openness)`. Fixed in `9e02cc1`. The **OS-only** finding beside it is real — read that one |
-| `export-all` says `COMPLETE: every block and type … Safe to compare against with drift-check --complete` | **Over-broad**, even with `--tagtables`. The dump has no tag tables unless you passed that flag, and `--complete` declares the dump the whole picture — so following it yields absence rows for tag tables that were never exported. Fixed in `5fdf6f4` |
+| `compile-all --json` | `clean=false  nothingExamined=true  compiled=0` at **exit 14**. The same run emitted `clean: true` before |
+| `compile --json` | stdout **parses** (`state=Warning`, `errors=0`); `PASSED WITH WARNINGS` is on **stderr** and absent from stdout. Checked with **separate file redirects, never `2>&1`** — merging the streams would have hidden exactly what the fix changed |
+| bogus `--device` | `No PLC device matching 'NoSuchDevice' found`, and it no longer claims the block is absent. **Control: the same export without the flag still exits 0**, so it does not over-fire |
+| `sanity-check` | `healthy=true  nothingExamined=false  blocks=36  types=7`, exit 0, text still `OVERALL: HEALTHY` |
 
-**Neither is a wrong answer about the controller. Both are a diagnostic crying wolf, which is the
-same class of error as a false green** — it teaches you to discount the one time it is right.
+⚠️ ***THAT LAST ROW CONFIRMS ONLY THE ANTI-OVER-FIRE HALF.*** The **defect** case — zero PLC devices —
+**cannot be constructed on this project** and is proven only by unit test. Observing it live needs an
+HMI-only or device-less project. **Read the row as "the fix does not break the normal path", never as
+"the guard was seen to fire."**
+
+⚠️ **And the lesson worth keeping now the symptom is gone:** for most of the night those two
+diagnostics were **lying in the shipped binary while their fixes sat committed, tested and green.**
+***A COMMIT IS NOT A DEPLOYMENT***, and here the gap between them was one build command. The cheap
+re-check after any future rebuild is `compile <project> --block <any> --json` through a JSON parser —
+it parsed as **nothing at all** before the fix, so it is an unambiguous currency probe.
 
 ---
 
