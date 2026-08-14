@@ -232,6 +232,9 @@ public sealed record MirrorObservability(IReadOnlyDictionary<string, IReadOnlySe
 
             var modes = new HashSet<InstrumentationMode> { InstrumentationMode.Sampled };
 
+            // *** DERIVED FOR A GENERATED LATCH, TAKEN ON TRUST FOR A HAND-AUTHORED ONE, AND THE REPORT
+            // SAYS WHICH. *** A generated latch is a computed fact about the artifact this harness emits -
+            // it can be read out of the generated IR - where a named block can only be believed.
             if (signal.LatchClaimed)
             {
                 modes.Add(InstrumentationMode.Latched);

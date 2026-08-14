@@ -113,7 +113,13 @@ public static class SubmissionGate
         /// Distinct from omitted: <c>[]</c> is the earned claim that the graph ran and found nothing,
         /// omitted is the honest NOT CHECKED, and an explicit null is neither — see gate 8.
         /// </summary>
-        bool conflictEdgesExplicitlyNull = false)
+        bool conflictEdgesExplicitlyNull = false,
+
+        /// <summary>
+        /// Fields the document carried that this schema does not know. <b>Named and refused</b> — a
+        /// silently-ignored field is worse than a rejected one, because it reads as accepted.
+        /// </summary>
+        IReadOnlyList<string>? unknownFields = null)
     {
         ArgumentNullException.ThrowIfNull(vectors);
         ArgumentNullException.ThrowIfNull(enumeration);
@@ -128,6 +134,7 @@ public static class SubmissionGate
             return new SubmissionReport(gates, 0);
         }
 
+        gates.Add(UnknownFields(unknownFields));
         gates.Add(Schema(vectors));
         gates.Add(Authorship(vectors, blockAuthor));
         gates.Add(BasisGate(vectors, enumeration));
@@ -161,6 +168,41 @@ public static class SubmissionGate
     // -------------------------------------------------------------------------------------------------
     // 1 — schema
     // -------------------------------------------------------------------------------------------------
+
+    /// <summary>
+    /// 🔴 <b>A FIELD THIS SCHEMA DOES NOT KNOW IS A REFUSAL NAMING IT — NEVER A SILENT DROP.</b>
+    ///
+    /// <para>*** A SILENTLY-IGNORED FIELD IS WORSE THAN A REJECTED ONE, BECAUSE IT READS AS ACCEPTED. ***
+    /// The contract and this code have diverged before: the contract specified three instrumentation
+    /// fields the code never implemented, so an author writing to the contract emitted three fields that
+    /// vanished — and got a green built on declarations nobody read.</para>
+    ///
+    /// <para><b>This closes a divergence in the direction that cannot lie, whichever document is stale.</b>
+    /// The refusal does not decide who is right; it makes the disagreement impossible to miss.</para>
+    /// </summary>
+    private static GateResult UnknownFields(IReadOnlyList<string>? unknown)
+    {
+        const string name = "0b unknown fields";
+
+        if (unknown is null)
+        {
+            return new GateResult(name, GateStatus.NotChecked, false, "the document reader's extension data",
+                "nobody supplied the document's unknown-field set, so a field this schema does not know would have been dropped in "
+                + "silence. That is not a pass: a dropped field reads as an accepted one.");
+        }
+
+        if (unknown.Count == 0)
+        {
+            return new GateResult(name, GateStatus.Checked, true, nameof(SubmissionGate),
+                "every field in the document is one this schema reads. Nothing was silently ignored.");
+        }
+
+        return new GateResult(name, GateStatus.Checked, false, nameof(SubmissionGate),
+            $"{unknown.Count} field(s) in the document are not read by this schema: {string.Join(", ", unknown)}. "
+            + "*** THIS IS A REFUSAL AND NOT A WARNING, BECAUSE A SILENTLY-IGNORED FIELD READS AS AN ACCEPTED ONE. *** Either the "
+            + "contract has moved ahead of the code or the document is stale; this gate does not decide which, it makes the "
+            + "disagreement impossible to miss. Remove the field, or implement it.");
+    }
 
     private static GateResult Schema(IReadOnlyList<SubmissionVector> vectors)
     {
@@ -662,6 +704,21 @@ public static class SubmissionGate
     // 5 — observability, COMPUTED
     // -------------------------------------------------------------------------------------------------
 
+    /// <summary>
+    /// The latch admission — <b>rendered for every report that carried a latch claim, passing or not.</b>
+    ///
+    /// <para>Its own method so there is ONE place it can be omitted from, and so the "could any input
+    /// reach a branch that omits it?" question has a single answer: no. It is appended unconditionally by
+    /// the only caller, and when nothing claims a latch it says THAT rather than nothing — an empty string
+    /// here would be indistinguishable from the defect it replaces.</para>
+    /// </summary>
+    private static string LatchAdmission(MirrorObservability map) =>
+        map.LatchProvenance.Count == 0
+            ? " No signal claims a latch: the copy layer emits none for these signals, and none was declared."
+            : " *** LATCH CLAIMS ADMITTED ON PROVENANCE, NOT ON VERIFICATION: *** "
+              + string.Join("; ", map.LatchProvenance.OrderBy(e => e.Key, StringComparer.Ordinal).Select(e => $"{e.Key} latched by {e.Value}"))
+              + ". Verify those blocks are in the deployment - THIS GATE TAKES THE NAME, NOT THE FACT.";
+
     private static GateResult Observability(IReadOnlyList<SubmissionVector> vectors, AssertionEnumeration enumeration, MirrorObservability map, double floorScans, int runtimeCompression)
     {
         // 🔴 *** THE MAP'S AUTHORITY IS CHECKED BEFORE THE MAP IS USED. *** This gate compares what a
@@ -725,17 +782,20 @@ public static class SubmissionGate
         }
 
         return new GateResult("5 observability", GateStatus.Checked, problems.Count == 0, nameof(ObservabilityCheck),
-            problems.Count == 0
+            (problems.Count == 0
                 ? $"every expectation is supportable by the map, against a floor of {floorScans:0.0} scan(s) at comp={runtimeCompression}."
-                  // Named, because a Latched mode NEVER comes from the copy layer - the generator emits no
-                  // per-signal latch - so every one of these came from somewhere else, and saying WHERE is
-                  // what makes the claim checkable against the deployed objects.
-                  + (map.LatchProvenance.Count == 0
-                      ? " No signal claims a latch: the copy layer emits none, and none was declared."
-                      : " LATCHES ARE NOT FROM THE COPY LAYER and are admitted on provenance: "
-                        + string.Join("; ", map.LatchProvenance.OrderBy(e => e.Key, StringComparer.Ordinal).Select(e => $"{e.Key} latched by {e.Value}"))
-                        + ". Verify those blocks are in the deployment - this gate takes the name, not the fact.")
-                : string.Join(" | ", problems));
+                : string.Join(" | ", problems))
+
+            // 🔴 *** THE ADMISSION IS ATTACHED TO THE CLAIM, NOT TO THE OUTCOME, AND THAT IS A DEFECT FIX.
+            // *** It used to render only when problems.Count == 0 - so on a report that refused for ANY
+            // other reason, latch claims were admitted on an unverified caller-supplied block name and
+            // NOTHING SAID SO. Measured: four such claims went through exactly that way.
+            //
+            // The whole justification for latchedBy being a BLOCK NAME rather than `latched: true` is that
+            // the name is checkable and the report says it was taken on trust. AN ADMISSION THAT APPEARS
+            // ONLY WHEN EVERYTHING PASSED IS MISSING FROM EVERY REPORT ANYONE READS CLOSELY - a refusing
+            // report is precisely the one that gets read.
+            + LatchAdmission(map));
     }
 
     // -------------------------------------------------------------------------------------------------

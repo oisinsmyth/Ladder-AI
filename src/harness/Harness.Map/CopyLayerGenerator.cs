@@ -270,6 +270,18 @@ public static class CopyLayerGenerator
                 tags.Add(MirrorTagFor($"{prefix}{binding.SlotId}_R{offset:000}", binding.ResultSources[i].Type, geometry,
                     allocation.Result.Register + offset, $"Result register {offset}."));
             }
+
+            // *** THE LATCH BAND, AFTER THE VALUES. *** A momentary signal is unobservable by sampling at
+            // any rate - a poll IS one round trip - so the copy layer gives it a STICKY BIT the client
+            // reads and clears, which is the shape Observability.Transient has always described. The
+            // latches sit in their own band so that adding one moves no value offset.
+            foreach (var (tag, offset) in binding.LatchRegisterOffsets.OrderBy(e => e.Value))
+            {
+                tags.Add(MirrorTagFor($"{prefix}{binding.SlotId}_L{offset:000}", MirrorValueType.Bool, geometry,
+                    allocation.Result.Register + offset,
+                    $"LATCH for '{tag}'. Sticky: set by the copy layer when the signal is true, cleared by the CLIENT during inert. "
+                    + "A momentary signal cannot be sampled at any rate, so this is the only way it is observable at all."));
+            }
         }
 
         var networks = new List<CopyLayerNetwork>();
@@ -341,6 +353,20 @@ public static class CopyLayerGenerator
                     networks.Add(new CopyLayerNetwork(number++, CopyLayerNetworkKind.ResultsOut,
                         $"Results out - slot {binding.SlotId} - {element.Type}", ofType));
                 }
+            }
+
+            // The latches, as SET coils - the same shape as the start echo (X-E), for the same reason: a
+            // level coil would fall again the moment the signal did, and a poll gap is 8.6 scans at the
+            // p99, so a one-scan event lands between two polls and the log says it never happened.
+            var latches = binding.LatchRegisterOffsets
+                .OrderBy(e => e.Value)
+                .Select(e => new CopyLayerCopy($"{prefix}{binding.SlotId}_L{e.Value:000}", e.Key, MirrorValueType.Bool))
+                .ToArray();
+
+            if (latches.Length > 0)
+            {
+                networks.Add(new CopyLayerNetwork(number++, CopyLayerNetworkKind.ResultLatch,
+                    $"Result latches - slot {binding.SlotId}", latches));
             }
         }
 
@@ -424,6 +450,14 @@ public static class CopyLayerGenerator
                 case CopyLayerNetworkKind.StartBool:
                     var start = network.Moves[0];
                     ir.Append($"  COIL {start.To} := {start.From}\n");
+                    break;
+
+                case CopyLayerNetworkKind.ResultLatch:
+                    // SCOIL, never COIL: a set coil is what makes the bit STICKY, and sticky is the whole
+                    // point - the client reads it and clears it during inert.
+                    foreach (var latch in network.Moves)
+                        ir.Append($"  SCOIL {latch.From} := {latch.To}\n");
+
                     break;
 
                 case CopyLayerNetworkKind.StartEcho:

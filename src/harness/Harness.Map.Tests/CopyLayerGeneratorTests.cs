@@ -811,4 +811,113 @@ public class CopyLayerGeneratorTests
 
         Assert.NotEqual(asInt.Value, asBool.Value);
     }
+
+    // ---------------------------------------------------------------------------------------------
+    // THE PER-SIGNAL LATCH — the milestone's last blocker, and the alternative was a trap
+    // ---------------------------------------------------------------------------------------------
+
+    [Fact]
+    public void A_TRANSIENT_SIGNAL_GETS_A_STICKY_BIT_the_client_reads_and_clears()
+    {
+        // *** THE ALTERNATIVE WAS DOWNGRADING THE DECLARATION TO Sampled, WHICH LOOKS LIKE PROGRESS AND IS
+        // NOT: *** it converts a strong assertion into one that can silently miss. A sampled assertion
+        // landing in a poll gap is a silent wrong answer, not an error - and a poll IS one round trip, so
+        // no polling rate recovers a one-scan event.
+        var plan = Generate(OneSlot(result: 4), Binding(sources: new[]
+        {
+            new MirroredSignal("DB_Unit.Pulse", MirrorValueType.Bool, Transient: true),
+        })).Require();
+
+        var latch = plan.Tags.Single(t => t.Name.Contains("_L0", StringComparison.Ordinal));
+
+        Assert.Equal("Bool", latch.DataType);
+        Assert.Contains("Sticky", latch.Comment, StringComparison.Ordinal);
+        Assert.Contains("cleared by the CLIENT", latch.Comment, StringComparison.Ordinal);
+
+        var ir = Generate(OneSlot(result: 4), Binding(sources: new[]
+        {
+            new MirroredSignal("DB_Unit.Pulse", MirrorValueType.Bool, Transient: true),
+        })).Objects.Single(o => o.Kind == HarnessObjectKind.Block).Ir;
+
+        // SCOIL, never COIL: a set coil is what makes it sticky, and it is the same shape the start echo
+        // already uses for the same reason.
+        Assert.Contains("SCOIL HX_S0_L001 := DB_Unit.Pulse", ir, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void THE_DID_NOT_RUN_TEST_a_signal_that_needs_no_latch_does_not_acquire_one()
+    {
+        // 🔴 *** DO NOT LATCH EVERYTHING. *** A latch on a signal that does not need one costs a register
+        // and hides nothing - and the converse trap is worth carrying: A BLOCK LATCHING ITS OWN OUTPUT IS
+        // A VALUE UNDER TEST, NOT INSTRUMENTATION. Latching it again in the copy layer would mean the
+        // harness observing its own latch rather than the block's.
+        var result = Generate(binding: Binding(sources: MirroredSignal.Bools("DB_Unit.Alarm")));
+        var plan = result.Require();
+
+        Assert.Empty(plan.Tags.Where(t => t.Name.Contains("_L0", StringComparison.Ordinal)));
+        Assert.Empty(plan.Networks.Where(n => n.Kind == CopyLayerNetworkKind.ResultLatch));
+
+        var ir = result.Objects.Single(o => o.Kind == HarnessObjectKind.Block).Ir;
+        Assert.DoesNotContain("SCOIL HX_S0_L", ir, StringComparison.Ordinal);
+
+        // And the register budget is unchanged by a signal that needs no latch.
+        Assert.Equal(0, Binding(sources: MirroredSignal.Bools("DB_Unit.Alarm")).LatchRegistersNeeded);
+    }
+
+    [Fact]
+    public void THE_LATCH_MODE_IS_DERIVED_not_declared_so_its_source_is_Generated()
+    {
+        // The mode must stay DERIVED. A generated latch makes Latched a COMPUTED fact - readable out of
+        // the emitted IR - where a hand-authored one can only be believed, and the two report differently.
+        var generated = new MirroredSignal("Pulse", MirrorValueType.Bool, Transient: true);
+        var handAuthored = new MirroredSignal("Violation", MirrorValueType.Bool, LatchedBy: "FB_HarnessViolationLatch");
+        var neither = new MirroredSignal("Alarm", MirrorValueType.Bool);
+
+        Assert.Equal(LatchSource.Generated, generated.LatchSource);
+        Assert.Equal(LatchSource.HandAuthored, handAuthored.LatchSource);
+        Assert.Equal(LatchSource.None, neither.LatchSource);
+
+        Assert.Contains("derived", generated.LatchProvenance!, StringComparison.Ordinal);
+        Assert.Equal("FB_HarnessViolationLatch", handAuthored.LatchProvenance);
+        Assert.Null(neither.LatchProvenance);
+    }
+
+    [Fact]
+    public void THE_REGISTER_BUDGET_MOVES_and_the_latches_sit_AFTER_the_values()
+    {
+        // *** COMPUTE THE WIDTH FROM THE SIGNAL SET; DO NOT ASSUME THERE IS ROOM. *** The mirror has gone
+        // 8 -> 31 -> 35 already. Latches live in their own band after the values so that ADDING ONE MOVES
+        // NO VALUE OFFSET - interleaving them would shift every later value the moment a latch appeared,
+        // and the client's arithmetic is the value offsets.
+        var binding = Binding(sources: new[]
+        {
+            new MirroredSignal("DB_Unit.Elapsed", MirrorValueType.Time),
+            new MirroredSignal("DB_Unit.Pulse", MirrorValueType.Bool, Transient: true),
+            new MirroredSignal("DB_Unit.Alarm", MirrorValueType.Bool),
+            new MirroredSignal("DB_Unit.Blip", MirrorValueType.Bool, Transient: true),
+        });
+
+        // Values: Time(2) + Bool(1) + Bool(1) + Bool(1) = 5. Latches: two transients = 2. Total 7.
+        Assert.Equal(new[] { 0, 2, 3, 4 }, binding.ResultRegisterOffsets);
+        Assert.Equal(2, binding.LatchRegistersNeeded);
+        Assert.Equal(7, binding.ResultRegistersNeeded);
+
+        // The latch band starts where the values end, and the value offsets are untouched by it.
+        Assert.Equal(5, binding.LatchRegisterOffsets["DB_Unit.Pulse"]);
+        Assert.Equal(6, binding.LatchRegisterOffsets["DB_Unit.Blip"]);
+    }
+
+    [Fact]
+    public void AND_A_SLOT_TOO_NARROW_FOR_ITS_LATCHES_IS_REFUSED_rather_than_silently_overrunning()
+    {
+        // The budget is checked in REGISTERS, and the latch band is part of it - so "there is room for the
+        // values" is no longer the question.
+        var result = CopyLayerGenerator.Generate(
+            OneSlot(result: 1),
+            Binding(sources: new[] { new MirroredSignal("DB_Unit.Pulse", MirrorValueType.Bool, Transient: true) }),
+            Naming, Stamp);
+
+        Assert.False(result.Generated);
+        Assert.Contains(result.Refusals, r => r.Contains("needing 2 register(s)", StringComparison.Ordinal));
+    }
 }

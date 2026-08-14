@@ -152,7 +152,8 @@ public static class GateCli
             ToDeploymentDeclaration(document),
             ToTagMapReach(document, readFile),
             ToSignalStorage(document),
-            document.ConflictEdgesExplicitlyNull);
+            document.ConflictEdgesExplicitlyNull,
+            document.UnknownFieldPaths());
     }
 
     /// <summary>

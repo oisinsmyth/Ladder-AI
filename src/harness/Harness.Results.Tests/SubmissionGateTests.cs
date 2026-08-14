@@ -115,7 +115,12 @@ public class SubmissionGateTests
             TagMapReach.Of(Array.Empty<S7Reach>()),
 
             // 2.7's join, complete. Gates 8/8c are statements about STORAGE and are NOT CHECKED without it.
-            storage ?? Joined);
+            storage ?? Joined,
+            conflictEdgesExplicitlyNull: false,
+
+            // These fixtures build typed objects rather than parsing a document, so the unknown-field set
+            // is a COMPUTED empty rather than an unasked question.
+            unknownFields: Array.Empty<string>());
 
     /// <summary>
     /// One vector whose expectation declares a WINDOW, so X-D's assertion ceiling is computable for it.
@@ -884,7 +889,7 @@ public class SubmissionGateTests
             9, 1, ConflictGraph.Empty, null,
             new DeploymentDeclaration("fixture-import", Array.Empty<S7ObjectDeclaration>(), NoS7Transport: true),
             null,
-            Joined);
+            Joined, false, Array.Empty<string>());
 
         var gate = Gate(report, "11 memory layout");
 
@@ -908,7 +913,7 @@ public class SubmissionGateTests
                 new[] { new S7ObjectDeclaration("DB_X", 100, "DB_X", DeclaredLayout.Standard, "fixture-import") },
                 NoS7Transport: true),
             TagMapReach.Of(Array.Empty<S7Reach>()),
-            Joined);
+            Joined, false, Array.Empty<string>());
 
         var gate = Gate(report, "11 memory layout");
 
@@ -1025,11 +1030,54 @@ public class SubmissionGateTests
         var gate = Gate(Check(map: map), "5 observability");
 
         Assert.True(gate.Passed);
-        Assert.Contains("LATCHES ARE NOT FROM THE COPY LAYER", gate.Detail, StringComparison.Ordinal);
+        Assert.Contains("LATCH CLAIMS ADMITTED ON PROVENANCE", gate.Detail, StringComparison.Ordinal);
         Assert.Contains("Demo_Count latched by FB_HarnessViolationLatch", gate.Detail, StringComparison.Ordinal);
 
         // It says outright that it took the NAME and not the FACT — the gate cannot see the deployment.
-        Assert.Contains("this gate takes the name, not the fact", gate.Detail, StringComparison.Ordinal);
+        Assert.Contains("THIS GATE TAKES THE NAME, NOT THE FACT", gate.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void THE_ADMISSION_IS_ON_THE_CLAIM_NOT_THE_OUTCOME_so_a_REFUSING_report_still_carries_it()
+    {
+        // 🔴 *** THE DEFECT THIS PINS. *** The admission used to render only when problems.Count == 0, so a
+        // report that refused for ANY other reason admitted latch claims on an unverified caller-supplied
+        // block name and NOTHING SAID SO. Measured: four claims went through exactly that way.
+        //
+        // *** AN ADMISSION THAT APPEARS ONLY WHEN EVERYTHING PASSED IS MISSING FROM EVERY REPORT ANYONE
+        // READS CLOSELY *** - a refusing report is precisely the one that gets read.
+        var map = MirrorObservability.FromBindings(new[]
+        {
+            new MirroredSignal("Demo_Count", MirrorValueType.Int, SpecName: "Demo_Count", LatchedBy: "FB_HarnessViolationLatch"),
+        });
+
+        // A second expectation on a signal the map does not carry, so the gate REFUSES for an unrelated
+        // reason - which is the situation the defect hid in.
+        var mixed = new[]
+        {
+            new ObservabilityDeclaration("Demo_Count", SignalNature.PersistentState, InstrumentationMode.Latched, 0, "10"),
+            new ObservabilityDeclaration("Demo_Absent", SignalNature.PersistentState, InstrumentationMode.Latched, 0, "1"),
+        };
+
+        var gate = Gate(Check(new[] { Vector(expectations: mixed) }, map: map), "5 observability");
+
+        Assert.False(gate.Passed);
+        Assert.Contains("Demo_Absent", gate.Detail, StringComparison.Ordinal);
+
+        // AND THE ADMISSION IS STILL THERE.
+        Assert.Contains("LATCH CLAIMS ADMITTED ON PROVENANCE", gate.Detail, StringComparison.Ordinal);
+        Assert.Contains("THIS GATE TAKES THE NAME, NOT THE FACT", gate.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void And_a_report_with_NO_latch_claim_says_SO_rather_than_saying_nothing()
+    {
+        // An empty string here would be indistinguishable from the defect it replaces, so the no-claim
+        // case is stated. That is also the answer to "could any input reach a branch that omits it?" - the
+        // admission is appended unconditionally by the only caller and has no empty arm.
+        var gate = Gate(Check(), "5 observability");
+
+        Assert.Contains("No signal claims a latch", gate.Detail, StringComparison.Ordinal);
     }
 
     [Fact]

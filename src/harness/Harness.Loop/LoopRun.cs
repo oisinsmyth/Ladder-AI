@@ -131,7 +131,14 @@ public static class LoopRun
         var gate = SubmissionGate.Check(
             request.Vectors, request.Enumeration, request.Fidelity, request.BlockAuthor,
             mirror, floor, compression.Factor, request.ComputedConflicts, request.CompressionInputs,
-            request.Deployment, request.TagMapReach, request.SignalStorage);
+            request.Deployment, request.TagMapReach, request.SignalStorage,
+
+            // The loop composes a request from TYPED objects rather than parsing a document, so there is
+            // no channel by which an unknown field could arrive - which is a computed empty set, not an
+            // unasked question. Passing null here would report NOT CHECKED for a question that cannot
+            // have an answer.
+            conflictEdgesExplicitlyNull: false,
+            unknownFields: Array.Empty<string>());
 
         if (gate.Verdict != SubmissionVerdict.AdmissibleSubjectToJudgement)
         {

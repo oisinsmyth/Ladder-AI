@@ -144,6 +144,26 @@ public static class MirrorElements
     public static string Supported => string.Join(", ", Table.Keys.Select(t => t.ToString()));
 }
 
+/// <summary>Where a signal's <c>Latched</c> mode comes from. <b>Generated is COMPUTED; HandAuthored is TAKEN ON TRUST.</b></summary>
+public enum LatchSource
+{
+    /// <summary>Nothing latches it. The copy layer mirrors it with a plain MOVE or COIL, so only Sampled is available.</summary>
+    None,
+
+    /// <summary>
+    /// <b>The copy layer emits the latch.</b> Derived from the signal being declared transient — so
+    /// <c>Latched</c> is a computed fact about the artifact this harness produces, and it can be read out
+    /// of the generated IR rather than believed.
+    /// </summary>
+    Generated,
+
+    /// <summary>
+    /// A block outside the copy layer latches it, named by the binding. <b>Taken on trust and reported as
+    /// such</b> — the gate takes the name, not the fact.
+    /// </summary>
+    HandAuthored,
+}
+
 /// <summary>
 /// One signal the copy layer mirrors, <b>with the type it actually is</b>.
 ///
@@ -195,7 +215,27 @@ public sealed record MirroredSignal(
     /// <para>Null is not "not latched" in the world — it is <b>"this binding claims no latch"</b>, and the
     /// derived observability then offers Sampled alone, which is what the generator actually provides.</para>
     /// </summary>
-    string? LatchedBy = null)
+    string? LatchedBy = null,
+
+    /// <summary>
+    /// 🔴 <b>THE SIGNAL IS MOMENTARY — true for about one scan — SO THE COPY LAYER MUST LATCH IT.</b>
+    ///
+    /// <para>*** THIS IS A PROPERTY OF THE SIGNAL, NOT AN INSTRUCTION TO THE GENERATOR, *** and that is
+    /// what keeps the mode DERIVED. The binding states a fact about the block's behaviour, exactly as
+    /// <see cref="MirrorValueType"/> does; the generator then DERIVES that a momentary signal needs a
+    /// sticky bit and emits one. <c>Latched</c> becomes a computed consequence, never a declaration.</para>
+    ///
+    /// <para><b>Why false is a safe default, stated rather than assumed.</b> Forgetting to declare a
+    /// transient signal yields NO latch, so a <c>Latched</c> expectation on it is REFUSED by gate 5 —
+    /// loud, and at the gate, before anything is spent. Over-latching would be the silent direction:
+    /// wasted registers, nothing reported. <b>The default's failure mode is a refusal, not a pass.</b></para>
+    ///
+    /// <para>⚠️ <b>DO NOT LATCH EVERYTHING.</b> A latch on a signal that does not need one costs a
+    /// register and hides nothing — and there is a converse trap worth carrying: <b>a block latching its
+    /// own output is a VALUE UNDER TEST, not instrumentation.</b> Those stay Sampled; latching them again
+    /// in the copy layer would mean the harness observing its own latch rather than the block's.</para>
+    /// </summary>
+    bool Transient = false)
 {
     /// <summary>
     /// True when the binding has stated a specification name. <b>Distinct from the names being equal</b> —
@@ -223,10 +263,35 @@ public sealed record MirroredSignal(
     /// <c>InstrumentationMode</c> lives downstream and this assembly stays dependency-free. What lives
     /// here is the FACT — whether a latch is claimed, and by whom.</para>
     /// </summary>
-    public bool LatchClaimed => !string.IsNullOrWhiteSpace(LatchedBy);
+    public bool LatchClaimed => !string.IsNullOrWhiteSpace(LatchedBy) || Transient;
 
-    /// <summary>Who latches it, trimmed — the provenance a reviewer can go and check against the deployed objects.</summary>
-    public string? LatchProvenance => LatchClaimed ? LatchedBy!.Trim() : null;
+    /// <summary>
+    /// Where the latch comes from — <b>and the distinction is the whole point of keeping the mode derived.</b>
+    /// </summary>
+    public LatchSource LatchSource =>
+        Transient ? LatchSource.Generated
+        : !string.IsNullOrWhiteSpace(LatchedBy) ? LatchSource.HandAuthored
+        : LatchSource.None;
+
+    /// <summary>
+    /// The extra mirror register this signal needs for its latch, or 0. <b>A latch is a Bool and takes a
+    /// register of its own</b> — packing is an explicit non-goal, and the client's index is the offset.
+    /// </summary>
+    public int LatchRegisters => Transient ? 1 : 0;
+
+    /// <summary>
+    /// Who latches it — <b>the provenance a reviewer can check.</b>
+    ///
+    /// <para>For a GENERATED latch this is the copy layer itself, which is a stronger answer than a block
+    /// name: the latch is in the artifact this harness emits and can be read out of it. For a
+    /// hand-authored one it is the block the binding named, taken on trust and reported as such.</para>
+    /// </summary>
+    public string? LatchProvenance => LatchSource switch
+    {
+        LatchSource.Generated => "the generated copy layer (derived: this signal is declared transient)",
+        LatchSource.HandAuthored => LatchedBy!.Trim(),
+        _ => null,
+    };
 
     /// <summary>A Bool signal — mirrored to one bit of its own register, by a coil.</summary>
     public static MirroredSignal Bool(string tag) => new(tag, MirrorValueType.Bool);
@@ -309,8 +374,41 @@ public sealed record SlotBinding(
     /// <summary>The same running sum over the vector targets.</summary>
     public IReadOnlyList<int> VectorRegisterOffsets => Offsets(VectorTargets);
 
-    /// <summary>Total result registers this binding needs. <b>Not the signal count.</b></summary>
-    public int ResultRegistersNeeded => (ResultSources ?? Array.Empty<MirroredSignal>()).Sum(s => s.Registers);
+    /// <summary>
+    /// Total result registers this binding needs. <b>Not the signal count, and not the value width alone</b>
+    /// — a transient signal also carries a LATCH register, so the budget moves when a latch is added.
+    /// </summary>
+    public int ResultRegistersNeeded =>
+        (ResultSources ?? Array.Empty<MirroredSignal>()).Sum(s => s.Registers)
+        + LatchRegistersNeeded;
+
+    /// <summary>
+    /// Registers this binding's LATCHES occupy — one per transient result signal, appended AFTER the
+    /// values so the value offsets are unchanged by adding a latch.
+    /// </summary>
+    public int LatchRegistersNeeded => (ResultSources ?? Array.Empty<MirroredSignal>()).Sum(s => s.LatchRegisters);
+
+    /// <summary>
+    /// Register offset of each transient signal's latch, keyed by the signal's tag. <b>Latches live in
+    /// their own band after the values</b>: interleaving them would move every later value offset the
+    /// moment a latch was added, and the client's arithmetic is the value offsets.
+    /// </summary>
+    public IReadOnlyDictionary<string, int> LatchRegisterOffsets
+    {
+        get
+        {
+            var offsets = new Dictionary<string, int>(StringComparer.Ordinal);
+            var next = (ResultSources ?? Array.Empty<MirroredSignal>()).Sum(s => s.Registers);
+
+            foreach (var signal in (ResultSources ?? Array.Empty<MirroredSignal>()).Where(s => s.Transient))
+            {
+                offsets[signal.Tag] = next;
+                next += 1;
+            }
+
+            return offsets;
+        }
+    }
 
     /// <summary>Total vector registers this binding needs.</summary>
     public int VectorRegistersNeeded => (VectorTargets ?? Array.Empty<MirroredSignal>()).Sum(s => s.Registers);
@@ -379,6 +477,16 @@ public enum CopyLayerNetworkKind
 
     /// <summary>Moves the block's outputs into the slot's result registers.</summary>
     ResultsOut,
+
+    /// <summary>
+    /// <b>Latches a MOMENTARY result into a sticky bit the client reads and clears.</b>
+    ///
+    /// <para>The alternative was downgrading such assertions to Sampled, which *** LOOKS LIKE PROGRESS AND
+    /// IS NOT: *** it converts a strong assertion into one that can silently miss. A sampled assertion
+    /// landing in a poll gap is a silent wrong answer, not an error — and a poll IS one round trip, so no
+    /// polling rate recovers a one-scan event. That is why this network exists rather than a relaxation.</para>
+    /// </summary>
+    ResultLatch,
 }
 
 /// <summary>
