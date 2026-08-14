@@ -41,6 +41,29 @@
 # An entry that does not exist on this machine simply never matches. That fails CLOSED, which is the
 # safe direction, so it is not itself an error.
 #
+# *** DO NOT WRITE A ROOTED PATH AFTER "repo:". MEASURED 2026-08-14, AND THE TWO FENCES THAT READ
+# THIS FORMAT DISAGREE ABOUT WHAT IT MEANS. *** The prefix is resolved by joining the entry onto the
+# repository root, and a join DISCARDS the root when the second part is already rooted:
+#
+#     entry                              download-probe (C#)          confirm-roundtrip.ps1 (PS 5.1)
+#     ---------------------------------  ---------------------------  ------------------------------
+#     repo:C:\Somewhere\Job.ap20         C:\Somewhere\Job.ap20        C:\<repo>\C:\Somewhere\Job.ap20
+#                                        *** ESCAPES THE REPO ***     (nonsense path, never matches)
+#     repo:\GenProject1\GenProject1.ap20 C:\GenProject1\...           C:\<repo>\GenProject1\...
+#                                        (the DRIVE ROOT)             (what you meant)
+#
+# The second row is the one to fear: a LEADING BACKSLASH is the likeliest typo in this format, and
+# it silently means two different places to the two fences. Both happen to fail closed TODAY because
+# no project sits at either location -- that is luck, not design, and it is why this is written down
+# rather than relied on. The rule: after "repo:", write a path RELATIVE to the repository root and
+# nothing else. If you want an absolute path, use the absolute form -- it is supported above, it is
+# unambiguous, and both fences agree about it.
+#
+# The SEMANTICS ARE DELIBERATELY UNCHANGED (2026-08-14). Redefining what an existing allowlist entry
+# means is an owner decision with a review behind it, not something an agent does at four in the
+# morning while hunting for holes. Current behaviour is pinned by a test so a future change to it is
+# a decision rather than a drift.
+#
 # *** A PROJECT WHOSE PATH MAY NOT BE COMMITTED DOES NOT GO HERE -- NOT EVEN AS AN EXAMPLE. *** A
 # copy of a live engineering job may not have its path, folder name or file name written into this
 # repository in any form (CLAUDE.md, "Live runs": use anything, commit nothing; docs/13). This file

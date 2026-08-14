@@ -255,4 +255,49 @@ public class AllowlistFileTests : IDisposable
         Assert.True(r.Loaded, r.Message);
         Assert.Single(r.Entries);
     }
+
+    // ---- duplicate keys: CURRENT behaviour, pinned, deliberately not changed --------------------
+
+    /// <summary>
+    /// A DUPLICATED JSON KEY SILENTLY TAKES THE LAST VALUE, so an entry that READS as `plant` is
+    /// honoured as a test rig. Measured 2026-08-14 through the shipped binary: the guard returned
+    /// ALLOWED for an entry whose first `kind` was "plant".
+    ///
+    /// <para>Not an attack path - this file is owner-authored, and anyone who can add the second key
+    /// can simply write `test-rig` once. It is a REVIEWABILITY defect: a human reading the entry top
+    /// to bottom sees the wrong answer, and the eye stops at the first `kind`.</para>
+    ///
+    /// <para>Pinned rather than fixed, on instruction: System.Text.Json's duplicate handling is the
+    /// behaviour of the parser, not of this fence, and quietly starting to REJECT duplicates would
+    /// change what an existing allowlist file means. If this test ever fails because the document is
+    /// now refused, that is a decision somebody made - not a regression - and the comment in the
+    /// allowlist format docs must move with it.</para>
+    /// </summary>
+    [Fact]
+    public void A_duplicate_key_takes_the_LAST_value_which_can_upgrade_a_plant_entry()
+    {
+        var path = WriteTemp("{\"entries\":[{\"address\":\"192.0.2.99\",\"kind\":\"plant\",\"kind\":\"test-rig\"}]}");
+        var r = AllowlistFile.Load(path);
+
+        Assert.True(r.Loaded, r.Message);
+        var entry = Assert.Single(r.Entries);
+
+        Assert.True(
+            entry.IsTestRig,
+            "CURRENT behaviour: the LAST duplicate key wins, so this entry is a test rig despite " +
+            "reading as 'plant'. If this now fails, duplicates are being rejected or the first key " +
+            "now wins - either is a change to what an existing allowlist file MEANS.");
+    }
+
+    /// <summary>The converse, so the pin above cannot be satisfied by a parser that ignores `kind`
+    /// altogether: last-wins in the SAFE direction demotes a rig to plant.</summary>
+    [Fact]
+    public void A_duplicate_key_in_the_other_order_demotes_the_entry()
+    {
+        var path = WriteTemp("{\"entries\":[{\"address\":\"192.0.2.99\",\"kind\":\"test-rig\",\"kind\":\"plant\"}]}");
+        var r = AllowlistFile.Load(path);
+
+        Assert.True(r.Loaded, r.Message);
+        Assert.False(Assert.Single(r.Entries).IsTestRig);
+    }
 }

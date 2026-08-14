@@ -220,6 +220,76 @@ public class DownloadProbeFencePathFormsTests
     private static bool TryCreateJunction(string link, string target) =>
         RunCmd($"mklink /J \"{link}\" \"{target}\"") && Directory.Exists(link);
 
+    // ---- the "repo:" prefix: CURRENT behaviour, pinned, deliberately not changed ------------------
+
+    /// <summary>
+    /// 🔴 <b>A <c>repo:</c> entry that is itself ROOTED escapes the repository root entirely</b>,
+    /// because <see cref="Path.Combine"/> discards its first argument when the second is rooted. So
+    /// <c>repo:C:\Somewhere\Job.ap20</c> permits a project nowhere near the repository, while
+    /// reading — to anyone reviewing the allowlist — as though it were inside it.
+    ///
+    /// <para><b>This is NOT a caller-controlled bypass.</b> Whoever can write this line can equally
+    /// write the bare absolute path, which the format supports outright. It is an ALLOWLIST-AUTHORING
+    /// hazard, and the reason it is pinned rather than fixed is that redefining what an existing
+    /// entry MEANS is an owner decision with a review behind it.</para>
+    ///
+    /// <para><b>The reason it matters is the divergence, not this case.</b> PowerShell's
+    /// <c>Join-Path</c> does NOT discard, so <c>confirm-roundtrip.ps1</c> reads the same line as
+    /// <c>C:\&lt;repo&gt;\C:\Somewhere\Job.ap20</c> — a nonsense path that never matches. One format,
+    /// two fences, two meanings. Both fail closed today because nothing sits at either location:
+    /// that is luck, and this test is what turns the luck into a recorded fact.</para>
+    /// </summary>
+    [Fact]
+    public void ARepoPrefixedEntryThatIsItselfRooted_EscapesTheRepositoryRoot()
+    {
+        var outsideDir = Path.Combine(Path.GetTempPath(), "outside-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(outsideDir);
+        try
+        {
+            var outside = Path.Combine(outsideDir, "Job.ap20");
+            File.WriteAllText(outside, "(a project OUTSIDE the repository, named by a repo: entry)");
+
+            using var repo = ProbeFenceRepo.Create(new[] { ScratchProjectGuard.RepoPrefix + outside });
+
+            var decision = ScratchProjectGuard.Decide(outside, new[] { repo.AllowlistPath }, repo.Root);
+
+            Assert.True(
+                decision.Permitted,
+                "CURRENT behaviour is that a rooted repo: entry escapes the repo root. If this now " +
+                "REFUSES, the semantics were changed — which may well be right, but it is a decision " +
+                "that needs the allowlist comments and both fences updated together, not a silent fix.");
+        }
+        finally
+        {
+            Directory.Delete(outsideDir, recursive: true);
+        }
+    }
+
+    /// <summary>
+    /// The likeliest typo in the format, and the sharper half of the divergence: a LEADING
+    /// BACKSLASH. <c>Path.Combine</c> yields <c>\GenProject1\…</c>, which
+    /// <see cref="Path.GetFullPath"/> then resolves against the CURRENT DRIVE ROOT — not the
+    /// repository. PowerShell's <c>Join-Path</c> yields the repo-relative path the author meant.
+    /// Pinned so the disagreement cannot quietly change on either side.
+    /// </summary>
+    [Fact]
+    public void ARepoPrefixedEntryWithALeadingSeparator_ResolvesAgainstTheDriveRoot_NotTheRepo()
+    {
+        using var repo = ProbeFenceRepo.Create(new[] { ScratchProjectGuard.RepoPrefix + @"\Sandbox\Sandbox.ap20" });
+
+        // The fixture's real project is <root>\Sandbox\Sandbox.ap20. If the entry resolved against
+        // the repo root — as its author intended and as the PowerShell fence does — this would be
+        // permitted. It is not, because it resolved against the drive root instead.
+        var decision = ScratchProjectGuard.Decide(repo.ProjectPath, new[] { repo.AllowlistPath }, repo.Root);
+
+        Assert.False(
+            decision.Permitted,
+            "CURRENT behaviour is that a leading separator after repo: escapes to the drive root. " +
+            "If this now PERMITS, the two fences have been brought into agreement — good, but update " +
+            "both allowlist files' comments in the same change.");
+        Assert.Contains(@"\Sandbox\Sandbox.ap20", decision.Text, StringComparison.OrdinalIgnoreCase);
+    }
+
     private static void RemoveJunction(string link)
     {
         if (Directory.Exists(link))

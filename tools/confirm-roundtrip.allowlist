@@ -24,6 +24,27 @@
 #
 # An entry that does not exist on this machine simply never matches. That fails CLOSED, which is
 # the safe direction, so it is not itself an error.
+#
+# *** DO NOT WRITE A ROOTED PATH AFTER "repo:". MEASURED 2026-08-14, AND THIS FENCE AND
+# download-probe's DISAGREE ABOUT WHAT SUCH A LINE MEANS. *** The prefix is resolved by joining the
+# entry onto the repository root, and the two implementations join differently:
+#
+#     entry                              confirm-roundtrip.ps1 (here)     download-probe (C#)
+#     ---------------------------------  -------------------------------  ------------------------
+#     repo:C:\Somewhere\Job.ap20         C:\<repo>\C:\Somewhere\Job.ap20  C:\Somewhere\Job.ap20
+#                                        (nonsense path, never matches)   *** ESCAPES THE REPO ***
+#     repo:\GenProject1\GenProject1.ap20 C:\<repo>\GenProject1\...        C:\GenProject1\...
+#                                        (what you meant)                 (the DRIVE ROOT)
+#
+# A LEADING BACKSLASH is the likeliest typo in this format and it silently means two different
+# places to the two fences. Both happen to fail closed TODAY because no project sits at either
+# location -- luck, not design. The rule: after "repo:", write a path RELATIVE to the repository
+# root and nothing else; if you want an absolute path, use the absolute form, which both fences
+# agree about.
+#
+# The SEMANTICS ARE DELIBERATELY UNCHANGED (2026-08-14). Redefining what an existing allowlist entry
+# means is an owner decision with a review behind it. Current behaviour is pinned by a test in
+# tools/confirm-roundtrip-fence.tests.ps1 so a future change is a decision rather than a drift.
 
 # The S6 sandbox / validation project. Called test-project001 everywhere in docs and IR; the live
 # Portal folder on disk keeps its original name (CLAUDE.md, "Codename note").
