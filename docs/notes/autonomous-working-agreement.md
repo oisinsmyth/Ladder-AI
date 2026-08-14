@@ -293,6 +293,26 @@ running does not license:
     ➜ **A crash is loud without being NAMED.** A harness cannot tell an unhandled exception from a
       refusal, so a top-level catch that names it is not decoration — it is what makes the difference
       reportable.
+- *** A TEST THAT PASSES FOR THE WRONG REASON IS INDISTINGUISHABLE FROM ONE THAT PASSES. *** Caught by
+  the lane that wrote it, 2026-08-14: a test for *"an unknown key is silently dropped"* used
+  `specname`, which **binds** — both readers set `PropertyNameCaseInsensitive`. It was green,
+  committable, and **evidence for a proposition it never tested.**
+    ➜ **Name the vector before writing the input.** The subject there was *a field that VANISHES*, and
+      a field that binds has not vanished. **A near-miss input that happens to work is the most
+      dangerous fixture there is**, because nothing downstream can tell it from the intended one.
+    ➜ **This is the same family as the unexecuted guard, one level up:** the guard ran, the assertion
+      held, and the thing under test was never reached.
+- *** A NARROWING NOBODY CAN SEE BECOMES A PLACE TO HIDE. *** When a check is scoped down — a prefix
+  excluded, a class skipped, a directory ignored — ***PRINT THE COUNT OF WHAT IT EXCLUDED, ON EVERY
+  RUN.*** 2026-08-14: gate `0b` was refusing a deliverable over its own 82 `_`-prefixed annotations;
+  the fix excludes them **by name and reports `82 annotation(s) EXCLUDED` every time.** A silent
+  exclusion has **no cost to grow**, and the first person to widen it will be solving a real problem.
+- *** AN UNREACHABLE REFUSAL IS WORSE THAN NO REFUSAL. *** Measured 2026-08-14: a capability gap was
+  implemented as a refusal — correctly — but the flag that triggers it had **no wire representation**,
+  so no caller could reach it. **The system looks like it has a guard.** The gap was then met on the
+  **rig**, where its symptom is *predicted findings quietly absent.* Third instance of *the domain
+  model gained a field and the wire format did not* — **when you add a property whose job is to cause
+  a refusal, follow it to the wire before believing the refusal exists.**
 - *** A DEFENCE BUILT ON TOP OF A GUARANTEE YOU ALREADY HAVE IS PURE RISK — IT CANNOT ADD SAFETY, AND
   IT CAN SUBTRACT IT. *** The closing half of the 48-agent crash, measured 2026-08-14 by killing the
   holder: `kill -9` on a lease holder yields the next acquirer **exit 0, immediately**. ***THERE IS NO
