@@ -8,6 +8,39 @@ tooling ready to use in the morning on a live project.* This is the answer, and 
 > run against a real controller. The **closed-loop test path is NOT** — no conformance wave has ever
 > executed end to end. Use the first. Do not build a plan on the second today.
 
+> 🔴 **AND ONE THING NEEDS A PERSON BEFORE YOU START:** the `openness-cli` **Release** binary — the
+> one every skill and every lane invokes — **was built at 02:21 and does not carry the fixes committed
+> after it**, including four found by hammering it. **One command fixes it**, and it was blocked by
+> the permission classifier overnight. See *THE RELEASE BINARY IS STALE* below. **Nothing is broken;
+> two diagnostics are lying, and it is cheap to stop them.**
+
+---
+
+## 🔴 THE RELEASE BINARY IS STALE — one command, needs a person
+
+`src/openness-cli/OpennessCli/bin/Release/net48/openness-cli.exe` was built **2026-08-14 02:21**.
+Six commits to `src/openness-cli` landed after it. **Run this first thing:**
+
+```
+dotnet build -c Release src/openness-cli/openness-cli.sln
+```
+
+Self-approval is in place and working unattended (the whitelist grew by five entries during
+overnight Debug builds with nobody at the machine), so this needs **no approval dialog** — it needs
+only the permission to run it. **Do it while no Portal work is in flight**, then confirm with
+`tools/openness-approve-build.ps1 -Status -Exe <the Release exe>` that one entry matches its hash.
+
+***UNTIL YOU DO, TWO DIAGNOSTICS ARE LYING, AND BOTH WERE MEASURED SAYING SO*** — the fixes are
+committed and tested; they are simply not in the binary you are running:
+
+| what you will see | what is true |
+|---|---|
+| `portal-status` says a process *"report[s] an ACQUIRED time EARLIER THAN THEIR OWN START TIME — a value that cannot be true"* | **False alarm.** It fires on every **Openness-invisible** process, whose ACQUIRED column three characters away reads `(not visible to Openness)`. Fixed in `9e02cc1`. The **OS-only** finding beside it is real — read that one |
+| `export-all` says `COMPLETE: every block and type … Safe to compare against with drift-check --complete` | **Over-broad**, even with `--tagtables`. The dump has no tag tables unless you passed that flag, and `--complete` declares the dump the whole picture — so following it yields absence rows for tag tables that were never exported. Fixed in `5fdf6f4` |
+
+**Neither is a wrong answer about the controller. Both are a diagnostic crying wolf, which is the
+same class of error as a false green** — it teaches you to discount the one time it is right.
+
 ---
 
 ## USE THESE — proven against the controller, not just against their own tests
@@ -52,6 +85,60 @@ not a description of what is running.** ***Reconcile before importing anything i
 fails to pair, and is then reported **both** as `EXPORT-ONLY` *and* as `SKIPPED` — **one object, two
 contradictory absence rows**, one of which reads as the serious finding *"in the controller and no
 `.ir` describes it"*. Being fixed. **Treat a tag-table absence row with suspicion until it is.**
+
+## THE READ-ONLY `openness-cli` SURFACE — hammered 2026-08-14, four defects, all fixed
+
+The subcommands a live job uses every day (`list` · `export` · `export-all` · `sanity-check` ·
+`portal-status` · `block-layout` · `library` · `download-plan` · `hmi` · `compile` / `compile-all`)
+had never been attacked. **Every defect found was a REPORTING defect** — nothing computed a wrong
+answer; all four *handed* one to a caller.
+
+| found | what it did |
+|---|---|
+| 🔴 **`compile-all --json` said `"clean": true` about a run that examined nothing** | `IsClean` was `WithErrors == 0 && StillInconsistent == 0` — vacuously true at `0 && 0`. The **text** output of the same run said `NOTHING EXAMINED … proves nothing about the project`. Exit 14 was the only thing separating them |
+| 🔴 **`compile --json` did not emit JSON** | A prose paragraph followed the object **on stdout**, so the output parsed as nothing at all. Not an edge case: this project carries a permanent hardware warning, so **every** per-block compile took that branch and **every** `--json` run was unparseable |
+| 🔴 **A `--device` that matched nothing was reported as a missing BLOCK** | `export-all --device NoSuchDevice` named **43 present blocks and types as absent from the project**, and its JSON gave each a `path` naming the device it claimed not to have found them under. *"This block is not in the controller"* is the most consequential wrong conclusion this tool can produce — it is what `drift-check --complete` exists to treat as a finding |
+| 🔴 **`sanity-check` passed a project it had never examined** | `IsHealthy`'s last term is `DeviceCompiles.All(…)`, and `All` over an empty sequence is **true** — so a run finding **no PLC device** returned `OVERALL: HEALTHY`, exit 0, having compiled nothing. **Hard rule 4 names this command as THE gate** |
+
+**Fixed, each with the mutation that turns its test red, each run and confirmed red.** 741 tests
+pass. ⚠️ **All four fixes are in the STALE Release binary's blind spot** — see above.
+
+### What HELD, and what that is worth
+
+- **`compile-all`'s empty-work-set guard fired on the real thing** (exit 14, `NOTHING EXAMINED`) —
+  not merely in unit tests. **`compile --block` correctly exited 0 on a warnings-only state**, so
+  that fix is live and working against the project's permanent hardware warning.
+- **`download-plan --device NoSuchDevice` named the device correctly** in the same session that
+  `export` blamed the block. *One flag, one binary, two behaviours* — the disagreement between two
+  commands is what located the defect, and it was worth more than either one's pass.
+- **Four commands agree on the inventory**: `list` 36 blocks; `sanity-check` 36 blocks + 7 types;
+  `export-all` 43 (+2 tag tables = 45); `download-plan` `WOULD CARRY 36 + 7`. No contradiction.
+- ✅ **`compile-all --force`: 43 compiled, 0 with errors, 0 still inconsistent, 1 pass.** The scratch
+  project is genuinely healthy **on a full denominator**, not only on an empty work set. This is a
+  stronger statement than `sanity-check` alone can make and it is new as of tonight.
+
+### ⚠️ WHAT THIS LANE DID NOT ESTABLISH
+
+- **Only refusals and reads were exercised.** No `import`, `delete`, `--set`, or write of any kind.
+  Read everything above as *"these read paths behave"*, never as *"the surface is correct"*.
+- **`hmi --screen <no match>` is UNMEASURED.** `GenProject1` has **no HMI device at all**, so the
+  screen filter is unreachable here and `hmi`/`hmi --screen NoSuchScreen` are **indistinguishable —
+  both exit 0** with `(no HMI devices found)`. Whether a screen filter matching nothing is a silent
+  zero-denominator **cannot be answered on this project**, and the other projects on this machine
+  are live engineering jobs. *This is the gap I would attack next, and it needs an HMI scratch project.*
+- **`library` and `hmi` return exit 0 on genuinely empty inventories.** Left alone deliberately —
+  they are censuses that *say* they are empty, not verdicts claiming a pass. Flagging that as a
+  defect would be a gate firing outside its scope.
+- **`compile`'s "these counts are not reliable" NOTE is itself wrong, and was left alone.** It fires
+  on every compile of this project and blames TIA: the tool's own message-tree count (`WARNINGS: 4`)
+  is inflated by counting **rollup nodes**, while TIA's `WarningCount=1` matches the single leaf
+  warning *and* the tree's own summary line. **It is not a false green** — the verdict takes
+  `Math.Max` of both counts, which is fail-closed — so it is a cosmetic defect in a permanently-firing
+  note, and *a note that is always on is a note nobody reads.* Recorded, not fixed.
+- **The `block-layout --set` help text still says the re-import revert is `UNVERIFIED`.** CLAUDE.md
+  records it as **MEASURED on 2026-08-11**, and the help steers the reader to `--expect`, which only
+  *detects* the revert — `--set` is what repairs it. **The binary's own help gives the insufficient
+  remedy.** Not fixed here; it is a text change in a command this lane was fenced from writing with.
 
 ## 🔴 THE FOUR TRAPS THAT HAVE EACH COST A DAY
 
