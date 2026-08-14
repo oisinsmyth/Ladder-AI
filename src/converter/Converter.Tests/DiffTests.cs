@@ -66,8 +66,8 @@ public class DiffTests : IDisposable
         new(number, title, new[] { new CoilAssignment(coilTag, new Expr.TagRef(condition)) });
 
     private static IrBlock Block(string name, IReadOnlyList<IrNetwork> networks,
-        string? title = null, IReadOnlyList<DbMember>? statics = null) =>
-        new("0", "FB", name, 1, "LAD", null, networks, StaticMembers: statics, Title: title);
+        string? title = null, IReadOnlyList<DbMember>? statics = null, string? comment = null) =>
+        new("0", "FB", name, 1, "LAD", comment, networks, StaticMembers: statics, Title: title);
 
     [Fact]
     public void Diff_SidecarlessInputs_Work()
@@ -313,5 +313,149 @@ public class DiffTests : IDisposable
 
         Assert.True(report.Header.InterfaceChanged);
         Assert.False(report.HasInvarianceViolation);
+    }
+
+    // --- the comment-only carve-out (2026-08-14, ruled on the gate's FIRST CONTACT with real work) ---
+    //
+    // A fix-wave run widened a Modbus area and, as instructed, repaired two stale block comments in
+    // the same file — one said the area covered "8 words" when it covered 35. The gate refused,
+    // correctly by its own rules, and the author correctly declined --allow-header, because that flag
+    // is gen-block-modify-purpose's and reaching for it means ROUTE, not DECLARE. Which left a
+    // DOCUMENTATION-ONLY repair with no clean path under either modify skill — while the comments were
+    // already false, so leaving them was not a neutral option.
+    //
+    // --only asks one question: did anything change outside the named networks that could ALTER WHAT
+    // THE PLC DOES? An interface change answers yes. A block comment cannot. The report already knew
+    // the difference (commentChanged: true, interfaceChanged: false); the verdict threw it away.
+
+    private const string StaleComment = "Covers 8 words of MB_HOLD_REG.";
+    private const string FixedComment = "Covers 35 words of MB_HOLD_REG.";
+
+    [Fact]
+    public void OnlyGate_CommentOnlyRepair_DoesNotGate()
+    {
+        var statics = Statics(("A", "Bool"));
+        var nets = new[] { Coil(1, "N1", "OutA", "InA"), Coil(2, "N2", "OutB", "InB") };
+        var before = WriteIr(Block("FB_X", nets, statics: statics, comment: StaleComment));
+        var after = WriteIr(Block("FB_X", nets, statics: statics, comment: FixedComment));
+
+        var report = DiffRunner.Run(before, after, new[] { 1 });
+
+        Assert.True(report.Header.CommentChanged);
+        Assert.True(report.Header.CommentOnlyChange);
+        Assert.False(report.Header.BehaviourBearingChange);
+        Assert.False(report.HasUnclaimedHeaderChange);
+        Assert.False(report.HasInvarianceViolation);
+    }
+
+    // Non-gating is NOT invisible. A comment repair is exactly how a stale comment gets fixed, and
+    // equally where a correct one gets silently discarded — so it is reported on its own line.
+    [Fact]
+    public void OnlyGate_CommentOnlyRepair_IsStillReportedOnItsOwnLine()
+    {
+        var statics = Statics(("A", "Bool"));
+        var nets = new[] { Coil(1, "N1", "OutA", "InA"), Coil(2, "N2", "OutB", "InB") };
+        var report = DiffRunner.Run(
+            WriteIr(Block("FB_X", nets, statics: statics, comment: StaleComment)),
+            WriteIr(Block("FB_X", nets, statics: statics, comment: FixedComment)),
+            new[] { 1 });
+
+        Assert.True(report.HasNonGatingCommentChange);
+
+        var text = DiffOutputFormatter.FormatText(report);
+        Assert.Contains("HEADER COMMENT CHANGED (does not gate)", text);
+        Assert.Contains("INVARIANCE OK", text);
+        Assert.Contains("block comment differs", text);
+    }
+
+    // 🔴 THE MUTATION THE RULING DEMANDS, IN THE DIRECTION THAT MATTERS. A relaxation that lets an
+    // interface change through UNDER COVER OF A COMMENT EDIT is worse than the gap it fixes — so the
+    // two changed together must still gate, and the reason must name the INTERFACE, not the comment.
+    [Fact]
+    public void OnlyGate_InterfaceChangeAlongsideAnIdenticalCommentChange_StillGates()
+    {
+        var nets = new[] { Coil(1, "N1", "OutA", "InA"), Coil(2, "N2", "OutB", "InB") };
+        var report = DiffRunner.Run(
+            WriteIr(Block("FB_X", nets, statics: Statics(("A", "Bool")), comment: StaleComment)),
+            WriteIr(Block("FB_X", nets, statics: Statics(("A", "Int")), comment: FixedComment)),
+            new[] { 1 });
+
+        Assert.True(report.Header.CommentChanged);          // the same comment edit as the case above
+        Assert.True(report.Header.InterfaceChanged);
+        Assert.False(report.Header.CommentOnlyChange);
+        Assert.True(report.HasUnclaimedHeaderChange);
+        Assert.True(report.HasInvarianceViolation);
+        Assert.False(report.HasNonGatingCommentChange);     // it is not the non-gating case
+
+        var text = DiffOutputFormatter.FormatText(report);
+        Assert.Contains("an INTERFACE member changed", text);
+        Assert.DoesNotContain("HEADER COMMENT CHANGED (does not gate)", text);
+    }
+
+    // The other two behaviour-bearing fields must not drift into the carve-out either. A TITLE is
+    // identity, and a rename creates a DUPLICATE block on import rather than updating one.
+    [Fact]
+    public void OnlyGate_TitleChangeAlongsideACommentChange_StillGates()
+    {
+        var nets = new[] { Coil(1, "N1", "OutA", "InA"), Coil(2, "N2", "OutB", "InB") };
+        var report = DiffRunner.Run(
+            WriteIr(Block("FB_X", nets, title: "Before", comment: StaleComment)),
+            WriteIr(Block("FB_X", nets, title: "After", comment: FixedComment)),
+            new[] { 1 });
+
+        Assert.True(report.HasUnclaimedHeaderChange);
+        Assert.Contains("the block TITLE changed", DiffOutputFormatter.FormatText(report));
+    }
+
+    [Fact]
+    public void OnlyGate_RenameAlongsideACommentChange_StillGates()
+    {
+        var nets = new[] { Coil(1, "N1", "OutA", "InA"), Coil(2, "N2", "OutB", "InB") };
+        var report = DiffRunner.Run(
+            WriteIr(Block("FB_X", nets, comment: StaleComment)),
+            WriteIr(Block("FB_Y", nets, comment: FixedComment)),
+            new[] { 1 });
+
+        Assert.True(report.HasUnclaimedHeaderChange);
+        Assert.Contains("renamed", DiffOutputFormatter.FormatText(report));
+    }
+
+    // --- the empty remainder ------------------------------------------------------------------
+    //
+    // "All changes confined to --only {1}" over a block with ONE network proves nothing: the
+    // remainder is empty. Measured on FB_Comms_ModbusServer, which has exactly one network — `--only
+    // 1` reported OK with identical: 0. Same shape as drift-check's COMPARED: <n>.
+
+    [Fact]
+    public void OnlyGate_SingleNetworkBlock_SaysTheRemainderIsEmpty()
+    {
+        var nets = new[] { Coil(1, "N1", "OutA", "InA") };
+        var report = DiffRunner.Run(
+            WriteIr(Block("FB_X", nets)),
+            WriteIr(Block("FB_X", new[] { Coil(1, "N1", "OutA", "InA_FIXED") })),
+            new[] { 1 });
+
+        Assert.Equal(0, report.IdenticalCount);
+        Assert.False(report.HasInvarianceViolation);   // still not a FAILURE - the claim is just empty
+
+        var text = DiffOutputFormatter.FormatText(report);
+        Assert.Contains("UNCHANGED REMAINDER: 0 network(s)", text);
+        Assert.Contains("NOTHING WAS PROVEN", text);
+    }
+
+    [Fact]
+    public void OnlyGate_MultiNetworkBlock_StatesTheRemainderItProved()
+    {
+        var nets = new[] { Coil(1, "N1", "OutA", "InA"), Coil(2, "N2", "OutB", "InB"), Coil(3, "N3", "OutC", "InC") };
+        var report = DiffRunner.Run(
+            WriteIr(Block("FB_X", nets)),
+            WriteIr(Block("FB_X", new[] { Coil(1, "N1", "OutA", "InA_FIXED"), nets[1], nets[2] })),
+            new[] { 1 });
+
+        Assert.Equal(2, report.IdenticalCount);
+
+        var text = DiffOutputFormatter.FormatText(report);
+        Assert.Contains("UNCHANGED REMAINDER: 2 network(s) proven identical", text);
+        Assert.DoesNotContain("NOTHING WAS PROVEN", text);
     }
 }

@@ -42,6 +42,21 @@ public sealed record HeaderDiff(
     bool InterfaceChanged)
 {
     public bool Changed => TitleChanged || CommentChanged || InterfaceChanged;
+
+    // The split the invariance gate turns on (2026-08-14, second ruling). `--only` answers exactly one
+    // question: DID ANYTHING CHANGE OUTSIDE THE NAMED NETWORKS THAT COULD ALTER WHAT THE PLC DOES?
+    //
+    //   * An INTERFACE change answers yes — retyping Bool -> Int compiles, imports and misbehaves.
+    //   * A TITLE or a NAME change answers yes in its own way: both are identity, and TIA's import
+    //     matches by name, so a rename creates a DUPLICATE block rather than updating one.
+    //   * A BLOCK COMMENT CANNOT. It is not downloaded as behaviour and nothing resolves against it.
+    //
+    // Kept as two named properties rather than one because the gate must never be able to drift into
+    // "the header no longer gates" — the failure direction that matters here is one careless
+    // generalisation away, and a comment edit must not become cover for an interface edit.
+    public bool BehaviourBearingChange => TitleChanged || InterfaceChanged;
+
+    public bool CommentOnlyChange => CommentChanged && !BehaviourBearingChange;
 }
 
 // The whole comparison. AllowedNetworks is the --only set (empty when --only wasn't supplied).
@@ -92,8 +107,33 @@ public sealed record DiffReport(
     // So an unclaimed header change or rename now VIOLATES, and `--allow-header` makes the intent
     // EXPRESSIBLE rather than leaving the default a false assurance (FI-71's shape). The escape is
     // real work, not a formality: gen-block-modify-purpose changes interfaces on purpose and says so.
+    //
+    // 🔴 NARROWED THE SAME DAY, on the change's FIRST CONTACT WITH REAL WORK, and the narrowing is
+    // deliberately small. A fix-wave run widened a Modbus area and — as instructed — repaired two
+    // stale block comments in the same file, one of which said the area covered "8 words" when it
+    // covered 35. The gate refused, correctly by its own rules, and the author correctly declined to
+    // reach for --allow-header, because that flag belongs to gen-block-modify-purpose and reaching
+    // for it means ROUTE, not DECLARE. Which left a documentation-only repair with NO clean path
+    // under either modify skill — while the comments were already false, so leaving them was not a
+    // neutral option either.
+    //
+    // The defect was in the TAXONOMY, not the gate: `Header.Changed` conflated three things with very
+    // different risks, and the report already knew the difference (commentChanged: true,
+    // interfaceChanged: false, titleChanged: false). The verdict threw that away. A block comment
+    // cannot change what the PLC does, so it cannot answer --only's question yes.
+    //
+    // *** IT IS STILL REPORTED, ON ITS OWN LINE, NAMING WHAT CHANGED. *** Not silenced: a comment
+    // repair is exactly how a stale comment gets fixed, and this project has now been misled by stale
+    // comments twice in two days. Non-gating is not invisible.
     public bool HasUnclaimedHeaderChange =>
-        AllowedNetworks.Count > 0 && !HeaderChangeAllowed && (Header.Changed || BlockNameMismatch);
+        AllowedNetworks.Count > 0
+        && !HeaderChangeAllowed
+        && (Header.BehaviourBearingChange || BlockNameMismatch);
+
+    // Reported always when --only is in play, gating never. Separate from HasUnclaimedHeaderChange so
+    // no future edit can widen one into the other by accident.
+    public bool HasNonGatingCommentChange =>
+        AllowedNetworks.Count > 0 && Header.CommentOnlyChange && !HasUnclaimedHeaderChange;
 
     public bool HasInvarianceViolation => InvarianceViolations.Count > 0 || HasUnclaimedHeaderChange;
 }

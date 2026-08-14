@@ -60,6 +60,25 @@ reference is worth splitting out" point.)
    fixes must not** — a fix that needs an interface member is a purpose change, and the answer is to
    route, not to declare. The clean verdict now also states what it examined (`…, header unchanged`)
    rather than only that it passed.
+   ✅ **NARROWED THE SAME DAY, ON THE GATE'S FIRST CONTACT WITH REAL WORK: A COMMENT-ONLY HEADER CHANGE
+   DOES NOT GATE.** A fix-wave run widened a Modbus area and repaired two block comments that were
+   *already false* (one said the area covered *"8 words"* when it covered 35) — and was refused. It
+   rightly declined `--allow-header`, which left a **documentation-only repair with no clean path under
+   either modify skill**, while leaving false comments in place was not a neutral option. ***The defect
+   was in the TAXONOMY, not the gate:*** `--only` asks one question — *did anything change outside the
+   named networks that could alter **what the PLC does**?* An **interface** member answers yes; a
+   **title** or a **rename** answers yes (both are identity, and TIA's import matches by name, so a
+   rename creates a duplicate block rather than updating one). ***A block comment cannot.*** The report
+   already carried `commentChanged` and `interfaceChanged` separately and the verdict threw that away.
+   **So: comment-only ⇒ exit 0, with `HEADER COMMENT CHANGED (does not gate)` printed on its own line —
+   quote it in the hand-back.** *Non-gating is not invisible: that line is where a stale comment gets
+   repaired and equally where a correct one gets silently discarded.* **A comment edit is never cover
+   for a behaviour-bearing one** — both together still exit 1, naming the interface, not the comment.
+   ⚠️ **AND THE VERDICT NOW STATES ITS OWN DENOMINATOR: `UNCHANGED REMAINDER: <n> network(s) proven
+   identical outside --only`.** On a block whose networks are *all* inside the `--only` set the
+   remainder is **empty**, and `INVARIANCE OK` proves nothing at all — it says so
+   (`NOTHING WAS PROVEN`). Same shape as `drift-check`'s `COMPARED: <n>`: *an invariance claim over an
+   empty remainder is another empty-is-not-clean.* **Read that line before quoting an exit 0 as proof.**
 6. **Compile gate** (hard rule 4): `converter preflight` (zero findings) → import to the **scratch** project
    → `openness-cli compile` clean. An **FB with multi-instance timers compiles only after its instance DB
    exists** — `openness-cli create-instance-db` first if there isn't one. Playbook first on any failure;

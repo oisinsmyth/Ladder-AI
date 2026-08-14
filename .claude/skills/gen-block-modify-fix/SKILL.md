@@ -74,6 +74,19 @@ compound-operand-must-lead synthesis rule). Follow it. **For a fix specifically:
   passed a gate whose whole job is *"prove the rest is identical"*. **`--allow-header` exists and is
   `gen-block-modify-purpose`'s, not yours** — if you reach for it, you are on the wrong path and the
   answer is to route, not to declare.
+  ✅ **BUT REPAIRING A STALE BLOCK COMMENT IS YOURS, AND IT NO LONGER GATES (narrowed 2026-08-14, on the
+  gate's first contact with real work).** A fix-wave run widened a Modbus area, repaired two block
+  comments that were *already false* — one said the area covered "8 words" when it covered 35 — and hit
+  `INVARIANCE VIOLATION`. It rightly refused `--allow-header`, which left a **documentation-only repair
+  with no clean path under either modify skill**, while leaving false comments in place was not a
+  neutral option either. **`--only` asks one question: did anything change outside the named networks
+  that could alter WHAT THE PLC DOES?** An interface member answers yes; a block title or a rename
+  answers yes (both are identity, and TIA's import matches by name). ***A block comment cannot.*** So a
+  **comment-only** header change now passes, and prints `HEADER COMMENT CHANGED (does not gate)` on its
+  own line — **quote that line in your hand-back**: non-gating is not invisible, and it is equally the
+  place a correct comment gets silently discarded. **Everything else in the header still gates**, and a
+  comment edit is never cover for one: change a member *and* a comment and you get
+  `an INTERFACE member changed (the block comment also changed; on its own that would not gate)`, exit 1.
 - **The REQ you restore already exists** — re-check the fixed network against it; a fix that compiles but
   doesn't restore the REQ is a miss (the compile gate never proves behavior).
 - **A requirement-vs-convention tension is a stop-and-route, not a guess** (e.g. a "retentive timer" REQ vs

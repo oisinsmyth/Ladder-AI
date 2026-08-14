@@ -85,7 +85,7 @@ public static class DiffOutputFormatter
                 if (report.HasUnclaimedHeaderChange)
                 {
                     sb.Append(report.InvarianceViolations.Count > 0 ? "; " : ": ")
-                      .Append(report.BlockNameMismatch ? "the block itself was renamed" : "the block HEADER changed")
+                      .Append(HeaderViolationReason(report))
                       .Append(" and --only names networks only. Pass --allow-header if that was the point of the change.");
                 }
 
@@ -99,11 +99,35 @@ public static class DiffOutputFormatter
                 // wrong half.
                 sb.Append("\nINVARIANCE OK: all changes confined to --only {")
                   .Append(string.Join(", ", report.AllowedNetworks.OrderBy(n => n)))
-                  .Append(report.Header.Changed || report.BlockNameMismatch
-                      ? "} plus the header change, declared via --allow-header"
-                      : "}, header unchanged")
+                  .Append(HeaderClause(report))
                   .Append('\n');
             }
+
+            // Reported whether the run passed or failed, on its own line, naming what changed — a
+            // comment repair is exactly how a stale comment gets fixed, and this project has been
+            // misled by stale comments twice in two days. Non-gating is not invisible.
+            if (report.HasNonGatingCommentChange)
+            {
+                sb.Append("HEADER COMMENT CHANGED (does not gate): the block comment differs and nothing else\n")
+                  .Append("       in the header does. A comment cannot alter what the PLC does, so it cannot be a\n")
+                  .Append("       change outside --only — but READ IT: this is where a stale comment gets repaired,\n")
+                  .Append("       and it is equally where a correct one gets silently discarded.\n");
+            }
+
+            // 🔴 THE DENOMINATOR OF THE INVARIANCE CLAIM. "All changes confined to --only {1}" over a
+            // block with ONE network proves nothing at all: the remainder is empty. Measured on
+            // FB_Comms_ModbusServer, which has exactly one network, where `--only 1` reported OK with
+            // `identical: 0`. Same shape as drift-check's COMPARED: <n> — printed always, so a green
+            // that examined nothing looks different from a green that examined ninety.
+            sb.Append("UNCHANGED REMAINDER: ").Append(report.IdenticalCount)
+              .Append(" network(s) proven identical outside --only");
+            if (report.IdenticalCount == 0)
+            {
+                sb.Append("  — NOTHING WAS PROVEN. Every network in this block is inside the --only set, so the\n")
+                  .Append("       invariance claim has an empty remainder and carries no information.");
+            }
+
+            sb.Append('\n');
         }
 
         return sb.ToString().TrimEnd('\n', '\r');
@@ -150,10 +174,63 @@ public static class DiffOutputFormatter
             // from an unclaimed HEADER change — different edits, different fixes.
             headerChangeAllowed = report.HeaderChangeAllowed,
             hasUnclaimedHeaderChange = report.HasUnclaimedHeaderChange,
+            // The comment-only carve-out, and the denominator of the invariance claim. Emitted so a
+            // machine reader can distinguish "nothing changed outside --only" from "there was nothing
+            // outside --only to change" — the header block above already carried commentChanged and
+            // interfaceChanged separately, and the old verdict simply threw that distinction away.
+            hasNonGatingCommentChange = report.HasNonGatingCommentChange,
+            unchangedRemainder = report.IdenticalCount,
             hasInvarianceViolation = report.HasInvarianceViolation,
         };
 
         return JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true });
+    }
+
+    // Names the SPECIFIC thing that gated, never the generic "header". A reader who is told "the
+    // header changed" checks the whole header; one who is told "an interface member changed" checks
+    // the one thing that can break a caller.
+    private static string HeaderViolationReason(DiffReport report)
+    {
+        if (report.BlockNameMismatch)
+        {
+            return "the block itself was renamed";
+        }
+
+        var parts = new List<string>();
+        if (report.Header.InterfaceChanged)
+        {
+            parts.Add("an INTERFACE member changed");
+        }
+
+        if (report.Header.TitleChanged)
+        {
+            parts.Add("the block TITLE changed");
+        }
+
+        var reason = string.Join(" and ", parts);
+
+        // A comment change reaches here only ALONGSIDE a behaviour-bearing one; on its own it does not
+        // gate at all. Said anyway, and said as an aside, so a reader cannot come away thinking the
+        // comment repair is what was refused — that misreading is what would send them to delete it.
+        return report.Header.CommentChanged
+            ? reason + " (the block comment also changed; on its own that would not gate)"
+            : reason;
+    }
+
+    // What the OK verdict examined in the header, spelled out rather than left to be assumed.
+    private static string HeaderClause(DiffReport report)
+    {
+        if (report.HeaderChangeAllowed && (report.Header.Changed || report.BlockNameMismatch))
+        {
+            return "} plus the header change, declared via --allow-header";
+        }
+
+        if (report.Header.CommentOnlyChange)
+        {
+            return "}, header behaviour-bearing fields unchanged (block comment differs — see below)";
+        }
+
+        return "}, header unchanged";
     }
 
     private static string KindLabel(NetworkChangeKind kind) => kind switch
