@@ -338,6 +338,23 @@ running does not license:
     ➜ **And prefer three verdicts to two**: the fix distinguishes *invented member* from
       `IndexOutOfRange` from **accepted-unchecked** (slice widths it cannot know). ***Declining to
       judge is the correct verdict when you cannot; inventing one is what caused this.***
+- *** A FAIL-CLOSED GATE MEETING AN UNANTICIPATED LEGITIMATE CASE IS THE EXPECTED COST OF FAILING
+  CLOSED — AND FAR CHEAPER THAN THE CONVERSE. *** First real contact with `diff --only`'s new
+  fail-closed header rule, 2026-08-14, hours after it landed: a `lad-coder` run repaired two **stale
+  block comments** alongside a legitimate scoped edit, and the gate refused with
+  `HEADER changed: comment`. ***The agent declined to reach for `--allow-header`, correctly*** — that
+  flag belongs to the purpose-change route, and reaching for it means *route, not declare*.
+    ➜ **The defect was in the TAXONOMY, not the gate.** `--only` asks *"could anything outside the
+      named networks change what the PLC does?"* An **interface** change answers yes; ***a comment
+      cannot.*** The verdict conflated them — **while the tool's own JSON already separated them**
+      (`commentChanged: true`, `interfaceChanged: false`). *The information was there; the verdict
+      threw it away.*
+    ➜ ***DO NOT FIX THIS BY WIDENING IT TO "THE HEADER NO LONGER GATES."*** That is one careless
+      generalisation away, and it is the direction that costs something.
+    ➜ **And the case had no clean route at all**: a documentation-only header repair is not a purpose
+      change and the fix path cannot express it — **while leaving a false comment is not a neutral
+      option either.** *When a gate has no legitimate path for a legitimate act, that is a finding
+      about the routes, not about the actor.*
 - *** A GATE LANDED WITHOUT ITS CALLERS IS A BROKEN PIPELINE. *** Same day: `diff --only` was made to
   fail closed on unclaimed header changes, and **the calling skills were updated in the same commit** —
   `modify-purpose` may pass the new `--allow-header` **and must then quote the interface delta**;
