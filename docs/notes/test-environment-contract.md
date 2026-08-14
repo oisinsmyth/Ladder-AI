@@ -92,9 +92,12 @@ Submission                    -- the top-level object the vectors are submitted 
   model               { id, represents, doesNotRepresent, validatedAgainstPlantData, compStable }
   enumeration         { clauses, assertions, forms, enumerator,      -- §3
                         normalisedTexts, requiredObservations, bounds }   -- §2.5 and §10's 3g/3h/3i
-  map                 { providedFor: signal -> [ modes ] }         -- §4.3
-  computedConflicts   [ block ]        -- D9's graph as bare names, carrying NO provenance
-  conflictEdges       [ { blockA, blockB, provenance, signal, class } ]   -- X-G, provenanced
+  map                 { providedFor: signal -> [ modes ],          -- §4.3, HOW it is watched
+                        storage:     signal -> { owner?, path },   -- §2.7, WHERE it lives
+                        harnessOnly: [ signal ] }                  -- §2.7, occupies no PLC storage
+  computedConflicts   [ block ]  -- bare names, NO provenance. *** NEVER EMITTED *** — §2.7
+  conflictEdges       [ { blockA, blockB, provenance, signal, class } ]   -- X-G, provenanced.
+                      *** OMITTED, never [] and never null, when the graph did not run *** — §2.7
   blockCompression    { plantMs, budgetMs, presets, negligibleFraction }  -- §2.3
   vectors             [ Vector ]
 ```
@@ -315,6 +318,12 @@ This is the one table to read before omitting anything. Four treatments, and the
 | a form for the **cited** assertion | **REFUSED** | the comparison cannot be made, and an uncomparable form is not a passing one |
 | `computedConflicts` **and** `conflictEdges` both | ***NOT CHECKED*** | a blacklist compared against an absent graph is a blacklist nobody checked |
 | provenance on a conflict edge | ***NOT CHECKED*** | *"0 multi-writer findings"* and *"nobody recorded why these conflict"* produce identical empty reports |
+| `conflictEdges` present as `null` | ***REFUSED*** | §2.7. **Not the same as omitted**: a lenient deserializer turns a null back into an empty collection one layer down, restoring the false *"ran and found nothing"* claim after the refusal was correctly made |
+| a signal in neither `map.storage` nor `map.harnessOnly` | ***NOT CHECKED*** | §2.7. The join from a logical name to PLC storage was never stated, so no conflict could be looked for. ***Measured: 16 of 17 signals in the deliverable submission*** |
+| a signal in **both** | **REFUSED**, naming it | a contradiction: it cannot both occupy storage and occupy none |
+| a `storage` entry's `owner` | **not an omission — a POSITIVE claim** | the path is **global** (DB member, PLC tag, `iDB_…`, physical address) and is already unique |
+| a declared join that still resolves to **more than one** storage | **REFUSED, naming EVERY candidate** | ***never resolved to one.*** Instance aliases are collapsed first, so this means genuinely different storage — and picking a candidate is the aliasing that manufactured fictional multi-writers |
+| a conflict edge's **signal class** | ***NOT CHECKED*** (carried through as `Unstated`) | it is **derived from the writing blocks, never declared** — there is no field for it, and an unclassifiable signal fails the gate closed rather than being guessed |
 | `blockCompression`, at `runtimeCompression` > 1 | ***NOT CHECKED*** | three ceilings compared against nothing |
 | `blockCompression`, at `runtimeCompression` = 1 | **CHECKED, a real pass** | nothing is scaled, so none of the three *can* bind — **computed from the submission, not assumed** |
 | a preset's `source` | **REFUSED** | the two real answers push OPPOSITE ways; there is no fail-safe guess |
@@ -540,6 +549,103 @@ already the widened one.**
 
 ---
 
+### 2.7 `map.storage` — ***WHERE A SIGNAL IS, NOT ONLY HOW IT IS WATCHED.*** ADDED 2026-08-14
+
+**Gates 8 and 8c could not be fed from a real submission at all** — *not merely unsupplied, but
+inexpressible* — and this is the field that closes it.
+
+> *** MEASURED ON THE DELIVERABLE SUBMISSION: 16 OF 17 SIGNALS RESOLVE TO NO PLC STORAGE PATH. *** They
+> are **harness-side logical names**, and the join from a logical name to the storage it occupies was
+> **stated nowhere in the submission.** `map.providedFor` carries *observability modes* only — it says
+> **how** a signal can be watched and never **where it is.**
+
+Both gates consume a conflict graph, and a conflict graph is a statement about **storage**: two blocks
+conflict because they write *the same location*. With no join, the graph is withheld and both gates
+report `NOT CHECKED` for ever.
+
+#### The join is DECLARED, and it is unambiguous BY CONSTRUCTION
+
+```
+map
+  providedFor    signal -> [ modes ]          -- §4.3. HOW it can be watched
+  storage        signal -> { owner?, path }   -- WHERE it lives, when it lives in the PLC
+      owner        the block (or tag table) that DECLARES the root.
+                   *** OMITTED for a global path *** — a DB member, a PLC tag, an `iDB_…`
+                   member or a physical address is already unique and is written verbatim
+      path         the path within that owner, or the global path verbatim
+  harnessOnly    [ signal ]                   -- a POSITIVE claim: occupies NO PLC storage
+```
+
+***`owner` and `path` are separate keys and are deliberately NOT one dotted string.*** The corrected
+analysis keeps the owner beside the path for exactly this reason, in its own words: **an emitted string
+is not a schema.** A consumer handed `A.B.C` cannot tell whether `A` is an owning block or a DB without
+parsing, and a parse is a lookup — which is the thing this field exists to remove.
+
+#### 🔴 A BARE LEAF NAME IS NOT A STORAGE REFERENCE, AND MATCHING ON ONE IS FORBIDDEN
+
+The obvious shortcut — take the signal's name and find the storage whose path *ends with* it — was built,
+examined and **declined for the right reason**:
+
+> ***RESOLVING A SIGNAL BY NAME SHAPE RE-INTRODUCES THE ALIASING DEFECT THAT MANUFACTURED FICTIONAL
+> MULTI-WRITERS*** — `IO.Step` declared in two different UDTs, a `Time` temp declared separately in three
+> FBs — **at the gate boundary instead of inside the analysis.** Two of the four cross-block multi-writer
+> findings this project has ever recorded were fiction produced exactly that way.
+
+So the declared join **replaces** suffix matching rather than supplementing it. **Nothing in this
+contract may resolve a signal by the shape of its name.**
+
+***An ambiguous resolution is REFUSED NAMING EVERY CANDIDATE, never silently resolved to one.*** Instance
+aliases of a single storage are collapsed first, so a refusal here means **genuinely different storage** —
+and picking one of them is the fiction, not the fix. Qualify the signal, or the graph does not run.
+
+#### Three states, and the middle one is a claim rather than a silence
+
+| | means | effect on gates 8 / 8c |
+|---|---|---|
+| in `storage` | this signal occupies **that** PLC storage | resolvable; may produce edges |
+| in `harnessOnly` | ***a positive claim: it occupies no PLC storage at all*** — a mirror-side logical name | **no edge is possible, and that is a computed fact** |
+| in neither | **nobody stated the join** | ***NOT CHECKED*** |
+| in **both** | a contradiction | **REFUSED**, naming the signal |
+
+**`harnessOnly` exists because the tooling names this ambiguity and cannot settle it**: an unresolved
+signal reports *"this may be a mirror-only signal, or the name may be wrong"* — two entirely different
+repairs behind one silence. **The claim is the author's to make**, and making it is what turns a
+`NOT CHECKED` into a fact.
+
+#### The refusal semantics of `conflictEdges`, exactly
+
+> ***WHEN THE GRAPH DID NOT RUN, THE KEY IS OMITTED — NOT `[]`, AND NOT `null`.***
+
+- **`conflictEdges: []` is the EARNED positive claim** that the graph ran over a whole corpus and found
+  nothing. Two authors have already refused to write it unearned; the format must keep that refusal
+  expressible.
+- **Omitting the key** leaves gates 8 and 8c `NOT CHECKED`, which is the weaker and *true* statement.
+- ***And `null` is not the same as omitted.*** A lenient deserializer can turn a null back into an empty
+  collection **one layer down**, restoring the false claim after the refusal was correctly made. The key
+  is absent, or it carries edges.
+
+A partial corpus is the case that makes this concrete: **a file that could not be parsed may hold the
+second writer that makes a signal a conflict**, so a graph built over it cannot honestly say *no
+conflicts*. The key is withheld.
+
+#### `computedConflicts` is never emitted, and that is deliberate
+
+**Write this down or somebody will "fix" the omission.** A bare block name records no provenance, so it
+can only ever be `Unstated` — and the multi-writer gate's provenance test is ***all-or-nothing***:
+
+> *** ONE UNPROVENANCED EDGE TURNS GATE 8c TO `NOT CHECKED` FOR THE ENTIRE SUBMISSION. *** A
+> helpful-looking extra edge — a call-graph coupling, say, which is about **no signal** and so could
+> carry no signal class — would **silently disable the multi-writer report it was added beside.**
+
+Gate 8's packing set derives from the edges. **Call-graph and model-sharing coupling belong to the
+author's blacklist**, which is add-only for precisely this reason (§7).
+
+**A signal's CLASS is derived, never declared.** Whether a conflict ships is read off the writing blocks
+themselves; there is no flag and no field for it, and an unclassifiable one carries `Unstated` through to
+the gate rather than being guessed. *The refusal is carried across, not resolved.*
+
+---
+
 ## 3. `Basis` — the clause AND the assertion, and why both
 
 > **A vector that cannot cite its specification clause is not admissible into a wave** (D6). **A
@@ -628,6 +734,9 @@ Observability
   Window      for Sampled: how long the condition is expected to HOLD, in scans
   Signal      the tag, which must appear in the map's observability declarations
 ```
+
+***The map has a second half, and it is not this one.*** `providedFor` says **how** a signal can be
+watched; it says nothing about **where the signal is**, and gates 8/8c need that. See **§2.7**.
 
 ***AND THE DECLARATION MUST EXIST BEFORE THE DOWNLOAD THAT GENERATES THE COPY LAYER*** (D15 + D31).
 The copy layer's latches and scan-stamps are *generated* from these declarations, and the set is
@@ -1015,8 +1124,8 @@ of saying so.
 | **observability** | mode valid; signal in the map; window ≥ §12a's floor **at the run-time `comp`**; declaration predates the generating download | ***refuse the vector*** — §2.6's own rule |
 | **settling** | declaration exists; **is not the completion flag alone** | reject, citing phase 2's `Done`-at-10-ramps-to-15 |
 | **start bool** | exactly one per slot; bound by name; later-scan rule against the observed counter | reject |
-| **blacklist** | add-only against computed disjointness; every entry has a reason | reject the *entry*, not the vector |
-| **8c multi-writer provenance** (X-G) | every conflict edge records WHY the two blocks conflict, on which signal, and whether that signal is part of the deliverable | ***the FINDING is reported, not refused*** — the defect is in the deliverable, not in the submission. **An UNPROVENANCED graph is `NOT CHECKED`** and fails closed |
+| **blacklist** | add-only against computed disjointness; every entry has a reason | reject the *entry*, not the vector. ***Both this gate and 8c are fed from `conflictEdges`, which cannot be computed without `map.storage` (§2.7)*** — until the join is declared they are `NOT CHECKED` for a reason that is not the author's blacklist at all |
+| **8c multi-writer provenance** (X-G) | every conflict edge records WHY the two blocks conflict, on which signal, and whether that signal is part of the deliverable | ***the FINDING is reported, not refused*** — the defect is in the deliverable, not in the submission. **An UNPROVENANCED graph is `NOT CHECKED`** and fails closed — ***and it is ALL-OR-NOTHING, so one unprovenanced edge disables the report for the whole submission*** (§2.7, which is why `computedConflicts` is never emitted) |
 | **10a assertion ceiling** (X-D) | the run-time `comp` is under every vector's own `T_event / scan_period` ceiling | reject, naming the binding signal and the ceiling. **Catches what gate 5 structurally cannot: LATCHED is exempt from the observability floor, never from the scan-period term** |
 | **10b timer / model / ratio ceilings** (X-D) | at `runtimeCompression` > 1, the block's presets, the model's `comp_stable` and the ratio-distortion threshold (§2.3) | reject with `comp_min` **and** `comp_max` shown. Absent inputs are `NOT CHECKED`, never a pass. At `comp` = 1 a real computed pass |
 | **liveness** *(post-run)* | stimulus check present; counter advanced by the expected amount; manifest presence | verdict `STALE`, never `PASS` |

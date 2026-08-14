@@ -86,7 +86,7 @@ Contract §10's surface, in the order a submission meets it, with the **verifier
 | 6 | **settling exists, and is not the completion flag** | both halves | `Admissibility` | **CHECKED** |
 | 6b | *does the condition really imply the value is final?* | — | **nothing, ever** | **JUDGEMENT** |
 | 7 | **start bool** | exactly one per slot; bound by NAME; raised a later scan than the inert-establish, against the **observed** counter | `SubmissionGate` for the first two. **The later-scan rule is RUN-TIME** (`InertPhase`) and is reported as such, never claimed at submission | **CHECKED** (submission half) |
-| 8 | **blacklist** | add-only against computed disjointness; every entry has a reason | `SubmissionGate`. ***Add-only is a property of the TYPE*** — `BlacklistEntry` carries no negation, so a removal cannot be expressed. **An ABSENT conflict graph is NOT CHECKED**, not a pass | **CHECKED** *(NOT CHECKED without `computedConflicts`)* |
+| 8 | **blacklist** | add-only against computed disjointness; every entry has a reason | `SubmissionGate`. ***Add-only is a property of the TYPE*** — `BlacklistEntry` carries no negation, so a removal cannot be expressed. **An ABSENT conflict graph is NOT CHECKED**, not a pass | **CHECKED** *(NOT CHECKED without `conflictEdges`, which needs `map.storage` — see below)* |
 | 8b | *is it over-broad?* | — | density, reported not gated | **JUDGEMENT** |
 | **8c** | **multi-writer provenance (X-G)** | every conflict edge records WHY two blocks conflict, on which signal, and whether that signal SHIPS | `ConflictGraph`. ***The teeth are on the ABSENCE of provenance***: a multi-writer FINDING on a deliverable signal is **reported, not refused** (the defect is in the deliverable, and a vector author cannot fix it), while an **unprovenanced graph is NOT CHECKED** — *"0 findings"* and *"nobody recorded why"* are the same empty report | **CHECKED** *(NOT CHECKED without provenance on every edge)* |
 | 9 | **liveness** *(post-run)* | stimulus check; counter advanced **by the expected amount**; manifest presence | `StimulusCheck`, at run time. **The separable half is now a submission gate**: a vector whose liveness could never be established is refused *before* a wave is spent | **CHECKED** (preconditions) **+ CHECKED at run time** |
@@ -129,7 +129,13 @@ The two are different facts and the gate distinguishes them. Measured on the bui
 | a mirrored signal's **element type** | ***REFUSED*** | the table's zero value is `Unstated`; nothing can be range-checked against a type with no width |
 | a **completion signal wider than one register** | ***REFUSED as INEXPRESSIBLE*** | comparing it tests the **high half** and reports `TIMED-OUT` forever on a block that finished — and ***a spurious `TIMED-OUT` is worse than a spurious `FAIL`, because it is believed*** |
 | the conflict graph (both `computedConflicts` and `conflictEdges`) | ***NOT CHECKED*** | a blacklist compared against an absent graph is a blacklist nobody checked |
-| provenance on any conflict edge | ***NOT CHECKED*** | *"0 multi-writer findings"* and *"nobody recorded why these conflict"* are the same empty report |
+| provenance on any conflict edge | ***NOT CHECKED*** | *"0 multi-writer findings"* and *"nobody recorded why these conflict"* are the same empty report. **All-or-nothing: ONE unprovenanced edge disables the report for the whole submission** |
+| `conflictEdges` present as **`null`** | ***REFUSED*** | §2.7. **Not the same as omitted** — a lenient deserializer restores the false *"ran and found nothing"* claim one layer down |
+| a signal in neither `map.storage` nor `map.harnessOnly` | ***NOT CHECKED*** | §2.7, and ***measured at 16 of 17 signals*** in the deliverable submission. `providedFor` says HOW a signal is watched, never WHERE it is |
+| a signal in **both** | ***REFUSED***, naming it | it cannot both occupy storage and occupy none |
+| a `storage` entry's `owner` | **a POSITIVE claim, not an omission** | the path is **global** — DB member, PLC tag, `iDB_…`, physical address — and already unique |
+| a declared join resolving to **more than one** storage | ***REFUSED, naming EVERY candidate*** | ***never resolved to one***; picking a candidate is the aliasing that manufactured fictional multi-writers |
+| a conflict edge's **signal class** | ***NOT CHECKED*** (`Unstated`) | **derived from the writing blocks, never declared.** There is no field for it, and an unclassifiable signal fails closed |
 | `blockCompression`, at `runtimeCompression` > 1 | ***NOT CHECKED*** | three of X-D's four ceilings compared against nothing |
 | `blockCompression`, at `runtimeCompression` = 1 | **CHECKED — a real pass** | nothing is scaled, so none of the three *can* bind. **Computed from the submission, not assumed** |
 | a preset's `source` (`Data`/`Literal`) | ***REFUSED*** | the two answers push OPPOSITE ways — a data preset lowers the timer ceiling, a literal one lowers the ratio-distortion ceiling. No fail-safe guess exists |
@@ -302,6 +308,30 @@ collapsing toward serial, and nobody noticing *because it still works*. Note for
 blacklist names **blocks**, but admission colours **slots**, so naming a block excludes every slot
 testing it — usually what was meant, occasionally much wider.
 
+### Gates 8 and 8c — ***first check whether they COULD have been fed at all***
+Both consume `conflictEdges`, and a conflict graph is a statement about **storage**: two blocks conflict
+because they write *the same location*. **A submission names signals; nothing joined them to storage.**
+
+> *** MEASURED: 16 OF 17 SIGNALS IN THE DELIVERABLE SUBMISSION RESOLVE TO NO PLC STORAGE PATH. *** They
+> are harness-side logical names. `map.providedFor` carries **observability modes** — it says HOW a
+> signal can be watched and never WHERE it is — so **these two gates were not merely unsupplied, they
+> were inexpressible.** Contract **§2.7** is the join: `map.storage` (signal → `{owner?, path}`) and
+> `map.harnessOnly` (signals that occupy no PLC storage, as a positive claim).
+
+- ***A BARE LEAF NAME IS NOT A STORAGE REFERENCE.*** Matching a signal to storage by the shape of its
+  name — "find the path that ends with this" — re-introduces **the aliasing defect that manufactured
+  fictional multi-writers** (`IO.Step` in two UDTs; a `Time` temp declared separately in three FBs), at
+  the gate boundary instead of inside the analysis. **Two of the four cross-block multi-writer findings
+  this project ever recorded were fiction produced that way.** Never resolve by name shape, and do not
+  accept a submission that asks you to.
+- **`owner` and `path` are separate keys, not one dotted string** — *an emitted string is not a schema*,
+  and a consumer handed `A.B.C` cannot tell an owning block from a DB without parsing.
+- ***An ambiguous resolution is refused NAMING EVERY CANDIDATE***, never resolved to one. Instance
+  aliases of one storage are collapsed first, so a refusal means genuinely different storage.
+- **A signal in neither map is NOT CHECKED; in both, REFUSED.** `harnessOnly` is a claim the author
+  makes, and it is what turns *"this may be a mirror-only signal, or the name may be wrong"* — two
+  entirely different repairs behind one silence — into a fact.
+
 ### Gate 8c — multi-writer provenance (X-G)
 Two blocks that both write one coil are a conflict, so the packer puts them in different tensors and
 **both tests pass** — ***the scheduler has silently repaired a defect that will ship.*** So the graph
@@ -315,8 +345,21 @@ of the deliverable**.
   taken is that this warning is about a program the vector author cannot repair.)*
 - ***The teeth are on the ABSENCE of provenance.*** An unprovenanced graph is **NOT CHECKED**: a bare
   block list and a fully-analysed clean graph produce the identical empty report, and only one of them
-  means anything. Note that `computedConflicts` (bare names) is *legal and unprovenanced* — mixing it
-  with `conflictEdges` leaves the packing set complete and 8c NOT CHECKED, which is the honest answer.
+  means anything. `computedConflicts` (bare names) is *legal and unprovenanced* — mixing it with
+  `conflictEdges` leaves the packing set complete and 8c NOT CHECKED, which is the honest answer.
+- 🔴 **Which is why `computedConflicts` is now NEVER EMITTED, deliberately** — say so, or somebody
+  "fixes" the omission. The provenance test is ***all-or-nothing***, so ***one unprovenanced edge turns
+  8c to NOT CHECKED for the ENTIRE submission***: a helpful-looking extra edge — a call-graph coupling,
+  which is about **no signal** and so can carry no signal class — would **silently disable the
+  multi-writer report it was added beside.** Call-graph and shared-model coupling belong in the
+  **author's blacklist**, which is add-only for exactly this reason.
+- **The signal CLASS is derived from the writing blocks, never declared.** There is no field for it. An
+  unclassifiable signal carries `Unstated` through to the gate — *the refusal is carried across, not
+  resolved into a guess*.
+- ***`conflictEdges` is OMITTED when the graph did not run — not `[]`, and NOT `null`.*** `[]` is the
+  **earned** claim that the graph ran over a whole corpus and found nothing; **a `null` lets a lenient
+  deserializer restore that false claim one layer down.** A partial corpus makes it concrete: an
+  unparsed file may hold the second writer that makes a signal a conflict.
 
 ### Gates 10a and 10b — time compression (X-D)
 ***A scan count and the `comp` it was stated at are ONE FACT.*** The hazard runs in both directions and
