@@ -159,6 +159,26 @@ public sealed record MirrorObservability(IReadOnlyDictionary<string, IReadOnlySe
     /// </remarks>
     public IReadOnlyList<string> TagsWithNoSpecName { get; init; } = Array.Empty<string>();
 
+    /// <summary>
+    /// 🔴 <b>Specification names declared MORE THAN ONCE with DIFFERENT modes — the multi-slot case this
+    /// map has no dimension for.</b>
+    ///
+    /// <para>This map is keyed on the specification's signal name and has no slot axis, so a wave set in
+    /// which several slots observe the same signal folds them into one entry. <b>That is correct and
+    /// intended when the declarations agree</b> — and the hopper set's six slots agree exactly, which is
+    /// what makes shared observation admissible at all. It is <i>not</i> correct when they differ: with a
+    /// plain overwrite the last binding in the list silently decided the answer for every slot, so a
+    /// vector on a slot with no latch could be admitted against a latch declared on a different slot.</para>
+    ///
+    /// <para><b>The resolution is the INTERSECTION, and it fails closed.</b> A mode is offered only where
+    /// every declaration of that name offers it, so a vector needing <c>Latched</c> is refused rather than
+    /// admitted against a slot that has none — <i>a false refusal argues and gets looked at; a false
+    /// admission is a silent miss</i>. The names are listed here so the refusal is arguable rather than
+    /// mysterious: the repair is to give the slots distinct specification names, or to declare the same
+    /// instrumentation on each.</para>
+    /// </summary>
+    public IReadOnlyList<string> DivergentAcrossDeclarations { get; init; } = Array.Empty<string>();
+
     public bool IsEmpty => ProvidedFor.Count == 0;
 
     public IReadOnlySet<InstrumentationMode> For(string signal) =>
@@ -215,6 +235,7 @@ public sealed record MirrorObservability(IReadOnlyDictionary<string, IReadOnlySe
         var provided = new Dictionary<string, IReadOnlySet<InstrumentationMode>>(StringComparer.Ordinal);
         var latchedBy = new Dictionary<string, string>(StringComparer.Ordinal);
         var unjoined = new List<string>();
+        var divergent = new SortedSet<string>(StringComparer.Ordinal);
 
         foreach (var signal in signals)
         {
@@ -241,6 +262,24 @@ public sealed record MirrorObservability(IReadOnlyDictionary<string, IReadOnlySe
                 latchedBy[citable] = signal.LatchProvenance!;
             }
 
+            // *** THE SECOND AND LATER DECLARATIONS OF ONE NAME ARE INTERSECTED, NOT OVERWRITTEN. ***
+            // This map has no slot axis, and a wave set may legitimately have several slots observing one
+            // signal. `provided[citable] = modes` gave the LAST binding in the list the final say for
+            // every slot, silently - so a Latched declared on one slot licensed a vector running on a
+            // slot that has no latch. Intersecting fails closed and DivergentAcrossDeclarations names
+            // what was narrowed, so the refusal can be argued with. See that property for the reasoning.
+            if (provided.TryGetValue(citable, out var already))
+            {
+                if (!already.SetEquals(modes))
+                {
+                    divergent.Add(citable);
+                    modes.IntersectWith(already);
+
+                    if (!modes.Contains(InstrumentationMode.Latched))
+                        latchedBy.Remove(citable);
+                }
+            }
+
             provided[citable] = modes;
         }
 
@@ -249,6 +288,7 @@ public sealed record MirrorObservability(IReadOnlyDictionary<string, IReadOnlySe
             Provenance = MapProvenance.Bindings,
             LatchProvenance = latchedBy,
             TagsWithNoSpecName = unjoined,
+            DivergentAcrossDeclarations = divergent.ToArray(),
         };
     }
 }

@@ -158,8 +158,20 @@ public static class CopyLayerGenerator
             if (slot is null)
                 refusals.Add($"binding names slot '{binding.SlotId}', which is not in the map.");
 
-            if (!SafeIdentifier.IsMatch(binding.SlotId ?? string.Empty))
-                refusals.Add($"slot id '{binding.SlotId}' is not a plain identifier, and it is part of every generated tag name.");
+            // *** A SLOT ID IS A CROSS-REFERENCE KEY AND A TAG FRAGMENT, AND THOSE ALPHABETS DIFFER. ***
+            // This used to demand a plain identifier outright, which made the deliverable's own binding
+            // ungeneratable: the vectors say `SLOT-HBA-RAISE`, the binding must say the same string for the
+            // two to join, and a hyphen cannot appear in a PLC tag name. Measured on the committed
+            // single-slot binding, which returned `slot id 'SLOT-HBA-ALL' is not a plain identifier` and
+            // emitted nothing. The id is now kept as the key and TRANSLITERATED for tag names, reported per
+            // slot, with a collision refused below.
+            if (!SlotTagToken.CanDerive(binding.SlotId))
+            {
+                refusals.Add(
+                    $"slot id '{binding.SlotId}' carries no letter or digit, so no identifier can be derived from it for the tag "
+                    + "names this generator emits. A slot id may contain any characters a vector's `slot` field can cite - they are "
+                    + "transliterated for the tag fragment - but it must carry something to transliterate.");
+            }
 
             var targets = binding.VectorTargets ?? Array.Empty<MirroredSignal>();
             var sources = binding.ResultSources ?? Array.Empty<MirroredSignal>();
@@ -266,6 +278,11 @@ public static class CopyLayerGenerator
             }
         }
 
+        // *** THE TWO CROSS-SLOT CHECKS. *** Everything above is about ONE binding; a wave set of several
+        // slots has two hazards that no per-binding check can see, and both were silent until 2026-08-14.
+        refusals.AddRange(TokenCollisions(bindings));
+        refusals.AddRange(MultipleWriters(bindings));
+
         if (refusals.Count > 0)
             return new CopyLayerResult(null, Array.Empty<HarnessObject>(), refusals);
 
@@ -289,16 +306,23 @@ public static class CopyLayerGenerator
             .Select(s => (Slot: s, Binding: bindings.Single(b => b.SlotId == s.SlotId)))
             .ToArray();
 
+        // One derivation per slot, in map order, carried onto the plan so a reader of the RESULT meets it
+        // rather than only a reader of this code. See SlotTagToken: the id is the vector's cross-reference
+        // key, the token is what a PLC tag name can hold, and they are not the same alphabet.
+        var tokens = ordered.Select(o => SlotTagToken.Derive(o.Binding.SlotId)).ToArray();
+
         foreach (var (allocation, binding) in ordered)
         {
+            var token = SlotTagToken.For(binding.SlotId);
+
             if (binding.StartCondition is not null)
             {
-                tags.Add(new($"{prefix}{binding.SlotId}_Start", "Bool",
+                tags.Add(new($"{prefix}{token}_Start", "Bool",
                     geometry.BitAddressOf(allocation.StartBoolRegister, allocation.StartBitInRegister),
                     geometry.ByteAddressOf(allocation.StartBoolRegister),
                     "Start bool. Its rising edge is the test's T=0."));
 
-                tags.Add(new($"{prefix}{binding.SlotId}_Ran", "Bool",
+                tags.Add(new($"{prefix}{token}_Ran", "Bool",
                     geometry.BitAddressOf(map.StartEcho.Register + (allocation.StartBoolRegister - map.StartBools.Register), allocation.StartBitInRegister),
                     geometry.ByteAddressOf(map.StartEcho.Register + (allocation.StartBoolRegister - map.StartBools.Register)),
                     "Latched: the block's own start condition was seen high. Cleared by the client at inert."));
@@ -314,7 +338,7 @@ public static class CopyLayerGenerator
             for (var i = 0; i < vectorTargets.Count; i++)
             {
                 var offset = vectorOffsets[i];
-                tags.Add(MirrorTagFor($"{prefix}{binding.SlotId}_V{offset:000}", vectorTargets[i].Type, geometry,
+                tags.Add(MirrorTagFor($"{prefix}{token}_V{offset:000}", vectorTargets[i].Type, geometry,
                     allocation.Vector.Register + offset, $"Vector register {offset}."));
             }
 
@@ -323,7 +347,7 @@ public static class CopyLayerGenerator
             for (var i = 0; i < binding.ResultSources.Count; i++)
             {
                 var offset = resultOffsets[i];
-                tags.Add(MirrorTagFor($"{prefix}{binding.SlotId}_R{offset:000}", binding.ResultSources[i].Type, geometry,
+                tags.Add(MirrorTagFor($"{prefix}{token}_R{offset:000}", binding.ResultSources[i].Type, geometry,
                     allocation.Result.Register + offset, $"Result register {offset}."));
             }
 
@@ -340,7 +364,7 @@ public static class CopyLayerGenerator
                 // phase-armed latch as an unconditional one is how a client comes to clear a bit the copy
                 // layer is already clearing, and reading it the other way is how index 1's firing is
                 // attributed to index 2.
-                tags.Add(MirrorTagFor($"{prefix}{binding.SlotId}_L{offset:000}", MirrorValueType.Bool, geometry,
+                tags.Add(MirrorTagFor($"{prefix}{token}_L{offset:000}", MirrorValueType.Bool, geometry,
                     allocation.Result.Register + offset,
                     signal is { PhaseArmed: true }
                         ? $"LATCH for '{tag}', PHASE-ARMED. Set only while this slot's start bool is high"
@@ -365,6 +389,10 @@ public static class CopyLayerGenerator
 
         foreach (var (_, binding) in ordered)
         {
+            // The same derivation the tag table used. Computed from the id rather than carried across, so
+            // the two cannot drift into naming different tags for one slot.
+            var token = SlotTagToken.For(binding.SlotId);
+
             var targets = binding.VectorTargets ?? Array.Empty<MirroredSignal>();
 
             // *** ONE NETWORK PER TYPE, and the register index stays the LIST index. *** Splitting by
@@ -378,7 +406,7 @@ public static class CopyLayerGenerator
                 var ofType = targets
                     .Select((t, i) => (Signal: t, Offset: targetOffsets[i]))
                     .Where(x => x.Signal.Type == element.Type)
-                    .Select(x => new CopyLayerCopy($"{prefix}{binding.SlotId}_V{x.Offset:000}", x.Signal.Tag, element.Type))
+                    .Select(x => new CopyLayerCopy($"{prefix}{token}_V{x.Offset:000}", x.Signal.Tag, element.Type))
                     .ToArray();
 
                 if (ofType.Length > 0)
@@ -392,7 +420,7 @@ public static class CopyLayerGenerator
             {
                 networks.Add(new CopyLayerNetwork(number++, CopyLayerNetworkKind.StartBool,
                     $"Start bool - slot {binding.SlotId}",
-                    new[] { new CopyLayerCopy($"{prefix}{binding.SlotId}_Start", binding.StartCondition, MirrorValueType.Bool) }));
+                    new[] { new CopyLayerCopy($"{prefix}{token}_Start", binding.StartCondition, MirrorValueType.Bool) }));
 
                 // X-E. The echo reads the FAR side of the coil above — the block's OWN start condition,
                 // which is what the program actually ran on. Reading back the mirror bit instead would
@@ -403,7 +431,7 @@ public static class CopyLayerGenerator
                 // say the slot never ran — which is exactly the false evidence X-E exists to kill.
                 networks.Add(new CopyLayerNetwork(number++, CopyLayerNetworkKind.StartEcho,
                     $"Start echo - slot {binding.SlotId}",
-                    new[] { new CopyLayerCopy($"{prefix}{binding.SlotId}_Ran", binding.StartCondition, MirrorValueType.Bool) }));
+                    new[] { new CopyLayerCopy($"{prefix}{token}_Ran", binding.StartCondition, MirrorValueType.Bool) }));
             }
 
             var sourceOffsets = binding.ResultRegisterOffsets;
@@ -413,7 +441,7 @@ public static class CopyLayerGenerator
                 var ofType = binding.ResultSources
                     .Select((s, i) => (Signal: s, Offset: sourceOffsets[i]))
                     .Where(x => x.Signal.Type == element.Type)
-                    .Select(x => new CopyLayerCopy(x.Signal.Tag, $"{prefix}{binding.SlotId}_R{x.Offset:000}", element.Type))
+                    .Select(x => new CopyLayerCopy(x.Signal.Tag, $"{prefix}{token}_R{x.Offset:000}", element.Type))
                     .ToArray();
 
                 if (ofType.Length > 0)
@@ -432,14 +460,14 @@ public static class CopyLayerGenerator
             // not redundant: the arm window is a STATIC OF THE BLOCK UNDER TEST, and the harness must not
             // assume the block clears its own phase flag at inert. Holding the window closed at both ends
             // costs one contact and removes an assumption about the implementation being tested.
-            var startBoolTag = binding.StartCondition is not null ? $"{prefix}{binding.SlotId}_Start" : null;
+            var startBoolTag = binding.StartCondition is not null ? $"{prefix}{token}_Start" : null;
 
             var latchRungs = binding.LatchRegisterOffsets
                 .OrderBy(e => e.Value)
                 .Select(e =>
                 {
                     var signal = binding.ResultSignal(e.Key);
-                    var latchTag = $"{prefix}{binding.SlotId}_L{e.Value:000}";
+                    var latchTag = $"{prefix}{token}_L{e.Value:000}";
 
                     if (signal is not { PhaseArmed: true })
                         return new CopyLayerLatch(latchTag, e.Key, Array.Empty<string>(), ClearLevel: null);
@@ -481,8 +509,24 @@ public static class CopyLayerGenerator
             }
         }
 
+        // Result sources more than one slot observes. ADMITTED - the copy layer only reads them and each
+        // slot writes its own register band - and reported anyway, because a scope that only speaks when
+        // it exempts something cannot be told from one that has stopped running.
+        var shared = ordered
+            .SelectMany(o => (o.Binding.ResultSources ?? Array.Empty<MirroredSignal>())
+                .Where(s => s is not null && !string.IsNullOrWhiteSpace(s.Tag))
+                .Select(s => (o.Binding.SlotId, s.Tag)))
+            .GroupBy(x => x.Tag, StringComparer.Ordinal)
+            .Where(g => g.Select(x => x.SlotId).Distinct(StringComparer.Ordinal).Count() > 1)
+            .Select(g => $"{g.Key} (observed by {g.Select(x => x.SlotId).Distinct(StringComparer.Ordinal).Count()} slots: {string.Join(", ", g.Select(x => x.SlotId).Distinct(StringComparer.Ordinal))})")
+            .ToArray();
+
         var plan = new CopyLayerPlan(map, ordered.Select(o => o.Binding).ToArray(), stamp, tags, networks,
-            ordered.Where(o => o.Binding.StartCondition is null).Select(o => o.Binding.SlotId).ToArray());
+            ordered.Where(o => o.Binding.StartCondition is null).Select(o => o.Binding.SlotId).ToArray())
+        {
+            SlotTokens = tokens,
+            SharedObservations = shared,
+        };
 
         var objects = new[]
         {
@@ -491,6 +535,121 @@ public static class CopyLayerGenerator
         };
 
         return new CopyLayerResult(plan, objects, Array.Empty<string>());
+    }
+
+    /// <summary>
+    /// Two different slot ids that would produce the SAME tag fragment, named.
+    ///
+    /// <para><b>Refused rather than resolved.</b> Sharing a fragment means sharing every generated tag
+    /// name — start bool, echo, every vector and result register — so the two slots would write each
+    /// other's mirror region while the map, the hash and the register arithmetic all stayed valid. That is
+    /// two agents aliased onto one register (DB-6), which the map's own disjointness check exists to make
+    /// impossible and which it cannot see, because the aliasing would be in the NAMES rather than in the
+    /// addresses.</para>
+    /// </summary>
+    private static IReadOnlyList<string> TokenCollisions(IReadOnlyList<SlotBinding> bindings)
+    {
+        var refusals = new List<string>();
+
+        var groups = bindings
+            .Where(b => SlotTagToken.CanDerive(b.SlotId))
+            .Select(b => (b.SlotId, Token: SlotTagToken.For(b.SlotId!)))
+            .GroupBy(x => x.Token, StringComparer.Ordinal)
+            .Where(g => g.Select(x => x.SlotId).Distinct(StringComparer.Ordinal).Count() > 1);
+
+        foreach (var group in groups)
+        {
+            refusals.Add(
+                $"slot ids {string.Join(", ", group.Select(x => $"'{x.SlotId}'"))} all transliterate to the tag fragment "
+                + $"'{group.Key}', so they would share EVERY generated tag name - start bool, start echo and every vector and "
+                + "result register. Their mirror regions would alias each other while the map's address arithmetic and its "
+                + "hash stayed perfectly valid, because the aliasing is in the NAMES and the disjointness check reads "
+                + "ADDRESSES. Give them ids that differ in more than punctuation.");
+        }
+
+        return refusals;
+    }
+
+    /// <summary>
+    /// 🔴 <b>TWO SLOTS THAT WRITE THE SAME TAG — AND UNTIL 2026-08-14 THE GENERATOR EMITTED BOTH AND SAID
+    /// NOTHING.</b>
+    ///
+    /// <para><b>Measured, on two slots bound to one skeleton block.</b> The emitted layer carried
+    /// <c>MOVE(EN := TRUE, IN := HX_S0_V000) =&gt; Demo_Step</c> in network 3 and
+    /// <c>MOVE(EN := TRUE, IN := HX_S1_V000) =&gt; Demo_Step</c> in network 7, plus
+    /// <c>COIL Demo_Start := HX_S0_Start</c> and <c>COIL Demo_Start := HX_S1_Start</c>. Rungs run in
+    /// order, every scan, so <b>the LAST slot in the wave set silently owns the block and the earlier ones
+    /// drive nothing.</b> The loop then ran, produced a package per slot, and reported
+    /// <c>OUTCOME=Ran</c> — <i>a confident wrong answer, not an error.</i></para>
+    ///
+    /// <para><b>THE READ DIRECTION IS NOT THE SAME AND IS DELIBERATELY ADMITTED.</b> N slots may observe
+    /// one result source: the copy layer only reads it, and each slot writes it into its own register
+    /// band. That asymmetry is the whole point — the hopper set's six slots share their observations
+    /// legitimately (<c>harness-binding.md:179-181</c>), and refusing that would refuse the deliverable
+    /// for a hazard that only exists in the other direction.</para>
+    ///
+    /// <para><b>WHY A REFUSAL AND NOT A CLEVERER RENDERING.</b> A shared destination could be rendered
+    /// correctly — one coil driven by the OR of the slots' start bools, and vector-in copies gated on
+    /// each slot's own start bool. That changes WHEN the stimulus reaches the block (at the commit rather
+    /// than during the data phase), which is an X-A property, and it is a design decision about the
+    /// harness contract rather than an implementation choice inside it. The source prose reaches the same
+    /// conclusion from the plant side: <i>"Making them genuinely concurrent would need six monitor
+    /// instances, six stimulus instances and six input buffers. That is a project-shape decision, not a
+    /// harness setting"</i> (<c>harness-binding.md:187-189</c>).</para>
+    /// </summary>
+    private static IReadOnlyList<string> MultipleWriters(IReadOnlyList<SlotBinding> bindings)
+    {
+        var refusals = new List<string>();
+
+        // Every destination the emitted layer WRITES, with what it is and which slot claimed it. The start
+        // condition is a destination too: `COIL <startCondition> := <slot start bool>`.
+        var writes = bindings.SelectMany(b =>
+            (b.VectorTargets ?? Array.Empty<MirroredSignal>())
+                .Where(t => t is not null && !string.IsNullOrWhiteSpace(t.Tag))
+                .Select(t => (Slot: b.SlotId ?? string.Empty, Tag: t.Tag, What: "a vector target"))
+                .Concat(string.IsNullOrWhiteSpace(b.StartCondition)
+                    ? Array.Empty<(string Slot, string Tag, string What)>()
+                    : new (string Slot, string Tag, string What)[] { (b.SlotId ?? string.Empty, b.StartCondition!, "the start condition") }))
+            .ToArray();
+
+        var collisions = writes.GroupBy(w => w.Tag, StringComparer.Ordinal).Where(g => g.Count() > 1).ToArray();
+
+        // Within ONE slot: a second copy overwrites the first inside a single scan. Its own refusal,
+        // because the repair is different (bind the tag once) and so is the diagnosis.
+        foreach (var group in collisions.Where(g => g.Select(w => w.Slot).Distinct(StringComparer.Ordinal).Count() == 1))
+        {
+            refusals.Add(
+                $"tag '{group.Key}' is written {group.Count()} times by slot '{group.First().Slot}' alone ({string.Join(", ", group.Select(w => w.What))}). "
+                + "One slot writes it twice, so the second copy overwrites the first within a single scan and the first is dead. Bind the tag once.");
+        }
+
+        // *** ACROSS SLOTS: ONE REFUSAL FOR THE WHOLE WAVE SET. *** The hopper binding collides on eleven
+        // tags at once, and repeating the explanation eleven times buries it - a refusal nobody finishes
+        // reading is a refusal that gets skimmed, which is the failure mode this project keeps recording
+        // about warnings. The TAGS are enumerated; the reasoning is said once.
+        var crossSlot = collisions
+            .Where(g => g.Select(w => w.Slot).Distinct(StringComparer.Ordinal).Count() > 1)
+            .ToArray();
+
+        if (crossSlot.Length > 0)
+        {
+            var slots = crossSlot.SelectMany(g => g.Select(w => w.Slot)).Distinct(StringComparer.Ordinal).OrderBy(s => s, StringComparer.Ordinal).ToArray();
+
+            refusals.Add(
+                $"{crossSlot.Length} tag(s) are WRITTEN by more than one slot in this wave set. "
+                + "*** THE RUNGS EXECUTE IN ORDER, EVERY SCAN, SO THE LAST SLOT SILENTLY OWNS THE BLOCK AND THE OTHERS DRIVE NOTHING. *** "
+                + "This does not error on the controller and it did not error here: the layer compiled, deployed, and the loop returned "
+                + "a package per slot with every earlier slot's stimulus overwritten before the block ever saw it. "
+                + "Sharing an OBSERVATION across slots is fine and is ADMITTED - the copy layer only READS a result source, and each slot "
+                + "has its own register band. Sharing a STIMULUS is not. "
+                + "THE TWO ROUTES: give each slot its own instance to drive (six monitor instances, six stimulus instances, six input "
+                + "buffers - a project-shape decision, per harness-binding.md:187-189), or bind ONE slot per wave set and run the wave "
+                + $"sets in sequence. Slots involved: {string.Join(", ", slots.Select(s => $"'{s}'"))}. Tags: "
+                + string.Join("; ", crossSlot.Select(g =>
+                    $"'{g.Key}' ({string.Join(", ", g.Select(w => $"slot '{w.Slot}' as {w.What}"))})")));
+        }
+
+        return refusals;
     }
 
     /// <summary>

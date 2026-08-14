@@ -683,6 +683,28 @@ public sealed record CopyLayerPlan(
     IReadOnlyList<CopyLayerNetwork> Networks,
     IReadOnlyList<string> SlotsAssertingNoStartGate)
 {
+    /// <summary>
+    /// How every slot id became the identifier fragment inside its tag names — <b>one entry per slot,
+    /// transliterated or not.</b> See <see cref="SlotTagToken"/> for why the two are different things.
+    /// </summary>
+    public IReadOnlyList<SlotTokenDerivation> SlotTokens { get; init; } = Array.Empty<SlotTokenDerivation>();
+
+    /// <summary>
+    /// 🔴 <b>Result-source tags that MORE THAN ONE slot observes — admitted, counted, and named.</b>
+    ///
+    /// <para>Shared OBSERVATION is legitimate and is the case this generator exists to admit: the copy
+    /// layer only READS a result source, and each slot writes it into its own register band, so N slots
+    /// watching one signal is N reads of one tag and no interference of any kind. The deliverable's six
+    /// hopper slots are exactly this shape — <c>harness-binding.md:179-181</c> states that all six drive
+    /// the same instance and the same members.</para>
+    ///
+    /// <para><b>Shared STIMULUS is the opposite and is refused</b> — see the multi-writer refusal in
+    /// <see cref="CopyLayerGenerator"/>. The two directions look symmetrical and are not, so this list is
+    /// reported on every run rather than only when it is non-empty: a report that appears only when it has
+    /// something to say cannot be told from one that has stopped running.</para>
+    /// </summary>
+    public IReadOnlyList<string> SharedObservations { get; init; } = Array.Empty<string>();
+
     /// <summary>The single binding, for a one-slot wave set.</summary>
     public SlotBinding Binding => Bindings.Count == 1
         ? Bindings[0]

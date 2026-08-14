@@ -523,8 +523,15 @@ public class CopyLayerGeneratorTests
     }
 
     [Fact]
-    public void A_slot_id_that_is_not_an_identifier_is_refused_because_it_becomes_a_tag_name()
+    public void A_slot_id_that_is_not_an_identifier_STILL_YIELDS_ONLY_IDENTIFIER_TAG_NAMES()
     {
+        // *** THE PROPERTY IS KEPT; THE MECHANISM MOVED (2026-08-14). *** This used to be a REFUSAL, and
+        // the refusal was wrong in one direction: the slot id is also the cross-reference key a vector's
+        // `slot` field must equal, and the deliverable's vectors cite `SLOT-HBA-RAISE`. Refusing every id
+        // a tag name cannot hold made the coordinator's own single-slot binding ungeneratable — measured
+        // on `SLOT-HBA-ALL`. The id is now kept and TRANSLITERATED for the tag fragment (SlotTagToken),
+        // so what this test was actually protecting — no illegal character ever reaches a tag name — is
+        // asserted directly rather than through a refusal that also blocked legitimate ids.
         var map = MapAllocator.Allocate(new WaveSetRequest(
             MirrorGeometry.ForCpu1214C(256, 4000),
             new[] { new SlotRequest("S 0", 2, 2) })).Require();
@@ -532,8 +539,13 @@ public class CopyLayerGeneratorTests
         var result = CopyLayerGenerator.Generate(map,
             new SlotBinding("S 0", MirroredSignal.Ints("A"), null, MirroredSignal.Ints("B")), Naming, Stamp);
 
-        Assert.False(result.Generated);
-        Assert.Contains(result.Refusals, r => r.Contains("plain identifier", StringComparison.Ordinal));
+        Assert.True(result.Generated, string.Join(" | ", result.Refusals));
+
+        var plan = result.Require();
+
+        Assert.Equal("S 0", plan.Bindings[0].SlotId);
+        Assert.All(plan.Tags, t => Assert.True(SlotTagToken.IsPlainIdentifier(t.Name), $"tag '{t.Name}' is not a plain identifier"));
+        Assert.Contains(plan.SlotTokens, d => d.SlotId == "S 0" && d.Token == "S_0" && d.Transliterated);
     }
 
     [Fact]
