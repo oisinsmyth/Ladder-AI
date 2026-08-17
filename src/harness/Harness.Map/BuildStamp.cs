@@ -54,7 +54,22 @@ public readonly record struct BuildStamp(uint Value)
         RegisterMap map,
         IReadOnlyList<SlotBinding> bindings,
         CopyLayerNaming naming,
-        IEnumerable<HarnessObject>? programUnderTest = null)
+        IEnumerable<HarnessObject>? programUnderTest = null) =>
+        Derive(map, bindings, naming, programUnderTest, out _);
+
+    /// <summary>
+    /// The derivation, REPORTING which supplied objects it refused to hash as the harness's own output.
+    ///
+    /// <para>The exclusion is not an optimisation and it is not silent. A caller that hands this method a
+    /// whole IR directory has no way to know it just handed over the copy layer as well, and an exclusion
+    /// nobody can see is indistinguishable from an object that was never supplied.</para>
+    /// </summary>
+    public static BuildStamp Derive(
+        RegisterMap map,
+        IReadOnlyList<SlotBinding> bindings,
+        CopyLayerNaming naming,
+        IEnumerable<HarnessObject>? programUnderTest,
+        out IReadOnlyList<string> excludedAsSelfReferential)
     {
         ArgumentNullException.ThrowIfNull(map);
         ArgumentNullException.ThrowIfNull(bindings);
@@ -104,8 +119,40 @@ public readonly record struct BuildStamp(uint Value)
             }
         }
 
+        // 🔴 *** THE HARNESS'S OWN GENERATED OBJECTS ARE EXCLUDED, AND THAT IS THE INVARIANT THIS CLASS
+        // OPENS BY STATING: "the copy layer is not one of its own inputs ... hashing the copy layer would
+        // be circular". *** It honoured that for its OWN arguments, and `--program <ir-dir>` re-introduced
+        // the circularity FROM THE SIDE, because the copy-layer block and the mirror tag table are FILES
+        // IN THAT DIRECTORY and the loader below quite correctly picks them up.
+        //
+        // MEASURED 2026-08-17, and the symptom is the worst-shaped one available: generate -> promote the
+        // generated layer into `ir/` -> regenerate to verify the device moved the stamp 16#F52ECEAD ->
+        // 16#4ED5E68D over an input set that was otherwise byte-identical (43 tracked files, none dirty,
+        // no code change in between — the promoting commit's own recorded command reproduces the OLD stamp
+        // only from the PRE-promotion tree). So `VersionCheck` classified a CORRECTLY DEPLOYED program as
+        // `Stale`, whose text says the download "aborted, was refused, or never reached it" — sending a
+        // person to re-download a device that was already right. *** EVERY PROMOTION INVALIDATED THE STAMP
+        // IT HAD JUST WRITTEN, so the version register could never confirm anything after the first time.
+        //
+        // Excluding them costs nothing: both objects are a pure function of the map, the bindings and the
+        // naming, and all three are already hashed above — which is the same argument the class opens with.
+        // The two names come FROM `naming`, never from a hardcoded list, so a renamed copy layer stays
+        // excluded and an unrelated block never is.
+        var selfReferential = new List<string>();
+
         foreach (var obj in (programUnderTest ?? Array.Empty<HarnessObject>()).OrderBy(o => o.Name, StringComparer.Ordinal))
+        {
+            if (string.Equals(obj.Name, naming.BlockName, StringComparison.Ordinal) ||
+                string.Equals(obj.Name, naming.TagTableName, StringComparison.Ordinal))
+            {
+                selfReferential.Add($"{obj.Kind}:{obj.Name}");
+                continue;
+            }
+
             canonical.Append($"obj={obj.Kind}:{obj.Name}\n{obj.Ir}\n");
+        }
+
+        excludedAsSelfReferential = selfReferential;
 
         var digest = SHA256.HashData(Encoding.UTF8.GetBytes(canonical.ToString()));
 

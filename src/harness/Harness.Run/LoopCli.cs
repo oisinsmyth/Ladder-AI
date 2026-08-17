@@ -193,7 +193,7 @@ public static class LoopCli
             return LoopExit.NothingExamined;
         }
 
-        WriteProgramInventory(program, noProgram, output);
+        WriteProgramInventory(program, noProgram, binding.BlockName, binding.TagTableName, output);
 
         // ---- GENERATE AND STOP ----------------------------------------------------------------------
         // Before the fence, because there is nothing to fence: no gateway is constructed on this path and
@@ -619,7 +619,12 @@ public static class LoopCli
     /// What the stamp was taken over, <b>on every run including the empty one</b> — a report that appears
     /// only when there is something to say teaches its reader that absence means it did not run.
     /// </summary>
-    private static void WriteProgramInventory(IReadOnlyList<HarnessObject> program, bool noProgram, TextWriter output)
+    private static void WriteProgramInventory(
+        IReadOnlyList<HarnessObject> program,
+        bool noProgram,
+        string? copyLayerBlockName,
+        string? mirrorTagTableName,
+        TextWriter output)
     {
         if (noProgram)
         {
@@ -631,9 +636,34 @@ public static class LoopCli
             return;
         }
 
-        output.WriteLine($"program     : {program.Count} object(s) under test, and THE BUILD STAMP IS TAKEN OVER THEM.");
+        // *** THE HARNESS'S OWN TWO OBJECTS ARE NAMED HERE AND SUBTRACTED FROM THE HEADLINE COUNT. *** This
+        // line used to read "N object(s) under test, and THE BUILD STAMP IS TAKEN OVER THEM" over a set that
+        // included the copy layer being stamped — which was both the defect and the reason it survived, since
+        // the report asserted the very scope it had wrong. See BuildStamp.Derive for the measurement.
+        bool SelfReferential(HarnessObject o) =>
+            string.Equals(o.Name, copyLayerBlockName, StringComparison.Ordinal) ||
+            string.Equals(o.Name, mirrorTagTableName, StringComparison.Ordinal);
+
+        var stamped = program.Count(o => !SelfReferential(o));
+
+        output.WriteLine($"program     : {program.Count} object(s) under test; THE BUILD STAMP IS TAKEN OVER {stamped} OF THEM.");
+
         foreach (var obj in program)
-            output.WriteLine($"              {obj.Kind,-9} {obj.Name}  ({obj.Ir.Length} chars of IR)");
+        {
+            var note = SelfReferential(obj)
+                ? "  <- NOT STAMPED: the harness generates this one, so hashing it would stamp the stamp"
+                : string.Empty;
+
+            output.WriteLine($"              {obj.Kind,-9} {obj.Name}  ({obj.Ir.Length} chars of IR){note}");
+        }
+
+        if (stamped == program.Count && (copyLayerBlockName is not null || mirrorTagTableName is not null))
+        {
+            output.WriteLine($"              (no supplied object is the harness's own: expected `{copyLayerBlockName}` and");
+            output.WriteLine($"              `{mirrorTagTableName}` in the program set and neither was there. That is legitimate when the");
+            output.WriteLine("              copy layer has not been promoted into this tree yet — and it is worth noticing, because");
+            output.WriteLine("              once it IS promoted the set changes and only the exclusion keeps the stamp stable.)");
+        }
 
         // *** THE PROGRAM'S CLAIM ON RETAIN — REPORTED, GATING NOTHING, AND PRINTED WHEN IT IS ZERO. ***
         // 0.1b constrains the objects the harness GENERATES; the plant's retain is the plant's, and at
