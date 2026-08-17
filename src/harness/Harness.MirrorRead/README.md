@@ -1,3 +1,20 @@
+> **This project also owns `IMirrorFeedSource` / `FileMirrorFeedSource`** — the sibling of
+> `IRegisterSource` / `ModbusRegisterSource` that reads **a wave's published feed instead of a socket**,
+> so `harness-mirror-view --follow` can show a run live without taking its connection. `MB_SERVER` accepts
+> ONE connection per instance: with a viewer attached, a conformance wave reported **0 of 22 vectors
+> attempted**.
+>
+> **It is a separate port rather than an `IRegisterSource` implementation, deliberately.** That interface
+> answers `ushort[] Read(start, count)` — values, or an exception. A feed read has **four outcomes that must
+> stay apart** (*no publisher ever wrote here* / *a publish did not complete* / *unreadable* / *ok*) and it
+> carries **per-register provenance**: which registers a real read covered, and *when each one was read*.
+> Forcing it through `IRegisterSource` would collapse three non-device conditions into one thrown exception
+> that `RegisterRead.Perform` would then report as a **transport failure** — a device diagnosis for
+> conditions in which no device was involved. Same seam SHAPE, deliberately not the same TYPE.
+>
+> The format is `Harness.Wire.MirrorFeed`; the writer is `Harness.Wire.MirrorFeedPublisher`. Full
+> description in `src/harness/Harness.MirrorView/README.md`.
+
 # `harness-mirror-read` — READ-ONLY Modbus holding-register reader
 
 Reads holding registers off the rig's `MB_SERVER` mirror and reports **how wide the area actually

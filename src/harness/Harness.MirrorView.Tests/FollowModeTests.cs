@@ -525,6 +525,41 @@ public class FollowModeTests
         Assert.Contains("NO SOCKET WAS OPENED", View(state, T0).LastAttemptDetail, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// 🔴 <b>THE TARGET LINE NAMES THE FEED, NOT A HOST AND PORT THIS VIEWER NEVER CONTACTED.</b>
+    ///
+    /// <para><b>Found by running the binary, not by a test.</b> The page's target read <c>:503 unit 1</c>
+    /// in follow mode — a plausible-looking device target for a viewer holding no connection at all —
+    /// because the view model rebuilt the string from the address fields instead of asking the options.
+    /// <c>Describe</c> existed, was correct, and was printed in the console banner; nothing had wired it to
+    /// the page. <i>A value with two readers has as many truths as it has readers.</i></para>
+    /// </summary>
+    [Fact]
+    public void A_followed_view_names_the_feed_as_its_target_and_no_device()
+    {
+        var state = new MirrorState();
+        Poller(new ScriptedFeed(Document(PublisherStatus.Running, T0, WholeArea(T0))), state, () => T0).PollOnce();
+
+        var target = View(state, T0).Target;
+
+        Assert.Contains("FOLLOWING", target, StringComparison.Ordinal);
+        Assert.Contains("C:/feed.mirrorfeed", target, StringComparison.Ordinal);
+        Assert.DoesNotContain(":503", target, StringComparison.Ordinal);
+        Assert.DoesNotContain("unit", target, StringComparison.Ordinal);
+    }
+
+    /// <summary>The converse: a direct-mode view still names the host, the port and the unit.</summary>
+    [Fact]
+    public void A_direct_view_still_names_the_device_it_is_connected_to()
+    {
+        var state = new MirrorState();
+        state.Publish(new PollAttempt(T0, PollOutcome.Ok, "FC03 answered.",
+            ScriptedSource.Area(Fixtures.Registers), 74));
+
+        Assert.Equal("10.10.10.10:503 unit 1",
+            MirrorView.Build(Fixtures.Map(), Fixtures.Options(), state, T0).Target);
+    }
+
     // ---- DIRECT MODE IS UNTOUCHED -------------------------------------------------------------------
 
     /// <summary>

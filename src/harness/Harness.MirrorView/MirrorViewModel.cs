@@ -153,7 +153,13 @@ public static class MirrorView
             AgeSeconds: age,
             StaleAfterSeconds: staleAfter,
             PollIntervalSeconds: options.PollIntervalMs / 1000.0,
-            Target: $"{options.Address}:{options.Port} unit {options.UnitId}",
+            // 🔴 *** THROUGH THE OPTIONS' OWN Describe, NOT REBUILT HERE. *** This line read
+            // `$"{Address}:{Port} unit {UnitId}"` and, in follow mode, rendered `:503 unit 1` at the top of
+            // the page — a plausible-looking target for a viewer that had opened no socket at all. FOUND BY
+            // RUNNING THE BINARY, not by any test: `Describe` existed, was correct, was printed in the
+            // console banner, and nothing had wired it to the page. A value with two readers has as many
+            // truths as it has readers.
+            Target: options.Describe,
             AllowlistPath: options.AllowlistPath ?? "<none configured>",
             MapSource: map.TagTableSource,
             AreaSource: map.AreaPointerSource,
