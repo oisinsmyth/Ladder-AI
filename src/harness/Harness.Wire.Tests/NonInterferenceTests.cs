@@ -20,7 +20,10 @@ public class NonInterferenceTests
 
     private static SlotRunResult Result(SlotOutcome outcome, params ushort[] results) =>
         new(outcome, results, new ScanCount(0), new ScanCount(0), 1, 1,
-            new InertReport(InertOutcome.Established, new ScanCount(0), Array.Empty<ushort>(), Array.Empty<ushort>(), "stub"), "stub");
+            new InertReport(InertOutcome.Established, new ScanCount(0), Array.Empty<ushort>(), Array.Empty<ushort>(), "stub"), "stub",
+            // This fixture is about NON-INTERFERENCE, not about observation; one frame states what these
+            // results are without pretending to a series. See ObservationSeries.OfSingleFrame.
+            ObservationSeries.OfSingleFrame(results, new ScanCount(0)));
 
     /// <summary>A wave whose per-slot results are dictated by the caller, keyed on the set of slots run.</summary>
     private static Func<IReadOnlyList<SlotTensor>, WaveResult> Waves(

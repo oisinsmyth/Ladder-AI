@@ -670,6 +670,78 @@ public sealed record SlotBinding(
     }
 
     /// <summary>
+    /// 🔴 <b>THE LATCH REGISTER A CITED RESULT SIGNAL'S LATCH SITS AT, or -1 when this binding generates
+    /// none for it. THE OBSERVE-SIDE CONSUMER OF <see cref="LatchRegisterOffsets"/>, WHICH UNTIL
+    /// 2026-08-17 HAD NONE AT ALL.</b>
+    ///
+    /// <para>*** THE LATCHES WERE ARGUED FOR, SIZED, GENERATED, DEPLOYED AND READ OFF THE WIRE — AND NEVER
+    /// CONSULTED. *** <c>LatchRegisterOffsets</c>' only consumer was <c>CopyLayerGenerator</c>, i.e. the
+    /// code that EMITS the latch rungs. <c>LoopRun</c> resolved every expectation through
+    /// <see cref="ResultRegisterOf"/> — the VALUE offsets — whatever mode the expectation declared, so
+    /// <c>Latched</c> and <c>Sampled</c> were the same thing at the wire: one read of the value register at
+    /// completion. Measured on JOB9004 2026-08-17, where all three of one vector's expectations declared
+    /// <c>Latched</c>, all three signals had generated phase-armed latches sitting in the very same FC03
+    /// the harness read every poll, and not one of them was looked at.</para>
+    ///
+    /// <para><b>The two keys are bridged HERE and nowhere else.</b> A vector cites the SPECIFICATION's name
+    /// (<see cref="MirroredSignal.JoinKey"/>); <see cref="LatchRegisterOffsets"/> is keyed on the IR
+    /// <see cref="MirroredSignal.Tag"/>, because that key is emitted into LAD as the latch rung's own
+    /// source expression. So this resolves cited name → signal → tag → latch offset, in one place, rather
+    /// than leaving a caller to do it and get the key wrong for the fourth time.</para>
+    ///
+    /// <para>⚠️ <b>-1 COVERS TWO DIFFERENT FACTS AND A CALLER MUST NOT COLLAPSE THEM WITH A FALLBACK:</b>
+    /// this binding does not carry the cited name at all, or it carries it and the signal is not
+    /// <see cref="MirroredSignal.Transient"/> so no latch was generated. <b>Neither may fall back to the
+    /// value register</b> — that fallback is precisely how <c>Latched</c> became a synonym for
+    /// <c>Sampled</c>, silently, for the whole life of the feature.</para>
+    /// </summary>
+    public int LatchRegisterOf(string citedSignal)
+    {
+        var signal = ResultSignal(citedSignal);
+        if (signal is null)
+            return -1;
+
+        return LatchRegisterOffsets.TryGetValue(signal.Tag, out var offset) ? offset : -1;
+    }
+
+    /// <summary>
+    /// 🔴 <b>THE REGISTER CARRYING THE ARM SIGNAL THIS RESULT SIGNAL'S OBSERVATION WINDOW IS DEFINED BY, or
+    /// -1 when there is no such register to read.</b>
+    ///
+    /// <para><b>What it answers:</b> <i>was this observation taken inside the window the binding declared
+    /// for it?</i> Nothing asked that before, and on the measured run nothing needed to be broken for the
+    /// answer to be "no": the model's own <c>Stim.Armed</c> flag was in the same 23-register read, and the
+    /// snapshot every assertion was evaluated against has it reading <b>0</b>.</para>
+    ///
+    /// <para><b>It is derived from the signal's OWN <see cref="MirroredSignal.ArmedBy"/> and from nothing
+    /// else.</b> Several signals in a binding may name the same arm tag, and it is tempting to treat that
+    /// tag as the SLOT's window and apply it to signals that declared none. That would be an inference
+    /// about a signal from its neighbours, and inferring a window is how an observation acquires a
+    /// confidence it was not given: a signal with no declared window gets <c>-1</c>, and the outcome then
+    /// says the window was UNKNOWN rather than assuming it was open.</para>
+    ///
+    /// <para><b>-1 also covers an arm tag that is not itself mirrored in this slot's result band</b> — the
+    /// binding may legitimately arm a latch from a tag it never publishes, in which case the latch still
+    /// works on the controller and the PC simply cannot see the window. That is a limit, not a failure,
+    /// and it reads as UNKNOWN for the same reason.</para>
+    /// </summary>
+    public int ArmRegisterOf(string citedSignal)
+    {
+        if (ResultSignal(citedSignal)?.ArmWindow is not { } armTag)
+            return -1;
+
+        var offsets = ResultRegisterOffsets;
+
+        for (var i = 0; i < ResultSources.Count; i++)
+        {
+            if (string.Equals(ResultSources[i].Tag, armTag, StringComparison.Ordinal))
+                return offsets[i];
+        }
+
+        return -1;
+    }
+
+    /// <summary>
     /// The result signal a vector's cited name resolves to — so a reader can ask what type it is about to
     /// decode. <b>Keyed on <see cref="MirroredSignal.JoinKey"/>, exactly as
     /// <see cref="ResultRegisterOf"/> is</b>: the two are read together on every observation, and a pair

@@ -689,13 +689,49 @@ public static class LoopRun
         return SettlingState.NotEstablished;
     }
 
+    /// <summary>
+    /// 🔴 <b>THE OBSERVE PATH — REWRITTEN 2026-08-17 AFTER IT WAS MEASURED PRODUCING A CONFIDENT FAIL
+    /// AGAINST A BLOCK THAT WAS PROVEN CORRECT ON THE DEVICE.</b>
+    ///
+    /// <para><b>What it used to do, in two lines:</b> resolve every expectation through
+    /// <c>ResultRegisterOf</c> — the VALUE offsets — and compare it against <c>run.Results</c>, the single
+    /// snapshot taken at the poll that recognised completion. <c>e.Mode</c> was never read by the code that
+    /// performs the observation at all, so <c>Latched</c> and <c>Sampled</c> were the same thing at the
+    /// wire, and the phase-armed latches that had been argued for, sized, generated, deployed and read off
+    /// the wire every poll were <b>unconsumed</b>.</para>
+    ///
+    /// <para><b>Why the single snapshot is fatal rather than merely lossy.</b> A well-built stimulus model
+    /// returns the block to inert BEFORE it raises its completion flag — that is required, and it is what
+    /// stops a wave dying after one vector. So the one instant this code looked at was, by construction,
+    /// the one instant at which every commanded member is inert and every latched cause has been reset.
+    /// Measured: an assertion expecting <c>Y11 = true</c> was read ~600 ms after the scenario ended,
+    /// against a register that no block, correct or not, could have held true at that instant.</para>
+    ///
+    /// <para><b>What it does now, per expectation:</b></para>
+    /// <list type="number">
+    /// <item><b><c>Latched</c> resolves through the LATCH register</b> — the mode that is immune to the
+    /// tail, because a latch says "this happened at some point inside the armed window". <b>An absent latch
+    /// is a refusal naming the signal, never a fallback to the value register</b>: that fallback is
+    /// precisely how <c>Latched</c> became a synonym for <c>Sampled</c>.</item>
+    /// <item><b>Everything else is evaluated over the RETAINED SERIES</b>, frame by frame, with each frame
+    /// stamped with its scan and with whether the signal's own declared arm window was open when it was
+    /// taken. See <c>SeriesEvaluation</c> for the three-way fold and for why it does not consult
+    /// <c>AssertionForm</c>.</item>
+    /// </list>
+    /// </summary>
     private static IReadOnlyList<AssertionOutcome> Assertions(
         SubmissionVector vector, SlotBinding binding, SlotRunResult run, RegisterWordOrder wordOrder)
     {
         var assertionId = vector.Basis?.AssertionId ?? "<uncited>";
+        var series = run.Observations;
+
+        var accounting = new SeriesAccounting(
+            series.PollsObserved, series.DistinctFrames, series.Frames.Count, series.Truncated);
 
         return vector.Expectations.Select(e =>
         {
+            var expected = e.Expected ?? "<no predicate>";
+
             // *** THE REGISTER OFFSET, NOT THE LIST INDEX. *** They diverge the moment a 32-bit element is
             // in the list: everything after a Time sits one register later than its position, and reading
             // by position would return the Time's SECOND HALF as the next signal's value — a plausible
@@ -703,9 +739,92 @@ public static class LoopRun
             var register = binding.ResultRegisterOf(e.Signal);
             var signal = binding.ResultSignal(e.Signal);
 
-            return AssertionOutcome.Compare(assertionId, e.Signal, e.Expected ?? "<no predicate>",
-                Observe(signal, register, run, wordOrder));
+            if (e.Mode == InstrumentationMode.Latched)
+                return Latched(assertionId, e, expected, binding, series, accounting);
+
+            var armRegister = binding.ArmRegisterOf(e.Signal);
+
+            var frames = series.Frames
+                .Select(f => new ObservedFrame(
+                    f.Scan.Raw, f.PollRound,
+                    Observe(signal, register, f.Registers, wordOrder),
+                    WindowAt(armRegister, f.Registers)))
+                .ToArray();
+
+            return SeriesEvaluation.Evaluate(assertionId, e.Signal, expected, frames, accounting);
         }).ToArray();
+    }
+
+    /// <summary>
+    /// A <c>Latched</c> expectation, read from <b>whichever register actually holds the latch</b> — and the
+    /// two are different registers for the two kinds of latch, which is the whole point of
+    /// <see cref="LatchSource"/>.
+    ///
+    /// <list type="bullet">
+    /// <item><b>Generated</b> (the signal is declared <c>Transient</c>): the copy layer emits a sticky bit
+    /// in the LATCH BAND, so the answer is in <c>LatchRegisterOf</c> and the value register is not
+    /// consulted.</item>
+    /// <item><b>Hand-authored</b> (the binding NAMES a block that latches it): the latching happens inside
+    /// the block under test, so the VALUE register already carries the latched bit and there is no separate
+    /// register to read. ⚠️ <b>This one is taken on trust and cannot be verified from here</b> — the
+    /// harness did not emit that latch and cannot read the named block. A binding that names a block which
+    /// does not in fact latch the signal reproduces the original defect exactly, and nothing mechanical
+    /// will say so. It is admitted because refusing it would refuse a real deployed capability, and because
+    /// <c>MirrorObservability.LatchProvenance</c> already carries the block name for a reviewer to check
+    /// against the object set.</item>
+    /// <item><b>None</b>: a refusal naming the signal. <b>Never a fallback to the value register</b> — an
+    /// author declaring <c>Latched</c> is saying the value register cannot answer.</item>
+    /// </list>
+    ///
+    /// <para><b>Either way it is read from the FINAL frame, and that is correct rather than convenient:</b>
+    /// a latch is cleared only when the slot stops running an index, so it is still standing at completion
+    /// — which is exactly the property that makes this mode the answer to a model with a tail recovery.
+    /// Reading it from an earlier frame would ask "had it happened YET", which is a weaker question.</para>
+    /// </summary>
+    private static AssertionOutcome Latched(
+        string assertionId, ObservabilityDeclaration e, string expected,
+        SlotBinding binding, ObservationSeries series, SeriesAccounting accounting)
+    {
+        var signal = binding.ResultSignal(e.Signal);
+
+        var register = signal?.LatchSource switch
+        {
+            LatchSource.Generated => binding.LatchRegisterOf(e.Signal),
+            LatchSource.HandAuthored => binding.ResultRegisterOf(e.Signal),
+            _ => -1,
+        };
+
+        if (signal is null || register < 0)
+            return SeriesEvaluation.NoLatchFor(assertionId, e.Signal, expected, accounting);
+
+        var final = series.Final;
+        if (final is null || register >= final.Registers.Length)
+            return AssertionOutcome.Compare(assertionId, e.Signal, expected, null);
+
+        // A latch is a Bool in its own register, written by a set-coil — bit 0, the same placement
+        // MirrorGeometry.BitAddressOf gives every mirrored bit. A hand-authored one is likewise a Bool
+        // result source, so the decode is the same either way.
+        var value = ((final.Registers[register] & 1) == 1).ToString().ToLowerInvariant();
+
+        return SeriesEvaluation.FromLatch(
+            assertionId, e.Signal, expected, value, final.Scan.Raw, accounting, signal.LatchSource);
+    }
+
+    /// <summary>
+    /// Whether the arm window was open when a frame was taken.
+    ///
+    /// <para><b><see cref="WindowState.Unknown"/> is returned for "no arm register", and it is not
+    /// "open".</b> A signal whose binding declared no window, or whose arm tag this slot does not publish,
+    /// simply cannot have its frames classified — and treating that as armed would hand every
+    /// under-declared signal the permissive reading, which is the assumption that made one arbitrary
+    /// instant authoritative in the first place.</para>
+    /// </summary>
+    private static WindowState WindowAt(int armRegister, ushort[] registers)
+    {
+        if (armRegister < 0 || armRegister >= registers.Length)
+            return WindowState.Unknown;
+
+        return (registers[armRegister] & 1) == 1 ? WindowState.InWindow : WindowState.OutOfWindow;
     }
 
     /// <summary>
@@ -718,9 +837,9 @@ public static class LoopRun
     /// <para><b>Null is "not observed", and it is returned rather than a zero</b> — an unread register is
     /// not a zero one, and <see cref="AssertionOutcome.Compare"/> is what turns null into NotObserved.</para>
     /// </summary>
-    private static string? Observe(MirroredSignal? signal, int register, SlotRunResult run, RegisterWordOrder wordOrder)
+    private static string? Observe(MirroredSignal? signal, int register, ushort[] registers, RegisterWordOrder wordOrder)
     {
-        if (signal is null || register < 0 || register >= run.Results.Length)
+        if (signal is null || register < 0 || register >= registers.Length)
             return null;
 
         var element = MirrorElements.For(signal.Type);
@@ -728,21 +847,21 @@ public static class LoopRun
             return null;
 
         // A 32-bit element needs BOTH its registers present. Half a value is not a value.
-        if (register + element.Registers > run.Results.Length)
+        if (register + element.Registers > registers.Length)
             return null;
 
         return element.Form switch
         {
             // Bit 0 of the register, matching what the copy layer's COIL writes and what
             // MirrorGeometry.BitAddressOf places there.
-            MirrorAddressForm.Bit => ((run.Results[register] & 1) == 1).ToString().ToLowerInvariant(),
+            MirrorAddressForm.Bit => ((registers[register] & 1) == 1).ToString().ToLowerInvariant(),
 
-            MirrorAddressForm.Word => unchecked((short)run.Results[register]).ToString(),
+            MirrorAddressForm.Word => unchecked((short)registers[register]).ToString(),
 
             // The same order as the version register and the scan counter, on purpose: ONE calibration
             // for the whole system rather than two. Measured HighWordFirst (2026-08-13, 2026-08-14).
             MirrorAddressForm.DoubleWord => unchecked((int)RegisterWords.To32(
-                run.Results[register], run.Results[register + 1], wordOrder)).ToString(),
+                registers[register], registers[register + 1], wordOrder)).ToString(),
 
             _ => null,
         };

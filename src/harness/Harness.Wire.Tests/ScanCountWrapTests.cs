@@ -191,7 +191,9 @@ public class ScanCountWrapTests
             new ScanCount(LastPositiveDInt - 3), new ScanCount(DIntBoundary + 4),
             PollRounds: 2, RoundTrips: 4,
             new InertReport(InertOutcome.Established, new ScanCount(LastPositiveDInt - 4), Array.Empty<ushort>(), Array.Empty<ushort>(), "stub"),
-            "stub");
+            "stub",
+            // About the WRAP, not about observation. See ObservationSeries.OfSingleFrame.
+            ObservationSeries.OfSingleFrame(new ushort[] { 10 }, new ScanCount(DIntBoundary + 4)));
 
         Assert.Equal(8, result.ElapsedScans);
     }

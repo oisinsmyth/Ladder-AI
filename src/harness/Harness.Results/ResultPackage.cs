@@ -18,11 +18,54 @@ public enum AssertionState
     /// counted with the ones that held.
     /// </summary>
     NotObserved,
+
+    /// <summary>
+    /// 🔴 <b>OBSERVED REPEATEDLY, AND THE OBSERVATIONS DID NOT AGREE WITH EACH OTHER. Neither a pass, nor a
+    /// failure, nor "nobody looked".</b>
+    ///
+    /// <para><b>It exists because the alternative was measured and it was a false accusation.</b> Until
+    /// 2026-08-17 the harness kept exactly one observation per index — the poll that recognised completion
+    /// — and a well-built stimulus model returns the block to inert BEFORE it raises its completion flag.
+    /// So the single instant the harness looked at was, by construction, the one instant at which every
+    /// commanded member is inert: an assertion expecting <c>Y11 = true</c> read false and the package
+    /// reported <c>Fail</c> against a block measured doing the right thing on the device.</para>
+    ///
+    /// <para><b>With the whole series retained, that case is no longer a disagreement — it is a signal that
+    /// took both values while nothing declared which instant discharges the assertion.</b> Saying so is the
+    /// honest answer, and it names two cheap repairs rather than sending someone to edit correct logic.
+    /// <see cref="Disagreed"/> stays exactly as strong as it was: it now means the expected value was not
+    /// present at ANY instant the harness looked inside the window.</para>
+    /// </summary>
+    Inconclusive,
 }
 
 /// <summary>Observed versus expected, per assertion — never a pass/fail for the test (DB-8).</summary>
 public sealed record AssertionOutcome(string AssertionId, string Signal, string Expected, string Observed, AssertionState State)
 {
+    /// <summary>
+    /// 🔴 <b>WHEN this was observed, out of how many observations, and whether the instant was inside the
+    /// window the binding declared for it. Null means the outcome came from a path that does not record it.</b>
+    ///
+    /// <para><b>Nothing asked the "when" question before 2026-08-17, and the measured cost was a confident
+    /// FAIL taken 25.2 seconds after the declared window closed</b>, with the model's own arm flag reading
+    /// 0 in the very same register read. See <see cref="ObservationWindow"/>.</para>
+    /// </summary>
+    public ObservationWindow? Window { get; init; }
+
+    /// <summary>
+    /// Why this outcome is what it is, in a sentence a reader can act on. <b>Carried on the outcome rather
+    /// than composed at the report</b>, because the reasons differ per assertion and a package-level
+    /// sentence cannot name which signal it is about.
+    /// </summary>
+    public string? Detail { get; init; }
+
+    /// <summary>
+    /// Whether this row says anything about the BLOCK. <b>Only <see cref="AssertionState.Held"/> and
+    /// <see cref="AssertionState.Disagreed"/> do</b> — an unread register and a self-contradicting series
+    /// are both silence, of two different kinds.
+    /// </summary>
+    public bool SaysSomethingAboutTheBlock => State is AssertionState.Held or AssertionState.Disagreed;
+
     public static AssertionOutcome Compare(string assertionId, string signal, string expected, string? observed) =>
         observed is null
             ? new AssertionOutcome(assertionId, signal, expected, "<never read>", AssertionState.NotObserved)
@@ -77,6 +120,22 @@ public enum ResultVerdict
     /// specifically <i>the experiment ran and the instrument did not read it.</i></para>
     /// </summary>
     NotObserved,
+
+    /// <summary>
+    /// 🔴 <b>SOMEBODY LOOKED, REPEATEDLY, AND THE OBSERVATIONS DISAGREED WITH EACH OTHER.</b>
+    ///
+    /// <para>Distinct from all four of its neighbours, and each of them would send a reader somewhere
+    /// useless. <see cref="NotObserved"/> says <i>nobody looked</i> — here the harness looked hundreds of
+    /// times. <see cref="TimedOut"/> says <i>the condition never occurred</i> — here it occurred, and also
+    /// did not, at different instants. <see cref="Unsettled"/> says <i>the value never became final</i> —
+    /// an inert tail is perfectly final, which is why settling cannot catch this. And
+    /// <see cref="Fail"/> is the answer this used to give: <b>a confident disagreement produced by looking
+    /// only at the one instant a well-built model guarantees is inert.</b></para>
+    ///
+    /// <para><b>It points at the INSTRUMENT DECLARATION, not the block and not the plant.</b> The repair is
+    /// in the binding or the expectation's mode, and it is named on <see cref="WhatToDoNext"/>.</para>
+    /// </summary>
+    Inconclusive,
 
     /// <summary>The value never met its settling condition, so nothing was legitimately read at all.</summary>
     Unsettled,
@@ -186,6 +245,15 @@ public sealed record ResultPackage(
             if (RunOutcome == SlotOutcome.TimedOut)
                 return ResultVerdict.TimedOut;
 
+            // 🔴 *** ABOVE SETTLING, DELIBERATELY, AND THE ORDER IS THE WHOLE VALUE OF THE VERDICT. *** An
+            // inert tail is PERFECTLY SETTLED — the measured package that reported FAIL against a correct
+            // block had `Settled` — so settling can neither detect this nor be a more informative answer
+            // for it. Below settling, this verdict would be masked in exactly the cases where the
+            // observation instant is the thing in doubt, and the reader would be sent to declare a settling
+            // condition that was never the problem.
+            if (Assertions.Any(a => a.State == AssertionState.Inconclusive))
+                return ResultVerdict.Inconclusive;
+
             if (Settling != SettlingState.Settled)
                 return ResultVerdict.Unsettled;
 
@@ -225,13 +293,33 @@ public sealed record ResultPackage(
             "NOBODY LOOKED: this vector declares NO assertions at all, so the run could not have said anything about the block whatever it did. "
             + "*** THIS IS NOT A TIMEOUT AND NOT A SETTLING PROBLEM — do not go and check durations. *** Declare at least one expectation.",
 
+        ResultVerdict.Inconclusive =>
+            "SOMEBODY LOOKED, REPEATEDLY, AND THE OBSERVATIONS DISAGREED WITH EACH OTHER. "
+            + "*** THIS IS NOT A FAILURE AND MUST NOT BE ACTIONED AGAINST THE BLOCK — DO NOT EDIT THE BLOCK. *** "
+            + "The signal(s) below took the expected value at some observed instants and a different value at others, and nothing in "
+            + "the submission or the binding declares which instant discharges the assertion. It is NOT a timeout (the condition did "
+            + "occur), NOT unsettled (an inert tail is perfectly settled, which is why settling cannot catch this) and NOT 'nobody "
+            + "looked'. GO TO THE INSTRUMENT DECLARATION: either declare `armedBy` on the signal in the binding, so the observation "
+            + "window is published in-band and out-of-window frames stop counting, or declare the expectation `Latched`, so an "
+            + "occurrence inside the window survives a model that returns the block to inert before it signals completion. "
+            + string.Join(" | ", Assertions
+                .Where(a => a.State == AssertionState.Inconclusive)
+                .Select(a => $"'{a.Signal}': {a.Detail}")),
+
         ResultVerdict.NotObserved =>
             $"NOBODY LOOKED: the experiment RAN, and not one of the {Assertions.Count} declared assertion(s) was read — every one came back '<never read>'. "
             + "*** THIS SAYS NOTHING ABOUT THE BLOCK AND NOTHING ABOUT THE PLANT. *** It is not a TIMEOUT (the condition may well have occurred, "
             + "nobody was watching) and not UNSETTLED (nothing got as far as needing to settle). GO TO THE INSTRUMENT, NOT THE DURATIONS: check "
             + "that each signal named in `expectations` is a name the binding carries — the binding states the specification's name as `specName` "
             + "beside the block's own tag, and a citation matching neither resolves to no register at all. Unread signal(s): "
-            + string.Join(", ", Assertions.Where(a => a.State == AssertionState.NotObserved).Select(a => $"'{a.Signal}'").Distinct(StringComparer.Ordinal)),
+            + string.Join(", ", Assertions.Where(a => a.State == AssertionState.NotObserved).Select(a => $"'{a.Signal}'").Distinct(StringComparer.Ordinal))
+            // *** AND THE ROWS THAT KNOW WHY, SAY WHY. *** An unjoined name, an absent latch and a window
+            // that never opened are three different repairs in three different documents, and the generic
+            // sentence above names only the first. A pointer that documents one case and steers the reader
+            // away from the real gap is worse than no pointer, because it satisfies.
+            + string.Concat(Assertions
+                .Where(a => a.State == AssertionState.NotObserved && a.Detail is not null)
+                .Select(a => $" | '{a.Signal}': {a.Detail}")),
 
         // The two roads to Stale need two different next actions, so they are not collapsed into one
         // sentence. A frozen mirror is a RIG problem; an out-of-date bound is a VECTOR problem, and

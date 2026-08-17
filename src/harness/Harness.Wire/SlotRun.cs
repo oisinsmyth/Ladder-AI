@@ -45,11 +45,27 @@ public enum SlotOutcome
 }
 
 /// <summary>What one vector produced, and what it cost.</summary>
-/// <param name="Results">The slot's result registers, read once completion was recognised.</param>
+/// <param name="Results">
+/// The slot's result registers, read once completion was recognised.
+///
+/// <para>⚠️ <b>THIS IS ONE INSTANT, AND FOR A MODEL WITH A TAIL RECOVERY IT IS THE INERT ONE.</b> It is
+/// kept because it is what settling compares against and what the completion detail describes — but an
+/// expectation must be evaluated against <see cref="Observations"/>, not against this. See
+/// <see cref="ObservationSeries"/> for the measured defect.</para>
+/// </param>
 /// <param name="StartScan">The scan counter at the commit — the test's T=0 (D37).</param>
 /// <param name="EndScan">The scan counter at the observation that recognised completion.</param>
 /// <param name="Inert">The inert phase's own report, kept separate: outputs are not recorded during inert.</param>
 /// <param name="RoundTrips">Round trips the whole sequence cost. The unit that was measured to matter.</param>
+/// <param name="Observations">
+/// 🔴 <b>EVERY OBSERVATION THIS INDEX PRODUCED, not just the completing one — and it is REQUIRED, with no
+/// default.</b>
+///
+/// <para>A default of <see cref="ObservationSeries.Empty"/> here would let a construction site forget the
+/// series and produce a result that reads as "nothing was observed" while a poll loop had run thousands
+/// of rounds. Every site states it; the ones that genuinely observed nothing state
+/// <see cref="ObservationSeries.Empty"/> and mean it.</para>
+/// </param>
 public sealed record SlotRunResult(
     SlotOutcome Outcome,
     ushort[] Results,
@@ -58,7 +74,8 @@ public sealed record SlotRunResult(
     int PollRounds,
     int RoundTrips,
     InertReport Inert,
-    string Detail)
+    string Detail,
+    ObservationSeries Observations)
 {
     /// <summary>Scans from T=0 to the observation that recognised completion.</summary>
     /// <summary>Scans from T=0, taken MODULARLY so the count is right across the counter's wrap.</summary>
@@ -105,7 +122,9 @@ public static class SlotRun
         {
             return new SlotRunResult(SlotOutcome.NotInert, Array.Empty<ushort>(), default, default, 0,
                 client.RoundTrips - roundTripsBefore, inert,
-                "the test never started, which is not a test failure: " + inert.Detail);
+                "the test never started, which is not a test failure: " + inert.Detail,
+                // Genuinely nothing: no poll round ran. Stated rather than defaulted.
+                ObservationSeries.Empty);
         }
 
         var startScan = InertPhase.Commit(client, inert, new[] { slotIndex });
@@ -116,17 +135,27 @@ public static class SlotRun
         var deadline = nowMs() + backstop;
 
         var polls = 0;
+
+        // 🔴 *** EVERY POLL IS RECORDED, NOT ONLY THE ONE THAT ENDS THE LOOP. *** This loop used to
+        // reassign `results` and return whichever round happened to recognise completion — which, for any
+        // model that recovers to inert before announcing it has finished, is guaranteed to be the one
+        // instant at which nothing is commanded. See ObservationSeries.
+        var recorder = new ObservationRecorder();
+
         while (true)
         {
             var control = client.ReadControl();
             var results = client.ReadResults(slotIndex);
             polls++;
+            recorder.Record(control.ScanCounter, polls, results);
 
             if (vector.CompletionRegister < results.Length && results[vector.CompletionRegister] == vector.CompletionValue)
             {
                 return new SlotRunResult(SlotOutcome.Completed, results, startScan, control.ScanCounter, polls,
                     client.RoundTrips - roundTripsBefore, inert,
-                    $"completion register R{vector.CompletionRegister:000} reached {vector.CompletionValue} after {control.ScanCounter.Since(startScan)} scan(s) and {polls} poll round(s).");
+                    $"completion register R{vector.CompletionRegister:000} reached {vector.CompletionValue} after {control.ScanCounter.Since(startScan)} scan(s) and {polls} poll round(s). "
+                    + recorder.Build().Describe(),
+                    recorder.Build());
             }
 
             if (nowMs() >= deadline)
@@ -135,7 +164,9 @@ public static class SlotRun
                     client.RoundTrips - roundTripsBefore, inert,
                     $"the backstop of {backstop} ms elapsed with R{vector.CompletionRegister:000} reading "
                     + (vector.CompletionRegister < results.Length ? results[vector.CompletionRegister].ToString() : "<outside the slot>")
-                    + $" rather than {vector.CompletionValue}. TIMED-OUT is not FAILED: the condition may simply never have occurred.");
+                    + $" rather than {vector.CompletionValue}. TIMED-OUT is not FAILED: the condition may simply never have occurred. "
+                    + recorder.Build().Describe(),
+                    recorder.Build());
             }
         }
     }

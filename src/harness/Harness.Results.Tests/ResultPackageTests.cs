@@ -73,7 +73,11 @@ public class ResultPackageTests
     private static SlotRunResult Run(SlotOutcome outcome = SlotOutcome.Completed) =>
         new(outcome, new ushort[] { 10, 1 }, new ScanCount(100), new ScanCount(140), 2, 8,
             new InertReport(InertOutcome.Established, new ScanCount(90), Array.Empty<ushort>(), Array.Empty<ushort>(), "established"),
-            "stub");
+            "stub",
+            // These tests hand `assertions` to the builder directly, so they never route through the
+            // observation path; one frame states the results honestly rather than claiming a series.
+            // See ObservationSeries.OfSingleFrame for why a new observation test must NOT use this.
+            ObservationSeries.OfSingleFrame(new ushort[] { 10, 1 }, new ScanCount(140)));
 
     private static ResultPackage Package(
         VectorDeclaration? declaration = null,

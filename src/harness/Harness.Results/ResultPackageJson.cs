@@ -92,7 +92,7 @@ public static class ResultPackageJson
 
         foreach (var a in assertions)
         {
-            array.Add(new JsonObject
+            var row = new JsonObject
             {
                 ["assertionId"] = a.AssertionId,
                 ["signal"] = a.Signal,
@@ -102,8 +102,44 @@ public static class ResultPackageJson
 
                 // Spelled out because NotObserved is neither a pass nor a failure, and a consumer
                 // counting states must not have to know that from a doc comment it cannot read.
-                ["saysSomethingAboutTheBlock"] = a.State != AssertionState.NotObserved,
-            });
+                //
+                // 🔴 *** IT READ `State != NotObserved` UNTIL 2026-08-17, WHICH SILENTLY ADMITTED THE NEW
+                // Inconclusive STATE AS EVIDENCE ABOUT THE BLOCK. *** The property is now on the outcome
+                // itself, so there is one definition of "says something" rather than a negation that a
+                // future state joins by default — a fail-open enumeration is how the count that mattered
+                // (`conclusiveAboutTheBlock`) would have been wrong again in a new way.
+                ["saysSomethingAboutTheBlock"] = a.SaysSomethingAboutTheBlock,
+            };
+
+            if (a.Detail is not null)
+                row["detail"] = a.Detail;
+
+            // 🔴 *** WHEN IT WAS OBSERVED, AND OUT OF HOW MANY OBSERVATIONS. *** Absent on outcomes taken
+            // by a path that does not record it, and ABSENT rather than zero-filled: a window of all zeros
+            // would read as "measured, and nothing was seen".
+            if (a.Window is { } w)
+            {
+                row["observation"] = new JsonObject
+                {
+                    ["source"] = w.Source.ToString(),
+                    ["framesRead"] = w.FramesRead,
+                    ["framesConsidered"] = w.FramesConsidered,
+                    ["framesAgreed"] = w.FramesAgreed,
+                    ["framesOutOfWindow"] = w.FramesOutOfWindow,
+                    ["windowWasDeclared"] = w.WindowWasDeclared,
+                    ["windowAtFinalFrame"] = w.WindowAtFinalFrame.ToString(),
+                    ["firstScan"] = w.FirstScan,
+                    ["lastScan"] = w.LastScan,
+                    ["decidingScan"] = w.DecidingScan,
+                    ["pollsObserved"] = w.PollsObserved,
+                    ["distinctFrames"] = w.DistinctFrames,
+                    ["retainedFrames"] = w.RetainedFrames,
+                    ["seriesTruncated"] = w.SeriesTruncated,
+                    ["detail"] = w.Describe(),
+                };
+            }
+
+            array.Add(row);
         }
 
         return array;

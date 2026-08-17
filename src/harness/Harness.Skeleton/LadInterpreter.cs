@@ -54,8 +54,14 @@ public sealed class LadProgram
         @"^ADD\(\s*EN\s*:=\s*(?<en>.+?)\s*,\s*IN1\s*:=\s*(?<in1>.+?)\s*,\s*IN2\s*:=\s*(?<in2>.+?)\s*\)\s*=>\s*(?<dest>\S+)$",
         RegexOptions.Compiled);
 
+    // 🔴 *** `R` WAS ADDED 2026-08-17, AND ITS ABSENCE WAS A HOLE IN THE SIMULATOR RATHER THAN A
+    // LIMITATION OF IT. *** `CopyLayerGenerator` emits `RCOIL <latch> := NOT <start bool>` for every
+    // PHASE-ARMED latch — the reset half, on a LEVEL rather than an edge — so a generated copy layer
+    // containing any re-arming transient threw `UnsupportedIrException` here and COULD NOT BE SIMULATED AT
+    // ALL. That is why the whole latch path had never been exercised end to end on the PC, which is the
+    // same reason it had never been exercised on the wire: the observation path never read a latch.
     private static readonly Regex CoilLine = new(
-        @"^(?<kind>S?)COIL\s+(?<dest>\S+)\s*:=\s*(?<expr>.+)$",
+        @"^(?<kind>[SR]?)COIL\s+(?<dest>\S+)\s*:=\s*(?<expr>.+)$",
         RegexOptions.Compiled);
 
     private readonly Dictionary<string, TagAddress> _tags = new(StringComparer.Ordinal);
@@ -166,11 +172,18 @@ public sealed class LadProgram
             if (!dest.IsBit)
                 throw new UnsupportedIrException($"'{line}' drives a coil onto a {dest.Width}-byte tag; a coil writes a bit.");
 
-            // A SET coil never clears. That asymmetry is the whole reason the start echo can be trusted:
-            // a level coil would drop back low the moment the block's start condition did, and a test that
-            // began and ended between two polls would read as never having run.
+            // A SET coil never clears, and a RESET coil never sets. That asymmetry is the whole reason the
+            // start echo and the result latches can be trusted: a level coil would drop back low the moment
+            // its source did, and a test that began and ended between two polls would read as never having
+            // run. The pair is what makes a phase-armed latch expressible — set inside the window, cleared
+            // only when the slot stops running an index.
             return new CoilStatement(ParseExpression(coil.Groups["expr"].Value), dest,
-                SetOnly: coil.Groups["kind"].Value == "S");
+                coil.Groups["kind"].Value switch
+                {
+                    "S" => CoilKind.Set,
+                    "R" => CoilKind.Reset,
+                    _ => CoilKind.Level,
+                });
         }
 
         throw new UnsupportedIrException(
@@ -480,21 +493,41 @@ public sealed class LadProgram
         }
     }
 
-    private sealed record CoilStatement(Expression Expr, TagAddress Dest, bool SetOnly) : Statement
+    /// <summary>The three coil shapes the harness generators emit. A missing one is a throw, never a skipped rung.</summary>
+    private enum CoilKind
+    {
+        /// <summary>Follows its expression in both directions.</summary>
+        Level,
+
+        /// <summary>Sets on a true expression and NEVER clears. What makes a latch sticky.</summary>
+        Set,
+
+        /// <summary>Clears on a true expression and NEVER sets. The other half of a latch.</summary>
+        Reset,
+    }
+
+    private sealed record CoilStatement(Expression Expr, TagAddress Dest, CoilKind Kind) : Statement
     {
         public override void Execute(byte[] memory)
         {
             var value = Expr.Evaluate(memory);
 
-            if (SetOnly)
+            switch (Kind)
             {
-                if (value)
-                    LadProgram.Write(memory, Dest, 1);
+                case CoilKind.Set:
+                    if (value)
+                        LadProgram.Write(memory, Dest, 1);
+                    return;
 
-                return;
+                case CoilKind.Reset:
+                    if (value)
+                        LadProgram.Write(memory, Dest, 0);
+                    return;
+
+                default:
+                    LadProgram.Write(memory, Dest, value ? 1 : 0);
+                    return;
             }
-
-            LadProgram.Write(memory, Dest, value ? 1 : 0);
         }
     }
 }

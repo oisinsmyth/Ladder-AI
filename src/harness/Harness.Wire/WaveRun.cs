@@ -114,7 +114,9 @@ public static class WaveRun
                 foreach (var t in active)
                 {
                     collected[t.SlotIndex].Add(new SlotRunResult(SlotOutcome.NotInert, Array.Empty<ushort>(), default, default, 0, 0, inert,
-                        "the test never started, which is not a test failure: " + inert.Detail));
+                        "the test never started, which is not a test failure: " + inert.Detail,
+                        // No poll round ran at all. Stated, not defaulted.
+                        ObservationSeries.Empty));
                 }
 
                 // D34 alternates inert/test unconditionally, but an inert phase that could not be
@@ -176,6 +178,14 @@ public static class WaveRun
         var done = new List<(int SlotIndex, SlotRunResult Result)>();
         var polls = 0;
 
+        // 🔴 *** ONE RECORDER PER SLOT, BECAUSE THE SERIES IS A PROPERTY OF THE SLOT AND NOT OF THE WAVE.
+        // *** Slots leave the poll loop at different rounds, so a shared recorder would give an early
+        // finisher the later slots' frames — and the frames are the evidence. See ObservationSeries for
+        // the defect this closes: this loop kept exactly the round that recognised completion, which for
+        // any model that recovers to inert BEFORE announcing completion is the one guaranteed-inert
+        // instant in the whole index.
+        var recorders = active.ToDictionary(t => t.SlotIndex, _ => new ObservationRecorder());
+
         // The backstop is per index and takes the LONGEST duration in the tensor, because the index costs
         // its longest member. *** LONGEST IS MEASURED AFTER RE-EXPRESSION AT THIS WAVE'S comp, NOT ON THE
         // RAW COUNTS *** — two vectors in one tensor may declare their scans at different factors, and 20
@@ -207,22 +217,36 @@ public static class WaveRun
             {
                 var vector = outstanding[slotIndex];
                 var results = observed[slotIndex];
+                var recorder = recorders[slotIndex];
+
+                // Recorded BEFORE the completion test, so the completing frame is in the series rather
+                // than only in `Results`. A series missing its own last frame would make the new
+                // behaviour incomparable with the old.
+                recorder.Record(control.ScanCounter, polls, results);
 
                 if (vector.CompletionRegister < results.Length && results[vector.CompletionRegister] == vector.CompletionValue)
                 {
+                    var series = recorder.Build();
+
                     done.Add((slotIndex, new SlotRunResult(SlotOutcome.Completed, results, startScan, control.ScanCounter,
                         polls, 0, inert,
-                        $"completion register R{vector.CompletionRegister:000} reached {vector.CompletionValue} after {control.ScanCounter.Since(startScan)} scan(s) and {polls} poll round(s).")));
+                        $"completion register R{vector.CompletionRegister:000} reached {vector.CompletionValue} after {control.ScanCounter.Since(startScan)} scan(s) and {polls} poll round(s). "
+                        + series.Describe(),
+                        series)));
 
                     outstanding.Remove(slotIndex);
                 }
                 else if (nowMs() >= deadline)
                 {
+                    var series = recorder.Build();
+
                     done.Add((slotIndex, new SlotRunResult(SlotOutcome.TimedOut, results, startScan, control.ScanCounter,
                         polls, 0, inert,
                         $"the backstop of {backstop} ms elapsed with R{vector.CompletionRegister:000} reading "
                         + (vector.CompletionRegister < results.Length ? results[vector.CompletionRegister].ToString() : "<outside the slot>")
-                        + $" rather than {vector.CompletionValue}. TIMED-OUT is not FAILED: the condition may simply never have occurred.")));
+                        + $" rather than {vector.CompletionValue}. TIMED-OUT is not FAILED: the condition may simply never have occurred. "
+                        + series.Describe(),
+                        series)));
 
                     outstanding.Remove(slotIndex);
                 }

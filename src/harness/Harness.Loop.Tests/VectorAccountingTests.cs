@@ -28,7 +28,9 @@ public class VectorAccountingTests
     private static SlotRunResult Result(SlotOutcome outcome, string detail) =>
         new(outcome, Array.Empty<ushort>(), default, default, 0, 0,
             new InertReport(InertOutcome.Established, default, Array.Empty<ushort>(), Array.Empty<ushort>(), "established"),
-            detail);
+            detail,
+            // These results carry no registers at all, so an empty series is the honest statement.
+            ObservationSeries.Empty);
 
     private static SlotDistribution Distribution(int slot, params SlotRunResult[] results) =>
         new(slot, results.Length - 1, results,
