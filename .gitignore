@@ -121,6 +121,14 @@ JOB9003 - K150 Demo - Scratch Copy/
 # `src/openness-cli/README.md`; its raw exports never leave this machine.
 research/graphics-probe/
 
+# THIRD-PARTY ARTWORK, REGENERABLE (2026-08-17). The WinCC graphics contact sheet embeds 366
+# Siemens-shipped symbols as data URIs — 1.4 MB of THIRD-PARTY ARTWORK whose licence is UNRESOLVED:
+# `Graphics_All.zip` contains 7,997 entries and ZERO licence, readme or copyright file, and silence
+# is not permission. Committing it would be a redistribution decision nobody has made, so the repo
+# keeps the GENERATOR (`hmi/tools/wg_contact_sheet.py`) and not the output. Anyone with TIA
+# installed regenerates it in one command; nobody without TIA has a licence to the artwork anyway.
+hmi/wincc-graphics-contact-sheet.html
+
 # OS / editor
 Thumbs.db
 Desktop.ini

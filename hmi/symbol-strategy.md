@@ -148,11 +148,81 @@ Inkscape's EMF export drops transparency, gradients and text, and the panel rast
    *filled* cone possible. It is a better primitive, not a different category — it would improve
    the silo without changing the verdict on composing artwork.
 
-## Which library — recommendation: buy nothing yet
+## ✅ ANSWERED — the shipped library covers it, and nothing needs buying
 
-**The cheapest option has never been looked at.** The **WinCC graphics folder ships with TIA and is
-already installed**; its contents for a Basic panel have never been inspected, because that needs
-Portal. That is the highest-value open item and it should be answered **before any purchase**.
+`C:\Program Files\Siemens\Automation\Portal V20\Lib\Graphics\Graphics_All.zip` — 32.7 MB,
+**7,997 files across 180 folders**. Found on the filesystem, so no Portal token was spent on
+discovery.
+
+| class | files | | class | files |
+|---|---|---|---|---|
+| **Tanks & silos** | **398** | | Instrumentation (ISA) | 306 |
+| **Pipes** | **393** | | Heat exchange / boilers | 163 |
+| **Pumps** | **263** | | Mixers & blowers | 150 |
+| **Motors** | **130** | | Valves | 149 |
+| **State variants** (`Animate`) | **86** | | Conveyors | 124 |
+
+**All four classes that failed the primitive-composition exercise are covered several times over**,
+and it is process-flavoured, not HVAC — Water & Wastewater 112, Food 72, Mining 63, Power 60,
+Chemical 50, Pulp & Paper 35. There *is* an HVAC/ASHRAE block, but alongside rather than instead.
+
+The 86 `Animate` files are running/stopped state pairs — the mechanism step 3 below needs.
+
+**Fully automatable.** Both formats import through `openness-cli graphics --import` and compile
+clean (`ERRORS: 0`), tested with real library files. No Toolbox step, no GUI.
+
+### 🔴 The two formats are NOT equivalent, and the pretty one is the limited one
+
+Established by walking the actual metafile records rather than trusting the extension — a metafile
+can wrap a bitmap and still be called a metafile:
+
+| | files | nature | median size | rescales? |
+|---|---|---|---|---|
+| **WMF** | 3,008 | **TRUE VECTOR** — 205/205 sampled carry drawing geometry, **zero** bitmap records | **~1 KB** | ✅ any size |
+| **EMF** | 1,778 | **BITMAP-WRAPPED** — **124/129** sampled contain an embedded bitmap | 55.7 KB, **max 1.9 MB** | ❌ native ~87×87 px |
+
+So the glossy 3-D set is the one that **does not rescale**: fine at 48–96 px, soft beyond ~90 px.
+The flat line-art set is the rescalable one, at a thousandth of the weight.
+
+**Recommendation: default to the WMF line-art set.** It is the high-performance-HMI aesthetic
+already argued for in `docs/17-hmi-conventions.md` — low chroma, outline-led, colour left free to
+mean alarm (H-102/H-105) — it rescales to any placement size in `sizing-standard.md`, and at ~1 KB
+it carries no memory exposure. Reserve the EMF set for a deliberate hero graphic at native size.
+
+⚠️ **Unmeasured risk, raise before standardising on EMF:** the KTP900 allows 10,485,632 bytes and
+the project currently uses 225,232. **One EMF pump is 1,136,748 bytes on disk.** Whether TIA
+re-encodes at compile or carries that to the panel was NOT measured — a dozen EMF symbols could
+plausibly exhaust it. Cheap to settle: place one, compile, read the device-usage line. The WMF half
+has no such exposure.
+
+⚠️ **A third set renders as flat cyan fill.** Cyan is the classic transparency key colour, and row 26
+records that Basic has no "Transparent" property — so these may be key-coloured artwork that renders
+as **literal cyan** on a Basic panel. **Not established either way**; it is a rendering artefact of
+the contact-sheet pipeline or a real property of the files, and one placement settles it. Do not use
+that set until it is known.
+
+### Licence: nothing found, and that is not permission
+
+**The archive contains 7,997 entries and ZERO non-image files** — no licence, EULA, readme or
+copyright notice, inside it or beside it. There is nothing to quote. Using them inside a project we
+deliver is a different question from redistributing them as an asset library, and neither is
+answered. **The silence is not consent** — the same discipline applied to every other candidate.
+
+*(Consequently the contact sheet itself is gitignored: it embeds 366 of these symbols, and
+committing it would be a redistribution decision nobody has made. The repo keeps the generator,
+`hmi/tools/wg_contact_sheet.py`, which anyone with TIA installed can re-run.)*
+
+### Ruled out, do not confuse with the above
+
+- **`IndustryGraphicLibrary`** (463 `.svghmi`) — **Unified only**; these are SVG *widgets* carrying
+  `hmi-bind:` parameter bindings, not pictures.
+- **`PTSymLib`** (633 `.ctx`/`.cat`) — the legacy ProTool **Symbol library object**, the one Siemens
+  documents as unavailable on Basic Panels.
+
+## The purchase question, now largely moot
+
+**The coverage argument for Symbol Factory is gone.** What follows is retained because licence, not
+coverage, may yet decide it.
 
 ⚠️ Note the distinction that is commonly conflated: the **"Symbol library" OBJECT is not available on
 Basic Panels** (Comfort/Panel/RT Advanced/RT Pro only) — but the **WinCC graphics FOLDER** is. Two
