@@ -39,9 +39,11 @@ namespace Ladder.Wave.Cli
 
                 switch (args[0])
                 {
+                    case "route": return RouteCommand.Run(args, Console.Out, Console.Error);
                     case "submit": return Submit(options);
                     case "status": return Status(options);
                     case "reset": return Reset(options);
+                    case "batch": return BatchCommand.Run(args);
                     default:
                         Console.Error.WriteLine("Unknown command '" + args[0] + "'.");
                         Usage();
@@ -390,8 +392,21 @@ namespace Ladder.Wave.Cli
                   [--blacklist <a>:<b>:<reason>]...  add-only exclusions (D22)
                   [--lease-timeout-ms <n>]
 
+  wave-cli route  --project <ir-dir> ...      DB-1: which objects changed, what class each change
+                                              is, and the blast radius. `route --help` for its own
+                                              flags.
+
   wave-cli status --store <dir> [--cap <n> --cap-provenance <text>]
   wave-cli reset  --store <dir> --agent <id>
+
+  wave-cli batch  --change-set <file.json>
+                  (--deployed <file.json> | --deployed-empty <reason>)
+                  [--max-objects <n> --max-objects-provenance <text>]  LOWER only; above DB-4's
+                                             twenty is exit 2 before anything is examined
+                  [--json]
+                                             DB-4: at most TWENTY DEPENDENCY-CLOSED objects per
+                                             wave-boundary download. An empty change set is exit 2
+                                             with a reason, never a plan of zero batches.
 
 EXIT: 0 admitted · 1 refused · 2 unusable (nothing was checked).
       A LEASE TIMEOUT IS EXIT 1 AND ITS REASON SAYS 'RETRYABLE' — back off and retry. Exit 2 is
