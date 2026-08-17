@@ -636,26 +636,60 @@ public sealed record SlotBinding(
     public int VectorRegistersNeeded => (VectorTargets ?? Array.Empty<MirroredSignal>()).Sum(s => s.Registers);
 
     /// <summary>
-    /// The register offset a result signal sits at, or -1 when this binding does not carry it.
+    /// The register offset a result signal sits at, <b>keyed on the name a VECTOR cites</b> — see
+    /// <see cref="MirroredSignal.JoinKey"/> — or -1 when this binding does not carry it.
+    ///
+    /// <para>🔴 <b>THIS READ <see cref="MirroredSignal.Tag"/> UNTIL 2026-08-17, AND IT IS THE THIRD
+    /// INDEPENDENT DERIVATION OF THE SAME JOIN TO BE FOUND WRONG.</b> <c>MirrorValueFit</c> and
+    /// <c>LoopRun.ToWireVector</c> were both moved onto <see cref="MirroredSignal.JoinKey"/> on
+    /// 2026-08-14, with the finding that joining on the tag matched NOTHING on a real deliverable. This —
+    /// <b>the OBSERVE side, where an assertion is turned into a register to read</b> — was not, so the
+    /// STIMULUS reached the block and the OBSERVATION never left the PC.</para>
+    ///
+    /// <para><b>Measured on JOB9004's valve wave (2026-08-17):</b> the wave polled 7,912 times, the mirror
+    /// feed records the whole 23-register result band being read, and <b>all four declared assertions came
+    /// back <c>&lt;never read&gt;</c></b> — because the vectors cite <c>Y07</c>, <c>Y11</c>,
+    /// <c>DrainValve.Command</c> while this method was asking for <c>iDB_ValveUnderTest.IO.FTC</c> and its
+    /// siblings. Every one of the four resolves under <see cref="MirroredSignal.JoinKey"/>.</para>
     ///
     /// <para><b>-1 rather than 0</b>, because 0 is a real offset and a caller that cannot tell them apart
-    /// reads the first register for every signal it does not have.</para>
+    /// reads the first register for every signal it does not have. <b>No caller may default it</b> —
+    /// <c>LoopRun</c> refuses the submission above the device boundary instead.</para>
     /// </summary>
-    public int ResultRegisterOf(string tag)
+    public int ResultRegisterOf(string citedSignal)
     {
         var offsets = ResultRegisterOffsets;
 
         for (var i = 0; i < ResultSources.Count; i++)
         {
-            if (string.Equals(ResultSources[i].Tag, tag, StringComparison.Ordinal))
+            if (string.Equals(ResultSources[i].JoinKey, citedSignal, StringComparison.Ordinal))
                 return offsets[i];
         }
 
         return -1;
     }
 
-    /// <summary>The result signal at a list position, by tag — so a reader can ask what type it is about to decode.</summary>
-    public MirroredSignal? ResultSignal(string tag) =>
+    /// <summary>
+    /// The result signal a vector's cited name resolves to — so a reader can ask what type it is about to
+    /// decode. <b>Keyed on <see cref="MirroredSignal.JoinKey"/>, exactly as
+    /// <see cref="ResultRegisterOf"/> is</b>: the two are read together on every observation, and a pair
+    /// that joined on different keys would return a register for one name and a type for another.
+    /// </summary>
+    public MirroredSignal? ResultSignal(string citedSignal) =>
+        ResultSources.FirstOrDefault(s => string.Equals(s.JoinKey, citedSignal, StringComparison.Ordinal));
+
+    /// <summary>
+    /// The result signal at a given <b>IR TAG</b> — the generator's lookup, and deliberately NOT the same
+    /// method as <see cref="ResultSignal"/>.
+    ///
+    /// <para><b>The two keys are not interchangeable and the distinction is load-bearing.</b>
+    /// <see cref="LatchRegisterOffsets"/> is keyed on <see cref="MirroredSignal.Tag"/> because its key is
+    /// then emitted into LAD as the latch rung's own source expression — a spec name there would render a
+    /// coil reading a symbol no PLC tag table declares. So the generator asks by tag, the observation path
+    /// asks by cited name, and each says which it means in its own signature rather than one method
+    /// silently trying both.</para>
+    /// </summary>
+    public MirroredSignal? ResultSignalByTag(string tag) =>
         ResultSources.FirstOrDefault(s => string.Equals(s.Tag, tag, StringComparison.Ordinal));
 
     private static IReadOnlyList<int> Offsets(IReadOnlyList<MirroredSignal>? signals)

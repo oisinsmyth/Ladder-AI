@@ -357,7 +357,10 @@ public static class CopyLayerGenerator
             // latches sit in their own band so that adding one moves no value offset.
             foreach (var (tag, offset) in binding.LatchRegisterOffsets.OrderBy(e => e.Value))
             {
-                var signal = binding.ResultSignal(tag);
+                // BY TAG: LatchRegisterOffsets is keyed on the IR tag, because that key is emitted into
+                // LAD below as the latch rung's own source expression. ResultSignal asks by the name a
+                // VECTOR cites, which is a different key wherever a binding states a spec name.
+                var signal = binding.ResultSignalByTag(tag);
 
                 // *** THE COMMENT SAYS WHICH FORM THIS LATCH IS, because the tag table is what a person
                 // reads in TIA and the two forms are indistinguishable from the address. *** Reading a
@@ -466,7 +469,9 @@ public static class CopyLayerGenerator
                 .OrderBy(e => e.Value)
                 .Select(e =>
                 {
-                    var signal = binding.ResultSignal(e.Key);
+                    // BY TAG, for the same reason as the tag-table pass above: `e.Key` IS the tag, and it
+                    // goes on to be the latch rung's source expression.
+                    var signal = binding.ResultSignalByTag(e.Key);
                     var latchTag = $"{prefix}{token}_L{e.Value:000}";
 
                     if (signal is not { PhaseArmed: true })

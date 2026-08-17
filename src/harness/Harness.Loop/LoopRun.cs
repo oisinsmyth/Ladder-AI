@@ -409,6 +409,28 @@ public static class LoopRun
                 join.Detail + " Nothing was generated and nothing was deployed.");
         }
 
+        // ---- 1c. THE SECOND JOIN: THE SIGNAL NAMES --------------------------------------------------
+        //
+        // 🔴 *** THE SLOT ID IS NOT THE ONLY JOIN, AND THE ONE BELOW IT HAD NO CHECK AT ALL. *** A
+        // vector's slot resolving says nothing about whether the SIGNALS it names resolve, and both are
+        // consumed as REGISTER OFFSETS. Measured on JOB9004's valve wave, 2026-08-17: the wave ran both its
+        // vectors against the rig, cost 7,912 round trips, read the whole result band every poll — and
+        // returned `<never read>` for every declared assertion, because not one cited name reached a
+        // register. Two causes, both this join, and only one of them was in the lookup.
+        //
+        // *** IT IS ABOVE THE GATE FOR THE SAME REASON SlotJoin IS: an unjoined name cannot be answered by
+        // anything downstream, so the cost of finding it late is a whole deployment. *** And it is a
+        // REFUSAL rather than a per-assertion NotObserved because of the completion signal, which had a
+        // FALLBACK TO REGISTER 0 — a plausible run that finishes on the wrong register is worse than a
+        // refusal that names the disagreement.
+        var signalJoin = SignalJoin.Check(request.Vectors, slot => SlotBindingOrNull(request.Bindings, slot));
+
+        if (signalJoin.Any)
+        {
+            return LoopGeneration.Stop(LoopOutcome.NotBound, null, mapResult.SizeReport, null, caveats,
+                signalJoin.Detail + " Nothing was generated and nothing was deployed.");
+        }
+
         // ---- 2. GATE — before anything is spent -----------------------------------------------------
         // The floor is a property of the WAVE SET, so it is computed from the map rather than declared:
         // a slot is polled once per read cycle, and a read cycle is ceil(K/R) round trips.
@@ -780,6 +802,23 @@ public static class LoopRun
             $"binding slot '{binding.SlotId}' (serving '{citedSlotId}') is not in this map.", nameof(citedSlotId));
     }
 
+    /// <summary>
+    /// The binding serving a cited slot id, or <b>null when none does or several do</b> — the non-throwing
+    /// form, for the checks that run BEFORE <see cref="SlotJoin"/> has refused an unbound id.
+    ///
+    /// <para>Returning null on the ambiguous case rather than picking one is deliberate: the ambiguity is
+    /// <c>WaveOrder</c>'s finding to report, and answering it here would attribute a signal disagreement to
+    /// whichever binding happened to be listed first.</para>
+    /// </summary>
+    private static SlotBinding? SlotBindingOrNull(IReadOnlyList<SlotBinding> bindings, string citedSlotId)
+    {
+        var matches = bindings
+            .Where(b => b.CitableSlotIds.Contains(citedSlotId, StringComparer.Ordinal))
+            .ToArray();
+
+        return matches.Length == 1 ? matches[0] : null;
+    }
+
     /// <summary>The binding whose <see cref="SlotBinding.CitableSlotIds"/> contain the id a vector cited.</summary>
     private static SlotBinding BindingFor(IReadOnlyList<SlotBinding> bindings, string citedSlotId)
     {
@@ -928,7 +967,25 @@ public static class LoopRun
             }
         }
 
+        // 🔴 *** THIS READ `completionRegister >= 0 ? completionRegister : 0` UNTIL 2026-08-17, AND THAT
+        // FALLBACK IS THE WHOLE OF A MEASURED DEFECT. *** Register 0 is a real register holding some other
+        // signal, so a completion name the binding does not carry did not fail — it silently watched
+        // whatever sat first in the result band. Measured on JOB9004: `VLV_Scenario_Done` matched neither the
+        // tag nor the spec name, the poll watched result register 0 (the stimulus model's PHASE code), and
+        // the wave declared a 41-second scenario COMPLETE after EIGHT SCANS because phase 1 equals the
+        // completion value 1. It then read the result band at that instant and packaged it as the answer.
+        //
+        // A throw, never a default: step 1c refuses an unjoined completion signal above the gate, so
+        // reaching here means the loop ran a submission it did not admit.
         var completionRegister = binding.ResultRegisterOf(vector.CompletionSignal);
+        if (completionRegister < 0)
+        {
+            throw new InvalidOperationException(
+                $"vector '{vector.Id}' reached the wave with completion signal '{vector.CompletionSignal}', which the binding for slot "
+                + $"'{vector.Slot}' does not carry. THE SIGNAL JOIN REFUSES THAT BEFORE ANY WAVE IS GENERATED, so the loop has run a "
+                + "submission it did not admit. There is deliberately no fallback register: watching register 0 instead is how a wave "
+                + "reports a vector complete on a signal nobody asked about.");
+        }
 
         return new WireVector(
             values,
@@ -936,7 +993,7 @@ public static class LoopRun
             // Declaring it per signal would leave those halves unclaimed, and an unclaimed register is one
             // nothing checks is quiet.
             new InertDeclaration(Enumerable.Range(0, binding.ResultRegistersNeeded).ToDictionary(i => i, _ => (ushort)0)),
-            completionRegister >= 0 ? completionRegister : 0,
+            completionRegister,
             // The completion VALUE comes from the vector. It used to be a literal 1 here, which was the
             // loop inventing a convention contract section 2 does not state — and then a DEFAULT of 1 on
             // the field, which was the same invention one layer up. Unreachable by construction: the

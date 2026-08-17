@@ -213,11 +213,78 @@ public class ResultPackageTests
     }
 
     [Fact]
-    public void A_package_whose_assertions_were_ALL_unobserved_cannot_pass()
+    public void A_package_whose_assertions_were_ALL_unobserved_is_NOT_OBSERVED_and_cannot_pass()
     {
+        // 🔴 *** THIS ASSERTED `Refused` UNTIL 2026-08-17, AND THE PROPERTY IT WAS GUARDING — "cannot
+        // pass" — IS KEPT. *** What changed is the name: `Refused` reads as "the vector was inadmissible",
+        // i.e. the AUTHOR broke a rule, and its own WhatToDoNext text says exactly that while listing an
+        // empty refusal set. Here the vector is admissible and the run happened; what failed is the
+        // INSTRUMENT.
         var package = Package(assertions: new[] { AssertionOutcome.Compare("REQ-14.a", "Demo_Count", "10", null) });
 
-        Assert.Equal(ResultVerdict.Refused, package.Verdict);
+        Assert.Equal(ResultVerdict.NotObserved, package.Verdict);
+        Assert.False(package.ConclusiveAboutTheBlock);
+
+        // It must send the reader to the instrument, and must NOT send them to the durations.
+        Assert.Contains("NOBODY LOOKED", package.WhatToDoNext, StringComparison.Ordinal);
+        Assert.Contains("Demo_Count", package.WhatToDoNext, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_TIMED_OUT_RUN_THAT_OBSERVED_NOTHING_IS_NOT_OBSERVED_rather_than_TIMED_OUT()
+    {
+        // 🔴 *** THE MEASURED HEADLINE DEFECT, JOB9004, 2026-08-17. *** The wave ran, polled 7,912 times and
+        // read the whole result band; every declared assertion came back `<never read>`; the package said
+        // TIMEDOUT. *** TimedOut is a claim about the PLANT — "the condition never occurred" — made by a
+        // package that did not observe the plant, *** and it sends its reader to check durations and
+        // stimulus, which were both fine.
+        var package = Package(
+            outcome: SlotOutcome.TimedOut,
+            assertions: new[] { AssertionOutcome.Compare("REQ-14.a", "Demo_Count", "10", null) });
+
+        Assert.Equal(ResultVerdict.NotObserved, package.Verdict);
+        Assert.DoesNotContain("the condition never occurred", package.WhatToDoNext, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void AN_UNSETTLED_RUN_THAT_OBSERVED_NOTHING_IS_NOT_OBSERVED_rather_than_UNSETTLED()
+    {
+        // The other half of the same JOB9004 package: the second vector rendered UNSETTLED, which points at
+        // the settling declaration. Nothing had got as far as needing to settle.
+        var package = Package(
+            settling: SettlingState.NotSettled,
+            assertions: new[] { AssertionOutcome.Compare("REQ-14.a", "Demo_Count", "10", null) });
+
+        Assert.Equal(ResultVerdict.NotObserved, package.Verdict);
+    }
+
+    [Fact]
+    public void BUT_A_RUN_THAT_OBSERVED_SOMETHING_KEEPS_ITS_OLD_VERDICT_because_a_gate_outside_its_scope_is_noise()
+    {
+        // *** THE UNAFFECTED CASES, ASSERTED AS DELIBERATELY AS THE MOVED ONES. *** A timeout that read its
+        // registers is still a TIMEOUT — that verdict is correct and load-bearing — and a partial read is
+        // still UNSETTLED. The new verdict fires only where NOTHING was read.
+        Assert.Equal(ResultVerdict.TimedOut, Package(outcome: SlotOutcome.TimedOut).Verdict);
+
+        Assert.Equal(ResultVerdict.Unsettled, Package(assertions: new[]
+        {
+            AssertionOutcome.Compare("REQ-14.a", "Demo_Count", "10", "10"),
+            AssertionOutcome.Compare("REQ-14.b", "Demo_Missing", "1", null),
+        }).Verdict);
+    }
+
+    [Fact]
+    public void AND_LIVENESS_STILL_OUTRANKS_IT_because_STALE_names_a_cause_where_NOT_OBSERVED_only_names_a_symptom()
+    {
+        // An experiment that never ran also observes nothing, and there `Stale` is the better answer: it
+        // says WHY. Placing the new verdict above liveness would have replaced a diagnosis with a symptom
+        // on every frozen-mirror run.
+        var package = Package(
+            stimulus: new StimulusEvidence(true, false, 0, 8, ManifestPresence.Loaded,
+                new VersionReport(VersionOutcome.Confirmed, Build.Value, Build.Value, 3, 1, "confirmed")),
+            assertions: new[] { AssertionOutcome.Compare("REQ-14.a", "Demo_Count", "10", null) });
+
+        Assert.Equal(ResultVerdict.Stale, package.Verdict);
     }
 
     [Fact]

@@ -53,6 +53,31 @@ public enum ResultVerdict
     /// <summary>The condition never occurred within the declared duration. <b>Not "the wrong thing happened".</b></summary>
     TimedOut,
 
+    /// <summary>
+    /// 🔴 <b>NOBODY LOOKED.</b> The experiment ran, but not one declared assertion was read — so this
+    /// package is silent about the block for a reason that has nothing to do with the block, the timing,
+    /// or the vector's admissibility.
+    ///
+    /// <para><b>It exists because the three verdicts it was previously spelled as each send a reader
+    /// somewhere useless.</b> <see cref="TimedOut"/> says <i>the condition never occurred</i> — a claim
+    /// about the plant, which points at durations and stimulus. <see cref="Unsettled"/> says <i>the value
+    /// never became final</i> — a claim about settling. <see cref="Refused"/> says <i>the author broke a
+    /// rule</i>. <b>All three describe an observation that was made; this one is the case where no
+    /// observation was made at all</b>, and it points at the INSTRUMENT.</para>
+    ///
+    /// <para><b>MEASURED, 2026-08-17.</b> JOB9004's valve wave ran both vectors against the rig, polled
+    /// 7,912 times, read the whole result band every poll, and returned <c>&lt;never read&gt;</c> for all
+    /// four declared assertions. It rendered as <c>TimedOut</c> and <c>Unsettled</c>. The per-assertion
+    /// rows were already honest (<c>saysSomethingAboutTheBlock: false</c>); <b>only the headline was
+    /// not</b>, and the headline is what gets read.</para>
+    ///
+    /// <para><b>It sits BELOW liveness in the precedence, not above it.</b> A run whose stimulus was never
+    /// confirmed, or whose inert phase never established, also observes nothing — and there
+    /// <see cref="Stale"/> is the more informative answer, because it names WHY. This verdict is
+    /// specifically <i>the experiment ran and the instrument did not read it.</i></para>
+    /// </summary>
+    NotObserved,
+
     /// <summary>The value never met its settling condition, so nothing was legitimately read at all.</summary>
     Unsettled,
 
@@ -140,16 +165,29 @@ public sealed record ResultPackage(
             if (RunOutcome == SlotOutcome.NotInert)
                 return ResultVerdict.Stale;
 
+            // 🔴 *** NOBODY LOOKED COMES BEFORE THE CONDITION NEVER OCCURRED, AND THAT ORDER IS THE FIX.
+            // *** This test used to sit three gates lower, so a run that read NOTHING was reported as
+            // TimedOut whenever the completion register did not reach its value, and as Unsettled whenever
+            // it did — two claims about the PLANT made by a package that had not observed the plant. And
+            // when it was reached it answered `Refused`, whose text blames the vector author for a defect
+            // in the harness. Measured on JOB9004's valve wave: four assertions, all `<never read>`, headline
+            // TIMEDOUT and UNSETTLED.
+            //
+            // *** IT IS BELOW LIVENESS AND ADMISSIBILITY, DELIBERATELY. *** An experiment that never ran
+            // also observes nothing, and `Stale` says WHY where this would only say that. Every earlier
+            // branch names a cause; this one is what remains when the run happened and the reading did not.
+            //
+            // *** AND IT DOES NOT FIRE ON A PARTIAL READ. *** One assertion read and one not is still a
+            // package that observed something, and it keeps falling through to Unsettled below — a gate
+            // that fires outside its scope is noise, and noise gets switched off.
+            if (Assertions.Count == 0 || Assertions.All(a => a.State == AssertionState.NotObserved))
+                return ResultVerdict.NotObserved;
+
             if (RunOutcome == SlotOutcome.TimedOut)
                 return ResultVerdict.TimedOut;
 
             if (Settling != SettlingState.Settled)
                 return ResultVerdict.Unsettled;
-
-            // Empty is not clean: a package with nothing observed cannot pass, and neither can one whose
-            // assertions were all left unread.
-            if (Assertions.Count == 0 || Assertions.All(a => a.State == AssertionState.NotObserved))
-                return ResultVerdict.Refused;
 
             if (Assertions.Any(a => a.State == AssertionState.NotObserved))
                 return ResultVerdict.Unsettled;
@@ -182,6 +220,18 @@ public sealed record ResultPackage(
 
         ResultVerdict.Unsettled =>
             "The value never met its settling condition, or an assertion was never read. NOTHING WAS LEGITIMATELY READ — this is not 'the value was wrong'. A completion flag is not a settling signal; declare what makes the value final.",
+
+        ResultVerdict.NotObserved when Assertions.Count == 0 =>
+            "NOBODY LOOKED: this vector declares NO assertions at all, so the run could not have said anything about the block whatever it did. "
+            + "*** THIS IS NOT A TIMEOUT AND NOT A SETTLING PROBLEM — do not go and check durations. *** Declare at least one expectation.",
+
+        ResultVerdict.NotObserved =>
+            $"NOBODY LOOKED: the experiment RAN, and not one of the {Assertions.Count} declared assertion(s) was read — every one came back '<never read>'. "
+            + "*** THIS SAYS NOTHING ABOUT THE BLOCK AND NOTHING ABOUT THE PLANT. *** It is not a TIMEOUT (the condition may well have occurred, "
+            + "nobody was watching) and not UNSETTLED (nothing got as far as needing to settle). GO TO THE INSTRUMENT, NOT THE DURATIONS: check "
+            + "that each signal named in `expectations` is a name the binding carries — the binding states the specification's name as `specName` "
+            + "beside the block's own tag, and a citation matching neither resolves to no register at all. Unread signal(s): "
+            + string.Join(", ", Assertions.Where(a => a.State == AssertionState.NotObserved).Select(a => $"'{a.Signal}'").Distinct(StringComparer.Ordinal)),
 
         // The two roads to Stale need two different next actions, so they are not collapsed into one
         // sentence. A frozen mirror is a RIG problem; an out-of-date bound is a VECTOR problem, and
