@@ -12,7 +12,12 @@ in a review.
 
 ## Denominator
 
-**31 rules. 14 CHECKED · 3 STRUCTURALLY ENFORCED · 9 SPECIFIED-BUT-UNCHECKED · 5 ADVISORY.**
+**39 rules. 14 CHECKED · 3 STRUCTURALLY ENFORCED · 12 SPECIFIED-BUT-UNCHECKED · 10 ADVISORY.**
+
+*Was 31 (14 · 3 · 9 · 5) before the **H-7xx platform block** was added 2026-08-17. **The CHECKED
+count did not move**: H-7xx adds three SPECIFIED-NOT-CHECKED and five ADVISORY, and the checker
+constructs a `Finding` for none of them. Counted by hand against the table below and reconciled
+with it — not grepped, per the warning three lines down.*
 
 🔴 **This line previously read "26 `[MECHANIZED]`", and that was false.** I wrote *mechanized*
 meaning *can be mechanized*; the only honest reading is *is mechanized*. Reconciled programmatically
@@ -24,8 +29,8 @@ about it. Twice now: the rule count itself was also wrong on first draft.
 |---|---|---|
 | **CHECKED** — the tool emits a finding citing this ID | **14** | H-104, H-105, H-201, H-202, H-203, H-205, H-401, H-403, H-404, H-501, H-502, H-503, H-504, H-505 |
 | **STRUCTURALLY ENFORCED** — impossible to violate, so no finding exists | 3 | H-405, H-406, H-407 |
-| **SPECIFIED, NOT YET CHECKED** — written, citable in review, not automated | 9 | H-101, H-102, H-103, H-107, H-204, H-301, H-302, H-304, H-402 |
-| **ADVISORY** — a human decides | 5 | H-106, H-303, H-305, H-408, H-506 |
+| **SPECIFIED, NOT YET CHECKED** — written, citable in review, not automated | 12 | H-101, H-102, H-103, H-107, H-204, H-301, H-302, H-304, H-402, **H-702, H-703, H-704** |
+| **ADVISORY** — a human decides | 10 | H-106, H-303, H-305, H-408, H-506, **H-701, H-705, H-706, H-707, H-708** |
 
 **The authoritative CHECKED set is the checker, never this table.** Regenerate rather than retype:
 the reconciliation reads every `new Finding("H-nnn", …)` out of `src/hmi-cli/`. A grep of this
@@ -88,6 +93,14 @@ Seeded from the eight clauses used in the rev-7 research experiment, which measu
 layer costs nothing and fixes screen appearance entirely, where every arm lacking one produced
 green-for-running and accent chrome unprompted. Sizing comes from `hmi/sizing-standard.md`
 (datasheet-derived, corroborated against real engineering practice on the anchor project).
+
+**H-7xx (2026-08-17)** comes from a different direction: **an existing panel specification written
+for a Classic Comfort target, re-cut for Classic Basic.** The absences it names were found by
+working a full screen set against the tier rather than by reading a feature matrix, which is why
+each rule is phrased as *what an author must do instead* rather than as *what the tier lacks*.
+Corroborated against this repo's own measured Classic Basic facts — `hmi/target-differences.md`
+(no screen windows; layers exist and export), `hmi/design-evidence.md` (no composition, zero
+scripts across a 48-screen reference corpus) and `hmi/sizing-standard.md` (the px/mm pair).
 
 ---
 
@@ -322,6 +335,143 @@ to interpret and the alarm palette has lost its monopoly on meaning. H-601 and H
   zero geometry.)*
 - **H-506** `[ADVISORY]` No large dead band. Unused area is acceptable; a screen that is mostly
   unused area is usually a screen that should be two screens or one smaller one.
+
+---
+
+## H-7xx — Platform capability
+
+**Added 2026-08-17**, from re-platforming an existing panel specification written for a **Classic
+Comfort** target onto **Classic Basic**. Everything below is a property of the tier, not of any
+project.
+
+**Why these are house rules and not a datasheet.** A Comfort specification transfers to Basic
+*looking* correct — same resolution, same tags, same alarm design — and fails on four structural
+absences that no import error and no compile reports. **Each rule here is one of those absences
+turned into something an author can be held to.**
+
+> ⚠️ **The failure mode this block exists to prevent: a specification that was RIGHT on the tier it
+> was written for, carried across unchanged, and wrong in ways that look like design choices.**
+
+### The four absences
+
+| | Absent on Classic Basic | Consequence |
+|---|---|---|
+| **Composition** | no screen-window item type — screens cannot embed screens | every screen carries its own chrome — **H-705** |
+| **Faceplates** | no parameterised reusable object | a repeated object is a **copy** — **H-704** |
+| **Popup screens** | a popup is a **layer**, shown by a condition | it belongs to one screen — **H-701 · H-702 · H-703** |
+| **Scripting** | the panel displays and writes tags | it computes nothing — **H-706** |
+
+### The rules
+
+- **H-701** `[ADVISORY]` **A popup is a LAYER on one screen, and is never global.** There is no
+  screen window to host a panel-wide dialog, so a popup can appear only on screens whose layers
+  carry it. **Any alert that must reach an operator who is looking at a different screen is carried
+  by CHROME — an announcement that names its subject and navigates — never by the popup.**
+  ⚠️ **Replicating the layer onto every screen is the alternative and it is usually wrong**: it
+  multiplies the object by the screen count, and **two conditions true at once means two layers
+  drawn over each other with no ordering**, because there is no dialog manager to queue them.
+
+- **H-702** `[MECHANIZABLE, NOT YET CHECKED]` **Every object on a popup layer carries the SAME
+  visibility condition, driven by ONE control tag.** The popup is only as hidden as its
+  least-hidden object. **An object with no condition, or a different one, is a fragment of a dialog
+  floating over a live screen** — and it reads as a rendering glitch rather than a logic error,
+  which is why nobody finds it by looking. **Check by counting: objects on the layer against objects
+  carrying the condition.**
+
+- **H-703** `[MECHANIZABLE, NOT YET CHECKED]` 🔴 **A SHOWN LAYER DOES NOT DISABLE WHAT IS BENEATH
+  IT. Modality has to be built, and it takes both halves:** an **opaque backing rectangle** covering
+  the whole content area, **and** a **disable condition on the controls underneath**, true while the
+  popup condition is true.
+  ⚠️ **The backing rectangle alone is not enough** — a covered control may still take the touch,
+  and that is precisely the case where a press does something the operator cannot see. **Verify by
+  pressing through a shown layer; it is not provable by inspection.**
+
+- **H-704** `[MECHANIZABLE, NOT YET CHECKED]` **There are no faceplates: a repeated object is a
+  COPY.** Author **one canonical group** per equipment class, copy it, and **make the per-instance
+  difference nothing but the tag path.** Any difference in geometry, colour, elements or logic is a
+  divergence **that will not be found by looking**, because nobody compares a dozen small objects
+  across four screens.
+  ⚠️ **Where instances genuinely differ in content, make a SECOND canonical group — never one group
+  carrying an element that is unbound on most copies.** The unbound element is the one somebody
+  eventually binds.
+  **Two checks that exist only because there is no faceplate:** count the copies and confirm each
+  binds a *different* instance — **two copies bound to the same source is the failure that hides** —
+  and diff every copy against the canonical group.
+
+- **H-705** `[ADVISORY]` **Every screen is self-contained and carries its own chrome.** Where a
+  composing platform pays for a header once, this one pays per screen. **Consistency is therefore an
+  authoring discipline, not a structural guarantee, and it is the first thing to drift.**
+  ⚠️ **The template — a single shared layer behind every screen — is the only shared-chrome device
+  the tier has. It is far weaker than composition and its carrying capacity for BOUND and
+  INTERACTIVE content is unproven here: test it with one bound value and one button before
+  committing chrome to it.**
+
+- **H-706** `[ADVISORY]` 🔴 **THE PANEL DISPLAYS AND WRITES TAGS. IT DOES NOT COMPUTE.** With no
+  scripting, **any derived value belongs in the PLC or does not exist.** That covers more than it
+  first appears:
+
+  | wanted | on this tier |
+  |---|---|
+  | a roll-up, a maximum, any arithmetic across tags | 🔴 **not available** — put it in the PLC |
+  | a read/compare/retry protocol, a last-good copy, a reject counter | 🔴 **not available** |
+  | a watchdog detecting that a counter has STOPPED | 🔴 **not available** — connection loss is still detected; *"peer alive, publishing stopped"* is not |
+  | ordered writes on a press | ✅ an ordered function list on the button |
+  | ⚠️ writes guaranteed to land in **separate transport jobs** | ⚠️ **not guaranteed — prove it, or make the receiving logic tolerant** |
+  | a periodic increment, e.g. a heartbeat | ✅ a cyclic Scheduler task — ⚠️ **confirm the function exists on the tier** |
+  | an unknown enum rendering as its own number | ⚠️ **depends on the text list's out-of-range behaviour — verify** |
+
+  ⚠️ **A derived value that the PLC cannot supply either does not become a panel feature by being
+  wanted.** Say so, and display the raw inputs instead — **a number a human can see has stopped
+  moving beats a derived indicator that cannot be built.**
+
+- **H-707** `[ADVISORY]` **Where the touch minimums make a control-dense screen impossible, use
+  SELECT-then-ACT** — many small **indicators** (not touch targets, so they may be small), one
+  **selection**, and **one full-size action pair acting on the selection.**
+  🔴 **Never shrink below the H-401 floor to make a layout fit.** A matrix of *n* items with two
+  actions each needs `2n` controls at a ≥ 12 mm pitch, and the arithmetic runs out quickly on a
+  small panel — **at which point the layout is wrong, not the rule.**
+  ✅ **It also buys a deliberate step before an act that moves plant**, which on a dense control
+  page is a feature rather than a cost.
+
+- **H-708** `[ADVISORY]` 🔴 **PANEL CAPABILITY FIGURES ARE ESTABLISHED FOR THE TARGET PANEL BEFORE
+  DESIGN, AND NEVER CARRIED ACROSS FROM ANOTHER TIER.** At minimum: **the tag limit, the maximum
+  discrete alarm count, the number of alarm CLASSES and whether they can be created, and whether
+  the alarm history persists across a power cycle.**
+  ⚠️ **These are the figures most likely to be inherited silently from a higher-tier specification,
+  and two of them can invalidate a design rather than trim it:** a tag limit below the design's
+  mandatory total means something must be cut, and **a volatile alarm buffer where an archive was
+  assumed can mean a plant with no durable record of anything at all.** ⚠️ **Merging alarm classes
+  to fit is an engineering decision about which distinctions an operator loses — not a
+  configuration detail.**
+
+### The sizing correction this block came from, worked once
+
+**A pixel constant inherited from another panel is the same class of error as an inherited
+capability figure**, and it is the one that passes every mechanical check — see **H-405**.
+
+Converting the mm thresholds with the **7-inch Basic** target's own px/mm pair
+(`hmi/sizing-standard.md`: **H 5.19 · V 5.59**, and note **H-406** — the vertical figure binds):
+
+| rule | mm | px H | px **V** ← binding |
+|---|---|---|---|
+| H-401 minor axis | ≥ 9 | 47 | **51** |
+| H-402 command | 12 | 63 | **68** |
+| H-402 primary/frequent | 15 | 78 | **84** |
+| H-403 safety-critical | ≥ 20 | 104 | **112** |
+| H-404 separation min / default | 3 / 5 | 16 / 26 | **17 / 28** |
+
+> ⚠️ **A 40 px touch target — a common constant on larger-format panels — is 7.7 × 7.2 mm here, and
+> BELOW THE FLOOR ON BOTH AXES.**
+
+**These pixels are for that panel only and are not constants.** Re-derive for any other target;
+that is H-405's whole point, and the table is here as a worked example rather than a lookup.
+
+⚠️ **Consequence for layout, worth stating once:** a chrome band carrying touch targets cannot be
+40 px, so **chrome and navigation both grow, and the content area shrinks by roughly 10%** against
+a specification written for a larger-format panel. **On this tier none of it is recoverable by
+composition (H-705).** ✅ **Bezel `SoftKey` items carry no geometry and cost zero pixels** — moving
+navigation onto them returns the whole navigation band, and a bezel key stays reachable while a
+popup layer covers the glass, which is exactly when a HOME control is most needed.
 
 ---
 
