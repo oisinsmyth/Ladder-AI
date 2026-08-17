@@ -108,7 +108,7 @@ public enum ResultVerdict
     /// rule</i>. <b>All three describe an observation that was made; this one is the case where no
     /// observation was made at all</b>, and it points at the INSTRUMENT.</para>
     ///
-    /// <para><b>MEASURED, 2026-08-17.</b> JOB9004's valve wave ran both vectors against the rig, polled
+    /// <para><b>MEASURED, 2026-08-17.</b> The first live wave ran both vectors against the rig, polled
     /// 7,912 times, read the whole result band every poll, and returned <c>&lt;never read&gt;</c> for all
     /// four declared assertions. It rendered as <c>TimedOut</c> and <c>Unsettled</c>. The per-assertion
     /// rows were already honest (<c>saysSomethingAboutTheBlock: false</c>); <b>only the headline was
@@ -229,7 +229,7 @@ public sealed record ResultPackage(
             // TimedOut whenever the completion register did not reach its value, and as Unsettled whenever
             // it did — two claims about the PLANT made by a package that had not observed the plant. And
             // when it was reached it answered `Refused`, whose text blames the vector author for a defect
-            // in the harness. Measured on JOB9004's valve wave: four assertions, all `<never read>`, headline
+            // in the harness. Measured on the first live wave: four assertions, all `<never read>`, headline
             // TIMEDOUT and UNSETTLED.
             //
             // *** IT IS BELOW LIVENESS AND ADMISSIBILITY, DELIBERATELY. *** An experiment that never ran

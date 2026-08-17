@@ -11,7 +11,7 @@ namespace Harness.Loop.Tests;
 /// THAT INSTANT IS, BY CONSTRUCTION, THE ONE INSTANT AT WHICH A WELL-BUILT MODEL HAS RETURNED THE BLOCK TO
 /// INERT.</b>
 ///
-/// <para><b>Measured on JOB9004, 2026-08-17.</b> An assertion expecting a commanded state to be TRUE was sampled ~600 ms
+/// <para><b>Measured on the first live wave, 2026-08-17.</b> An assertion expecting a commanded state to be TRUE was sampled ~600 ms
 /// after the scenario ended and read false — <i>a value impossible for ANY block at that instant</i> — and
 /// the package reported <c>FAIL</c> against a block proven correct from an earlier frame on the device.
 /// Its <c>conclusiveAboutTheBlock: 1</c> should have been <c>0</c>.</para>
@@ -80,7 +80,7 @@ public class ObservationWindowTests
             AssertionForm.When,
 
             // 🔴 *** SETTLING IS DECLARED, AND IT WILL PASS — WHICH IS THE MEASURED SHAPE, NOT A
-            // CONVENIENCE. *** An inert tail is PERFECTLY SETTLED: the JOB9004 package that reported FAIL
+            // CONVENIENCE. *** An inert tail is PERFECTLY SETTLED: the live package that reported FAIL
             // against a correct block carried `Settled`, which is exactly why settling could neither
             // detect this defect nor serve as a better answer for it. A fixture that reached its verdict
             // through `Unsettled` would be testing the wrong guard and would go green if the fix were
@@ -192,7 +192,7 @@ public class ObservationWindowTests
     // -------------------------------------------------------------------------------------------------
 
     /// <summary>
-    /// 🔴 <b>THE JOB9004 SHAPE. Before this change: <c>Disagreed</c> and a package verdict of <c>Fail</c>
+    /// 🔴 <b>THE MEASURED SHAPE. Before this change: <c>Disagreed</c> and a package verdict of <c>Fail</c>
     /// against a block that did exactly what the specification asks.</b>
     ///
     /// <para>With no arm window declared for the signal, the harness has no basis for excluding any frame —

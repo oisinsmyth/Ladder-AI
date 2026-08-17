@@ -15,7 +15,7 @@ public sealed record ResultFrame(ScanCount Scan, int PollRound, ushort[] Registe
 /// <summary>
 /// 🔴 <b>EVERY OBSERVATION ONE INDEX PRODUCED, NOT JUST THE ONE THAT HAPPENED TO RECOGNISE COMPLETION.</b>
 ///
-/// <para><b>The defect this exists to close, measured on JOB9004 2026-08-17.</b> <c>SlotRun</c> and
+/// <para><b>The defect this exists to close, measured on the first live wave 2026-08-17.</b> <c>SlotRun</c> and
 /// <c>WaveRun</c> polled in a loop, reassigned a local <c>results</c> each round, and returned only the
 /// round that saw the completion register reach its value. Every earlier poll was discarded, and the
 /// package then evaluated <i>every</i> expectation against that single snapshot.</para>

@@ -237,7 +237,7 @@ public class ResultPackageTests
     [Fact]
     public void A_TIMED_OUT_RUN_THAT_OBSERVED_NOTHING_IS_NOT_OBSERVED_rather_than_TIMED_OUT()
     {
-        // 🔴 *** THE MEASURED HEADLINE DEFECT, JOB9004, 2026-08-17. *** The wave ran, polled 7,912 times and
+        // 🔴 *** THE MEASURED HEADLINE DEFECT, FIRST LIVE WAVE, 2026-08-17. *** The wave ran, polled 7,912 times and
         // read the whole result band; every declared assertion came back `<never read>`; the package said
         // TIMEDOUT. *** TimedOut is a claim about the PLANT — "the condition never occurred" — made by a
         // package that did not observe the plant, *** and it sends its reader to check durations and
@@ -253,7 +253,7 @@ public class ResultPackageTests
     [Fact]
     public void AN_UNSETTLED_RUN_THAT_OBSERVED_NOTHING_IS_NOT_OBSERVED_rather_than_UNSETTLED()
     {
-        // The other half of the same JOB9004 package: the second vector rendered UNSETTLED, which points at
+        // The other half of the same live package: the second vector rendered UNSETTLED, which points at
         // the settling declaration. Nothing had got as far as needing to settle.
         var package = Package(
             settling: SettlingState.NotSettled,

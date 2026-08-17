@@ -17,7 +17,7 @@ namespace Harness.Loop.Tests;
 /// spec name happened to equal its tag. <i>A fixture in which two keys coincide is a fixture that cannot
 /// tell them apart.</i></para>
 ///
-/// <para><b>The shape reproduced here is JOB9004's valve wave, 2026-08-17:</b> a binding that states a
+/// <para><b>The shape reproduced here is the first live wave, 2026-08-17:</b> a binding that states a
 /// specification name for every result source, and vectors that cite those names. The wave ran, cost
 /// 7,912 round trips, and returned <c>observed: "&lt;never read&gt;"</c> for all four declared
 /// assertions while the published mirror feed recorded the whole result band being read.</para>
@@ -25,8 +25,8 @@ namespace Harness.Loop.Tests;
 public class SpecNameObservationTests
 {
     // The specification's vocabulary. NOT the block's — that is the entire point, and it is the shape of
-    // every real binding: `Y07` is the alarm id an instance carries, `iDB_ValveUnderTest.IO.FTC` is what
-    // the block calls the member.
+    // every real binding: `SPEC.FaultAlarm` is the alarm id an instance carries, `iDB_Widget.IO.Fault` is
+    // what the block calls the member.
     private const string CountSpecName = "SPEC.RampCount";
     private const string DoneSpecName = "SPEC.RampDone";
 
@@ -122,7 +122,7 @@ public class SpecNameObservationTests
     [Fact]
     public void A_VECTOR_CITING_THE_SPEC_NAME_IS_ACTUALLY_OBSERVED_and_the_run_reaches_a_verdict_about_the_block()
     {
-        // *** THE JOB9004 SHAPE. *** Before the fix this ran to completion and came back with
+        // *** THE MEASURED SHAPE. *** Before the fix this ran to completion and came back with
         // observed "<never read>" on every assertion, because ResultRegisterOf matched on Tag.
         var gateway = new SimulatedGateway(LoopRunTests.Geometry());
         var result = LoopRun.Execute(Request(), gateway);
@@ -197,15 +197,16 @@ public class SpecNameObservationTests
     [Fact]
     public void A_COMPLETION_SIGNAL_NAMING_NOTHING_IS_REFUSED_AND_THE_REFUSAL_NAMES_THE_REGISTER_ZERO_HAZARD()
     {
-        // *** THIS IS EXACTLY WHAT JOB9004 DID. *** `VLV_Scenario_Done` matched neither the tag nor the spec
-        // name (`VLV_Stim.ScenarioDone`), the poll watched result register 0 — the stimulus model's PHASE
-        // code — and a 41-second scenario was declared complete after EIGHT SCANS.
+        // *** THIS IS EXACTLY WHAT THE LIVE WAVE DID. *** `SPEC.Scenario_Done` matched neither the tag nor
+        // the spec name (`SPEC.ScenarioDone`) — a near-miss that looks right — the poll watched result
+        // register 0 — the stimulus model's PHASE code — and a 41-second scenario was declared complete
+        // after EIGHT SCANS.
         var gateway = new SimulatedGateway(LoopRunTests.Geometry());
-        var result = LoopRun.Execute(Request(Vector(completionSignal: "VLV_Scenario_Done")), gateway);
+        var result = LoopRun.Execute(Request(Vector(completionSignal: "SPEC.Scenario_Done")), gateway);
 
         Assert.Equal(LoopOutcome.NotBound, result.Outcome);
         Assert.Equal(0, gateway.Deployments);
-        Assert.Contains("VLV_Scenario_Done", result.Detail, StringComparison.Ordinal);
+        Assert.Contains("SPEC.Scenario_Done", result.Detail, StringComparison.Ordinal);
         Assert.Contains("register 0", result.Detail, StringComparison.OrdinalIgnoreCase);
     }
 

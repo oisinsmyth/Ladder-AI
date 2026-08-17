@@ -12,7 +12,7 @@ namespace Harness.Map.Tests;
 ///
 /// <para><b>Until 2026-08-17 the first pair joined on the TAG</b>, which is the third independent
 /// derivation of this join to be found wrong — <c>MirrorValueFit</c> and <c>LoopRun.ToWireVector</c> were
-/// both corrected on 2026-08-14. The consequence measured on JOB9004's valve wave: the stimulus reached the
+/// both corrected on 2026-08-14. The consequence measured on the first live wave: the stimulus reached the
 /// block and <b>every observation resolved to no register at all</b>.</para>
 ///
 /// <para><b>Every fixture here states a spec name that DIFFERS from the tag</b>, because the two keys are
@@ -24,8 +24,8 @@ public class ResultLookupKeyTests
     private static readonly CopyLayerNaming Naming = new(BlockNumber: 900);
     private static readonly BuildStamp Stamp = new(0xA93F2C71);
 
-    private const string Tag = "iDB_ValveUnderTest.IO.FTC";
-    private const string Spec = "Y07";
+    private const string Tag = "iDB_Widget.IO.Fault";
+    private const string Spec = "SPEC.FaultAlarm";
 
     private static SlotBinding Binding(params MirroredSignal[] sources) => new(
         "S0",
@@ -110,7 +110,7 @@ public class ResultLookupKeyTests
         var result = CopyLayerGenerator.Generate(
             map,
             Binding(new MirroredSignal(Tag, MirrorValueType.Bool, SpecName: Spec,
-                Transient: true, RearmsEachIndex: true, ArmedBy: "iDB_ValveStim.Stim.Armed")),
+                Transient: true, RearmsEachIndex: true, ArmedBy: "iDB_Model.Phase.Armed")),
             Naming, Stamp);
 
         Assert.True(result.Generated);
@@ -119,7 +119,7 @@ public class ResultLookupKeyTests
         // The rung reads the BLOCK'S TAG. A spec name here would be a coil reading a symbol no PLC tag
         // table declares.
         Assert.Contains(
-            $"SCOIL HX_S0_L001 := HX_S0_Start AND iDB_ValveStim.Stim.Armed AND {Tag}",
+            $"SCOIL HX_S0_L001 := HX_S0_Start AND iDB_Model.Phase.Armed AND {Tag}",
             ir, StringComparison.Ordinal);
         Assert.Contains("RCOIL HX_S0_L001 := NOT HX_S0_Start", ir, StringComparison.Ordinal);
 

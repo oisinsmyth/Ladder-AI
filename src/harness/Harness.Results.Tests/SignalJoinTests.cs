@@ -7,17 +7,17 @@ namespace Harness.Results.Tests;
 /// 🔴 <b>THE SECOND JOIN BETWEEN A SUBMISSION AND A BINDING — the SIGNAL names — which had no check at
 /// all until 2026-08-17.</b>
 ///
-/// <para>Written against the shape that was measured on JOB9004's valve wave: the binding states the
+/// <para>Written against the shape that was measured on the first live wave: the binding states the
 /// specification's name as <c>specName</c> beside the block's own tag, and the vector cites the
 /// specification's name.</para>
 /// </summary>
 public class SignalJoinTests
 {
-    private const string Tag = "iDB_ValveUnderTest.IO.FTC";
-    private const string SpecName = "Y07";
+    private const string Tag = "iDB_Widget.IO.Fault";
+    private const string SpecName = "SPEC.FaultAlarm";
 
     private static SlotBinding Binding(params MirroredSignal[] results) =>
-        new("VLV", Array.Empty<MirroredSignal>(), "iDB_ValveStim.Stim.Start", results)
+        new("WGT", Array.Empty<MirroredSignal>(), "iDB_Model.Phase.Start", results)
         {
             Serves = new[] { "SLOT-VALVE-CLASS" },
         };
@@ -26,14 +26,14 @@ public class SignalJoinTests
         new(tag, MirrorValueType.Bool, SpecName: spec);
 
     private static SubmissionVector Vector(
-        string id = "VJ-VLV-001",
+        string id = "VJ-WGT-001",
         string slot = "SLOT-VALVE-CLASS",
         string? expectation = SpecName,
-        string completion = "VLV_Stim.ScenarioDone") =>
+        string completion = "SPEC.ScenarioDone") =>
         new(id, slot, 0, new AgentIdentity("author"),
-            new Basis("SPEC-3.3-Y07", "SPEC-3.3-Y07:beb55b"),
+            new Basis("SPEC-3.3-W1", "SPEC-3.3-W1:beb55b"),
             new Dictionary<string, string>(StringComparer.Ordinal),
-            "VLV_Start_Class",
+            "WGT_Start_Class",
             expectation is null
                 ? Array.Empty<ObservabilityDeclaration>()
                 : new[] { new ObservabilityDeclaration(expectation, SignalNature.PersistentState, InstrumentationMode.Latched, 10, "false") },
@@ -57,7 +57,7 @@ public class SignalJoinTests
     {
         var report = Check(
             Vector(),
-            Binding(Result(Tag, SpecName), Result("iDB_ValveStim.Stim.ScenarioDone", "VLV_Stim.ScenarioDone")));
+            Binding(Result(Tag, SpecName), Result("iDB_Model.Phase.ScenarioDone", "SPEC.ScenarioDone")));
 
         Assert.False(report.Any);
 
@@ -76,7 +76,7 @@ public class SignalJoinTests
         // signal and make the `specName` declaration decorative.
         var report = Check(
             Vector(expectation: Tag),
-            Binding(Result(Tag, SpecName), Result("iDB_ValveStim.Stim.ScenarioDone", "VLV_Stim.ScenarioDone")));
+            Binding(Result(Tag, SpecName), Result("iDB_Model.Phase.ScenarioDone", "SPEC.ScenarioDone")));
 
         Assert.True(report.Any);
         Assert.Equal(1, report.Signals);
@@ -85,22 +85,22 @@ public class SignalJoinTests
         // AND what is carried.
         Assert.Contains(Tag, report.Detail, StringComparison.Ordinal);
         Assert.Contains($"'{SpecName}'", report.Detail, StringComparison.Ordinal);
-        Assert.Contains("VJ-VLV-001", report.Detail, StringComparison.Ordinal);
+        Assert.Contains("VJ-WGT-001", report.Detail, StringComparison.Ordinal);
     }
 
     [Fact]
     public void A_COMPLETION_SIGNAL_THAT_JOINS_TO_NOTHING_IS_REFUSED_AND_THE_REFUSAL_NAMES_THE_REGISTER_ZERO_HAZARD()
     {
-        // *** THE MEASURED JOB9004 CASE. *** `VLV_Scenario_Done` matched neither the tag
-        // (`iDB_ValveStim.Stim.ScenarioDone`) nor the spec name (`VLV_Stim.ScenarioDone`), and the loop
+        // *** THE MEASURED LIVE-WAVE CASE. *** `SPEC.Scenario_Done` matched neither the tag
+        // (`iDB_Model.Phase.ScenarioDone`) nor the spec name (`SPEC.ScenarioDone`), and the loop
         // defaulted the completion register to 0. That register held the stimulus model's PHASE code, and
         // phase 1 equals the completion value 1, so a 41-second scenario was declared complete 8 scans in.
         var report = Check(
-            Vector(completion: "VLV_Scenario_Done"),
-            Binding(Result(Tag, SpecName), Result("iDB_ValveStim.Stim.ScenarioDone", "VLV_Stim.ScenarioDone")));
+            Vector(completion: "SPEC.Scenario_Done"),
+            Binding(Result(Tag, SpecName), Result("iDB_Model.Phase.ScenarioDone", "SPEC.ScenarioDone")));
 
         Assert.True(report.Any);
-        Assert.Contains(report.Unjoined, u => u.Role == SignalRole.Completion && u.Signal == "VLV_Scenario_Done");
+        Assert.Contains(report.Unjoined, u => u.Role == SignalRole.Completion && u.Signal == "SPEC.Scenario_Done");
 
         // The completion case gets its own sentence, because the remedy differs: an unjoined EXPECTATION
         // yields silence, an unjoined COMPLETION yields a confident early finish.
@@ -113,8 +113,8 @@ public class SignalJoinTests
         // The unaffected case. JoinKey falls back to the tag where the binding never stated a spec name,
         // and a check that refused those would fire on every binding written the older way.
         var report = Check(
-            Vector(expectation: Tag, completion: "iDB_ValveStim.Stim.ScenarioDone"),
-            Binding(Result(Tag), Result("iDB_ValveStim.Stim.ScenarioDone")));
+            Vector(expectation: Tag, completion: "iDB_Model.Phase.ScenarioDone"),
+            Binding(Result(Tag), Result("iDB_Model.Phase.ScenarioDone")));
 
         Assert.False(report.Any);
         Assert.Equal(2, report.Examined);
@@ -124,15 +124,15 @@ public class SignalJoinTests
     public void A_CARRIED_SIGNAL_THAT_NO_VECTOR_CITES_IS_NOT_A_FINDING()
     {
         // Deliberately one-sided, exactly as SlotJoin is. A binding publishes diagnostic registers on
-        // purpose — JOB9004's carries twenty and its vectors cite four — and refusing the unused ones would
+        // purpose — the live binding carried twenty and its vectors cited four — and refusing the unused ones would
         // fire far outside this check's scope.
         var report = Check(
             Vector(),
             Binding(
                 Result(Tag, SpecName),
-                Result("iDB_ValveStim.Stim.ScenarioDone", "VLV_Stim.ScenarioDone"),
-                Result("iDB_ValveUnderTest.IO.FTO", "Valve.FTO"),
-                Result("iDB_ValveUnderTest.IO.ExtFault", "Valve.ExtFault")));
+                Result("iDB_Model.Phase.ScenarioDone", "SPEC.ScenarioDone"),
+                Result("iDB_Widget.IO.Release", "SPEC.Release"),
+                Result("iDB_Widget.IO.ExtFault", "SPEC.ExtFault")));
 
         Assert.False(report.Any);
     }

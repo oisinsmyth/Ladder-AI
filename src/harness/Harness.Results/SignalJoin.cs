@@ -48,18 +48,19 @@ public sealed record SignalJoinReport(
 /// level below: that each signal the vector NAMES resolves to a result source of that binding. They are
 /// separate failures with separate remedies, and the second one had no check.</para>
 ///
-/// <para><b>MEASURED ON JOB9004's VALVE WAVE, 2026-08-17.</b> Both vectors ran to completion against the
+/// <para><b>MEASURED ON THE FIRST LIVE WAVE, 2026-08-17.</b> Both vectors ran to completion against the
 /// bench rig, the wave cost 7,912 round trips, and the published mirror feed records the entire
 /// 23-register result band being read with a UTC instant on it — <b>including the register holding the
 /// exact value one vector expected.</b> Every declared assertion nonetheless came back
 /// <c>observed: "&lt;never read&gt;", state: NotObserved</c>. Two distinct causes, both of them this
 /// join:</para>
 /// <list type="number">
-/// <item><b>The expectations</b> cited <c>Y07</c>, <c>Y11</c>, <c>DrainValve.Command</c> — the binding's
+/// <item><b>The expectations</b> cited <c>SPEC.FaultAlarm</c>, <c>SPEC.HoldCommand</c>,
+/// <c>SPEC.EngageCommand</c> — the binding's
 /// own <c>specName</c>s — while <c>SlotBinding.ResultRegisterOf</c> matched on <c>tag</c>. That is fixed
 /// at the lookup, and those four names now resolve.</item>
-/// <item><b>The completion signal</b> cited <c>VLV_Scenario_Done</c>, which matches NEITHER the tag NOR
-/// the spec name (<c>VLV_Stim.ScenarioDone</c>) — a genuine disagreement between the two documents that
+/// <item><b>The completion signal</b> cited <c>SPEC.Scenario_Done</c>, which matches NEITHER the tag NOR
+/// the spec name (<c>SPEC.ScenarioDone</c>) — a genuine disagreement between the two documents that
 /// no lookup can repair. <b>It fell back to result register 0</b>, a wholly different signal, and one
 /// vector was therefore declared complete <b>8 scans</b> into a 41-second scenario.</item>
 /// </list>

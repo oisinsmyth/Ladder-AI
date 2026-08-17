@@ -39,7 +39,7 @@ public enum TailRecoveryShape
 ///
 /// <para><b>The shape reproduced here is the one every well-built stimulus model has</b>, and it is
 /// required rather than incidental: a model must return the block under test to inert BEFORE it announces
-/// it has finished, or the wave dies after one vector. JOB9004's valve model does exactly this — its own
+/// it has finished, or the wave dies after one vector. The live stimulus model does exactly this — its own
 /// tail recovery runs a disarm, a reset pulse and a verify, and only then raises its completion flag. The
 /// measured consequence was an assertion expecting a commanded state to be TRUE being sampled ~600 ms after the
 /// scenario ended and reading false: <b>a value impossible for ANY block at that instant</b>, reported as

@@ -109,7 +109,7 @@ public sealed record ObservedFrame(long Scan, int PollRound, string? Value, Wind
 /// 🔴 <b>TURNS A SERIES OF OBSERVATIONS INTO ONE OUTCOME — and its whole design constraint is that it must
 /// never produce a FALSE ACCUSATION.</b>
 ///
-/// <para><b>The measured defect (JOB9004, 2026-08-17).</b> The harness kept one observation per index: the
+/// <para><b>The measured defect (first live wave, 2026-08-17).</b> The harness kept one observation per index: the
 /// poll that recognised completion. A well-built stimulus model returns the block to inert BEFORE it
 /// raises its completion flag — that is required, and it is what stops a wave dying after one vector — so
 /// the one instant the harness looked at was, by construction, the one instant at which every commanded

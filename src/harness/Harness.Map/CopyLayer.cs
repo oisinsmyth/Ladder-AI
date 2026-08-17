@@ -646,10 +646,11 @@ public sealed record SlotBinding(
     /// <b>the OBSERVE side, where an assertion is turned into a register to read</b> — was not, so the
     /// STIMULUS reached the block and the OBSERVATION never left the PC.</para>
     ///
-    /// <para><b>Measured on JOB9004's valve wave (2026-08-17):</b> the wave polled 7,912 times, the mirror
+    /// <para><b>Measured on the first live wave (2026-08-17):</b> the wave polled 7,912 times, the mirror
     /// feed records the whole 23-register result band being read, and <b>all four declared assertions came
-    /// back <c>&lt;never read&gt;</c></b> — because the vectors cite <c>Y07</c>, <c>Y11</c>,
-    /// <c>DrainValve.Command</c> while this method was asking for <c>iDB_ValveUnderTest.IO.FTC</c> and its
+    /// back <c>&lt;never read&gt;</c></b> — because the vectors cite <c>SPEC.FaultAlarm</c>,
+    /// <c>SPEC.HoldCommand</c>, <c>SPEC.EngageCommand</c> while this method was asking for
+    /// <c>iDB_Widget.IO.Fault</c> and its
     /// siblings. Every one of the four resolves under <see cref="MirroredSignal.JoinKey"/>.</para>
     ///
     /// <para><b>-1 rather than 0</b>, because 0 is a real offset and a caller that cannot tell them apart
@@ -679,7 +680,7 @@ public sealed record SlotBinding(
     /// code that EMITS the latch rungs. <c>LoopRun</c> resolved every expectation through
     /// <see cref="ResultRegisterOf"/> — the VALUE offsets — whatever mode the expectation declared, so
     /// <c>Latched</c> and <c>Sampled</c> were the same thing at the wire: one read of the value register at
-    /// completion. Measured on JOB9004 2026-08-17, where all three of one vector's expectations declared
+    /// completion. Measured on the first live wave 2026-08-17, where all three of one vector's expectations declared
     /// <c>Latched</c>, all three signals had generated phase-armed latches sitting in the very same FC03
     /// the harness read every poll, and not one of them was looked at.</para>
     ///
