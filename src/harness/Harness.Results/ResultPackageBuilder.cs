@@ -139,16 +139,21 @@ public static class ResultPackageBuilder
             caveats.Add("THE VERSION REGISTER WAS NOT READ for this result, so what was RUNNING is asserted from the plan rather than from the device.");
         }
 
-        // AMB-19's two NOT-CHECKED states. They do not change the VERDICT — the submission gate refuses
+        // AMB-19's three NOT-CHECKED states. They do not change the VERDICT — the submission gate refuses
         // them before a run happens — but if one reaches a built package the gate was bypassed, and a
         // result whose bound nobody compared must not read as one whose bound agreed.
+        //
+        // NoBoundsCited is deliberately NOT here: it is a CHECKED pass, verified against the enumeration,
+        // and caveating it would re-create under another name the refusal this state exists to remove.
         if (declaration.BoundsCurrency is null)
         {
             caveats.Add(
                 "NOTHING ASKED WHETHER THIS VECTOR STILL TESTS THE SPECIFIED BOUND (AMB-19). A retune moves no assertion ID, so no citation would dangle "
                 + "and no other check here would notice — this result may be a green against a number the specification no longer states.");
         }
-        else if (declaration.BoundsCurrency.State is BoundsCurrencyState.NotDeclared or BoundsCurrencyState.NoTable)
+        else if (declaration.BoundsCurrency.State is BoundsCurrencyState.NotDeclared
+                 or BoundsCurrencyState.NoTable
+                 or BoundsCurrencyState.NoBoundsClaimUnverified)
         {
             caveats.Add("BOUNDS CURRENCY WAS NOT ESTABLISHED (AMB-19). " + declaration.BoundsCurrency.Detail);
         }

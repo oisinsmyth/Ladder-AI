@@ -272,7 +272,14 @@ public static class ResultPackageJson
         {
             ["asked"] = true,
             ["state"] = bounds.State.ToString(),
+            // *** `checked` IS EMITTED BESIDE `state` BECAUSE A READER CANNOT DERIVE IT FROM THE NAME. ***
+            // Two of seven states are passes and the rest are not, and a consumer reasoning "not
+            // premiseOutOfDate, therefore fine" would read every NOT-CHECKED state as a pass.
+            ["checked"] = bounds.Checked,
             ["premiseOutOfDate"] = bounds.PremiseOutOfDate,
+            // Null unless the enumeration was consulted about a specific assertion — a verified no-bound
+            // claim must name what it was verified against, or "verified" is just a word in a report.
+            ["citedAssertion"] = bounds.CitedAssertion,
             ["agreed"] = agreed,
             ["disagreements"] = disagreements,
             ["detail"] = bounds.Detail,

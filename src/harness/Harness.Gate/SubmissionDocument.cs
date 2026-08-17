@@ -421,6 +421,25 @@ public sealed class EnumerationDocument
     /// <para>Absent means gate 3i is NOT CHECKED — never a pass.</para>
     /// </summary>
     public Dictionary<string, string>? Bounds { get; set; }
+
+    /// <summary>
+    /// Assertion ID to <b>which of the bounds above that assertion depends on</b> — the relation that
+    /// makes a vector's <c>boundsUsed: {}</c> a checkable claim instead of an accepted one.
+    ///
+    /// <para>🔴 <b>WITHOUT IT, A HONEST VECTOR HAD NO EXIT.</b> An assertion about a gating condition, an
+    /// ordering or a state names no time and no threshold, so its vector truthfully records no bound —
+    /// and gate 3i refused that, leaving <i>inventing a bound</i> as the only way through. Measured on a
+    /// real submission, on two vectors, 2026-08-17.</para>
+    ///
+    /// <para><b>An EMPTY list for an assertion is the positive statement "this one depends on none"</b>
+    /// and is what lets the empty claim pass. <b>An assertion simply MISSING from this map is an
+    /// absence</b> and leaves the claim NOT CHECKED — the same absent-versus-empty discipline
+    /// <c>reachable-state</c> uses. Absent altogether means every empty claim is NOT CHECKED.</para>
+    ///
+    /// <para><b>It belongs to the ENUMERATION</b> — the third party — for the same reason the enumeration
+    /// itself does: a claim verified against something its own author wrote is not verified.</para>
+    /// </summary>
+    public Dictionary<string, List<string>>? AssertionBounds { get; set; }
 }
 
 public sealed class MapDocument

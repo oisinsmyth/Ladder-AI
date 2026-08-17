@@ -705,9 +705,31 @@ public class SubmissionGateTests
     // 3i — bounds currency (AMB-19). The channel made entirely out of correct decisions.
     // ---------------------------------------------------------------------------------------------
 
-    private static AssertionEnumeration EnumerationWithBounds(IReadOnlyDictionary<string, string>? bounds) =>
+    private static AssertionEnumeration EnumerationWithBounds(
+        IReadOnlyDictionary<string, string>? bounds,
+        IReadOnlyDictionary<string, IReadOnlySet<string>>? assertionBounds = null) =>
         AssertionEnumeration.Of(new[] { "REQ-014" }, new[] { AssertionIdValue },
-            new Dictionary<string, AssertionForm> { [AssertionIdValue] = AssertionForm.When }, "agent-c", Texts, Observations, bounds);
+            new Dictionary<string, AssertionForm> { [AssertionIdValue] = AssertionForm.When }, "agent-c", Texts, Observations, bounds,
+            assertionBounds);
+
+    /// <summary>
+    /// The enumeration stating which of its bounds the default fixture's assertion depends on. <b>An
+    /// empty set is the positive statement "none"</b>, which is what makes a vector's <c>boundsUsed: {}</c>
+    /// checkable rather than merely accepted.
+    /// </summary>
+    private static AssertionEnumeration EnumerationSayingAssertionDependsOn(params string[] bounds) =>
+        EnumerationWithBounds(SpecifiedBounds,
+            new Dictionary<string, IReadOnlySet<string>>(StringComparer.Ordinal)
+            {
+                [AssertionIdValue] = bounds.ToHashSet(StringComparer.Ordinal),
+            });
+
+    /// <summary>The vector that says NOTHING AT ALL about bounds — distinct from one claiming none.</summary>
+    private static SubmissionVector SilentOnBounds(string id = "V-1") => Vector(id: id) with { BoundsUsed = null };
+
+    /// <summary>The vector that POSITIVELY CLAIMS it was written against no bound.</summary>
+    private static SubmissionVector ClaimsNoBounds(string id = "V-1") =>
+        Vector(id: id, boundsUsed: new Dictionary<string, string>(StringComparer.Ordinal));
 
     [Fact]
     public void A_vector_written_against_the_CURRENT_bounds_passes_gate_3i_and_the_pass_NAMES_the_values()
@@ -773,19 +795,140 @@ public class SubmissionGateTests
     }
 
     [Fact]
-    public void A_vector_that_states_NO_BOUND_is_NOT_CHECKED_and_never_a_pass()
+    public void A_vector_that_says_NOTHING_AT_ALL_about_bounds_is_NOT_CHECKED_and_never_a_pass()
     {
         // *** THIS IS AMB-19 ITSELF, NOT A FORMALITY. *** A vector recording no number cannot be found
-        // stale by anything, so it is the one that survives a retune in silence.
-        var silent = Vector(boundsUsed: new Dictionary<string, string>(StringComparer.Ordinal));
-
-        var report = Check(new[] { silent });
+        // stale by anything, so it is the one that survives a retune in silence. SILENCE MUST STAY A
+        // REFUSAL — the empty-claim fix below deliberately does not touch this path.
+        var report = Check(new[] { SilentOnBounds() });
         var gate = Gate(report, "3i bounds currency");
 
         Assert.Equal(GateStatus.NotChecked, gate.Status);
         Assert.False(gate.Passed);
         Assert.Equal(SubmissionVerdict.NotAdmissible, report.Verdict);
         Assert.Contains("CANNOT BE FOUND STALE BY ANYTHING", gate.Detail, StringComparison.Ordinal);
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // `boundsUsed: {}` — THE POSITIVE CLAIM. Measured 2026-08-17 on a real submission: two vectors cited
+    // assertions that genuinely carry no bound, recorded that truthfully, and were refused — so the only
+    // way to clear the refusal was to INVENT a bound, which is the fabrication this gate exists to
+    // prevent. A gate satisfiable only by making something up is inverted.
+    // ---------------------------------------------------------------------------------------------
+
+    [Fact]
+    public void A_vector_claiming_NO_BOUND_that_the_enumeration_CONFIRMS_passes_gate_3i()
+    {
+        var report = Check(new[] { ClaimsNoBounds() }, enumeration: EnumerationSayingAssertionDependsOn());
+        var gate = Gate(report, "3i bounds currency");
+
+        Assert.Equal(GateStatus.Checked, gate.Status);
+        Assert.True(gate.Passed);
+
+        // The pass states its denominator and its authority. With no vector declaring a value there is
+        // nothing to compare, and a summary claiming "every one matches the current table ()" would be an
+        // invariance claim over an empty remainder.
+        Assert.Contains("NO VECTOR HERE DECLARED A VALUE", gate.Detail, StringComparison.Ordinal);
+        Assert.Contains("VERIFIED against the enumeration, not taken from the vector", gate.Detail, StringComparison.Ordinal);
+        Assert.Contains(AssertionIdValue, gate.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_vector_claiming_NO_BOUND_the_enumeration_CANNOT_CONFIRM_is_NOT_CHECKED_and_the_repair_is_the_ENUMERATION()
+    {
+        // The default enumeration carries a bounds TABLE and no per-assertion relation, so the claim
+        // cannot be verified. It must not pass — and it must not tell the author to invent a number.
+        var report = Check(new[] { ClaimsNoBounds() });
+        var gate = Gate(report, "3i bounds currency");
+
+        Assert.Equal(GateStatus.NotChecked, gate.Status);
+        Assert.False(gate.Passed);
+        Assert.Equal(SubmissionVerdict.NotAdmissible, report.Verdict);
+
+        Assert.Contains("THE REPAIR IS TO THE ENUMERATION, NOT TO THESE VECTORS", gate.Detail, StringComparison.Ordinal);
+        Assert.Contains("assertionBounds", gate.Detail, StringComparison.Ordinal);
+        Assert.Contains("DO NOT invent a bound", gate.Detail, StringComparison.Ordinal);
+
+        // And it is NOT reported as the silence case: the two claims have two repairs, and naming the
+        // wrong one sends the author to the wrong document.
+        Assert.DoesNotContain("say NOTHING AT ALL about bounds", gate.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_vector_claiming_NO_BOUND_where_the_enumeration_NAMES_ONE_is_REFUSED_and_it_is_the_serious_case()
+    {
+        // *** THE CHECK THAT MAKES THIS A FIX AND NOT A HOLE. *** The enumeration says the cited
+        // assertion depends on `dwell`; the vector asserts that no bound applies to it. That is a vector
+        // written against a bound nobody looked at, and it is a refusal rather than a note.
+        var report = Check(new[] { ClaimsNoBounds() }, enumeration: EnumerationSayingAssertionDependsOn("dwell"));
+        var gate = Gate(report, "3i bounds currency");
+
+        Assert.Equal(GateStatus.Checked, gate.Status);
+        Assert.False(gate.Passed);
+        Assert.Equal(SubmissionVerdict.NotAdmissible, report.Verdict);
+
+        Assert.Contains("dwell", gate.Detail, StringComparison.Ordinal);
+        Assert.Contains("T#5S", gate.Detail, StringComparison.Ordinal);
+        Assert.Contains("THE BLOCK IS NOT ACCUSED OF ANYTHING HERE", gate.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_claim_of_NO_BOUND_against_an_enumeration_with_NO_TABLE_stays_NOT_CHECKED()
+    {
+        // Empty is not clean: the route by which this fix could become a hole is "declare nothing on both
+        // sides and sail through". An enumeration with no bounds table is not one whose assertions have
+        // no bounds.
+        var gate = Gate(
+            Check(new[] { ClaimsNoBounds() }, enumeration: EnumerationWithBounds(null)),
+            "3i bounds currency");
+
+        Assert.Equal(GateStatus.NotChecked, gate.Status);
+        Assert.False(gate.Passed);
+        Assert.Contains("AN ABSENT TABLE IS NOT AN AGREEING ONE", gate.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void THE_OVER_FIRE_CONVERSE_a_submission_whose_bounds_are_DECLARED_AND_CURRENT_is_untouched_by_the_empty_claim_fix()
+    {
+        // *** A GATE THAT FIRES OUTSIDE ITS SCOPE IS NOISE, AND NOISE GETS SWITCHED OFF. *** The fix adds
+        // a consultation of a relation that the ordinary submission does not carry — so the ordinary
+        // submission must be unaffected by its absence, and pass on exactly the evidence it did before.
+        var report = Check();
+        var gate = Gate(report, "3i bounds currency");
+
+        Assert.Equal(GateStatus.Checked, gate.Status);
+        Assert.True(gate.Passed);
+        Assert.Equal(SubmissionVerdict.AdmissibleSubjectToJudgement, report.Verdict);
+
+        // Still compares, still names both numbers. The empty-claim wording must not appear at all: a
+        // pass that talks about claims nobody made is a pass nobody can read.
+        Assert.Contains("ramp_limit = 10", gate.Detail, StringComparison.Ordinal);
+        Assert.Contains("dwell = T#5S", gate.Detail, StringComparison.Ordinal);
+        Assert.DoesNotContain("NO VECTOR HERE DECLARED A VALUE", gate.Detail, StringComparison.Ordinal);
+        Assert.DoesNotContain("positively state", gate.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_RETUNE_IS_STILL_CAUGHT_when_a_SIBLING_vector_legitimately_cites_no_bound()
+    {
+        // The mixed submission, which is the shape a real one takes: one vector against a bound that
+        // moved, one vector on an assertion that genuinely has none. The honest sibling must not launder
+        // the stale one — the refusal must survive, and it must still name the numbers.
+        var retuned = EnumerationWithBounds(
+            new Dictionary<string, string>(StringComparer.Ordinal) { ["ramp_limit"] = "10", ["dwell"] = "T#9S" },
+            new Dictionary<string, IReadOnlySet<string>>(StringComparer.Ordinal)
+            {
+                [AssertionIdValue] = new HashSet<string>(StringComparer.Ordinal),
+            });
+
+        var report = Check(new[] { Vector(id: "V-stale"), ClaimsNoBounds("V-unbounded") }, enumeration: retuned);
+        var gate = Gate(report, "3i bounds currency");
+
+        Assert.Equal(GateStatus.Checked, gate.Status);
+        Assert.False(gate.Passed);
+        Assert.Equal(SubmissionVerdict.NotAdmissible, report.Verdict);
+        Assert.Contains("V-stale", gate.Detail, StringComparison.Ordinal);
+        Assert.Contains("T#9S", gate.Detail, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -807,7 +950,7 @@ public class SubmissionGateTests
         var retuned = EnumerationWithBounds(new Dictionary<string, string>(StringComparer.Ordinal) { ["dwell"] = "T#9S" });
 
         var stale = Vector(id: "V-stale", boundsUsed: new Dictionary<string, string>(StringComparer.Ordinal) { ["dwell"] = "T#5S" });
-        var silent = Vector(id: "V-silent", boundsUsed: new Dictionary<string, string>(StringComparer.Ordinal));
+        var silent = SilentOnBounds("V-silent");
 
         var gate = Gate(Check(new[] { stale, silent }, enumeration: retuned), "3i bounds currency");
 

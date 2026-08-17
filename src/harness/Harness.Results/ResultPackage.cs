@@ -106,7 +106,7 @@ public sealed record ResultPackage(
     IReadOnlyList<int>? CoRunners,
     ValidityStamp Stamp,
     // AMB-19. Null means the question was not asked for this result; the STATES inside it are the
-    // answers, and four of the five are not passes. See BoundsCurrencyCheck.
+    // answers, and five of the seven are not passes. See BoundsCurrencyCheck.
     VectorBoundsCurrency? BoundsCurrency = null)
 {
     /// <summary>
@@ -187,10 +187,14 @@ public sealed record ResultPackage(
         // sentence. A frozen mirror is a RIG problem; an out-of-date bound is a VECTOR problem, and
         // telling somebody the experiment never ran when it was the premise that expired would send them
         // to the wrong place entirely.
+        // The headline is taken from the FINDING and not written here, because the three roads to a
+        // premise refusal need three different repairs: "written against a bound the specification no
+        // longer states" is simply false of a vector that declared no bound at all, and a headline that
+        // misnames the repair sends the reader to the wrong document with full confidence.
         ResultVerdict.Stale when BoundsCurrency is { PremiseOutOfDate: true } =>
-            "THE VECTOR'S PREMISE IS OUT OF DATE — IT WAS WRITTEN AGAINST A BOUND THE SPECIFICATION NO LONGER STATES (AMB-19). "
+            BoundsCurrency.PremiseHeadline + " (AMB-19). "
             + "*** THIS IS NOT A DEFECT IN THE BLOCK AND MUST NOT BE READ AS ONE: DO NOT EDIT THE BLOCK. *** No assertion ID moved, because no hashed assertion text contains a number — "
-            + "which is exactly why nothing else here could have caught it. Re-read the vector against the current bounds table, then re-submit. "
+            + "which is exactly why nothing else here could have caught it. "
             + BoundsCurrency.Detail,
 
         ResultVerdict.Stale =>

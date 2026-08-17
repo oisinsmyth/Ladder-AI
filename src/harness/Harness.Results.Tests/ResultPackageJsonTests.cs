@@ -101,7 +101,9 @@ public class ResultPackageJsonTests
                 new VersionReport(VersionOutcome.Confirmed, Build.Value, Build.Value, 3, 1, "confirmed")),
             BoundsCurrencyCheck.Evaluate("V-1",
                 new Dictionary<string, string>(StringComparer.Ordinal) { ["fill_setpoint"] = "500" },
-                new Dictionary<string, string>(StringComparer.Ordinal) { ["fill_setpoint"] = "500" }));
+                new Dictionary<string, string>(StringComparer.Ordinal) { ["fill_setpoint"] = "500" },
+                // A declared bound, so the per-assertion relation is never consulted here.
+                AssertionBoundsExpectation.NotStated("this fixture declares a bound")));
 
     /// <summary>Serialise for real and parse back. <b>Never assert against the renderer's own object.</b></summary>
     private static JsonElement RoundTrip(ResultPackage package)

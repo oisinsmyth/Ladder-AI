@@ -324,7 +324,15 @@ public static class GateCli
                 e => e.Key,
                 e => (IReadOnlySet<string>)e.Value.ToHashSet(StringComparer.Ordinal),
                 StringComparer.Ordinal),
-            document.Enumeration?.Bounds);
+            document.Enumeration?.Bounds,
+            // *** THE EMPTY LIST SURVIVES THE PROJECTION. *** `bounds: []` for an assertion is the
+            // positive claim "this one depends on none" and is the only thing that lets a vector's
+            // `boundsUsed: {}` pass; an assertion absent from the map stays absent, and its claim stays
+            // NOT CHECKED. Collapsing empty to absent here would silently re-close the honest exit.
+            document.Enumeration?.AssertionBounds?.ToDictionary(
+                e => e.Key,
+                e => (IReadOnlySet<string>)e.Value.ToHashSet(StringComparer.Ordinal),
+                StringComparer.Ordinal));
 
     /// <summary>The model's fidelity declaration, off the document.</summary>
     public static FidelityDeclaration? ToFidelity(SubmissionDocument document) =>

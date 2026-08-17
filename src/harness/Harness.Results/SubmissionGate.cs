@@ -746,9 +746,19 @@ public static class SubmissionGate
     /// <see cref="ResultPackage.Verdict"/> carries the same distinction through to the result.</para>
     ///
     /// <para><b>NOT CHECKED means a comparison could not be made</b>, and it fails closed: no table at
-    /// all, or a vector that declares no bound. The second is the hole itself rather than a formality —
-    /// <b>a vector that never records which number it was written against can never be found stale by
-    /// anything</b>, so it is precisely the vector that survives a retune in silence.</para>
+    /// all, or a vector that says nothing at all about bounds. The second is the hole itself rather than a
+    /// formality — <b>a vector that never records which number it was written against can never be found
+    /// stale by anything</b>, so it is precisely the vector that survives a retune in silence.</para>
+    ///
+    /// <para>🔴 <b>BUT SILENCE AND <c>boundsUsed: {}</c> ARE DIFFERENT CLAIMS, AND UNTIL 2026-08-17 THIS
+    /// GATE TREATED THEM AS ONE.</b> Measured on a real submission: two vectors cited assertions that
+    /// genuinely carry no bound, recorded that truthfully as an empty map, and were refused — so <b>the
+    /// only way to clear the refusal was to invent a bound</b>, which is exactly the fabrication this gate
+    /// exists to prevent. <i>A gate that can only be satisfied by making something up is inverted.</i> The
+    /// empty claim is now CHECKED — <b>and verified rather than taken</b>: it passes only where the
+    /// enumeration confirms the cited assertion depends on no bound, is NOT CHECKED where the enumeration
+    /// cannot say, and is a <b>refusal</b> where the enumeration names a bound the vector claims does not
+    /// apply.</para>
     /// </summary>
     private static GateResult BoundsCurrency(IReadOnlyList<SubmissionVector> vectors, AssertionEnumeration enumeration)
     {
@@ -763,47 +773,81 @@ public static class SubmissionGate
                 + "no assertion ID moves, and every other gate here stays green. Supply the enumeration's `bounds:` table as `enumeration.bounds`.");
         }
 
+        // *** THE EXPECTATION COMES FROM THE ENUMERATION AND NEVER FROM THE VECTOR. *** A vector claiming
+        // "no bound applies to me" checked against its own claim is not checked at all; the enumeration is
+        // the third party, and where it does not answer the finding says NOT CHECKED rather than passing.
         var findings = vectors
-            .Select(v => BoundsCurrencyCheck.Evaluate(v.Id, v.BoundsUsed, enumeration.Bounds))
+            .Select(v => BoundsCurrencyCheck.Evaluate(
+                v.Id,
+                v.BoundsUsed,
+                enumeration.Bounds,
+                enumeration.BoundsExpectationFor(v.Basis?.AssertionId)))
             .ToArray();
 
-        var stale = findings.Where(f => f.PremiseOutOfDate).ToArray();
+        var refused = findings.Where(f => f.PremiseOutOfDate).ToArray();
         var undeclared = findings.Where(f => f.State == BoundsCurrencyState.NotDeclared).ToArray();
+        var unverifiable = findings.Where(f => f.State == BoundsCurrencyState.NoBoundsClaimUnverified).ToArray();
+        var noBounds = findings.Where(f => f.State == BoundsCurrencyState.NoBoundsCited).ToArray();
 
-        // Undeclared is reported FIRST and as NOT CHECKED even when stale vectors were also found, because
-        // the two are different facts and the weaker one must not be dressed in the stronger one's status:
-        // "we compared and refused" would hide "and these others we could not compare at all". Both refuse
-        // the submission, so nothing is admitted either way — only the report differs, and the report is
-        // the build list.
-        if (undeclared.Length > 0)
+        // The NOT-CHECKED group is reported FIRST and keeps its own status even when refusable vectors
+        // were also found, because the two are different facts and the weaker one must not be dressed in
+        // the stronger one's status: "we compared and refused" would hide "and these others we could not
+        // compare at all". Both refuse the submission, so nothing is admitted either way — only the report
+        // differs, and the report is the build list.
+        if (undeclared.Length > 0 || unverifiable.Length > 0)
         {
-            var detail =
-                $"{undeclared.Length} of {vectors.Count} vector(s) state no bound, so nothing could establish whether they still test the specified number: "
-                + string.Join(" | ", undeclared.Select(f => f.VectorId))
-                + ". *** A VECTOR THAT RECORDS NO BOUND CANNOT BE FOUND STALE BY ANYTHING *** — it survives a retune with every mechanical check green, which is AMB-19 exactly. "
-                + "Declare `boundsUsed` on each vector: bound name to the value it was written against.";
+            var parts = new List<string>();
 
-            if (stale.Length > 0)
+            if (undeclared.Length > 0)
             {
-                detail += " AND, SEPARATELY, THESE WERE COMPARED AND DISAGREE — STALE, NOT FAILED, and not a defect in the block: "
-                    + string.Join(" | ", stale.Select(f => f.Detail));
+                parts.Add(
+                    $"{undeclared.Length} of {vectors.Count} vector(s) say NOTHING AT ALL about bounds, so nothing could establish whether they still test the specified number: "
+                    + string.Join(" | ", undeclared.Select(f => f.VectorId))
+                    + ". *** A VECTOR THAT RECORDS NO BOUND CANNOT BE FOUND STALE BY ANYTHING *** — it survives a retune with every mechanical check green, which is AMB-19 exactly. "
+                    + "Declare `boundsUsed` on each vector: bound name to the value it was written against. If the cited assertion genuinely has no bound, declare it EMPTY — that is a different claim and it is checkable.");
             }
 
-            return GateResult.CouldNotRun(name, NotCheckedReason.AwaitingAnArtifactThatCouldExist, verifier, detail);
+            if (unverifiable.Length > 0)
+            {
+                parts.Add(
+                    $"{unverifiable.Length} of {vectors.Count} vector(s) POSITIVELY CLAIM they were written against no bound, and the enumeration cannot confirm it: "
+                    + string.Join(" | ", unverifiable.Select(f => f.Detail))
+                    + " *** THE REPAIR IS TO THE ENUMERATION, NOT TO THESE VECTORS. *** Supply `enumeration.assertionBounds` — assertion ID to the bound names that assertion depends on, with an EMPTY list "
+                    + "meaning 'this one depends on none'. DO NOT invent a bound on the vector to clear this: that is the fabrication this gate exists to prevent, and a gate satisfiable only by making something up is inverted.");
+            }
+
+            if (refused.Length > 0)
+            {
+                parts.Add("AND, SEPARATELY, THESE WERE COMPARED AND DISAGREE — STALE, NOT FAILED, and not a defect in the block: "
+                    + string.Join(" | ", refused.Select(f => f.Detail)));
+            }
+
+            return GateResult.CouldNotRun(name, NotCheckedReason.AwaitingAnArtifactThatCouldExist, verifier, string.Join(" ", parts));
         }
 
-        if (stale.Length > 0)
+        if (refused.Length > 0)
         {
             return new GateResult(name, GateStatus.Checked, false, verifier,
-                string.Join(" | ", stale.Select(f => f.Detail))
+                string.Join(" | ", refused.Select(f => f.Detail))
                 + " *** THE BLOCK IS NOT ACCUSED OF ANYTHING HERE. Do NOT edit the block on the strength of this finding. ***");
         }
 
         var agreed = findings.SelectMany(f => f.Agreed).Distinct(StringComparer.Ordinal).OrderBy(s => s, StringComparer.Ordinal).ToArray();
+        var compared = findings.Count(f => f.State == BoundsCurrencyState.Current);
 
+        // The pass states its own denominator, and it states the two kinds of pass separately. A run in
+        // which EVERY vector legitimately cites no bound compares no value at all — `agreed` is empty —
+        // and a summary that printed "every one matches the current table ()" would be an invariance claim
+        // over an empty remainder. Same shape as drift-check's COMPARED: line.
         return new GateResult(name, GateStatus.Checked, true, verifier,
-            $"every one of {vectors.Count} vector(s) states the bound it was written against, and every one matches the enumeration's current table ({string.Join("; ", agreed)}). "
-            + "A retune of any of these values would now refuse this submission rather than silently changing what it tests.");
+            $"all {vectors.Count} vector(s) state which bound they were written against. "
+            + (compared > 0
+                ? $"{compared} declared a value and every one matches the enumeration's current table ({string.Join("; ", agreed)}). "
+                : "NO VECTOR HERE DECLARED A VALUE, so no value was compared — the pass rests entirely on the verified no-bound claims below. ")
+            + (noBounds.Length > 0
+                ? $"{noBounds.Length} positively state they were written against NO bound, and the enumeration confirms each cited assertion depends on none ({string.Join("; ", noBounds.Select(f => $"{f.VectorId} cites {f.CitedAssertion}"))}) — VERIFIED against the enumeration, not taken from the vector. "
+                : string.Empty)
+            + "A retune of any specified value would now refuse this submission rather than silently changing what it tests.");
     }
 
     /// <summary>

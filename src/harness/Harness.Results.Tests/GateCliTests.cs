@@ -557,6 +557,50 @@ public class GateCliTests
     }
 
     [Fact]
+    public void THE_EMPTY_BOUNDS_CLAIM_AND_ITS_ENUMERATION_RELATION_BOTH_REACH_THE_GATE_FROM_THE_DOCUMENT()
+    {
+        // *** A FIELD NOBODY CAN SET IS A FIELD THAT DOES NOT EXIST *** — this repo has recorded that
+        // three times — so the new relation is tested through the DOCUMENT, by removal, not by reading
+        // the projection code. All three states are driven from JSON alone.
+        var claimsNone = Good.Replace("\"boundsUsed\": { \"ramp_limit\": \"10\" }", "\"boundsUsed\": {}", StringComparison.Ordinal);
+        Assert.NotEqual(Good, claimsNone);
+
+        // (1) The claim with NO relation to check it against: NOT CHECKED, and the repair named is the
+        //     enumeration's — never "add a bound to the vector", which is the fabrication being avoided.
+        var unverifiable = Run(claimsNone);
+        Assert.Equal(GateExit.NotAdmissible, unverifiable.Exit);
+        Assert.Contains("THE REPAIR IS TO THE ENUMERATION, NOT TO THESE VECTORS", unverifiable.Output, StringComparison.Ordinal);
+        Assert.Contains("DO NOT invent a bound", unverifiable.Output, StringComparison.Ordinal);
+
+        // (2) The enumeration confirms the assertion depends on none — an EMPTY LIST, which must survive
+        //     the projection as an answer rather than collapsing into an absence.
+        var confirmed = claimsNone.Replace(
+            "\"bounds\": { \"ramp_limit\": \"10\" } },",
+            "\"bounds\": { \"ramp_limit\": \"10\" }, \"assertionBounds\": { \"REQ-014:ffcc38\": [] } },",
+            StringComparison.Ordinal);
+        Assert.NotEqual(claimsNone, confirmed);
+        Assert.Equal(GateExit.AdmissibleSubjectToJudgement, Run(confirmed).Exit);
+        Assert.Contains("VERIFIED against the enumeration, not taken from the vector", Run(confirmed).Output, StringComparison.Ordinal);
+
+        // (3) The enumeration NAMES a bound the vector claims does not apply: refused, and the block is
+        //     explicitly not accused. The only edit between (2) and (3) is the relation's contents.
+        var contradicted = claimsNone.Replace(
+            "\"bounds\": { \"ramp_limit\": \"10\" } },",
+            "\"bounds\": { \"ramp_limit\": \"10\" }, \"assertionBounds\": { \"REQ-014:ffcc38\": [\"ramp_limit\"] } },",
+            StringComparison.Ordinal);
+        Assert.NotEqual(claimsNone, contradicted);
+
+        var refused = Run(contradicted);
+        Assert.Equal(GateExit.NotAdmissible, refused.Exit);
+        Assert.Contains("ramp_limit", refused.Output, StringComparison.Ordinal);
+        Assert.Contains("THE BLOCK IS NOT ACCUSED OF ANYTHING HERE", refused.Output, StringComparison.Ordinal);
+
+        // And the untouched document still passes: the new field is optional and its absence changes
+        // nothing for a submission that declares its bounds.
+        Assert.Equal(GateExit.AdmissibleSubjectToJudgement, Run(Good).Exit);
+    }
+
+    [Fact]
     public void A_CONFLICT_EDGES_ENTRY_REACHES_THE_GATE_AND_ITS_SIGNAL_IS_NAMED_IN_THE_REPORT()
     {
         var withEdge = Good.Replace(

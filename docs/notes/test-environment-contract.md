@@ -83,6 +83,8 @@ Vector                        -- one element of the submission's `vectors` array
   assertedBehaviours  [ behaviour ]   -- set-differenced against the model's `represents` (M4)
   kills               the wrong implementation this vector would catch    -- §2.2
   boundsUsed          bound name -> the value THIS VECTOR WAS WRITTEN AGAINST   -- §2.5, AMB-19
+                      ABSENT and {} ARE DIFFERENT CLAIMS: absent = nobody said (refused);
+                      {} = "this assertion has no bound", checked against assertionBounds
 
 Submission                    -- the top-level object the vectors are submitted inside
   blockAuthor         agent identity, for D6
@@ -91,7 +93,8 @@ Submission                    -- the top-level object the vectors are submitted 
   resultRegistersPerSlot  /
   model               { id, represents, doesNotRepresent, validatedAgainstPlantData, compStable }
   enumeration         { clauses, assertions, forms, enumerator,      -- §3
-                        normalisedTexts, requiredObservations, bounds }   -- §2.5 and §10's 3g/3h/3i
+                        normalisedTexts, requiredObservations, bounds,    -- §2.5 and §10's 3g/3h/3i
+                        assertionBounds }   -- assertion -> which bounds it depends on; [] means NONE
   map                 { providedFor: signal -> [ modes ],          -- §4.3, HOW it is watched
                         storage:     signal -> { owner?, path },   -- §2.7, WHERE it lives
                         harnessOnly: [ signal ] }                  -- §2.7, occupies no PLC storage
@@ -346,7 +349,11 @@ This is the one table to read before omitting anything. Four treatments, and the
 | `layoutSetAfterImport`, or one naming an older `importStamp` | **REFUSED** | the layout reverts at **every** import; a stale stamp says it was re-asserted and has reverted since |
 | an `s7Objects` row naming a **deliverable** block | **REFUSED** | the invariant itself, §4.5. Not a finding — the harness touches harness-generated objects only |
 | a vector's `boundsUsed` (§2.5) | ***NOT CHECKED*** | ***this is the AMB-19 hole itself, not a formality*** — a vector that records no bound **can never be found stale by anything**, so it survives a retune with every gate green. It keeps this status even beside a provably stale sibling |
-| `enumeration.bounds` | ***NOT CHECKED*** | a property of the **enumeration**; an absent table is not an agreeing one |
+| `boundsUsed: {}` — **present and EMPTY**, with `enumeration.assertionBounds` saying the cited assertion depends on none | **CHECKED — a pass** | 🔴 **A DIFFERENT CLAIM FROM ABSENCE, AND UNTIL 2026-08-17 THE SAME STATE.** Empty is the positive claim *"this assertion has no bound to cite"* — true of a gating condition, an ordering, a state naming no time and no threshold. Refusing it left **inventing a bound as the only way to pass**, which is the fabrication this gate exists to prevent. **VERIFIED, never taken:** the pass requires the *enumeration* to confirm it |
+| `boundsUsed: {}` with **no** `assertionBounds` entry for the cited assertion | ***NOT CHECKED*** | the claim is unverifiable, and *a declaration is a transferred responsibility, not a verification*. ***The repair is to the ENUMERATION*** — supply `assertionBounds` — **never to the vector**: adding a number to clear this is the fabrication |
+| `boundsUsed: {}` where `assertionBounds` **names a bound** | **REFUSED, reported as `STALE`** | the serious one: **a vector written against a bound nobody looked at.** Not merely a failure to record a number — an assertion that *no* number applies where the specification says one does. Still never a `FAIL`: it says nothing about the block |
+| `enumeration.bounds` | ***NOT CHECKED*** | a property of the **enumeration**; an absent table is not an agreeing one. **An absent table also outranks the empty claim** — declaring nothing on both sides is not a route through |
+| `enumeration.assertionBounds` | ***optional; absent affects only the empty claim*** | a submission that declares its bounds normally is **untouched** by its absence. An assertion **missing** from a relation that exists is an ABSENCE, not an assertion with no bounds |
 | a declared bound that **differs** from the table | **REFUSED, reported as `STALE`** | ***never `FAIL`*** — the block may be perfectly correct and the vector predates a retune. §2.5 |
 | a declared bound the table does **not contain** | **REFUSED, reported as `Unknown`** | a disagreement about which bounds *exist*, whose repair precedes any question about a value — so it outranks `Stale` |
 | `enumeration.normalisedTexts` | ***NOT CHECKED*** | the stamper's output is then taken on trust, and **the omission is exactly what a compromised stamper would emit** |
@@ -418,11 +425,49 @@ written against, and submission compares that against the table.
 Vector
   boundsUsed        bound name -> the value THIS VECTOR WAS WRITTEN AGAINST
                     e.g. { "persistence_threshold": "T#60S" }
+                    ABSENT = nobody said anything      -> NOT CHECKED, refused
+                    {}     = "no bound applies to me"  -> a CLAIM, checked below
 
 enumeration
   bounds            bound name -> the value the specification CURRENTLY STATES
                     e.g. { "persistence_threshold": "T#60S" }
+
+  assertionBounds   assertion ID -> which of those bounds it DEPENDS ON
+                    e.g. { "REQ-HBA-001:ab68c1": ["persistence_threshold"],
+                           "REQ-HBA-004:9e21c7": [] }
+                    [] = "this one depends on none"    -> a positive answer
+                    key absent = nobody said           -> an ABSENCE
 ```
+
+#### 🔴 `boundsUsed: {}` IS A CLAIM, NOT A SILENCE — AND IT IS VERIFIED, NOT ACCEPTED (2026-08-17)
+
+**Measured on a real submission.** Two vectors cited assertions that genuinely carry no bound —
+an assertion about a gating condition, an ordering, or a state names no time and no threshold, so
+there is nothing to cite. They recorded that truthfully as an empty map. **The gate refused them,
+and the only way to clear the refusal was to invent a bound.**
+
+> *** A GATE THAT CAN ONLY BE SATISFIED BY MAKING SOMETHING UP IS INVERTED. *** It was refusing
+> exactly the vectors that were being most honest, and the fabrication it would have produced is
+> the thing it exists to prevent.
+
+The cause was that `null` and `{}` were the same state. They are different claims:
+
+| the vector says | it means | outcome |
+|---|---|---|
+| nothing (`boundsUsed` absent) | *nobody said anything about bounds* | **NOT CHECKED, refused.** Unchanged — **silence must stay a refusal**, and the fix deliberately does not touch this path |
+| `{}` and `assertionBounds` confirms none | *this assertion has no bound to cite* | **CHECKED — a pass**, naming the assertion it was verified against |
+| `{}` and nothing states the relation | the claim cannot be checked | **NOT CHECKED, refused.** ***Repair the ENUMERATION, never the vector*** |
+| `{}` and `assertionBounds` names a bound | *written against a bound nobody looked at* | **REFUSED, reported as `STALE`.** The serious one |
+
+**The verification is the whole of why this is a fix and not a hole.** The authority is the
+enumeration — the third party — for the same reason the enumeration itself is: *a claim checked
+against something its own author wrote is not checked.* And it follows the discipline already in
+this repo for `reachable-state`'s `reachableState: []` and `drift-check`'s `--complete`:
+***absent is not empty, at both levels.***
+
+⚠️ **What it does NOT check, stated rather than left to be rediscovered:** a vector declaring
+**one** bound where `assertionBounds` names **two** is not caught here. That is a partial-citation
+check and a different gate. The relation is consulted **only** on the empty claim.
 
 ***Carry the BARE VALUE on both sides.*** The enumeration's YAML writes provenance prose beside the
 number — `"T#60S  (Q-HBA-01, owner) — the SPECIFIED value"` — and these fields want `"T#60S"`. A
@@ -1379,7 +1424,7 @@ of saying so.
 | **3f citation shape** | the citation is the content-derived ID, never the **display ordinal** | reject. An ordinal is POSITIONAL, so inserting one assertion above it silently makes the citation name a different one |
 | **3g assertion IDs recompute** | every ID re-hashes from the `normalisedTexts` it claims to come from | reject. ***This recomputation is the ONLY reason a stamper is permitted to have no independence*** — without it a hand-written hex string is indistinguishable from a computed one. Absent texts are `NOT CHECKED` |
 | **3h required observations** (AMB-14) | every signal the cited assertion depends on appears in this vector's `Expectations` | reject, naming the unobserved signals. A relational assertion has more than one, and observing one tests neither the other nor the relation |
-| **3i bounds currency** (AMB-19, §2.5) | each `boundsUsed` value matches `enumeration.bounds` | ***refuse, reported as `STALE` and never `FAIL`***, ending *"Do NOT edit the block on the strength of this finding"*. A vector declaring no bound is `NOT CHECKED` **and keeps that status beside a stale sibling** |
+| **3i bounds currency** (AMB-19, §2.5) | each `boundsUsed` value matches `enumeration.bounds`; an EMPTY `boundsUsed` is checked against `enumeration.assertionBounds` | ***refuse, reported as `STALE` and never `FAIL`***, ending *"Do NOT edit the block on the strength of this finding"*. A vector **saying nothing** is `NOT CHECKED` **and keeps that status beside a stale sibling**. A vector **claiming no bound** passes where the enumeration confirms it, is `NOT CHECKED` where nothing can confirm it (***repair the enumeration, never the vector***), and is refused where the enumeration names a bound |
 | **fidelity** | every asserted behaviour ∈ the model's fidelity declaration (M4) | reject with both sets shown |
 | **observability** | mode valid; signal in the map; window ≥ §12a's floor **at the run-time `comp`**; declaration predates the generating download | ***refuse the vector*** — §2.6's own rule |
 | **settling** | declaration exists; **is not the completion flag alone** | reject, citing phase 2's `Done`-at-10-ramps-to-15 |

@@ -48,10 +48,22 @@ public class ResultPackageTests
             omitBoundsCurrency ? null : boundsCurrency ?? CurrentBounds);
 
     /// <summary>A vector whose declared bound matches the enumeration's table — AMB-19's only passing state.</summary>
+    /// <summary>
+    /// These packages declare a bound, so the per-assertion relation is never consulted — it is only
+    /// asked about the EMPTY claim. Passed explicitly rather than defaulted: the parameter is required so
+    /// that a caller who has no relation says so, and says why.
+    ///
+    /// <para>Declared ABOVE its first use because static initialisers run in textual order — below it,
+    /// every fixture here would be built against a null.</para>
+    /// </summary>
+    private static readonly AssertionBoundsExpectation NoRelation =
+        AssertionBoundsExpectation.NotStated("these fixtures declare a bound, so the per-assertion relation is not consulted");
+
     private static readonly VectorBoundsCurrency CurrentBounds = BoundsCurrencyCheck.Evaluate(
         "V-1",
         new Dictionary<string, string>(StringComparer.Ordinal) { ["fill_setpoint"] = "500" },
-        new Dictionary<string, string>(StringComparer.Ordinal) { ["fill_setpoint"] = "500" });
+        new Dictionary<string, string>(StringComparer.Ordinal) { ["fill_setpoint"] = "500" },
+        NoRelation);
 
     private static readonly ObservabilityReport Supportable = ObservabilityCheck.Evaluate(
         new[] { new ObservabilityDeclaration("Demo_Count", SignalNature.PersistentState, InstrumentationMode.Latched, 0) },
@@ -336,7 +348,8 @@ public class ResultPackageTests
     private static readonly VectorBoundsCurrency Retuned = BoundsCurrencyCheck.Evaluate(
         "V-1",
         new Dictionary<string, string>(StringComparer.Ordinal) { ["fill_setpoint"] = "500" },
-        new Dictionary<string, string>(StringComparer.Ordinal) { ["fill_setpoint"] = "900" });
+        new Dictionary<string, string>(StringComparer.Ordinal) { ["fill_setpoint"] = "900" },
+        NoRelation);
 
     [Fact]
     public void A_RETUNED_BOUND_IS_STALE_AND_NOT_FAIL_even_when_every_assertion_HELD()
@@ -391,7 +404,8 @@ public class ResultPackageTests
         // is vanish: the submission gate refuses it first, and if one ever reaches a package the gate
         // was bypassed and the result must still say so.
         var undeclared = BoundsCurrencyCheck.Evaluate("V-1", null,
-            new Dictionary<string, string>(StringComparer.Ordinal) { ["fill_setpoint"] = "500" });
+            new Dictionary<string, string>(StringComparer.Ordinal) { ["fill_setpoint"] = "500" },
+            NoRelation);
 
         var package = Package(declaration: Declaration(boundsCurrency: undeclared));
 

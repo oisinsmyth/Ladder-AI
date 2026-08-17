@@ -80,6 +80,22 @@ public sealed record Basis(string ClauseId, string AssertionId);
 /// (<see cref="BoundsCurrencyCheck"/>). Absent means the comparison was made against nothing, which the
 /// gate reports as NOT CHECKED and never as agreement.</para>
 /// </param>
+/// <param name="AssertionBounds">
+/// Assertion ID to <b>which of the bounds above that assertion actually depends on</b> — the relation
+/// that makes <c>boundsUsed: {}</c> a CHECKABLE claim.
+///
+/// <para><b>Without it a vector citing a genuinely unbounded assertion had no honest exit.</b> An
+/// assertion about a gating condition, an ordering or a state names no time and no threshold, so its
+/// vector truthfully records no bound — and gate 3i refused it, leaving <i>inventing a bound</i> as the
+/// only way through. That is the fabrication the gate exists to prevent, so the gate was inverted for
+/// exactly the vectors that were being most honest.</para>
+///
+/// <para>🔴 <b>ABSENT IS NOT EMPTY, at both levels.</b> A null relation is "nobody stated it" and the
+/// empty claim then reads NOT CHECKED. An empty SET for one assertion is the positive statement "this
+/// assertion depends on no bound" — the same shape as <c>reachable-state</c>'s <c>reachableState: []</c>
+/// against an omitted key. <b>And it is the ENUMERATION that states it</b>, not the vector: a claim
+/// verified against its own author is not verified.</para>
+/// </param>
 public sealed record AssertionEnumeration(
     IReadOnlySet<string> Clauses,
     IReadOnlySet<string> Assertions,
@@ -87,7 +103,8 @@ public sealed record AssertionEnumeration(
     AgentIdentity Enumerator,
     IReadOnlyDictionary<string, string>? NormalisedTexts = null,
     IReadOnlyDictionary<string, IReadOnlySet<string>>? RequiredObservations = null,
-    IReadOnlyDictionary<string, string>? Bounds = null)
+    IReadOnlyDictionary<string, string>? Bounds = null,
+    IReadOnlyDictionary<string, IReadOnlySet<string>>? AssertionBounds = null)
 {
     public bool IsEmpty => Assertions.Count == 0 || Clauses.Count == 0;
 
@@ -118,6 +135,47 @@ public sealed record AssertionEnumeration(
     /// </summary>
     public bool CarriesNoBounds => Bounds is null || Bounds.Count == 0;
 
+    /// <summary>
+    /// True when nothing states which bounds each assertion depends on, so a vector's positive
+    /// <c>boundsUsed: {}</c> claim <b>cannot be verified by this enumeration</b>. Not the same as an
+    /// enumeration stating that every assertion is unbounded.
+    /// </summary>
+    public bool CarriesNoAssertionBounds => AssertionBounds is null || AssertionBounds.Count == 0;
+
+    /// <summary>
+    /// The bounds this assertion depends on, or null when the enumeration does not say. <b>An EMPTY set
+    /// is an answer</b> — "this assertion depends on none" — and null is the absence of one.
+    /// </summary>
+    public IReadOnlySet<string>? BoundsOf(string assertionId) =>
+        AssertionBounds is not null && AssertionBounds.TryGetValue(assertionId, out var bounds) ? bounds : null;
+
+    /// <summary>
+    /// <b>What gate 3i should compare a vector's empty bounds claim against</b> — assembled here rather
+    /// than in the gate so the "why is there nothing" reasons are written once, next to the data that
+    /// decides them, and reach the report intact.
+    /// </summary>
+    public AssertionBoundsExpectation BoundsExpectationFor(string? citedAssertionId)
+    {
+        if (string.IsNullOrWhiteSpace(citedAssertionId))
+        {
+            return AssertionBoundsExpectation.NotStated(
+                "this vector cites no assertion, so there is nothing whose bounds could be looked up. A vector with no basis is refused by gate 3 in any case.");
+        }
+
+        if (CarriesNoAssertionBounds)
+        {
+            return AssertionBoundsExpectation.NotStated(
+                $"the enumeration states no per-assertion bounds relation at all, so nothing says whether '{citedAssertionId}' depends on a bound");
+        }
+
+        var bounds = BoundsOf(citedAssertionId);
+
+        return bounds is null
+            ? AssertionBoundsExpectation.NotStated(
+                $"the enumeration states a per-assertion bounds relation but says nothing about '{citedAssertionId}' — an assertion missing from the relation is an ABSENCE, never an assertion with no bounds")
+            : AssertionBoundsExpectation.Stated(citedAssertionId, bounds);
+    }
+
     public static AssertionEnumeration Of(
         IEnumerable<string> clauses,
         IEnumerable<string> assertions,
@@ -125,14 +183,16 @@ public sealed record AssertionEnumeration(
         string enumerator = "",
         IReadOnlyDictionary<string, string>? normalisedTexts = null,
         IReadOnlyDictionary<string, IReadOnlySet<string>>? requiredObservations = null,
-        IReadOnlyDictionary<string, string>? bounds = null) =>
+        IReadOnlyDictionary<string, string>? bounds = null,
+        IReadOnlyDictionary<string, IReadOnlySet<string>>? assertionBounds = null) =>
         new(clauses.ToHashSet(StringComparer.Ordinal),
             assertions.ToHashSet(StringComparer.Ordinal),
             forms ?? new Dictionary<string, AssertionForm>(StringComparer.Ordinal),
             new AgentIdentity(enumerator),
             normalisedTexts,
             requiredObservations,
-            bounds);
+            bounds,
+            assertionBounds);
 }
 
 /// <summary>What a model claims to represent, and what it explicitly does not (M3).</summary>
