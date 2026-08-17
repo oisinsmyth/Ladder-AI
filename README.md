@@ -2,9 +2,14 @@
 
 AI-assisted Siemens LAD engineering via TIA Openness. Claude Code reads/writes a vendor-neutral IR; `openness-cli` is the only TIA touchpoint; a human reviews everything.
 
+🛑 **The staged development plan is SUSPENDED (2026-08-17)** — time constraints and real application
+needs. No stage is active; stage progression, gate reviews and the build backlog are frozen where
+they stand. The hard rules, the data boundary and the already-proven tooling are **unaffected** and
+real jobs continue. Canonical notice: **`docs/03-development-plan.md`**.
+
 - Start here: `docs/00-README.md` (reading order for the design suite)
 - Claude Code operating manual: `CLAUDE.md`
-- Active stage: `docs/notes/stage-gates.md`
+- Active stage: `docs/notes/stage-gates.md` — **none; suspended, see above**
 
 ## Layout
 

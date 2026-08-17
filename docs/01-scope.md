@@ -44,4 +44,6 @@ See `10-non-goals.md`. Headlines: safety logic, non-LAD PLC languages, direct ha
 
 ## Related documents
 
-`02-roadmap.md` (staged expansion) · `03-development-plan.md` · `04-design-philosophy.md` · `05-architecture.md` · `10-non-goals.md`
+`02-roadmap.md` (staged expansion — **🛑 suspended 2026-08-17**) · `03-development-plan.md` (**🛑 suspended; canonical notice**) · `04-design-philosophy.md` · `05-architecture.md` · `10-non-goals.md`
+
+**Note on this document:** the scope and success criteria above are **unchanged by the suspension** — what is suspended is the plan for *delivering* them, not the definition of what is in scope. Nothing here has been narrowed or withdrawn.

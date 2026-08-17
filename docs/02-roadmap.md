@@ -1,5 +1,16 @@
 # 02 — Staged Scope Expansion (Roadmap)
 
+> # 🛑 SUSPENDED — 2026-08-17
+>
+> **The staged development plan is suspended (time constraints + real application needs).** The stage
+> progression below does not advance: no stage opens, closes, or has its gate reviewed while the
+> suspension stands. Entry/exit criteria are **frozen as written, not waived** — in particular S6's
+> exit criterion (ten fresh requests, at 1) and S7's `S6 done` entry gate are unchanged and unmet.
+>
+> **Canonical notice, including what is *not* suspended (the hard rules, the data boundary, the built
+> tooling, and live-job work): `03-development-plan.md`.** Current per-stage status:
+> `docs/notes/stage-gates.md`. Everything below is retained verbatim as the plan of record.
+
 Stages follow the project goals in priority order. Each stage has entry criteria (what must already be true), deliverables, and exit criteria (definition of done). A stage does not start until the previous stage's exit criteria are met — read capabilities are proven before write capabilities are attempted.
 
 Two cross-cutting rules apply from the first write-capable stage (S3) onward:
@@ -97,6 +108,13 @@ Highest-risk capability: changes to existing logic.
 > (two slots do not interfere) and **A7** (run-state read in both CPU states). **A6** (a delegate
 > throw leaving the CPU untouched) is the widest-blast-radius item still unmeasured and needs the
 > owner present; **A8/G2** is deferred by ruling.
+>
+> 🛑 **SUSPENDED 2026-08-17 along with the rest of the plan.** This block described work in
+> progress; that work is **stopped where it stands, not cancelled and not finished** — phases 0–3
+> closed, phase 4.3/4.4 built, **the closed-loop conformance path never run end to end**, assumption
+> **A6** still unmeasured. `docs/notes/test-environment-build-plan.md` and
+> `docs/notes/live-project-readiness.md` remain accurate as of that date; read the readiness page
+> before using any of the harness on a live job, since the tooling itself is not suspended.
 >
 > ***THE EXIT CRITERION ABOVE IS UNCHANGED AND IS NOT YET MET.*** Phase 2 demonstrated a deliberate
 > defect going RED and its correction going GREEN — *and the same defect shown invisible under a

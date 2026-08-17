@@ -1,5 +1,12 @@
 # 16 — Future Ideas
 
+🛑 **PROMOTION SUSPENDED 2026-08-17.** The staged development plan is suspended
+(`docs/03-development-plan.md`), so **no entry here is promoted into the plan or built while it
+stands** — the FI backlog is held. Two things continue unchanged, because this doc's discipline is
+what keeps ideas from being lost: **entries may still be raised and recorded**, and **no entry is
+silently deleted**. An idea raised during the suspension gets its verdict when the plan resumes;
+until then, "Raised" is the correct status, not "Rejected".
+
 Candidate ideas under debate: analysed here for merits and costs until they earn a verdict. This doc fills the gap between the suite's other homes for scope — it holds what is *not yet decided*. Committed work lives in `02-roadmap.md`; excluded work lives in `10-non-goals.md`; in-flight work lives in `AITODO.md` (ephemeral by design). An idea is never silently deleted from here: every entry ends with a recorded verdict or an explicit revisit trigger.
 
 ## Lifecycle

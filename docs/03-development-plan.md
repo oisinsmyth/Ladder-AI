@@ -1,5 +1,51 @@
 # 03 — Development Plan
 
+> # 🛑 SUSPENDED — 2026-08-17
+>
+> **The staged development plan is suspended by the project owner, for time constraints and real
+> application needs.** This notice is the canonical one. Eleven other surfaces carry a **pointer** to
+> it rather than their own wording, so there is one place to change when it lifts — `CLAUDE.md`
+> (*Current stage*), `02-roadmap.md` (top + its S9 status block), `docs/notes/stage-gates.md` (top +
+> every non-DONE table row), `AITODO.md` (*Project stage*, *Current task*, *Outstanding works*,
+> recovery step 2), `README.md`, `docs/00-README.md`, `docs/01-scope.md`,
+> `docs/15-generation-pipeline.md`, `docs/16-future-ideas.md`, `agent-tasks/README.md`, and the
+> `CHANGELOG.md` entry for this date. **`docs/evidence/`, `docs/audit/`, the ADRs and the older
+> CHANGELOG entries were deliberately left untouched** — they are dated records of what happened, and
+> a suspension does not revise history.
+>
+> **What is suspended** — the *plan*, meaning the way the work was being sequenced and governed:
+>
+> - The S0–S9 staged progression in `02-roadmap.md`. No stage opens, closes, or advances.
+> - The stage-gate reviews and sign-offs in `docs/notes/stage-gates.md`, including the two still
+>   formally open (**S0**'s pending gate sign-off, **S6**'s exit criterion at 1 of 10 fresh requests).
+>   These are **frozen where they stand, not failed and not waived** — see the status table.
+> - Milestones M1–M9 and the cadence below.
+> - The build-order queues that exist only to advance the plan: `docs/16-future-ideas.md`'s FI
+>   backlog, `docs/15-generation-pipeline.md`'s remaining skills, `agent-tasks/`.
+>
+> **What is NOT suspended** — and this is the point of the suspension, not an exception to it:
+>
+> - **`CLAUDE.md`'s hard rules, in full.** A suspended plan does not relax LAD-only, safety, tag
+>   invention, the compile gate, the human promotion gate, IR-not-SimaticML, or `lad-coder` dispatch.
+> - **`docs/13-data-boundary.md`, in full**, including the `Live Runs/` retention rule (use anything,
+>   commit nothing).
+> - **The tooling that is already built and proven** — `openness-cli`, `converter`, the skills, the
+>   harness. It stays usable for real jobs; suspending the plan does not withdraw the capability.
+> - **Real application work in `Live Runs/`**, which is what the suspension is making room for.
+>
+> ⚠️ **The reading recorded here, so it can be corrected rather than assumed:** *"real application
+> needs"* is taken to mean live delivery continues while pipeline development stops. If the owner
+> meant the whole project pauses — live jobs included — this notice is wrong in one direction only
+> (the "NOT suspended" list) and should be cut back to the hard rules and the data boundary.
+>
+> **Status of the work at suspension** is not restated here — `docs/notes/stage-gates.md`'s table and
+> `docs/evidence/stage-SN.md` are the record, and they were accurate on this date. Nothing was
+> abandoned mid-flight: `agent-tasks/` was empty and `AITODO.md` recorded nothing mid-execution.
+>
+> **To resume:** delete this block and the pointers listed above; re-read `AITODO.md`'s recovery
+> procedure before trusting any narrative in these docs, since the tooling may have moved under live
+> work while the plan was suspended.
+
 ## Approach
 
 Solo engineer + Claude Code, working stage by stage per `02-roadmap.md`. Each stage is a vertical slice: build the minimum tooling, prove it on the reference project, write the tests, hold the stage-gate review, then move on. No stage is skipped because a later one looks more exciting — the boring stages (round-trip, tests) are what make the exciting ones safe.

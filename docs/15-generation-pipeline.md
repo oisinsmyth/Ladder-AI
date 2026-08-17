@@ -4,6 +4,13 @@
 The individual skills are built incrementally — the "Build order & status" table at the bottom is
 the ground truth for what exists vs. what is still design.
 
+🛑 **BUILD-OUT SUSPENDED 2026-08-17 along with the staged plan** (`docs/03-development-plan.md`). The
+**pipeline itself is not suspended and ADR-0004 still stands**: the skills that exist are built,
+validated and in use, and the stage contract they follow is unchanged — a live job still runs through
+them under `CLAUDE.md`'s hard rules. What stops is *building the rest*: the unbuilt rows in the "Build
+order & status" table stay unbuilt, and a missing skill is still no excuse to do the stage inline
+(hard rule 8 — `lad-coder` performs it manually to the same contract, exactly as before).
+
 ## Why this exists
 
 S6's first real build (test-project001 / Kestrel Shredder, 2026-07-15 — `docs/notes/stage-gates.md`)

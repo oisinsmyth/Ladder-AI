@@ -8,6 +8,12 @@ working (that's `AITODO.md`). A task file moves here once its ruling/design deci
 and it's ready to hand to an agent; when done, its outcome gets folded back into the permanent docs
 and the task file itself gets deleted — don't let finished tasks accumulate here.
 
+🛑 **DISPATCH SUSPENDED 2026-08-17** along with the staged development plan
+(`docs/03-development-plan.md`) — **and the board was empty when it happened, so nothing is stranded
+here.** Do not queue pipeline-development tasks while the suspension stands. This does not fence off
+agent dispatch as such: `lad-coder` dispatch under hard rule 8 is unaffected, and live-job work is
+dispatched the same way it always was.
+
 **Status: empty.** The queue this folder was built for (nine tasks against the `test-project001`
 scratch project, 2026-07-17) is fully closed and its task files removed — the pattern below is
 what's worth keeping, not the specific tasks. Populate it again next time a batch of queued,

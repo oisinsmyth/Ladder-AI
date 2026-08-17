@@ -353,6 +353,8 @@ LAD you write or review follows `docs/06-lad-conventions.md` (cite rule IDs like
 
 ## Current stage
 
+🛑 **THE STAGED DEVELOPMENT PLAN IS SUSPENDED — 2026-08-17, project owner's decision, for time constraints and real application needs. NO STAGE IS ACTIVE.** Canonical notice: **`docs/03-development-plan.md`** (what is and is not covered); current per-stage state: `docs/notes/stage-gates.md`. **S5 and S6 were active and are frozen — not closed, not failed, and their exit criteria are NOT waived** (S6 stands at 1 of 10 fresh requests). Do not open, close, advance or gate-review a stage; do not treat a frozen stage as passed. **Everything else in this file still binds in full** — the hard rules, the data boundary, and the tooling below are unaffected, because what was suspended is the *programme*, not the capability: real jobs in `Live Runs/` continue under exactly the rules already written here. If a request only makes sense as pipeline development (advancing a stage, closing S6's ten, working the FI backlog), say it is suspended and point here rather than doing it.
+
 Check `docs/notes/stage-gates.md` for which roadmap stage is active. Do not perform capabilities from stages that haven't passed their gate — e.g. no logic generation while the project is still in S1–S5, even if asked casually; point to the roadmap instead.
 
 **Structured spec pipeline — four new rung skills, under development (2026-08-05).** Alongside (not

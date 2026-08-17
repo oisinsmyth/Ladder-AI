@@ -1,5 +1,38 @@
 # Changelog
 
+## 2026-08-17
+
+**🛑 The staged development plan is SUSPENDED — docs marked, nothing else touched**
+
+Project owner's decision: time constraints and real application needs. This entry records the
+documentation change only; no code, IR, tooling, test or project artifact was modified.
+
+- **Canonical notice lives in `docs/03-development-plan.md`.** Every other surface carries a pointer
+  to it rather than its own wording, so there is one place to edit when the suspension lifts:
+  `02-roadmap.md` (+ its S9 status block), `docs/notes/stage-gates.md`, `CLAUDE.md` (*Current
+  stage*), `README.md`, `docs/00-README.md`, `docs/01-scope.md`, `AITODO.md` (*Project stage*,
+  *Current task*, *Outstanding works*), `docs/15-generation-pipeline.md`, `docs/16-future-ideas.md`,
+  `agent-tasks/README.md`.
+- **Suspended:** the S0–S9 progression, the stage gates and their pending sign-offs, milestones
+  M1–M9, and the queues that exist only to advance the plan (FI backlog, unbuilt pipeline skills,
+  the dispatch board). S5 and S6 were ACTIVE and are now **frozen**.
+- **Not suspended, deliberately and explicitly:** `CLAUDE.md`'s hard rules in full, the
+  `docs/13-data-boundary.md` boundary in full including `Live Runs/` retention, the already-built
+  tooling, and real application work — which is the reason for the suspension, not an exception to it.
+- **Frozen, not waived, and said so in every place it could be misread.** S6's exit criterion stands
+  at **1 of 10** fresh requests and its tally is closed to further counting; S0's gate sign-off stays
+  pending; S7's `S6 done` entry gate is unchanged and unmet. A suspended stage has **not** passed its
+  gate — while suspended the gate rule reads *more* restrictively, not less. The one existing
+  exception, the **S9 live-project waiver** (owner, 2026-08-11), is untouched and still in force.
+- **Historical records were left exactly as written** — `docs/evidence/`, `docs/audit/`, prior
+  CHANGELOG entries, ADRs. They are dated accounts of what happened, and a suspension does not
+  revise them.
+- ⚠️ **One reading was assumed and is flagged in the notice for correction:** *"real application
+  needs"* is taken to mean live delivery continues while pipeline development stops. If the owner
+  meant a full stop including live jobs, only the "not suspended" list needs cutting back.
+- ⚠️ **The `.claude/worktrees/JOB9004-marker-db` worktree holds its own copy of `docs/` and was not
+  edited** — a separate branch; it inherits this when it merges or rebases.
+
 ## 2026-08-07
 
 **Multi-instance: the write half was fixed and the read half was missed**

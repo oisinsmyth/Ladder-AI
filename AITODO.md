@@ -14,13 +14,20 @@ documented/committed, delete it from this file rather than letting it accumulate
    in-flight work, more reliable than any narrative.
 2. Read `docs/notes/stage-gates.md`'s status table (which stage is active, what's signed off);
    for recent detailed history, read the tail of the active stage's evidence doc
-   (`docs/evidence/stage-S6.md` while S6 is active) — the authoritative record of what's actually
-   *closed*, with dates and evidence.
+   (`docs/evidence/stage-S6.md`, the last stage to have been active) — the authoritative record of
+   what's actually *closed*, with dates and evidence. **Since 2026-08-17 the answer to "which stage
+   is active" is *none*: the staged plan is suspended — `docs/03-development-plan.md`.**
 3. Read this file's "Current task" section below.
 4. Cross-check: does the code in the diff match what this doc claims is done? If not, trust the
    code/diff and fix this doc.
 
 ## Current task / in flight — nothing mid-execution; one owner decision waiting, four items left open by the S6-Killer-Plan wave
+
+> 🛑 **SUSPENDED 2026-08-17.** Everything in this section and in *Outstanding works* below is **held,
+> not cancelled** — the staged plan is suspended (`docs/03-development-plan.md`). Nothing was
+> abandoned mid-execution: this section already recorded nothing in flight, and `agent-tasks/` was
+> empty. The owner decisions listed here **stay open and stay waiting**; they are not resolved by the
+> suspension, and the items depending on them stay unverified. Read this section as the resume list.
 
 **OWNER DECISION WAITING (2026-08-10): five committed tooling fixes cannot be verified without a
 Release rebuild.** FI-63, FI-66, FI-68 and FI-70's `export-all` are built, unit-tested and committed,
@@ -93,6 +100,14 @@ classic device exists locally and adding one is its own non-goal.
 
 ## Project stage
 
+> 🛑 **SUSPENDED 2026-08-17 — no stage is active.** The staged development plan is suspended by the
+> project owner (time constraints, real application needs); canonical notice in
+> `docs/03-development-plan.md`. **S5 and S6 below were ACTIVE and are now frozen** — not closed, not
+> failed, exit criteria **not waived**. **S6's live tally stays at 1 of 10 and stops being live**: do
+> not add to it, and do not treat a request run for a live job as counting toward it. The stage
+> records below are retained verbatim as the state to resume from. Everything outside this section —
+> the recovery procedure, the hard rules, the tooling — is unaffected.
+
 **S3 — Comment generation, DONE — gate reviewed and signed off by the project owner, 2026-07-14.**
 Full history in `docs/notes/stage-gates.md`'s status table and `docs/evidence/stage-S3.md`'s "S3
 first/second/third proof" sections: exit criterion met three times over (`TimerSample`, `PerimeterSafetyAlarms` — Green-tier
@@ -152,6 +167,10 @@ tally so far: 1 of 10** (fix waves excluded — keep this count here as the live
   (answer key gitignored).
 
 ## Outstanding works
+
+> 🛑 **SUSPENDED 2026-08-17 — this whole backlog is on hold, in the order it stands.** The priority
+> steer below was the *plan's* ordering and is preserved for resumption; it is not a live instruction
+> while the plan is suspended (`docs/03-development-plan.md`).
 
 **Priority steer (2026-07-18):** the earlier "S7 is the rush" framing is retired. **S5** is bumped up
 for a proper look; **library-filling** is acknowledged as heavy work that may get a dedicated
