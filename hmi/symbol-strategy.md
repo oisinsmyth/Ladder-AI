@@ -283,6 +283,44 @@ line-drawing down proportionally makes its lines *thin to invisibility*.
 WMF set is flat line art at a median logical size of 1404×1590 being placed at 48–130 px — the same
 one-to-twenty-nine reduction. **Assume this bites us and check it on the first symbol placed.**
 
+#### The operational test: stroke ÷ viewBox
+
+A later survey turned that guess into a number by reading SVG source across ten libraries. **The ratio
+of stroke width to viewBox is what decides whether artwork survives 48 px**, and it sorts sets
+decisively:
+
+| ratio | @130 px | @48 px | |
+|---|---|---|---|
+| **no stroke — filled shapes only** | — | — | ✅ **size-immune** |
+| 6 / 200 | 3.9 px | 1.44 px | ✅ survives |
+| ~1 / 41 | 3.2 px | 1.2 px | ✅ survives |
+| ~1 / 96 | 1.35 px | 0.5 px | ⚠️ greys out |
+| 3 / 400 | 0.98 px | 0.36 px | 🔴 **vanishes** |
+| 2 / 1000 | 0.26 px | 0.09 px | 🔴 **vanishes** |
+
+**Roughly 1/33 is the floor.** Below it the artwork looks correct in a browser and disappears on the
+panel — which is exactly the failure that gets shipped, because the check everyone runs is "open it
+and look" at desktop size.
+
+**Apply this to the WMF set before adopting it wholesale**, and to any symbol we ever draw ourselves.
+
+#### 🟢 Two techniques worth adopting, independent of which library wins
+
+**1. Filled shapes beat stroked shapes at small size.** The strongest-performing set found builds
+depth from **four nested filled polygons** (`shape`/`dark`/`light`/`hlight`) with **no `stroke`
+attribute anywhere** — so there is no hairline to go sub-pixel, and nothing to band at 16-bit. That is
+a drawing principle, not a library property, and it is the right default for 48–130 px on a panel
+whose colour depth is row 29's 65,536.
+
+**2. Avoid gradients and filters outright.** One surveyed widget carried ~90 paths, `linearGradient`,
+`feGaussianBlur stdDeviation="28.1"` and drop shadows — assessed as *mud* at 48 px on a 16-bit
+display. Our own H-1xx rules already push flat; this is the independent performance reason for it.
+
+**3. State artwork can be generated, not drawn.** The same set derives its shaded bands from one base
+colour by percentage shade — **one colour value per state → re-render → one PNG per state,
+mechanically, library-wide.** If the shipped `Animate` pairs prove thin, that is the cheap route to a
+full state set rather than commissioning artwork.
+
 ### 🟢 One idea worth stealing from ISA-101
 
 Ignition documents an **alarm indicator whose SHAPE varies by priority, not colour alone**. That is
