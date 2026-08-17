@@ -104,14 +104,49 @@ public sealed class SignalStorageResolver
     private readonly IReadOnlyList<StorageGroup> _groups;
     private readonly SubmissionSignalMap _map;
 
-    private SignalStorageResolver(IReadOnlyList<StorageGroup> groups, SubmissionSignalMap map)
+    /// <summary>
+    /// 🔴 <b>EVERY PLACEMENT OF EVERY FB — an instance DB <i>or</i> a MULTI-INSTANCE, and the second
+    /// half is what case B turned on.</b>
+    ///
+    /// <para>A multi-instance is an FB placed as a STATIC of another FB. It is a real instance with real
+    /// per-instance state and it has no DB of its own, so an index built from instance DBs alone cannot
+    /// see it. <see cref="ProjectUsageGraph"/> has resolved them to a fixpoint since FI-50 — <b>nested
+    /// ones included</b>, which is why <c>iDB_Outer.Inner</c> is a key here — and this resolver simply
+    /// had never asked. Same lesson <c>undriven-scan</c> learned in FI-50, one tool later.</para>
+    /// </summary>
+    private readonly Dictionary<string, List<string>> _placements;
+
+    private SignalStorageResolver(
+        IReadOnlyList<StorageGroup> groups, SubmissionSignalMap map, Dictionary<string, List<string>> placements)
     {
         _groups = groups;
         _map = map;
+        _placements = placements;
     }
 
-    public static SignalStorageResolver Over(ProjectUsageGraph graph, SubmissionSignalMap map) =>
-        new(StorageGroups.Build(graph), map ?? SubmissionSignalMap.None);
+    public static SignalStorageResolver Over(ProjectUsageGraph graph, SubmissionSignalMap map)
+    {
+        ArgumentNullException.ThrowIfNull(graph);
+
+        var placements = new Dictionary<string, List<string>>(StringComparer.Ordinal);
+        foreach (var (placement, fb) in graph.InstanceToFb.Select(kv => (kv.Key, kv.Value))
+                     .Concat(graph.MultiInstanceToFb.Select(kv => (kv.Key, kv.Value))))
+        {
+            if (!placements.TryGetValue(fb, out var list))
+            {
+                placements[fb] = list = new List<string>();
+            }
+
+            list.Add(placement);
+        }
+
+        foreach (var list in placements.Values)
+        {
+            list.Sort(StringComparer.Ordinal);
+        }
+
+        return new SignalStorageResolver(StorageGroups.Build(graph), map ?? SubmissionSignalMap.None, placements);
+    }
 
     /// <summary>Every distinct storage the project holds — the denominator a caller may report.</summary>
     public int StorageCount => _groups.Count;
@@ -126,7 +161,7 @@ public sealed class SignalStorageResolver
         // and both SAY which one they took.
         if (cited.Origin == SignalOrigin.OperatorList || !_map.Declared)
         {
-            return FromComponents(
+            return FromLocations(
                 signal,
                 SignalJoinKind.ProjectPathMatch,
                 MatchByName(signal),
@@ -157,7 +192,7 @@ public sealed class SignalStorageResolver
 
             case DeclaredJoin.InStorage:
                 var declared = _map.StorageOf(signal)!;
-                return FromComponents(
+                return FromLocations(
                     signal,
                     SignalJoinKind.DeclaredStorage,
                     MatchDeclared(declared),
@@ -192,185 +227,159 @@ public sealed class SignalStorageResolver
     }
 
     /// <summary>
-    /// Turn the storage COMPONENTS a match found into one resolution.
+    /// Turn the storage LOCATIONS a match found into one resolution.
     ///
-    /// <para>*** THE TWO REASONS THERE CAN BE MORE THAN ONE GROUP ARE OPPOSITES, AND CONFLATING THEM IS
+    /// <para>*** THE TWO REASONS A NAME CAN REACH SEVERAL THINGS ARE OPPOSITES, AND CONFLATING THEM IS
     /// THE ALIASING DEFECT. *** Several SPELLINGS of one location must be pooled and their writers
-    /// unioned; several DIFFERENT locations must be refused naming every candidate. The components
-    /// carry that distinction, which is why the match returns them rather than a flat list.</para>
+    /// unioned; several DIFFERENT locations must be refused naming every candidate. Working in
+    /// LOCATIONS rather than in groups keeps those apart <b>structurally</b>: a group is a reference at
+    /// some level of qualification, and the locations it COVERS are the answer.</para>
     /// </summary>
-    private static SignalStorageResolution FromComponents(
-        string signal, SignalJoinKind join, List<List<StorageGroup>> components, string reason, string whenEmpty)
+    private SignalStorageResolution FromLocations(
+        string signal, SignalJoinKind join, List<string> locations, string reason, string whenEmpty)
     {
-        if (components.Count == 0)
+        if (locations.Count == 0)
         {
             return new SignalStorageResolution(
                 signal, join, SignalResolution.Unresolved, null, Array.Empty<string>(), whenEmpty);
         }
 
-        if (components.Count > 1)
+        if (locations.Count > 1)
         {
             return new SignalStorageResolution(
                 signal, join, SignalResolution.Ambiguous, null,
-                components.Select(c => c[0].Path).OrderBy(p => p, StringComparer.Ordinal).ToList(),
-                "this matches MORE THAN ONE distinct storage location. Refused rather than resolved to one of them: picking a candidate is exactly "
-                + "the aliasing that made cross-check invent multi-writers, and it would put the same fiction into the conflict graph. Qualify the "
-                + "signal with its owning block or its full path — or declare it in `map.storage`, where owner and path are separate keys.");
+                locations.OrderBy(p => p, StringComparer.Ordinal).ToList(),
+                "this names MORE THAN ONE distinct storage location — most often an FB member reached through every PLACEMENT of that FB, because "
+                + "nothing said WHICH placement. Refused rather than resolved to one of them: two placements of one FB are different memory, and "
+                + "pooling them would invent a conflict between blocks that never share a location. *** NAME THE PLACEMENT AND THIS RESOLVES: *** "
+                + "declare the fully-qualified instance path in `map.storage` (`<instance>.<member>`, or `<outerInstance>.<multiInstance>.<member>` "
+                + "for an FB placed as a static of another FB).");
         }
 
-        var matches = components[0];
-
-        // *** THE MULTI-INSTANCE CASE IS REFUSED, NOT POOLED. *** An FB with TWO instance DBs has an
-        // internal write landing in BOTH, so unioning the writers of `iDB_A.x` and `iDB_B.x` would
-        // manufacture a conflict between two blocks that touch genuinely different storage — the exact
-        // fiction the corrected grouping exists to remove. With at most one instance spelling there is
-        // nothing to choose between and the union is simply correct.
-        var instanceSpellings = matches
-            .Where(m => m.Owner is null)
-            .Select(m => m.Path)
-            .Where(p => matches.Any(other => other.InstanceAliases.Contains(p, StringComparer.Ordinal)))
-            .Distinct(StringComparer.Ordinal)
+        var location = locations[0];
+        var matches = _groups.Where(g => Covers(g, location))
+            .OrderByDescending(g => g.Writers.Count + g.Readers.Count)
+            .ThenBy(g => g.Path, StringComparer.Ordinal)
             .ToList();
 
-        if (instanceSpellings.Count > 1)
+        if (matches.Count == 0)
         {
             return new SignalStorageResolution(
-                signal, join, SignalResolution.Ambiguous, null,
-                instanceSpellings.OrderBy(p => p, StringComparer.Ordinal).ToList(),
-                "one FB-internal member reached through MORE THAN ONE instance DB. Those are different storage, and pooling their writers would "
-                + "invent a conflict between blocks that never share a location. Name the instance you mean.");
+                signal, join, SignalResolution.Unresolved, null, Array.Empty<string>(), whenEmpty);
         }
 
-        // Display prefers the most-referenced spelling, which is the one a reader will recognise; the
-        // WRITER SET is the union, because dropping the other spelling's writers silently under-reports
-        // the conflict this whole tool exists to find.
-        var display = matches[0];
+        // *** THE WRITER SET IS THE UNION OF EVERY REFERENCE THAT REACHES THIS ONE LOCATION, AND
+        // NOTHING ELSE. *** An FB writing its own `IO.Level`, its owner writing `Valve.IO.Level`, and a
+        // caller writing `iDB_X.IO.Level` are three references to the SAME memory, and dropping any of
+        // them under-reports the conflict this tool exists to find. What is NOT unioned is a sibling
+        // placement: `iDB_A.IO.Level` and `iDB_B.IO.Level` are different memory and never pool — a
+        // property of working in locations, rather than a rule bolted on afterwards.
         var writers = matches.SelectMany(m => m.WriterBlocks).Distinct(StringComparer.Ordinal)
             .OrderBy(b => b, StringComparer.Ordinal).ToList();
 
-        var aliasNote = matches.Count > 1
-            ? $"; {matches.Count} spellings of one storage ({string.Join(", ", matches.Select(m => m.Path).OrderBy(p => p, StringComparer.Ordinal))}) were pooled, and their writers unioned"
-            : string.Empty;
-
+        // The reaching references are named on EVERY resolution, not only where several were pooled.
+        // The reported location is a COMPUTED thing and the references are the CODE — without them a
+        // reader cannot check the answer, which is the property this whole change is about.
         return new SignalStorageResolution(
             signal, join, SignalResolution.Resolved,
-            new ResolvedStorage(display.Path, writers),
-            new[] { display.Path },
-            reason + aliasNote);
+            new ResolvedStorage(location, writers),
+            new[] { location },
+            reason
+            + $"; storage location {location}, reached by {matches.Count} reference(s) ("
+            + string.Join(", ", matches.Select(m => m.Path).OrderBy(p => p, StringComparer.Ordinal)) + ")"
+            + (matches.Count > 1 ? ", whose writers are unioned" : string.Empty));
     }
 
     /// <summary>
-    /// The DECLARED join, and it is exact. An owner-qualified declaration matches on (owner, local
-    /// path); a global one matches a group's own path or an <c>iDB.&lt;suffix&gt;</c> alias of it —
-    /// <b>an identity read off the instance DB's own declared members, never a name shape.</b>
+    /// 🔴 <b>THE LOCATIONS ONE REFERENCE COVERS — the whole model, in one method.</b>
+    ///
+    /// <para>A group is not a location; it is a REFERENCE written at some level of qualification, and
+    /// what it covers depends on that level:</para>
+    /// <list type="bullet">
+    /// <item>A <b>global</b> reference (<c>DB_X.Member</c>, a PLC tag, <c>iDB_A.IO.Level</c>,
+    /// <c>iDB_A.Valve.IO.Level</c>) is already fully qualified and covers exactly itself.</item>
+    /// <item>A <b>block-local</b> reference — an FB addressing its own member as a bare path — covers
+    /// <b>one location per PLACEMENT of that FB</b>. The FB's write executes once per placement and
+    /// lands in each one's own memory.</item>
+    /// <item>A block-local reference in an FB with <b>no placement at all</b> covers a single
+    /// declaration-site location. Reporting nothing there is FI-44 in a new costume: a block written
+    /// before its caller still has storage.</item>
+    /// </list>
+    ///
+    /// <para>*** THIS IS A CONTAINMENT RELATION AND DELIBERATELY NOT AN EQUIVALENCE. *** It replaced a
+    /// transitive closure over "these two spellings name one storage", which is what case A was:
+    /// <c>FB_X|IO.Cmd</c> names the same storage as <c>iDB_A.IO.Cmd</c> and as <c>iDB_B.IO.Cmd</c>, but
+    /// <c>iDB_A.IO.Cmd</c> is NOT <c>iDB_B.IO.Cmd</c> — <b>the relation is not transitive, and closing
+    /// over it pooled five placements of one FB and then refused to guess between them.</b> The refusal
+    /// was right and the pooling should never have happened: a declaration that names the placement has
+    /// already answered the question.</para>
     /// </summary>
-    private List<List<StorageGroup>> MatchDeclared(DeclaredStorage declared)
+    private IEnumerable<string> LocationsOf(StorageGroup group) =>
+        group.Owner is null
+            ? new[] { group.Path }
+            : LocationsOfMember(group.Owner, LocalPathOf(group));
+
+    private IEnumerable<string> LocationsOfMember(string owner, string suffix) =>
+        _placements.TryGetValue(owner, out var placements) && placements.Count > 0
+            ? placements.Select(p => p + "." + suffix)
+            : new[] { owner + "." + suffix };
+
+    private bool Covers(StorageGroup group, string location) =>
+        group.Owner is null
+            ? string.Equals(group.Path, location, StringComparison.Ordinal)
+            : LocationsOfMember(group.Owner, LocalPathOf(group))
+                .Any(l => string.Equals(l, location, StringComparison.Ordinal));
+
+    /// <summary>
+    /// The DECLARED join, and it is exact.
+    ///
+    /// <para>A GLOBAL declaration <b>is</b> the location — including a fully-qualified instance path and
+    /// a nested multi-instance path, which is exactly what case B declared and what nothing here used to
+    /// look for. Whether anything in the corpus reaches it is then a question about the corpus, and an
+    /// empty answer is the honest <i>"the join was stated and no storage is that location"</i>.</para>
+    ///
+    /// <para>An OWNER-QUALIFIED declaration names a member of a CLASS, so it names one location per
+    /// placement — <b>and more than one placement is a genuine ambiguity the author can settle by naming
+    /// the instance.</b> That is a refusal about the declaration, not a claim about the plant.</para>
+    /// </summary>
+    private List<string> MatchDeclared(DeclaredStorage declared)
     {
         var path = declared.Path.Trim();
 
-        if (!declared.IsGlobal)
-        {
-            var owner = declared.Owner!.Trim();
-            return Collapse(_groups.Where(g =>
-                g.Owner is not null
-                && string.Equals(g.Owner, owner, StringComparison.Ordinal)
-                && string.Equals(LocalPathOf(g), path, StringComparison.Ordinal)));
-        }
-
-        return Collapse(_groups.Where(g =>
-            string.Equals(g.Path, path, StringComparison.Ordinal)
-            || g.InstanceAliases.Contains(path, StringComparer.Ordinal)));
+        return declared.IsGlobal
+            ? new List<string> { path }
+            : LocationsOfMember(declared.Owner!.Trim(), path).Distinct(StringComparer.Ordinal).ToList();
     }
 
     /// <summary>
-    /// The WEAKER join: the cited name matched against the project's own paths. Exact display path,
-    /// exact path within its owner, an <c>iDB.&lt;suffix&gt;</c> alias, or a dotted-suffix match.
+    /// The WEAKER join: the cited name matched against the project's own references.
     ///
-    /// <para>🔴 <b>THE INSTANCE-ALIAS ARM IS THE SECOND MEASURED FAILURE MODE'S REPAIR.</b> A block that
-    /// writes its own STATIC member writes it as a bare path, so the corpus holds
-    /// <c>FB_X.Member</c> and nothing else — while the harness cites <c>iDB_X.Member</c>, the instance
-    /// path. Before this arm existed those two never met, and a slot whose storage tags were supplied
-    /// verbatim still resolved NONE of them.</para>
+    /// <para>Two arms, and the first is the one that matters. <b>A name that is already a LOCATION —
+    /// anything some reference covers — is taken as that location and nothing else</b>, which is how a
+    /// fully-qualified instance path resolves even when the corpus only ever writes the member from
+    /// inside its owning block. Only if that fails does the name-SHAPE arm run: exact reference path,
+    /// exact path within its owner, or a dotted-suffix match.</para>
+    ///
+    /// <para>🔴 <b>THE SUFFIX ARM IS A NAME SHAPE AND THE CONTRACT FORBIDS RELYING ON IT.</b> It survives
+    /// only for <c>--signals</c> and for a submission that declares no map at all, and every line that
+    /// used it says so.</para>
     /// </summary>
-    private List<List<StorageGroup>> MatchByName(string signal) =>
-        Collapse(_groups.Where(g =>
-            string.Equals(g.Path, signal, StringComparison.Ordinal)
-            || (g.Owner is not null && string.Equals(LocalPathOf(g), signal, StringComparison.Ordinal))
-            || g.InstanceAliases.Contains(signal, StringComparer.Ordinal)
-            || g.Path.EndsWith("." + signal, StringComparison.Ordinal)));
-
-    private static string LocalPathOf(StorageGroup group) => group.Path[(group.Owner!.Length + 1)..];
-
-    /// <summary>
-    /// Take the groups a match SELECTED and return the whole storage each of them belongs to.
-    ///
-    /// <para>🔴 <b>THE EXPANSION IS NOT TIDINESS — WITHOUT IT THE WRITER SET IS SHORT.</b> An FB's own
-    /// <c>IO.Level</c> and its caller's <c>iDB_X.IO.Level</c> are ONE location under two spellings, and
-    /// they arrive as two groups because each is keyed on how it was written. A match that selects only
-    /// one of them reports only that one's writers — so a member the FB writes internally and a caller
-    /// also drives reads as SINGLE-WRITER, and the conflict this whole tool exists to find is
-    /// invisible. Selecting is done by the match; deciding what counts as one storage is done here, in
-    /// one place, for both joins.</para>
-    ///
-    /// <para>The relation is walked TRANSITIVELY. One hop is enough for the shape that exists today,
-    /// and stopping there would make the answer depend on which spelling the caller happened to cite.</para>
-    /// </summary>
-    private List<List<StorageGroup>> Collapse(IEnumerable<StorageGroup> seeds)
+    private List<string> MatchByName(string signal)
     {
-        var components = new List<List<StorageGroup>>();
-
-        foreach (var seed in seeds)
+        if (_groups.Any(g => Covers(g, signal)))
         {
-            if (components.Any(c => c.Any(m => ReferenceEquals(m, seed))))
-            {
-                continue;
-            }
-
-            var component = new List<StorageGroup>();
-            var queue = new Queue<StorageGroup>();
-            queue.Enqueue(seed);
-            while (queue.Count > 0)
-            {
-                var current = queue.Dequeue();
-                if (component.Any(m => ReferenceEquals(m, current)))
-                {
-                    continue;
-                }
-
-                component.Add(current);
-                foreach (var other in _groups.Where(g => SameStorage(g, current)))
-                {
-                    if (!component.Any(m => ReferenceEquals(m, other)))
-                    {
-                        queue.Enqueue(other);
-                    }
-                }
-            }
-
-            // A seed reached through an earlier seed's closure is the SAME storage, so the components
-            // merge rather than becoming a spurious ambiguity.
-            var overlapping = components.FirstOrDefault(c => c.Any(m => component.Any(n => ReferenceEquals(m, n))));
-            if (overlapping is null)
-            {
-                components.Add(component);
-            }
-            else
-            {
-                overlapping.AddRange(component.Where(m => !overlapping.Any(n => ReferenceEquals(m, n))));
-            }
+            return new List<string> { signal };
         }
 
-        // Each component is ONE storage under one or more spellings, most-referenced first (that is the
-        // display path a reader will recognise). MORE THAN ONE component is genuinely different storage
-        // matching one name, and the caller refuses it naming every candidate.
-        return components
-            .Select(c => c.OrderByDescending(m => m.Writers.Count + m.Readers.Count)
-                .ThenBy(m => m.Path, StringComparer.Ordinal).ToList())
-            .OrderBy(c => c[0].Path, StringComparer.Ordinal)
+        return _groups
+            .Where(g =>
+                string.Equals(g.Path, signal, StringComparison.Ordinal)
+                || (g.Owner is not null && string.Equals(LocalPathOf(g), signal, StringComparison.Ordinal))
+                || g.Path.EndsWith("." + signal, StringComparison.Ordinal))
+            .SelectMany(LocationsOf)
+            .Distinct(StringComparer.Ordinal)
             .ToList();
     }
 
-    private static bool SameStorage(StorageGroup a, StorageGroup b) =>
-        a.InstanceAliases.Contains(b.Path, StringComparer.Ordinal)
-        || b.InstanceAliases.Contains(a.Path, StringComparer.Ordinal);
+    private static string LocalPathOf(StorageGroup group) => group.Path[(group.Owner!.Length + 1)..];
 }

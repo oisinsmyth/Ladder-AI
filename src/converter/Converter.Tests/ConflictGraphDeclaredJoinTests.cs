@@ -327,7 +327,12 @@ public class ConflictGraphDeclaredJoinTests : IDisposable
         Assert.True(report.Computed);
         var fact = Assert.Single(report.Signals);
         Assert.Equal(SignalResolution.Resolved, fact.Resolution);
-        Assert.Equal(new[] { "FB_Solo.Echo" }, fact.Candidates);
+
+        // *** IT REPORTS THE LOCATION, NOT THE REFERENCE THAT REACHED IT. *** The only spelling in the
+        // corpus is the FB-internal `FB_Solo.Echo`, but the storage is the placement's memory, and a
+        // reader comparing this against a binding is holding an instance path.
+        Assert.Equal(new[] { "iDB_Solo.Echo" }, fact.Candidates);
+        Assert.Contains("FB_Solo.Echo", fact.Reason);
     }
 
     // The same through the DECLARED join, which is how a submission would actually reach it.
@@ -357,7 +362,12 @@ public class ConflictGraphDeclaredJoinTests : IDisposable
         var edge = Assert.Single(report.Edges);
         Assert.Equal("FB_Owner", edge.BlockA);
         Assert.Equal("FC_Caller", edge.BlockB);
-        Assert.Contains("pooled", Assert.Single(report.Signals).Reason);
+
+        // Both spellings are named in the reason, so a reader can check the union rather than take it.
+        var reason = Assert.Single(report.Signals).Reason;
+        Assert.Contains("writers are unioned", reason);
+        Assert.Contains("FB_Owner.IO.Alarm", reason);
+        Assert.Contains("iDB_Owner.IO.Alarm", reason);
     }
 
     // *** THE UNION HAS A BOUNDARY, AND IT IS REFUSED RATHER THAN GUESSED. *** An FB with TWO instance
