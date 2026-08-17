@@ -1909,6 +1909,88 @@ per-call timing or a real run records agents actually contending for the canonic
   rebuild, which revokes the binary's Openness approval until a person re-approves it at the machine
   (FI-61), so it waits for a moment when no Portal work is in flight.
 
+### FI-76 — the map model: derive the block structure from the border, and build it in order-waves
+
+- **Status:** **Raised 2026-08-17 — design settled with the owner, recorded in ADR-0012, BUILD NOT
+  SCHEDULED.** Promotion is suspended along with the staged plan (see this doc's header), so "Raised"
+  is the correct status even though the design itself is agreed. The decision record is
+  **`docs/adr/adr-0012-map-model-and-order-waves.md`**; this entry is the analysis that led to it. The
+  costed build plan — 9 items, ~10–13 agent-days, held for later execution — is
+  **`docs/notes/map-model-build-plan.md`**.
+- **Raised:** 2026-08-17 · **Source:** owner, in conversation — a proposed development methodology
+  ("model the solution like a map of a country, where the borders are edge interfaces").
+
+**The idea.** A PLC program is a map. The **border** is the edge interfaces — IO, comms to devices,
+control and state from the HMI, and the list is open. **Territories** (things with state surviving the
+scan) are carved inside it: equipment first, whose shape is known a priori from `references/<class>/`.
+What remains is a **derived territory** — logic not yet written, whose interface is *implied by what
+surrounds it* rather than designed. Blocks are then built in **order-waves** outward from the border.
+
+**Merits.**
+
+- **Interfaces become derived, not declared.** The largest remaining declaration in this pipeline is
+  the block interface. Under the map it is a set difference. Same instinct that made `reachable-state`
+  compute slot disjointness instead of accepting the submitting agent's word for it.
+- **It starts at the only thing hard rule 3 forbids inventing.** Carving outward from the border is
+  "never invent reality" applied to the *shape* of the program.
+- **Five rules collapse into one property.** C-308 multi-writer = overlapping territories; C-304 =
+  only border territories touch the border; C-127 = reaching into another territory's interior; dead
+  wiring = a border segment with nothing beyond it; hard rule 2 = a frontier with no crossing. A model
+  that reproduces independently-discovered rules is usually right.
+- **Cycles become violations rather than cases.** Coupling between same-order blocks is always
+  mediated by the layer above (two conveyors couple through an order-2 interlock, not to each other),
+  so a cycle in the block graph means coordination logic ended up inside an equipment block — C-127
+  under a new name. The layering does not just describe the program, it prevents the defect.
+- **Measured economics.** From `gen/*/telemetry.log` (20 stage types, 45 runs, **1,637 min**): the
+  three stages this replaces — rung C, rung D and `gen-architecture` — are **477 min, 29%** of all
+  logged pipeline time, and `gen-architecture` alone at **202 min is the single largest stage in the
+  log**. Folding the per-instance half of C and D into the parallel per-block agents puts the
+  parallelisable fraction at **35% conservatively / 54% counting per-block review and vector
+  authoring**, for an expected **26–40% wall-clock saving** at four effective agents (~54% ceiling).
+- **Testability descends with order,** so building outward front-loads the highest-confidence testing:
+  order-1 blocks touch the border and the rig can drive them directly.
+- It gives the multi-agent machinery already built (`src/wave-control/`, `converter claim`/`claims`) a
+  use that actually requires it.
+
+**Costs / risks.**
+
+- 🔴 **The cartographer becomes the critical path and can eat the entire win.** Contract thickness
+  trades conflict safety against parallel fraction *directly*: complete contracts are what stop
+  semantic divergence, and completing them moves interpretive work back onto one serial agent.
+  Recommendation in the ADR is start thick, thin deliberately.
+- 🔴 **Semantic gap-filling is undetectable.** Two agents given an underspecified contract fill the
+  gap differently, both compile, both pass their own vectors, and nothing collides — it is not a
+  conflict, it is two self-consistent readings. `cross-check` catches structural divergence and cannot
+  catch this. Needs `docs/15`'s "never an invention" norm promoted to a hard stop for wave agents.
+- **Replacing rungs C and D removes the inputs two mechanical-floor checks are built on** —
+  `relation-reconcile` and `signal-sweep`, both through the shared `RelationArtifactParsers`. Argues
+  for a parseable map artifact from day one. ⚠️ **`docs/15` says all *four* checks parse these files
+  and that is wrong: `candidate-scan` and `undriven-scan` take `--project <ir-dir> --fb <FBName>` and
+  read IR only** — verified 2026-08-17 by reading the runners. Correcting that line in `docs/15` is a
+  cheap item worth doing whether or not this is ever built.
+- **Review load arrives a whole layer at a time,** which is exactly the presentation shape
+  `11-review-workflow.md` calls a rejection reason by itself. Tolerable for homogeneous order-1 waves;
+  not obviously so higher up.
+- **Two single-token resources cap the parallelism:** Portal, and the rig (deployment is device-level,
+  there is one rig, so vector *authoring* parallelises and vector *execution* does not).
+- **Everything about the multi-agent half is prediction.** `src/wave-control/` is built and has never
+  run with two agents contending; `Harness.Loop` has never run a wave end to end.
+- A correction worth keeping: batching the compile at wave boundaries was argued to be the largest
+  win and **is not** — total Portal round-trips across every logged coding run is **16, ~1.6 per
+  block**. Preflight already squeezed it. Worth about an hour across a project.
+
+**Dependencies.** The staged plan resuming (`docs/03-development-plan.md`); a `territory` claim kind
+in the claims registry; the four mechanical-floor checks re-pointed; the wave-set admission path in
+`src/wave-control/` actually exercised with two agents.
+
+**Verdict / revisit trigger.** Design agreed and recorded (ADR-0012); build deliberately not
+scheduled. **Revisit on the first wave run**, which should be small — three or four order-1 blocks,
+two agents — with the deliverable being *evidence the wave machinery works* rather than the blocks. The
+number to instrument is the **cartographer's wall clock**, logged in the existing telemetry format
+against the 477 minutes it replaces. One decision is left open in the ADR and gates any scheduler
+work: **the mixed-order block** (a block consuming state from order 1 *and* order 3 — is it order 2 by
+"lowest", order 4 by `1 + max`, or a violation?).
+
 ### OPEN QUESTION — the converter's tag resolution is CASE-SENSITIVE; TIA's symbol resolution is not
 
 **Raised 2026-08-14 by the converter check-tool hammer. Reported rather than changed, because I could
