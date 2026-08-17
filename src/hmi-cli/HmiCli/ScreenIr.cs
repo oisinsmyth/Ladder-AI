@@ -41,6 +41,30 @@ public sealed record IrItem
     /// </summary>
     [JsonPropertyName("overrideSpec")] public string? OverrideSpec { get; init; }
 
+    /// <summary>H-601: "chrome" or "process". Declared, never inferred - a checker cannot tell
+    /// which is which from geometry and must not guess.</summary>
+    [JsonPropertyName("zone")] public string? Zone { get; init; }
+
+    /// <summary>H-108: "start" | "stop" | "reset". A COMMAND ACCENT - static, small, and about
+    /// which control this is rather than what the plant is doing.</summary>
+    [JsonPropertyName("accentRole")] public string? AccentRole { get; init; }
+
+    /// <summary>H-109: the id of the control this accent marks, so its area can be checked
+    /// against it. Without it the size half of H-109 cannot run.</summary>
+    [JsonPropertyName("accentFor")] public string? AccentFor { get; init; }
+
+    [JsonPropertyName("elementId")] public string? ElementId { get; init; }
+
+    /// <summary>
+    /// Which diagonal of its bounding box a Line runs along: "down" (top-left to bottom-right,
+    /// the default) or "up" (bottom-left to top-right).
+    ///
+    /// A box has two diagonals and CSS cannot express which one a div "is" - so without this, only
+    /// one of them was reachable and any shape needing a pair of opposed diagonals (a cone, a roof,
+    /// a chevron) could not be drawn at all.
+    /// </summary>
+    [JsonPropertyName("lineDirection")] public string? LineDirection { get; init; }
+
     [JsonPropertyName("safetyCritical")] public bool SafetyCritical { get; init; }
 
     /// <summary>Declares H-205's carve-out: this element's motion IS the unacknowledged-alarm channel.</summary>

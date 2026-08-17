@@ -167,6 +167,50 @@ public static class Linter
             }
         }
 
+        // H-109 - an accent is a MARKER, not a FILL. This is the half of the rule that actually
+        // separates a label from a coloured region, and it needs the accent paired to the control
+        // it marks (data-hmi-accent-for). Without that pairing the check CANNOT RUN, and saying so
+        // is the point: an unrunnable check reported as a pass is the failure this repo keeps
+        // closing.
+        var byId = items.Where(i => !string.IsNullOrWhiteSpace(i.ElementId))
+                        .GroupBy(i => i.ElementId!)
+                        .ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
+
+        foreach (var it in items.Where(i => !string.IsNullOrWhiteSpace(i.AccentRole)))
+        {
+            if (string.IsNullOrWhiteSpace(it.AccentFor))
+            {
+                f.Add(new Finding("H-109", Severity.Error,
+                    $"'{it.AccentRole}' accent does not declare which control it marks "
+                    + "(data-hmi-accent-for). The marker-not-fill check cannot run without it.", it.Index));
+                continue;
+            }
+
+            if (!byId.TryGetValue(it.AccentFor!, out var control))
+            {
+                f.Add(new Finding("H-109", Severity.Error,
+                    $"'{it.AccentRole}' accent points at '{it.AccentFor}', which is not on this screen", it.Index));
+                continue;
+            }
+
+            var accentArea = it.Width * it.Height;
+            var controlArea = control.Width * control.Height;
+            if (controlArea <= 0)
+            {
+                continue;
+            }
+
+            var share = accentArea / controlArea;
+            if (share > CommandAccents.MaxShareOfControl)
+            {
+                f.Add(new Finding("H-109", Severity.Error,
+                    $"'{it.AccentRole}' accent covers {share:P0} of '{it.AccentFor}' "
+                    + $"(max {CommandAccents.MaxShareOfControl:P0}). That is a FILL, not a marker - a "
+                    + "coloured region competes with the alarm palette, a small marker reads as a label.",
+                    it.Index));
+            }
+        }
+
         // H-503 - interactive overlap. Deliberately restricted to interactive pairs: a decorative
         // overlap is often intentional, and the prototype's any-pair version false-positived seven
         // times on one arm where the overlap was the design.
@@ -270,11 +314,44 @@ public static class StyleChecker
         {
             examined++;
 
+            // H-601: the brand colour is permitted in CHROME. Chrome identifies the plant; alarms do
+            // not live there, so colour costs the operator nothing. The zone is DECLARED because
+            // geometry cannot reveal it and guessing would be worse than not checking.
+            var isChrome = string.Equals(it.Zone, "chrome", StringComparison.OrdinalIgnoreCase);
+
+            // H-108: a COMMAND ACCENT is about which control this is, not what the plant is doing.
+            // It is static and small, which is exactly why it does not compete with the alarm
+            // palette - see H-109 for the size half, checked separately.
+            var accent = CommandAccents.Role(it.AccentRole);
+            if (accent is not null)
+            {
+                var hsl = Hsl.Parse(it.BackColor);
+                if (hsl is null)
+                {
+                    f.Add(new Finding("H-108", Severity.Error,
+                        $"declared as the '{it.AccentRole}' command accent but has no readable colour", it.Index));
+                }
+                else if (!accent.Value.Accepts(hsl.Value.H))
+                {
+                    f.Add(new Finding("H-108", Severity.Error,
+                        $"'{it.AccentRole}' accent is hue {hsl.Value.H:0}deg; {accent.Value.Name} expects "
+                        + $"{accent.Value.Low:0}-{accent.Value.High:0}deg. Command accents are fixed by FUNCTION "
+                        + "and identical on every screen - an operator learns them once.", it.Index));
+                }
+            }
+
             foreach (var (colour, where) in new[]
                      {
                          (it.BackColor, "background"), (it.ForeColor, "text"), (it.BorderColor, "border"),
                      })
             {
+                // Chrome and command accents are exempt from the colour rules by design, not by
+                // oversight: H-102/H-104/H-105 govern the PROCESS AREA and STATE.
+                if (isChrome || accent is not null)
+                {
+                    continue;
+                }
+
                 var hsl = Hsl.Parse(colour);
                 if (hsl is null)
                 {
@@ -319,7 +396,11 @@ public static class StyleChecker
                 f.Add(new Finding("H-202", Severity.Error, $"text shadow ({it.TextShadow})", it.Index));
             }
 
-            if (IsSet(it.BorderRadius) && it.BorderRadius != "0px")
+            // H-203 forbids ROUNDED CORNERS on rectangular controls. It must not fire on a Circle:
+            // `border-radius: 50%` is simply HOW a circle is written in CSS, and flagging it told
+            // the author to un-round a circle. A rule that fires on the correct way to do something
+            // trains people to ignore it.
+            if (it.Type != "Circle" && IsSet(it.BorderRadius) && it.BorderRadius != "0px")
             {
                 f.Add(new Finding("H-203", Severity.Error, $"corner radius ({it.BorderRadius})", it.Index));
             }
@@ -342,6 +423,56 @@ public static class StyleChecker
 
     private static bool IsSet(string? v) =>
         !string.IsNullOrWhiteSpace(v) && v != "none" && v != "normal" && v != "0px";
+}
+
+/// <summary>
+/// H-108 - the three command accents, fixed by function and constant across every screen and
+/// project. An operator learns three markers once; varying them per project would be the same
+/// mistake as varying what red means.
+/// </summary>
+public static class CommandAccents
+{
+    public readonly record struct Band(string Name, double Low, double High)
+    {
+        /// <summary>
+        /// Hue is a CIRCLE, and red sits on the seam. A band of 340-375 means "340 through 15",
+        /// so a hue of 5 is inside it — but only if the comparison wraps.
+        ///
+        /// The first version did not wrap. It carried a comment saying it did, and then rejected
+        /// rgb(176, 42, 30) — a textbook red — as "hue 5deg, red expects 340-375deg". A comment
+        /// describing behaviour the code does not have is worse than no comment, because it stops
+        /// the reader looking.
+        /// </summary>
+        public bool Accepts(double hue)
+        {
+            var h = ((hue % 360) + 360) % 360;
+            return (h >= Low && h <= High) || (High > 360 && h + 360 >= Low && h + 360 <= High);
+        }
+    }
+
+    private static readonly Dictionary<string, Band> Roles = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["start"] = new Band("green", 90, 165),
+        ["run"] = new Band("green", 90, 165),
+        ["stop"] = new Band("red", 340, 375),        // wraps the 0 seam - see Band.Accepts
+        ["estop"] = new Band("red", 340, 375),
+        ["reset"] = new Band("light blue", 185, 225),
+        ["ack"] = new Band("light blue", 185, 225),
+    };
+
+    public static Band? Role(string? role)
+    {
+        if (string.IsNullOrWhiteSpace(role) || !Roles.TryGetValue(role.Trim(), out var b))
+        {
+            return null;
+        }
+
+        return b;
+    }
+
+    /// <summary>H-109: an accent is a MARKER, not a FILL. Above this share of the control it stops
+    /// reading as a label and becomes a coloured region competing with the alarm palette.</summary>
+    public const double MaxShareOfControl = 0.15;
 }
 
 public static class Hsl

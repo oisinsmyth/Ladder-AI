@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Brand accent demo</title>
+<style>
+  /* KTP700 Basic, 800x480. Every px figure derives from a mm band in hmi/sizing-standard.md;
+     none was chosen for how it looks on a desktop monitor.
+
+     Two colour systems on this screen, and they must not be confused:
+
+       BRAND (H-6xx)   #1F4E79, the site's blue. Chrome only - header and footer. It identifies
+                       the plant. It never touches the process area and never indicates state.
+                       Passes brand-check: hue 209deg, 151deg clear of the alarm band, white text
+                       at 8.7:1.
+
+       COMMAND (H-108) green START, red STOP, light-blue RESET. Fixed by FUNCTION, identical on
+                       every screen, and STATIC - present whatever the plant is doing.
+
+     H-109 is the load-bearing rule: an accent is a small MARKER, not a FILL. Each button body is a
+     shade of the grey field; the accent is a 12px bar down its leading edge, about 5% of the
+     button's area. A filled green button would be a coloured region competing with the alarm
+     palette - a green bar on a grey button is a label. */
+  :root {
+    --field:   rgb(182, 182, 182);
+    --raised:  rgb(203, 203, 203);   /* control body: lifted from the field, still grey */
+    --sunk:    rgb(168, 168, 168);
+    --ink:     rgb(0, 0, 0);
+    --line:    rgb(96, 96, 96);
+
+    --brand:      rgb(31, 78, 121);
+    --brand-ink:  rgb(255, 255, 255);
+
+    --cmd-start: rgb(38, 138, 60);
+    --cmd-stop:  rgb(176, 42, 30);
+    --cmd-reset: rgb(90, 160, 205);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 800px; height: 480px; }
+  body { background: var(--field); color: var(--ink); font-family: Tahoma, sans-serif; font-size: 16px; }
+
+  /* ---- CHROME: the only place the brand colour appears ---- */
+  .bar    { position: absolute; left: 0; width: 800px; background: var(--brand); }
+  #header { top: 0; height: 52px; }
+  #footer { top: 428px; height: 52px; }
+  .bartext { position: absolute; height: 22px; color: var(--brand-ink); }
+  #title  { left: 14px; top: 15px;  width: 420px; }
+  #ident  { left: 560px; top: 15px; width: 226px; }
+  #foot1  { left: 14px; top: 443px; width: 380px; }
+  #foot2  { left: 560px; top: 443px; width: 226px; }
+
+  /* ---- COMMANDS: grey bodies, small accent markers (H-109) ---- */
+  /* 15 mm primary action -> 78 x 84 px minimum on this panel. These are 150 x 96. */
+  /* H-403: safety-critical controls are >= 20 mm on the minor axis. On this panel 20 mm is
+     112 px vertically (4.30 px/mm V, rounded UP - a floor that rounds down is not a floor).
+     The first draft used 96 px = 17.2 mm and the checker caught it. All three commands share the
+     size so the row reads as one control group. */
+  .cmd     { position: absolute; top: 84px; width: 150px; height: 112px;
+             background: var(--raised); border: 1px solid var(--line); color: var(--ink); }
+  #bStart  { left: 28px; }
+  #bStop   { left: 206px; }
+  #bReset  { left: 384px; }
+
+  /* The accent: a 12 px bar on the leading edge - 12/150 = 8% of the control's area.
+     H-109 caps this at 15%: above that it stops reading as a label and becomes a coloured
+     region competing with the alarm palette. */
+  .accent  { position: absolute; top: 84px; width: 12px; height: 112px; }
+  #aStart  { left: 28px;  background: var(--cmd-start); }
+  #aStop   { left: 206px; background: var(--cmd-stop); }
+  #aReset  { left: 384px; background: var(--cmd-reset); }
+
+  /* ---- PROCESS AREA: grey throughout. No brand, no command colour. ---- */
+  .panel   { position: absolute; background: var(--sunk); border: 1px solid var(--line); }
+  #readout { left: 560px; top: 84px; width: 212px; height: 112px; }
+  .label   { position: absolute; height: 20px; }
+  #rLabel  { left: 570px; top: 92px;  width: 192px; }
+  #rValue  { left: 570px; top: 118px; width: 192px; font-size: 28px; }
+  #rUnit   { left: 570px; top: 152px; width: 192px; }
+
+  .rule    { position: absolute; left: 28px; top: 212px; width: 744px; height: 1px; background: var(--line); }
+
+  .row     { position: absolute; height: 20px; }
+  #k1 { left: 28px;  top: 226px; width: 210px; }
+  #v1 { left: 250px; top: 226px; width: 150px; }
+  #k2 { left: 28px;  top: 252px; width: 210px; }
+  #v2 { left: 250px; top: 252px; width: 150px; }
+  #k3 { left: 420px; top: 226px; width: 210px; }
+  #v3 { left: 642px; top: 226px; width: 130px; }
+  #k4 { left: 420px; top: 252px; width: 210px; }
+  #v4 { left: 642px; top: 252px; width: 130px; }
+
+  /* The alarm view cannot be authored on Classic at all - measured. Placeholder + hand-off. */
+  #alarm { position: absolute; left: 28px; top: 284px; width: 744px; height: 128px; }
+</style>
+</head>
+<body>
+
+  <div id="header" class="bar"     data-hmi="Rectangle" data-hmi-zone="chrome"></div>
+  <div id="title"  class="bartext" data-hmi="Text" data-hmi-zone="chrome">MILLBROOK SCREENING PLANT</div>
+  <div id="ident"  class="bartext" data-hmi="Text" data-hmi-zone="chrome">LINE 3 - PANEL HMI-03</div>
+
+  <div id="aStart" class="accent" data-hmi="Rectangle" data-hmi-accent="start" data-hmi-accent-for="bStart"></div>
+  <button id="bStart" class="cmd" data-hmi="Button">START</button>
+
+  <div id="aStop" class="accent" data-hmi="Rectangle" data-hmi-accent="stop" data-hmi-accent-for="bStop"></div>
+  <button id="bStop" class="cmd" data-hmi="Button" data-hmi-safety>STOP</button>
+
+  <div id="aReset" class="accent" data-hmi="Rectangle" data-hmi-accent="reset" data-hmi-accent-for="bReset"></div>
+  <button id="bReset" class="cmd" data-hmi="Button">RESET</button>
+
+  <div id="readout" class="panel" data-hmi="Rectangle"></div>
+  <div id="rLabel" class="label" data-hmi="Text">THROUGHPUT</div>
+  <div id="rValue" class="label" data-hmi="Text">0.0</div>
+  <div id="rUnit"  class="label" data-hmi="Text">tonnes per hour</div>
+
+  <div class="rule" data-hmi="Line"></div>
+
+  <div id="k1" class="row" data-hmi="Text">Line state</div>
+  <div id="v1" class="row" data-hmi="Text">STOPPED</div>
+  <div id="k2" class="row" data-hmi="Text">Running hours</div>
+  <div id="v2" class="row" data-hmi="Text">0.0 h</div>
+  <div id="k3" class="row" data-hmi="Text">Feed rate setpoint</div>
+  <div id="v3" class="row" data-hmi="Text">0 %</div>
+  <div id="k4" class="row" data-hmi="Text">Last reset</div>
+  <div id="v4" class="row" data-hmi="Text">--:--</div>
+
+  <div id="alarm" data-hmi="AlarmPlaceholder"></div>
+
+  <div id="footer" class="bar"     data-hmi="Rectangle" data-hmi-zone="chrome"></div>
+  <div id="foot1"  class="bartext" data-hmi="Text" data-hmi-zone="chrome">1 HOME    2 OVERVIEW    3 ALARMS</div>
+  <div id="foot2"  class="bartext" data-hmi="Text" data-hmi-zone="chrome">SHIFT A</div>
+
+</body>
+</html>

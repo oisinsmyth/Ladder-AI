@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Equipment symbols</title>
+<style>
+  /* Four P&ID-style equipment symbols, each built ONLY from the primitives the emitter can
+     produce: Rectangle, Circle, Line, Text. No Polygon, no imported graphic.
+
+     🔴 DOCUMENT ORDER IS Z-ORDER, in HTML and in SimaticML alike. Anything that must sit on top is
+     declared LATER. This is not a detail: the brand-demo screen put its accent bars before the
+     buttons that shared their position, and the buttons painted straight over them - a 150 px
+     button on a 12 px bar, invisible. Every fill here is declared before the outline that frames
+     it, and every label last.
+
+     All grey. These are process-area graphics and H-102 reserves colour for the abnormal, so a
+     symbol carries shape and label, never a hue. */
+  :root {
+    --field:  rgb(182, 182, 182);
+    --metal:  rgb(198, 198, 198);   /* vessel / body fill, lifted from the field */
+    --shade:  rgb(158, 158, 158);   /* the shadowed side, so a cylinder reads round */
+    --dark:   rgb(120, 120, 120);   /* pipe bore */
+    --line:   rgb(70, 70, 70);
+    --ink:    rgb(0, 0, 0);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 800px; height: 480px; }
+  body { background: var(--field); color: var(--ink); font-family: Tahoma, sans-serif; font-size: 16px; }
+
+  .cap   { position: absolute; height: 20px; width: 180px; font-size: 15px; }
+  .tag   { position: absolute; height: 18px; width: 180px; font-size: 13px; }
+
+  /* ---------- 1. SILO: cylinder + conical outlet ---------- */
+  #siloBody   { position: absolute; left: 40px;  top: 78px;  width: 96px; height: 108px;
+                background: var(--metal); border: 1px solid var(--line); }
+  #siloShade  { position: absolute; left: 40px;  top: 78px;  width: 22px; height: 108px;
+                background: var(--shade); }
+  #siloTop    { position: absolute; left: 40px;  top: 66px;  width: 96px; height: 24px;
+                background: var(--metal); border: 1px solid var(--line); border-radius: 0; }
+  #siloLevel  { position: absolute; left: 40px;  top: 140px; width: 96px; height: 45px;
+                background: var(--shade); }
+  /* The cone: two opposed diagonals. This is what data-hmi-line="up" exists for - a bounding box
+     has two diagonals and CSS cannot say which one a div is. */
+  #coneL      { position: absolute; left: 40px;  top: 186px; width: 26px; height: 34px; }
+  #coneR      { position: absolute; left: 110px; top: 186px; width: 26px; height: 34px; }
+  #siloOut    { position: absolute; left: 80px;  top: 220px; width: 16px; height: 14px;
+                background: var(--dark); border: 1px solid var(--line); }
+  #siloLegL   { position: absolute; left: 46px;  top: 220px; width: 6px;  height: 40px;
+                background: var(--shade); border: 1px solid var(--line); }
+  #siloLegR   { position: absolute; left: 124px; top: 220px; width: 6px;  height: 40px;
+                background: var(--shade); border: 1px solid var(--line); }
+  #siloCap    { left: 40px;  top: 276px; }
+  #siloTag    { left: 40px;  top: 296px; }
+
+  /* ---------- 2. PUMP: centrifugal casing + nozzles + baseplate ---------- */
+  #pumpSuct   { position: absolute; left: 220px; top: 126px; width: 30px; height: 26px;
+                background: var(--metal); border: 1px solid var(--line); }
+  #pumpCase   { position: absolute; left: 248px; top: 104px; width: 66px; height: 66px;
+                background: var(--metal); border: 1px solid var(--line); border-radius: 50%; }
+  #pumpImp    { position: absolute; left: 268px; top: 124px; width: 26px; height: 26px;
+                background: var(--shade); border: 1px solid var(--line); border-radius: 50%; }
+  #pumpDisch  { position: absolute; left: 270px; top: 82px;  width: 22px; height: 28px;
+                background: var(--metal); border: 1px solid var(--line); }
+  #pumpBase   { position: absolute; left: 232px; top: 172px; width: 98px; height: 12px;
+                background: var(--shade); border: 1px solid var(--line); }
+  #pumpFootL  { position: absolute; left: 240px; top: 184px; width: 10px; height: 14px;
+                background: var(--shade); border: 1px solid var(--line); }
+  #pumpFootR  { position: absolute; left: 312px; top: 184px; width: 10px; height: 14px;
+                background: var(--shade); border: 1px solid var(--line); }
+  #pumpCap    { left: 220px; top: 276px; }
+  #pumpTag    { left: 220px; top: 296px; }
+
+  /* ---------- 3. PIPE: run, elbow, flanges, reducer ---------- */
+  #pipeRun    { position: absolute; left: 400px; top: 120px; width: 132px; height: 20px;
+                background: var(--dark); border: 1px solid var(--line); }
+  #pipeDrop   { position: absolute; left: 512px; top: 120px; width: 20px; height: 92px;
+                background: var(--dark); border: 1px solid var(--line); }
+  #pipeElbow  { position: absolute; left: 512px; top: 120px; width: 20px; height: 20px;
+                background: var(--shade); border: 1px solid var(--line); }
+  #flangeA    { position: absolute; left: 396px; top: 112px; width: 8px;  height: 36px;
+                background: var(--shade); border: 1px solid var(--line); }
+  #flangeB    { position: absolute; left: 504px; top: 204px; width: 36px; height: 8px;
+                background: var(--shade); border: 1px solid var(--line); }
+  /* A reducer is the cone again, rotated: two opposed diagonals over a short run. */
+  #redTop     { position: absolute; left: 452px; top: 112px; width: 28px; height: 8px; }
+  #redBot     { position: absolute; left: 452px; top: 140px; width: 28px; height: 8px; }
+  #pipeCap    { left: 400px; top: 276px; }
+  #pipeTag    { left: 400px; top: 296px; }
+
+  /* ---------- 4. MOTOR: body, terminal box, shaft, driven end ---------- */
+  #motBody    { position: absolute; left: 600px; top: 104px; width: 104px; height: 62px;
+                background: var(--metal); border: 1px solid var(--line); }
+  #motShade   { position: absolute; left: 600px; top: 148px; width: 104px; height: 18px;
+                background: var(--shade); }
+  #motFins1   { position: absolute; left: 616px; top: 104px; width: 2px; height: 62px;
+                background: var(--line); }
+  #motFins2   { position: absolute; left: 632px; top: 104px; width: 2px; height: 62px;
+                background: var(--line); }
+  #motFins3   { position: absolute; left: 648px; top: 104px; width: 2px; height: 62px;
+                background: var(--line); }
+  #motFins4   { position: absolute; left: 664px; top: 104px; width: 2px; height: 62px;
+                background: var(--line); }
+  #motTerm    { position: absolute; left: 632px; top: 86px;  width: 40px; height: 20px;
+                background: var(--shade); border: 1px solid var(--line); }
+  #motShaft   { position: absolute; left: 704px; top: 126px; width: 26px; height: 12px;
+                background: var(--shade); border: 1px solid var(--line); }
+  #motBaseL   { position: absolute; left: 608px; top: 166px; width: 12px; height: 16px;
+                background: var(--shade); border: 1px solid var(--line); }
+  #motBaseR   { position: absolute; left: 684px; top: 166px; width: 12px; height: 16px;
+                background: var(--shade); border: 1px solid var(--line); }
+  #motMark    { position: absolute; left: 634px; top: 120px; width: 36px; height: 36px;
+                border: 1px solid var(--line); border-radius: 50%; background: var(--metal); }
+  #motM       { position: absolute; left: 634px; top: 128px; width: 36px; height: 20px;
+                text-align: center; font-size: 17px; }
+  #motCap     { left: 600px; top: 276px; }
+  #motTag     { left: 600px; top: 296px; }
+
+  #title      { position: absolute; left: 40px; top: 24px; width: 500px; height: 24px; font-size: 19px; }
+  #note       { position: absolute; left: 40px; top: 340px; width: 700px; height: 20px; font-size: 14px; }
+  #note2      { position: absolute; left: 40px; top: 364px; width: 700px; height: 20px; font-size: 14px; }
+  .rule       { position: absolute; left: 40px; top: 56px; width: 690px; height: 1px;
+                background: var(--line); }
+</style>
+</head>
+<body>
+
+  <div id="title" data-hmi="Text">EQUIPMENT SYMBOLS - COMPOSED FROM PRIMITIVES</div>
+  <div class="rule" data-hmi="Line"></div>
+
+  <!-- 1. SILO. Fill, then shade, then level, then cone, then furniture. -->
+  <div id="siloTop"   data-hmi="Rectangle"></div>
+  <div id="siloBody"  data-hmi="Rectangle"></div>
+  <div id="siloShade" data-hmi="Rectangle"></div>
+  <div id="siloLevel" data-hmi="Rectangle"></div>
+  <div id="coneL"     data-hmi="Line"></div>
+  <div id="coneR"     data-hmi="Line" data-hmi-line="up"></div>
+  <div id="siloLegL"  data-hmi="Rectangle"></div>
+  <div id="siloLegR"  data-hmi="Rectangle"></div>
+  <div id="siloOut"   data-hmi="Rectangle"></div>
+  <div id="siloCap" class="cap" data-hmi="Text">SILO</div>
+  <div id="siloTag" class="tag" data-hmi="Text">body + shade + level + cone</div>
+
+  <!-- 2. PUMP. Nozzles under the casing so the casing frames them. -->
+  <div id="pumpSuct"  data-hmi="Rectangle"></div>
+  <div id="pumpDisch" data-hmi="Rectangle"></div>
+  <div id="pumpBase"  data-hmi="Rectangle"></div>
+  <div id="pumpFootL" data-hmi="Rectangle"></div>
+  <div id="pumpFootR" data-hmi="Rectangle"></div>
+  <div id="pumpCase"  data-hmi="Circle"></div>
+  <div id="pumpImp"   data-hmi="Circle"
+       data-hmi-override="H-504: internal to the PUMP symbol; the line it is near belongs to the motor, 400px away"></div>
+  <div id="pumpCap" class="cap" data-hmi="Text">PUMP</div>
+  <div id="pumpTag" class="tag" data-hmi="Text">casing + impeller + nozzles</div>
+
+  <!-- 3. PIPE. Run and drop first, elbow over the junction, flanges and reducer last. -->
+  <div id="pipeRun"   data-hmi="Rectangle"></div>
+  <div id="pipeDrop"  data-hmi="Rectangle"></div>
+  <div id="pipeElbow" data-hmi="Rectangle"></div>
+  <div id="redTop"    data-hmi="Line"></div>
+  <div id="redBot"    data-hmi="Line" data-hmi-line="up"></div>
+  <div id="flangeA"   data-hmi="Rectangle"></div>
+  <div id="flangeB"   data-hmi="Rectangle"></div>
+  <div id="pipeCap" class="cap" data-hmi="Text">PIPE</div>
+  <div id="pipeTag" class="tag" data-hmi="Text">run + elbow + reducer + flanges</div>
+
+  <!-- 4. MOTOR. Body, then shade, then fins, then furniture, then the M last of all. -->
+  <div id="motTerm"   data-hmi="Rectangle"></div>
+  <div id="motShaft"  data-hmi="Rectangle"></div>
+  <div id="motBaseL"  data-hmi="Rectangle"></div>
+  <div id="motBaseR"  data-hmi="Rectangle"></div>
+  <div id="motBody"   data-hmi="Rectangle"></div>
+  <div id="motShade"  data-hmi="Rectangle"></div>
+  <div id="motFins1"  data-hmi="Rectangle"></div>
+  <div id="motFins2"  data-hmi="Rectangle"></div>
+  <div id="motFins3"  data-hmi="Rectangle"></div>
+  <div id="motFins4"  data-hmi="Rectangle"></div>
+  <div id="motMark"   data-hmi="Circle"></div>
+  <div id="motM"      data-hmi="Text"
+       data-hmi-override="H-504: internal to the MOTOR symbol; aligns to its own circle, not to the pump">M</div>
+  <div id="motCap" class="cap" data-hmi="Text">MOTOR</div>
+  <div id="motTag" class="tag" data-hmi="Text">body + fins + terminal + shaft</div>
+
+  <div id="note"  data-hmi="Text">Built only from Rectangle, Circle, Line and Text. No polygon, no imported graphic.</div>
+  <div id="note2" data-hmi="Text">Declaration order is paint order: fills first, outlines over them, labels last.</div>
+
+</body>
+</html>

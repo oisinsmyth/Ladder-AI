@@ -101,6 +101,9 @@ green-for-running and accent chrome unprompted. Sizing comes from `hmi/sizing-st
   warning). No third alarm colour, no per-area palettes.
 - **H-104** `[MECHANIZED]` **No green for running.** Running is the normal state; by H-102 it is grey.
   This is the single most common violation and every unguided generation produced it.
+  ⚠️ **This rule is about STATE, not about command identity.** A *static* green marker on a START
+  button is permitted and expected — see **H-108/H-109**. What is forbidden is a green that means
+  "this is running", i.e. one that appears, disappears or changes with the plant.
 - **H-105** `[MECHANIZED]` **No accent colour in the PROCESS AREA** — no coloured dividers, no
   decorative fills, nothing tinted that is not carrying state.
   🔴 **AMENDED 2026-08-17.** This rule previously read *"no accent colour as chrome — no branded
@@ -126,6 +129,61 @@ green-for-running and accent chrome unprompted. Sizing comes from `hmi/sizing-st
 
   *Owner sign-off recorded 2026-08-17 — this is safety-adjacent convention, so it is the engineer's
   call and not the tool's.*
+
+### H-108 / H-109 — command accents, and what "accent" actually means
+
+**Owner, 2026-08-17:** *"start is always accented with green, stop is always accented with red and
+reset is always accented with a light blue. When I say accent I mean that, while the button is a
+slightly different shade from the background there is a small symbol or something similar with the
+accent colour."*
+
+That definition is the whole reason this is compatible with H-102 and H-104, so it comes first.
+
+- **H-109** `[MECHANIZED]` **An ACCENT is a SMALL MARKER, never a FILL.** The control's body is a
+  shade of the grey field — slightly lifted, so it reads as pressable — and the accent appears as a
+  **small symbol, bar or dot**, occupying a minor fraction of the control (**≤ 15% of its area**).
+  🔴 **A control whose body is the accent colour is a FILL, not an accent, and is forbidden.** The
+  difference is not stylistic: a filled green button is a coloured region competing with the alarm
+  palette; a small green marker on a grey button is a label.
+
+- **H-108** `[MECHANIZED]` **Command accents are fixed by FUNCTION, not chosen per screen:**
+
+  | command | accent | why it is not a state colour |
+  |---|---|---|
+  | START / RUN | **green** | marks *which control starts the plant*. It does not mean "running" |
+  | STOP / E-STOP | **red** | H-107. Plant convention, and the strongest one there is |
+  | RESET / ACKNOWLEDGE | **light blue** | distinct from both, and from every alarm hue |
+
+  These are constant on every screen, in every project, and **never vary with plant state**. An
+  operator learns three shapes once.
+
+### Why this does not contradict H-102 or H-104
+
+H-104 forbids **green for running**. That is a rule about **state**: a green region that appears when
+a pump runs and disappears when it stops is carrying process information in the alarm channel.
+
+A green marker on a START button is not that. It is **static** — it is there when the plant is
+running, stopped, or faulted — so it carries **no state at all**. It identifies the control, the way
+the word START does. Two properties make it safe, and both are required:
+
+1. **It never changes.** Anything that changes with the plant is state, and state belongs to the
+   alarm palette.
+2. **It is small.** A marker is read as a label; a fill is read as a region.
+
+Lose either and it becomes exactly what H-104 forbids. **H-108 accents are permitted precisely
+because they are the least informative thing on the screen** — which is what lets the eye stop
+reporting them and keeps the alarm channel loud.
+
+### Interaction with brand colour (H-6xx)
+
+Command accents are **reserved** and outrank the brand. A site's blue may theme the chrome and
+mark the primary command (H-604), but it **never** replaces the green on START, the red on STOP or
+the light blue on RESET — those three are the operator's vocabulary, not the site's.
+
+⚠️ **A site whose brand colour is a green, a red or a light blue therefore collides with the
+command set as well as the alarm set.** H-602 already refuses red and amber; this extends the same
+reasoning: a brand accent must be distinguishable from the command accents too, or the operator has
+two meanings for one colour.
 
 ## H-2xx — Form
 

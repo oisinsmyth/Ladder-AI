@@ -75,6 +75,33 @@ public static class Coherence
                     + $"{canvasWidth}x{canvasHeight} screen"));
             }
 
+            // 🔴 THE SECOND MEASURED CRASH, same class as the Line one below. A Circle declares
+            // BOTH a bounding box AND a Radius, and if they disagree the object is incoherent -
+            // TIA does not reject it, the Portal process dies with "Access to a disposed object".
+            //
+            // Found on the first screen that ever used a Circle: 36 x 34 with Radius 17. A radius
+            // of 17 is a 34 x 34 circle, so the width was two pixels of nonsense. The Line rule
+            // below was written from the first crash and did not generalise - one rule per shape
+            // is how this gate stays honest, because "the parts contradict each other" takes a
+            // different form in every shape.
+            if (type == "Circle")
+            {
+                var radius = Int(item, "Radius");
+                if (radius is null)
+                {
+                    findings.Add(new Finding("C-CIRCLE", Severity.Error,
+                        $"Circle '{name}' declares no Radius"));
+                }
+                else if (width != height || width != radius * 2)
+                {
+                    findings.Add(new Finding("C-CIRCLE", Severity.Error,
+                        $"Circle '{name}' is {width}x{height} with Radius {radius}: a radius-{radius} "
+                        + $"circle is {radius * 2}x{radius * 2}. The bounding box and the radius must "
+                        + "agree - TIA does not reject a circle that contradicts itself, IT CRASHES "
+                        + "THE PORTAL PROCESS on import."));
+                }
+            }
+
             // 🔴 THE ONE THAT CRASHES PORTAL. A Line carries its endpoints as ABSOLUTE screen
             // coordinates, and they must agree with the bounding box the same object declares.
             if (type == "Line")
@@ -96,6 +123,8 @@ public static class Coherence
                     var minY = Math.Min(st.Value, et.Value);
                     var maxY = Math.Max(st.Value, et.Value);
 
+                    // Either diagonal is coherent: what matters is that the endpoints span exactly
+                    // the declared bounding box, not which corner the line starts from.
                     if (minX != left || minY != top || maxX != left + width || maxY != top + height)
                     {
                         findings.Add(new Finding("C-LINE", Severity.Error,

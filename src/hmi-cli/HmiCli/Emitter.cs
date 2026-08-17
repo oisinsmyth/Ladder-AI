@@ -305,6 +305,9 @@ public static class Emitter
 
     private static void WriteCircle(XmlWriter w, string id, string name, IrItem i)
     {
+        var radius = (int)Math.Round(Math.Min(i.Width, i.Height) / 2);
+        var side = radius * 2;
+
         w.WriteStartElement("Hmi.Screen.Circle");
         w.WriteAttributeString("ID", id);
         w.WriteAttributeString("CompositionName", "ScreenItems");
@@ -317,7 +320,10 @@ public static class Emitter
         Attr(w, "Flashing", "None");
         Geometry(w, i);
         Attr(w, "ObjectName", name);
-        Attr(w, "Radius", ((int)Math.Round(Math.Min(i.Width, i.Height) / 2)).ToString(CultureInfo.InvariantCulture));
+        // Radius and the bounding box must agree or the object is incoherent, so the box is
+        // SQUARED to the radius rather than left as authored. An ellipse is not a thing this type
+        // can express, and emitting one crashes Portal rather than being refused.
+        Attr(w, "Radius", radius.ToString(CultureInfo.InvariantCulture));
         Attr(w, "TabIndex", "-1");
         Attr(w, "Top", ((int)Math.Round(i.Top)).ToString(CultureInfo.InvariantCulture));
         Attr(w, "UseDesignColorSchema", "false");
@@ -341,9 +347,16 @@ public static class Emitter
         // aftermath and not the cause. Isolated by bisection: Rectangle, TextField and Button all
         // imported cleanly and Line alone killed the process. Confirmed against the real export,
         // where every line satisfies StartLeft == Left and EndLeft == Left + Width.
+        // A bounding box has TWO diagonals. "down" runs top-left to bottom-right; "up" runs
+        // bottom-left to top-right. Without the choice, opposed pairs - the two sides of a cone,
+        // the two slopes of a roof - simply cannot be drawn.
+        var up = string.Equals(i.LineDirection, "up", StringComparison.OrdinalIgnoreCase);
+        var startY = up ? i.Top + i.Height : i.Top;
+        var endY = up ? i.Top : i.Top + i.Height;
+
         Attr(w, "EndLeft", ((int)Math.Round(i.Left + i.Width)).ToString(CultureInfo.InvariantCulture));
         Attr(w, "EndStyle", "NoEnd");
-        Attr(w, "EndTop", ((int)Math.Round(i.Top + i.Height)).ToString(CultureInfo.InvariantCulture));
+        Attr(w, "EndTop", ((int)Math.Round(endY)).ToString(CultureInfo.InvariantCulture));
         Attr(w, "FillStyle", "Transparent");
         Attr(w, "Flashing", "None");
         Geometry(w, i);
@@ -352,7 +365,7 @@ public static class Emitter
         Attr(w, "ObjectName", name);
         Attr(w, "StartLeft", ((int)Math.Round(i.Left)).ToString(CultureInfo.InvariantCulture));
         Attr(w, "StartStyle", "NoEnd");
-        Attr(w, "StartTop", ((int)Math.Round(i.Top)).ToString(CultureInfo.InvariantCulture));
+        Attr(w, "StartTop", ((int)Math.Round(startY)).ToString(CultureInfo.InvariantCulture));
         Attr(w, "Style", "Solid");
         Attr(w, "TabIndex", "-1");
         Attr(w, "Top", ((int)Math.Round(i.Top)).ToString(CultureInfo.InvariantCulture));
