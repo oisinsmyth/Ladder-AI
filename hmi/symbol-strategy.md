@@ -434,6 +434,16 @@ This is how the Basic-vs-Comfort question got a real answer instead of a plausib
 be reused for any future "does Basic support X" question. It also removes the blocker that stopped the
 Openness manual being read (the PDF exceeds WebFetch's 10 MB cap).
 
+Two more retrieval facts, both learned the hard way across four survey lanes:
+
+- 🔴 **`cache.industry.siemens.com` serves the PDFs that `support.industry.siemens.com` returns 403
+  for.** That 403 stopped a whole vendor lane; the host swap is the workaround.
+- **An appearance claim needs the raster actually rendered and looked at.** Fetching an image saves it
+  locally, and it can then be read back and genuinely viewed — **PDFs could not be rendered at all**,
+  so every PDF cited in any of these surveys is a "go look yourself" pointer, never verified
+  appearance. This is the same lesson the Inkscape retraction above teaches from the other direction:
+  *a claim about how something looks is only as good as the renderer that produced it.*
+
 ## What is still open
 
 1. **Whether the panel RENDERS any of this at runtime** — only compile-level acceptance is measured.
