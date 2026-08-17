@@ -116,12 +116,12 @@ public sealed record CleanupReport(
     /// including empty ones.
     /// </summary>
     public string Render() =>
-        $"{Outcome.ToString().ToUpperInvariant()} — {Removals.Count} removal(s), {Deferred.Count} deferred, "
+        $"{Outcome.ToString().ToUpperInvariant()} - {Removals.Count} removal(s), {Deferred.Count} deferred, "
         + $"{Dispositions.Count - Removals.Count - Deferred.Count} retained. {Detail}"
         + (Removals.Count == 0
             ? string.Empty
             : Environment.NewLine + string.Join(Environment.NewLine, Removals.Select(r =>
-                $"  REMOVE {r.Candidate.Kind} '{r.Candidate.Name}' — why: {r.Candidate.Why} — authority: {r.Candidate.Authority} — evidence: {r.Detail}")));
+                $"  REMOVE {r.Candidate.Kind} '{r.Candidate.Name}' - why: {r.Candidate.Why} - authority: {r.Candidate.Authority} - evidence: {r.Detail}")));
 }
 
 /// <summary>
@@ -209,7 +209,7 @@ public static class Cleanup
             if (candidate.Kind == RemovalKind.Unstated)
             {
                 dispositions.Add(new CleanupDisposition(candidate, CleanupEligibility.KindNotStated,
-                    $"'{candidate.Name}' does not say what kind of object it is, so what removing it would cost — scan time, object count, an instance DB a test still owns — is unknown."));
+                    $"'{candidate.Name}' does not say what kind of object it is, so what removing it would cost - scan time, object count, an instance DB a test still owns - is unknown."));
                 continue;
             }
 

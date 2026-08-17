@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>Harness.Cleanup</RootNamespace>
+    <AssemblyName>harness-cleanup</AssemblyName>
+  </PropertyGroup>
+
+  <!--
+    DB-7's ENTRY POINT. `Harness.Results/Cleanup.cs` has computed cleanup eligibility since it was
+    written and NOTHING CALLED IT: zero references anywhere in src/ outside its own file and its
+    tests. A library nobody can run is a design that has not been tested against reality, and the
+    first thing running it against the real corpus found was that a tag table and a UDT are
+    STRUCTURALLY OUTSIDE X-J's ownership rule (see CleanupRun's UNADDRESSABLE section) — which no
+    unit test over hand-made candidates could have surfaced.
+
+    *** THIS BINARY PLANS. IT CANNOT DELETE, AND THE CONFIRMATION FLAGS ARE REFUSED BY NAME. ***
+
+    That is `download-plan`'s shape, chosen for `download-plan`'s reason: the delete verb lives in
+    `openness-cli delete` (net48, Portal, its own fences), and a second path to the same destructive
+    act is a second fence to keep correct. What this emits instead is the exact command line per
+    removal, so the plan is executable by a party that holds the Portal token — and CleanupStructure
+    Tests walks this compiled assembly asserting no file-mutating or process-launching call exists in
+    it, with a denominator and a live positive control, because a claim about an assembly needs a
+    walk over the assembly.
+
+    It consumes ARTIFACTS and never invokes a tool: `converter cross-check` in JSON form,
+    `converter claims` in JSON form, the vector files, the drain report. Same reason Harness.Results opens
+    no socket — provenance is then visible on the command line, and the binary stays testable with
+    no converter, no Portal and no rig in the room.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\Harness.Results\Harness.Results.csproj" />
+  </ItemGroup>
+
+</Project>
