@@ -621,6 +621,34 @@ public sealed class ScreenImportFailedException : Exception
     }
 }
 
+/// <summary>
+/// 🔴 A screen claiming a NUMBER another screen already holds. Refused before the importer is
+/// contacted, because Portal does not refuse it — IT DIES, reporting only
+/// "Access to a disposed object of type 'Siemens.Engineering.Project'", which describes the aftermath
+/// and names neither the screen nor the number.
+///
+/// Measured 2026-08-17 with a control in both directions: one document imported at number 10 and
+/// crashed at number 1 with no other change, and a document that had already imported cleanly at
+/// number 87 crashed when re-emitted at 1.
+///
+/// A screen keeping its OWN number is the normal update path and is NOT a collision.
+/// </summary>
+public sealed class ScreenNumberCollisionException : Exception
+{
+    public ScreenNumberCollisionException(IReadOnlyList<string> collisions)
+        : base("Screen number collision - REFUSED before contacting Portal:"
+               + Environment.NewLine
+               + string.Join(Environment.NewLine, collisions.Select(c => "    " + c))
+               + Environment.NewLine
+               + "A screen number is unique across the device. Importing a screen whose number is "
+               + "already held by a DIFFERENT screen CRASHES the Portal process rather than failing "
+               + "validation, so this is refused here. Give the screen an unused number "
+               + "(hmi-cli emit --number <n>), or rename it to the screen that already holds that "
+               + "number if you meant to update it.")
+    {
+    }
+}
+
 public sealed class GraphicNotFoundException : Exception
 {
     public GraphicNotFoundException(string graphicName, IEnumerable<string> available)

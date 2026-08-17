@@ -2977,6 +2977,170 @@ public sealed class OpennessGateway : IOpennessGateway
             screens);
     }
 
+    /// <summary>
+    /// Every screen NUMBER already in use, keyed to the screen holding it. Recursive, because a
+    /// number is unique across the whole device and not merely within one folder — a collision
+    /// hiding in a subfolder crashes Portal exactly as readily as one at the top.
+    /// </summary>
+    private static void CollectScreenNumbers(ScreenFolder folder, Dictionary<int, string> into, ref int screensSeen)
+    {
+        foreach (Screen screen in folder.Screens)
+        {
+            screensSeen++;
+            var name = TryRead(() => screen.Name) ?? "(unnamed)";
+
+            // The attribute is NOT called the same thing on both families, and getting it wrong is
+            // SILENT: a wrong name reads nothing, the map comes back empty, and the guard clears
+            // every import while appearing to work. That happened once here - "ScreenNumber" is the
+            // Unified spelling and found nothing on a classic screen, so the first build of this
+            // guard was a no-op that still let Portal be killed. Both spellings are tried, and the
+            // caller fails loudly if NOTHING could be read (see ImportScreens).
+            var number = ReadLongAttribute(screen, "Number") ?? ReadLongAttribute(screen, "ScreenNumber");
+
+            // Neither spelling worked, so ASK THE OBJECT what its attributes are called instead of
+            // guessing a third time. GetAttributeInfos is how Openness self-describes, and it is the
+            // same technique the HMI schema dump already relies on.
+            if (number is null)
+            {
+                foreach (var attr in DiscoverNumberAttributeNames(screen))
+                {
+                    number = ReadLongAttribute(screen, attr);
+                    if (number is not null)
+                    {
+                        break;
+                    }
+                }
+            }
+
+            if (number is { } n)
+            {
+                into[(int)n] = name;
+            }
+        }
+
+        foreach (ScreenUserFolder child in folder.Folders)
+        {
+            CollectScreenNumbers(child, into, ref screensSeen);
+        }
+    }
+
+    /// <summary>
+    /// The numbers actually in use, read from each screen's own EXPORTED DOCUMENT because the object
+    /// model does not carry them on this family. Exports go to a temp directory and are deleted.
+    ///
+    /// Costly (one export per existing screen) and only reached when the cheap route found nothing,
+    /// which is the right order: pay for the accurate answer only when the free one is unavailable.
+    /// </summary>
+    private static void CollectScreenNumbersByExport(ScreenFolder folder, Dictionary<int, string> into)
+    {
+        var temp = Path.Combine(Path.GetTempPath(), "openness-cli-screennums-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(temp);
+
+        try
+        {
+            CollectScreenNumbersByExportInto(folder, into, temp);
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+            catch (Exception)
+            {
+                // A temp directory that will not delete is not a reason to fail an import.
+            }
+        }
+    }
+
+    private static void CollectScreenNumbersByExportInto(ScreenFolder folder, Dictionary<int, string> into, string temp)
+    {
+        var n = 0;
+        foreach (Screen screen in folder.Screens)
+        {
+            var name = TryRead(() => screen.Name) ?? "(unnamed)";
+            var path = Path.Combine(temp, "s" + (++n).ToString(System.Globalization.CultureInfo.InvariantCulture) + ".xml");
+
+            try
+            {
+                screen.Export(new FileInfo(path), Siemens.Engineering.ExportOptions.WithDefaults);
+                var (_, number) = ReadScreenIdentity(path);
+                if (number is { } value)
+                {
+                    into[value] = name;
+                }
+            }
+            catch (Exception)
+            {
+                // One screen that will not export leaves its number unknown. The caller's
+                // empty-is-not-clean check still fires if NOTHING could be read; a partial read is
+                // reported as what it is by simply not containing that number.
+            }
+        }
+
+        foreach (ScreenUserFolder child in folder.Folders)
+        {
+            CollectScreenNumbersByExportInto(child, into, temp);
+        }
+    }
+
+    /// <summary>
+    /// Attribute names on this object that plausibly carry a screen number, discovered by asking the
+    /// object rather than by guessing. Openness self-describes through <c>GetAttributeInfos</c>, and
+    /// the spelling differs between device families — "ScreenNumber" is the Unified name and reads
+    /// nothing on a classic screen.
+    /// </summary>
+    private static IEnumerable<string> DiscoverNumberAttributeNames(IEngineeringObject obj)
+    {
+        List<string> names;
+        try
+        {
+            names = obj.GetAttributeInfos()
+                .Select(a => a.Name)
+                .Where(n => n.IndexOf("Number", StringComparison.OrdinalIgnoreCase) >= 0)
+                .ToList();
+        }
+        catch (Exception)
+        {
+            yield break;
+        }
+
+        foreach (var n in names)
+        {
+            yield return n;
+        }
+    }
+
+    /// <summary>
+    /// The screen's declared NAME and NUMBER, read from the SimaticML file rather than from the
+    /// caller's arguments — the file is what the importer will act on, and an argument is only a
+    /// claim about it.
+    /// </summary>
+    private static (string Name, int? Number) ReadScreenIdentity(string file)
+    {
+        try
+        {
+            var doc = System.Xml.Linq.XDocument.Load(file);
+            var screen = doc.Descendants()
+                .FirstOrDefault(e => e.Name.LocalName == "Hmi.Screen.Screen");
+
+            var attrs = screen?.Elements().FirstOrDefault(e => e.Name.LocalName == "AttributeList");
+            var name = attrs?.Elements().FirstOrDefault(e => e.Name.LocalName == "Name")?.Value
+                       ?? Path.GetFileNameWithoutExtension(file);
+            var numberText = attrs?.Elements().FirstOrDefault(e => e.Name.LocalName == "Number")?.Value;
+
+            return int.TryParse(numberText, out var n) ? (name, n) : (name, null);
+        }
+        catch (Exception)
+        {
+            // A file this cannot parse is NOT reported as collision-free — it is reported as
+            // unreadable by returning no number, so the guard declines to clear it and the importer's
+            // own error surfaces instead. Silently returning "no collision" would be the empty-is-
+            // clean failure this repo keeps naming.
+            return (Path.GetFileNameWithoutExtension(file), null);
+        }
+    }
+
     private static void WalkClassicScreenFolder(ScreenFolder folder, List<HmiScreenInfo> results)
     {
         foreach (Screen screen in folder.Screens)
@@ -3441,6 +3605,80 @@ public sealed class OpennessGateway : IOpennessGateway
 
         var folder = targets[0].Target.ScreenFolder;
         var imported = new List<string>();
+
+        // 🔴 A SCREEN-NUMBER COLLISION CRASHES THE PORTAL PROCESS. MEASURED 2026-08-17, WITH A
+        // NEGATIVE CONTROL, AGAINST A REAL PROJECT.
+        //
+        // Importing a screen whose ScreenNumber is already taken by a DIFFERENT screen does not fail
+        // validation and does not return an error. Portal DIES, and Openness reports only
+        // "Access to a disposed object of type 'Siemens.Engineering.Project'" - the aftermath, never
+        // the cause. It is the same shape as the Line-endpoint and Circle-radius crashes.
+        //
+        // How it was found is worth recording, because the cost was almost entirely self-inflicted:
+        // eleven bisection imports chased CONTENT - events, FieldLength, Unit, decimal patterns,
+        // field count, item count, object count - and every one of those variables was CONFOUNDED
+        // with the screen number, because each probe was emitted with its own unique number while
+        // every attempt at the real screen used number 1. Two documents differing only in that
+        // number settled it in one pair: identical bytes otherwise, number 10 imported, number 1
+        // killed Portal. The control ran the other way too - a document that had already imported
+        // cleanly at number 87 crashed when re-emitted at 1.
+        //
+        // So: READ THE EXISTING NUMBERS AND REFUSE BEFORE CONTACTING THE IMPORTER. A screen keeping
+        // its OWN number is the update path and must stay allowed - the collision is a number held
+        // by a screen of a DIFFERENT NAME.
+        var takenByOther = new Dictionary<int, string>();
+        var screensSeen = 0;
+        CollectScreenNumbers(folder, takenByOther, ref screensSeen);
+
+        // 🔴 OPENNESS DOES NOT EXPOSE A CLASSIC SCREEN'S NUMBER AT ALL. Measured: neither "Number"
+        // nor "ScreenNumber" reads, and GetAttributeInfos offers no attribute containing "Number" -
+        // which matches `hmi --json` reporting screenNumber:null for every classic screen, and the
+        // broader rule that classic exposes almost nothing through the object model.
+        //
+        // So the object model cannot answer the question, and a guard that cannot verify must not
+        // silently clear. The EXPORT can answer it: a classic screen exports as SimaticML and the
+        // document carries <Number>. That is the same asymmetry as everywhere else here - THE
+        // DOCUMENT IS RICHER THAN THE API - so the fallback reads the documents.
+        if (screensSeen > 0 && takenByOther.Count == 0)
+        {
+            CollectScreenNumbersByExport(folder, takenByOther);
+        }
+
+        // EMPTY IS STILL NOT CLEAN. If even the export route yielded nothing, the collision cannot be
+        // ruled out and the import is refused rather than risking the Portal process. The first build
+        // of this guard read the wrong attribute, found nothing, and cleared every import while
+        // appearing to work - which is the exact failure this branch exists to prevent.
+        if (screensSeen > 0 && takenByOther.Count == 0)
+        {
+            throw new ScreenNumberCollisionException(new[]
+            {
+                $"NOT VERIFIED: {screensSeen} screen(s) exist and NONE reported a number, by attribute "
+                + "or by export, so a collision cannot be ruled out. Importing anyway risks killing "
+                + "the Portal process.",
+            });
+        }
+
+        var collisions = new List<string>();
+        foreach (var file in files)
+        {
+            var (fileScreenName, fileNumber) = ReadScreenIdentity(file);
+            if (fileNumber is null || !takenByOther.TryGetValue(fileNumber.Value, out var holder))
+            {
+                continue;
+            }
+
+            if (!string.Equals(holder, fileScreenName, StringComparison.Ordinal))
+            {
+                collisions.Add(
+                    $"{Path.GetFileName(file)}: screen '{fileScreenName}' claims number {fileNumber.Value}, "
+                    + $"which is already held by '{holder}'");
+            }
+        }
+
+        if (collisions.Count > 0)
+        {
+            throw new ScreenNumberCollisionException(collisions);
+        }
 
         try
         {
