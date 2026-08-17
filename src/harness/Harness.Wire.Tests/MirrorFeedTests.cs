@@ -101,6 +101,38 @@ public class MirrorFeedTests
     }
 
     /// <summary>
+    /// 🔴 <b>THE TERMINATOR'S OWN CASE, AND THE THEORY ABOVE DOES NOT COVER IT.</b>
+    ///
+    /// <para><b>Found by mutation.</b> Making the parser <i>helpfully fill in</i> a missing terminator left
+    /// every truncation case above GREEN: each fractional cut breaks a header or a frame line as well, and
+    /// something else refuses first. So those three were passing for a reason that had nothing to do with
+    /// the check they appear to be about — <i>a test that passes for the wrong reason is indistinguishable
+    /// from one that passes.</i></para>
+    ///
+    /// <para>This removes the terminator LINE AND NOTHING ELSE. Every header is intact, every frame parses,
+    /// and the only thing missing is the statement of how many frames there should have been — which is
+    /// exactly what a truncation that happens to land on a line boundary produces, and exactly the document
+    /// a lenient parser renders as a short but entirely reasonable table of registers.</para>
+    /// </summary>
+    [Fact]
+    public void A_feed_whose_terminator_alone_is_missing_is_refused()
+    {
+        var text = MirrorFeed.Format(Document(
+            new MirrorFeedFrame(0, T0, new ushort[] { 1, 2, 3, 4 }),
+            new MirrorFeedFrame(4, T0, new ushort[] { 5, 6, 7, 8 })));
+
+        var withoutTerminator = string.Join("\n",
+            text.Split('\n').Where(l => !l.StartsWith("END ", StringComparison.Ordinal)));
+
+        // The control: everything else about the document is still whole and still parses.
+        Assert.True(MirrorFeed.TryParse(withoutTerminator + "\nEND 2\n", out _, out var controlProblem), controlProblem);
+
+        Assert.False(MirrorFeed.TryParse(withoutTerminator, out var read, out var problem));
+        Assert.Null(read);
+        Assert.Contains("TRUNCATED", problem, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// The terminator carries a COUNT, and the count is checked. A document whose frames were dropped
     /// while its terminator survived is the case a bare terminator would wave through.
     /// </summary>
