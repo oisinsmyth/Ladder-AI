@@ -3127,6 +3127,43 @@ stays `Unresolved` **even when its name would have matched something** — a map
 repaired by filling the hole. And a submission that declares no map behaves exactly as before, so the
 gate does not fire outside its scope.
 
+### 🔴 A reference is not a location — which placement a name reaches (2026-08-17, second pass)
+
+First real use of the declared join produced two more cases, **both resolver gaps rather than bad
+declarations**:
+
+| symptom | cause | ruling |
+|---|---|---|
+| a **fully-qualified instance path** came back `AMBIGUOUS` over every instance of its FB | the first fix walked a **transitive closure** over *"these two spellings name one storage"* — **and that relation is not transitive.** `FB_X\|IO.Cmd` names the same storage as `iDB_A.IO.Cmd` *and* as `iDB_B.IO.Cmd`; `iDB_A.IO.Cmd` is **not** `iDB_B.IO.Cmd` | **gap.** The bound was right and the pooling should never have happened — *a declaration that names the placement has already answered the question* |
+| a **nested multi-instance path** (`<outerInstance>.<innerStatic>.<member>`) resolved to nothing | an FB placed as a STATIC of another FB has real per-instance state and **no DB of its own**. `ProjectUsageGraph` has resolved these to a fixpoint since **FI-50**, nested ones included, and the resolver never asked | **gap.** Same lesson `undriven-scan` learned in FI-50, one tool later |
+
+Both close with one change of model: **the equivalence closure became a CONTAINMENT relation.**
+
+> **A group is not a location. It is a REFERENCE at some level of qualification, and what it COVERS is
+> the answer.** A *global* reference covers itself. A *block-local* reference — an FB addressing its own
+> member as a bare path — covers **one location per PLACEMENT of that FB**, instance DBs and
+> multi-instances alike, because the FB's write executes once per placement and lands in each one's own
+> memory. An FB with **no** placement covers a single declaration-site location (FI-44: a block written
+> before its caller still has storage).
+
+Resolution then works in locations: **one** location resolves, with the writers of every reference
+reaching it unioned; **several** are refused naming each. *Sibling placements can no longer pool, and
+that is now a property of the model rather than a bound bolted on after it.*
+
+**The refusals are kept, and one is sharper.** An **owner-qualified** declaration names a member of the
+*class*, so on a multi-placement FB it names N locations and is still `AMBIGUOUS` — now naming every
+placement, with the repair in the message. A declaration naming an instance that does not exist, or a
+real instance plus an unknown member, stays `UNRESOLVED` and is **never rounded to a sibling that
+does**.
+
+**So a per-instance test CAN resolve a shared member name** — the qualifier selects — provided the
+declaration is the fully-qualified placement path. That is the whole of what changed for a
+multi-instance plant.
+
+The reported path is now the **location**, with the reaching references named beside it on every
+resolution: *the location is computed and the references are the code, so a reader can check the
+answer instead of taking it.*
+
 ### The writer set is UNIONED across every spelling of one storage
 
 An FB writing its own `IO.Alarm` and a caller writing `iDB_X.IO.Alarm` are **one location under two
@@ -3159,9 +3196,10 @@ live negative control (the predicate is a parameter, retargeted at a type used e
 fence around one gate: a join built directly on `ProjectUsageGraph.Usages`, or written in another
 assembly, is outside it.
 
-**38 tests** (15 `ConflictGraphTests` + 19 `ConflictGraphDeclaredJoinTests` + 4 `JoinSiteWalkTests`).
-**Mutation-tested 2026-08-17 against a 1,377-test baseline — every figure below was RUN, not
-predicted; the two rows marked † were measured after two later tests took the baseline to 1,379:**
+**48 tests** (15 `ConflictGraphTests` + 19 `ConflictGraphDeclaredJoinTests` + 10
+`ConflictGraphInstanceScopeTests` + 4 `JoinSiteWalkTests`). **Mutation-tested 2026-08-17 — every figure
+below was RUN, not predicted.** Baselines differ because the suite grew during the work: unmarked rows
+were measured at 1,377, † at 1,379, ‡ at 1,389 (the placement pass).
 
 | mutation | red |
 |---|---|
@@ -3178,6 +3216,12 @@ predicted; the two rows marked † were measured after two later tests took the 
 | never declare ambiguity | 1 |
 | count only "missing from a map that exists", so a no-map submission is told nothing † | 1 |
 | **add a second name-to-storage join site to the assembly** | **1** — `JoinSiteWalkTests` |
+| ‡ a qualified instance path stops selecting and fans back out to every placement | **6** |
+| ‡ multi-instances dropped from the placement index (instance DBs only) | 2 |
+| ‡ a block-local reference covers only ONE placement | **7** |
+| ‡ the name match loses its location arm | 1 |
+| ‡ an owner-qualified declaration stops expanding to placements | 3 |
+| ‡ nothing may ever resolve to one location (the resolution path itself) | **22** |
 
 **The over-fire converse, run as deliberately as the refusals**: a new type in the assembly that
 touches no storage grouping leaves all 1,377 green — *a guard that fires on ordinary code is noise,
@@ -3186,12 +3230,20 @@ that path is removed). And an operator `--signals` name that resolves to nothing
 as a missing declaration — *an unresolved path there is a wrong path, and sending its user to write a
 `map` would be the wrong repair.*
 
-⚠️ **What none of this establishes.** Every figure above is from the converter's own tests and from
-the **committed** `ir/test-project001` corpus. **Nothing here was re-measured against the real
-submission that produced the 70-of-70 finding**, and the `0 of 68` figure is quoted from the report
-that raised the defect, not re-taken — *a recorded fact and a fresh one are different evidence.* The
-shape of that second failure was reproduced on the committed corpus instead
-(`iDB_HxBoolEcho.EchoResponse`), which is evidence about the mechanism and not about that submission.
+**The strongest converse available, and it is on real data.** The placement pass was re-run against the
+submission that produced the original finding, and each signal's outcome compared with the previous
+run's: **0 signals lost** — nothing that resolved before stopped resolving — **10 newly resolved**, and
+all **58** already-resolved signals changed only in the path *reported*, from the FB-internal reference
+to the placement's location. That equivalence was **checked mechanically, not by eye**: for all 58, the
+previously-reported path is still one of the *reaching references* named in the new reason.
+
+⚠️ **What none of this establishes.** The mutation figures and every fixture are from the converter's
+own tests on the **committed** corpus. The `0 of 68` figure in the section above is quoted from the
+report that raised it, not re-taken. And **an empty edge list on that submission was checked rather
+than assumed**: the corpus holds 140 genuine cross-block multi-writers, and **none of them is at a
+location the submission declares** — they are all on deployed instances while the submission's scope is
+a dedicated test instance. *That is why the empty list is earned; without that check it would be an
+empty list over a scope that had just been narrowed.*
 
 ## 🔴 `claim` — X-J's enforcing half: `--allocate` now knows the reserved band (2026-08-14)
 
