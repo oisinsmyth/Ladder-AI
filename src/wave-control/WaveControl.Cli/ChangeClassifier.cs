@@ -235,8 +235,26 @@ namespace Ladder.Wave.Cli
         /// </summary>
         /// <returns><see cref="ChangeClass.Unknown"/> when no row matches; <paramref name="rule"/> then
         /// carries WHY there is no row.</returns>
-        internal static ChangeClass Row(ObjectKind kind, ChangeNature nature, out string rule)
+        /// <remarks>
+        /// *** PUBLIC, AND CARRYING THE FIXED-STOP KINDS TOO, BECAUSE OF A MUTATION THAT STAYED
+        /// GREEN. *** It was internal, and <see cref="Classify"/> short-circuits the four fixed-STOP
+        /// kinds above it while the corpus lookup rejects <see cref="ObjectKind.Unknown"/> below it —
+        /// so the <c>default:</c> arm could not be reached from ANY caller, and mutating it to return
+        /// RUN left all 54 tests green. That is the "when a mutation you expected to go red stays
+        /// green, the finding is in the assertion, not in the mutation" case: the arm was dead code
+        /// wearing a fail-closed arm's clothes, in the one place a fail-closed arm matters. Publishing
+        /// the table and giving it EVERY row makes the arm reachable, and a test now walks every
+        /// <see cref="ObjectKind"/> value through it.
+        /// </remarks>
+        public static ChangeClass Row(ObjectKind kind, ChangeNature nature, out string rule)
         {
+            string? fixedStop;
+            if (FixedStopKinds.TryGetValue(kind, out fixedStop) && fixedStop != null)
+            {
+                rule = fixedStop;
+                return ChangeClass.Stop;
+            }
+
             switch (kind)
             {
                 case ObjectKind.FunctionBlock:
@@ -299,6 +317,9 @@ namespace Ladder.Wave.Cli
                     return ChangeClass.Unknown;
 
                 default:
+                    // Reached only by ObjectKind.Unknown. Classify() never arrives here — the corpus
+                    // lookup refuses an unstated kind first — but the TABLE is public, and a caller
+                    // asking it about an unstated kind must be answered "no row", never "RUN".
                     rule = "No row: DB-1's table does not name this kind of object.";
                     return ChangeClass.Unknown;
             }

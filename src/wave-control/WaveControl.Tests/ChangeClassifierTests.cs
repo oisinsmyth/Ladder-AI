@@ -219,6 +219,56 @@ namespace Ladder.Wave.Tests
         }
 
         [Fact]
+        public void TheTableItselfAnswersForEveryObjectKind_AndTheUnstatedKindGetsNoRow()
+        {
+            // *** THIS TEST EXISTS BECAUSE A MUTATION STAYED GREEN. *** Row's `default:` arm was
+            // unreachable from Classify (fixed-STOP kinds short-circuit above it, an unknown kind is
+            // refused below it), so changing it to return RUN broke nothing and all 54 tests passed.
+            // A fail-closed arm nobody can reach is not a fail-closed arm; it is a comment. The table
+            // is public now and this walks it, with a DENOMINATOR, so the arm has a caller.
+            var kinds = (ObjectKind[])Enum.GetValues(typeof(ObjectKind));
+            var natures = new[] { ChangeNature.Added, ChangeNature.Deleted, ChangeNature.Modified };
+
+            Assert.Equal(11, kinds.Length);
+
+            var answered = 0;
+            foreach (var kind in kinds)
+            {
+                foreach (var nature in natures)
+                {
+                    string rule;
+                    var row = ChangeClassifier.Row(kind, nature, out rule);
+                    Assert.NotEqual(string.Empty, rule);
+                    answered++;
+
+                    if (kind == ObjectKind.Unknown)
+                    {
+                        // The whole point: an object that will not say what it is gets NO ROW, and in
+                        // particular never RUN.
+                        Assert.Equal(ChangeClass.Unknown, row);
+                        continue;
+                    }
+
+                    if (ChangeClassifier.FixedStopKinds.ContainsKey(kind))
+                    {
+                        Assert.Equal(ChangeClass.Stop, row);
+                        continue;
+                    }
+
+                    if (kind == ObjectKind.TagTable && nature != ChangeNature.Added)
+                    {
+                        Assert.Equal(ChangeClass.Unknown, row);
+                        continue;
+                    }
+
+                    Assert.NotEqual(ChangeClass.Unknown, row);
+                }
+            }
+
+            Assert.Equal(kinds.Length * natures.Length, answered);
+        }
+
+        [Fact]
         public void EveryClassifiedVerdictCitesTheRowThatDecidedIt()
         {
             // A verdict without a citation cannot be argued with, and DB-1's table is transcribed from a
