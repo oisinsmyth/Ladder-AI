@@ -111,6 +111,16 @@ HMIAlarms.xlsx*
 JOB9003 - K150 Demo - Scratch Copy/
 *K150 Demo*/
 
+# ...AND THE PROBE OUTPUT DERIVED FROM IT (2026-08-17). The patterns above protect the PROJECT
+# FOLDER. The graphics-import probe exported screens and graphics OUT of that project into
+# `research/graphics-probe/` — real screen XML carrying identifying tag names, alarm text and
+# equipment-named graphics, sitting untracked and unignored under a directory nothing covers.
+# Same shape as the stray settings `.bak` of 2026-08-13 and the tag-sweep scratch files of
+# 2026-08-08: content that escaped the folder, one `git add -A` from being committed. The probe's
+# FINDINGS are structural (formats, API behaviour, error text) and belong in
+# `src/openness-cli/README.md`; its raw exports never leave this machine.
+research/graphics-probe/
+
 # OS / editor
 Thumbs.db
 Desktop.ini
