@@ -176,6 +176,51 @@ internal static class Program
                     return RunSanityCheck(gateway, sanityCheck.Options, timeoutOpenSeconds);
                 case ParseResult.CompileScopesSuccess compileScopes:
                     return RunCompileScopes(gateway, compileScopes.Options, timeoutOpenSeconds);
+                case ParseResult.HmiCloneScreenSuccess clone:
+
+                    if (!clone.Options.Confirm)
+
+                    {
+
+                        Console.Error.WriteLine(
+
+                            $"Would clone screen '{clone.Options.ScreenName}' via a library master copy. " +
+
+                            "This WRITES: it creates a master copy and a new screen. Nothing was done, and " +
+
+                            "Portal was not contacted. Re-run with --yes to proceed.");
+
+                        return ExitCodes.NotConfirmed;
+
+                    }
+
+                
+
+                    gateway.OpenProject(clone.Options.ProjectIdentifier, TimeSpan.FromSeconds(timeoutOpenSeconds));
+
+                    var cloned = gateway.CloneScreenViaMasterCopy(clone.Options.ScreenName);
+
+                    Console.WriteLine($"MASTER COPY: {cloned.MasterCopy}");
+
+                    Console.WriteLine($"NEW SCREEN:  {cloned.NewScreen}");
+
+                    return ExitCodes.Success;
+                case ParseResult.HmiSuccess hmi when hmi.Options.Inspect:
+
+                    gateway.OpenProject(hmi.Options.ProjectIdentifier, TimeSpan.FromSeconds(timeoutOpenSeconds));
+
+                    foreach (var line in gateway.InspectClassicScreen(hmi.Options.Screen ?? string.Empty))
+
+                    {
+
+                        Console.WriteLine(line);
+
+                    }
+
+                
+
+                    return ExitCodes.Success;
+
                 case ParseResult.HmiSuccess hmi:
                     return RunHmi(gateway, hmi.Options, timeoutOpenSeconds);
                 case ParseResult.HmiCreateScreenSuccess hmiCreate:
@@ -504,6 +549,11 @@ internal static class Program
             gateway.ExportTagTable(options.TagTableName, options.Device, options.OutPath);
             Console.WriteLine($"Exported '{options.TagTableName}' -> {options.OutPath}");
         }
+        else if (options.ScreenName is not null)
+        {
+            gateway.ExportScreen(options.ScreenName, options.Device, options.OutPath, options.ExportOptionsName);
+            Console.WriteLine($"Exported screen '{options.ScreenName}' -> {options.OutPath}");
+        }
         else
         {
             gateway.ExportBlock(options.BlockName!, options.Device, options.OutPath);
@@ -590,10 +640,31 @@ internal static class Program
 
     internal static int RunImport(IOpennessGateway gateway, ImportCommandOptions options, int timeoutOpenSeconds)
     {
+        if (options.AsScreen)
+        {
+            gateway.OpenProject(options.ProjectIdentifier, TimeSpan.FromSeconds(timeoutOpenSeconds));
+            var screens = gateway.ImportScreens(options.Device, options.Files);
+            foreach (var name in screens)
+            {
+                Console.WriteLine($"Imported screen '{name}'");
+            }
+
+            // Empty is not clean: Import() returning nothing means nothing landed, and reporting
+            // that as a success is how a no-op reads as a working pipeline.
+            Console.WriteLine($"IMPORTED: {screens.Count} screen(s) from {options.Files.Count} file(s)");
+            if (screens.Count == 0)
+            {
+                Console.Error.WriteLine("NOTHING IMPORTED - this is not a pass.");
+                return ExitCodes.ImportIncomplete;
+            }
+
+            return ExitCodes.Success;
+        }
+
         gateway.OpenProject(options.ProjectIdentifier, TimeSpan.FromSeconds(timeoutOpenSeconds));
         if (options.AsType)
         {
-            var importedTypes = gateway.ImportTypes(options.GroupPath, options.Files);
+            var importedTypes = gateway.ImportTypes(options.GroupPath!, options.Files);
             foreach (var name in importedTypes)
             {
                 Console.WriteLine(name);
@@ -607,7 +678,7 @@ internal static class Program
 
         if (options.AsTagTable)
         {
-            var importedTagTables = gateway.ImportTagTables(options.GroupPath, options.Files);
+            var importedTagTables = gateway.ImportTagTables(options.GroupPath!, options.Files);
             foreach (var name in importedTagTables)
             {
                 Console.WriteLine(name);
@@ -616,7 +687,7 @@ internal static class Program
             return ExitCodes.Success;
         }
 
-        var imported = gateway.ImportBlocks(options.GroupPath, options.Files);
+        var imported = gateway.ImportBlocks(options.GroupPath!, options.Files);
         Console.WriteLine(OutputFormatter.FormatTable(imported));
         return ReportDuplicateBlockNumbersAfterWrite(
             gateway, imported.Select(b => b.Name).ToList(), "imported and SAVED");

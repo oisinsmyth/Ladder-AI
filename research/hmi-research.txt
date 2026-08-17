@@ -1,0 +1,1163 @@
+================================================================================
+HMI GENERATION FROM A SPEC — RESEARCH
+Date: 2026-08-14   (rev 7 - FINAL)
+================================================================================
+
+RESEARCH CLOSED 2026-08-14 at owner request.
+➜ START AT SECTION R — the owner recommendation: build an `hmi-designer` agent
+  with mechanical tooling. Everything before it is the evidence for it.
+➜ The two controlled experiments behind that recommendation are 3.9 (1920x1080,
+  tooled vs direct) and 3.10 (1280x800, the full 2x2). Both were run live this
+  session; artefacts are in research/experiment/ and research/experiment2/.
+
+THE QUESTION, AS REFOCUSED BY THE OWNER (rev 3)
+-----------------------------------------------
+"What tools could Claude Code programmatically interact with to generate HTML or
+websites? Or do you think you could produce it directly?"
+
+ANSWER, AND IT IS MEASURED RATHER THAN ARGUED: produce it directly. I generated a
+1920x1080 operator screen this session, rendered it headlessly, and read its
+geometry back — first attempt, no generator tool, no dependencies beyond the Chrome
+already on this machine. Evidence and the honest defect list are in section 2.
+
+The leverage is NOT in a generation tool. It is in the render-and-flatten loop,
+which costs almost nothing and catches things reasoning about coordinates cannot.
+Section 3 assesses every candidate tool; the short version is that one is worth
+adopting now (headless Chrome, already proven), one later (PuppeteerSharp/Playwright
+in-process), one for a single specific job (the browser extension, for reading a
+LIVE runtime), and the whole AI-UI-generation category is a reject for this target.
+
+################################################################################
+R. OWNER RECOMMENDATION — BUILD THE `hmi-designer` AGENT
+   Added rev 7 at owner request, as the closing recommendation of this research.
+################################################################################
+
+R.0 THE RECOMMENDATION IN ONE PARAGRAPH
+
+  Create a new sub-agent, `hmi-designer`, standing in the same relation to HMI
+  screen content that `lad-coder` stands in to ladder logic: the ONLY agent
+  permitted to author or modify HMI screens, dispatched for every such task no
+  matter how small, working to a fixed contract and handing back evidence rather
+  than assurances. Give it the METHOD that experiment 2 measured as the only one
+  that works — house rules plus a render loop plus mechanical checks — and give it
+  MECHANICAL TOOLING so its output is judged by arithmetic rather than by its own
+  report. Do NOT give it a general-purpose design skill; that was measured three
+  times as counterproductive.
+
+R.1 WHY AN AGENT AT ALL
+
+  Three reasons, each grounded in something measured here rather than assumed:
+
+  (a) THE WORK IS ITERATIVE AND NOISY. Experiment 2's winning arm ran 7 render
+      cycles and inspected 7 screenshots. That is a lot of context spent on images
+      and intermediate defects, none of which the dispatching conversation needs.
+      An agent contains it and returns the verdict.
+  (b) THE METHOD IS NOT OPTIONAL AND MUST NOT BE RE-DECIDED PER TASK. The rules
+      layer is free and decisive (3.10 finding 1); skipping it produces green-for-
+      running and accent chrome EVERY time, in every arm that lacked it, unprompted.
+      Encoding the method in an agent definition is how it stops being a choice.
+  (c) IT MIRRORS A PATTERN THIS PROJECT ALREADY TRUSTS. Hard rule 8 exists because
+      LAD work done inline drifts. The same argument applies here, and the same
+      shape — plan and dispatch in the main conversation, verify the returned
+      evidence, present to the engineer — transfers without modification.
+
+R.2 THE AGENT'S MANDATORY METHOD (this is the measured hybrid, C)
+
+  1. READ THE HOUSE STYLE GUIDE and author HTML/CSS against it. Never invent a
+     palette, a type scale or a spacing scale.
+  2. RENDER HEADLESSLY AND LOOK AT THE RESULT. Not optional: the arm that skipped
+     this shipped a visible text collision, and the arm that did it caught clipping,
+     collisions, dead space and a mis-seated label across 7 cycles.
+  3. RUN THE MECHANICAL CHECKS (R.3) AND THE RENDER, BOTH, EVERY TIME. Measured
+     directly: the linter missed a visible text collision (glyph overflow without
+     box intersection) and the render missed 2 off-canvas elements across 8 cycles.
+     NEITHER SUBSUMES THE OTHER. This is the single most important line in R.
+  4. ITERATE until the checks are clean and the render looks right.
+  5. HAND BACK: the source, the final render, the check output verbatim, and a
+     statement of what it could not satisfy. Its summary is not evidence.
+
+  AND EXPLICITLY: DO NOT INVOKE `artifact-design` OR ANY GENERAL-PURPOSE DESIGN
+  SKILL. Measured three times (3.6 reasoning, 3.9, 3.10): it is tuned for web
+  artifacts, it did not prevent a single house-rule violation in either experiment,
+  it added gradients, accent colour and shadows, and in experiment 2 it cost MORE
+  tokens than the hybrid while scoring worst on overlap and off-canvas.
+
+R.3 THE MECHANICAL TOOLING — what to build, and what already exists
+
+  The principle this project already holds: a check that only warns gets skimmed,
+  so anything on the path to delivery FAILS CLOSED. And every one of these must
+  print its DENOMINATOR — "COMPARED: n items" — because empty is not clean.
+
+  BUILT AND PROVEN THIS SESSION (prototype quality, in the experiment harness):
+
+  T1  hmi-flatten     Headless Chrome -> screen-ir.json: absolute integer rects,
+      [PROVEN]        element type, stacking tier, per-item properties, tag
+                      bindings and faceplate type+version. Proven twice: 55 items
+                      with 4 faceplate refs and 14 bindings at 1920x1080, and
+                      across four independent screens at 1280x800. ~50 lines.
+                      This is the converter's step 1 and the input to T2 and T3.
+
+  T2  hmi-lint        Geometry, from the IR: sub-pixel positions, off-canvas,
+      [PROVEN]        text-leaf overlap, alignment near-miss (edge within 3px of a
+                      shared alignment line but not equal), largest dead band,
+                      touch targets under the minimum. No thresholds to tune, no
+                      baseline to approve. KNOWN LIMITATION, MEASURED: it cannot
+                      see glyph overflow that does not intersect boxes, and it
+                      false-positives on deliberate overlap — which is exactly why
+                      R.2 step 3 requires the render alongside it.
+
+  T3  hmi-style-check House-rule conformance, machine-scored: every computed
+      [PROVEN]        background/text/border colour converted to HSL, then green-
+                      for-normal (hue 80-165, sat >0.18), accent hues, gradients,
+                      shadows, corner radius, animation, and the grey-field range.
+                      Scored all four arms of experiment 2 identically and produced
+                      the result that decided the recommendation. Emits rule IDs.
+
+  T4  hmi-snap        Quantise the IR to the grid before applying. From experiment
+      [DESIGNED]      1's finding that 93% of a CSS-authored layout lands off an
+                      8-px grid even when the source claims to honour it. Not
+                      needed at a 1-px grid; needed the moment a coarser grid is
+                      adopted. "LLM proposes, solver disposes".
+
+  TO BUILD — the real work, and none of it is design work:
+
+  T5  hmi-apply       IR -> Openness write calls. Uses the existing measured
+      [M]             capability (create screen/items, set attributes with
+                      coercion, bind dynamizations, place faceplate containers and
+                      set Interface values). Must be RE-RUNNABLE AND IDEMPOTENT:
+                      there is no transaction and a failed command keeps what it
+                      already did.
+  T6  hmi-serialise   Read-back of a screen via the property walk, canonicalised
+      [M]             and stably ordered. Recovers diff, hash and round-trip, which
+                      the absence of a screen export otherwise denies. Two shipped
+                      products prove it is feasible.
+  T7  hmi-compare     T6's output vs the intended IR. The `converter compare`
+      [S]             analogue. Must ignore volatile fields and SAY WHICH, and must
+                      never exit 0 over zero comparisons.
+  T8  hmi-preflight   Before any write: every bound tag exists in ir/<project>/
+      [S]             (`converter tagstatus` already does this and already exits
+                      non-zero on invented names), every faceplate type exists,
+                      every element mapped, no duplicate names.
+  T9  unwired-check   Every faceplate parameter is actually bound. The compile
+      [S]             catches WRONG, never MISSING — an entirely unwired parameter
+                      compiles clean. Buildable now: read-back reports (unset).
+
+  ALREADY EXISTS AND IS THE GATE: `openness-cli hmi-compile`, which checks the
+  faceplate type reference and the parameter binding structurally, by type and
+  version, located screen -> item -> property. It is blind to geometry and
+  aesthetics — which is precisely the hole T2 and T3 fill.
+
+R.4 THE ARTIFACT THE AGENT CANNOT WORK WITHOUT
+
+  A HOUSE STYLE GUIDE as a real document — the `docs/06-lad-conventions.md`
+  analogue, with numbered rules the checker cites and findings reference. Suggested
+  `docs/XX-hmi-conventions.md`, rules H-nnn.
+
+  Seed it from the eight clauses used in experiment 2 (grey field; colour reserved
+  for abnormal; red and amber only; no gradient/shadow/radius; no animation except
+  unacknowledged alarms; dark text and tabular numerals; >=48px touch targets; no
+  accent colour), and harvest the concrete numbers — palette, grid pitch, zone
+  geometry, type scale — from the free SIMATIC HMI Template Suite rather than
+  inventing them.
+
+  🔴 WITH ONE CORRECTION ALREADY OWED, FOUND BY THE EXPERIMENT ITSELF. Both rules
+  arms independently objected that forbidding a RED STOP is wrong: plant convention
+  overwhelmingly expects red for a safety-critical stop, and a grey STOP "will feel
+  wrong to anyone trained on red-stop panels". They are right. H3 needs an explicit
+  STOP carve-out. Recorded here because it is the argument for the guide being a
+  REVIEWABLE DOCUMENT that engineers can correct, rather than a prompt buried in an
+  agent — the first contact with real work already produced a correction.
+
+R.5 WHAT THE AGENT MUST NOT DO
+
+  - Not review its own output for acceptance. A fixer reviewing its own fix is the
+    correlated check this project exists to avoid; reviewer -> fixer is fine, the
+    reverse is not. A separate reviewing pass reads the BUILT screen (via T6), not
+    the spec it came from.
+  - Not write to the real project. Same gate as everything else: what reaches the
+    engineer is a diff plus evidence.
+  - Not invent tags. `converter tagstatus` is the existing anti-laundering gate and
+    T8 makes it mandatory.
+  - Not touch safety content, under any framing.
+  - Not treat a green compile as a pass on its own — it is blind to geometry.
+
+R.6 BUILD ORDER
+
+  0. Write `docs/XX-hmi-conventions.md`, seeded from experiment 2's clauses, with
+     the STOP correction, and the numbers harvested from the Template Suite. FREE,
+     and measured as the single highest-leverage artifact here.
+  1. Promote T1/T2/T3 from experiment prototypes into real tools with tests.
+  2. Create `.claude/agents/hmi-designer.md` encoding R.2 and R.5.
+     ⚠️ QUOTE THE `description:` FIELD. Frontmatter is strict YAML and both failure
+     modes are silent: an unquoted ": " de-registers the agent entirely, an
+     unquoted " #" truncates the description. Run `/doctor` after creating it —
+     that is the only surface that reports either.
+  3. T8 preflight, then T5 apply, then hmi-compile as the gate. First real screen
+     end to end.
+  4. T6 serialise + T7 compare. Only now is output provable rather than plausible.
+  5. T9 unwired-check, T4 snap if a coarser grid is adopted.
+
+  Steps 0-2 are days and need no Portal contact at all. Step 3 is where this stops
+  being research.
+
+R.7 THE SCOPE CAVEAT THAT GOVERNS ALL OF R
+
+  HMI engineering remains a NON-GOAL under docs/10-non-goals.md pending ADR-0007,
+  which is Proposed and undecided. R is a RECOMMENDATION, not a licence. Steps 0
+  and 1 are pure PC-side tooling and authoring and are defensible today; creating
+  the agent and pointing it at a project is exactly the decision ADR-0007 exists to
+  make. Do not build R by drift — that is the failure mode docs/10 was written to
+  prevent.
+
+--------------------------------------------------------------------------------
+0. SCOPE CONSTRAINT — V20. Read this before anything below.
+--------------------------------------------------------------------------------
+
+This project is on TIA Portal V20. Owner's instruction, rev 3: features that arrived
+later are not applicable and must not shape the plan.
+
+  NOT APPLICABLE — recorded as strategic background only, do not design for it:
+  * SIMATIC AX WinCC Unified Elements (launched 2026-07-28): YAML-defined screens
+    and faceplates, native Git, AI-generation oriented. US-only, WinCC Unified PC
+    Runtime only, and a different toolchain (SIMATIC AX / OPC UA) rather than TIA
+    Portal + Openness. Its only bearing on the plan is directional: the vendor
+    independently concluded text-defined HMI is right, which is corroboration for
+    the converter approach and nothing more.
+  * V21's NextGen Unified Screen Editor, MTP support, PaCo improvements.
+  * SIMATIC SD text export — and note it is PLC-only anyway, so it would not have
+    given Unified screens an export even on V21.
+
+  STILL TRUE ON V20, and these are what the plan rests on:
+  * Screens, screen items, attributes, dynamizations, events, alarms, tags and
+    faceplate INSTANCES are all writable through Openness. [REPO-MEASURED]
+  * No Unified screen export function. [REPO-MEASURED, five ways]
+  * The device compile gates references and faceplate wiring structurally, and is
+    blind to geometry. [REPO-MEASURED]
+  * Layers and within-layer stacking exist (see section 1).
+
+EVIDENCE LABELS
+  [PROVEN-HERE]    run this session on this machine, output inspected
+  [REPO-MEASURED]  run live against a real Unified device by this project
+  [VENDOR-DOC]     read directly from a Siemens document/page this session
+  [SEARCH]         search-result summary only — a lead, not a fact
+  [INFERENCE]      reasoning on top of the above; unmeasured
+Sizes: XS hours · S 1-3 days · M ~a week · L multi-week
+
+--------------------------------------------------------------------------------
+1. CORRECTION CARRIED FORWARD: THE SCREEN MODEL IS NOT FLAT
+--------------------------------------------------------------------------------
+
+Owner correction, rev 2, accepted and retained. I had called a Unified screen a
+"flat list". The repo's own notes say the same. It is correct about CONTAINMENT —
+items do not nest — and incomplete about everything else:
+
+  * LAYERS ARE A DOCUMENTED FEATURE, with a whole doc family: using layers,
+    renaming a layer, specifying the active layer, moving objects between layers,
+    hiding and showing layers. [VENDOR-DOC]
+  * STACKING IS TWO-LEVEL: layers stack against each other; within a layer objects
+    move toward front or back. Items respect layer position first, then position
+    within the layer. [VENDOR-DOC]
+  * LAYER VISIBILITY IS DYNAMIZABLE AT RUNTIME, from the ES and from a JScript
+    function — a documented page for each. A layer is a runtime-addressable unit,
+    not just an editing convenience. [VENDOR-DOC]
+  * Screen-object GROUPING exists from V18. [SEARCH]
+  * The repo's read survey lists Left/Top/Width/Height, RotationAngle,
+    Authorization, TabIndex, ToolTipText and NO layer attribute [REPO-MEASURED] —
+    but `--schema` only dumps attributes for types already present in the project,
+    so that is a gap in the survey, not evidence of absence.
+  * Whether Openness can SET the layer, and whether creation order fixes
+    within-layer stacking, is not publicly documented. I searched specifically and
+    found nothing either way. Probe P1.
+
+WHY IT MATTERS: the mapping from HTML is close to one-to-one, so the converter
+translates a stacking story rather than inventing one.
+
+    stacking context (z-index tier)  ->  layer
+    document order within a context  ->  order within a layer
+    toggling a container's display   ->  layer visibility dynamization
+    <div> grouping                   ->  screen-object group (V18+)
+
+What genuinely remains ours: there is no FLOW or CONSTRAINT layout — nothing in
+Unified computes a position from a sibling's size. That is exactly what the
+flattening step removes, and section 2 shows it working.
+
+--------------------------------------------------------------------------------
+2. CAN CLAUDE PRODUCE IT DIRECTLY? — TESTED THIS SESSION
+--------------------------------------------------------------------------------
+
+2.1 WHAT WAS RUN
+
+  Authored one 1920x1080 area-overview screen as HTML + a ~100-line house
+  stylesheet, to high-performance-HMI rules: low-chroma grey field (never white,
+  never dark mode), colour reserved for abnormal conditions only, no gradients,
+  no 3-D, no shadows, analog bars with limit and setpoint markers in preference to
+  bare numbers, title/main/status zones, tabular-numeric fonts.
+
+  Content: four equipment tiles (two conveyors, a hopper, a motor), flow
+  connectors, an active-alarm banner, a status bar. Two items deliberately
+  abnormal, so colour had a job to do.
+
+  Rendered headless, no browser extension, no node, no network:
+
+    chrome.exe --headless --disable-gpu --hide-scrollbars
+      --force-device-scale-factor=1 --window-size=1920,1080
+      --screenshot=<out.png> --virtual-time-budget=3000 file:///<screen.html>
+
+  Result: 49,956-byte PNG, inspected. [PROVEN-HERE]
+
+2.2 THE HONEST VERDICT ON QUALITY
+
+  GOOD, and better than I expected: the grey field reads as a control-room screen
+  rather than a web dashboard; colour appears only on the tripped motor and the
+  high-level hopper, so the eye goes straight to them; the analog bars with limit
+  ticks carry more information than the numbers alone; the type hierarchy works.
+  It would not embarrass anyone in a review as a starting point.
+
+  DEFECTIVE IN THREE WAYS I COULD ONLY SEE BECAUSE IT RENDERED:
+    (a) roughly 180 px of dead space between the tiles and the alarm banner —
+        the screen looks unfinished in the middle;
+    (b) two tiles abut edge-to-edge, so the mimic reads as a table rather than a
+        process flow;
+    (c) the vertical flow connector runs behind a tile and is invisible.
+
+  None of those were visible in the source. None would have been caught by
+  reasoning about coordinates. THIS IS THE ARGUMENT FOR THE LOOP, and it is also
+  the argument that direct generation is viable — the failures are ordinary layout
+  mistakes that one look fixes, not a fundamental inability to produce the artifact.
+
+2.3 THE FLATTENER, PROVEN [PROVEN-HERE]
+
+  The page carried a ~20-line script that walks every [data-hmi] element, reads
+  getBoundingClientRect and getComputedStyle, and emits absolute integer tuples
+  into a hidden <pre>. Recovered with `--dump-dom` and parsed. Output:
+
+      ITEMS FLATTENED: 55
+       Screen      L    0 T   0 W 1920 H1080  z0
+       Group       L    0 T   0 W 1920 H  64  z0
+       Text        L   24 T  16 W  378 H  32  z0
+       IOField     L 1807 T  19 W   89 H  26  z0  bind=ProcessValue:System.DateTime
+       Line        L  744 T 216 W    6 H 240  z0
+       ...
+      FACEPLATE INSTANCES: 4
+         FP_Conveyor/V0.0.4 -> 24 96 432 240
+         FP_Hopper/V0.0.4   -> 528 96 432 240
+         FP_Motor/V0.0.11   -> 1032 330 432 240
+         FP_Conveyor/V0.0.4 -> 528 330 432 240
+      BINDINGS: 14
+
+  That is `screen-ir.json`. Absolute integer rects, item types, faceplate type WITH
+  VERSION and position, and every tag binding — i.e. precisely the tuples the
+  Openness applier needs, produced by Chrome, with no dependency beyond a browser
+  that is already installed. The "Unified has no layout engine" problem is solved by
+  doing the layout at build time in the same engine the Unified runtime itself uses.
+
+2.4 THE GATE EARNED ITS KEEP IMMEDIATELY
+
+      OFF 8px GRID: 44 of 55 items
+        ('Text',426,22) ('IOField',1807,19) ('Line',744,450) ('Text',42,114) ...
+
+  My stylesheet CLAIMED an 8-px grid. The rendered reality is that 44 of 55 items
+  are off it, because text baselines, flex distribution and percentage widths land
+  wherever CSS puts them. I did not notice. The screenshot did not reveal it.
+  Arithmetic over the IR found it in one pass.
+
+  DESIGN CONSEQUENCE, and it is the most useful thing this probe produced:
+  DO NOT TRUST THE SOURCE TO BE ON-GRID. The pipeline needs a SNAP stage between
+  flatten and apply — quantise every rect to the 8-px grid, then lint what remains.
+  This is the "LLM proposes, solver disposes" pattern the prior research found in
+  the layout literature (LayoutRectifier: grid systems with discrete search, then a
+  containment function), now motivated empirically on our own output rather than
+  adopted on faith.
+
+2.5 WHAT THIS DOES AND DOES NOT PROVE
+
+  PROVES: I can author HMI-grade HTML directly; Chrome flattens it to the exact IR
+  the applier needs; a render-free geometric check finds real defects immediately;
+  the whole loop runs offline, in about a second, with zero dependencies.
+
+  DOES NOT PROVE: that the IR imports cleanly into TIA (never attempted — that is
+  the Openness applier, and the item-type and attribute mapping is probe P2); that
+  Siemens Sans metrics match (the probe used a fallback font); that a second screen
+  authored to the same stylesheet comes out consistent; or that this survives
+  contact with a real spec rather than content I invented to exercise the format.
+
+  ARTEFACTS: probe HTML and PNG are in the job scratch directory
+  (C:\Users\User\.claude\jobs\0755f2fb\tmp\), which is TRANSIENT and cleaned up with
+  the job. The command in 2.1 and the approach in 2.3 reproduce both; nothing was
+  written into the repo except this file.
+
+--------------------------------------------------------------------------------
+3. TOOL ASSESSMENT — what Claude Code could programmatically drive
+--------------------------------------------------------------------------------
+
+Ranked by value to this specific target, not by general merit.
+
+3.1 ADOPT NOW
+
+  HEADLESS CHROME CLI — already installed, already proven (section 2).
+    Does both jobs: `--screenshot` renders, `--dump-dom` plus an injected script
+    flattens. No node, no npm, no account, no network, no cloud, no data leaving
+    the machine. Deterministic enough to regression-test. This is the pipeline.
+    Cost: zero. Effort: it already works.
+    Caveats: pin the Chrome version and treat a rect delta across an upgrade as
+    build-breaking; install Siemens Sans so metrics match the panel; disable font
+    hinting; the injected-script trick is a stand-in for proper CDP.
+
+3.2 ADOPT WHEN PRODUCTIONISED
+
+  PUPPETEERSHARP (MIT) or PLAYWRIGHT (Apache-2.0) — both ship netstandard2.0, so
+    they run in the SAME net48 process as Openness code. Gives real CDP:
+    `DOMSnapshot.captureSnapshot` with `includeDOMRects` returns the whole box tree
+    plus whitelisted computed styles in one call, instead of the injected-script
+    workaround. [prior research, verified there]
+    Use when the flattener stops being a probe and becomes a build step.
+
+  @playwright/cli — worth knowing about if the loop is ever driven by an agent
+    rather than a build script: Microsoft measured a typical browser-automation
+    task at ~114,000 tokens via MCP versus ~27,000 via the CLI, a ~4x reduction.
+    [SEARCH] Prefer plain shell commands over an MCP server for this workload.
+
+3.3 ADOPT FOR ONE SPECIFIC JOB
+
+  THE BROWSER EXTENSION (now installed in Edge). Not needed for authoring — headless
+    beat it to the answer and needs no human. Its real value is a job nothing else
+    can do: attach to a LIVE WinCC Unified runtime and read the rendered DOM.
+    Prior research names this the single most important open question in its whole
+    tooling section — does the runtime DOM carry engineering-meaningful item
+    identity? If it does, you get a SECOND, INDEPENDENT geometry oracle that is not
+    derived from the same Openness read as the thing it checks, which is the only
+    route found to breaking the correlated-check problem. One session with a running
+    runtime settles it. Keep the extension; use it for that.
+
+3.4 CONDITIONAL
+
+  FIGMA + DEV MODE MCP — a local MCP server exposing a Figma file's structured
+    contents: `get_code`, `get_variable_defs` (design tokens, so code uses tokens
+    not magic numbers), `get_image`, `get_code_connect_map`. Claude Code is named as
+    a supported client. Reported 2026 gains are "unevenly distributed — teams with
+    mature, well-structured design systems see dramatic gains". [SEARCH]
+    PAYS ONLY IF a human builds the HMI design system in Figma first. Then
+    `get_variable_defs` hands over the palette and scale programmatically and the
+    stylesheet stops being hand-maintained. Needs a paid Dev/Full seat.
+    Verdict: not now. Revisit only if a designer enters the loop. Harvesting the
+    free Siemens HMI Template Suite (section 4) gets you the same tokens for hours
+    of work and no subscription.
+
+3.5 REJECT — the AI-UI-generation category
+
+  v0 PLATFORM API (Vercel, GA 2026) — genuinely capable: programmatic headless
+    access to the app-building agent, sync/async/streaming, files plus a preview
+    URL, chat IDs for iterative edits. [SEARCH] And wrong here on four counts:
+      (i)   it is cloud, and it executes in a Vercel Sandbox — deployed plant
+            screens leaving the machine collides with docs/13-data-boundary.md
+            before any technical argument;
+      (ii)  it emits React/Next.js + Tailwind, which you would have to strip back
+            to a constrained static subset — negative work;
+      (iii) it optimises for responsive web-app aesthetics, which is the exact set
+            of priors an HMI must be steered away from;
+      (iv)  it is a network round trip to do something I did locally in one step
+            with better control over the output format.
+
+  LOVABLE / BOLT / UIZARD / FRAMER / STITCH / BUILDER.IO VISUAL COPILOT / LOCOFY /
+  TELEPORTHQ / ANIMA — same verdict, and prior research already established the
+    structural reason: this entire industry exists to convert flat-absolute layouts
+    INTO nested-responsive code. This target needs the inverse. TeleportHQ's IR has
+    no coordinate concept at all; Anima does emit absolute coordinates and the
+    industry treats that as its defect.
+
+  TAILWIND / COMPONENT LIBRARIES — reject. Adds a build step, pulls hard toward web
+    aesthetics, and the house stylesheet that actually matters was ~100 lines of
+    plain CSS (section 2).
+
+  SIEMENS iX (MIT, npm) — reject as an authority, retained from prior research and
+    worth restating because the Siemens badge is misleading: it is a design system
+    for industrial WEB APPS — accent colours, gradients, dark mode, no ISA-101
+    claim, no mention of panels or control rooms.
+
+3.6 THE CLAUDE-SPECIFIC ECOSYSTEM — surveyed on GitHub, rev 4
+
+  Owner asked specifically whether HTML/website tools exist that Claude could drive,
+  and to search GitHub as well as the open web. Done. The ecosystem is LARGE, almost
+  entirely LOCAL, almost entirely FREE — and almost entirely aimed at the wrong
+  aesthetic.
+
+  THE BEST SINGLE INDEX: `wilwaldon/Claude-Code-Frontend-Design-Toolkit` catalogues
+  70+ skills, plugins, MCP servers and CLAUDE.md techniques for making Claude Code
+  produce better frontends. [VENDOR-DOC/repo, read this session] Breakdown: 7
+  design/aesthetic skills, 6 theming/design-token, 3 animation, 4 UX research, 8
+  framework-specific, 7 MCP servers, 3 testing/regression, 2 config patterns.
+
+  ANTHROPIC'S OWN `frontend-design` SKILL — a single ~50-line markdown file, roughly
+  300,000 installs, "enforces aesthetic direction before coding, blocks generic
+  patterns", pushing "distinctive typography, creative layouts, thoughtful
+  animations". [SEARCH]
+  *** AND IT IS ACTIVELY WRONG FOR THIS TARGET. *** Distinctive typography, creative
+  layout and animation are precisely what a control-room screen must not have —
+  HP-HMI practice wants boring, consistent, unsurprising, with no animation except
+  alarm flashing. Installing the official design skill would degrade HMI output
+  while improving everything else it touches. Worth stating plainly because it is
+  the most obvious thing anyone would reach for first.
+
+  The same applies down the whole list, and the vocabulary gives it away: "240+
+  styles, 127 font pairings", "11 named aesthetic presets", GSAP / Framer Motion /
+  Lottie / Three.js, "awwwards scoring rubric", "anti-AI-slop rules", "WebGL
+  direction", "motion choreography", CLAUDE.md theme blocks offering Solarpunk and
+  Cyberpunk. GitHub API search for Claude design-system skills returns a long tail
+  of 1-28 star MIT repos, all in that idiom. [PROVEN-HERE, GitHub API]
+
+  WHAT GENUINELY TRANSFERS — the patterns, never the content:
+    * CLAUDE.md THEME BLOCKS — "five lines of config" enforcing site-wide aesthetics.
+      This is exactly the house-stylesheet-as-constraint idea (section 4), and it is
+      the cheapest possible implementation of it. Adopt the MECHANISM, supply an
+      HP-HMI palette instead of Cyberpunk.
+    * DESIGN-TOKEN SKILLS (OKLCH colour systems, spacing grids, semantic theming) —
+      right mechanism, wrong palette. Point one at the harvested Template Suite
+      values and it earns its keep.
+    * `Bbasche/design-review` (MIT) — "reviews frontend UI as a design director with
+      screenshot analysis, system extraction, and severity-ranked reports". The
+      SHAPE matches this repo's reviewer model exactly (findings, severity, cited
+      rules). Worth reading before writing the HMI review skill.
+    * `addyosmani/web-quality-skills` — accessibility and contrast auditing has real
+      transfer, since contrast ratios matter more on a panel at 2 m than on a desk.
+    * PLAYWRIGHT MCP's design choice, which is the important one: it returns
+      ACCESSIBILITY TREES (2-5 KB) rather than screenshots, because text is cheaper
+      than pixels. Same instinct as section 2.4 — measure geometry, look at pixels
+      only when a human judgement is needed.
+
+  NOT WORTH IT HERE:
+    * `nexu-io/open-design` (Apache-2.0) — genuinely good and genuinely local:
+      Express+SQLite daemon, agent writes real files, sandboxed-iframe preview,
+      exports HTML/PDF/PPTX/MP4, BYOK or local agents, no cloud required.
+      [VENDOR-DOC/repo] But it is a design STUDIO for prototypes, landing pages,
+      dashboards and slides. It adds a daemon, a database and a desktop app to
+      replace one Chrome command line. Rejected on weight, not on quality.
+    * `claude-design-mcp` (two variants) — persistent design studio, HTML on disk,
+      SQLite lineage, Playwright screenshots, variant comparison, design-system
+      extraction. [SEARCH] Closest thing to the loop proven in section 2, and it
+      would save building variant management IF variant management were the
+      bottleneck. It is not; the bottleneck is the Openness applier.
+    * shadcn/ui MCP, Tailwind kits, Storybook MCP — web component vocabularies with
+      no bearing on 12 Unified item types.
+
+3.7 THE EFFICIENCY ANSWER, WITH MEASURED NUMBERS
+
+  Owner's question was framed as efficiency. Measured on the section 2 probe
+  [PROVEN-HERE]:
+
+      write the HTML + stylesheet          10,725 bytes   ~2,980 tokens
+      render headless (Bash, writes file)                 ~    0 tokens
+      flatten + lint, printed as a summary                ~  250 tokens
+      view the screenshot (1920x1080)      49,956 bytes   ~2,760 tokens
+      -----------------------------------------------------------------
+      one screen, with a visual check                     ~6,000 tokens
+      one screen, geometry check only                     ~3,200 tokens
+
+  Against that, the comparators:
+    * PLAYWRIGHT MCP measured by Microsoft at ~114,000 tokens for a typical browser
+      task, versus ~27,000 via `@playwright/cli`. [SEARCH] An MCP-driven loop costs
+      roughly 19x an entire screen. Use plain shell commands, not an MCP server.
+    * v0 PLATFORM API — a network round trip that returns React/Next + Tailwind
+      which then has to be stripped back to a constrained static subset. That is
+      strictly more tokens and more work than authoring the subset directly.
+    * A DESIGN SKILL — near-free in tokens (~50 lines), but it moves quality the
+      wrong way here (3.6).
+
+  CONCLUSION: direct authoring is ALREADY the efficient option, by a wide margin,
+  and the dominant cost is writing the markup — which no generator reduces, because
+  every generator emits MORE than the target needs.
+
+  THE TWO REAL EFFICIENCY LEVERS, and both are things already in the plan:
+
+    (1) THE HOUSE STYLESHEET. It was ~40% of the probe file. Once it is a fixed
+        external asset the AI never re-emits, per-screen cost falls to markup
+        alone — roughly 1,200-1,500 tokens. A pleasing convergence: the artifact
+        that makes output LOOK right is the same one that makes it CHEAP.
+
+    (2) DO NOT SCREENSHOT EVERY ITERATION. Geometry lint is ~250 tokens; a
+        screenshot is ~2,760. An 11x difference. Lint on every build; render for
+        human judgement only, at the end of a screen. This is the same conclusion
+        Playwright MCP reached by preferring accessibility trees to pixels, and the
+        same conclusion section 5.5 reached for a different reason (pixels are a
+        tripwire, geometry is the gate). Three independent routes to one rule.
+
+3.9 HEAD-TO-HEAD: TOOL-ASSISTED vs DIRECT, SAME SPEC, SEPARATED CONTEXT
+    [PROVEN-HERE, rev 5]
+
+  Owner's challenge to 3.7, and it was a fair one: per-attempt token cost is only
+  half the story. If the tooled path converges in one pass and the direct path needs
+  four, tools win on wall-clock even at higher token cost — and wall-clock is what
+  actually costs a person. So it was measured rather than argued.
+
+  METHOD. Two fresh subagents, no shared context, launched in parallel, given a
+  BYTE-IDENTICAL spec: a 1920x1080 fixed panel home screen with navigation to five
+  named screens, an alarm banner along the bottom, START/STOP/RESET, plus five
+  stand-in sub-pages; self-contained, no CDN, no frameworks.
+  * ARM A "DIRECT": forbidden to invoke any Skill, forbidden to render or screenshot,
+    forbidden to iterate after writing. One pass, own judgement.
+  * ARM B "TOOLED": required to invoke the `artifact-design` skill and to render
+    headlessly and iterate until satisfied.
+  CRITICALLY: NEITHER ARM WAS TOLD ANY HP-HMI RULE. The spec said "industrial
+  control system", "panel-mounted touchscreen", "plant operator", and nothing about
+  colour, palette or convention. Criteria were fixed before either result was seen.
+
+  COST
+                        tool calls    tokens     wall-clock
+      ARM A  direct          9         83,592      3.8 min
+      ARM B  tooled         63        172,345     27.1 min
+      ratio               7.0x          2.1x         7.1x
+
+  GEOMETRY (both measured with the same flattener, on the rendered page)
+                     elements  leaves  off-8px-grid  off-canvas  <44px targets  largest dead band
+      ARM A  direct     132      81      124 (93%)        0            3            138 px
+      ARM B  tooled     243     149      231 (95%)        0            5             57 px
+
+  SPEC COMPLIANCE: both arms passed in full — five nav targets, bottom alarm banner,
+  three command buttons, five sub-pages, fixed 1920x1080, fully self-contained.
+
+  HP-HMI CONFORMANCE: BOTH FAILED, AND THE TOOLED ARM FAILED HARDER.
+      Arm A: dark-mode field (not low-chroma grey); saturated GREEN START key;
+             green "RUNNING", green "6 OF 6 RUNNING", green "PLC ONLINE" dot;
+             mild gradients on the command keys; rounded card styling.
+      Arm B: all of the above, plus GRADIENT-filled START and STOP keys, a teal
+             accent colour running through borders, headings and the sparkline, and
+             GREEN STATUS NODES ON THE PROCESS MIMIC ITSELF.
+  Green-for-running is explicitly an improper use of colour in HP-HMI practice, and
+  it appeared in both arms, unprompted, from a spec that never mentioned colour.
+
+  WHAT THE RENDER LOOP ACTUALLY BOUGHT — and this is the real result. Arm B ran five
+  render/iterate cycles and each one caught a defect INVISIBLE IN THE SOURCE:
+    1. `<button>` + `display:flex` pushed the START/STOP/RESET sub-labels OUTSIDE
+       their buttons, overlapping the Settings tile;
+    2. four nav tiles rendered with hollow middles;
+    3. the process mimic scaled down wrongly inside its box;
+    4. a sub-screen side column OVERFLOWED, clipping Diagnostics under the HOME key;
+    5. a large dead void in the sheet.
+  Arm A never looked, so its defect count is unknown rather than zero — my render of
+  it happened to come out clean, which is luck, not process. Note also that Arm B
+  produced 84% more elements: richer screens have more ways to break, so some of the
+  five defects are the cost of its own ambition.
+
+  CONCLUSIONS, and they split cleanly in two:
+
+  (1) THE RENDER LOOP EARNS ITS KEEP. Five cycles, five real defects, all of a class
+      that no amount of reasoning about source finds. Keep it. Its marginal cost is
+      modest — roughly a minute per cycle — and much of Arm B's 7x wall-clock went on
+      SCOPE IT INVENTED (a mimic diagram, a sparkline, six fully-built screens with
+      byte-identical chrome), not on iteration overhead. The two cannot be cleanly
+      separated from this single trial, and that is stated rather than smoothed over.
+
+  (2) THE DESIGN SKILL DID NOT HELP AND PLAUSIBLY HURT. `artifact-design` is built
+      for claude.ai artifacts; it drove palette, type and "encode state in form"
+      decisions that are right for a web page and wrong for a control room. It did
+      not prevent a single HP-HMI violation and it added gradients and an accent
+      colour. This is 3.6's prediction, confirmed on this project's own output.
+
+  (3) THE DECISIVE VARIABLE IS NEITHER — IT IS THE RULES LAYER. Compare all three
+      runs from this session, same model, same week:
+          no rules, no render   (Arm A)      -> handsome, wrong palette
+          no rules, render loop (Arm B)      -> handsomer, denser, wronger palette,
+                                                better geometry
+          RULES + render        (section 2)  -> conformant palette, correct restraint
+      The section 2 probe was the only conformant output, and the only difference was
+      that it was handed an HP-HMI stylesheet up front. THE STYLESHEET DID WHAT
+      NEITHER THE TOOL NOR THE MODEL'S JUDGEMENT DID. That is section 4's argument,
+      now demonstrated rather than asserted.
+
+  (4) THE OWNER'S TIME HYPOTHESIS DID NOT HOLD HERE. Tools cost 7.1x wall-clock, not
+      less. But the hypothesis is not refuted in general: what it correctly predicts
+      is that the DIRECT arm's true cost is understated, because Arm A shipped
+      unverified. The fair comparison is not "one pass vs five" — it is "five
+      verified passes vs one unverified pass plus however many rounds of human review
+      the unverified one eventually needs."
+
+  RECOMMENDED CONFIGURATION, from this experiment:
+      house stylesheet (mandatory)  +  headless render loop (keep)
+      +  NO general-purpose design skill (actively counterproductive here)
+  Which is cheaper than Arm B, better than Arm A, and the only combination tested
+  that produced a screen conforming to the conventions the target actually needs.
+
+  ARTEFACTS: research/experiment/direct/ and research/experiment/tooled/, each with
+  home.html, five sub-pages, a stylesheet, and _render.png. Kept deliberately as the
+  evidence for this section; delete freely once read.
+
+3.10 EXPERIMENT 2 — THE 2x2, AT 1280x800  [PROVEN-HERE, rev 6]
+
+  Experiment 1 (3.9) confounded two variables: the hybrid would have changed BOTH
+  the rules and the rendering. This one separates them. Owner set the target at
+  1280x800 (a real Siemens MTP1200 panel resolution) with a 1-px grid.
+
+  DESIGN. Four fresh subagents, no shared context, launched in parallel, one
+  BYTE-IDENTICAL spec (home screen: five nav targets, bottom alarm banner,
+  START/STOP/RESET, header; plus five stand-in pages). Two amendments over
+  experiment 1: SCOPE WAS FROZEN ("do not add mimics, charts, sparklines, gauges")
+  so cost is comparable, and the shared spec required whole-pixel geometry.
+
+                        no render loop        render loop
+        no rules        A  direct             B  tooled (artifact-design skill)
+        rules           D  rules-only         C  HYBRID
+
+  The rules arms received an 8-clause written house style guide (H1 grey field,
+  H2 no colour for normal state / green-for-running forbidden, H3 red+amber only,
+  H4 no gradient/shadow/radius, H5 no animation except unack alarm, H6 dark text +
+  tabular numerals, H7 >=48px targets, H8 no accent colour) — the RULES, not a
+  finished stylesheet.
+
+  NOTE ON THE 1-PX GRID: it makes "off-grid" vacuous, since every integer position
+  conforms. Replaced with SUB-PIXEL COUNT (fractional geometry, which blurs text on
+  a fixed panel), ALIGNMENT NEAR-MISS (edge within 3px of a shared alignment line
+  but not equal), and TEXT-LEAF OVERLAP. Palette conformance was measured
+  programmatically — every computed background/text/border colour converted to HSL,
+  greens counted as hue 80-165 with saturation >0.18, accents as any other saturated
+  non-red/amber hue — so HP-HMI conformance is machine-scored, not my eyeball.
+
+  COST
+                    calls   tokens    wall-clock   render cycles
+      A direct         8    77,548      2.7 min         0
+      D rules-only     9    77,026      2.7 min         0
+      B tooled        30   131,605     12.2 min         8
+      C hybrid        29   118,145     15.2 min         7
+
+  RESULT
+                 subpx  nearmiss  offcanvas  overlap  gap | grey  green  accent  shadow  radius  anim
+      A direct      0       0         0         0     24  | FAIL    5      10       0       2      2
+      B tooled      5       2         2         7     72  | FAIL    1       3       8       0      0
+      D rules-only 34       1         1         0    106  | OK      0       0       0       0      1
+      C HYBRID      0       1         0         0     71  | OK      0       0       0       0      2
+
+  *** THE HYBRID IS THE ONLY ARM CLEAN ON BOTH AXES: zero sub-pixel, zero
+  off-canvas, zero overlap, and full palette conformance. ***
+
+  THE THREE FINDINGS THAT MATTER
+
+  (1) THE RULES LAYER IS FREE. D cost 77,026 tokens and 2.7 minutes against A's
+      77,548 and 2.7 minutes — statistically identical — and moved the palette from
+      5 greens / 10 accent colours / dark field to 0 / 0 / conformant. A written
+      style guide is the highest-leverage artifact in this entire document: it costs
+      nothing at generation time and it is the only thing that fixed the defect
+      class the compile can never catch.
+
+  (2) THE RENDER LOOP IS WHAT COSTS, AND IT BUYS GEOMETRY. C vs D isolates it:
+      ~5.6x wall-clock and ~1.5x tokens, in exchange for 34 sub-pixel boxes -> 0,
+      1 off-canvas -> 0, and a visible-defect list fixed across 7 cycles. It did
+      NOT improve the palette, because D had already made the palette perfect.
+      Clean separation: RULES FIX APPEARANCE, RENDERING FIXES GEOMETRY.
+
+  (3) THE DESIGN SKILL STILL DOES NOT PAY. B cost 12.2 minutes and 131k tokens —
+      more than the hybrid on tokens — and still failed the grey field, still
+      carried 3 accent colours and 8 shadows, and scored WORST on overlap (7) and
+      off-canvas (2). Confirms 3.6 and 3.9 for a second time on a different spec.
+
+  WHAT EACH ARM'S RENDER ACTUALLY SHOWED (the qualitative half)
+    A direct     — dark navy field, green RUNNING pill, green START, red STOP, and
+                   five decorative accent-coloured tile glyphs. Ships a VISIBLE TEXT
+                   COLLISION: "UNACKNOWLEDGED" overlapping "INCOMING" in the alarm
+                   banner. It never rendered, so it never saw it.
+    D rules-only — genuinely conformant palette, but ~180px of dead space at the top
+                   of every nav tile, a stray empty sixth grid cell, and THE THIRD
+                   ALARM ROW CLIPPED OFF THE BOTTOM EDGE — an operator cannot read
+                   that alarm. Exactly the defect class rendering exists to catch.
+    C hybrid     — flat grey, colour only on alarm severity chips and edge bars,
+                   five evenly-placed tiles, STOP distinguished by border weight and
+                   tonal fill, four alarm rows all fully visible. Reads as a plant
+                   panel.
+
+  A LIMITATION OF MY OWN SCORECARD, STATED BECAUSE IT MATTERS. The overlap metric
+  scored A at ZERO while A carries a plainly visible text collision — because the
+  glyphs overflow their box without the BOXES intersecting. It also scored B at 7,
+  most of which are deliberate (badges, stripes). So the metric is weak in BOTH
+  directions. That is not a footnote, it is the argument: THE LINTER AND THE RENDER
+  CATCH DIFFERENT THINGS. B's 2 off-canvas elements survived 8 render cycles because
+  they were invisible; A's overlap survived the linter because it is text overflow.
+  Neither check subsumes the other, and the hybrid is the only configuration that
+  runs both.
+
+  A GENUINE CRITICISM OF THE RULES, RAISED INDEPENDENTLY BY BOTH RULES ARMS.
+  H2/H3 forbid a red STOP, and both C and D pushed back unprompted: safety-critical
+  stop is the one place plant convention overwhelmingly expects red, and a grey STOP
+  "will feel wrong to anyone trained on red-stop panels". Both worked around it with
+  border weight and tonal fill. I think they are right and the guide is wrong here —
+  H3 should carve out an explicit exception for the STOP command. Recorded as a
+  finding about the RULES, not about the arms: this is what a style guide getting
+  its first contact with real work looks like, and it is an argument for the rules
+  being a reviewable document rather than a prompt.
+
+  HONEST LIMITS. n=1 per cell. The geometry gap between A (0 sub-pixel) and D (34)
+  is NOT attributable to the treatment — both got the identical whole-pixel
+  instruction; A used absolute positioning throughout and complied, D used flex and
+  did not. That is arm variance. The PALETTE difference is attributable, because it
+  is precisely what the rules targeted and the effect is total (5/10 -> 0/0 in both
+  rules arms, 0/0 in neither non-rules arm).
+
+  ARTEFACTS: research/experiment2/{direct,tooled,rules-only,hybrid}/, each with
+  home.html, five sub-pages, a stylesheet and _render.png.
+
+  BOTTOM LINE, and it supersedes 3.9's: BUILD THE HOUSE STYLESHEET FIRST — it is
+  free and it fixes the class of defect nothing else catches. ADD THE RENDER LOOP
+  WHEN GEOMETRY MATTERS — it costs roughly 5x wall-clock and is the only thing that
+  finds clipping, collisions and dead space. RUN THE GEOMETRIC LINTER ALONGSIDE IT,
+  NOT INSTEAD OF IT. SKIP THE GENERAL-PURPOSE DESIGN SKILL ENTIRELY.
+
+3.8 THE HONEST SUMMARY OF SECTION 3
+
+  There is no tool to buy or install that generates this better than direct
+  authoring, because every generator and nearly every design skill on the market is
+  tuned for the opposite output — and the most popular one, Anthropic's own, is
+  tuned hardest. What matters, and what is already on this machine for free, is a
+  dependency-light way to SEE and MEASURE what was generated. That is the whole
+  toolchain: Chrome, a Bash line, and a script that prints a summary.
+
+--------------------------------------------------------------------------------
+4. WHERE "NICE LOOKING" COMES FROM — the stylesheet, not the generator
+--------------------------------------------------------------------------------
+
+Section 2 makes this concrete. The screen came out looking like an HMI because the
+stylesheet forced it to: grey field, colour reserved for abnormal, no gradients,
+bars over bare numbers. Remove that constraint and the same model produces a
+handsome web dashboard that is wrong for a control room — an LLM fluent in modern
+web UI reaches for gradients, dark mode, accent colours and green-for-running, and
+green-for-running is explicitly an improper use of colour in HP-HMI practice.
+Siemens' own training material argues both ways (animated flames, rotating fans),
+and the top public "ISA-101 palette" is fabricated Google Material Design hex
+values. Neither the model's priors nor a web search lands on the right answer.
+[prior research, verified there]
+
+So the constraint layer is the product, and it has three parts:
+
+  1. A HOUSE STYLESHEET the AI authors against. Fixed palette as CSS custom
+     properties, a type scale, an 8-px spacing scale, named zone classes. The AI
+     writes class="zone-main tile-status", never a hex value.
+     SOURCE IT, DO NOT INVENT IT: the free SIMATIC HMI Template Suite for WinCC
+     Unified (SIOS 91174767) carries named palettes (SiemensLight / SiemensDark /
+     DeepBlue), an 8-PIXEL GRID, defined Title Bar / Status Bar / MainWindow zones,
+     a four-level navigation hierarchy with its transition scripts, and ready-made
+     faceplates. [VENDOR-DOC] Install it, read it with the existing `hmi` walk,
+     harvest the real numbers. XS-to-S, and it removes weeks of design guesswork.
+     It also supplies human-authored FACEPLATE TYPES, which matters because
+     faceplate types cannot be authored through Openness [REPO-MEASURED] and must
+     come from somewhere.
+
+  2. A CHECKER over the IR, citing rule IDs — the `converter review` shape. Colour
+     outside the palette, size off the type scale, position off the grid, touch
+     target under minimum, colour used for a normal state. Section 2.4 shows the
+     grid rule alone is worth having.
+
+  3. THRESHOLDS IN MILLIMETRES, px derived per panel. Vendor style-guide px numbers
+     are wrong by 2-4x on a high-ppi panel at 2 m viewing distance. [prior research]
+
+Sequencing: the stylesheet must exist before the first generated screen, because it
+is what the HTML is authored against. The checker can follow.
+
+--------------------------------------------------------------------------------
+5. THE CONVERTER — design, now with the measured parts marked
+--------------------------------------------------------------------------------
+
+Framed as the owner framed it: the Ladder converter's problems were worked around,
+and these can be too. Each stage names the Ladder-side precedent it copies.
+
+  screen.html + house.css
+      |  (1) FLATTEN — headless Chrome resolves all layout      [PROVEN-HERE]
+      v
+  screen-ir.json    absolute integer rects, type, layer/order, props, bindings
+      |  (2) SNAP    — quantise to the 8-px grid                [NEW, from 2.4]
+      |  (3) LINT    — overlap, off-canvas, zero-size, alignment outliers
+      v
+      |  (4) APPLY   — existing openness-cli hmi write commands  [REPO-MEASURED]
+      v
+  screens in TIA   + hmi-compile                                 [REPO-MEASURED]
+      |  (5) READ BACK — the property walk `hmi --screen` performs
+      v
+  readback.json
+      |  (6) NORMALISE + COMPARE against screen-ir.json
+      v
+  VERDICT
+
+  HTML is the authored artifact a human reviews; screen-ir.json is the compiled
+  form; readback.json is the proof. That is the .ir / SimaticML / re-export
+  separation, transplanted, and it is what makes step 6 meaningful.
+
+5.1 ELEMENT MAPPING — EXPLICIT, NEVER INFERRED. The vocabulary used in the probe:
+
+    <div  data-hmi="Rectangle">
+    <span data-hmi="Text">
+    <div  data-hmi="IOField"   data-hmi-bind="ProcessValue:CV201.Speed">
+    <div  data-hmi="Bar"       data-hmi-bind="ProcessValue:HP204.Level">
+    <button data-hmi="Button"  data-hmi-event="Tapped:startPump">
+    <div  data-hmi="Faceplate" data-hmi-type="FP_Motor/V0.0.11"
+                               data-hmi-param="IO:MT310">
+    <svg  data-hmi="Graphic">                    -> dynamic SVG route (section 6)
+
+  An element with no data-hmi and no data-hmi-ignore is a HARD ERROR naming the
+  element and its source line. Precedent: ADR-0010, "no IR the AI cannot change" —
+  an unsupported construct is a scope item, not a silent drop.
+
+  Only 12 item types matter to start: a full sweep of a real 49-screen project uses
+  Text, Circle, Rectangle, Button, Line, Polygon, GraphicView, IOField,
+  ScreenWindow, ToggleSwitch, SymbolicIOField, AlarmControl — and all 12 are
+  creatable. [REPO-MEASURED] Four of them covered the whole probe screen.
+
+5.2 THE CSS SPLIT — the decision that keeps this small
+
+  LAYOUT CSS is CONSUMED by the flattener (position, display, flex, grid, margin,
+  padding, width/height). It produces integers and then it is gone. Author with
+  whatever CSS is convenient.
+  VISUAL CSS must MAP one-for-one to a target property:
+      background-color -> BackColor    color      -> ForeColor
+      border-*         -> Border*      font-*     -> Font*
+      opacity          -> Opacity      visibility -> Visible
+  A visual property with no target equivalent is a hard error or an explicit
+  opt-out. Do not let the source express what the target cannot render.
+  Which properties actually exist per item type: probe P2, answerable locally today.
+
+5.3 STACKING — expressible because of section 1. Group by resolved z-index tier,
+  emit one layer per tier in ascending order, preserve document order within each.
+  GATED ON P1. If layers turn out not to be settable through Openness, the honest
+  fallback is single-layer output plus a HARD ERROR on any source needing more than
+  one tier — never a silent flattening. That is the FI-71 / --allow-blind-types
+  shape: refuse, name the reason, offer an explicit escape, never guess.
+
+5.4 THE COMPARISON — how "no export" gets worked around
+
+  There is no screen export function [REPO-MEASURED, five ways]. The consequence
+  once drawn from that — no diff, no hash, no round-trip — was already retracted in
+  the repo's own notes, correctly: a SERIALISER over the property walk recovers all
+  three, and there are two existence proofs (Siemens' own Openness-based Excel
+  exporter SIOS 109792619, and a commercial JSON one for V15-V21). So build it.
+  It inherits two hard-won rules from `Normalizer` / `converter compare`:
+    - IGNORE THE VOLATILE FIELDS AND SAY WHICH. TIA reassigns UIds unprompted;
+      assume an HMI equivalent exists and find it before trusting a diff.
+    - EMPTY IS NOT CLEAN. A comparison over zero items must never exit 0. Print
+      "COMPARED: n objects" on every run. This project has been bitten by that on
+      drift-check, compare, reuse-scan, undriven-scan and compile-all.
+
+5.5 GATES, cheapest first
+    a) preflight on the HTML — every bound tag exists in ir/<project>/ (tagstatus
+       already does exactly this and exits non-zero on invented names); every
+       faceplate type exists; every element mapped.
+    b) convert — deterministic, hard-errors on anything unsupported.
+    c) snap + geometric lint (2.4).
+    d) apply, then hmi-compile — gates the faceplate type reference AND the
+       parameter binding structurally, by type and version, located screen -> item
+       -> property. [REPO-MEASURED] A genuine hard-rule-4 analogue.
+    e) unwired-parameter check — the compile catches WRONG, never MISSING; an
+       entirely unwired faceplate parameter compiles clean. [REPO-MEASURED]
+    f) read-back compare (5.4).
+  NOT screenshot diffing as the gate: with no independent ground truth an approved
+  baseline is generated from the same source as the thing it checks — the
+  correlated check PlantAutoControl-bench-autopsy.md exists to prevent. Pixels are a
+  tripwire; geometry is the gate. (The live-runtime DOM read in 3.3 is the one
+  route to a genuinely decorrelated second oracle.)
+
+5.6 DO NOT ITERATE AGAINST TIA. Openness writes are multi-minute and
+  non-transactional — a failed command keeps what it already did [REPO-MEASURED].
+  Converge in the browser where a render is free (about a second, measured), and
+  pay the Openness cost once. Every applier command must be re-runnable and
+  idempotent.
+
+--------------------------------------------------------------------------------
+6. THE SECOND CONVERTER — dynamic SVG, worth doing after the first
+--------------------------------------------------------------------------------
+
+A dynamic SVG is a plain .svg carrying a Siemens-namespaced parameter interface and
+binding expressions. Syntax [SEARCH — NOT YET VERIFIED AT PRIMARY SOURCE, probe P4]:
+
+    <hmi:paramDef name="ShowElement" type="boolean" default="true"/>
+    types: boolean | number | string | HmiColor
+    hmi-bind:display="{{ParamProps.ShowElement ? 'inline' : 'none'}}"
+
+Dynamizable [VENDOR-DOC, Siemens 109782045]: fill and stroke colour, fill/stroke
+opacity, stroke width, display, position, rotation including rotary animation,
+scaling, gradient translation, dynamic text.
+Lifecycle [VENDOR-DOC]: import into project graphics, store in the project library,
+update in place, and use AS A MASTER COPY — so unlike a Custom Web Control it can
+live in a library.
+Minimum transformation from a plain SVG: strip vector-editor metadata, regenerate
+the <svg> tag, convert <style> attributes to supported form, add <hmi:self/> with
+its mandatory variable. Pure vector only. [VENDOR-DOC, third-party vendor]
+
+Why it is the natural second converter: an LLM writes SVG extremely well, the
+target format exists and Siemens consumes it natively, and it gives per-symbol
+reuse that faceplate-type authoring denies. A commercial SVG->SVGHMI converter
+already exists — look at it before writing one.
+Open: the "Restrictions on SVG graphics (RT Unified)" page and section 2.4.4
+"Functions not supported by SIMATIC WinCC" both defeated retrieval. Probe P3.
+
+CUSTOM WEB CONTROL remains the escape hatch for a rectangle that genuinely needs
+internal layout — a rich table, a custom trend. Package is manifest.json +
+control/ + assets/ zipped as {GUID}.zip, installed by FILE COPY, either
+project-scoped (...\UserFiles\CustomControls\) or MACHINE-GLOBAL
+(C:\Program Files\Siemens\Automation\Portal Vxx\Data\Hmi\CustomControls\).
+Manifest properties appear as ordinary screen-object properties and bind normally.
+[VENDOR-DOC] Do not use it as the default screen body: it is one opaque rectangle
+to every native check. Openness placement still unproven — probe P5.
+
+--------------------------------------------------------------------------------
+7. STAGING — working product first
+--------------------------------------------------------------------------------
+
+  STAGE 0 [XS]  Harvest the house stylesheet from the HMI Template Suite (section
+                4). Install, run its wizard once, read the panel with the existing
+                `hmi` walk, write the palette / grid / zones / type scale as CSS.
+                Settles probes P1 and P2 for free — you now have a project
+                containing the item types you care about.
+
+  STAGE 1 [S]   Minimum converter: flatten -> snap -> apply, four item types
+                (Rectangle, Text, IOField, Button), tag binding, single layer,
+                then hmi-compile. One real screen end to end, compiling clean.
+                THE FLATTEN HALF IS ALREADY PROVEN (section 2); this stage is the
+                applier and the mapping table.
+
+  STAGE 2 [S]   Serialiser + comparator (5.4). Output becomes verifiable and
+                re-runs provable. Do this BEFORE widening, not after.
+
+  STAGE 3 [S]   Full CSS layout, stacking contexts -> layers, document order ->
+                within-layer order. Gated on P1.
+
+  STAGE 4 [M]   Faceplate elements (place + bind; types authored by a human),
+                events/handlers, dynamic SVG elements (section 6).
+
+  STAGE 5 [M]   Rules checker (section 4), full geometric linter, unwired-parameter
+                check.
+
+--------------------------------------------------------------------------------
+8. PROBES — before writing generator code
+--------------------------------------------------------------------------------
+
+  P1 [XS] *** KEYSTONE *** Can Openness SET an item's LAYER, and does creation
+     order determine within-layer stacking? Create two overlapping items, vary
+     creation order, read back; look for a layer attribute via `hmi --schema` on a
+     project that HAS layered content. Decides whether 5.3 is a mapping or a
+     hard error.
+
+  P2 [XS] Dump `hmi --schema` for the 12 real item types and build the CSS-property
+     -> HMI-attribute mapping table (5.2). Note `--schema` only reports attributes
+     for types already used in the project — Stage 0 gives you such a project.
+
+  P3 [XS] Retrieve "Restrictions on SVG graphics (RT Unified)" and section 2.4.4 of
+     Siemens 109782045.
+     *** METHOD THAT WORKS: cache.industry.siemens.com serves PDFs that
+     support.industry.siemens.com refuses with HTTP 403. That is how the Openness
+     system manual and both Template Suite manuals were read this session. ***
+
+  P4 [XS] Verify hmi:paramDef / hmi-bind syntax at primary source before building
+     the SVG converter — currently [SEARCH] tier, and it is the contract.
+
+  P5 [XS] Run the already-written, never-run HmiCustomWebControlContainer placement
+     code.
+
+  P6 [S]  Attach the browser extension to a LIVE Unified runtime and check whether
+     the rendered DOM carries engineering-meaningful item identity (3.3). The only
+     route found to a decorrelated second geometry oracle.
+
+  P7 [S]  Read-only walk of Plant View / Plant Objects. The Openness manual lists
+     Plant View, Plant Object, Plant View Node, Plant Object Interface, Plant
+     Object Interface Member and Plant Object Logging Tag as controllable for
+     Unified [VENDOR-DOC], and "Plant Object" appears in NONE of this repo's eleven
+     HMI notes. May be a better per-instance model than faceplate containers.
+
+--------------------------------------------------------------------------------
+9. RISKS
+--------------------------------------------------------------------------------
+
+  - P1 NEGATIVE: stacking expressible only as creation order; multi-tier sources
+    must hard-error. Survivable — most screens are single-layer.
+  - CHROME VERSION DRIFT changes the flattened integers. Pin the version, treat a
+    rect delta as build-breaking, keep golden tests — the shape tests/golden/
+    already is.
+  - FONT METRICS: the probe used a fallback font. Siemens Sans must be installed in
+    the flattening Chrome or every text rect is wrong. Not yet tested.
+  - THE VISUAL-CSS MAPPING MAY BE SMALLER THAN IT LOOKS. box-shadow, gradients,
+    border-radius and transforms may have no target equivalent. Find out in P2
+    BEFORE the stylesheet is written against them — the probe stylesheet already
+    uses border-radius-free flat styling, which was luck as much as judgement.
+  - NO TRANSACTION, DELETION ORPHANS SILENTLY [REPO-MEASURED]. Any converter that
+    replaces a screen must compile in the same breath and be re-runnable.
+  - A MEMORY-LAYOUT-CLASS TRAP: assume one attribute is silently reset on
+    re-import and invisible to every check. Design the read-back comparison to
+    notice rather than trusting that it will not.
+  - ONE SCREEN IS NOT A POPULATION. Section 2 is a single probe, on content I
+    invented. Consistency across screens authored to the same stylesheet is
+    untested and is the thing most likely to disappoint.
+
+--------------------------------------------------------------------------------
+10. OPEN QUESTIONS
+--------------------------------------------------------------------------------
+
+  1. Layer settability and stacking-by-creation-order via Openness. (P1)
+  2. Per-item-type visual attribute surface, hence the CSS mapping table. (P2)
+  3. SVG restriction list for RT Unified. (P3)
+  4. Primary-source hmi:paramDef / hmi-bind syntax. (P4)
+  5. Whether Openness can import a dynamic SVG into project graphics.
+  6. CWC instance placement via Openness. (P5)
+  7. Whether the live runtime DOM carries item identity. (P6)
+  8. Whether screen-object GROUPS (V18+) are exposed through Openness — a <div>
+     analogue for the converter.
+  9. Fidelity of the Siemens Excel Importer/Exporter (109792619) — still 403;
+     retry via the cache host per P3.
+ 10. Whether Plant Objects beat faceplate containers as the instance model. (P7)
+
+--------------------------------------------------------------------------------
+11. SOURCES
+--------------------------------------------------------------------------------
+
+Run/produced this session:
+  Headless Chrome render + DOM flatten probe — see 2.1 and 2.3 for the exact
+  command and method. Artefacts transient, in the job scratch directory.
+
+Read directly this session:
+  TIA Portal Openness system manual (11/2019) — master copies, IMasterCopySource,
+  CreateFrom compositions, Unified object list incl. Plant Objects
+    https://cache.industry.siemens.com/dl/files/802/109773802/att_1007204/v1/TIAPortalOpenness_en-US.pdf
+  HMI Template Suite (WinCC Unified) manuals V5.0 and V21
+    https://cache.industry.siemens.com/dl/files/767/91174767/att_1293894/v2/91174767_HMITemplateSuiteUnified_V5.0_DOC_en.pdf
+    https://cache.industry.siemens.com/dl/files/767/91174767/att_1360143/v1/LHmiTemplateSuite_V21_0_0_Manual_en.pdf
+  Using dynamic SVGs with SIMATIC WinCC (Siemens 109782045)
+    https://server.svghmi.pro/api/users/download/109782045_WinCC_and_SVG_DOC_en.pdf
+  Hiding and showing layers (RT Unified) — TIA Information System
+    https://docs.tia.siemens.cloud/r/en-us/v20/configuring-screens-rt-unified/configuring-screen-objects-rt-unified/using-layers-rt-unified/hiding-and-showing-layers-rt-unified
+  Importing SVG graphics (RT Unified) — TIA Information System
+    https://docs.tia.siemens.cloud/r/en-us/v20/configuring-screens-rt-unified/overview-of-screen-objects-rt-unified/graphics-rt-unified/importing-svg-graphics-rt-unified
+  Custom Web Control engineering guide — Siemens GitHub org
+    https://github.com/tia-portal-applications/CWC-in-WinCC-Unified/blob/main/docs/engineering_CWC.md
+  Eigen Engineering Agent product page (generates HMI JavaScript + tag
+  dynamization; does NOT claim screen layout generation)
+    https://www.siemens.com/en-us/products/tia-portal/eigen-engineering-agent/
+  Siemens newsroom — SIMATIC AX WinCC Unified Elements, 2026-07-28 (NOT APPLICABLE,
+  section 0; retained as directional corroboration only)
+    https://news.siemens.com/en-us/siemens-launches-simatic-ax-wincc-unified-elements/
+
+Search-summary tier — verify before relying on:
+  v0 Platform API capabilities; Playwright/Chrome DevTools MCP and the
+  @playwright/cli token figures; Figma Dev Mode MCP tool set; hmi:paramDef syntax;
+  screen-object grouping from V18; Plant Objects / PaCo; SIMATIC SD PLC-only.
+
+In-repo prior research — outranks everything above where they collide:
+  docs/notes/hmi-capability-record.md      what is measured to work, one page
+  docs/notes/hmi-ai-design-options.md      47 ranked options
+  docs/notes/hmi-web-tooling-research.md   external tooling, build/buy/reject
+  docs/notes/openness-hmi-write-api.md     the capability map
+  docs/notes/openness-hmi-api-survey.md    the read survey (no layer coverage)
+  docs/notes/hmi-faceplate-gap-probe.md    faceplate instantiation, proven live
+  docs/notes/hmi-rdf-store.md              why there is no screen export
+  docs/adr/adr-0007-hmi-engineering-scope.md  the open scope decision
+
+--------------------------------------------------------------------------------
+12. SCOPE NOTE
+--------------------------------------------------------------------------------
+
+HMI engineering remains a non-goal under docs/10-non-goals.md pending ADR-0007,
+which is Proposed and undecided. This document is research, not a scope grant.
+The section 2 probe touched no TIA project and no Portal — it was HTML in a browser.
+Probes P2-P7 are read-only or external; P1 needs a scratch-project write.
+
+REJECTED, with reasons, so they are not re-proposed:
+  * PRUNE-AND-BIND (instantiate a pre-designed panel, delete what is unwanted).
+    Rejected by owner 2026-08-14: produces clunky results. A subtractive generator
+    can only produce arrangements the template anticipated, and inherits the
+    template's grouping permanently since screens cannot be moved between groups.
+    What survives: the Template Suite as the SOURCE of the stylesheet and of
+    human-authored faceplate types (section 4).
+  * SCREENSHOT DIFFING AS THE PRIMARY GATE — correlated check (5.5).
+  * THE AI-UI-GENERATION TOOL CATEGORY — wrong direction, wrong aesthetics, and
+    cloud-hosted against a data boundary (3.5).
+
+================================================================================

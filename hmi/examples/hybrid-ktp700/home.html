@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>HOME - Line 3 Screening Plant - KTP700 Basic</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- HEADER ------------------------------------------------------------- -->
+  <div class="hdr"                    data-hmi="Rectangle"></div>
+  <div class="hdr-title txt"          data-hmi="Text">MILLBROOK SCREENING PLANT</div>
+  <div class="hdr-state txt"          data-hmi="Text">LINE 3 - RUNNING - AUTO</div>
+  <div class="hdr-clock txt num"      data-hmi="Text">14:07  FRI 14 AUG</div>
+
+  <!-- NAVIGATION ---------------------------------------------------------- -->
+  <div class="txt dim" style="left:10px; top:44px; width:300px;" data-hmi="Text">SCREENS</div>
+
+  <button class="nav" style="left:10px;"  data-hmi="Button">1 OVERVIEW</button>
+  <button class="nav" style="left:170px;" data-hmi="Button">2 ALARMS</button>
+  <button class="nav" style="left:330px;" data-hmi="Button">3 SETTINGS</button>
+  <button class="nav" style="left:490px;" data-hmi="Button">4 TRENDS</button>
+  <button class="nav" style="left:650px;" data-hmi="Button">5 DIAGNOSTICS</button>
+
+  <!-- LINE COMMANDS -------------------------------------------------------- -->
+  <div class="txt dim" style="left:10px; top:148px; width:300px;" data-hmi="Text">LINE COMMANDS</div>
+
+  <button class="cmd"          style="left:10px;"  data-hmi="Button">START</button>
+  <button class="cmd cmd-stop" style="left:280px;" data-hmi="Button" data-hmi-safety>STOP</button>
+  <button class="cmd"          style="left:550px;" data-hmi="Button">RESET</button>
+
+  <!-- ALARM BANNER --------------------------------------------------------- -->
+  <div class="txt dim" style="left:10px; top:296px; width:300px;" data-hmi="Text">ACTIVE ALARMS</div>
+
+  <div class="alarm" style="top:322px; height:148px;" data-hmi="AlarmPlaceholder">ALARM VIEW GOES HERE - add manually</div>
+
+</body>
+</html>

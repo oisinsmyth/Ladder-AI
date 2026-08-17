@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    net8.0, deliberately NOT net48 and deliberately NOT part of the converter.
+
+    Not `converter`: T1 shells out to headless Chrome, and the converter's standing invariant
+    (FI-24) is that it is a pure in-process file transformer with no external-process access.
+    Not `openness-cli`: that is net48 by Openness constraint, and every rebuild of it needs a TIA
+    whitelist approval keyed on (Path, FileHash). Dragging a Chrome dependency into that binary
+    would make every flatten a reason to re-approve.
+
+    This project never touches Portal, so it is free to rebuild at any time, including mid-session.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <AssemblyName>hmi-cli</AssemblyName>
+    <RootNamespace>HmiCli</RootNamespace>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
+</Project>

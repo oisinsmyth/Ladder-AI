@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>DIAGNOSTICS - LINE 3</title>
+<link rel="stylesheet" href="hmi.css">
+</head>
+<body>
+<div class="screen">
+
+  <div class="hdr">
+    <div class="hdr-id">
+      <div class="hdr-line">LINE 3 - MIXING AND TRANSFER</div>
+      <div class="hdr-site">NORTHFIELD WORKS / PLC1 / DIAGNOSTICS</div>
+    </div>
+    <div class="hdr-clock">
+      <div class="hdr-time" id="clk">14:32:07</div>
+      <div class="hdr-date" id="dat">2026-08-14 FRI</div>
+    </div>
+  </div>
+
+  <div class="page">
+    <h1>DIAGNOSTICS</h1>
+    <div class="rule"></div>
+    <p>Controller, device and network status for Line 3. This screen is a
+       stand-in and holds no device list.</p>
+    <p class="note">Screen 5 of 5. Return to the home screen with the button below.</p>
+  </div>
+
+  <a class="backbtn" href="home.html">&lt; HOME</a>
+
+</div>
+
+<script>
+(function () {
+  var days = ["SUN","MON","TUE","WED","THU","FRI","SAT"];
+  function two(n) { return (n < 10 ? "0" : "") + n; }
+  function tick() {
+    var d = new Date();
+    document.getElementById("clk").textContent =
+      two(d.getHours()) + ":" + two(d.getMinutes()) + ":" + two(d.getSeconds());
+    document.getElementById("dat").textContent =
+      d.getFullYear() + "-" + two(d.getMonth() + 1) + "-" + two(d.getDate())
+      + " " + days[d.getDay()];
+  }
+  tick();
+  setInterval(tick, 1000);
+})();
+</script>
+
+</body>
+</html>

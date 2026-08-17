@@ -1,0 +1,317 @@
+/* Operator panel style sheet - 1280 x 800 fixed panel, house standard.
+   Field: low-chroma mid grey. Colour reserved for abnormal conditions only. */
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 1280px;
+  height: 800px;
+  overflow: hidden;
+  background: #bfbfba;
+  color: #1a1a18;
+  font-family: "Segoe UI", "Tahoma", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.screen {
+  position: relative;
+  width: 1280px;
+  height: 800px;
+  background: #bfbfba;
+}
+
+/* ---------- header ---------- */
+
+.hdr {
+  height: 72px;
+  width: 1280px;
+  background: #b4b4af;
+  border-bottom: 2px solid #6f6f6a;
+  padding: 0 16px 0 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.hdr-id {
+  display: block;
+}
+
+.hdr-line {
+  font-size: 26px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  line-height: 30px;
+}
+
+.hdr-site {
+  font-size: 14px;
+  letter-spacing: 2px;
+  line-height: 16px;
+  color: #45453f;
+}
+
+.hdr-clock {
+  text-align: right;
+  font-family: "Consolas", "Lucida Console", "Courier New", monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+.hdr-time {
+  font-size: 32px;
+  line-height: 34px;
+  letter-spacing: 1px;
+}
+
+.hdr-date {
+  font-size: 14px;
+  line-height: 16px;
+  letter-spacing: 1px;
+  color: #45453f;
+}
+
+/* ---------- main body ---------- */
+
+.main {
+  height: 600px;
+  width: 1280px;
+  display: flex;
+}
+
+.nav {
+  width: 896px;
+  height: 600px;
+  padding: 16px;
+  border-right: 2px solid #6f6f6a;
+  display: grid;
+  grid-template-columns: 278px 278px 278px;
+  grid-template-rows: 277px 277px;
+  column-gap: 14px;
+  row-gap: 14px;
+  align-content: start;
+}
+
+.navbtn {
+  display: block;
+  width: 278px;
+  height: 277px;
+  background: #c6c6c1;
+  border: 2px solid #6f6f6a;
+  border-radius: 0;
+  text-decoration: none;
+  color: #1a1a18;
+  padding: 16px;
+  position: relative;
+}
+
+.navbtn:active {
+  background: #a9a9a4;
+}
+
+.navbtn .idx {
+  font-family: "Consolas", "Lucida Console", "Courier New", monospace;
+  font-variant-numeric: tabular-nums;
+  font-size: 16px;
+  line-height: 18px;
+  color: #45453f;
+}
+
+.navbtn .lbl {
+  position: absolute;
+  left: 16px;
+  bottom: 46px;
+  font-size: 32px;
+  line-height: 36px;
+  font-weight: 600;
+  letter-spacing: 1px;
+}
+
+.navbtn .sub {
+  position: absolute;
+  left: 16px;
+  bottom: 16px;
+  font-size: 15px;
+  line-height: 18px;
+  color: #45453f;
+  letter-spacing: 1px;
+}
+
+.navcell-blank {
+  width: 278px;
+  height: 277px;
+  border: 2px solid #a9a9a4;
+  background: #b8b8b3;
+}
+
+/* ---------- command column ---------- */
+
+.cmd {
+  width: 384px;
+  height: 600px;
+  padding: 16px;
+  background: #b8b8b3;
+}
+
+.cmd-title {
+  height: 24px;
+  font-size: 16px;
+  line-height: 24px;
+  letter-spacing: 2px;
+  color: #45453f;
+  margin-bottom: 16px;
+  border-bottom: 1px solid #8e8e89;
+}
+
+.cmdbtn {
+  display: block;
+  width: 352px;
+  height: 168px;
+  margin-bottom: 12px;
+  background: #c6c6c1;
+  border: 3px solid #45453f;
+  border-radius: 0;
+  color: #1a1a18;
+  font-family: "Segoe UI", "Tahoma", Arial, sans-serif;
+  font-size: 44px;
+  font-weight: 700;
+  letter-spacing: 3px;
+  text-align: left;
+  padding: 0 0 0 24px;
+  cursor: default;
+}
+
+.cmdbtn:last-child { margin-bottom: 0; }
+
+.cmdbtn:active { background: #a9a9a4; }
+
+.cmdbtn .cmdsub {
+  display: block;
+  font-size: 14px;
+  font-weight: 400;
+  letter-spacing: 2px;
+  color: #45453f;
+  margin-top: 4px;
+}
+
+.cmdbtn-stop {
+  background: #aeaea9;
+  border-width: 6px;
+}
+
+/* ---------- alarm banner ---------- */
+
+.banner {
+  height: 128px;
+  width: 1280px;
+  border-top: 2px solid #6f6f6a;
+  background: #b4b4af;
+}
+
+.bnr-head {
+  height: 32px;
+  width: 1280px;
+  display: flex;
+  align-items: center;
+  border-left: 8px solid #b4b4af;
+  border-bottom: 1px solid #8e8e89;
+  font-size: 14px;
+  letter-spacing: 2px;
+  color: #45453f;
+}
+
+.arow {
+  height: 32px;
+  width: 1280px;
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid #a9a9a4;
+  font-size: 18px;
+  line-height: 20px;
+}
+
+.arow:last-child { border-bottom: 0; }
+
+.c-sev  { width: 96px;  padding-left: 16px; }
+.c-time { width: 128px; font-family: "Consolas", "Lucida Console", "Courier New", monospace; font-variant-numeric: tabular-nums; }
+.c-tag  { width: 300px; font-family: "Consolas", "Lucida Console", "Courier New", monospace; }
+.c-desc { width: 588px; overflow: hidden; white-space: nowrap; }
+.c-stat { width: 160px; letter-spacing: 1px; }
+
+/* abnormal-condition colours - these two only */
+.sev-high { color: #b02a1e; font-weight: 700; letter-spacing: 1px; }
+.sev-warn { color: #c9821a; font-weight: 700; letter-spacing: 1px; }
+
+.arow-high { border-left: 8px solid #b02a1e; }
+.arow-warn { border-left: 8px solid #c9821a; }
+.arow-none { border-left: 8px solid #a9a9a4; }
+
+.c-sev-inset { padding-left: 8px; }
+
+/* slow flash - unacknowledged alarm row only */
+.unack { animation: unackflash 1.6s steps(1, end) infinite; }
+
+@keyframes unackflash {
+  0%   { background: #b4b4af; }
+  50%  { background: #cbb0ab; }
+  100% { background: #b4b4af; }
+}
+
+/* ---------- stand-in pages ---------- */
+
+.page {
+  height: 728px;
+  width: 1280px;
+  padding: 32px;
+}
+
+.page h1 {
+  margin: 0 0 8px 0;
+  font-size: 44px;
+  line-height: 48px;
+  font-weight: 600;
+  letter-spacing: 2px;
+}
+
+.page .rule {
+  width: 1216px;
+  height: 2px;
+  background: #6f6f6a;
+  margin: 0 0 24px 0;
+}
+
+.page p {
+  margin: 0 0 12px 0;
+  font-size: 22px;
+  line-height: 30px;
+  max-width: 960px;
+  color: #1a1a18;
+}
+
+.page .note {
+  font-size: 18px;
+  line-height: 26px;
+  color: #45453f;
+}
+
+.backbtn {
+  display: block;
+  position: absolute;
+  left: 32px;
+  bottom: 32px;
+  width: 320px;
+  height: 72px;
+  background: #c6c6c1;
+  border: 3px solid #45453f;
+  border-radius: 0;
+  color: #1a1a18;
+  text-decoration: none;
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: 2px;
+  line-height: 66px;
+  padding-left: 24px;
+}
+
+.backbtn:active { background: #a9a9a4; }

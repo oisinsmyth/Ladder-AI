@@ -3302,6 +3302,363 @@ public sealed class OpennessGateway : IOpennessGateway
         }
     }
 
+    // K1 (2026-08-17). The Classic HMI pipeline's first half. Mirrors ExportTagTable's shape
+    // deliberately - find, narrow by device, refuse ambiguity, export, retry once on the
+    // Export()-produced-no-file quirk - so the failure modes are the ones callers already know.
+    public void ExportScreen(string screenName, string? deviceFilter, string outPath, string exportOptionsName)
+    {
+        if (_project is null)
+        {
+            throw new InvalidOperationException($"{nameof(OpenProject)} must be called before {nameof(ExportScreen)}.");
+        }
+
+        var classic = new List<(Screen Screen, string Path)>();
+        var unifiedPaths = new List<string>();
+
+        foreach (Device device in _project.Devices)
+        {
+            foreach (DeviceItem item in device.DeviceItems)
+            {
+                CollectScreensForExport(item, device.Name, screenName, classic, unifiedPaths);
+            }
+        }
+
+        var matches = NarrowToDevice(classic, deviceFilter, m => m.Path);
+
+        if (matches.Count == 0)
+        {
+            // A Unified hit is a DIFFERENT answer from "not found" and must not be flattened into
+            // it: the screen exists, the format does not. Only reported when no classic screen of
+            // that name survived narrowing, so a mixed project still exports the classic one.
+            if (unifiedPaths.Count > 0)
+            {
+                throw new ScreenExportNotSupportedOnUnifiedException(screenName, unifiedPaths[0]);
+            }
+
+            throw new ScreenNotFoundException(screenName);
+        }
+
+        if (matches.Count > 1)
+        {
+            throw new AmbiguousScreenException(screenName, matches.Select(m => m.Path));
+        }
+
+        var screen = matches[0].Screen;
+
+        if (File.Exists(outPath))
+        {
+            File.Delete(outPath);
+        }
+
+        var options = (Siemens.Engineering.ExportOptions)Enum.Parse(typeof(Siemens.Engineering.ExportOptions), exportOptionsName);
+        screen.Export(new FileInfo(outPath), options);
+
+        if (!File.Exists(outPath))
+        {
+            screen.Export(new FileInfo(outPath), options);
+            if (!File.Exists(outPath))
+            {
+                throw new ExportProducedNoFileException(outPath);
+            }
+        }
+    }
+
+    private static void CollectScreensForExport(
+        DeviceItem item,
+        string parentPath,
+        string screenName,
+        List<(Screen Screen, string Path)> classic,
+        List<string> unifiedPaths)
+    {
+        var path = $"{parentPath}/{item.Name}";
+
+        var softwareContainer = item.GetService<SoftwareContainer>();
+        switch (softwareContainer?.Software)
+        {
+            case HmiTarget target:
+                CollectClassicScreens(target.ScreenFolder, path, screenName, classic);
+                break;
+            case HmiSoftware unified:
+                if (unified.Screens.Any(s => string.Equals(s.Name, screenName, StringComparison.Ordinal)))
+                {
+                    unifiedPaths.Add(path);
+                }
+
+                break;
+        }
+
+        foreach (DeviceItem child in item.DeviceItems)
+        {
+            CollectScreensForExport(child, path, screenName, classic, unifiedPaths);
+        }
+    }
+
+    private static void CollectClassicScreens(
+        ScreenFolder folder,
+        string devicePath,
+        string screenName,
+        List<(Screen Screen, string Path)> results)
+    {
+        foreach (Screen screen in folder.Screens)
+        {
+            if (string.Equals(screen.Name, screenName, StringComparison.Ordinal))
+            {
+                results.Add((screen, devicePath));
+            }
+        }
+
+        foreach (ScreenUserFolder child in folder.Folders)
+        {
+            CollectClassicScreens(child, devicePath, screenName, results);
+        }
+    }
+
+    public IReadOnlyList<string> ImportScreens(string? deviceFilter, IReadOnlyList<string> files)
+    {
+        if (_project is null)
+        {
+            throw new InvalidOperationException($"{nameof(OpenProject)} must be called before {nameof(ImportScreens)}.");
+        }
+
+        var targets = new List<(HmiTarget Target, string Path)>();
+        foreach (Device device in _project.Devices)
+        {
+            foreach (DeviceItem item in device.DeviceItems)
+            {
+                CollectClassicTargets(item, device.Name, targets);
+            }
+        }
+
+        if (deviceFilter is not null)
+        {
+            targets = targets.Where(t => t.Path.IndexOf(deviceFilter, StringComparison.OrdinalIgnoreCase) >= 0).ToList();
+        }
+
+        if (targets.Count != 1)
+        {
+            throw new DeviceNotFoundException(deviceFilter);
+        }
+
+        var folder = targets[0].Target.ScreenFolder;
+        var imported = new List<string>();
+
+        try
+        {
+            foreach (var file in files)
+            {
+                // Override, not the default: re-importing an edited screen must UPDATE it. Without
+                // this an existing name is a hard failure, which would make the author loop
+                // one-shot-only - and the loop is the whole point.
+                //
+                // Each file is wrapped so a failure NAMES THE FILE. A bare exception from a
+                // multi-file import says only that something went wrong, which on a fault-injection
+                // run is indistinguishable from the fault being detected.
+                try
+                {
+                    var result = folder.Screens.Import(new FileInfo(file), Siemens.Engineering.ImportOptions.Override);
+                    if (result is null)
+                    {
+                        throw new ScreenImportFailedException(file, "Import() returned null");
+                    }
+
+                    var countBefore = imported.Count;
+                    foreach (var obj in result)
+                    {
+                        if (obj is null)
+                        {
+                            continue;
+                        }
+
+                        imported.Add(obj is Screen s ? s.Name : obj.ToString() ?? "(unnamed)");
+                    }
+
+                    if (imported.Count == countBefore)
+                    {
+                        throw new ScreenImportFailedException(file, "Import() succeeded but produced no screen object");
+                    }
+                }
+                catch (Exception ex) when (ex is not ScreenImportFailedException)
+                {
+                    throw new ScreenImportFailedException(file, $"{ex.GetType().Name}: {ex.Message}");
+                }
+            }
+        }
+        finally
+        {
+            // Same reason as ImportBlocks: Import() mutates only the in-memory model, so without
+            // this the whole run is as durable as whichever Portal process happens to survive.
+            SaveProject();
+        }
+
+        return imported;
+    }
+
+    private static void CollectClassicTargets(DeviceItem item, string parentPath, List<(HmiTarget, string)> found)
+    {
+        var path = $"{parentPath}/{item.Name}";
+        if (item.GetService<SoftwareContainer>()?.Software is HmiTarget target)
+        {
+            found.Add((target, path));
+        }
+
+        foreach (DeviceItem child in item.DeviceItems)
+        {
+            CollectClassicTargets(child, path, found);
+        }
+    }
+
+    public IReadOnlyList<string> InspectClassicScreen(string screenName)
+    {
+        if (_project is null)
+        {
+            throw new InvalidOperationException($"{nameof(OpenProject)} must be called before {nameof(InspectClassicScreen)}.");
+        }
+
+        var classic = new List<(Screen Screen, string Path)>();
+        var unified = new List<string>();
+        foreach (Device device in _project.Devices)
+        {
+            foreach (DeviceItem item in device.DeviceItems)
+            {
+                CollectScreensForExport(item, device.Name, screenName, classic, unified);
+            }
+        }
+
+        if (classic.Count == 0)
+        {
+            throw new ScreenNotFoundException(screenName);
+        }
+
+        var screen = classic[0].Screen;
+        var lines = new List<string> { $"SCREEN: {screen.Name}  ({classic[0].Path})", "" };
+
+        lines.Add("--- ATTRIBUTES (GetAttributeInfos) ---");
+        var attrs = 0;
+        foreach (var info in screen.GetAttributeInfos())
+        {
+            attrs++;
+            object? value = null;
+            try
+            {
+                value = screen.GetAttribute(info.Name);
+            }
+            catch (Exception ex)
+            {
+                value = $"<unreadable: {ex.GetType().Name}>";
+            }
+
+            lines.Add($"  {info.Name} = {value}");
+        }
+
+        lines.Add($"  ATTRIBUTES: {attrs}");
+        lines.Add(string.Empty);
+
+        // FINDING, established at COMPILE TIME: a classic Screen has no GetCompositionInfos() at
+        // all. Unified objects have it and the survey used it; this type does not expose it, so the
+        // object cannot even be ASKED for child collections. That is a stronger negative than an
+        // empty answer would have been.
+        lines.Add("--- COMPOSITIONS ---");
+        lines.Add("  GetCompositionInfos(): NOT PRESENT on Siemens.Engineering.Hmi.Screen.Screen.");
+        lines.Add("  (Unified objects expose it; this type does not, so no composition can be asked for.)");
+        lines.Add(string.Empty);
+
+        // Fallback probe: walk the CLR type itself, so anything reachable at runtime is reported even
+        // if it is absent from the typed surface we reasoned about.
+        lines.Add("--- CLR REFLECTION over the live instance ---");
+        var t = screen.GetType();
+        lines.Add($"  runtime type: {t.FullName}");
+        lines.Add($"  interfaces:   {string.Join(", ", t.GetInterfaces().Select(i => i.Name))}");
+
+        var members = 0;
+        foreach (var prop in t.GetProperties())
+        {
+            members++;
+            object? v;
+            try
+            {
+                v = prop.GetValue(screen);
+            }
+            catch (Exception ex)
+            {
+                v = $"<unreadable: {ex.GetType().Name}>";
+            }
+
+            var extra = string.Empty;
+            if (v is System.Collections.IEnumerable seq and not string)
+            {
+                var n = 0;
+                try
+                {
+                    foreach (var _ in seq)
+                    {
+                        n++;
+                    }
+
+                    extra = $"  [enumerable, {n} member(s)]";
+                }
+                catch (Exception ex)
+                {
+                    extra = $"  [enumeration failed: {ex.GetType().Name}]";
+                }
+            }
+
+            lines.Add($"  {prop.Name} : {prop.PropertyType.Name} = {v}{extra}");
+        }
+
+        lines.Add($"  PROPERTIES: {members}");
+        foreach (var meth in t.GetMethods().Where(x => x.DeclaringType == t).OrderBy(x => x.Name))
+        {
+            lines.Add($"  method {meth.Name}({string.Join(", ", meth.GetParameters().Select(x => x.ParameterType.Name))})");
+        }
+
+        return lines;
+    }
+
+    public (string MasterCopy, string NewScreen) CloneScreenViaMasterCopy(string screenName)
+    {
+        if (_project is null)
+        {
+            throw new InvalidOperationException($"{nameof(OpenProject)} must be called before {nameof(CloneScreenViaMasterCopy)}.");
+        }
+
+        var classic = new List<(Screen Screen, string Path)>();
+        var unified = new List<string>();
+        foreach (Device device in _project.Devices)
+        {
+            foreach (DeviceItem item in device.DeviceItems)
+            {
+                CollectScreensForExport(item, device.Name, screenName, classic, unified);
+            }
+        }
+
+        if (classic.Count == 0)
+        {
+            throw new ScreenNotFoundException(screenName);
+        }
+
+        var screen = classic[0].Screen;
+
+        var targets = new List<(HmiTarget Target, string Path)>();
+        foreach (Device device in _project.Devices)
+        {
+            foreach (DeviceItem item in device.DeviceItems)
+            {
+                CollectClassicTargets(item, device.Name, targets);
+            }
+        }
+
+        if (targets.Count != 1)
+        {
+            throw new DeviceNotFoundException(null);
+        }
+
+        var masterCopy = _project.ProjectLibrary.MasterCopyFolder.MasterCopies.Create(screen);
+        var created = targets[0].Target.ScreenFolder.Screens.CreateFrom(masterCopy);
+        SaveProject();
+
+        return (masterCopy.Name, created.Name);
+    }
+
     public IReadOnlyList<BlockInfo> ImportBlocks(string groupPath, IReadOnlyList<string> files)
     {
         var imported = new List<BlockInfo>();

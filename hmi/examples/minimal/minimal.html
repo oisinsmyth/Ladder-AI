@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Minimal screen</title>
+<style>
+  /* Deliberately the smallest thing that is still a screen: ONE rectangle, no text, no fonts, no
+     multi-state objects. It exists to bisect import failures - when a full screen fails, this
+     separates "the emitter's document shape is wrong" from "one particular item type is wrong". */
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 800px; height: 480px; }
+  body { background: rgb(182, 182, 182); }
+  #box { position: absolute; left: 40px; top: 40px; width: 200px; height: 100px;
+         background: rgb(200, 200, 200); border: 1px solid rgb(90, 90, 90); }
+</style>
+</head>
+<body>
+  <div id="box" data-hmi="Rectangle"></div>
+</body>
+</html>

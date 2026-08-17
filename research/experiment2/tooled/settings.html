@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Settings &mdash; Line 4 Panel</title>
+<link rel="stylesheet" href="panel.css">
+</head>
+<body>
+
+<div class="header">
+  <div class="ident">
+    <div class="plant">Millbrook Works &middot; Blending &amp; Fill</div>
+    <div class="line">Line 4 &mdash; Settings</div>
+  </div>
+  <div class="spacer"></div>
+  <div class="clock">
+    <div class="time" id="clock-time">14:23:48</div>
+    <div class="date" id="clock-date">Thu 14 Aug 2026</div>
+  </div>
+</div>
+
+<div class="screen">
+  <p class="eyebrow">Screen 3 of 5</p>
+  <h1>Settings</h1>
+  <div class="keyline"></div>
+  <p>Setpoints, recipe selection and panel preferences land on this screen.</p>
+  <p>Placeholder &mdash; access is limited to the maintenance login.</p>
+</div>
+
+<div class="footbar">
+  <a class="home-btn" href="home.html">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+         stroke-width="3" stroke-linecap="square" aria-hidden="true">
+      <path d="M15 4 L7 12 L15 20"></path>
+    </svg>
+    Home
+  </a>
+</div>
+
+<script>
+(function () {
+  var days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  var months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  function pad(n) { return n < 10 ? "0" + n : "" + n; }
+  function tick() {
+    var d = new Date();
+    document.getElementById("clock-time").textContent =
+      pad(d.getHours()) + ":" + pad(d.getMinutes()) + ":" + pad(d.getSeconds());
+    document.getElementById("clock-date").textContent =
+      days[d.getDay()] + " " + pad(d.getDate()) + " " +
+      months[d.getMonth()] + " " + d.getFullYear();
+  }
+  tick();
+  setInterval(tick, 1000);
+})();
+</script>
+
+</body>
+</html>

@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Overview &mdash; Line 2 Operator Panel</title>
+<link rel="stylesheet" href="hmi.css">
+</head>
+<body>
+<div class="screen">
+
+  <header class="hdr" data-state="run">
+    <div class="hdr__id">
+      <div class="hdr__plant">Northfield Works</div>
+      <div class="hdr__area">Line 2 &middot; Aggregate handling</div>
+    </div>
+
+    <nav class="hdr__crumb" aria-label="Screen location">
+      <a href="home.html" style="color:inherit;text-decoration:none">Home</a>
+      <span class="sep">&#9656;</span>
+      <b>Overview</b>
+    </nav>
+
+    <div class="hdr__spacer"></div>
+
+    <div class="hdr__stat">
+      <span class="statechip statechip--run"><i class="lamp"></i>Line running</span>
+      <span class="statechip statechip--alarm"><i class="lamp"></i>2 unacknowledged</span>
+      <span class="statechip statechip--net"><i class="lamp"></i>PLC online</span>
+
+      <div class="hdr__user">
+        <span class="who">D. Mahon</span>
+        <span class="role">Operator &middot; Shift B</span>
+      </div>
+
+      <div class="hdr__clock">
+        <span class="t" id="clock">14:26:41</span>
+        <span class="d" id="date">Fri 14 Aug 2026</span>
+      </div>
+    </div>
+  </header>
+
+  <main class="sub">
+    <section class="sheet">
+      <div class="sheet__eyebrow">Screen 1 of 5 &middot; Process</div>
+      <h1 class="sheet__h">Overview</h1>
+      <p class="sheet__p">
+        The full-size process mimic for Line 2 lives here: feed hopper HP-201 through
+        conveyors CV-201 and CV-202, screening deck SC-203 and discharge bin BN-205,
+        each drawn with its live state, rate and level.
+      </p>
+      <p class="sheet__p">
+        Touch any item on the mimic to open its faceplate for local start, stop and
+        mode selection.
+      </p>
+      <div class="sheet__frame"><span>Process mimic renders here</span></div>
+      <div class="sheet__note">Placeholder screen &middot; mimic not drawn in this mock-up</div>
+    </section>
+
+    <aside class="side">
+      <div class="side__card">
+        <h3>Line at a glance</h3>
+        <dl class="kv">
+          <dt>Feed rate</dt><dd>412 t/h</dd>
+          <dt>HP-201 level</dt><dd>68 %</dd>
+          <dt>CV-201</dt><dd class="is-run">RUNNING</dd>
+          <dt>CV-202</dt><dd class="is-warn">DRIFT</dd>
+          <dt>SC-203 load</dt><dd>74 %</dd>
+          <dt>BN-205</dt><dd>41 %</dd>
+        </dl>
+      </div>
+
+      <div class="side__card">
+        <h3>Go to screen</h3>
+        <nav class="navlist" aria-label="Other screens">
+          <a class="is-here" href="overview.html">Overview <span class="mark">&#9679;</span></a>
+          <a href="alarms.html">Alarms <span class="mark">&#9656;</span></a>
+          <a href="settings.html">Settings <span class="mark">&#9656;</span></a>
+          <a href="trends.html">Trends <span class="mark">&#9656;</span></a>
+          <a href="diagnostics.html">Diagnostics <span class="mark">&#9656;</span></a>
+        </nav>
+      </div>
+
+      <a class="key key--home" href="home.html">
+        <span class="key__in"><span>Home</span><span class="sub">Back to main screen</span></span>
+      </a>
+    </aside>
+  </main>
+
+  <section class="banner" aria-label="Active alarms">
+    <div class="banner__bar">
+      <span class="banner__title">Active alarms</span>
+      <span class="tally tally--alarm"><b>1</b> Critical</span>
+      <span class="tally tally--warn"><b>2</b> Warning</span>
+      <span class="tally"><b>14:22:07</b> Last event</span>
+      <div class="banner__spacer"></div>
+      <button class="minikey" type="button" onclick="location.href='alarms.html'">Open alarm list</button>
+    </div>
+
+    <div class="alarms">
+      <div class="alarms__hd" aria-hidden="true">
+        <span></span><span>Time</span><span>Tag</span><span>Priority</span>
+        <span>Message</span><span>State</span><span></span>
+      </div>
+
+      <div class="alarm alarm--crit alarm--unack">
+        <i class="sev"></i>
+        <span class="time">14:22:07</span>
+        <span class="tag">HP-201</span>
+        <span class="pri">Critical</span>
+        <span class="msg">Feed hopper blocked &mdash; level held above high-high for 30 s, feeder inhibited</span>
+        <span class="st">Active &middot; unack</span>
+        <span></span>
+      </div>
+
+      <div class="alarm alarm--warn alarm--unack">
+        <i class="sev"></i>
+        <span class="time">14:19:48</span>
+        <span class="tag">CV-202</span>
+        <span class="pri">Warning</span>
+        <span class="msg">Belt drift switch tripped on the right-hand side &mdash; running at reduced speed</span>
+        <span class="st">Active &middot; unack</span>
+        <span></span>
+      </div>
+
+      <div class="alarm alarm--warn">
+        <i class="sev"></i>
+        <span class="time">14:03:12</span>
+        <span class="tag">DE-101</span>
+        <span class="pri">Warning</span>
+        <span class="msg">Dust extractor differential pressure below limit &mdash; check filter bags</span>
+        <span class="st">Active &middot; acked</span>
+        <span></span>
+      </div>
+    </div>
+  </section>
+
+</div>
+<script src="panel.js"></script>
+</body>
+</html>

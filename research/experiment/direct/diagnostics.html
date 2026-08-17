@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>DIAGNOSTICS - Line 3 Operator Panel</title>
+<link rel="stylesheet" href="hmi.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="plant">
+    <div class="logo">L3</div>
+    <div>
+      <div class="plant-name">Northfield Works &mdash; Line 3</div>
+      <div class="plant-sub">Blending &amp; Transfer</div>
+    </div>
+  </div>
+  <div class="screen-title">Diagnostics</div>
+  <div class="status-cluster">
+    <div class="pill online"><span class="led"></span>PLC ONLINE</div>
+    <div class="stat-item"><div class="label">Operator</div><div class="value">J. HALE</div></div>
+    <div class="stat-item"><div class="label">Plant Time</div><div class="value" id="clock">06:42:18</div></div>
+  </div>
+</header>
+
+<main class="subpage">
+  <section class="subpage-main">
+    <div class="panel" style="flex:1;">
+      <h1>System Diagnostics</h1>
+      <div class="rule"></div>
+      <p>Controller and network health, module status, I/O forcing overview and the panel's own
+         connection and version information.</p>
+      <p>This is the screen a maintenance technician is sent to first when the panel reports a
+         communication or module fault.</p>
+      <div class="placeholder-note">
+        PLACEHOLDER SCREEN &mdash; the rack view and module detail are not part of this mock-up.
+        Use HOME below to return to the navigation screen.
+      </div>
+    </div>
+  </section>
+
+  <aside class="subpage-side">
+    <div class="side-card">
+      <h2>Controller</h2>
+      <div class="summary-row"><span class="k">CPU state</span><span class="v ok">RUN</span></div>
+      <div class="summary-row"><span class="k">Scan time</span><span class="v">23.3<span class="u">ms</span></span></div>
+      <div class="summary-row"><span class="k">Forces</span><span class="v ok">0</span></div>
+    </div>
+    <div class="side-card">
+      <h2>Network</h2>
+      <div class="summary-row"><span class="k">Link</span><span class="v ok">UP</span></div>
+      <div class="summary-row"><span class="k">Round trip</span><span class="v">72<span class="u">ms</span></span></div>
+      <div class="summary-row"><span class="k">Module faults</span><span class="v ok">NONE</span></div>
+    </div>
+  </aside>
+</main>
+
+<footer class="bottombar">
+  <a class="home-btn" href="home.html">
+    <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+         stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3.5 11.5 12 4l8.5 7.5"></path>
+      <path d="M5.8 10.2V20h12.4v-9.8"></path>
+    </svg>
+    Home
+  </a>
+
+  <div class="crumb-tabs">
+    <a href="overview.html">Overview</a>
+    <a href="alarms.html">Alarms</a>
+    <a href="settings.html">Settings</a>
+    <a href="trends.html">Trends</a>
+    <a class="current" href="diagnostics.html">Diagnostics</a>
+  </div>
+
+  <div class="strip">
+    <span class="prio hi">HIGH</span>
+    <span class="a-time">06:41:52</span>
+    <span>P301_TransferPump &mdash; motor overload tripped</span>
+  </div>
+</footer>
+
+<script>
+(function () {
+  var el = document.getElementById('clock');
+  function tick() {
+    var d = new Date();
+    function p(n) { return (n < 10 ? '0' : '') + n; }
+    el.textContent = p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds());
+  }
+  tick(); setInterval(tick, 1000);
+})();
+</script>
+
+</body>
+</html>

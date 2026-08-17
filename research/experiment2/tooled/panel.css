@@ -1,0 +1,476 @@
+/* ============================================================
+   Millbrook Works - Line 4 operator panel
+   WinCC Unified style, fixed 1280 x 800 panel-mounted target.
+   All geometry is whole-pixel. Single committed visual world:
+   this is an appliance screen, not a document, so it does not
+   follow the viewer theme - every colour is painted explicitly.
+   ============================================================ */
+
+:root {
+  /* ground + surfaces: cool graphite, biased toward the petrol accent */
+  --ground:      #20262c;
+  --surface:     #2e363e;
+  --surface-hi:  #39434c;
+  --edge:        #434d57;
+  --edge-soft:   #262d34;
+
+  /* ink */
+  --ink:         #e6ebef;
+  --ink-dim:     #8f9ba5;
+  --ink-faint:   #6b767f;
+
+  /* identity accent - Siemens petrol, used for wayfinding only */
+  --petrol:      #0d8f8f;
+  --petrol-lit:  #19b6b6;
+
+  /* semantic state - reserved for abnormal conditions and commands */
+  --critical:    #d93a2b;
+  --warning:     #e0a02c;
+  --run:         #3f9e4d;
+  --ack:         #4a86d8;
+
+  --ui:   "Segoe UI", "Segoe UI Variable Text", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --data: Consolas, "Cascadia Mono", "SF Mono", Menlo, monospace;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  width: 1280px;
+  height: 800px;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+body {
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--ui);
+  font-size: 16px;
+  line-height: 20px;
+  -webkit-font-smoothing: antialiased;
+  cursor: default;
+  user-select: none;
+}
+
+/* keyboard focus must stay visible on a panel with a keypad */
+a:focus-visible, button:focus-visible {
+  outline: 3px solid var(--petrol-lit);
+  outline-offset: -3px;
+}
+
+/* ---------- header : plant identity + time ---------- */
+
+.header {
+  position: absolute;
+  top: 0; left: 0;
+  width: 1280px;
+  height: 72px;
+  background: var(--surface);
+  border-bottom: 2px solid var(--petrol);
+  display: flex;
+  align-items: center;
+}
+
+.ident {
+  width: 480px;
+  height: 72px;
+  padding: 0 20px 0 24px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+}
+
+.ident .plant, .ident .line { width: 436px; }
+
+.ident .plant {
+  font-size: 11px;
+  line-height: 12px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.ident .line {
+  font-size: 24px;
+  line-height: 26px;
+  font-weight: 600;
+  letter-spacing: 0px;
+  color: var(--ink);
+}
+
+/* petrol keyline separating identity from the rest of the header */
+.header .rule {
+  width: 2px;
+  height: 44px;
+  background: var(--edge);
+  margin: 0 4px;
+}
+
+.header .spacer { flex: 1 1 auto; }
+
+.clock {
+  width: 320px;
+  height: 72px;
+  padding: 0 24px 0 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 3px;
+  font-family: var(--data);
+  font-variant-numeric: tabular-nums;
+}
+
+.clock .time {
+  width: 276px;
+  text-align: right;
+  font-size: 30px;
+  line-height: 32px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  color: var(--ink);
+}
+
+.clock .date {
+  width: 276px;
+  text-align: right;
+  font-size: 12px;
+  line-height: 13px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+/* ---------- working band ---------- */
+
+.band {
+  position: absolute;
+  top: 72px; left: 0;
+  width: 1280px;
+  height: 548px;
+  padding: 20px;
+}
+
+.nav {
+  position: absolute;
+  top: 20px; left: 20px;
+  width: 880px;
+  height: 508px;
+}
+
+/* ---------- navigation tiles ----------
+   Two rows, weighted by how often an operator touches them:
+   Overview and Alarms are the working screens, the other three
+   are consulted. The size difference is the information.       */
+
+.tile {
+  position: absolute;
+  background: var(--surface);
+  border: 1px solid var(--edge);
+  border-radius: 2px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  text-decoration: none;
+  color: var(--ink);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 20px;
+  padding: 24px;
+}
+
+.tile:hover  { background: var(--surface-hi); border-color: var(--petrol); }
+.tile:active { background: var(--ground); box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.4); }
+
+.tile .glyph { color: var(--petrol-lit); display: block; }
+
+.tile .label {
+  width: 100%;
+  font-size: 34px;
+  line-height: 36px;
+  font-weight: 600;
+  letter-spacing: 0px;
+}
+
+.tile.small { padding: 20px; gap: 16px; }
+.tile.small .label { font-size: 26px; line-height: 28px; }
+
+.tile-overview    { left: 0;   top: 0;   width: 430px; height: 264px; }
+.tile-alarms      { left: 450px; top: 0; width: 430px; height: 264px; }
+.tile-settings    { left: 0;   top: 284px; width: 280px; height: 224px; }
+.tile-trends      { left: 300px; top: 284px; width: 280px; height: 224px; }
+.tile-diagnostics { left: 600px; top: 284px; width: 280px; height: 224px; }
+
+/* active-alarm count carried onto the tile that answers it */
+.count {
+  position: absolute;
+  top: 24px;
+  right: 24px;
+  width: 64px;
+  height: 48px;
+  border-radius: 2px;
+  background: var(--critical);
+  color: #ffffff;
+  font-family: var(--data);
+  font-variant-numeric: tabular-nums;
+  font-size: 28px;
+  line-height: 48px;
+  font-weight: 700;
+  text-align: center;
+}
+
+/* ---------- command bay ----------
+   Fenced off from navigation: nothing in here changes screens,
+   everything in here changes the plant.                        */
+
+.commands {
+  position: absolute;
+  top: 20px; left: 924px;
+  width: 336px;
+  height: 508px;
+  background: var(--edge-soft);
+  border: 1px solid var(--edge);
+  border-radius: 2px;
+  padding: 16px;
+}
+
+.bay-label {
+  height: 16px;
+  margin-bottom: 16px;
+  font-size: 11px;
+  line-height: 16px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  display: block;
+}
+
+.cmd {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  width: 304px;
+  height: 136px;
+  margin-bottom: 18px;
+  padding: 0 24px;
+  border: 1px solid rgba(0, 0, 0, 0.35);
+  border-radius: 2px;
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.18),
+              inset 0 -3px 0 rgba(0, 0, 0, 0.28);
+  font-family: var(--ui);
+  font-size: 38px;
+  line-height: 40px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: #ffffff;
+  cursor: pointer;
+}
+
+.cmd:last-child { margin-bottom: 0; }
+
+.cmd:active {
+  box-shadow: inset 0 3px 6px rgba(0, 0, 0, 0.45);
+  padding-top: 2px;
+}
+
+.cmd-start { background: var(--run); }
+.cmd-stop  { background: var(--critical); }
+.cmd-reset { background: var(--surface-hi); color: var(--ink); }
+
+.cmd-start:hover { background: #4aae58; }
+.cmd-stop:hover  { background: #e6483a; }
+.cmd-reset:hover { background: #3d474f; }
+
+.cmd svg { flex: 0 0 auto; }
+
+/* ---------- alarm banner ---------- */
+
+.banner {
+  position: absolute;
+  top: 620px; left: 0;
+  width: 1280px;
+  height: 180px;
+  background: var(--surface);
+  border-top: 2px solid var(--edge);
+}
+
+.banner-bar {
+  height: 34px;
+  padding: 0 24px;
+  display: flex;
+  border-bottom: 1px solid var(--edge);
+  font-size: 11px;
+  line-height: 33px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+}
+
+.banner-bar .left  { width: 900px; height: 33px; }
+.banner-bar .right { width: 332px; height: 33px; text-align: right; }
+
+.banner-bar .title { color: var(--ink); font-weight: 600; }
+.banner-bar .sep { color: var(--ink-faint); }
+.banner-bar .unack { color: var(--critical); font-weight: 700; }
+
+.alarm {
+  display: flex;
+  align-items: center;
+  height: 48px;
+  padding-right: 24px;
+  border-bottom: 1px solid var(--edge-soft);
+  font-size: 17px;
+  line-height: 21px;
+}
+
+.stripe { width: 8px; flex: 0 0 auto; align-self: stretch; }
+.stripe.s-critical { background: var(--critical); }
+.stripe.s-warning  { background: var(--warning); }
+.stripe.s-low      { background: var(--ack); }
+
+/* unacknowledged alarms pulse, as they do on the real panel */
+.alarm.unack .stripe { animation: pulse 1200ms steps(1, end) infinite; }
+
+@keyframes pulse {
+  0%,   49% { opacity: 1; }
+  50%, 100% { opacity: 0.25; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .alarm.unack .stripe { animation: none; }
+}
+
+.alarm .ts {
+  width: 108px;
+  padding-left: 16px;
+  flex: 0 0 auto;
+  font-family: var(--data);
+  font-variant-numeric: tabular-nums;
+  font-size: 16px;
+  color: var(--ink-dim);
+}
+
+.alarm .tag {
+  width: 116px;
+  flex: 0 0 auto;
+  font-family: var(--data);
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.alarm .text { flex: 1 1 auto; color: var(--ink); }
+
+.alarm .prio {
+  width: 76px;
+  flex: 0 0 auto;
+  font-size: 12px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  font-weight: 700;
+}
+
+.prio.s-critical { color: var(--critical); }
+.prio.s-warning  { color: var(--warning); }
+.prio.s-low      { color: var(--ack); }
+
+.alarm .state {
+  width: 116px;
+  flex: 0 0 auto;
+  text-align: right;
+  font-size: 12px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  font-weight: 700;
+  color: var(--ink-faint);
+}
+
+.alarm.unack .state { color: var(--critical); }
+
+/* ---------- stand-in screens ---------- */
+
+/* stand-in screens sit in the same surface frame as the home tiles,
+   so an empty screen reads as a content area, not a blank display */
+.screen {
+  position: absolute;
+  top: 92px; left: 20px;
+  width: 1240px;
+  height: 616px;
+  background: var(--surface);
+  border: 1px solid var(--edge);
+  border-radius: 2px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  padding: 48px;
+}
+
+.eyebrow {
+  font-size: 12px;
+  line-height: 14px;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--petrol-lit);
+  margin: 0 0 16px 0;
+}
+
+.screen h1 {
+  margin: 0 0 24px 0;
+  font-size: 52px;
+  line-height: 56px;
+  font-weight: 600;
+  letter-spacing: -1px;
+  color: var(--ink);
+}
+
+.screen .keyline {
+  width: 240px;
+  height: 2px;
+  background: var(--petrol);
+  margin-bottom: 28px;
+}
+
+.screen p {
+  margin: 0 0 12px 0;
+  max-width: 720px;
+  font-size: 20px;
+  line-height: 30px;
+  color: var(--ink-dim);
+}
+
+.footbar {
+  position: absolute;
+  top: 728px; left: 0;
+  width: 1280px;
+  height: 72px;
+  background: var(--surface);
+  border-top: 1px solid var(--edge);
+  display: flex;
+  align-items: center;
+  padding: 0 24px;
+}
+
+.home-btn {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 180px;
+  height: 48px;
+  padding: 0 28px 0 20px;
+  background: var(--surface-hi);
+  border: 1px solid var(--edge);
+  border-radius: 2px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  color: var(--ink);
+  text-decoration: none;
+  font-size: 18px;
+  line-height: 20px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.home-btn:hover  { background: var(--petrol); border-color: var(--petrol-lit); }
+.home-btn:active { box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.4); }
+.home-btn svg { flex: 0 0 auto; }

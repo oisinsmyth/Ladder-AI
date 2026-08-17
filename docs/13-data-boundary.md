@@ -57,6 +57,31 @@ Two standing exceptions to that rule, both recorded below: the per-project Amber
        the real DBs/tag tables from `JOB9002`... go all the way to `PlantAutoControl` itself in this
        pass, not stop at the 8 FBs." Same genericization rule applied throughout (sanitized before
        import into `SampleProject`; `sanitization/` maps gitignored, never committed).
+  - **2026-08-17 — extended to the HMI, READ-ONLY, for design-convention learning.** Project
+    owner's own explicit instruction in conversation: *"The JOB9002 project has a Unified panel, run
+    the walk on it, see what you can learn."* Every prior extension of this entry was PLC-side, so
+    the HMI is new scope and is recorded rather than assumed covered.
+    - **Scope:** read-only walk of the Unified HMI device (`openness-cli hmi`) — screens, screen
+      items, their geometry, and per-property dynamizations. No write of any kind: no
+      `hmi-create-screen`, no `hmi-edit-screen`, no import, no compile.
+    - **Purpose:** `docs/17-hmi-conventions.md` is a constraint set with no layout or composition
+      rules at all, so generated screens are rule-compliant and unguided. Real projects are the
+      only available evidence for what a competent screen actually looks like.
+    - **What may be RETAINED, and it is a narrow slice:** *structural and geometric facts only* —
+      zone heights, grid pitch, item-size distributions, item counts per screen, spacing, how items
+      cluster. These are not identifying and are the whole point of the exercise.
+      **NOT retained, in any committed doc:** screen names, tag names, item names, alarm or label
+      text, equipment names, or any layout reproduced closely enough to identify the plant. The
+      rule is the same one this entry has always carried — structure may inform an invented
+      artifact; values never leave.
+    - 🔴 **Owner's methodological caveat, recorded because it governs how the findings are used:**
+      *"The design in those projects are probably not all good or a perfect example, but they are
+      directionally correct. So just because its in a project doesn't make it right."* Observed
+      practice is therefore **evidence about direction, not authority**. Where the corpus and an
+      established ergonomic principle disagree, the principle wins and the disagreement is recorded.
+      There is already a measured instance: the JOB9003 anchor's switches are 5.1 mm on the minor
+      axis, against a 9 mm floor.
+
   - **Rule for this and any future scope:** example content pulled from JOB9002 into a *committed*
     doc (`ir/SPEC.md`, ADRs, anything under `docs/`) must be genericized — invented tag/instance
     names, never copied verbatim from the real project. Structural findings (XML element shapes,
@@ -346,6 +371,48 @@ Two standing exceptions to that rule, both recorded below: the per-project Amber
     generation input or as a committed example, and any further JOB9003 work beyond the alarm
     extraction above — re-confirm with the owner first, per the same "per-project, not blanket"
     rule the JOB9002 entry states.
+
+- **2026-08-17 — "JOB9003 - K150 Demo - Scratch Copy", Amber, approved READ access, anchor project for
+  the HMI programme.** Explicit per-project approval given by the project owner in conversation:
+  *"add it to .gitignore, mark it as an amber project with read access allowed... use it as your
+  anchor initially and we will expand to the other hmi types from there."* A scratch copy of the real
+  JOB9003 project, placed at the repo root by the owner. **Gitignored** — `.gitignore` names it
+  explicitly rather than relying on the `j[0-9][0-9][0-9][0-9]*` backstop, which matches it only via
+  Windows' case-insensitivity.
+  - **Scope, as approved:** **read** access to the project, as the anchor for the `hmi/` development
+    programme. This is a genuine widening of the 2026-07-29 entry, which was scoped to one alarm
+    extraction and said "no further JOB9003 work" — that clause is superseded for HMI-programme work
+    by this entry, and only for it.
+  - **What it anchors, and why it matters:** the project carries a **KTP900 Basic** panel — a
+    *Classic Basic* device. The owner states the first real application is a **Classic Basic 7"**.
+    That settles the open target-family question in `hmi/PLAN.md` §5 decision 5, and settles it
+    against the direction the plan was originally written in (Unified). Classic is a SimaticML file
+    pipeline with no screen object model, so the HMI programme's architecture changes accordingly —
+    see `hmi/PLAN.md` §0.
+  - **Output rule, unchanged from the JOB9002 and 2026-07-29 JOB9003 entries:** real tag names,
+    equipment names, screen names, alarm wording and comment text may appear in conversation and in
+    gitignored local artifacts. **Nothing verbatim from this project goes into any committed repo
+    doc.** Structural findings — SimaticML element shapes, which item types a Basic panel supports,
+    attribute names, API behaviour — are *not* identifying and may be documented directly;
+    that distinction is what makes this project usable as an anchor at all. Specific values get
+    invented replacements.
+  - **Extended to WRITE the same day, 2026-08-17, by the project owner:** *"I give you write
+    permissions, dont worry if you overwrite or delete anything in that project I have a separate
+    copy that I can use to reset the scratch version with."* So: **import, screen creation and
+    deletion, compile and modification are all approved on this scratch copy**, and it is explicitly
+    disposable — the owner holds an independent master. This unblocks the HMI plan's wave-1 thin
+    spike, which had no write target. Hard rule 5's "work freely against the scratch copy" now
+    applies here in full.
+    - **What does NOT change:** this is a *scratch copy*, not the real JOB9003 project — the real one
+      stays untouched. The **output rule above is unaffected**: real names may exist inside this
+      project and in gitignored local artifacts, and **nothing verbatim from it enters a committed
+      doc.** Write access widens what may be *done to the project*; it does not widen what may be
+      *retained about it.* Those are independent axes and this entry deliberately moves only one.
+    - **Still not authorized:** any write to the *real* JOB9003 project, use of JOB9003 logic as
+      generation input, or JOB9003 content as a committed example.
+    - ⚠️ **Disposable is not the same as free.** A restore costs the owner an action, and a
+      destructive step taken casually is still a step somebody has to undo. Prefer additive work;
+      take a note of what a reset would cost before a bulk delete.
 
 ## Live runs (`Live Runs/`) — full working access, zero retention
 

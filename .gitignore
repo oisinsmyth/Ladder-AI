@@ -26,6 +26,15 @@ scratch/
 # beside it was covered. A pattern protects the directory somebody thought of; this
 # one covers the ones nobody did.
 scratch-*/
+# ...and the DOT-PREFIXED form, which is the same lesson learned a second time.
+# Measured 2026-08-17: three concurrent lanes created `.lane-gate3i/`, `.lane-c/` and
+# `.lane-result-integrity/` at the repo root, all untracked and ALL UNIGNORED, while
+# `scratch-*/` beside them was covered — a dot prefix hides a directory from `ls`, which
+# is exactly why nobody noticed. One `git add -A` from being committed. The lane that
+# found it deliberately did not edit this file because another session had it modified,
+# and it was right to say so rather than race.
+.lane-*/
+.scratch-*/
 *.plf
 *.backup
 
@@ -92,6 +101,15 @@ FuncDesc.docx
 # HMI alarm-import workbook (Amber-tier, docs/13-data-boundary.md 2026-07-29) — real JOB9003 alarm
 # text, equipment names and trigger tags. Engineering output for a real job, local-only.
 HMIAlarms.xlsx*
+
+# JOB9003 scratch copy — the HMI programme's anchor project (Amber, read-only, docs/13 2026-08-17).
+# A real site TIA project (~19 MB) carrying a KTP900 Basic panel. It is ALREADY matched by the
+# `j[0-9][0-9][0-9][0-9]*` backstop above, but only via Windows' case-insensitive matching — on a
+# case-sensitive checkout `JOB9003...` would fall through to the uppercase pattern and a renamed or
+# relocated copy might match neither. Named explicitly because a leak is unrecoverable once pushed
+# and redundant patterns cost nothing.
+JOB9003 - K150 Demo - Scratch Copy/
+*K150 Demo*/
 
 # OS / editor
 Thumbs.db

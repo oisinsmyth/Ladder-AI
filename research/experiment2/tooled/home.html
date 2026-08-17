@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Line 4 Operator Panel</title>
+<link rel="stylesheet" href="panel.css">
+</head>
+<body>
+
+<!-- ===================== HEADER ===================== -->
+<div class="header">
+  <div class="ident">
+    <div class="plant">Millbrook Works &middot; Blending &amp; Fill</div>
+    <div class="line">Line 4 &mdash; Operator Panel</div>
+  </div>
+  <div class="spacer"></div>
+  <div class="clock">
+    <div class="time" id="clock-time">14:23:48</div>
+    <div class="date" id="clock-date">Thu 14 Aug 2026</div>
+  </div>
+</div>
+
+<!-- ===================== WORKING BAND ===================== -->
+<div class="band">
+
+  <!-- navigation field -->
+  <div class="nav">
+
+    <a class="tile tile-overview" href="overview.html">
+      <svg class="glyph" width="80" height="80" viewBox="0 0 40 40" fill="none"
+             stroke="currentColor" stroke-width="2" aria-hidden="true">
+        <rect x="7" y="5" width="18" height="28"></rect>
+        <rect x="11" y="22" width="10" height="10" fill="currentColor" stroke="none"></rect>
+        <path d="M25 26 H34"></path>
+      </svg>
+      <div class="label">Overview</div>
+    </a>
+
+    <a class="tile tile-alarms" href="alarms.html">
+      <svg class="glyph" width="80" height="80" viewBox="0 0 40 40" fill="none"
+             stroke="currentColor" stroke-width="2" aria-hidden="true">
+        <path d="M20 6 L35 32 H5 Z"></path>
+        <path d="M20 15 V23"></path>
+        <rect x="19" y="26" width="2" height="3" fill="currentColor" stroke="none"></rect>
+      </svg>
+      <div class="count">3</div>
+      <div class="label">Alarms</div>
+    </a>
+
+    <a class="tile tile-settings small" href="settings.html">
+      <svg class="glyph" width="80" height="80" viewBox="0 0 40 40" fill="none"
+             stroke="currentColor" stroke-width="2" aria-hidden="true">
+        <path d="M6 11 H34"></path><circle cx="14" cy="11" r="4"></circle>
+        <path d="M6 20 H34"></path><circle cx="25" cy="20" r="4"></circle>
+        <path d="M6 29 H34"></path><circle cx="17" cy="29" r="4"></circle>
+      </svg>
+      <div class="label">Settings</div>
+    </a>
+
+    <a class="tile tile-trends small" href="trends.html">
+      <svg class="glyph" width="80" height="80" viewBox="0 0 40 40" fill="none"
+             stroke="currentColor" stroke-width="2" aria-hidden="true">
+        <path d="M7 6 V33 H34"></path>
+        <polyline points="12,27 18,20 24,24 31,12"></polyline>
+      </svg>
+      <div class="label">Trends</div>
+    </a>
+
+    <a class="tile tile-diagnostics small" href="diagnostics.html">
+      <svg class="glyph" width="80" height="80" viewBox="0 0 40 40" fill="none"
+             stroke="currentColor" stroke-width="2" aria-hidden="true">
+        <rect x="12" y="12" width="16" height="16"></rect>
+        <path d="M16 6 V12 M24 6 V12 M16 28 V34 M24 28 V34"></path>
+        <path d="M6 16 H12 M6 24 H12 M28 16 H34 M28 24 H34"></path>
+      </svg>
+      <div class="label">Diagnostics</div>
+    </a>
+
+  </div>
+
+  <!-- command bay: fenced off from navigation on purpose -->
+  <div class="commands">
+    <div class="bay-label"><span>Line Command</span></div>
+
+    <button class="cmd cmd-start" type="button">
+      <svg width="32" height="32" viewBox="0 0 32 32" fill="currentColor" aria-hidden="true">
+        <polygon points="9,6 9,26 26,16"></polygon>
+      </svg>
+      START
+    </button>
+
+    <button class="cmd cmd-stop" type="button">
+      <svg width="32" height="32" viewBox="0 0 32 32" fill="currentColor" aria-hidden="true">
+        <rect x="8" y="8" width="16" height="16"></rect>
+      </svg>
+      STOP
+    </button>
+
+    <button class="cmd cmd-reset" type="button">
+      <svg width="32" height="32" viewBox="0 0 32 32" fill="none" stroke="currentColor"
+           stroke-width="3" aria-hidden="true">
+        <path d="M27 16 A11 11 0 1 1 16 5"></path>
+        <polygon points="9,5 21,0 21,12" fill="currentColor" stroke="none"></polygon>
+      </svg>
+      RESET
+    </button>
+  </div>
+
+</div>
+
+<!-- ===================== ALARM BANNER ===================== -->
+<div class="banner">
+  <div class="banner-bar">
+    <div class="left"><span class="title">Active Alarms</span>&nbsp;&nbsp;<span class="sep">&mdash;</span>&nbsp;&nbsp;3 active&nbsp;&nbsp;<span class="sep">&middot;</span>&nbsp;&nbsp;<span class="unack">1 unacknowledged</span></div>
+    <div class="right">Newest first</div>
+  </div>
+
+  <div class="alarm unack">
+    <div class="stripe s-critical"></div>
+    <div class="ts">14:22:07</div>
+    <div class="tag">FT&#8209;4102</div>
+    <div class="text">Blender feed flow below setpoint for 30&nbsp;s</div>
+    <div class="prio s-critical">High</div>
+    <div class="state">Unacknowledged</div>
+  </div>
+
+  <div class="alarm">
+    <div class="stripe s-warning"></div>
+    <div class="ts">14:19:41</div>
+    <div class="tag">P&#8209;4201</div>
+    <div class="text">Feed pump overload tripped &mdash; motor protection</div>
+    <div class="prio s-warning">Medium</div>
+    <div class="state">Acknowledged</div>
+  </div>
+
+  <div class="alarm">
+    <div class="stripe s-low"></div>
+    <div class="ts">13:58:16</div>
+    <div class="tag">LT&#8209;4110</div>
+    <div class="text">Day tank level low &mdash; refill within 20&nbsp;min</div>
+    <div class="prio s-low">Low</div>
+    <div class="state">Acknowledged</div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  var months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  function pad(n) { return n < 10 ? "0" + n : "" + n; }
+  function tick() {
+    var d = new Date();
+    document.getElementById("clock-time").textContent =
+      pad(d.getHours()) + ":" + pad(d.getMinutes()) + ":" + pad(d.getSeconds());
+    document.getElementById("clock-date").textContent =
+      days[d.getDay()] + " " + pad(d.getDate()) + " " +
+      months[d.getMonth()] + " " + d.getFullYear();
+  }
+  tick();
+  setInterval(tick, 1000);
+})();
+</script>
+
+</body>
+</html>

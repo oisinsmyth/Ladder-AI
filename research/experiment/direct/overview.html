@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>OVERVIEW - Line 3 Operator Panel</title>
+<link rel="stylesheet" href="hmi.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="plant">
+    <div class="logo">L3</div>
+    <div>
+      <div class="plant-name">Northfield Works &mdash; Line 3</div>
+      <div class="plant-sub">Blending &amp; Transfer</div>
+    </div>
+  </div>
+  <div class="screen-title">Overview</div>
+  <div class="status-cluster">
+    <div class="pill online"><span class="led"></span>PLC ONLINE</div>
+    <div class="stat-item"><div class="label">Operator</div><div class="value">J. HALE</div></div>
+    <div class="stat-item"><div class="label">Plant Time</div><div class="value" id="clock">06:42:18</div></div>
+  </div>
+</header>
+
+<main class="subpage">
+  <section class="subpage-main">
+    <div class="panel" style="flex:1;">
+      <h1>Process Overview</h1>
+      <div class="rule"></div>
+      <p>Plant mimic for the Line 3 blending and transfer circuit &mdash; intake, blend tank,
+         transfer pumps and the discharge header, each with live state, flow and level readouts.</p>
+      <p>Equipment symbols animate with the live process values and can be selected to open the
+         faceplate for that item.</p>
+      <div class="placeholder-note">
+        PLACEHOLDER SCREEN &mdash; the mimic graphics for this screen are not part of this mock-up.
+        Use HOME below to return to the navigation screen.
+      </div>
+    </div>
+  </section>
+
+  <aside class="subpage-side">
+    <div class="side-card">
+      <h2>Screen Status</h2>
+      <div class="summary-row"><span class="k">Line state</span><span class="v ok">RUNNING</span></div>
+      <div class="summary-row"><span class="k">Batch no.</span><span class="v">B-2418</span></div>
+      <div class="summary-row"><span class="k">Equipment</span><span class="v">6 <span class="u">items</span></span></div>
+    </div>
+    <div class="side-card">
+      <h2>Last Refresh</h2>
+      <div class="summary-row"><span class="k">Cycle</span><span class="v">500 <span class="u">ms</span></span></div>
+      <div class="summary-row"><span class="k">Quality</span><span class="v ok">GOOD</span></div>
+    </div>
+  </aside>
+</main>
+
+<footer class="bottombar">
+  <a class="home-btn" href="home.html">
+    <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+         stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3.5 11.5 12 4l8.5 7.5"></path>
+      <path d="M5.8 10.2V20h12.4v-9.8"></path>
+    </svg>
+    Home
+  </a>
+
+  <div class="crumb-tabs">
+    <a class="current" href="overview.html">Overview</a>
+    <a href="alarms.html">Alarms</a>
+    <a href="settings.html">Settings</a>
+    <a href="trends.html">Trends</a>
+    <a href="diagnostics.html">Diagnostics</a>
+  </div>
+
+  <div class="strip">
+    <span class="prio hi">HIGH</span>
+    <span class="a-time">06:41:52</span>
+    <span>P301_TransferPump &mdash; motor overload tripped</span>
+  </div>
+</footer>
+
+<script>
+(function () {
+  var el = document.getElementById('clock');
+  function tick() {
+    var d = new Date();
+    function p(n) { return (n < 10 ? '0' : '') + n; }
+    el.textContent = p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds());
+  }
+  tick(); setInterval(tick, 1000);
+})();
+</script>
+
+</body>
+</html>

@@ -86,6 +86,32 @@ public interface IOpennessGateway : IDisposable
     IReadOnlyList<HmiSchemaReport> EnumerateHmiSchema(string screenFilter, int maxItems);
 
     /// <summary>
+    /// Deep metamodel dump for ONE classic screen: every attribute the object declares, and every
+    /// COMPOSITION it owns. Read-only.
+    ///
+    /// Exists to answer one question exhaustively: a classic <c>Screen</c>'s typed surface is
+    /// <c>Name</c>, <c>Parent</c> and <c>Export</c> - nothing else - so if its contents are reachable
+    /// at all it must be through a composition the typed API does not surface as a property.
+    /// <c>GetCompositionInfos()</c> is the only way to ask that question. A negative answer here is
+    /// as valuable as a positive one and must be reported, not swallowed.
+    /// </summary>
+    IReadOnlyList<string> InspectClassicScreen(string screenName);
+
+    /// <summary>
+    /// Clones a classic screen through the LIBRARY rather than through a file: the screen becomes a
+    /// master copy (<c>MasterCopies.Create</c>, legal because <c>Screen</c> implements
+    /// <c>IMasterCopySource</c>), and a new screen is built from it (<c>Screens.CreateFrom</c>).
+    /// Returns (master copy name, new screen name).
+    /// </summary>
+    /// <remarks>
+    /// WRITES. This is the last route by which a classic screen can be duplicated without passing
+    /// through SimaticML, and it is the probe for whether content the exporter cannot represent
+    /// survives a copy that never becomes a document. <c>MasterCopy</c> has no <c>Export</c> of its
+    /// own, so a positive result buys REPRODUCTION, never AUTHORING.
+    /// </remarks>
+    (string MasterCopy, string NewScreen) CloneScreenViaMasterCopy(string screenName);
+
+    /// <summary>
     /// Creates one screen (and optionally a few static items on it), runs <c>Validate()</c>, and
     /// saves. **The only writing method in the HMI half of this interface** — kept separate from the
     /// walker on purpose so that reading can never become writing by accident.
@@ -207,6 +233,31 @@ public interface IOpennessGateway : IDisposable
     /// <see cref="ExportType"/>.
     /// </summary>
     void ExportTagTable(string tagTableName, string? deviceFilter, string outPath);
+
+    /// <summary>
+    /// Exports a CLASSIC HMI screen as SimaticML. Same <paramref name="deviceFilter"/>
+    /// disambiguation as <see cref="ExportBlock"/>.
+    /// </summary>
+    /// <remarks>
+    /// Classic only, and the asymmetry is the point: a classic screen has NO object model
+    /// (<c>Siemens.Engineering.Hmi.Screen.Screen</c> exposes no <c>ScreenItems</c>), so the exported
+    /// file is the only surface an editor can reach — the exact relationship SimaticML has to LAD.
+    /// A Unified screen is the converse: full object model, and <b>no export in any form</b>. So a
+    /// Unified target is REFUSED BY NAME (<see cref="ScreenExportNotSupportedOnUnifiedException"/>)
+    /// rather than returning nothing, because an empty result reads downstream as "no such screen".
+    /// </remarks>
+    void ExportScreen(string screenName, string? deviceFilter, string outPath, string exportOptionsName);
+
+    /// <summary>
+    /// Imports CLASSIC HMI screens from SimaticML into the resolved HMI device's ScreenFolder.
+    /// Returns the screen names the project holds for each file after the import.
+    /// </summary>
+    /// <remarks>
+    /// Classic only, for the same reason as <see cref="ExportScreen"/>: this is the ONLY way content
+    /// gets into a classic screen at all - <c>ScreenComposition</c> has no <c>Create</c>, so a screen
+    /// arrives by SimaticML import, library copy or master copy and by no other route.
+    /// </remarks>
+    IReadOnlyList<string> ImportScreens(string? deviceFilter, IReadOnlyList<string> files);
 
     /// <summary>
     /// Imports <paramref name="files"/> into the block group at <paramref name="groupPath"/>
@@ -520,6 +571,46 @@ public sealed class AmbiguousTagTableException : Exception
 {
     public AmbiguousTagTableException(string tagTableName, IEnumerable<string> paths)
         : base($"Tag table '{tagTableName}' exists in more than one place: {string.Join(", ", paths)}. Pass --device to disambiguate.")
+    {
+    }
+}
+
+/// <summary>Names the FILE that failed. A bare exception from a multi-file import is
+/// indistinguishable from the injected fault being detected, which makes a fault matrix unreadable.</summary>
+public sealed class ScreenImportFailedException : Exception
+{
+    public ScreenImportFailedException(string file, string reason)
+        : base($"Screen import failed for '{System.IO.Path.GetFileName(file)}': {reason}")
+    {
+    }
+}
+
+public sealed class ScreenNotFoundException : Exception
+{
+    public ScreenNotFoundException(string screenName)
+        : base($"No classic HMI screen named '{screenName}' found in the project.")
+    {
+    }
+}
+
+public sealed class AmbiguousScreenException : Exception
+{
+    public AmbiguousScreenException(string screenName, IEnumerable<string> paths)
+        : base($"Screen '{screenName}' exists in more than one place: {string.Join(", ", paths)}. Pass --device to disambiguate.")
+    {
+    }
+}
+
+/// <summary>
+/// A Unified device carries a screen of this name, and Unified screens do not export in ANY form —
+/// verified five separate ways (docs/notes/openness-hmi-api-survey.md, hmi-rdf-store.md). Refusing
+/// by name rather than returning an empty result: silence here would read downstream as "the screen
+/// does not exist", which is a different and wrong conclusion. Empty is not clean.
+/// </summary>
+public sealed class ScreenExportNotSupportedOnUnifiedException : Exception
+{
+    public ScreenExportNotSupportedOnUnifiedException(string screenName, string devicePath)
+        : base($"Screen '{screenName}' is on Unified device '{devicePath}'. WinCC Unified has no screen export - not this tool's limitation, the API has none. Use `hmi --screen` to read it via the property walk instead.")
     {
     }
 }

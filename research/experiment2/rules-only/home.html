@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>HOME - LINE 3</title>
+<link rel="stylesheet" href="hmi.css">
+</head>
+<body>
+<div class="screen">
+
+  <div class="hdr">
+    <div class="hdr-id">
+      <div class="hdr-line">LINE 3 - MIXING AND TRANSFER</div>
+      <div class="hdr-site">NORTHFIELD WORKS / PLC1 / HOME</div>
+    </div>
+    <div class="hdr-clock">
+      <div class="hdr-time" id="clk">14:32:07</div>
+      <div class="hdr-date" id="dat">2026-08-14 FRI</div>
+    </div>
+  </div>
+
+  <div class="main">
+
+    <div class="nav">
+
+      <a class="navbtn" href="overview.html">
+        <span class="idx">1</span>
+        <span class="lbl">OVERVIEW</span>
+        <span class="sub">PLANT STATE</span>
+      </a>
+
+      <a class="navbtn" href="alarms.html">
+        <span class="idx">2</span>
+        <span class="lbl">ALARMS</span>
+        <span class="sub">LIST AND ACKNOWLEDGE</span>
+      </a>
+
+      <a class="navbtn" href="settings.html">
+        <span class="idx">3</span>
+        <span class="lbl">SETTINGS</span>
+        <span class="sub">SETPOINTS AND LIMITS</span>
+      </a>
+
+      <a class="navbtn" href="trends.html">
+        <span class="idx">4</span>
+        <span class="lbl">TRENDS</span>
+        <span class="sub">LOGGED VALUES</span>
+      </a>
+
+      <a class="navbtn" href="diagnostics.html">
+        <span class="idx">5</span>
+        <span class="lbl">DIAGNOSTICS</span>
+        <span class="sub">DEVICE AND NETWORK</span>
+      </a>
+
+      <div class="navcell-blank"></div>
+
+    </div>
+
+    <div class="cmd">
+      <div class="cmd-title">LINE COMMAND</div>
+
+      <button class="cmdbtn" type="button">START
+        <span class="cmdsub">REQUEST LINE START</span>
+      </button>
+
+      <button class="cmdbtn cmdbtn-stop" type="button">STOP
+        <span class="cmdsub">CONTROLLED LINE STOP</span>
+      </button>
+
+      <button class="cmdbtn" type="button">RESET
+        <span class="cmdsub">CLEAR LATCHED FAULTS</span>
+      </button>
+    </div>
+
+  </div>
+
+  <div class="banner">
+
+    <div class="bnr-head">
+      <div class="c-sev">SEVERITY</div>
+      <div class="c-time">TIME</div>
+      <div class="c-tag">TAG</div>
+      <div class="c-desc">DESCRIPTION</div>
+      <div class="c-stat">STATE</div>
+    </div>
+
+    <div class="arow arow-high unack">
+      <div class="c-sev sev-high">HIGH</div>
+      <div class="c-time">14:31:52</div>
+      <div class="c-tag">TT_3104_TEMP</div>
+      <div class="c-desc">Mixer 3104 bearing temperature above high limit</div>
+      <div class="c-stat">UNACK</div>
+    </div>
+
+    <div class="arow arow-warn">
+      <div class="c-sev sev-warn">WARN</div>
+      <div class="c-time">14:28:10</div>
+      <div class="c-tag">LT_3210_LEVEL</div>
+      <div class="c-desc">Transfer tank 3210 level below low warning limit</div>
+      <div class="c-stat">ACK</div>
+    </div>
+
+    <div class="arow arow-none">
+      <div class="c-sev">EVENT</div>
+      <div class="c-time">14:26:44</div>
+      <div class="c-tag">FB_PUMP_3220</div>
+      <div class="c-desc">Pump 3220 switched to local control at panel</div>
+      <div class="c-stat">ACK</div>
+    </div>
+
+  </div>
+
+</div>
+
+<script>
+(function () {
+  var days = ["SUN","MON","TUE","WED","THU","FRI","SAT"];
+  function two(n) { return (n < 10 ? "0" : "") + n; }
+  function tick() {
+    var d = new Date();
+    document.getElementById("clk").textContent =
+      two(d.getHours()) + ":" + two(d.getMinutes()) + ":" + two(d.getSeconds());
+    document.getElementById("dat").textContent =
+      d.getFullYear() + "-" + two(d.getMonth() + 1) + "-" + two(d.getDate())
+      + " " + days[d.getDay()];
+  }
+  tick();
+  setInterval(tick, 1000);
+})();
+</script>
+
+</body>
+</html>

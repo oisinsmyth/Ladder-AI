@@ -1,0 +1,482 @@
+/* ============================================================
+   WinCC Unified style operator panel - fixed 1280 x 800
+   All geometry in whole pixels. No media queries, no scrolling.
+   ============================================================ */
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body {
+  width: 1280px;
+  height: 800px;
+  overflow: hidden;
+  background: #0d1013;
+  font-family: "Segoe UI", Tahoma, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  cursor: default;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.screen {
+  position: relative;
+  width: 1280px;
+  height: 800px;
+  background: #191d22;
+  overflow: hidden;
+}
+
+/* ---------------- Header (1280 x 72) ---------------- */
+
+.header {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 1280px;
+  height: 72px;
+  background: #232a32;
+  border-bottom: 3px solid #3d78c8;
+}
+
+.hdr-plant {
+  position: absolute;
+  left: 20px;
+  top: 8px;
+  width: 620px;
+  height: 32px;
+  color: #ffffff;
+  font-size: 26px;
+  line-height: 32px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.hdr-sub {
+  position: absolute;
+  left: 20px;
+  top: 40px;
+  width: 620px;
+  height: 22px;
+  color: #93a1b0;
+  font-size: 15px;
+  line-height: 22px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.hdr-state {
+  position: absolute;
+  left: 700px;
+  top: 16px;
+  width: 220px;
+  height: 40px;
+  background: #16351f;
+  border: 2px solid #2e9e4f;
+  color: #6ee08d;
+  font-size: 19px;
+  line-height: 36px;
+  font-weight: 600;
+  text-align: center;
+  letter-spacing: 1px;
+}
+
+.hdr-time {
+  position: absolute;
+  left: 940px;
+  top: 8px;
+  width: 320px;
+  height: 36px;
+  color: #ffffff;
+  font-size: 30px;
+  line-height: 36px;
+  font-weight: 600;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.hdr-date {
+  position: absolute;
+  left: 940px;
+  top: 44px;
+  width: 320px;
+  height: 20px;
+  color: #93a1b0;
+  font-size: 15px;
+  line-height: 20px;
+  text-align: right;
+}
+
+/* ---------------- Home main area (1280 x 608) ---------------- */
+
+.main {
+  position: absolute;
+  left: 0;
+  top: 72px;
+  width: 1280px;
+  height: 608px;
+  background: #191d22;
+}
+
+/* Navigation tiles */
+
+.tile {
+  position: absolute;
+  display: block;
+  background: #2b333d;
+  border: 2px solid #46525f;
+  border-top-color: #5c6b7a;
+  color: #e8edf2;
+  text-decoration: none;
+  overflow: hidden;
+}
+
+.tile:active {
+  background: #3d78c8;
+  border-color: #7fb0ec;
+}
+
+.tile-num {
+  position: absolute;
+  left: 16px;
+  top: 12px;
+  width: 40px;
+  height: 28px;
+  color: #7e8d9c;
+  font-size: 20px;
+  line-height: 28px;
+  font-weight: 700;
+}
+
+.tile-label {
+  position: absolute;
+  left: 16px;
+  width: 402px;
+  height: 44px;
+  color: #ffffff;
+  font-size: 34px;
+  line-height: 44px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.tile-note {
+  position: absolute;
+  left: 16px;
+  width: 402px;
+  height: 26px;
+  color: #9fb0c0;
+  font-size: 17px;
+  line-height: 26px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+/* Row 1: three tiles, 284 wide */
+.t1 { left: 16px;  top: 16px;  width: 284px; height: 280px; }
+.t2 { left: 316px; top: 16px;  width: 284px; height: 280px; }
+.t3 { left: 616px; top: 16px;  width: 284px; height: 280px; }
+/* Row 2: two tiles, 434 wide */
+.t4 { left: 16px;  top: 312px; width: 434px; height: 280px; }
+.t5 { left: 466px; top: 312px; width: 434px; height: 280px; }
+
+.t1 .tile-label, .t2 .tile-label, .t3 .tile-label { top: 178px; width: 252px; }
+.t1 .tile-note,  .t2 .tile-note,  .t3 .tile-note  { top: 226px; width: 252px; }
+.t4 .tile-label, .t5 .tile-label { top: 178px; width: 402px; }
+.t4 .tile-note,  .t5 .tile-note  { top: 226px; width: 402px; }
+
+/* Simple glyph blocks - deliberately plain, no icon library */
+.tile-mark {
+  position: absolute;
+  left: 16px;
+  top: 56px;
+  width: 96px;
+  height: 96px;
+  border: 6px solid #6c8fb8;
+  background: #212831;
+}
+.mark-a { border-radius: 0; }
+.mark-b { border-radius: 48px; border-color: #c8873d; }
+.mark-c { border-radius: 0; border-color: #7e8d9c; }
+.mark-d { border-radius: 0; border-color: #4fa3a3; border-width: 6px 6px 20px 20px; }
+.mark-e { border-radius: 48px; border-color: #8f79c0; border-width: 20px; }
+
+/* Command buttons column (x = 916, width 348) */
+
+.cmd-title {
+  position: absolute;
+  left: 916px;
+  top: 0px;
+  width: 348px;
+  height: 16px;
+}
+
+.cmd {
+  position: absolute;
+  left: 916px;
+  width: 348px;
+  height: 176px;
+  border: 4px solid #000000;
+  color: #ffffff;
+  font-size: 46px;
+  line-height: 168px;
+  font-weight: 700;
+  letter-spacing: 4px;
+  text-align: center;
+  overflow: hidden;
+}
+
+.cmd-start { top: 16px;  background: #1f7a3a; border-color: #35c163; }
+.cmd-stop  { top: 216px; background: #a01f1f; border-color: #e05454; }
+.cmd-reset { top: 416px; background: #4a5563; border-color: #7f8d9c; }
+
+.cmd:active { filter: brightness(1.35); }
+
+/* ---------------- Alarm banner (1280 x 120, at y = 680) ---------------- */
+
+.banner {
+  position: absolute;
+  left: 0;
+  top: 680px;
+  width: 1280px;
+  height: 120px;
+  background: #14181c;
+  border-top: 3px solid #46525f;
+}
+
+.banner-bar {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 1280px;
+  height: 27px;
+  background: #232a32;
+}
+
+.banner-bar-txt {
+  position: absolute;
+  left: 12px;
+  top: 0;
+  width: 500px;
+  height: 27px;
+  color: #c8d4e0;
+  font-size: 15px;
+  line-height: 27px;
+  font-weight: 600;
+  letter-spacing: 1px;
+}
+
+.banner-count {
+  position: absolute;
+  left: 1130px;
+  top: 0;
+  width: 138px;
+  height: 27px;
+  color: #ff8c8c;
+  font-size: 15px;
+  line-height: 27px;
+  font-weight: 600;
+  text-align: right;
+}
+
+.alarm {
+  position: absolute;
+  left: 0;
+  width: 1280px;
+  height: 30px;
+  overflow: hidden;
+}
+.a1 { top: 27px; }
+.a2 { top: 57px; background: #171b20; }
+.a3 { top: 87px; }
+
+.al-dot {
+  position: absolute;
+  left: 12px;
+  top: 9px;
+  width: 12px;
+  height: 12px;
+  background: #7e8d9c;
+}
+.al-time {
+  position: absolute;
+  left: 36px;
+  top: 0;
+  width: 100px;
+  height: 30px;
+  color: #b8c4d0;
+  font-size: 16px;
+  line-height: 30px;
+  font-variant-numeric: tabular-nums;
+}
+.al-tag {
+  position: absolute;
+  left: 140px;
+  top: 0;
+  width: 210px;
+  height: 30px;
+  color: #d8e2ec;
+  font-size: 16px;
+  line-height: 30px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.al-text {
+  position: absolute;
+  left: 356px;
+  top: 0;
+  width: 590px;
+  height: 30px;
+  color: #e8edf2;
+  font-size: 16px;
+  line-height: 30px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.al-prio {
+  position: absolute;
+  left: 952px;
+  top: 0;
+  width: 160px;
+  height: 30px;
+  font-size: 16px;
+  line-height: 30px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+.al-state {
+  position: absolute;
+  left: 1118px;
+  top: 0;
+  width: 150px;
+  height: 30px;
+  color: #b8c4d0;
+  font-size: 16px;
+  line-height: 30px;
+  text-align: right;
+  letter-spacing: 1px;
+}
+
+.sev-alarm .al-dot  { background: #ef4444; }
+.sev-alarm .al-prio { color: #ff7b7b; }
+.sev-alarm .al-text { color: #ffd9d9; }
+.sev-warn  .al-dot  { background: #f0a500; }
+.sev-warn  .al-prio { color: #ffc247; }
+.sev-warn  .al-text { color: #ffeccc; }
+.sev-info  .al-dot  { background: #6c8fb8; }
+.sev-info  .al-prio { color: #9fc0e4; }
+
+.unacked .al-dot { animation: blink 1s steps(1, end) infinite; }
+
+@keyframes blink {
+  0%   { opacity: 1; }
+  50%  { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+/* ---------------- Sub-page layout ---------------- */
+
+.sub-main {
+  position: absolute;
+  left: 0;
+  top: 72px;
+  width: 1280px;
+  height: 656px;
+  background: #191d22;
+}
+
+.panel {
+  position: absolute;
+  left: 16px;
+  top: 16px;
+  width: 1248px;
+  height: 624px;
+  background: #232a32;
+  border: 2px solid #46525f;
+}
+
+.panel h1 {
+  position: absolute;
+  left: 32px;
+  top: 28px;
+  width: 1180px;
+  height: 56px;
+  color: #ffffff;
+  font-size: 44px;
+  line-height: 56px;
+  font-weight: 600;
+  letter-spacing: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.panel .rule {
+  position: absolute;
+  left: 32px;
+  top: 96px;
+  width: 1180px;
+  height: 3px;
+  background: #3d78c8;
+}
+
+.panel p {
+  position: absolute;
+  left: 32px;
+  width: 1180px;
+  height: 32px;
+  color: #c8d4e0;
+  font-size: 22px;
+  line-height: 32px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.panel .line1 { top: 128px; }
+.panel .line2 { top: 168px; color: #93a1b0; }
+
+.sub-footer {
+  position: absolute;
+  left: 0;
+  top: 728px;
+  width: 1280px;
+  height: 72px;
+  background: #14181c;
+  border-top: 3px solid #46525f;
+}
+
+.home-btn {
+  position: absolute;
+  left: 16px;
+  top: 8px;
+  width: 300px;
+  height: 56px;
+  background: #3d78c8;
+  border: 3px solid #7fb0ec;
+  color: #ffffff;
+  font-size: 26px;
+  line-height: 50px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-align: center;
+  text-decoration: none;
+  overflow: hidden;
+}
+
+.home-btn:active { background: #2b5d9f; }
+
+.footer-note {
+  position: absolute;
+  left: 340px;
+  top: 8px;
+  width: 924px;
+  height: 56px;
+  color: #7e8d9c;
+  font-size: 17px;
+  line-height: 56px;
+  text-align: right;
+  white-space: nowrap;
+  overflow: hidden;
+}

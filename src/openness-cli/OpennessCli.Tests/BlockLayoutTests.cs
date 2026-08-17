@@ -651,6 +651,14 @@ internal sealed class FakeGateway : IOpennessGateway
 
     public void ExportTagTable(string tagTableName, string? deviceFilter, string outPath) => throw new NotSupportedException();
 
+    public void ExportScreen(string screenName, string? deviceFilter, string outPath, string exportOptionsName) => throw new NotSupportedException();
+
+    public IReadOnlyList<string> ImportScreens(string? deviceFilter, IReadOnlyList<string> files) => throw new NotSupportedException();
+
+    public IReadOnlyList<string> InspectClassicScreen(string screenName) => throw new NotSupportedException();
+
+    public (string MasterCopy, string NewScreen) CloneScreenViaMasterCopy(string screenName) => throw new NotSupportedException();
+
     // ---- import ---------------------------------------------------------------------------------
     //
     // Configured, not stubbed, for this file's usual reason: a member handing back a default empty

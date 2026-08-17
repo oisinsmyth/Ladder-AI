@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Demo home screen</title>
+<style>
+  /* House stylesheet - docs/17-hmi-conventions.md.
+     Sizes are px derived from millimetres for a KTP700 Basic (5.19 px/mm H, 5.59 px/mm V) per
+     hmi/sizing-standard.md. They are NOT chosen for how they look on this monitor. */
+  :root {
+    --field:  rgb(182, 182, 182);  /* H-101 low-chroma grey */
+    --panel:  rgb(200, 200, 200);
+    --ink:    rgb(0, 0, 0);        /* H-301 dark text */
+    --line:   rgb(90, 90, 90);
+    --stop:   rgb(176, 42, 30);    /* H-107 red, STOP only */
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 800px; height: 480px; }
+  body {
+    background: var(--field);
+    color: var(--ink);
+    font-family: Tahoma, sans-serif;
+    font-size: 15px;
+  }
+  .bar   { position: absolute; left: 0; top: 0; width: 800px; height: 40px;
+           background: var(--panel); border-bottom: 1px solid var(--line); }
+  .title { position: absolute; left: 12px; top: 10px; width: 400px; height: 20px; font-size: 17px; }
+  .clock { position: absolute; left: 640px; top: 10px; width: 148px; height: 20px; }
+
+  /* H-402 primary action 15 mm -> 78 x 84 px; H-403 safety-critical 20 mm -> 104 x 112 px.
+     H-404 recommended gap 5 mm -> 26 px. */
+  .btn   { position: absolute; top: 70px; width: 140px; height: 112px;
+           background: rgb(210, 210, 210); border: 1px solid var(--line);
+           font-size: 16px; color: var(--ink); }
+  #start { left: 24px; }
+  #stop  { left: 190px; background: var(--stop); color: rgb(255, 255, 255); }
+  #reset { left: 356px; }
+
+  .label { position: absolute; height: 20px; }
+  #l1 { left: 24px;  top: 200px; width: 200px; }
+  #l2 { left: 24px;  top: 226px; width: 200px; }
+  #v1 { left: 240px; top: 200px; width: 120px; }
+  #v2 { left: 240px; top: 226px; width: 120px; }
+
+  .sep { position: absolute; left: 24px; top: 262px; width: 752px; height: 1px;
+         background: var(--line); }
+
+  /* The alarm view cannot be authored on classic HMI at all - measured. This is the placeholder the
+     engineer replaces by hand, and the emitter also writes it into a hand-off checklist. */
+  #alarm { position: absolute; left: 24px; top: 300px; width: 752px; height: 150px; }
+</style>
+</head>
+<body>
+
+  <div class="bar"   data-hmi="Rectangle"></div>
+  <div class="title" data-hmi="Text">Shredder Line - Home</div>
+  <div class="clock" data-hmi="Text">Shift A</div>
+
+  <button id="start" class="btn" data-hmi="Button">START</button>
+  <button id="stop"  class="btn" data-hmi="Button" data-hmi-safety>STOP</button>
+  <button id="reset" class="btn" data-hmi="Button">RESET</button>
+
+  <div id="l1" class="label" data-hmi="Text">Line status</div>
+  <div id="l2" class="label" data-hmi="Text">Running hours</div>
+  <div id="v1" class="label" data-hmi="Text">STOPPED</div>
+  <div id="v2" class="label" data-hmi="Text">0.0 h</div>
+
+  <div class="sep" data-hmi="Line"></div>
+
+  <div id="alarm" data-hmi="AlarmPlaceholder"></div>
+
+</body>
+</html>

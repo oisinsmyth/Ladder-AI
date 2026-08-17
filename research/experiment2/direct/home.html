@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Home - Line 3 Packing</title>
+<link rel="stylesheet" href="hmi.css">
+</head>
+<body>
+<div class="screen">
+
+  <!-- ===================== HEADER ===================== -->
+  <div class="header">
+    <div class="hdr-plant">NORTHFIELD WORKS &nbsp;&bull;&nbsp; LINE 3 PACKING</div>
+    <div class="hdr-sub">PLC1 6ES7 214-1AG40-0XB0 &nbsp;|&nbsp; Operator: SHIFT B</div>
+    <div class="hdr-state">RUNNING</div>
+    <div class="hdr-time" id="clock">--:--:--</div>
+    <div class="hdr-date" id="datestamp">--</div>
+  </div>
+
+  <!-- ===================== MAIN ===================== -->
+  <div class="main">
+
+    <a class="tile t1" href="overview.html">
+      <div class="tile-num">1</div>
+      <div class="tile-mark mark-a"></div>
+      <div class="tile-label">OVERVIEW</div>
+      <div class="tile-note">Plant status</div>
+    </a>
+
+    <a class="tile t2" href="alarms.html">
+      <div class="tile-num">2</div>
+      <div class="tile-mark mark-b"></div>
+      <div class="tile-label">ALARMS</div>
+      <div class="tile-note">Active and history</div>
+    </a>
+
+    <a class="tile t3" href="settings.html">
+      <div class="tile-num">3</div>
+      <div class="tile-mark mark-c"></div>
+      <div class="tile-label">SETTINGS</div>
+      <div class="tile-note">Setpoints and modes</div>
+    </a>
+
+    <a class="tile t4" href="trends.html">
+      <div class="tile-num">4</div>
+      <div class="tile-mark mark-d"></div>
+      <div class="tile-label">TRENDS</div>
+      <div class="tile-note">Recorded process values</div>
+    </a>
+
+    <a class="tile t5" href="diagnostics.html">
+      <div class="tile-num">5</div>
+      <div class="tile-mark mark-e"></div>
+      <div class="tile-label">DIAGNOSTICS</div>
+      <div class="tile-note">Controller and network status</div>
+    </a>
+
+    <button class="cmd cmd-start" type="button">START</button>
+    <button class="cmd cmd-stop"  type="button">STOP</button>
+    <button class="cmd cmd-reset" type="button">RESET</button>
+
+  </div>
+
+  <!-- ===================== ALARM BANNER ===================== -->
+  <div class="banner">
+    <div class="banner-bar">
+      <div class="banner-bar-txt">ACTIVE ALARMS</div>
+      <div class="banner-count">2 UNACKNOWLEDGED</div>
+    </div>
+
+    <div class="alarm a1 sev-alarm unacked">
+      <div class="al-dot"></div>
+      <div class="al-time">10:42:07</div>
+      <div class="al-tag">CV301_MTR</div>
+      <div class="al-text">Infeed conveyor motor overload tripped</div>
+      <div class="al-prio">ALARM</div>
+      <div class="al-state">INCOMING</div>
+    </div>
+
+    <div class="alarm a2 sev-warn unacked">
+      <div class="al-dot"></div>
+      <div class="al-time">10:39:51</div>
+      <div class="al-tag">HP210_LVL</div>
+      <div class="al-text">Hopper level below low setpoint</div>
+      <div class="al-prio">WARNING</div>
+      <div class="al-state">INCOMING</div>
+    </div>
+
+    <div class="alarm a3 sev-info">
+      <div class="al-dot"></div>
+      <div class="al-time">10:31:16</div>
+      <div class="al-tag">PK120_STN</div>
+      <div class="al-text">Packer station in local mode</div>
+      <div class="al-prio">INFO</div>
+      <div class="al-state">ACKNOWLEDGED</div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+(function () {
+  var p = function (n) { return (n < 10 ? "0" : "") + n; };
+  var days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  var months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  function tick() {
+    var d = new Date();
+    document.getElementById("clock").textContent =
+      p(d.getHours()) + ":" + p(d.getMinutes()) + ":" + p(d.getSeconds());
+    document.getElementById("datestamp").textContent =
+      days[d.getDay()] + " " + p(d.getDate()) + " " + months[d.getMonth()] + " " + d.getFullYear();
+  }
+  tick();
+  setInterval(tick, 1000);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Alarms &mdash; Line 2 Operator Panel</title>
+<link rel="stylesheet" href="hmi.css">
+</head>
+<body>
+<div class="screen">
+
+  <header class="hdr" data-state="run">
+    <div class="hdr__id">
+      <div class="hdr__plant">Northfield Works</div>
+      <div class="hdr__area">Line 2 &middot; Aggregate handling</div>
+    </div>
+
+    <nav class="hdr__crumb" aria-label="Screen location">
+      <a href="home.html" style="color:inherit;text-decoration:none">Home</a>
+      <span class="sep">&#9656;</span>
+      <b>Alarms</b>
+    </nav>
+
+    <div class="hdr__spacer"></div>
+
+    <div class="hdr__stat">
+      <span class="statechip statechip--run"><i class="lamp"></i>Line running</span>
+      <span class="statechip statechip--alarm"><i class="lamp"></i>2 unacknowledged</span>
+      <span class="statechip statechip--net"><i class="lamp"></i>PLC online</span>
+
+      <div class="hdr__user">
+        <span class="who">D. Mahon</span>
+        <span class="role">Operator &middot; Shift B</span>
+      </div>
+
+      <div class="hdr__clock">
+        <span class="t" id="clock">14:26:41</span>
+        <span class="d" id="date">Fri 14 Aug 2026</span>
+      </div>
+    </div>
+  </header>
+
+  <main class="sub">
+    <section class="sheet sheet--alarm">
+      <div class="sheet__eyebrow">Screen 2 of 5 &middot; Alarms</div>
+      <h1 class="sheet__h">Alarms</h1>
+      <p class="sheet__p">
+        The complete active alarm list, filtered by priority or plant area, with single and bulk acknowledge and thirty days of alarm history behind it.
+      </p>
+      <p class="sheet__p">
+        The banner along the bottom of every screen carries the three most recent active alarms. This screen shows all of them, oldest first.
+      </p>
+      <div class="sheet__frame"><span>Alarm list renders here</span></div>
+      <div class="sheet__note">Placeholder screen &middot; list not populated in this mock-up</div>
+    </section>
+
+    <aside class="side">
+      <div class="side__card">
+        <h3>Alarm summary</h3>
+        <dl class="kv">
+          <dt>Critical</dt><dd class="is-warn">1</dd>
+          <dt>Warning</dt><dd>2</dd>
+          <dt>Unacknowledged</dt><dd class="is-warn">2</dd>
+          <dt>Oldest active</dt><dd>14:03:12</dd>
+          <dt>Last acknowledged</dt><dd>13:47:20</dd>
+          <dt>Suppressed</dt><dd>0</dd>
+        </dl>
+      </div>
+
+      <div class="side__card">
+        <h3>Go to screen</h3>
+        <nav class="navlist" aria-label="Other screens">
+          <a href="overview.html">Overview <span class="mark">&#9656;</span></a>
+          <a class="is-here" href="alarms.html">Alarms <span class="mark">&#9679;</span></a>
+          <a href="settings.html">Settings <span class="mark">&#9656;</span></a>
+          <a href="trends.html">Trends <span class="mark">&#9656;</span></a>
+          <a href="diagnostics.html">Diagnostics <span class="mark">&#9656;</span></a>
+        </nav>
+      </div>
+
+      <a class="key key--home" href="home.html">
+        <span class="key__in"><span>Home</span><span class="sub">Back to main screen</span></span>
+      </a>
+    </aside>
+  </main>
+
+  <section class="banner" aria-label="Active alarms">
+    <div class="banner__bar">
+      <span class="banner__title">Active alarms</span>
+      <span class="tally tally--alarm"><b>1</b> Critical</span>
+      <span class="tally tally--warn"><b>2</b> Warning</span>
+      <span class="tally"><b>14:22:07</b> Last event</span>
+      <div class="banner__spacer"></div>
+      <button class="minikey" type="button">Acknowledge all</button>
+    </div>
+
+    <div class="alarms">
+      <div class="alarms__hd" aria-hidden="true">
+        <span></span><span>Time</span><span>Tag</span><span>Priority</span>
+        <span>Message</span><span>State</span><span></span>
+      </div>
+
+      <div class="alarm alarm--crit alarm--unack">
+        <i class="sev"></i>
+        <span class="time">14:22:07</span>
+        <span class="tag">HP-201</span>
+        <span class="pri">Critical</span>
+        <span class="msg">Feed hopper blocked &mdash; level held above high-high for 30 s, feeder inhibited</span>
+        <span class="st">Active &middot; unack</span>
+        <span></span>
+      </div>
+
+      <div class="alarm alarm--warn alarm--unack">
+        <i class="sev"></i>
+        <span class="time">14:19:48</span>
+        <span class="tag">CV-202</span>
+        <span class="pri">Warning</span>
+        <span class="msg">Belt drift switch tripped on the right-hand side &mdash; running at reduced speed</span>
+        <span class="st">Active &middot; unack</span>
+        <span></span>
+      </div>
+
+      <div class="alarm alarm--warn">
+        <i class="sev"></i>
+        <span class="time">14:03:12</span>
+        <span class="tag">DE-101</span>
+        <span class="pri">Warning</span>
+        <span class="msg">Dust extractor differential pressure below limit &mdash; check filter bags</span>
+        <span class="st">Active &middot; acked</span>
+        <span></span>
+      </div>
+    </div>
+  </section>
+
+</div>
+<script src="panel.js"></script>
+</body>
+</html>

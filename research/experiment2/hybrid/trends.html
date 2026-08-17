@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>TRENDS - Line 3 Screening Plant</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="screen">
+
+  <div class="hdr">
+    <div class="hdr-plant">MILLBROOK SCREENING PLANT</div>
+    <div class="hdr-line">LINE 3 &nbsp;/&nbsp; PANEL HMI-03 &nbsp;/&nbsp; OPERATOR</div>
+
+    <div class="hdr-state">
+      <div class="hdr-state-lbl">LINE STATE</div>
+      <div class="hdr-state-val">RUNNING &mdash; AUTO</div>
+    </div>
+
+    <div class="hdr-clock num" id="clk">14:07:32</div>
+    <div class="hdr-date num" id="dat">FRI 14 AUG 2026</div>
+  </div>
+
+  <div class="cap" style="top:88px; left:16px; width:600px;">SCREEN 4 OF 5</div>
+  <div class="rule" style="top:112px; left:16px; width:1248px; height:2px;"></div>
+
+  <div class="pg-title">TRENDS</div>
+  <div class="pg-l1">Logged process values plotted over the selected time window.</div>
+  <div class="pg-l2">Placeholder screen. No trend content is drawn on this mock-up.</div>
+  <div class="pg-meta num">SCREEN ID 1004 &nbsp;&nbsp; REV 00 &nbsp;&nbsp; PLACEHOLDER</div>
+
+  <div class="rule" style="top:608px; left:16px; width:1248px; height:2px;"></div>
+
+  <a class="back" href="home.html">
+    <div class="back-name">HOME</div>
+    <div class="back-sub">RETURN TO NAVIGATION SCREEN</div>
+  </a>
+
+</div>
+
+<script>
+(function () {
+  var days = ['SUN','MON','TUE','WED','THU','FRI','SAT'];
+  var mons = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+  function pad(n) { return (n < 10 ? '0' : '') + n; }
+  function tick() {
+    var d = new Date();
+    document.getElementById('clk').textContent =
+      pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
+    document.getElementById('dat').textContent =
+      days[d.getDay()] + ' ' + pad(d.getDate()) + ' ' + mons[d.getMonth()] + ' ' + d.getFullYear();
+  }
+  tick();
+  setInterval(tick, 1000);
+})();
+</script>
+</body>
+</html>

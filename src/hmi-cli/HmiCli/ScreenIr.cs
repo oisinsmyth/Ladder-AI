@@ -1,0 +1,138 @@
+using System.Text.Json.Serialization;
+
+namespace HmiCli;
+
+/// <summary>One flattened element: absolute integer geometry plus the properties a check needs.</summary>
+public sealed record IrItem
+{
+    [JsonPropertyName("index")] public int Index { get; init; }
+
+    [JsonPropertyName("tag")] public string Tag { get; init; } = "";
+
+    /// <summary>The declared HMI item type from <c>data-hmi</c>, or null when the element is layout-only.</summary>
+    [JsonPropertyName("type")] public string? Type { get; init; }
+
+    [JsonPropertyName("left")] public double Left { get; init; }
+
+    [JsonPropertyName("top")] public double Top { get; init; }
+
+    [JsonPropertyName("width")] public double Width { get; init; }
+
+    [JsonPropertyName("height")] public double Height { get; init; }
+
+    [JsonPropertyName("zTier")] public int ZTier { get; init; }
+
+    [JsonPropertyName("interactive")] public bool Interactive { get; init; }
+
+    [JsonPropertyName("leaf")] public bool Leaf { get; init; }
+
+    /// <summary>True for item types that legitimately carry no geometry - H-505's exception.</summary>
+    [JsonPropertyName("geometryless")] public bool Geometryless { get; init; }
+
+    /// <summary>Declared layout-only: this element is deliberately NOT a screen object.</summary>
+    [JsonPropertyName("ignored")] public bool Ignored { get; init; }
+
+    /// <summary>
+    /// `data-hmi-override="H-104: the site's standard requires green for running"`.
+    ///
+    /// The house rules GUIDE the generator; the engineer directs it. An override names the rule and
+    /// gives a reason, and is always REPORTED rather than silently honoured - a suppression nobody
+    /// can see is indistinguishable from a checker that does not work.
+    /// </summary>
+    [JsonPropertyName("overrideSpec")] public string? OverrideSpec { get; init; }
+
+    [JsonPropertyName("safetyCritical")] public bool SafetyCritical { get; init; }
+
+    /// <summary>Declares H-205's carve-out: this element's motion IS the unacknowledged-alarm channel.</summary>
+    [JsonPropertyName("alarmFlash")] public bool AlarmFlash { get; init; }
+
+    [JsonPropertyName("bind")] public string? Bind { get; init; }
+
+    [JsonPropertyName("text")] public string? Text { get; init; }
+
+    [JsonPropertyName("backColor")] public string? BackColor { get; init; }
+
+    [JsonPropertyName("foreColor")] public string? ForeColor { get; init; }
+
+    [JsonPropertyName("borderColor")] public string? BorderColor { get; init; }
+
+    [JsonPropertyName("backgroundImage")] public string? BackgroundImage { get; init; }
+
+    [JsonPropertyName("boxShadow")] public string? BoxShadow { get; init; }
+
+    [JsonPropertyName("textShadow")] public string? TextShadow { get; init; }
+
+    [JsonPropertyName("borderRadius")] public string? BorderRadius { get; init; }
+
+    [JsonPropertyName("animationName")] public string? AnimationName { get; init; }
+
+    [JsonPropertyName("fontVariantNumeric")] public string? FontVariantNumeric { get; init; }
+
+    /// <summary>Computed CSS font-size in px. SimaticML's FontSize is also PIXELS, so this maps straight through.</summary>
+    [JsonPropertyName("fontSizePx")] public double FontSizePx { get; init; }
+
+    [JsonPropertyName("fontWeight")] public int FontWeight { get; init; }
+
+    /// <summary>CSS font-style: normal | italic | oblique.</summary>
+    [JsonPropertyName("fontStyleCss")] public string? FontStyleCss { get; init; }
+
+    /// <summary>The family that ACTUALLY rendered, measured - not the requested CSS stack.</summary>
+    [JsonPropertyName("fontFamilyUsed")] public string? FontFamilyUsed { get; init; }
+
+    [JsonPropertyName("fontFamilyCss")] public string? FontFamilyCss { get; init; }
+
+    /// <summary>Captured because an uppercased label in the browser and a mixed-case payload in the
+    /// panel look like a font difference when they are really a text difference.</summary>
+    [JsonPropertyName("textTransform")] public string? TextTransform { get; init; }
+
+    [JsonPropertyName("letterSpacing")] public string? LetterSpacing { get; init; }
+}
+
+/// <summary>
+/// The flattened screen. <see cref="Panel"/> is mandatory and travels with the artifact (H-407) -
+/// every downstream check needs it to convert a millimetre threshold, and none of them may guess.
+/// </summary>
+public sealed record ScreenIr
+{
+    [JsonPropertyName("panel")] public string Panel { get; init; } = "";
+
+    [JsonPropertyName("family")] public string Family { get; init; } = "Classic";
+
+    [JsonPropertyName("canvasWidth")] public int CanvasWidth { get; init; }
+
+    [JsonPropertyName("canvasHeight")] public int CanvasHeight { get; init; }
+
+    [JsonPropertyName("source")] public string Source { get; init; } = "";
+
+    [JsonPropertyName("chromeVersion")] public string ChromeVersion { get; init; } = "";
+
+    [JsonPropertyName("items")] public List<IrItem> Items { get; init; } = new();
+}
+
+public enum Severity
+{
+    Advisory,
+    Error,
+}
+
+public sealed record Finding(string RuleId, Severity Severity, string Message, int? ItemIndex = null)
+{
+    public override string ToString()
+    {
+        var where = ItemIndex is null ? "" : $" [item {ItemIndex}]";
+        return $"{(Severity == Severity.Error ? "ERROR" : "ADVISORY")} {RuleId}{where}: {Message}";
+    }
+}
+
+/// <summary>
+/// A check result that carries its own denominator. Every tool in this repo that reported a pass
+/// over zero comparisons eventually reported a false pass - drift-check, compare, reuse-scan,
+/// undriven-scan, compile-all. Five for five. So <see cref="Examined"/> is printed on every run and
+/// an empty examination is never a pass.
+/// </summary>
+public sealed record CheckResult(string CheckName, int Examined, IReadOnlyList<Finding> Findings)
+{
+    public bool NothingExamined => Examined == 0;
+
+    public int ErrorCount => Findings.Count(f => f.Severity == Severity.Error);
+}

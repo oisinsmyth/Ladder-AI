@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Home - Line 3 Screening Plant</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="screen">
+
+  <!-- ================= HEADER ================= -->
+  <div class="hdr">
+    <div class="hdr-plant">MILLBROOK SCREENING PLANT</div>
+    <div class="hdr-line">LINE 3 &nbsp;/&nbsp; PANEL HMI-03 &nbsp;/&nbsp; OPERATOR</div>
+
+    <div class="hdr-state">
+      <div class="hdr-state-lbl">LINE STATE</div>
+      <div class="hdr-state-val">RUNNING &mdash; AUTO</div>
+    </div>
+
+    <div class="hdr-clock num" id="clk">14:07:32</div>
+    <div class="hdr-date num" id="dat">FRI 14 AUG 2026</div>
+  </div>
+
+  <!-- ================= NAVIGATION ================= -->
+  <div class="cap" style="top:88px; left:16px; width:600px;">SCREENS</div>
+
+  <a class="nav" href="overview.html"    style="top:120px; left:16px;   width:240px; height:224px;">
+    <div class="nav-idx num">1</div>
+    <div class="nav-tile"></div>
+    <div class="nav-name">OVERVIEW</div>
+    <div class="nav-sub">Plant mimic and</div>
+    <div class="nav-sub2">equipment status</div>
+  </a>
+
+  <a class="nav" href="alarms.html"      style="top:120px; left:268px;  width:240px; height:224px;">
+    <div class="nav-idx num">2</div>
+    <div class="nav-tile"></div>
+    <div class="nav-name">ALARMS</div>
+    <div class="nav-sub">Active list, history</div>
+    <div class="nav-sub2">and acknowledge</div>
+    <div class="nav-badge num">2 UNACKNOWLEDGED</div>
+  </a>
+
+  <a class="nav" href="settings.html"    style="top:120px; left:520px;  width:240px; height:224px;">
+    <div class="nav-idx num">3</div>
+    <div class="nav-tile"></div>
+    <div class="nav-name">SETTINGS</div>
+    <div class="nav-sub">Setpoints, timers</div>
+    <div class="nav-sub2">and limits</div>
+  </a>
+
+  <a class="nav" href="trends.html"      style="top:120px; left:772px;  width:240px; height:224px;">
+    <div class="nav-idx num">4</div>
+    <div class="nav-tile"></div>
+    <div class="nav-name">TRENDS</div>
+    <div class="nav-sub">Logged process</div>
+    <div class="nav-sub2">values over time</div>
+  </a>
+
+  <a class="nav" href="diagnostics.html" style="top:120px; left:1024px; width:240px; height:224px;">
+    <div class="nav-idx num">5</div>
+    <div class="nav-tile"></div>
+    <div class="nav-name">DIAGNOSTICS</div>
+    <div class="nav-sub">Controller, network</div>
+    <div class="nav-sub2">and IO health</div>
+  </a>
+
+  <div class="rule" style="top:364px; left:16px; width:1248px; height:2px;"></div>
+
+  <!-- ================= COMMANDS ================= -->
+  <div class="cap" style="top:380px; left:16px; width:600px;">LINE COMMANDS</div>
+
+  <a class="cmd" href="#" style="top:412px; left:16px;  width:408px; height:168px;">
+    <div class="cmd-name">START</div>
+    <div class="cmd-sub">HOLD 2 s TO START LINE 3</div>
+  </a>
+
+  <a class="cmd cmd-stop" href="#" style="top:412px; left:436px; width:408px; height:168px;">
+    <div class="cmd-name">STOP</div>
+    <div class="cmd-sub">CONTROLLED STOP, SEQUENCED</div>
+  </a>
+
+  <a class="cmd" href="#" style="top:412px; left:856px; width:408px; height:168px;">
+    <div class="cmd-name">RESET</div>
+    <div class="cmd-sub">CLEAR LATCHED FAULTS</div>
+  </a>
+
+  <!-- ================= ALARM BANNER ================= -->
+  <div class="banner">
+    <div class="banner-bar">
+      <div class="banner-ttl">ACTIVE ALARMS</div>
+      <div class="banner-cnt num">4 ACTIVE &nbsp;/&nbsp; 2 UNACKNOWLEDGED &nbsp;/&nbsp; PAGE 1 OF 1</div>
+    </div>
+
+    <div class="arow crit unack" style="top:33px;">
+      <div class="a-bar"></div>
+      <div class="a-time num">14:06:58</div>
+      <div class="a-pri">HIGH</div>
+      <div class="a-tag num">FT-3041</div>
+      <div class="a-txt">Feed hopper level high &mdash; discharge conveyor blocked</div>
+      <div class="a-ack">UNACKNOWLEDGED</div>
+    </div>
+
+    <div class="arow warn unack" style="top:75px;">
+      <div class="a-bar"></div>
+      <div class="a-time num">14:05:11</div>
+      <div class="a-pri">LOW</div>
+      <div class="a-tag num">TT-3012</div>
+      <div class="a-txt">Screen drive bearing temperature above warning limit</div>
+      <div class="a-ack">UNACKNOWLEDGED</div>
+    </div>
+
+    <div class="arow crit" style="top:117px;">
+      <div class="a-bar"></div>
+      <div class="a-time num">13:58:04</div>
+      <div class="a-pri">HIGH</div>
+      <div class="a-tag num">MT-3003</div>
+      <div class="a-txt">Wash pump overload tripped &mdash; motor protection open</div>
+      <div class="a-ack">ACK 13:58:22</div>
+    </div>
+
+    <div class="arow warn" style="top:159px;">
+      <div class="a-bar"></div>
+      <div class="a-time num">13:44:37</div>
+      <div class="a-pri">LOW</div>
+      <div class="a-tag num">PT-3027</div>
+      <div class="a-txt">Wash water pressure below setpoint for longer than 30 s</div>
+      <div class="a-ack">ACK 13:45:02</div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+(function () {
+  var days = ['SUN','MON','TUE','WED','THU','FRI','SAT'];
+  var mons = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+  function pad(n) { return (n < 10 ? '0' : '') + n; }
+  function tick() {
+    var d = new Date();
+    document.getElementById('clk').textContent =
+      pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
+    document.getElementById('dat').textContent =
+      days[d.getDay()] + ' ' + pad(d.getDate()) + ' ' + mons[d.getMonth()] + ' ' + d.getFullYear();
+  }
+  tick();
+  setInterval(tick, 1000);
+})();
+</script>
+</body>
+</html>

@@ -18,7 +18,13 @@ Explicit list of what this project will not do. "Permanent" items are never revi
 ## Not now (revisit only via ADR)
 
 - Other PLC vendors (Rockwell, Beckhoff, Codesys) — designed-for but not built until Siemens pipeline is proven.
-- HMI engineering (screens, scripts, faceplates). HMI *documentation* (alarm tables) is in scope as data extraction.
+- ~~HMI engineering (screens, scripts, faceplates).~~ ✅ **LEFT THIS LIST 2026-08-17 — ADR-0007
+  ACCEPTED.** HMI engineering is now **active work**, at full screen-authoring size. Plan:
+  `hmi/PLAN.md`. First target is **Classic Basic** (a Basic 7"), anchored on a KTP900 Basic scratch
+  project. Retained as a struck-through entry rather than deleted, because this is the worked example
+  the "revisit only via ADR" rule exists to produce: it was on this list for months, it moved by a
+  written decision with its evidence attached, and it did not move by drift.
+  HMI *documentation* (alarm tables) was always in scope as data extraction and is unaffected.
 - Hardware configuration / network configuration via Openness.
 - Multi-user / team deployment — single engineering PC first.
 - Version-comparison against PLC online state.

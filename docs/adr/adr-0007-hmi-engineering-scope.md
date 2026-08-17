@@ -1,9 +1,9 @@
 # ADR-0007 — Should HMI engineering leave the "not now" list?
 
-- **Status:** **Proposed** — put to the owner, undecided. Nothing in this document changes scope, and
-  nothing may be built on it until it is accepted. `10-non-goals.md`'s "not now" line for HMI
-  engineering stands until then.
-- **Date:** 2026-08-08
+- **Status:** ✅ **ACCEPTED 2026-08-17** by the project owner. HMI engineering leaves
+  `10-non-goals.md`'s "Not now" list and becomes active work. The development plan is `hmi/PLAN.md`;
+  wave 1 was authorised for execution in the same instruction.
+- **Date:** 2026-08-08 · **Accepted:** 2026-08-17
 - **Relates to:** `10-non-goals.md` "Not now" (HMI engineering — screens, scripts, faceplates) ·
   `16-future-ideas.md` **FI-18** (PLC/HMI boundary skill), **FI-35** (alarm-list generation),
   **FI-10** (HMI-importable alarm exports), **FI-54** (the probe programme) ·
@@ -83,12 +83,34 @@ now be answered on measurement rather than on a projection.**
 
 ## Decision
 
-**None taken.** The question put to the owner is:
+✅ **ACCEPTED 2026-08-17.** Answering the three questions as put:
 
-1. Should HMI engineering move out of `10-non-goals.md`'s "Not now" list and into `02-roadmap.md`?
-2. If yes, **at what size** — the full screen-authoring capability, or a bounded alarm-and-contract
-   capability (FI-18 + FI-35) with screens explicitly left excluded?
-3. If no, what happens to the probe commands already built — frozen, kept read-only, or removed?
+1. **Yes** — HMI engineering moves out of `10-non-goals.md`'s "Not now" list and becomes active work.
+2. **At full screen-authoring size**, not the bounded alarm-and-contract option. The owner's
+   direction is a spec-to-screen capability: *"generate a nice looking HMI from a spec"*, which
+   FI-18 + FI-35 alone do not reach.
+3. Moot — the probe commands stay, and become the foundation rather than an artefact of a probe.
+
+### What "accepted" actually scopes, and it is narrower than "HMI engineering"
+
+The decision was taken **alongside** a target ruling that post-dates every argument in this
+document, and the two must be read together:
+
+- **The first target is CLASSIC BASIC** (anchor `JOB9003 - K150 Demo - Scratch Copy`, a KTP900 Basic;
+  first application a Basic 7"). Expansion goes Classic Basic → Classic Comfort/Advanced/
+  Professional → Unified.
+- 🔴 **Which means the evidence in "The case for" below does not support the work now authorised.**
+  Every live proof cited there — create screen, create items, set attributes, bind, script, compile —
+  ran against **Unified**, whose object model **Classic does not have**. On Classic there is no
+  `ScreenItems`, no button type, no IO-field type; screens move as **SimaticML files**.
+  The write path is proven for the *expansion target*, not for the *first* one. Read the case-for
+  section as evidence that the ceiling is reachable, not that the floor is built.
+- **The Classic path's own equivalent proof does not exist yet.** It is `hmi/PLAN.md` wave 1, and
+  its first item (K1) is precisely the question *does a Basic panel export a screen as SimaticML at
+  all* — untried at the time of acceptance.
+
+**The governance consequence:** acceptance removes the scope gate, not the evidence gate. Hard rule
+4's shape still applies — nothing is presented as working on Classic because it worked on Unified.
 
 ## The case for
 

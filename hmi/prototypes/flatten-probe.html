@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>HMI probe</title>
+<style>
+  /* ---- HOUSE STYLESHEET: the constraint layer, not decoration ---- */
+  :root{
+    --grid: 8px;
+    --bg:        #b9b9b4;   /* HP-HMI: low-chroma grey field, never white, never dark */
+    --panel:     #c9c9c4;
+    --line:      #6e6e69;
+    --ink:       #1c1c1a;
+    --ink-dim:   #55554f;
+    --bar-track: #a4a49f;
+    --bar-fill:  #55554f;   /* normal process value: GREY, not green */
+    --chrome:    #4a4a46;
+    --chrome-ink:#eceae4;
+    /* colour is reserved for ABNORMAL only */
+    --alm-hi:    #b02a1e;
+    --alm-lo:    #c9821a;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{width:1920px;height:1080px}
+  body{
+    background:var(--bg); color:var(--ink);
+    font-family:"Siemens Sans","Segoe UI",Arial,sans-serif;
+    font-size:20px; -webkit-font-smoothing:antialiased;
+  }
+  .screen{position:relative;width:1920px;height:1080px}
+
+  /* zones */
+  .titlebar{height:64px;background:var(--chrome);color:var(--chrome-ink);
+    display:flex;align-items:center;padding:0 24px;gap:24px}
+  .titlebar h1{font-size:26px;font-weight:600;letter-spacing:.02em}
+  .titlebar .crumb{font-size:18px;opacity:.75}
+  .titlebar .spacer{flex:1}
+  .titlebar .clock{font-size:22px;font-variant-numeric:tabular-nums}
+
+  .main{position:relative;height:calc(1080px - 64px - 56px);padding:24px}
+  .statusbar{position:absolute;bottom:0;left:0;right:0;height:56px;
+    background:var(--chrome);color:var(--chrome-ink);
+    display:flex;align-items:center;padding:0 24px;gap:16px;font-size:19px}
+
+  /* equipment tile */
+  .tile{position:absolute;width:432px;height:240px;background:var(--panel);
+    border:2px solid var(--line);padding:16px}
+  .tile .tag{font-size:22px;font-weight:600;letter-spacing:.03em}
+  .tile .desc{font-size:17px;color:var(--ink-dim);margin-top:2px}
+  .tile .state{position:absolute;right:16px;top:16px;font-size:19px;
+    border:2px solid var(--line);padding:2px 10px;min-width:104px;text-align:center}
+
+  /* analog indicator: HP-HMI prefers a bar with limits over a bare number */
+  .pv{position:absolute;left:16px;right:16px;bottom:16px}
+  .pv .row{display:flex;align-items:baseline;gap:8px;margin-bottom:6px}
+  .pv .val{font-size:34px;font-weight:600;font-variant-numeric:tabular-nums}
+  .pv .eu{font-size:18px;color:var(--ink-dim)}
+  .pv .lbl{margin-left:auto;font-size:17px;color:var(--ink-dim)}
+  .track{position:relative;height:18px;background:var(--bar-track);
+    border:1px solid var(--line)}
+  .fill{position:absolute;left:0;top:0;bottom:0;background:var(--bar-fill)}
+  .sp{position:absolute;top:-4px;bottom:-4px;width:3px;background:var(--ink)}
+  .lim{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--ink-dim)}
+
+  /* abnormal states — the ONLY place colour appears */
+  .alarm .state{background:var(--alm-hi);color:#fff;border-color:var(--alm-hi)}
+  .alarm .fill{background:var(--alm-hi)}
+  .warn  .state{background:var(--alm-lo);color:#1c1c1a;border-color:var(--alm-lo)}
+
+  /* flow path */
+  .flow{position:absolute;background:var(--line)}
+
+  .banner{position:absolute;left:24px;right:24px;top:744px;height:120px;
+    background:var(--panel);border:2px solid var(--line)}
+  .banner .hdr{height:32px;background:var(--bar-track);border-bottom:1px solid var(--line);
+    display:flex;align-items:center;padding:0 12px;font-size:17px;color:var(--ink-dim)}
+  .arow{display:flex;align-items:center;gap:16px;padding:6px 12px;font-size:19px}
+  .arow .t{font-variant-numeric:tabular-nums;color:var(--ink-dim);width:88px}
+  .arow.hi{background:var(--alm-hi);color:#fff}
+  .arow.hi .t{color:#f2d7d4}
+  .chip{border:2px solid var(--line);padding:1px 8px;font-size:16px}
+</style></head>
+<body>
+<div class="screen" data-hmi="Screen" data-hmi-name="AreaOverview_Sorting">
+
+  <div class="titlebar" data-hmi="Group" data-hmi-layer="chrome">
+    <h1 data-hmi="Text">Sorting Line — Area Overview</h1>
+    <span class="crumb" data-hmi="Text">Plant / Sorting / Line 2</span>
+    <span class="spacer"></span>
+    <span class="clock" data-hmi="IOField" data-hmi-bind="ProcessValue:System.DateTime">14:32:08</span>
+  </div>
+
+  <div class="main" data-hmi="Group" data-hmi-layer="process">
+
+    <div class="flow" style="left:240px;top:152px;width:504px;height:6px" data-hmi="Line"></div>
+    <div class="flow" style="left:744px;top:152px;width:6px;height:240px" data-hmi="Line"></div>
+    <div class="flow" style="left:744px;top:386px;width:504px;height:6px" data-hmi="Line"></div>
+
+    <div class="tile" style="left:24px;top:32px" data-hmi="Faceplate"
+         data-hmi-type="FP_Conveyor/V0.0.4" data-hmi-param="IO:CV201">
+      <div class="tag" data-hmi="Text">CV201</div>
+      <div class="desc" data-hmi="Text">Infeed conveyor</div>
+      <div class="state" data-hmi="SymbolicIOField" data-hmi-bind="ProcessValue:CV201.State">RUN</div>
+      <div class="pv">
+        <div class="row"><span class="val" data-hmi="IOField"
+             data-hmi-bind="ProcessValue:CV201.Speed">1.42</span>
+          <span class="eu" data-hmi="Text">m/s</span>
+          <span class="lbl" data-hmi="Text">SP 1.40</span></div>
+        <div class="track" data-hmi="Bar" data-hmi-bind="ProcessValue:CV201.Speed">
+          <div class="fill" style="width:71%"></div>
+          <div class="lim" style="left:15%"></div>
+          <div class="lim" style="left:90%"></div>
+          <div class="sp"  style="left:70%"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="tile warn" style="left:528px;top:32px" data-hmi="Faceplate"
+         data-hmi-type="FP_Hopper/V0.0.4" data-hmi-param="IO:HP204">
+      <div class="tag" data-hmi="Text">HP204</div>
+      <div class="desc" data-hmi="Text">Surge hopper</div>
+      <div class="state" data-hmi="SymbolicIOField" data-hmi-bind="ProcessValue:HP204.State">HI LVL</div>
+      <div class="pv">
+        <div class="row"><span class="val" data-hmi="IOField"
+             data-hmi-bind="ProcessValue:HP204.Level">86.3</span>
+          <span class="eu" data-hmi="Text">%</span>
+          <span class="lbl" data-hmi="Text">HI 85.0</span></div>
+        <div class="track" data-hmi="Bar" data-hmi-bind="ProcessValue:HP204.Level">
+          <div class="fill" style="width:86%"></div>
+          <div class="lim" style="left:85%"></div>
+          <div class="lim" style="left:95%"></div>
+          <div class="sp"  style="left:60%"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="tile alarm" style="left:1032px;top:266px" data-hmi="Faceplate"
+         data-hmi-type="FP_Motor/V0.0.11" data-hmi-param="IO:MT310">
+      <div class="tag" data-hmi="Text">MT310</div>
+      <div class="desc" data-hmi="Text">Screen drive</div>
+      <div class="state" data-hmi="SymbolicIOField" data-hmi-bind="ProcessValue:MT310.State">TRIP</div>
+      <div class="pv">
+        <div class="row"><span class="val" data-hmi="IOField"
+             data-hmi-bind="ProcessValue:MT310.Current">47.9</span>
+          <span class="eu" data-hmi="Text">A</span>
+          <span class="lbl" data-hmi="Text">TRIP 46.0</span></div>
+        <div class="track" data-hmi="Bar" data-hmi-bind="ProcessValue:MT310.Current">
+          <div class="fill" style="width:96%"></div>
+          <div class="lim" style="left:92%"></div>
+          <div class="sp"  style="left:64%"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="tile" style="left:528px;top:266px" data-hmi="Faceplate"
+         data-hmi-type="FP_Conveyor/V0.0.4" data-hmi-param="IO:CV205">
+      <div class="tag" data-hmi="Text">CV205</div>
+      <div class="desc" data-hmi="Text">Discharge conveyor</div>
+      <div class="state" data-hmi="SymbolicIOField" data-hmi-bind="ProcessValue:CV205.State">STOP</div>
+      <div class="pv">
+        <div class="row"><span class="val" data-hmi="IOField"
+             data-hmi-bind="ProcessValue:CV205.Speed">0.00</span>
+          <span class="eu" data-hmi="Text">m/s</span>
+          <span class="lbl" data-hmi="Text">SP 1.20</span></div>
+        <div class="track" data-hmi="Bar" data-hmi-bind="ProcessValue:CV205.Speed">
+          <div class="fill" style="width:0%"></div>
+          <div class="lim" style="left:15%"></div>
+          <div class="sp"  style="left:60%"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="banner" data-hmi="AlarmControl" data-hmi-layer="alarms">
+      <div class="hdr" data-hmi="Text">Active alarms — 2 unacknowledged</div>
+      <div class="arow hi"><span class="t" data-hmi="Text">14:31:52</span>
+        <span class="chip" data-hmi="Text">HI</span>
+        <span data-hmi="Text">MT310 Screen drive — motor overload trip</span></div>
+      <div class="arow"><span class="t" data-hmi="Text">14:29:07</span>
+        <span class="chip" data-hmi="Text">LO</span>
+        <span data-hmi="Text">HP204 Surge hopper — level above high limit</span></div>
+    </div>
+
+  </div>
+
+  <div class="statusbar" data-hmi="Group" data-hmi-layer="chrome">
+    <span data-hmi="Text">Line 2</span>
+    <span class="chip" data-hmi="SymbolicIOField" data-hmi-bind="ProcessValue:Line2.Mode">AUTO</span>
+    <span data-hmi="Text">Operator: —</span>
+    <span style="flex:1"></span>
+    <span data-hmi="Text">Throughput 412 t/h</span>
+    <span data-hmi="Text">Runtime 06:14</span>
+  </div>
+</div>
+
+<script>
+// ---- THE FLATTENER, in miniature: resolve CSS layout -> absolute integer rects.
+// This is step 1 of the converter. Chrome does the layout; we just read it off.
+(function(){
+  const root = document.querySelector('.screen').getBoundingClientRect();
+  const out = [];
+  document.querySelectorAll('[data-hmi]').forEach((el, i) => {
+    const r = el.getBoundingClientRect();
+    const cs = getComputedStyle(el);
+    // z-order: CSS stacking tier, then document order -> Unified layer + order-in-layer
+    const z = cs.zIndex === 'auto' ? 0 : parseInt(cs.zIndex, 10);
+    out.push({
+      i,
+      type:  el.dataset.hmi,
+      layer: el.closest('[data-hmi-layer]') ?.dataset.hmi_layer
+             || el.getAttribute('data-hmi-layer')
+             || (el.closest('[data-hmi-layer]')||{}).dataset?.hmiLayer || 'default',
+      ztier: z,
+      left:   Math.round(r.left - root.left),
+      top:    Math.round(r.top  - root.top),
+      width:  Math.round(r.width),
+      height: Math.round(r.height),
+      bind:  el.getAttribute('data-hmi-bind') || null,
+      fptype:el.getAttribute('data-hmi-type') || null,
+      back:  cs.backgroundColor,
+      fore:  cs.color,
+      font:  cs.fontSize + '/' + cs.fontWeight
+    });
+  });
+  const pre = document.createElement('pre');
+  pre.id = 'HMI_IR';
+  pre.textContent = JSON.stringify({items: out.length, grid: 8, ir: out}, null, 0);
+  pre.style.display = 'none';
+  document.body.appendChild(pre);
+})();
+</script>
+</body></html>

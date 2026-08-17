@@ -1,0 +1,460 @@
+/* ============================================================
+   HMI panel style sheet - house style
+   Field: low-chroma mid grey. Colour ONLY for alarm state.
+   No gradients, shadows, glow, bevel, radius > 2px, no accent hue.
+   ============================================================ */
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body {
+  width: 1280px;
+  height: 800px;
+  overflow: hidden;
+}
+
+body {
+  background: #bfbfba;
+  color: #1b1b19;
+  font-family: Arial, Helvetica, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.num {
+  font-family: Consolas, "Courier New", monospace;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+}
+
+/* ---------- screen shell ---------- */
+.screen {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1280px;
+  height: 800px;
+}
+
+/* ---------- header ---------- */
+.hdr {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1280px;
+  height: 72px;
+  background: #a9a9a4;
+  border-bottom: 2px solid #5c5c58;
+}
+
+.hdr-plant {
+  position: absolute;
+  top: 12px;
+  left: 16px;
+  width: 560px;
+  height: 30px;
+  font-size: 25px;
+  font-weight: bold;
+  line-height: 30px;
+  letter-spacing: 1px;
+}
+
+.hdr-line {
+  position: absolute;
+  top: 42px;
+  left: 16px;
+  width: 560px;
+  height: 20px;
+  font-size: 17px;
+  line-height: 20px;
+  color: #3a3a37;
+}
+
+/* Plant state - conveyed by TEXT, not by colour. */
+.hdr-state {
+  position: absolute;
+  top: 14px;
+  left: 600px;
+  width: 300px;
+  height: 42px;
+  border: 2px solid #5c5c58;
+  background: #b6b6b1;
+}
+
+.hdr-state-lbl {
+  position: absolute;
+  top: 4px;
+  left: 10px;
+  width: 120px;
+  height: 16px;
+  font-size: 14px;
+  line-height: 16px;
+  color: #3a3a37;
+  letter-spacing: 1px;
+}
+
+.hdr-state-val {
+  position: absolute;
+  top: 18px;
+  left: 10px;
+  width: 276px;
+  height: 20px;
+  font-size: 18px;
+  font-weight: bold;
+  line-height: 20px;
+  letter-spacing: 2px;
+}
+
+.hdr-clock {
+  position: absolute;
+  top: 12px;
+  left: 924px;
+  width: 340px;
+  height: 34px;
+  font-size: 30px;
+  font-weight: bold;
+  line-height: 34px;
+  text-align: right;
+}
+
+.hdr-date {
+  position: absolute;
+  top: 46px;
+  left: 924px;
+  width: 340px;
+  height: 18px;
+  font-size: 16px;
+  line-height: 18px;
+  text-align: right;
+  color: #3a3a37;
+}
+
+/* ---------- section captions ---------- */
+.cap {
+  position: absolute;
+  height: 20px;
+  font-size: 17px;
+  font-weight: bold;
+  line-height: 20px;
+  letter-spacing: 2px;
+  color: #383835;
+}
+
+.rule {
+  position: absolute;
+  background: #7a7a74;
+}
+
+/* ---------- navigation buttons ---------- */
+.nav {
+  position: absolute;
+  display: block;
+  background: #c8c8c3;
+  border: 2px solid #5c5c58;
+  border-radius: 0;
+  text-decoration: none;
+  color: #1b1b19;
+}
+
+.nav-idx {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  width: 40px;
+  height: 24px;
+  font-size: 20px;
+  line-height: 24px;
+  color: #4a4a46;
+}
+
+.nav-tile {
+  position: absolute;
+  top: 60px;
+  left: 12px;
+  width: 214px;
+  height: 2px;
+  background: #7a7a74;
+}
+
+.nav-name {
+  position: absolute;
+  top: 84px;
+  left: 12px;
+  width: 214px;
+  height: 30px;
+  font-size: 26px;
+  font-weight: bold;
+  line-height: 30px;
+}
+
+.nav-sub, .nav-sub2 {
+  position: absolute;
+  left: 12px;
+  width: 214px;
+  height: 22px;
+  font-size: 17px;
+  line-height: 22px;
+  color: #3d3d3a;
+}
+
+.nav-sub  { top: 122px; }
+.nav-sub2 { top: 144px; }
+
+/* alarm-count badge on the Alarms tile - the one permitted use of colour */
+.nav-badge {
+  position: absolute;
+  top: 172px;
+  left: 12px;
+  width: 214px;
+  height: 44px;
+  border: 2px solid #4e4e4a;
+  background: #b02a1e;
+  color: #ffffff;
+  font-size: 17px;
+  font-weight: bold;
+  line-height: 40px;
+  text-align: center;
+  letter-spacing: 1px;
+}
+
+/* ---------- command buttons ---------- */
+.cmd {
+  position: absolute;
+  display: block;
+  background: #c8c8c3;
+  border: 3px solid #4e4e4a;
+  border-radius: 0;
+  text-decoration: none;
+  color: #1b1b19;
+  text-align: center;
+}
+
+.cmd-stop {
+  background: #ababa6;
+  border-width: 6px;
+}
+
+.cmd-stop .cmd-name { top: 41px; }
+.cmd-stop .cmd-sub  { top: 97px; }
+
+.cmd-name {
+  position: absolute;
+  top: 44px;
+  left: 0;
+  width: 100%;
+  height: 48px;
+  font-size: 42px;
+  font-weight: bold;
+  line-height: 48px;
+  letter-spacing: 6px;
+}
+
+.cmd-sub {
+  position: absolute;
+  top: 100px;
+  left: 0;
+  width: 100%;
+  height: 20px;
+  font-size: 16px;
+  line-height: 20px;
+  letter-spacing: 1px;
+  color: #3d3d3a;
+}
+
+/* ---------- alarm banner ---------- */
+.banner {
+  position: absolute;
+  top: 596px;
+  left: 0;
+  width: 1280px;
+  height: 204px;
+  background: #b4b4af;
+  border-top: 3px solid #4e4e4a;
+}
+
+.banner-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1280px;
+  height: 33px;
+  border-bottom: 2px solid #7a7a74;
+}
+
+.banner-ttl {
+  position: absolute;
+  top: 7px;
+  left: 24px;
+  width: 420px;
+  height: 20px;
+  font-size: 17px;
+  font-weight: bold;
+  line-height: 20px;
+  letter-spacing: 2px;
+}
+
+.banner-cnt {
+  position: absolute;
+  top: 7px;
+  left: 560px;
+  width: 704px;
+  height: 20px;
+  font-size: 17px;
+  line-height: 20px;
+  text-align: right;
+  letter-spacing: 1px;
+}
+
+.arow {
+  position: absolute;
+  left: 0;
+  width: 1280px;
+  height: 42px;
+  border-bottom: 1px solid #9a9a94;
+}
+
+.a-time {
+  position: absolute;
+  top: 11px;
+  left: 24px;
+  width: 128px;
+  height: 22px;
+  font-size: 18px;
+  line-height: 22px;
+}
+
+.a-pri {
+  position: absolute;
+  top: 8px;
+  left: 152px;
+  width: 92px;
+  height: 26px;
+  border: 2px solid #4e4e4a;
+  font-size: 15px;
+  font-weight: bold;
+  line-height: 22px;
+  text-align: center;
+  letter-spacing: 1px;
+}
+
+.a-tag {
+  position: absolute;
+  top: 11px;
+  left: 260px;
+  width: 176px;
+  height: 22px;
+  font-size: 18px;
+  line-height: 22px;
+}
+
+.a-txt {
+  position: absolute;
+  top: 11px;
+  left: 448px;
+  width: 604px;
+  height: 22px;
+  font-size: 18px;
+  line-height: 22px;
+  overflow: hidden;
+}
+
+.a-ack {
+  position: absolute;
+  top: 11px;
+  left: 1056px;
+  width: 208px;
+  height: 22px;
+  font-size: 17px;
+  line-height: 22px;
+  text-align: right;
+  letter-spacing: 1px;
+}
+
+/* alarm severity - the ONLY sanctioned colours */
+.crit .a-pri { background: #b02a1e; color: #ffffff; }
+.warn .a-pri { background: #c9821a; color: #1b1b19; }
+.a-bar { position: absolute; top: 0; left: 0; width: 8px; height: 41px; }
+.crit .a-bar { background: #b02a1e; }
+.warn .a-bar { background: #c9821a; }
+.crit .a-txt { font-weight: bold; }
+
+/* H5: slow flash permitted on an UNACKNOWLEDGED alarm row only */
+.unack { animation: ackflash 2s steps(1, end) infinite; }
+@keyframes ackflash {
+  0%, 50%   { background: #b4b4af; }
+  50.01%, 100% { background: #a3a39e; }
+}
+
+/* ---------- stand-in sub pages ---------- */
+.pg-title {
+  position: absolute;
+  top: 132px;
+  left: 16px;
+  width: 1248px;
+  height: 54px;
+  font-size: 46px;
+  font-weight: bold;
+  line-height: 54px;
+  letter-spacing: 2px;
+}
+
+.pg-l1, .pg-l2 {
+  position: absolute;
+  left: 16px;
+  width: 1100px;
+  height: 32px;
+  font-size: 22px;
+  line-height: 32px;
+  color: #2c2c29;
+}
+
+.pg-l1 { top: 224px; }
+.pg-l2 { top: 264px; }
+
+.pg-meta {
+  position: absolute;
+  top: 344px;
+  left: 16px;
+  width: 900px;
+  height: 26px;
+  font-size: 18px;
+  line-height: 26px;
+  color: #3d3d3a;
+}
+
+.back {
+  position: absolute;
+  top: 640px;
+  left: 16px;
+  width: 384px;
+  height: 96px;
+  display: block;
+  background: #c8c8c3;
+  border: 3px solid #4e4e4a;
+  border-radius: 0;
+  text-decoration: none;
+  color: #1b1b19;
+  text-align: center;
+}
+
+.back-name {
+  position: absolute;
+  top: 24px;
+  left: 0;
+  width: 100%;
+  height: 34px;
+  font-size: 30px;
+  font-weight: bold;
+  line-height: 34px;
+  letter-spacing: 3px;
+}
+
+.back-sub {
+  position: absolute;
+  top: 60px;
+  left: 0;
+  width: 100%;
+  height: 20px;
+  font-size: 16px;
+  line-height: 20px;
+  color: #3d3d3a;
+  letter-spacing: 1px;
+}

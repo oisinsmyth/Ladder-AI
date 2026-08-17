@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Trends - Line 3 Packing</title>
+<link rel="stylesheet" href="hmi.css">
+</head>
+<body>
+<div class="screen">
+
+  <div class="header">
+    <div class="hdr-plant">NORTHFIELD WORKS &nbsp;&bull;&nbsp; LINE 3 PACKING</div>
+    <div class="hdr-sub">Screen 4 of 5 &nbsp;|&nbsp; TRENDS</div>
+    <div class="hdr-state">RUNNING</div>
+    <div class="hdr-time" id="clock">--:--:--</div>
+    <div class="hdr-date" id="datestamp">--</div>
+  </div>
+
+  <div class="sub-main">
+    <div class="panel">
+      <h1>TRENDS</h1>
+      <div class="rule"></div>
+      <p class="line1">Recorded process values over time.</p>
+      <p class="line2">Placeholder screen &mdash; content to be added.</p>
+    </div>
+  </div>
+
+  <div class="sub-footer">
+    <a class="home-btn" href="home.html">&#8592; HOME</a>
+    <div class="footer-note">Line 3 Packing &nbsp;|&nbsp; Trends</div>
+  </div>
+
+</div>
+
+<script>
+(function () {
+  var p = function (n) { return (n < 10 ? "0" : "") + n; };
+  var days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  var months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  function tick() {
+    var d = new Date();
+    document.getElementById("clock").textContent =
+      p(d.getHours()) + ":" + p(d.getMinutes()) + ":" + p(d.getSeconds());
+    document.getElementById("datestamp").textContent =
+      days[d.getDay()] + " " + p(d.getDate()) + " " + months[d.getMonth()] + " " + d.getFullYear();
+  }
+  tick();
+  setInterval(tick, 1000);
+})();
+</script>
+</body>
+</html>

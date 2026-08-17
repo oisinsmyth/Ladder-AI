@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>HOME - Line 3 Operator Panel</title>
+<link rel="stylesheet" href="hmi.css">
+</head>
+<body>
+
+<!-- ============================ TOP STATUS BAR ============================ -->
+<header class="topbar">
+  <div class="plant">
+    <div class="logo">L3</div>
+    <div>
+      <div class="plant-name">Northfield Works &mdash; Line 3</div>
+      <div class="plant-sub">Blending &amp; Transfer</div>
+    </div>
+  </div>
+
+  <div class="screen-title">Home</div>
+
+  <div class="status-cluster">
+    <div class="pill online"><span class="led"></span>PLC ONLINE</div>
+    <div class="stat-item">
+      <div class="label">Operator</div>
+      <div class="value">J. HALE</div>
+    </div>
+    <div class="stat-item">
+      <div class="label">Plant Time</div>
+      <div class="value" id="clock">06:42:18</div>
+    </div>
+  </div>
+</header>
+
+<!-- ============================== WORK AREA =============================== -->
+<main class="workspace">
+
+  <!-- ---- navigation tiles ---- -->
+  <nav class="nav-grid">
+
+    <a class="nav-tile" href="overview.html">
+      <svg class="icon" width="64" height="64" viewBox="0 0 24 24" fill="none"
+           stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="2.5" y="4" width="9" height="7" rx="1"></rect>
+        <rect x="13.5" y="4" width="8" height="11" rx="1"></rect>
+        <rect x="2.5" y="13" width="9" height="7" rx="1"></rect>
+        <rect x="13.5" y="17" width="8" height="3" rx="1"></rect>
+      </svg>
+      <div>
+        <div class="tile-name">Overview</div>
+        <div class="tile-desc">Process mimic, vessels, pumps and valves</div>
+        <span class="tile-badge ok">6 OF 6 RUNNING</span>
+      </div>
+    </a>
+
+    <a class="nav-tile" href="alarms.html">
+      <svg class="icon" width="64" height="64" viewBox="0 0 24 24" fill="none"
+           stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 3a6 6 0 0 0-6 6v4l-1.8 3.2h15.6L18 13V9a6 6 0 0 0-6-6z"></path>
+        <path d="M9.7 19.2a2.4 2.4 0 0 0 4.6 0"></path>
+      </svg>
+      <div>
+        <div class="tile-name">Alarms</div>
+        <div class="tile-desc">Active alarm list, history and acknowledge</div>
+        <span class="tile-badge alarm">4 ACTIVE &middot; 2 UNACK</span>
+      </div>
+    </a>
+
+    <a class="nav-tile" href="trends.html">
+      <svg class="icon" width="64" height="64" viewBox="0 0 24 24" fill="none"
+           stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3 20V4"></path>
+        <path d="M3 20h18"></path>
+        <path d="M6 15l4-5 3.5 3L20 6.5"></path>
+        <circle cx="10" cy="10" r="1.1" fill="currentColor" stroke="none"></circle>
+        <circle cx="13.5" cy="13" r="1.1" fill="currentColor" stroke="none"></circle>
+      </svg>
+      <div>
+        <div class="tile-name">Trends</div>
+        <div class="tile-desc">Live and historical process charts</div>
+        <span class="tile-badge">8 PENS LOGGING</span>
+      </div>
+    </a>
+
+    <a class="nav-tile" href="settings.html">
+      <svg class="icon" width="64" height="64" viewBox="0 0 24 24" fill="none"
+           stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="3.2"></circle>
+        <path d="M12 2.6v3M12 18.4v3M21.4 12h-3M5.6 12h-3M18.6 5.4l-2.1 2.1M7.5 16.5l-2.1 2.1M18.6 18.6l-2.1-2.1M7.5 7.5L5.4 5.4"></path>
+      </svg>
+      <div>
+        <div class="tile-name">Settings</div>
+        <div class="tile-desc">Setpoints, recipes and panel configuration</div>
+        <span class="tile-badge warn">SUPERVISOR LEVEL</span>
+      </div>
+    </a>
+
+    <a class="nav-tile" href="diagnostics.html">
+      <svg class="icon" width="64" height="64" viewBox="0 0 24 24" fill="none"
+           stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="4.5" width="18" height="15" rx="1.5"></rect>
+        <path d="M3 9h18"></path>
+        <path d="M6 14h3l1.5-2.5L12.5 17l1.5-3h4"></path>
+      </svg>
+      <div>
+        <div class="tile-name">Diagnostics</div>
+        <div class="tile-desc">I/O status, network and controller health</div>
+        <span class="tile-badge ok">NO FAULTS</span>
+      </div>
+    </a>
+
+    <!-- sixth cell: at-a-glance line summary, not a navigation target -->
+    <section class="summary-tile">
+      <h2>Line Summary</h2>
+      <div class="summary-rows">
+        <div class="summary-row"><span class="k">Line state</span><span class="v ok">RUNNING</span></div>
+        <div class="summary-row"><span class="k">Batch no.</span><span class="v">B-2418</span></div>
+        <div class="summary-row"><span class="k">Throughput</span><span class="v">142<span class="u">m&sup3;/h</span></span></div>
+        <div class="summary-row"><span class="k">Blend tank</span><span class="v">68.4<span class="u">%</span></span></div>
+        <div class="summary-row"><span class="k">Header press.</span><span class="v warn">5.9<span class="u">bar</span></span></div>
+        <div class="summary-row"><span class="k">Runtime today</span><span class="v">05:12<span class="u">hh:mm</span></span></div>
+      </div>
+    </section>
+
+  </nav>
+
+  <!-- ---- command column ---- -->
+  <section class="command-col">
+    <div class="mode-box">
+      <div class="label">Control Mode</div>
+      <div class="mode-value">AUTO &mdash; LOCAL</div>
+    </div>
+
+    <button class="cmd-btn cmd-start" type="button">
+      START
+      <span class="sub">LINE 3 SEQUENCE</span>
+    </button>
+
+    <button class="cmd-btn cmd-stop" type="button">
+      STOP
+      <span class="sub">CONTROLLED SHUTDOWN</span>
+    </button>
+
+    <button class="cmd-btn cmd-reset" type="button">
+      RESET
+      <span class="sub">CLEAR LATCHED FAULTS</span>
+    </button>
+  </section>
+
+</main>
+
+<!-- =========================== ALARM BANNER ============================== -->
+<footer class="alarm-banner">
+  <div class="alarm-head">
+    <span class="title">Active Alarms</span>
+    <span class="count">4 ACTIVE</span>
+    <span class="count unack">2 UNACK</span>
+    <span class="spacer"></span>
+    <button class="mini-btn accent" type="button">Acknowledge</button>
+    <button class="mini-btn" type="button">Silence</button>
+    <a class="mini-btn" href="alarms.html">Alarm List</a>
+  </div>
+
+  <div class="alarm-row sev-hi blink">
+    <span class="a-time">14 AUG 06:41:52</span>
+    <span class="a-prio"><span class="prio hi">HIGH</span></span>
+    <span class="a-tag">P301_TransferPump</span>
+    <span class="a-text">Transfer pump 301 &mdash; motor overload tripped</span>
+    <span class="a-state unack">UNACK</span>
+  </div>
+
+  <div class="alarm-row sev-med">
+    <span class="a-time">14 AUG 06:39:07</span>
+    <span class="a-prio"><span class="prio med">MED</span></span>
+    <span class="a-tag">PT210_HeaderPress</span>
+    <span class="a-text">Discharge header pressure above high limit (5.9 bar / 5.5 bar)</span>
+    <span class="a-state unack">UNACK</span>
+  </div>
+
+  <div class="alarm-row sev-med">
+    <span class="a-time">14 AUG 06:33:41</span>
+    <span class="a-prio"><span class="prio med">MED</span></span>
+    <span class="a-tag">LT120_BlendTank</span>
+    <span class="a-text">Blend tank level approaching high alarm &mdash; feed throttled</span>
+    <span class="a-state ack">ACK 06:34</span>
+  </div>
+
+  <div class="alarm-row sev-low">
+    <span class="a-time">14 AUG 06:12:19</span>
+    <span class="a-prio"><span class="prio low">LOW</span></span>
+    <span class="a-tag">FV045_InletValve</span>
+    <span class="a-text">Inlet valve 045 travel time exceeded &mdash; check air supply</span>
+    <span class="a-state ack">ACK 06:13</span>
+  </div>
+</footer>
+
+<script>
+/* Plant clock. The only script on the panel; everything else is static. */
+(function () {
+  var el = document.getElementById('clock');
+  function tick() {
+    var d = new Date();
+    function p(n) { return (n < 10 ? '0' : '') + n; }
+    el.textContent = p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds());
+  }
+  tick();
+  setInterval(tick, 1000);
+})();
+</script>
+
+</body>
+</html>

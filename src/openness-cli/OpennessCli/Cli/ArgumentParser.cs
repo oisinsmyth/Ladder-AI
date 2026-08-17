@@ -21,12 +21,23 @@ public sealed record ListOptions(
 // exclusive alternatives (a PLC data type/UDT and a PLC tag table, both confirmed real 2026-07-14,
 // have no Number/ProgrammingLanguage the way a block does, so each needs its own distinct
 // resolution path, not a shared "name" field).
+// ScreenName (2026-08-17, HMI wave 1 / K1): a CLASSIC HMI screen, exported as SimaticML. The other
+// three selectors are PLC content; this one is not, and it is the whole Classic HMI pipeline —
+// classic screens have no object model (Siemens.Engineering.Hmi.Screen.Screen has no ScreenItems),
+// so the file IS the only editable surface, exactly as SimaticML is for LAD. Unified screens do NOT
+// export in any form and are refused by name rather than returning an empty file.
 public sealed record ExportCommandOptions(
     string ProjectIdentifier,
     string? BlockName,
     string? TypeName,
     string? TagTableName,
+    string? ScreenName,
     string? Device,
+    // ExportOptions is a THREE-valued enum (None | WithDefaults | WithReadOnly) and this tool used
+    // WithDefaults exclusively until 2026-08-17. It was never established that the choice cannot
+    // change WHICH OBJECTS appear - only that it changes which ATTRIBUTES do - so a completeness
+    // conclusion drawn from one value was drawn from an untested assumption.
+    string ExportOptionsName,
     string OutPath,
     string? TiaInstallOverride,
     int TimeoutConnectSeconds,
@@ -51,12 +62,17 @@ public sealed record ExportAllCommandOptions(
 // AsType/AsTagTable select which composition Import() targets (PlcTypeGroup.Types /
 // PlcTagTableGroup.TagTables vs. PlcBlockGroup.Blocks) — both default to false (blocks), today's
 // existing behavior, unchanged. Mutually exclusive, same as --block/--type/--tagtable on export.
+// AsScreen (2026-08-17): a CLASSIC HMI screen. Unlike the other three it takes NO --group: screens
+// live in the HMI device's ScreenFolder, not in a PLC block group, so there is no path to name. The
+// device is resolved the way `export --screen` resolves it, and --device disambiguates.
 public sealed record ImportCommandOptions(
     string ProjectIdentifier,
-    string GroupPath,
+    string? GroupPath,
     IReadOnlyList<string> Files,
     bool AsType,
     bool AsTagTable,
+    bool AsScreen,
+    string? Device,
     string? TiaInstallOverride,
     int TimeoutConnectSeconds,
     int TimeoutOpenSeconds);
@@ -171,6 +187,20 @@ public sealed record PortalStatusOptions(
 
 // Screen defaults to null rather than "*": summarising every screen is cheap, reading every item on
 // every screen is not, so the expensive mode is opt-in. MaxItems bounds a single screen's read.
+// The IMasterCopySource probe (2026-08-17). A classic screen implements IMasterCopySource, so it can
+// become a library master copy, and ScreenComposition.CreateFrom(MasterCopy) builds a screen back out
+// of one. That is the ONLY route besides SimaticML by which a classic screen can come into existence,
+// and it is the last untested one - the question it answers is whether content the EXPORTER cannot
+// represent (an alarm view) survives a copy that never becomes a document.
+// MasterCopy itself has no Export method: this buys reproduction, never authoring.
+public sealed record HmiCloneScreenOptions(
+    string ProjectIdentifier,
+    string ScreenName,
+    bool Confirm,
+    string? TiaInstallOverride,
+    int TimeoutConnectSeconds,
+    int TimeoutOpenSeconds);
+
 public sealed record HmiOptions(
     string ProjectIdentifier,
     string? Screen,
@@ -180,7 +210,11 @@ public sealed record HmiOptions(
     string? TiaInstallOverride,
     int TimeoutConnectSeconds,
     int TimeoutOpenSeconds,
-    bool Scripts = false);
+    bool Scripts,
+    // --inspect: dump GetAttributeInfos + GetCompositionInfos for a CLASSIC screen. Exists because
+    // the typed Screen surface is Name+Parent+Export and nothing else, so the only remaining place a
+    // screen's contents could be reachable is a composition the typed API does not expose.
+    bool Inspect = false);
 
 // The only HMI command that writes. Confirm mirrors `delete`'s own gate: the mutating commands in
 // this tool state what they will do and require --yes before doing it. ItemTypes are CLR type names
@@ -302,6 +336,8 @@ public abstract record ParseResult
 
     public sealed record HmiSuccess(HmiOptions Options) : ParseResult;
 
+    public sealed record HmiCloneScreenSuccess(HmiCloneScreenOptions Options) : ParseResult;
+
     public sealed record HmiCreateScreenSuccess(HmiCreateScreenOptions Options) : ParseResult;
 
     public sealed record HmiEditScreenSuccess(HmiEditScreenOptions Options) : ParseResult;
@@ -371,12 +407,14 @@ public static class ArgumentParser
     private const string Usage =
         "Usage:\n" +
         "  openness-cli list          <project> [--json] [--tagtables] [--tia-install <path>] [--timeout-connect <s>] [--timeout-open <s>]\n" +
-        "  openness-cli export        <project> (--block <name> | --type <name> | --tagtable <name>) --out <path> [--device <name>] [--tia-install <path>] [--timeout-connect <s>] [--timeout-open <s>]\n" +
+        "  openness-cli export        <project> (--block <name> | --type <name> | --tagtable <name> | --screen <name>) --out <path> [--device <name>] [--tia-install <path>] [--timeout-connect <s>] [--timeout-open <s>]\n" +
+        "    --screen exports a CLASSIC HMI screen as SimaticML. Classic screens have no object model, so the file is the only editable surface.\n" +
+        "    Unified screens do NOT export in any form and are refused BY NAME - an empty result would read as 'no such screen'.\n" +
         "  openness-cli export-all    <project> --out <dir> [--device <name>] [--tagtables] [--json] [--tia-install <path>] [--timeout-connect <s>] [--timeout-open <s>]\n" +
         "    Exports EVERY block and PLC data type to one directory, so `converter drift-check --project <ir-dir> --exports <dir> --complete` can compare the IR on disk against what is\n" +
         "    actually in the controller (FI-70). Safety blocks are REFUSED and NAMED, never silently omitted - a dump missing a file is read as 'not in the controller' by the completeness\n" +
         "    check, which would turn a correct refusal into a false finding. Exits 7 if any export failed or was refused; --tagtables is opt-in (a tag table has no .ir counterpart to pair with).\n" +
-        "  openness-cli import        <project> --group <device>/<path> [--type | --tagtable] <files...> [--tia-install <path>] [--timeout-connect <s>] [--timeout-open <s>]\n" +
+        "  openness-cli import        <project> (--screen [--device <name>] | --group <device>/<path>) [--type | --tagtable] <files...> [--tia-install <path>] [--timeout-connect <s>] [--timeout-open <s>]\n" +
         "  openness-cli import-all    <project> --group <device>/<path> <dirs-or-files...> [--json] [--dry-run] [--tia-install <path>] [--timeout-connect <s>] [--timeout-open <s>]\n" +
         "    Bulk restore: classifies every file (tag table / PLC data type / block) from its own root element, imports tag tables then types then blocks, and RETRIES failures until a pass\n" +
         "    makes no progress - so a dependency order nobody can supply from filenames does not have to be supplied. --dry-run prints the plan and never contacts Portal. Exits 13 if any\n" +
@@ -418,7 +456,7 @@ public static class ArgumentParser
         "  openness-cli compile-scopes <project> [--json] [--tia-install <path>] [--timeout-connect <s>] [--timeout-open <s>]\n" +
         "    READ-ONLY. Every object that answers GetService<ICompilable>(), and which of them are the SAME compiler. Compiles nothing.\n" +
         "  openness-cli portal-status [--json] [--tia-install <path>]\n" +
-        "  openness-cli hmi           <project> [--screen <name>|*] [--schema] [--max-items <n>] [--json] [--tia-install <path>] [--timeout-connect <s>] [--timeout-open <s>]\n" +
+        "  openness-cli hmi           <project> [--inspect] [--screen <name>|*] [--schema] [--max-items <n>] [--json] [--tia-install <path>] [--timeout-connect <s>] [--timeout-open <s>]\n" +
         "  <project> is either the name of a project already open in TIA Portal, or a path to a .apNN file.\n" +
         "  --type selects a PLC data type (UDT) instead of a block; on import it's a switch (no value) applying to all files.\n" +
         "  --tagtable selects a PLC tag table instead of a block; on export it takes a name, on import it's a switch (no value) applying to all files.\n" +
@@ -494,6 +532,7 @@ public static class ArgumentParser
         ParseResult.CompileScopesSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
         ParseResult.PortalStatusSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
         ParseResult.HmiSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
+        ParseResult.HmiCloneScreenSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
         ParseResult.HmiCreateScreenSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
         ParseResult.HmiEditScreenSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
         ParseResult.HmiCompileSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
@@ -528,6 +567,7 @@ public static class ArgumentParser
         ParseResult.CompileScopesSuccess s => s.Options.ProjectIdentifier,
         ParseResult.PortalStatusSuccess => null,
         ParseResult.HmiSuccess s => s.Options.ProjectIdentifier,
+        ParseResult.HmiCloneScreenSuccess s => s.Options.ProjectIdentifier,
         ParseResult.HmiCreateScreenSuccess s => s.Options.ProjectIdentifier,
         ParseResult.HmiEditScreenSuccess s => s.Options.ProjectIdentifier,
         ParseResult.HmiCompileSuccess s => s.Options.ProjectIdentifier,
@@ -564,6 +604,7 @@ public static class ArgumentParser
             "compile-scopes" => ParseCompileScopes(args),
             "portal-status" => ParsePortalStatus(args),
             "hmi" => ParseHmi(args),
+            "hmi-clone-screen" => ParseHmiCloneScreen(args),
             "hmi-create-screen" => ParseHmiCreateScreen(args),
             "hmi-edit-screen" => ParseHmiEditScreen(args),
             "hmi-create-tag" => ParseHmiCreateTag(args),
@@ -711,7 +752,9 @@ public static class ArgumentParser
         string? block = null;
         string? type = null;
         string? tagTable = null;
+        string? screen = null;
         string? device = null;
+        var exportOptionsName = "WithDefaults";
         string? outPath = null;
         string? tiaInstall = null;
         var timeoutConnect = DefaultTimeoutConnectSeconds;
@@ -721,6 +764,27 @@ public static class ArgumentParser
         {
             switch (args[i])
             {
+                case "--screen":
+                    if (!TryTakeValue(args, ref i, "--screen", out screen, out var screenErr))
+                    {
+                        return new ParseResult.Failure(screenErr);
+                    }
+
+                    break;
+                case "--export-options":
+                    if (!TryTakeValue(args, ref i, "--export-options", out var eo, out var eoErr))
+                    {
+                        return new ParseResult.Failure(eoErr);
+                    }
+
+                    if (eo is not ("None" or "WithDefaults" or "WithReadOnly"))
+                    {
+                        return new ParseResult.Failure(
+                            $"--export-options must be None, WithDefaults or WithReadOnly (got '{eo}').{Environment.NewLine}{Usage}");
+                    }
+
+                    exportOptionsName = eo;
+                    break;
                 case "--block":
                     if (!TryTakeValue(args, ref i, "--block", out block, out var blockErr))
                     {
@@ -792,15 +856,15 @@ public static class ArgumentParser
             return new ParseResult.Failure($"Missing required argument: <project>.{Environment.NewLine}{Usage}");
         }
 
-        var selectedCount = (block is not null ? 1 : 0) + (type is not null ? 1 : 0) + (tagTable is not null ? 1 : 0);
+        var selectedCount = (block is not null ? 1 : 0) + (type is not null ? 1 : 0) + (tagTable is not null ? 1 : 0) + (screen is not null ? 1 : 0);
         if (selectedCount == 0)
         {
-            return new ParseResult.Failure($"Missing required flag: --block <name>, --type <name>, or --tagtable <name>.{Environment.NewLine}{Usage}");
+            return new ParseResult.Failure($"Missing required flag: --block <name>, --type <name>, --tagtable <name>, or --screen <name>.{Environment.NewLine}{Usage}");
         }
 
         if (selectedCount > 1)
         {
-            return new ParseResult.Failure($"--block, --type, and --tagtable are mutually exclusive.{Environment.NewLine}{Usage}");
+            return new ParseResult.Failure($"--block, --type, --tagtable, and --screen are mutually exclusive.{Environment.NewLine}{Usage}");
         }
 
         if (outPath is null)
@@ -808,7 +872,7 @@ public static class ArgumentParser
             return new ParseResult.Failure($"Missing required flag: --out <path>.{Environment.NewLine}{Usage}");
         }
 
-        return new ParseResult.ExportSuccess(new ExportCommandOptions(projectIdentifier, block, type, tagTable, device, PathArguments.ToAbsolute(outPath), tiaInstall, timeoutConnect, timeoutOpen));
+        return new ParseResult.ExportSuccess(new ExportCommandOptions(projectIdentifier, block, type, tagTable, screen, device, exportOptionsName, PathArguments.ToAbsolute(outPath), tiaInstall, timeoutConnect, timeoutOpen));
     }
 
     private static ParseResult ParseExportAll(string[] args)
@@ -898,6 +962,8 @@ public static class ArgumentParser
         var files = new List<string>();
         var asType = false;
         var asTagTable = false;
+        var asScreen = false;
+        string? device = null;
         string? tiaInstall = null;
         var timeoutConnect = DefaultTimeoutConnectSeconds;
         var timeoutOpen = DefaultTimeoutOpenSeconds;
@@ -906,6 +972,16 @@ public static class ArgumentParser
         {
             switch (args[i])
             {
+                case "--screen":
+                    asScreen = true;
+                    break;
+                case "--device":
+                    if (!TryTakeValue(args, ref i, "--device", out device, out var deviceErr))
+                    {
+                        return new ParseResult.Failure(deviceErr);
+                    }
+
+                    break;
                 case "--group":
                     if (!TryTakeValue(args, ref i, "--group", out group, out var groupErr))
                     {
@@ -964,9 +1040,16 @@ public static class ArgumentParser
             return new ParseResult.Failure($"Missing required argument: <project>.{Environment.NewLine}{Usage}");
         }
 
-        if (group is null)
+        if (group is null && !asScreen)
         {
             return new ParseResult.Failure($"Missing required flag: --group <device>/<path>.{Environment.NewLine}{Usage}");
+        }
+
+        if (group is not null && asScreen)
+        {
+            return new ParseResult.Failure(
+                $"--group does not apply to --screen: a classic screen lives in the HMI device's ScreenFolder, "
+                + $"not a block group. Use --device to disambiguate.{Environment.NewLine}{Usage}");
         }
 
         if (files.Count == 0)
@@ -974,12 +1057,12 @@ public static class ArgumentParser
             return new ParseResult.Failure($"Missing required argument: at least one <file>.{Environment.NewLine}{Usage}");
         }
 
-        if (asType && asTagTable)
+        if ((asType ? 1 : 0) + (asTagTable ? 1 : 0) + (asScreen ? 1 : 0) > 1)
         {
-            return new ParseResult.Failure($"--type and --tagtable are mutually exclusive.{Environment.NewLine}{Usage}");
+            return new ParseResult.Failure($"--type, --tagtable, and --screen are mutually exclusive.{Environment.NewLine}{Usage}");
         }
 
-        return new ParseResult.ImportSuccess(new ImportCommandOptions(projectIdentifier, group, files.Select(PathArguments.ToAbsolute).ToList(), asType, asTagTable, tiaInstall, timeoutConnect, timeoutOpen));
+        return new ParseResult.ImportSuccess(new ImportCommandOptions(projectIdentifier, group, files.Select(PathArguments.ToAbsolute).ToList(), asType, asTagTable, asScreen, device, tiaInstall, timeoutConnect, timeoutOpen));
     }
 
     private static ParseResult ParseCompileAll(string[] args)
@@ -1704,6 +1787,7 @@ public static class ArgumentParser
         var json = false;
         var schema = false;
         var scripts = false;
+        var inspect = false;
         string? tiaInstall = null;
         var timeoutConnect = DefaultTimeoutConnectSeconds;
         var timeoutOpen = DefaultTimeoutOpenSeconds;
@@ -1717,6 +1801,9 @@ public static class ArgumentParser
                     break;
                 case "--schema":
                     schema = true;
+                    break;
+                case "--inspect":
+                    inspect = true;
                     break;
                 case "--scripts":
                     scripts = true;
@@ -1778,7 +1865,7 @@ public static class ArgumentParser
             screen = "*";
         }
 
-        return new ParseResult.HmiSuccess(new HmiOptions(projectIdentifier, screen, maxItems, json, schema, tiaInstall, timeoutConnect, timeoutOpen, scripts));
+        return new ParseResult.HmiSuccess(new HmiOptions(projectIdentifier, screen, maxItems, json, schema, tiaInstall, timeoutConnect, timeoutOpen, scripts, inspect));
     }
 
     private static ParseResult ParseHmiCreateScreen(string[] args)
@@ -2603,4 +2690,73 @@ public static class ArgumentParser
 
         return true;
     }
+    private static ParseResult ParseHmiCloneScreen(string[] args)
+    {
+        string? projectIdentifier = null;
+        string? screen = null;
+        var confirm = false;
+        string? tiaInstall = null;
+        var timeoutConnect = DefaultTimeoutConnectSeconds;
+        var timeoutOpen = DefaultTimeoutOpenSeconds;
+
+        for (var i = 1; i < args.Length; i++)
+        {
+            switch (args[i])
+            {
+                case "--screen":
+                    if (!TryTakeValue(args, ref i, "--screen", out screen, out var screenErr))
+                    {
+                        return new ParseResult.Failure(screenErr);
+                    }
+
+                    break;
+                case "--yes":
+                    confirm = true;
+                    break;
+                case "--tia-install":
+                    if (!TryTakeValue(args, ref i, "--tia-install", out tiaInstall, out var installErr))
+                    {
+                        return new ParseResult.Failure(installErr);
+                    }
+
+                    break;
+                case "--timeout-connect":
+                    if (!TryTakeIntValue(args, ref i, "--timeout-connect", out timeoutConnect, out var cErr))
+                    {
+                        return new ParseResult.Failure(cErr);
+                    }
+
+                    break;
+                case "--timeout-open":
+                    if (!TryTakeIntValue(args, ref i, "--timeout-open", out timeoutOpen, out var oErr))
+                    {
+                        return new ParseResult.Failure(oErr);
+                    }
+
+                    break;
+                default:
+                    if (args[i].StartsWith("--", StringComparison.Ordinal))
+                    {
+                        return new ParseResult.Failure($"Unknown flag '{args[i]}'.{Environment.NewLine}{Usage}");
+                    }
+
+                    projectIdentifier ??= args[i];
+                    break;
+            }
+        }
+
+        if (projectIdentifier is null)
+        {
+            return new ParseResult.Failure($"Missing required argument: <project>.{Environment.NewLine}{Usage}");
+        }
+
+        if (screen is null)
+        {
+            return new ParseResult.Failure($"Missing required flag: --screen <name>.{Environment.NewLine}{Usage}");
+        }
+
+        return new ParseResult.HmiCloneScreenSuccess(
+            new HmiCloneScreenOptions(projectIdentifier, screen, confirm, tiaInstall, timeoutConnect, timeoutOpen));
+    }
+
 }

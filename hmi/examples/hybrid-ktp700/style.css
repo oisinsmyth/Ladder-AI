@@ -1,0 +1,113 @@
+/* ============================================================================
+   House stylesheet for the experiment-2 HYBRID arm, RE-AUTHORED for a KTP700
+   Basic (800 x 480, 5.19 px/mm H, 5.59 px/mm V).
+
+   Rules: docs/17-hmi-conventions.md.  Sizing: hmi/sizing-standard.md.
+
+   Every pixel figure below is derived from a millimetre band, not chosen for
+   how it looks on a development monitor:
+
+     nav / HOME button   140 x 72  ->  27.0 x 12.9 mm   (H-402 standard 12 mm)
+     command button      240 x 116 ->  46.2 x 20.8 mm   (H-403 safety 20 mm)
+     horizontal gap       20 px    ->   3.9 mm          (H-404, 3 mm floor)
+     vertical gap         32 px    ->   5.7 mm          (H-404 recommended 5 mm)
+
+   The emitter renders EVERY text object as Tahoma 12 pt, so this sheet uses
+   one 16 px body size throughout rather than a type scale: a scale here would
+   look right in the browser and vanish on the panel.  Hierarchy is carried by
+   position and by the boxes, which do survive.
+   ============================================================================ */
+
+:root {
+  --field:  rgb(182, 182, 182);   /* H-101 low-chroma grey screen field       */
+  --panel:  rgb(200, 200, 200);   /* header band                              */
+  --btn:    rgb(210, 210, 210);   /* command / navigation face                */
+  --ink:    rgb(0, 0, 0);         /* H-301 dark text                          */
+  --dim:    rgb(60, 60, 60);      /* secondary text, still dark               */
+  --line:   rgb(90, 90, 90);      /* rules and borders                        */
+  --stop:   rgb(176, 42, 30);     /* H-107 red, STOP controls ONLY            */
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body {
+  width: 800px;
+  height: 480px;
+  overflow: hidden;
+}
+
+body {
+  background: var(--field);
+  color: var(--ink);
+  font-family: Tahoma, sans-serif;
+  font-size: 16px;
+  line-height: 22px;
+}
+
+/* ---- chrome ------------------------------------------------------------- */
+
+.hdr {
+  position: absolute; left: 0; top: 0; width: 800px; height: 40px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+}
+
+.hdr-title  { position: absolute; left: 10px;  top: 9px; width: 380px; height: 22px; }
+.hdr-state  { position: absolute; left: 400px; top: 9px; width: 200px; height: 22px; }
+.hdr-clock  { position: absolute; left: 610px; top: 9px; width: 180px; height: 22px; }
+
+/* ---- text --------------------------------------------------------------- */
+
+.txt  { position: absolute; height: 22px; color: var(--ink); }
+.dim  { position: absolute; height: 22px; color: var(--dim); }
+
+/* H-302: process values and timestamps use tabular figures so a changing
+   value does not reflow under the eye. */
+.num  { font-variant-numeric: tabular-nums; }
+
+/* ---- controls ----------------------------------------------------------- */
+
+.nav {
+  position: absolute; top: 70px; width: 140px; height: 72px;
+  background: var(--btn); border: 1px solid var(--line);
+  color: var(--ink); font-family: Tahoma, sans-serif; font-size: 16px;
+}
+
+.cmd {
+  position: absolute; top: 174px; width: 240px; height: 116px;
+  background: var(--btn); border: 1px solid var(--line);
+  color: var(--ink); font-family: Tahoma, sans-serif; font-size: 16px;
+}
+
+/* H-107: red is reserved for STOP, and it overrides H-102/H-103.  Paired with
+   the 20 mm size band (H-403) - the physical-safety rule is size AND colour. */
+.cmd-stop { background: var(--stop); color: rgb(255, 255, 255); border-color: var(--stop); }
+
+.back {
+  position: absolute; left: 10px; top: 394px; width: 140px; height: 72px;
+  background: var(--btn); border: 1px solid var(--line);
+  color: var(--ink); font-family: Tahoma, sans-serif; font-size: 16px;
+}
+
+/* ---- rules and panels --------------------------------------------------- */
+
+.rule { position: absolute; left: 10px; width: 780px; height: 1px; background: var(--line); }
+
+.pane {
+  position: absolute; left: 10px; width: 780px;
+  background: var(--panel); border: 1px solid var(--line);
+}
+
+/* ---- the alarm view, which CANNOT be authored on classic HMI at all -------
+   Measured: a screen carrying an alarm view exports with no object for it, and
+   re-importing such a screen destroys the control.  The emitter therefore
+   writes a white box with a red border and a label, plus a hand-off checklist
+   entry.  This rule reproduces what the panel will actually show, so the
+   render is not more finished-looking than the screen. */
+.alarm {
+  position: absolute; left: 10px; width: 780px;
+  background: rgb(255, 255, 255);
+  border: 1px solid var(--stop);
+  color: var(--ink);
+  padding-left: 4px;
+}

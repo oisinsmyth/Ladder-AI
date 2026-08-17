@@ -1,0 +1,384 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Line 2 Operator Panel</title>
+<link rel="stylesheet" href="hmi.css">
+</head>
+<body>
+<div class="screen">
+
+  <!-- ===================== STATUS HEADER ===================== -->
+  <header class="hdr" data-state="run">
+    <div class="hdr__id">
+      <div class="hdr__plant">Northfield Works</div>
+      <div class="hdr__area">Line 2 &middot; Aggregate handling</div>
+    </div>
+
+    <nav class="hdr__crumb" aria-label="Screen location">
+      <span class="sep">&#9632;</span>
+      <b>Home</b>
+    </nav>
+
+    <div class="hdr__spacer"></div>
+
+    <div class="hdr__stat">
+      <span class="statechip statechip--run"><i class="lamp"></i>Line running</span>
+      <span class="statechip statechip--alarm"><i class="lamp"></i>2 unacknowledged</span>
+      <span class="statechip statechip--net"><i class="lamp"></i>PLC online</span>
+
+      <div class="hdr__user">
+        <span class="who">D. Mahon</span>
+        <span class="role">Operator &middot; Shift B</span>
+      </div>
+
+      <div class="hdr__clock">
+        <span class="t" id="clock">14:26:41</span>
+        <span class="d" id="date">Fri 14 Aug 2026</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- ===================== BODY ===================== -->
+  <main class="body">
+
+    <!-- navigation to the five process screens -->
+    <nav class="nav" aria-label="Screen navigation">
+
+      <a class="tile tile--wide" href="overview.html">
+        <div class="tile__head">
+          <span class="tile__ico" aria-hidden="true">
+            <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.4"
+                 stroke-linecap="round" stroke-linejoin="round">
+              <rect x="4" y="10" width="16" height="12"></rect>
+              <rect x="28" y="26" width="16" height="12"></rect>
+              <path d="M20 16h8v10h0"></path>
+              <path d="M4 34h18"></path>
+              <path d="M18 30l4 4-4 4"></path>
+              <circle cx="36" cy="16" r="6"></circle>
+            </svg>
+          </span>
+          <div>
+            <h2 class="tile__t">Overview</h2>
+            <p class="tile__sub">Live mimic &mdash; feed, conveying, screening, discharge.</p>
+          </div>
+        </div>
+
+        <div class="mimic" aria-hidden="true">
+          <svg viewBox="0 0 880 150" preserveAspectRatio="xMidYMid meet"
+               font-family="Consolas, 'Cascadia Mono', monospace">
+            <defs>
+              <clipPath id="hopper"><path d="M36 22 h124 l-30 58 h-64 Z"></path></clipPath>
+            </defs>
+
+            <!-- feed hopper -->
+            <rect x="36" y="41" width="124" height="40" fill="#2fbe6a" opacity="0.42" clip-path="url(#hopper)"></rect>
+            <path d="M36 22 h124 l-30 58 h-64 Z" fill="none" stroke="#48697c" stroke-width="2.5"></path>
+            <text x="98" y="15" fill="#7b95a1" font-size="13" text-anchor="middle" letter-spacing="1.6">HP-201</text>
+            <text x="98" y="67" fill="#e6eff2" font-size="17" text-anchor="middle" font-weight="600">68 %</text>
+            <text x="98" y="136" fill="#a8bfc9" font-size="14" text-anchor="middle" letter-spacing="1.2">FEED 412 t/h</text>
+            <path d="M112 80 L178 96" stroke="#48697c" stroke-width="2.5"></path>
+
+            <!-- conveyor CV-201 -->
+            <line x1="178" y1="100" x2="404" y2="100" stroke="#48697c" stroke-width="4"></line>
+            <circle cx="188" cy="100" r="12" fill="#0a1216" stroke="#2fbe6a" stroke-width="3.5"></circle>
+            <circle cx="394" cy="100" r="12" fill="#0a1216" stroke="#2fbe6a" stroke-width="3.5"></circle>
+            <path d="M246 84 l10 6 -10 6 M276 84 l10 6 -10 6 M306 84 l10 6 -10 6"
+                  fill="none" stroke="#2fbe6a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"></path>
+            <text x="291" y="136" fill="#2fbe6a" font-size="14" text-anchor="middle" letter-spacing="1.2">CV-201 1.42 m/s</text>
+            <path d="M404 100 L416 96" stroke="#48697c" stroke-width="2.5"></path>
+
+            <!-- screening deck -->
+            <rect x="416" y="44" width="132" height="52" fill="#12202a" stroke="#48697c" stroke-width="2.5"></rect>
+            <line x1="428" y1="62" x2="536" y2="62" stroke="#48697c" stroke-width="2"></line>
+            <line x1="428" y1="79" x2="536" y2="79" stroke="#48697c" stroke-width="2"></line>
+            <text x="482" y="15" fill="#7b95a1" font-size="13" text-anchor="middle" letter-spacing="1.6">SC-203</text>
+            <text x="482" y="136" fill="#2fbe6a" font-size="14" text-anchor="middle" letter-spacing="1.2">SCREEN RUN</text>
+            <path d="M548 96 L560 100" stroke="#48697c" stroke-width="2.5"></path>
+
+            <!-- conveyor CV-202 -->
+            <line x1="560" y1="100" x2="766" y2="100" stroke="#48697c" stroke-width="4"></line>
+            <circle cx="570" cy="100" r="12" fill="#0a1216" stroke="#f0a722" stroke-width="3.5"></circle>
+            <circle cx="756" cy="100" r="12" fill="#0a1216" stroke="#f0a722" stroke-width="3.5"></circle>
+            <path d="M628 84 l10 6 -10 6 M658 84 l10 6 -10 6 M688 84 l10 6 -10 6"
+                  fill="none" stroke="#f0a722" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"></path>
+            <text x="663" y="136" fill="#f0a722" font-size="14" text-anchor="middle" letter-spacing="1.2">CV-202 BELT DRIFT</text>
+            <path d="M766 100 L778 96" stroke="#48697c" stroke-width="2.5"></path>
+
+            <!-- discharge bin -->
+            <rect x="780" y="75" width="72" height="21" fill="#3f9be0" opacity="0.5"></rect>
+            <path d="M778 44 h76 v52 h-76 Z" fill="none" stroke="#48697c" stroke-width="2.5"></path>
+            <text x="816" y="15" fill="#7b95a1" font-size="13" text-anchor="middle" letter-spacing="1.6">BN-205</text>
+            <text x="816" y="136" fill="#3f9be0" font-size="14" text-anchor="middle" letter-spacing="1.2">BIN 41 %</text>
+          </svg>
+        </div>
+
+        <div class="tile__foot">
+          <div class="readout">
+            <div><span class="k">Feed rate</span><span class="v">412 t/h</span></div>
+            <div><span class="k">HP-201 level</span><span class="v">68 %</span></div>
+            <div><span class="k">CV-201</span><span class="v is-run">RUNNING</span></div>
+            <div><span class="k">CV-202</span><span class="v is-warn">DRIFT</span></div>
+            <div><span class="k">SC-203 load</span><span class="v">74 %</span></div>
+          </div>
+        </div>
+      </a>
+
+      <a class="tile tile--alarms" href="alarms.html">
+        <div class="tile__head">
+          <span class="tile__ico" aria-hidden="true">
+            <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.4"
+                 stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 20a12 12 0 0 1 24 0c0 9 3 12 3 12H9s3-3 3-12Z"></path>
+              <path d="M20 38a4.5 4.5 0 0 0 8 0"></path>
+            </svg>
+          </span>
+          <div>
+            <h2 class="tile__t">Alarms</h2>
+            <p class="tile__sub">Active list, acknowledge and alarm history.</p>
+          </div>
+        </div>
+
+        <div class="tile__mid">
+          <ul class="minilist">
+            <li class="is-crit"><i class="dot"></i><span class="tg">HP-201</span><span class="tx">Feed hopper blocked</span></li>
+            <li><i class="dot"></i><span class="tg">CV-202</span><span class="tx">Belt drift, RH side</span></li>
+            <li><i class="dot"></i><span class="tg">DE-101</span><span class="tx">Filter &Delta;p low</span></li>
+          </ul>
+        </div>
+
+        <div class="tile__foot">
+          <div class="count">
+            <span class="n">3</span><span class="l">Active</span>
+            <span class="n n--sm">2</span><span class="l">Unack</span>
+          </div>
+        </div>
+      </a>
+
+      <a class="tile" href="trends.html">
+        <div class="tile__head">
+          <span class="tile__ico" aria-hidden="true">
+            <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.4"
+                 stroke-linecap="round" stroke-linejoin="round">
+              <path d="M6 6v36h36"></path>
+              <path d="M12 32l9-11 7 6 11-16"></path>
+            </svg>
+          </span>
+          <div>
+            <h2 class="tile__t">Trends</h2>
+            <p class="tile__sub">Rates, levels and motor current over time.</p>
+          </div>
+        </div>
+
+        <div class="tile__mid">
+          <div class="spark" aria-hidden="true">
+            <svg viewBox="0 0 400 120" preserveAspectRatio="none">
+              <line x1="0" y1="24" x2="400" y2="24" stroke="#22333e" stroke-width="1"></line>
+              <line x1="0" y1="48" x2="400" y2="48" stroke="#22333e" stroke-width="1"></line>
+              <line x1="0" y1="72" x2="400" y2="72" stroke="#22333e" stroke-width="1"></line>
+              <line x1="0" y1="96" x2="400" y2="96" stroke="#22333e" stroke-width="1"></line>
+              <line x1="0" y1="30" x2="400" y2="30" stroke="#f0a722" stroke-width="1"
+                    stroke-dasharray="5 6" opacity="0.55"></line>
+              <path d="M0 96 L33 84 L66 90 L100 68 L133 74 L166 52 L200 58 L233 40 L266 47 L300 30 L333 38 L366 24 L396 33 V120 H0 Z"
+                    fill="#00a69e" opacity="0.16"></path>
+              <path d="M0 96 L33 84 L66 90 L100 68 L133 74 L166 52 L200 58 L233 40 L266 47 L300 30 L333 38 L366 24 L396 33"
+                    fill="none" stroke="#00a69e" stroke-width="2.5" vector-effect="non-scaling-stroke"></path>
+              <circle cx="396" cy="33" r="4" fill="#00a69e"></circle>
+            </svg>
+          </div>
+        </div>
+
+        <div class="tile__foot">
+          <div class="readout">
+            <div><span class="k">Feed rate 8 h</span><span class="v">412 t/h</span></div>
+            <div><span class="k">Peak</span><span class="v">468 t/h</span></div>
+            <div><span class="k">SC-203 current</span><span class="v">62 A</span></div>
+          </div>
+        </div>
+      </a>
+
+      <a class="tile tile--diag" href="diagnostics.html">
+        <div class="tile__head">
+          <span class="tile__ico" aria-hidden="true">
+            <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.4"
+                 stroke-linecap="round" stroke-linejoin="round">
+              <rect x="7" y="12" width="34" height="24"></rect>
+              <path d="M14 12V6M24 12V6M34 12V6M14 42v-6M24 42v-6M34 42v-6"></path>
+              <path d="M14 24h6l3-5 4 10 3-5h6"></path>
+            </svg>
+          </span>
+          <div>
+            <h2 class="tile__t">Diagnostics</h2>
+            <p class="tile__sub">Controller, network and field device health.</p>
+          </div>
+        </div>
+
+        <div class="tile__mid">
+          <dl class="tilekv">
+            <dt>CPU cycle time</dt><dd>23.3 ms</dd>
+            <dt>Load memory used</dt><dd>41 %</dd>
+            <dt>Last download</dt><dd>13 Aug 09:41</dd>
+          </dl>
+        </div>
+
+        <div class="tile__foot">
+          <div class="chips">
+            <span class="chip"><i class="dot"></i>PLC RUN</span>
+            <span class="chip"><i class="dot"></i>Profinet OK</span>
+            <span class="chip chip--warn"><i class="dot"></i>2 IO warnings</span>
+            <span class="chip chip--info"><i class="dot"></i>Modbus 1&#8202;/&#8202;1</span>
+            <span class="chip chip--off"><i class="dot"></i>Drive 3 offline</span>
+          </div>
+        </div>
+      </a>
+
+      <a class="tile" href="settings.html">
+        <div class="tile__head">
+          <span class="tile__ico" aria-hidden="true">
+            <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.4"
+                 stroke-linecap="round" stroke-linejoin="round">
+              <path d="M8 14h32M8 24h32M8 34h32"></path>
+              <circle cx="18" cy="14" r="4.5" fill="#16222a"></circle>
+              <circle cx="30" cy="24" r="4.5" fill="#16222a"></circle>
+              <circle cx="15" cy="34" r="4.5" fill="#16222a"></circle>
+            </svg>
+          </span>
+          <div>
+            <h2 class="tile__t">Settings</h2>
+            <p class="tile__sub">Setpoints, recipes, timers and user access.</p>
+          </div>
+        </div>
+
+        <div class="tile__mid">
+          <dl class="tilekv">
+            <dt>Feed rate setpoint</dt><dd>420 t/h</dd>
+            <dt>Screen speed</dt><dd>92 %</dd>
+            <dt>Blockage delay</dt><dd>30 s</dd>
+          </dl>
+        </div>
+
+        <div class="tile__foot">
+          <div class="locknote">&#9679;&nbsp; Supervisor sign-in required</div>
+        </div>
+      </a>
+
+    </nav>
+
+    <!-- command column -->
+    <div class="cmd">
+      <div class="cmd__state">
+        <div class="cmd__label">Line 2 state</div>
+        <div class="cmd__value">Running</div>
+        <div class="cmd__meta">
+          <span><span class="k">Since</span> 06:12:04</span>
+          <span><span class="k">Mode</span> AUTO</span>
+        </div>
+      </div>
+
+      <button class="key key--start" type="button" data-cmd="START">
+        <span class="key__in"><span>Start</span><span class="sub">Sequence start</span></span>
+      </button>
+
+      <button class="key key--stop" type="button" data-cmd="STOP">
+        <span class="key__in"><span>Stop</span><span class="sub">Controlled stop</span></span>
+      </button>
+
+      <button class="key key--reset" type="button" data-cmd="RESET">
+        <span class="key__in"><span>Reset</span><span class="sub">Clear faults</span></span>
+      </button>
+    </div>
+  </main>
+
+  <!-- ===================== ALARM BANNER ===================== -->
+  <section class="banner" aria-label="Active alarms">
+    <div class="banner__bar">
+      <span class="banner__title">Active alarms</span>
+      <span class="tally tally--alarm"><b>1</b> Critical</span>
+      <span class="tally tally--warn"><b>2</b> Warning</span>
+      <span class="tally"><b>14:22:07</b> Last event</span>
+      <div class="banner__spacer"></div>
+      <button class="minikey" type="button" id="ackall">Acknowledge all</button>
+      <button class="minikey" type="button" onclick="location.href='alarms.html'">Open alarm list</button>
+    </div>
+
+    <div class="alarms">
+      <div class="alarms__hd" aria-hidden="true">
+        <span></span><span>Time</span><span>Tag</span><span>Priority</span>
+        <span>Message</span><span>State</span><span></span>
+      </div>
+
+      <div class="alarm alarm--crit alarm--unack">
+        <i class="sev"></i>
+        <span class="time">14:22:07</span>
+        <span class="tag">HP-201</span>
+        <span class="pri">Critical</span>
+        <span class="msg">Feed hopper blocked &mdash; level held above high-high for 30 s, feeder inhibited</span>
+        <span class="st">Active &middot; unack</span>
+        <button class="ackbtn" type="button">Ack</button>
+      </div>
+
+      <div class="alarm alarm--warn alarm--unack">
+        <i class="sev"></i>
+        <span class="time">14:19:48</span>
+        <span class="tag">CV-202</span>
+        <span class="pri">Warning</span>
+        <span class="msg">Belt drift switch tripped on the right-hand side &mdash; running at reduced speed</span>
+        <span class="st">Active &middot; unack</span>
+        <button class="ackbtn" type="button">Ack</button>
+      </div>
+
+      <div class="alarm alarm--warn">
+        <i class="sev"></i>
+        <span class="time">14:03:12</span>
+        <span class="tag">DE-101</span>
+        <span class="pri">Warning</span>
+        <span class="msg">Dust extractor differential pressure below limit &mdash; check filter bags</span>
+        <span class="st">Active &middot; acked</span>
+        <button class="ackbtn" type="button" disabled>Ack</button>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<script>
+(function () {
+  var clock = document.getElementById('clock');
+  var date  = document.getElementById('date');
+  var days  = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  var mons  = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+               'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+  function pad(n) { return (n < 10 ? '0' : '') + n; }
+
+  // Panel time runs from the shift time the alarm list was captured, so the
+  // timestamps on screen stay consistent with each other.
+  var t = new Date(2026, 7, 14, 14, 26, 41);
+
+  function tick() {
+    clock.textContent = pad(t.getHours()) + ':' + pad(t.getMinutes()) + ':' + pad(t.getSeconds());
+    date.textContent  = days[t.getDay()] + ' ' + t.getDate() + ' ' +
+                        mons[t.getMonth()] + ' ' + t.getFullYear();
+    t = new Date(t.getTime() + 1000);
+  }
+  tick();
+  setInterval(tick, 1000);
+
+  // Acknowledging clears the unacknowledged highlight on that row.
+  function ack(row) {
+    row.classList.remove('alarm--unack');
+    row.querySelector('.st').textContent = 'Active Â· acked';
+    row.querySelector('.ackbtn').disabled = true;
+  }
+
+  Array.prototype.forEach.call(document.querySelectorAll('.ackbtn'), function (b) {
+    b.addEventListener('click', function () { ack(b.parentNode); });
+  });
+
+  document.getElementById('ackall').addEventListener('click', function () {
+    Array.prototype.forEach.call(document.querySelectorAll('.alarm--unack'), ack);
+  });
+})();
+</script>
+</body>
+</html>

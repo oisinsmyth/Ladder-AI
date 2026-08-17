@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>ALARMS - Line 3 Operator Panel</title>
+<link rel="stylesheet" href="hmi.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="plant">
+    <div class="logo">L3</div>
+    <div>
+      <div class="plant-name">Northfield Works &mdash; Line 3</div>
+      <div class="plant-sub">Blending &amp; Transfer</div>
+    </div>
+  </div>
+  <div class="screen-title">Alarms</div>
+  <div class="status-cluster">
+    <div class="pill online"><span class="led"></span>PLC ONLINE</div>
+    <div class="stat-item"><div class="label">Operator</div><div class="value">J. HALE</div></div>
+    <div class="stat-item"><div class="label">Plant Time</div><div class="value" id="clock">06:42:18</div></div>
+  </div>
+</header>
+
+<main class="subpage">
+  <section class="subpage-main">
+    <div class="panel" style="flex:1;">
+      <h1>Alarm List</h1>
+      <div class="rule"></div>
+      <p>Full active-alarm and alarm-history view, with acknowledge, silence and filtering by
+         priority, area and time range.</p>
+      <p>The banner on the home screen shows only the four most recent active alarms; the complete
+         list, including cleared-but-unacknowledged entries, belongs here.</p>
+      <div class="placeholder-note">
+        PLACEHOLDER SCREEN &mdash; the alarm table and filter controls are not part of this mock-up.
+        Use HOME below to return to the navigation screen.
+      </div>
+    </div>
+  </section>
+
+  <aside class="subpage-side">
+    <div class="side-card">
+      <h2>Alarm Counts</h2>
+      <div class="summary-row"><span class="k">High</span><span class="v" style="color:#e5484d">1</span></div>
+      <div class="summary-row"><span class="k">Medium</span><span class="v warn">2</span></div>
+      <div class="summary-row"><span class="k">Low</span><span class="v">1</span></div>
+      <div class="summary-row"><span class="k">Unacknowledged</span><span class="v warn">2</span></div>
+    </div>
+    <div class="side-card">
+      <h2>Horn</h2>
+      <div class="summary-row"><span class="k">State</span><span class="v warn">SOUNDING</span></div>
+    </div>
+  </aside>
+</main>
+
+<footer class="bottombar">
+  <a class="home-btn" href="home.html">
+    <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+         stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3.5 11.5 12 4l8.5 7.5"></path>
+      <path d="M5.8 10.2V20h12.4v-9.8"></path>
+    </svg>
+    Home
+  </a>
+
+  <div class="crumb-tabs">
+    <a href="overview.html">Overview</a>
+    <a class="current" href="alarms.html">Alarms</a>
+    <a href="settings.html">Settings</a>
+    <a href="trends.html">Trends</a>
+    <a href="diagnostics.html">Diagnostics</a>
+  </div>
+
+  <div class="strip">
+    <span class="prio hi">HIGH</span>
+    <span class="a-time">06:41:52</span>
+    <span>P301_TransferPump &mdash; motor overload tripped</span>
+  </div>
+</footer>
+
+<script>
+(function () {
+  var el = document.getElementById('clock');
+  function tick() {
+    var d = new Date();
+    function p(n) { return (n < 10 ? '0' : '') + n; }
+    el.textContent = p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds());
+  }
+  tick(); setInterval(tick, 1000);
+})();
+</script>
+
+</body>
+</html>
