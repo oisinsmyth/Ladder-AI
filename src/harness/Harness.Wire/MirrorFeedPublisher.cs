@@ -137,6 +137,21 @@ public sealed class MirrorFeedPublisher : IMirrorFeedPublisher
     /// <inheritdoc />
     public long Published { get; private set; }
 
+    /// <summary>
+    /// TEST SEAM — invoked with the temporary file's path after it has been written and flushed, and
+    /// BEFORE it is renamed over the destination.
+    ///
+    /// <para>🔴 <b>IT EXISTS BECAUSE THE TWO CENTRAL GUARANTEES OF THIS CLASS ARE OTHERWISE UNTESTABLE,
+    /// AND MUTATION PROVED IT.</b> Replacing the whole temp-then-rename with a plain
+    /// <see cref="File.WriteAllText(string,string)"/> left every test green, and so did writing the
+    /// <c>.initialised</c> marker AFTER the publish instead of before. Nothing observed the moments that
+    /// matter: that the NEW document is already complete somewhere else while the destination still holds
+    /// the whole PREVIOUS one, and that the marker is on disk before anything is ever published. This makes
+    /// exactly those observable, and it is the difference between an argued guarantee and a demonstrated
+    /// one — the same seam, for the same reason, as <c>CoordinatorStateStore.OnTemporaryWritten</c>.</para>
+    /// </summary>
+    internal Action<string>? OnTemporaryWritten { get; set; }
+
     /// <inheritdoc />
     public void Begin(MirrorFeedIdentity identity)
     {
@@ -230,6 +245,8 @@ public sealed class MirrorFeedPublisher : IMirrorFeedPublisher
                 // The content is durable BEFORE the rename publishes it. The ORDER is the point.
                 stream.Flush(flushToDisk: true);
             }
+
+            OnTemporaryWritten?.Invoke(temporary);
 
             Replace(temporary);
             Published++;

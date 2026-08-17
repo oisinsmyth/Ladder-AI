@@ -296,6 +296,70 @@ public class MirrorFeedPublisherTests : IDisposable
     }
 
     /// <summary>
+    /// 🔴 <b>AT THE MOMENT BEFORE PUBLICATION, THE NEW DOCUMENT IS COMPLETE SOMEWHERE ELSE AND THE
+    /// DESTINATION STILL HOLDS THE WHOLE PREVIOUS ONE.</b>
+    ///
+    /// <para>That sentence IS the atomicity guarantee, and nothing could observe it from outside — which
+    /// is why a mutation replacing the whole temp-then-rename with a plain <c>File.WriteAllText</c> left
+    /// every other test in this file green. The seam makes the moment visible, and this asserts both
+    /// halves of it.</para>
+    /// </summary>
+    [Fact]
+    public void At_the_moment_before_publication_both_documents_are_whole()
+    {
+        var publisher = new MirrorFeedPublisher(Feed, () => T0, "test");
+        publisher.Begin(Identity());
+        publisher.Publish(0, new ushort[] { 0x1111 }, T0);
+
+        var observations = 0;
+
+        publisher.OnTemporaryWritten = temporary =>
+        {
+            observations++;
+
+            // The NEW document, complete, somewhere else.
+            Assert.True(MirrorFeed.TryParse(File.ReadAllText(temporary), out var staged, out var stagedProblem), stagedProblem);
+            Assert.Equal(0x2222, staged!.Frames[0].Values[0]);
+
+            // The PREVIOUS document, whole, still at the destination.
+            Assert.True(MirrorFeed.TryParse(File.ReadAllText(Feed), out var current, out var currentProblem), currentProblem);
+            Assert.Equal(0x1111, current!.Frames[0].Values[0]);
+        };
+
+        publisher.Publish(0, new ushort[] { 0x2222 }, T0.AddSeconds(1));
+
+        Assert.Equal(1, observations);
+    }
+
+    /// <summary>
+    /// 🔴 <b>THE MARKER IS ON DISK BEFORE ANYTHING IS EVER PUBLISHED, AND THE ORDER IS THE GUARANTEE.</b>
+    ///
+    /// <para>A marker written after the rename would leave the very window it exists to qualify, unmarked —
+    /// and a reader landing there would report "no publisher has ever written here", which is the one state
+    /// from which a viewer happily declares that no wave has run. The seam is what makes the ORDER
+    /// observable: asserting the marker exists after <c>Begin</c> returns is satisfied by either order.</para>
+    /// </summary>
+    [Fact]
+    public void The_marker_is_written_before_the_very_first_publication()
+    {
+        var publisher = new MirrorFeedPublisher(Feed, () => T0, "test");
+
+        var observations = 0;
+
+        publisher.OnTemporaryWritten = _ =>
+        {
+            observations++;
+            Assert.True(File.Exists(publisher.InitialisedPath),
+                "the marker does not exist at the moment the FIRST document is about to be published, so a " +
+                "reader landing in the rename's window would read the absent feed as 'nobody ever wrote here'.");
+        };
+
+        publisher.Begin(Identity());
+
+        Assert.Equal(1, observations);
+    }
+
+    /// <summary>
     /// <b>A reader interleaved with a hundred publishes never sees a partial document.</b> This is the
     /// property the atomic rename buys, and it is asserted by READING rather than by inspecting the code:
     /// every read either finds no file yet or parses whole.
@@ -331,6 +395,62 @@ public class MirrorFeedPublisherTests : IDisposable
         }
 
         Assert.True(whole > 0, "no read succeeded at all, so this proves nothing about atomicity.");
+        Assert.Equal(0, partial);
+    }
+
+    /// <summary>
+    /// <b>A reader on ANOTHER THREAD, reading continuously while the publisher works.</b>
+    ///
+    /// <para>⚠️ The sequential interleaving above cannot fail under a non-atomic write: it reads between
+    /// publishes, so a torn file would already have been repaired. This one reads DURING them, which is
+    /// the situation a live viewer is actually in. The denominator is asserted, because a reader that
+    /// never landed on a write proves nothing about writes.</para>
+    /// </summary>
+    [Fact]
+    public async Task A_concurrent_reader_never_observes_a_partial_document()
+    {
+        using var publisher = new MirrorFeedPublisher(Feed, () => T0, "test");
+        publisher.Begin(Identity());
+
+        var stop = false;
+        var whole = 0;
+        var partial = 0;
+        var absent = 0;
+
+        var reader = Task.Run(() =>
+        {
+            while (!Volatile.Read(ref stop))
+            {
+                string text;
+                try
+                {
+                    using var stream = new FileStream(Feed, FileMode.Open, FileAccess.Read,
+                        FileShare.ReadWrite | FileShare.Delete);
+                    using var handle = new StreamReader(stream);
+                    text = handle.ReadToEnd();
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    // A rename briefly refuses opens of its destination, and it briefly does not exist.
+                    // Neither is a partial document, and neither is what this test is about.
+                    absent++;
+                    continue;
+                }
+
+                if (MirrorFeed.TryParse(text, out _, out _)) whole++;
+                else partial++;
+            }
+        });
+
+        for (var i = 0; i < 2000; i++)
+            publisher.Publish(0, new ushort[] { (ushort)i, (ushort)(i >> 8) }, T0.AddMilliseconds(i));
+
+        Volatile.Write(ref stop, true);
+        await reader.WaitAsync(TimeSpan.FromSeconds(30));
+
+        Assert.True(whole + absent > 0, "the reader never ran, so this proves nothing.");
+        Assert.True(whole > 0, $"the reader never read a whole document at all ({absent} open failures), so a " +
+                               "zero partial count is a green over nothing.");
         Assert.Equal(0, partial);
     }
 

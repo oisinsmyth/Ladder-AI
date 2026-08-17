@@ -22,6 +22,18 @@
     <PackageReference Include="NModbus" />
   </ItemGroup>
 
+  <!--
+    MirrorFeedPublisher's two central guarantees - the new document is complete elsewhere before the
+    destination is touched, and the .initialised marker is on disk BEFORE anything is published - are
+    invisible from outside the publish. Both survived a mutation that removed them. The test seam that
+    makes those moments observable is internal, so the tests need to see it.
+  -->
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
+      <_Parameter1>Harness.Wire.Tests</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\Harness.Map\Harness.Map.csproj" />
   </ItemGroup>
