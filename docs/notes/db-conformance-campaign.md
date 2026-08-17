@@ -92,6 +92,13 @@ renderer drops is gone before a scraper sees it."*
 **DB-2 is unexercised as a result, and it is unexercised in the specific way DB-2 exists to prevent:**
 its stamp is what stops a green obtained *before* an invalidating change from being read as current.
 
+> ✅ **CLOSED 2026-08-17 (`8584f5a`), OFFLINE.** `ResultPackageJson` renders all seven contents on every
+> package, and a content that is genuinely unavailable is **present and says so** rather than absent.
+> Two supporting gaps were found while fixing it: **manifest presence was not on the package type at
+> all** (`StimulusCheck` consumed it and dropped it), and **an unrecorded co-running slice rendered as
+> the positive claim "ran alone"**. ⚠️ **The wave was NOT re-run — that needs the rig.** The finding
+> above stands as the record of what the artifact of 2026-08-17 contains.
+
 ### 3. 🔴 The wave reported on 2 of 22 vectors, using 2 as its own denominator
 
 `OUTCOME: Ran — the wave ran to 22 index(es) over 1 slot(s), costing 890 round trip(s).` Then **two**
@@ -104,6 +111,21 @@ that silently renarrows its own denominator to match what it managed to produce 
 Both packages were honest about themselves — `UNSETTLED` and `STALE`, the latter saying outright
 *"THE EXPERIMENT NEVER RAN … Reading this as a failure would send an agent editing correct logic."*
 **The per-package honesty is real; the run-level denominator is the gap.**
+
+> ✅ **CLOSED 2026-08-17 (`8584f5a`), OFFLINE.** The denominator is now the SUBMITTED count everywhere,
+> every submitted vector carries a disposition and a reason in both the console and the JSON, and a slot
+> that stops short is reported with the index it reached and the number of vectors consequently never
+> attempted. `wave.Length` — *what the wave SET OUT to run* — is no longer printed as what it ran.
+>
+> 🔴 **AND THE DISPOSITION OF VECTORS 3–22 IS NOW ESTABLISHED FROM THE CODE, THOUGH NOT ITS CAUSE.**
+> `WaveRun.Run` has exactly **one** `break`, and it is the only route by which a slot's collected results
+> can be shorter than its tensor: an inert phase that could not be ESTABLISHED records one `NotInert`
+> result and stops the wave. Two collected results therefore means **the wave broke at index 1**, and
+> vectors 3–22 were never submitted to the device. That also accounts for the second package's
+> `CommandedButDidNotRun` — on that path the echo is cleared and never committed.
+> ⚠️ ***WHICH of the four `InertOutcome` values it was is NOT recoverable from the artifact***, because
+> `inert.Detail` was never serialised. It is now (`slotExits[].lastOutcome` / `lastDetail`), so the next
+> run answers it. **Do not read a cause into this one.**
 
 ### 4. 🔴 Gate 4 compares free prose, so it cannot survive an independent author — DB-9, M4
 
