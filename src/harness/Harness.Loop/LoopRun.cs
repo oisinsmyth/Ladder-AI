@@ -122,9 +122,13 @@ public static class LoopRun
 
         if (!generation.Generated)
         {
+            // *** EVERY SUBMITTED VECTOR IS ACCOUNTED FOR EVEN HERE, WHERE NOTHING RAN. *** A stop before
+            // the wave is precisely the run most likely to be read as "no results yet" rather than as
+            // "twenty-two vectors were never attempted", and an empty list says the first.
             return new LoopResult(generation.Stopped!.Value, generation.Gate, generation.SizeReport,
                 generation.Retention, null, null, null,
-                Array.Empty<ResultPackage>(), generation.Caveats, generation.Detail);
+                Array.Empty<ResultPackage>(), generation.Caveats, generation.Detail,
+                NothingAttempted(request, generation.Stopped!.Value, generation.Detail, ordinalOf: null, generation.Map));
         }
 
         var map = generation.Map!;
@@ -156,15 +160,23 @@ public static class LoopRun
             // an order that would not have helped.
             var spanning = order?.BoundarySpanningVectors ?? Array.Empty<string>();
 
-            return new LoopResult(
-                spanning.Count > 0 ? LoopOutcome.NotSchedulable : LoopOutcome.NotOrdered,
-                gate, generation.SizeReport, retention, null, null, null,
-                Array.Empty<ResultPackage>(), caveats,
+            var outcome = spanning.Count > 0 ? LoopOutcome.NotSchedulable : LoopOutcome.NotOrdered;
+
+            var detail =
                 (spanning.Count > 0
                     ? $"{spanning.Count} vector(s) cannot be scheduled in this wave, so nothing was deployed and no wave was run: "
                     : "the vectors could not be put in one order, so nothing was deployed and no wave was run: ")
                 + (order?.Detail ?? "no order was computed at all")
-                + (order is null ? string.Empty : " " + string.Join(" | ", order.Refusals)));
+                + (order is null ? string.Empty : " " + string.Join(" | ", order.Refusals));
+
+            return new LoopResult(
+                outcome,
+                gate, generation.SizeReport, retention, null, null, null,
+                Array.Empty<ResultPackage>(), caveats, detail,
+
+                // No merged order exists on this path, so no vector HAS a wave index — the accounting
+                // reports -1 rather than 0, since 0 is a real index and would read as "it was first".
+                NothingAttempted(request, outcome, detail, ordinalOf: null, map));
         }
 
         var ordinalOf = order.OrdinalOf;
@@ -173,10 +185,13 @@ public static class LoopRun
         var deployment = gateway.Deploy(copyLayer.Objects.Concat(request.ProgramUnderTest).ToArray(), stamp);
         if (!deployment.Attempted || !deployment.Loaded)
         {
-            return new LoopResult(LoopOutcome.NotDeployed, gate, generation.SizeReport, retention, deployment, null, null,
-                Array.Empty<ResultPackage>(), caveats,
+            var detail =
                 (deployment.Attempted ? "the deployment was attempted and the device did not load everything: " : "no deployment was attempted: ")
-                + deployment.Detail);
+                + deployment.Detail;
+
+            return new LoopResult(LoopOutcome.NotDeployed, gate, generation.SizeReport, retention, deployment, null, null,
+                Array.Empty<ResultPackage>(), caveats, detail,
+                NothingAttempted(request, LoopOutcome.NotDeployed, detail, ordinalOf, map));
         }
 
         using var transport = gateway.Open();
@@ -186,9 +201,11 @@ public static class LoopRun
         var version = VersionCheck.Confirm(client, stamp);
         if (!version.Confirmed)
         {
+            var detail = "the version register did not confirm the build this loop generated, so the wave was not run: " + version.Detail;
+
             return new LoopResult(LoopOutcome.NotConfirmed, gate, generation.SizeReport, retention, deployment, version, null,
-                Array.Empty<ResultPackage>(), caveats,
-                "the version register did not confirm the build this loop generated, so the wave was not run: " + version.Detail);
+                Array.Empty<ResultPackage>(), caveats, detail,
+                NothingAttempted(request, LoopOutcome.NotConfirmed, detail, ordinalOf, map));
         }
 
         // ---- 7. RUN ---------------------------------------------------------------------------------
@@ -206,12 +223,90 @@ public static class LoopRun
         var roundTripsBefore = client.RoundTrips;
         var wave = WaveRun.Run(client, compression, tensors, nowMs);
 
+        // ---- 7b. ACCOUNT FOR EVERY SUBMITTED VECTOR, BEFORE PACKAGING ANY OF THEM -------------------
+        //
+        // 🔴 *** THE DENOMINATOR IS THE SUBMITTED SET AND IT IS COMPUTED ONCE. *** Step 8 below builds a
+        // package if and only if this says `Ran`, which is what stops the report and the packages from
+        // disagreeing: the loop used to `continue` past a vector whose index the wave never reached, and
+        // NOTHING ELSE IN THE SYSTEM LEARNED THAT IT HAD HAPPENED. Measured on the first wave ever run —
+        // 22 vectors submitted, 2 packages produced, and the summary line then read `0 of 2`.
+        var account = VectorAccounting.Of(
+            Submitted(request, ordinalOf, map),
+            VectorAccounting.ProgressOf(wave.Distributions),
+            wave.Length);
+
         // ---- 8. PACKAGE -----------------------------------------------------------------------------
-        var packages = Package(request, map, stamp, client, wave, deployment, version, roundTripsBefore, ordinalOf);
+        var packages = Package(request, map, stamp, client, wave, deployment, version, roundTripsBefore, ordinalOf, account);
+
+        // *** WHAT WAS PLANNED AND WHAT WAS REACHED ARE TWO NUMBERS, AND THIS PRINTED ONLY THE FIRST. ***
+        // `wave.Length` is the LONGEST TENSOR — what the wave set out to run — so a wave that stopped at
+        // index 1 of 22 reported "the wave ran to 22 index(es)". True of the plan, false of the run, and
+        // it is the headline line of the whole report.
+        var reached = account.IndicesRun == account.IndicesPlanned
+            ? $"the wave ran all {wave.Length} planned index(es)"
+            : $"the wave ran {account.IndicesRun} of {wave.Length} planned index(es) and STOPPED EARLY";
 
         return new LoopResult(LoopOutcome.Ran, gate, generation.SizeReport, retention, deployment, version, wave,
             packages, caveats,
-            $"the wave ran to {wave.Length} index(es) over {tensors.Length} slot(s), costing {wave.RoundTrips} round trip(s).");
+            $"{reached} over {tensors.Length} slot(s), costing {wave.RoundTrips} round trip(s). "
+            + $"{account.Ran} of {account.Submitted} submitted vector(s) were attempted"
+            + (account.NeverAttempted > 0 ? $"; {account.NeverAttempted} were NOT." : "."),
+            account);
+    }
+
+    /// <summary>
+    /// Every submitted vector with the two keys the accounting needs: which mirror slot it resolves to and
+    /// where it sits in that slot's MERGED run.
+    /// </summary>
+    private static IReadOnlyList<VectorAccounting.SubmittedVector> Submitted(
+        LoopRequest request, IReadOnlyDictionary<string, int> ordinalOf, RegisterMap map) =>
+        request.Vectors
+            .Select(v => new VectorAccounting.SubmittedVector(
+                v.Id, v.Slot, SlotIndexOf(map, request.Bindings, v.Slot), ordinalOf[v.Id]))
+            .ToArray();
+
+    /// <summary>
+    /// The whole submitted set, accounted for as never attempted — <b>for every path that stops before
+    /// the wave.</b>
+    /// </summary>
+    /// <param name="ordinalOf">
+    /// The merged order, where one exists. <b>Absent means no vector has a wave index yet</b>, and the
+    /// rows then carry <c>-1</c> rather than <c>0</c>: zero is a real index and would read as "it was
+    /// first". Slot indices are likewise <c>-1</c> when the map cannot resolve them, which is the case on
+    /// the paths that stop before the map is trusted.
+    /// </param>
+    private static RunAccount NothingAttempted(
+        LoopRequest request, LoopOutcome outcome, string detail,
+        IReadOnlyDictionary<string, int>? ordinalOf = null,
+        RegisterMap? map = null) =>
+        VectorAccounting.NothingAttempted(
+            request.Vectors.Select(v => new VectorAccounting.SubmittedVector(
+                v.Id,
+                v.Slot,
+                SlotIndexOrUnknown(request, map, v.Slot),
+                ordinalOf is not null && ordinalOf.TryGetValue(v.Id, out var ordinal) ? ordinal : -1)),
+            outcome,
+            detail);
+
+    /// <summary>
+    /// The slot index a cited id resolves to, or <c>-1</c>.
+    ///
+    /// <para><b>It cannot throw, and that is the point of it existing beside
+    /// <see cref="SlotIndexOf"/>.</b> The stop paths include the one where the two documents disagree
+    /// about which slots exist at all, so an unresolvable id is an ordinary input to this accounting
+    /// rather than a fault — and losing the whole account to an exception would leave the run reporting
+    /// nothing about any vector, which is exactly the defect being fixed.</para>
+    /// </summary>
+    private static int SlotIndexOrUnknown(LoopRequest request, RegisterMap? map, string citedSlotId)
+    {
+        if (map is null)
+            return -1;
+
+        var matches = request.Bindings
+            .Where(b => b.CitableSlotIds.Contains(citedSlotId, StringComparer.Ordinal))
+            .ToArray();
+
+        return matches.Length == 1 ? map.Slot(matches[0].SlotId)?.Index ?? -1 : -1;
     }
 
     /// <summary>
@@ -424,10 +519,11 @@ public static class LoopRun
     private static IReadOnlyList<ResultPackage> Package(
         LoopRequest request, RegisterMap map, BuildStamp stamp, MirrorClient client,
         WaveResult wave, DeploymentOutcome deployment, VersionReport version, int roundTripsBefore,
-        IReadOnlyDictionary<string, int> ordinalOf)
+        IReadOnlyDictionary<string, int> ordinalOf, RunAccount account)
     {
         var packages = new List<ResultPackage>();
         var slotsCoveredByOneRead = map.ReadPlan(Enumerable.Range(0, map.Slots.Count)).Max(r => r.SlotCount);
+        var accountOf = account.Vectors.ToDictionary(a => a.VectorId, StringComparer.Ordinal);
 
         foreach (var vector in request.Vectors)
         {
@@ -438,17 +534,18 @@ public static class LoopRun
             // share one index — and reading Results[index] hands each of them the first vector's run.
             var waveIndex = ordinalOf[vector.Id];
 
-            var distribution = wave.Distributions.SingleOrDefault(d => d.SlotIndex == slotIndex);
-            var run = distribution is not null && waveIndex < distribution.Results.Count
-                ? distribution.Results[waveIndex]
-                : null;
-
-            if (run is null)
-            {
-                // The wave stopped before this index. No package is fabricated for it: an absent package
-                // is unambiguous, and one built on a run that did not happen would not be.
+            // 🔴 *** ONE PREDICATE DECIDES BOTH THE PACKAGE AND THE DISPOSITION. *** This was a bare
+            // `if (run is null) continue;` — correct in itself (a package built on a run that did not
+            // happen would be worse) and SILENT, so the twenty vectors it skipped on the first live wave
+            // left no trace anywhere. The skip is still a skip; what changed is that the account was
+            // computed first and every skipped vector is now a reported row with a reason.
+            if (accountOf[vector.Id].Disposition != VectorDisposition.Ran)
                 continue;
-            }
+
+            // Guaranteed in range by the account's own definition of `Ran`, which is why the lookup below
+            // is unconditional rather than re-testing what was just decided.
+            var distribution = wave.Distributions.Single(d => d.SlotIndex == slotIndex);
+            var run = distribution.Results[waveIndex];
 
             var logIndex = wave.Log.Indices.ElementAtOrDefault(waveIndex);
             var binding = BindingFor(request.Bindings, vector.Slot);
@@ -473,15 +570,38 @@ public static class LoopRun
                 waveIndex,
                 stimulus,
                 StimulusExpectation.AtLeastOneScanPerRoundTrip(Math.Max(1, run.PollRounds)),
-                Settling(client, vector, slotIndex, waveIndex, run, distribution!),
+                Settling(client, vector, slotIndex, waveIndex, run, distribution),
                 Assertions(vector, binding, run, request.WordOrder),
-                distribution!.CoRunning.FirstOrDefault(c => c.WaveIndex == waveIndex).CoRunners ?? Array.Empty<int>(),
+
+                // 🔴 *** NULL WHEN NO SLICE WAS RECORDED, NOT AN EMPTY LIST. *** This read
+                // `FirstOrDefault(...).CoRunners ?? Array.Empty<int>()`, so an index with no entry in the
+                // co-running log rendered as the positive claim "ran alone" — a result obtained under
+                // unrecorded co-runners was indistinguishable from one obtained in isolation.
+                CoRunnersOf(distribution, waveIndex),
                 map,
                 stamp,
                 slotsCoveredByOneRead));
         }
 
         return packages;
+    }
+
+    /// <summary>
+    /// The measured co-running slice for one index, <b>or null when the log holds no entry for it.</b>
+    ///
+    /// <para>Written as an explicit lookup rather than <c>FirstOrDefault(...) ?? empty</c> because those
+    /// two spellings differ only in what they say about an absence, and the convenient one says the
+    /// dangerous thing.</para>
+    /// </summary>
+    private static IReadOnlyList<int>? CoRunnersOf(SlotDistribution distribution, int waveIndex)
+    {
+        foreach (var (index, coRunners) in distribution.CoRunning)
+        {
+            if (index == waveIndex)
+                return coRunners;
+        }
+
+        return null;
     }
 
     /// <summary>

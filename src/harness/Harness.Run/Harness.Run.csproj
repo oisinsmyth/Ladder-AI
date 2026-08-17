@@ -21,6 +21,19 @@
     Every decision lives in LoopCli, which takes its transport as a FACTORY, so the whole CLI is
     exercised in tests without a process and without a socket.
   -->
+  <!--
+    The REPORT is a deliverable, not a side effect: a run's console output and its JSON artifact are the
+    only things a consumer ever sees, and the first live wave shipped a report whose denominator was the
+    number of packages it managed to produce. Both renderers are therefore reachable from the test
+    assembly and asserted directly, rather than only through a whole CLI invocation - a component that
+    can only be asserted about at arm's length has a class of defect no assertion reaches.
+  -->
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
+      <_Parameter1>Harness.Loop.Tests</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\Harness.Gate\Harness.Gate.csproj" />
     <ProjectReference Include="..\Harness.Loop\Harness.Loop.csproj" />

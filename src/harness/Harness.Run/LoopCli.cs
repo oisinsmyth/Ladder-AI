@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using DeviceGuard;
 using Harness.Gate;
@@ -705,15 +706,70 @@ public static class LoopCli
             ? Directory.GetFiles(path, "*.ir").OrderBy(p => p, StringComparer.Ordinal).ToArray()
             : new[] { path };
 
-    private static void Write(LoopResult result, TextWriter output)
+    /// <summary>
+    /// 🔴 <b>The run report — and every count in it reads against the SUBMITTED vectors.</b>
+    ///
+    /// <para><b>The defect this closes, verbatim from the first wave that has ever run:</b>
+    /// <c>the wave ran to 22 index(es) over 1 slot(s)</c>, two packages, then
+    /// <c>0 of 2 package(s) say anything about the block at all</c>. <b>Nothing anywhere stated what
+    /// became of vectors 3 to 22.</b> The denominator was the number of packages PRODUCED, which is the
+    /// one number guaranteed to make an incomplete run look complete.</para>
+    /// </summary>
+    internal static void Write(LoopResult result, TextWriter output)
     {
+        var account = result.Account;
+
         output.WriteLine($"OUTCOME: {result.Outcome}");
         output.WriteLine($"  {result.Detail}");
+        output.WriteLine();
+
+        // *** THE DENOMINATOR, PRINTED ON EVERY RUN INCLUDING THE COMPLETE ONE. *** A section that appears
+        // only when something went short teaches a reader that its absence means everything ran.
+        output.WriteLine($"VECTORS SUBMITTED: {account.Submitted}");
+        output.WriteLine($"  RAN            {account.Ran}");
+        output.WriteLine($"  NEVER ATTEMPTED {account.NeverAttempted}");
+
+        foreach (var group in account.Vectors
+                     .Where(v => v.Disposition != VectorDisposition.Ran)
+                     .GroupBy(v => v.Disposition)
+                     .OrderBy(g => g.Key.ToString(), StringComparer.Ordinal))
+        {
+            output.WriteLine($"    {Label(group.Key),-18} {group.Count()}");
+        }
+
+        output.WriteLine();
+
+        // *** WHICH INDEX A SLOT STOPPED AT, AND WHAT IT COST IN VECTORS. *** "A slot exited early" without
+        // the index and the count is a fact nobody can act on.
+        if (account.SlotExits.Count > 0)
+        {
+            output.WriteLine("SLOTS THAT STOPPED SHORT OF THEIR OWN TENSOR");
+            foreach (var exit in account.SlotExits)
+            {
+                output.WriteLine(
+                    $"  slot {exit.SlotIndex}: ran {exit.IndicesRun} of {exit.TensorLength} index(es), stopping at index "
+                    + $"{exit.LastIndex} with {exit.LastOutcome}. {exit.VectorsNeverAttempted} vector(s) were consequently NEVER ATTEMPTED.");
+                output.WriteLine($"      the stopping index said: {exit.LastDetail}");
+            }
+
+            output.WriteLine();
+        }
+
+        output.WriteLine("DISPOSITION PER SUBMITTED VECTOR");
+        foreach (var vector in account.Vectors)
+        {
+            output.WriteLine($"  {Label(vector.Disposition),-18} {vector.VectorId,-16} slot {vector.SlotIndex} index {vector.WaveIndex}");
+
+            if (vector.Disposition != VectorDisposition.Ran)
+                output.WriteLine($"      {vector.Detail}");
+        }
+
         output.WriteLine();
 
         if (result.Packages.Count == 0)
         {
             output.WriteLine("NO PACKAGES — nothing about the block was tested. That is a statement about the RUN, not about the block.");
+            output.WriteLine($"*** EMPTY IS NOT CLEAN: {account.Submitted} vector(s) were submitted and NONE of them produced a result. ***");
             return;
         }
 
@@ -726,25 +782,98 @@ public static class LoopCli
 
         var conclusive = result.Packages.Count(p => p.ConclusiveAboutTheBlock);
         output.WriteLine();
-        output.WriteLine($"{conclusive} of {result.Packages.Count} package(s) say anything about the block at all.");
+
+        // *** AGAINST THE SUBMITTED TOTAL, NEVER AGAINST THE PACKAGES. *** Both numbers are printed, so a
+        // reader can see the gap rather than having to notice it.
+        output.WriteLine(
+            $"{conclusive} of {account.Submitted} SUBMITTED vector(s) say anything about the block at all "
+            + $"({result.Packages.Count} produced a package; {account.NeverAttempted} were never attempted).");
     }
 
-    private static string Render(LoopResult result) =>
-        JsonSerializer.Serialize(new
+    /// <summary>Fixed-width labels for the console. The JSON carries the enum name, which is the machine-readable one.</summary>
+    private static string Label(VectorDisposition disposition) => disposition switch
+    {
+        VectorDisposition.Ran => "RAN",
+        VectorDisposition.SlotExitedFirst => "SLOT EXITED FIRST",
+        VectorDisposition.WaveDidNotRun => "WAVE DID NOT RUN",
+        VectorDisposition.NotDistributed => "NOT DISTRIBUTED",
+        _ => disposition.ToString().ToUpperInvariant(),
+    };
+
+    /// <summary>
+    /// 🔴 <b>The artifact. A consumer reads THIS, never the rendering above</b> — so everything the report
+    /// above can conclude must be computable from here alone.
+    ///
+    /// <para><b>Two defects closed at once, and they are the same defect at two levels.</b> Each package
+    /// now carries all seven of DB-8's named contents (see <see cref="ResultPackageJson"/>), and the
+    /// document now carries a disposition for every SUBMITTED vector rather than only for the ones that
+    /// produced a package. <c>dispositions.length</c> is the denominator; coverage is computable from this
+    /// file without reference to any console output.</para>
+    /// </summary>
+    internal static string Render(LoopResult result)
+    {
+        var account = result.Account;
+
+        var packages = new JsonArray();
+        foreach (var package in result.Packages)
+            packages.Add(ResultPackageJson.Of(package));
+
+        var dispositions = new JsonArray();
+        foreach (var vector in account.Vectors)
         {
-            outcome = result.Outcome.ToString(),
-            detail = result.Detail,
-            packages = result.Packages.Select(p => new
+            dispositions.Add(new JsonObject
             {
-                vector = p.VectorId,
-                verdict = p.Verdict.ToString(),
-                conclusive = p.ConclusiveAboutTheBlock,
-                whatToDoNext = p.WhatToDoNext,
-                caveats = p.Stamp.Caveats,
-                assertions = p.Assertions.Select(a => new { a.AssertionId, a.Signal, a.Expected, a.Observed, state = a.State.ToString() }),
-            }),
-            caveats = result.Caveats.Select(c => new { c.Id, c.Detail }),
-        }, new JsonSerializerOptions { WriteIndented = true });
+                ["vector"] = vector.VectorId,
+                ["citedSlot"] = vector.CitedSlotId,
+                ["slotIndex"] = vector.SlotIndex,
+                ["waveIndex"] = vector.WaveIndex,
+                ["disposition"] = vector.Disposition.ToString(),
+                ["attempted"] = vector.Attempted,
+                ["detail"] = vector.Detail,
+            });
+        }
+
+        var slotExits = new JsonArray();
+        foreach (var exit in account.SlotExits)
+        {
+            slotExits.Add(new JsonObject
+            {
+                ["slotIndex"] = exit.SlotIndex,
+                ["indicesRun"] = exit.IndicesRun,
+                ["tensorLength"] = exit.TensorLength,
+                ["lastIndexReached"] = exit.LastIndex,
+                ["lastOutcome"] = exit.LastOutcome,
+                ["lastDetail"] = exit.LastDetail,
+                ["vectorsNeverAttempted"] = exit.VectorsNeverAttempted,
+            });
+        }
+
+        var loopCaveats = new JsonArray();
+        foreach (var caveat in result.Caveats)
+            loopCaveats.Add(new JsonObject { ["id"] = caveat.Id, ["detail"] = caveat.Detail });
+
+        var document = new JsonObject
+        {
+            ["outcome"] = result.Outcome.ToString(),
+            ["detail"] = result.Detail,
+
+            // The coverage arithmetic, stated rather than left to be derived — and derivable anyway from
+            // `dispositions`, which is what makes these three numbers checkable against the rows below.
+            ["vectorsSubmitted"] = account.Submitted,
+            ["vectorsRan"] = account.Ran,
+            ["vectorsNeverAttempted"] = account.NeverAttempted,
+            ["packagesProduced"] = result.Packages.Count,
+            ["conclusiveAboutTheBlock"] = result.Packages.Count(p => p.ConclusiveAboutTheBlock),
+            ["indicesPlanned"] = account.IndicesPlanned,
+            ["indicesRun"] = account.IndicesRun,
+            ["slotExits"] = slotExits,
+            ["dispositions"] = dispositions,
+            ["packages"] = packages,
+            ["caveats"] = loopCaveats,
+        };
+
+        return document.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
+    }
 
     private static string? Option(IReadOnlyList<string> args, string name)
     {

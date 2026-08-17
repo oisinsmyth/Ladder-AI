@@ -182,7 +182,18 @@ public sealed record LoopResult(
     WaveResult? Wave,
     IReadOnlyList<ResultPackage> Packages,
     IReadOnlyList<LoopCaveat> Caveats,
-    string Detail)
+    string Detail,
+
+    /// <summary>
+    /// 🔴 <b>Every SUBMITTED vector and what became of it — the run's real denominator.</b>
+    ///
+    /// <para><b>Required, not optional, and it is the last thing that should ever acquire a default.</b>
+    /// The defect it closes is that <see cref="Packages"/> was the denominator: a run that produced two
+    /// packages from twenty-two submitted vectors reported <i>"0 of 2 package(s) say anything about the
+    /// block"</i> and said nothing whatever about the other twenty. A default here would let a future
+    /// construction site reintroduce exactly that silence.</para>
+    /// </summary>
+    RunAccount Account)
 {
     /// <summary>Packages that say something about the block. Only <c>Pass</c> and <c>Fail</c> do.</summary>
     public IReadOnlyList<ResultPackage> Conclusive =>
@@ -225,13 +236,20 @@ public sealed record LoopResult(
         "SCAN-ACCURATE SETTLING. The settling check here compares the recorded value against the value some scans later, which catches a value still moving; it cannot see one that moved and came back.",
     };
 
-    /// <summary>A summary that names the OUTCOME first, so it cannot be skimmed past.</summary>
+    /// <summary>
+    /// A summary that names the OUTCOME first, so it cannot be skimmed past — <b>and counts against the
+    /// SUBMITTED vectors, never against the packages that happened to be produced.</b>
+    /// </summary>
     public string Summary()
     {
         var head = $"{Outcome.ToString().ToUpperInvariant()} — {Detail}";
 
         if (Outcome != LoopOutcome.Ran)
-            return head + $" [{Caveats.Count} caveat(s); nothing was learned about the block]";
+        {
+            return head
+                + $" [{Account.Submitted} vector(s) submitted, NONE attempted; {Caveats.Count} caveat(s);"
+                + " nothing was learned about the block]";
+        }
 
         var byVerdict = Packages
             .GroupBy(p => p.Verdict)
@@ -239,7 +257,9 @@ public sealed record LoopResult(
             .Select(g => $"{g.Count()} {g.Key.ToString().ToUpperInvariant()}");
 
         return head
-            + $" — {Packages.Count} package(s): {string.Join(", ", byVerdict)}."
-            + $" {Conclusive.Count} conclusive about the block. [{Caveats.Count} caveat(s)]";
+            + $" — {Account.Ran} of {Account.Submitted} submitted vector(s) ran"
+            + (Account.NeverAttempted > 0 ? $", {Account.NeverAttempted} NEVER ATTEMPTED" : string.Empty)
+            + $"; {Packages.Count} package(s): {string.Join(", ", byVerdict)}."
+            + $" {Conclusive.Count} of {Account.Submitted} conclusive about the block. [{Caveats.Count} caveat(s)]";
     }
 }

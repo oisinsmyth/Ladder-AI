@@ -103,9 +103,35 @@ public sealed record StimulusEvidence(
     VersionReport? Version);
 
 /// <summary>The liveness verdict, with the reason and what it does NOT mean.</summary>
-public sealed record StimulusReport(StimulusOutcome Outcome, string Detail)
+/// <param name="Manifest">
+/// 🔴 <b>§9a's manifest presence, RETAINED rather than consumed — and it is one of DB-8's seven named
+/// package contents.</b>
+///
+/// <para>It used to arrive on <see cref="StimulusEvidence"/>, decide one branch of
+/// <see cref="StimulusCheck.Check"/>, and then be dropped: nothing downstream of this class could say
+/// whether the object under test was in the download's own manifest, so the first result package that
+/// ever existed could not carry it. <b>A value a check consumes and does not publish is a value the
+/// package cannot report</b>, however carefully the check reasons about it.</para>
+///
+/// <para><b>Null is NOT <see cref="ManifestPresence.NotAvailable"/>.</b> <c>NotAvailable</c> is
+/// "a manifest was consulted and it named nothing downloadable"; null is "no liveness evidence was
+/// supplied at all, so the question was never asked". Collapsing them would let a run that measured
+/// nothing render identically to one that looked and found nothing — the absent-versus-empty
+/// distinction this repository keeps re-earning. Required rather than defaulted for the same reason:
+/// an optional parameter is an invitation to omit it.</para>
+/// </param>
+public sealed record StimulusReport(StimulusOutcome Outcome, string Detail, ManifestPresence? Manifest)
 {
     public bool Confirmed => Outcome == StimulusOutcome.Confirmed;
+
+    /// <summary>§9a's answer, or the fact that it was never asked. Never a silent <c>NotAvailable</c>.</summary>
+    public string ManifestDetail => Manifest switch
+    {
+        ManifestPresence.Loaded => "the object(s) under test appear in the download's own load manifest.",
+        ManifestPresence.Absent => "the manifest was read and the object(s) under test are NOT in it — this result is about whatever WAS on the device.",
+        ManifestPresence.NotAvailable => "no load manifest was available, so transfer is NOT positively evidenced (section 9c forbids inferring it from the absence of a failure).",
+        _ => "NOT ASKED — no liveness evidence was supplied to this result at all, so nothing here looked for a manifest. This is not the same fact as a manifest that was consulted and answered nothing.",
+    };
 }
 
 /// <summary>
@@ -132,8 +158,12 @@ public static class StimulusCheck
     {
         if (evidence is null || expectation is null)
         {
+            // Manifest is NULL rather than NotAvailable: nobody looked. NotAvailable would claim a
+            // manifest was consulted and answered nothing, which is a stronger statement than this
+            // branch can make.
             return new StimulusReport(StimulusOutcome.NotChecked,
-                "no liveness evidence was supplied. An absence of evidence reads exactly like a healthy run in every other field, so it is reported as its own outcome and can never be a pass.");
+                "no liveness evidence was supplied. An absence of evidence reads exactly like a healthy run in every other field, so it is reported as its own outcome and can never be a pass.",
+                Manifest: null);
         }
 
         // Ordered from "the experiment did not exist" outward, because each earlier state makes the
@@ -141,19 +171,22 @@ public static class StimulusCheck
         if (!evidence.Commanded)
         {
             return new StimulusReport(StimulusOutcome.NeverRan,
-                "this slot's start bool was never raised at this index — D26a's null. Nothing about the block was tested, and this is not a failing test.");
+                "this slot's start bool was never raised at this index — D26a's null. Nothing about the block was tested, and this is not a failing test.",
+                evidence.Manifest);
         }
 
         if (!evidence.Executed)
         {
             return new StimulusReport(StimulusOutcome.CommandedButDidNotRun,
-                "the slot was commanded and the echo says its block never saw its start condition (X-E). The test did not happen. Reading this as a failure would send an agent editing correct logic.");
+                "the slot was commanded and the echo says its block never saw its start condition (X-E). The test did not happen. Reading this as a failure would send an agent editing correct logic.",
+                evidence.Manifest);
         }
 
         if (evidence.Manifest == ManifestPresence.Absent)
         {
             return new StimulusReport(StimulusOutcome.NotLoaded,
-                "the object under test does not appear in the download's load manifest. It is not on the device, so this result is about whatever WAS on the device.");
+                "the object under test does not appear in the download's load manifest. It is not on the device, so this result is about whatever WAS on the device.",
+                evidence.Manifest);
         }
 
         if (evidence.Version is { } version)
@@ -161,7 +194,8 @@ public static class StimulusCheck
             if (!version.Confirmed)
             {
                 return new StimulusReport(StimulusOutcome.WrongBuildRunning,
-                    $"the version register did not confirm the build this result was derived against ({version.Outcome}): {version.Detail}");
+                    $"the version register did not confirm the build this result was derived against ({version.Outcome}): {version.Detail}",
+                    evidence.Manifest);
             }
 
             // A version report CONFIRMING a different build than this result expects is the one shape a
@@ -170,20 +204,23 @@ public static class StimulusCheck
             if (version.Expected != expectedBuild.Value)
             {
                 return new StimulusReport(StimulusOutcome.WrongBuildRunning,
-                    $"the version check confirmed build 16#{version.Expected:X8}, but this result was derived against 16#{expectedBuild.Value:X8}. A confirmation of the wrong question is not a confirmation.");
+                    $"the version check confirmed build 16#{version.Expected:X8}, but this result was derived against 16#{expectedBuild.Value:X8}. A confirmation of the wrong question is not a confirmation.",
+                    evidence.Manifest);
             }
         }
 
         if (evidence.ScanAdvance <= 0)
         {
             return new StimulusReport(StimulusOutcome.CounterFrozen,
-                $"the scan counter did not advance across a run that issued {evidence.RoundTrips} round trip(s). A frozen mirror is perfectly self-consistent, so nothing in the content would have said so.");
+                $"the scan counter did not advance across a run that issued {evidence.RoundTrips} round trip(s). A frozen mirror is perfectly self-consistent, so nothing in the content would have said so.",
+                evidence.Manifest);
         }
 
         if (evidence.ScanAdvance < expectation.MinimumScanAdvance)
         {
             return new StimulusReport(StimulusOutcome.CounterAdvancedTooLittle,
-                $"the scan counter advanced {evidence.ScanAdvance} scan(s) across {evidence.RoundTrips} round trip(s), where at least {expectation.MinimumScanAdvance} was expected. MOVED is not ADVANCED BY THE EXPECTED AMOUNT, and a counter that stutters is a counter that is not tracking scans.");
+                $"the scan counter advanced {evidence.ScanAdvance} scan(s) across {evidence.RoundTrips} round trip(s), where at least {expectation.MinimumScanAdvance} was expected. MOVED is not ADVANCED BY THE EXPECTED AMOUNT, and a counter that stutters is a counter that is not tracking scans.",
+                evidence.Manifest);
         }
 
         var manifestNote = evidence.Manifest == ManifestPresence.NotAvailable
@@ -191,6 +228,7 @@ public static class StimulusCheck
             : " The object appears in the download's load manifest.";
 
         return new StimulusReport(StimulusOutcome.Confirmed,
-            $"commanded, observed to run, and the scan counter advanced {evidence.ScanAdvance} scan(s) across {evidence.RoundTrips} round trip(s) against a floor of {expectation.MinimumScanAdvance}." + manifestNote);
+            $"commanded, observed to run, and the scan counter advanced {evidence.ScanAdvance} scan(s) across {evidence.RoundTrips} round trip(s) against a floor of {expectation.MinimumScanAdvance}." + manifestNote,
+            evidence.Manifest);
     }
 }

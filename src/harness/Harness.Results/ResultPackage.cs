@@ -92,7 +92,18 @@ public sealed record ResultPackage(
     SettlingState Settling,
     SlotOutcome RunOutcome,
     IReadOnlyList<AssertionOutcome> Assertions,
-    IReadOnlyList<int> CoRunners,
+
+    /// <summary>
+    /// DB-8's co-running slice: <b>who actually ran alongside this vector, measured (X-E)</b>.
+    ///
+    /// <para>🔴 <b>NULL IS "NO SLICE WAS RECORDED FOR THIS INDEX", AND IT IS NOT AN EMPTY ONE.</b> An
+    /// empty list is the positive measurement <i>"this vector ran alone"</i>; null is the absence of the
+    /// measurement altogether. They were the same value until 2026-08-17 — the loop reached for
+    /// <c>FirstOrDefault(...).CoRunners ?? Array.Empty&lt;int&gt;()</c>, so a missing log entry rendered
+    /// as a confident <i>ran alone</i>. That is the wrong direction to be wrong in: a green obtained
+    /// under unrecorded co-runners would read as one obtained in isolation.</para>
+    /// </summary>
+    IReadOnlyList<int>? CoRunners,
     ValidityStamp Stamp,
     // AMB-19. Null means the question was not asked for this result; the STATES inside it are the
     // answers, and four of the five are not passes. See BoundsCurrencyCheck.
@@ -196,8 +207,17 @@ public sealed record ResultPackage(
         $"{Verdict.ToString().ToUpperInvariant()} — vector {VectorId}, slot {SlotIndex} index {WaveIndex}: "
         + $"{Assertions.Count(a => a.State == AssertionState.Held)}/{Assertions.Count} assertion(s) held, "
         + $"stimulus {Stimulus.Outcome}, settling {Settling}"
-        + (CoRunners.Count > 0 ? $", ran alongside slot(s) {string.Join(", ", CoRunners)}" : ", ran alone")
+        + CoRunningSummary
         + (Stamp.Caveats.Count > 0 ? $" [{Stamp.Caveats.Count} caveat(s)]" : string.Empty);
+
+    /// <summary>
+    /// The co-running slice in one clause, keeping the three cases apart: measured-alone, measured with
+    /// names, and <b>not measured at all</b>.
+    /// </summary>
+    public string CoRunningSummary =>
+        CoRunners is null ? ", CO-RUNNING NOT RECORDED for this index"
+        : CoRunners.Count > 0 ? $", ran alongside slot(s) {string.Join(", ", CoRunners)}"
+        : ", ran alone";
 }
 
 /// <summary>Whether the observed value was final when it was read.</summary>

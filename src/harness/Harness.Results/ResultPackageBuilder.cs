@@ -53,7 +53,11 @@ public static class ResultPackageBuilder
         StimulusExpectation? expectation,
         SettlingState settling,
         IReadOnlyList<AssertionOutcome> assertions,
-        IReadOnlyList<int> coRunners,
+
+        // *** NULL IS "NO CO-RUNNING SLICE WAS RECORDED", AND IT IS NOT AN EMPTY ONE. *** See
+        // ResultPackage.CoRunners: an empty list is the measurement "this vector ran alone", which is a
+        // claim, and the caller must not be able to make it by accident.
+        IReadOnlyList<int>? coRunners,
         RegisterMap map,
         BuildStamp expectedBuild,
         int slotsCoveredByOneRead)
@@ -62,7 +66,8 @@ public static class ResultPackageBuilder
         ArgumentNullException.ThrowIfNull(enumeration);
         ArgumentNullException.ThrowIfNull(run);
         ArgumentNullException.ThrowIfNull(assertions);
-        ArgumentNullException.ThrowIfNull(coRunners);
+        // `coRunners` is deliberately NOT null-checked: null is a meaningful value here (no slice was
+        // recorded), and a throw would push every caller back to the empty list that hid the distinction.
         ArgumentNullException.ThrowIfNull(map);
 
         var admissibility = Admissibility.Check(
