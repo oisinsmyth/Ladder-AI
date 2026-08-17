@@ -213,3 +213,63 @@ I also instructed a lane to re-assert `Standard` memory layout on `FC_HarnessCop
 with evidence: an **FC has no data area**, `DeploymentPlan` targets data blocks only, the block was
 already Optimized before the import, and it gated the claim both ways (`--expect Standard` → exit 15,
 `--expect Optimized` → exit 0). **I had applied a DB rule to a block where the property is inert.**
+
+---
+
+## THE NON-START, DIAGNOSED — AND IT IS A DESIGN GAP, NOT A TOOLING BUG
+
+**2026-08-17, after both reporting fixes landed and were re-run against the rig.** Finding 3 left the
+slot exit *unexplained*, and I recorded a refuted hypothesis rather than a guess: `cross-check` shows
+**no multi-writer on `iDB_HopperBlockageStim.Stim.Start`**, so the copy layer and the model are not
+fighting over the start signal.
+
+The mechanism was then established from code — `WaveRun.cs` has **exactly one `break`**, reached when
+an inert phase cannot be ESTABLISHED — and the fixed reporting named the cause outright:
+
+> `slot 0: ran 2 of 22 index(es), stopping at index 1 with NotInert.`
+> `the next test's start conditions are not established: slot 0 R000 reads 1, declared 0;`
+> `slot 0 R001 reads 1, declared 0`
+
+`R000`/`R001` are `HopperBlockedAlarm` and `HopperBlockStopReq`. **Independently corroborated on the
+device before the run** — `harness-mirror-view` decoded both as `TRUE` while `Armed` was `FALSE`, which
+is also why the phase-armed latches correctly did *not* capture them.
+
+🔴 ***THE BLOCK LATCHES AN ALARM AND THE HARNESS CANNOT INERT OUT OF IT.*** The alarm clears only via
+`DB_Controls.FaultReset`, which only the stimulus model drives, and the model only runs once started —
+**and starting is not inert.** So after any vector that alarms, every subsequent index fails its inert
+check and the wave stops.
+
+***CONSEQUENCE: THE WAVE CAN RUN EXACTLY ONE ALARMING VECTOR PER CPU RESTART.*** Reproduced: against a
+freshly restarted CPU the wave ran **2 of 22** and stopped at index 1 for that reason; against the
+already-alarmed rig it ran **1 of 22** and stopped at index 0 for the same reason. Same signals, same
+values, both times.
+
+**`rig-control` cannot fix this**: it can start a CPU and **deliberately cannot stop one** — *"reversal
+is a person's job"*. The only mechanism that restored inert was a **disruptive download**, which is a
+heavy instrument for clearing a test artifact.
+
+**This is D33's contract meeting a real block for the first time.** Inert is *"the next test's start
+state, dynamics untriggered, resets HELD"*, and nothing in the wave loop can drive a reset between
+indexes. **It belongs to the binding and the stimulus model, not to the harness code** — the model must
+return the block to inert at scenario end, or the inert declaration must not require a latched alarm to
+be low. ***It is the blocker for using the conformance loop on a real job, and it is now precisely
+characterised rather than a mystery.***
+
+⚠️ **And the reporting fixes are what made it findable.** Before them this run read as *"2 packages, 0
+conclusive"*. It now names the stopping index, the outcome, the two signals, their read and declared
+values, and accounts for all 22 submitted vectors individually.
+
+### Verified live, after the fixes
+
+- All **seven** DB-8 contents present in the artifact; `validityStamp` carries the **actually running**
+  `programVersion 16#33434A68`, the map hash and its caveats. **DB-2 is now genuinely exercised.**
+- `vectorsSubmitted 22 / ran 2 / neverAttempted 20`, and `dispositions.length == 22` — **coverage is
+  computable from the artifact alone.**
+
+### One operational fact worth keeping
+
+A download that had taken **35 s** took **10 minutes and timed out**: `download-probe` had been
+**rebuilt** at 09:00:28 and TIA approves callers by `(Path, FileHash)` — **0 of its 15 whitelist
+entries matched the new hash** across 17.0/19.0/20.0. `tools/openness-approve-build.ps1 -Exe <path>`
+wrote the entry and the next download completed. **The binary's own warning said exactly this before
+the stall, in its output, and it was there to be read.**

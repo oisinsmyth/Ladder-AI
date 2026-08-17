@@ -1,0 +1,442 @@
+{
+  "outcome": "Ran",
+  "detail": "the wave ran 2 of 22 planned index(es) and STOPPED EARLY over 1 slot(s), costing 914 round trip(s). 2 of 22 submitted vector(s) were attempted; 20 were NOT.",
+  "vectorsSubmitted": 22,
+  "vectorsRan": 2,
+  "vectorsNeverAttempted": 20,
+  "packagesProduced": 2,
+  "conclusiveAboutTheBlock": 0,
+  "indicesPlanned": 22,
+  "indicesRun": 2,
+  "slotExits": [
+    {
+      "slotIndex": 0,
+      "indicesRun": 2,
+      "tensorLength": 22,
+      "lastIndexReached": 1,
+      "lastOutcome": "NotInert",
+      "lastDetail": "the test never started, which is not a test failure: the next test\u0027s start conditions are not established: slot 0 R000 reads 1, declared 0; slot 0 R001 reads 1, declared 0",
+      "vectorsNeverAttempted": 20
+    }
+  ],
+  "dispositions": [
+    {
+      "vector": "VB-HBA-001",
+      "citedSlot": "SLOT-HBA-RAISE",
+      "slotIndex": 0,
+      "waveIndex": 0,
+      "disposition": "Ran",
+      "attempted": true,
+      "detail": "RAN at index 0 of slot 0. Read its result package - a package existing is not a statement that anything held."
+    },
+    {
+      "vector": "VB-HBA-002",
+      "citedSlot": "SLOT-HBA-RAISE",
+      "slotIndex": 0,
+      "waveIndex": 1,
+      "disposition": "Ran",
+      "attempted": true,
+      "detail": "RAN at index 1 of slot 0. Read its result package - a package existing is not a statement that anything held."
+    },
+    {
+      "vector": "VB-HBA-003",
+      "citedSlot": "SLOT-HBA-RAISE",
+      "slotIndex": 0,
+      "waveIndex": 2,
+      "disposition": "SlotExitedFirst",
+      "attempted": false,
+      "detail": "NEVER ATTEMPTED - slot 0 ran 2 of its 22 index(es) and stopped at index 1, which recorded NotInert. This vector sits at index 2 and was never submitted to the device. Nothing here is evidence about the block. The stopping index said: the test never started, which is not a test failure: the next test\u0027s start conditions are not established: slot 0 R000 reads 1, declared 0; slot 0 R001 reads 1, declared 0"
+    },
+    {
+      "vector": "VB-HBA-004",
+      "citedSlot": "SLOT-HBA-RAISE",
+      "slotIndex": 0,
+      "waveIndex": 3,
+      "disposition": "SlotExitedFirst",
+      "attempted": false,
+      "detail": "NEVER ATTEMPTED - slot 0 ran 2 of its 22 index(es) and stopped at index 1, which recorded NotInert. This vector sits at index 3 and was never submitted to the device. Nothing here is evidence about the block. The stopping index said: the test never started, which is not a test failure: the next test\u0027s start conditions are not established: slot 0 R000 reads 1, declared 0; slot 0 R001 reads 1, declared 0"
+    },
+    {
+      "vector": "VB-HBA-005",
+      "citedSlot": "SLOT-HBA-CLEAR",
+      "slotIndex": 0,
+      "waveIndex": 6,
+      "disposition": "SlotExitedFirst",
+      "attempted": false,
+      "detail": "NEVER ATTEMPTED - slot 0 ran 2 of its 22 index(es) and stopped at index 1, which recorded NotInert. This vector sits at index 6 and was never submitted to the device. Nothing here is evidence about the block. The stopping index said: the test never started, which is not a test failure: the next test\u0027s start conditions are not established: slot 0 R000 reads 1, declared 0; slot 0 R001 reads 1, declared 0"
+    },
+    {
+      "vector": "VB-HBA-006",
+      "citedSlot": "SLOT-HBA-CLEAR",
+      "slotIndex": 0,
+      "waveIndex": 7,
+      "disposition": "SlotExitedFirst",
+      "attempted": false,
+      "detail": "NEVER ATTEMPTED - slot 0 ran 2 of its 22 index(es) and stopped at index 1, which recorded NotInert. This vector sits at index 7 and was never submitted to the device. Nothing here is evidence about the block. The stopping index said: the test never started, which is not a test failure: the next test\u0027s start conditions are not established: slot 0 R000 reads 1, declared 0; slot 0 R001 reads 1, declared 0"
+    },
+    {
+      "vector": "VB-HBA-007",
+      "citedSlot": "SLOT-HBA-CLEAR",
+      "slotIndex": 0,
+      "waveIndex": 8,
+      "disposition": "SlotExitedFirst",
+      "attempted": false,
+      "detail": "NEVER ATTEMPTED - slot 0 ran 2 of its 22 index(es) and stopped at index 1, which recorded NotInert. This vector sits at index 8 and was never submitted to the device. Nothing here is evidence about the block. The stopping index said: the test never started, which is not a test failure: the next test\u0027s start conditions are not established: slot 0 R000 reads 1, declared 0; slot 0 R001 reads 1, declared 0"
+    },
+    {
+      "vector": "VB-HBA-008",
+      "citedSlot": "SLOT-HBA-CLEAR",
+      "slotIndex": 0,
+      "waveIndex": 9,
+      "disposition": "SlotExitedFirst",
+      "attempted": false,
+      "detail": "NEVER ATTEMPTED - slot 0 ran 2 of its 22 index(es) and stopped at index 1, which recorded NotInert. This vector sits at index 9 and was never submitted to the device. Nothing here is evidence about the block. The stopping index said: the test never started, which is not a test failure: the next test\u0027s start conditions are not established: slot 0 R000 reads 1, declared 0; slot 0 R001 reads 1, declared 0"
+    },
+    {
+      "vector": "VB-HBA-009",
+      "citedSlot": "SLOT-HBA-CLEAR",
+      "slotIndex": 0,
+      "waveIndex": 10,
+      "disposition": "SlotExitedFirst",
+      "attempted": false,
+      "detail": "NEVER ATTEMPTED - slot 0 ran 2 of its 22 index(es) and stopped at index 1, which recorded NotInert. This vector sits at index 10 and was never submitted to the device. Nothing here is evidence about the block. The stopping index said: the test never started, which is not a test failure: the next test\u0027s start conditions are not established: slot 0 R000 reads 1, declared 0; slot 0 R001 reads 1, declared 0"
+    },
+    {
+      "vector": "VB-HBA-010",
+      "citedSlot": "SLOT-HBA-CLEAR",
+      "slotIndex": 0,
+      "waveIndex": 11,
+      "disposition": "SlotExitedFirst",
+      "attempted": false,
+      "detail": "NEVER ATTEMPTED - slot 0 ran 2 of its 22 index(es) and stopped at index 1, which recorded NotInert. This vector sits at index 11 and was never submitted to the device. Nothing here is evidence about the block. The stopping index said: the test never started, which is not a test failure: the next test\u0027s start conditions are not established: slot 0 R000 reads 1, declared 0; slot 0 R001 reads 1, declared 0"
+    },
+    {
+      "vector": "VB-HBA-011",
+      "citedSlot": "SLOT-HBA-LATCH",
+      "slotIndex": 0,
+      "waveIndex": 12,
+      "disposition": "SlotExitedFirst",
+      "attempted": false,
+      "detail": "NEVER ATTEMPTED - slot 0 ran 2 of its 22 index(es) and stopped at index 1, which recorded NotInert. This vector sits at index 12 and was never submitted to the device. Nothing here is evidence about the block. The stopping index said: the test never started, which is not a test failure: the next test\u0027s start conditions are not established: slot 0 R000 reads 1, declared 0; slot 0 R001 reads 1, declared 0"
+    },
+    {
+      "vector": "VB-HBA-012",
+      "citedSlot": "SLOT-HBA-LATCH",
+      "slotIndex": 0,
+      "waveIndex": 13,
+      "disposition": "SlotExitedFirst",
+      "attempted": false,
+      "detail": "NEVER ATTEMPTED - slot 0 ran 2 of its 22 index(es) and stopped at index 1, which recorded NotInert. This vector sits at index 13 and was never submitted to the device. Nothing here is evidence about the block. The stopping index said: the test never started, which is not a test failure: the next test\u0027s start conditions are not established: slot 0 R000 reads 1, declared 0; slot 0 R001 reads 1, declared 0"
+    },
+    {
+      "vector": "VB-HBA-013",
+      "citedSlot": "SLOT-HBA-RESET",
+      "slotIndex": 0,
+      "waveIndex": 14,
+      "disposition": "SlotExitedFirst",
+      "attempted": false,
+      "detail": "NEVER ATTEMPTED - slot 0 ran 2 of its 22 index(es) and stopped at index 1, which recorded NotInert. This vector sits at index 14 and was never submitted to the device. Nothing here is evidence about the block. The stopping index said: the test never started, which is not a test failure: the next test\u0027s start conditions are not established: slot 0 R000 reads 1, declared 0; slot 0 R001 reads 1, declared 0"
+    },
+    {
+      "vector": "VB-HBA-014",
+      "citedSlot": "SLOT-HBA-RESET",
+      "slotIndex": 0,
+      "waveIndex": 15,
+      "disposition": "SlotExitedFirst",
+      "attempted": false,
+      "detail": "NEVER ATTEMPTED - slot 0 ran 2 of its 22 index(es) and stopped at index 1, which recorded NotInert. This vector sits at index 15 and was never submitted to the device. Nothing here is evidence about the block. The stopping index said: the test never started, which is not a test failure: the next test\u0027s start conditions are not established: slot 0 R000 reads 1, declared 0; slot 0 R001 reads 1, declared 0"
+    },
+    {
+      "vector": "VB-HBA-015",
+      "citedSlot": "SLOT-HBA-RESET",
+      "slotIndex": 0,
+      "waveIndex": 16,
+      "disposition": "SlotExitedFirst",
+      "attempted": false,
+      "detail": "NEVER ATTEMPTED - slot 0 ran 2 of its 22 index(es) and stopped at index 1, which recorded NotInert. This vector sits at index 16 and was never submitted to the device. Nothing here is evidence about the block. The stopping index said: the test never started, which is not a test failure: the next test\u0027s start conditions are not established: slot 0 R000 reads 1, declared 0; slot 0 R001 reads 1, declared 0"
+    },
+    {
+      "vector": "VB-HBA-016",
+      "citedSlot": "SLOT-HBA-RESET",
+      "slotIndex": 0,
+      "waveIndex": 17,
+      "disposition": "SlotExitedFirst",
+      "attempted": false,
+      "detail": "NEVER ATTEMPTED - slot 0 ran 2 of its 22 index(es) and stopped at index 1, which recorded NotInert. This vector sits at index 17 and was never submitted to the device. Nothing here is evidence about the block. The stopping index said: the test never started, which is not a test failure: the next test\u0027s start conditions are not established: slot 0 R000 reads 1, declared 0; slot 0 R001 reads 1, declared 0"
+    },
+    {
+      "vector": "VB-HBA-017",
+      "citedSlot": "SLOT-HBA-RESET",
+      "slotIndex": 0,
+      "waveIndex": 18,
+      "disposition": "SlotExitedFirst",
+      "attempted": false,
+      "detail": "NEVER ATTEMPTED - slot 0 ran 2 of its 22 index(es) and stopped at index 1, which recorded NotInert. This vector sits at index 18 and was never submitted to the device. Nothing here is evidence about the block. The stopping index said: the test never started, which is not a test failure: the next test\u0027s start conditions are not established: slot 0 R000 reads 1, declared 0; slot 0 R001 reads 1, declared 0"
+    },
+    {
+      "vector": "VB-HBA-018",
+      "citedSlot": "SLOT-HBA-RESET",
+      "slotIndex": 0,
+      "waveIndex": 19,
+      "disposition": "SlotExitedFirst",
+      "attempted": false,
+      "detail": "NEVER ATTEMPTED - slot 0 ran 2 of its 22 index(es) and stopped at index 1, which recorded NotInert. This vector sits at index 19 and was never submitted to the device. Nothing here is evidence about the block. The stopping index said: the test never started, which is not a test failure: the next test\u0027s start conditions are not established: slot 0 R000 reads 1, declared 0; slot 0 R001 reads 1, declared 0"
+    },
+    {
+      "vector": "VB-HBA-024",
+      "citedSlot": "SLOT-HBA-PAIR",
+      "slotIndex": 0,
+      "waveIndex": 20,
+      "disposition": "SlotExitedFirst",
+      "attempted": false,
+      "detail": "NEVER ATTEMPTED - slot 0 ran 2 of its 22 index(es) and stopped at index 1, which recorded NotInert. This vector sits at index 20 and was never submitted to the device. Nothing here is evidence about the block. The stopping index said: the test never started, which is not a test failure: the next test\u0027s start conditions are not established: slot 0 R000 reads 1, declared 0; slot 0 R001 reads 1, declared 0"
+    },
+    {
+      "vector": "VB-HBA-025",
+      "citedSlot": "SLOT-HBA-PAIR",
+      "slotIndex": 0,
+      "waveIndex": 21,
+      "disposition": "SlotExitedFirst",
+      "attempted": false,
+      "detail": "NEVER ATTEMPTED - slot 0 ran 2 of its 22 index(es) and stopped at index 1, which recorded NotInert. This vector sits at index 21 and was never submitted to the device. Nothing here is evidence about the block. The stopping index said: the test never started, which is not a test failure: the next test\u0027s start conditions are not established: slot 0 R000 reads 1, declared 0; slot 0 R001 reads 1, declared 0"
+    },
+    {
+      "vector": "VB-HBA-026",
+      "citedSlot": "SLOT-HBA-RAISE",
+      "slotIndex": 0,
+      "waveIndex": 4,
+      "disposition": "SlotExitedFirst",
+      "attempted": false,
+      "detail": "NEVER ATTEMPTED - slot 0 ran 2 of its 22 index(es) and stopped at index 1, which recorded NotInert. This vector sits at index 4 and was never submitted to the device. Nothing here is evidence about the block. The stopping index said: the test never started, which is not a test failure: the next test\u0027s start conditions are not established: slot 0 R000 reads 1, declared 0; slot 0 R001 reads 1, declared 0"
+    },
+    {
+      "vector": "VB-HBA-027",
+      "citedSlot": "SLOT-HBA-RAISE",
+      "slotIndex": 0,
+      "waveIndex": 5,
+      "disposition": "SlotExitedFirst",
+      "attempted": false,
+      "detail": "NEVER ATTEMPTED - slot 0 ran 2 of its 22 index(es) and stopped at index 1, which recorded NotInert. This vector sits at index 5 and was never submitted to the device. Nothing here is evidence about the block. The stopping index said: the test never started, which is not a test failure: the next test\u0027s start conditions are not established: slot 0 R000 reads 1, declared 0; slot 0 R001 reads 1, declared 0"
+    }
+  ],
+  "packages": [
+    {
+      "vector": "VB-HBA-001",
+      "slotIndex": 0,
+      "waveIndex": 0,
+      "verdict": "Unsettled",
+      "conclusive": false,
+      "whatToDoNext": "The value never met its settling condition, or an assertion was never read. NOTHING WAS LEGITIMATELY READ \u2014 this is not \u0027the value was wrong\u0027. A completion flag is not a settling signal; declare what makes the value final.",
+      "summary": "UNSETTLED \u2014 vector VB-HBA-001, slot 0 index 0: 0/1 assertion(s) held, stimulus Confirmed, settling NotEstablished, ran alone [2 caveat(s)]",
+      "runOutcome": "Completed",
+      "settling": "NotEstablished",
+      "admissibility": {
+        "admissible": true,
+        "refusals": []
+      },
+      "assertions": [
+        {
+          "assertionId": "REQ-HBA-001:ab68c1",
+          "signal": "HopperBlockedAlarm",
+          "expected": "true",
+          "observed": "\u003Cnever read\u003E",
+          "state": "NotObserved",
+          "saysSomethingAboutTheBlock": false
+        }
+      ],
+      "basis": {
+        "cited": true,
+        "clauseId": "REQ-HBA-001",
+        "assertionId": "REQ-HBA-001:ab68c1"
+      },
+      "fidelity": {
+        "declared": true,
+        "modelId": "MDL-HopperBlockageStimulus-1",
+        "declaredBy": "model-fidelity-declarer-1",
+        "validatedAgainstPlantData": false,
+        "represents": [
+          "The commanded state of exactly three signals the monitored block consumes - the hopper high-level sensor, the FORWARD shredder running feedback, and the shared operator fault reset - injected at the input map\u0027s test members and at DB_Controls.FaultReset (FB_HopperBlockageStim N21; FC_Inputs N1 lines for Test[5]/Test[8]; FC_ControlMain N8 lines 91-93).",
+          "Presentation of that commanded state to the monitored block within the SAME scan it is computed: the model is called from Main N1, ahead of the input map (Main N2) and the control (Main N3), and it is called from no other block.",
+          "Six timeline shapes selected by the TENS digit of Profile (N7 DIV by 10), with segment boundaries accumulated from the commanded P1..P4 (N8): shape 1 hopper high and plant running throughout; shape 2 hopper high with the plant never running; shape 3 plant running throughout with the hopper low for [T1,T2); shape 4 hopper high throughout with the plant stopped for [T1,T2); shape 5 plant stopped for [T1,T4) with the hopper low for [T2,T3), i.e. the clear falls wholly inside the stop; shape 6 neither signal driven, hopper low and plant stopped (N11, N12, N13, N14).",
+          "A hopper clear of any commanded duration of one CPU scan or longer - including one deliberately SHORTER than the monitored block\u0027s clear-debounce filter time - as a stimulus, by choosing P2 (shape 3) or P3 (shape 5) (N8, N11).",
+          "A commanded operator reset in four modes (N16, N17): never asserted inside the scenario; one pulse of ResetPulseWidth = T#500MS at ScenarioT = ResetAt; continuously true for the whole scenario phase; one pulse of the same width at the model\u0027s own ModelThreshold value.",
+          "A fixed pre-scenario clear-down of T#5S in which the hopper is driven LOW and the plant driven STOPPED, containing a commanded reset asserted from T#3S to T#4S of the run (N4, N9 InCleardown, N16 ClearDownReset). This is a statement about what the model DRIVES, not about the state the monitored block ends up in.",
+          "A run that begins with NO clear-down at all - Offset = T#0S and InCleardown never true - whenever the retentive PreBoundaryDone is already set when the run latches (N5, N9). This is the form a run takes after an externally performed CPU stop/restart.",
+          "A pre-boundary conditioning interval in which the hopper is high AND the plant is running for the commanded PreBoundaryHighRunning, entered only when Precondition = 1 and PreBoundaryDone is clear (N9 InPreBoundary, N13, N14), ending in the latching of a single retentive Bool (N10). That Bool is the entire boundary mechanism the block contains.",
+          "A published observation window, Stim.Armed, true only while the scenario phase is running and only for ScenarioT in [ArmAt, ArmUntil) (N18), for arming observation latches outside this block.",
+          "A published, latched completion flag, Stim.ScenarioDone, set at ScenarioT \u003E= EndAt (N19), which also drops the run latch (N1) and thereby leaves the hopper low and the plant stopped; it is re-armed only after the harness drops Start (N20).",
+          "A run that cannot be truncated by the harness dropping Start part-way through: Running seals itself and is broken only by ScenarioDone (N1).",
+          "Restoration of the field at the end of a run: the map\u0027s test-enable Test[0] follows Running (N21), so outside a run every mapped input is taken from its physical terminal again (FC_Inputs)."
+        ],
+        "doesNotRepresent": [
+          "Any physical or process behaviour of a hopper. There is no material, no level dynamics, no in-flight mass, no sensor noise and no coupling whatsoever between the plant-running signal and the hopper-level signal: both are computed from Shape and elapsed time alone (N13, N14). Shape 2 holds the hopper high with the plant stopped indefinitely and nothing in the block forbids a physically impossible combination.",
+          "An equipment-grounded model in the sense of spec S11 M2. The six shapes were fitted to the CASES THE SPECIFICATION AND VECTOR SET ASK FOR - the block\u0027s own comment says so (\u0027six shapes cover every scenario the vector set asks for\u0027) - so the model inherits the register\u0027s assumptions and the register\u0027s blind spots are not represented by construction.",
+          "The field-side signal path. Values are injected at the input buffer\u0027s test members (N21), so DI5_SHR_RunFwdFB and DI8_HPR_LevelHigh are bypassed entirely (FC_Inputs N1). No wire break, stuck-at, contact bounce, DI hardware input filtering or terminal polarity is represented.",
+          "The REVERSE running feedback, or the plant-running condition as an OR of two directions. The model drives the forward feedback only and force-clears the reverse feedback\u0027s test member for the whole run (N22), while the monitored block\u0027s PlantRunning is Fwd OR Rev (FC_ControlMain line 92).",
+          "A coherent plant input image. DB_Input.Test[0] is the input map\u0027s SINGLE GLOBAL test-enable (FC_Inputs, every line), so while a run is under way EVERY member of DB_Input is taken from a Test bit - and only Test[5], Test[6] and Test[8] are written by anything in the corpus. The other nineteen read FALSE regardless of the field, so during a run the rest of the program (Control_Healthy, Cycle_Start/Stop, pusher limits, downstream running, motor fault, ...) sees an all-false input image. The model does not model those inputs; it suppresses them.",
+          "A reset private to the monitored block. N21 writes the SHARED DB_Controls.FaultReset, which FC_ControlMain fans out to the shredder sequencer (line 23), the motor system (line 39), the pusher (line 59), the monitored block (line 93) and the physical output DQ11_SHR_FaultReset (line 84). It is a plain coil evaluated every scan of the run, so it also overwrites any externally written operator reset for the duration.",
+          "A CPU stop, a CPU restart, or a power cycle. The block cannot command, cause, detect or confirm one. Nothing in it records that a restart occurred; the only thing it carries across is the single retentive Bool PreBoundaryDone (N10), which is set BEFORE any restart and says only that the pre-boundary phase completed.",
+          "A HELD pre-boundary wait for that restart - CONTRADICTS THE BLOCK\u0027S OWN COMMENTS. InPreBoundaryWait requires NOT PreBoundaryDone (N9) and N10 sets PreBoundaryDone from InPreBoundaryWait, so the wait state is true for EXACTLY ONE SCAN (~2 ms) and can never be waited in. On the next scan Offset flips from ClearDownTime to T#0S (N5), so ScenarioT jumps forward by 5 s (N6), and either (a) EndAt \u003C= PreBoundaryHighRunning \u002B 5 s, in which case N19 latches ScenarioDone immediately and N20 RESETS THE RETAINED PreBoundaryDone in the same scan - the boundary marker is destroyed and the run ends - or (b) EndAt is larger, in which case the model resumes driving the scenario from a clock already 5 s \u002B PreBoundaryHighRunning into a timeline whose segments T1..T4 are measured from zero. The model has no mechanism to zero its own scenario clock at the boundary; only the CPU restart, which clears the non-retentive Running and RunTimer, can do that. Consequence: the Precondition = 1 path delivers its intended scenario only if the CPU is stopped within the same scan the pre-boundary phase ends, and delivers nothing usable otherwise.",
+          "The monitored block\u0027s persistence threshold, or the instant it crosses it. ModelThreshold is a stimulus constant held as the instance start value T#60S (iDB_HopperBlockageStim) and is never read from the monitored block; ResetMode 3 places its pulse at the model\u0027s own number (N15, N16). If the block\u0027s preset differs, the pulse does not coincide with the block\u0027s crossing.",
+          "Any observation, expectation or judgement of the monitored block. No network of this block reads any member of iDB_HopperBlockageMonitor; Armed and ScenarioDone are published, never compared against anything.",
+          "The state the monitored block is actually in when a scenario starts. The clear-down drives the hopper low for 5 s and pulses the shared reset; whether that leaves the block unalarmed with a zeroed accumulator is the BLOCK\u0027S behaviour, and this model neither establishes nor verifies it.",
+          "Sub-scan timing. Every phase boundary is a comparison against the run timer\u0027s ET sampled once per OB1 scan (N2, N3), so commanded transitions land on scan boundaries and two commanded transitions less than one scan apart collapse. The narrowest reset the model can command is T#500MS inside the scenario (N4 ResetPulseWidth) and 1 s inside the clear-down (N4 ClearResetFrom/ClearResetUntil).",
+          "Runs longer than the run timer. RunTimer\u0027s PT is T#10M (N2) and a TON\u0027s ET stops at PT, so RunT saturates at ten minutes and every phase comparison freezes with it: a run whose clear-down plus EndAt exceeds that never reaches EndAt, never publishes ScenarioDone, and never ends.",
+          "Validation of the commanded vector. Shape is Profile / 10 (N7); any Profile whose tens digit is not 1..5 - including 0, 6 and 7 or above - drives nothing at all and is indistinguishable in the driven signals from the deliberate idle shape 6. An unset or out-of-range command is a silent idle run, never a refusal.",
+          "More than one hopper clear or more than one plant stop per run. Each shape yields at most one clear interval and at most one stop interval (N11, N12), so a second high episode after a re-accumulation, a second clear, or repeated stop/start within one scenario is not representable in a single run.",
+          "An observation window that outlasts the scenario. Armed is ANDed with InScenario (N18), so an ArmUntil beyond EndAt is silently truncated at EndAt, and no ArmAt/ArmUntil window can open during the clear-down or the pre-boundary phase.",
+          "A run containing no operator reset at all. Every run that starts with a clear-down asserts the commanded reset from 3 s to 4 s of the run irrespective of ResetMode (N16, N17); ResetMode 0 means \u0027no reset inside the scenario\u0027, not \u0027no reset in this run\u0027. ResetMode 2 likewise presents exactly ONE rising edge of the commanded reset - the reset is false from 4 s to 5 s of the run and true from the first scan of the scenario - not zero edges."
+        ]
+      },
+      "stimulus": {
+        "outcome": "Confirmed",
+        "confirmed": true,
+        "detail": "commanded, observed to run, and the scan counter advanced 29080 scan(s) across 914 round trip(s) against a floor of 447. The object appears in the download\u0027s load manifest."
+      },
+      "coRunning": {
+        "recorded": true,
+        "ranAlone": true,
+        "slots": [],
+        "detail": "measured: no other slot was running alongside this vector at this index (X-E)."
+      },
+      "validityStamp": {
+        "programVersion": "16#33434A68",
+        "programVersionRaw": 860047976,
+        "mapHash": "0ee87e6a715e63eaa644ccc7fc25dc4b0b1d709183c57e17eefa174979ccd493",
+        "caveats": [
+          "NOTHING ASKED WHETHER THIS VECTOR STILL TESTS THE SPECIFIED BOUND (AMB-19). A retune moves no assertion ID, so no citation would dangle and no other check here would notice \u2014 this result may be a green against a number the specification no longer states.",
+          "MODEL \u0027MDL-HopperBlockageStimulus-1\u0027 HAS NOT BEEN VALIDATED AGAINST REAL PLANT DATA (M5), and its declaration names these absences: Any physical or process behaviour of a hopper. There is no material, no level dynamics, no in-flight mass, no sensor noise and no coupling whatsoever between the plant-running signal and the hopper-level signal: both are computed from Shape and elapsed time alone (N13, N14). Shape 2 holds the hopper high with the plant stopped indefinitely and nothing in the block forbids a physically impossible combination., An equipment-grounded model in the sense of spec S11 M2. The six shapes were fitted to the CASES THE SPECIFICATION AND VECTOR SET ASK FOR - the block\u0027s own comment says so (\u0027six shapes cover every scenario the vector set asks for\u0027) - so the model inherits the register\u0027s assumptions and the register\u0027s blind spots are not represented by construction., The field-side signal path. Values are injected at the input buffer\u0027s test members (N21), so DI5_SHR_RunFwdFB and DI8_HPR_LevelHigh are bypassed entirely (FC_Inputs N1). No wire break, stuck-at, contact bounce, DI hardware input filtering or terminal polarity is represented., The REVERSE running feedback, or the plant-running condition as an OR of two directions. The model drives the forward feedback only and force-clears the reverse feedback\u0027s test member for the whole run (N22), while the monitored block\u0027s PlantRunning is Fwd OR Rev (FC_ControlMain line 92)., A coherent plant input image. DB_Input.Test[0] is the input map\u0027s SINGLE GLOBAL test-enable (FC_Inputs, every line), so while a run is under way EVERY member of DB_Input is taken from a Test bit - and only Test[5], Test[6] and Test[8] are written by anything in the corpus. The other nineteen read FALSE regardless of the field, so during a run the rest of the program (Control_Healthy, Cycle_Start/Stop, pusher limits, downstream running, motor fault, ...) sees an all-false input image. The model does not model those inputs; it suppresses them., A reset private to the monitored block. N21 writes the SHARED DB_Controls.FaultReset, which FC_ControlMain fans out to the shredder sequencer (line 23), the motor system (line 39), the pusher (line 59), the monitored block (line 93) and the physical output DQ11_SHR_FaultReset (line 84). It is a plain coil evaluated every scan of the run, so it also overwrites any externally written operator reset for the duration., A CPU stop, a CPU restart, or a power cycle. The block cannot command, cause, detect or confirm one. Nothing in it records that a restart occurred; the only thing it carries across is the single retentive Bool PreBoundaryDone (N10), which is set BEFORE any restart and says only that the pre-boundary phase completed., A HELD pre-boundary wait for that restart - CONTRADICTS THE BLOCK\u0027S OWN COMMENTS. InPreBoundaryWait requires NOT PreBoundaryDone (N9) and N10 sets PreBoundaryDone from InPreBoundaryWait, so the wait state is true for EXACTLY ONE SCAN (~2 ms) and can never be waited in. On the next scan Offset flips from ClearDownTime to T#0S (N5), so ScenarioT jumps forward by 5 s (N6), and either (a) EndAt \u003C= PreBoundaryHighRunning \u002B 5 s, in which case N19 latches ScenarioDone immediately and N20 RESETS THE RETAINED PreBoundaryDone in the same scan - the boundary marker is destroyed and the run ends - or (b) EndAt is larger, in which case the model resumes driving the scenario from a clock already 5 s \u002B PreBoundaryHighRunning into a timeline whose segments T1..T4 are measured from zero. The model has no mechanism to zero its own scenario clock at the boundary; only the CPU restart, which clears the non-retentive Running and RunTimer, can do that. Consequence: the Precondition = 1 path delivers its intended scenario only if the CPU is stopped within the same scan the pre-boundary phase ends, and delivers nothing usable otherwise., The monitored block\u0027s persistence threshold, or the instant it crosses it. ModelThreshold is a stimulus constant held as the instance start value T#60S (iDB_HopperBlockageStim) and is never read from the monitored block; ResetMode 3 places its pulse at the model\u0027s own number (N15, N16). If the block\u0027s preset differs, the pulse does not coincide with the block\u0027s crossing., Any observation, expectation or judgement of the monitored block. No network of this block reads any member of iDB_HopperBlockageMonitor; Armed and ScenarioDone are published, never compared against anything., The state the monitored block is actually in when a scenario starts. The clear-down drives the hopper low for 5 s and pulses the shared reset; whether that leaves the block unalarmed with a zeroed accumulator is the BLOCK\u0027S behaviour, and this model neither establishes nor verifies it., Sub-scan timing. Every phase boundary is a comparison against the run timer\u0027s ET sampled once per OB1 scan (N2, N3), so commanded transitions land on scan boundaries and two commanded transitions less than one scan apart collapse. The narrowest reset the model can command is T#500MS inside the scenario (N4 ResetPulseWidth) and 1 s inside the clear-down (N4 ClearResetFrom/ClearResetUntil)., Runs longer than the run timer. RunTimer\u0027s PT is T#10M (N2) and a TON\u0027s ET stops at PT, so RunT saturates at ten minutes and every phase comparison freezes with it: a run whose clear-down plus EndAt exceeds that never reaches EndAt, never publishes ScenarioDone, and never ends., Validation of the commanded vector. Shape is Profile / 10 (N7); any Profile whose tens digit is not 1..5 - including 0, 6 and 7 or above - drives nothing at all and is indistinguishable in the driven signals from the deliberate idle shape 6. An unset or out-of-range command is a silent idle run, never a refusal., More than one hopper clear or more than one plant stop per run. Each shape yields at most one clear interval and at most one stop interval (N11, N12), so a second high episode after a re-accumulation, a second clear, or repeated stop/start within one scenario is not representable in a single run., An observation window that outlasts the scenario. Armed is ANDed with InScenario (N18), so an ArmUntil beyond EndAt is silently truncated at EndAt, and no ArmAt/ArmUntil window can open during the clear-down or the pre-boundary phase., A run containing no operator reset at all. Every run that starts with a clear-down asserts the commanded reset from 3 s to 4 s of the run irrespective of ResetMode (N16, N17); ResetMode 0 means \u0027no reset inside the scenario\u0027, not \u0027no reset in this run\u0027. ResetMode 2 likewise presents exactly ONE rising edge of the commanded reset - the reset is false from 4 s to 5 s of the run and true from the first scan of the scenario - not zero edges.."
+        ],
+        "detail": "DB-2. A result carrying a program version other than the one now deployed is a result about a program that is no longer running; a result carrying a different map hash addressed a different mirror. Compare BOTH before reading any verdict above as current."
+      },
+      "manifestPresence": {
+        "state": "Loaded",
+        "asked": true,
+        "evidencesTransfer": true,
+        "detail": "the object(s) under test appear in the download\u0027s own load manifest."
+      },
+      "boundsCurrency": {
+        "asked": false,
+        "state": "NotAsked",
+        "premiseOutOfDate": null,
+        "detail": "NOTHING ASKED WHETHER THIS VECTOR STILL TESTS THE SPECIFIED BOUND (AMB-19). A retune moves no assertion ID, so no citation would dangle and no other check here would notice."
+      }
+    },
+    {
+      "vector": "VB-HBA-002",
+      "slotIndex": 0,
+      "waveIndex": 1,
+      "verdict": "Stale",
+      "conclusive": false,
+      "whatToDoNext": "THE EXPERIMENT NEVER RAN. This result says nothing whatsoever about the block, and no part of it may be read as evidence. the slot was commanded and the echo says its block never saw its start condition (X-E). The test did not happen. Reading this as a failure would send an agent editing correct logic.",
+      "summary": "STALE \u2014 vector VB-HBA-002, slot 0 index 1: 0/1 assertion(s) held, stimulus CommandedButDidNotRun, settling NotEstablished, CO-RUNNING NOT RECORDED for this index [2 caveat(s)]",
+      "runOutcome": "NotInert",
+      "settling": "NotEstablished",
+      "admissibility": {
+        "admissible": true,
+        "refusals": []
+      },
+      "assertions": [
+        {
+          "assertionId": "REQ-HBA-001:8ea7f6",
+          "signal": "HopperBlockedInhibit",
+          "expected": "true",
+          "observed": "\u003Cnever read\u003E",
+          "state": "NotObserved",
+          "saysSomethingAboutTheBlock": false
+        }
+      ],
+      "basis": {
+        "cited": true,
+        "clauseId": "REQ-HBA-001",
+        "assertionId": "REQ-HBA-001:8ea7f6"
+      },
+      "fidelity": {
+        "declared": true,
+        "modelId": "MDL-HopperBlockageStimulus-1",
+        "declaredBy": "model-fidelity-declarer-1",
+        "validatedAgainstPlantData": false,
+        "represents": [
+          "The commanded state of exactly three signals the monitored block consumes - the hopper high-level sensor, the FORWARD shredder running feedback, and the shared operator fault reset - injected at the input map\u0027s test members and at DB_Controls.FaultReset (FB_HopperBlockageStim N21; FC_Inputs N1 lines for Test[5]/Test[8]; FC_ControlMain N8 lines 91-93).",
+          "Presentation of that commanded state to the monitored block within the SAME scan it is computed: the model is called from Main N1, ahead of the input map (Main N2) and the control (Main N3), and it is called from no other block.",
+          "Six timeline shapes selected by the TENS digit of Profile (N7 DIV by 10), with segment boundaries accumulated from the commanded P1..P4 (N8): shape 1 hopper high and plant running throughout; shape 2 hopper high with the plant never running; shape 3 plant running throughout with the hopper low for [T1,T2); shape 4 hopper high throughout with the plant stopped for [T1,T2); shape 5 plant stopped for [T1,T4) with the hopper low for [T2,T3), i.e. the clear falls wholly inside the stop; shape 6 neither signal driven, hopper low and plant stopped (N11, N12, N13, N14).",
+          "A hopper clear of any commanded duration of one CPU scan or longer - including one deliberately SHORTER than the monitored block\u0027s clear-debounce filter time - as a stimulus, by choosing P2 (shape 3) or P3 (shape 5) (N8, N11).",
+          "A commanded operator reset in four modes (N16, N17): never asserted inside the scenario; one pulse of ResetPulseWidth = T#500MS at ScenarioT = ResetAt; continuously true for the whole scenario phase; one pulse of the same width at the model\u0027s own ModelThreshold value.",
+          "A fixed pre-scenario clear-down of T#5S in which the hopper is driven LOW and the plant driven STOPPED, containing a commanded reset asserted from T#3S to T#4S of the run (N4, N9 InCleardown, N16 ClearDownReset). This is a statement about what the model DRIVES, not about the state the monitored block ends up in.",
+          "A run that begins with NO clear-down at all - Offset = T#0S and InCleardown never true - whenever the retentive PreBoundaryDone is already set when the run latches (N5, N9). This is the form a run takes after an externally performed CPU stop/restart.",
+          "A pre-boundary conditioning interval in which the hopper is high AND the plant is running for the commanded PreBoundaryHighRunning, entered only when Precondition = 1 and PreBoundaryDone is clear (N9 InPreBoundary, N13, N14), ending in the latching of a single retentive Bool (N10). That Bool is the entire boundary mechanism the block contains.",
+          "A published observation window, Stim.Armed, true only while the scenario phase is running and only for ScenarioT in [ArmAt, ArmUntil) (N18), for arming observation latches outside this block.",
+          "A published, latched completion flag, Stim.ScenarioDone, set at ScenarioT \u003E= EndAt (N19), which also drops the run latch (N1) and thereby leaves the hopper low and the plant stopped; it is re-armed only after the harness drops Start (N20).",
+          "A run that cannot be truncated by the harness dropping Start part-way through: Running seals itself and is broken only by ScenarioDone (N1).",
+          "Restoration of the field at the end of a run: the map\u0027s test-enable Test[0] follows Running (N21), so outside a run every mapped input is taken from its physical terminal again (FC_Inputs)."
+        ],
+        "doesNotRepresent": [
+          "Any physical or process behaviour of a hopper. There is no material, no level dynamics, no in-flight mass, no sensor noise and no coupling whatsoever between the plant-running signal and the hopper-level signal: both are computed from Shape and elapsed time alone (N13, N14). Shape 2 holds the hopper high with the plant stopped indefinitely and nothing in the block forbids a physically impossible combination.",
+          "An equipment-grounded model in the sense of spec S11 M2. The six shapes were fitted to the CASES THE SPECIFICATION AND VECTOR SET ASK FOR - the block\u0027s own comment says so (\u0027six shapes cover every scenario the vector set asks for\u0027) - so the model inherits the register\u0027s assumptions and the register\u0027s blind spots are not represented by construction.",
+          "The field-side signal path. Values are injected at the input buffer\u0027s test members (N21), so DI5_SHR_RunFwdFB and DI8_HPR_LevelHigh are bypassed entirely (FC_Inputs N1). No wire break, stuck-at, contact bounce, DI hardware input filtering or terminal polarity is represented.",
+          "The REVERSE running feedback, or the plant-running condition as an OR of two directions. The model drives the forward feedback only and force-clears the reverse feedback\u0027s test member for the whole run (N22), while the monitored block\u0027s PlantRunning is Fwd OR Rev (FC_ControlMain line 92).",
+          "A coherent plant input image. DB_Input.Test[0] is the input map\u0027s SINGLE GLOBAL test-enable (FC_Inputs, every line), so while a run is under way EVERY member of DB_Input is taken from a Test bit - and only Test[5], Test[6] and Test[8] are written by anything in the corpus. The other nineteen read FALSE regardless of the field, so during a run the rest of the program (Control_Healthy, Cycle_Start/Stop, pusher limits, downstream running, motor fault, ...) sees an all-false input image. The model does not model those inputs; it suppresses them.",
+          "A reset private to the monitored block. N21 writes the SHARED DB_Controls.FaultReset, which FC_ControlMain fans out to the shredder sequencer (line 23), the motor system (line 39), the pusher (line 59), the monitored block (line 93) and the physical output DQ11_SHR_FaultReset (line 84). It is a plain coil evaluated every scan of the run, so it also overwrites any externally written operator reset for the duration.",
+          "A CPU stop, a CPU restart, or a power cycle. The block cannot command, cause, detect or confirm one. Nothing in it records that a restart occurred; the only thing it carries across is the single retentive Bool PreBoundaryDone (N10), which is set BEFORE any restart and says only that the pre-boundary phase completed.",
+          "A HELD pre-boundary wait for that restart - CONTRADICTS THE BLOCK\u0027S OWN COMMENTS. InPreBoundaryWait requires NOT PreBoundaryDone (N9) and N10 sets PreBoundaryDone from InPreBoundaryWait, so the wait state is true for EXACTLY ONE SCAN (~2 ms) and can never be waited in. On the next scan Offset flips from ClearDownTime to T#0S (N5), so ScenarioT jumps forward by 5 s (N6), and either (a) EndAt \u003C= PreBoundaryHighRunning \u002B 5 s, in which case N19 latches ScenarioDone immediately and N20 RESETS THE RETAINED PreBoundaryDone in the same scan - the boundary marker is destroyed and the run ends - or (b) EndAt is larger, in which case the model resumes driving the scenario from a clock already 5 s \u002B PreBoundaryHighRunning into a timeline whose segments T1..T4 are measured from zero. The model has no mechanism to zero its own scenario clock at the boundary; only the CPU restart, which clears the non-retentive Running and RunTimer, can do that. Consequence: the Precondition = 1 path delivers its intended scenario only if the CPU is stopped within the same scan the pre-boundary phase ends, and delivers nothing usable otherwise.",
+          "The monitored block\u0027s persistence threshold, or the instant it crosses it. ModelThreshold is a stimulus constant held as the instance start value T#60S (iDB_HopperBlockageStim) and is never read from the monitored block; ResetMode 3 places its pulse at the model\u0027s own number (N15, N16). If the block\u0027s preset differs, the pulse does not coincide with the block\u0027s crossing.",
+          "Any observation, expectation or judgement of the monitored block. No network of this block reads any member of iDB_HopperBlockageMonitor; Armed and ScenarioDone are published, never compared against anything.",
+          "The state the monitored block is actually in when a scenario starts. The clear-down drives the hopper low for 5 s and pulses the shared reset; whether that leaves the block unalarmed with a zeroed accumulator is the BLOCK\u0027S behaviour, and this model neither establishes nor verifies it.",
+          "Sub-scan timing. Every phase boundary is a comparison against the run timer\u0027s ET sampled once per OB1 scan (N2, N3), so commanded transitions land on scan boundaries and two commanded transitions less than one scan apart collapse. The narrowest reset the model can command is T#500MS inside the scenario (N4 ResetPulseWidth) and 1 s inside the clear-down (N4 ClearResetFrom/ClearResetUntil).",
+          "Runs longer than the run timer. RunTimer\u0027s PT is T#10M (N2) and a TON\u0027s ET stops at PT, so RunT saturates at ten minutes and every phase comparison freezes with it: a run whose clear-down plus EndAt exceeds that never reaches EndAt, never publishes ScenarioDone, and never ends.",
+          "Validation of the commanded vector. Shape is Profile / 10 (N7); any Profile whose tens digit is not 1..5 - including 0, 6 and 7 or above - drives nothing at all and is indistinguishable in the driven signals from the deliberate idle shape 6. An unset or out-of-range command is a silent idle run, never a refusal.",
+          "More than one hopper clear or more than one plant stop per run. Each shape yields at most one clear interval and at most one stop interval (N11, N12), so a second high episode after a re-accumulation, a second clear, or repeated stop/start within one scenario is not representable in a single run.",
+          "An observation window that outlasts the scenario. Armed is ANDed with InScenario (N18), so an ArmUntil beyond EndAt is silently truncated at EndAt, and no ArmAt/ArmUntil window can open during the clear-down or the pre-boundary phase.",
+          "A run containing no operator reset at all. Every run that starts with a clear-down asserts the commanded reset from 3 s to 4 s of the run irrespective of ResetMode (N16, N17); ResetMode 0 means \u0027no reset inside the scenario\u0027, not \u0027no reset in this run\u0027. ResetMode 2 likewise presents exactly ONE rising edge of the commanded reset - the reset is false from 4 s to 5 s of the run and true from the first scan of the scenario - not zero edges."
+        ]
+      },
+      "stimulus": {
+        "outcome": "CommandedButDidNotRun",
+        "confirmed": false,
+        "detail": "the slot was commanded and the echo says its block never saw its start condition (X-E). The test did not happen. Reading this as a failure would send an agent editing correct logic."
+      },
+      "coRunning": {
+        "recorded": false,
+        "ranAlone": null,
+        "slots": [],
+        "detail": "NO CO-RUNNING SLICE WAS RECORDED FOR THIS INDEX. This is NOT \u0027it ran alone\u0027: nothing measured what else was running, so a result obtained under interference would look exactly like one obtained in isolation."
+      },
+      "validityStamp": {
+        "programVersion": "16#33434A68",
+        "programVersionRaw": 860047976,
+        "mapHash": "0ee87e6a715e63eaa644ccc7fc25dc4b0b1d709183c57e17eefa174979ccd493",
+        "caveats": [
+          "NOTHING ASKED WHETHER THIS VECTOR STILL TESTS THE SPECIFIED BOUND (AMB-19). A retune moves no assertion ID, so no citation would dangle and no other check here would notice \u2014 this result may be a green against a number the specification no longer states.",
+          "MODEL \u0027MDL-HopperBlockageStimulus-1\u0027 HAS NOT BEEN VALIDATED AGAINST REAL PLANT DATA (M5), and its declaration names these absences: Any physical or process behaviour of a hopper. There is no material, no level dynamics, no in-flight mass, no sensor noise and no coupling whatsoever between the plant-running signal and the hopper-level signal: both are computed from Shape and elapsed time alone (N13, N14). Shape 2 holds the hopper high with the plant stopped indefinitely and nothing in the block forbids a physically impossible combination., An equipment-grounded model in the sense of spec S11 M2. The six shapes were fitted to the CASES THE SPECIFICATION AND VECTOR SET ASK FOR - the block\u0027s own comment says so (\u0027six shapes cover every scenario the vector set asks for\u0027) - so the model inherits the register\u0027s assumptions and the register\u0027s blind spots are not represented by construction., The field-side signal path. Values are injected at the input buffer\u0027s test members (N21), so DI5_SHR_RunFwdFB and DI8_HPR_LevelHigh are bypassed entirely (FC_Inputs N1). No wire break, stuck-at, contact bounce, DI hardware input filtering or terminal polarity is represented., The REVERSE running feedback, or the plant-running condition as an OR of two directions. The model drives the forward feedback only and force-clears the reverse feedback\u0027s test member for the whole run (N22), while the monitored block\u0027s PlantRunning is Fwd OR Rev (FC_ControlMain line 92)., A coherent plant input image. DB_Input.Test[0] is the input map\u0027s SINGLE GLOBAL test-enable (FC_Inputs, every line), so while a run is under way EVERY member of DB_Input is taken from a Test bit - and only Test[5], Test[6] and Test[8] are written by anything in the corpus. The other nineteen read FALSE regardless of the field, so during a run the rest of the program (Control_Healthy, Cycle_Start/Stop, pusher limits, downstream running, motor fault, ...) sees an all-false input image. The model does not model those inputs; it suppresses them., A reset private to the monitored block. N21 writes the SHARED DB_Controls.FaultReset, which FC_ControlMain fans out to the shredder sequencer (line 23), the motor system (line 39), the pusher (line 59), the monitored block (line 93) and the physical output DQ11_SHR_FaultReset (line 84). It is a plain coil evaluated every scan of the run, so it also overwrites any externally written operator reset for the duration., A CPU stop, a CPU restart, or a power cycle. The block cannot command, cause, detect or confirm one. Nothing in it records that a restart occurred; the only thing it carries across is the single retentive Bool PreBoundaryDone (N10), which is set BEFORE any restart and says only that the pre-boundary phase completed., A HELD pre-boundary wait for that restart - CONTRADICTS THE BLOCK\u0027S OWN COMMENTS. InPreBoundaryWait requires NOT PreBoundaryDone (N9) and N10 sets PreBoundaryDone from InPreBoundaryWait, so the wait state is true for EXACTLY ONE SCAN (~2 ms) and can never be waited in. On the next scan Offset flips from ClearDownTime to T#0S (N5), so ScenarioT jumps forward by 5 s (N6), and either (a) EndAt \u003C= PreBoundaryHighRunning \u002B 5 s, in which case N19 latches ScenarioDone immediately and N20 RESETS THE RETAINED PreBoundaryDone in the same scan - the boundary marker is destroyed and the run ends - or (b) EndAt is larger, in which case the model resumes driving the scenario from a clock already 5 s \u002B PreBoundaryHighRunning into a timeline whose segments T1..T4 are measured from zero. The model has no mechanism to zero its own scenario clock at the boundary; only the CPU restart, which clears the non-retentive Running and RunTimer, can do that. Consequence: the Precondition = 1 path delivers its intended scenario only if the CPU is stopped within the same scan the pre-boundary phase ends, and delivers nothing usable otherwise., The monitored block\u0027s persistence threshold, or the instant it crosses it. ModelThreshold is a stimulus constant held as the instance start value T#60S (iDB_HopperBlockageStim) and is never read from the monitored block; ResetMode 3 places its pulse at the model\u0027s own number (N15, N16). If the block\u0027s preset differs, the pulse does not coincide with the block\u0027s crossing., Any observation, expectation or judgement of the monitored block. No network of this block reads any member of iDB_HopperBlockageMonitor; Armed and ScenarioDone are published, never compared against anything., The state the monitored block is actually in when a scenario starts. The clear-down drives the hopper low for 5 s and pulses the shared reset; whether that leaves the block unalarmed with a zeroed accumulator is the BLOCK\u0027S behaviour, and this model neither establishes nor verifies it., Sub-scan timing. Every phase boundary is a comparison against the run timer\u0027s ET sampled once per OB1 scan (N2, N3), so commanded transitions land on scan boundaries and two commanded transitions less than one scan apart collapse. The narrowest reset the model can command is T#500MS inside the scenario (N4 ResetPulseWidth) and 1 s inside the clear-down (N4 ClearResetFrom/ClearResetUntil)., Runs longer than the run timer. RunTimer\u0027s PT is T#10M (N2) and a TON\u0027s ET stops at PT, so RunT saturates at ten minutes and every phase comparison freezes with it: a run whose clear-down plus EndAt exceeds that never reaches EndAt, never publishes ScenarioDone, and never ends., Validation of the commanded vector. Shape is Profile / 10 (N7); any Profile whose tens digit is not 1..5 - including 0, 6 and 7 or above - drives nothing at all and is indistinguishable in the driven signals from the deliberate idle shape 6. An unset or out-of-range command is a silent idle run, never a refusal., More than one hopper clear or more than one plant stop per run. Each shape yields at most one clear interval and at most one stop interval (N11, N12), so a second high episode after a re-accumulation, a second clear, or repeated stop/start within one scenario is not representable in a single run., An observation window that outlasts the scenario. Armed is ANDed with InScenario (N18), so an ArmUntil beyond EndAt is silently truncated at EndAt, and no ArmAt/ArmUntil window can open during the clear-down or the pre-boundary phase., A run containing no operator reset at all. Every run that starts with a clear-down asserts the commanded reset from 3 s to 4 s of the run irrespective of ResetMode (N16, N17); ResetMode 0 means \u0027no reset inside the scenario\u0027, not \u0027no reset in this run\u0027. ResetMode 2 likewise presents exactly ONE rising edge of the commanded reset - the reset is false from 4 s to 5 s of the run and true from the first scan of the scenario - not zero edges.."
+        ],
+        "detail": "DB-2. A result carrying a program version other than the one now deployed is a result about a program that is no longer running; a result carrying a different map hash addressed a different mirror. Compare BOTH before reading any verdict above as current."
+      },
+      "manifestPresence": {
+        "state": "Loaded",
+        "asked": true,
+        "evidencesTransfer": true,
+        "detail": "the object(s) under test appear in the download\u0027s own load manifest."
+      },
+      "boundsCurrency": {
+        "asked": false,
+        "state": "NotAsked",
+        "premiseOutOfDate": null,
+        "detail": "NOTHING ASKED WHETHER THIS VECTOR STILL TESTS THE SPECIFIED BOUND (AMB-19). A retune moves no assertion ID, so no citation would dangle and no other check here would notice."
+      }
+    }
+  ],
+  "caveats": [
+    {
+      "id": "F-3-authority",
+      "detail": "THE ASSERTION FORM HAS NO AUTHORITY BEHIND IT. F-3 refuses a SAMPLED observation of a NEVER assertion, and the form is declared BY THE VECTOR \u2014 nothing checks it against the enumeration, because the enumeration still has no producer. So F-3 is enforced against what a vector CLAIMS, not against what the assertion IS, and an author who cites a NEVER and declares WHEN gets the permissive path."
+    },
+    {
+      "id": "DB-8-saw-nothing",
+      "detail": "DB-8 CANNOT DISTINGUISH \u0027SAW NOTHING\u0027 FROM \u0027NOTHING HAPPENED\u0027. A sampled assertion that observed no disagreement is AssertionState.Held, identical to one that saw nothing because nothing occurred. F-3 prevents the case where that is dangerous (a NEVER assertion); it does not fix the package. This submission declares 17 sampled expectation(s) of 29."
+    },
+    {
+      "id": "F-6-collapse-seam",
+      "detail": "SLOT-WIDTH REPORT (not a gate): 1 slot(s) at 10 result register(s), R = 12 whole slot(s) per FC03 read. No width collapse \u2014 no slot is paying for a wider neighbour. (Carried here because nothing else emits it \u2014 the coordinator is its natural owner. It is a report at this level too: no part of this loop consults it.)"
+    }
+  ]
+}
