@@ -1,4 +1,4 @@
-using Harness.Map;
+﻿using Harness.Map;
 
 namespace Harness.Map.Tests;
 
@@ -16,24 +16,24 @@ namespace Harness.Map.Tests;
 /// </summary>
 public class LatchLookupTests
 {
-    private const string Tag = "iDB_Unit.IO.OpenValve";
-    private const string Spec = "DrainValve.Command";
-    private const string ArmTag = "iDB_Stim.Stim.Armed";
-    private const string ArmSpec = "VLV_Stim.Armed";
+    private const string Tag = "iDB_Widget.IO.Engage";
+    private const string Spec = "SPEC.EngageCommand";
+    private const string ArmTag = "iDB_Model.Phase.Armed";
+    private const string ArmSpec = "SPEC.Armed";
 
     /// <summary>
-    /// The JOB9004 valve slot in miniature: a phase-armed transient whose arm signal is itself published in
+    /// A phase-armed transient in the shape a real binding has: whose arm signal is itself published in
     /// the same result band, beside two ordinary signals — and every spec name DIFFERS from its tag, which
     /// is the shape a fixture needs to be able to tell the two keys apart at all.
     /// </summary>
     private static SlotBinding Binding() => new(
-        "VLV",
-        MirroredSignal.Ints("iDB_Stim.Stim.Profile"),
-        "iDB_Stim.Stim.Start",
+        "WGT",
+        MirroredSignal.Ints("iDB_Model.Phase.Profile"),
+        "iDB_Model.Phase.Start",
         new[]
         {
             new MirroredSignal(ArmTag, MirrorValueType.Bool, SpecName: ArmSpec),
-            new MirroredSignal("iDB_Unit.IO.Telemetry", MirrorValueType.Int, SpecName: "Valve.Telemetry"),
+            new MirroredSignal("iDB_Widget.IO.Reading", MirrorValueType.Int, SpecName: "SPEC.Reading"),
             new MirroredSignal(Tag, MirrorValueType.Bool, SpecName: Spec,
                 Transient: true, RearmsEachIndex: true, ArmedBy: ArmTag),
         });
@@ -65,11 +65,11 @@ public class LatchLookupTests
     {
         var binding = Binding();
 
-        // *** THE FORBIDDEN FALLBACK, PINNED. *** `Valve.Telemetry` is a real, carried signal at register
+        // *** THE FORBIDDEN FALLBACK, PINNED. *** `SPEC.Reading` is a real, carried signal at register
         // 1; it simply has no latch. Returning 1 here would answer a `Latched` expectation from the value
         // register — which is precisely how `Latched` became a synonym for `Sampled`.
-        Assert.Equal(1, binding.ResultRegisterOf("Valve.Telemetry"));
-        Assert.Equal(-1, binding.LatchRegisterOf("Valve.Telemetry"));
+        Assert.Equal(1, binding.ResultRegisterOf("SPEC.Reading"));
+        Assert.Equal(-1, binding.LatchRegisterOf("SPEC.Reading"));
 
         // A name the binding does not carry at all answers the same way, and -1 rather than 0 because 0 is
         // a real offset.
@@ -95,7 +95,7 @@ public class LatchLookupTests
         // name the same arm tag, and it is tempting to treat that tag as the SLOT's window and apply it to
         // signals that declared none. That would be an inference about a signal from its neighbours, and
         // an inferred window is how an observation acquires a confidence it was never given.
-        Assert.Equal(-1, Binding().ArmRegisterOf("Valve.Telemetry"));
+        Assert.Equal(-1, Binding().ArmRegisterOf("SPEC.Reading"));
     }
 
     [Fact]
@@ -105,13 +105,13 @@ public class LatchLookupTests
         // controller and the PC simply cannot see the window. That is a limit, not a failure, and it must
         // read as UNKNOWN rather than as an open window.
         var binding = new SlotBinding(
-            "VLV",
+            "WGT",
             Array.Empty<MirroredSignal>(),
-            "iDB_Stim.Stim.Start",
+            "iDB_Model.Phase.Start",
             new[]
             {
                 new MirroredSignal(Tag, MirrorValueType.Bool, SpecName: Spec,
-                    Transient: true, RearmsEachIndex: true, ArmedBy: "iDB_Stim.Stim.ArmedButNotMirrored"),
+                    Transient: true, RearmsEachIndex: true, ArmedBy: "iDB_Model.Phase.ArmedButNotMirrored"),
             });
 
         // One value register at 0, so the latch band starts at 1 — the latch is fine; only the WINDOW is

@@ -1,4 +1,4 @@
-namespace Harness.Wire;
+﻿namespace Harness.Wire;
 
 /// <summary>
 /// One poll's reading of one slot's whole result band, <b>with WHEN it was taken.</b>
@@ -23,7 +23,7 @@ public sealed record ResultFrame(ScanCount Scan, int PollRound, ushort[] Registe
 /// <para><b>Why that is fatal rather than merely lossy.</b> A well-built stimulus model returns the block
 /// to inert BEFORE it raises its completion flag — that is required, it is what stops a wave dying after
 /// one vector. So <b>the one instant the harness looked at is, by construction, the one instant at which
-/// every commanded member is inert.</b> An assertion expecting <c>Y11 = true</c> was sampled ~600 ms
+/// every commanded member is inert.</b> An assertion expecting a commanded state to be TRUE was sampled ~600 ms
 /// after the scenario ended, read false, and the package reported FAIL against a block that had been
 /// measured doing the right thing on the device from an earlier frame.</para>
 ///

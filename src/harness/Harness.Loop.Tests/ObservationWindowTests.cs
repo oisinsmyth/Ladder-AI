@@ -1,4 +1,4 @@
-using Harness.Loop;
+﻿using Harness.Loop;
 using Harness.Map;
 using Harness.Results;
 using Harness.Skeleton;
@@ -11,7 +11,7 @@ namespace Harness.Loop.Tests;
 /// THAT INSTANT IS, BY CONSTRUCTION, THE ONE INSTANT AT WHICH A WELL-BUILT MODEL HAS RETURNED THE BLOCK TO
 /// INERT.</b>
 ///
-/// <para><b>Measured on JOB9004, 2026-08-17.</b> An assertion expecting <c>Y11 = true</c> was sampled ~600 ms
+/// <para><b>Measured on JOB9004, 2026-08-17.</b> An assertion expecting a commanded state to be TRUE was sampled ~600 ms
 /// after the scenario ended and read false — <i>a value impossible for ANY block at that instant</i> — and
 /// the package reported <c>FAIL</c> against a block proven correct from an earlier frame on the device.
 /// Its <c>conclusiveAboutTheBlock: 1</c> should have been <c>0</c>.</para>

@@ -1,4 +1,4 @@
-namespace Harness.Map;
+﻿namespace Harness.Map;
 
 /// <summary>
 /// The type of a signal the copy layer mirrors — <b>and it decides the rung shape, not just the tag.</b>
@@ -710,7 +710,7 @@ public sealed record SlotBinding(
     ///
     /// <para><b>What it answers:</b> <i>was this observation taken inside the window the binding declared
     /// for it?</i> Nothing asked that before, and on the measured run nothing needed to be broken for the
-    /// answer to be "no": the model's own <c>Stim.Armed</c> flag was in the same 23-register read, and the
+    /// answer to be "no": the model's own arm flag was in the same 23-register read, and the
     /// snapshot every assertion was evaluated against has it reading <b>0</b>.</para>
     ///
     /// <para><b>It is derived from the signal's OWN <see cref="MirroredSignal.ArmedBy"/> and from nothing

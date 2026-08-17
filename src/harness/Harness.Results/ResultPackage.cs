@@ -1,4 +1,4 @@
-using Harness.Map;
+﻿using Harness.Map;
 using Harness.Wire;
 
 namespace Harness.Results;
@@ -27,7 +27,7 @@ public enum AssertionState
     /// 2026-08-17 the harness kept exactly one observation per index — the poll that recognised completion
     /// — and a well-built stimulus model returns the block to inert BEFORE it raises its completion flag.
     /// So the single instant the harness looked at was, by construction, the one instant at which every
-    /// commanded member is inert: an assertion expecting <c>Y11 = true</c> read false and the package
+    /// commanded member is inert: an assertion expecting a commanded state to be TRUE read false and the package
     /// reported <c>Fail</c> against a block measured doing the right thing on the device.</para>
     ///
     /// <para><b>With the whole series retained, that case is no longer a disagreement — it is a signal that

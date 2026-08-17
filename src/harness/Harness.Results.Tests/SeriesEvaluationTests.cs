@@ -1,4 +1,4 @@
-using Harness.Map;
+﻿using Harness.Map;
 using Harness.Results;
 
 namespace Harness.Results.Tests;
@@ -124,7 +124,7 @@ public class SeriesEvaluationTests
     /// <summary>
     /// 🔴 <b>A DECLARED WINDOW THAT NEVER OPENED IN ANY RETAINED FRAME IS NOT A DISAGREEMENT.</b>
     ///
-    /// <para>This is the JOB9004 snapshot in miniature: <c>Stim.Armed</c> read 0 in the one frame the
+    /// <para>This is the JOB9004 snapshot in miniature: the model's own arm flag read 0 in the one frame the
     /// harness kept. Every reading held is one the binding itself says is outside the window, so none of
     /// them is evidence — and rendering that as <c>Disagreed</c> is exactly the false accusation.</para>
     /// </summary>

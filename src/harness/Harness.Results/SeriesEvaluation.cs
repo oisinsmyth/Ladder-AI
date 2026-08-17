@@ -1,4 +1,4 @@
-namespace Harness.Results;
+﻿namespace Harness.Results;
 
 /// <summary>
 /// 🔴 <b>WHETHER AN OBSERVATION WAS TAKEN INSIDE THE WINDOW ITS OWN BINDING DECLARED FOR IT.</b>
@@ -113,7 +113,7 @@ public sealed record ObservedFrame(long Scan, int PollRound, string? Value, Wind
 /// poll that recognised completion. A well-built stimulus model returns the block to inert BEFORE it
 /// raises its completion flag — that is required, and it is what stops a wave dying after one vector — so
 /// the one instant the harness looked at was, by construction, the one instant at which every commanded
-/// member is inert. An assertion expecting <c>Y11 = true</c> read false and the package reported FAIL
+/// member is inert. An assertion expecting a commanded state to be TRUE read false and the package reported FAIL
 /// against a block proven correct from an earlier frame on the device.</para>
 ///
 /// <para><b>THE FOLD, AND WHY IT IS THIS ONE.</b> The window narrows the set first, then a three-way

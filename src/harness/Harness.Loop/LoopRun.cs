@@ -1,4 +1,4 @@
-using Harness.Map;
+﻿using Harness.Map;
 using Harness.Results;
 using Harness.Wire;
 
@@ -704,7 +704,7 @@ public static class LoopRun
     /// returns the block to inert BEFORE it raises its completion flag — that is required, and it is what
     /// stops a wave dying after one vector. So the one instant this code looked at was, by construction,
     /// the one instant at which every commanded member is inert and every latched cause has been reset.
-    /// Measured: an assertion expecting <c>Y11 = true</c> was read ~600 ms after the scenario ended,
+    /// Measured: an assertion expecting a commanded state to be TRUE was read ~600 ms after the scenario ended,
     /// against a register that no block, correct or not, could have held true at that instant.</para>
     ///
     /// <para><b>What it does now, per expectation:</b></para>

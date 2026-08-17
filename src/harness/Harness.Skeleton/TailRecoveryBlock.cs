@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using Harness.Map;
 
 namespace Harness.Skeleton;
@@ -40,8 +40,8 @@ public enum TailRecoveryShape
 /// <para><b>The shape reproduced here is the one every well-built stimulus model has</b>, and it is
 /// required rather than incidental: a model must return the block under test to inert BEFORE it announces
 /// it has finished, or the wave dies after one vector. JOB9004's valve model does exactly this — its own
-/// tail recovery runs a disarm, a reset pulse and a verify, and only then raises <c>ScenarioDone</c>. The
-/// measured consequence was an assertion expecting <c>Y11 = true</c> being sampled ~600 ms after the
+/// tail recovery runs a disarm, a reset pulse and a verify, and only then raises its completion flag. The
+/// measured consequence was an assertion expecting a commanded state to be TRUE being sampled ~600 ms after the
 /// scenario ended and reading false: <b>a value impossible for ANY block at that instant</b>, reported as
 /// a FAIL against a block proven correct from an earlier frame.</para>
 ///
@@ -69,7 +69,7 @@ public static class TailRecoveryBlock
     /// <summary>The signal under assertion.</summary>
     public const string ResponseTag = "Tail_Response";
 
-    /// <summary>The model's own arm flag — the observation window, published in-band exactly as JOB9004's model publishes <c>Stim.Armed</c>.</summary>
+    /// <summary>The model's own arm flag — the observation window, published in-band, the way a real stimulus model publishes its phase flag.</summary>
     public const string ArmedTag = "Tail_Armed";
 
     /// <summary>The completion signal the client polls.</summary>
