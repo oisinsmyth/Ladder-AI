@@ -1,0 +1,45 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>Harness.Verify</RootNamespace>
+    <AssemblyName>harness-verify</AssemblyName>
+  </PropertyGroup>
+
+  <!--
+    harness-verify — DB-6 ("ISOLATION BY CONSTRUCTION") EXERCISED AGAINST A LIVE DEVICE. READ-ONLY.
+
+    WHY IT EXISTS. `MirrorClient` is constructed in exactly ONE production place — Harness.Loop's
+    LoopRun.Execute, and no executable reaches that line: `harness-run` with the verify flag stops at the
+    VerifyingDeviceGateway, which reads the version registers through the raw transport and never builds
+    a client. So `VersionCheck.Confirm` and `MirrorClient.ReadControl`'s DB-6 guard had never executed
+    against a real device. Both were unit-tested against scripted transports, which is a different claim.
+
+    *** THIS BINARY READS AND NOTHING ELSE, AND THE CLAIM IS CHECKED RATHER THAN DECLARED. ***
+    VerifyStructureTests walks every method body in the compiled assembly and asserts that none of them
+    names a write member of Harness.Wire, Harness.Map or NModbus — with a DENOMINATOR (bodies examined
+    > 0), a LIVE POSITIVE CONTROL (a planted class in the test assembly that does call
+    WriteHoldingRegisters, which the same walk must find) and a RESOLUTION CONTROL inside this module
+    (MirrorClient.ReadControl, which VerifyRun certainly calls). A `const bool` with an Assert.False on
+    it is what that replaces: measured 2026-08-14 on Harness.RigWrite, planting a class that constructed
+    a live socket client left all 202 tests green.
+
+    THE RESIDUAL, NAMED. Unlike harness-mirror-read this binary MUST hold a MirrorClient — exercising
+    the client's guard is the whole point — and MirrorClient carries WriteVector/Commit/LowerAllStartBools/
+    ClearStartEcho. So the property checked here is the narrower and more precise one: this assembly
+    names NONE of those members, and names neither LoopRun.Execute nor LoopCli.Run, the two entry points
+    that can reach a write. The capability exists in the process; nothing here reaches it.
+
+    Harness.Run is referenced for LoopCli.Compose and ProgramUnderTest — the SAME loaders and the SAME
+    composition `harness-run` in generate-only mode uses. A second parser would be a second answer to the
+    question "what is the build stamp for these documents", and the whole tool turns on that number.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\Harness.Gate\Harness.Gate.csproj" />
+    <ProjectReference Include="..\Harness.Loop\Harness.Loop.csproj" />
+    <ProjectReference Include="..\Harness.Run\Harness.Run.csproj" />
+    <ProjectReference Include="..\Harness.Wire\Harness.Wire.csproj" />
+    <ProjectReference Include="..\..\device-guard\DeviceGuard\DeviceGuard.csproj" />
+  </ItemGroup>
+
+</Project>

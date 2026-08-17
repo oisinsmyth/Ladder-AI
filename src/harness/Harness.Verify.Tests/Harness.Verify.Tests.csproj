@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <RootNamespace>Harness.Verify.Tests</RootNamespace>
+  </PropertyGroup>
+
+  <!-- Versions come from the repo-root Directory.Packages.props (F-38, central package management). -->
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <!--
+    No device and no socket. Every test drives a SCRIPTED transport and a RECORDING connect factory, so
+    "the fence refused and nothing connected" is asserted against a counter rather than against an exit
+    code: a disconnected gate can still produce the right exit code by accident.
+
+    The fence tests use the REAL DeviceAccessGuard against a REAL temporary allowlist file, not an
+    interface over it. A seam there would let the tests exercise a fence that is not the one an operator
+    runs.
+
+    NOTE: this project deliberately CONTAINS a class that calls WriteHoldingRegisters
+    (PlantedWriteControl). It is the live positive control for the IL walk, and it must stay here and
+    never move into the shipped assembly.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\Harness.Verify\Harness.Verify.csproj" />
+  </ItemGroup>
+
+</Project>

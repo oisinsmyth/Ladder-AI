@@ -65,6 +65,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Harness.Cleanup", "Harness.
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Harness.Verify", "Harness.Verify\Harness.Verify.csproj", "{1B80F79D-3D5D-451E-BA94-405754BDB37C}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Harness.Verify.Tests", "Harness.Verify.Tests\Harness.Verify.Tests.csproj", "{2598DF26-04DB-450A-8095-33AC5A6E2902}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -198,5 +200,9 @@ Global
 		{1B80F79D-3D5D-451E-BA94-405754BDB37C}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{1B80F79D-3D5D-451E-BA94-405754BDB37C}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{1B80F79D-3D5D-451E-BA94-405754BDB37C}.Release|Any CPU.Build.0 = Release|Any CPU
+		{2598DF26-04DB-450A-8095-33AC5A6E2902}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2598DF26-04DB-450A-8095-33AC5A6E2902}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2598DF26-04DB-450A-8095-33AC5A6E2902}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{2598DF26-04DB-450A-8095-33AC5A6E2902}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal
