@@ -3507,6 +3507,421 @@ public sealed class OpennessGateway : IOpennessGateway
         }
     }
 
+    // ---- graphics (2026-08-17) ------------------------------------------------------------------
+    // Project.Graphics is a MultiLingualGraphicComposition and is PROJECT-level, not device-level:
+    // one picture store shared by every HMI device. HmiTarget.GraphicLists is a different thing
+    // entirely (a state->picture mapping), so nothing here touches it.
+
+    private Siemens.Engineering.Hmi.Globalization.MultiLingualGraphicComposition GraphicStore()
+    {
+        if (_project is null)
+        {
+            throw new InvalidOperationException($"{nameof(OpenProject)} must be called before any graphics command.");
+        }
+
+        return _project.Graphics;
+    }
+
+    public IReadOnlyList<string> EnumerateGraphics()
+    {
+        var store = GraphicStore();
+        var lines = new List<string>();
+        var count = 0;
+        foreach (Siemens.Engineering.Hmi.Globalization.MultiLingualGraphic g in store)
+        {
+            count++;
+            lines.Add($"  {g.Name}");
+        }
+
+        // Empty is not clean: a project genuinely CAN have no graphics, but so can a walk that found
+        // the wrong composition, so the denominator is always stated.
+        lines.Insert(0, $"GRAPHICS: {count} in Project.Graphics ({store.GetType().FullName})");
+        return lines;
+    }
+
+    private Siemens.Engineering.Hmi.Globalization.MultiLingualGraphic FindGraphic(string name)
+    {
+        var store = GraphicStore();
+        var names = new List<string>();
+        foreach (Siemens.Engineering.Hmi.Globalization.MultiLingualGraphic g in store)
+        {
+            names.Add(g.Name);
+            if (string.Equals(g.Name, name, StringComparison.Ordinal))
+            {
+                return g;
+            }
+        }
+
+        throw new GraphicNotFoundException(name, names);
+    }
+
+    public IReadOnlyList<string> InspectGraphic(string graphicName)
+    {
+        var graphic = FindGraphic(graphicName);
+        var lines = new List<string> { $"GRAPHIC: {graphic.Name}", string.Empty };
+
+        lines.Add("--- ATTRIBUTES (GetAttributeInfos) ---");
+        var attrs = 0;
+        foreach (var info in graphic.GetAttributeInfos())
+        {
+            attrs++;
+            object? value;
+            try
+            {
+                value = graphic.GetAttribute(info.Name);
+            }
+            catch (Exception ex)
+            {
+                value = $"<unreadable: {ex.GetType().Name}: {ex.Message}>";
+            }
+
+            lines.Add($"  {info.Name} = {DescribeGraphicValue(value)}");
+        }
+
+        lines.Add($"  ATTRIBUTES: {attrs}");
+        lines.Add(string.Empty);
+
+        lines.Add("--- COMPOSITIONS (GetCompositionInfos) ---");
+        var comps = 0;
+        try
+        {
+            foreach (var info in ((IEngineeringObject)graphic).GetCompositionInfos())
+            {
+                comps++;
+                var member = ((IEngineeringObject)graphic).GetComposition(info.Name);
+                var n = -1;
+                if (member is System.Collections.IEnumerable seq)
+                {
+                    n = 0;
+                    foreach (var _ in seq)
+                    {
+                        n++;
+                    }
+                }
+
+                lines.Add($"  {info.Name} : {member?.GetType().FullName ?? "<null>"}" + (n >= 0 ? $"  [{n} member(s)]" : string.Empty));
+            }
+
+            lines.Add($"  COMPOSITIONS: {comps}");
+        }
+        catch (Exception ex)
+        {
+            lines.Add($"  GetCompositionInfos() threw: {ex.GetType().Name}: {ex.Message}");
+        }
+
+        lines.Add(string.Empty);
+        lines.Add("--- CLR REFLECTION over the live instance ---");
+        var t = graphic.GetType();
+        lines.Add($"  runtime type: {t.FullName}");
+        lines.Add($"  interfaces:   {string.Join(", ", t.GetInterfaces().Select(i => i.Name))}");
+        foreach (var prop in t.GetProperties())
+        {
+            object? v;
+            try
+            {
+                v = prop.GetValue(graphic);
+            }
+            catch (Exception ex)
+            {
+                v = $"<unreadable: {ex.GetType().Name}>";
+            }
+
+            var extra = string.Empty;
+            if (v is System.Collections.IEnumerable seq and not string)
+            {
+                var n = 0;
+                try
+                {
+                    foreach (var _ in seq)
+                    {
+                        n++;
+                    }
+
+                    extra = $"  [enumerable, {n} member(s)]";
+                }
+                catch (Exception ex)
+                {
+                    extra = $"  [enumeration failed: {ex.GetType().Name}]";
+                }
+            }
+
+            lines.Add($"  {prop.Name} : {prop.PropertyType.Name} = {DescribeGraphicValue(v)}{extra}");
+        }
+
+        foreach (var meth in t.GetMethods().Where(x => x.DeclaringType == t).OrderBy(x => x.Name))
+        {
+            lines.Add($"  method {meth.Name}({string.Join(", ", meth.GetParameters().Select(x => x.ParameterType.Name))}) -> {meth.ReturnType.Name}");
+        }
+
+        return lines;
+    }
+
+    private static string DescribeGraphicValue(object? value)
+    {
+        if (value is null)
+        {
+            return "<null>";
+        }
+
+        // A picture is bytes. Printing them would be useless and enormous; the LENGTH is the fact
+        // that matters, because it says whether the store holds the image itself.
+        if (value is byte[] bytes)
+        {
+            return $"<byte[{bytes.Length}]>";
+        }
+
+        return value.ToString() ?? "<null>";
+    }
+
+    public void ExportGraphic(string graphicName, string outPath, string exportOptionsName)
+    {
+        var graphic = FindGraphic(graphicName);
+
+        if (File.Exists(outPath))
+        {
+            File.Delete(outPath);
+        }
+
+        var options = (Siemens.Engineering.ExportOptions)Enum.Parse(typeof(Siemens.Engineering.ExportOptions), exportOptionsName);
+        graphic.Export(new FileInfo(outPath), options);
+
+        if (!File.Exists(outPath))
+        {
+            // Same quirk one retry, as everywhere else in this file.
+            graphic.Export(new FileInfo(outPath), options);
+            if (!File.Exists(outPath))
+            {
+                throw new ExportProducedNoFileException(outPath);
+            }
+        }
+    }
+
+    public IReadOnlyList<string> ImportGraphics(IReadOnlyList<string> files, bool overwrite)
+    {
+        var store = GraphicStore();
+        var imported = new List<string>();
+
+        try
+        {
+            foreach (var file in files)
+            {
+                try
+                {
+                    var result = store.Import(
+                        new FileInfo(file),
+                        overwrite ? Siemens.Engineering.ImportOptions.Override : Siemens.Engineering.ImportOptions.None);
+
+                    if (result is null)
+                    {
+                        throw new GraphicImportFailedException(file, "Import() returned null");
+                    }
+
+                    var before = imported.Count;
+                    foreach (var obj in result)
+                    {
+                        if (obj is null)
+                        {
+                            continue;
+                        }
+
+                        imported.Add(obj.Name ?? "(unnamed)");
+                    }
+
+                    if (imported.Count == before)
+                    {
+                        throw new GraphicImportFailedException(file, "Import() succeeded but produced no graphic object");
+                    }
+                }
+                catch (Exception ex) when (ex is not GraphicImportFailedException)
+                {
+                    // WHOLE chain, verbatim. TIA wraps the real complaint one or two levels down, and
+                    // the outer message is routinely content-free ("An exception occurred").
+                    var chain = new List<string>();
+                    for (var cur = ex; cur is not null; cur = cur.InnerException)
+                    {
+                        chain.Add($"{cur.GetType().FullName}: {cur.Message}");
+                    }
+
+                    throw new GraphicImportFailedException(file, string.Join(" ---> ", chain));
+                }
+            }
+        }
+        finally
+        {
+            SaveProject();
+        }
+
+        return imported;
+    }
+
+    // RESOLVE EVERY NAME FIRST, then delete, then RE-READ. Three separate reasons, each measured
+    // elsewhere in this project:
+    //   - resolve-all-first, because a half-applied delete is worse than none and an unknown name is
+    //     the likeliest mistake a caller makes;
+    //   - re-read, because `block-layout --set`'s silent no-op is exactly this shape;
+    //   - no wildcard anywhere in here — the caller supplies literal names. A prefix match evaluated
+    //     at delete time is one typo away from taking a real screen with it.
+    public IReadOnlyList<string> DeleteGraphics(IReadOnlyList<string> names)
+    {
+        var store = GraphicStore();
+
+        var targets = new List<Siemens.Engineering.Hmi.Globalization.MultiLingualGraphic>();
+        foreach (var name in names)
+        {
+            targets.Add(FindGraphic(name));  // throws GraphicNotFoundException, naming what IS there
+        }
+
+        var lines = new List<string>();
+        try
+        {
+            foreach (var g in targets)
+            {
+                var name = g.Name;
+                g.Delete();
+                lines.Add($"deleted graphic '{name}'");
+            }
+        }
+        finally
+        {
+            SaveProject();
+        }
+
+        var remaining = new List<string>();
+        foreach (Siemens.Engineering.Hmi.Globalization.MultiLingualGraphic g in store)
+        {
+            remaining.Add(g.Name);
+        }
+
+        var survivors = names.Where(n => remaining.Contains(n, StringComparer.Ordinal)).ToList();
+        if (survivors.Count > 0)
+        {
+            throw new DeleteDidNotTakeEffectException("graphic(s)", survivors);
+        }
+
+        lines.Add($"VERIFIED BY RE-READ: {names.Count} gone; {remaining.Count} graphic(s) remain in the project");
+        return lines;
+    }
+
+    public IReadOnlyList<string> DeleteScreens(string? deviceFilter, IReadOnlyList<string> names)
+    {
+        if (_project is null)
+        {
+            throw new InvalidOperationException($"{nameof(OpenProject)} must be called before {nameof(DeleteScreens)}.");
+        }
+
+        var targets = new List<Screen>();
+        foreach (var name in names)
+        {
+            var classic = new List<(Screen Screen, string Path)>();
+            var unified = new List<string>();
+            foreach (Device device in _project.Devices)
+            {
+                foreach (DeviceItem item in device.DeviceItems)
+                {
+                    CollectScreensForExport(item, device.Name, name, classic, unified);
+                }
+            }
+
+            var matches = NarrowToDevice(classic, deviceFilter, m => m.Path);
+            if (matches.Count == 0)
+            {
+                if (unified.Count > 0)
+                {
+                    throw new ScreenExportNotSupportedOnUnifiedException(name, unified[0]);
+                }
+
+                throw new ScreenNotFoundException(name);
+            }
+
+            if (matches.Count > 1)
+            {
+                throw new AmbiguousScreenException(name, matches.Select(m => m.Path));
+            }
+
+            targets.Add(matches[0].Screen);
+        }
+
+        var lines = new List<string>();
+        try
+        {
+            foreach (var screen in targets)
+            {
+                var name = screen.Name;
+                screen.Delete();
+                lines.Add($"deleted screen '{name}'");
+            }
+        }
+        finally
+        {
+            SaveProject();
+        }
+
+        var survivors = new List<string>();
+        var stillThere = 0;
+        foreach (Device device in _project.Devices)
+        {
+            foreach (DeviceItem item in device.DeviceItems)
+            {
+                CountClassicScreens(item, ref stillThere);
+            }
+        }
+
+        foreach (var name in names)
+        {
+            var classic = new List<(Screen Screen, string Path)>();
+            var unified = new List<string>();
+            foreach (Device device in _project.Devices)
+            {
+                foreach (DeviceItem item in device.DeviceItems)
+                {
+                    CollectScreensForExport(item, device.Name, name, classic, unified);
+                }
+            }
+
+            if (classic.Count > 0)
+            {
+                survivors.Add(name);
+            }
+        }
+
+        if (survivors.Count > 0)
+        {
+            throw new DeleteDidNotTakeEffectException("screen(s)", survivors);
+        }
+
+        lines.Add($"VERIFIED BY RE-READ: {names.Count} gone; {stillThere} classic screen(s) remain in the project");
+        return lines;
+    }
+
+    private static void CountClassicScreens(DeviceItem item, ref int count)
+    {
+        if (item.GetService<SoftwareContainer>()?.Software is HmiTarget target)
+        {
+            count += CountScreensInFolder(target.ScreenFolder);
+        }
+
+        foreach (DeviceItem child in item.DeviceItems)
+        {
+            CountClassicScreens(child, ref count);
+        }
+    }
+
+    private static int CountScreensInFolder(ScreenFolder folder)
+    {
+        var n = 0;
+        foreach (Screen _ in folder.Screens)
+        {
+            n++;
+        }
+
+        foreach (ScreenUserFolder child in folder.Folders)
+        {
+            n += CountScreensInFolder(child);
+        }
+
+        return n;
+    }
+
     public IReadOnlyList<string> InspectClassicScreen(string screenName)
     {
         if (_project is null)

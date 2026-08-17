@@ -29,6 +29,9 @@ openness-cli sanity-check  <project>                                           #
                                     # would mark every healthy project unhealthy
 openness-cli portal-status                                                     # read-only Portal-process diagnostic (no project); never attaches/launches/kills — see below
 openness-cli hmi           <project> [--screen <name>|*] [--max-items <n>]     # READ-ONLY HMI walk: screens, screen items, per-property dynamizations — see below
+openness-cli graphics      <project> [--list] [--inspect <name>] [--export <name> --out <path>] [--import <file>]... [--overwrite]   # the PROJECT-level picture store — see below
+openness-cli graphics      <project> --delete <name>... --yes                  # deletes graphics BY LITERAL NAME (no wildcard form exists); unknown name = hard error, nothing deleted — see below
+openness-cli hmi-delete-screen <project> --name <name>... --yes                # deletes CLASSIC screens, same contract. `hmi-delete` is Unified-only and cannot see one — see below
 openness-cli xref          <project>                                           # cross-reference data — not built yet
 ```
 
@@ -490,6 +493,153 @@ call). `--event Target:Type` with no `=script` creates an empty handler, which i
 `openness-cli hmi --screen <name>` now **reads events back** — closing the walker's one previously
 misleading gap, where a button reporting no dynamizations read as "not bound" when it meant "not
 looked at".
+
+## `graphics` — the project-level picture store (2026-08-17)
+
+```
+openness-cli graphics <project> [--list]
+openness-cli graphics <project> --inspect <name>
+openness-cli graphics <project> --export <name> --out <path> [--export-options <name>]
+openness-cli graphics <project> --import <file>... [--overwrite]
+```
+
+`Project.Graphics` is a `MultiLingualGraphicComposition` and it is **project-scoped, not
+device-scoped** — one picture store shared by every HMI device, which is why this command takes no
+`--device`. `HmiTarget.GraphicLists` is a different object entirely (a state→picture *mapping*, not
+the picture store) and nothing here touches it.
+
+### The typed object is `Name` and nothing else — the document is the only surface
+
+`--inspect` on a real graphic reports **one** attribute (`Name`), **zero** compositions, and a CLR
+surface of `Name`, `Parent`, `Delete`, `Export`, `GetAttribute*`/`SetAttribute*`. **The image bytes
+are not reachable through the object model at all.** The exported document, by contrast, carries
+`DefaultDithering`, `DefaultImageStream`, `DefaultSmoothness` and `Name` — so the SimaticML document
+is strictly richer than the API, exactly the relationship SimaticML has to a classic screen.
+
+`MultiLingualGraphicComposition` has **no `Create`** (its members are `Import`, `Find`, `Contains`,
+`IndexOf`, `Count`, the indexer and the enumerator). **Import is the only route in.**
+
+### `Export` produces a DOCUMENT plus a sidecar folder holding the real image file
+
+Measured on an existing graphic. `--export X --out X.xml` writes **two** things:
+
+```
+X.xml
+X files\DefaultImageStream.png      <- a real PNG, 96x96 8-bit RGBA
+```
+
+and the document references it by relative path rather than embedding it:
+
+```xml
+<Hmi.Globalization.MultiLingualGraphic ID="0">
+  <AttributeList>
+    <DefaultDithering>false</DefaultDithering>
+    <DefaultImageStream external="path">X files\DefaultImageStream.png</DefaultImageStream>
+    <DefaultSmoothness>false</DefaultSmoothness>
+    <Name>X</Name>
+  </AttributeList>
+</Hmi.Globalization.MultiLingualGraphic>
+```
+
+**A caller that copies only the `.xml` has copied nothing.** The sidecar folder is the picture.
+
+### `Import` wants that document, refuses a bare image, and VALIDATES the payload
+
+Handing it a raw `.png`:
+
+```
+Invalid XML encountered while reading Simatic ML file:
+Invalid character in the given encoding. Line 1, position 1.
+```
+
+Handing it a well-formed document whose sidecar is not a decodable image (prose, or a zero-byte
+file):
+
+```
+The external file "...\DefaultImageStream.png" is corrupt or invalid.
+```
+
+So the store is **not** a blind blob store — it decodes what it is given. And the check is keyed on
+the **declared extension**: SVG bytes named `DefaultImageStream.png` are refused as corrupt, while
+the same bytes named `.svg` are accepted.
+
+### Nine formats accepted, all round-tripping byte-identical
+
+PNG, BMP, JPG, GIF, ICO, TIFF, WMF, EMF **and SVG** each imported (exit 0), and each exported back
+with a **SHA-256-identical** payload. The store preserves the original encoding rather than
+normalising to one — the read-back extension follows the source (`.tif` came back as `.tiff`, the
+only name change observed).
+
+Because the store round-trips bytes, **a green `--import` is not on its own evidence that the panel
+can render the format.** That question belongs to `hmi-compile`, and the compiler does answer it:
+a `GraphicView` naming a picture that does not exist fails the HMI compile by name —
+
+```
+[Error] ZZ_<screen>: 
+[Error] GV_<item>: 
+[Error] The graphic for the 'GV_<item>' screen object is invalid.
+```
+
+— which is the negative control that makes a clean compile of the same screen mean something.
+
+### Exit codes
+
+`--import` failures surface as `CommandError` (7) carrying the **whole** exception chain verbatim,
+because on a capability question the refusal text *is* the result. A `--import` that reports zero
+graphics also exits 7 rather than 0: empty is not clean.
+
+## Deleting graphics and classic screens (2026-08-17)
+
+```
+openness-cli graphics         <project> --delete <name>... --yes
+openness-cli hmi-delete-screen <project> --name <name>... [--device <name>] --yes
+```
+
+`hmi-delete-screen` is separate from `hmi-delete` for the same reason `hmi-compile` is separate from
+`compile`: `hmi-delete` is the metamodel command over `HmiSoftware` (Unified) compositions and
+**cannot see a classic screen at all**.
+
+### 🔴 There is no wildcard, and that is deliberate
+
+`--delete` / `--name` take **literal names only**, repeated once per object. There is no `--prefix`,
+`--pattern`, `--glob` or `--all`, and a name containing `*` is carried through as a literal that
+simply fails to resolve. A pattern evaluated at delete time is one typo away from taking real
+content with it, and the caller can always enumerate first and pass the names it meant. A test
+asserts the absence of every pattern-style flag, so adding one later has to delete a statement that
+it does not exist.
+
+### Every name resolves BEFORE anything is deleted
+
+A batch containing one unresolvable name deletes **nothing** — measured against a real project:
+
+```
+$ ... --delete ZzProbePng --delete ZzDoesNotExistAnywhere --yes
+No graphic named 'ZzDoesNotExistAnywhere' in Project.Graphics. Present: <the 31 that are>
+exit 7      graphics before: 31      graphics after: 31
+```
+
+A half-applied delete is worse than none, and an unknown name is the likeliest mistake a caller
+makes. The message names what **is** present, so a typo is correctable without a second command. A
+name that does not exist is a **hard error, never a silent no-op**.
+
+### The confirm fence, and the read-back
+
+`--yes` is required. Without it the plan lists **every** name and Portal is **never contacted**
+(exit 10) — measured at ~0.1 s per run, where a real attach costs at least 0.7 s. A unit test drives
+the real entry point with a counting gateway and asserts `OpenProjectCalls == 0`, because a refusal
+that still opened the project would satisfy any test that only checked the exit code.
+
+After the save, the composition is **re-read** and any survivor raises
+`DeleteDidNotTakeEffectException`. That is classified `UnexpectedError` (5), **not** `CommandError`:
+nothing the caller typed can fix a delete that reported success and did not happen. It is the same
+shape as `block-layout --set`'s silent no-op, which is exit 15 rather than a success with a note for
+exactly this reason. A run that deletes zero objects never exits 0.
+
+### Order: referencing objects first
+
+**Delete screens before the graphics they reference.** A `GraphicView` left pointing at a deleted
+picture fails the HMI compile with `The graphic for the '<item>' screen object is invalid` — the
+same error this file documents as the graphics negative control.
 
 ## `hmi-compile` — compiling the HMI device
 

@@ -260,6 +260,42 @@ public interface IOpennessGateway : IDisposable
     IReadOnlyList<string> ImportScreens(string? deviceFilter, IReadOnlyList<string> files);
 
     /// <summary>
+    /// Lists the PROJECT-level graphic store (<c>Project.Graphics</c>, a
+    /// <c>MultiLingualGraphicComposition</c>). Project-level, not device-level: a picture is shared
+    /// across every HMI device in the project, which is why this takes no device filter.
+    /// </summary>
+    IReadOnlyList<string> EnumerateGraphics();
+
+    /// <summary>Attribute + CLR walk of one graphic — the same probe shape as
+    /// <see cref="InspectClassicScreen"/>, used to find where the image bytes actually live.</summary>
+    IReadOnlyList<string> InspectGraphic(string graphicName);
+
+    /// <summary>Exports one graphic. The API documents this as "Simatic ML export of a multilingual
+    /// graphic"; whether that is a document or the image itself is a question for the bytes, not the docs.</summary>
+    void ExportGraphic(string graphicName, string outPath, string exportOptionsName);
+
+    /// <summary>
+    /// Imports graphics. Returns the names the project holds afterwards. A refusal is reported with
+    /// the FULL exception chain verbatim — for a capability probe the exact refusal IS the result,
+    /// and a summarised one is worthless.
+    /// </summary>
+    IReadOnlyList<string> ImportGraphics(IReadOnlyList<string> files, bool overwrite);
+
+    /// <summary>
+    /// Deletes graphics BY EXACT NAME. Every name is resolved BEFORE anything is deleted, so an
+    /// unknown name aborts the whole run rather than leaving a half-applied delete — and a name that
+    /// does not exist is a hard error, never a silent no-op. Absence is confirmed by RE-READING the
+    /// composition afterwards; the returned lines say what was verified, not what was attempted.
+    /// </summary>
+    IReadOnlyList<string> DeleteGraphics(IReadOnlyList<string> names);
+
+    /// <summary>
+    /// Deletes CLASSIC HMI screens by exact name, same resolve-all-then-delete-then-verify contract
+    /// as <see cref="DeleteGraphics"/>. Classic only: a Unified screen is refused by name.
+    /// </summary>
+    IReadOnlyList<string> DeleteScreens(string? deviceFilter, IReadOnlyList<string> names);
+
+    /// <summary>
     /// Imports <paramref name="files"/> into the block group at <paramref name="groupPath"/>
     /// (format: "&lt;device&gt;/&lt;group&gt;/.../&lt;group&gt;", matching the Path shown by
     /// `list`). No generic "import wherever it goes" exists on the Siemens side, so an explicit
@@ -581,6 +617,37 @@ public sealed class ScreenImportFailedException : Exception
 {
     public ScreenImportFailedException(string file, string reason)
         : base($"Screen import failed for '{System.IO.Path.GetFileName(file)}': {reason}")
+    {
+    }
+}
+
+public sealed class GraphicNotFoundException : Exception
+{
+    public GraphicNotFoundException(string graphicName, IEnumerable<string> available)
+        : base($"No graphic named '{graphicName}' in Project.Graphics. Present: {string.Join(", ", available)}")
+    {
+    }
+}
+
+/// <summary>Carries the WHOLE exception chain verbatim. On a capability probe the refusal text is the
+/// finding; a summarised one answers nothing.</summary>
+public sealed class GraphicImportFailedException : Exception
+{
+    public GraphicImportFailedException(string file, string reason)
+        : base($"Graphic import failed for '{System.IO.Path.GetFileName(file)}': {reason}")
+    {
+    }
+}
+
+/// <summary>
+/// The object was deleted, the project was saved, and a RE-READ still found it. Its own name, not a
+/// generic failure: a delete that silently does nothing is the failure mode worth naming, and an
+/// exit code alone would let it read as a success (cf. `block-layout --set`'s read-back).
+/// </summary>
+public sealed class DeleteDidNotTakeEffectException : Exception
+{
+    public DeleteDidNotTakeEffectException(string kind, IEnumerable<string> survivors)
+        : base($"Delete reported success but the following {kind} are STILL PRESENT after a re-read: {string.Join(", ", survivors)}. Nothing about this run can be trusted.")
     {
     }
 }

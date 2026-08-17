@@ -657,6 +657,32 @@ internal sealed class FakeGateway : IOpennessGateway
 
     public IReadOnlyList<string> InspectClassicScreen(string screenName) => throw new NotSupportedException();
 
+    public IReadOnlyList<string> EnumerateGraphics() => throw new NotSupportedException();
+
+    public IReadOnlyList<string> InspectGraphic(string graphicName) => throw new NotSupportedException();
+
+    public void ExportGraphic(string graphicName, string outPath, string exportOptionsName) => throw new NotSupportedException();
+
+    public IReadOnlyList<string> ImportGraphics(IReadOnlyList<string> files, bool overwrite) => throw new NotSupportedException();
+
+    /// <summary>Names passed to <see cref="DeleteGraphics"/>. Null until it is called — which is how
+    /// a test tells "called with nothing" apart from "never called at all".</summary>
+    public IReadOnlyList<string>? DeletedGraphicNames { get; private set; }
+
+    public IReadOnlyList<string>? DeletedScreenNames { get; private set; }
+
+    public IReadOnlyList<string> DeleteGraphics(IReadOnlyList<string> names)
+    {
+        DeletedGraphicNames = names;
+        return names.Select(n => $"deleted graphic '{n}'").ToList();
+    }
+
+    public IReadOnlyList<string> DeleteScreens(string? deviceFilter, IReadOnlyList<string> names)
+    {
+        DeletedScreenNames = names;
+        return names.Select(n => $"deleted screen '{n}'").ToList();
+    }
+
     public (string MasterCopy, string NewScreen) CloneScreenViaMasterCopy(string screenName) => throw new NotSupportedException();
 
     // ---- import ---------------------------------------------------------------------------------

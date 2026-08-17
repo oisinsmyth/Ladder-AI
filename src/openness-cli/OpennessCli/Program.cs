@@ -124,6 +124,21 @@ internal static class Program
                 return ExitCodes.NotConfirmed;
             }
 
+            // The two delete commands added 2026-08-17. Both sit with the other pre-connect refusals
+            // above for the same reason: an unconfirmed destructive command must cost nothing and
+            // must not touch Portal, so the plan is printed from the arguments alone.
+            if (parseResult is ParseResult.GraphicsSuccess { Options.DeleteNames.Count: > 0, Options.Confirm: false } unconfirmedGfx)
+            {
+                return RefuseUnconfirmedDelete(
+                    "graphic", unconfirmedGfx.Options.DeleteNames!, unconfirmedGfx.Options.ProjectIdentifier);
+            }
+
+            if (parseResult is ParseResult.HmiDeleteScreenSuccess { Options.Confirm: false } unconfirmedScreen)
+            {
+                return RefuseUnconfirmedDelete(
+                    "classic HMI screen", unconfirmedScreen.Options.ScreenNames, unconfirmedScreen.Options.ProjectIdentifier);
+            }
+
             // FI-61: warn BEFORE the attach, because an unapproved binary is refused silently and
             // the attach then burns the whole --timeout-connect with nothing on screen to explain
             // it. Advisory only — never blocks (see OpennessWhitelist's class comment for why).
@@ -241,6 +256,10 @@ internal static class Program
                     return RunHmiSet(gateway, hmiSet.Options, timeoutOpenSeconds);
                 case ParseResult.LibrarySuccess library:
                     return RunLibrary(gateway, library.Options, timeoutOpenSeconds);
+                case ParseResult.GraphicsSuccess graphics:
+                    return RunGraphics(gateway, graphics.Options, timeoutOpenSeconds);
+                case ParseResult.HmiDeleteScreenSuccess deleteScreen:
+                    return RunHmiDeleteScreen(gateway, deleteScreen.Options, timeoutOpenSeconds);
                 default:
                     throw new InvalidOperationException($"Unhandled parse result: {parseResult.GetType().Name}");
             }
@@ -372,6 +391,92 @@ internal static class Program
 
         Console.Error.WriteLine("Nothing was changed, and Portal was not contacted. Re-run with --yes to proceed.");
         return ExitCodes.NotConfirmed;
+    }
+
+    // graphics (2026-08-17). Every mode prints what it examined, not merely what it found: an empty
+    // graphic store and a walk that reached the wrong object look identical otherwise.
+    private static int RunGraphics(IOpennessGateway gateway, GraphicsOptions options, int timeoutOpenSeconds)
+    {
+        gateway.OpenProject(options.ProjectIdentifier, TimeSpan.FromSeconds(timeoutOpenSeconds));
+
+        if (options.InspectName is not null)
+        {
+            foreach (var line in gateway.InspectGraphic(options.InspectName))
+            {
+                Console.WriteLine(line);
+            }
+
+            return ExitCodes.Success;
+        }
+
+        if (options.ExportName is not null)
+        {
+            gateway.ExportGraphic(options.ExportName, options.OutPath!, options.ExportOptionsName);
+            var info = new FileInfo(options.OutPath!);
+            Console.WriteLine($"Exported graphic '{options.ExportName}' -> {options.OutPath}  ({info.Length} bytes)");
+            return ExitCodes.Success;
+        }
+
+        if (options.DeleteNames is { Count: > 0 } deleteNames)
+        {
+            var lines = gateway.DeleteGraphics(deleteNames);
+            foreach (var line in lines)
+            {
+                Console.WriteLine(line);
+            }
+
+            // A delete run that deleted nothing is not a success. The gateway cannot reach here with
+            // an unresolved name (it throws), so an empty result would mean something stranger still.
+            return lines.Count == 0 ? ExitCodes.CommandError : ExitCodes.Success;
+        }
+
+        if (options.ImportFiles.Count > 0)
+        {
+            var names = gateway.ImportGraphics(options.ImportFiles, options.Overwrite);
+            foreach (var name in names)
+            {
+                Console.WriteLine($"Imported graphic '{name}'");
+            }
+
+            Console.WriteLine($"IMPORTED: {names.Count} graphic(s) from {options.ImportFiles.Count} file(s)");
+            return names.Count == 0 ? ExitCodes.CommandError : ExitCodes.Success;
+        }
+
+        foreach (var line in gateway.EnumerateGraphics())
+        {
+            Console.WriteLine(line);
+        }
+
+        return ExitCodes.Success;
+    }
+
+    /// <summary>
+    /// The shared unconfirmed-delete refusal. Lists EVERY name, so the dry run is a reviewable plan
+    /// rather than a count — the same reasoning as `hmi-edit-screen`'s. Portal is not contacted.
+    /// </summary>
+    private static int RefuseUnconfirmedDelete(string kind, IReadOnlyList<string> names, string project)
+    {
+        Console.Error.WriteLine($"Would DELETE {names.Count} {kind}(s) from project '{project}':");
+        foreach (var name in names)
+        {
+            Console.Error.WriteLine($"  {name}");
+        }
+
+        Console.Error.WriteLine(
+            "Nothing was deleted, and Portal was not contacted. Re-run with --yes to proceed.");
+        return ExitCodes.NotConfirmed;
+    }
+
+    private static int RunHmiDeleteScreen(IOpennessGateway gateway, HmiDeleteScreenOptions options, int timeoutOpenSeconds)
+    {
+        gateway.OpenProject(options.ProjectIdentifier, TimeSpan.FromSeconds(timeoutOpenSeconds));
+        var lines = gateway.DeleteScreens(options.Device, options.ScreenNames);
+        foreach (var line in lines)
+        {
+            Console.WriteLine(line);
+        }
+
+        return lines.Count == 0 ? ExitCodes.CommandError : ExitCodes.Success;
     }
 
     private static int RunHmiObject(IOpennessGateway gateway, HmiObjectOptions options, int timeoutOpenSeconds, bool isDelete)
@@ -1646,6 +1751,17 @@ public static class ExitCodes
         HmiObjectAlreadyExistsException => CommandError,
         HmiObjectNotFoundException => CommandError,
         HmiRefusedToDeleteRealObjectException => CommandError,
+
+        // The graphics family (2026-08-17). A wrong graphic name and a refused import are both
+        // user-correctable, and the import message carries the WHOLE TIA chain already — reporting it
+        // as an internal fault would bury the one thing the probe exists to read.
+        GraphicNotFoundException => CommandError,
+        GraphicImportFailedException => CommandError,
+
+        // Deliberately NOT CommandError: nothing the caller typed can fix a delete that reported
+        // success and did not happen. It is the `block-layout --set` silent-no-op shape, and that
+        // one is exit 15 rather than a success with a note for exactly this reason.
+        DeleteDidNotTakeEffectException => UnexpectedError,
 
         // The Openness approval refusal, added 2026-08-09. Measured: a freshly-rebuilt `library`
         // binary exited 5 with "AggregateException ... ---> EngineeringSecurityException: Security

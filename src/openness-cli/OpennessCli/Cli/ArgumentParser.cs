@@ -300,6 +300,37 @@ public sealed record HmiCreateTagOptions(
     int TimeoutConnectSeconds,
     int TimeoutOpenSeconds);
 
+// The project-level graphic store (2026-08-17, symbol-strategy probe). No --device: Project.Graphics
+// is project-scoped, shared by every HMI device, unlike a screen which belongs to one HmiTarget.
+public sealed record GraphicsOptions(
+    string ProjectIdentifier,
+    string? ExportName,
+    string? InspectName,
+    IReadOnlyList<string> ImportFiles,
+    string? OutPath,
+    string ExportOptionsName,
+    bool Overwrite,
+    string? TiaInstallOverride,
+    int TimeoutConnectSeconds,
+    int TimeoutOpenSeconds,
+    // Repeated --delete, one LITERAL name each. There is deliberately no pattern, prefix or glob
+    // form: a wildcard evaluated at delete time is one typo away from taking real content with it,
+    // and the caller can always enumerate first and pass the names it meant.
+    IReadOnlyList<string>? DeleteNames = null,
+    bool Confirm = false);
+
+// Deleting CLASSIC screens. Separate from `hmi-delete`, which is the metamodel command over
+// HmiSoftware (Unified) compositions and cannot see a classic screen at all — the same blind spot
+// that made `hmi-compile` a separate subcommand from `compile`.
+public sealed record HmiDeleteScreenOptions(
+    string ProjectIdentifier,
+    IReadOnlyList<string> ScreenNames,
+    string? Device,
+    bool Confirm,
+    string? TiaInstallOverride,
+    int TimeoutConnectSeconds,
+    int TimeoutOpenSeconds);
+
 public abstract record ParseResult
 {
     private ParseResult()
@@ -357,6 +388,10 @@ public abstract record ParseResult
     public sealed record HmiSetSuccess(HmiObjectOptions Options) : ParseResult;
 
     public sealed record LibrarySuccess(LibraryOptions Options) : ParseResult;
+
+    public sealed record GraphicsSuccess(GraphicsOptions Options) : ParseResult;
+
+    public sealed record HmiDeleteScreenSuccess(HmiDeleteScreenOptions Options) : ParseResult;
 
     public sealed record Failure(string Message) : ParseResult;
 }
@@ -494,7 +529,18 @@ public static class ArgumentParser
         "      e.g. --map \"Rect_1.BackColor=Range;From=int:1;To=int:5;Value=color:#FF0000;Flashing=True;FlashingRate=Fast\"\n" +
         "    Every entry created is READ BACK field by field and reported with the CLR type stored, because Value/AlternateValue are declared 'object'\n" +
         "      and nothing in the metamodel says what they want. --map-clear deletes all entries first, so a re-run does not stack duplicates.\n" +
-        "    Requires a tag binding on that property already (--bind): only a TagDynamization carries a ValueConverter.";
+        "    Requires a tag binding on that property already (--bind): only a TagDynamization carries a ValueConverter.\n" +
+        "  openness-cli graphics <project> [--list] [--inspect <name>] [--export <name> --out <path>] [--import <file>]... [--overwrite] [--export-options <name>] [...]\n" +
+        "    The PROJECT-level graphic store (Project.Graphics, a MultiLingualGraphicComposition). No --device: one picture store serves every HMI device.\n" +
+        "    With no mode flag it lists. --inspect dumps a graphic's attributes, compositions and CLR surface. --import takes the file Export produced.\n" +
+        "    --overwrite passes ImportOptions.Override instead of None, so a re-import UPDATES rather than failing on the existing name.\n" +
+        "  openness-cli graphics <project> --delete <name>... --yes\n" +
+        "    Deletes graphics BY EXACT LITERAL NAME. Repeat --delete per name; there is deliberately NO pattern/prefix/glob form.\n" +
+        "    A name that does not exist is a HARD ERROR naming what IS present, never a silent no-op, and no deletion happens until every name resolves.\n" +
+        "    --yes required: without it the plan prints and Portal is NEVER contacted (exit 10). Absence is confirmed by RE-READING after the save.\n" +
+        "  openness-cli hmi-delete-screen <project> --name <name>... [--device <name>] --yes\n" +
+        "    Deletes CLASSIC HMI screens, same contract. `hmi-delete` is the Unified metamodel command and cannot see a classic screen at all.\n" +
+        "    Delete screens BEFORE the graphics they reference, or the HMI compile fails with \"The graphic for the '<item>' screen object is invalid\".";
 
     /// <summary>
     /// Pulls the flags every subcommand shares off whichever options record the parse produced.
@@ -542,6 +588,8 @@ public static class ArgumentParser
         ParseResult.HmiInventorySuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
         ParseResult.HmiSetSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
         ParseResult.LibrarySuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
+        ParseResult.GraphicsSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
+        ParseResult.HmiDeleteScreenSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
         _ => throw new InvalidOperationException($"Unhandled parse result: {result.GetType().Name}"),
     };
 
@@ -577,6 +625,8 @@ public static class ArgumentParser
         ParseResult.HmiInventorySuccess s => s.Options.ProjectIdentifier,
         ParseResult.HmiSetSuccess s => s.Options.ProjectIdentifier,
         ParseResult.LibrarySuccess s => s.Options.ProjectIdentifier,
+        ParseResult.GraphicsSuccess s => s.Options.ProjectIdentifier,
+        ParseResult.HmiDeleteScreenSuccess s => s.Options.ProjectIdentifier,
         _ => throw new InvalidOperationException($"Unhandled parse result: {result.GetType().Name}"),
     };
 
@@ -613,6 +663,8 @@ public static class ArgumentParser
             "hmi-inventory" => ParseHmiObject(args, "hmi-inventory", requireName: false, requireConfirm: false),
             "hmi-set" => ParseHmiObject(args, "hmi-set", requireName: true, requireConfirm: true),
             "library" => ParseLibrary(args),
+            "graphics" => ParseGraphics(args),
+            "hmi-delete-screen" => ParseHmiDeleteScreen(args),
             // Reuses ParseCompile so the flags stay identical to `compile`; only the ParseResult
             // differs, which is what routes it to the HMI-aware device lookup.
             "hmi-compile" => ParseCompile(args) switch
@@ -621,7 +673,7 @@ public static class ArgumentParser
                 var other => other,
             },
             var other => new ParseResult.Failure(
-                $"Unknown subcommand '{other}'. Supported subcommands: list, export, import, compile, delete, block-layout, download-plan, create-instance-db, sanity-check, compile-scopes, portal-status, library, hmi, hmi-compile, hmi-create-screen, hmi-edit-screen, hmi-create-tag, hmi-inventory, hmi-new, hmi-delete, hmi-set.{Environment.NewLine}{Usage}"),
+                $"Unknown subcommand '{other}'. Supported subcommands: list, export, import, compile, delete, block-layout, download-plan, create-instance-db, sanity-check, compile-scopes, portal-status, library, graphics, hmi, hmi-compile, hmi-delete-screen, hmi-create-screen, hmi-edit-screen, hmi-create-tag, hmi-inventory, hmi-new, hmi-delete, hmi-set.{Environment.NewLine}{Usage}"),
         };
     }
 
@@ -2278,6 +2330,249 @@ public static class ArgumentParser
     // One parser for hmi-new / hmi-delete / hmi-inventory: the flag shape is identical and three
     // near-copies would drift. `verb` decides which ParseResult comes back and whether --name and
     // --yes are required (inventory is read-only, so neither is).
+    // graphics (2026-08-17). Deliberately ONE subcommand with three modes rather than three
+    // subcommands: they all resolve the same project-level composition and the whole point of the
+    // probe is that list/export/import are read against each other.
+    private static ParseResult ParseGraphics(string[] args)
+    {
+        string? projectIdentifier = null;
+        string? exportName = null;
+        string? inspectName = null;
+        string? outPath = null;
+        var exportOptionsName = "WithDefaults";
+        var importFiles = new List<string>();
+        var deleteNames = new List<string>();
+        var confirm = false;
+        var overwrite = false;
+        string? tiaInstall = null;
+        var timeoutConnect = DefaultTimeoutConnectSeconds;
+        var timeoutOpen = DefaultTimeoutOpenSeconds;
+
+        for (var i = 1; i < args.Length; i++)
+        {
+            switch (args[i])
+            {
+                case "--list":
+                    // Accepted and ignored: listing is what the command does with no mode flag. Named
+                    // explicitly so a caller who writes it is not told the flag is unknown.
+                    break;
+                case "--overwrite":
+                    overwrite = true;
+                    break;
+                case "--yes":
+                    confirm = true;
+                    break;
+                case "--delete":
+                    if (!TryTakeValue(args, ref i, "--delete", out var deleteName, out var delErr))
+                    {
+                        return new ParseResult.Failure(delErr);
+                    }
+
+                    deleteNames.Add(deleteName!);
+                    break;
+                case "--export":
+                    if (!TryTakeValue(args, ref i, "--export", out exportName, out var expErr))
+                    {
+                        return new ParseResult.Failure(expErr);
+                    }
+
+                    break;
+                case "--inspect":
+                    if (!TryTakeValue(args, ref i, "--inspect", out inspectName, out var inspErr))
+                    {
+                        return new ParseResult.Failure(inspErr);
+                    }
+
+                    break;
+                case "--import":
+                    if (!TryTakeValue(args, ref i, "--import", out var importFile, out var impErr))
+                    {
+                        return new ParseResult.Failure(impErr);
+                    }
+
+                    importFiles.Add(PathArguments.ToAbsolute(importFile!));
+                    break;
+                case "--out":
+                    if (!TryTakeValue(args, ref i, "--out", out outPath, out var outErr))
+                    {
+                        return new ParseResult.Failure(outErr);
+                    }
+
+                    break;
+                case "--export-options":
+                    if (!TryTakeValue(args, ref i, "--export-options", out exportOptionsName!, out var optErr))
+                    {
+                        return new ParseResult.Failure(optErr);
+                    }
+
+                    break;
+                case "--tia-install":
+                    if (!TryTakeValue(args, ref i, "--tia-install", out tiaInstall, out var installErr))
+                    {
+                        return new ParseResult.Failure(installErr);
+                    }
+
+                    break;
+                case "--timeout-connect":
+                    if (!TryTakeIntValue(args, ref i, "--timeout-connect", out timeoutConnect, out var connectErr))
+                    {
+                        return new ParseResult.Failure(connectErr);
+                    }
+
+                    break;
+                case "--timeout-open":
+                    if (!TryTakeIntValue(args, ref i, "--timeout-open", out timeoutOpen, out var openErr))
+                    {
+                        return new ParseResult.Failure(openErr);
+                    }
+
+                    break;
+                default:
+                    if (!TryTakePositional(args[i], ref projectIdentifier, out var posErr))
+                    {
+                        return new ParseResult.Failure(posErr);
+                    }
+
+                    break;
+            }
+        }
+
+        if (projectIdentifier is null)
+        {
+            return new ParseResult.Failure($"Missing required argument: <project>.{Environment.NewLine}{Usage}");
+        }
+
+        var modes = (exportName is not null ? 1 : 0) + (inspectName is not null ? 1 : 0)
+                    + (importFiles.Count > 0 ? 1 : 0) + (deleteNames.Count > 0 ? 1 : 0);
+        if (modes > 1)
+        {
+            return new ParseResult.Failure($"--export, --inspect, --import and --delete are mutually exclusive.{Environment.NewLine}{Usage}");
+        }
+
+        // A duplicate name would report two deletions of one object, so the count in the verdict
+        // would overstate what happened. Caught here rather than in the gateway: it is a mistake in
+        // what was typed, and Portal should never be contacted to discover it.
+        var duplicate = deleteNames.GroupBy(n => n, StringComparer.Ordinal).FirstOrDefault(g => g.Count() > 1);
+        if (duplicate is not null)
+        {
+            return new ParseResult.Failure($"--delete '{duplicate.Key}' was given more than once.{Environment.NewLine}{Usage}");
+        }
+
+        // An export with nowhere to write is a silent no-op waiting to happen — same rule `library`
+        // applies to --export-version.
+        if (exportName is not null && outPath is null)
+        {
+            return new ParseResult.Failure($"--export requires --out <path>.{Environment.NewLine}{Usage}");
+        }
+
+        if (exportName is null && outPath is not null)
+        {
+            return new ParseResult.Failure($"--out is only meaningful with --export.{Environment.NewLine}{Usage}");
+        }
+
+        return new ParseResult.GraphicsSuccess(new GraphicsOptions(
+            projectIdentifier,
+            exportName,
+            inspectName,
+            importFiles,
+            PathArguments.ToAbsoluteOrNull(outPath),
+            exportOptionsName,
+            overwrite,
+            tiaInstall,
+            timeoutConnect,
+            timeoutOpen,
+            deleteNames,
+            confirm));
+    }
+
+    // hmi-delete-screen. A separate subcommand rather than a flag on `hmi-edit-screen`: deleting a
+    // whole screen is not an edit to one, and every other mutating command in this tool is its own
+    // verb with its own --yes.
+    private static ParseResult ParseHmiDeleteScreen(string[] args)
+    {
+        string? projectIdentifier = null;
+        string? device = null;
+        var names = new List<string>();
+        var confirm = false;
+        string? tiaInstall = null;
+        var timeoutConnect = DefaultTimeoutConnectSeconds;
+        var timeoutOpen = DefaultTimeoutOpenSeconds;
+
+        for (var i = 1; i < args.Length; i++)
+        {
+            switch (args[i])
+            {
+                case "--yes":
+                    confirm = true;
+                    break;
+                case "--name":
+                    if (!TryTakeValue(args, ref i, "--name", out var name, out var nameErr))
+                    {
+                        return new ParseResult.Failure(nameErr);
+                    }
+
+                    names.Add(name!);
+                    break;
+                case "--device":
+                    if (!TryTakeValue(args, ref i, "--device", out device, out var deviceErr))
+                    {
+                        return new ParseResult.Failure(deviceErr);
+                    }
+
+                    break;
+                case "--tia-install":
+                    if (!TryTakeValue(args, ref i, "--tia-install", out tiaInstall, out var installErr))
+                    {
+                        return new ParseResult.Failure(installErr);
+                    }
+
+                    break;
+                case "--timeout-connect":
+                    if (!TryTakeIntValue(args, ref i, "--timeout-connect", out timeoutConnect, out var connectErr))
+                    {
+                        return new ParseResult.Failure(connectErr);
+                    }
+
+                    break;
+                case "--timeout-open":
+                    if (!TryTakeIntValue(args, ref i, "--timeout-open", out timeoutOpen, out var openErr))
+                    {
+                        return new ParseResult.Failure(openErr);
+                    }
+
+                    break;
+                default:
+                    if (!TryTakePositional(args[i], ref projectIdentifier, out var posErr))
+                    {
+                        return new ParseResult.Failure(posErr);
+                    }
+
+                    break;
+            }
+        }
+
+        if (projectIdentifier is null)
+        {
+            return new ParseResult.Failure($"Missing required argument: <project>.{Environment.NewLine}{Usage}");
+        }
+
+        // No --name means no work. Exiting 0 on that would be a delete command that reports success
+        // having examined nothing — the empty-is-not-clean defect this project keeps re-finding.
+        if (names.Count == 0)
+        {
+            return new ParseResult.Failure($"Missing required flag: --name <screen name> (repeatable).{Environment.NewLine}{Usage}");
+        }
+
+        var duplicate = names.GroupBy(n => n, StringComparer.Ordinal).FirstOrDefault(g => g.Count() > 1);
+        if (duplicate is not null)
+        {
+            return new ParseResult.Failure($"--name '{duplicate.Key}' was given more than once.{Environment.NewLine}{Usage}");
+        }
+
+        return new ParseResult.HmiDeleteScreenSuccess(new HmiDeleteScreenOptions(
+            projectIdentifier, names, device, confirm, tiaInstall, timeoutConnect, timeoutOpen));
+    }
+
     private static ParseResult ParseLibrary(string[] args)
     {
         string? projectIdentifier = null;
