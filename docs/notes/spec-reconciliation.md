@@ -360,7 +360,7 @@ that §NC's own total is one of the numbers that did not survive the census.**
 | X-K residual — S7 variable access refused CPU-wide; all data reads go over Modbus | AS SPECIFIED | Re-measured 2026-08-14: `DBRead(38)` and `MBRead(0)` both `0x00040000` while SZL answers. |
 | 16.12a stable-but-unexpected version value must refuse to test | AS SPECIFIED | `VersionOutcome` separates it from "still settling" and from `WordOrderSuspect`. |
 | 16.12b models and instance DBs share the ≤20 budget | AS SPECIFIED | `BatchPlan` counts them. |
-| 16.12c every removal path must release its claim | **NOT BUILT** | `Cleanup` computes eligibility; nothing releases a `converter claim`. *Consequence: numbers leak until the reserved range is exhausted.* |
+| 16.12c every removal path must release its claim | **HALF BUILT** (2026-08-17) | `Cleanup` computes eligibility; **`harness-cleanup` now reads the shared claims store and emits the exact `converter claims --release` command per removal**, with `Held` / `NoClaimHeld` / `NotChecked` kept apart. It does **not run it**, on purpose: that binary cannot delete, and a release ahead of the deletion hands the number to the next allocator while the block is still in the project. *Consequence: the leak is narrowed to a human step between delete and release, not closed.* |
 | X-L retain is a HARD restriction; work/load/block-count are governed by minimality; read the budget, never hard-code | AS SPECIFIED | `RetentionCheck`/`RetentionVerdict`; `MirrorGeometry.RetentiveBytes` has **no default**; the mirror is placed above the retentive window because a `%M` tag carries no per-tag retain flag at all. |
 
 ---
