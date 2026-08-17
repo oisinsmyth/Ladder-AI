@@ -221,8 +221,74 @@ committing it would be a redistribution decision nobody has made. The repo keeps
 
 ## The purchase question, now largely moot
 
-**The coverage argument for Symbol Factory is gone.** What follows is retained because licence, not
-coverage, may yet decide it.
+**The coverage argument for Symbol Factory is gone** — and a survey of the Ignition/Inductive
+Automation ecosystem then took a second one away.
+
+| | shipped WinCC set | Symbol Factory Universal 3.x |
+|---|---|---|
+| cost | **free, installed** | $695 perpetual, per machine |
+| tanks / pumps / pipes / motors | ✅ 398 / 263 / 393 / 130 | ✅ all four (the only third-party set with **pipes and fittings**) |
+| heat exchangers | ✅ 163 | ⚠️ **not confirmed** — absent from every primary category list |
+| **state variants** | ✅ **86 `Animate` pairs** | 🔴 **NONE — the set is static** |
+| licence | unresolved (nothing found) | clear, one clause to check |
+
+**State variants are the discriminator.** The corpus already proved tag-driven picture swapping is
+how a pump shows running vs stopped, and it is step 3 below. A static set cannot do it at all.
+
+Worth knowing about the rest of that ecosystem, because it is the obvious place to look next and it
+does not repay the trip: **Ignition's own Perspective symbols are five components** (Motor, Pump,
+Sensor, Valve, Vessel) — bundled, not exportable, with **no pipes, conveyors, heat exchangers,
+agitators or ISA bubbles**. Their state support is *not* different artwork: it is
+Primary/Secondary/Tertiary/Stroke recolouring over **one geometry**. The Ignition Exchange has no
+real symbol pack. Both are design references, not artwork sources.
+
+⚠️ **Provenance caveat, preserved from the survey rather than smoothed away:** that agent had text
+tools only and **could view none of the images**, so every appearance claim in it is unverified. The
+WinCC verdict above is different in kind — that artwork was looked at.
+
+## The open-source and standards landscape — surveyed, and it confirms the same answer
+
+| source | licence | coverage vs our classes | verdict |
+|---|---|---|---|
+| **ISO 10628-2** (Wikimedia, 296 symbols) | CC BY-SA 4.0 — **share-alike** | tanks ✅ pumps ✅ motors ✅ pipes ✅ HX ✅ conveyors ✅ agitators ✅ — **but NO elbows/tees/junctions, NO instrumentation bubbles, NO silo distinct from tank** | best **open** substrate; still loses to the shipped set |
+| **jsgorana SCADA kit** | **Apache-2.0** | 11 symbols total | best **state model**, not a library |
+| **ThingsBoard** | Apache-2.0 | claims pipes *with* elbows/tees | SVG directory **could not be located**; counts self-inconsistent |
+| draw.io P&ID · FreeCAD · OSHMI · SpaceTeam | Apache / CC-BY / **GPL-3.0** | partial | GPL likely blocks a deliverable; OSHMI turned out to be finished **screens**, not a symbol library |
+
+**The shipped WinCC set still wins**, and now for a concrete reason rather than convenience: it has the
+**393 pipe files** — elbows, tees, junctions, reducers — that ISO 10628-2 conspicuously lacks, and no
+share-alike obligation to reason about. ISO 10628-2 remains the fallback if the Siemens licence
+question ever resolves badly.
+
+### 🔴 A negative result worth never re-deriving: ISA-101 defines NO symbol shapes
+
+**By construction.** Its scope is menu hierarchy, navigation, colour conventions, dynamic elements,
+alarming and popups — it mandates a Style Guide and Toolkit *process*, and defers shapes to
+**ISA-5.1** (instrumentation) and **ISA-5.5** (process displays). **There is no ISA-101 symbol set to
+download.** Anyone searching for one is chasing something that does not exist.
+
+*This also sharpens the `hmilibrary.com` finding:* it published a "canonical ISA-101 palette" made of
+Google Material hex values, for a standard that specifies a greyscale-base **rule** and no palette.
+
+**ISA-5.5, "Graphic Symbols for Process Displays", is the uninvestigated one** and is where Rockwell's
+own style guide points for HMI symbol shapes. Highest-value next step if this is ever reopened.
+
+### 🔴 The rasterisation trap — this applies to the WMF set we are adopting
+
+Measured on ISO 10628-2's SVG source, and **transferable**: its strokes are `0.35 mm` on ~50 mm cells,
+≈ **0.7 % of symbol width** — which at a 100 px placement is **~0.7 px, sub-pixel.** Scaling a vector
+line-drawing down proportionally makes its lines *thin to invisibility*.
+
+**So stroke width must be RE-SET at final size (~1.5–2 px), never scaled proportionally.** The Siemens
+WMF set is flat line art at a median logical size of 1404×1590 being placed at 48–130 px — the same
+one-to-twenty-nine reduction. **Assume this bites us and check it on the first symbol placed.**
+
+### 🟢 One idea worth stealing from ISA-101
+
+Ignition documents an **alarm indicator whose SHAPE varies by priority, not colour alone**. That is
+directly useful here: `docs/17`'s H-102 forbids colouring equipment to show state, and H-105 rations
+colour because it is the alarm channel. A shape-keyed indicator carries priority **without spending
+colour**, and it stays legible to a colour-blind operator. Candidate convention, not yet a rule.
 
 ⚠️ Note the distinction that is commonly conflated: the **"Symbol library" OBJECT is not available on
 Basic Panels** (Comfort/Panel/RT Advanced/RT Pro only) — but the **WinCC graphics FOLDER** is. Two
