@@ -59,6 +59,13 @@ public static class ConflictGraphOutputFormatter
         signalsResolved = report.Signals.Count(s => s.Resolution == SignalResolution.Resolved),
         signalsUnresolved = report.Unresolved.Count,
         signalsAmbiguous = report.Ambiguous.Count,
+        signalsHarnessOnly = report.HarnessOnly.Count,
+        signalsRefused = report.RefusedSignals.Count,
+        // WHICH JOIN CARRIED EACH NAME, counted. A tool that reports only THAT a name resolved cannot
+        // be asked whether it resolved for the right reason — which is how `map.storage` sat unread.
+        joinsUsed = report.Signals.GroupBy(s => s.Join.ToString())
+            .OrderBy(g => g.Key, StringComparer.Ordinal)
+            .ToDictionary(g => g.Key, g => g.Count()),
         edgesWithoutRecordedProvenance = report.WithoutRecordedProvenance.Count,
         // Only MultiWriter is ever emitted; see ConflictGraphRunner for why a CallGraph edge would
         // silently disable gate 8c rather than add to it.
@@ -67,6 +74,7 @@ public static class ConflictGraphOutputFormatter
         {
             signal = s.Signal,
             resolution = s.Resolution.ToString(),
+            join = s.Join.ToString(),
             candidates = s.Candidates,
             reason = s.Reason,
         }),
@@ -92,20 +100,25 @@ public static class ConflictGraphOutputFormatter
                 .Append("     ").Append(e.Derivation).Append('\n');
         }
 
+        // *** THE JOIN IS PRINTED ON EVERY LINE, RESOLVED OR NOT. *** A resolution that cannot be
+        // explained is exactly what let this tool report 70 of 70 unresolved while the field that
+        // joins them sat unread in the same document. `[DeclaredStorage]` and `[ProjectPathMatch]` are
+        // different claims about the same green.
         sb.Append("== SIGNAL RESOLUTION (every supplied signal, including the ones that produced nothing) ==\n");
         foreach (var s in report.Signals)
         {
-            sb.Append("  ").Append(s.Signal).Append(": ").Append(s.Resolution.ToString().ToUpperInvariant());
+            sb.Append("  ").Append(s.Signal).Append(": ").Append(s.Resolution.ToString().ToUpperInvariant())
+                .Append(" [join: ").Append(s.Join).Append(']');
             if (s.Candidates.Count > 0)
             {
                 sb.Append(" -> ").Append(string.Join(", ", s.Candidates));
             }
 
-            sb.Append('\n');
-            if (s.Resolution != SignalResolution.Resolved)
-            {
-                sb.Append("     ").Append(s.Reason).Append('\n');
-            }
+            // *** THE REASON IS PRINTED ON EVERY LINE, INCLUDING THE RESOLVED ONES. *** It used to be
+            // suppressed for anything that resolved — which hid the two facts a reader most needs about
+            // a green: WHICH join carried it, and whether several spellings of one storage were pooled
+            // to get there. A resolution nobody can check is the shape this whole defect had.
+            sb.Append('\n').Append("     ").Append(s.Reason).Append('\n');
         }
 
         foreach (var w in report.Warnings)
@@ -120,7 +133,16 @@ public static class ConflictGraphOutputFormatter
             .Append(report.Signals.Count).Append(" resolved signal(s); ")
             .Append(report.Unresolved.Count).Append(" unresolved, ")
             .Append(report.Ambiguous.Count).Append(" ambiguous, ")
+            .Append(report.HarnessOnly.Count).Append(" declared harnessOnly (no edge possible - a computed fact), ")
+            .Append(report.RefusedSignals.Count).Append(" refused, ")
             .Append(report.WithoutRecordedProvenance.Count).Append(" edge(s) with unstated provenance/class\n");
+
+        // The join breakdown, always printed. `signalsResolved` alone says a name found storage; only
+        // this says whether the DECLARED join or the weaker name match carried it there.
+        sb.Append("JOINS: ").Append(string.Join(", ", report.Signals
+            .GroupBy(s => s.Join)
+            .OrderBy(g => g.Key.ToString(), StringComparer.Ordinal)
+            .Select(g => $"{g.Key}={g.Count()}"))).Append('\n');
         sb.Append("CORPUS: ").Append(report.CorpusDescription).Append('\n');
         sb.Append(report.Computed
             ? "EMITTED: `conflictEdges` is present, so an empty list is the earned claim that the graph ran and found nothing.\n"

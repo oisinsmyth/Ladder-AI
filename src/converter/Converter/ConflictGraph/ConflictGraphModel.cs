@@ -75,13 +75,39 @@ public enum SignalResolution
     /// of ONE storage are collapsed first, so this fires only on genuinely different storage.
     /// </summary>
     Ambiguous,
+
+    /// <summary>
+    /// *** THE SUBMISSION DECLARED IT `harnessOnly`: A POSITIVE CLAIM THAT IT OCCUPIES NO PLC STORAGE. ***
+    /// No conflict edge is possible for it, and that is a COMPUTED FACT rather than a gap — so it does
+    /// NOT count against the scope, and a submission consisting entirely of mirror-side names is
+    /// legitimately computable.
+    ///
+    /// <para>This state exists because the tooling names an ambiguity it cannot settle: an unresolved
+    /// signal means <i>"this may be a mirror-only signal, or the name may be wrong"</i> — two entirely
+    /// different repairs behind one silence. The claim is the author's to make.</para>
+    /// </summary>
+    HarnessOnly,
+
+    /// <summary>
+    /// The declaration contradicts itself — the signal is in BOTH <c>storage</c> and
+    /// <c>harnessOnly</c>. <b>Refused, and the named escape does not cover it</b>:
+    /// <c>--allow-unresolved</c> means "accept that some names were not looked at", never "accept a
+    /// document that answers one question twice, differently".
+    /// </summary>
+    Refused,
 }
 
+/// <param name="Join">
+/// WHICH JOIN CARRIED THE NAME. Reported on every line, resolved or not — <b>a resolution that cannot
+/// be explained is what let a tool read 70 of 70 signals as unresolved while the field that joined them
+/// sat in the same document, unread.</b>
+/// </param>
 public sealed record SignalResolutionFact(
     string Signal,
     SignalResolution Resolution,
     IReadOnlyList<string> Candidates,
-    string Reason);
+    string Reason,
+    SignalJoinKind Join = SignalJoinKind.ProjectPathMatch);
 
 /// <summary>
 /// The emission, and *** ITS CENTRAL PROPERTY IS THAT AN ABSENT GRAPH AND AN EMPTY ONE ARE DIFFERENT
@@ -106,6 +132,26 @@ public sealed record ConflictGraphReport(
 
     public IReadOnlyList<SignalResolutionFact> Ambiguous =>
         Signals.Where(s => s.Resolution == SignalResolution.Ambiguous).ToList();
+
+    /// <summary>
+    /// Signals the submission positively claimed occupy no PLC storage. <b>Counted separately from both
+    /// the resolved and the unresolved</b> — folding them into either would turn a computed fact into
+    /// either an edge search that happened or a gap that did not exist.
+    /// </summary>
+    public IReadOnlyList<SignalResolutionFact> HarnessOnly =>
+        Signals.Where(s => s.Resolution == SignalResolution.HarnessOnly).ToList();
+
+    /// <summary>Signals whose declaration contradicts itself. Never escapable by <c>--allow-unresolved</c>.</summary>
+    public IReadOnlyList<SignalResolutionFact> RefusedSignals =>
+        Signals.Where(s => s.Resolution == SignalResolution.Refused).ToList();
+
+    /// <summary>
+    /// Signals nothing looked at — the count an empty edge list would otherwise hide.
+    /// <see cref="SignalResolution.HarnessOnly"/> is NOT here: it was looked at, and the answer was
+    /// "no edge is possible".
+    /// </summary>
+    public IReadOnlyList<SignalResolutionFact> Unjudged =>
+        Signals.Where(s => s.Resolution is not (SignalResolution.Resolved or SignalResolution.HarnessOnly)).ToList();
 
     /// <summary>
     /// Edges the consumer's own `ProvenanceRecorded` will reject. Surfaced HERE as well, because at the

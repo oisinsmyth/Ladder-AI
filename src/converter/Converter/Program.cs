@@ -168,7 +168,7 @@ internal static class Program
             Console.Error.WriteLine("       converter compare <first.xml> <second.xml> [--json] [--max-differences <n>] [--allow-silent-layout]   # the CONFIRM LOOP's judgement half: Normalizer-compare two SimaticML exports and report WHAT differs");
             Console.Error.WriteLine("                    exit 0 equivalent / 1 differs / 2 NOT COMPARED (missing, unparseable, not a block export, same file twice, or a MemoryLayout premise that did not hold)");
             Console.Error.WriteLine("       converter cross-check --project <ir-dir> [--json]   # whole-project cross-block reference-graph FACTS the reviewer reasons over (FI-22); never verdicts; exit 0");
-            Console.Error.WriteLine("       converter conflict-graph --project <ir-dir> (--submission <file> | --signals <file>) [--json] [--allow-unresolved]   # SUBMISSION-SCOPED `conflictEdges` for harness gates 8/8c, in the exact shape ConflictEdgeDocument deserializes. NOT cross-check with a filter: that emits whole-project fact tables keyed on a storage path, this emits EDGES between BLOCKS with a provenance and a signal class. Only MultiWriter provenance is ever emitted - a CallGraph edge is about no signal, so it could only carry an Unstated class, and ProvenanceComplete is ALL-or-nothing, so ONE such edge would turn gate 8c to NOT CHECKED for the whole submission. `computedConflicts` is never emitted for the same reason (a bare name is Unstated provenance); gate 8's packing set derives from the edges. Exit 0 = computed (an EMPTY list is the EARNED claim that the graph ran and found nothing), 2 = NOT COMPUTED and the key is WITHHELD so the gate reports NOT CHECKED, 3 = emitted but an edge is unprovenanced");
+            Console.Error.WriteLine("       converter conflict-graph --project <ir-dir> (--submission <file> | --signals <file>) [--json] [--allow-unresolved]   # SUBMISSION-SCOPED `conflictEdges` for harness gates 8/8c, in the exact shape ConflictEdgeDocument deserializes. NOT cross-check with a filter: that emits whole-project fact tables keyed on a storage path, this emits EDGES between BLOCKS with a provenance and a signal class. Only MultiWriter provenance is ever emitted - a CallGraph edge is about no signal, so it could only carry an Unstated class, and ProvenanceComplete is ALL-or-nothing, so ONE such edge would turn gate 8c to NOT CHECKED for the whole submission. `computedConflicts` is never emitted for the same reason (a bare name is Unstated provenance); gate 8's packing set derives from the edges. Exit 0 = computed (an EMPTY list is the EARNED claim that the graph ran and found nothing), 2 = NOT COMPUTED and the key is WITHHELD so the gate reports NOT CHECKED, 3 = emitted but an edge is unprovenanced. 🔴 --submission READS THE DECLARED JOIN `map.storage` (contract 2.7), which it did not until 2026-08-17: a submission cites the SPECIFICATION's names by design (D8) and this fed them to a resolver expecting STORAGE PATHS, measuring 70 of 70 unresolved on a real submission while the field that joins them sat unread in the same document. `map.storage` is signal -> { owner?, path } (two keys - an emitted string is not a schema) and `map.harnessOnly` is a POSITIVE claim that a signal occupies no PLC storage, which is a computed fact and does NOT count against the scope. EVERY resolution reports WHICH JOIN carried it - DeclaredStorage / DeclaredHarnessOnly / ProjectPathMatch / NotDeclared / ContradictoryDeclaration. THE REFUSAL IS NOT WEAKENED: once a map is declared, a signal absent from it stays UNRESOLVED even when its name would have matched something, because a map with one hole is repaired by filling the hole and not by guessing at it; a submission declaring NO map behaves exactly as before. A signal declared BOTH ways, or twice with different storage, is REFUSED and --allow-unresolved does NOT cover it (that flag accepts names nobody looked at, not a document answering one question twice)");
             Console.Error.WriteLine("       converter reachable-state --project <ir-dir> [--block <name>]... [--json]   # D9's PRODUCER (2026-08-14): per block, the transitive closure through its CALL tree of every storage location it touches, keyed on STORAGE IDENTITY. Feeds `TestSlot.ReachableState` + `ReachableStateProvenance`, after which `SlotConflictDerivation.OverlappingReachableState` makes the edges by set intersection with no further work. Until this existed the set arrived from `wave-cli submit --reaches`, i.e. DECLARED BY THE SUBMITTING AGENT — the shape D9 forbids. Reads count as well as writes (two tests cannot share a signal one drives and the other observes). Closes DOWNWARD only: closing upward through callers reaches OB1 from any leaf and would make every pair conflict. An `iDB.<suffix>` reference is CANONICALISED onto the FB's own `<FB>|<suffix>` before intersecting, and every rewrite is reported — without it a slot testing an FB and one testing its caller read as disjoint while driving one location. Exit 0 = computed / 2 = NOT COMPUTED, key withheld / 3 = emitted, but at least one block's closure was withheld BY NAME");
             Console.Error.WriteLine("       converter interface-check --project <ir-dir> --block <name> (--requires <n1,n2,...> | --requires-file <path>) [--json]   # NB-30 (2026-08-14): does the BLOCK carry the response signals the SPECIFICATION names? A set difference over the block's interface MEMBER NAMES, answerable before a scan elapses — which is why D1 (a spec signal the block does not provide) was able to ride inside a relational conformance assertion for a week. Walks INPUT/OUTPUT/INOUT/STATIC/CONSTANT and descends through inlined nested members AND named PLC data types, because on this corpus's house style (C-132) INPUT and OUTPUT are BOTH EMPTY and the whole caller interface is one STATIC UDT member — a check reading those two sections reports every signal missing, including the ones that exist. Matches MEMBER NAMES ONLY: one matching comments would find 'inhibit' in a block comment and pass the defect. TEMP is excluded BY NAME and COUNTED on every run. 🔴 EXIT 1 IS A **FAIL AGAINST THE BLOCK**, NOT AGAINST THE SUBMISSION — every other outcome in the pipeline means 'fix the vector', and reusing one here would send an author to edit the artifact that is correct. Exit 0 = all present / 1 = the block does not carry a required signal / 2 = NOT CHECKED (block absent or ambiguous, empty interface, no required names, an unjudgeable required token, or a member whose type could not be opened — a MISSING verdict is only sound over a COMPLETE member set). Emits the block's ir-hash as the STAMP the result was established against; a consumer carries the stamp, never a bool, so 'nobody ran it' and 'ran it against a different version' stay distinct facts. --requires-file reads one name per line, OR an assertion-enumeration YAML directly (its `response_signal:` values), which is the form with a producer");
             Console.Error.WriteLine("       converter trace --binding <bindings.json> --project <ir-dir> [--json]   # forward-pass REQ trace: per-hop facts over the reader/writer graph (FI-25); facts not verdicts; exit 0. Hops incl. guard-containment (FI-36-min): every spec-listed condition must appear in the coil's guard");
@@ -1747,17 +1747,26 @@ internal static class Program
             return 1;
         }
 
-        List<string> signals = new();
+        List<CitedSignal> signals = new();
+        var map = SubmissionSignalMap.None;
         try
         {
             if (submission is not null)
             {
-                signals.AddRange(ConflictGraphRunner.SignalsFromSubmission(submission));
+                signals.AddRange(ConflictGraphRunner.SignalsFromSubmission(submission)
+                    .Select(s => new CitedSignal(s, SignalOrigin.Submission)));
+
+                // 🔴 THE FIELD THAT WAS ALREADY THERE AND NEVER READ. A submission cites the
+                // SPECIFICATION's names, and `map.storage` is the declared join to controller storage
+                // (contract 2.7). Without this line the tool measured 70 of 70 unresolved on a real
+                // submission and refused — correctly, over a question it had never actually asked.
+                map = SubmissionSignalMap.ReadFromSubmission(submission);
             }
 
             if (signalsFile is not null)
             {
-                signals.AddRange(ConflictGraphRunner.SignalsFromList(signalsFile));
+                signals.AddRange(ConflictGraphRunner.SignalsFromList(signalsFile)
+                    .Select(s => new CitedSignal(s, SignalOrigin.OperatorList)));
             }
         }
         catch (Exception ex) when (ex is IOException or System.Text.Json.JsonException)
@@ -1766,7 +1775,7 @@ internal static class Program
             return 1;
         }
 
-        var report = ConflictGraphRunner.Run(projectDir, signals, allowUnresolved);
+        var report = ConflictGraphRunner.Run(projectDir, signals, map, allowUnresolved);
         Console.WriteLine(json ? ConflictGraphOutputFormatter.FormatJson(report) : ConflictGraphOutputFormatter.FormatText(report));
 
         if (!report.Computed)

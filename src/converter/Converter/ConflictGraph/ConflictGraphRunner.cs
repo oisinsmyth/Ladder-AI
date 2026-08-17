@@ -24,17 +24,40 @@ namespace Converter.ConflictGraph;
 /// helpful-looking extra edge would silently disable the multi-writer report it was added beside.
 /// Call-graph coupling belongs to the author's blacklist, which is add-only for exactly this reason.</para>
 ///
-/// <para><b>Every edge is derived from the CORRECTED storage grouping</b> (<see cref="StorageGroups"/>),
+/// <para><b>Every edge is derived from the CORRECTED storage grouping</b> (<c>StorageGroups</c>),
 /// so the false cross-block multi-writers that `cross-check` used to manufacture from unqualified
 /// FB-internal paths are structurally incapable of becoming edges: a block-local storage has all its
 /// writers in one block, and one block is not a conflict.</para>
+///
+/// <para>🔴 <b>AND IT READS THE DECLARED JOIN — WHICH IT DID NOT UNTIL 2026-08-17.</b> A submission
+/// speaks the SPECIFICATION's vocabulary by design (D8: agents cite tag names, never registers), and
+/// this runner fed those names straight into a resolver expecting STORAGE PATHS. <b>On a real
+/// submission that was 70 of 70 unresolved — and the field carrying the join, <c>map.storage</c>, was
+/// already in the document and read by nobody.</b> The whole name→storage step now lives in
+/// <see cref="SignalStorageResolver"/>, which is the single site the fifth instance of this seam
+/// argued for, and every resolution reports WHICH JOIN carried it.</para>
 /// </summary>
 public static class ConflictGraphRunner
 {
-    public static ConflictGraphReport Run(string projectDir, IReadOnlyList<string> signals, bool allowUnresolved)
+    /// <summary>
+    /// The pre-2026-08-17 entry point: bare names, no declared join. Kept because <c>--signals</c> is
+    /// exactly this — an operator's list of storage paths — and because the CONVERSE has to stay
+    /// testable: <b>a signal set that already resolved must still resolve.</b>
+    /// </summary>
+    public static ConflictGraphReport Run(string projectDir, IReadOnlyList<string> signals, bool allowUnresolved) =>
+        Run(
+            projectDir,
+            signals.Select(s => new CitedSignal(s, SignalOrigin.OperatorList)).ToList(),
+            SubmissionSignalMap.None,
+            allowUnresolved);
+
+    public static ConflictGraphReport Run(
+        string projectDir,
+        IReadOnlyList<CitedSignal> signals,
+        SubmissionSignalMap map,
+        bool allowUnresolved)
     {
         var graph = ProjectUsageGraph.Build(projectDir);
-        var groups = StorageGroups.Build(graph);
         var harness = HarnessScope.Build(Directory.EnumerateFiles(projectDir, "*.ir"));
         var corpus = $"{harness.CorpusFileCount} project file(s); {harness.UnreadableCorpusFiles.Count} unparseable";
 
@@ -73,43 +96,27 @@ public static class ConflictGraphRunner
                 corpus);
         }
 
+        var resolver = SignalStorageResolver.Over(graph, map);
         var resolutions = new List<SignalResolutionFact>();
         var edges = new List<ConflictEdgeFact>();
 
-        foreach (var signal in signals.Distinct(StringComparer.Ordinal).OrderBy(s => s, StringComparer.Ordinal))
+        foreach (var cited in signals
+                     .DistinctBy(s => (s.Name, s.Origin))
+                     .OrderBy(s => s.Name, StringComparer.Ordinal))
         {
-            var matches = Resolve(groups, signal);
-
-            if (matches.Count == 0)
-            {
-                resolutions.Add(new SignalResolutionFact(
-                    signal,
-                    SignalResolution.Unresolved,
-                    Array.Empty<string>(),
-                    "no storage path in the project matches this name, so no conflict could be looked for. A submission signal is a harness-side logical name and the join to PLC storage is not stated in the submission — this may be a mirror-only signal, or the name may be wrong."));
-                continue;
-            }
-
-            if (matches.Count > 1)
-            {
-                resolutions.Add(new SignalResolutionFact(
-                    signal,
-                    SignalResolution.Ambiguous,
-                    matches.Select(m => m.Path).OrderBy(p => p, StringComparer.Ordinal).ToList(),
-                    "this name matches MORE THAN ONE distinct storage location. Refused rather than resolved to one of them: picking a candidate is exactly the aliasing that made cross-check invent multi-writers, and it would put the same fiction into the conflict graph. Qualify the signal with its owning block or its full path."));
-                continue;
-            }
-
-            var group = matches[0];
+            // *** THE ONE JOIN. *** Every name-to-storage step in this assembly goes through here; see
+            // SignalStorageResolver for why it is a type, and JoinSiteWalkTests for what stops a sixth
+            // call site being written beside it.
+            var resolved = resolver.Resolve(cited);
             resolutions.Add(new SignalResolutionFact(
-                signal,
-                SignalResolution.Resolved,
-                new[] { group.Path },
-                group.Owner is null
-                    ? "resolved to a global storage path"
-                    : $"resolved to a member of {group.Owner}"));
+                resolved.Signal, resolved.Resolution, resolved.Candidates, resolved.Reason, resolved.Join));
 
-            var blocks = group.WriterBlocks;
+            if (resolved.Storage is not { } storage)
+            {
+                continue;
+            }
+
+            var blocks = storage.WriterBlocks;
             if (blocks.Count < 2)
             {
                 continue; // one writer, or one block writing several times — not a cross-block conflict
@@ -124,28 +131,57 @@ public static class ConflictGraphRunner
                         blocks[i],
                         blocks[j],
                         EdgeProvenance.MultiWriter,
-                        signal,
+                        cited.Name,
                         signalClass,
-                        group.Path,
-                        $"both blocks write {group.Path}; {DescribeClass(signalClass, blocks)}"));
+                        storage.Path,
+                        $"both blocks write {storage.Path}; {DescribeClass(signalClass, blocks)}"));
                 }
             }
+        }
+
+        // *** A CONTRADICTORY DECLARATION IS NOT A GAP, SO THE NAMED ESCAPE DOES NOT COVER IT. ***
+        // `--allow-unresolved` means "accept that some names were not looked at". A signal declared in
+        // both `storage` and `harnessOnly` — or a `map` entry that could not be read at all — is a
+        // document answering one question twice, and choosing a half would be this tool deciding it.
+        var refused = resolutions.Where(r => r.Resolution == SignalResolution.Refused).ToList();
+        if (refused.Count > 0 || map.Rejections.Count > 0)
+        {
+            return new ConflictGraphReport(
+                Computed: false,
+                NotComputedReason:
+                    $"the submission's `map` cannot be read as ONE statement: {refused.Count} signal(s) declared contradictorily "
+                    + $"({string.Join(" | ", refused.Select(r => $"'{r.Signal}': {r.Reason}"))}), {map.Rejections.Count} malformed entr(y/ies). "
+                    + (map.Rejections.Count > 0 ? string.Join(" | ", map.Rejections) + " " : string.Empty)
+                    + "*** --allow-unresolved DOES NOT COVER THIS: *** it accepts names nobody looked at, not a declaration that contradicts itself.",
+                edges,
+                resolutions,
+                graph.Warnings,
+                corpus);
         }
 
         // Unresolved and ambiguous signals are NOT a detail. A submission whose signals mostly failed
         // to resolve gets an edge list that is empty because nothing was looked at, and at the gate
         // that reads exactly like a clean program. So the emission is withheld unless the caller says
         // outright that it accepts the gap — the named-escape shape, never the default.
-        var unjudged = resolutions.Count(r => r.Resolution != SignalResolution.Resolved);
+        //
+        // `harnessOnly` is deliberately NOT counted here: it is a positive claim that no edge is
+        // possible, which is a computed fact rather than a gap. Counting it would refuse a submission
+        // whose author did exactly what the contract asks.
+        var unjudged = resolutions.Count(r => r.Resolution is not (SignalResolution.Resolved or SignalResolution.HarnessOnly));
         if (unjudged > 0 && !allowUnresolved)
         {
+            var notDeclared = resolutions.Count(r => r.Join == SignalJoinKind.NotDeclared);
             return new ConflictGraphReport(
                 Computed: false,
                 NotComputedReason:
                     $"{unjudged} of {resolutions.Count} submission signal(s) could not be resolved to exactly one storage path "
-                    + $"({resolutions.Count(r => r.Resolution == SignalResolution.Unresolved)} unresolved, {resolutions.Count(r => r.Resolution == SignalResolution.Ambiguous)} ambiguous). "
+                    + $"({resolutions.Count(r => r.Resolution == SignalResolution.Unresolved)} unresolved, {resolutions.Count(r => r.Resolution == SignalResolution.Ambiguous)} ambiguous"
+                    + $"; {notDeclared} of them stated no join at all). "
                     + "An edge list computed over a scope that was mostly not looked at is empty for a reason that has nothing to do with conflicts, and at the gate that is indistinguishable from a clean program. "
-                    + "Fix the signal names, or pass --allow-unresolved to emit the edges for the signals that DID resolve and accept the gap deliberately.",
+                    + (notDeclared > 0
+                        ? "*** A SUBMISSION SIGNAL IS THE SPECIFICATION'S NAME, NOT A STORAGE PATH (contract 2.8). *** Declare each one in `map.storage` as { owner?, path }, or in `map.harnessOnly` if it occupies no PLC storage — the second is a positive claim and turns a NOT CHECKED into a fact. "
+                        : string.Empty)
+                    + "Or pass --allow-unresolved to emit the edges for the signals that DID resolve and accept the gap deliberately.",
                 edges,
                 resolutions,
                 graph.Warnings,
@@ -162,44 +198,6 @@ public static class ConflictGraphRunner
             graph.Warnings,
             corpus);
     }
-
-    // Instance aliases of ONE storage are collapsed before ambiguity is declared: an FB's own
-    // `IO.HopperBlockedAlarm` and the caller's `iDB_X.IO.HopperBlockedAlarm` are two display paths for
-    // one location, and calling that "ambiguous" would refuse a signal that is perfectly determined.
-    // This is the join StorageGroups deliberately REPORTS rather than pools, earning its keep.
-    private static List<StorageGroup> Resolve(IReadOnlyList<StorageGroup> groups, string signal)
-    {
-        var matches = groups.Where(g => Matches(g, signal)).ToList();
-        if (matches.Count <= 1)
-        {
-            return matches;
-        }
-
-        var collapsed = new List<StorageGroup>();
-        foreach (var candidate in matches.OrderByDescending(m => m.Writers.Count + m.Readers.Count))
-        {
-            if (collapsed.Any(kept => SameStorage(kept, candidate)))
-            {
-                continue;
-            }
-
-            collapsed.Add(candidate);
-        }
-
-        return collapsed;
-    }
-
-    private static bool SameStorage(StorageGroup a, StorageGroup b) =>
-        a.InstanceAliases.Contains(b.Path, StringComparer.Ordinal)
-        || b.InstanceAliases.Contains(a.Path, StringComparer.Ordinal);
-
-    // Exact display path, exact unqualified path, or a dotted-suffix match. A suffix match is what
-    // lets a submission's logical `HopperBlockedAlarm` find `FB_X.IO.HopperBlockedAlarm`; it is only
-    // ever allowed to succeed when it is UNIQUE, which is enforced by the caller.
-    private static bool Matches(StorageGroup group, string signal) =>
-        string.Equals(group.Path, signal, StringComparison.Ordinal)
-        || (group.Owner is not null && string.Equals(group.Path[(group.Owner.Length + 1)..], signal, StringComparison.Ordinal))
-        || group.Path.EndsWith("." + signal, StringComparison.Ordinal);
 
     // *** THE SIGNAL CLASS COMES FROM THE SAME DERIVED HARNESS CLASSIFICATION AS `converter review`'s
     // HARNESS SCOPE — the reserved 9000-9999 block band, read off each writing block's own number.
