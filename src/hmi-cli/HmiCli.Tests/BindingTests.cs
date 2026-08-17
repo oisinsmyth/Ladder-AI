@@ -131,11 +131,16 @@ public class BindingTests
     // ---- navigation ---------------------------------------------------------------------------
 
     /// <summary>
-    /// 🔴 <c>KeyUp</c>, not <c>Click</c>. Harvested from a real export where all four navigation
-    /// buttons use it. This assertion is the whole reason the test exists.
+    /// 🔴 MEASURED AGAINST A REAL PROJECT, 2026-08-17: an event CANNOT be imported.
+    /// <c>'Create' is not supported by type 'Siemens.Engineering.Hmi.Event.EventComposition'.</c>
+    ///
+    /// So the emitter must NOT write one - emitting it fails the whole import and takes the working
+    /// half of the screen with it. This test pins that, because the structure is still in the file
+    /// (correct, harvested, and what a future create-capable route would need) and the temptation to
+    /// re-enable it will recur.
     /// </summary>
     [Fact]
-    public void A_navigation_button_emits_ActivateScreen_on_KeyUp()
+    public void A_navigation_button_emits_NO_event_because_events_cannot_be_imported()
     {
         var button = new IrItem
         {
@@ -143,25 +148,33 @@ public class BindingTests
             Text = "HOME", GoTo = "Plant Overview", FontSizePx = 17,
         };
 
-        var doc = Emit(Ir(button));
-
-        var ev = Find(doc, "Hmi.Event.Event");
-        Assert.NotNull(ev);
-        Assert.Equal("KeyUp", ev!.Element("AttributeList")?.Element("Name")?.Value);
-
-        var entry = Find(doc, "Hmi.Event.FunctionListEntry")!.Element("AttributeList")!;
-        Assert.Equal("ActivateScreen", entry.Element("Name")?.Value);
-        Assert.Equal("SystemFunction", entry.Element("Type")?.Value);
-
-        // The parameter name carries a space and that capitalisation, from the export.
-        var param = Find(doc, "Hmi.Event.FunctionListEntryParameter")!;
-        Assert.Equal("Screen name", param.Element("AttributeList")?.Element("Name")?.Value);
-        Assert.Equal("Plant Overview", param.Element("LinkList")?.Element("Value")?.Element("Name")?.Value);
+        Assert.Null(Find(Emit(Ir(button)), "Hmi.Event.Event"));
     }
 
-    /// <summary>Positive control: an ordinary button must NOT acquire an event.</summary>
+    /// <summary>
+    /// The navigation is not silently dropped - it becomes a hand-off item naming the button, the
+    /// event and the target. A silent omission would leave a screen whose buttons do nothing and
+    /// nobody told to wire them.
+    /// </summary>
     [Fact]
-    public void A_button_with_no_goto_emits_no_event()
+    public void A_navigation_button_produces_a_hand_off_item_naming_its_target()
+    {
+        var button = new IrItem
+        {
+            Type = "Button", Left = 0, Top = 400, Width = 120, Height = 68,
+            Text = "HOME", GoTo = "Plant Overview", FontSizePx = 17,
+        };
+
+        var handOff = Emitter.Emit(Ir(button), "S", 1).HandOff;
+
+        Assert.Single(handOff);
+        Assert.Contains("Plant Overview", handOff[0], StringComparison.Ordinal);
+        Assert.Contains("ActivateScreen", handOff[0], StringComparison.Ordinal);
+    }
+
+    /// <summary>Positive control: an ordinary button raises no hand-off.</summary>
+    [Fact]
+    public void A_button_with_no_goto_produces_no_hand_off()
     {
         var button = new IrItem
         {
@@ -169,7 +182,7 @@ public class BindingTests
             Text = "START", FontSizePx = 17,
         };
 
-        Assert.Null(Find(Emit(Ir(button)), "Hmi.Event.Event"));
+        Assert.Empty(Emitter.Emit(Ir(button), "S", 1).HandOff);
     }
 
     [Fact]
@@ -185,6 +198,45 @@ public class BindingTests
     }
 
     // ---- the vocabulary -----------------------------------------------------------------------
+
+    /// <summary>
+    /// 🔴 THE THIRD MEMBER OF THE "TWO ATTRIBUTES THAT MUST AGREE" CRASH FAMILY, after Line's
+    /// endpoints and Circle's radius. <c>FieldLength</c> is the FormatPattern's LENGTH, not its digit
+    /// count — corpus: pattern <c>99999.999</c>, FieldLength <c>9</c>. Emitting the digit count (8)
+    /// made them disagree for every pattern containing a decimal point and CRASHED PORTAL on import.
+    /// </summary>
+    [Theory]
+    [InlineData("99999.999", "9")]
+    [InlineData("9999.9", "6")]
+    [InlineData("9999", "4")]
+    [InlineData("999999", "6")]
+    public void FieldLength_is_the_pattern_length_not_its_digit_count(string pattern, string expected)
+    {
+        var item = Field("T") with { Format = pattern };
+        var attrs = Find(Emit(Ir(item)), "Hmi.Screen.IOField")!.Element("AttributeList")!;
+
+        Assert.Equal(pattern, attrs.Element("FormatPattern")?.Value);
+        Assert.Equal(expected, attrs.Element("FieldLength")?.Value);
+    }
+
+    /// <summary>
+    /// The regression guard stated as the invariant rather than as four cases: whatever the pattern,
+    /// the two attributes agree. A future format feature that breaks the relationship fails here
+    /// instead of at a Portal session.
+    /// </summary>
+    [Theory]
+    [InlineData("99999.999")]
+    [InlineData("9999.9")]
+    [InlineData("9.999")]
+    public void FieldLength_and_FormatPattern_never_disagree(string pattern)
+    {
+        var attrs = Find(Emit(Ir(Field("T") with { Format = pattern })), "Hmi.Screen.IOField")!
+            .Element("AttributeList")!;
+
+        Assert.Equal(
+            attrs.Element("FormatPattern")!.Value.Length.ToString(),
+            attrs.Element("FieldLength")!.Value);
+    }
 
     [Fact]
     public void IOField_is_in_the_supported_set()

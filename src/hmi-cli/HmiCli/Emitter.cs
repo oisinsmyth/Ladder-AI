@@ -216,9 +216,19 @@ public static class Emitter
                         break;
 
                     case "Button":
-                        WriteButton(w, NextId, Name("Button", emitted), item);
+                    {
+                        var btnName = Name("Button", emitted);
+                        WriteButton(w, NextId, btnName, item);
                         emitted++;
+                        if (!string.IsNullOrWhiteSpace(item.GoTo))
+                        {
+                            handOff.Add(
+                                $"{btnName} (\"{item.Text}\"): add an ActivateScreen event on KeyUp targeting "
+                                + $"\"{item.GoTo}\". THE PANEL CANNOT BE NAVIGATED UNTIL THIS IS DONE BY HAND.");
+                        }
+
                         break;
+                    }
 
                     case "Line":
                         WriteLine(w, NextId(), Name("Line", emitted), item);
@@ -490,10 +500,24 @@ public static class Emitter
         WriteText(w, nextId, string.Empty, "HelpText");
         WriteText(w, nextId, i.Text ?? string.Empty, "TextOff");
         WriteText(w, nextId, i.Text ?? string.Empty, "TextOn");
-        if (!string.IsNullOrWhiteSpace(i.GoTo))
-        {
-            WriteNavigationEvent(w, nextId, i.GoTo!);
-        }
+
+        // 🔴 THE EVENT IS DELIBERATELY NOT WRITTEN. MEASURED 2026-08-17, AGAINST A REAL PROJECT:
+        //
+        //     'Create' is not supported by type 'Siemens.Engineering.Hmi.Event.EventComposition'.
+        //
+        // Openness will NOT create an event on a classic screen through an import, and the refusal is
+        // structural rather than a validation failure. Note the asymmetry, which is the trap: TIA
+        // EXPORTS events perfectly well - this emitter's event structure was harvested from a real
+        // export carrying four of them - so a round trip reads as though it should work.
+        //
+        // This is the ALARM VIEW's shape a second time: representable in the document, not creatable
+        // through the API. So it gets the alarm view's treatment - the button is emitted, and the
+        // event becomes a HAND-OFF ITEM the engineer completes in TIA. Emitting it anyway would fail
+        // the whole import and take the working half of the screen down with it.
+        //
+        // WriteNavigationEvent is KEPT, not deleted: it is the correct structure, it is proven
+        // against the corpus, and it is what a future create-capable route would emit. Deleting it
+        // would discard harvested knowledge that cost a Portal session to obtain.
 
         w.WriteEndElement();
 
@@ -617,7 +641,25 @@ public static class Emitter
     {
         var mode = string.IsNullOrWhiteSpace(i.Mode) ? "Output" : i.Mode!;
         var format = string.IsNullOrWhiteSpace(i.Format) ? "9999" : i.Format!;
-        var fieldLength = format.Count(char.IsDigit).ToString(CultureInfo.InvariantCulture);
+
+        // 🔴 FieldLength IS THE WHOLE PATTERN'S LENGTH, NOT ITS DIGIT COUNT - AND GETTING IT WRONG
+        // CRASHES PORTAL.
+        //
+        // Measured: the corpus has FormatPattern "99999.999" with FieldLength 9. That is the string's
+        // LENGTH (9), not the number of digits in it (8). Emitting the digit count made the two
+        // attributes disagree for any pattern containing a decimal point, and the import killed the
+        // Portal process with "Access to a disposed object of type 'Siemens.Engineering.Project'" -
+        // the aftermath, never the cause.
+        //
+        // Isolated by bisection against a control that PASSED: a probe field with pattern "9999" -
+        // where length and digit count are both 4, so the bug could not express itself - imported
+        // clean, while the same field with "9999.9" did not. A control that cannot fail is worth
+        // exactly nothing, and this one nearly was one by accident.
+        //
+        // Third member of the same family: Circle's Radius vs its bounding box, Line's endpoints vs
+        // its own box, and now this. TWO ATTRIBUTES THAT MUST AGREE, where TIA validates neither and
+        // dies instead of refusing.
+        var fieldLength = format.Length.ToString(CultureInfo.InvariantCulture);
 
         w.WriteStartElement("Hmi.Screen.IOField");
         w.WriteAttributeString("ID", nextId());
