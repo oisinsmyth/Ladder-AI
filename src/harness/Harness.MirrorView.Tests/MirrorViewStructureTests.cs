@@ -236,9 +236,12 @@ public class MirrorViewStructureTests
     }
 
     // ---- the walk -----------------------------------------------------------------------------------
+    //
+    // THE SCANNER ITSELF IS `IlWalk`, SHARED WITH `FollowStructureTests`. It was private here until a
+    // second structural claim arrived; two copies are two things that can rot independently, and the
+    // copy rots silently because its own tests keep passing.
 
-    private static string? DeclaringName(MemberInfo member) =>
-        member is Type type ? type.FullName : member.DeclaringType?.FullName;
+    private static string? DeclaringName(MemberInfo member) => IlWalk.DeclaringName(member);
 
     private static bool IsWireWriteMember(MemberInfo member)
     {
@@ -259,112 +262,6 @@ public class MirrorViewStructureTests
         DeclaringName(member) == "System.Net.IPAddress" &&
         member.Name is nameof(IPAddress.Any) or nameof(IPAddress.IPv6Any);
 
-    private static IlScan Scan(Assembly assembly, Func<MemberInfo, bool> forbidden)
-    {
-        var hits = new List<string>();
-        var types = 0;
-        var methods = 0;
-        var bodies = 0;
-
-        Type[] loadable;
-        try
-        {
-            loadable = assembly.GetTypes();
-        }
-        catch (ReflectionTypeLoadException ex)
-        {
-            // Reported, never absorbed: a type that would not load is a slice of the assembly this walk
-            // did NOT examine, and a clean sweep over the remainder would be a green with an unstated
-            // denominator.
-            var unloadable = ex.LoaderExceptions.Length;
-            Assert.Fail($"{unloadable} type(s) in {assembly.GetName().Name} could not be loaded, so the walk " +
-                        $"cannot claim to have examined the assembly: " +
-                        string.Join("; ", ex.LoaderExceptions.Select(e => e?.Message)));
-            return new IlScan(hits, 0, 0, 0);
-        }
-
-        foreach (var type in loadable)
-        {
-            types++;
-            foreach (var method in type.GetMethods(
-                         BindingFlags.Public | BindingFlags.NonPublic |
-                         BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly))
-            {
-                methods++;
-
-                byte[]? il;
-                try
-                {
-                    il = method.GetMethodBody()?.GetILAsByteArray();
-                }
-                catch (Exception)
-                {
-                    // Abstract, extern and generated members have no readable body.
-                    continue;
-                }
-
-                if (il is null) continue;
-
-                bodies++;
-                if (References(il, method, forbidden, out var detail))
-                    hits.Add($"{type.FullName}.{method.Name}: {detail}");
-            }
-        }
-
-        return new IlScan(hits, types, methods, bodies);
-    }
-
-    private sealed record IlScan(IReadOnlyList<string> Hits, int TypesEnumerated, int MethodsEnumerated, int BodiesExamined);
-
-    /// <summary>
-    /// Deliberately coarse, for the reason <c>openness-cli</c>'s equivalent gives: every 4-byte window is
-    /// offered to the token resolver rather than the IL being decoded precisely. That OVER-reports
-    /// candidate tokens and UNDER-reports nothing, and since the assertions are that a count is ZERO,
-    /// over-reporting is the safe direction — a false positive fails a test and gets read, a false
-    /// negative lets the one thing this guards against through unnoticed.
-    ///
-    /// <para>⚠️ The direction reverses for the CONTROLS, which assert a count above zero: there a
-    /// spurious token could make a broken walk look armed. Every control matches on a specific expected
-    /// member rather than on "found something".</para>
-    /// </summary>
-    private static bool References(byte[] il, MethodInfo owner, Func<MemberInfo, bool> forbidden, out string detail)
-    {
-        detail = string.Empty;
-        var module = owner.Module;
-        var typeArgs = SafeGenericArguments(owner.DeclaringType);
-        var methodArgs = owner.IsGenericMethodDefinition ? owner.GetGenericArguments() : Type.EmptyTypes;
-
-        for (var i = 0; i + 4 <= il.Length; i++)
-        {
-            var token = BitConverter.ToInt32(il, i);
-
-            try
-            {
-                var member = module.ResolveMember(token, typeArgs, methodArgs);
-                if (member is not null && forbidden(member))
-                {
-                    detail = $"references {DeclaringName(member)}.{member.Name}";
-                    return true;
-                }
-            }
-            catch (Exception)
-            {
-                // Not a member token. Expected constantly — see the remarks on coarseness.
-            }
-        }
-
-        return false;
-    }
-
-    private static Type[] SafeGenericArguments(Type? type)
-    {
-        try
-        {
-            return type is { IsGenericTypeDefinition: true } ? type.GetGenericArguments() : Type.EmptyTypes;
-        }
-        catch (Exception)
-        {
-            return Type.EmptyTypes;
-        }
-    }
+    private static IlScan Scan(Assembly assembly, Func<MemberInfo, bool> forbidden) =>
+        IlWalk.Scan(assembly, forbidden);
 }

@@ -110,7 +110,17 @@ public static class LoopRun
 {
     /// <summary>Run one turn.</summary>
     /// <param name="nowMs">Monotonic milliseconds, injected so the backstop is testable without waiting.</param>
-    public static LoopResult Execute(LoopRequest request, IDeviceGateway gateway, Func<long>? nowMs = null)
+    /// <param name="feed">
+    /// 🔴 <b>OPT-IN. When present, every read the wave makes is FORWARDED to it as it returns</b>, so
+    /// <c>harness-mirror-view --follow</c> can show the run live without opening a second socket to the
+    /// device. <c>MB_SERVER</c> accepts one connection per instance — measured, a viewer attached during a
+    /// wave cost 0 of 22 vectors — and two connections would in any case be two samples at two instants.
+    ///
+    /// <para><b>It never causes a read and it can never fail the run.</b> The publisher forwards what a
+    /// read already returned and counts its own failures; nothing in this loop consults it.</para>
+    /// </param>
+    public static LoopResult Execute(
+        LoopRequest request, IDeviceGateway gateway, Func<long>? nowMs = null, IMirrorFeedPublisher? feed = null)
     {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(gateway);
@@ -195,7 +205,18 @@ public static class LoopRun
         }
 
         using var transport = gateway.Open();
-        var client = new MirrorClient(map, transport, stamp);
+
+        // The feed is handed to the CLIENT, which is where every read in this system lands. Publishing
+        // from anywhere higher would mean choosing which of the wave's reads a viewer is entitled to see,
+        // and publishing on a separate clock would be the two-instants problem again minus the socket.
+        //
+        // ⚠️ `request.WordOrder` is now passed explicitly. It used to be left to the parameter default,
+        // which is the same value TODAY (`HighWordFirst`, measured twice) and would have diverged the
+        // moment anything set the request's order: the client decodes the version register and the scan
+        // counter under ITS order, so a request declaring the other one would have had ReadControl compare
+        // a mis-assembled stamp against Expected and refuse a healthy device. A no-op as things stand,
+        // covered by the existing default-agreement test, and one fewer value with two readers.
+        var client = new MirrorClient(map, transport, stamp, request.WordOrder, feed);
 
         // ---- 6. CONFIRM what is RUNNING -------------------------------------------------------------
         var version = VersionCheck.Confirm(client, stamp);

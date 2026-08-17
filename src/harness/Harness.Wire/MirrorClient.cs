@@ -57,17 +57,40 @@ public sealed class MirrorClient
 {
     private readonly RegisterMap _map;
     private readonly IRegisterTransport _transport;
+    private readonly IMirrorFeedPublisher? _feed;
+    private readonly Func<DateTimeOffset> _clock;
 
+    /// <param name="feed">
+    /// 🔴 <b>OPTIONAL, OPT-IN, AND IT NEVER CAUSES A READ.</b> When present, every read this client makes
+    /// is FORWARDED to it at the moment the read returns, with the instant it returned — so a viewer can
+    /// show exactly the bytes this client acted on without opening a second socket to the device.
+    /// <c>MB_SERVER</c> accepts one connection, and two connections would in any case be two samples at
+    /// two instants. See <see cref="IMirrorFeedPublisher"/>.
+    /// </param>
+    /// <param name="clock">
+    /// Stamps each forwarded read. Injectable so the feed's timestamps are testable without waiting;
+    /// <b>it is read at the moment the transport returns and nowhere else</b>, so the published instant is
+    /// the read's own and never a render time or a publish time.
+    /// </param>
     public MirrorClient(RegisterMap map, IRegisterTransport transport, BuildStamp expected,
-        RegisterWordOrder wordOrder = RegisterWordOrder.HighWordFirst)
+        RegisterWordOrder wordOrder = RegisterWordOrder.HighWordFirst,
+        IMirrorFeedPublisher? feed = null,
+        Func<DateTimeOffset>? clock = null)
     {
         _map = map ?? throw new ArgumentNullException(nameof(map));
         _transport = transport ?? throw new ArgumentNullException(nameof(transport));
+        _feed = feed;
+        _clock = clock ?? (() => DateTimeOffset.UtcNow);
         Expected = expected;
         WordOrder = wordOrder;
 
         if (expected.Value == 0)
             throw new WireException("the expected build stamp is zero, which is what bit memory reads before anything writes it — a client holding one cannot tell a running program from an absent one.");
+
+        // The feed learns what it describes before it carries a single register, so a viewer attached
+        // before the first poll shows "a publisher is running and no read has landed yet" rather than a
+        // table of zeros or an absence indistinguishable from "no wave has ever run".
+        _feed?.Begin(new MirrorFeedIdentity(expected.Value, map.MapHash, map.TotalRegisters, wordOrder));
     }
 
     /// <summary>The build stamp this client will accept. A different one means a download landed mid-session.</summary>
@@ -231,10 +254,29 @@ public sealed class MirrorClient
         return _map.Slots[index];
     }
 
+    /// <summary>
+    /// 🔴 <b>EVERY READ THIS CLIENT MAKES GOES THROUGH HERE, WHICH IS WHY THE FEED IS PUBLISHED HERE.</b>
+    ///
+    /// <para>The control read, the version read and every result read all land on this one line, so a
+    /// viewer following the feed sees the whole picture the harness has — and sees it as the SAME BYTES,
+    /// at the SAME INSTANTS, that the harness made its own decisions from. Publishing anywhere higher
+    /// would mean picking which reads a viewer is entitled to see; publishing on a clock of its own would
+    /// mean two samples again, minus the second socket.</para>
+    ///
+    /// <para><b>The stamp is taken when the transport RETURNS</b>, not before the call and not when the
+    /// document is written. A read costs ~72 ms to this rig, so those are visibly different instants and
+    /// only one of them is when the values existed.</para>
+    ///
+    /// <para><b>A publish never affects the read.</b> The values are returned whatever the feed does, and
+    /// <see cref="IMirrorFeedPublisher"/> is contracted not to throw — the feed is a view and the wave is
+    /// the work.</para>
+    /// </summary>
     private ushort[] Read(int register, int count)
     {
         RoundTrips++;
-        return _transport.ReadHoldingRegisters(register, count);
+        var values = _transport.ReadHoldingRegisters(register, count);
+        _feed?.Publish(register, values, _clock());
+        return values;
     }
 
     /// <summary>

@@ -86,7 +86,8 @@ public static class LoopCli
         Action<string, string> writeFile,
         Func<string, int, byte, IRegisterTransport>? connect = null,
         Func<string, string?>? env = null,
-        Func<string, IReadOnlyList<string>>? expandProgramPath = null)
+        Func<string, IReadOnlyList<string>>? expandProgramPath = null,
+        Func<string, IMirrorFeedPublisher>? openFeed = null)
     {
         ArgumentNullException.ThrowIfNull(args);
         ArgumentNullException.ThrowIfNull(output);
@@ -110,6 +111,11 @@ public static class LoopCli
         var programPaths = Values(args, "--program");
         var noProgram = args.Contains("--no-program-under-test");
 
+        // 🔴 *** OPT-IN, NEVER ON BY DEFAULT. *** A run that silently wrote a file somewhere is a surprise,
+        // and the feed is a real artifact on disk with a real (small) cost per read. Stating the path is
+        // also what keeps two concurrent runs from publishing over each other.
+        var publishPath = Option(args, "--publish");
+
         // *** THE TWO MODES ARE MUTUALLY EXCLUSIVE, AND THE REFUSAL NAMES WHY. *** --verify reads a build
         // stamp OFF A DEVICE; --generate-only stops before any gateway is constructed. A run that claimed
         // both would have to open a socket to satisfy one of them.
@@ -117,6 +123,26 @@ public static class LoopCli
         {
             output.WriteLine("NOTHING EXAMINED — --generate-only and --verify are mutually exclusive. --generate-only stops after the");
             output.WriteLine("copy layer is generated and constructs no gateway at all; --verify reads the build stamp OFF THE DEVICE.");
+            return LoopExit.NothingExamined;
+        }
+
+        // *** A FEED IS A RECORD OF READS, AND A GENERATE-ONLY RUN MAKES NONE. *** Accepting the flag and
+        // writing an empty feed would put a file on disk that a viewer would report as "a publisher is
+        // running and no read has landed yet" — a live-looking state for a run that will never read
+        // anything. Refused by name rather than ignored: a flag that silently does nothing is one somebody
+        // will believe was honoured.
+        if (publishPath is not null && generateOnly)
+        {
+            output.WriteLine("NOTHING EXAMINED — --publish and --generate-only contradict each other. --publish forwards the reads a");
+            output.WriteLine("wave makes so a viewer can watch them; --generate-only constructs no gateway, opens no socket and makes");
+            output.WriteLine("no reads. A feed from it would show a publisher that is running and will never read anything.");
+            return LoopExit.NothingExamined;
+        }
+
+        if (publishPath is not null && string.IsNullOrWhiteSpace(publishPath))
+        {
+            output.WriteLine("NOTHING EXAMINED — --publish was given an empty path. There is no default feed location: two runs");
+            output.WriteLine("publishing to one guessed path would overwrite each other and a viewer could not tell which it was watching.");
             return LoopExit.NothingExamined;
         }
 
@@ -287,9 +313,40 @@ public static class LoopCli
               + Environment.NewLine + "              Pass --verify --host <ip> to run against a device already carrying this build.");
         output.WriteLine();
 
-        var result = LoopRun.Execute(request, gateway, () => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
+        // 🔴 *** THE FEED, AND IT IS DISPOSED WHATEVER HAPPENS. *** `End()` is what turns "the wave
+        // finished" into a fact a viewer can read; a publisher that simply stopped writing is
+        // indistinguishable from one that died, and the viewer reports those as different states
+        // precisely because they are. So the End must survive an exception out of the run.
+        using var feed = publishPath is null
+            ? null
+            : (openFeed ?? DefaultFeed)(publishPath);
+
+        if (feed is not null)
+        {
+            output.WriteLine($"feed        : PUBLISHING every read to {feed.Destination}");
+            output.WriteLine("              Watch it live with:  harness-mirror-view --follow <that path> --map <tags.ir> --area <server.ir>");
+            output.WriteLine("              THE VIEWER OPENS NO SOCKET. MB_SERVER accepts one connection per instance, so a viewer");
+            output.WriteLine("              connecting directly while this runs would take this run's connection away — and would in");
+            output.WriteLine("              any case be a second sample at a second instant. The page shows the bytes THIS run read.");
+            output.WriteLine();
+        }
+
+        var result = LoopRun.Execute(request, gateway, () => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), feed);
 
         Write(result, output);
+
+        // *** REPORTED WHATEVER THE COUNT, INCLUDING ZERO. *** A publisher that cannot write must not stop
+        // the wave — but a feed that quietly stopped writing is indistinguishable from a wave that quietly
+        // stopped reading, and a line that appears only on failure teaches a reader that its absence means
+        // everything was written.
+        if (feed is not null)
+        {
+            output.WriteLine();
+            output.WriteLine($"FEED: {feed.Published} document(s) published to {feed.Destination}, {feed.Failures} publish(es) FAILED.");
+
+            if (feed.LastFailure is not null)
+                output.WriteLine($"  last failure: {feed.LastFailure}");
+        }
 
         if (outPath is not null)
         {
@@ -304,6 +361,9 @@ public static class LoopCli
     /// <summary>The real transport. Behind a factory so every test above reaches none of it.</summary>
     private static IRegisterTransport DefaultConnect(string host, int port, byte unit) =>
         NModbusTransport.Connect(host, port, unit);
+
+    /// <summary>The real feed. Behind a factory so no test above writes to a real path.</summary>
+    private static IMirrorFeedPublisher DefaultFeed(string path) => new MirrorFeedPublisher(path);
 
     /// <summary>
     /// 🔴 <b><c>--generate-only</c>: derive → gate → width → GENERATE → 0.1b, then STOP and print the IR.</b>
@@ -887,6 +947,7 @@ public static class LoopCli
         output.WriteLine("                   (--program <file-or-dir>... | --no-program-under-test)");
         output.WriteLine("                   [--generate-only [--emit <dir>]]");
         output.WriteLine("                   [--verify --host <ip> --port <n> [--unit 1] [--allowlist <path>]]");
+        output.WriteLine("                   [--publish <feed.mirrorfeed>]");
         output.WriteLine("                   [--out <result.json>]");
         output.WriteLine();
         output.WriteLine("Runs the phase 5.3 inner loop: map -> gate -> copy layer -> 0.1b -> gateway -> version -> wave -> packages.");
@@ -910,6 +971,16 @@ public static class LoopCli
         output.WriteLine("         It imports nothing, compiles nothing, downloads nothing and writes nothing. Use it to run vectors");
         output.WriteLine("         against a program that is ALREADY deployed. There is no flag that asserts a deployment instead of");
         output.WriteLine("         measuring one, because a gateway reporting Loaded without loading is one edit from one that lies.");
+        output.WriteLine();
+        output.WriteLine("--publish FORWARDS EVERY READ THIS RUN MAKES to a feed file, so `harness-mirror-view --follow <path>`");
+        output.WriteLine("         can show the wave live WITHOUT OPENING A SECOND SOCKET. That matters twice over. MB_SERVER accepts");
+        output.WriteLine("         ONE connection per instance, so a viewer connected directly while a wave runs takes the wave's");
+        output.WriteLine("         connection away - measured: SocketException 'actively refused', 0 of 22 vectors attempted. And two");
+        output.WriteLine("         sockets would be TWO SAMPLES AT TWO INSTANTS, so the page could show a value this run never acted");
+        output.WriteLine("         on. The feed carries the RAW REGISTERS as read, each stamped with the moment the read RETURNED;");
+        output.WriteLine("         the viewer does the decoding, so there is exactly one decoder and the two cannot drift.");
+        output.WriteLine("         OFF unless stated: a run that silently writes a file somewhere is a surprise. A failure to publish");
+        output.WriteLine("         never stops the wave, and the failures are COUNTED and reported at the end of the run.");
         output.WriteLine();
         output.WriteLine("Without --verify the gateway REFUSES and the loop stops at deployment. That is a real outcome, not a stub.");
         output.WriteLine();

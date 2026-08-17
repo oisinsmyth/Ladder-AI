@@ -14,6 +14,76 @@ dotnet run --project src\harness\Harness.MirrorView -c Release -- `
 Then open **`http://127.0.0.1:8137/`**. The same data is at **`/api/mirror`** as JSON — the page has no
 other source, so the two cannot disagree.
 
+## 🔴 TWO MODES, AND WITH A WAVE RUNNING YOU MUST USE THE SECOND ONE
+
+**`MB_SERVER` accepts ONE connection per instance.** With this viewer connected to the rig, a conformance
+wave against the same device failed with `SocketException: No connection could be made because the target
+machine actively refused it` and reported **0 of 22 vectors attempted**. Stopping the viewer fixed it
+immediately.
+
+A second `MB_SERVER` instance is **not** the escape: `LocalPort` and the connection `ID` are FB **static
+start values**, so a second instance inherits both — two servers on one port with one connection id,
+***which is exactly the collision being escaped and which would import and compile without complaint.***
+
+So: **do not open a second connection. The wave is already polling** — 914 round trips in its last run,
+each reading the whole control and result region — so the PC already holds the live data. Follow it.
+
+```powershell
+# 1. the wave, publishing every read it makes
+dotnet run --project src\harness\Harness.Run -c Release -- `
+  --submission <submission.json> --binding <binding.json> `
+  --program ir\test-project001 `
+  --verify --host 10.10.10.10 --port 503 --unit 1 `
+  --allowlist "$env:USERPROFILE\.ladder\device-allowlist.json" `
+  --publish .\run.mirrorfeed
+
+# 2. the viewer, following it. NO SOCKET, no --address, no allowlist.
+dotnet run --project src\harness\Harness.MirrorView -c Release -- `
+  --follow .\run.mirrorfeed `
+  --map  ir\test-project001\HarnessMirror.ir `
+  --area ir\test-project001\FB_Comms_ModbusServer.ir
+```
+
+`--follow` and `--address` are **mutually exclusive** and neither is a default.
+
+### *** THE ARGUMENT IS TRUTH, NOT COST ***
+
+Two sockets means **two samples at two different instants**: the page could show a value the harness never
+acted on, and the two could then disagree about what the device did. One source means the page shows
+**exactly the bytes the harness made its decisions from**.
+
+This viewer already holds that property internally — the page and `/api/mirror` render from one object, so
+they cannot disagree. Follow mode **extends the same property across the process boundary**, and that is
+deliberate rather than incidental:
+
+- the feed is published **at the moment a read RETURNS**, inside `Harness.Wire.MirrorClient.Read`, which is
+  where *every* read in this system lands;
+- each frame carries the **raw registers as read** and the **UTC instant that read returned** — never a
+  publish time and never a render time;
+- **the viewer decodes**, so there is exactly one decoder and the two halves cannot drift;
+- 🔴 **nothing on the viewer's side can cause a read.** There is no host, no port, no socket, no fence and
+  no refresh on that path. A gateway that refreshed when the page asked, or a publisher that sampled on its
+  own clock, would bring the two-instants problem back *minus the second socket* — and it would look
+  exactly like the fix. `FollowStructureTests` asserts the shipped assembly never names the publisher.
+
+The **device fence governs the publisher**, which is the process that actually contacts the rig. Fencing a
+file read would authorise nothing and would refuse a viewer whose wave is properly authorised.
+
+### A composed picture has rows of different ages, and each states its own
+
+A wave reads the **control region** and **each slot's results** separately, so the picture is composed from
+several real reads rather than one FC03 over the whole area. Every row therefore carries **its own
+`observedUtc` and its own age**, goes grey **individually** when it passes the window, and a register that
+**no read covered** shows **`NOT READ`** — never the zero underneath it. The server's own zero and this
+program's default are the same bytes and completely different facts.
+
+A 32-bit element needs **both** halves observed; half a value is not a value, and reassembling one read
+half with one default produces a plausible number. The build-stamp card and the scan-counter card refuse on
+the same rule.
+
+In **direct mode** one FC03 covers the whole area, so every row shares one instant and the per-row treatment
+and the whole-table one always agree — which is why direct mode looks exactly as it did.
+
 ## What each row shows
 
 | column | where it comes from |
@@ -58,6 +128,41 @@ check against an authority outside this component, not a restatement of its own 
 
 **Green needs both halves.** Keying on the last outcome alone leaves a dead loop looking healthy; keying
 on the age alone leaves a failing poller green until the window passes.
+
+### 🔴 Follow mode adds seven more, and none of them may be merged
+
+*** "NO DATA" AND "OLD DATA" AND "DEAD DEVICE" ARE THREE DIFFERENT FACTS *** — and following a wave splits
+the first into three again. Each has its own banner and its own words.
+
+| state | when | on screen |
+|---|---|---|
+| `NoFeed` | **no publisher has ever written to this path** — no wave has run with `--publish` here | grey, no values. Nothing is wrong |
+| `FeedInterrupted` | **something published here and the feed is gone** — a publish did not complete, or the file was deleted | red, no values |
+| `FeedUnreadable` | the feed is present and cannot be fully accounted for — truncated, no terminator, a frame count that does not match | red, no values |
+| `FeedMismatch` | **the feed and this viewer's map describe different mirrors** — a different width, or the other word order | red, no values |
+| `FeedCarriesNoReading` | a publisher has begun and its first poll has not returned | grey, no values |
+| `PublisherEnded` | **the wave FINISHED and said so.** The values are FINAL, which is not CURRENT | amber, values kept and struck |
+| `PublisherStopped` | **the wave was RUNNING and stopped writing without ending.** It died, was killed, or is wedged | red, values kept and struck |
+| `ClockDisagreement` | the feed's instants are in this viewer's future, so an age would be negative | red |
+
+Three of those deserve saying out loud:
+
+- **`NoFeed` and `FeedInterrupted` are not one state.** The first is benign and the second is an incident,
+  and they are the *same absence on disk*. The publisher writes a `.initialised` marker **before** its first
+  publish, so an absent feed with the marker present means a publish did not complete —
+  `File.Replace` is not atomic against process death and leaves a window in which the destination does not
+  exist. Reading a lost feed as "nothing ever ran" hands a reader the most reassuring answer available at
+  the exact moment something has gone wrong.
+- **`PublisherEnded` is never green, not even one second after the wave finished.** *Final* and *current*
+  are different facts; nothing further is coming.
+- **A live feed of a dead CPU is a real combination.** The publisher is writing, the readings are fresh, and
+  the scan counter has not moved: the banner reads `Live` and the scan card reads `NOT ADVANCING`. Those are
+  two independent facts and the page shows both.
+
+The viewer polls the feed on its own rhythm and legitimately sees the **same document twice**. That is *not*
+two readings: rotating on it would put a reading against itself and report *"the counter read N twice, 0 ms
+apart"* — this page's wording for a stopped CPU, as a false alarm about the most serious thing the card can
+say. The published instant is the key, and it is identical only when it is the same read.
 
 **The browser adds two more red states of its own**: if a fetch fails, the banner says *CANNOT REACH THE
 VIEWER* and greys everything; and if the page's own elapsed time passes the window between fetches it

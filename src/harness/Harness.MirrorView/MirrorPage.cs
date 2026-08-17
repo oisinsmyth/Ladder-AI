@@ -15,6 +15,15 @@ namespace Harness.MirrorView;
 /// <para><b>A failed FETCH is its own red state.</b> If the browser cannot reach the viewer, the numbers
 /// on screen are frozen — and they must not go on looking like a live view of a controller because the
 /// page happens to still be open.</para>
+///
+/// <para>🔴 <b>IN FOLLOW MODE EVERY ROW CARRIES ITS OWN AGE, AND ROWS GO GREY INDIVIDUALLY.</b> A page
+/// composed from the several reads a wave actually makes has rows of DIFFERENT ages, and a single
+/// whole-table verdict would present the old ones as current. In direct mode one FC03 covers the whole
+/// area, so every row shares one instant and the per-row treatment and the whole-table one always agree —
+/// which is why direct mode looks exactly as it did.</para>
+///
+/// <para><b>A register nothing read shows NOT READ, never a zero.</b> The server's own zero and this
+/// program's default are the same bytes and completely different facts.</para>
 /// </summary>
 public static class MirrorPage
 {
@@ -68,6 +77,13 @@ public static class MirrorPage
      taken now, and the header row says so on every screen-width. *** */
   #values.notcurrent td.val, #values.notcurrent td.raw { opacity: 0.32; text-decoration: line-through; }
   #values.notcurrent { filter: grayscale(1); }
+
+  /* *** PER-ROW, FOR A PAGE COMPOSED FROM READS OF DIFFERENT AGES. *** A row whose OWN reading is past
+     the window is struck out on its own, whatever the rest of the table is doing. */
+  tr.rowstale td.val, tr.rowstale td.raw { opacity: 0.32; text-decoration: line-through; }
+  tr.rowstale td.age { color: #ffd873; }
+  tr.notread td.val, tr.notread td.raw, tr.notread td.age { color: #d64545; font-style: italic; }
+  td.age { color: #98a0ad; white-space: nowrap; font-size: 0.72rem; }
   .stamp { color: #98a0ad; font-size: 0.72rem; margin: 0.4rem 0 1rem; }
   footer { margin-top: 2rem; color: #98a0ad; font-size: 0.74rem; border-top: 1px solid #262a34; padding-top: 0.8rem; }
   footer b { color: #c3c9d4; }
@@ -85,6 +101,8 @@ public static class MirrorPage
   <div class="card"><div class="k">scan counter</div><div class="v" id="scan">—</div><div class="n" id="scanNote"></div></div>
   <div class="card"><div class="k">build stamp</div><div class="v" id="stamp">—</div><div class="n">static — it names the program, it cannot say the program is running.</div></div>
   <div class="card"><div class="k">last attempt</div><div class="v" id="attempt">—</div><div class="n" id="attemptNote"></div></div>
+  <div class="card"><div class="k">source</div><div class="v" id="source">—</div><div class="n" id="sourceNote"></div></div>
+  <div class="card"><div class="k">registers</div><div class="v" id="freshness">—</div><div class="n" id="freshnessNote"></div></div>
 </div>
 
 <p class="stamp" id="mapline"></p>
@@ -93,10 +111,10 @@ public static class MirrorPage
   <thead>
     <tr>
       <th>reg</th><th>%M address</th><th>tag</th><th>type</th>
-      <th>raw</th><th id="valueHead">decoded</th><th>comment / meaning</th>
+      <th>raw</th><th id="valueHead">decoded</th><th>read</th><th>comment / meaning</th>
     </tr>
   </thead>
-  <tbody id="values"><tr><td colspan="7">waiting for the first response…</td></tr></tbody>
+  <tbody id="values"><tr><td colspan="8">waiting for the first response…</td></tr></tbody>
 </table>
 
 <footer>
@@ -109,6 +127,10 @@ public static class MirrorPage
   values. A register it does not name is a register the map does not name.</p>
   <p><b>Raw beside every decode, always.</b> A decode that hides its bytes hides a wrong assumption.
   32-bit values are reassembled HIGH-WORD-FIRST — measured on this rig, not assumed.</p>
+  <p><b>Following a wave.</b> When the source card says FOLLOWING, this viewer holds no connection at all:
+  it is showing the registers a running harness read, each stamped with the moment that read returned. It
+  cannot ask for fresher data and never triggers a read. Rows therefore have different ages and each states
+  its own; a register no read covered says NOT READ rather than showing the zero underneath it.</p>
 </footer>
 
 <script>
@@ -130,10 +152,19 @@ function setBanner(cls, headline, why) {
   b.appendChild(span);
 }
 
+/* THREE COLOURS, AND EVERY STATE IS PLACED DELIBERATELY.
+
+   Green is ONLY "read just now and still arriving". Amber is "these are real readings and they are not
+   now" — which is where a FINISHED wave belongs: its data is final, and final is not current. Grey is
+   "there is nothing here and nothing is wrong". Everything else is red, including a publisher that
+   stopped without saying it had finished, because that is an incident rather than an outcome. */
 function bannerClassFor(status) {
   if (status === "Live") return "live";
   if (status === "Stale") return "stale";
+  if (status === "PublisherEnded") return "stale";
   if (status === "NeverRead") return "unknown";
+  if (status === "NoFeed") return "unknown";
+  if (status === "FeedCarriesNoReading") return "unknown";
   return "bad";
 }
 
@@ -157,6 +188,26 @@ function render(d) {
   el("attempt").textContent = d.lastAttemptOutcome + " (" + d.lastAttemptElapsedMs + " ms)";
   el("attemptNote").textContent = d.lastAttemptDetail;
 
+  /* WHOSE READS THESE ARE. A page showing another process's readings must say so, or it is an
+     unattributed table indistinguishable from a direct one. */
+  if (d.feed) {
+    el("source").textContent = "FOLLOWING a wave (" + d.feed.status + ")";
+    el("sourceNote").textContent =
+      "publisher " + d.feed.publisherId + ", sequence " + d.feed.sequence + ", " + d.feed.frames +
+      " read(s) composing " + d.feed.registersObserved + " of " + d.feed.declaredRegisters +
+      " register(s). This viewer opened NO socket: these are the bytes the harness read. Feed: " + d.feed.origin;
+  } else {
+    el("source").textContent = "DIRECT — this viewer holds the connection";
+    el("sourceNote").textContent =
+      "one FC03 over the whole declared area per poll, so every row below shares one instant.";
+  }
+
+  el("freshness").textContent =
+    d.registersCurrent + " current / " + d.registersStale + " stale / " + d.registersNotObserved + " not read";
+  el("freshnessNote").textContent =
+    "Counted every time, including when the last two are zero — a count that appears only when it is " +
+    "non-zero teaches a reader that its absence means everything was fresh.";
+
   var body = el("values");
   body.className = d.valuesAreCurrent ? "" : "notcurrent";
   el("valueHead").textContent = d.valuesAreCurrent ? "decoded" : "decoded — NOT CURRENT";
@@ -165,6 +216,19 @@ function render(d) {
   for (var i = 0; i < d.rows.length; i++) {
     var r = d.rows[i];
     var cls = r.role === "continuation" ? "continuation" : (r.role === "unmapped" ? "unmapped" : "");
+
+    /* PER-ROW, AND THE TWO CASES ARE NOT THE SAME. A row with an OLD reading is struck out; a row with
+       NO reading is red and says NOT READ. Rendering the second as a zero is the failure this whole
+       design exists to prevent, and it is one line of carelessness away. */
+    var age = "—";
+    if (r.observedUtc === null || r.observedUtc === undefined) {
+      cls += " notread";
+      age = "NOT READ";
+    } else {
+      age = (r.ageSeconds === null || r.ageSeconds === undefined) ? "?" : r.ageSeconds.toFixed(1) + " s ago";
+      if (!r.current) { cls += " rowstale"; }
+    }
+
     var valCls = "val";
     if (r.decoded === "TRUE") { valCls += " true"; }
     if (r.decoded === "FALSE") { valCls += " false"; }
@@ -175,6 +239,7 @@ function render(d) {
       "<td>" + esc(r.typeName || "—") + "</td>" +
       "<td class='raw'>" + esc(r.raw || "—") + "</td>" +
       "<td class='" + valCls + "' title='" + esc(r.basis || "") + "'>" + esc(r.decoded || "—") + "</td>" +
+      "<td class='age' title='" + esc(r.observedUtc || "no read has covered this register") + "'>" + esc(age) + "</td>" +
       "<td class='cmt'>" + esc(r.comment || "") + "</td></tr>";
   }
   body.innerHTML = html;
