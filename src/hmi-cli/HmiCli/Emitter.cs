@@ -31,7 +31,7 @@ public static class Emitter
     /// <summary>Item types this emitter can faithfully produce. Anything else is refused by name.</summary>
     private static readonly HashSet<string> Supported = new(StringComparer.Ordinal)
     {
-        "Rectangle", "Text", "Button", "Line", "Circle", "AlarmPlaceholder",
+        "Rectangle", "Text", "Button", "Line", "Circle", "AlarmPlaceholder", "IOField",
     };
 
     public static IReadOnlyCollection<string> SupportedTypes => Supported;
@@ -113,6 +113,37 @@ public static class Emitter
             throw new UntypedElementException(untyped);
         }
 
+        // AN IOField WITHOUT A TAG IS REFUSED, NOT WRITTEN UNBOUND.
+        //
+        // An unbound IOField imports clean, compiles clean, and renders 0 or #### on the panel -
+        // indistinguishable from a working field whose value happens to be zero. That is this
+        // project's standing failure mode (a green that examined nothing) in its most operational
+        // form: the number an operator reads off the screen is not connected to the plant.
+        //
+        // The same reasoning is why the check lives HERE and not in the checker: emit is the last
+        // point at which the document does not yet exist. Refusing costs one line of output;
+        // discovering it at commissioning costs a site visit.
+        var unbound = ir.Items
+            .Where(i => i.Type == "IOField" && string.IsNullOrWhiteSpace(i.Bind))
+            .ToList();
+
+        if (unbound.Count > 0)
+        {
+            throw new UnboundFieldException(unbound);
+        }
+
+        // A NAVIGATION BUTTON THAT NAMES NO SCREEN is the same class of defect: it looks like a
+        // button, it presses, and nothing happens. Only flagged when the author declared an intent
+        // to navigate (an empty data-hmi-goto), never for an ordinary command button.
+        var emptyGoto = ir.Items
+            .Where(i => i.Type == "Button" && i.GoTo is not null && string.IsNullOrWhiteSpace(i.GoTo))
+            .ToList();
+
+        if (emptyGoto.Count > 0)
+        {
+            throw new UnboundFieldException(emptyGoto);
+        }
+
         var handOff = new List<string>();
         var id = 0;
         string NextId() => (++id).ToString("X", CultureInfo.InvariantCulture);
@@ -175,27 +206,32 @@ public static class Emitter
                 switch (item.Type)
                 {
                     case "Rectangle":
-                        WriteRectangle(w, NextId(), Name(item, "Rectangle", emitted), item, Colour(item.BackColor, HouseGrey), Colour(item.BorderColor, "0, 0, 0"));
+                        WriteRectangle(w, NextId(), Name("Rectangle", emitted), item, Colour(item.BackColor, HouseGrey), Colour(item.BorderColor, "0, 0, 0"));
                         emitted++;
                         break;
 
                     case "Text":
-                        WriteTextField(w, NextId, Name(item, "Text", emitted), item);
+                        WriteTextField(w, NextId, Name("Text", emitted), item);
                         emitted++;
                         break;
 
                     case "Button":
-                        WriteButton(w, NextId, Name(item, "Button", emitted), item);
+                        WriteButton(w, NextId, Name("Button", emitted), item);
                         emitted++;
                         break;
 
                     case "Line":
-                        WriteLine(w, NextId(), Name(item, "Line", emitted), item);
+                        WriteLine(w, NextId(), Name("Line", emitted), item);
                         emitted++;
                         break;
 
                     case "Circle":
-                        WriteCircle(w, NextId(), Name(item, "Circle", emitted), item);
+                        WriteCircle(w, NextId(), Name("Circle", emitted), item);
+                        emitted++;
+                        break;
+
+                    case "IOField":
+                        WriteIOField(w, NextId, Name("IOField", emitted), item);
                         emitted++;
                         break;
 
@@ -205,7 +241,7 @@ public static class Emitter
                         // replaces by hand, because an alarm view cannot be authored at all on
                         // classic. Emitted as a bordered rectangle plus a label, so it is impossible
                         // to mistake for finished work.
-                        var boxName = Name(item, "AlarmPlaceholder", emitted);
+                        var boxName = Name("AlarmPlaceholder", emitted);
                         WriteRectangle(w, NextId(), boxName, item, "255, 255, 255", "176, 42, 30");
                         WriteTextField(w, NextId, boxName + "_Label", item with { Text = "ALARM VIEW GOES HERE - add manually" });
                         emitted += 2;
@@ -255,8 +291,11 @@ public static class Emitter
     //   * Button BackFillStyle: observed Transparent, emitted Solid (a command button must show its
     //     fill; Solid is observed on Rectangle and Circle, so the value is in the enum)
 
-    private static string Name(IrItem item, string prefix, int n) =>
-        string.IsNullOrWhiteSpace(item.Bind) ? $"{prefix}_{n + 1}" : $"{prefix}_{n + 1}";
+    // Was a ternary whose two branches were IDENTICAL - it read item.Bind and returned the same
+    // string either way. That was the visible symptom of the real defect: the binding was captured
+    // into the IR and never emitted, so every screen this tool produced was a static picture. The
+    // binding now goes where it belongs (WriteTagBinding), and the name is just a name.
+    private static string Name(string prefix, int n) => $"{prefix}_{n + 1}";
 
     private static void Attr(XmlWriter w, string name, string value) => w.WriteElementString(name, value);
 
@@ -451,6 +490,185 @@ public static class Emitter
         WriteText(w, nextId, string.Empty, "HelpText");
         WriteText(w, nextId, i.Text ?? string.Empty, "TextOff");
         WriteText(w, nextId, i.Text ?? string.Empty, "TextOn");
+        if (!string.IsNullOrWhiteSpace(i.GoTo))
+        {
+            WriteNavigationEvent(w, nextId, i.GoTo!);
+        }
+
+        w.WriteEndElement();
+
+        w.WriteEndElement();
+    }
+
+    /// <summary>
+    /// A button that changes screen: <c>ActivateScreen</c> on <c>KeyUp</c>.
+    ///
+    /// 🔴 THE EVENT IS <c>KeyUp</c>, NOT <c>Click</c> - harvested from a real Classic export where all
+    /// four navigation buttons use it. Guessing <c>Click</c> here would produce a document that
+    /// imports and compiles cleanly and does nothing when pressed, which is the worst available
+    /// failure: every gate green, and the screen dead under the operator's finger.
+    ///
+    /// The parameter is named <c>Screen name</c> - with the space, and with that capitalisation - and
+    /// carries the target as a <c>Value</c> LINK rather than as an attribute value.
+    /// </summary>
+    private static void WriteNavigationEvent(XmlWriter w, Func<string> nextId, string targetScreen)
+    {
+        w.WriteStartElement("Hmi.Event.Event");
+        w.WriteAttributeString("ID", nextId());
+        w.WriteAttributeString("CompositionName", "Events");
+        w.WriteStartElement("AttributeList");
+        Attr(w, "Name", "KeyUp");
+        w.WriteEndElement();
+
+        w.WriteStartElement("ObjectList");
+        w.WriteStartElement("Hmi.Event.FunctionListEventHandler");
+        w.WriteAttributeString("ID", nextId());
+        w.WriteAttributeString("CompositionName", "EventHandler");
+        w.WriteStartElement("ObjectList");
+
+        w.WriteStartElement("Hmi.Event.FunctionListEntry");
+        w.WriteAttributeString("ID", nextId());
+        w.WriteAttributeString("CompositionName", "FunctionListEntries");
+        w.WriteStartElement("AttributeList");
+        Attr(w, "Name", "ActivateScreen");
+        Attr(w, "Type", "SystemFunction");
+        w.WriteEndElement();
+
+        w.WriteStartElement("ObjectList");
+        w.WriteStartElement("Hmi.Event.FunctionListEntryParameter");
+        w.WriteAttributeString("ID", nextId());
+        w.WriteAttributeString("CompositionName", "Parameters");
+        w.WriteStartElement("AttributeList");
+        Attr(w, "Name", "Screen name");
+        w.WriteEndElement();
+        w.WriteStartElement("LinkList");
+        w.WriteStartElement("Value");
+        w.WriteAttributeString("TargetID", "@OpenLink");
+        Attr(w, "Name", targetScreen);
+        w.WriteEndElement();
+        w.WriteEndElement();
+        w.WriteEndElement(); // Parameter
+        w.WriteEndElement(); // ObjectList
+        w.WriteEndElement(); // FunctionListEntry
+
+        w.WriteEndElement(); // ObjectList
+        w.WriteEndElement(); // FunctionListEventHandler
+        w.WriteEndElement(); // ObjectList
+        w.WriteEndElement(); // Event
+    }
+
+    /// <summary>
+    /// Connects one of an item's PROPERTIES to a PLC tag.
+    ///
+    /// Harvested whole from a real Classic export. The nesting is
+    /// <c>Hmi.Screen.Property(Name=&lt;property&gt;) -> Hmi.Dynamic.TagConnectionDynamic -> LinkList -> Tag</c>,
+    /// and it is GENERAL: the same shape binds <c>ProcessValue</c> on an IOField, and would bind
+    /// <c>Visible</c> on any item - which is the mechanism a popup layer's visibility condition needs.
+    ///
+    /// ⚠️ The tag NAME here is an HMI tag name, not a PLC symbol path. The HMI tag is what carries the
+    /// connection to the PLC; binding an item straight to <c>"DB".Member</c> is not what the corpus
+    /// does. So a screen is only as bound as the HMI tag table behind it - which is why nothing here
+    /// invents one.
+    /// </summary>
+    private static void WriteTagBinding(XmlWriter w, Func<string> nextId, string property, string tag)
+    {
+        w.WriteStartElement("Hmi.Screen.Property");
+        w.WriteAttributeString("ID", nextId());
+        w.WriteAttributeString("CompositionName", "Properties");
+        w.WriteStartElement("AttributeList");
+        Attr(w, "Name", property);
+        w.WriteEndElement();
+
+        w.WriteStartElement("ObjectList");
+        w.WriteStartElement("Hmi.Dynamic.TagConnectionDynamic");
+        w.WriteAttributeString("ID", nextId());
+        w.WriteAttributeString("CompositionName", "Dynamic");
+        w.WriteStartElement("AttributeList");
+        Attr(w, "Indirect", "false");
+        w.WriteEndElement();
+        w.WriteStartElement("LinkList");
+        w.WriteStartElement("Tag");
+        w.WriteAttributeString("TargetID", "@OpenLink");
+        Attr(w, "Name", tag);
+        w.WriteEndElement();
+        w.WriteEndElement();
+        w.WriteEndElement(); // TagConnectionDynamic
+        w.WriteEndElement(); // ObjectList
+        w.WriteEndElement(); // Property
+    }
+
+    /// <summary>
+    /// The field that puts a live plant value on a screen - and the reason the emitter's previous
+    /// vocabulary could not build a working HMI at all.
+    ///
+    /// There are 23 of these on the five-screen reference corpus, against zero in anything this tool
+    /// had produced before 2026-08-17.
+    ///
+    /// MODE DEFAULTS TO <c>Output</c>. An <c>Input</c> or <c>InOutput</c> field writes to the PLC, so
+    /// a display field that silently became writable would hand an operator a control nobody decided
+    /// to give them. Writability is declared (<c>data-hmi-mode</c>), never inherited.
+    ///
+    /// An IOField with no <c>data-hmi-bind</c> is REFUSED at emit rather than written unbound: an
+    /// unbound field renders as <c>0</c> or <c>####</c> on the panel and looks exactly like a working
+    /// one that happens to read zero. That is the failure this project keeps naming - a green that
+    /// examined nothing - so it fails closed.
+    /// </summary>
+    private static void WriteIOField(XmlWriter w, Func<string> nextId, string name, IrItem i)
+    {
+        var mode = string.IsNullOrWhiteSpace(i.Mode) ? "Output" : i.Mode!;
+        var format = string.IsNullOrWhiteSpace(i.Format) ? "9999" : i.Format!;
+        var fieldLength = format.Count(char.IsDigit).ToString(CultureInfo.InvariantCulture);
+
+        w.WriteStartElement("Hmi.Screen.IOField");
+        w.WriteAttributeString("ID", nextId());
+        w.WriteAttributeString("CompositionName", "ScreenItems");
+        w.WriteStartElement("AttributeList");
+        // The two limit colours are the panel's own out-of-range indication. Kept at the corpus
+        // values: they are an ALARM channel, and H-105 rations exactly this.
+        Attr(w, "AboveUpperLimitColor", "237, 88, 97");
+        Attr(w, "BackColor", Colour(i.BackColor, "255, 255, 255"));
+        Attr(w, "BackFillStyle", "Solid");
+        Attr(w, "BelowLowerLimitColor", "241, 161, 44");
+        Attr(w, "BorderColor", Colour(i.BorderColor, "105, 105, 105"));
+        Attr(w, "BorderWidth", "1");
+        Attr(w, "BottomMargin", "2");
+        // H-203: no radius. The corpus uses 3; the house rule wins, as it does on Button.
+        Attr(w, "CornerRadius", "0");
+        Attr(w, "DataFormat", "Decimal");
+        // H-204: the corpus uses Double (a 3-D bevel); Solid is the flat equivalent.
+        Attr(w, "EdgeStyle", "Solid");
+        Attr(w, "Enabled", mode == "Output" ? "false" : "true");
+        Attr(w, "FieldLength", fieldLength);
+        Attr(w, "FitToLargest", "false");
+        Attr(w, "Flashing", "None");
+        Attr(w, "ForeColor", Colour(i.ForeColor, "0, 0, 0"));
+        Attr(w, "FormatPattern", format);
+        Geometry(w, i);
+        Attr(w, "HiddenInput", "false");
+        // Right-aligned: H-302 wants process values to line up on the decimal point, and a
+        // left-aligned number in a fixed-width field does not.
+        Attr(w, "HorizontalAlignment", "Right");
+        Attr(w, "LeftMargin", "3");
+        Attr(w, "Mode", mode);
+        Attr(w, "ObjectName", name);
+        Attr(w, "RightMargin", "2");
+        Attr(w, "ShiftDecimalPoint", "0");
+        Attr(w, "ShowLeadingZeros", "false");
+        Attr(w, "TabIndex", "-1");
+        Attr(w, "TextOrientation", "Horizontal");
+        Attr(w, "Top", ((int)Math.Round(i.Top)).ToString(CultureInfo.InvariantCulture));
+        Attr(w, "TopMargin", "2");
+        Attr(w, "Unit", i.Unit ?? string.Empty);
+        Attr(w, "UseDesignColorSchema", "false");
+        Attr(w, "UseTwoHandOperation", "false");
+        Attr(w, "VerticalAlignment", "Middle");
+        Attr(w, "Width", ((int)Math.Round(i.Width)).ToString(CultureInfo.InvariantCulture));
+        w.WriteEndElement();
+
+        w.WriteStartElement("ObjectList");
+        WriteFont(w, nextId, i);
+        WriteText(w, nextId, string.Empty, "HelpText");
+        WriteTagBinding(w, nextId, "ProcessValue", i.Bind!);
         w.WriteEndElement();
 
         w.WriteEndElement();
@@ -548,11 +766,42 @@ public sealed class UntypedElementException : Exception
              + Environment.NewLine + sample + more + Environment.NewLine
              + "Element mapping is EXPLICIT and never inferred - an unannotated element has not been "
              + "decided about, and guessing a type for it is a silent guess about what an operator sees. "
-             + "Tag each with data-hmi=\"Rectangle|Text|Button|Line|Circle|AlarmPlaceholder\", or with "
+             + "Tag each with data-hmi=\"Rectangle|Text|Button|Line|Circle|IOField|AlarmPlaceholder\", or with "
              + "data-hmi-ignore if it is a layout wrapper that should not become a screen object.";
     }
 
     private static string Trim(string t) => t.Length <= 24 ? t : t[..24] + "...";
+}
+
+/// <summary>
+/// An item that would reach the panel LOOKING connected and BEING disconnected.
+///
+/// Separate from <see cref="UntypedElementException"/> because the failure is the opposite shape: an
+/// untyped element is a question the author has not answered, whereas an unbound IOField is an answer
+/// that is silently wrong. It renders 0 or #### and reads as a working field showing zero.
+/// </summary>
+public sealed class UnboundFieldException : Exception
+{
+    public UnboundFieldException(IReadOnlyList<IrItem> items)
+        : base(Build(items))
+    {
+    }
+
+    private static string Build(IReadOnlyList<IrItem> items)
+    {
+        var sample = string.Join(Environment.NewLine, items.Take(8).Select(i =>
+            $"    {i.Type} at {i.Left:0},{i.Top:0} {i.Width:0}x{i.Height:0}"
+            + (string.IsNullOrWhiteSpace(i.Text) ? "" : $"  \"{i.Text}\"")));
+
+        var more = items.Count > 8 ? $"{Environment.NewLine}    ... and {items.Count - 8} more" : string.Empty;
+
+        return $"{items.Count} item(s) declare a connection and name nothing to connect to:"
+             + Environment.NewLine + sample + more + Environment.NewLine
+             + "An IOField needs data-hmi-bind=\"<hmi tag>\"; a navigation button needs a non-empty "
+             + "data-hmi-goto=\"<screen name>\". These are REFUSED rather than emitted unbound, because "
+             + "an unbound field imports clean, compiles clean, and displays a number that is not "
+             + "coming from the plant - which nobody can tell apart from a working one by looking.";
+    }
 }
 
 /// <summary>

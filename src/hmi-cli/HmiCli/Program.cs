@@ -299,7 +299,7 @@ switch (command)
         {
             result = Emitter.Emit(ir, screenName, number);
         }
-        catch (Exception ex) when (ex is UnsupportedItemTypeException or UntypedElementException or UnrepresentableStylingException)
+        catch (Exception ex) when (ex is UnsupportedItemTypeException or UntypedElementException or UnrepresentableStylingException or UnboundFieldException)
         {
             Console.Error.WriteLine(ex.Message);
             return ExitFindings;

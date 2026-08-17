@@ -70,7 +70,49 @@ public sealed record IrItem
     /// <summary>Declares H-205's carve-out: this element's motion IS the unacknowledged-alarm channel.</summary>
     [JsonPropertyName("alarmFlash")] public bool AlarmFlash { get; init; }
 
+    /// <summary>
+    /// The PLC tag this item's value is connected to (<c>data-hmi-bind</c>).
+    ///
+    /// 🔴 Captured since the flattener was written and DISCARDED by the emitter until 2026-08-17 -
+    /// the name was read into the IR and then dropped on the floor by a ternary whose two branches
+    /// were identical. Every screen this tool produced before that date was a STATIC PICTURE, and
+    /// nothing said so. It is now the ProcessValue dynamization on an IOField and the value
+    /// dynamization on a Text.
+    /// </summary>
     [JsonPropertyName("bind")] public string? Bind { get; init; }
+
+    /// <summary>
+    /// Screen this button navigates to (<c>data-hmi-goto</c>), emitted as an <c>ActivateScreen</c>
+    /// system function on the button's <c>KeyUp</c> event.
+    ///
+    /// <c>KeyUp</c> is harvested from a real Classic export - all four navigation buttons on the
+    /// reference screen use it. There is no <c>Click</c>.
+    /// </summary>
+    [JsonPropertyName("goto")] public string? GoTo { get; init; }
+
+    /// <summary>
+    /// IOField direction (<c>data-hmi-mode</c>): <c>Output</c> (display only), <c>Input</c> or
+    /// <c>InOutput</c>.
+    ///
+    /// DEFAULTS TO <c>Output</c> DELIBERATELY. An Input field lets an operator write to the PLC, so
+    /// defaulting to writable would make a display field into a control by omission - the kind of
+    /// surprise that is only discovered by someone changing a setpoint they meant to read.
+    /// Writability is opted into, never inherited.
+    /// </summary>
+    [JsonPropertyName("mode")] public string? Mode { get; init; }
+
+    /// <summary>
+    /// IOField display pattern (<c>data-hmi-format</c>), e.g. <c>99999.999</c>. Harvested shape: the
+    /// digit count before the point sets the integer width and after it the decimals.
+    /// </summary>
+    [JsonPropertyName("format")] public string? Format { get; init; }
+
+    /// <summary>
+    /// Engineering unit (<c>data-hmi-unit</c>). H-303 requires a unit on every process value, so this
+    /// exists to make satisfying it a property of the field rather than a separate text item that can
+    /// drift away from the number it belongs to.
+    /// </summary>
+    [JsonPropertyName("unit")] public string? Unit { get; init; }
 
     [JsonPropertyName("text")] public string? Text { get; init; }
 

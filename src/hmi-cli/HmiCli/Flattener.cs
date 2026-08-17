@@ -37,7 +37,14 @@ window.addEventListener('load', function () {
       left: r.left - root.left, top: r.top - root.top,
       width: r.width, height: r.height,
       zTier: isNaN(z) ? 0 : z,
-      interactive: !!(el.matches('button,a,input,select,textarea,[role=button]') || el.hasAttribute('data-hmi-interactive')),
+      // A WRITABLE IOField IS INTERACTIVE EVEN WHEN IT IS AUTHORED AS A <div>.
+      // Interactivity was derived from the HTML element alone, so an operator-writable setpoint
+      // written as <div data-hmi="IOField" data-hmi-mode="Input"> escaped H-401's 9 mm touch floor
+      // entirely - it is a touch target on the panel and was not one to the checker. What the PANEL
+      // does decides this, not what the markup happens to be made of.
+      interactive: !!(el.matches('button,a,input,select,textarea,[role=button]')
+                      || el.hasAttribute('data-hmi-interactive')
+                      || ['Input', 'InOutput'].includes(el.getAttribute('data-hmi-mode'))),
       leaf: el.children.length === 0,
       geometryless: geometryless,
       ignored: el.hasAttribute('data-hmi-ignore'),
@@ -50,6 +57,10 @@ window.addEventListener('load', function () {
       safetyCritical: el.hasAttribute('data-hmi-safety'),
       alarmFlash: el.hasAttribute('data-hmi-alarm'),
       bind: el.getAttribute('data-hmi-bind'),
+      goto: el.getAttribute('data-hmi-goto'),
+      mode: el.getAttribute('data-hmi-mode'),
+      format: el.getAttribute('data-hmi-format'),
+      unit: el.getAttribute('data-hmi-unit'),
       text: el.children.length === 0 ? (el.textContent || '').trim().slice(0, 80) : null,
       backColor: c.backgroundColor, foreColor: c.color, borderColor: c.borderTopColor,
       backgroundImage: c.backgroundImage, boxShadow: c.boxShadow, textShadow: c.textShadow,
