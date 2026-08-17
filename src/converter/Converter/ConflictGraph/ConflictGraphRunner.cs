@@ -170,13 +170,24 @@ public static class ConflictGraphRunner
         var unjudged = resolutions.Count(r => r.Resolution is not (SignalResolution.Resolved or SignalResolution.HarnessOnly));
         if (unjudged > 0 && !allowUnresolved)
         {
-            var notDeclared = resolutions.Count(r => r.Join == SignalJoinKind.NotDeclared);
+            // Counts BOTH shapes of "nobody stated where this lives": a signal missing from a map that
+            // exists, and a SUBMISSION signal in a document with no map at all. The second is the case
+            // that produced this defect — 70 of 70 — and quoting only the first would print the repair
+            // for the rarer half while staying silent about the common one. Operator `--signals` names
+            // are excluded: an unresolved path there is a WRONG PATH, not a missing declaration, and
+            // sending its user to write a `map` would be the wrong repair.
+            var notDeclared = resolutions.Count(r => r.Join == SignalJoinKind.NotDeclared)
+                + (map.Declared
+                    ? 0
+                    : resolutions.Count(r => r.Resolution == SignalResolution.Unresolved
+                                             && signals.Any(s => s.Origin == SignalOrigin.Submission
+                                                                 && string.Equals(s.Name, r.Signal, StringComparison.Ordinal))));
             return new ConflictGraphReport(
                 Computed: false,
                 NotComputedReason:
                     $"{unjudged} of {resolutions.Count} submission signal(s) could not be resolved to exactly one storage path "
                     + $"({resolutions.Count(r => r.Resolution == SignalResolution.Unresolved)} unresolved, {resolutions.Count(r => r.Resolution == SignalResolution.Ambiguous)} ambiguous"
-                    + $"; {notDeclared} of them stated no join at all). "
+                    + $"; {notDeclared} of them have NO DECLARED JOIN at all). "
                     + "An edge list computed over a scope that was mostly not looked at is empty for a reason that has nothing to do with conflicts, and at the gate that is indistinguishable from a clean program. "
                     + (notDeclared > 0
                         ? "*** A SUBMISSION SIGNAL IS THE SPECIFICATION'S NAME, NOT A STORAGE PATH (contract 2.8). *** Declare each one in `map.storage` as { owner?, path }, or in `map.harnessOnly` if it occupies no PLC storage — the second is a positive claim and turns a NOT CHECKED into a fact. "

@@ -3091,8 +3091,107 @@ consumers), so the fictitious cross-block multi-writers above are **structurally
 becoming edges: a block-local storage has all its writers in one block, and one block is not a
 conflict.
 
-15 tests; mutation-tested three ways — emit the key unconditionally (2 red), never declare ambiguity
-(1 red), guess `Deliverable` instead of `Unstated` (1 red).
+### 🔴 `--submission` reads `map.storage` — the declared join, which it did not until 2026-08-17
+
+***A SUBMISSION SPEAKS THE SPECIFICATION'S VOCABULARY BY DESIGN*** (D8: agents cite tag names, never
+registers), and this tool fed those names straight into a resolver expecting **storage paths**.
+**Measured on a real submission: 70 of 70 unresolved, and the graph correctly refused** — over a
+question it had never actually asked. ***The field carrying the join already existed in the same
+document and was read by nobody.*** Fifth instance in this codebase of one seam: a slot id, a
+vector-target prefix, an observable vocabulary, a completion signal and `ResultRegisterOf`'s tag-vs-
+cited-name have each failed the same way, and *this tool was built after the seam was diagnosed.*
+
+Contract §2.7's shape, read exactly as `Harness.Gate.MapDocument` reads it — **object form only**,
+because accepting a shape the gate ignores would let an author write a map that this tool honours and
+the gate does not:
+
+```
+map
+  storage      signal -> { owner?, path }   -- WHERE it lives. Two keys: an emitted string is not a schema
+  harnessOnly  [ signal ]                   -- a POSITIVE claim: occupies NO PLC storage
+```
+
+**Every resolution says WHICH JOIN carried it**, on its own line and in the `JOINS:` breakdown —
+*a resolution that cannot be explained is what made this invisible.*
+
+| join | means |
+|---|---|
+| `DeclaredStorage` | `map.storage` named the (owner, path) and it matched project storage. **The only join the contract endorses** |
+| `DeclaredHarnessOnly` | declared to occupy no PLC storage. No edge is possible and **that is a computed fact** — it does NOT count against the scope |
+| `ProjectPathMatch` | the document declares **no map at all** (or the name came from `--signals`), so the cited name was matched against the project's own paths. Weaker, includes a leaf match, and says so every time |
+| `NotDeclared` | the document declares a map and this signal is in neither half. **Unresolved, and no name-shape fallback is tried** |
+| `ContradictoryDeclaration` | in both halves, declared twice differently, or a malformed entry. **Refused — and `--allow-unresolved` does not reach it**, because that flag accepts names nobody looked at, not a document that answers one question twice |
+
+***THE REFUSAL IS NOT WEAKENED, WHICH IS THE POINT.*** Once a map is declared, a signal absent from it
+stays `Unresolved` **even when its name would have matched something** — a map with one hole in it is
+repaired by filling the hole. And a submission that declares no map behaves exactly as before, so the
+gate does not fire outside its scope.
+
+### The writer set is UNIONED across every spelling of one storage
+
+An FB writing its own `IO.Alarm` and a caller writing `iDB_X.IO.Alarm` are **one location under two
+spellings**, arriving as two groups because each is keyed on how it was written. Resolving to one of
+them reported **only that one's writers** — so a member the FB drives internally and a caller also
+drives read as *single-writer*, and the conflict was invisible. The equivalence class is now walked
+transitively and the writers unioned, with the pooling stated in the reason line.
+
+**Bounded**: an FB with **two** instance DBs has an internal write landing in both, so a member reached
+through more than one instance is `AMBIGUOUS` naming them — pooling there would invent a conflict
+between blocks that never share a location.
+
+### ⚠️ The second measured failure mode, and what it cost
+
+Supplying a slot's storage tags **directly** still resolved **0 of 68**, because the corpus references
+those members only **from inside the owning block** — never through the instance path the harness uses.
+That is now repaired by an **identity** join (the instance DB's own declared members say which
+`iDB.<suffix>` names the FB's member), not by a name shape. Verified on the committed corpus:
+`iDB_HxBoolEcho.EchoResponse` read `UNRESOLVED` before and `RESOLVED -> FB_HxBoolEcho.EchoResponse`
+after.
+
+### One join site, and a walk that fails when a second appears
+
+`SignalStorageResolver` is the only type in the assembly that turns a cited name into a location.
+***A SHARED HELPER IS NECESSARY AND NOT SUFFICIENT*** — `Harness.Map.MirroredSignal.JoinKey` carries
+the comment *"one definition, used by every path that joins the two documents"* and **the observe path
+was not one of them**. So `JoinSiteWalkTests` walks the compiled assembly and goes red when a type
+outside a declared allowlist reaches `StorageGroup`, with a denominator (bodies examined > 0) and a
+live negative control (the predicate is a parameter, retargeted at a type used everywhere). It is a
+fence around one gate: a join built directly on `ProjectUsageGraph.Usages`, or written in another
+assembly, is outside it.
+
+**38 tests** (15 `ConflictGraphTests` + 19 `ConflictGraphDeclaredJoinTests` + 4 `JoinSiteWalkTests`).
+**Mutation-tested 2026-08-17 against a 1,377-test baseline — every figure below was RUN, not
+predicted; the two rows marked † were measured after two later tests took the baseline to 1,379:**
+
+| mutation | red |
+|---|---|
+| ignore the declared join (always take the project-path match) | **9** |
+| fall back to a name match for a signal the map does not name | 1 |
+| drop the instance-alias arm from the project-path match | 1 |
+| drop the instance-alias arm from the declared match | 1 |
+| keep one spelling's writers instead of the union | **3** |
+| let `--allow-unresolved` cover a contradictory declaration | **3** |
+| treat a malformed `map` entry as a skip rather than a rejection | 1 |
+| pool a member reached through two instance DBs instead of refusing | 1 |
+| label a project-path match as `DeclaredStorage` | **3** |
+| emit `conflictEdges` unconditionally | **3** |
+| never declare ambiguity | 1 |
+| count only "missing from a map that exists", so a no-map submission is told nothing † | 1 |
+| **add a second name-to-storage join site to the assembly** | **1** — `JoinSiteWalkTests` |
+
+**The over-fire converse, run as deliberately as the refusals**: a new type in the assembly that
+touches no storage grouping leaves all 1,377 green — *a guard that fires on ordinary code is noise,
+and noise gets switched off.* A submission declaring no map still resolves by project path (2 red if
+that path is removed). And an operator `--signals` name that resolves to nothing is **not** reported
+as a missing declaration — *an unresolved path there is a wrong path, and sending its user to write a
+`map` would be the wrong repair.*
+
+⚠️ **What none of this establishes.** Every figure above is from the converter's own tests and from
+the **committed** `ir/test-project001` corpus. **Nothing here was re-measured against the real
+submission that produced the 70-of-70 finding**, and the `0 of 68` figure is quoted from the report
+that raised the defect, not re-taken — *a recorded fact and a fresh one are different evidence.* The
+shape of that second failure was reproduced on the committed corpus instead
+(`iDB_HxBoolEcho.EchoResponse`), which is evidence about the mechanism and not about that submission.
 
 ## 🔴 `claim` — X-J's enforcing half: `--allocate` now knows the reserved band (2026-08-14)
 

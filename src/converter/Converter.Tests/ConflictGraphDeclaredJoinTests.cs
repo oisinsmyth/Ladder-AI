@@ -454,6 +454,33 @@ public class ConflictGraphDeclaredJoinTests : IDisposable
         Assert.Equal(SignalJoinKind.ProjectPathMatch, Assert.Single(report.Signals).Join);
     }
 
+    // *** THE REFUSAL NAMES THE REPAIR FOR THE CASE THAT ACTUALLY HAPPENED. *** 70 of 70 unresolved was
+    // a document with NO map at all, and a message counting only "signals missing from a map that
+    // exists" prints the fix for the rarer half while staying silent about the common one.
+    [Fact]
+    public void TheRefusalNamesTheRepair_WhenASubmissionCitesSpecNamesAndDeclaresNoMap()
+    {
+        var report = RunSubmission("""
+        { "vectors": [ { "inputs": {}, "expectations": [ { "signal": "SPEC.NothingLikeAPath" } ] } ] }
+        """);
+
+        Assert.False(report.Computed);
+        Assert.Contains("1 of them have NO DECLARED JOIN at all", report.NotComputedReason);
+        Assert.Contains("map.storage", report.NotComputedReason);
+    }
+
+    // The converse of that count: an OPERATOR's `--signals` path that resolves to nothing is a WRONG
+    // PATH, not a missing declaration, and sending its user to write a `map` would be the wrong repair.
+    [Fact]
+    public void AnOperatorListMiss_IsNotReportedAsAMissingDeclaration()
+    {
+        var report = ConflictGraphRunner.Run(_dir, new[] { "NoSuchStorageAnywhere" }, allowUnresolved: false);
+
+        Assert.False(report.Computed);
+        Assert.Contains("0 of them have NO DECLARED JOIN at all", report.NotComputedReason);
+        Assert.DoesNotContain("contract 2.8", report.NotComputedReason);
+    }
+
     // ---- READING THE MAP -------------------------------------------------------------------------
 
     [Fact]
