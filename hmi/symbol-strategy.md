@@ -184,10 +184,54 @@ can wrap a bitmap and still be called a metafile:
 So the glossy 3-D set is the one that **does not rescale**: fine at 48–96 px, soft beyond ~90 px.
 The flat line-art set is the rescalable one, at a thousandth of the weight.
 
-**Recommendation: default to the WMF line-art set.** It is the high-performance-HMI aesthetic
-already argued for in `docs/17-hmi-conventions.md` — low chroma, outline-led, colour left free to
-mean alarm (H-102/H-105) — it rescales to any placement size in `sizing-standard.md`, and at ~1 KB
-it carries no memory exposure. Reserve the EMF set for a deliberate hero graphic at native size.
+🔴 **RETRACTED 2026-08-17, SAME DAY — "default to the WMF line-art set" WAS WRONG, AND THE ERROR WAS
+IN THE INSTRUMENT.** The WMF set was judged flat line art from **Inkscape** renders. **Inkscape's
+metafile importer silently drops gradient fills and leaves bare outlines.** Rendered through
+**GDI+ — the engine Windows and TIA actually use** — the identical bytes are **skeuomorphic metallic
+3-D**. Two renderers, opposite conclusions, same files. Verified by looking at both.
+
+**This is the project's own recurring failure, committed again:** a measurement was read as evidence
+about the subject when it was a property of the instrument. Same shape as the alarm-view retraction
+above, and as every denominator a tool had to learn to print. The format facts in the table (WMF is
+true vector, EMF wraps a bitmap) are **unaffected** — those came from metafile records, not renders.
+
+**Siemens ships NO flat equipment set.** The zip's three genres are gradient 3-D equipment, 306 ISA
+symbols that render **solid cyan**, and 268 flat *concept* pictograms that are not equipment.
+
+⚠️ **The cyan is REAL, not an artefact** — Inkscape and GDI+ agree on it, which settles the open
+question raised earlier. Those 306 need recolouring before use.
+
+**What survives the retraction:** at 48 px the artwork **is** still legible — elbow, cone-bottom
+silo, tee, storage tank and riveted silo all hold their silhouette, gradients softening into cylinder
+shading rather than mush. It is the wrong *genre*, not unusable art.
+
+### 🔴 And the comparison against Symbol Factory was partly a comparison with itself
+
+The zip's folder tree contains `Pipes/Segmented`, `Tanks/Cutaways`, `Pipes/Miscellaneous`,
+`Plant Facilities`, `Process Cooling`, `Pulp & Paper`, `Nature`, `Vehicles`, `Scales`. **Symbol
+Factory's published category list contains the same distinctive names** — *Segmented Pipes*, *Tank
+Cutaways*, *Misc. Pipes*, *Plant Facilities*. That is not a taxonomy two vendors invent
+independently.
+
+**The 3,008 WMF files TIA ships ARE Symbol Factory artwork**, corroborating the dead-link lead from
+the first sweep (*"already included in Siemens's WinCC through a licensing agreement"*) with on-disk
+evidence. So **$695 would buy SVG/XAML export, a search UI and newer categories — not the core art.**
+"Buy nothing" survives, for a stronger reason than it was first given.
+
+⚠️ **Origin is not rights.** The taxonomy match is strong evidence of *where the art came from*, and
+says nothing about what we may do with it. The licence question is still open.
+
+### 🔴 Correction: `Animate/` is NOT a device-state mechanism
+
+Recorded earlier as "86 running/stopped state pairs" and used as the **discriminator** against Symbol
+Factory. **Wrong** — they are *motion* frames: spinning fans, flowing arrows, flames, smoke.
+
+State variants do exist, but as **colour-tint families**, and the coverage is uneven:
+
+| class | green / red / yellow / grey | |
+|---|---|---|
+| Motors (11 shapes), Pumps (21), Pipes (11), Valves (7) | ✅ full family | valves also carry a true `open`/`close` pair |
+| **Tanks (12), Mixers (72)** | 🔴 **none** | **a failing class with no state mechanism at all** |
 
 ⚠️ **Unmeasured risk, raise before standardising on EMF:** the KTP900 allows 10,485,632 bytes and
 the project currently uses 225,232. **One EMF pump is 1,136,748 bytes on disk.** Whether TIA
@@ -229,11 +273,16 @@ Automation ecosystem then took a second one away.
 | cost | **free, installed** | $695 perpetual, per machine |
 | tanks / pumps / pipes / motors | ✅ 398 / 263 / 393 / 130 | ✅ all four (the only third-party set with **pipes and fittings**) |
 | heat exchangers | ✅ 163 | ⚠️ **not confirmed** — absent from every primary category list |
-| **state variants** | ✅ **86 `Animate` pairs** | 🔴 **NONE — the set is static** |
+| **state variants** | ⚠️ colour-tint families on motors/pumps/pipes/valves; **NONE on tanks or mixers** | 🔴 **NONE — the set is static** |
 | licence | unresolved (nothing found) | clear, one clause to check |
 
-**State variants are the discriminator.** The corpus already proved tag-driven picture swapping is
-how a pump shows running vs stopped, and it is step 3 below. A static set cannot do it at all.
+⚠️ **This table was first written with the wrong discriminator** ("86 `Animate` pairs") — see the
+correction above; those are motion frames. The honest comparison is narrower: the shipped set has
+state tints on four classes and **none on tanks**, which is one of the four we need.
+
+**And the row that really settles it is the first one.** The shipped WMF half *is* Symbol Factory
+artwork, so the two columns are not independent: paying $695 buys export, search and newer
+categories — **not artwork we do not already hold.**
 
 Worth knowing about the rest of that ecosystem, because it is the obvious place to look next and it
 does not repay the trip: **Ignition's own Perspective symbols are five components** (Motor, Pump,
