@@ -973,9 +973,15 @@ public class CopyLayerGeneratorTests
     }
 
     /// <summary>
-    /// <b>An arm window on a signal that gets no latch arms nothing</b>, so it is refused rather than
+    /// <b>An arm window that reaches NEITHER consumer arms nothing</b>, so it is refused rather than
     /// accepted and ignored — the "plausible artifact" failure, one field over from the one that made
     /// this work necessary.
+    ///
+    /// <para><b>The arm tag here is deliberately NOT a result source of the slot</b>, which is what makes
+    /// every case below reach neither consumer: no generated latch, and nothing
+    /// <c>SlotBinding.ArmRegisterOf</c> could resolve. The converse — the arm tag IS mirrored — is
+    /// <see cref="AN_ARM_WINDOW_ON_A_MIRRORED_LEVEL_IS_ADMITTED_AND_GENERATES_NO_LATCH"/>, and without
+    /// that pair this test would pass just as well against a generator that refuses every arm window.</para>
     /// </summary>
     [Theory]
     [InlineData(false, false, null, "it is mirrored Sampled")]
@@ -991,8 +997,86 @@ public class CopyLayerGeneratorTests
         }));
 
         Assert.False(result.Generated);
-        Assert.Contains(result.Refusals, r => r.Contains("would arm nothing", StringComparison.Ordinal));
+        Assert.Contains(result.Refusals, r => r.Contains("ARMS NOTHING", StringComparison.Ordinal));
         Assert.Contains(result.Refusals, r => r.Contains(expected, StringComparison.Ordinal));
+
+        // It names BOTH routes that work, not just the latch one — the whole defect in the old refusal
+        // was that it knew of one consumer and there are two.
+        Assert.Contains(result.Refusals, r => r.Contains("RESULT SOURCE OF THIS SLOT", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// 🔴 <b>D2: AN ARM WINDOW ON A PLAIN <c>Sampled</c> LEVEL IS ADMITTED, AND IT GENERATES NO LATCH.</b>
+    ///
+    /// <para><b>The refusal it replaces was written when <c>armedBy</c> had exactly one consumer</b> — the
+    /// generated latch's arm term, which genuinely needs a momentary signal. It has had a second since
+    /// 2026-08-17: <c>SlotBinding.ArmRegisterOf</c>, which arms the EVALUATION of a <c>Sampled</c> series
+    /// by reading the arm tag's own mirrored register, and needs no latch and no transience at all.</para>
+    ///
+    /// <para><b>Measured cost of the stale premise:</b> six arm windows on the live binding had to be
+    /// declared <c>transient</c> to be accepted, five of them on LEVELS, generating six latch registers
+    /// nothing would ever read — band 95 → 101, mirror 164 → 170, and a redeploy to carry it.</para>
+    ///
+    /// <para><b>The latch-register assertion is the load-bearing half.</b> Admitting the binding while
+    /// still emitting a latch would pass an admission-only test and would save not one register, which is
+    /// the entire point of the change.</para>
+    /// </summary>
+    [Fact]
+    public void AN_ARM_WINDOW_ON_A_MIRRORED_LEVEL_IS_ADMITTED_AND_GENERATES_NO_LATCH()
+    {
+        var binding = Binding(sources: new[]
+        {
+            // A LEVEL. Not transient, not re-arming, no LatchedBy — the exact shape the old rule refused.
+            new MirroredSignal("DB_Unit.Response", MirrorValueType.Bool, ArmedBy: "DB_Unit.Armed"),
+
+            // The arm tag, mirrored in the same result band. This is what ArmRegisterOf resolves against.
+            new MirroredSignal("DB_Unit.Armed", MirrorValueType.Bool),
+        });
+
+        var result = Generate(OneSlot(result: 4), binding);
+
+        Assert.True(result.Generated, string.Join(" | ", result.Refusals));
+
+        // *** NO LATCH REGISTER WAS BOUGHT. *** The saving is the whole reason for the change.
+        Assert.Empty(binding.LatchRegisterOffsets);
+        Assert.DoesNotContain(result.Plan!.Networks, n => n.Kind == CopyLayerNetworkKind.ResultLatch);
+
+        // And the window is genuinely readable: the observer resolves it to a register of this band.
+        Assert.True(binding.ArmRegisterOf("DB_Unit.Response") >= 0);
+    }
+
+    /// <summary>
+    /// <b>THE HALF OF THE OLD RULE THAT WAS NEVER STALE:</b> an arm tag this slot does not publish still
+    /// arms nothing observable, whatever the signal declares. Without this the narrowed condition would
+    /// admit a window that reads UNKNOWN at every frame and changes no verdict.
+    /// </summary>
+    [Fact]
+    public void AN_ARM_TAG_THE_SLOT_DOES_NOT_PUBLISH_IS_STILL_REFUSED()
+    {
+        var result = Generate(OneSlot(result: 4), Binding(sources: new[]
+        {
+            new MirroredSignal("DB_Unit.Response", MirrorValueType.Bool, ArmedBy: "DB_Unit.Armed"),
+            new MirroredSignal("DB_Unit.Other", MirrorValueType.Bool),
+        }));
+
+        Assert.False(result.Generated);
+        Assert.Contains(result.Refusals, r => r.Contains("ARMS NOTHING", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// A blank arm window is a caller error on ANY result source, not only on a phase-armed one — the check
+    /// used to sit inside the phase-armed loop, which was right while a latch was the only consumer.
+    /// </summary>
+    [Fact]
+    public void A_BLANK_ARM_WINDOW_IS_REFUSED_ON_A_PLAIN_SAMPLED_SIGNAL_TOO()
+    {
+        var result = Generate(OneSlot(result: 4), Binding(sources: new[]
+        {
+            new MirroredSignal("DB_Unit.Response", MirrorValueType.Bool, ArmedBy: "   "),
+        }));
+
+        Assert.False(result.Generated);
+        Assert.Contains(result.Refusals, r => r.Contains("BLANK arm window", StringComparison.Ordinal));
     }
 
     /// <summary>A blank arm window is a caller who meant to name one, and is not read as an absent one.</summary>

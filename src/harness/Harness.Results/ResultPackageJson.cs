@@ -136,6 +136,14 @@ public static class ResultPackageJson
                     ["retainedFrames"] = w.RetainedFrames,
                     ["seriesTruncated"] = w.SeriesTruncated,
 
+                    // 🔴 *** WHICH PART OF THE INDEX THE VERDICT WAS TAKEN OVER. *** `seriesTruncated: true`
+                    // was on every row of the measured package including the three that accused a
+                    // site's block from frames taken four minutes before the stimulus — it says only
+                    // THAT frames were dropped. 1 = every change retained; higher = a uniform sample at
+                    // that resolution, spanning the whole index. Emitted on EVERY row, so its absence
+                    // cannot be read as "not sampled".
+                    ["retentionStride"] = w.RetentionStride,
+
                     // 🔴 *** WHICH QUESTION THE FOLD WAS ASKED. *** Emitted on EVERY row including
                     // `Unstated`, rather than only when a shape was declared: an absent key reads as "fine"
                     // to everyone who did not write it, and `Unstated` is a positive fact about the vector

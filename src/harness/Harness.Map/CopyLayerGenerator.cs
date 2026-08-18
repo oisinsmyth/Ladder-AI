@@ -232,30 +232,67 @@ public static class CopyLayerGenerator
                         + "Refusing here rather than emitting the latch that compiles is deliberate: the wrong one is only discoverable on the rig.");
                 }
 
-                if (signal.ArmedBy is not null && !signal.ArmWindowStated)
-                {
-                    refusals.Add(
-                        $"result source '{signal.Tag}' on slot '{binding.SlotId}' states a BLANK arm window. "
-                        + "An empty ArmedBy is not the same as an absent one: absent claims no in-index window and leaves the whole index armed, while blank is a caller who meant to name a signal. "
-                        + "Name the tag, or omit the field.");
-                }
             }
 
-            // *** AN ARM ON A SIGNAL WITH NO GENERATED LATCH ARMS NOTHING, AND IS REFUSED RATHER THAN
-            // IGNORED. *** A caller who declares a window and gets no latch believes they have a
-            // phase-armed observation; what they actually have is a Sampled one, or a hand-authored latch
-            // whose arming is inside a block this generator does not write. Accepting the field silently
-            // is the "plausible artifact" failure, one field over from the one that made this work
-            // necessary.
-            foreach (var signal in sources.Where(s => s is { ArmWindowStated: true, PhaseArmed: false }))
+            // *** A BLANK ArmedBy IS A CALLER WHO MEANT TO NAME A SIGNAL, ON ANY RESULT SOURCE. *** This
+            // used to sit inside the PhaseArmed loop above, which was right while a latch was the only
+            // consumer of an arm window; with the evaluation consumer below it is not, so a blank on a
+            // non-latching source is now the same caller error and is refused in the same words.
+            foreach (var signal in sources.Where(s => s is { ArmedBy: not null, ArmWindowStated: false }))
             {
                 refusals.Add(
-                    $"result source '{signal.Tag}' on slot '{binding.SlotId}' names an arm window ('{signal.ArmWindow}') but gets NO GENERATED LATCH, so the arm would arm nothing. "
-                    + "An arm window is only meaningful on a signal declared BOTH Transient (so the copy layer emits a latch) AND RearmsEachIndex (so that latch is phase-armed). "
+                    $"result source '{signal.Tag}' on slot '{binding.SlotId}' states a BLANK arm window. "
+                    + "An empty ArmedBy is not the same as an absent one: absent claims no in-index window and leaves the whole index armed, while blank is a caller who meant to name a signal. "
+                    + "Name the tag, or omit the field.");
+            }
+
+            // 🔴 *** AN ARM WINDOW THAT ARMS NOTHING IS REFUSED — AND SINCE 2026-08-18 THERE ARE TWO WAYS
+            // TO ARM SOMETHING, NOT ONE (D2). ***
+            //
+            // The refusal used to read `ArmWindowStated && !PhaseArmed`, i.e. an arm window is only
+            // meaningful on a Transient && RearmsEachIndex signal. THAT WAS TRUE WHEN IT WAS WRITTEN AND
+            // STOPPED BEING TRUE ON 2026-08-17. `armedBy` then had exactly one consumer — the generated
+            // latch's arm term, which genuinely needs a momentary signal and a latch to arm. It has had a
+            // SECOND consumer since: `SlotBinding.ArmRegisterOf`, which arms the EVALUATION of a `Sampled`
+            // series. That consumer reads the arm tag's own mirrored register out of the same FC03 the
+            // harness already makes every poll, narrows the considered frames to the ones taken while the
+            // window was open, and NEEDS NO LATCH, NO STICKY BIT AND NO TRANSIENCE. A level is not merely
+            // acceptable to it — a level is the natural shape of a phase flag.
+            //
+            // *** WHAT THE STALE PREMISE COST, MEASURED ON THE LIVE BINDING: *** six arm windows had to be
+            // declared `transient` to get past this refusal, FIVE OF THEM ON LEVELS. Each generated a latch
+            // register nothing would ever read: band 95 -> 101, mirror 164 -> 170, which then forces a
+            // width change in a PLC source file declared in two places where a mismatch is silent, a
+            // re-import, a re-compile and a re-download. One narrowed condition removes all six.
+            //
+            // *** SO THE QUESTION IS "DOES THIS ARM ANYTHING", NOT "IS THERE A LATCH". *** It arms
+            // something if it arms a generated latch (PhaseArmed) OR if the arm tag is itself a result
+            // source of THIS slot, because that is precisely and only when ArmRegisterOf resolves it —
+            // the same condition, read off the same collection, so the two cannot drift apart. An arm tag
+            // the slot does not publish still arms nothing observable and is still refused, which is the
+            // half of the old rule that was never stale.
+            foreach (var signal in sources.Where(s => s is { ArmWindowStated: true, PhaseArmed: false }))
+            {
+                // BY TAG, matching SlotBinding.ArmRegisterOf exactly: that lookup compares ArmWindow
+                // against each result source's Tag, never against its JoinKey. Comparing anything else
+                // here would admit a binding whose window then reads as UNKNOWN at every frame.
+                var armIsMirrored = sources.Any(s =>
+                    s is not null && string.Equals(s.Tag, signal.ArmWindow, StringComparison.Ordinal));
+
+                if (armIsMirrored)
+                    continue;
+
+                refusals.Add(
+                    $"result source '{signal.Tag}' on slot '{binding.SlotId}' names an arm window ('{signal.ArmWindow}') that ARMS NOTHING. "
+                    + "An arm window has exactly two consumers, and this signal reaches neither. "
+                    + "(1) A GENERATED LATCH, which needs the signal declared BOTH Transient and RearmsEachIndex — "
                     + (string.IsNullOrWhiteSpace(signal.LatchedBy)
-                        ? "This signal declares neither, so it is mirrored Sampled."
-                        : $"This signal declares LatchedBy '{signal.LatchedBy}', and the arming of a hand-authored latch lives INSIDE that block — it is not this generator's to emit.")
-                    + " Declare both flags, or drop the arm window.");
+                        ? "this signal declares neither, so it is mirrored Sampled."
+                        : $"this signal declares LatchedBy '{signal.LatchedBy}', and the arming of a hand-authored latch lives INSIDE that block — it is not this generator's to emit.")
+                    + $" (2) THE EVALUATION WINDOW, which needs '{signal.ArmWindow}' to be a RESULT SOURCE OF THIS SLOT so the observer can read it out of the same result band — it is not one here, "
+                    + "so every frame would come back with the window state UNKNOWN and the declaration would change no verdict. "
+                    + $"THE TWO ROUTES THAT WORK: mirror '{signal.ArmWindow}' as a result source of this slot (no latch, no Transient, no extra register beyond the arm tag itself), "
+                    + "or declare this signal Transient AND RearmsEachIndex so the copy layer emits a phase-armed latch. Or drop the arm window.");
             }
 
             foreach (var (signal, where) in typed)

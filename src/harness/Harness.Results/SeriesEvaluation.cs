@@ -67,7 +67,13 @@ public enum ObservationSource
 /// <param name="PollsObserved">Poll rounds that read this slot at this index. The outermost denominator.</param>
 /// <param name="DistinctFrames">Times the result band's value changed. Compare with <paramref name="RetainedFrames"/>.</param>
 /// <param name="RetainedFrames">Frames actually kept. Fewer than <paramref name="DistinctFrames"/> means the cap bit.</param>
-/// <param name="SeriesTruncated">Whether later distinct frames were dropped. <b>A truncated series is not a record of the index.</b></param>
+/// <param name="SeriesTruncated">
+/// Whether the retention cap bit, so the index is represented by a SAMPLE rather than by every change —
+/// see <see cref="RetentionStride"/> for the resolution. <b>It does NOT mean the end of the index was
+/// dropped</b> (that was the prefix rule, replaced under D1), and on its own it never told a reader which
+/// part of the index a verdict was taken over: it was true on all three of the rows that accused a
+/// site's block on 2026-08-17.
+/// </param>
 public sealed record ObservationWindow(
     ObservationSource Source,
     int FramesRead,
@@ -100,6 +106,17 @@ public sealed record ObservationWindow(
     /// </summary>
     public TemporalShape Shape { get; init; } = TemporalShape.Unstated;
 
+    /// <summary>
+    /// 🔴 <b>WHICH PART OF THE INDEX THE RETAINED FRAMES REPRESENT: one frame per this many distinct band
+    /// changes. THE FIELD <see cref="SeriesTruncated"/> SHOULD HAVE BEEN ALL ALONG.</b>
+    ///
+    /// <para><c>seriesTruncated: true</c> was on every row of the measured package, including the three
+    /// that accused a site's block from frames taken four minutes before the stimulus — because it says
+    /// only THAT frames were dropped, and the reader's actual question is WHICH ONES. 1 is "every change";
+    /// higher is "a uniform sample at this resolution, spanning the whole index".</para>
+    /// </summary>
+    public int RetentionStride { get; init; } = 1;
+
     /// <summary>The one-line accounting, printed on every outcome rather than only the interesting ones.</summary>
     public string Describe() =>
         Source == ObservationSource.Latch
@@ -108,7 +125,11 @@ public sealed record ObservationWindow(
               + $"{FramesRead} frame(s) decoded, {FramesOutOfWindow} excluded as OUT OF WINDOW, "
               + $"deciding scan {DecidingScan} in [{FirstScan}, {LastScan}]. "
               + $"{PollsObserved} poll round(s), {DistinctFrames} distinct band value(s), {RetainedFrames} retained"
-              + (SeriesTruncated ? " — *** SERIES TRUNCATED, so this is not a record of the whole index. ***" : ".")
+              + (SeriesTruncated
+                  ? $" — *** SERIES TRUNCATED: the retained frames are a UNIFORM SAMPLE at 1 in {RetentionStride}, "
+                    + "spanning the whole index from the first change to the last. What was lost is time RESOLUTION, "
+                    + "not a part of the index. ***"
+                  : ".")
               + (WindowWasDeclared
                   ? $" Window at the completing frame: {WindowAtFinalFrame}."
                   : " NO ARM WINDOW WAS DECLARED for this signal, so no frame could be excluded and the window state is UNKNOWN rather than open.")
@@ -171,6 +192,18 @@ public sealed record ObservedFrame(long Scan, int PollRound, string? Value, Wind
 /// frame may be the model's own required return to inert. Design note:
 /// <c>docs/notes/observation-window-shapes.md</c>.</para>
 ///
+/// <para>🔴 <b>AND SINCE 2026-08-18 IT ASKS WHETHER IT MAY CONVICT AT ALL — the truncation-accusation
+/// rule (D1).</b> The retained series is bounded, so on a long index it is a SAMPLE. Every accusation this
+/// fold makes except one names a frame that was actually observed, and a frame that exists cannot be an
+/// artifact of dropping frames. <b>The exception is the total-absence branch</b>, which accuses from what
+/// was NOT seen — and that is precisely what a bounded retention can manufacture. Measured: on a
+/// 369-second index whose window opened at 313.8 s, the old prefix retention kept nothing inside the phase
+/// and three signals came back <c>Disagreed</c>, <b>65 of 65</b>, from frames taken more than four minutes
+/// before the stimulus. <b>So an absence may accuse only where the phase under test is demonstrably in
+/// what was retained</b> — an arm window declared AND open at some retained frame — otherwise the verdict
+/// is <see cref="AssertionState.NotObserved"/> with <see cref="SeriesEvaluation.PhaseNotCovered"/>. An
+/// UNTRUNCATED series holds every change, so its absence is real and it accuses exactly as before.</para>
+///
 /// <para><b>It does not consult <c>AssertionForm</c>, and that is a decision rather than an omission.</b>
 /// The tempting rule is <i>mixed + WHEN ⇒ Held, because a WHEN passes on having SEEN the response</i>.
 /// Applied to the skeleton's own off-by-one build, whose count ramps THROUGH the expected value on its way
@@ -190,6 +223,15 @@ public static class SeriesEvaluation
 
     /// <summary>The observed text of a <c>Latched</c> expectation on a signal for which no latch exists.</summary>
     public const string NoLatch = "<no latch register: a Latched expectation cannot be answered from the value register>";
+
+    /// <summary>
+    /// 🔴 <b>THE OBSERVED TEXT OF AN ACCUSATION WITHHELD BECAUSE THE RETAINED SERIES IS A SAMPLE AND
+    /// NOTHING SAYS THE PHASE UNDER TEST IS IN IT.</b> Its own token, because "we looked and it was never
+    /// there" and "we cannot show we looked at the right part of the index" send a reader to different
+    /// repairs.
+    /// </summary>
+    public const string PhaseNotCovered =
+        "<the retained series is a sample of the index and nothing shows it covers the phase under test>";
 
     /// <summary>
     /// The observed text of an expectation declared <see cref="TemporalShape.AtNoPoint"/> whose forbidden
@@ -246,7 +288,14 @@ public static class SeriesEvaluation
                 series.PollsObserved, series.DistinctFrames, series.RetainedFrames, series.Truncated)
             {
                 Shape = shape,
+                RetentionStride = series.Stride,
             };
+
+        // 🔴 *** IS THE PHASE UNDER TEST DEMONSTRABLY IN WHAT WE KEPT? *** It is exactly when the binding
+        // declared an arm window AND at least one retained frame was taken while that window was open.
+        // Anything else is UNKNOWN coverage — and unknown is not "covered", by the same rule that makes
+        // WindowState.Unknown not "open". This is the term the accusation rule below turns on.
+        var phaseRepresented = windowDeclared && inWindow.Length > 0;
 
         // *** A DECLARED WINDOW THAT NEVER OPENED IN ANY RETAINED FRAME IS NOT A DISAGREEMENT. *** Every
         // reading we hold is one the binding itself says is outside the window, so none of them is evidence
@@ -284,6 +333,48 @@ public static class SeriesEvaluation
 
         if (agreed.Length == 0)
         {
+            // 🔴 *** THE TRUNCATION-ACCUSATION RULE (D1, 2026-08-18). AN ARGUMENT FROM ABSENCE MAY NOT BE
+            // MADE OVER A SAMPLE WHOSE COVERAGE OF THE PHASE IS UNKNOWN. ***
+            //
+            // This branch is the ONLY verdict in the whole fold that accuses from what was NOT seen; every
+            // other accusation names a frame that WAS observed (a counterexample under Throughout, a
+            // fall-back under BecomesAndHolds, an occurrence under AtNoPoint, the declared instant under
+            // AtEnd), and a frame that exists cannot be an artifact of dropping frames. Absence can be,
+            // and on the measured run it was: three Disagreed rows, 65 of 65 considered, every one of
+            // those frames taken more than four minutes before the stimulus.
+            //
+            // Uniform decimation makes this rare rather than routine — the retained frames now span the
+            // whole index — but "spread across the index" is not "inside the phase", and the residual
+            // case is exactly the one that bit: a window narrower than the sample's resolution. So the
+            // rule fails closed, and it is deliberately keyed on `phaseRepresented` rather than on
+            // truncation alone: an untruncated series holds EVERY change, so its absence is real.
+            //
+            // *** THE REPAIR IS ONE FIELD, AND SINCE D2 IT COSTS NOTHING: *** declare `armedBy` on the
+            // signal. It no longer requires `transient`, generates no latch and consumes no register when
+            // the arm tag is already mirrored in the slot's band.
+            if (series.Truncated && !phaseRepresented)
+            {
+                return new AssertionOutcome(assertionId, signal, expected, PhaseNotCovered, AssertionState.NotObserved)
+                {
+                    Window = Accounting(ObservationSource.Series, considered.Length, 0, considered[^1].Scan),
+                    Detail =
+                        $"the expected value was not observed at any of the {considered.Length} considered frame(s) — "
+                        + $"BUT THOSE FRAMES ARE A SAMPLE. The band changed {series.DistinctFrames} time(s) and "
+                        + $"{series.RetainedFrames} frame(s) were retained, one per {series.Stride} change(s), and "
+                        + (windowDeclared
+                            ? "although an arm window IS declared for this signal, no retained frame was taken while it was open."
+                            : "NO ARM WINDOW IS DECLARED for this signal, so nothing here can say whether the phase under test is "
+                              + "represented among the frames that were kept.")
+                        + " *** THIS IS NOT A DISAGREEMENT AND MUST NOT BE ACTIONED AGAINST THE BLOCK. *** An accusation from ABSENCE "
+                        + "requires that the absence be over the right part of the index, and that cannot be shown here. "
+                        + "This exact shape — a long index, a sampled series, and no way to say the window was in it — is how three "
+                        + "accusations were built against a site's block on 2026-08-17 from frames taken minutes before the "
+                        + "stimulus. THE REPAIR: declare `armedBy` on this signal in the binding so the window travels in-band; it "
+                        + "needs no latch and no `transient`, and the verdict then becomes decidable in either direction. Or declare "
+                        + "the expectation `Latched`, so an occurrence survives sampling entirely.",
+                };
+            }
+
             // The only shape that may accuse: the expected value was not present at ANY instant this
             // harness looked inside the window. *** EVERY SHAPE AGREES ON THIS ONE. *** A universal claim
             // never held, an existential one never occurred, a becomes-and-holds never rose and a
@@ -546,14 +637,25 @@ public static class SeriesEvaluation
     {
         if (occurrences.Length == 0)
         {
+            var window = accounting(ObservationSource.Series, considered.Length, 0, considered[^1].Scan);
+
             return new AssertionOutcome(assertionId, signal, expected, ForbiddenValueAbsent(expected), AssertionState.Held)
             {
-                Window = accounting(ObservationSource.Series, considered.Length, 0, considered[^1].Scan),
+                Window = window,
                 Detail =
                     $"declared AT NO POINT: '{expected}' is the FORBIDDEN value, and it was not observed at any of the "
                     + $"{considered.Length} considered frame(s), spanning scans {considered[0].Scan} to {considered[^1].Scan}. "
                     + "⚠️ A pass on this shape is produced by SEEING NOTHING, which is also what a poll gap produces — it is only as "
-                    + "strong as the observability floor makes it, and it is not proof the value never appeared between polls.",
+                    + "strong as the observability floor makes it, and it is not proof the value never appeared between polls."
+                    // *** THE SAME WEAKNESS THE TRUNCATION-ACCUSATION RULE GATES, POINTING THE OTHER WAY. ***
+                    // It is not gated here because this is a PASS, and withholding a pass does not protect a
+                    // block from a false accusation — but a pass from absence over a SAMPLE is weaker again,
+                    // and a reader must meet that where the verdict is rather than in a retention doc.
+                    + (window.SeriesTruncated
+                        ? $" ⚠️ AND THE SERIES IS A SAMPLE: one frame per {window.RetentionStride} distinct band change(s). "
+                          + "An occurrence standing for fewer changes than that can fall between two retained frames, so this pass is "
+                          + "weaker than an untruncated one by exactly that resolution."
+                        : string.Empty),
             };
         }
 
@@ -708,6 +810,18 @@ public static class SeriesEvaluation
 /// </summary>
 public sealed record SeriesAccounting(int PollsObserved, int DistinctFrames, int RetainedFrames, bool Truncated)
 {
+    /// <summary>
+    /// 🔴 <b>ONE RETAINED FRAME PER THIS MANY DISTINCT BAND CHANGES — <c>ObservationSeries.Stride</c>,
+    /// carried through so the fold can say WHICH PART OF THE INDEX it judged.</b>
+    ///
+    /// <para>1 means every change was kept. Higher means the frames are a uniform sample spanning the whole
+    /// index at that resolution — which is a far weaker loss than the prefix rule that preceded it, and the
+    /// reason a truncated series is no longer simply "not a record of the index".</para>
+    ///
+    /// <para>Init-only with a default, so every hand-built fixture keeps compiling and keeps stating 1.</para>
+    /// </summary>
+    public int Stride { get; init; } = 1;
+
     /// <summary>Nothing was observed. <b>A positive value, so a consumer cannot mistake it for an omission.</b></summary>
     public static SeriesAccounting Nothing { get; } = new(0, 0, 0, false);
 }

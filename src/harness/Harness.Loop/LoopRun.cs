@@ -877,8 +877,15 @@ public static class LoopRun
         var assertionId = vector.Basis?.AssertionId ?? "<uncited>";
         var series = run.Observations;
 
+        // 🔴 *** THE STRIDE TRAVELS WITH THE DENOMINATORS, because the fold's decision on whether it may
+        // convict from an ABSENCE turns on WHICH PART OF THE INDEX was retained — and `Truncated` alone
+        // never answered that. It was true on all three of the rows that accused a site's block on
+        // 2026-08-17. ***
         var accounting = new SeriesAccounting(
-            series.PollsObserved, series.DistinctFrames, series.Frames.Count, series.Truncated);
+            series.PollsObserved, series.DistinctFrames, series.Frames.Count, series.Truncated)
+        {
+            Stride = series.Stride,
+        };
 
         return vector.Expectations.Select(e =>
         {

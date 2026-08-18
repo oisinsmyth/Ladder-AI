@@ -307,9 +307,26 @@ public sealed record MirroredSignal(
     /// window</b>, which leaves the whole index armed. That is the correct reading for a signal whose
     /// every firing inside an index is of interest.</para>
     ///
-    /// <para><b>It is inert on a signal with no generated latch, so it is REFUSED there</b> rather than
-    /// accepted and ignored: a caller who declares an arm and gets no latch believes they have a
-    /// phase-armed observation and has an unconditional one, or none.</para>
+    /// <para>🔴 <b>IT HAS TWO CONSUMERS, NOT ONE — AND THE SECOND NEEDS NEITHER A LATCH NOR TRANSIENCE
+    /// (D2, corrected 2026-08-18).</b></para>
+    /// <list type="number">
+    /// <item><b>THE GENERATED LATCH's arm term</b>, above. That one genuinely needs
+    /// <see cref="Transient"/> and <see cref="RearmsEachIndex"/>: there has to be a latch for an arm to
+    /// arm, and a sticky bit is only worth emitting for a signal too short to sample.</item>
+    /// <item><b>THE EVALUATION WINDOW</b> — <see cref="SlotBinding.ArmRegisterOf"/>, added 2026-08-17. It
+    /// reads this arm tag's OWN mirrored register out of the result band the harness already polls, and
+    /// narrows the frames a <c>Sampled</c> expectation is judged over to the ones taken while the window
+    /// was open. <b>No latch, no sticky bit, no transience, and no register beyond the arm tag's own.</b>
+    /// A LEVEL is the natural shape here — a phase flag that stands for the whole phase is exactly what
+    /// makes the window meaningful.</item>
+    /// </list>
+    ///
+    /// <para><b>It is refused only where it arms NEITHER</b> — no generated latch AND the arm tag is not a
+    /// result source of the same slot, so <see cref="SlotBinding.ArmRegisterOf"/> cannot resolve it and
+    /// every frame would read UNKNOWN. <b>Until 2026-08-18 the refusal read "no generated latch" alone</b>,
+    /// which was correct while consumer 1 was the only consumer and, once consumer 2 existed, forced six
+    /// arm windows on the live binding to be declared <see cref="Transient"/> — five of them on LEVELS —
+    /// to buy six latch registers nothing would ever read.</para>
     /// </summary>
     string? ArmedBy = null,
 
