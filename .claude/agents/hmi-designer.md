@@ -20,6 +20,16 @@ emitter was proven, and the four bugs that proved it).
    spacing scale. A rules layer costs nothing and fixes appearance entirely; every generation
    attempt that lacked one produced green-for-running and accent chrome, unprompted, every time.
 2. **Render headlessly and LOOK at the result.**
+   ⚠️ **The render is only evidence about the panel where the HTML is styled to MATCH what the
+   emitter forces.** The emitter sets `VerticalAlignment` unconditionally — `Middle` on every Button,
+   `Top` on every TextField — so a plain `<div data-hmi="Button">TEXT</div>`, which a browser renders
+   with the text at the TOP of the box, produces a picture the panel will never show. Measured
+   2026-08-17 across two lanes on the same project: one styled its buttons
+   `display:flex; align-items:center; justify-content:center` and rendered centred, the other did not
+   and rendered top-aligned, **and both emitted identical `<VerticalAlignment>Middle</>`.** Only the
+   review picture differed — which is worse than it sounds, because the render is the one instrument
+   that catches what no check can. **Wherever the emitter forces an attribute, style the HTML to
+   match, or the render is not evidence.**
 3. **Run the mechanical checks AND the render, both, every time.**
    🔴 **This is the single most important line here.** Measured directly: the linter missed a visible
    text collision (glyph overflow that does not intersect boxes) and an 8-cycle render loop missed
