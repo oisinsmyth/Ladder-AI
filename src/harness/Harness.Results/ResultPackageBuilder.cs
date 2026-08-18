@@ -43,9 +43,16 @@ public static class ResultPackageBuilder
     /// <see cref="SettlingState.NotEstablished"/> is what to pass when nothing established it, and it is
     /// deliberately not the same as <see cref="SettlingState.Settled"/>.
     /// </param>
+    /// <param name="enumerations">
+    /// 🔴 <b>THE ENUMERATIONS THIS RESULT'S CITATION IS JUDGED AGAINST — plural since 2026-08-18.</b> A
+    /// single one converts implicitly to a set of one and behaves identically. Where a submission carries
+    /// two subjects, an unqualified citation into a clause both declare produces
+    /// <c>RefusalReason.AmbiguousSubject</c> HERE as well as at the gate — so a package cannot read as
+    /// conclusive about a block on the strength of a citation nobody could place.
+    /// </param>
     public static ResultPackage Build(
         VectorDeclaration declaration,
-        AssertionEnumeration enumeration,
+        AssertionEnumerationSet enumerations,
         SlotRunResult run,
         int slotIndex,
         int waveIndex,
@@ -63,7 +70,7 @@ public static class ResultPackageBuilder
         int slotsCoveredByOneRead)
     {
         ArgumentNullException.ThrowIfNull(declaration);
-        ArgumentNullException.ThrowIfNull(enumeration);
+        ArgumentNullException.ThrowIfNull(enumerations);
         ArgumentNullException.ThrowIfNull(run);
         ArgumentNullException.ThrowIfNull(assertions);
         // `coRunners` is deliberately NOT null-checked: null is a meaningful value here (no slice was
@@ -72,7 +79,7 @@ public static class ResultPackageBuilder
 
         var admissibility = Admissibility.Check(
             declaration.Basis,
-            enumeration,
+            enumerations,
             declaration.Fidelity,
             declaration.AssertedBehaviours,
             declaration.Settling,

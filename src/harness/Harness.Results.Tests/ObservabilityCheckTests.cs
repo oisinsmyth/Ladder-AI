@@ -313,11 +313,21 @@ public class ObservabilityCheckTests
     [Fact]
     public void And_Admissibility_no_longer_takes_a_bool_for_it_either()
     {
-        var observabilityParameter = typeof(Admissibility)
-            .GetMethod(nameof(Admissibility.Check))!
-            .GetParameters()
-            .Single(p => p.Name == "observability");
+        // Asserted of EVERY `Check` overload — see the note in AdmissibilityTests: a second one arrived on
+        // 2026-08-18 and a bool creeping back into whichever one this did not resolve to would reopen the
+        // hole this test closes.
+        var overloads = typeof(Admissibility)
+            .GetMethods()
+            .Where(m => m.Name == nameof(Admissibility.Check))
+            .ToArray();
 
-        Assert.Equal(typeof(ObservabilityReport), observabilityParameter.ParameterType);
+        Assert.True(overloads.Length >= 2, $"expected both Check overloads; found {overloads.Length}.");
+
+        foreach (var overload in overloads)
+        {
+            var observabilityParameter = overload.GetParameters().Single(p => p.Name == "observability");
+
+            Assert.Equal(typeof(ObservabilityReport), observabilityParameter.ParameterType);
+        }
     }
 }

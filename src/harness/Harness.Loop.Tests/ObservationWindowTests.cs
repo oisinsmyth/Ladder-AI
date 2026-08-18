@@ -66,7 +66,8 @@ public class ObservationWindowTests
     private static SubmissionVector Vector(
         InstrumentationMode mode = InstrumentationMode.Sampled,
         string expected = "true",
-        string signal = ResponseSpec) =>
+        string signal = ResponseSpec,
+        TemporalShape temporalShape = TemporalShape.Unstated) =>
         new("V-T1", "S0", 0, new AgentIdentity("agent-b"),
             new Basis(ClauseId, AssertionIdValue),
             new Dictionary<string, string>
@@ -76,7 +77,7 @@ public class ObservationWindowTests
                 [TailRecoveryBlock.EndTag] = EndAt.ToString(),
             },
             TailRecoveryBlock.StartTag,
-            new[] { new ObservabilityDeclaration(signal, SignalNature.PersistentState, mode, 20, expected) },
+            new[] { new ObservabilityDeclaration(signal, SignalNature.PersistentState, mode, 20, expected, temporalShape) },
             AssertionForm.When,
 
             // 🔴 *** SETTLING IS DECLARED, AND IT WILL PASS — WHICH IS THE MEASURED SHAPE, NOT A
@@ -396,5 +397,80 @@ public class ObservationWindowTests
 
         var window = Assert.IsType<ObservationWindow>(package.Assertions[0].Window);
         Assert.Equal(window.FramesConsidered, window.FramesAgreed);
+    }
+
+    // -------------------------------------------------------------------------------------------------
+    // THE TEMPORAL SHAPE, PASSED THROUGH BY THE RUNNER — the observation-window model's last hop
+    // -------------------------------------------------------------------------------------------------
+
+    /// <summary>
+    /// 🔴 <b>THE RUNNER PASSES THE DECLARED SHAPE TO THE EVALUATOR, AND THIS IS WHAT PROVES IT.</b>
+    ///
+    /// <para><b>The evaluator has understood shapes since 2026-08-18 and the runner did not pass one</b> —
+    /// <c>SeriesEvaluation.Evaluate</c>'s shape parameter is trailing and optional, so the omission compiled,
+    /// ran, and reported <c>Unstated</c> for every expectation in every wave. The whole model was reachable
+    /// only by a caller that did not exist. Measured on the wave of 2026-08-18: three vectors, all
+    /// Inconclusive, <c>conclusiveAboutTheBlock: 0</c>, with 65 frames observed on two signals.</para>
+    ///
+    /// <para><b>Why one series and three shapes rather than one assertion.</b> A test asserting that a
+    /// declared shape "changes the verdict" passes for any change at all, including a change that broke the
+    /// fold. Here <b>one identical run yields three DIFFERENT states</b> — the unstated refusal, an
+    /// existential pass, and a single-instant disagreement — so the argument must be both consulted and
+    /// consulted correctly. Delete <c>e.Shape</c> from <c>LoopRun.Assertions</c> and all three collapse to
+    /// <c>Inconclusive</c>.</para>
+    /// </summary>
+    [Fact]
+    public void ONE_SERIES_UNDER_THREE_DECLARED_SHAPES_YIELDS_THREE_DIFFERENT_STATES()
+    {
+        // The did-not-run control, first: with no shape stated this series is the measured Inconclusive,
+        // and if it were anything else every comparison below would be against the wrong baseline.
+        var unstated = Run(Request(Vector()), out _);
+        Assert.Equal(AssertionState.Inconclusive, Assert.Single(unstated.Assertions).State);
+
+        // EXISTENTIAL: the response WAS present at some observed instant, and its later withdrawal is not
+        // part of the claim. A pass — and one the author had to type to get.
+        var atSomePoint = Run(Request(Vector(temporalShape: TemporalShape.AtSomePoint)), out _);
+        Assert.Equal(AssertionState.Held, Assert.Single(atSomePoint.Assertions).State);
+
+        // ONE DEFINED INSTANT: the last considered frame, which in this fixture is the withdrawn tail.
+        // A disagreement — the OPPOSITE verdict from the same frames, which is what makes this pair
+        // evidence about the shape rather than about the run.
+        var atEnd = Run(Request(Vector(temporalShape: TemporalShape.AtEnd)), out _);
+        Assert.Equal(AssertionState.Disagreed, Assert.Single(atEnd.Assertions).State);
+
+        Assert.Equal(3, new[]
+        {
+            Assert.Single(unstated.Assertions).State,
+            Assert.Single(atSomePoint.Assertions).State,
+            Assert.Single(atEnd.Assertions).State,
+        }.Distinct().Count());
+    }
+
+    /// <summary>
+    /// 🔴 <b>THE ACCUSATION RULE SURVIVES THE INTEGRATION: a sharp shape still refuses to accuse without a
+    /// declared arm window.</b>
+    ///
+    /// <para><c>Throughout</c> on this mixed series is the case the design note calls out — <i>"a shape may
+    /// accuse only on the strength of a frame known to be inside the phase"</i>. With no <c>armedBy</c> the
+    /// disagreeing frame may be the model's own inert tail, so the verdict stays <c>Inconclusive</c> and
+    /// names the repair. <b>Widening what can be SAID must never widen what PASSES — or what FAILS.</b></para>
+    /// </summary>
+    [Fact]
+    public void A_SHARP_SHAPE_STILL_REFUSES_TO_ACCUSE_WITH_NO_DECLARED_WINDOW()
+    {
+        var package = Run(Request(Vector(temporalShape: TemporalShape.Throughout)), out _);
+        var assertion = Assert.Single(package.Assertions);
+
+        Assert.Equal(AssertionState.Inconclusive, assertion.State);
+        Assert.False(assertion.SaysSomethingAboutTheBlock);
+        Assert.Contains("armedBy", package.WhatToDoNext, StringComparison.Ordinal);
+
+        // And the converse in the same breath, so this is not simply "Throughout never accuses": with the
+        // window declared the out-of-window tail stops counting, every remaining frame agrees, and the same
+        // shape over the same block HOLDS.
+        var windowed = Run(Request(Vector(temporalShape: TemporalShape.Throughout), declareTheArmWindow: true), out _);
+
+        Assert.Equal(AssertionState.Held, Assert.Single(windowed.Assertions).State);
+        Assert.True(windowed.ConclusiveAboutTheBlock);
     }
 }

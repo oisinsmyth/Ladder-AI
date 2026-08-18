@@ -172,9 +172,16 @@ public static class SubmissionGate
     /// <see cref="ConflictGraph.WithoutProvenance"/> is available but unprovenanced, which is a different
     /// and equally reportable state.
     /// </param>
+    /// <param name="enumerations">
+    /// 🔴 <b>THE ENUMERATIONS THIS SUBMISSION CITES INTO — PLURAL SINCE 2026-08-18.</b> A single
+    /// <c>AssertionEnumeration</c> converts implicitly to a set of one and behaves exactly as it did
+    /// before, which is what keeps every caller and every submission written before subjects existed on
+    /// the path it was written for. See <see cref="AssertionEnumerationSet"/> for why a citation must
+    /// resolve to (subject, clause, assertion) and why the assertion hash cannot break the tie.
+    /// </param>
     public static SubmissionReport Check(
         IReadOnlyList<SubmissionVector> vectors,
-        AssertionEnumeration enumeration,
+        AssertionEnumerationSet enumerations,
         FidelityDeclaration? fidelity,
         AgentIdentity blockAuthor,
         MirrorObservability map,
@@ -207,7 +214,7 @@ public static class SubmissionGate
         IReadOnlyList<string>? annotationFields = null)
     {
         ArgumentNullException.ThrowIfNull(vectors);
-        ArgumentNullException.ThrowIfNull(enumeration);
+        ArgumentNullException.ThrowIfNull(enumerations);
         ArgumentNullException.ThrowIfNull(map);
 
         var gates = new List<GateResult>();
@@ -222,18 +229,19 @@ public static class SubmissionGate
         gates.Add(UnknownFields(unknownFields, annotationFields));
         gates.Add(Schema(vectors));
         gates.Add(Authorship(vectors, blockAuthor));
-        gates.Add(BasisGate(vectors, enumeration));
+        gates.Add(SubjectResolution(vectors, enumerations));
+        gates.Add(BasisGate(vectors, enumerations));
         gates.Add(CitationShape(vectors));
-        gates.Add(IdsRecompute(enumeration));
-        gates.Add(RequiredObservations(vectors, enumeration));
-        gates.Add(EnumeratorIndependence(vectors, enumeration, blockAuthor));
-        gates.Add(AssertionFormAuthority(vectors, enumeration));
-        gates.Add(BoundsCurrency(vectors, enumeration));
+        gates.Add(IdsRecompute(enumerations));
+        gates.Add(RequiredObservations(vectors, enumerations));
+        gates.Add(EnumeratorIndependence(vectors, enumerations, blockAuthor));
+        gates.Add(AssertionFormAuthority(vectors, enumerations));
+        gates.Add(BoundsCurrency(vectors, enumerations));
         gates.Add(new GateResult("3c basis — faithful reading of the clause", GateStatus.Judgement, true, "none, ever",
             "whether the cited assertion is a faithful reading of the clause is what the independent author is for. It is recorded, never verified."));
         gates.Add(Fidelity(vectors, fidelity));
         gates.Add(FidelityAuthority(vectors, fidelity, blockAuthor));
-        gates.Add(Observability(vectors, enumeration, map, floorScans, runtimeCompression));
+        gates.Add(Observability(vectors, enumerations, map, floorScans, runtimeCompression));
         gates.Add(Settling(vectors));
         gates.Add(new GateResult("6b settling — does the condition imply the value is final", GateStatus.Judgement, true, "none, ever",
             "whether the declared settling condition really implies finality is judgement, informed by the model's fidelity declaration."));
@@ -401,23 +409,128 @@ public static class SubmissionGate
     }
 
     // -------------------------------------------------------------------------------------------------
+    // 3j — SUBJECT RESOLUTION: which enumeration does this citation mean?
+    // -------------------------------------------------------------------------------------------------
+
+    /// <summary>
+    /// 🔴 <b>A CITATION MUST RESOLVE TO (SUBJECT, CLAUSE, ASSERTION) — NOT TO (CLAUSE, ASSERTION).</b>
+    ///
+    /// <para><b>The measured problem, 2026-08-18.</b> A campaign gained a second enumeration with a
+    /// different subject, and <b>four clause IDs appear in both files</b>, each numbering its assertions
+    /// from A1. Until this gate existed a submission could hold one enumeration and a citation was checked
+    /// with two <c>Contains</c> calls against two flat sets, so the only way to submit a two-subject
+    /// campaign was to MERGE them — after which a citation to a shared clause is answered by whichever
+    /// entry survived the merge, the denominator reported is the union of two denominators and therefore
+    /// neither, and <b>the dangling-citation check passes having examined the wrong set.</b></para>
+    ///
+    /// <para>🔴 <b>AND THE ASSERTION ID CANNOT BE THE TIE-BREAKER — MEASURED, NOT ASSUMED.</b> An ID is
+    /// <c>clause + ":" + hash(normalised text)</c> with no subject term, so two subjects sharing a clause
+    /// AND a sentence mint the same ID; the live vessel enumeration records that this has already happened.
+    /// A resolver falling back on the hash would be right until the first shared sentence. <b>Matching is at
+    /// clause level and the hash is never consulted to disambiguate.</b></para>
+    ///
+    /// <para><b>A set of one cannot be ambiguous</b>, so every submission written before subjects existed
+    /// passes here without qualifying anything, and an unqualified citation still means the file that was
+    /// there first. What is refused is a clause declared by TWO subjects with nothing saying which.</para>
+    /// </summary>
+    private static GateResult SubjectResolution(IReadOnlyList<SubmissionVector> vectors, AssertionEnumerationSet enumerations)
+    {
+        const string name = "3j subject resolution";
+
+        if (enumerations.IsEmpty)
+        {
+            return new GateResult(name, GateStatus.Checked, false, nameof(AssertionEnumerationSet),
+                $"NOTHING EXAMINED — the submission supplies no assertion enumeration at all, so none of these {vectors.Count} citation(s) "
+                + "was resolved to anything. An empty set answers every citation the same way while reading exactly like a resolution that ran (FI-44).");
+        }
+
+        var problems = new List<string>();
+
+        // A subject declared twice is malformed before any citation is considered: a citation naming it
+        // would resolve to whichever came first, which is the pick this gate exists to prevent, wearing a
+        // QUALIFIED citation's clothes so nobody would think to look.
+        if (enumerations.DuplicateSubjects.Count > 0)
+        {
+            problems.Add($"{enumerations.DuplicateSubjects.Count} subject(s) are declared by more than one enumeration: "
+                + string.Join(", ", enumerations.DuplicateSubjects)
+                + ". Two enumerations under one subject name is two answers to one question, and a citation naming it would resolve to whichever was listed first.");
+        }
+
+        foreach (var v in vectors)
+        {
+            var resolution = enumerations.Resolve(v.Basis);
+            if (resolution.IsFailure)
+                problems.Add($"{v.Id}: {resolution.State} — {resolution.Detail}");
+        }
+
+        var shared = enumerations.SharedClauses();
+
+        // *** THE PASS STATES ITS OWN DENOMINATOR AND ITS OWN SCOPE. *** "every citation resolved" is also
+        // true of a submission whose subjects share no clause at all, where this gate had nothing to
+        // separate; saying which case it was is the difference between a check and a formality.
+        var scope = enumerations.IsSingle
+            ? "The submission carries ONE enumeration, so nothing could be ambiguous and no citation needed qualifying — this is the shape every submission had before subjects existed, and it behaves exactly as it did."
+            : shared.Count == 0
+                ? $"The submission carries {enumerations.Enumerations.Count} subjects ({string.Join(", ", enumerations.Subjects)}) that share NO clause, so every unqualified citation had exactly one home. Nothing here was contested."
+                : $"The submission carries {enumerations.Enumerations.Count} subjects ({string.Join(", ", enumerations.Subjects)}) sharing {shared.Count} clause(s) — {string.Join(", ", shared)} — and every citation into those resolved to exactly one subject.";
+
+        return new GateResult(name, GateStatus.Checked, problems.Count == 0, nameof(AssertionEnumerationSet),
+            problems.Count == 0
+                ? $"all {vectors.Count} citation(s) resolve to exactly one subject. {scope} Denominators: {enumerations.DenominatorText()}."
+                : string.Join(" | ", problems));
+    }
+
+    /// <summary>
+    /// Each vector paired with the enumeration its citation resolved to.
+    ///
+    /// <para><b>Resolved ONCE and shared, rather than re-derived per gate.</b> Six gates below need to know
+    /// which denominator a vector cites into, and six independent derivations of one answer is how the loop
+    /// and the CLI came to disagree about twelve gate inputs — the defect <c>GateInputs</c> exists to
+    /// prevent, one component in.</para>
+    /// </summary>
+    private static (SubmissionVector Vector, AssertionEnumeration? Enumeration)[] Resolved(
+        IReadOnlyList<SubmissionVector> vectors, AssertionEnumerationSet enumerations) =>
+        vectors.Select(v => (v, enumerations.Resolve(v.Basis).Enumeration)).ToArray();
+
+    /// <summary>
+    /// The line a per-vector gate adds when some of its subjects could not be placed.
+    ///
+    /// <para>🔴 <b>AN UNRESOLVED VECTOR IS SKIPPED AND SAID SO — NEVER SKIPPED SILENTLY.</b> A gate that
+    /// quietly dropped the vectors it could not place would report a pass over the remainder, and where
+    /// EVERY citation is ambiguous it would examine nothing and pass. Empty is not clean.</para>
+    /// </summary>
+    private static string? UnresolvedNote((SubmissionVector Vector, AssertionEnumeration? Enumeration)[] resolved)
+    {
+        var unresolved = resolved.Where(r => r.Enumeration is null && r.Vector.Basis is not null).ToArray();
+
+        return unresolved.Length == 0
+            ? null
+            : $"{unresolved.Length} of {resolved.Length} vector(s) were NOT examined by this gate because their citation resolves to no single subject "
+              + $"({string.Join(", ", unresolved.Select(r => r.Vector.Id))}) — see gate 3j. A check that could not be made on some of its subjects has not passed on them.";
+    }
+
+    // -------------------------------------------------------------------------------------------------
     // 3 — basis, 4 — fidelity, 6 — settling: delegated to Admissibility, which already computes them
     // -------------------------------------------------------------------------------------------------
 
-    private static GateResult BasisGate(IReadOnlyList<SubmissionVector> vectors, AssertionEnumeration enumeration)
+    private static GateResult BasisGate(IReadOnlyList<SubmissionVector> vectors, AssertionEnumerationSet enumerations)
     {
         var problems = vectors
-            .SelectMany(v => Admissibility.Check(v.Basis, enumeration, FidelityDeclaration.Of("<n/a>", new[] { "x" }, null, true),
+            .SelectMany(v => Admissibility.Check(v.Basis, enumerations, FidelityDeclaration.Of("<n/a>", new[] { "x" }, null, true),
                     Array.Empty<string>(), new SettlingDeclaration("n/a", Array.Empty<string>()), v.CompletionSignal,
                     new AgentIdentity("a"), new AgentIdentity("b"), Passing)
                 .Refusals
                 .Where(r => r.Reason is RefusalReason.BasisNotCited or RefusalReason.ClauseNotEnumerated
-                                     or RefusalReason.AssertionNotEnumerated or RefusalReason.EnumerationEmpty)
+                                     or RefusalReason.AssertionNotEnumerated or RefusalReason.EnumerationEmpty
+                                     or RefusalReason.AmbiguousSubject or RefusalReason.SubjectNotEnumerated)
                 .Select(r => $"{v.Id}: {r.Reason} — {r.Detail}"))
             .ToArray();
 
+        // *** THE DENOMINATOR IS STATED PER SUBJECT AND NEVER SUMMED. *** Summed over two subjects the
+        // total is the coverage denominator of neither, and a reader taking a coverage figure from this
+        // line would be quoting a number that does not exist.
         return new GateResult("3 basis — clause AND assertion", GateStatus.Checked, problems.Length == 0, nameof(Admissibility),
-            problems.Length == 0 ? $"every citation resolves into an enumeration of {enumeration.Assertions.Count} assertion(s)." : string.Join(" | ", problems));
+            problems.Length == 0 ? $"every citation resolves into {enumerations.DenominatorText()}." : string.Join(" | ", problems));
     }
 
     private static GateResult Fidelity(IReadOnlyList<SubmissionVector> vectors, FidelityDeclaration? fidelity)
@@ -523,25 +636,52 @@ public static class SubmissionGate
     /// assert about it, and the vector author's citation stops being a second reading. An UNRECORDED
     /// enumerator is NOT CHECKED, never a pass: unknown is not independent.</para>
     /// </summary>
-    private static GateResult EnumeratorIndependence(IReadOnlyList<SubmissionVector> vectors, AssertionEnumeration enumeration, AgentIdentity blockAuthor)
+    /// <remarks>
+    /// <b>EVERY enumeration in the set must clear this, not the one that happens to be first.</b> A
+    /// submission whose vessel denominator was written by the vessel block's author is exactly as
+    /// correlated as one whose only denominator was — and it would sit behind a valve enumeration with an
+    /// impeccable third-party enumerator. An UNRECORDED enumerator on ANY of them is NOT CHECKED for the
+    /// whole gate: a partially-attributed set is not an attributed one.
+    /// </remarks>
+    private static GateResult EnumeratorIndependence(IReadOnlyList<SubmissionVector> vectors, AssertionEnumerationSet enumerations, AgentIdentity blockAuthor)
     {
-        if (!enumeration.Enumerator.IsRecorded)
+        var unattributed = enumerations.Enumerations.Where(e => !e.Enumerator.IsRecorded).ToArray();
+
+        if (enumerations.IsEmpty || unattributed.Length > 0)
         {
+            var which = enumerations.IsEmpty
+                ? "no enumeration was supplied"
+                : enumerations.IsSingle
+                    ? "the enumeration does not record who produced it"
+                    : $"{unattributed.Length} of {enumerations.Enumerations.Count} enumerations record no enumerator ({string.Join(", ", unattributed.Select(e => AssertionEnumerationSet.DisplaySubject(e.Subject)))})";
+
             return GateResult.CouldNotRun("3d enumerator independence", NotCheckedReason.AwaitingAnArtifactThatCouldExist, "the enumeration's own identity field",
-                "the enumeration does not record who produced it, so it cannot be shown independent of the block's author. If the block's author decomposed the requirement, D6's independence is lost AT THE DENOMINATOR and citing into it buys nothing. Unknown is not independent.");
+                $"{which}, so it cannot be shown independent of the block's author. If the block's author decomposed the requirement, D6's independence is lost AT THE DENOMINATOR and citing into it buys nothing. Unknown is not independent.");
         }
 
         var problems = new List<string>();
 
-        if (blockAuthor.IsRecorded && enumeration.Enumerator.SameAs(blockAuthor))
-            problems.Add($"'{enumeration.Enumerator}' both wrote the block and enumerated its assertions. The denominator is then the block author's own reading of the requirement, and a vector citing into it is agreeing with the block by construction.");
+        foreach (var enumeration in enumerations.Enumerations)
+        {
+            var where = enumerations.IsSingle ? string.Empty : $"[{AssertionEnumerationSet.DisplaySubject(enumeration.Subject)}] ";
 
-        foreach (var v in vectors.Where(v => v.Author.IsRecorded && enumeration.Enumerator.SameAs(v.Author)))
-            problems.Add($"{v.Id}: '{enumeration.Enumerator}' both enumerated the assertions and wrote this vector. The enumeration is meant to be a THIRD party to both authors.");
+            if (blockAuthor.IsRecorded && enumeration.Enumerator.SameAs(blockAuthor))
+                problems.Add($"{where}'{enumeration.Enumerator}' both wrote the block and enumerated its assertions. The denominator is then the block author's own reading of the requirement, and a vector citing into it is agreeing with the block by construction.");
+
+            foreach (var v in vectors.Where(v => v.Author.IsRecorded && enumeration.Enumerator.SameAs(v.Author)))
+                problems.Add($"{v.Id}: {where}'{enumeration.Enumerator}' both enumerated the assertions and wrote this vector. The enumeration is meant to be a THIRD party to both authors.");
+        }
+
+        var producers = enumerations.Enumerations
+            .Select(e => e.Enumerator.ToString())
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
 
         return new GateResult("3d enumerator independence", GateStatus.Checked, problems.Count == 0, nameof(AgentIdentity),
             problems.Count == 0
-                ? $"the enumeration was produced by '{enumeration.Enumerator}', who is neither the block's author nor any vector's."
+                ? enumerations.IsSingle
+                    ? $"the enumeration was produced by '{enumerations.Enumerations[0].Enumerator}', who is neither the block's author nor any vector's."
+                    : $"all {enumerations.Enumerations.Count} enumerations were produced by {string.Join(", ", producers.Select(p => $"'{p}'"))}, none of whom is the block's author or any vector's."
                 : string.Join(" | ", problems));
     }
 
@@ -593,65 +733,93 @@ public static class SubmissionGate
     /// be.</b> An enumeration carrying no normalised text is therefore NOT CHECKED — not a pass. The
     /// projection that omits the texts is exactly the one a compromised stamper would emit.</para>
     /// </summary>
-    private static GateResult IdsRecompute(AssertionEnumeration enumeration)
+    /// <remarks>
+    /// <b>Run over EVERY enumeration in the set, each against its OWN clause set.</b> An ID is scoped to
+    /// its clause and now, transitively, to its subject: recomputing a vessel assertion against the union
+    /// of both clause sets would accept an ID scoped to the wrong file, which is the merge this gate table
+    /// stopped relying on. One enumeration carrying no normalised text takes the WHOLE gate to NOT CHECKED
+    /// — a partially-verifiable set is not a verified one, and the unverified half is exactly where a
+    /// wrong ID would sit.
+    /// </remarks>
+    private static GateResult IdsRecompute(AssertionEnumerationSet enumerations)
     {
         const string name = "3g assertion IDs recompute";
 
-        if (enumeration.CarriesNoNormalisedText)
+        var untexted = enumerations.Enumerations.Where(e => e.CarriesNoNormalisedText).ToArray();
+
+        if (enumerations.IsEmpty || untexted.Length > 0)
         {
+            var which = enumerations.IsEmpty
+                ? "no enumeration was supplied, so nothing"
+                : enumerations.IsSingle
+                    ? "the enumeration carries no normalised text, so no ID"
+                    : $"{untexted.Length} of {enumerations.Enumerations.Count} enumerations carry no normalised text ({string.Join(", ", untexted.Select(e => AssertionEnumerationSet.DisplaySubject(e.Subject)))}), so their IDs";
+
             return GateResult.CouldNotRun(name, NotCheckedReason.AwaitingAnArtifactThatCouldExist, "normalised_text in the enumeration projection",
-                "the enumeration carries no normalised text, so no ID could be recomputed and the STAMPER'S OUTPUT WAS TAKEN ON TRUST. "
+                $"{which} could be recomputed and the STAMPER'S OUTPUT WAS TAKEN ON TRUST. "
                 + "§3.4 permits a stamper with no independence from the block or vector author ONLY because this recomputation happens; without it "
                 + "a hand-written or altered hex string is indistinguishable from a computed one. Emit `normalisedTexts` alongside `assertions`.");
         }
 
         var problems = new List<string>();
 
+        foreach (var enumeration in enumerations.Enumerations)
+            RecomputeOne(enumeration, enumerations.IsSingle, problems);
+
+        var total = enumerations.Enumerations.Sum(e => e.Assertions.Count);
+
+        return new GateResult(name, GateStatus.Checked, problems.Count == 0, nameof(AssertionId),
+            problems.Count == 0
+                ? enumerations.IsSingle
+                    ? $"all {total} assertion ID(s) recompute from their own normalised text. The stamper is verified rather than trusted."
+                    : $"all {total} assertion ID(s) across {enumerations.Enumerations.Count} subjects recompute from their own normalised text, each against ITS OWN clause set. The stamper is verified rather than trusted."
+                : string.Join(" | ", problems));
+    }
+
+    private static void RecomputeOne(AssertionEnumeration enumeration, bool single, List<string> problems)
+    {
+        var where = single ? string.Empty : $"[{AssertionEnumerationSet.DisplaySubject(enumeration.Subject)}] ";
+
         foreach (var (id, text) in enumeration.NormalisedTexts!.OrderBy(e => e.Key, StringComparer.Ordinal))
         {
             if (!enumeration.Assertions.Contains(id))
             {
-                problems.Add($"'{id}' has a normalised text but is not in the assertion set. The projection disagrees with itself, and there is no way to tell which half is right.");
+                problems.Add($"{where}'{id}' has a normalised text but is not in the assertion set. The projection disagrees with itself, and there is no way to tell which half is right.");
                 continue;
             }
 
             if (!AssertionId.TryParse(id, out var clauseId, out _))
             {
-                problems.Add($"'{id}' is not an assertion ID (<clause>:<six lowercase hex>), so nothing can be recomputed for it.");
+                problems.Add($"{where}'{id}' is not an assertion ID (<clause>:<six lowercase hex>), so nothing can be recomputed for it.");
                 continue;
             }
 
             if (!enumeration.Clauses.Contains(clauseId))
             {
-                problems.Add($"'{id}' names clause '{clauseId}', which is not in the enumeration's clause set. An ID is scoped to its clause, so this one is scoped to nothing.");
+                problems.Add($"{where}'{id}' names clause '{clauseId}', which is not in the enumeration's clause set. An ID is scoped to its clause, so this one is scoped to nothing.");
                 continue;
             }
 
             if (AssertionId.Normalise(text) != text)
             {
-                problems.Add($"'{id}': the supplied text is not itself normalised (§3.1). Normalising it here would change the ID being checked, so the check is refused rather than made to pass.");
+                problems.Add($"{where}'{id}': the supplied text is not itself normalised (§3.1). Normalising it here would change the ID being checked, so the check is refused rather than made to pass.");
                 continue;
             }
 
             var recomputed = AssertionId.Compute(clauseId, text);
             if (!string.Equals(recomputed, id, StringComparison.Ordinal))
             {
-                problems.Add($"'{id}' DOES NOT RECOMPUTE — its own normalised text hashes to '{recomputed}'. Either the text was edited without re-stamping (every citation to '{id}' is then STALE, §3.2) or the ID was not computed from this text at all.");
+                problems.Add($"{where}'{id}' DOES NOT RECOMPUTE — its own normalised text hashes to '{recomputed}'. Either the text was edited without re-stamping (every citation to '{id}' is then STALE, §3.2) or the ID was not computed from this text at all.");
             }
         }
 
         var uncovered = enumeration.Assertions.Where(a => enumeration.NormalisedTextOf(a) is null).ToArray();
         if (uncovered.Length > 0)
         {
-            problems.Add($"{uncovered.Length} assertion(s) carry no normalised text and were NOT recomputed: {string.Join(", ", uncovered.OrderBy(a => a, StringComparer.Ordinal).Take(5))}"
+            problems.Add($"{where}{uncovered.Length} assertion(s) carry no normalised text and were NOT recomputed: {string.Join(", ", uncovered.OrderBy(a => a, StringComparer.Ordinal).Take(5))}"
                 + (uncovered.Length > 5 ? ", …" : string.Empty)
                 + ". A partially-verifiable enumeration is not a verified one — the unverified ones are exactly where a wrong ID would sit.");
         }
-
-        return new GateResult(name, GateStatus.Checked, problems.Count == 0, nameof(AssertionId),
-            problems.Count == 0
-                ? $"all {enumeration.Assertions.Count} assertion ID(s) recompute from their own normalised text. The stamper is verified rather than trusted."
-                : string.Join(" | ", problems));
     }
 
     /// <summary>
@@ -673,22 +841,36 @@ public static class SubmissionGate
     /// output was renamed. Closing AMB-14 by editing an assertion's text to name both signals would give
     /// that property away to fix something that lives beside the sentence.</para>
     /// </summary>
-    private static GateResult RequiredObservations(IReadOnlyList<SubmissionVector> vectors, AssertionEnumeration enumeration)
+    private static GateResult RequiredObservations(IReadOnlyList<SubmissionVector> vectors, AssertionEnumerationSet enumerations)
     {
         const string name = "3h required observations (AMB-14)";
 
-        if (enumeration.CarriesNoRequiredObservations)
+        var resolved = Resolved(vectors, enumerations);
+
+        // *** THE CONDITION IS ASKED OF THE ENUMERATIONS THESE VECTORS ACTUALLY CITE INTO. *** Asking it of
+        // the whole set would let a fully-declared valve enumeration carry an undeclared vessel one through;
+        // asking it of a merge would compare a citation against a table assembled from both.
+        var consulted = resolved.Where(r => r.Enumeration is not null).Select(r => r.Enumeration!).Distinct().ToArray();
+        var undeclared = consulted.Where(e => e.CarriesNoRequiredObservations).ToArray();
+
+        if (enumerations.IsEmpty || consulted.Length == 0 || undeclared.Length > 0)
         {
+            var which = enumerations.IsEmpty || consulted.Length == 0
+                ? "no enumeration this submission cites into could be identified, so nothing"
+                : enumerations.IsSingle
+                    ? "the enumeration declares no required observations, so no citation"
+                    : $"{undeclared.Length} of the {consulted.Length} enumerations these vectors cite into declare no required observations ({string.Join(", ", undeclared.Select(e => AssertionEnumerationSet.DisplaySubject(e.Subject)))}), so their citations";
+
             return GateResult.CouldNotRun(name, NotCheckedReason.AwaitingAnArtifactThatCouldExist, "response_signal + also_requires_observation_of in the enumeration",
-                "the enumeration declares no required observations, so no citation was checked against the signals it depends on. "
+                $"{which} was checked against the signals it depends on. "
                 + "A RELATIONAL assertion is the case that matters: cite one, expect on one of its two outputs, never observe the other, and the relation is untested while everything reports green.");
         }
 
         var problems = new List<string>();
 
-        foreach (var v in vectors)
+        foreach (var (v, enumeration) in resolved)
         {
-            if (v.Basis is null || string.IsNullOrWhiteSpace(v.Basis.AssertionId))
+            if (v.Basis is null || string.IsNullOrWhiteSpace(v.Basis.AssertionId) || enumeration is null)
                 continue;
 
             var required = enumeration.RequiredObservationsOf(v.Basis.AssertionId);
@@ -716,6 +898,10 @@ public static class SubmissionGate
                         : "The assertion's response is that signal; a vector that never observes it cannot have tested the assertion it cites."));
             }
         }
+
+        var unresolved = UnresolvedNote(resolved);
+        if (unresolved is not null)
+            problems.Add(unresolved);
 
         return new GateResult(name, GateStatus.Checked, problems.Count == 0, nameof(AssertionEnumeration),
             problems.Count == 0
@@ -760,15 +946,33 @@ public static class SubmissionGate
     /// cannot say, and is a <b>refusal</b> where the enumeration names a bound the vector claims does not
     /// apply.</para>
     /// </summary>
-    private static GateResult BoundsCurrency(IReadOnlyList<SubmissionVector> vectors, AssertionEnumeration enumeration)
+    /// <remarks>
+    /// 🔴 <b>THE TABLE IS THE ONE THE VECTOR'S OWN SUBJECT PUBLISHES — NEVER A MERGE OF ALL OF THEM.</b>
+    /// Bound names are BARE (<c>persistence_threshold</c>), carrying no subject and no clause, so two
+    /// subject files' tables collide by name wherever they share one. Measured on the live campaign:
+    /// <b>9 bound names appear in both enumerations.</b> Their values agree today — which is luck, not a
+    /// property — and a merge would compare a vector against whichever entry survived the moment one
+    /// subject retuned. That is AMB-19 re-opened across a file boundary, and it would move no assertion ID.
+    /// </remarks>
+    private static GateResult BoundsCurrency(IReadOnlyList<SubmissionVector> vectors, AssertionEnumerationSet enumerations)
     {
         const string name = "3i bounds currency (AMB-19)";
         const string verifier = nameof(BoundsCurrencyCheck) + ", against the enumeration's bounds table";
 
-        if (enumeration.CarriesNoBounds)
+        var resolved = Resolved(vectors, enumerations);
+        var consulted = resolved.Where(r => r.Enumeration is not null).Select(r => r.Enumeration!).Distinct().ToArray();
+        var boundless = consulted.Where(e => e.CarriesNoBounds).ToArray();
+
+        if (enumerations.IsEmpty || consulted.Length == 0 || boundless.Length > 0)
         {
+            var which = enumerations.IsEmpty || consulted.Length == 0
+                ? $"no enumeration this submission cites into could be identified, so the number each of these {vectors.Count} vector(s) was written against"
+                : enumerations.IsSingle
+                    ? $"the enumeration supplied no `bounds` table, so the number each of these {vectors.Count} vector(s) was written against"
+                    : $"{boundless.Length} of the {consulted.Length} enumerations these vectors cite into supply no `bounds` table ({string.Join(", ", boundless.Select(e => AssertionEnumerationSet.DisplaySubject(e.Subject)))}), so the numbers their vectors were written against";
+
             return GateResult.CouldNotRun(name, NotCheckedReason.AwaitingAnArtifactThatCouldExist, verifier,
-                $"the enumeration supplied no `bounds` table, so the number each of these {vectors.Count} vector(s) was written against was compared against nothing. "
+                $"{which} was compared against nothing. "
                 + "*** AN ABSENT TABLE IS NOT AN AGREEING ONE. *** This is AMB-19's channel wide open: a bound can be retuned, every assertion referring to it changes what it is true of, "
                 + "no assertion ID moves, and every other gate here stays green. Supply the enumeration's `bounds:` table as `enumeration.bounds`.");
         }
@@ -776,13 +980,23 @@ public static class SubmissionGate
         // *** THE EXPECTATION COMES FROM THE ENUMERATION AND NEVER FROM THE VECTOR. *** A vector claiming
         // "no bound applies to me" checked against its own claim is not checked at all; the enumeration is
         // the third party, and where it does not answer the finding says NOT CHECKED rather than passing.
-        var findings = vectors
-            .Select(v => BoundsCurrencyCheck.Evaluate(
-                v.Id,
-                v.BoundsUsed,
-                enumeration.Bounds,
-                enumeration.BoundsExpectationFor(v.Basis?.AssertionId)))
+        var findings = resolved
+            .Where(r => r.Enumeration is not null)
+            .Select(r => BoundsCurrencyCheck.Evaluate(
+                r.Vector.Id,
+                r.Vector.BoundsUsed,
+                r.Enumeration!.Bounds,
+                r.Enumeration.BoundsExpectationFor(r.Vector.Basis?.AssertionId)))
             .ToArray();
+
+        // An unresolved citation has no third party to be compared against, so this gate did not examine it
+        // — and a gate that quietly dropped its unexaminable subjects would pass over the remainder.
+        var unresolvedBounds = UnresolvedNote(resolved);
+        if (unresolvedBounds is not null)
+        {
+            return GateResult.CouldNotRun(name, NotCheckedReason.AwaitingAnArtifactThatCouldExist, verifier,
+                unresolvedBounds + " A bound can only be compared against the table the vector's own SUBJECT publishes, and until the citation resolves there is no such table.");
+        }
 
         var refused = findings.Where(f => f.PremiseOutOfDate).ToArray();
         var undeclared = findings.Where(f => f.State == BoundsCurrencyState.NotDeclared).ToArray();
@@ -862,19 +1076,29 @@ public static class SubmissionGate
     /// projection, and against it the hole is exactly as open as it was - reporting it as verified would
     /// be the failure this whole gate table exists to prevent.</para>
     /// </summary>
-    private static GateResult AssertionFormAuthority(IReadOnlyList<SubmissionVector> vectors, AssertionEnumeration enumeration)
+    private static GateResult AssertionFormAuthority(IReadOnlyList<SubmissionVector> vectors, AssertionEnumerationSet enumerations)
     {
-        if (enumeration.CarriesNoForms)
+        var resolved = Resolved(vectors, enumerations);
+        var consulted = resolved.Where(r => r.Enumeration is not null).Select(r => r.Enumeration!).Distinct().ToArray();
+        var formless = consulted.Where(e => e.CarriesNoForms).ToArray();
+
+        if (enumerations.IsEmpty || consulted.Length == 0 || formless.Length > 0)
         {
+            var which = enumerations.IsEmpty || consulted.Length == 0
+                ? "no enumeration this submission cites into could be identified"
+                : enumerations.IsSingle
+                    ? "the enumeration is the flat projection (clause and assertion IDs only) and carries no canonical form"
+                    : $"{formless.Length} of the {consulted.Length} enumerations these vectors cite into are the flat projection and carry no canonical form ({string.Join(", ", formless.Select(e => AssertionEnumerationSet.DisplaySubject(e.Subject)))})";
+
             return GateResult.CouldNotRun("3e assertion form authority", NotCheckedReason.AwaitingAnArtifactThatCouldExist, "per-assertion form in the enumeration",
-                "the enumeration is the flat projection (clause and assertion IDs only) and carries no canonical form, so a vector's declared form was compared against nothing. F-3's refusal of a SAMPLED NEVER is therefore enforced against WHAT THE VECTOR CLAIMS: cite a NEVER, declare WHEN, take the permissive path.");
+                $"{which}, so a vector's declared form was compared against nothing. F-3's refusal of a SAMPLED NEVER is therefore enforced against WHAT THE VECTOR CLAIMS: cite a NEVER, declare WHEN, take the permissive path.");
         }
 
         var problems = new List<string>();
 
-        foreach (var v in vectors)
+        foreach (var (v, enumeration) in resolved)
         {
-            if (v.Basis is null)
+            if (v.Basis is null || enumeration is null)
                 continue;
 
             var declared = v.Form;
@@ -895,6 +1119,10 @@ public static class SubmissionGate
             else if (enumerated != declared)
                 problems.Add($"{v.Id}: declares form {declared} and the enumeration says '{v.Basis.AssertionId}' is {enumerated}. The assertion's form is the ENUMERATION's to state; a vector that disagrees with it is asserting something other than what it cites - and if the disagreement is Never-declared-as-When it is F-3's refusal being walked around.");
         }
+
+        var unresolvedForms = UnresolvedNote(resolved);
+        if (unresolvedForms is not null)
+            problems.Add(unresolvedForms);
 
         return new GateResult("3e assertion form authority", GateStatus.Checked, problems.Count == 0, nameof(AssertionEnumeration),
             problems.Count == 0
@@ -921,7 +1149,7 @@ public static class SubmissionGate
               + string.Join("; ", map.LatchProvenance.OrderBy(e => e.Key, StringComparer.Ordinal).Select(e => $"{e.Key} latched by {e.Value}"))
               + ". Verify those blocks are in the deployment - THIS GATE TAKES THE NAME, NOT THE FACT.";
 
-    private static GateResult Observability(IReadOnlyList<SubmissionVector> vectors, AssertionEnumeration enumeration, MirrorObservability map, double floorScans, int runtimeCompression)
+    private static GateResult Observability(IReadOnlyList<SubmissionVector> vectors, AssertionEnumerationSet enumerations, MirrorObservability map, double floorScans, int runtimeCompression)
     {
         // 🔴 *** THE MAP'S AUTHORITY IS CHECKED BEFORE THE MAP IS USED. *** This gate compares what a
         // vector asks to observe against what the copy layer PROVIDES — so a map supplied by the vector
@@ -974,8 +1202,9 @@ public static class SubmissionGate
         }
 
         var problems = new List<string>();
+        var resolved = Resolved(vectors, enumerations);
 
-        foreach (var v in vectors)
+        foreach (var (v, enumeration) in resolved)
         {
             // A vector whose declared comp is not a comp is refused HERE as well as at the schema gate,
             // and the check is then run at 1 so the rest of the vector is still evaluated. Skipping it
@@ -991,9 +1220,22 @@ public static class SubmissionGate
             // keys on the assertion's form, so evaluating it against the VECTOR's declaration would
             // enforce the ruling against what an author claimed. The mismatch itself is refused by the
             // form-authority gate; this makes the observability verdict right even so.
-            var form = (v.Basis is not null ? enumeration.FormOf(v.Basis.AssertionId) : null) ?? v.Form;
+            //
+            // *** AND IT IS THE FORM FROM THE SUBJECT THIS VECTOR CITES INTO. *** Reading it from a merge
+            // would let one subject's form decide another subject's observability verdict wherever the two
+            // share a clause — F-3 enforced against the wrong file.
+            var form = (v.Basis is not null && enumeration is not null ? enumeration.FormOf(v.Basis.AssertionId) : null) ?? v.Form;
             var report = ObservabilityCheck.Evaluate(v.Expectations, form, map, floorScans, declared, runtimeCompression);
             problems.AddRange(report.Refusals.Select(r => $"{v.Id}/{r.Signal}: {r.Outcome} — {r.Detail}"));
+        }
+
+        // Every vector IS evaluated above — an unresolved citation falls back to the vector's own declared
+        // form, which is weaker, so the fact is reported rather than left to be inferred from gate 3j.
+        var unresolvedObs = UnresolvedNote(resolved);
+        if (unresolvedObs is not null)
+        {
+            problems.Add(unresolvedObs.Replace("were NOT examined by this gate because", "were evaluated against THEIR OWN declared form rather than the enumeration's, because", StringComparison.Ordinal)
+                + " F-3 is then enforced against what the vector claims, which is the permissive path this gate exists to close.");
         }
 
         return new GateResult("5 observability", GateStatus.Checked, problems.Count == 0, nameof(ObservabilityCheck),

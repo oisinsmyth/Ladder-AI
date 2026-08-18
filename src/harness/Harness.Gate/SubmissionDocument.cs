@@ -24,7 +24,31 @@ public sealed class SubmissionDocument
     public int ResultRegistersPerSlot { get; set; } = 1;
 
     public ModelDocument? Model { get; set; }
+
+    /// <summary>
+    /// The single enumeration — <b>the shape every submission had before 2026-08-18, and still the right
+    /// one for a single-subject campaign.</b>
+    ///
+    /// <para><b>Mutually exclusive with <see cref="Enumerations"/>.</b> Supplying both is two answers to
+    /// one question and is refused by name; see <see cref="EnumerationConflict"/>.</para>
+    /// </summary>
     public EnumerationDocument? Enumeration { get; set; }
+
+    /// <summary>
+    /// 🔴 <b>THE ENUMERATIONS A MULTI-SUBJECT CAMPAIGN CITES INTO — one per subject.</b>
+    ///
+    /// <para><b>Until this existed a submission could hold exactly one</b>, so a campaign with a valve
+    /// enumeration and a vessel enumeration had one option: merge them. After a merge a citation to a
+    /// clause both files declare is answered by whichever entry survived, and the denominator gate 3
+    /// reports is the union of two denominators and therefore neither.</para>
+    ///
+    /// <para><b>Each element MUST declare its <c>subject</c> when there is more than one</b> — an unnamed
+    /// subject in a set of two is a denominator nobody can cite into deliberately. Resolution, ambiguity
+    /// and the reason the assertion hash cannot break the tie all live in
+    /// <see cref="AssertionEnumerationSet"/>.</para>
+    /// </summary>
+    public List<EnumerationDocument>? Enumerations { get; set; }
+
     public MapDocument? Map { get; set; }
 
     /// <summary>
@@ -169,6 +193,12 @@ public sealed class SubmissionDocument
         Collect(UnknownFields, string.Empty, found);
         Collect(Map?.UnknownFields, "map", found);
         Collect(Enumeration?.UnknownFields, "enumeration", found);
+
+        // *** EVERY ELEMENT, NOT JUST THE FIRST. *** A typo in the second subject's enumeration is exactly
+        // as silently dropped as one in the first, and it is the one nobody would go looking for.
+        foreach (var (enumeration, index) in (Enumerations ?? new List<EnumerationDocument>()).Select((e, i) => (e, i)))
+            Collect(enumeration.UnknownFields, $"enumerations[{index}]", found);
+
         Collect(Model?.UnknownFields, "model", found);
         Collect(Deployment?.UnknownFields, "deployment", found);
         Collect(BlockCompression?.UnknownFields, "blockCompression", found);
@@ -372,6 +402,17 @@ public sealed class EnumerationDocument
     [JsonExtensionData]
     public Dictionary<string, object?>? UnknownFields { get; set; }
 
+    /// <summary>
+    /// 🔴 <b>WHAT THIS ENUMERATION IS THE DENOMINATOR *FOR* — e.g. the enumeration file's own
+    /// <c>subject:</c> block, reduced to one word.</b>
+    ///
+    /// <para><b>Optional, and absent is correct for a single-subject campaign</b> — every enumeration
+    /// written before 2026-08-18 is an unnamed single subject and stays valid unchanged. It becomes
+    /// load-bearing the moment a submission carries two: a citation says which subject it means, and a
+    /// clause declared by both with nothing saying which is a REFUSAL naming both, never a pick.</para>
+    /// </summary>
+    public string? Subject { get; set; }
+
     public List<string>? Clauses { get; set; }
     public List<string>? Assertions { get; set; }
 
@@ -506,6 +547,16 @@ public sealed class VectorDocument
     public string? Author { get; set; }
     public string? Clause { get; set; }
     public string? Assertion { get; set; }
+
+    /// <summary>
+    /// 🔴 <b>WHICH ENUMERATION THIS CITATION MEANS.</b> Optional, and unqualified stays legal for ever —
+    /// what is refused is a clause declared by TWO subjects with nothing saying which.
+    ///
+    /// <para><b>Every citation written before 2026-08-18 is unqualified and means the subject that existed
+    /// then.</b> A set of one cannot be ambiguous, so those vectors resolve exactly as they always did and
+    /// are never retargeted.</para>
+    /// </summary>
+    public string? Subject { get; set; }
     public Dictionary<string, string>? Inputs { get; set; }
     public string? StartBool { get; set; }
     public List<ExpectationDocument>? Expectations { get; set; }
@@ -594,6 +645,29 @@ public sealed class ExpectationDocument
     /// default — an expectation with nothing to compare against cannot fail.</para>
     /// </summary>
     public string? Expected { get; set; }
+
+    /// <summary>
+    /// 🔴 <b>WHAT THIS EXPECTATION CLAIMS ABOUT ITS SIGNAL *IN TIME* — the question nothing in the vector
+    /// format could ask until 2026-08-18.</b>
+    ///
+    /// <para><b>Why the field had to be mapped here before any author could write it.</b> Gate 0b refuses
+    /// a field this schema does not know, by name — <i>"a silently-ignored field is worse than a rejected
+    /// one, because it reads as accepted"</i> — so a vector carrying <c>temporalShape</c> was not ignored,
+    /// it was REFUSED, and the whole submission with it. Mapping it is step 2 of the sequencing in
+    /// <c>docs/notes/observation-window-shapes.md §7</c>; step 3 is the runner passing it through.</para>
+    ///
+    /// <para><b>Absent parses as <see cref="TemporalShape.Unstated"/>, which reproduces the previous fold
+    /// exactly, down to the text.</b> Accepted values: <c>throughout</c>, <c>atSomePoint</c>,
+    /// <c>becomesAndHolds</c>, <c>atEnd</c>, <c>atNoPoint</c>.</para>
+    ///
+    /// <para>⚠️ <b>A MISSPELT SHAPE IS A PARSE REFUSAL, NOT A SILENT <c>Unstated</c></b> — the same
+    /// treatment <c>nature</c> and <c>mode</c> have had all along. The design note's §7 reads "unrecognised
+    /// ⇒ Unstated", which is right about the EVALUATOR and would be wrong here: coercing a typo to the
+    /// default is precisely the quiet convenience its own next paragraph forbids, where <i>"a dropped field
+    /// must fail the same comparison a wrong one does"</i>. Dropped and misspelt must not part company at
+    /// the parser.</para>
+    /// </summary>
+    public TemporalShape TemporalShape { get; set; } = TemporalShape.Unstated;
 }
 
 /// <summary>One conflict edge with X-G's provenance. Every field is required; the enums' zero values are unusable.</summary>

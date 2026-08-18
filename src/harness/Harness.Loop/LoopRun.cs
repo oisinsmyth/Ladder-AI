@@ -21,7 +21,14 @@ namespace Harness.Loop;
 /// </param>
 public sealed record LoopRequest(
     IReadOnlyList<SubmissionVector> Vectors,
-    AssertionEnumeration Enumeration,
+
+    /// <summary>
+    /// 🔴 <b>PLURAL SINCE 2026-08-18.</b> A single <c>AssertionEnumeration</c> converts implicitly to a set
+    /// of one, so every construction site is unchanged and a single-subject wave behaves exactly as it did.
+    /// It comes from <c>GateCli.InputsOf</c> like every other document-sourced input, which is what keeps
+    /// the loop's gate and the standalone gate the same gate.
+    /// </summary>
+    AssertionEnumerationSet Enumeration,
     FidelityDeclaration? Fidelity,
     AgentIdentity BlockAuthor,
     ConflictGraph? ComputedConflicts,
@@ -295,6 +302,29 @@ public static class LoopRun
         // ---- 8. PACKAGE -----------------------------------------------------------------------------
         var packages = Package(request, map, stamp, client, wave, deployment, version, roundTripsBefore, ordinalOf, account);
 
+        // ---- 8b. RELEASE THE RIG — AFTER PACKAGING, NEVER BEFORE ------------------------------------
+        //
+        // 🔴 *** THE WAVE LEFT EVERY START BOOL RAISED, AND THE BLOCK UNDER TEST RUNNING, INDEFINITELY. ***
+        // Nothing in `WaveRun` lowers them at the end: the reset level is written by the NEXT index's
+        // inert phase, and after the last index there is no next index. Measured on JOB9004's vessel runs
+        // 2026-08-18 — the final control frame of two complete waves reads StartBools = 0x0001,
+        // StartEcho = 0x0001, taken minutes after the client had finished and closed.
+        //
+        // Two consequences, both real. The block under test goes on being commanded with nobody
+        // observing it, for however long the rig is left alone; and the NEXT wave's index 0 then has only
+        // its declared quiescence window to bring a fully-driven block back to rest, which is the
+        // likeliest reading of the index-0 `NotInert` results in this job's earlier runs.
+        //
+        // *** IT IS HERE AND NOT IN `WaveRun` BECAUSE OF THE ORDERING. *** `Package` above evaluates
+        // SETTLING, which re-reads the slot's results some scans after the run and compares them against
+        // what completion recorded — and that comparison is only meaningful while the block is still
+        // driven. Releasing inside the wave would reset the block first and report `NotSettled` on every
+        // healthy last index. So: last read first, release second.
+        //
+        // A failure to release cannot be allowed to destroy a run that already happened, so it is
+        // reported rather than thrown.
+        var released = ReleaseTheRig(client);
+
         // *** WHAT WAS PLANNED AND WHAT WAS REACHED ARE TWO NUMBERS, AND THIS PRINTED ONLY THE FIRST. ***
         // `wave.Length` is the LONGEST TENSOR — what the wave set out to run — so a wave that stopped at
         // index 1 of 22 reported "the wave ran to 22 index(es)". True of the plan, false of the run, and
@@ -311,9 +341,66 @@ public static class LoopRun
             // *** THE START STATE THIS RUN'S EVERY VERDICT RESTS ON, ON THE HEADLINE LINE. *** A run gated
             // on assumed zeros is not the same evidence as one gated on declared resting values, and the
             // difference has to be visible where a reader of RESULTS meets it.
-            + inertRest.Summary(),
+            + inertRest.Summary()
+            // 🔴 *** AND WHY AN INDEX REFUSED, WHICH USED TO REACH NOBODY. *** A NotInert index produces a
+            // package whose every assertion reads `<never read>`; the InertReport that says WHICH check
+            // refused and on which register is on `SlotRunResult.Inert` and is rendered nowhere. Two agents
+            // spent a day on a `NotInert` whose stated cause was one field away.
+            + InertRefusals(wave)
+            + released,
             account,
             inertRest);
+    }
+
+    /// <summary>
+    /// 🔴 <b>Lower every start bool once the run's last read is done — the rig is left INERT, not
+    /// running.</b>
+    ///
+    /// <para>Returns what to append to the headline, because <b>a release that did not happen must be
+    /// visible</b>: the failure mode of a silent one is a block left commanded on a bench rig, which is
+    /// the state this exists to end. It never throws — a run that already produced results is not thrown
+    /// away because the tidy-up write failed.</para>
+    /// </summary>
+    private static string ReleaseTheRig(MirrorClient client)
+    {
+        try
+        {
+            client.LowerAllStartBools();
+            return " The rig was released: every start bool is LOW and no block under test is left commanded.";
+        }
+        catch (Exception error)
+        {
+            return " ⚠️ THE RIG WAS NOT RELEASED — the start bools could not be lowered after the run, so a block "
+                + "under test may still be commanded on the device and the next wave's first index will start from a "
+                + $"driven state: {error.Message}";
+        }
+    }
+
+    /// <summary>
+    /// 🔴 <b>Every index whose inert phase REFUSED, with the outcome and the reason the phase itself
+    /// gave.</b>
+    ///
+    /// <para><b>Nothing rendered this.</b> A refused index yields a package whose run outcome is
+    /// <c>NotInert</c>, whose assertions are all <c>&lt;never read&gt;</c> and whose stimulus says the
+    /// experiment did not happen — none of which says WHICH of the inert checks refused, on which
+    /// register, or against what declared value. That is on <see cref="SlotRunResult.Inert"/> and it is
+    /// the one fact a reader needs, because the three plausible causes (a declaration that is wrong, a
+    /// signal that is not quiescent by construction, a program that did not reset) have three different
+    /// remedies and are indistinguishable without it.</para>
+    /// </summary>
+    private static string InertRefusals(WaveResult wave)
+    {
+        var refusals = wave.Distributions
+            .SelectMany(d => d.Results.Select((r, ordinal) => (d.SlotIndex, Ordinal: ordinal, Run: r)))
+            .Where(x => x.Run.Outcome == SlotOutcome.NotInert)
+            .OrderBy(x => x.Ordinal).ThenBy(x => x.SlotIndex)
+            .Select(x => $"index {x.Ordinal}, slot {x.SlotIndex}: {x.Run.Inert.Outcome} — {x.Run.Inert.Detail}")
+            .ToArray();
+
+        return refusals.Length == 0
+            ? string.Empty
+            : $" *** INERT REFUSED AT {refusals.Length} INDEX(ES), SO THOSE TESTS NEVER RAN AND SAY NOTHING ABOUT ANY BLOCK: "
+              + string.Join(" | ", refusals);
     }
 
     /// <summary>
@@ -816,7 +903,19 @@ public static class LoopRun
                     WindowAt(armRegister, f.Registers)))
                 .ToArray();
 
-            return SeriesEvaluation.Evaluate(assertionId, e.Signal, expected, frames, accounting);
+            // 🔴 *** THE DECLARED TEMPORAL SHAPE, PASSED THROUGH — THE LAST HOP OF THE OBSERVATION-WINDOW
+            // MODEL. *** Without it every expectation reaches the evaluator as `Unstated`, the three-way
+            // fold calls every mixed series Inconclusive, and a vector that ran and settled says nothing
+            // about the block. Measured on the wave of 2026-08-18: three vectors, all Inconclusive,
+            // `conclusiveAboutTheBlock: 0`, with 65 frames observed on two signals — every one of them
+            // while the declared arm window was CLOSED.
+            //
+            // *** IT WIDENS WHAT CAN BE SAID AND NEVER WHAT PASSES. *** `Unstated` is still the default and
+            // still reproduces the previous fold down to the text, so nothing already written changes
+            // meaning; and the sharp shapes still refuse to accuse without a declared arm window, because a
+            // disagreeing frame outside the phase may be the model's own inert tail
+            // (docs/notes/observation-window-shapes.md §2, the accusation rule).
+            return SeriesEvaluation.Evaluate(assertionId, e.Signal, expected, frames, accounting, e.Shape);
         }).ToArray();
     }
 

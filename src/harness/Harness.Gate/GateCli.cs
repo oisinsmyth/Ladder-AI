@@ -45,7 +45,15 @@ public static class GateExit
 /// </summary>
 public sealed record GateInputs(
     IReadOnlyList<SubmissionVector> Vectors,
-    AssertionEnumeration Enumeration,
+
+    /// <summary>
+    /// 🔴 <b>PLURAL SINCE 2026-08-18 — the enumerations, not the enumeration.</b> A single
+    /// <c>AssertionEnumeration</c> converts implicitly to a set of one, so the type change is invisible to
+    /// every caller and every single-subject submission behaves exactly as it did. It is here rather than
+    /// derived twice for the same reason everything else in this record is: two derivations of one input
+    /// is how the loop's gate and the CLI's came to disagree about twelve of them.
+    /// </summary>
+    AssertionEnumerationSet Enumeration,
     FidelityDeclaration? Fidelity,
     AgentIdentity BlockAuthor,
     ConflictGraph? Conflicts,
@@ -235,7 +243,7 @@ public static class GateCli
 
         return new GateInputs(
             (document.Vectors ?? new List<VectorDocument>()).Select(ToSubmissionVector).ToArray(),
-            ToEnumeration(document),
+            ToEnumerationSet(document),
             ToFidelity(document),
             new AgentIdentity(document.BlockAuthor ?? string.Empty),
             ToConflicts(document),
@@ -318,26 +326,68 @@ public static class GateCli
             row.InertRest?.ToRest());
 
     /// <summary>The enumeration projection, off the document. Public so the runner composes it the same way.</summary>
+    /// <summary>
+    /// 🔴 <b>EVERY ENUMERATION THE SUBMISSION CITES INTO, AS A SET.</b>
+    ///
+    /// <para><b><c>enumeration</c> and <c>enumerations</c> are mutually exclusive and supplying both
+    /// THROWS.</b> Two answers to one question cannot be reconciled here: preferring either one silently
+    /// discards a denominator somebody wrote down, and merging them is the union that belongs to no
+    /// subject. Both CLIs wrap this read and report NOTHING EXAMINED naming the contradiction, which is
+    /// the same treatment an unparseable document gets and for the same reason.</para>
+    ///
+    /// <para><b>Neither present is an EMPTY set, not an empty enumeration.</b> Gate 3j then reports
+    /// NOTHING EXAMINED rather than gate 3 reporting an empty denominator — different facts, and the
+    /// first is the one that is true.</para>
+    /// </summary>
+    public static AssertionEnumerationSet ToEnumerationSet(SubmissionDocument document)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+
+        var plural = document.Enumerations ?? new List<EnumerationDocument>();
+
+        if (document.Enumeration is not null && plural.Count > 0)
+        {
+            throw new InvalidDataException(
+                $"the submission carries BOTH `enumeration` (singular) and `enumerations` ({plural.Count} of them). "
+                + "*** THAT IS TWO ANSWERS TO ONE QUESTION AND NEITHER CAN BE PREFERRED HERE. *** Choosing one would silently "
+                + "discard a coverage denominator somebody wrote down, and merging them would produce a denominator that belongs "
+                + "to no subject — the exact defect subjects exist to remove. Use `enumeration` for a single-subject campaign, or "
+                + "`enumerations` with a `subject` on each; never both.");
+        }
+
+        if (document.Enumeration is null && plural.Count == 0)
+            return AssertionEnumerationSet.Empty;
+
+        var documents = document.Enumeration is not null ? new List<EnumerationDocument> { document.Enumeration } : plural;
+
+        return AssertionEnumerationSet.Of(documents.Select(ToEnumeration));
+    }
+
+    /// <summary>One enumeration document as the checked type. <b>Nulls are absences and stay absences</b> — see the field docs on each.</summary>
     public static AssertionEnumeration ToEnumeration(SubmissionDocument document) =>
+        ToEnumeration(document.Enumeration);
+
+    private static AssertionEnumeration ToEnumeration(EnumerationDocument? enumeration) =>
         AssertionEnumeration.Of(
-            document.Enumeration?.Clauses ?? Enumerable.Empty<string>(),
-            document.Enumeration?.Assertions ?? Enumerable.Empty<string>(),
-            document.Enumeration?.Forms,
-            document.Enumeration?.Enumerator ?? string.Empty,
-            document.Enumeration?.NormalisedTexts,
-            document.Enumeration?.RequiredObservations?.ToDictionary(
+            enumeration?.Clauses ?? Enumerable.Empty<string>(),
+            enumeration?.Assertions ?? Enumerable.Empty<string>(),
+            enumeration?.Forms,
+            enumeration?.Enumerator ?? string.Empty,
+            enumeration?.NormalisedTexts,
+            enumeration?.RequiredObservations?.ToDictionary(
                 e => e.Key,
                 e => (IReadOnlySet<string>)e.Value.ToHashSet(StringComparer.Ordinal),
                 StringComparer.Ordinal),
-            document.Enumeration?.Bounds,
+            enumeration?.Bounds,
             // *** THE EMPTY LIST SURVIVES THE PROJECTION. *** `bounds: []` for an assertion is the
             // positive claim "this one depends on none" and is the only thing that lets a vector's
             // `boundsUsed: {}` pass; an assertion absent from the map stays absent, and its claim stays
             // NOT CHECKED. Collapsing empty to absent here would silently re-close the honest exit.
-            document.Enumeration?.AssertionBounds?.ToDictionary(
+            enumeration?.AssertionBounds?.ToDictionary(
                 e => e.Key,
                 e => (IReadOnlySet<string>)e.Value.ToHashSet(StringComparer.Ordinal),
-                StringComparer.Ordinal));
+                StringComparer.Ordinal),
+            enumeration?.Subject ?? string.Empty);
 
     /// <summary>The model's fidelity declaration, off the document.</summary>
     public static FidelityDeclaration? ToFidelity(SubmissionDocument document) =>
@@ -448,11 +498,15 @@ public static class GateCli
         new AgentIdentity(v.Author ?? string.Empty),
         string.IsNullOrWhiteSpace(v.Clause) && string.IsNullOrWhiteSpace(v.Assertion)
             ? null
-            : new Basis(v.Clause ?? string.Empty, v.Assertion ?? string.Empty),
+            : new Basis(v.Clause ?? string.Empty, v.Assertion ?? string.Empty, v.Subject),
         v.Inputs ?? new Dictionary<string, string>(),
         v.StartBool ?? string.Empty,
         (v.Expectations ?? new List<ExpectationDocument>())
-            .Select(e => new ObservabilityDeclaration(e.Signal ?? string.Empty, e.Nature, e.Mode, e.WindowScans, e.Expected))
+            // *** THE SHAPE IS CARRIED THROUGH, NOT DROPPED HERE. *** It is the last hop of the field's
+            // sequencing: mapped by the schema so gate 0b stops refusing it, carried here so the runner
+            // has something to pass to the evaluator. A field the parser knows and the projection drops
+            // is the silently-ignored field gate 0b exists to prevent, one layer in.
+            .Select(e => new ObservabilityDeclaration(e.Signal ?? string.Empty, e.Nature, e.Mode, e.WindowScans, e.Expected, e.TemporalShape))
             .ToArray(),
         v.AssertionForm,
         string.IsNullOrWhiteSpace(v.SettlingCondition)

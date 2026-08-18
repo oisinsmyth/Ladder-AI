@@ -247,9 +247,20 @@ public class AdmissibilityTests
     {
         // Stated as a property of the signature. A gate with a skip flag is a gate that will be skipped
         // at 2 a.m., and the way to keep that true is for there to be nothing to pass.
-        var parameters = typeof(Admissibility)
-            .GetMethod(nameof(Admissibility.Check))!
-            .GetParameters()
+        //
+        // *** EVERY OVERLOAD, NOT "THE" ONE. *** `Check` gained a second form (the enumeration SET) on
+        // 2026-08-18, and `GetMethod(name)` threw AmbiguousMatchException rather than quietly picking one
+        // — which was the right failure. Enumerating them is the stronger property anyway: a relaxing flag
+        // added to whichever overload this test did not resolve to would be exactly as bad.
+        var overloads = typeof(Admissibility)
+            .GetMethods()
+            .Where(m => m.Name == nameof(Admissibility.Check))
+            .ToArray();
+
+        Assert.True(overloads.Length >= 2, $"expected both Check overloads; found {overloads.Length}. If one was removed, this test is now checking less than it says.");
+
+        var parameters = overloads
+            .SelectMany(m => m.GetParameters())
             .Select(p => p.Name)
             .ToArray();
 

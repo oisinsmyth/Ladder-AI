@@ -89,12 +89,32 @@ public enum AssertionForm
 /// says nothing. Defaulted only so that the many call sites that are ABOUT observability need not
 /// restate it; the gate is what makes the default unusable.
 /// </param>
+/// <param name="Shape">
+/// 🔴 <b>WHAT THE AUTHOR CLAIMS ABOUT THIS SIGNAL <i>IN TIME</i> — see <see cref="TemporalShape"/>.</b>
+///
+/// <para><b>OPTIONAL, AND ITS ABSENCE IS THE BACKWARD-COMPATIBILITY GUARANTEE.</b> Every vector written
+/// before this field existed carries <see cref="TemporalShape.Unstated"/>, which reproduces the previous
+/// evaluation exactly — same verdict, same text. A silent change of verdict for existing vectors would
+/// rewrite the meaning of results already recorded against a real job.</para>
+///
+/// <para>⚠️ <b>NOTHING POPULATES THIS YET, AND THAT IS DELIBERATE — IT IS A PROPOSED CONTRACT CHANGE.</b>
+/// Vectors are written by an independent party who does not read the implementation, so the field is
+/// proposed rather than imposed. And <b>gate 0b REFUSES unknown submission fields</b>, so the submission
+/// parser must map <c>temporalShape</c> BEFORE any author may write it — otherwise a vector using it is
+/// not ignored, it is REFUSED, and the whole submission with it. Sequencing and the proposed JSON
+/// spelling: <c>docs/notes/observation-window-shapes.md</c> §7.</para>
+///
+/// <para><b>It is NOT <see cref="Mode"/>.</b> An instrumentation mode is HOW the copy layer watches and is
+/// DERIVED from what was generated; a shape is WHAT THE SPECIFICATION CLAIMS, stated by the author, and it
+/// can be wrong.</para>
+/// </param>
 public sealed record ObservabilityDeclaration(
     string Signal,
     SignalNature Nature,
     InstrumentationMode Mode,
     int WindowScans,
-    string? Expected = null);
+    string? Expected = null,
+    TemporalShape Shape = TemporalShape.Unstated);
 
 /// <summary>What the generated copy layer actually provides, per signal (contract §4.3's "the map's observability declarations").</summary>
 /// <remarks>

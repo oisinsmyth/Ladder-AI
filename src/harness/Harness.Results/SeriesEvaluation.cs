@@ -84,6 +84,22 @@ public sealed record ObservationWindow(
     int RetainedFrames,
     bool SeriesTruncated)
 {
+    /// <summary>
+    /// 🔴 <b>THE TEMPORAL SHAPE THE AUTHOR DECLARED for this expectation — i.e. WHICH QUESTION the fold
+    /// below was asked.</b>
+    ///
+    /// <para><b>An init-only property with a default rather than a positional member</b>, deliberately:
+    /// every existing construction site keeps compiling and keeps producing
+    /// <see cref="TemporalShape.Unstated"/>, which is today's behaviour exactly.</para>
+    ///
+    /// <para><b>Carried onto the outcome because a verdict that cannot say what question it answered
+    /// cannot be argued with</b> — the same reason every count here is a denominator. A <c>Held</c> under
+    /// <see cref="TemporalShape.AtSomePoint"/> and a <c>Held</c> under
+    /// <see cref="TemporalShape.Throughout"/> are different claims about the block, and a reader who
+    /// cannot tell them apart will over-read the weaker one.</para>
+    /// </summary>
+    public TemporalShape Shape { get; init; } = TemporalShape.Unstated;
+
     /// <summary>The one-line accounting, printed on every outcome rather than only the interesting ones.</summary>
     public string Describe() =>
         Source == ObservationSource.Latch
@@ -95,7 +111,16 @@ public sealed record ObservationWindow(
               + (SeriesTruncated ? " — *** SERIES TRUNCATED, so this is not a record of the whole index. ***" : ".")
               + (WindowWasDeclared
                   ? $" Window at the completing frame: {WindowAtFinalFrame}."
-                  : " NO ARM WINDOW WAS DECLARED for this signal, so no frame could be excluded and the window state is UNKNOWN rather than open.");
+                  : " NO ARM WINDOW WAS DECLARED for this signal, so no frame could be excluded and the window state is UNKNOWN rather than open.")
+              // *** THE QUESTION THAT WAS ASKED, PRINTED BESIDE THE ANSWER — and nothing at all when the
+              // shape is Unstated, because that is the pre-existing behaviour and this line must not
+              // change one character of it.
+              + (Shape == TemporalShape.Unstated
+                  ? string.Empty
+                  : $" Declared temporal shape: {Shape}."
+                    + (Shape == TemporalShape.AtNoPoint
+                        ? " NOTE: on this shape the agreement count is the number of OCCURRENCES OF THE FORBIDDEN VALUE, not agreements."
+                        : string.Empty));
 }
 
 /// <summary>One frame of the series, decoded for one signal.</summary>
@@ -135,6 +160,17 @@ public sealed record ObservedFrame(long Scan, int PollRound, string? Value, Wind
 /// two cheap repairs: declare an <c>armedBy</c> for the signal so the window is in-band, or declare the
 /// expectation <c>Latched</c> so the observation survives the tail.</para>
 ///
+/// <para>🔴 <b>AND SINCE 2026-08-18 THE FOLD ASKS WHICH QUESTION IT IS ANSWERING — <see cref="TemporalShape"/>.</b>
+/// The third case above is right and it is also, at plant scale, MOST OF THE RESULTS: four different
+/// authors reach it meaning four different things (<i>throughout</i>, <i>at some point</i>, <i>at one
+/// instant</i>, <i>becomes and stays</i>), and a "51 of 65" is a FAILURE under the first and a PASS under
+/// the second. The shape lets the author say which, so the fold can judge against a stated claim instead
+/// of refusing. <b>What is widened is what can be SAID, never what PASSES:</b> an expectation whose shape
+/// was never stated is <c>Unstated</c> and comes back exactly as it did before, text included — and the
+/// two sharpest shapes may only ACCUSE where an arm window is declared, because otherwise the disagreeing
+/// frame may be the model's own required return to inert. Design note:
+/// <c>docs/notes/observation-window-shapes.md</c>.</para>
+///
 /// <para><b>It does not consult <c>AssertionForm</c>, and that is a decision rather than an omission.</b>
 /// The tempting rule is <i>mixed + WHEN ⇒ Held, because a WHEN passes on having SEEN the response</i>.
 /// Applied to the skeleton's own off-by-one build, whose count ramps THROUGH the expected value on its way
@@ -155,16 +191,34 @@ public static class SeriesEvaluation
     /// <summary>The observed text of a <c>Latched</c> expectation on a signal for which no latch exists.</summary>
     public const string NoLatch = "<no latch register: a Latched expectation cannot be answered from the value register>";
 
+    /// <summary>
+    /// The observed text of an expectation declared <see cref="TemporalShape.AtNoPoint"/> whose forbidden
+    /// value never appeared. <b>A sentence rather than a bare value</b>, because on that shape alone a row
+    /// reading <c>expected: "true" … Held</c> would be describing a signal that was never true.
+    /// </summary>
+    public static string ForbiddenValueAbsent(string expected) =>
+        $"<'{expected}' was never observed — which is what this expectation requires>";
+
     /// <summary>Evaluate one expectation over one index's decoded frames.</summary>
     /// <param name="expected">The expectation's predicate, as declared. Never null here — the schema gate refuses an expectation with nothing to compare against.</param>
     /// <param name="frames">Every retained frame, decoded for this signal, in poll order.</param>
     /// <param name="series">The series' own accounting, so the outcome carries its denominators.</param>
+    /// <param name="shape">
+    /// 🔴 <b>WHAT THE AUTHOR CLAIMED ABOUT THE SIGNAL IN TIME. <see cref="TemporalShape.Unstated"/> — the
+    /// default, and what every vector written before the field existed carries — reproduces the previous
+    /// behaviour exactly, including the text.</b>
+    ///
+    /// <para><b>The parameter is TRAILING AND OPTIONAL on purpose.</b> The runner's call site lives in
+    /// another component and is owned by another track; leaving it untouched must be a no-op, and it is.
+    /// Passing the expectation's declared shape is a one-argument change there, and nothing else.</para>
+    /// </param>
     public static AssertionOutcome Evaluate(
         string assertionId,
         string signal,
         string expected,
         IReadOnlyList<ObservedFrame> frames,
-        SeriesAccounting series)
+        SeriesAccounting series,
+        TemporalShape shape = TemporalShape.Unstated)
     {
         ArgumentNullException.ThrowIfNull(frames);
         ArgumentNullException.ThrowIfNull(series);
@@ -189,7 +243,10 @@ public static class SeriesEvaluation
         ObservationWindow Accounting(ObservationSource source, int considered, int agreed, long deciding) =>
             new(source, readable.Length, considered, agreed, outOfWindow, windowDeclared, finalWindow,
                 firstScan, lastScan, deciding,
-                series.PollsObserved, series.DistinctFrames, series.RetainedFrames, series.Truncated);
+                series.PollsObserved, series.DistinctFrames, series.RetainedFrames, series.Truncated)
+            {
+                Shape = shape,
+            };
 
         // *** A DECLARED WINDOW THAT NEVER OPENED IN ANY RETAINED FRAME IS NOT A DISAGREEMENT. *** Every
         // reading we hold is one the binding itself says is outside the window, so none of them is evidence
@@ -209,44 +266,368 @@ public static class SeriesEvaluation
         var considered = windowDeclared ? inWindow : readable;
         var agreed = considered.Where(f => string.Equals(f.Value, expected, StringComparison.Ordinal)).ToArray();
 
+        // *** THE FORBIDDEN-VALUE SHAPE INVERTS THE WHOLE FOLD, so it is answered before any of the
+        // branches below. *** For it, `agreed` counts OCCURRENCES OF WHAT MUST NOT HAPPEN, and every
+        // verdict below would read exactly backwards.
+        if (shape == TemporalShape.AtNoPoint)
+            return ForbiddenValue(assertionId, signal, expected, considered, agreed, windowDeclared, Accounting);
+
         if (agreed.Length == considered.Length)
         {
             return new AssertionOutcome(assertionId, signal, expected, expected, AssertionState.Held)
             {
                 Window = Accounting(ObservationSource.Series, considered.Length, agreed.Length, considered[^1].Scan),
-                Detail = $"agreed at every one of the {considered.Length} considered frame(s).",
+                Detail = $"agreed at every one of the {considered.Length} considered frame(s)."
+                    + WholesaleAgreementClause(shape, considered),
             };
         }
 
         if (agreed.Length == 0)
         {
             // The only shape that may accuse: the expected value was not present at ANY instant this
-            // harness looked inside the window.
+            // harness looked inside the window. *** EVERY SHAPE AGREES ON THIS ONE. *** A universal claim
+            // never held, an existential one never occurred, a becomes-and-holds never rose and a
+            // single-instant claim disagrees at its instant — so this branch is shape-independent, and
+            // the shape widens nothing here.
             return new AssertionOutcome(assertionId, signal, expected, considered[^1].Value!, AssertionState.Disagreed)
             {
                 Window = Accounting(ObservationSource.Series, considered.Length, 0, considered[^1].Scan),
                 Detail =
                     $"the expected value was not observed at ANY of the {considered.Length} considered frame(s), "
-                    + $"spanning scans {considered[0].Scan} to {considered[^1].Scan}.",
+                    + $"spanning scans {considered[0].Scan} to {considered[^1].Scan}."
+                    + TotalAbsenceClause(shape),
             };
         }
 
+        // ------------------------------------------------------------------------------------------
+        // MIXED. Some frames agreed and some did not — the case that used to have exactly one answer,
+        // and the whole reason this parameter exists. What follows judges it against the shape the
+        // author DECLARED; where nothing was declared it is untouched, byte for byte.
+        // ------------------------------------------------------------------------------------------
         var firstAgreeing = agreed[0];
+
+        return shape switch
+        {
+            TemporalShape.Throughout =>
+                Universal(assertionId, signal, expected, considered, agreed, windowDeclared, Accounting),
+
+            TemporalShape.AtSomePoint =>
+                Existential(assertionId, signal, expected, considered, agreed, Accounting),
+
+            TemporalShape.BecomesAndHolds =>
+                Rising(assertionId, signal, expected, considered, agreed, windowDeclared, Accounting),
+
+            TemporalShape.AtEnd =>
+                Terminal(assertionId, signal, expected, considered, agreed, windowDeclared, Accounting),
+
+            // 🔴 *** UNSTATED: UNCHANGED, DELIBERATELY, AND THIS IS THE BACKWARD-COMPATIBILITY
+            // GUARANTEE. *** Every vector written before the shape field existed lands here, including
+            // vectors already run against a real job. Same verdict, same observed text, same detail —
+            // a silent change here would rewrite the meaning of results already recorded.
+            _ => new AssertionOutcome(assertionId, signal, expected,
+                    $"{expected} at {agreed.Length} of {considered.Length} observation(s)", AssertionState.Inconclusive)
+            {
+                Window = Accounting(ObservationSource.Series, considered.Length, agreed.Length, firstAgreeing.Scan),
+                Detail =
+                    $"the signal took the expected value at {agreed.Length} of {considered.Length} considered frame(s) "
+                    + $"(first at scan {firstAgreeing.Scan}) and a different value at the other {considered.Length - agreed.Length}, "
+                    + $"including scan {considered[^1].Scan}, the last one observed. "
+                    + "*** THIS IS NOT A DISAGREEMENT AND MUST NOT BE ACTIONED AGAINST THE BLOCK. *** Nothing declares which instant "
+                    + "discharges this assertion, and picking one is how a model's deliberate return to inert before it signals "
+                    + "completion was read as a defect. To make it decidable: declare `armedBy` on this signal in the binding so the "
+                    + "window is published in-band, or declare the expectation `Latched` so a transient occurrence survives the tail.",
+            },
+        };
+    }
+
+    /// <summary>How the accounting is built, so the shape handlers below need not restate the denominators.</summary>
+    private delegate ObservationWindow Accountant(ObservationSource source, int considered, int agreed, long deciding);
+
+    /// <summary>
+    /// <b><see cref="TemporalShape.Throughout"/>, mixed.</b> A universal claim contradicted by an observed
+    /// frame.
+    ///
+    /// <para>🔴 <b>THE WINDOW IS WHAT DECIDES WHETHER THIS MAY ACCUSE, and that is the accusation rule
+    /// rather than caution.</b> With an arm window declared, the disagreeing frame is KNOWN to be inside
+    /// the phase, so the signal demonstrably did not hold throughout it — positive evidence, and the
+    /// verdict is a disagreement. Without one, that frame may be a TAIL frame, i.e. the model's own
+    /// required return to inert, and accusing on it is the exact false accusation of 2026-08-17 wearing a
+    /// declaration. <b>Declaring the shape is necessary and not sufficient; the binding still has to
+    /// publish the window.</b></para>
+    /// </summary>
+    private static AssertionOutcome Universal(
+        string assertionId, string signal, string expected,
+        ObservedFrame[] considered, ObservedFrame[] agreed, bool windowDeclared, Accountant accounting)
+    {
+        var offending = considered.First(f => !string.Equals(f.Value, expected, StringComparison.Ordinal));
+
+        if (windowDeclared)
+        {
+            return new AssertionOutcome(assertionId, signal, expected, offending.Value!, AssertionState.Disagreed)
+            {
+                Window = accounting(ObservationSource.Series, considered.Length, agreed.Length, offending.Scan),
+                Detail =
+                    $"declared THROUGHOUT, and it was not. The signal held at {agreed.Length} of {considered.Length} considered "
+                    + $"frame(s) but read '{offending.Value}' at scan {offending.Scan}, INSIDE the declared arm window. "
+                    + "A universal claim is refuted by one counterexample, and this one is known to be inside the phase rather than "
+                    + "in the model's inert tail, because the arm signal read TRUE in the same register read. "
+                    + "This IS a statement about the block.",
+            };
+        }
 
         return new AssertionOutcome(assertionId, signal, expected,
             $"{expected} at {agreed.Length} of {considered.Length} observation(s)", AssertionState.Inconclusive)
         {
-            Window = Accounting(ObservationSource.Series, considered.Length, agreed.Length, firstAgreeing.Scan),
+            Window = accounting(ObservationSource.Series, considered.Length, agreed.Length, agreed[0].Scan),
             Detail =
-                $"the signal took the expected value at {agreed.Length} of {considered.Length} considered frame(s) "
-                + $"(first at scan {firstAgreeing.Scan}) and a different value at the other {considered.Length - agreed.Length}, "
-                + $"including scan {considered[^1].Scan}, the last one observed. "
-                + "*** THIS IS NOT A DISAGREEMENT AND MUST NOT BE ACTIONED AGAINST THE BLOCK. *** Nothing declares which instant "
-                + "discharges this assertion, and picking one is how a model's deliberate return to inert before it signals "
-                + "completion was read as a defect. To make it decidable: declare `armedBy` on this signal in the binding so the "
-                + "window is published in-band, or declare the expectation `Latched` so a transient occurrence survives the tail.",
+                $"declared THROUGHOUT, and the signal read '{offending.Value}' at scan {offending.Scan} — but NO ARM WINDOW WAS "
+                + "DECLARED for it, so nothing says whether that frame is inside the phase or in the model's tail. "
+                + "*** THIS IS NOT A DISAGREEMENT AND MUST NOT BE ACTIONED AGAINST THE BLOCK. *** A model is REQUIRED to return the "
+                + "block to inert before it signals completion, so the frames after the phase read exactly like a signal that dropped. "
+                + "The shape is stated and the interval is not: declare `armedBy` on this signal in the binding and this becomes "
+                + "decidable — as a PASS or a FAIL, on the evidence.",
         };
     }
+
+    /// <summary>
+    /// <b><see cref="TemporalShape.AtSomePoint"/>, mixed: HELD.</b> The author asserted an occurrence and
+    /// the occurrence was observed; the frames that disagree are outside the claim, not against it.
+    ///
+    /// <para>⚠️ <b>The distinct-value count is printed because of the RAMP.</b> An existential claim on a
+    /// value that ramps is discharged by a pass-through — a counter climbing to the wrong value passes
+    /// through the right one — so a reader must be able to see, in the row, that the signal took several
+    /// values rather than two. <b>Reported, never gated:</b> a ramp is legitimate evidence for an
+    /// event-shaped author and a trap for a value-shaped one, and the evaluator cannot tell which from
+    /// here.</para>
+    /// </summary>
+    private static AssertionOutcome Existential(
+        string assertionId, string signal, string expected,
+        ObservedFrame[] considered, ObservedFrame[] agreed, Accountant accounting)
+    {
+        var distinct = considered.Select(f => f.Value).Distinct(StringComparer.Ordinal).Count();
+
+        return new AssertionOutcome(assertionId, signal, expected,
+            $"{expected} at {agreed.Length} of {considered.Length} observation(s)", AssertionState.Held)
+        {
+            Window = accounting(ObservationSource.Series, considered.Length, agreed.Length, agreed[0].Scan),
+            Detail =
+                $"declared AT SOME POINT, and it was: the signal took the expected value at {agreed.Length} of "
+                + $"{considered.Length} considered frame(s), first at scan {agreed[0].Scan} and last at scan {agreed[^1].Scan}. "
+                + "The frames that read otherwise are outside this claim rather than against it — an existential expectation says "
+                + "nothing about when the signal stopped. "
+                + (distinct > 2
+                    ? $"⚠️ The signal took {distinct} DISTINCT values across the considered frames. If this is a value that RAMPS, "
+                      + "an existential expectation is discharged by a pass-through on the way to the wrong value — check that this "
+                      + "signal is event-shaped, or restate the expectation as `throughout` or `atEnd`."
+                    : $"The signal took {distinct} distinct value(s) across the considered frames."),
+        };
+    }
+
+    /// <summary>
+    /// <b><see cref="TemporalShape.BecomesAndHolds"/>, mixed.</b> The one shape that reads the ORDER of the
+    /// frames: a pass iff the agreeing frames are a non-empty SUFFIX of the considered set.
+    ///
+    /// <para><b>This is the shape that reads a "51 of 65" correctly</b> — a pass when the 51 are the tail, a
+    /// defect when they are the head. Reverse the series and the verdict changes, which is precisely what
+    /// makes it a distinct shape rather than a tuning of the other two.</para>
+    ///
+    /// <para><b>A fall-back may accuse only with a declared window</b>, by the same rule as
+    /// <see cref="Universal"/>: without one, the frames where the signal went false again may be the
+    /// model's own recovery.</para>
+    /// </summary>
+    private static AssertionOutcome Rising(
+        string assertionId, string signal, string expected,
+        ObservedFrame[] considered, ObservedFrame[] agreed, bool windowDeclared, Accountant accounting)
+    {
+        var rose = Array.FindIndex(considered, f => string.Equals(f.Value, expected, StringComparison.Ordinal));
+        var heldToTheEnd = considered.Skip(rose)
+            .All(f => string.Equals(f.Value, expected, StringComparison.Ordinal));
+
+        if (heldToTheEnd)
+        {
+            return new AssertionOutcome(assertionId, signal, expected,
+                $"{expected} from scan {considered[rose].Scan} onward, at {agreed.Length} of {considered.Length} observation(s)",
+                AssertionState.Held)
+            {
+                Window = accounting(ObservationSource.Series, considered.Length, agreed.Length, considered[rose].Scan),
+                Detail =
+                    $"declared BECOMES AND HOLDS, and it did: the signal read otherwise for the first {rose} considered frame(s), "
+                    + $"took the expected value at scan {considered[rose].Scan}, and held it at every one of the "
+                    + $"{agreed.Length} frame(s) from there to scan {considered[^1].Scan}. The agreeing frames are the TAIL of the "
+                    + "considered set, which is what this shape asserts. Note that the rising edge itself falls between two polls: "
+                    + "what is observed is that the signal was NOT at the expected value and later WAS, not the instant it changed.",
+            };
+        }
+
+        var fellBack = considered.Skip(rose)
+            .First(f => !string.Equals(f.Value, expected, StringComparison.Ordinal));
+
+        if (windowDeclared)
+        {
+            return new AssertionOutcome(assertionId, signal, expected, fellBack.Value!, AssertionState.Disagreed)
+            {
+                Window = accounting(ObservationSource.Series, considered.Length, agreed.Length, fellBack.Scan),
+                Detail =
+                    $"declared BECOMES AND HOLDS, and it did not hold. The signal took the expected value at scan "
+                    + $"{considered[rose].Scan} and then read '{fellBack.Value}' again at scan {fellBack.Scan}, INSIDE the declared "
+                    + "arm window — so the fall-back is known to be inside the phase rather than in the model's inert tail. "
+                    + "This IS a statement about the block.",
+            };
+        }
+
+        return new AssertionOutcome(assertionId, signal, expected,
+            $"{expected} at {agreed.Length} of {considered.Length} observation(s), then not",
+            AssertionState.Inconclusive)
+        {
+            Window = accounting(ObservationSource.Series, considered.Length, agreed.Length, considered[rose].Scan),
+            Detail =
+                $"declared BECOMES AND HOLDS. The signal rose at scan {considered[rose].Scan} and read '{fellBack.Value}' again at "
+                + $"scan {fellBack.Scan} — but NO ARM WINDOW WAS DECLARED for it, so nothing says whether that fall-back is inside "
+                + "the phase or is the model's own required return to inert. "
+                + "*** THIS IS NOT A DISAGREEMENT AND MUST NOT BE ACTIONED AGAINST THE BLOCK. *** Declare `armedBy` on this signal in "
+                + "the binding and this becomes decidable on the evidence.",
+        };
+    }
+
+    /// <summary>
+    /// <b><see cref="TemporalShape.AtEnd"/>, mixed.</b> One frame decides, and the row names it.
+    ///
+    /// <para>🔴 <b>THIS IS THE PRE-2026-08-17 BEHAVIOUR WITH A DECLARATION ATTACHED, AND THE DIFFERENCE IS
+    /// THE WHOLE ARGUMENT FOR ADMITTING IT.</b> The old code took the completing frame for EVERY
+    /// expectation, chosen by nobody and recorded nowhere, and produced a confident FAIL against a block
+    /// proven correct on the device. Here the author asked for a terminal instant, and the outcome names
+    /// which scan it was and what the arm window read there — a verdict taken at an instant the reader can
+    /// see is a different object from one taken at an instant nobody knew was being used.</para>
+    ///
+    /// <para><b>With a window declared the instant is the last IN-WINDOW frame</b> (the considered set is
+    /// already narrowed), i.e. the end of the phase. <b>Without one it is the last frame before
+    /// completion</b> — the INERT TAIL for exactly the class of well-built model this system requires —
+    /// and the detail says so in those words, because an author who meant "at the end of the active phase"
+    /// needs `armedBy` first.</para>
+    /// </summary>
+    private static AssertionOutcome Terminal(
+        string assertionId, string signal, string expected,
+        ObservedFrame[] considered, ObservedFrame[] agreed, bool windowDeclared, Accountant accounting)
+    {
+        var last = considered[^1];
+        var held = string.Equals(last.Value, expected, StringComparison.Ordinal);
+
+        var whereTheInstantCameFrom = windowDeclared
+            ? "the last frame taken while the declared arm window was still OPEN, i.e. the end of the phase."
+            : "the last frame observed before completion. *** NO ARM WINDOW WAS DECLARED, so this instant is the model's TAIL: *** "
+              + "a well-built stimulus model returns the block to inert BEFORE it raises its completion flag, so a commanded state is "
+              + "expected to read inert here. If you meant 'at the end of the ACTIVE phase', declare `armedBy` on this signal in the "
+              + "binding first.";
+
+        return new AssertionOutcome(assertionId, signal, expected, last.Value!,
+            held ? AssertionState.Held : AssertionState.Disagreed)
+        {
+            Window = accounting(ObservationSource.Series, considered.Length, agreed.Length, last.Scan),
+            Detail =
+                $"declared AT END, so exactly one frame decides: scan {last.Scan}, which read '{last.Value}'. That instant is "
+                + whereTheInstantCameFrom
+                + $" (For context, and NOT part of this verdict: the signal agreed at {agreed.Length} of {considered.Length} "
+                + "considered frame(s).)",
+        };
+    }
+
+    /// <summary>
+    /// <b><see cref="TemporalShape.AtNoPoint"/> — the whole fold, inverted.</b> The expectation's value is
+    /// the FORBIDDEN one, so an "agreeing" frame is an occurrence of what must not happen.
+    ///
+    /// <para><b>An occurrence is positive evidence and may accuse; an absence is not and cannot.</b> A pass
+    /// here is produced by seeing nothing, which is also what a poll gap produces — the standing weakness of
+    /// every NEVER assertion under sampling, bounded by the observability floor rather than by this shape,
+    /// and printed on the row so a reader meets it where the verdict is.</para>
+    /// </summary>
+    private static AssertionOutcome ForbiddenValue(
+        string assertionId, string signal, string expected,
+        ObservedFrame[] considered, ObservedFrame[] occurrences, bool windowDeclared, Accountant accounting)
+    {
+        if (occurrences.Length == 0)
+        {
+            return new AssertionOutcome(assertionId, signal, expected, ForbiddenValueAbsent(expected), AssertionState.Held)
+            {
+                Window = accounting(ObservationSource.Series, considered.Length, 0, considered[^1].Scan),
+                Detail =
+                    $"declared AT NO POINT: '{expected}' is the FORBIDDEN value, and it was not observed at any of the "
+                    + $"{considered.Length} considered frame(s), spanning scans {considered[0].Scan} to {considered[^1].Scan}. "
+                    + "⚠️ A pass on this shape is produced by SEEING NOTHING, which is also what a poll gap produces — it is only as "
+                    + "strong as the observability floor makes it, and it is not proof the value never appeared between polls.",
+            };
+        }
+
+        if (windowDeclared)
+        {
+            return new AssertionOutcome(assertionId, signal, expected,
+                $"'{expected}' OBSERVED at {occurrences.Length} of {considered.Length} observation(s)",
+                AssertionState.Disagreed)
+            {
+                Window = accounting(ObservationSource.Series, considered.Length, occurrences.Length, occurrences[0].Scan),
+                Detail =
+                    $"declared AT NO POINT, and it happened: the FORBIDDEN value '{expected}' was observed at scan "
+                    + $"{occurrences[0].Scan}, INSIDE the declared arm window, and at {occurrences.Length} of "
+                    + $"{considered.Length} considered frame(s) in all. An occurrence is positive evidence and this one is known to be "
+                    + "inside the phase. This IS a statement about the block.",
+            };
+        }
+
+        return new AssertionOutcome(assertionId, signal, expected,
+            $"'{expected}' OBSERVED at {occurrences.Length} of {considered.Length} observation(s)",
+            AssertionState.Inconclusive)
+        {
+            Window = accounting(ObservationSource.Series, considered.Length, occurrences.Length, occurrences[0].Scan),
+            Detail =
+                $"declared AT NO POINT, and the FORBIDDEN value '{expected}' WAS observed, first at scan {occurrences[0].Scan} — but "
+                + "NO ARM WINDOW WAS DECLARED for this signal, so nothing says whether that occurrence is inside the phase or is a "
+                + "transient of the model's own reset. "
+                + "*** THIS IS NOT A DISAGREEMENT AND MUST NOT BE ACTIONED AGAINST THE BLOCK. *** Declare `armedBy` on this signal in "
+                + "the binding and this becomes decidable on the evidence.",
+        };
+    }
+
+    /// <summary>
+    /// What the shape adds when EVERY considered frame agreed. <b>Empty for
+    /// <see cref="TemporalShape.Unstated"/>, so the pre-existing text is unchanged character for
+    /// character.</b>
+    /// </summary>
+    private static string WholesaleAgreementClause(TemporalShape shape, ObservedFrame[] considered) => shape switch
+    {
+        TemporalShape.Throughout =>
+            " Declared THROUGHOUT, and no counterexample was seen — which is all a sampled universal claim can ever mean. "
+            + "It is not proof the signal never dropped between two polls.",
+
+        TemporalShape.AtSomePoint =>
+            " Declared AT SOME POINT, and it is discharged many times over: the expected value was present at every considered frame.",
+
+        TemporalShape.BecomesAndHolds =>
+            $" Declared BECOMES AND HOLDS. The signal was ALREADY at the expected value at the first considered frame (scan "
+            + $"{considered[0].Scan}), so NO RISING EDGE WAS OBSERVED — the edge, if any, fell before the first retained frame or "
+            + "before the window opened. The 'holds' half is satisfied; the 'becomes' half was not witnessed here.",
+
+        TemporalShape.AtEnd =>
+            $" Declared AT END; the deciding instant is scan {considered[^1].Scan}, and it agreed along with every other considered "
+            + "frame, so the choice of instant is not load-bearing in this result.",
+
+        _ => string.Empty,
+    };
+
+    /// <summary>
+    /// What the shape adds when NO considered frame agreed. <b>Empty for
+    /// <see cref="TemporalShape.Unstated"/>.</b> Every shape reaches the same verdict here, so these
+    /// clauses only say what was refuted.
+    /// </summary>
+    private static string TotalAbsenceClause(TemporalShape shape) => shape switch
+    {
+        TemporalShape.Throughout => " Declared THROUGHOUT: it did not hold at any observed instant, let alone all of them.",
+        TemporalShape.AtSomePoint =>
+            " Declared AT SOME POINT: the occurrence was never seen. This accusation is exactly as strong as it was before shapes "
+            + "existed — an event smaller than the poll gap is invisible at any polling rate, which is what the observability floor "
+            + "bounds.",
+        TemporalShape.BecomesAndHolds => " Declared BECOMES AND HOLDS: the signal never became the expected value at all.",
+        TemporalShape.AtEnd => " Declared AT END: the deciding instant disagrees, as does every other considered frame.",
+        _ => string.Empty,
+    };
 
     /// <summary>Evaluate a <c>Latched</c> expectation from its latch — the mode that is immune to the tail.</summary>
     /// <param name="source">

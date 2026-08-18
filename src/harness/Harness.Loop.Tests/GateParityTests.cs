@@ -191,6 +191,94 @@ public class GateParityTests
     }
 
     // ---------------------------------------------------------------------------------------------
+    // THE MULTI-SUBJECT SHAPE — parity PROVEN for it, not inherited from the single-subject fixture
+    // ---------------------------------------------------------------------------------------------
+
+    /// <summary>
+    /// 🔴 <b>THE SUBJECT GATE AGREES ON BOTH SIDES — INCLUDING WHEN IT REFUSES.</b>
+    ///
+    /// <para><b>This is the test that made a Gate-only fix impossible</b>, and it is here so the reason
+    /// stays checkable rather than remembered. A subject resolution performed in <c>GateCli</c> alone would
+    /// have appeared as <c>&lt;absent&gt;</c> on the loop's side of <see cref="AssertAgree"/> — the loop's
+    /// gate weaker than the standalone one, in exactly the place the standalone one is consulted first, on
+    /// the path that spends rig time. It lives in <c>SubmissionGate</c>, which both callers run.</para>
+    ///
+    /// <para><b>Asserted in both directions.</b> The refusing case alone would be satisfied by two gates
+    /// that both broke; the resolving case alone would be satisfied by two that both stopped checking.</para>
+    /// </summary>
+    [Theory]
+    [InlineData(null, false)]
+    [InlineData("\"subject\": \"TANK\",", true)]
+    public void THE_TWO_SUBJECT_SHAPE_AGREES_GATE_FOR_GATE_ON_BOTH_SIDES(string? vectorSubject, bool expectResolved)
+    {
+        var (standalone, loop) = Both(TwoSubjectSubmission(vectorSubject), Binding());
+
+        AssertAgree(standalone, loop);
+
+        // And the gate that moved is NAMED, on the loop's side — "they agree" is also true when both are
+        // absent, which is the failure mode this whole file exists for.
+        var gate = Assert.Single(loop.Gates, g => g.Gate == "3j subject resolution");
+
+        Assert.Equal(GateStatus.Checked, gate.Status);
+        Assert.Equal(expectResolved, gate.Passed);
+
+        if (!expectResolved)
+        {
+            Assert.Contains("PUMP", gate.Detail, StringComparison.Ordinal);
+            Assert.Contains("TANK", gate.Detail, StringComparison.Ordinal);
+        }
+    }
+
+    private const string SharedClause = "SHARED-7";
+    private const string PumpText = "WHEN the interlock is broken THEN the drive command is dropped";
+    private const string TankText = "WHEN the interlock is broken THEN the fill valve is closed";
+    private static readonly string PumpId = AssertionId.Compute(SharedClause, PumpText);
+    private static readonly string TankId = AssertionId.Compute(SharedClause, TankText);
+
+    /// <summary>
+    /// The single-subject fixture with its enumeration replaced by TWO that share a clause. Everything else
+    /// is byte-identical, so any gate that moves has moved for the subject and nothing else.
+    /// </summary>
+    private static string TwoSubjectSubmission(string? vectorSubject)
+    {
+        var json = Submission();
+
+        // *** SPLICED BY INDEX, AND EVERY ANCHOR IS ASSERTED. *** A `.Replace` whose needle does not match
+        // returns the string unchanged, so a fixture built that way degrades SILENTLY into the
+        // single-subject one — and a two-subject test that quietly tests one subject is precisely the
+        // examined-nothing green this file exists to catch. It caught itself here, on the first run.
+        var start = json.IndexOf("\"enumeration\":", StringComparison.Ordinal);
+        var end = json.IndexOf("\"map\":", StringComparison.Ordinal);
+
+        Assert.True(start >= 0 && end > start, "the fixture's enumeration block moved; this splice would have produced the SINGLE-subject submission.");
+
+        var twoSubjects = $$"""
+            "enumerations": [
+                { "subject": "PUMP", "clauses": ["{{SharedClause}}"], "assertions": ["{{PumpId}}"],
+                  "forms": { "{{PumpId}}": "When" }, "enumerator": "agent-c",
+                  "normalisedTexts": { "{{PumpId}}": "{{PumpText}}" },
+                  "requiredObservations": { "{{PumpId}}": ["Count"] }, "bounds": { "ramp_limit": "10" } },
+                { "subject": "TANK", "clauses": ["{{SharedClause}}"], "assertions": ["{{TankId}}"],
+                  "forms": { "{{TankId}}": "When" }, "enumerator": "agent-c",
+                  "normalisedTexts": { "{{TankId}}": "{{TankText}}" },
+                  "requiredObservations": { "{{TankId}}": ["Count"] }, "bounds": { "ramp_limit": "10" } }
+              ],
+
+            """;
+
+        var spliced = json[..start] + twoSubjects + json[end..];
+
+        var citation = $"\"clause\": \"{ClauseId}\",";
+        var assertion = $"\"assertion\": \"{AssertionIdValue}\",";
+        Assert.Contains(citation, spliced, StringComparison.Ordinal);
+        Assert.Contains(assertion, spliced, StringComparison.Ordinal);
+
+        return spliced
+            .Replace(citation, $"\"clause\": \"{SharedClause}\",", StringComparison.Ordinal)
+            .Replace(assertion, $"\"assertion\": \"{TankId}\", {vectorSubject ?? string.Empty}", StringComparison.Ordinal);
+    }
+
+    // ---------------------------------------------------------------------------------------------
     // THE COMPARATOR'S OWN CONTROLS — because it is otherwise unfalsifiable in place
     // ---------------------------------------------------------------------------------------------
 

@@ -14,7 +14,18 @@ namespace Harness.Results;
 /// if the block were correct</b> — and that is the decorrelating half, because two different readings
 /// of one clause produce two VISIBLY DIFFERENT assertions instead of two green results.</para>
 /// </summary>
-public sealed record Basis(string ClauseId, string AssertionId);
+/// <param name="Subject">
+/// 🔴 <b>WHICH ENUMERATION THIS CITATION MEANS, where a submission carries more than one.</b>
+///
+/// <para><b>TRAILING AND OPTIONAL, AND THAT IS THE COMPATIBILITY GUARANTEE.</b> Every citation written
+/// before 2026-08-18 is unqualified and predates the second subject file entirely, so it means the file
+/// that was there first. A set of one has nothing to resolve between, so those citations take exactly the
+/// path they took yesterday — they are never retargeted. See <see cref="AssertionEnumerationSet.Resolve"/>.</para>
+///
+/// <para><b>Blank means unqualified, and unqualified is only an error where it is AMBIGUOUS</b> — a clause
+/// declared by one subject resolves unqualified for ever. What is refused is a clause declared by two.</para>
+/// </param>
+public sealed record Basis(string ClauseId, string AssertionId, string? Subject = null);
 
 /// <summary>
 /// The spec-derived assertion enumeration a <see cref="Basis"/> must cite INTO.
@@ -106,6 +117,21 @@ public sealed record AssertionEnumeration(
     IReadOnlyDictionary<string, string>? Bounds = null,
     IReadOnlyDictionary<string, IReadOnlySet<string>>? AssertionBounds = null)
 {
+    /// <summary>
+    /// 🔴 <b>WHAT THIS ENUMERATION IS THE DENOMINATOR *FOR* — its declared subject.</b>
+    ///
+    /// <para><b>An INIT-ONLY PROPERTY WITH A DEFAULT rather than a positional member</b>, following
+    /// <c>ObservationWindow.Shape</c> and <c>MirrorObservability.Provenance</c>: no existing construction
+    /// site changes, and every enumeration written before subjects existed carries the empty string — the
+    /// unnamed single subject, which is what all of them are.</para>
+    ///
+    /// <para><b>Blank is not a defect and never gates.</b> It is only meaningful against a sibling: one
+    /// unnamed enumeration is the shape this system had for its whole life. What the subject buys is the
+    /// ability to say WHICH denominator a citation means once there are two — see
+    /// <see cref="AssertionEnumerationSet"/>, which is where every rule about that lives.</para>
+    /// </summary>
+    public string Subject { get; init; } = string.Empty;
+
     public bool IsEmpty => Assertions.Count == 0 || Clauses.Count == 0;
 
     /// <summary>True when the enumeration is the flat projection and carries no forms at all.</summary>
@@ -184,7 +210,8 @@ public sealed record AssertionEnumeration(
         IReadOnlyDictionary<string, string>? normalisedTexts = null,
         IReadOnlyDictionary<string, IReadOnlySet<string>>? requiredObservations = null,
         IReadOnlyDictionary<string, string>? bounds = null,
-        IReadOnlyDictionary<string, IReadOnlySet<string>>? assertionBounds = null) =>
+        IReadOnlyDictionary<string, IReadOnlySet<string>>? assertionBounds = null,
+        string subject = "") =>
         new(clauses.ToHashSet(StringComparer.Ordinal),
             assertions.ToHashSet(StringComparer.Ordinal),
             forms ?? new Dictionary<string, AssertionForm>(StringComparer.Ordinal),
@@ -192,7 +219,10 @@ public sealed record AssertionEnumeration(
             normalisedTexts,
             requiredObservations,
             bounds,
-            assertionBounds);
+            assertionBounds)
+        {
+            Subject = subject ?? string.Empty,
+        };
 }
 
 /// <summary>What a model claims to represent, and what it explicitly does not (M3).</summary>
@@ -267,6 +297,19 @@ public enum RefusalReason
     /// <summary>The enumeration itself was empty, so the citation was checked against nothing.</summary>
     EnumerationEmpty,
 
+    /// <summary>
+    /// 🔴 <b>THE CITED CLAUSE IS DECLARED BY MORE THAN ONE SUBJECT AND THE CITATION DOES NOT SAY WHICH.</b>
+    ///
+    /// <para>Each subject numbers its own assertions from A1, so one clause ID names a different assertion
+    /// in each file — and the assertion ID cannot break the tie, because an ID is (clause identity,
+    /// assertion content) with no subject term. <b>Picking one would be a guess dressed as a lookup;
+    /// empty is not clean and neither is ambiguous.</b> The repair is on the VECTOR: qualify the citation.</para>
+    /// </summary>
+    AmbiguousSubject,
+
+    /// <summary>The citation names a subject no enumeration in the submission declares, so it resolves to nothing written.</summary>
+    SubjectNotEnumerated,
+
     /// <summary>The vector asserts a behaviour the model does not claim to represent (M4).</summary>
     FidelityExceeded,
 
@@ -299,6 +342,69 @@ public enum RefusalReason
 public sealed record Admissibility(IReadOnlyList<(RefusalReason Reason, string Detail)> Refusals)
 {
     public bool Admissible => Refusals.Count == 0;
+
+    /// <summary>
+    /// Run every gate, <b>resolving the citation to ONE subject first</b>.
+    ///
+    /// <para>🔴 <b>THE RESOLUTION IS A GATE OF ITS OWN AND IT COMES BEFORE THE OTHERS.</b> Where a citation
+    /// cannot be placed in exactly one enumeration there is no denominator to check it against, so the
+    /// clause and assertion gates are NOT RUN rather than run against a guess — running them against the
+    /// first candidate is the pick this refuses, and running them against a merge is the union denominator
+    /// that belongs to neither subject. Every other gate (fidelity, settling, authorship, observability) is
+    /// independent of which enumeration answered and runs exactly as before.</para>
+    ///
+    /// <para><b>A set of one behaves identically to the single-enumeration overload below</b>, which is what
+    /// keeps every submission written before subjects existed on the path it was written for.</para>
+    /// </summary>
+    public static Admissibility Check(
+        Basis? basis,
+        AssertionEnumerationSet enumerations,
+        FidelityDeclaration? fidelity,
+        IReadOnlyCollection<string> assertedBehaviours,
+        SettlingDeclaration? settling,
+        string completionSignal,
+        AgentIdentity vectorAuthor,
+        AgentIdentity blockAuthor,
+        ObservabilityReport? observability)
+    {
+        ArgumentNullException.ThrowIfNull(enumerations);
+
+        var resolution = enumerations.Resolve(basis);
+
+        if (!resolution.IsFailure)
+        {
+            // RESOLVED, or NOT CITED. The second passes the set's only enumeration through unchanged so
+            // that gate 3 raises its own BasisNotCited — one defect, refused once, by the gate that owns it.
+            return Check(basis, resolution.Enumeration ?? enumerations.Enumerations[0],
+                fidelity, assertedBehaviours, settling, completionSignal, vectorAuthor, blockAuthor, observability);
+        }
+
+        var reason = resolution.State switch
+        {
+            CitationResolutionState.Ambiguous => RefusalReason.AmbiguousSubject,
+            CitationResolutionState.UnknownSubject => RefusalReason.SubjectNotEnumerated,
+            CitationResolutionState.NothingToResolveInto => RefusalReason.EnumerationEmpty,
+            _ => RefusalReason.ClauseNotEnumerated,
+        };
+
+        // 🔴 THE CITATION COULD NOT BE PLACED, SO THE CLAUSE AND ASSERTION GATES ARE NOT RUN — but every
+        // gate that does NOT depend on the enumeration still is. A vector whose citation is ambiguous can
+        // ALSO have an undeclared model and no settling condition, and reporting only the first would send
+        // the author back for three round trips. The stand-in below contains this citation's own clause and
+        // assertion, so those two gates pass vacuously and contribute nothing; the resolution's refusal is
+        // what stands in their place, and it is FIRST in the list because it is the one to fix first.
+        var standIn = AssertionEnumeration.Of(
+            new[] { basis?.ClauseId ?? "<none>" },
+            new[] { basis?.AssertionId ?? "<none>" });
+
+        var independent = Check(basis, standIn,
+            fidelity, assertedBehaviours, settling, completionSignal, vectorAuthor, blockAuthor, observability);
+
+        return new Admissibility(
+            new[] { (reason, resolution.Detail) }
+                .Concat(independent.Refusals)
+                .ToArray());
+    }
 
     /// <summary>Run every gate. Order is the contract's own (§10), and every failure is reported, not the first.</summary>
     public static Admissibility Check(

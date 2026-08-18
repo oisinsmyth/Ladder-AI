@@ -107,7 +107,23 @@ public static class WaveRun
             var inert = InertPhase.Establish(client,
                 active.Select(t => new SlotInert(t.SlotIndex, t.Vectors[index].Values, t.Vectors[index].Inert)).ToArray());
 
-            var commanded = active.Select(t => t.SlotIndex).ToArray();
+            // 🔴 *** PLANNED, NOT COMMANDED — AND THE NAME IS THE FIX. ***
+            //
+            // This variable was called `commanded` and was handed to the co-running log on BOTH paths
+            // below, including the one where `InertPhase.Commit` is never called. `Establish` has just
+            // written LOW start bools and CLEARED the echo, so on the refusal path the log compared a
+            // fabricated commanded set against a freshly-zeroed echo and could only ever report X-E's
+            // `CommandedButDidNotRun`: *"the slot was commanded and the echo says its block never saw its
+            // start condition"*.
+            //
+            // Measured on JOB9004's vessel wave, 2026-08-18: the run's own last control frame read
+            // StartBools = 0x0000 — the commit provably had not happened — while the result package
+            // accused the block of not starting, and the investigation that produced went hunting a
+            // start-bit write race in this client that does not exist. A plan is not evidence; the whole
+            // of X-E is that sentence, and this is where the log was quietly breaking it.
+            //
+            // It becomes `commanded` at exactly one point in this method: after `Commit` returns.
+            var planned = active.Select(t => t.SlotIndex).ToArray();
 
             if (!inert.Established)
             {
@@ -122,16 +138,29 @@ public static class WaveRun
                 // D34 alternates inert/test unconditionally, but an inert phase that could not be
                 // ESTABLISHED is O6's residual — a wave-blocking condition rather than a test failure —
                 // and continuing would run every later index from a state nobody verified.
-                log.Record(index, commanded, client.ReadControlUnverified(), client.Map.Slots.Count);
+                //
+                // The echo is still READ here: a latch set at an index where this client raised nothing is
+                // `RanButWasNotCommanded`, which is real and more alarming here than anywhere else.
+                log.RecordNotCommitted(index, planned, client.ReadControlUnverified(), client.Map.Slots.Count);
                 break;
             }
 
+            // ---- THE COMMIT. Everything above ran with the start bools LOW; everything below runs with
+            // them HIGH, and only from here is `planned` also `commanded`.
+            var commanded = planned;
             var startScan = InertPhase.Commit(client, inert, commanded);
 
             var perIndex = Observe(client, compression, active, index, startScan, inert, nowMs);
             foreach (var (slotIndex, result) in perIndex)
                 collected[slotIndex].Add(result);
 
+            // 🔴 *** THE ECHO IS READ HERE, AFTER THE OBSERVATION AND BEFORE THE NEXT INDEX'S INERT PHASE
+            // CLEARS IT. *** That ordering is the whole handshake: the latch is set by the copy layer in
+            // the same scan the start bit is copied, survives every poll gap (a short test can start and
+            // finish between two polls), is read once here, and is released by the NEXT
+            // `InertPhase.Establish` — never after a commit. Clearing it on the far side of a commit would
+            // wipe a latch that had just been set and would be indistinguishable, in every artifact this
+            // system produces, from a block that never started.
             log.Record(index, commanded, client.ReadControl(), client.Map.Slots.Count);
 
             // D26a rule 3 — a slot exits when its OWN tensor is done, and its results go out THEN.

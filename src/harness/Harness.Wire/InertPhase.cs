@@ -185,15 +185,48 @@ public static class InertPhase
             }
         }
 
-        // The reset, as a LEVEL held for the whole inert period — not an edge and not a pulse. ONE write,
-        // covering every slot: a null slot's bool goes low here too, which is the whole of D26a rule 2.
+        // -----------------------------------------------------------------------------------------
+        // 🔴 THE PER-INDEX WRITE ORDER. Four writes, in this order, and each one is on the side of the
+        // commit it is on for a stated reason. `InertPhaseTests` pins the order; do not reorder them.
+        //
+        //   1. LOWER the start bools      — here, because it is the reset LEVEL and everything below
+        //                                   must be observed with the block under test held reset.
+        //   2. CLEAR the echo latches     — here, and NEVER after the commit. See below.
+        //   3. WRITE the vector           — here, because the next test's values ARE its start condition
+        //                                   (D33 consequence 1) and they must be in place before the
+        //                                   quiescence window that decides whether it is settled.
+        //   4. RAISE the start bools      — `Commit`, on a LATER scan than the verify (D37).
+        //
+        // 🔴 *** WHY 2 IS BEFORE 4 AND CAN NEVER MOVE AFTER IT. *** The echo is a SET coil on the
+        // block's own start condition and NOTHING IN THE PROGRAM CLEARS IT — this client is the only
+        // thing that ever does. Clearing it after the commit would wipe a latch the commit had just set,
+        // and the wave would then read "the block never saw its start condition" for a block that ran
+        // perfectly. That failure is invisible in every artifact this system produces: it is
+        // byte-identical to a start bit that never reached the controller.
+        //
+        // *** AND IT IS A RACE, NOT A CONSTANT ERROR, WHICH IS WHY IT WOULD LOOK INTERMITTENT. *** The
+        // controller scans in ~2-25 ms and a Modbus round trip to the rig measures 63-106 ms, so the
+        // client is 3-40x slower than the thing it is handshaking with. The latch is the only mechanism
+        // bridging that gap; on the wrong side of the commit it destroys it for as long as the copy layer
+        // takes to re-set the bit, which is a window nothing here can bound.
+        //
+        // Writes 1 and 2 are separate transactions ON PURPOSE and in this order: the copy layer's SET
+        // coil re-fires for as long as the start condition is high, so clearing the echo while the start
+        // bools were still raised would clear a latch the very next scan re-sets. Write 1's response has
+        // returned before write 2 is issued — one round trip is many scans — so the reset is established
+        // on the device before the release is asked for.
+        // -----------------------------------------------------------------------------------------
+
+        // 1. The reset, as a LEVEL held for the whole inert period — not an edge and not a pulse. ONE
+        // write, covering every slot: a null slot's bool goes low here too, which is the whole of D26a
+        // rule 2.
         client.LowerAllStartBools();
 
-        // D33: latches are released, and the release must COMPLETE before the first scan of the test.
+        // 2. D33: latches are released, and the release must COMPLETE before the first scan of the test.
         // The echo is a latch, so it is cleared here rather than after the commit.
         client.ClearStartEcho();
 
-        // The values that establish the NEXT test's start condition (D33 consequence 1).
+        // 3. The values that establish the NEXT test's start condition (D33 consequence 1).
         foreach (var slot in active)
             client.WriteVector(slot.SlotIndex, slot.Vector);
 
@@ -342,9 +375,12 @@ public static class InertPhase
                 $"refusing to raise the start bools: inert was not established ({verified.Outcome}). {verified.Detail} D34 alternates inert/test unconditionally, but the inert phase is what CONTAINS a bad state — starting from one that was never verified is what that alternation exists to prevent.");
         }
 
-        // A LATER scan than the verify, never the same one — observed, not inferred from the round-trip
-        // time. Releasing a reset and starting in one scan makes the outcome depend on rung order inside
-        // the block under test.
+        // 4. A LATER scan than the verify, never the same one — observed, not inferred from the
+        // round-trip time. Releasing a reset and starting in one scan makes the outcome depend on rung
+        // order inside the block under test.
+        //
+        // 🔴 *** THIS IS THE LAST WRITE OF THE INDEX. Nothing after it may clear the echo latch *** — see
+        // the write-order block in `Establish`. The next release is the NEXT index's inert phase.
         if (!WaitScans(client, verified.ScanAtVerify, 1, maxPolls, out var scanAtCommit, out _))
         {
             throw new WireException(

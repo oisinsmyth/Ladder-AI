@@ -342,6 +342,131 @@ public class WaveRunTests
     }
 
     // ---------------------------------------------------------------------------------------------
+    // 🔴 THE FABRICATED X-E ACCUSATION — an index at which the commit never happened
+    //
+    // Measured on JOB9004's vessel wave, 2026-08-18: index 2 came back NotInert, the run's own final
+    // control frame read StartBools = 0x0000 (so nothing had been commanded), and the result package
+    // nevertheless said "the slot was commanded and the echo says its block never saw its start
+    // condition (X-E). The test did not happen." That sentence names the BLOCK, and it sent an
+    // investigation looking for a start-bit/echo write race in this client that does not exist.
+    // ---------------------------------------------------------------------------------------------
+
+    /// <summary>An index whose inert phase refuses at check one: R000 is declared to rest at 7 and rests at 0.</summary>
+    private static WireVector RefusingInert() =>
+        Vector() with { Inert = new InertDeclaration(new Dictionary<int, ushort> { [0] = 7, [1] = 0 }) };
+
+    [Fact]
+    public void AN_INDEX_WHOSE_INERT_PHASE_REFUSED_COMMANDED_NOTHING_and_the_log_must_not_say_it_did()
+    {
+        // The load-bearing fact is on the WIRE, not in our bookkeeping: `InertPhase.Commit` is the only
+        // thing that raises a start bool, and on this path it is never called. A log that names the
+        // index's PLANNED slots as `Commanded` compares them against an echo the same inert phase has
+        // just CLEARED, so it can only ever produce CommandedButDidNotRun — a fabricated accusation
+        // against a block nobody asked to run.
+        var (client, wire, map) = Wired(slots: 1);
+
+        var wave = WaveRun.Run(client, RuntimeCompression.Uncompressed,
+            new[] { new SlotTensor(0, new[] { Vector(), RefusingInert() }) });
+
+        Assert.Equal(SlotOutcome.Completed, wave.For(0).Results[0].Outcome);
+        Assert.Equal(SlotOutcome.NotInert, wave.For(0).Results[1].Outcome);
+
+        // THE DEVICE'S OWN ANSWER FIRST: the last thing written to the start-bool word at the refused
+        // index was the inert phase's LOWERING. Nothing was commanded, and this is why.
+        var startBoolWrites = wire.Log.Where(t => t.IsWrite && t.StartRegister == map.StartBools.Register).ToArray();
+        Assert.Equal((ushort)0, startBoolWrites[^1].Values[0]);
+
+        var refused = wave.Log.Indices[1];
+
+        Assert.Empty(refused.Commanded);
+        Assert.Equal(new[] { 0 }, refused.PlannedSlots);
+        Assert.Equal(CoRunningOutcome.NotCommitted, refused.Outcome);
+
+        // The whole point, stated as the sentence that must NOT be produced.
+        Assert.DoesNotContain(wave.Log.Discrepancies,
+            d => d.Contains("were commanded and never ran", StringComparison.Ordinal));
+
+        Assert.Contains(wave.Log.Discrepancies,
+            d => d.Contains("NO START BOOL WAS RAISED", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void A_refused_index_is_NOT_reported_as_agreement_either_because_empty_is_not_clean()
+    {
+        // Commanded and executed are both empty on a refused index, so they trivially agree. Reporting a
+        // wave that stopped dead as "everything agreed" is the other way to be wrong about it.
+        var (client, _, _) = Wired(slots: 1);
+
+        var wave = WaveRun.Run(client, RuntimeCompression.Uncompressed,
+            new[] { new SlotTensor(0, new[] { Vector(), RefusingInert() }) });
+
+        Assert.False(wave.Log.Agrees);
+    }
+
+    [Fact]
+    public void A_BLOCK_RUNNING_AT_AN_INDEX_NOBODY_COMMANDED_IS_STILL_REPORTED_even_when_inert_refused()
+    {
+        // The converse, and it must survive the fix: an echo latched at an index where this client raised
+        // nothing means something OTHER than this harness is driving that block. Folding that into "no
+        // commit happened" would swallow the one finding the co-running log exists to make, on the index
+        // where it is most alarming.
+        var (client, wire, _) = Wired(slots: 1);
+        wire.ForceEchoFor.Add(0);
+
+        var wave = WaveRun.Run(client, RuntimeCompression.Uncompressed,
+            new[] { new SlotTensor(0, new[] { RefusingInert() }) });
+
+        Assert.Equal(CoRunningOutcome.RanButWasNotCommanded, wave.Log.Indices[0].Outcome);
+        Assert.Contains(wave.Log.Discrepancies, d => d.Contains("without being commanded", StringComparison.Ordinal));
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // 🔴 THE ECHO LATCH IS RELEASED BEFORE THE COMMIT AND NEVER AFTER IT
+    //
+    // This is the hypothesis the vessel symptom was first read as, and it is the one ordering that
+    // would reproduce it exactly: clearing the latch after raising the start bit wipes evidence the
+    // commit had just created, and the artifact is byte-identical to a block that never started. It is
+    // NOT what the client does — this test is the fence that keeps it that way, because the defect is
+    // invisible in every other output.
+    // ---------------------------------------------------------------------------------------------
+
+    [Fact]
+    public void NO_ECHO_CLEAR_EVER_FOLLOWS_A_COMMIT_within_the_index_it_committed()
+    {
+        var (client, wire, map) = Wired(slots: 2);
+
+        WaveRun.Run(client, RuntimeCompression.Uncompressed, new[] { Tensor(0, 3), Tensor(1, 3) });
+
+        // Every control-region write, in issue order, reduced to what it was: a raise, a lowering, or an
+        // echo release. Read straight off the transaction log, so it is a statement about the WIRE.
+        var control = wire.Log
+            .Where(t => t.IsWrite && (t.StartRegister == map.StartBools.Register || t.StartRegister == map.StartEcho.Register))
+            .Select(t => t.StartRegister == map.StartEcho.Register ? "echo-clear"
+                       : t.Values.Any(v => v != 0) ? "raise" : "lower")
+            .ToArray();
+
+        Assert.Contains("raise", control);
+        Assert.Contains("echo-clear", control);
+
+        for (var i = 0; i < control.Length; i++)
+        {
+            if (control[i] != "raise" || i + 1 >= control.Length)
+                continue;
+
+            // The next control write after a raise must be the NEXT index's lowering. An echo clear here
+            // would destroy a latch this raise had just set, and the poll gap (63-106 ms against a 2-25 ms
+            // scan) is exactly why a latch is what bridges it.
+            Assert.True(control[i + 1] == "lower",
+                $"a '{control[i + 1]}' was issued straight after a commit. The echo latch is set by the copy layer "
+                + "in the same scan the start bit is copied and is cleared by NOBODY but this client; releasing it on the "
+                + "far side of a commit reports a healthy block as one that never saw its start condition.");
+        }
+
+        // And the positive half of the order, per index: lower, echo-clear, raise.
+        Assert.Equal(new[] { "lower", "echo-clear", "raise" }, control.Take(3));
+    }
+
+    // ---------------------------------------------------------------------------------------------
     // Refusals
     // ---------------------------------------------------------------------------------------------
 

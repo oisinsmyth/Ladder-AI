@@ -135,6 +135,14 @@ public static class ResultPackageJson
                     ["distinctFrames"] = w.DistinctFrames,
                     ["retainedFrames"] = w.RetainedFrames,
                     ["seriesTruncated"] = w.SeriesTruncated,
+
+                    // 🔴 *** WHICH QUESTION THE FOLD WAS ASKED. *** Emitted on EVERY row including
+                    // `Unstated`, rather than only when a shape was declared: an absent key reads as "fine"
+                    // to everyone who did not write it, and `Unstated` is a positive fact about the vector
+                    // — it is the reason a mixed series came back Inconclusive rather than judged. A
+                    // consumer comparing two Held rows needs it, because Held-under-AtSomePoint and
+                    // Held-under-Throughout are different claims about the block.
+                    ["temporalShape"] = w.Shape.ToString(),
                     ["detail"] = w.Describe(),
                 };
             }
