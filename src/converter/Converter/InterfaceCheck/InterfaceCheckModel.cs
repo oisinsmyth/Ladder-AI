@@ -1,4 +1,4 @@
-namespace Converter.InterfaceCheck;
+﻿namespace Converter.InterfaceCheck;
 
 /// <summary>One required name's verdict.</summary>
 /// <remarks>
@@ -103,13 +103,14 @@ public sealed record InterfaceCheckReport(
     /// Report an outcome that examined nothing. <b>Every field a consumer might read is empty and
     /// <see cref="Checked"/> is false</b>, so no caller can mistake it for a pass.
     /// </summary>
-    public static InterfaceCheckReport NotChecked(string block, string reason, string corpusSummary) =>
+    public static InterfaceCheckReport NotChecked(
+        string block, string reason, string corpusSummary, string requirementsSource = "") =>
         new(block, string.Empty, string.Empty, Checked: false, reason,
             Array.Empty<InterfaceRequirement>(),
             Array.Empty<string>(),
             Array.Empty<string>(),
             Array.Empty<OpaqueMember>(),
             new Dictionary<string, int>(StringComparer.Ordinal),
-            RequirementsSource: string.Empty,
+            requirementsSource,
             corpusSummary);
 }

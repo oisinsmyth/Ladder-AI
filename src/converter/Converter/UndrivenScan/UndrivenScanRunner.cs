@@ -55,6 +55,15 @@ public static class UndrivenScanRunner
             .OrderBy(i => i, StringComparer.Ordinal)
             .ToList();
 
+        // FI-44 again, one level in. `--instance` naming nothing that exists produced zero rows and
+        // EXIT 0 — a filter typo read exactly like a clean sweep of every instance.
+        if (instances.Count == 0)
+        {
+            return new UndrivenScanReport(projectDir, inventory.FilesScanned, fbName, callerFiles,
+                Array.Empty<MemberDrive>(), inventory.Warnings.Concat(graph.Warnings).ToList(),
+                ScanScope.NoInstancesMatchedFilter);
+        }
+
         // In scope: members the FB READS (inputs — "undriven" means something), PLUS members nothing
         // touches at all. That second group matters and is easy to miss: a declared input the FB never
         // reads AND no caller writes is inert on both sides, which is exactly the documented
@@ -72,6 +81,23 @@ public static class UndrivenScanRunner
             .OrderBy(s => s, StringComparer.Ordinal)
             .ToList();
 
+        // 🔴 FI-44, THE THIRD SHAPE — 2026-08-18. The block exists, it HAS instances, and the scope
+        // filter above still emptied the set: every interface member is one the FB itself writes, so
+        // there is no caller-driven input left to resolve. That is a perfectly ordinary state for a
+        // block that only PUBLISHES — and it produced `0 member/instance pair(s)` and EXIT 0, which is
+        // indistinguishable from a thorough scan that found nothing wrong.
+        //
+        // Measured on a live corpus: TWO OF THE THREE LARGEST BLOCKS reported exactly that, and both
+        // were read as passes. The two earlier guards (unknown block, no instances) were written
+        // against the ways a scan could examine nothing THAT WERE KNOWN THEN; this is the way that was
+        // not, and the lesson is that the count of rows is the thing to key on, not the reasons.
+        if (scopedMembers.Count == 0)
+        {
+            return new UndrivenScanReport(projectDir, inventory.FilesScanned, fbName, callerFiles,
+                Array.Empty<MemberDrive>(), inventory.Warnings.Concat(graph.Warnings).ToList(),
+                ScanScope.NoMembersInScope);
+        }
+
         var startValues = inventory.Leaves.ToLookup(l => l.Path, StringComparer.Ordinal);
 
         var rows = new List<MemberDrive>();
@@ -87,22 +113,27 @@ public static class UndrivenScanRunner
             inventory.Warnings.Concat(graph.Warnings).ToList());
     }
 
+    // 🔴 ALL THREE OF THESE RESOLVE THROUGH `UsagesReaching`, NOT THROUGH A VERBATIM KEY LOOKUP
+    // (2026-08-18). A block that writes a whole struct — `MOVE(IN := DB_Param.Recipe[3]) => Selected` —
+    // writes every member of it, under a usage key that names no member. Looking `Selected.SRID` up
+    // verbatim finds nothing, so the FB's own output members survived the scope filter below and were
+    // then reported UNDRIVEN to their caller: the caller is not supposed to drive them at all.
     private static bool IsReadByFb(ProjectUsageGraph graph, string fbName, string suffix) =>
-        graph.Usages.TryGetValue(suffix, out var usage)
-        && usage.Readers.Any(r => string.Equals(r.Block, fbName, StringComparison.Ordinal));
+        graph.UsagesReaching(suffix).Readers.Any(r => string.Equals(r.Block, fbName, StringComparison.Ordinal));
 
     // A member the FB WRITES is an output it reports, not an input the caller is meant to drive — even
     // when the FB also reads it back (an internal latch exposed on the interface). Reporting those as
     // "undriven (default FALSE)" from the caller's side was ~2/3 of this scan's output and actively
     // misleading: a reader can mistake an FB output's default for a missing wire.
     private static bool IsWrittenByFb(ProjectUsageGraph graph, string fbName, string suffix) =>
-        graph.Usages.TryGetValue(suffix, out var usage)
-        && usage.Writers.Any(w => string.Equals(w.Block, fbName, StringComparison.Ordinal));
+        graph.UsagesReaching(suffix).Writers.Any(w => string.Equals(w.Block, fbName, StringComparison.Ordinal));
 
     // Declared on the interface but neither read nor written by the FB itself.
-    private static bool IsUntouchedByFb(ProjectUsageGraph graph, string fbName, string suffix) =>
-        !graph.Usages.TryGetValue(suffix, out var usage)
-        || !usage.Readers.Concat(usage.Writers).Any(s => string.Equals(s.Block, fbName, StringComparison.Ordinal));
+    private static bool IsUntouchedByFb(ProjectUsageGraph graph, string fbName, string suffix)
+    {
+        var (writers, readers) = graph.UsagesReaching(suffix);
+        return !readers.Concat(writers).Any(s => string.Equals(s.Block, fbName, StringComparison.Ordinal));
+    }
 
     private static MemberDrive Classify(
         ProjectUsageGraph graph,
@@ -119,20 +150,49 @@ public static class UndrivenScanRunner
         // the local form, then restricts to the owning block: two FBs that both happen to declare a
         // `ValveWater` would otherwise pool each other's writers and each mask the other's gap.
         var isMulti = graph.MultiInstanceOrigin.TryGetValue(instance, out var origin);
-        var path = isMulti ? $"{origin.LocalRoot}.{member}" : $"{instance}.{member}";
 
-        List<ProjectUsageGraph.UsageSite> writers;
-        if (graph.Usages.TryGetValue(path, out var usage))
+        // 🔴 A MULTI-INSTANCE MEMBER IS ADDRESSED TWO WAYS, AND ONLY ONE OF THEM WAS EVER LOOKED UP
+        // (2026-08-18). From INSIDE the owning FB it is bare and local — `ValveDrain.IO.InHand`. From
+        // ANY OTHER BLOCK it is absolute and rooted on the owner's instance DB —
+        // `iDB_SiloVessel_SiloW.ValveDrain.IO.InHand`. This method resolved the local form only, so
+        // every write from an orchestrator, a command decoder or a startup block was invisible.
+        //
+        // MEASURED: six members reported UNDRIVEN on all sixteen placements of one valve FB — 96 false
+        // reports — while `cross-check`, reading the SAME graph, listed the writers of each absolute
+        // path plainly. Two tools contradicting each other over one corpus is what made it findable,
+        // and a check wrong in one direction 60% of the time cannot be trusted in the other.
+        //
+        // The owner restriction applies to the LOCAL form only, and must: a bare `ValveDrain.IO.InHand`
+        // could belong to any FB that happens to declare a `ValveDrain`, so pooling those would let one
+        // block's wiring mask another's gap. The ABSOLUTE form names one placement and needs no such
+        // guard — that is exactly what makes it absolute.
+        var lookups = new List<(string Path, string Root, string? RestrictToBlock)>();
+        if (isMulti)
         {
-            writers = isMulti
-                ? usage.Writers.Where(w => string.Equals(w.Block, origin.OwnerFb, StringComparison.Ordinal)).ToList()
-                : usage.Writers.ToList();
+            lookups.Add(($"{origin.LocalRoot}.{member}", origin.LocalRoot, origin.OwnerFb));
+            lookups.Add(($"{instance}.{member}", instance, null));
         }
         else
         {
-            writers = new List<ProjectUsageGraph.UsageSite>();
+            lookups.Add(($"{instance}.{member}", instance, null));
         }
 
+        var path = isMulti ? $"{origin.LocalRoot}.{member}" : $"{instance}.{member}";
+
+        var writers = new List<ProjectUsageGraph.UsageSite>();
+        foreach (var (candidate, root, restrictTo) in lookups)
+        {
+            // The instance root is the FLOOR, never an ancestor that drives: `CALL FB(iDB, ...)`
+            // records a write at the bare iDB path, and admitting it would mark every member driven.
+            var found = graph.UsagesReaching(candidate, notAbove: root).Writers;
+            writers.AddRange(restrictTo is null
+                ? found
+                : found.Where(w => string.Equals(w.Block, restrictTo, StringComparison.Ordinal)));
+        }
+
+        // A declaration-site placement (`FB_X/Member`) has no real root, so its absolute form is not a
+        // path any logic writes; the local lookup above is the only one that can resolve. Nothing to do
+        // here beyond noting that the union is over candidates, not over guesses.
         var writerNames = writers
             .Select(w => $"{w.Block} N{w.Network}")
             .Distinct(StringComparer.Ordinal)

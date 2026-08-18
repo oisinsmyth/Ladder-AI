@@ -51,6 +51,31 @@ public static class DriftCheckOutputFormatter
 
         sb.Append('\n');
 
+        // WHOSE DOCUMENTS WERE ON THE OTHER SIDE. Printed on every run beside the denominator, because
+        // COMPARED: 101 against 101 files this converter wrote itself is a tautology wearing a
+        // denominator — the one shape of "examined nothing" that does not show up as a zero.
+        if (report.ComparedCount > 0)
+        {
+            sb.Append("PROVENANCE: ").Append(report.TiaExportCount).Append(" of ").Append(report.ComparedCount)
+                .Append(" export(s) compared carry TIA's <DocumentInfo>");
+            if (report.NonTiaExportCount > 0)
+            {
+                sb.Append("; ").Append(report.NonTiaExportCount)
+                    .Append(" do NOT and could be converter output (`to-xml` writes BESIDE ITS INPUT by default)");
+            }
+
+            sb.Append('\n');
+        }
+
+        if (report.ComparedNothingFromTia)
+        {
+            sb.Append("NO TIA EXPORT WAS COMPARED — this is not a pass. Every one of the ")
+                .Append(report.ComparedCount).Append(" document(s) on the other side of these\n")
+                .Append("       comparisons lacks TIA's <DocumentInfo>, so each could be this converter's own `to-xml`\n")
+                .Append("       output. Comparing the converter against itself MATCHES by construction and says nothing\n")
+                .Append("       about the project. Point --exports at a directory of real exports (openness-cli export-all).\n");
+        }
+
         if (report.ExaminedNothing)
         {
             sb.Append("NOTHING COMPARED — this is not a pass. No object reached the Normalizer, so nothing is\n")
@@ -113,11 +138,17 @@ public static class DriftCheckOutputFormatter
                 xmlPath = e.XmlPath,
                 status = e.Status.ToString(),
                 detail = e.Detail,
+                fromTia = e.FromTia,
             }),
             // The denominator and the examined-nothing flag, so a --json consumer can tell "nothing
             // drifted" from "nothing was compared" without parsing the text.
             comparedCount = report.ComparedCount,
             examinedNothing = report.ExaminedNothing,
+            // The provenance denominator: a consumer must be able to tell "nothing drifted" from
+            // "nothing on the other side came from TIA" without parsing the text.
+            tiaExportCount = report.TiaExportCount,
+            nonTiaExportCount = report.NonTiaExportCount,
+            comparedNothingFromTia = report.ComparedNothingFromTia,
             projectDir = report.ProjectDir,
             exportsDir = report.ExportsDir,
             hasDrift = report.HasDrift,

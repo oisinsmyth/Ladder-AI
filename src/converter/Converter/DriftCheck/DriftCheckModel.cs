@@ -22,7 +22,12 @@ public enum DriftStatus
 
 // IrPath is null for ExportOnly (there is no .ir — that is the finding); XmlPath is null for Skipped;
 // both are null for PairingFailure, whose Detail names the colliding files.
-public sealed record DriftEntry(string Name, string? IrPath, string? XmlPath, DriftStatus Status, string? Detail);
+//
+// FromTia: whether the paired .xml carries TIA's own `<DocumentInfo>` block — see
+// DriftCheckReport.TiaExportCount for why that one bit decides whether this tool answered a question
+// at all. Null when there was no .xml to look at (Skipped, PairingFailure).
+public sealed record DriftEntry(
+    string Name, string? IrPath, string? XmlPath, DriftStatus Status, string? Detail, bool? FromTia = null);
 
 // FI-70. The exports directory means two different things depending on what filled it, and the tool
 // cannot tell them apart from the inside:
@@ -67,6 +72,41 @@ public sealed record DriftCheckReport(
     // because it never looked. One catch clause, two meanings, one non-gating bucket.
     public bool ExaminedNothing => ComparedCount == 0;
 
+    /// <summary>
+    /// Of the objects actually compared, how many were compared against a document TIA WROTE — one
+    /// carrying the <c>&lt;DocumentInfo&gt;</c> block every Openness export emits and the converter
+    /// never does.
+    ///
+    /// <para>🔴 <b>THE FOURTH WAY OF EXAMINING NOTHING, AND THE ONLY ONE THAT REPORTS A FULL
+    /// DENOMINATOR WHILE DOING IT — 2026-08-18.</b> The three recorded above all show up as
+    /// <c>COMPARED: 0</c>. This one shows <c>COMPARED: 101</c>, a hundred green MATCH lines, and
+    /// proves nothing whatsoever, because the "exports" were <b>this converter's own
+    /// <c>to-xml</c> output</b>: <c>to-xml</c> writes BESIDE ITS INPUT by default (FI-72), so
+    /// running it over an <c>ir/</c> directory silently replaces every real export sitting there,
+    /// and from then on the tool compares the converter against itself. Same binary, same input,
+    /// same output — MATCH is a tautology, not a measurement.</para>
+    ///
+    /// <para>MEASURED on a live job: <b>0 of 101</b> files in the directory being passed as
+    /// <c>--exports</c> carried DocumentInfo, and <c>0 drifted / 101 match</c> had been recorded
+    /// FOUR TIMES as evidence the corpus was in sync with the controller. It was evidence of
+    /// nothing. The drift that then appeared was two real converter FIXES landing (wire-endpoint
+    /// direction, the instance-DB InOut section) and the stale output not moving with them.</para>
+    ///
+    /// <para>WHY THE GATE IS "NONE" AND NOT "ALL": a real corpus can legitimately carry a
+    /// hand-reduced fixture or a file predating an export setting — <c>simatic-ml/reference/</c> has
+    /// four such out of fifteen — and failing those would be a gate firing outside its own question.
+    /// ZERO is the different claim: not one document on the other side of the comparison came from
+    /// the controller, so whatever this run proved, it was not about the project.</para>
+    /// </summary>
+    public int TiaExportCount => Entries.Count(e =>
+        e.Status is DriftStatus.Match or DriftStatus.Drifted && e.FromTia == true);
+
+    /// <summary>Compared against a document the converter itself could have written.</summary>
+    public int NonTiaExportCount => ComparedCount - TiaExportCount;
+
+    /// <summary>Every object compared, and not one of them against a TIA export.</summary>
+    public bool ComparedNothingFromTia => ComparedCount > 0 && TiaExportCount == 0;
+
     // Genuine divergence always fails. So does a comparison that could not be made (Error), and an
     // ambiguous identity (PairingFailure).
     //
@@ -76,5 +116,6 @@ public sealed record DriftCheckReport(
     public bool HasDrift =>
         Entries.Any(e => e.Status is DriftStatus.Drifted or DriftStatus.Error or DriftStatus.PairingFailure)
         || ExaminedNothing
+        || ComparedNothingFromTia
         || (Complete && Entries.Any(e => e.Status is DriftStatus.Skipped or DriftStatus.ExportOnly));
 }

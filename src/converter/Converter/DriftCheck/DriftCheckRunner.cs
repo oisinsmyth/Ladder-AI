@@ -92,11 +92,20 @@ public static class DriftCheckRunner
                 continue;
             }
 
+            // WHOSE DOCUMENT IS ON THE OTHER SIDE OF THIS COMPARISON. `<DocumentInfo>` is written by
+            // TIA's own exporter on every Openness export and by nothing else — the converter's
+            // SimaticML writers never emit it. So its ABSENCE means the file could have been produced
+            // by `to-xml`, which writes BESIDE ITS INPUT by default (FI-72) and therefore replaces a
+            // real export sitting in the same directory. See DriftCheckReport.TiaExportCount.
+            var fromTia = committed.Root?.Elements()
+                .Any(e => string.Equals(e.Name.LocalName, "DocumentInfo", StringComparison.Ordinal)) == true;
+
             var equivalent = Normalizer.AreSemanticallyEquivalent(committed, built);
             entries.Add(new DriftEntry(
                 name, irPath, xmlPath,
                 equivalent ? DriftStatus.Match : DriftStatus.Drifted,
-                equivalent ? null : "semantic divergence between .ir and committed export"));
+                equivalent ? null : "semantic divergence between .ir and committed export",
+                fromTia));
         }
 
         return new DriftCheckReport(entries, complete, projectDir, exportsDir);

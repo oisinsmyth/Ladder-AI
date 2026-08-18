@@ -17,6 +17,14 @@ public static class InterfaceCheckOutputFormatter
 
         if (!report.Checked)
         {
+            // Provenance is printed HERE TOO. It used to appear only on a run that completed, so the
+            // outcome most likely to have been caused by the wrong input file was the one that never
+            // said which file it read.
+            if (report.RequirementsSource.Length > 0)
+            {
+                sb.Append("REQUIRED FROM: ").Append(report.RequirementsSource).Append('\n');
+            }
+
             sb.Append("NOT CHECKED — ").Append(report.NotCheckedReason).Append('\n');
             sb.Append("*** NOT CHECKED IS NOT A PASS AND IS NOT A FAIL AGAINST THE BLOCK. *** Nothing downstream may\n")
               .Append("    cite this run as evidence that the block does or does not carry a required signal.\n");

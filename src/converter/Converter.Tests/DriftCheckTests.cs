@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using Converter.DriftCheck;
 using Converter.Ir;
 using Converter.SimaticMl;
@@ -48,7 +48,7 @@ public class DriftCheckTests : IDisposable
         File.WriteAllText(Path.Combine(_projectDir, fileName), DbIrSerializer.Serialize(db));
 
     private void WriteXml(string fileName, DbSource db) =>
-        DbSourceWriter.Write(db).Save(Path.Combine(_exportsDir, fileName));
+        DbSourceWriter.Write(db).SaveAsTiaExport(Path.Combine(_exportsDir, fileName));
 
     public void Dispose()
     {

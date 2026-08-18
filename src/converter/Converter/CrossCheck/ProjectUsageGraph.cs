@@ -349,6 +349,67 @@ public sealed class ProjectUsageGraph
         return (writers, readers);
     }
 
+    /// <summary>
+    /// Every usage that lands ON <paramref name="leafPath"/> <b>or on an ANCESTOR of it</b>, ignoring
+    /// array subscripts on both sides.
+    ///
+    /// <para>*** THE OPPOSITE DIRECTION FROM <see cref="UsagesCovering"/>, AND A DIFFERENT QUESTION. ***
+    /// That one asks <i>"does anything use this declared thing, at any depth inside it?"</i> and walks
+    /// DOWNWARD. This one asks <i>"does this one leaf receive a value?"</i> and walks UPWARD, because a
+    /// write to a whole struct writes every member of it: <c>MOVE(IN := DB_Param.Recipe[3]) =&gt;
+    /// Selected</c> drives <c>Selected.SRID</c>, <c>Selected.TargetMC</c> and every other member,
+    /// under a usage key that mentions none of them.</para>
+    ///
+    /// <para>MEASURED, 2026-08-18: fifty such whole-struct MOVEs left every <c>Selected.*</c> member
+    /// reported UNDRIVEN on all four instances of one FB — 40 false reports out of that block's rows —
+    /// because <c>undriven-scan</c> looked the key up VERBATIM. It lives here, on the graph, rather
+    /// than in the scan, because the join is a property of how storage nests and not of any one
+    /// check's question.</para>
+    ///
+    /// <para>Only the ANCESTOR direction is admitted. A write to a DESCENDANT (<c>Selected.SRID</c>)
+    /// drives part of <c>Selected</c> and not the rest, so counting it would be the false-green
+    /// direction; <see cref="UsagesCovering"/> answers that separately and says so.</para>
+    ///
+    /// <para>🔴 <b><paramref name="notAbove"/> IS NOT OPTIONAL POLISH — WITHOUT IT THIS METHOD MARKS
+    /// EVERY MEMBER OF EVERY INSTANCE DRIVEN.</b> <c>CALL FB_Drum(iDB_Drum_DrumA, EN := TRUE)</c>
+    /// records a WRITE at the bare path <c>iDB_Drum_DrumA</c> — the instance root — which is an
+    /// ancestor of every member in it. That reference is the CALL naming its own state store; it is
+    /// not a data write of the interface, and treating it as one turned a block with 20 genuine
+    /// undriven members into 168 driven ones and exit 0. Measured while building this, and it is the
+    /// exact false-green shape the whole repair exists to remove. So a caller passes the instance root
+    /// as the floor: an ancestor is admitted only STRICTLY BELOW it. Pass null only when the path is
+    /// already block-local and has no instance root to be confused with.</para>
+    /// </summary>
+    public (IReadOnlyList<UsageSite> Writers, IReadOnlyList<UsageSite> Readers) UsagesReaching(
+        string leafPath, string? notAbove = null)
+    {
+        var target = StripSubscripts(leafPath);
+        var floor = notAbove is null ? null : StripSubscripts(notAbove);
+        var writers = new List<UsageSite>();
+        var readers = new List<UsageSite>();
+
+        foreach (var kv in _usages)
+        {
+            var stripped = StripSubscripts(kv.Key);
+            var exact = string.Equals(stripped, target, StringComparison.Ordinal);
+            if (!exact && !target.StartsWith(stripped + ".", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            // An ancestor at or above the floor is out of bounds — see the notAbove note above.
+            if (!exact && floor is not null && !stripped.StartsWith(floor + ".", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            writers.AddRange(kv.Value.Writers);
+            readers.AddRange(kv.Value.Readers);
+        }
+
+        return (writers, readers);
+    }
+
     // Removes "[n]" from every component. An index never contains a dot, so this cannot disturb the
     // component boundaries the path is built from.
     public static string StripSubscripts(string path) =>

@@ -1920,6 +1920,50 @@ Two caveats measured on a real corpus rather than anticipated: compare **normali
 (a `--no-sidecar` disk copy differs from its export by hundreds of lines and is not drift), and line
 endings vary per file, so neither side may be assumed CRLF or LF.
 
+### 🔴 `PROVENANCE:` — whose documents were on the other side (2026-08-18)
+
+**The fourth way this tool could report a clean run having proved nothing — and the only one that
+shows a FULL denominator while doing it.** The three closed under *"empty is not clean"* all surface
+as `COMPARED: 0`. This one surfaces as `COMPARED: 101`, a hundred green `MATCH` lines, and an
+answer about nothing:
+
+> `to-xml` **writes beside its input by default** (FI-72). Run it over an `ir/` directory and it
+> silently replaces every real export sitting there. From then on `drift-check --exports ir/` is
+> **the converter compared against its own output** — same binary, same input, same output. `MATCH`
+> is a tautology, not a measurement.
+
+Measured on a live job: **0 of 101** files in the directory being passed as `--exports` carried
+TIA's `<DocumentInfo>` block, and `0 drifted / 101 match` had been recorded **four times** in the
+job's own records as evidence the corpus was in sync with the controller. It was evidence of
+nothing. What later appeared as *"52 drifted"* was two real converter **fixes** landing
+(`1edf376` wire-endpoint direction, `f2a548a` the instance-DB `InOut` section) while the stale
+output did not move with them — a **tightening**, not a regression; see the closing note in the
+`compare` section.
+
+`<DocumentInfo>` is written by TIA's exporter on every Openness export and by **nothing else** —
+the converter's own writers never emit it, and the Normalizer already ignores it (it has to; real
+exports carry it and converter output does not, and the two are compared for equivalence every
+day). So it is an exact discriminator, and it is now counted and printed on every run:
+
+```
+COMPARED: 101 object(s) put through the Normalizer  (project=…  exports=…)
+PROVENANCE: 0 of 101 export(s) compared carry TIA's <DocumentInfo>; 101 do NOT and could be
+            converter output (`to-xml` writes BESIDE ITS INPUT by default)
+NO TIA EXPORT WAS COMPARED — this is not a pass. …                        # exit 1
+```
+
+**The gate is NONE, not ALL, and that is deliberate.** A real corpus legitimately carries the odd
+document without provenance — `simatic-ml/reference/` has four out of fifteen — and failing those
+would be the gate firing outside its own question. Zero is a different claim: *not one document on
+the other side of the comparison came from the controller.* A partial count is **reported and does
+not gate**, so a directory drifting towards converter output is visible long before it becomes
+total. `--json` carries `tiaExportCount`, `nonTiaExportCount`, `comparedNothingFromTia`, and
+`fromTia` per entry.
+
+*Consequence for fixtures:* a test standing in for a TIA export now has to declare itself one
+(`TiaExportFixture.SaveAsTiaExport`). Every drift-check fixture in the suite previously built its
+"export" side by calling a converter writer and saving it — precisely the state being gated.
+
 ## `compare` — the confirm loop's judgement half (2026-08-12)
 
 `converter compare <first.xml> <second.xml> [--json] [--max-differences <n>] [--allow-silent-layout]`
@@ -2212,6 +2256,69 @@ which is the failure this fix exists to remove.
 **IEC timer and counter statics are excluded.** A `TON_TIME`'s `Q` and `ET` are written by the timer
 instruction, not by any caller, so "who drives this" is not a meaningful question for them. Left in,
 they were the loudest false positive in the output — every dwell in a sequencer carries one.
+
+### 🔴 Two write mechanisms it could not see — 136 of 228 rows were false (2026-08-18)
+
+Found by running this across a **101-file live corpus** and hand-verifying every line. `cross-check`,
+reading the **same graph**, got both joins right — two tools contradicting each other over one corpus
+is what made it findable, and is the strongest available evidence that this was the scan's defect and
+not a corpus quirk. **A tool wrong 60% of the time in one direction cannot be trusted in the other**,
+so its output was unusable without hand-verifying every line.
+
+Both repairs went into **`ProjectUsageGraph.UsagesReaching`** — shared, on the graph — rather than
+into a second resolver here, because the join is a property of how storage nests and not of any one
+check's question.
+
+1. **An ABSOLUTE instance-path write to a MULTI-INSTANCE member was not joined.** The bullet above
+   explains that a multi-instance is addressed *bare and local* from inside its owner. It is also
+   addressed **absolutely, rooted on the owner's instance DB, from everywhere else** —
+   `iDB_SiloVessel_SiloW.ValveDrain.IO.InHand`. Only the local form was ever looked up, so every
+   write from an orchestrator, a command decoder or a startup block was invisible. Both forms are now
+   resolved and unioned; the **owner restriction stays on the local form only**, and must — a bare
+   `ValveDrain.IO.InHand` could belong to any FB declaring a `ValveDrain`, while the absolute form
+   names one placement, which is what makes it absolute.
+
+2. **A WHOLE-STRUCT write was not attributed to the struct's members.** `MOVE(…) => Selected` drives
+   `Selected.SRID`, `Selected.TargetMC` and every other member under a key that mentions none of
+   them, so a verbatim lookup found nothing. Worse than noise on the measured case: those members are
+   ones the **FB itself** writes, so they should never have been in the caller-driven scope at all —
+   a reader was being told a caller had failed to wire an FB's own outputs.
+
+Measured across the corpus, old binary → new: `FB_RecipeSelect` **40 undriven → 0** (48 rows leave
+the scope entirely), `FB_MotorDOL` **58 → 10**, `FB_Valve` **100 → 68**. The remaining findings are
+genuine — a per-valve member written for one placement and not its siblings.
+
+#### The floor, and why an ancestor rule without one is worse than the bug
+
+`CALL FB_Drum(iDB_Drum_DrumA, EN := TRUE)` records a **write at the bare instance path** — the CALL
+naming its own state store, not a data write of the interface. A naive ancestor rule admits it, and
+then every member of every instance reads as `driven`. **Measured live while building this fix:** a
+block with 20 genuine undriven members reported **168 driven and exit 0**. So `UsagesReaching` takes
+a `notAbove` floor and admits an ancestor only strictly below it; the caller passes the instance
+root. A test pins this, and it is the test that matters most here — a fix that makes everything look
+driven passes every test that only checks the two joins.
+
+### 🔴 `NOTHING EXAMINED` — the third shape of FI-44 (2026-08-18)
+
+The first two ways this scan could examine nothing and exit 0 were closed by name: an unknown
+`--fb`, and an FB nothing instantiates. **This is the way that was not thought of.** The block
+EXISTS, it HAS an instance DB, and every one of its interface members is one the FB itself writes —
+so the caller-driven scope is empty and nothing is resolved. On the live corpus **two of the three
+largest blocks** reported `0 member/instance pair(s), 0 undriven` and **exit 0**, and both were read
+as passes.
+
+That is an ordinary state for a block that only publishes. It is not a pass and it is not a finding:
+it is a statement that the question does not apply to this block. It now exits **2**, prints
+`NOTHING EXAMINED - this is not a pass:` with the reason, and carries `scope` +
+`examinedNothing` in `--json` (which previously carried neither, so a consumer reading
+`members: []` + `hasFindings: false` could not tell the two apart either).
+
+A fourth shape — `--instance` matching none of the block's instances — is closed with it.
+
+**And the gate now keys on the ROW COUNT as well as on the scope enum.** The enum enumerates the
+ways of examining nothing that somebody has already thought of, and the third one arrived three
+weeks after the first two were called complete. `Members.Count == 0` is the fact rather than a
+catalogue of its causes, so a fifth shape gates on arrival instead of on being noticed.
 
 ## `candidate-scan` — compute the candidate set for a requirement (2026-08-05, FI-39 check 1)
 
@@ -3403,6 +3510,58 @@ about a branch. Two tests were added: one fixture with a non-inlined member that
 (the mutation now goes red), and one that **asserts the absence** — every corpus member is inlined
 *today*, so the day a real non-inlined one appears, that test fails and demands the resolution be
 re-checked against real data instead of a hand-written fixture.
+
+### 🔴 `--subject` — the wrong enumeration was a FALSE ACCUSATION AGAINST A BLOCK (2026-08-18)
+
+```
+converter interface-check --project <ir-dir> --block <name> --requires-file <path> [--subject <text>] [--json]
+```
+
+`--requires-file` scraped every `response_signal:` value out of **one** enumeration and **never read
+that file's own declared `subject:`**, nor compared it to `--block`. Two enumerations now exist
+carrying **28 and 15** distinct response signals with an **overlap of 2**, so pointing a block at the
+wrong one demands about **26 signals that cannot be present**: ~26 `MISSING`, **exit 1** — which in
+this subcommand's contract is a **FAIL AGAINST THE BLOCK**, the one outcome in the whole pipeline
+that blames the code rather than the submission.
+
+**What made it credible rather than obviously wrong** is the house-style trap two sections up: on
+C-132 an FB's `INPUT` and `OUTPUT` are both empty, so *"nearly every signal missing"* is a shape this
+tool's own documentation predicts as a **genuine** output. A wrong-file run and a catastrophic block
+defect rendered identically, and the provenance line named **the path only** — which is precisely the
+thing that had been mis-typed.
+
+Two repairs, cheapest first:
+
+- **Always, unguarded: the file's own words are reported.** The `REQUIRED FROM:` line now carries the
+  document's top-level `subject:` (folded/literal block scalars included, per-assertion `subject:`
+  keys deliberately ignored — they are indented, and pooling them would make the document's subject
+  depend on which assertion came last), or states outright that *the file declares NO top-level
+  `subject:`*. That line is also printed on a **NOT CHECKED** run, which it was not before: the
+  outcome most likely to have been caused by the wrong input file was the one that never said which
+  file it read.
+- **Opt-in gate: `--subject <text>`.** The caller states what the file must be about. Disagreement —
+  or a file that declares no subject at all — is **exit 2, NOT CHECKED**, never 1. *A wrong
+  enumeration is an unjudgeable INPUT, not a defective block*, the same ruling already applied to an
+  unparseable required name, and this subcommand's exit contract already reserves 2 for exactly that.
+  `--subject` without `--requires-file` is refused rather than ignored: silently accepting it would
+  hand a caller a guard they believe they have.
+
+Agreement is **containment either way, case- and whitespace-insensitive**, and the rule is stated
+rather than tuned. A declared subject is a paragraph of prose and an asserted one is a phrase, so
+equality would refuse every real file. The coarseness is safe because of the **direction of error**:
+disagreement costs a re-run with a better string, and the flag is opt-in, so nothing is forced
+through it.
+
+Finally, on a FAIL where a **majority** of required signals are absent, a `NOTE` names the other
+thing that produces that shape and states that this run did not establish the file is about this
+block. It **does not decide** — a threshold would be a guess, and the house-style trap means
+majority-absent really can be genuine. It puts the alternative explanation in front of the reader at
+the moment it matters.
+
+Tested at the CLI boundary where the gate lives, with the positive control that matters: **subject
+agreement does not suppress a real FAIL**. Mutations: `Agrees` forced true → 3 red; disagreement
+returning 1 instead of 2 → red; the top-level parse relaxed to accept an indented per-assertion
+`subject:` → red. Semantics-preserving rewrite (containment operands swapped) → green.
 
 ## 🔴 `review` — C-410, the self-restarting timer: a silent block-killer nobody was checking for (2026-08-18)
 

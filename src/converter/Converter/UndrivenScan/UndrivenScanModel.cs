@@ -31,6 +31,17 @@ public enum ScanScope
     Scanned,          // the FB exists and has instances; the rows below are a real result
     UnknownBlock,     // no block of this name in the corpus - a typo, or a block not written yet
     NoInstances,      // the block exists but nothing instantiates it - nothing to resolve per-instance
+
+    // 🔴 2026-08-18. The block exists, it HAS instances, and NO INTERFACE MEMBER SURVIVED THE SCOPE
+    // FILTER: every one of them is written by the FB itself, so there is no caller-driven input to
+    // resolve. An ordinary state for a block that only publishes - and it exited 0 over zero rows,
+    // which is what a thorough clean scan also looks like. Two of the three largest blocks on a live
+    // corpus were in exactly this state and both were read as passes.
+    NoMembersInScope,
+
+    // --instance named nothing that exists. The filter typo, one level in from UnknownBlock, and the
+    // same failure: zero rows, no findings, exit 0.
+    NoInstancesMatchedFilter,
 }
 
 public sealed record UndrivenScanReport(
@@ -62,5 +73,11 @@ public sealed record UndrivenScanReport(
     // Kept SEPARATE from HasFindings on purpose. A finding is a defect in the plant; this is a
     // defect in the question. They deserve different exit codes and different words, because the
     // action differs: fix the wiring, versus fix what you asked.
-    public bool ExaminedNothing => Scope is not ScanScope.Scanned;
+    //
+    // 🔴 KEYED ON THE ROW COUNT AS WELL AS ON THE SCOPE, since 2026-08-18. The scope enum enumerates
+    // the ways of examining nothing that someone has already thought of, and the third one arrived
+    // three weeks after the first two were called complete. `Members.Count == 0` is the fact itself
+    // rather than a catalogue of its causes, so a FOURTH shape gates on arrival instead of on being
+    // noticed - and any new scope value that forgets to be listed here still cannot report a pass.
+    public bool ExaminedNothing => Scope is not ScanScope.Scanned || Members.Count == 0;
 }

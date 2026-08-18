@@ -1,4 +1,4 @@
-using Converter.DriftCheck;
+﻿using Converter.DriftCheck;
 using Converter.Ir;
 using Converter.SimaticMl;
 using Xunit;
@@ -64,7 +64,7 @@ public class DriftCheckEmptyAndPairingTests : IDisposable
         File.WriteAllText(Path.Combine(dir, fileName), DbIrSerializer.Serialize(db));
 
     private static void WriteXml(string dir, string fileName, DbSource db) =>
-        DbSourceWriter.Write(db).Save(Path.Combine(dir, fileName));
+        DbSourceWriter.Write(db).SaveAsTiaExport(Path.Combine(dir, fileName));
 
     // --- empty is not clean --------------------------------------------------------------------
 
@@ -149,7 +149,7 @@ public class DriftCheckEmptyAndPairingTests : IDisposable
             new PlcTagSource("1", "Start_PB", "Bool", "%I0.0", true, true, true, null),
         });
         File.WriteAllText(Path.Combine(project, "DefaultTagTable.ir"), TagTableIrSerializer.Serialize(table));
-        PlcTagTableSourceWriter.Write(table).Save(Path.Combine(exports, "Default tag table.xml"));
+        PlcTagTableSourceWriter.Write(table).SaveAsTiaExport(Path.Combine(exports, "Default tag table.xml"));
 
         var report = DriftCheckRunner.Run(project, exports, complete: true);
 

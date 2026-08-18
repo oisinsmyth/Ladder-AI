@@ -57,6 +57,22 @@ public static class UndrivenScanOutputFormatter
             .Append(defaulted).Append(" defaulted, ")
             .Append(dead).Append(" dead-interface\n");
 
+        // A zero-row summary reads exactly like a clean sweep, so the reason it is zero goes on its own
+        // line rather than only on stderr - the text output is what gets pasted into a hand-back.
+        if (report.ExaminedNothing)
+        {
+            sb.Append("NOTHING EXAMINED - this is not a pass: ").Append(report.Scope switch
+            {
+                ScanScope.UnknownBlock => "no block of that name is in the corpus.",
+                ScanScope.NoInstances => "the block exists but nothing instantiates it.",
+                ScanScope.NoInstancesMatchedFilter => "--instance matched none of the block's instances.",
+                ScanScope.NoMembersInScope =>
+                    "the block has instances, but every interface member is one the FB itself writes, so no "
+                    + "caller-driven input was left to resolve.",
+                _ => "the scan produced no member/instance rows.",
+            }).Append('\n');
+        }
+
         return sb.ToString().TrimEnd('\n', '\r');
     }
 
@@ -78,6 +94,11 @@ public static class UndrivenScanOutputFormatter
                 nameJoinHints = m.NameJoinHints,
             }),
             hasFindings = report.HasFindings,
+            // The JSON carried neither of these, so a consumer reading `members: []` + `hasFindings:
+            // false` could not tell a clean scan from one that examined nothing - the same collapse the
+            // exit code had.
+            scope = report.Scope.ToString(),
+            examinedNothing = report.ExaminedNothing,
             warnings = report.Warnings,
         };
 

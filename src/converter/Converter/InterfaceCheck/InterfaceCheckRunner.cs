@@ -1,4 +1,4 @@
-using Converter.Ir;
+﻿using Converter.Ir;
 using Converter.IrHash;
 using Converter.SimaticMl;
 
@@ -66,7 +66,7 @@ public static class InterfaceCheckRunner
             return InterfaceCheckReport.NotChecked(blockName,
                 "no required names were supplied, so the set difference was taken against nothing. Empty is not "
                 + "clean: an empty required set produces PRESENT-for-everything on every block in the corpus, "
-                + "including one with no interface at all.", corpus);
+                + "including one with no interface at all.", corpus, requirementsSource);
         }
 
         var matches = new List<(string File, IrBlock Block)>();
@@ -114,7 +114,7 @@ public static class InterfaceCheckRunner
                 $"no block named '{blockName}' in the corpus ({corpus}"
                 + (unparseable.Count == 0 ? "" : $"; {unparseable.Count} file(s) did not parse: {string.Join(", ", unparseable)}")
                 + "). A block that is not here has no interface to compare, and reporting every required name MISSING "
-                + "would be a FAIL against a block this run never saw.", corpus);
+                + "would be a FAIL against a block this run never saw.", corpus, requirementsSource);
         }
 
         if (matches.Count > 1)
@@ -122,7 +122,7 @@ public static class InterfaceCheckRunner
             return InterfaceCheckReport.NotChecked(blockName,
                 $"{matches.Count} files declare a block named '{blockName}' ({string.Join(", ", matches.Select(m => Path.GetFileName(m.File)))}). "
                 + "Which one the deployed program carries is not decidable from here, and checking the wrong one would "
-                + "stamp the result with an ir-hash that names a block nobody deployed.", corpus);
+                + "stamp the result with an ir-hash that names a block nobody deployed.", corpus, requirementsSource);
         }
 
         var (blockFile, target) = matches[0];
@@ -171,7 +171,7 @@ public static class InterfaceCheckRunner
                 $"'{blockName}' has no members in INPUT/OUTPUT/INOUT/STATIC/CONSTANT"
                 + (excludedTemps.Count == 0 ? "" : $" ({excludedTemps.Count} TEMP member(s) excluded — a temp is not observable from outside the block)")
                 + ". Every required name would read MISSING, which is what a check that examined nothing looks like "
-                + "when it is mistaken for a finding.", corpus);
+                + "when it is mistaken for a finding.", corpus, requirementsSource);
         }
 
         var byName = examined
@@ -193,7 +193,7 @@ public static class InterfaceCheckRunner
                 + $"{opaque.Count} interface member(s) could not be opened: "
                 + string.Join("; ", opaque.Select(o => $"{o.Member} : {o.Datatype} ({o.Reason})"))
                 + ". A MISSING verdict is the positive claim that the block does not carry a name, and that is only "
-                + "sound over a COMPLETE member set. Supply the missing type in --project and re-run.", corpus);
+                + "sound over a COMPLETE member set. Supply the missing type in --project and re-run.", corpus, requirementsSource);
         }
 
         return new InterfaceCheckReport(

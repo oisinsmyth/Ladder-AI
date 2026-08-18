@@ -163,17 +163,17 @@ internal static class Program
             Console.Error.WriteLine("       converter reuse-scan --project <ir-dir> [--tag <tag> ...] [--kind <kind> ...] [--json]   # reuse-first: which blocks reference tag(s)/implement kind(s) (FI-29); exit 1 if any candidate found");
             Console.Error.WriteLine("       converter ir-hash <file> [<file> ...] [--json]   # stable readable-IR hash keying an explanation sidecar (FI-17); immune to SIDECAR/UId churn; exit 1 on any error");
             Console.Error.WriteLine("       converter target-scan --requirements <register.md> --project <ir-dir> [--json]   # S6 new-block target gap-hunter: REQ x tag-status x as-built (FI-30); exit 1 if no clean candidate");
-            Console.Error.WriteLine("       converter drift-check --project <ir-dir> --exports <simatic-ml-dir> [--complete] [--json]   # detect ir<->simatic-ml export drift (FI-26); exit 1 if any block drifted");
+            Console.Error.WriteLine("       converter drift-check --project <ir-dir> --exports <simatic-ml-dir> [--complete] [--json]   # detect ir<->simatic-ml export drift (FI-26); exit 1 if any block drifted. PROVENANCE: printed every run (2026-08-18) - how many compared exports carry TIA's <DocumentInfo>, which TIA writes and the converter never does. ZERO of them is exit 1, NOT A PASS: `to-xml` writes BESIDE ITS INPUT by default (FI-72), so an ir/ dir used as --exports holds the converter's OWN output and every MATCH is a tautology - measured at 0 of 101 on a live job whose `0 drifted / 101 match` had been recorded four times as evidence. A PARTIAL count reports and does not gate (a real corpus carries the odd unprovenanced file)");
             Console.Error.WriteLine("                    --complete: the exports dir is the WHOLE picture (e.g. a fresh controller dump, FI-70), so a missing .xml OR a .xml with no .ir also fails");
             Console.Error.WriteLine("       converter compare <first.xml> <second.xml> [--json] [--max-differences <n>] [--allow-silent-layout]   # the CONFIRM LOOP's judgement half: Normalizer-compare two SimaticML exports and report WHAT differs");
             Console.Error.WriteLine("                    exit 0 equivalent / 1 differs / 2 NOT COMPARED (missing, unparseable, not a block export, same file twice, or a MemoryLayout premise that did not hold)");
             Console.Error.WriteLine("       converter cross-check --project <ir-dir> [--json]   # whole-project cross-block reference-graph FACTS the reviewer reasons over (FI-22); never verdicts; exit 0");
             Console.Error.WriteLine("       converter conflict-graph --project <ir-dir> (--submission <file> | --signals <file>) [--json] [--allow-unresolved]   # SUBMISSION-SCOPED `conflictEdges` for harness gates 8/8c, in the exact shape ConflictEdgeDocument deserializes. NOT cross-check with a filter: that emits whole-project fact tables keyed on a storage path, this emits EDGES between BLOCKS with a provenance and a signal class. Only MultiWriter provenance is ever emitted - a CallGraph edge is about no signal, so it could only carry an Unstated class, and ProvenanceComplete is ALL-or-nothing, so ONE such edge would turn gate 8c to NOT CHECKED for the whole submission. `computedConflicts` is never emitted for the same reason (a bare name is Unstated provenance); gate 8's packing set derives from the edges. Exit 0 = computed (an EMPTY list is the EARNED claim that the graph ran and found nothing), 2 = NOT COMPUTED and the key is WITHHELD so the gate reports NOT CHECKED, 3 = emitted but an edge is unprovenanced. 🔴 --submission READS THE DECLARED JOIN `map.storage` (contract 2.7), which it did not until 2026-08-17: a submission cites the SPECIFICATION's names by design (D8) and this fed them to a resolver expecting STORAGE PATHS, measuring 70 of 70 unresolved on a real submission while the field that joins them sat unread in the same document. `map.storage` is signal -> { owner?, path } (two keys - an emitted string is not a schema) and `map.harnessOnly` is a POSITIVE claim that a signal occupies no PLC storage, which is a computed fact and does NOT count against the scope. EVERY resolution reports WHICH JOIN carried it - DeclaredStorage / DeclaredHarnessOnly / ProjectPathMatch / NotDeclared / ContradictoryDeclaration. THE REFUSAL IS NOT WEAKENED: once a map is declared, a signal absent from it stays UNRESOLVED even when its name would have matched something, because a map with one hole is repaired by filling the hole and not by guessing at it; a submission declaring NO map behaves exactly as before. A signal declared BOTH ways, or twice with different storage, is REFUSED and --allow-unresolved does NOT cover it (that flag accepts names nobody looked at, not a document answering one question twice)");
             Console.Error.WriteLine("       converter reachable-state --project <ir-dir> [--block <name>]... [--json]   # D9's PRODUCER (2026-08-14): per block, the transitive closure through its CALL tree of every storage location it touches, keyed on STORAGE IDENTITY. Feeds `TestSlot.ReachableState` + `ReachableStateProvenance`, after which `SlotConflictDerivation.OverlappingReachableState` makes the edges by set intersection with no further work. Until this existed the set arrived from `wave-cli submit --reaches`, i.e. DECLARED BY THE SUBMITTING AGENT — the shape D9 forbids. Reads count as well as writes (two tests cannot share a signal one drives and the other observes). Closes DOWNWARD only: closing upward through callers reaches OB1 from any leaf and would make every pair conflict. An `iDB.<suffix>` reference is CANONICALISED onto the FB's own `<FB>|<suffix>` before intersecting, and every rewrite is reported — without it a slot testing an FB and one testing its caller read as disjoint while driving one location. Exit 0 = computed / 2 = NOT COMPUTED, key withheld / 3 = emitted, but at least one block's closure was withheld BY NAME");
-            Console.Error.WriteLine("       converter interface-check --project <ir-dir> --block <name> (--requires <n1,n2,...> | --requires-file <path>) [--json]   # NB-30 (2026-08-14): does the BLOCK carry the response signals the SPECIFICATION names? A set difference over the block's interface MEMBER NAMES, answerable before a scan elapses — which is why D1 (a spec signal the block does not provide) was able to ride inside a relational conformance assertion for a week. Walks INPUT/OUTPUT/INOUT/STATIC/CONSTANT and descends through inlined nested members AND named PLC data types, because on this corpus's house style (C-132) INPUT and OUTPUT are BOTH EMPTY and the whole caller interface is one STATIC UDT member — a check reading those two sections reports every signal missing, including the ones that exist. Matches MEMBER NAMES ONLY: one matching comments would find 'inhibit' in a block comment and pass the defect. TEMP is excluded BY NAME and COUNTED on every run. 🔴 EXIT 1 IS A **FAIL AGAINST THE BLOCK**, NOT AGAINST THE SUBMISSION — every other outcome in the pipeline means 'fix the vector', and reusing one here would send an author to edit the artifact that is correct. Exit 0 = all present / 1 = the block does not carry a required signal / 2 = NOT CHECKED (block absent or ambiguous, empty interface, no required names, an unjudgeable required token, or a member whose type could not be opened — a MISSING verdict is only sound over a COMPLETE member set). Emits the block's ir-hash as the STAMP the result was established against; a consumer carries the stamp, never a bool, so 'nobody ran it' and 'ran it against a different version' stay distinct facts. --requires-file reads one name per line, OR an assertion-enumeration YAML directly (its `response_signal:` values), which is the form with a producer");
+            Console.Error.WriteLine("       converter interface-check --project <ir-dir> --block <name> (--requires <n1,n2,...> | --requires-file <path>) [--subject <text>] [--json]   # NB-30 (2026-08-14): does the BLOCK carry the response signals the SPECIFICATION names? A set difference over the block's interface MEMBER NAMES, answerable before a scan elapses — which is why D1 (a spec signal the block does not provide) was able to ride inside a relational conformance assertion for a week. Walks INPUT/OUTPUT/INOUT/STATIC/CONSTANT and descends through inlined nested members AND named PLC data types, because on this corpus's house style (C-132) INPUT and OUTPUT are BOTH EMPTY and the whole caller interface is one STATIC UDT member — a check reading those two sections reports every signal missing, including the ones that exist. Matches MEMBER NAMES ONLY: one matching comments would find 'inhibit' in a block comment and pass the defect. TEMP is excluded BY NAME and COUNTED on every run. 🔴 EXIT 1 IS A **FAIL AGAINST THE BLOCK**, NOT AGAINST THE SUBMISSION — every other outcome in the pipeline means 'fix the vector', and reusing one here would send an author to edit the artifact that is correct. Exit 0 = all present / 1 = the block does not carry a required signal / 2 = NOT CHECKED (block absent or ambiguous, empty interface, no required names, an unjudgeable required token, or a member whose type could not be opened — a MISSING verdict is only sound over a COMPLETE member set). Emits the block's ir-hash as the STAMP the result was established against; a consumer carries the stamp, never a bool, so 'nobody ran it' and 'ran it against a different version' stay distinct facts. --requires-file reads one name per line, OR an assertion-enumeration YAML directly (its `response_signal:` values), which is the form with a producer. 🔴 IT NEVER READ THAT FILE'S OWN `subject:` NOR COMPARED IT TO --block, SO THE WRONG FILE WAS A FALSE ACCUSATION AGAINST THE BLOCK (2026-08-18): two enumerations with 28 and 15 signals and an overlap of 2 mean a mis-typed path demands ~26 signals that cannot be present - ~26 MISSING, exit 1, a FAIL AGAINST THE BLOCK - and the C-132 house-style trap makes \"nearly everything missing\" a plausible GENUINE output, so nothing distinguished the two. The declared subject is now REPORTED on every run (including a NOT CHECKED one, which never printed provenance at all), and --subject <text> GATES on it: disagreement, or a file declaring no subject, is EXIT 2 NOT CHECKED, never 1, because a wrong enumeration is an unjudgeable INPUT and not a defective block. Agreement is containment either way, case- and whitespace-insensitive; --subject without --requires-file is refused rather than ignored");
             Console.Error.WriteLine("       converter trace --binding <bindings.json> --project <ir-dir> [--json]   # forward-pass REQ trace: per-hop facts over the reader/writer graph (FI-25); facts not verdicts; exit 0. Hops incl. guard-containment (FI-36-min): every spec-listed condition must appear in the coil's guard");
             Console.Error.WriteLine("       converter candidate-scan --project <ir-dir> --fb <FBName> [--scope <prefix> ...] [--type <T>] [--direction status|command|any] [--json]   # compute every signal that could satisfy a requirement (FI-39); exit 1 if the IO half has >1 candidate");
-            Console.Error.WriteLine("       converter undriven-scan --project <ir-dir> --fb <FBName> [--instance <iDB> ...] [--caller <file.ir> ...] [--hints] [--json]   # per-instance interface drive states (FI-39); exit 1 on undriven/disarmed");
+            Console.Error.WriteLine("       converter undriven-scan --project <ir-dir> --fb <FBName> [--instance <iDB> ...] [--caller <file.ir> ...] [--hints] [--json]   # per-instance interface drive states (FI-39); exit 1 on undriven/disarmed. EXIT 2 = NOTHING EXAMINED, and there are FOUR ways now (2026-08-18): --fb names no block; the block has no instances; --instance matched none of them; or the block HAS instances and NO interface member is in scope because the FB writes every one of them - an ordinary state for a block that only publishes, and on a live corpus TWO OF THE THREE LARGEST BLOCKS were in it, reporting 0 rows and exit 0. The gate keys on the ROW COUNT as well as on the scope enum, so a fifth shape gates on arrival rather than on being noticed. Writes are joined through ProjectUsageGraph.UsagesReaching: a multi-instance member is resolved BOTH bare-and-local (restricted to its owning FB) and ABSOLUTE on the owner iDB (unrestricted) - only the first was ever looked up, so every write from an orchestrator or startup block was invisible - and a WHOLE-STRUCT write (`MOVE(...) => Selected`) drives every member of the struct. 136 of 228 rows on a live corpus were false before this. The ancestor rule takes a FLOOR at the instance root: `CALL FB(iDB, ...)` records a write at the bare iDB path, and admitting it marks EVERY member of EVERY instance driven");
             Console.Error.WriteLine("       converter relation-reconcile --specs <dir> --ledger <code-structure.md> --register <requirements.md> [--project <ir-dir>] [--json]   # reconcile (instance, relation-id) sets across the spec artifacts + probative citations (FI-39); exit 1 on any difference");
             Console.Error.WriteLine("       converter signal-sweep --project <ir-dir> --specs <dir> [--register <file>] [--unclaimed <file>] [--json]   # project-level residual signal coverage (FI-39); exit 1 if any signal is in no spec and no disposition table");
             Console.Error.WriteLine("       converter claim  --project <ir-dir> --claims <dir> --agent <id> --kind <k> (--value <v> | --allocate [--type FB|FC|OB|DB] [--floor <n>] [--in <word|block>]) [--purpose <text>] [--json]   # reserve a shared resource BEFORE writing IR (FI-65); exit 1 refused, 2 unusable. X-J RESERVED BAND (2026-08-14): block numbers 9000-9999 are reserved for harness-generated objects per number space, FB/FC/DB, OB EXCLUDED (an OB's number is fixed by its event class, and applying a band to OBs emits a false finding on OB80, the first harness object the spec lists). A PLAIN --allocate CANNOT return a band number - the band is REMOVED from the candidate set, not deprioritised. --floor 9000 aims the search INTO the band, and that allocation is CONFINED to it: running out is `BandExhausted` naming the band, NEVER a quiet step past 9999 into deliverable numbers. An explicit --value inside the band is ACCEPTED and SAID SO in the outcome, not refused - the block does not exist yet (that is what an allocation claim means), so nothing derivable distinguishes a harness claim from a plant one, and a --harness flag would be a caller assertion forgotten exactly when it matters. The band is read from HarnessNumberRange.Declared(), never restated here");
@@ -1280,9 +1280,26 @@ internal static class Program
         // exited 0 and an FB that had never been written passed the check.
         if (report.ExaminedNothing)
         {
-            Console.Error.WriteLine(report.Scope == ScanScope.UnknownBlock
-                ? $"undriven-scan: no block named '{fb}' in {projectDir} - nothing was examined."
-                : $"undriven-scan: block '{fb}' has no instances in {projectDir} - nothing was examined.");
+            Console.Error.WriteLine("undriven-scan: " + report.Scope switch
+            {
+                ScanScope.UnknownBlock =>
+                    $"no block named '{fb}' in {projectDir} - nothing was examined.",
+                ScanScope.NoInstances =>
+                    $"block '{fb}' has no instances in {projectDir} - nothing was examined.",
+                ScanScope.NoInstancesMatchedFilter =>
+                    $"--instance matched none of the instances of '{fb}' in {projectDir} - nothing was examined. "
+                    + "Drop --instance to scan them all, or check the spelling against the instance names the "
+                    + "unfiltered run prints.",
+                ScanScope.NoMembersInScope =>
+                    $"block '{fb}' has instances, but NO INTERFACE MEMBER IS IN SCOPE in {projectDir} - nothing "
+                    + "was examined. Every member is one the FB itself writes, so it is an output it reports "
+                    + "rather than an input a caller drives, and per-instance drive state is not a question this "
+                    + "block has. That is an ordinary state and NOT a pass: this run says nothing about the "
+                    + "block's wiring in either direction.",
+                _ =>
+                    $"'{fb}' produced no member/instance rows in {projectDir} - nothing was examined. "
+                    + "Zero rows is never a pass.",
+            });
             return 2;
         }
 
@@ -1870,11 +1887,15 @@ internal static class Program
     }
 
     // NB-30. See the usage line above for what this is and why exit 1 blames the BLOCK.
-    private static int RunInterfaceCheck(string[] args)
+    // internal, not private, so the --subject gate can be exercised at the CLI boundary where it lives
+    // (RunConvert / RunCompare precedent). The gate is argument handling, and argument handling that is
+    // only reachable through Main is argument handling nothing tests.
+    internal static int RunInterfaceCheck(string[] args)
     {
         string? projectDir = null;
         string? block = null;
         string? requiresFile = null;
+        string? subject = null;
         var required = new List<string>();
         var json = false;
 
@@ -1900,6 +1921,9 @@ internal static class Program
                 case "--requires-file":
                     requiresFile = RequireValue(args, ref i, "--requires-file");
                     break;
+                case "--subject":
+                    subject = RequireValue(args, ref i, "--subject");
+                    break;
                 case "--json":
                     json = true;
                     break;
@@ -1912,7 +1936,15 @@ internal static class Program
         if (projectDir is null || block is null || (required.Count == 0 && requiresFile is null))
         {
             Console.Error.WriteLine(
-                "Usage: converter interface-check --project <ir-dir> --block <name> (--requires <n1,n2,...> | --requires-file <path>) [--json]");
+                "Usage: converter interface-check --project <ir-dir> --block <name> (--requires <n1,n2,...> | --requires-file <path>) [--subject <text>] [--json]");
+            return 1;
+        }
+
+        if (subject is not null && requiresFile is null)
+        {
+            Console.Error.WriteLine(
+                "--subject asks whether the ENUMERATION FILE is about the thing you think it is about, so it needs "
+                + "--requires-file to have a file to ask about. A --requires list has no declared subject to compare.");
             return 1;
         }
 
@@ -1933,6 +1965,39 @@ internal static class Program
             }
 
             var lines = File.ReadAllLines(requiresFile);
+
+            // 🔴 WHAT IS THIS FILE ABOUT? Asked, reported, and — when the caller states an answer —
+            // GATED, since 2026-08-18. Pointing a block at the wrong enumeration demanded ~26 signals
+            // that could not be present and reported it as a FAIL AGAINST THE BLOCK; nothing in the
+            // output distinguished that from a real one, because the provenance line named the PATH,
+            // which is the very thing that was mis-typed. See EnumerationSubject.
+            var declaredSubject = Converter.InterfaceCheck.EnumerationSubject.Parse(lines);
+
+            if (subject is not null)
+            {
+                if (declaredSubject is null)
+                {
+                    Console.Error.WriteLine(
+                        $"NOT CHECKED — you asserted --subject '{subject}', and {requiresFile} declares no top-level "
+                        + "`subject:` of its own, so the agreement you asked for cannot be established. This is a "
+                        + "statement about the INPUT and NOT a fail against the block: nothing was compared. Drop "
+                        + "--subject to run unguarded, or add a subject: to the enumeration.");
+                    return 2;
+                }
+
+                if (!Converter.InterfaceCheck.EnumerationSubject.Agrees(declaredSubject, subject))
+                {
+                    Console.Error.WriteLine(
+                        $"NOT CHECKED — the enumeration's declared subject does not agree with --subject, so this run "
+                        + $"was not made.\n  --subject   : {subject}\n  file declares: {Truncate(declaredSubject, 300)}"
+                        + $"\n  file        : {requiresFile}\n  block       : {block}\n"
+                        + "*** A WRONG ENUMERATION IS AN UNJUDGEABLE INPUT, NOT A DEFECTIVE BLOCK. *** Running it "
+                        + "anyway would demand every response signal of some other subject and report them MISSING — "
+                        + "exit 1, a FAIL against a block that is not at fault. Agreement is containment either way, "
+                        + "case- and whitespace-insensitive.");
+                    return 2;
+                }
+            }
 
             // *** THE FORM WITH A PRODUCER IS ACCEPTED DIRECTLY. *** A hand-typed list of required
             // signals is the same self-referential check this exists to break: the party being checked
@@ -1964,6 +2029,14 @@ internal static class Program
                 required.AddRange(plain);
                 source = $"{requiresFile} — read as a plain name list: {plain.Count} name(s)";
             }
+
+            // THE FILE'S OWN WORDS, ON EVERY RUN, GUARDED OR NOT. The cheap half of the repair: a
+            // reader can now see WHICH subject was demanded of WHICH block without opening the file,
+            // and an absent declaration is said out loud rather than left as a blank.
+            source += declaredSubject is null
+                ? "; the file declares NO top-level `subject:`, so nothing states what it is about"
+                : $"; the file declares subject: \"{Truncate(declaredSubject, 200)}\""
+                  + (subject is null ? " (NOT checked against --block — pass --subject to gate on it)" : " (agreed with --subject)");
         }
 
         var report = Converter.InterfaceCheck.InterfaceCheckRunner.Run(
@@ -2006,11 +2079,34 @@ internal static class Program
                 + $"{report.Requirements.Count} required response signal(s): "
                 + string.Join(", ", report.Missing.Select(r => r.Name))
                 + ". The submission is not at fault. Established against ir-hash " + report.IrHash + ".");
+
+            // THE ALTERNATIVE EXPLANATION, PUT IN FRONT OF THE READER AT THE MOMENT IT MATTERS. A
+            // majority-absent result is equally the shape of a WRONG --requires-file, and the two are
+            // otherwise indistinguishable — the C-132 house style makes "nearly everything missing" a
+            // plausible genuine output, which is what made the false accusation credible. This does NOT
+            // decide (a threshold would be a guess); it names the other thing that produces this shape.
+            if (requiresFile is not null && report.Missing.Count * 2 > report.Requirements.Count)
+            {
+                Console.Error.WriteLine(
+                    $"NOTE — {report.Missing.Count} of {report.Requirements.Count} required signals are absent, i.e. a "
+                    + "MAJORITY. That is equally the shape of an enumeration file about a DIFFERENT subject, and this "
+                    + $"run did not establish that '{requiresFile}' is about '{report.Block}'"
+                    + (subject is null
+                        ? " — no --subject was given, so the file's declared subject was reported and not checked. "
+                          + "Re-run with --subject to settle which of the two you are looking at."
+                        : " beyond the --subject agreement above.")
+                    + " Check the file before acting on the FAIL.");
+            }
+
             return 1;
         }
 
         return 0;
     }
+
+    // Keeps a declared subject — a paragraph of prose in the real artifacts — to one readable line.
+    private static string Truncate(string text, int max) =>
+        text.Length <= max ? text : text[..max] + "…";
 
     private static int RunTrace(string[] args)
     {
