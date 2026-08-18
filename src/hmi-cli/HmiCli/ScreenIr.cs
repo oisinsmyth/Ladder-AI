@@ -114,6 +114,18 @@ public sealed record IrItem
     /// </summary>
     [JsonPropertyName("unit")] public string? Unit { get; init; }
 
+
+    /// <summary>
+    /// Name of the TEXT LIST that resolves this field's numeric value into a word
+    /// (<c>data-hmi-textlist</c>). Required on a SymbolicIOField.
+    ///
+    /// This is the half that makes a coded value readable. Nine of nineteen fields on the first real
+    /// screen delivered were bare numbers standing in for words - state, hold cause, moisture stage -
+    /// because the emitter had no type that could resolve them. The text list itself is a project
+    /// object the engineer creates; this only names it.
+    /// </summary>
+    [JsonPropertyName("textList")] public string? TextList { get; init; }
+
     [JsonPropertyName("text")] public string? Text { get; init; }
 
     /// <summary>

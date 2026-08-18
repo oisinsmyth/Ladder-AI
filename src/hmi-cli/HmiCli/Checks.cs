@@ -174,6 +174,11 @@ public static class Linter
             var minRatio = it.Type switch
             {
                 "IOField" => 1.92,
+                // Two specimens only, and the floor is the smaller: the reference corpus's text-list
+                // field at 25/17 = 1.47, and the owner's hand-placed one at 32/17 = 1.88. A narrow
+                // denominator, stated rather than implied - if a third specimen comes in lower, this
+                // moves.
+                "SymbolicIOField" => 1.47,
                 "Button" => 1.35,   // a button's own corpus floor is 2.67, but that reflects touch
                                     // sizing (H-402) rather than legibility, and H-401/H-402 already
                                     // bind it far above this. Held at the text floor so the two
@@ -181,7 +186,8 @@ public static class Linter
                 _ => 1.35,
             };
 
-            if (it.FontSizePx >= 1 && !string.IsNullOrWhiteSpace(it.Text) || it.Type == "IOField")
+            if (it.FontSizePx >= 1 && !string.IsNullOrWhiteSpace(it.Text)
+                || it.Type is "IOField" or "SymbolicIOField")
             {
                 var font = it.FontSizePx >= 1 ? it.FontSizePx : 15;
                 var needed = Math.Ceiling(font * minRatio);

@@ -75,6 +75,7 @@ window.addEventListener('load', function () {
       mode: el.getAttribute('data-hmi-mode'),
       format: el.getAttribute('data-hmi-format'),
       unit: el.getAttribute('data-hmi-unit'),
+      textList: el.getAttribute('data-hmi-textlist'),
       // 🔴 TEXT WAS SILENTLY TRUNCATED AT 80 CHARACTERS.
       //
       // `.slice(0, 80)` was an arbitrary cap, and it CUT REAL CAPTIONS MID-WORD with no warning

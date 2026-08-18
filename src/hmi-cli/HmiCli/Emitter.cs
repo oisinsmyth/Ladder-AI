@@ -31,7 +31,7 @@ public static class Emitter
     /// <summary>Item types this emitter can faithfully produce. Anything else is refused by name.</summary>
     private static readonly HashSet<string> Supported = new(StringComparer.Ordinal)
     {
-        "Rectangle", "Text", "Button", "Line", "Circle", "AlarmPlaceholder", "IOField",
+        "Rectangle", "Text", "Button", "Line", "Circle", "AlarmPlaceholder", "IOField", "SymbolicIOField",
     };
 
     public static IReadOnlyCollection<string> SupportedTypes => Supported;
@@ -125,11 +125,36 @@ public static class Emitter
         // discovering it at commissioning costs a site visit.
         var unbound = ir.Items
             .Where(i => i.Type == "IOField" && string.IsNullOrWhiteSpace(i.Bind))
+            // A SymbolicIOField needs BOTH halves. With no tag it shows nothing; with no text list it
+            // shows the NUMBER - which is exactly the unreadable state this type exists to remove, and
+            // it would look like a working field to everyone downstream.
+            .Concat(ir.Items.Where(i => i.Type == "SymbolicIOField"
+                                        && (string.IsNullOrWhiteSpace(i.Bind)
+                                            || string.IsNullOrWhiteSpace(i.TextList))))
             .ToList();
 
         if (unbound.Count > 0)
         {
             throw new UnboundFieldException(unbound);
+        }
+
+        // A DUPLICATE ObjectName IS REFUSED HERE RATHER THAN AT TIA.
+        //
+        // Now that an author-supplied `id` becomes the ObjectName, two elements sharing an id produce
+        // two objects sharing a name. TIA rejects that at IMPORT - which costs a Portal session to
+        // discover, and the message names the document rather than the element. Cheaper to say it now.
+        var dupeIds = ir.Items
+            .Where(i => i.Type is not null && !i.Geometryless && !string.IsNullOrWhiteSpace(i.ElementId))
+            .GroupBy(i => i.ElementId!, StringComparer.Ordinal)
+            .Where(g => g.Count() > 1)
+            .ToList();
+
+        if (dupeIds.Count > 0)
+        {
+            throw new UnrepresentableStylingException(dupeIds
+                .Select(g => $"id=\"{g.Key}\" is on {g.Count()} elements - an id becomes the object's "
+                           + "name on the panel and TIA refuses duplicates at import")
+                .ToList());
         }
 
         // TRUNCATED TEXT IS REFUSED, NOT SHORTENED. See ScreenIr.TextTruncated - the flattener used
@@ -218,18 +243,18 @@ public static class Emitter
                 switch (item.Type)
                 {
                     case "Rectangle":
-                        WriteRectangle(w, NextId(), Name("Rectangle", emitted), item, Colour(item.BackColor, HouseGrey), Colour(item.BorderColor, "0, 0, 0"));
+                        WriteRectangle(w, NextId(), Name(item, "Rectangle", emitted), item, Colour(item.BackColor, HouseGrey), Colour(item.BorderColor, "0, 0, 0"));
                         emitted++;
                         break;
 
                     case "Text":
-                        WriteTextField(w, NextId, Name("Text", emitted), item);
+                        WriteTextField(w, NextId, Name(item, "Text", emitted), item);
                         emitted++;
                         break;
 
                     case "Button":
                     {
-                        var btnName = Name("Button", emitted);
+                        var btnName = Name(item, "Button", emitted);
                         WriteButton(w, NextId, btnName, item);
                         emitted++;
                         // EVERY BUTTON GETS A HAND-OFF LINE, not only the navigating ones.
@@ -255,17 +280,22 @@ public static class Emitter
                     }
 
                     case "Line":
-                        WriteLine(w, NextId(), Name("Line", emitted), item);
+                        WriteLine(w, NextId(), Name(item, "Line", emitted), item);
                         emitted++;
                         break;
 
                     case "Circle":
-                        WriteCircle(w, NextId(), Name("Circle", emitted), item);
+                        WriteCircle(w, NextId(), Name(item, "Circle", emitted), item);
                         emitted++;
                         break;
 
                     case "IOField":
-                        WriteIOField(w, NextId, Name("IOField", emitted), item);
+                        WriteIOField(w, NextId, Name(item, "IOField", emitted), item);
+                        emitted++;
+                        break;
+
+                    case "SymbolicIOField":
+                        WriteSymbolicIOField(w, NextId, Name(item, "SymbolicIOField", emitted), item);
                         emitted++;
                         break;
 
@@ -275,7 +305,7 @@ public static class Emitter
                         // replaces by hand, because an alarm view cannot be authored at all on
                         // classic. Emitted as a bordered rectangle plus a label, so it is impossible
                         // to mistake for finished work.
-                        var boxName = Name("AlarmPlaceholder", emitted);
+                        var boxName = Name(item, "AlarmPlaceholder", emitted);
                         WriteRectangle(w, NextId(), boxName, item, "255, 255, 255", "176, 42, 30");
                         WriteTextField(w, NextId, boxName + "_Label", item with { Text = "ALARM VIEW GOES HERE - add manually" });
                         emitted += 2;
@@ -325,11 +355,23 @@ public static class Emitter
     //   * Button BackFillStyle: observed Transparent, emitted Solid (a command button must show its
     //     fill; Solid is observed on Rectangle and Circle, so the value is in the enum)
 
-    // Was a ternary whose two branches were IDENTICAL - it read item.Bind and returned the same
-    // string either way. That was the visible symptom of the real defect: the binding was captured
-    // into the IR and never emitted, so every screen this tool produced was a static picture. The
-    // binding now goes where it belongs (WriteTagBinding), and the name is just a name.
-    private static string Name(string prefix, int n) => $"{prefix}_{n + 1}";
+    // 🔴 AN OBJECT NAME IS AN IDENTITY, AND A POSITIONAL ONE IS NOT STABLE.
+    //
+    // Names were purely positional - `Button_53` meant "the 53rd item emitted". So inserting ONE
+    // element near the top of the HTML renumbered every object after it, and a `compare` between two
+    // versions of the same screen then reported a wall of differences that were pure noise.
+    //
+    // Measured 2026-08-17: comparing a screen against a re-emitted version of itself produced 32
+    // CHANGED and 2 DROPPED lines, of which the real count was ZERO - every one was a name shifting
+    // by one. I read that as "TIA renumbers objects on a hand edit" and reported it as a finding. It
+    // was our own emitter, and a lane comparing against the correct baseline showed 1 changed over
+    // 1758 fields. A misleading identity produced a false conclusion about the PLATFORM.
+    //
+    // So: an element carrying an `id` gets that as its ObjectName, which survives anything happening
+    // above it. Without one the positional name remains - it is fine for decoration, and requiring an
+    // id on every rectangle would be noise. **Put an id on anything you intend to diff.**
+    private static string Name(IrItem item, string prefix, int n) =>
+        string.IsNullOrWhiteSpace(item.ElementId) ? $"{prefix}_{n + 1}" : item.ElementId!;
 
     private static void Attr(XmlWriter w, string name, string value) => w.WriteElementString(name, value);
 
@@ -603,6 +645,98 @@ public static class Emitter
         w.WriteEndElement(); // FunctionListEventHandler
         w.WriteEndElement(); // ObjectList
         w.WriteEndElement(); // Event
+    }
+
+    /// <summary>
+    /// The field that shows a coded value as a WORD instead of a number.
+    ///
+    /// 🔴 This is the type whose absence made the first real screen unreadable: nine of nineteen
+    /// fields on it were bare integers standing in for words - the state, the hold cause, the moisture
+    /// stage - because the emitter had nothing that could resolve them. The owner's verdict on seeing
+    /// it was that a non-technical operator could not read the screen, and they were right.
+    ///
+    /// STRUCTURE HARVESTED FROM TWO REAL SPECIMENS, not documentation. There are two distinct modes
+    /// and only one of them is useful here:
+    ///   * BIT mode      - BitNumber + OnValue with TextOff/TextOn. Two states, no list. This is what
+    ///                     TIA creates by default when you drop one on a screen.
+    ///   * TEXT-LIST mode - a LinkList naming a TextList, plus a tag on the ProcessValue property.
+    ///                     Many values to many words, which is what a state number needs.
+    /// This emits TEXT-LIST mode; the bit variant is reachable with a two-entry list and is not worth
+    /// a second code path.
+    ///
+    /// ⚠️ The text list itself is a PROJECT object the engineer creates - this only NAMES one. A
+    /// screen naming a list that does not exist still imports; the hand-off carries the list and its
+    /// entries so the naming is not left implicit.
+    /// </summary>
+    private static void WriteSymbolicIOField(XmlWriter w, Func<string> nextId, string name, IrItem i)
+    {
+        var mode = string.IsNullOrWhiteSpace(i.Mode) ? "Output" : i.Mode!;
+
+        w.WriteStartElement("Hmi.Screen.SymbolicIOField");
+        w.WriteAttributeString("ID", nextId());
+        w.WriteAttributeString("CompositionName", "ScreenItems");
+        w.WriteStartElement("AttributeList");
+        Attr(w, "AboveUpperLimitColor", "237, 88, 97");
+        Attr(w, "BackColor", Colour(i.BackColor, "255, 255, 255"));
+        Attr(w, "BackFillStyle", "Solid");
+        Attr(w, "BelowLowerLimitColor", "241, 161, 44");
+        Attr(w, "BitNumber", "0");
+        Attr(w, "BorderColor", Colour(i.BorderColor, "105, 105, 105"));
+        Attr(w, "BorderWidth", "1");
+        Attr(w, "BottomMargin", "2");
+        // H-203/H-204: the corpus uses CornerRadius 3 and EdgeStyle Double, and the owner's own
+        // hand-placed specimen came out Style3D - that is simply TIA's default, and it is what H-204
+        // exists to catch. Flat and square here, as on Button and IOField.
+        Attr(w, "CornerRadius", "0");
+        Attr(w, "CountVisibleItems", "3");
+        Attr(w, "EdgeStyle", "Solid");
+        Attr(w, "Enabled", mode == "Output" ? "false" : "true");
+        Attr(w, "EvenRowBackColor", "230, 230, 232");
+        Attr(w, "FitToLargest", "false");
+        Attr(w, "Flashing", "None");
+        Attr(w, "FlashingOnLimitViolation", "false");
+        Attr(w, "ForeColor", Colour(i.ForeColor, "0, 0, 0"));
+        Geometry(w, i);
+        // Left-aligned, unlike an IOField: this holds a WORD, and words read from the left. Numbers
+        // line up on the right so their decimal points align; text has no such point.
+        Attr(w, "HorizontalAlignment", "Left");
+        Attr(w, "LeftMargin", "3");
+        Attr(w, "Mode", mode);
+        Attr(w, "ObjectName", name);
+        Attr(w, "OnValue", "1");
+        Attr(w, "RightMargin", "2");
+        Attr(w, "SelectBackColor", "0, 0, 0");
+        Attr(w, "SelectForeColor", "255, 255, 255");
+        // A drop-down is an INPUT affordance. On a display field it invites a press that does
+        // nothing, so both are off unless the field is genuinely writable.
+        Attr(w, "ShowDropDownButton", mode == "Output" ? "false" : "true");
+        Attr(w, "ShowDropDownList", mode == "Output" ? "false" : "true");
+        Attr(w, "TabIndex", "-1");
+        Attr(w, "TextOrientation", "Horizontal");
+        Attr(w, "Top", ((int)Math.Round(i.Top)).ToString(CultureInfo.InvariantCulture));
+        Attr(w, "TopMargin", "2");
+        Attr(w, "UseDesignColorSchema", "false");
+        Attr(w, "VerticalAlignment", "Middle");
+        Attr(w, "Width", ((int)Math.Round(i.Width)).ToString(CultureInfo.InvariantCulture));
+        w.WriteEndElement();
+
+        // The TEXT LIST link sits on the ITEM, beside its AttributeList - not inside a Property, which
+        // is where the TAG goes. Two different link levels on one object, and swapping them yields a
+        // document that imports into nothing.
+        w.WriteStartElement("LinkList");
+        w.WriteStartElement("TextList");
+        w.WriteAttributeString("TargetID", "@OpenLink");
+        Attr(w, "Name", i.TextList!);
+        w.WriteEndElement();
+        w.WriteEndElement();
+
+        w.WriteStartElement("ObjectList");
+        WriteFont(w, nextId, i);
+        WriteText(w, nextId, string.Empty, "HelpText");
+        WriteTagBinding(w, nextId, "ProcessValue", i.Bind!);
+        w.WriteEndElement();
+
+        w.WriteEndElement();
     }
 
     /// <summary>
