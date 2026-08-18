@@ -116,6 +116,13 @@ public sealed record IrItem
 
     [JsonPropertyName("text")] public string? Text { get; init; }
 
+    /// <summary>
+    /// This element's text was longer than the flattener will carry. Emit REFUSES rather than
+    /// shortening it: a truncated caption renders, looks deliberate, and loses whichever half came
+    /// second — which on a safety statement is the half that mattered.
+    /// </summary>
+    [JsonPropertyName("textTruncated")] public bool TextTruncated { get; init; }
+
     [JsonPropertyName("backColor")] public string? BackColor { get; init; }
 
     [JsonPropertyName("foreColor")] public string? ForeColor { get; init; }

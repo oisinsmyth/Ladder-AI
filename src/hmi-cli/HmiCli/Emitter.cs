@@ -132,6 +132,18 @@ public static class Emitter
             throw new UnboundFieldException(unbound);
         }
 
+        // TRUNCATED TEXT IS REFUSED, NOT SHORTENED. See ScreenIr.TextTruncated - the flattener used
+        // to cut at 80 characters silently, and a caption that renders while missing its second half
+        // is the worst available outcome.
+        var truncated = ir.Items.Where(i => i.TextTruncated).ToList();
+        if (truncated.Count > 0)
+        {
+            throw new UnrepresentableStylingException(truncated
+                .Select(i => $"\"{Trim(i.Text ?? string.Empty)}\": text is too long to carry intact - "
+                           + "split it across elements rather than letting it be cut")
+                .ToList());
+        }
+
         // A NAVIGATION BUTTON THAT NAMES NO SCREEN is the same class of defect: it looks like a
         // button, it presses, and nothing happens. Only flagged when the author declared an intent
         // to navigate (an empty data-hmi-goto), never for an ordinary command button.

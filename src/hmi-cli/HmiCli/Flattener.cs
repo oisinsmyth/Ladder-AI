@@ -42,8 +42,22 @@ window.addEventListener('load', function () {
       // written as <div data-hmi="IOField" data-hmi-mode="Input"> escaped H-401's 9 mm touch floor
       // entirely - it is a touch target on the panel and was not one to the checker. What the PANEL
       // does decides this, not what the markup happens to be made of.
+      // 🔴 A DECLARED BUTTON IS INTERACTIVE WHATEVER ELEMENT IT IS MADE OF.
+      //
+      // This keyed on the HTML element, so `<div data-hmi="Button">` - which is how every screen in
+      // this project authors its buttons - was NOT interactive to the checker. H-401 (touch size),
+      // H-404 (separation) and H-503 (overlap) therefore never ran on a single button.
+      //
+      // Measured on a real job: a screen reported "0 errors over 62 items" having examined NONE of
+      // its own touch targets, and the navigation bar copied from it turned out to be 8 px apart
+      // against a 3 mm floor. A green over the wrong denominator, in the checker whose whole purpose
+      // is the physical-safety rules.
+      //
+      // What the PANEL does decides this, not what the markup is made of - the same correction
+      // already applied to a writable IOField.
       interactive: !!(el.matches('button,a,input,select,textarea,[role=button]')
                       || el.hasAttribute('data-hmi-interactive')
+                      || el.getAttribute('data-hmi') === 'Button'
                       || ['Input', 'InOutput'].includes(el.getAttribute('data-hmi-mode'))),
       leaf: el.children.length === 0,
       geometryless: geometryless,
@@ -61,7 +75,21 @@ window.addEventListener('load', function () {
       mode: el.getAttribute('data-hmi-mode'),
       format: el.getAttribute('data-hmi-format'),
       unit: el.getAttribute('data-hmi-unit'),
-      text: el.children.length === 0 ? (el.textContent || '').trim().slice(0, 80) : null,
+      // 🔴 TEXT WAS SILENTLY TRUNCATED AT 80 CHARACTERS.
+      //
+      // `.slice(0, 80)` was an arbitrary cap, and it CUT REAL CAPTIONS MID-WORD with no warning
+      // from check, from emit or from the coherence gate. Measured on a real job: a 90-character
+      // safety statement reached the SimaticML as "...is a different number and is on the si" and
+      // was found only because the author read the emitted XML.
+      //
+      // A truncated caption is worse than a refused one: it renders, it looks deliberate, and the
+      // half that carried the warning is the half that went. Only LEAF elements contribute text
+      // (see the ternary), so there was never a runaway-container risk for the cap to guard against.
+      //
+      // Full text is captured now, and `textTruncated` marks anything past a sane ceiling so emit
+      // can refuse rather than quietly shorten it.
+      text: el.children.length === 0 ? (el.textContent || '').trim().slice(0, 1000) : null,
+      textTruncated: el.children.length === 0 && (el.textContent || '').trim().length > 1000,
       backColor: c.backgroundColor, foreColor: c.color, borderColor: c.borderTopColor,
       backgroundImage: c.backgroundImage, boxShadow: c.boxShadow, textShadow: c.textShadow,
       borderRadius: c.borderTopLeftRadius, animationName: c.animationName,
