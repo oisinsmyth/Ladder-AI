@@ -219,6 +219,36 @@ two meanings for one colour.
   arm's length and one read across an aisle are different problems.
 - **H-304** `[MECHANIZED]` Every value carries its **engineering unit**. A bare number is a defect.
 - **H-305** `[ADVISORY]` Labels say what the operator calls the thing, not what the tag is called.
+- **H-306** `[CHECKED]` `[CORRECTNESS]` 🔴 **A text box must be tall enough for the text in it.**
+  Minimum height is `1.35 × FontSize` for a Text or Button and **`1.92 × FontSize` for an IOField** —
+  a field carries margins, a border and a focus rectangle that a plain label does not.
+
+  **The floors are MEASURED, not derived from font metrics.** Height ÷ FontSize across 66
+  text-bearing objects in a real TIA export:
+
+  | | n | min | median | max |
+  |---|---|---|---|---|
+  | TextField | 37 | **1.35** (23/17) | 1.54 | 1.54 |
+  | IOField | 23 | **1.92** | 1.92 | 2.00 |
+  | Button | 6 | 2.67 | 6.67 | 6.67 |
+
+  The floor is the corpus **minimum**, not its median: below it is a size no real screen uses, which
+  is a defensible line — above it is a density judgement, and that belongs to the author.
+
+  **Found by the owner looking at built screens**, not by any check: *"the textboxes have been sized
+  too small compared to the text they hold and has resulted in cut-off text at the bottom."* It was
+  systematic — 36 of 62 items on one screen, 70 of 84 on another — and every geometry rule passed,
+  because the boxes were a legal size, on the canvas and not overlapping **while the glyphs were
+  clipped**. Nothing in H-5xx measures a box against its contents.
+
+  **CORRECTNESS, so it cannot be overridden.** Clipped text is broken on any panel, to anyone's
+  taste — the same class as off-canvas.
+
+  ⚠️ **It bites density, and that is usually the right trade.** Raising an IOField from 24 px to 33
+  px at font 17 costs a row per band. On the screens where it first fired, the owner's other
+  complaint was that they were *too crowded* — so the two findings had one fix, and losing rows was
+  the cure rather than the cost. Where a band genuinely cannot lose one, a smaller font in the same
+  box is the fallback; prefer losing the row to making an operator squint.
 
 ## H-4xx — Physical sizing
 

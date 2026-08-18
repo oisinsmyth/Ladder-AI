@@ -32,6 +32,11 @@ public static class RuleClasses
         ["H-501"] = RuleClass.Correctness,   // off-canvas
         ["H-502"] = RuleClass.Correctness,   // sub-pixel geometry
         ["H-505"] = RuleClass.Correctness,   // zero-size / degenerate
+        // A box too short for its own text CLIPS THE TEXT. That is not a taste difference: the
+        // operator reads a truncated word, or a digit with its descender cut off, and there is no
+        // panel or preference on which that is correct. Same class as off-canvas - the screen is
+        // broken, not different - so it cannot be overridden away.
+        ["H-306"] = RuleClass.Correctness,   // text box shorter than its font needs
 
         // Safety - about whether a person can operate the thing under pressure.
         ["H-401"] = RuleClass.Safety,        // >= 9 mm interactive
@@ -144,6 +149,49 @@ public static class Linter
             {
                 f.Add(new Finding("H-501", Severity.Error,
                     $"extends beyond the {ir.CanvasWidth}x{ir.CanvasHeight} screen", it.Index));
+            }
+
+            // H-306 - A TEXT BOX MUST BE TALL ENOUGH FOR THE TEXT IN IT.
+            //
+            // Reported by the owner looking at built screens: "the textboxes have been sized too
+            // small compared to the text they hold and has resulted in cut-off text at the bottom."
+            // It was systematic, not incidental, and nothing here caught it - the box is a legal
+            // size, on the canvas, not overlapping, so every geometry rule passed while the glyphs
+            // were clipped.
+            //
+            // THE FLOORS ARE MEASURED FROM A REAL TIA EXPORT, NOT REASONED FROM FONT METRICS.
+            // Height / FontSize across 66 text-bearing objects:
+            //     TextField  n=37  min 1.35 (23/17)  median 1.54
+            //     IOField    n=23  min 1.92          median 1.92   max 2.00
+            //     Button     n=6   min 2.67
+            // A real IOField is nearly TWICE its font size - the field carries margins, a border and
+            // a focus rectangle that a plain label does not. Screens authored here sat at 1.41, which
+            // is why the values clipped worst.
+            //
+            // The floor is the corpus MINIMUM rather than its median: below it is a size no real
+            // screen uses, which is a defensible line. Above it is a judgement about density, and
+            // that is the author's.
+            var minRatio = it.Type switch
+            {
+                "IOField" => 1.92,
+                "Button" => 1.35,   // a button's own corpus floor is 2.67, but that reflects touch
+                                    // sizing (H-402) rather than legibility, and H-401/H-402 already
+                                    // bind it far above this. Held at the text floor so the two
+                                    // rules do not contradict each other.
+                _ => 1.35,
+            };
+
+            if (it.FontSizePx >= 1 && !string.IsNullOrWhiteSpace(it.Text) || it.Type == "IOField")
+            {
+                var font = it.FontSizePx >= 1 ? it.FontSizePx : 15;
+                var needed = Math.Ceiling(font * minRatio);
+                if (it.Height + 0.5 < needed)
+                {
+                    f.Add(new Finding("H-306", Severity.Error,
+                        $"{it.Height:0} px tall for a {font:0} px font - needs >= {needed:0} "
+                        + $"({minRatio:0.00}x, the smallest a real {it.Type} uses). Text clips at the bottom.",
+                        it.Index));
+                }
             }
 
             if (it.Interactive)
