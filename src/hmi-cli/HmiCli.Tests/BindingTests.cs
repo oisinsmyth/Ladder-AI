@@ -172,9 +172,17 @@ public class BindingTests
         Assert.Contains("ActivateScreen", handOff[0], StringComparison.Ordinal);
     }
 
-    /// <summary>Positive control: an ordinary button raises no hand-off.</summary>
+    /// <summary>
+    /// 🔴 A COMMAND button — one with no navigation target — must ALSO raise a hand-off, and this
+    /// test exists because it did not. Found on a real job: nine command buttons across four screens
+    /// emitted completely inert, with no generated file naming any of them.
+    ///
+    /// A button with no declared target is not LESS incomplete than a navigating one. It is MORE:
+    /// no event can be created for either, and for this one nobody even knows what it was meant to
+    /// do.
+    /// </summary>
     [Fact]
-    public void A_button_with_no_goto_produces_no_hand_off()
+    public void A_command_button_with_no_goto_still_raises_a_hand_off()
     {
         var button = new IrItem
         {
@@ -182,7 +190,21 @@ public class BindingTests
             Text = "START", FontSizePx = 17,
         };
 
-        Assert.Empty(Emitter.Emit(Ir(button), "S", 1).HandOff);
+        var handOff = Emitter.Emit(Ir(button), "S", 1).HandOff;
+
+        Assert.Single(handOff);
+        Assert.Contains("INERT", handOff[0], StringComparison.Ordinal);
+        Assert.Contains("START", handOff[0], StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Control: a non-button item raises nothing, so the rule above is about BUTTONS and not a
+    /// hand-off line for everything on the screen.
+    /// </summary>
+    [Fact]
+    public void A_plain_field_raises_no_hand_off()
+    {
+        Assert.Empty(Emitter.Emit(Ir(Field("Level")), "S", 1).HandOff);
     }
 
     [Fact]

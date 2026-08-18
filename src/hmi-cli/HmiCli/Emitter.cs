@@ -220,12 +220,24 @@ public static class Emitter
                         var btnName = Name("Button", emitted);
                         WriteButton(w, NextId, btnName, item);
                         emitted++;
-                        if (!string.IsNullOrWhiteSpace(item.GoTo))
-                        {
-                            handOff.Add(
-                                $"{btnName} (\"{item.Text}\"): add an ActivateScreen event on KeyUp targeting "
-                                + $"\"{item.GoTo}\". THE PANEL CANNOT BE NAVIGATED UNTIL THIS IS DONE BY HAND.");
-                        }
+                        // EVERY BUTTON GETS A HAND-OFF LINE, not only the navigating ones.
+                        //
+                        // This used to fire only when data-hmi-goto was set, which meant a COMMAND
+                        // button - START, ABORT, ACKNOWLEDGE - was emitted completely inert with
+                        // NOTHING ANYWHERE NAMING IT. Found on a real job: nine command buttons
+                        // across four screens, every one of them dead, and no generated file
+                        // mentioned any of them.
+                        //
+                        // That is the silent omission this emitter exists to refuse. No button can
+                        // carry an action on classic (no event can be created at all), so a button
+                        // WITHOUT a declared target is not less incomplete than one with - it is
+                        // MORE, because nobody even knows what it was meant to do.
+                        handOff.Add(string.IsNullOrWhiteSpace(item.GoTo)
+                            ? $"{btnName} (\"{item.Text}\"): INERT - this button has no action and no "
+                              + "event can be generated for it. Define what it does and build the "
+                              + "function list by hand, including any enable condition."
+                            : $"{btnName} (\"{item.Text}\"): add an ActivateScreen event on KeyUp targeting "
+                              + $"\"{item.GoTo}\". THE PANEL CANNOT BE NAVIGATED UNTIL THIS IS DONE BY HAND.");
 
                         break;
                     }
