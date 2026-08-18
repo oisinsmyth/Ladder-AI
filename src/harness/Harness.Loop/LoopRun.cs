@@ -454,7 +454,7 @@ public static class LoopRun
         //
         // 🔴 *** THE SLOT ID IS NOT THE ONLY JOIN, AND THE ONE BELOW IT HAD NO CHECK AT ALL. *** A
         // vector's slot resolving says nothing about whether the SIGNALS it names resolve, and both are
-        // consumed as REGISTER OFFSETS. Measured on the first live wave, 2026-08-17: the wave ran both its
+        // consumed as REGISTER OFFSETS. Measured on JOB9004's first live wave, 2026-08-17: the wave ran both its
         // vectors against the rig, cost 7,912 round trips, read the whole result band every poll — and
         // returned `<never read>` for every declared assertion, because not one cited name reached a
         // register. Two causes, both this join, and only one of them was in the lookup.
@@ -644,7 +644,7 @@ public static class LoopRun
 
             // 🔴 *** ONE PREDICATE DECIDES BOTH THE PACKAGE AND THE DISPOSITION. *** This was a bare
             // `if (run is null) continue;` — correct in itself (a package built on a run that did not
-            // happen would be worse) and SILENT, so the twenty vectors it skipped on the first live wave
+            // happen would be worse) and SILENT, so the twenty vectors it skipped on JOB9004's first live wave
             // left no trace anywhere. The skip is still a skip; what changed is that the account was
             // computed first and every skipped vector is now a reported row with a reason.
             if (accountOf[vector.Id].Disposition != VectorDisposition.Ran)
@@ -1155,7 +1155,7 @@ public static class LoopRun
         // 🔴 *** THIS READ `completionRegister >= 0 ? completionRegister : 0` UNTIL 2026-08-17, AND THAT
         // FALLBACK IS THE WHOLE OF A MEASURED DEFECT. *** Register 0 is a real register holding some other
         // signal, so a completion name the binding does not carry did not fail — it silently watched
-        // whatever sat first in the result band. Measured on the first live wave: `SPEC.Scenario_Done`
+        // whatever sat first in the result band. Measured on JOB9004's first live wave: `SPEC.Scenario_Done`
         // matched neither the
         // tag nor the spec name, the poll watched result register 0 (the stimulus model's PHASE code), and
         // the wave declared a 41-second scenario COMPLETE after EIGHT SCANS because phase 1 equals the

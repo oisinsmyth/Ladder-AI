@@ -75,7 +75,7 @@ public class VectorAccountingTests
     // -------------------------------------------------------------------------------------------------
 
     /// <summary>
-    /// 🔴 <b>THE FIRST LIVE WAVE, RECONSTRUCTED.</b> 22 vectors on one slot, the slot stopping after
+    /// 🔴 <b>JOB9004'S FIRST LIVE WAVE, RECONSTRUCTED.</b> 22 vectors on one slot, the slot stopping after
     /// index 1. Every one of the 20 that were never attempted is a row with a reason, and the summary
     /// counts read against 22.
     /// </summary>

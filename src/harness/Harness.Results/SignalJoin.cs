@@ -48,7 +48,7 @@ public sealed record SignalJoinReport(
 /// level below: that each signal the vector NAMES resolves to a result source of that binding. They are
 /// separate failures with separate remedies, and the second one had no check.</para>
 ///
-/// <para><b>MEASURED ON THE FIRST LIVE WAVE, 2026-08-17.</b> Both vectors ran to completion against the
+/// <para><b>MEASURED ON JOB9004'S FIRST LIVE WAVE, 2026-08-17.</b> Both vectors ran to completion against the
 /// bench rig, the wave cost 7,912 round trips, and the published mirror feed records the entire
 /// 23-register result band being read with a UTC instant on it — <b>including the register holding the
 /// exact value one vector expected.</b> Every declared assertion nonetheless came back

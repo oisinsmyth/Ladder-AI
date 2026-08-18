@@ -17,7 +17,7 @@ namespace Harness.Loop.Tests;
 /// spec name happened to equal its tag. <i>A fixture in which two keys coincide is a fixture that cannot
 /// tell them apart.</i></para>
 ///
-/// <para><b>The shape reproduced here is the first live wave, 2026-08-17:</b> a binding that states a
+/// <para><b>The shape reproduced here is JOB9004's first live wave, 2026-08-17:</b> a binding that states a
 /// specification name for every result source, and vectors that cite those names. The wave ran, cost
 /// 7,912 round trips, and returned <c>observed: "&lt;never read&gt;"</c> for all four declared
 /// assertions while the published mirror feed recorded the whole result band being read.</para>

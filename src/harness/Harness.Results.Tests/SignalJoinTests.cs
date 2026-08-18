@@ -7,7 +7,7 @@ namespace Harness.Results.Tests;
 /// 🔴 <b>THE SECOND JOIN BETWEEN A SUBMISSION AND A BINDING — the SIGNAL names — which had no check at
 /// all until 2026-08-17.</b>
 ///
-/// <para>Written against the shape that was measured on the first live wave: the binding states the
+/// <para>Written against the shape that was measured on JOB9004's first live wave: the binding states the
 /// specification's name as <c>specName</c> beside the block's own tag, and the vector cites the
 /// specification's name.</para>
 /// </summary>

@@ -147,7 +147,7 @@ public class ResultPackageJsonTests
         {
             Assert.True(json.TryGetProperty(content, out var value),
                 $"DB-8 names '{content}' as a package content and the serialised artifact does not carry it. "
-                + "This is the defect measured on the first live wave: five of seven were missing.");
+                + "This is the defect measured on JOB9004's first live wave: five of seven were missing.");
 
             Assert.NotEqual(JsonValueKind.Null, value.ValueKind);
             Assert.NotEqual(JsonValueKind.Undefined, value.ValueKind);

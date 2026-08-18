@@ -12,7 +12,7 @@ namespace Harness.Map.Tests;
 ///
 /// <para><b>Until 2026-08-17 the first pair joined on the TAG</b>, which is the third independent
 /// derivation of this join to be found wrong — <c>MirrorValueFit</c> and <c>LoopRun.ToWireVector</c> were
-/// both corrected on 2026-08-14. The consequence measured on the first live wave: the stimulus reached the
+/// both corrected on 2026-08-14. The consequence measured on JOB9004's first live wave: the stimulus reached the
 /// block and <b>every observation resolved to no register at all</b>.</para>
 ///
 /// <para><b>Every fixture here states a spec name that DIFFERS from the tag</b>, because the two keys are
