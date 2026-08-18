@@ -7,7 +7,9 @@ C# CLI — the only component that talks to TIA Portal (via Openness). Built in 
 ```
 openness-cli list          <project> [--tagtables]                            # enumerate blocks (or tag tables, with --tagtables); F-/safety blocks flagged, never opened
 openness-cli export        <project> (--block <name> | --type <name> | --tagtable <name>) [--device <name>] --out <path>   # block/UDT/tag table → SimaticML (refuses safety blocks)
+openness-cli export        <project> (--screen <name> | --hmitagtable <name> | --textlist <name>) --out <path>   # CLASSIC HMI content → SimaticML. --tagtable is the PLC one; --hmitagtable is the HMI one — see below
 openness-cli import        <project> --group <device>/<path> [--type | --tagtable] <files...>   # SimaticML → TIA (--type/--tagtable import into the Types/TagTables composition, not Blocks)
+openness-cli import        <project> (--screen | --hmitags | --textlists) <files...> [--device <name>]   # CLASSIC HMI content. No --group. 🔴 ImportOptions.Override REPLACES the object, it does not merge, so adding one tag means shipping the whole table — see below
 openness-cli import-all    <project> --group <device>/<path> <dirs-or-files...> [--dry-run]   # bulk restore: classifies each file itself, imports tag tables → types → blocks, retries to a fixpoint
 openness-cli compile       <project> [--device <name>] [--block <name> | --type <name> | --software | --station | --hardware]   # diagnostics; non-zero exit on error.
                                     # 🔴 **THE DEFAULT SCOPE CHANGED ON 2026-08-13 — A BARE `compile` NOW COMPILES THE PROGRAM.** It used to reach the DeviceItem compilable, which compiles
@@ -587,6 +589,223 @@ a `GraphicView` naming a picture that does not exist fails the HMI compile by na
 `--import` failures surface as `CommandError` (7) carrying the **whole** exception chain verbatim,
 because on a capability question the refusal text *is* the result. A `--import` that reports zero
 graphics also exits 7 rather than 0: empty is not clean.
+
+## Classic HMI tags and text lists (2026-08-18)
+
+```
+openness-cli export <project> --hmitagtable <name> --out <path> [--device <name>]
+openness-cli export <project> --textlist    <name> --out <path> [--device <name>]
+openness-cli import <project> --hmitags   <files...> [--device <name>]
+openness-cli import <project> --textlists  <files...> [--device <name>]
+```
+
+`--tagtable` is the **PLC** tag table. `--hmitagtable` is the **classic HMI** one — a different
+composition on a different device — and the two are deliberately not merged behind one flag.
+
+### Import is the only route in — again
+
+Reflected on the installed V20 `Siemens.Engineering.dll`:
+
+| type | route in | route out |
+|---|---|---|
+| `Hmi.Tag.TagTableComposition` | `Import(FileInfo, ImportOptions)`, `CreateFrom(MasterCopy)` | — |
+| `Hmi.Tag.TagTable` | — | `Export(FileInfo, ExportOptions)`, `.Tags` |
+| `Hmi.Tag.TagComposition` | `Import(FileInfo, ImportOptions)`, `CreateFrom(MasterCopy)` | — |
+| `Hmi.TextGraphicList.TextListComposition` | `Import(FileInfo, ImportOptions)` | — |
+| `Hmi.TextGraphicList.TextList` | — | `Export(FileInfo, ExportOptions)` |
+
+🔴 **Not one of them has `Create`.** Same shape as `ScreenComposition` and
+`MultiLingualGraphicComposition`: **the document is richer than the API.** A classic `TextList`
+object exposes `Name`, `Parent`, `Export`, `Delete` and the attribute bag and **nothing about its
+entries** — the entries exist for a reader *only* inside the exported document, which is why the
+import report prints `members NOT EXPOSED BY THE API` rather than `0`.
+
+Both types live in **`Siemens.Engineering.dll`**, not `Siemens.Engineering.Hmi.dll` — loading the
+wrong assembly reports all of them absent.
+
+**Classic only.** The Unified compositions are separate types with a different contract:
+`HmiUnified.HmiTags.HmiTagTableComposition` *does* have `Create(string)` (that is what
+`hmi-create-tag` uses), and `HmiUnified.TextGraphicList.HmiTextListComposition`'s `Import`/`Export`
+take a `DirectoryInfo` + filename rather than a `FileInfo`. A Unified hit is refused **by name**, not
+returned as an empty result — the object exists, this route does not reach it.
+
+`--hmitagtable`/`--textlist` are also the only **enumeration** there is: nothing in this CLI lists
+classic HMI tag tables, so a name that does not resolve is refused with `PRESENT: <every name>`.
+Not decoration — TIA's own default table is called `Default tag table`, spaces included, which is not
+a name anyone guesses.
+
+### The tag-table document
+
+`Hmi.Tag.TagTable` → `ObjectList` of `Hmi.Tag.Tag`. A tag's **datatype, connection, address and
+acquisition cycle are NOT attributes** — they are `LinkList` entries naming another object:
+
+```xml
+<Hmi.Tag.TagTable ID="0">
+  <AttributeList>
+    <Name>MyTable</Name>
+  </AttributeList>
+  <ObjectList>
+    <Hmi.Tag.Tag ID="1" CompositionName="Tags">
+      <AttributeList>
+        <AcquisitionTriggerMode>Visible</AcquisitionTriggerMode>
+        <AddressAccessMode>Symbolic</AddressAccessMode>
+        <Coding>IEEE754Float</Coding>          <!-- Binary for Bool/Int/String -->
+        <ConfirmationType>None</ConfirmationType>
+        <GmpRelevant>false</GmpRelevant>
+        <JobNumber>0</JobNumber>
+        <Length>4</Length>                     <!-- bytes: Bool 1, Int 2, Real 4, String 254 -->
+        <LinearScaling>false</LinearScaling>
+        <LogicalAddress />                     <!-- empty under AddressAccessMode Symbolic -->
+        <MandatoryCommenting>false</MandatoryCommenting>
+        <Name>MyTag</Name>
+        <Persistency>false</Persistency>
+        <QualityCode>false</QualityCode>
+        <ScalingHmiHigh>100</ScalingHmiHigh>
+        <ScalingHmiLow>0</ScalingHmiLow>
+        <ScalingPlcHigh>10</ScalingPlcHigh>
+        <ScalingPlcLow>0</ScalingPlcLow>
+        <StartValue />
+        <SubstituteValue />
+        <SubstituteValueUsage>None</SubstituteValueUsage>
+        <Synchronization>false</Synchronization>
+        <UpdateMode>ProjectWide</UpdateMode>
+        <UseMultiplexing>false</UseMultiplexing>
+      </AttributeList>
+      <LinkList>
+        <AcquisitionCycle TargetID="@OpenLink"><Name>1 s</Name></AcquisitionCycle>
+        <Connection      TargetID="@OpenLink"><Name>HMI_Connection_1</Name></Connection>
+        <ControllerTag   TargetID="@OpenLink"><Name>MyDb.MyMember</Name></ControllerTag>
+        <DataType        TargetID="@OpenLink"><Name>Real</Name></DataType>
+        <HmiDataType     TargetID="@OpenLink"><Name>Real</Name></HmiDataType>
+      </LinkList>
+      <ObjectList>
+        <!-- Comment, DisplayName and TagValue, each a MultilingualText/MultilingualTextItem
+             carrying <Culture> and <Text>. Present even when empty. -->
+      </ObjectList>
+    </Hmi.Tag.Tag>
+  </ObjectList>
+</Hmi.Tag.TagTable>
+```
+
+⚠️ **`DataType` and `HmiDataType` are two different links and they can DISAGREE.** Measured: a tag
+whose PLC-side `DataType` is `String` carries an HMI-side `HmiDataType` of `WString`. A generator
+that writes one value into both is wrong for that case.
+
+`TargetID="@OpenLink"` means *resolve this by name at import time*. So a generated tag table must
+name a connection, an acquisition cycle and a controller tag **that already exist** — none of them is
+created by this document.
+
+### The text-list document
+
+`Hmi.TextGraphicList.TextList` → `ObjectList` of `Hmi.TextGraphicList.TextListEntry`. The
+value→text mapping is `From`/`To` (a **range**, equal for a single value) plus a `MultilingualText`:
+
+```xml
+<Hmi.TextGraphicList.TextList ID="0">
+  <AttributeList>
+    <ListRange>Decimal</ListRange>            <!-- Decimal | Bit | BitNumber -->
+    <Name>MyList</Name>
+  </AttributeList>
+  <ObjectList>
+    <MultilingualText ID="1" CompositionName="Comment"> ... </MultilingualText>
+    <Hmi.TextGraphicList.TextListEntry ID="3" CompositionName="Entries">
+      <AttributeList>
+        <DefaultEntry>false</DefaultEntry>
+        <EntryType>SingleValue</EntryType>
+        <From>0</From>
+        <To>0</To>
+      </AttributeList>
+      <ObjectList>
+        <MultilingualText ID="4" CompositionName="Text">
+          <ObjectList>
+            <MultilingualTextItem ID="5" CompositionName="Items">
+              <AttributeList>
+                <Culture>en-US</Culture>
+                <Text>&lt;body&gt;&lt;p&gt;the displayed text&lt;/p&gt;&lt;/body&gt;</Text>
+              </AttributeList>
+            </MultilingualTextItem>
+          </ObjectList>
+        </MultilingualText>
+      </ObjectList>
+    </Hmi.TextGraphicList.TextListEntry>
+  </ObjectList>
+</Hmi.TextGraphicList.TextList>
+```
+
+The entry text is **escaped HTML**, not plain text: `<body><p>…</p></body>`.
+
+### 🔴 `ImportOptions.Override` REPLACES the object. It does not merge.
+
+Measured 2026-08-18 against a real project, with **disjoint** contents so the answer cannot be read
+two ways — a merge and a replace give different counts, not the same count by coincidence:
+
+| step | sent | tag tables | tags in device | read back from the project |
+|---|---|---|---|---|
+| create | table `P`, one tag `A` | 3 → **4** | 67 → **68** | — |
+| override | table `P`, one tag `B` | 4 → **4** | 68 → **68** | **1 tag, and it is `B`** |
+
+`A` is gone. The same experiment on a text list: a list holding entry `0` was overridden by a
+document holding only entry `1`, and the read-back holds **one** entry, `From/To = 1`.
+
+**Consequence: adding one tag means shipping the whole table.** There is no additive path — read
+the existing table out with `export --hmitagtable`, edit the document, send all of it back.
+
+Both documents round-trip **identical modulo object IDs** (TIA reassigns `ID=` on import, exactly as
+it does for `Part`/`Wire`/`Access` UIds in LAD): export → import → export produced a byte-identical
+body once IDs were normalised, for the tag table and for the text list alike.
+
+### Reporting: counts read back from the project, never from `Import()`
+
+Both imports print the denominator on both sides:
+
+```
+DEVICE:  <device>/<hmi runtime>
+KIND:    HMI tag table
+FILES:   1
+           C:\...\MyTable.xml
+
+HMI tag tables in device   BEFORE 3  ->  AFTER 4   (+1)
+tags in device        BEFORE 67  ->  AFTER 68   (+1)
+
+RETURNED BY Import(): 1
+  PRESENT MyTable
+PRESENT AFTER a re-read: 4
+    ...
+```
+
+The **member** count is the line that distinguishes replace from merge; the container count cannot,
+because an override leaves it unchanged. For a text list the member line reads
+`NOT EXPOSED BY THE API` — a `0` there would be a false claim about the project instead of a true one
+about the API.
+
+**Empty is not clean, in two ways, and both exit 13** (`ImportIncomplete`): `Import()` returning
+nothing, and `Import()` naming an object that a re-read does not find. A count comparison alone is
+*not* used as the gate — re-importing an existing table legitimately leaves every count unchanged,
+and that is a real success.
+
+### A wrong-kind document is refused, and the refusal names both sides
+
+Handing a text-list document to `--hmitags` (exit 7, nothing written):
+
+```
+HMI tag table import failed for 'MyList.xml':
+  Siemens.Engineering.EngineeringTargetInvocationException: Error when calling method 'Import'
+  of type 'Siemens.Engineering.Hmi.Tag.TagTableComposition'.
+  ---> ... : Import action was invoked on navigator 'TagTables' which is out of context for the
+  Simatic ML file containing 'Siemens.Engineering.Hmi.TextGraphicList.TextList' root object.
+```
+
+The **whole** chain is carried verbatim for the graphics path's reason, and it is not decoration
+here: the outer message says only that `Import` threw. The inner one is the entire answer.
+
+### What is NOT built
+
+- **No `import-all` equivalent.** These are separate flags, not a mixed-kind bulk restore.
+- **No delete.** `TagTable.Delete()` and `TextList.Delete()` exist; nothing here calls them.
+- **Individual tags are not wired.** `TagComposition.Import` takes a single-tag document into ONE
+  named table; only the table-level route is exposed, because that is the one the export produces.
+- **The Unified refusal is unit-tested, not measured** — the project used for the live run carries
+  no Unified device.
 
 ## Deleting graphics and classic screens (2026-08-17)
 

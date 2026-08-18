@@ -3745,6 +3745,340 @@ public sealed class OpennessGateway : IOpennessGateway
         }
     }
 
+    // ---- classic HMI tag tables and text lists (2026-08-18) -------------------------------------
+    //
+    // Same shape as the screen pair above, because it is the same situation: neither
+    // TagTableComposition nor TagComposition nor TextListComposition has a `Create`, so a SimaticML
+    // import is the only route by which a classic tag table, a classic tag or a classic text list can
+    // come into existence. The document is richer than the API - a `TextList` object exposes
+    // Name/Parent/Export/Delete and NOTHING about its entries, so the entries exist for a reader only
+    // inside the exported file.
+    //
+    // The Unified compositions are separate types (HmiUnified.HmiTags.HmiTagTableComposition, which
+    // DOES have Create; HmiUnified.TextGraphicList.HmiTextListComposition, whose Import/Export take a
+    // DirectoryInfo + filename). So a Unified hit is refused BY NAME, never flattened into "not
+    // found" - the object exists, this route does not reach it, and those are different corrections.
+
+    private (List<(HmiTarget Target, string Path)> Classic, List<(HmiSoftware Software, string Path)> Unified) CollectHmiDevices()
+    {
+        if (_project is null)
+        {
+            throw new InvalidOperationException($"{nameof(OpenProject)} must be called before any HMI command.");
+        }
+
+        var classic = new List<(HmiTarget, string)>();
+        var unified = new List<(HmiSoftware, string)>();
+
+        foreach (Device device in _project.Devices)
+        {
+            foreach (DeviceItem item in device.DeviceItems)
+            {
+                CollectClassicTargets(item, device.Name, classic);
+                CollectUnifiedSoftware(item, device.Name, unified);
+            }
+        }
+
+        return (classic, unified);
+    }
+
+    // Recursive on purpose. TagFolder.Folders is a TagUserFolderComposition and a tag table can sit
+    // any depth down it, exactly as a classic screen can sit under ScreenFolder.Folders. A flat walk
+    // would report "no such tag table" for one plainly visible in the project tree.
+    private static void CollectClassicTagTables(
+        Siemens.Engineering.Hmi.Tag.TagFolder folder,
+        string devicePath,
+        List<(Siemens.Engineering.Hmi.Tag.TagTable Table, string Path)> found)
+    {
+        foreach (Siemens.Engineering.Hmi.Tag.TagTable table in folder.TagTables)
+        {
+            found.Add((table, devicePath));
+        }
+
+        foreach (Siemens.Engineering.Hmi.Tag.TagUserFolder child in folder.Folders)
+        {
+            CollectClassicTagTables(child, devicePath, found);
+        }
+    }
+
+    public void ExportHmiTagTable(string tagTableName, string? deviceFilter, string outPath, string exportOptionsName)
+    {
+        var (classicDevices, unifiedDevices) = CollectHmiDevices();
+
+        var all = new List<(Siemens.Engineering.Hmi.Tag.TagTable Table, string Path)>();
+        foreach (var (target, path) in classicDevices)
+        {
+            CollectClassicTagTables(target.TagFolder, path, all);
+        }
+
+        var matches = all.Where(t => string.Equals(t.Table.Name, tagTableName, StringComparison.Ordinal)).ToList();
+        matches = NarrowToDevice(matches, deviceFilter, m => m.Path);
+
+        if (matches.Count == 0)
+        {
+            var unifiedHit = unifiedDevices.FirstOrDefault(u => u.Software.TagTables.Find(tagTableName) is not null);
+            if (unifiedHit.Software is not null)
+            {
+                throw new HmiClassicOnlyObjectException("HMI tag table", tagTableName, unifiedHit.Path);
+            }
+
+            // The present-set is the whole classic corpus, NOT the device-narrowed one: a --device
+            // that matched nothing is exactly when the caller most needs to see the real names.
+            throw new HmiTagTableNotFoundException(
+                tagTableName, all.Select(t => $"{t.Table.Name} [{t.Path}]").OrderBy(n => n, StringComparer.Ordinal));
+        }
+
+        if (matches.Count > 1)
+        {
+            throw new AmbiguousHmiTagTableException(tagTableName, matches.Select(m => m.Path));
+        }
+
+        ExportHmiObject(
+            outPath,
+            exportOptionsName,
+            (file, options) => matches[0].Table.Export(file, options));
+    }
+
+    public void ExportTextList(string textListName, string? deviceFilter, string outPath, string exportOptionsName)
+    {
+        var (classicDevices, unifiedDevices) = CollectHmiDevices();
+
+        // HmiTarget.TextLists is FLAT. Checked rather than assumed: the API has no
+        // TextListSystemFolder/TextListUserFolder type at all, so there is nothing to recurse into.
+        var all = new List<(Siemens.Engineering.Hmi.TextGraphicList.TextList List, string Path)>();
+        foreach (var (target, path) in classicDevices)
+        {
+            foreach (Siemens.Engineering.Hmi.TextGraphicList.TextList list in target.TextLists)
+            {
+                all.Add((list, path));
+            }
+        }
+
+        var matches = all.Where(l => string.Equals(l.List.Name, textListName, StringComparison.Ordinal)).ToList();
+        matches = NarrowToDevice(matches, deviceFilter, m => m.Path);
+
+        if (matches.Count == 0)
+        {
+            var unifiedHit = unifiedDevices.FirstOrDefault(u => u.Software.HmiTextLists.Find(textListName) is not null);
+            if (unifiedHit.Software is not null)
+            {
+                throw new HmiClassicOnlyObjectException("Text list", textListName, unifiedHit.Path);
+            }
+
+            throw new HmiTextListNotFoundException(
+                textListName, all.Select(l => $"{l.List.Name} [{l.Path}]").OrderBy(n => n, StringComparer.Ordinal));
+        }
+
+        if (matches.Count > 1)
+        {
+            throw new AmbiguousHmiTextListException(textListName, matches.Select(m => m.Path));
+        }
+
+        ExportHmiObject(
+            outPath,
+            exportOptionsName,
+            (file, options) => matches[0].List.Export(file, options));
+    }
+
+    // The delete-then-export-then-retry-once dance, shared. Identical to ExportScreen's tail: Export()
+    // can return having written nothing (docs/notes/openness-quirks.md), and a stale file left from a
+    // previous run would otherwise be read as this run's output.
+    private static void ExportHmiObject(
+        string outPath,
+        string exportOptionsName,
+        Action<FileInfo, Siemens.Engineering.ExportOptions> export)
+    {
+        if (File.Exists(outPath))
+        {
+            File.Delete(outPath);
+        }
+
+        var options = (Siemens.Engineering.ExportOptions)Enum.Parse(typeof(Siemens.Engineering.ExportOptions), exportOptionsName);
+        export(new FileInfo(outPath), options);
+
+        if (!File.Exists(outPath))
+        {
+            export(new FileInfo(outPath), options);
+            if (!File.Exists(outPath))
+            {
+                throw new ExportProducedNoFileException(outPath);
+            }
+        }
+    }
+
+    // WHOLE chain, verbatim - the graphics path's rule, and it is not decoration here either.
+    // MEASURED 2026-08-18 on a text-list document handed to --hmitags: the OUTER message is
+    // "EngineeringTargetInvocationException: Error when calling method 'Import' of type
+    // 'Siemens.Engineering.Hmi.Tag.TagTableComposition'." - which says nothing about what was wrong -
+    // while the INNER one names both sides of the mismatch: "Import action was invoked on navigator
+    // 'TagTables' which is out of context for the Simatic ML file containing
+    // 'Siemens.Engineering.Hmi.TextGraphicList.TextList' root object." Summarising to the outer
+    // message throws away the entire answer.
+    private static string DescribeChain(Exception ex)
+    {
+        var chain = new List<string>();
+        for (var cur = ex; cur is not null; cur = cur.InnerException)
+        {
+            chain.Add($"{cur.GetType().FullName}: {cur.Message}");
+        }
+
+        return string.Join(" ---> ", chain);
+    }
+
+    private (HmiTarget Target, string Path) ResolveSingleClassicTarget(string? deviceFilter)
+    {
+        var (classicDevices, unifiedDevices) = CollectHmiDevices();
+
+        var narrowed = deviceFilter is null
+            ? classicDevices
+            : classicDevices.Where(t => t.Path.IndexOf(deviceFilter, StringComparison.OrdinalIgnoreCase) >= 0).ToList();
+
+        if (narrowed.Count != 1)
+        {
+            throw new HmiClassicDeviceNotResolvedException(
+                deviceFilter,
+                narrowed.Select(t => t.Path).ToList(),
+                unifiedDevices.Select(u => u.Path).ToList());
+        }
+
+        return narrowed[0];
+    }
+
+    public HmiClassicImportOutcome ImportHmiTagTables(string? deviceFilter, IReadOnlyList<string> files)
+    {
+        var (target, devicePath) = ResolveSingleClassicTarget(deviceFilter);
+
+        var (containersBefore, membersBefore) = CountClassicTags(target);
+        var returned = new List<string>();
+
+        try
+        {
+            foreach (var file in files)
+            {
+                try
+                {
+                    // Override for the same reason as screens: re-importing an edited table must
+                    // UPDATE it, or the author loop is one-shot-only. What Override actually does to
+                    // an existing table - replace or merge - is a measured question, and the member
+                    // counts either side of this are what answer it.
+                    var result = target.TagFolder.TagTables.Import(
+                        new FileInfo(file), Siemens.Engineering.ImportOptions.Override);
+
+                    if (result is null)
+                    {
+                        throw new HmiClassicImportFailedException("HMI tag table", file, "Import() returned null");
+                    }
+
+                    foreach (var obj in result)
+                    {
+                        if (obj is null)
+                        {
+                            continue;
+                        }
+
+                        returned.Add(obj is Siemens.Engineering.Hmi.Tag.TagTable t ? t.Name : obj.ToString() ?? "(unnamed)");
+                    }
+                }
+                catch (Exception ex) when (ex is not HmiClassicImportFailedException)
+                {
+                    throw new HmiClassicImportFailedException("HMI tag table", file, DescribeChain(ex));
+                }
+            }
+        }
+        finally
+        {
+            // Import() mutates the in-memory model only, same as every other import here.
+            SaveProject();
+        }
+
+        var (containersAfter, membersAfter) = CountClassicTags(target);
+        var presentAfter = new List<(Siemens.Engineering.Hmi.Tag.TagTable Table, string Path)>();
+        CollectClassicTagTables(target.TagFolder, devicePath, presentAfter);
+
+        return new HmiClassicImportOutcome(
+            "HMI tag table",
+            devicePath,
+            containersBefore,
+            containersAfter,
+            membersBefore,
+            membersAfter,
+            returned,
+            presentAfter.Select(p => p.Table.Name).OrderBy(n => n, StringComparer.Ordinal).ToList(),
+            files);
+    }
+
+    // The member count is the only thing that can tell REPLACE from MERGE, so it is read from the
+    // project rather than inferred: a table that went 40 -> 41 tags was merged into, one that went
+    // 40 -> 1 was replaced.
+    private static (int Tables, int Tags) CountClassicTags(HmiTarget target)
+    {
+        var tables = new List<(Siemens.Engineering.Hmi.Tag.TagTable, string)>();
+        CollectClassicTagTables(target.TagFolder, target.Name, tables);
+        return (tables.Count, tables.Sum(t => t.Item1.Tags.Count));
+    }
+
+    public HmiClassicImportOutcome ImportTextLists(string? deviceFilter, IReadOnlyList<string> files)
+    {
+        var (target, devicePath) = ResolveSingleClassicTarget(deviceFilter);
+
+        var before = target.TextLists.Count;
+        var returned = new List<string>();
+
+        try
+        {
+            foreach (var file in files)
+            {
+                try
+                {
+                    var result = target.TextLists.Import(
+                        new FileInfo(file), Siemens.Engineering.ImportOptions.Override);
+
+                    if (result is null)
+                    {
+                        throw new HmiClassicImportFailedException("Text list", file, "Import() returned null");
+                    }
+
+                    foreach (var obj in result)
+                    {
+                        if (obj is null)
+                        {
+                            continue;
+                        }
+
+                        returned.Add(obj is Siemens.Engineering.Hmi.TextGraphicList.TextList l ? l.Name : obj.ToString() ?? "(unnamed)");
+                    }
+                }
+                catch (Exception ex) when (ex is not HmiClassicImportFailedException)
+                {
+                    throw new HmiClassicImportFailedException("Text list", file, DescribeChain(ex));
+                }
+            }
+        }
+        finally
+        {
+            SaveProject();
+        }
+
+        var presentAfter = new List<string>();
+        foreach (Siemens.Engineering.Hmi.TextGraphicList.TextList list in target.TextLists)
+        {
+            presentAfter.Add(list.Name);
+        }
+
+        return new HmiClassicImportOutcome(
+            "Text list",
+            devicePath,
+            before,
+            target.TextLists.Count,
+            // NULL, NOT ZERO. `TextList` exposes no entries collection at all, so there is no member
+            // count to read - a zero here would be a false claim about the project rather than a true
+            // one about the API.
+            MembersBefore: null,
+            MembersAfter: null,
+            returned,
+            presentAfter.OrderBy(n => n, StringComparer.Ordinal).ToList(),
+            files);
+    }
+
     // ---- graphics (2026-08-17) ------------------------------------------------------------------
     // Project.Graphics is a MultiLingualGraphicComposition and is PROJECT-level, not device-level:
     // one picture store shared by every HMI device. HmiTarget.GraphicLists is a different thing

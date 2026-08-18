@@ -659,6 +659,16 @@ internal static class Program
             gateway.ExportScreen(options.ScreenName, options.Device, options.OutPath, options.ExportOptionsName);
             Console.WriteLine($"Exported screen '{options.ScreenName}' -> {options.OutPath}");
         }
+        else if (options.HmiTagTableName is not null)
+        {
+            gateway.ExportHmiTagTable(options.HmiTagTableName, options.Device, options.OutPath, options.ExportOptionsName);
+            Console.WriteLine($"Exported HMI tag table '{options.HmiTagTableName}' -> {options.OutPath}");
+        }
+        else if (options.TextListName is not null)
+        {
+            gateway.ExportTextList(options.TextListName, options.Device, options.OutPath, options.ExportOptionsName);
+            Console.WriteLine($"Exported text list '{options.TextListName}' -> {options.OutPath}");
+        }
         else
         {
             gateway.ExportBlock(options.BlockName!, options.Device, options.OutPath);
@@ -760,6 +770,43 @@ internal static class Program
             if (screens.Count == 0)
             {
                 Console.Error.WriteLine("NOTHING IMPORTED - this is not a pass.");
+                return ExitCodes.ImportIncomplete;
+            }
+
+            return ExitCodes.Success;
+        }
+
+        if (options.AsHmiTags || options.AsTextLists)
+        {
+            gateway.OpenProject(options.ProjectIdentifier, TimeSpan.FromSeconds(timeoutOpenSeconds));
+            var outcome = options.AsHmiTags
+                ? gateway.ImportHmiTagTables(options.Device, options.Files)
+                : gateway.ImportTextLists(options.Device, options.Files);
+
+            Console.WriteLine(OutputFormatter.FormatHmiClassicImport(outcome));
+
+            // Empty is not clean, and here that has TWO readings, which is why both are checked.
+            //   - Import() returned nothing: nothing landed at all.
+            //   - Import() returned something but the project holds no more than it did and no name
+            //     it returned is present: the report would be describing an object that is not there.
+            // The count comparison alone would NOT do: re-importing an existing table legitimately
+            // leaves the container count unchanged, and that is a real success.
+            var landed = outcome.ReturnedByImport
+                .Where(n => outcome.PresentAfter.Contains(n, StringComparer.Ordinal))
+                .ToList();
+
+            if (outcome.ReturnedByImport.Count == 0)
+            {
+                Console.Error.WriteLine("NOTHING IMPORTED - this is not a pass.");
+                return ExitCodes.ImportIncomplete;
+            }
+
+            if (landed.Count == 0)
+            {
+                Console.Error.WriteLine(
+                    "IMPORT REPORTED OBJECTS THAT ARE NOT IN THE PROJECT AFTERWARDS - this is not a pass. "
+                    + $"Import() named: {string.Join(", ", outcome.ReturnedByImport)}. "
+                    + $"Present after a re-read: {(outcome.PresentAfter.Count == 0 ? "(none)" : string.Join(", ", outcome.PresentAfter))}.");
                 return ExitCodes.ImportIncomplete;
             }
 
@@ -1757,6 +1804,28 @@ public static class ExitCodes
         // as an internal fault would bury the one thing the probe exists to read.
         GraphicNotFoundException => CommandError,
         GraphicImportFailedException => CommandError,
+
+        // The classic HMI tag / text-list family (2026-08-18). Same class as the screen and graphic
+        // families: a name that is not there, a name that is there twice, a name that is on the wrong
+        // KIND of HMI device, or a document the importer refused — every one of them correctable from
+        // the message, and none of them an internal fault.
+        HmiTagTableNotFoundException => CommandError,
+        AmbiguousHmiTagTableException => CommandError,
+        HmiTextListNotFoundException => CommandError,
+        AmbiguousHmiTextListException => CommandError,
+        HmiClassicOnlyObjectException => CommandError,
+        HmiClassicDeviceNotResolvedException => CommandError,
+        HmiClassicImportFailedException => CommandError,
+
+        // The screen family, which had been left unmapped since it was written (found 2026-08-18
+        // while adding the pair above). Each is a name the caller can correct, and the number-collision
+        // one carries the single most important refusal message this tool has — reporting it as an
+        // internal fault buries it under an inner-exception dump.
+        ScreenNotFoundException => CommandError,
+        AmbiguousScreenException => CommandError,
+        ScreenExportNotSupportedOnUnifiedException => CommandError,
+        ScreenImportFailedException => CommandError,
+        ScreenNumberCollisionException => CommandError,
 
         // Deliberately NOT CommandError: nothing the caller typed can fix a delete that reported
         // success and did not happen. It is the `block-layout --set` silent-no-op shape, and that

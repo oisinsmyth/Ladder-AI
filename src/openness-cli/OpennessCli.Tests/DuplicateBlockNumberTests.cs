@@ -342,7 +342,8 @@ public class DuplicateBlockNumberTests
 
     private static ImportCommandOptions ImportOptions(bool asType = false) =>
         new("C:\\proj\\My.ap20", Group, new[] { "C:\\out\\FC_HarnessCopyLayer.xml" },
-            AsType: asType, AsTagTable: false, AsScreen: false, Device: null, TiaInstallOverride: null,
+            AsType: asType, AsTagTable: false, AsScreen: false, AsHmiTags: false, AsTextLists: false,
+            Device: null, TiaInstallOverride: null,
             TimeoutConnectSeconds: 1, TimeoutOpenSeconds: 1);
 
     [Fact]

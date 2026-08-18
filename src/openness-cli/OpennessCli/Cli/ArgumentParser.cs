@@ -32,6 +32,12 @@ public sealed record ExportCommandOptions(
     string? TypeName,
     string? TagTableName,
     string? ScreenName,
+    // HmiTagTableName / TextListName (2026-08-18): the other two classic HMI document types. Kept as
+    // their own selectors rather than folded into --tagtable, which means a PLC tag table — a
+    // different composition on a different device, and merging them would make `--tagtable X` mean
+    // two things depending on which device happened to answer first.
+    string? HmiTagTableName,
+    string? TextListName,
     string? Device,
     // ExportOptions is a THREE-valued enum (None | WithDefaults | WithReadOnly) and this tool used
     // WithDefaults exclusively until 2026-08-17. It was never established that the choice cannot
@@ -72,6 +78,11 @@ public sealed record ImportCommandOptions(
     bool AsType,
     bool AsTagTable,
     bool AsScreen,
+    // AsHmiTags / AsTextLists (2026-08-18): the classic HMI counterparts. Like --screen they take no
+    // --group; a classic tag table lives in HmiTarget.TagFolder and a text list in
+    // HmiTarget.TextLists, neither of which is a PLC block group.
+    bool AsHmiTags,
+    bool AsTextLists,
     string? Device,
     string? TiaInstallOverride,
     int TimeoutConnectSeconds,
@@ -442,14 +453,19 @@ public static class ArgumentParser
     private const string Usage =
         "Usage:\n" +
         "  openness-cli list          <project> [--json] [--tagtables] [--tia-install <path>] [--timeout-connect <s>] [--timeout-open <s>]\n" +
-        "  openness-cli export        <project> (--block <name> | --type <name> | --tagtable <name> | --screen <name>) --out <path> [--device <name>] [--tia-install <path>] [--timeout-connect <s>] [--timeout-open <s>]\n" +
+        "  openness-cli export        <project> (--block <name> | --type <name> | --tagtable <name> | --screen <name> | --hmitagtable <name> | --textlist <name>) --out <path> [--device <name>] [--tia-install <path>] [--timeout-connect <s>] [--timeout-open <s>]\n" +
         "    --screen exports a CLASSIC HMI screen as SimaticML. Classic screens have no object model, so the file is the only editable surface.\n" +
         "    Unified screens do NOT export in any form and are refused BY NAME - an empty result would read as 'no such screen'.\n" +
+        "    --hmitagtable / --textlist export a CLASSIC HMI tag table / text list. Same situation: TagTableComposition, TagComposition and TextListComposition have NO Create, so a\n" +
+        "    SimaticML import is the only route in, and a TextList object exposes no entries at all - the entries exist for a reader only inside the exported document. --tagtable is the\n" +
+        "    PLC tag table and a different composition on a different device; the two are deliberately not merged. A Unified hit is refused BY NAME (its compositions are separate types).\n" +
         "  openness-cli export-all    <project> --out <dir> [--device <name>] [--tagtables] [--json] [--tia-install <path>] [--timeout-connect <s>] [--timeout-open <s>]\n" +
         "    Exports EVERY block and PLC data type to one directory, so `converter drift-check --project <ir-dir> --exports <dir> --complete` can compare the IR on disk against what is\n" +
         "    actually in the controller (FI-70). Safety blocks are REFUSED and NAMED, never silently omitted - a dump missing a file is read as 'not in the controller' by the completeness\n" +
         "    check, which would turn a correct refusal into a false finding. Exits 7 if any export failed or was refused; --tagtables is opt-in (a tag table has no .ir counterpart to pair with).\n" +
-        "  openness-cli import        <project> (--screen [--device <name>] | --group <device>/<path>) [--type | --tagtable] <files...> [--tia-install <path>] [--timeout-connect <s>] [--timeout-open <s>]\n" +
+        "  openness-cli import        <project> (--screen | --hmitags | --textlists [--device <name>] | --group <device>/<path>) [--type | --tagtable] <files...> [--tia-install <path>] [--timeout-connect <s>] [--timeout-open <s>]\n" +
+        "    --hmitags imports CLASSIC HMI tag tables into the device's TagFolder; --textlists imports classic text lists into its TextLists composition. Neither takes --group.\n" +
+        "    Both report the counts BEFORE and AFTER, read back from the project: an import that created nothing exits 13 rather than 0, and the tag count is what tells replace from merge.\n" +
         "  openness-cli import-all    <project> --group <device>/<path> <dirs-or-files...> [--json] [--dry-run] [--tia-install <path>] [--timeout-connect <s>] [--timeout-open <s>]\n" +
         "    Bulk restore: classifies every file (tag table / PLC data type / block) from its own root element, imports tag tables then types then blocks, and RETRIES failures until a pass\n" +
         "    makes no progress - so a dependency order nobody can supply from filenames does not have to be supplied. --dry-run prints the plan and never contacts Portal. Exits 13 if any\n" +
@@ -805,6 +821,8 @@ public static class ArgumentParser
         string? type = null;
         string? tagTable = null;
         string? screen = null;
+        string? hmiTagTable = null;
+        string? textList = null;
         string? device = null;
         var exportOptionsName = "WithDefaults";
         string? outPath = null;
@@ -858,6 +876,20 @@ public static class ArgumentParser
                     }
 
                     break;
+                case "--hmitagtable":
+                    if (!TryTakeValue(args, ref i, "--hmitagtable", out hmiTagTable, out var hmiTagTableErr))
+                    {
+                        return new ParseResult.Failure(hmiTagTableErr);
+                    }
+
+                    break;
+                case "--textlist":
+                    if (!TryTakeValue(args, ref i, "--textlist", out textList, out var textListErr))
+                    {
+                        return new ParseResult.Failure(textListErr);
+                    }
+
+                    break;
                 case "--out":
                     if (!TryTakeValue(args, ref i, "--out", out outPath, out var outErr))
                     {
@@ -908,15 +940,16 @@ public static class ArgumentParser
             return new ParseResult.Failure($"Missing required argument: <project>.{Environment.NewLine}{Usage}");
         }
 
-        var selectedCount = (block is not null ? 1 : 0) + (type is not null ? 1 : 0) + (tagTable is not null ? 1 : 0) + (screen is not null ? 1 : 0);
+        var selectedCount = (block is not null ? 1 : 0) + (type is not null ? 1 : 0) + (tagTable is not null ? 1 : 0)
+            + (screen is not null ? 1 : 0) + (hmiTagTable is not null ? 1 : 0) + (textList is not null ? 1 : 0);
         if (selectedCount == 0)
         {
-            return new ParseResult.Failure($"Missing required flag: --block <name>, --type <name>, --tagtable <name>, or --screen <name>.{Environment.NewLine}{Usage}");
+            return new ParseResult.Failure($"Missing required flag: --block <name>, --type <name>, --tagtable <name>, --screen <name>, --hmitagtable <name>, or --textlist <name>.{Environment.NewLine}{Usage}");
         }
 
         if (selectedCount > 1)
         {
-            return new ParseResult.Failure($"--block, --type, --tagtable, and --screen are mutually exclusive.{Environment.NewLine}{Usage}");
+            return new ParseResult.Failure($"--block, --type, --tagtable, --screen, --hmitagtable, and --textlist are mutually exclusive.{Environment.NewLine}{Usage}");
         }
 
         if (outPath is null)
@@ -924,7 +957,7 @@ public static class ArgumentParser
             return new ParseResult.Failure($"Missing required flag: --out <path>.{Environment.NewLine}{Usage}");
         }
 
-        return new ParseResult.ExportSuccess(new ExportCommandOptions(projectIdentifier, block, type, tagTable, screen, device, exportOptionsName, PathArguments.ToAbsolute(outPath), tiaInstall, timeoutConnect, timeoutOpen));
+        return new ParseResult.ExportSuccess(new ExportCommandOptions(projectIdentifier, block, type, tagTable, screen, hmiTagTable, textList, device, exportOptionsName, PathArguments.ToAbsolute(outPath), tiaInstall, timeoutConnect, timeoutOpen));
     }
 
     private static ParseResult ParseExportAll(string[] args)
@@ -1015,6 +1048,8 @@ public static class ArgumentParser
         var asType = false;
         var asTagTable = false;
         var asScreen = false;
+        var asHmiTags = false;
+        var asTextLists = false;
         string? device = null;
         string? tiaInstall = null;
         var timeoutConnect = DefaultTimeoutConnectSeconds;
@@ -1026,6 +1061,12 @@ public static class ArgumentParser
             {
                 case "--screen":
                     asScreen = true;
+                    break;
+                case "--hmitags":
+                    asHmiTags = true;
+                    break;
+                case "--textlists":
+                    asTextLists = true;
                     break;
                 case "--device":
                     if (!TryTakeValue(args, ref i, "--device", out device, out var deviceErr))
@@ -1092,16 +1133,21 @@ public static class ArgumentParser
             return new ParseResult.Failure($"Missing required argument: <project>.{Environment.NewLine}{Usage}");
         }
 
-        if (group is null && !asScreen)
+        // The three HMI-device kinds share one rule: no --group, because none of them lives in a PLC
+        // block group. Grouped here rather than repeated so a fourth cannot be added and miss one.
+        var hmiKind = asScreen ? "--screen" : asHmiTags ? "--hmitags" : asTextLists ? "--textlists" : null;
+
+        if (group is null && hmiKind is null)
         {
             return new ParseResult.Failure($"Missing required flag: --group <device>/<path>.{Environment.NewLine}{Usage}");
         }
 
-        if (group is not null && asScreen)
+        if (group is not null && hmiKind is not null)
         {
             return new ParseResult.Failure(
-                $"--group does not apply to --screen: a classic screen lives in the HMI device's ScreenFolder, "
-                + $"not a block group. Use --device to disambiguate.{Environment.NewLine}{Usage}");
+                $"--group does not apply to {hmiKind}: classic HMI content lives on the HMI device "
+                + $"(ScreenFolder / TagFolder / TextLists), not in a PLC block group. Use --device to "
+                + $"disambiguate.{Environment.NewLine}{Usage}");
         }
 
         if (files.Count == 0)
@@ -1109,12 +1155,12 @@ public static class ArgumentParser
             return new ParseResult.Failure($"Missing required argument: at least one <file>.{Environment.NewLine}{Usage}");
         }
 
-        if ((asType ? 1 : 0) + (asTagTable ? 1 : 0) + (asScreen ? 1 : 0) > 1)
+        if ((asType ? 1 : 0) + (asTagTable ? 1 : 0) + (asScreen ? 1 : 0) + (asHmiTags ? 1 : 0) + (asTextLists ? 1 : 0) > 1)
         {
-            return new ParseResult.Failure($"--type, --tagtable, and --screen are mutually exclusive.{Environment.NewLine}{Usage}");
+            return new ParseResult.Failure($"--type, --tagtable, --screen, --hmitags, and --textlists are mutually exclusive.{Environment.NewLine}{Usage}");
         }
 
-        return new ParseResult.ImportSuccess(new ImportCommandOptions(projectIdentifier, group, files.Select(PathArguments.ToAbsolute).ToList(), asType, asTagTable, asScreen, device, tiaInstall, timeoutConnect, timeoutOpen));
+        return new ParseResult.ImportSuccess(new ImportCommandOptions(projectIdentifier, group, files.Select(PathArguments.ToAbsolute).ToList(), asType, asTagTable, asScreen, asHmiTags, asTextLists, device, tiaInstall, timeoutConnect, timeoutOpen));
     }
 
     private static ParseResult ParseCompileAll(string[] args)

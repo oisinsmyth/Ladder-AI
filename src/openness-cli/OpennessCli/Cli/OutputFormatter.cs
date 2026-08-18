@@ -1806,6 +1806,61 @@ public static class OutputFormatter
         b.Path,
     };
 
+    /// <summary>
+    /// The classic HMI tag-table / text-list import report (2026-08-18).
+    ///
+    /// Every number here is a DENOMINATOR or a delta measured by re-reading the project, never a
+    /// restatement of what <c>Import()</c> claimed. The BEFORE/AFTER member line is what distinguishes
+    /// REPLACE from MERGE, and is printed even when it did not move — an unchanged count is a finding.
+    /// A null member count prints as NOT EXPOSED BY THE API rather than as 0: the classic
+    /// <c>TextList</c> object has no entries collection, and a zero would be a false claim about the
+    /// project instead of a true one about the API.
+    /// </summary>
+    public static string FormatHmiClassicImport(HmiClassicImportOutcome outcome)
+    {
+        var sb = new StringBuilder();
+        sb.Append($"DEVICE:  {outcome.DevicePath}\n");
+        sb.Append($"KIND:    {outcome.Kind}\n");
+        sb.Append($"FILES:   {outcome.Files.Count}\n");
+        foreach (var file in outcome.Files)
+        {
+            sb.Append($"           {file}\n");
+        }
+
+        sb.Append('\n');
+        sb.Append($"{outcome.Kind}s in device   BEFORE {outcome.ContainersBefore}  ->  AFTER {outcome.ContainersAfter}"
+                  + $"   ({Delta(outcome.ContainersAfter - outcome.ContainersBefore)})\n");
+
+        sb.Append(outcome.MembersBefore is null || outcome.MembersAfter is null
+            ? "members               NOT EXPOSED BY THE API - a classic TextList has no entries collection; the entries\n"
+              + "                      exist for a reader only inside the exported document. Not zero: not readable.\n"
+            : $"tags in device        BEFORE {outcome.MembersBefore}  ->  AFTER {outcome.MembersAfter}"
+              + $"   ({Delta(outcome.MembersAfter.Value - outcome.MembersBefore.Value)})\n");
+
+        sb.Append('\n');
+        sb.Append($"RETURNED BY Import(): {outcome.ReturnedByImport.Count}\n");
+        foreach (var name in outcome.ReturnedByImport)
+        {
+            var present = outcome.PresentAfter.Contains(name, StringComparer.Ordinal);
+            sb.Append($"  {(present ? "PRESENT " : "ABSENT  ")}{name}\n");
+        }
+
+        sb.Append($"PRESENT AFTER a re-read: {outcome.PresentAfter.Count}\n");
+        foreach (var name in outcome.PresentAfter)
+        {
+            sb.Append($"    {name}\n");
+        }
+
+        return sb.ToString();
+    }
+
+    private static string Delta(int d) => d switch
+    {
+        0 => "unchanged",
+        > 0 => $"+{d}",
+        _ => d.ToString(CultureInfo.InvariantCulture),
+    };
+
     private static void AppendRow(StringBuilder sb, IReadOnlyList<string> cells, IReadOnlyList<int> widths)
     {
         for (var i = 0; i < cells.Count; i++)

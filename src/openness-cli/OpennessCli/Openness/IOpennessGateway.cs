@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using OpennessCli.Model;
 
 namespace OpennessCli.Openness;
@@ -258,6 +259,60 @@ public interface IOpennessGateway : IDisposable
     /// arrives by SimaticML import, library copy or master copy and by no other route.
     /// </remarks>
     IReadOnlyList<string> ImportScreens(string? deviceFilter, IReadOnlyList<string> files);
+
+    // ---- classic HMI tags and text lists (2026-08-18) -------------------------------------------
+    //
+    // The same shape as screens, and for the same reason. Reflected on the installed V20 DLL:
+    //
+    //   Siemens.Engineering.Hmi.Tag.TagTableComposition        Import / Find / CreateFrom(MasterCopy)
+    //   Siemens.Engineering.Hmi.Tag.TagTable                   Export / Tags / Delete
+    //   Siemens.Engineering.Hmi.Tag.TagComposition             Import / Find / CreateFrom(MasterCopy)
+    //   Siemens.Engineering.Hmi.TextGraphicList.TextListComposition   Import / Find
+    //   Siemens.Engineering.Hmi.TextGraphicList.TextList              Export / Delete
+    //
+    // 🔴 NOT ONE OF THEM HAS `Create`. A classic HMI tag table, a classic tag and a classic text list
+    // cannot be brought into existence through the object model at all — IMPORT IS THE ONLY ROUTE IN,
+    // exactly as with a classic screen and with `MultiLingualGraphicComposition` for graphics. THE
+    // DOCUMENT IS RICHER THAN THE API, again.
+    //
+    // The Unified side is a DIFFERENT set of types, not a different mode of these ones:
+    // `HmiSoftware.TagTables` is an `HmiUnified.HmiTags.HmiTagTableComposition` (which DOES have
+    // `Create(string)` — that is what `hmi-create-tag` uses) and `HmiSoftware.HmiTextLists` is an
+    // `HmiUnified.TextGraphicList.HmiTextListComposition` whose Import/Export take a DirectoryInfo and
+    // a filename rather than a FileInfo. So a Unified target is refused BY NAME here, never returned
+    // as an empty result — the screen path's rule, for the screen path's reason.
+
+    /// <summary>
+    /// Exports a CLASSIC HMI tag table as SimaticML. Walks <c>HmiTarget.TagFolder</c> RECURSIVELY —
+    /// tag tables nest under <c>TagFolder.Folders</c> (a <c>TagUserFolderComposition</c>) the way
+    /// classic screens nest under <c>ScreenFolder.Folders</c>, so a non-recursive walk would report
+    /// "not found" for a table that is plainly in the project.
+    /// </summary>
+    void ExportHmiTagTable(string tagTableName, string? deviceFilter, string outPath, string exportOptionsName);
+
+    /// <summary>
+    /// Exports a CLASSIC HMI text list as SimaticML. <c>HmiTarget.TextLists</c> is FLAT — there is no
+    /// text-list folder type in the API (checked: no <c>TextListSystemFolder</c>/<c>TextListUserFolder</c>
+    /// exists), so unlike tag tables there is nothing to recurse into.
+    /// </summary>
+    void ExportTextList(string textListName, string? deviceFilter, string outPath, string exportOptionsName);
+
+    /// <summary>
+    /// Imports CLASSIC HMI tag tables into the resolved HMI device's ROOT <c>TagFolder</c>.
+    /// </summary>
+    /// <remarks>
+    /// Counts are read back from the project on both sides of the import, because <c>Import()</c>'s
+    /// own return value says only what it believes it made. The member count is what distinguishes
+    /// REPLACE from MERGE, and neither can be inferred from the container count alone.
+    /// </remarks>
+    HmiClassicImportOutcome ImportHmiTagTables(string? deviceFilter, IReadOnlyList<string> files);
+
+    /// <summary>
+    /// Imports CLASSIC HMI text lists into the resolved HMI device's <c>TextLists</c> composition.
+    /// The member count is reported as null, not zero: <c>TextList</c> exposes no entries collection,
+    /// so the entries are visible ONLY in the exported document.
+    /// </summary>
+    HmiClassicImportOutcome ImportTextLists(string? deviceFilter, IReadOnlyList<string> files);
 
     /// <summary>
     /// Lists the PROJECT-level graphic store (<c>Project.Graphics</c>, a
@@ -645,6 +700,116 @@ public sealed class ScreenNumberCollisionException : Exception
                + "validation, so this is refused here. Give the screen an unused number "
                + "(hmi-cli emit --number <n>), or rename it to the screen that already holds that "
                + "number if you meant to update it.")
+    {
+    }
+}
+
+// ---- classic HMI tag / text-list failures (2026-08-18) ------------------------------------------
+// Named `Hmi*` deliberately: `HmiExceptionsAreClassified_NotLeftAsInternalFaults` enumerates the
+// family by name prefix, so naming them this way puts them under the guard that stops a new HMI
+// exception silently exiting 5 as an internal fault. That guard exists because exactly that happened
+// twice within one day.
+
+/// <summary>
+/// Lists what IS there, the way <see cref="GraphicNotFoundException"/> does. Not decoration: nothing
+/// in this CLI enumerates classic HMI tag tables, so without the present-set a wrong name gives the
+/// caller no route to the right one — and a classic tag table's name is not guessable (TIA's own
+/// default is "Default tag table", spaces included).
+/// </summary>
+public sealed class HmiTagTableNotFoundException : Exception
+{
+    public HmiTagTableNotFoundException(string tagTableName, IEnumerable<string> present)
+        : base($"No classic HMI tag table named '{tagTableName}' found in the project. PRESENT: {Describe(present)}")
+    {
+    }
+
+    internal static string Describe(IEnumerable<string> present)
+    {
+        var list = present.ToList();
+        return list.Count == 0 ? "(none — the device holds no tag tables at all)" : string.Join(", ", list);
+    }
+}
+
+public sealed class AmbiguousHmiTagTableException : Exception
+{
+    public AmbiguousHmiTagTableException(string tagTableName, IEnumerable<string> paths)
+        : base($"Classic HMI tag table '{tagTableName}' exists in more than one place: {string.Join(", ", paths)}. Pass --device to disambiguate.")
+    {
+    }
+}
+
+/// <summary>Lists what IS there, same reason as <see cref="HmiTagTableNotFoundException"/>.</summary>
+public sealed class HmiTextListNotFoundException : Exception
+{
+    public HmiTextListNotFoundException(string textListName, IEnumerable<string> present)
+        : base($"No classic HMI text list named '{textListName}' found in the project. PRESENT: {HmiTagTableNotFoundException.Describe(present)}")
+    {
+    }
+}
+
+public sealed class AmbiguousHmiTextListException : Exception
+{
+    public AmbiguousHmiTextListException(string textListName, IEnumerable<string> paths)
+        : base($"Classic HMI text list '{textListName}' exists in more than one place: {string.Join(", ", paths)}. Pass --device to disambiguate.")
+    {
+    }
+}
+
+/// <summary>
+/// The name resolved on a UNIFIED device, and the Unified compositions are different types with a
+/// different document contract (<c>HmiTextListComposition.Export(DirectoryInfo, string)</c>, and no
+/// per-object <c>Export</c> on an <c>HmiTagTable</c> at all). Refused BY NAME rather than reported as
+/// "not found": the object exists, this route does not reach it, and flattening those into one answer
+/// sends the caller looking for a name that is right there in the project.
+/// </summary>
+public sealed class HmiClassicOnlyObjectException : Exception
+{
+    public HmiClassicOnlyObjectException(string kind, string name, string devicePath)
+        : base($"{kind} '{name}' is on UNIFIED device '{devicePath}'. This command is CLASSIC-only: the Unified "
+               + $"compositions are separate types (HmiUnified.HmiTags.HmiTagTableComposition / "
+               + $"HmiUnified.TextGraphicList.HmiTextListComposition) with a different import/export contract. "
+               + "Use `hmi-create-tag` for a Unified tag, or `hmi <project>` to read the Unified side.")
+    {
+    }
+}
+
+/// <summary>
+/// No single CLASSIC HMI device to import into. Its own type rather than reusing
+/// <see cref="DeviceNotFoundException"/>, whose message says "No PLC device found" — which on an HMI
+/// import is a wrong statement about a project that may hold several. States the DENOMINATOR: how
+/// many classic devices were seen, and how many Unified ones, because "none at all" and "two, pass
+/// --device" and "only Unified" are three different corrections.
+/// </summary>
+public sealed class HmiClassicDeviceNotResolvedException : Exception
+{
+    public HmiClassicDeviceNotResolvedException(string? deviceFilter, IReadOnlyList<string> classicPaths, IReadOnlyList<string> unifiedPaths)
+        : base(Describe(deviceFilter, classicPaths, unifiedPaths))
+    {
+    }
+
+    private static string Describe(string? deviceFilter, IReadOnlyList<string> classicPaths, IReadOnlyList<string> unifiedPaths)
+    {
+        var filter = deviceFilter is null ? "no --device filter" : $"--device '{deviceFilter}'";
+        if (classicPaths.Count > 1)
+        {
+            return $"More than one classic HMI device matched ({filter}): {string.Join(", ", classicPaths)}. Pass --device to name one.";
+        }
+
+        if (unifiedPaths.Count > 0)
+        {
+            return $"No classic HMI device matched ({filter}). The project DOES carry Unified HMI device(s): "
+                   + $"{string.Join(", ", unifiedPaths)} — this command is classic-only and their compositions are separate types.";
+        }
+
+        return $"No classic HMI device matched ({filter}), and the project carries no Unified HMI device either.";
+    }
+}
+
+/// <summary>Names the FILE that failed, same reason as <see cref="ScreenImportFailedException"/>.</summary>
+public sealed class HmiClassicImportFailedException : Exception
+{
+    public HmiClassicImportFailedException(string kind, string file, string reason)
+        : base($"{kind} import failed for '{System.IO.Path.GetFileName(file)}': {reason}")
     {
     }
 }

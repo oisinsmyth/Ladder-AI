@@ -655,6 +655,14 @@ internal sealed class FakeGateway : IOpennessGateway
 
     public IReadOnlyList<string> ImportScreens(string? deviceFilter, IReadOnlyList<string> files) => throw new NotSupportedException();
 
+    public void ExportHmiTagTable(string tagTableName, string? deviceFilter, string outPath, string exportOptionsName) => throw new NotSupportedException();
+
+    public void ExportTextList(string textListName, string? deviceFilter, string outPath, string exportOptionsName) => throw new NotSupportedException();
+
+    public OpennessCli.Model.HmiClassicImportOutcome ImportHmiTagTables(string? deviceFilter, IReadOnlyList<string> files) => throw new NotSupportedException();
+
+    public OpennessCli.Model.HmiClassicImportOutcome ImportTextLists(string? deviceFilter, IReadOnlyList<string> files) => throw new NotSupportedException();
+
     public IReadOnlyList<string> InspectClassicScreen(string screenName) => throw new NotSupportedException();
 
     public IReadOnlyList<string> EnumerateGraphics() => throw new NotSupportedException();
