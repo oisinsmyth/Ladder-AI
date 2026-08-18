@@ -940,10 +940,22 @@ public sealed class HmiUnknownScreenItemTypeException : Exception
     }
 }
 
+/// <summary>
+/// Raised by every Unified-only write command when the project has no Unified device.
+///
+/// ⚠️ The message NAMES THE OPERATION because this exception is shared. It previously said
+/// "Screen creation is Unified-only" regardless of what was actually attempted, so
+/// <c>hmi-create-tag</c> on a classic project refused with the right verdict and the wrong noun —
+/// and a reader chasing a tag problem was told about screen items. Correct refusals that describe
+/// the wrong thing cost as much as wrong ones.
+/// </summary>
 public sealed class NoUnifiedHmiDeviceException : Exception
 {
-    public NoUnifiedHmiDeviceException()
-        : base("No WinCC Unified HMI device found in this project. Screen creation is Unified-only — classic HMI exposes no screen-item model at all, so there is nothing to create into.")
+    public NoUnifiedHmiDeviceException(string operation = "This operation")
+        : base($"No WinCC Unified HMI device found in this project. {operation} is Unified-only — "
+               + "classic HMI exposes no object model to create into, so there is nothing to create. "
+               + "On a classic device the equivalent objects are authored in TIA Portal by hand, or "
+               + "imported as SimaticML where the format can represent them.")
     {
     }
 }
