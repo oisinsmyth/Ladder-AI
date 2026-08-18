@@ -140,6 +140,25 @@ running does not license:
 - **A check that shares its subject's blind spot.** The converter emitted wire endpoints in the
   wrong order and the Normalizer was blind in exactly the same way, so *** the two cancelled and
   every check passed. ***
+    ➜ *** A CHECK THAT DERIVES ITS EXPECTATION THE SAME WAY THE SUBJECT DOES IS SELF-CONSISTENT AND
+      PROVES NOTHING. *** Measured 2026-08-17, HMI lane. A copy generator producing four screen
+      instances held only the OLD token and derived the new one as `token[:-1] + letter` — right for
+      `SILO W` → `SILO X`, wrong for `Silo_W_`, which became **`Silo_WX`**. Its inverse-substitution
+      round-trip check **PASSED**, because the inverse used *the same derivation*. What caught it was
+      normalising the EMITTED document, which states the expected form `Silo_X_` **independently**.
+        ▪ **The fix is to state both sides, never to derive one from the other** — a substitution
+          table spells out `Silo_W_` and `Silo_X_` literally, so no shared rule can be wrong in both
+          directions at once.
+        ▪ A second lane hit the same class from the other side: a naive `s/DRUM A/DRUM B/` corrupted
+          `DRUM ABANDON` into `DRUM BBANDON`, **and no round-trip proof can catch that** — the
+          inverse restores it perfectly. It needs a separate guard asserting no substitution token is
+          followed by a word character.
+- *** NEGATIVE-TEST THE GUARD, OR IT IS NOT A GUARD. *** Same lane, same day: hardening the above
+  produced three guards, and **proving them by deliberately corrupting a copy found two bugs in the
+  guards themselves** — `set -e` killing the script on a `[ ] && continue`, and `pipefail` killing it
+  on a legitimately-zero `grep -c`. Either would have made the guard **exit silently and pass
+  everything**, which is strictly worse than no guard: it converts an unknown into a false assurance.
+  A guard is only known to work once it has been shown to FAIL on a case it is supposed to catch.
 - *** A PROOF IS ONLY AS STRONG AS THE MOST INDEPENDENT AUTHORITY IN ITS LOOP. *** A round-trip
   check is structurally blind to any error the round trip **preserves**. Measured 2026-08-13: the
   converter typed every hex literal `Int` regardless of its destination, so every 32-bit build stamp
