@@ -423,6 +423,13 @@ public static class LoopCli
         // away first, and no way at all to compare this gate against `harness-gate`'s.
         var admissible = WriteGate(generation.Gate, generation.Stopped, output);
 
+        output.WriteLine();
+
+        // *** IT IS PRINTED HERE EVEN THOUGH THIS PATH NEVER RUNS A WAVE. *** The resting values are a
+        // property of the BINDING, so `--generate-only` is exactly where a coordinator can see what their
+        // document does and does not declare — without spending a deployment to find out.
+        WriteInertRest(generation.InertRest, generation.Stopped?.ToString() ?? "an unreported stage", output);
+
         if (!generation.Generated)
         {
             output.WriteLine();
@@ -601,6 +608,12 @@ public static class LoopCli
                 Serves = s.Serves?.ToArray() ?? Array.Empty<string>(),
                 ServesRunInOrder = s.ServesRunInOrder,
                 BoundarySpanning = s.BoundarySpanning?.ToArray() ?? Array.Empty<string>(),
+
+                // The inert-rest migration claim, off the wire. A field the domain model has and the
+                // composition drops is a field that does not exist — three of those are recorded in
+                // BindingDocument, all of them found only after a run had already gone wrong.
+                AssumedZeroRest = s.AssumedZeroRest,
+                AssumedZeroRestBasis = s.AssumedZeroRestBasis,
             })
             .ToArray();
 
@@ -775,6 +788,60 @@ public static class LoopCli
     /// became of vectors 3 to 22.</b> The denominator was the number of packages PRODUCED, which is the
     /// one number guaranteed to make an incomplete run look complete.</para>
     /// </summary>
+    /// <summary>
+    /// 🔴 <b>WHAT THE INERT START STATE WAS GATED ON, ON EVERY RUN — declared, excluded, defaulted or
+    /// derived, per register.</b>
+    ///
+    /// <para>*** THE DEFECT THIS SECTION EXISTS FOR PRINTED NOTHING AT ALL. *** Every result register was
+    /// asserted to rest at zero by a hardcoded <c>ToDictionary</c> in the wave builder, so a run gated on
+    /// twenty-three assumptions and a run gated on twenty-three declarations produced identical output.
+    /// <b>A defaulted expectation that reads like a declared one is the whole shape of it</b>, which is why
+    /// the per-register lines carry their provenance rather than only the totals.</para>
+    ///
+    /// <para><b>Printed on the clean run too.</b> A section that appears only when something is wrong
+    /// teaches its reader that its absence means everything was declared.</para>
+    /// </summary>
+    internal static void WriteInertRest(InertRestReport? report, string stoppedAt, TextWriter output)
+    {
+        if (report is null)
+        {
+            output.WriteLine("INERT REST: NOT COMPUTED — the run stopped at " + stoppedAt + ", which is before the bindings were examined.");
+            output.WriteLine("  *** THIS IS NOT 'nothing to report'. *** No register's resting value was established either way.");
+            output.WriteLine();
+            return;
+        }
+
+        output.WriteLine(report.Summary());
+
+        foreach (var plan in report.Plans)
+        {
+            output.WriteLine($"  {plan.Summary()}");
+
+            // Only the registers a reader has to WEIGH. A declared value is the ordinary case and printing
+            // twenty of them buries the two that nobody stated — and a section nobody finishes gets skimmed.
+            foreach (var register in plan.Registers.Where(r =>
+                         r.Provenance is InertRestProvenance.Defaulted or InertRestProvenance.Excluded))
+            {
+                output.WriteLine($"    {register}");
+            }
+
+            foreach (var refusal in plan.Refusals)
+                output.WriteLine($"    REFUSED  {refusal}");
+
+            foreach (var note in plan.Notes)
+                output.WriteLine($"    NOTE     {note}");
+        }
+
+        if (report.Plans.Sum(p => p.DefaultedCount) > 0)
+        {
+            output.WriteLine("  🔴 A DEFAULTED REGISTER IS ONE NOBODY DECLARED. Its expectation of 0 was supplied by the slot's");
+            output.WriteLine("     assumedZeroRest claim, not by anyone who knows what the signal does — so an inert failure on one");
+            output.WriteLine("     of these may be the expectation rather than the program, and a PASS on one proves less than it looks.");
+        }
+
+        output.WriteLine();
+    }
+
     internal static void Write(LoopResult result, TextWriter output)
     {
         var account = result.Account;
@@ -782,6 +849,8 @@ public static class LoopCli
         output.WriteLine($"OUTCOME: {result.Outcome}");
         output.WriteLine($"  {result.Detail}");
         output.WriteLine();
+
+        WriteInertRest(result.InertRest, result.Outcome.ToString(), output);
 
         // *** THE DENOMINATOR, PRINTED ON EVERY RUN INCLUDING THE COMPLETE ONE. *** A section that appears
         // only when something went short teaches a reader that its absence means everything ran.

@@ -1,4 +1,4 @@
-using Harness.Gate;
+﻿using Harness.Gate;
 using Harness.Results;
 using Harness.Run;
 using Harness.Skeleton;
@@ -93,8 +93,10 @@ public class SettlingWireTests
           { "tag": "{{TrivialBlock.LimitTag}}", "specName": "{{TrivialBlock.LimitTag}}", "type": "Int" }
         ],
         "resultSources": [
-          { "tag": "{{TrivialBlock.CountTag}}", "specName": "{{TrivialBlock.CountTag}}", "type": "Int" },
-          { "tag": "{{TrivialBlock.DoneTag}}", "specName": "{{TrivialBlock.DoneTag}}", "type": "Int" }
+          { "tag": "{{TrivialBlock.CountTag}}", "specName": "{{TrivialBlock.CountTag}}", "type": "Int",
+            "inertRest": { "value": "0", "basis": "network 1 holds the count at 0 while the start command is off" } },
+          { "tag": "{{TrivialBlock.DoneTag}}", "specName": "{{TrivialBlock.DoneTag}}", "type": "Int",
+            "inertRest": { "value": "0", "basis": "network 1 holds the done flag at 0 while the start command is off" } }
         ]
       }]
     }

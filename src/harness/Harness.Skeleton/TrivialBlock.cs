@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using Harness.Map;
 
 namespace Harness.Skeleton;
@@ -160,7 +160,14 @@ public static class TrivialBlock
         // exactly the assumption that failed on 16 of 17 real signals.
         new[]
         {
-            new MirroredSignal(CountTag, MirrorValueType.Int, SpecName: CountTag),
-            new MirroredSignal(DoneTag, MirrorValueType.Int, SpecName: DoneTag),
+            // *** THE RESTING VALUE IS DECLARED, AND IT IS READ OUT OF THIS BLOCK'S OWN NETWORK 1. ***
+            // `MOVE(EN := NOT Start, IN := 0) => Count` and the same for Done: while the start command is
+            // off — which is exactly the state the inert phase holds — both are driven to zero every scan.
+            // So this zero is a fact about the block, not the harness's old hardcoded assumption that every
+            // published signal in the world rests at zero.
+            new MirroredSignal(CountTag, MirrorValueType.Int, SpecName: CountTag,
+                Rest: InertRest.At("0", "network 1 drives the count to 0 while the start command is off")),
+            new MirroredSignal(DoneTag, MirrorValueType.Int, SpecName: DoneTag,
+                Rest: InertRest.At("0", "network 1 drives the done flag to 0 while the start command is off")),
         });
 }

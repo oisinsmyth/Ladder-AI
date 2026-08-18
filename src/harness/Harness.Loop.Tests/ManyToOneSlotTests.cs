@@ -1,4 +1,4 @@
-using Harness.Loop;
+﻿using Harness.Loop;
 using Harness.Map;
 using Harness.Results;
 using Harness.Skeleton;
@@ -110,8 +110,10 @@ public class ManyToOneSlotTests
             TrivialBlock.StartTag,
             new[]
             {
-                new MirroredSignal(TrivialBlock.CountTag, MirrorValueType.Int, SpecName: TrivialBlock.CountTag),
-                new MirroredSignal(TrivialBlock.DoneTag, MirrorValueType.Int, SpecName: TrivialBlock.DoneTag),
+                new MirroredSignal(TrivialBlock.CountTag, MirrorValueType.Int, SpecName: TrivialBlock.CountTag,
+                    Rest: InertRest.At("0", "the ramp block's network 1 holds the count at 0 while the start command is off")),
+                new MirroredSignal(TrivialBlock.DoneTag, MirrorValueType.Int, SpecName: TrivialBlock.DoneTag,
+                    Rest: InertRest.At("0", "the ramp block's network 1 holds the done flag at 0 while the start command is off")),
             })
         {
             Serves = serves ?? Array.Empty<string>(),

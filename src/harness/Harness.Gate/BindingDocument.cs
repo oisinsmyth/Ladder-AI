@@ -59,6 +59,7 @@ public sealed class BindingDocument
             foreach (var (signal, j) in (slot.VectorTargets ?? new List<MirroredSignalDocument>()).Select((v, k) => (v, k)))
             {
                 Collect(signal.UnknownFields, $"{path}.vectorTargets[{j}]", found);
+                Collect(signal.InertRest?.UnknownFields, $"{path}.vectorTargets[{j}].inertRest", found);
 
                 // The encoding is a nested object and gate 0b has to reach INSIDE it: a misspelt `source`
                 // there would silently drop the citation the encoding refuses without, and a misspelt
@@ -71,6 +72,11 @@ public sealed class BindingDocument
             {
                 Collect(signal.UnknownFields, $"{path}.resultSources[{j}]", found);
                 Collect(signal.Encoding?.UnknownFields, $"{path}.resultSources[{j}].encoding", found);
+
+                // The resting state is the newest nested object and it is the one where a dropped key is
+                // worst: a misspelt `excluded` leaves a signal claiming a resting VALUE of null, and a
+                // misspelt `basis` silently removes the only thing a reader can check an exclusion by.
+                Collect(signal.InertRest?.UnknownFields, $"{path}.resultSources[{j}].inertRest", found);
             }
         }
 
@@ -148,6 +154,28 @@ public sealed class SlotBindingDocument
     public string? StartCondition { get; set; }
 
     public List<MirroredSignalDocument>? ResultSources { get; set; }
+
+    /// <summary>
+    /// 🔴 <b>THE NAMED MIGRATION ESCAPE: this slot's UNDECLARED resting values may be assumed to be zero.</b>
+    ///
+    /// <para><b>It exists because the refusal it escapes lands on a slot that is DEPLOYED AND RUNNING</b>
+    /// against the old hardcoded-zero behaviour. A fail-closed gate that refuses working submissions on the
+    /// day it lands gets removed within a week, by someone who is right to — so the migration is one stated
+    /// line here rather than a revert.</para>
+    ///
+    /// <para><b>It is not free.</b> <see cref="AssumedZeroRestBasis"/> is required; it is per SLOT, so it
+    /// cannot be set project-wide by accident; every register it covers is counted and listed as
+    /// <c>DEFAULTED</c> in the run's inert-rest report; and any inert failure on such a register says in
+    /// its own text that nobody declared it — <b>so the reader is told the expectation may be the wrong
+    /// half of the disagreement.</b></para>
+    ///
+    /// <para>A signal that declares its own <c>inertRest</c> is unaffected: the escape only ever fills a
+    /// hole.</para>
+    /// </summary>
+    public bool AssumedZeroRest { get; set; }
+
+    /// <summary>Why this slot's undeclared resting values may be assumed zero. <b>Required when <see cref="AssumedZeroRest"/> is set</b>, even if it currently covers nothing.</summary>
+    public string? AssumedZeroRestBasis { get; set; }
 
     /// <summary>Unknown keys at slot level. Folded into gate 0b — see <see cref="BindingDocument.UnknownFields"/>.</summary>
     [JsonExtensionData]
@@ -262,9 +290,66 @@ public sealed class MirroredSignalDocument
     /// </summary>
     public ValueEncodingDocument? Encoding { get; set; }
 
+    /// <summary>
+    /// 🔴 <b>WHAT THIS SIGNAL READS WHEN NOTHING IS RUNNING — and until now the harness assumed ZERO for
+    /// every published signal in the system.</b>
+    ///
+    /// <para>*** THE HARDCODED ZERO LIVED IN THE WAVE BUILDER, WHERE NO COORDINATOR COULD SEE IT: ***
+    /// <c>Range(0, ResultRegistersNeeded).ToDictionary(i =&gt; i, _ =&gt; (ushort)0)</c>, feeding a type
+    /// whose own summary says the expectation <i>must be declared</i>. <b>Fourth instance of the shape this
+    /// file already records three times:</b> a capability documented as declared, supplied by the code
+    /// instead, with no field a document could state it in.</para>
+    ///
+    /// <para><b>Absent is a REFUSAL, not a zero</b> — see <c>Harness.Wire.InertRestPlan</c>, which states
+    /// the ruling and why the two alternatives were rejected. The migration for a slot that cannot be
+    /// re-declared yet is <see cref="SlotBindingDocument.AssumedZeroRest"/>.</para>
+    /// </summary>
+    public InertRestDocument? InertRest { get; set; }
+
     /// <summary>Unknown keys at signal level — where a misspelt <c>specName</c> would otherwise vanish.</summary>
     [JsonExtensionData]
     public Dictionary<string, object?>? UnknownFields { get; set; }
+}
+
+/// <summary>
+/// One signal's declared resting state, on the wire. <b>Exactly one of <see cref="Value"/> and
+/// <see cref="Excluded"/></b>; see <c>Harness.Map.InertRest</c> for the semantics.
+/// </summary>
+public sealed class InertRestDocument
+{
+    /// <summary>
+    /// The resting value, as text. <b>Signed</b> — a sentinel of <c>-1</c> is a real case and the register
+    /// it lands in is unsigned on the wire. It is read through exactly the path a stimulus value is, so the
+    /// signal's own <c>encoding</c> applies and a <c>Bool</c> takes <c>true</c>/<c>false</c>.
+    /// </summary>
+    public string? Value { get; set; }
+
+    /// <summary>
+    /// 🔴 <b>This signal has NO meaningful resting value and inert is NOT gated on it — a positive claim.</b>
+    ///
+    /// <para>The motivating case is a ONE-SCAN PULSE, which reads 1 in about one sample of five: any
+    /// single-sample expectation on it is a coin toss, and the coin toss gets blamed on the block.
+    /// <b><see cref="Basis"/> is required here</b>, because an exclusion is the one declaration no machine
+    /// will ever check.</para>
+    /// </summary>
+    public bool Excluded { get; set; }
+
+    /// <summary>Why. <b>Required for <see cref="Excluded"/>, optional for a value</b> — a value is falsified by the device on every run; an exclusion is falsified by nobody.</summary>
+    public string? Basis { get; set; }
+
+    /// <summary>Unknown keys inside a resting-state declaration, folded into gate 0b like every other level.</summary>
+    [JsonExtensionData]
+    public Dictionary<string, object?>? UnknownFields { get; set; }
+
+    /// <summary>
+    /// The domain form. <b>An empty object is not a declaration</b> — it states neither a value nor an
+    /// exclusion, and is carried through as a malformed <c>Value</c> claim so the refusal names the signal
+    /// rather than this class throwing without one.
+    /// </summary>
+    public InertRest ToRest() =>
+        Excluded
+            ? new InertRest(InertRestKind.Excluded, Value, (Basis ?? string.Empty).Trim())
+            : new InertRest(InertRestKind.Value, Value, (Basis ?? string.Empty).Trim());
 }
 
 /// <summary>

@@ -327,7 +327,28 @@ public sealed record MirroredSignal(
     /// one cited value read twice under two different rules. Nothing special-cases it — the join key is
     /// the spec name and an encoding is per entry, so the capability falls out of both.</para>
     /// </summary>
-    ValueEncoding? Encoding = null)
+    ValueEncoding? Encoding = null,
+
+    /// <summary>
+    /// 🔴 <b>WHAT THIS SIGNAL READS WHEN NOTHING IS RUNNING — D33's first check, declared per signal
+    /// instead of assumed for the whole band.</b>
+    ///
+    /// <para>*** THE ONLY PRODUCTION CALLER USED TO HARDCODE ZERO FOR EVERY RESULT REGISTER. *** See
+    /// <see cref="InertRest"/> for the measured consequence; the short form is that a hardcoded 0 fails in
+    /// BOTH directions — it refuses a signal that legitimately rests at a <c>-1</c> sentinel, and it
+    /// ACCEPTS a stale <c>0</c> on a signal where 0 is a measured PASS verdict.</para>
+    ///
+    /// <para><b>NULL IS NOT ZERO AND IT IS NOT "DON'T CARE".</b> It is the absence of a claim, and the loop
+    /// REFUSES on it — <c>Harness.Wire.InertRestPlan</c> carries the ruling and its reasoning. That is the
+    /// same treatment <see cref="SpecName"/>, <c>MirrorValueType.Unstated</c> and
+    /// <see cref="SlotBinding.StartCondition"/> already get, for the same reason: a default that is right
+    /// for the binding somebody happens to be looking at is wrong for the next one, silently.</para>
+    ///
+    /// <para><b>It is meaningful only on a RESULT source.</b> A vector target is written by the harness at
+    /// every inert phase, so its resting value is whatever the next index declares — a fact the harness
+    /// already holds and never needs to be told.</para>
+    /// </summary>
+    InertRest? Rest = null)
 {
     /// <summary>
     /// True when the binding has stated a specification name. <b>Distinct from the names being equal</b> —
@@ -566,6 +587,35 @@ public sealed record SlotBinding(
     /// inline ordinal at all — so it may be listed anywhere.</para>
     /// </summary>
     public IReadOnlyList<string> BoundarySpanning { get; init; } = Array.Empty<string>();
+
+    /// <summary>
+    /// 🔴 <b>THE NAMED MIGRATION ESCAPE FOR THIS SLOT'S UNDECLARED RESTING VALUES — and it is a
+    /// DECLARATION, not a fallback.</b>
+    ///
+    /// <para><b>The ruling it exists under:</b> a result register whose signal declares no
+    /// <see cref="MirroredSignal.Rest"/> REFUSES the run. That is the honest reading of
+    /// <c>InertDeclaration</c>'s own contract sentence, and it is the only one of the three candidate
+    /// readings whose failure mode is loud — see <c>Harness.Wire.InertRestPlan</c>, which states all three
+    /// and why the other two were rejected.</para>
+    ///
+    /// <para><b>Why an escape exists at all:</b> the ruling lands on a slot that is DEPLOYED AND RUNNING
+    /// against the hardcoded-zero behaviour. A fail-closed gate that refuses working submissions on the day
+    /// it lands is removed within a week, by someone who is right to — so the migration is a single stated
+    /// line in the document that already owns every other instrumentation fact, rather than a revert.</para>
+    ///
+    /// <para><b>What it costs, so that it is not free:</b> it is per SLOT, so it cannot be set project-wide
+    /// by accident; it requires <see cref="AssumedZeroRestBasis"/> and refuses without one; every register
+    /// it covers is counted as DEFAULTED rather than declared, listed by index in the run's inert-rest
+    /// report, and named as a default in the text of any inert failure that fires on it — <b>so a reader who
+    /// sees the check fail is told the expectation may be the wrong half of the disagreement.</b></para>
+    ///
+    /// <para>It does NOT cover a signal that declares its own rest: an explicit declaration always wins, and
+    /// the escape only ever fills a hole.</para>
+    /// </summary>
+    public bool AssumedZeroRest { get; init; }
+
+    /// <summary>Why this slot's undeclared resting values may be assumed zero. <b>Required when <see cref="AssumedZeroRest"/> is set.</b></summary>
+    public string? AssumedZeroRestBasis { get; init; }
 
     /// <summary>
     /// The specification slot ids a vector may cite for this slot, in the order they were declared.

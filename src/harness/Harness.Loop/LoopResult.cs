@@ -84,6 +84,29 @@ public enum LoopOutcome
     /// </summary>
     NotRepresentable,
 
+    /// <summary>
+    /// 🔴 <b>A PUBLISHED SIGNAL HAS NO DECLARED RESTING VALUE, SO THE INERT PHASE WOULD BE GATED ON AN
+    /// EXPECTATION NOBODY STATED.</b> The copy layer generated; <b>nothing was deployed and no wave was
+    /// run.</b>
+    ///
+    /// <para><b>What it replaces:</b> <c>ToWireVector</c> built the inert declaration as
+    /// <c>Range(0, ResultRegistersNeeded).ToDictionary(i =&gt; i, _ =&gt; (ushort)0)</c> — every result
+    /// register asserted to rest at zero, hardcoded, under a type whose own summary says the expectation
+    /// <i>must be declared</i>.</para>
+    ///
+    /// <para><b>Why a refusal and not a default.</b> The hardcoded zero fails in both directions on real
+    /// hardware. It refuses a signal resting at a <c>-1</c> sentinel — loud, and blamed on the block. And
+    /// where <c>0</c> is a measured PASS verdict it ACCEPTS the previous index's leftover result as an
+    /// inert start state — <b>silent, and it is the inert check passing over exactly the state it exists to
+    /// catch.</b> A default whose failure modes include a false pass cannot be the default.</para>
+    ///
+    /// <para><b>The remedy is in the BINDING</b>, which is where every other instrumentation fact already
+    /// lives: an <c>inertRest</c> per result signal — a value, or <c>excluded</c> with a reason — or, for a
+    /// slot that cannot be re-declared yet, the slot-level <c>assumedZeroRest</c> claim, which says so out
+    /// loud and has every register it covers reported as DEFAULTED.</para>
+    /// </summary>
+    RestNotDeclared,
+
     /// <summary>The deployment did not happen, or the device did not load what it was given.</summary>
     NotDeployed,
 
@@ -99,6 +122,56 @@ public enum LoopOutcome
 
 /// <summary>A known gap this run rests on, carried with the result rather than closed silently.</summary>
 public sealed record LoopCaveat(string Id, string Detail);
+
+/// <summary>
+/// 🔴 <b>WHAT THE RUN'S INERT EXPECTATION IS MADE OF, PER SLOT AND WITH ITS DENOMINATOR.</b>
+///
+/// <para>The rule this exists to make visible: <b>a defaulted expectation must never be indistinguishable
+/// from a declared one.</b> Before this, every result register was expected to rest at zero by a hardcoded
+/// <c>ToDictionary</c> in the wave builder, and nothing anywhere said so — not the run's output, not the
+/// result package, not the failure text when the check fired.</para>
+///
+/// <para><b>It is emitted on every run, not only the refused one.</b> A report that appears only on bad
+/// news teaches its reader that its absence means it was not run.</para>
+/// </summary>
+public sealed record InertRestReport(IReadOnlyList<InertRestPlan> Plans)
+{
+    /// <summary>True only when every slot's band is covered by something somebody is answerable for.</summary>
+    public bool Planned => Plans.Count > 0 && Plans.All(p => p.Planned);
+
+    /// <summary>Every reason a slot could not be planned, slot-qualified.</summary>
+    public IReadOnlyList<string> Refusals =>
+        Plans.SelectMany(p => p.Refusals.Select(r => $"slot '{p.SlotId}': {r}")).ToArray();
+
+    /// <summary>Observations that gate nothing — an escape claim covering no register, and the like.</summary>
+    public IReadOnlyList<string> Notes => Plans.SelectMany(p => p.Notes).ToArray();
+
+    /// <summary>The declaration for one slot, or a throw. <b>No caller may default it.</b></summary>
+    public InertDeclaration For(string slotId) =>
+        Plans.FirstOrDefault(p => string.Equals(p.SlotId, slotId, StringComparison.Ordinal))?.Require()
+        ?? throw new InvalidOperationException(
+            $"no inert declaration was computed for slot '{slotId}'. The loop refuses an undeclared resting value above the "
+            + "device boundary, so reaching here means a wave was built from a plan that was never made.");
+
+    /// <summary>
+    /// The aggregate, <b>with the denominator first</b>: how many registers were declared, excluded,
+    /// defaulted and derived, over how many slots.
+    /// </summary>
+    public string Summary()
+    {
+        if (Plans.Count == 0)
+            return "INERT REST: NOTHING PLANNED — no slot was examined. Empty is not clean: this is an unexamined run, not a clean one.";
+
+        var registers = Plans.Sum(p => p.Registers.Count);
+
+        return $"INERT REST: {registers} result register(s) over {Plans.Count} slot(s) — "
+            + $"{Plans.Sum(p => p.DeclaredCount)} DECLARED, "
+            + $"{Plans.Sum(p => p.ExcludedCount)} EXCLUDED by declaration, "
+            + $"{Plans.Sum(p => p.DefaultedCount)} DEFAULTED, "
+            + $"{Plans.Sum(p => p.DerivedCount)} DERIVED (latch band)."
+            + (Planned ? string.Empty : $" NOT PLANNED: {Refusals.Count} refusal(s).");
+    }
+}
 
 /// <summary>
 /// 🔴 <b>What steps 1–4 produced, with the device boundary NOT crossed.</b>
@@ -135,7 +208,20 @@ public sealed record LoopGeneration(
     ///
     /// <para>Null only when the run stopped before it could be computed at all.</para>
     /// </summary>
-    WaveOrderReport? Order = null)
+    WaveOrderReport? Order = null,
+
+    /// <summary>
+    /// 🔴 <b>What each slot's inert expectation is made of — declared, excluded, defaulted or derived.</b>
+    ///
+    /// <para><b>Computed here and GATED in <see cref="LoopRun.Execute"/></b>, the same split
+    /// <see cref="Order"/> gets and for the same reason: the resting values decide nothing about the copy
+    /// layer, which is a pure function of the binding, so <c>--generate-only</c> prints the IR AND this
+    /// report, while the path that reaches a device refuses on it.</para>
+    ///
+    /// <para><b>Null is NOT COMPUTED, never "nothing to say"</b> — it means the run stopped before the
+    /// bindings were examined at all.</para>
+    /// </summary>
+    InertRestReport? InertRest = null)
 {
     /// <summary>True only when a copy layer exists. Equivalent to <c>Stopped is null</c> by construction.</summary>
     public bool Generated => Stopped is null;
@@ -193,7 +279,19 @@ public sealed record LoopResult(
     /// block"</i> and said nothing whatever about the other twenty. A default here would let a future
     /// construction site reintroduce exactly that silence.</para>
     /// </summary>
-    RunAccount Account)
+    RunAccount Account,
+
+    /// <summary>
+    /// 🔴 <b>What the inert expectation was made of — declared, excluded, defaulted or derived, with its
+    /// denominator.</b>
+    ///
+    /// <para>On the RESULT and not only on the generation, because <b>a caveat that lives where only a
+    /// reader of the design meets it has already failed the person it was written for.</b> A run whose
+    /// start state was gated on assumed zeros is a run whose every verdict rests on them.</para>
+    ///
+    /// <para>Null means NOT COMPUTED — the run stopped before the bindings were examined.</para>
+    /// </summary>
+    InertRestReport? InertRest = null)
 {
     /// <summary>Packages that say something about the block. Only <c>Pass</c> and <c>Fail</c> do.</summary>
     public IReadOnlyList<ResultPackage> Conclusive =>

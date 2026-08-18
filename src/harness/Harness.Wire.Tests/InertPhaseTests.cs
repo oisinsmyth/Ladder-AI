@@ -168,6 +168,201 @@ public class InertPhaseTests
     // D33: outputs are not recorded during inert
     // ---------------------------------------------------------------------------------------------
 
+    // ---------------------------------------------------------------------------------------------
+    // The declaration must COVER the band — "a check with no expectation passes over anything"
+    // ---------------------------------------------------------------------------------------------
+
+    /// <summary>
+    /// A declaration that is silent about a register in the band. <b>The whole defect in one fixture:</b>
+    /// before this, silence meant "not checked", and an unchecked register was indistinguishable from a
+    /// quiet one.
+    /// </summary>
+    private static InertDeclaration OnlyR000 => new(new Dictionary<int, ushort> { [0] = 0 });
+
+    [Fact]
+    public void A_REGISTER_THE_DECLARATION_IS_SILENT_ABOUT_REFUSES_RATHER_THAN_BEING_PASSED_OVER()
+    {
+        var (client, _) = Wired();
+
+        var report = InertPhase.Establish(client, 0, Vector, OnlyR000);
+
+        Assert.Equal(InertOutcome.RestNotDeclared, report.Outcome);
+        Assert.Contains("R001", report.Detail, StringComparison.Ordinal);
+        Assert.Contains("A CHECK WITH NO EXPECTATION PASSES OVER ANYTHING", report.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AN_UNDECLARED_REGISTER_IS_ITS_OWN_OUTCOME_and_not_StartConditionsWrong()
+    {
+        // The values may be perfect; what is missing is anybody's statement of what they should be. Sending
+        // a reader to look at the program for a fault in the DOCUMENT is the wrong place.
+        var (client, wire) = Wired();
+        wire.SetResult(0, 1, 0);
+
+        Assert.Equal(InertOutcome.RestNotDeclared, InertPhase.Establish(client, 0, Vector, OnlyR000).Outcome);
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // EXCLUDED — skipped by BOTH checks, and the second is the one that is easy to forget
+    // ---------------------------------------------------------------------------------------------
+
+    [Fact]
+    public void AN_EXCLUDED_REGISTER_IS_NOT_GATED_ON_ITS_VALUE()
+    {
+        var (client, wire) = Wired();
+        wire.SetResult(0, 1, 7);
+
+        var report = InertPhase.Establish(client, 0, Vector, new InertDeclaration(
+            new Dictionary<int, ushort> { [0] = 0 },
+            ExcludedResults: new Dictionary<int, string> { [1] = "one-scan pulse" }));
+
+        Assert.True(report.Established, report.Detail);
+    }
+
+    [Fact]
+    public void AN_EXCLUDED_REGISTER_IS_NOT_GATED_ON_QUIESCENCE_EITHER_which_is_the_case_that_motivates_it()
+    {
+        // 🔴 *** THE ONE-SCAN PULSE. *** It reads 1 in about one sample of five, so on the runs where it
+        // happens to pass the value check it then MOVES between the two observations and fails the
+        // quiescence check for exactly the same reason. Excluding it from the value check alone would leave
+        // the coin toss in place one check further down — and the coin toss would be blamed on the block.
+        var (client, wire) = Wired();
+        var reads = 0;
+        wire.OnTransaction = t =>
+        {
+            reads++;
+            if (reads > 6) t.SetResult(0, 1, 1);
+        };
+
+        var report = InertPhase.Establish(client, 0, Vector, new InertDeclaration(
+            new Dictionary<int, ushort> { [0] = 0 },
+            ExcludedResults: new Dictionary<int, string> { [1] = "one-scan pulse: true for a single scan" }));
+
+        Assert.True(report.Established, report.Detail);
+    }
+
+    [Fact]
+    public void A_MOVING_REGISTER_THAT_IS_NOT_EXCLUDED_STILL_FAILS_QUIESCENCE()
+    {
+        // The converse of the test above, so that "excluded is skipped" cannot be satisfied by a quiescence
+        // check that stopped working. Same fixture, same movement, no exclusion.
+        var (client, wire) = Wired();
+        var reads = 0;
+        wire.OnTransaction = t =>
+        {
+            reads++;
+            if (reads > 6) t.SetResult(0, 1, 1);
+        };
+
+        var report = InertPhase.Establish(client, 0, Vector, Declaration());
+
+        Assert.Equal(InertOutcome.NotQuiescent, report.Outcome);
+        Assert.Contains("R001 moved 0 -> 1", report.Detail, StringComparison.Ordinal);
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // The over-fire converse: a slot resting at NON-ZERO declared values must still pass
+    // ---------------------------------------------------------------------------------------------
+
+    [Fact]
+    public void A_SLOT_RESTING_AT_ITS_DECLARED_NON_ZERO_VALUES_IS_ESTABLISHED()
+    {
+        // *** THE FIXTURE TRAP, HANDLED HEAD-ON. *** Every other fixture in this file rests at zero, so
+        // none of them can tell a declared expectation from the old hardcoded one. This slot rests at a
+        // -1 sentinel and a raised alarm — the two shapes measured on real hardware — and must pass.
+        var (client, wire) = Wired();
+        wire.SetResult(0, 0, 65535);
+        wire.SetResult(0, 1, 1);
+
+        var report = InertPhase.Establish(client, 0, Vector, new InertDeclaration(
+            new Dictionary<int, ushort> { [0] = 65535, [1] = 1 }));
+
+        Assert.True(report.Established, report.Detail);
+    }
+
+    [Fact]
+    public void A_SLOT_THAT_IS_GENUINELY_DIRTY_IS_STILL_REFUSED_when_the_declared_rest_is_non_zero()
+    {
+        // And the other half of the converse: declaring a non-zero rest must not become a way of declaring
+        // "anything goes". A register at 0 where -1 was declared is a fault, and 0 is the value the old
+        // implementation would have accepted here.
+        var (client, wire) = Wired();
+        wire.SetResult(0, 0, 0);
+        wire.SetResult(0, 1, 1);
+
+        var report = InertPhase.Establish(client, 0, Vector, new InertDeclaration(
+            new Dictionary<int, ushort> { [0] = 65535, [1] = 1 }));
+
+        Assert.Equal(InertOutcome.StartConditionsWrong, report.Outcome);
+        Assert.Contains("R000 reads 0, declared 65535", report.Detail, StringComparison.Ordinal);
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // A defaulted expectation must never read like a declared one
+    // ---------------------------------------------------------------------------------------------
+
+    [Fact]
+    public void A_FAILURE_ON_A_DEFAULTED_EXPECTATION_SAYS_THAT_NOBODY_DECLARED_IT()
+    {
+        // Handed a bare "reads 7, declared 0" a reader investigates the block. Told the 0 was assumed
+        // rather than stated, they can weigh the other half — and the other half is where this defect was.
+        var (client, wire) = Wired();
+        wire.SetResult(0, 1, 7);
+
+        var report = InertPhase.Establish(client, 0, Vector, new InertDeclaration(
+            new Dictionary<int, ushort> { [0] = 0, [1] = 0 },
+            DefaultedResults: new HashSet<int> { 1 }));
+
+        Assert.Equal(InertOutcome.StartConditionsWrong, report.Outcome);
+        Assert.Contains("NOBODY DECLARED THIS REGISTER'S RESTING VALUE", report.Detail, StringComparison.Ordinal);
+        Assert.Contains("may be the expectation rather than the program", report.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_FAILURE_ON_A_DECLARED_EXPECTATION_CARRIES_NO_SUCH_CAVEAT()
+    {
+        // The converse, so the caveat cannot decay into boilerplate printed on everything.
+        var (client, wire) = Wired();
+        wire.SetResult(0, 1, 7);
+
+        var report = InertPhase.Establish(client, 0, Vector, Declaration());
+
+        Assert.Equal(InertOutcome.StartConditionsWrong, report.Outcome);
+        Assert.DoesNotContain("NOBODY DECLARED", report.Detail, StringComparison.Ordinal);
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // The denominator, on the PASSING run
+    // ---------------------------------------------------------------------------------------------
+
+    [Fact]
+    public void THE_PASS_STATES_WHAT_IT_EXAMINED_because_a_green_that_examined_nothing_reads_the_same()
+    {
+        var (client, wire) = Wired();
+        wire.SetResult(0, 1, 7);
+
+        var report = InertPhase.Establish(client, 0, Vector, new InertDeclaration(
+            new Dictionary<int, ushort> { [0] = 0 },
+            ExcludedResults: new Dictionary<int, string> { [1] = "one-scan pulse" }));
+
+        Assert.True(report.Established, report.Detail);
+        Assert.Contains("INERT REST: 1 of 2 result register(s) gated", report.Detail, StringComparison.Ordinal);
+        Assert.Contains("1 EXCLUDED by declaration, checked by NOBODY", report.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void THE_PASS_NAMES_ITS_DEFAULTS_TOO()
+    {
+        var (client, _) = Wired();
+
+        var report = InertPhase.Establish(client, 0, Vector, new InertDeclaration(
+            new Dictionary<int, ushort> { [0] = 0, [1] = 0 },
+            DefaultedResults: new HashSet<int> { 1 }));
+
+        Assert.True(report.Established, report.Detail);
+        Assert.Contains("OF WHICH 1 DEFAULTED", report.Detail, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void The_inert_observations_are_reported_separately_from_the_tests_results()
     {

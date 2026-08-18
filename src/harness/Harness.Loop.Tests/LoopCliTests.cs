@@ -1,4 +1,4 @@
-using Harness.Run;
+﻿using Harness.Run;
 using Harness.Wire;
 
 namespace Harness.Loop.Tests;
@@ -35,6 +35,41 @@ public class LoopCliTests
         "slotId": "HBA",
         "vectorTargets": [{ "tag": "Stim_Total", "type": "Time" }],
         "startCondition": "Stim_Start",
+        "resultSources": [{ "tag": "Alarm", "type": "Bool",
+                           "inertRest": { "value": "false", "basis": "the alarm coil is ANDed with the start condition, so it is off at inert" } }]
+      }]
+    }
+    """;
+
+    /// <summary>
+    /// The same binding with <b>no resting value declared for its published signal</b> — the shape EVERY
+    /// binding had before the resting value could be stated, and the shape the wave builder used to fill in
+    /// with a hardcoded zero.
+    /// </summary>
+    private const string BindingWithNoDeclaredRest = """
+    {
+      "blockNumber": 9001,
+      "baseByte": 1000,
+      "slots": [{
+        "slotId": "HBA",
+        "vectorTargets": [{ "tag": "Stim_Total", "type": "Time" }],
+        "startCondition": "Stim_Start",
+        "resultSources": [{ "tag": "Alarm", "type": "Bool" }]
+      }]
+    }
+    """;
+
+    /// <summary>The same binding again, migrated by the named escape rather than by declaring.</summary>
+    private const string BindingAssumingZeroRest = """
+    {
+      "blockNumber": 9001,
+      "baseByte": 1000,
+      "slots": [{
+        "slotId": "HBA",
+        "assumedZeroRest": true,
+        "assumedZeroRestBasis": "carried from the deployed binding while its signals are declared",
+        "vectorTargets": [{ "tag": "Stim_Total", "type": "Time" }],
+        "startCondition": "Stim_Start",
         "resultSources": [{ "tag": "Alarm", "type": "Bool" }]
       }]
     }
@@ -54,7 +89,8 @@ public class LoopCliTests
         "serves": ["G-ONE", "G-TWO"],
         "vectorTargets": [{ "tag": "Stim_Total", "type": "Time" }],
         "startCondition": "Stim_Start",
-        "resultSources": [{ "tag": "Alarm", "type": "Bool" }]
+        "resultSources": [{ "tag": "Alarm", "type": "Bool",
+                           "inertRest": { "value": "false", "basis": "the alarm coil is ANDed with the start condition, so it is off at inert" } }]
       }]
     }
     """;
@@ -92,6 +128,8 @@ public class LoopCliTests
                 "sub.json" => Submission,
                 "binding.json" => Binding,
                 "binding-two-groups.json" => BindingTwoGroupsNoOrder,
+                "binding-undeclared-rest.json" => BindingWithNoDeclaredRest,
+                "binding-assumed-zero.json" => BindingAssumingZeroRest,
                 "ramp.ir" => BlockIr,
                 "empty.ir" => "\n\n",
                 "type.ir" => "TYPE TypeDOL\n  MEMBERS\n",
@@ -521,6 +559,45 @@ public class LoopCliTests
         Assert.Equal(LoopExit.NothingExamined, exit);
         Assert.Contains("--verify needs --port", output, StringComparison.Ordinal);
         Assert.Equal(0, opened);
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // The inert-rest report — printed on EVERY run, because absence would otherwise read as "declared"
+    // ---------------------------------------------------------------------------------------------
+
+    [Fact]
+    public void THE_INERT_REST_REPORT_IS_PRINTED_WITH_ITS_DENOMINATOR_ON_AN_ORDINARY_RUN()
+    {
+        // A report that appears only on bad news teaches its reader that its absence means it was not run.
+        var (_, output, _) = Run(Args("--submission", "sub.json", "--binding", "binding.json", "--generate-only"));
+
+        Assert.Contains("INERT REST:", output, StringComparison.Ordinal);
+        Assert.Contains("1 DECLARED", output, StringComparison.Ordinal);
+        Assert.Contains("0 DEFAULTED", output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_BINDING_THAT_DECLARES_NO_RESTING_VALUE_IS_REFUSED_BY_NAME_AT_THE_CLI()
+    {
+        var (_, output, _) = Run(Args("--submission", "sub.json", "--binding", "binding-undeclared-rest.json", "--generate-only"));
+
+        Assert.Contains("REFUSED", output, StringComparison.Ordinal);
+        Assert.Contains("Alarm", output, StringComparison.Ordinal);
+        Assert.Contains("THIS IS A REFUSAL AND NOT A ZERO", output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_DEFAULTED_REGISTER_IS_LISTED_AND_LABELLED_rather_than_folded_into_the_total()
+    {
+        // 🔴 *** THE DEFECT'S OWN SHAPE, AT THE OUTPUT. *** A run gated on assumed zeros and a run gated on
+        // declared values used to print identically. The per-register line is what makes them different
+        // documents.
+        var (_, output, _) = Run(Args("--submission", "sub.json", "--binding", "binding-assumed-zero.json", "--generate-only"));
+
+        Assert.Contains("1 DEFAULTED", output, StringComparison.Ordinal);
+        Assert.Contains("R000 DEFAULTED", output, StringComparison.Ordinal);
+        Assert.Contains("NOBODY DECLARED THIS", output, StringComparison.Ordinal);
+        Assert.Contains("A DEFAULTED REGISTER IS ONE NOBODY DECLARED", output, StringComparison.Ordinal);
     }
 
     [Fact]

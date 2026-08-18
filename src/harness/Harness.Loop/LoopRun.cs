@@ -138,7 +138,8 @@ public static class LoopRun
             return new LoopResult(generation.Stopped!.Value, generation.Gate, generation.SizeReport,
                 generation.Retention, null, null, null,
                 Array.Empty<ResultPackage>(), generation.Caveats, generation.Detail,
-                NothingAttempted(request, generation.Stopped!.Value, generation.Detail, ordinalOf: null, generation.Map));
+                NothingAttempted(request, generation.Stopped!.Value, generation.Detail, ordinalOf: null, generation.Map),
+                generation.InertRest);
         }
 
         var map = generation.Map!;
@@ -186,10 +187,43 @@ public static class LoopRun
 
                 // No merged order exists on this path, so no vector HAS a wave index — the accounting
                 // reports -1 rather than 0, since 0 is a real index and would read as "it was first".
-                NothingAttempted(request, outcome, detail, ordinalOf: null, map));
+                NothingAttempted(request, outcome, detail, ordinalOf: null, map),
+                generation.InertRest);
         }
 
         var ordinalOf = order.OrdinalOf;
+
+        // ---- 4c. THE INERT EXPECTATION, BEFORE THE DEVICE BOUNDARY ----------------------------------
+        //
+        // 🔴 *** EVERY RESULT REGISTER USED TO BE ASSERTED TO REST AT ZERO, HARDCODED IN ToWireVector. ***
+        // That is not a declaration, it is an assumption wearing one's clothes — and on real hardware it
+        // fails in BOTH directions. Loud: a signal resting at a -1 sentinel refuses a correct program.
+        // SILENT, and this is the disqualifying half: where 0 is a measured PASS verdict, asserting 0
+        // accepts the previous index's leftover result as an inert start state, which is D33's first check
+        // passing over exactly the state it exists to catch.
+        //
+        // *** IT REFUSES HERE RATHER THAN INSIDE THE WAVE *** for the reason SlotJoin sits above the gate:
+        // a cross-document fault found after the deployment costs a whole download. InertPhase carries the
+        // same check against the band it actually read — that one is the backstop for a direct caller, and
+        // the two are not redundant because only this one is free.
+        var inertRest = generation.InertRest;
+
+        if (inertRest is null || !inertRest.Planned)
+        {
+            var detail =
+                (inertRest is null
+                    ? "the inert expectation was never computed, so nothing was deployed and no wave was run"
+                    : $"{inertRest.Refusals.Count} published signal(s) have no declared resting value, so nothing was deployed and "
+                      + "no wave was run")
+                + ". *** THE INERT PHASE IS D33's FIRST CHECK AND IT MUST BE DECLARED: a check with no expectation passes over "
+                + "anything. *** " + string.Join(" | ", inertRest?.Refusals ?? Array.Empty<string>())
+                + " " + (inertRest?.Summary() ?? "INERT REST: NOT COMPUTED.");
+
+            return new LoopResult(LoopOutcome.RestNotDeclared, gate, generation.SizeReport, retention, null, null, null,
+                Array.Empty<ResultPackage>(), caveats, detail,
+                NothingAttempted(request, LoopOutcome.RestNotDeclared, detail, ordinalOf, map),
+                inertRest);
+        }
 
         // ---- 5. DEPLOY — the device boundary --------------------------------------------------------
         var deployment = gateway.Deploy(copyLayer.Objects.Concat(request.ProgramUnderTest).ToArray(), stamp);
@@ -201,7 +235,8 @@ public static class LoopRun
 
             return new LoopResult(LoopOutcome.NotDeployed, gate, generation.SizeReport, retention, deployment, null, null,
                 Array.Empty<ResultPackage>(), caveats, detail,
-                NothingAttempted(request, LoopOutcome.NotDeployed, detail, ordinalOf, map));
+                NothingAttempted(request, LoopOutcome.NotDeployed, detail, ordinalOf, map),
+                inertRest);
         }
 
         using var transport = gateway.Open();
@@ -226,7 +261,8 @@ public static class LoopRun
 
             return new LoopResult(LoopOutcome.NotConfirmed, gate, generation.SizeReport, retention, deployment, version, null,
                 Array.Empty<ResultPackage>(), caveats, detail,
-                NothingAttempted(request, LoopOutcome.NotConfirmed, detail, ordinalOf, map));
+                NothingAttempted(request, LoopOutcome.NotConfirmed, detail, ordinalOf, map),
+                inertRest);
         }
 
         // ---- 7. RUN ---------------------------------------------------------------------------------
@@ -237,7 +273,7 @@ public static class LoopRun
             .GroupBy(v => SlotIndexOf(map, request.Bindings, v.Slot))
             .Select(g => new SlotTensor(
                 g.Key,
-                g.OrderBy(v => ordinalOf[v.Id]).Select(v => ToWireVector(v, request.Bindings, map, request.WordOrder)).ToArray()))
+                g.OrderBy(v => ordinalOf[v.Id]).Select(v => ToWireVector(v, request.Bindings, map, request.WordOrder, inertRest)).ToArray()))
             .OrderBy(t => t.SlotIndex)
             .ToArray();
 
@@ -271,8 +307,13 @@ public static class LoopRun
             packages, caveats,
             $"{reached} over {tensors.Length} slot(s), costing {wave.RoundTrips} round trip(s). "
             + $"{account.Ran} of {account.Submitted} submitted vector(s) were attempted"
-            + (account.NeverAttempted > 0 ? $"; {account.NeverAttempted} were NOT." : "."),
-            account);
+            + (account.NeverAttempted > 0 ? $"; {account.NeverAttempted} were NOT. " : ". ")
+            // *** THE START STATE THIS RUN'S EVERY VERDICT RESTS ON, ON THE HEADLINE LINE. *** A run gated
+            // on assumed zeros is not the same evidence as one gated on declared resting values, and the
+            // difference has to be visible where a reader of RESULTS meets it.
+            + inertRest.Summary(),
+            account,
+            inertRest);
     }
 
     /// <summary>
@@ -532,11 +573,35 @@ public static class LoopRun
                 copyLayer);
         }
 
+        // ---- 4c. THE INERT EXPECTATION — computed from the bindings, REPORTED here, GATED in Execute ---
+        //
+        // 🔴 *** IT USED TO BE `Range(0, ResultRegistersNeeded).ToDictionary(i => i, _ => (ushort)0)`,
+        // BUILT INSIDE THE WAVE BUILDER. *** Every result register asserted to rest at zero, hardcoded,
+        // under a type whose own summary reads "D33's FIRST check, and it must be declared: a check with no
+        // expectation passes over anything". See InertRestPlan for the ruling and the measured consequence.
+        //
+        // Computed here and refused in Execute, exactly as the wave order is: the resting values decide
+        // nothing about the copy layer, so `--generate-only` prints the IR AND this report.
+        var inertRest = InertRestOf(request);
+
         return new LoopGeneration(null, gate, mapResult.SizeReport, map, stamp, copyLayer, retention, caveats,
             $"the copy layer was generated: {copyLayer.Objects.Count} object(s), {copyLayer.Require().Networks.Count} network(s), "
-            + $"{copyLayer.Require().Tags.Count} mirror tag(s), {map.TotalRegisters} register(s) of mirror. NOTHING WAS DEPLOYED.",
-            OrderOf(request));
+            + $"{copyLayer.Require().Tags.Count} mirror tag(s), {map.TotalRegisters} register(s) of mirror. NOTHING WAS DEPLOYED. "
+            + inertRest.Summary(),
+            OrderOf(request),
+            inertRest);
     }
+
+    /// <summary>
+    /// One inert-rest plan per binding, <b>derived once and read by both the refusal and the wave
+    /// builder.</b>
+    ///
+    /// <para>Two derivations of one expectation is how the thing that REFUSES and the thing that RUNS come
+    /// to disagree — and this file already records three instances of exactly that, all of them on the
+    /// signal join. One computation, two consumers.</para>
+    /// </summary>
+    private static InertRestReport InertRestOf(LoopRequest request) =>
+        new(request.Bindings.Select(b => InertRestPlan.For(b, request.WordOrder)).ToArray());
 
     /// <summary>
     /// The merged <c>(group, index)</c> order for this request — <b>one computation, read by generation
@@ -1029,7 +1094,8 @@ public static class LoopRun
     /// element is wider than one register cannot be honoured here, and pretending otherwise would compare
     /// against its high half and report TIMED-OUT forever on a block that finished.</para>
     /// </summary>
-    private static WireVector ToWireVector(SubmissionVector vector, IReadOnlyList<SlotBinding> bindings, RegisterMap map, RegisterWordOrder wordOrder)
+    private static WireVector ToWireVector(
+        SubmissionVector vector, IReadOnlyList<SlotBinding> bindings, RegisterMap map, RegisterWordOrder wordOrder, InertRestReport inertRest)
     {
         var binding = BindingFor(bindings, vector.Slot);
 
@@ -1109,10 +1175,23 @@ public static class LoopRun
 
         return new WireVector(
             values,
-            // Inert is declared over every RESULT REGISTER, including the second half of a wide element.
-            // Declaring it per signal would leave those halves unclaimed, and an unclaimed register is one
-            // nothing checks is quiet.
-            new InertDeclaration(Enumerable.Range(0, binding.ResultRegistersNeeded).ToDictionary(i => i, _ => (ushort)0)),
+            // 🔴 *** THIS READ `Enumerable.Range(0, binding.ResultRegistersNeeded).ToDictionary(i => i, _ =>
+            // (ushort)0)` UNTIL 2026-08-18 — EVERY RESULT REGISTER ASSERTED TO REST AT ZERO, HARDCODED. ***
+            // The comment beside it argued, correctly, that inert must be declared over every RESULT
+            // REGISTER including the second half of a wide element — and then supplied the values itself.
+            // The premise survives and is now discharged by InertRestPlan, which expands a PER-SIGNAL
+            // declaration across the element's whole span and derives the latch band from the rungs this
+            // harness emits, so no half is left unclaimed and no value is invented.
+            //
+            // *** MEASURED ON REAL HARDWARE: *** one slot passed its inert gate only because its published
+            // signals happen to rest at zero; a second could not pass it at all, and every reason was a
+            // legitimate resting value of a correctly-functioning program — a -1 sentinel where 0 means a
+            // measured PASS, a commanded input resting at whatever the pending index declares, alarm bits
+            // honestly true after a restart, and a one-scan pulse no single sample can be right about.
+            //
+            // Unreachable by construction: step 4c refuses an undeclared resting value before any device is
+            // touched, so a throw out of `For` means the loop built a wave from a plan it never made.
+            inertRest.For(binding.SlotId),
             completionRegister,
             // The completion VALUE comes from the vector. It used to be a literal 1 here, which was the
             // loop inventing a convention contract section 2 does not state — and then a DEFAULT of 1 on

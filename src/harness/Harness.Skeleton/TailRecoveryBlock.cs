@@ -163,11 +163,17 @@ public static class TailRecoveryBlock
         {
             // Spec names stated and DELIBERATELY DIFFERENT FROM THE TAGS, so this fixture cannot pass by
             // the two keys coinciding — the trap that hid the spec-name join defect for a whole wave.
+            // Resting values declared from the rungs above: networks 3 and 4 are coils ANDed with the
+            // start command, and network 1 drives the completion flag to zero while it is off. All three
+            // are therefore false/0 at inert — declared, and checkable against the IR this class emits.
             new MirroredSignal(ResponseTag, MirrorValueType.Bool, SpecName: "SPEC.Response",
                 Transient: latchTheResponse || declareTheArmWindow,
                 RearmsEachIndex: latchTheResponse || declareTheArmWindow,
-                ArmedBy: declareTheArmWindow ? ArmedTag : null),
-            new MirroredSignal(ArmedTag, MirrorValueType.Bool, SpecName: "SPEC.Armed"),
-            new MirroredSignal(DoneTag, MirrorValueType.Int, SpecName: "SPEC.Done"),
+                ArmedBy: declareTheArmWindow ? ArmedTag : null,
+                Rest: InertRest.At("false", "network 3's coil is ANDed with the start command, so it is off at inert")),
+            new MirroredSignal(ArmedTag, MirrorValueType.Bool, SpecName: "SPEC.Armed",
+                Rest: InertRest.At("false", "network 4's coil is ANDed with the start command, so it is off at inert")),
+            new MirroredSignal(DoneTag, MirrorValueType.Int, SpecName: "SPEC.Done",
+                Rest: InertRest.At("0", "network 1 drives the completion flag to 0 while the start command is off")),
         });
 }

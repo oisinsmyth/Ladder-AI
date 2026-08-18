@@ -844,6 +844,93 @@ controller uses.**
 
 ---
 
+### 2.8b `inertRest` — ***WHAT A PUBLISHED SIGNAL READS WHEN NOTHING IS RUNNING.*** ADDED 2026-08-18
+
+> 🔴 *** THE INERT PHASE'S FIRST CHECK WAS GATED ON A HARDCODED ZERO FOR EVERY RESULT REGISTER IN THE
+> SYSTEM. *** `InertDeclaration`'s own summary states the contract — *"D33's FIRST check, and it must be
+> declared: a check with no expectation passes over anything"* — and its only production caller built the
+> declaration as `Range(0, ResultRegistersNeeded).ToDictionary(i => i, _ => (ushort)0)`. **That is not a
+> declaration; it is an assumption wearing one's clothes**, and no coordinator could see it, because the
+> binding format had no field to state it in.
+
+**Measured on real hardware.** One slot passed its inert gate only because its published signals happen
+to rest at zero. A second could not pass it at all, and every reason was a legitimate resting value of a
+correctly-functioning program:
+
+| resting state | why the hardcoded 0 is wrong about it |
+|---|---|
+| a **sentinel** of `-1` meaning *no test has been performed* | `0` is a measured **PASS** verdict, so asserting 0 asserts a pass as the resting state — **and the check then accepts the previous index's leftover result as inert** |
+| a commanded input resting at **whatever the pending index declares** | no single constant can be right for it |
+| alarm bits **honestly true at rest** after a restart | the block is correct and the gate refuses it |
+| a **one-scan pulse** | reads 1 in about one sample of five — *any* single-sample expectation is a coin toss, and the coin toss gets blamed on the block |
+
+#### The field
+
+```
+resultSources[ ]
+  inertRest                  what this signal reads when nothing is running
+    value      the resting value AS TEXT - SIGNED, and read through the same
+               path a stimulus value is, so the signal's own `encoding` applies
+               and a Bool takes true/false
+    excluded   TRUE when the signal has NO meaningful resting value and inert
+               must not be gated on it
+    basis      why. REQUIRED for `excluded`, optional for a value
+```
+
+> **The `basis` asymmetry is deliberate.** A declared value is falsified by the device on every single
+> run, by name. **An exclusion is falsified by nobody, ever** — it removes a register from the check and
+> nothing downstream can notice it was wrong. What no machine will check, a reader must.
+
+#### 🔴 ***AN ABSENT `inertRest` IS A REFUSAL, NOT A ZERO.*** The ruling, and why the other two lost
+
+| reading | verdict |
+|---|---|
+| **absent ⇒ 0** | ***Rejected.*** It fails in BOTH directions and one of them is silent. Loud: a `-1` sentinel refuses a correct program. **Silent, and disqualifying: where 0 is a measured PASS verdict, asserting 0 accepts a stale result as an inert start state — the check passing over exactly the state it exists to catch.** A default whose failure modes include a false pass cannot be the default |
+| **absent ⇒ excluded** | ***Rejected.*** It is the contract's own opening sentence inverted: D33's first check would examine nothing and still report `Established`. It is also the wrong answer that leaves no trace |
+| **absent ⇒ REFUSE** | ***Chosen.*** Its failure mode is loud, it is paid once per slot by the party that already owns every other instrumentation fact, and it is the treatment this format already gives `type` (`Unstated` refuses), `specName` (absent is NOT the tag), `completionValue` (no default) and `startCondition` (null is a claim) |
+
+The loop refuses with `RestNotDeclared` **before the device boundary** — nothing generated is deployed,
+no transport is opened. `InertPhase` carries the same check against the band it actually read, as the
+backstop for a direct caller.
+
+#### The migration escape, and what it costs
+
+The ruling lands on a slot that is **deployed and running** against the old behaviour, and *a
+fail-closed gate that refuses working submissions on the day it lands is removed within a week, by
+someone who is right to.* So:
+
+```
+slots[ ]
+  assumedZeroRest        this slot's UNDECLARED resting values may be assumed 0
+  assumedZeroRestBasis   why. REQUIRED - refused without it, even when it covers nothing
+```
+
+It is **per slot**, so it cannot be set project-wide by accident; every register it covers is counted
+and listed as **DEFAULTED** in the run's inert-rest report; and any inert failure on such a register
+says in its own text that nobody declared it, **so the reader is told the expectation may be the wrong
+half of the disagreement.** A signal that declares its own `inertRest` is unaffected — the escape only
+ever fills a hole.
+
+#### Latch registers are DERIVED and are not declarable
+
+A latch is not a signal the block publishes; it is a rung **this harness emits**, so its resting value
+is a computed fact about our own artifact. A **phase-armed** latch carries `RCOIL := NOT <start bool>`
+and the inert phase lowers the start bool before it reads, so it rests cleared. A **once-per-wave**
+latch is an unconditional `SCOIL` that stays set for the rest of the wave once it fires — **it has no
+per-index resting value at all**, so it is EXCLUDED, derived, with the reason stated. *(The hardcoded
+zero was wrong here too, and nobody had noticed: it would have refused every index after the one where
+the signal legitimately fired.)*
+
+#### Every run says what it did
+
+`INERT REST: <n> result register(s) over <k> slot(s) — <a> DECLARED, <b> EXCLUDED by declaration,
+<c> DEFAULTED, <d> DERIVED (latch band).` Printed on the clean run too, because a report that appears
+only on bad news teaches its reader that its absence means everything was declared. Defaulted and
+excluded registers are additionally listed **one line each**, with their provenance — the ordinary
+declared ones are not, because a section nobody finishes gets skimmed.
+
+---
+
 ### 2.9 What a submission may assume about the PROJECT it is submitted against. ADDED 2026-08-14
 
 **Right now it assumes silently, and the assumption has been measured false.** The first whole-project

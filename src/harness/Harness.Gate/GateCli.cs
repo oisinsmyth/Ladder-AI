@@ -310,7 +310,12 @@ public static class GateCli
             // `RearmsEachIndex` each spent time as fields the generator read and nothing could set — a
             // field nobody can set is a field that does not exist, however well it is implemented
             // downstream, and that is the third instance of it this file records.
-            row.Encoding?.ToEncoding());
+            row.Encoding?.ToEncoding(),
+
+            // *** THREADED IN THE SAME COMMIT THAT GIVES IT A MEANING, for the fourth time in this file's
+            // history. *** The resting value was supplied by a hardcoded zero inside the wave builder, so
+            // the capability was not merely unreachable from a binding — nobody could see it existed.
+            row.InertRest?.ToRest());
 
     /// <summary>The enumeration projection, off the document. Public so the runner composes it the same way.</summary>
     public static AssertionEnumeration ToEnumeration(SubmissionDocument document) =>

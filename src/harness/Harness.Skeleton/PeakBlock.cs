@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using Harness.Map;
 
 namespace Harness.Skeleton;
@@ -127,8 +127,12 @@ public static class PeakBlock
         // Spec names stated, and here they coincide with the tags. Stated identity, never assumed identity.
         new[]
         {
-            new MirroredSignal(PeakTag, MirrorValueType.Int, SpecName: PeakTag),
-            new MirroredSignal(AlarmTag, MirrorValueType.Int, SpecName: AlarmTag),
+            // Declared from this block's own hold rung, which drives both to zero while the start command
+            // is off — the state the inert phase establishes.
+            new MirroredSignal(PeakTag, MirrorValueType.Int, SpecName: PeakTag,
+                Rest: InertRest.At("0", "the hold rung drives the peak to 0 while the start command is off")),
+            new MirroredSignal(AlarmTag, MirrorValueType.Int, SpecName: AlarmTag,
+                Rest: InertRest.At("0", "the hold rung drives the alarm to 0 while the start command is off")),
         });
 }
 

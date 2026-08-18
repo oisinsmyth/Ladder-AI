@@ -1,4 +1,4 @@
-using Harness.Loop;
+﻿using Harness.Loop;
 using Harness.Map;
 using Harness.Results;
 using Harness.Skeleton;
@@ -45,8 +45,10 @@ public class SpecNameObservationTests
         TrivialBlock.StartTag,
         new[]
         {
-            new MirroredSignal(TrivialBlock.CountTag, MirrorValueType.Int, SpecName: CountSpecName),
-            new MirroredSignal(TrivialBlock.DoneTag, MirrorValueType.Int, SpecName: DoneSpecName),
+            new MirroredSignal(TrivialBlock.CountTag, MirrorValueType.Int, SpecName: CountSpecName,
+                Rest: InertRest.At("0", "the ramp block's network 1 holds the count at 0 while the start command is off")),
+            new MirroredSignal(TrivialBlock.DoneTag, MirrorValueType.Int, SpecName: DoneSpecName,
+                Rest: InertRest.At("0", "the ramp block's network 1 holds the done flag at 0 while the start command is off")),
         });
 
     private static AssertionEnumeration Enumeration(IReadOnlyDictionary<string, string>? bounds, string observedSignal) =>

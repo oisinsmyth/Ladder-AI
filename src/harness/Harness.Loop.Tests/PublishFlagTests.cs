@@ -1,4 +1,4 @@
-using Harness.Run;
+﻿using Harness.Run;
 using Harness.Wire;
 
 namespace Harness.Loop.Tests;
@@ -35,7 +35,8 @@ public class PublishFlagTests
         "slotId": "HBA",
         "vectorTargets": [{ "tag": "Stim_Total", "type": "Time" }],
         "startCondition": "Stim_Start",
-        "resultSources": [{ "tag": "Alarm", "type": "Bool" }]
+        "resultSources": [{ "tag": "Alarm", "type": "Bool",
+                           "inertRest": { "value": "false", "basis": "the alarm coil is ANDed with the start condition, so it is off at inert" } }]
       }]
     }
     """;

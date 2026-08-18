@@ -1,4 +1,4 @@
-using Harness.Gate;
+﻿using Harness.Gate;
 using Harness.Map;
 using Harness.Results;
 using Harness.Run;
@@ -127,8 +127,10 @@ public class GateParityTests
         "startCondition": "Demo_Start",
         "vectorTargets": [{ "tag": "Demo_Step", "specName": "Demo_Step", "type": "Int" }],
         "resultSources": [
-          { "tag": "Demo_Count", "specName": "Count", "type": "Int" },
-          { "tag": "Demo_Done", "specName": "Done", "type": "Bool" }
+          { "tag": "Demo_Count", "specName": "Count", "type": "Int",
+            "inertRest": { "value": "0", "basis": "the demo ramp holds its count at 0 while the start command is off" } },
+          { "tag": "Demo_Done", "specName": "Done", "type": "Bool",
+            "inertRest": { "value": "false", "basis": "the demo ramp holds its done flag off while the start command is off" } }
         ]
       }]
     }

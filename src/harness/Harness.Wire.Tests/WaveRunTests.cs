@@ -1,4 +1,4 @@
-using Harness.Map;
+﻿using Harness.Map;
 using Harness.Wire;
 
 namespace Harness.Wire.Tests;
@@ -36,9 +36,25 @@ public class WaveRunTests
         return (new MirrorClient(map, wire, Stamp), wire, map);
     }
 
-    private static WireVector Vector() => new(
+    /// <summary>
+    /// One vector, with an inert declaration that <b>covers the whole result band this fixture's slots
+    /// actually have.</b>
+    ///
+    /// <para>It used to declare R000/R001 and nothing else, whatever the slot's width — so the F-1 width
+    /// tests below, which allocate 20 and 123 result registers, ran with 18 and 121 registers that
+    /// <c>InertPhase</c> passed over in silence. That is the very thing the coverage check now refuses, and
+    /// this fixture was one of the places it was hiding: the two-register slots looked declared, the wide
+    /// ones looked identical, and nothing distinguished them.</para>
+    ///
+    /// <para>The fake program drives R000 and R001 only, so the rest are EXCLUDED with that as their
+    /// reason rather than declared to rest at a zero this fixture never sets.</para>
+    /// </summary>
+    private static WireVector Vector(int resultWidth = 2) => new(
         Values: new ushort[] { 1, 2 },
-        Inert: new InertDeclaration(new Dictionary<int, ushort> { [0] = 0, [1] = 0 }),
+        Inert: new InertDeclaration(
+            new Dictionary<int, ushort> { [0] = 0, [1] = 0 },
+            ExcludedResults: Enumerable.Range(2, Math.Max(0, resultWidth - 2))
+                .ToDictionary(r => r, _ => "padding: this fixture's program drives R000 and R001 only")),
         CompletionRegister: 1,
         CompletionValue: 1,
         Duration: new ScanBudget(1, 1));
@@ -111,8 +127,8 @@ public class WaveRunTests
         return run.Detail;
     }
 
-    private static SlotTensor Tensor(int slot, int length) =>
-        new(slot, Enumerable.Range(0, length).Select(_ => Vector()).ToArray());
+    private static SlotTensor Tensor(int slot, int length, int resultWidth = 2) =>
+        new(slot, Enumerable.Range(0, length).Select(_ => Vector(resultWidth)).ToArray());
 
     // ---------------------------------------------------------------------------------------------
     // 3.4 — unequal tensor lengths
@@ -196,10 +212,14 @@ public class WaveRunTests
         var sized = Wired(slots: 6, resultWidth: 20);
         var padded = Wired(slots: 6, resultWidth: 123);
 
-        var tensors = Enumerable.Range(0, 6).Select(i => Tensor(i, 1)).ToArray();
+        // *** THE DECLARATION IS PER BAND, SO THE TWO WAVES CANNOT SHARE ONE. *** A declaration written for
+        // the 20-register slot leaves 103 of the padded slot's registers uncovered — which InertPhase now
+        // refuses, and which it silently passed over before.
+        var sizedTensors = Enumerable.Range(0, 6).Select(i => Tensor(i, 1, resultWidth: 20)).ToArray();
+        var paddedTensors = Enumerable.Range(0, 6).Select(i => Tensor(i, 1, resultWidth: 123)).ToArray();
 
-        var sizedWave = WaveRun.Run(sized.Client, RuntimeCompression.Uncompressed,tensors);
-        var paddedWave = WaveRun.Run(padded.Client, RuntimeCompression.Uncompressed,tensors);
+        var sizedWave = WaveRun.Run(sized.Client, RuntimeCompression.Uncompressed,sizedTensors);
+        var paddedWave = WaveRun.Run(padded.Client, RuntimeCompression.Uncompressed,paddedTensors);
 
         Assert.Equal(6, sized.Map.SlotsPerRead);
         Assert.Equal(1, padded.Map.SlotsPerRead);
@@ -215,10 +235,11 @@ public class WaveRunTests
         // request never split. F-1 says nothing about writes at all.
         var sized = Wired(slots: 6, resultWidth: 20);
         var padded = Wired(slots: 6, resultWidth: 123);
-        var tensors = Enumerable.Range(0, 6).Select(i => Tensor(i, 1)).ToArray();
+        var sizedTensors = Enumerable.Range(0, 6).Select(i => Tensor(i, 1, resultWidth: 20)).ToArray();
+        var paddedTensors = Enumerable.Range(0, 6).Select(i => Tensor(i, 1, resultWidth: 123)).ToArray();
 
-        WaveRun.Run(sized.Client, RuntimeCompression.Uncompressed,tensors);
-        WaveRun.Run(padded.Client, RuntimeCompression.Uncompressed,tensors);
+        WaveRun.Run(sized.Client, RuntimeCompression.Uncompressed,sizedTensors);
+        WaveRun.Run(padded.Client, RuntimeCompression.Uncompressed,paddedTensors);
 
         Assert.Equal(
             sized.Wire.Log.Count(t => t.IsWrite),

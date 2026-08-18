@@ -11,6 +11,28 @@ namespace Harness.Wire;
 /// Scans that must elapse between the two observations of D33's SECOND check. At least one, because
 /// two reads within one scan cannot distinguish a settled value from a changing one.
 /// </param>
+/// <param name="ExcludedResults">
+/// 🔴 <b>Registers this declaration positively claims have NO meaningful resting value, index → why.</b>
+///
+/// <para>*** THIS IS NOT THE SAME AS BEING ABSENT FROM <paramref name="ExpectedResults"/>, AND THE
+/// DIFFERENCE IS THE POINT. *** Absent used to mean "not checked", silently, which is the sentence this
+/// type opens with running backwards. A register is now either expected, or excluded WITH A REASON, or the
+/// declaration does not cover the band and <see cref="InertOutcome.RestNotDeclared"/> refuses.</para>
+///
+/// <para><b>An excluded register is skipped by BOTH checks, and the second is the one that is easy to
+/// forget.</b> A one-scan pulse reads 1 in about one sample of five: it fails check one at random, and
+/// when it does pass check one it then moves between the two observations and fails check two. Excluding
+/// it from the value check alone would leave it failing the quiescence check for the same reason.</para>
+/// </param>
+/// <param name="DefaultedResults">
+/// 🔴 <b>Registers whose expectation NOBODY STATED — filled in by a named migration claim rather than
+/// declared.</b>
+///
+/// <para><b>Carried so that a default is never indistinguishable from a declaration.</b> When check one
+/// fires on one of these, the failure says so in its own text: the disagreement may be the block, and it
+/// may equally be an expectation somebody assumed. That distinction is unavailable to a reader who is
+/// handed a bare "R003 reads 65535, declared 0".</para>
+/// </param>
 /// <remarks>
 /// <b>There is deliberately no vector here.</b> D33 consequence 1 makes inert "computed per boundary
 /// from tensor[k+1]'s vectors" — the values that establish the start state ARE the next test's values,
@@ -20,7 +42,25 @@ namespace Harness.Wire;
 /// </remarks>
 public sealed record InertDeclaration(
     IReadOnlyDictionary<int, ushort> ExpectedResults,
-    int QuiescenceScans = 1);
+    int QuiescenceScans = 1,
+    IReadOnlyDictionary<int, string>? ExcludedResults = null,
+    IReadOnlySet<int>? DefaultedResults = null)
+{
+    /// <summary>Excluded registers with their stated reasons. Never null — an absent map is an empty one.</summary>
+    public IReadOnlyDictionary<int, string> Excluded =>
+        ExcludedResults ?? new Dictionary<int, string>();
+
+    /// <summary>Registers whose expectation was defaulted rather than declared. Never null.</summary>
+    public IReadOnlySet<int> Defaulted =>
+        DefaultedResults ?? new HashSet<int>();
+
+    /// <summary>
+    /// True when this declaration says SOMETHING about the register — a value or an exclusion.
+    /// <b>Silence is not one of the answers</b>, which is what <see cref="InertOutcome.RestNotDeclared"/>
+    /// is for.
+    /// </summary>
+    public bool Covers(int register) => ExpectedResults.ContainsKey(register) || Excluded.ContainsKey(register);
+}
 
 /// <summary>One slot's participation in an inert phase: which slot, what values, and what inert means for it.</summary>
 public sealed record SlotInert(int SlotIndex, ushort[] Vector, InertDeclaration Declaration);
@@ -33,6 +73,18 @@ public enum InertOutcome
 
     /// <summary>Check one: the start conditions are not what the declaration says they must be.</summary>
     StartConditionsWrong,
+
+    /// <summary>
+    /// 🔴 <b>A register in the slot's result band is neither expected nor excluded — the declaration does
+    /// not cover what is about to be checked.</b>
+    ///
+    /// <para><b>Deliberately NOT <see cref="Established"/>, and deliberately not
+    /// <see cref="StartConditionsWrong"/>.</b> The values may be perfect; what is missing is anybody's
+    /// statement of what they should be. This is the outcome that stops <i>"a check with no expectation
+    /// passes over anything"</i> from being the thing this class does — <b>an unchecked register looks
+    /// exactly like a quiet one, and empty is not clean.</b></para>
+    /// </summary>
+    RestNotDeclared,
 
     /// <summary>Check two: the values are right and still moving. A model integrating toward a value is not AT it.</summary>
     NotQuiescent,
@@ -157,11 +209,51 @@ public static class InertPhase
         // them one at a time would cost 2K round trips per index where 2 x ceil(K/R) will do.
         var first = client.ReadResults(active.Select(s => s.SlotIndex));
 
+        // *** A DECLARATION ABOUT A DIFFERENT BAND, FIRST. *** An entry naming a register the slot does not
+        // have says the declaration was written against something other than this slot, and that is a more
+        // specific finding than the coverage one below — which such a declaration would also trip.
+        var outOfBand = active.SelectMany(s =>
+            s.Declaration.ExpectedResults.Keys.Concat(s.Declaration.Excluded.Keys)
+                .Where(r => r >= first[s.SlotIndex].Length)
+                .Select(r => $"slot {s.SlotIndex} R{r:000} was declared but the slot has only {first[s.SlotIndex].Length} result register(s)"))
+            .ToArray();
+
+        if (outOfBand.Length > 0)
+        {
+            return new InertReport(InertOutcome.StartConditionsWrong, start, Flatten(active, first), Array.Empty<ushort>(),
+                "the next test's start conditions are not established: " + string.Join("; ", outOfBand));
+        }
+
+        // *** COVERAGE, AGAINST THE BAND THAT WAS ACTUALLY READ. *** This is the check that makes the
+        // sentence at the top of this file true. Without it a declaration mentioning one register of
+        // twenty-three passes over the other twenty-two and reports Established — and there is no outward
+        // difference between a register that was quiet and one nobody looked at.
+        var undeclared = active.SelectMany(s =>
+            Enumerable.Range(0, first[s.SlotIndex].Length)
+                .Where(r => !s.Declaration.Covers(r))
+                .Select(r => $"slot {s.SlotIndex} R{r:000}"))
+            .ToArray();
+
+        if (undeclared.Length > 0)
+        {
+            return new InertReport(InertOutcome.RestNotDeclared, start, Flatten(active, first), Array.Empty<ushort>(),
+                $"{undeclared.Length} result register(s) are neither expected nor excluded, so inert was NOT established: "
+                + string.Join(", ", undeclared)
+                + ". *** A CHECK WITH NO EXPECTATION PASSES OVER ANYTHING. *** An undeclared register cannot be told from a "
+                + "quiet one, so this refuses rather than reporting a start state it did not examine. Declare each signal's "
+                + "resting value, or EXCLUDE it with a reason.");
+        }
+
         var wrong = active.SelectMany(s => s.Declaration.ExpectedResults
-            .Where(e => e.Key >= first[s.SlotIndex].Length || first[s.SlotIndex][e.Key] != e.Value)
-            .Select(e => e.Key < first[s.SlotIndex].Length
-                ? $"slot {s.SlotIndex} R{e.Key:000} reads {first[s.SlotIndex][e.Key]}, declared {e.Value}"
-                : $"slot {s.SlotIndex} R{e.Key:000} was declared but the slot has only {first[s.SlotIndex].Length} result register(s)"))
+            .Where(e => first[s.SlotIndex][e.Key] != e.Value)
+            .Select(e => $"slot {s.SlotIndex} R{e.Key:000} reads {first[s.SlotIndex][e.Key]}, declared {e.Value}"
+                // *** A DEFAULTED EXPECTATION IS NAMED AS ONE, IN THE FAILURE ITSELF. *** Handed a bare
+                // "reads 65535, declared 0" a reader investigates the block. Told the 0 was assumed rather
+                // than stated, they can weigh the other half — and the other half is where this defect was.
+                + (s.Declaration.Defaulted.Contains(e.Key)
+                    ? " — BUT NOBODY DECLARED THIS REGISTER'S RESTING VALUE: the 0 was DEFAULTED under the slot's assumedZeroRest "
+                      + "claim, so the disagreement may be the expectation rather than the program"
+                    : string.Empty)))
             .ToArray();
 
         if (wrong.Length > 0)
@@ -177,8 +269,15 @@ public static class InertPhase
 
         var second = client.ReadResults(active.Select(s => s.SlotIndex));
 
+        // *** AN EXCLUDED REGISTER IS SKIPPED BY THIS CHECK TOO, AND THAT IS NOT AN OVERSIGHT WORTH
+        // "TIGHTENING". *** The motivating exclusion is a ONE-SCAN PULSE: it fails check one at random, and
+        // on the runs where it happens to pass check one it then moves between the two observations and
+        // fails HERE for the same reason. Excluding it from the value check alone would leave the coin toss
+        // in place one check further down — and it would get blamed on the block, which is the whole shape
+        // of the defect this declaration exists to remove.
         var moving = active.SelectMany(s =>
             Enumerable.Range(0, Math.Min(first[s.SlotIndex].Length, second[s.SlotIndex].Length))
+                .Where(i => !s.Declaration.Excluded.ContainsKey(i))
                 .Where(i => first[s.SlotIndex][i] != second[s.SlotIndex][i])
                 .Select(i => $"slot {s.SlotIndex} R{i:000} moved {first[s.SlotIndex][i]} -> {second[s.SlotIndex][i]}"))
             .ToArray();
@@ -197,7 +296,31 @@ public static class InertPhase
         var scanAtVerify = client.ReadControl().ScanCounter;
 
         return new InertReport(InertOutcome.Established, scanAtVerify, Flatten(active, first), Flatten(active, second),
-            $"start conditions established and unchanged over {quiescence} scan(s) on {active.Count} slot(s).");
+            $"start conditions established and unchanged over {quiescence} scan(s) on {active.Count} slot(s). "
+            + Denominator(active));
+    }
+
+    /// <summary>
+    /// 🔴 <b>WHAT THE CHECK ACTUALLY EXAMINED, ON THE PASSING RUN AS WELL AS THE FAILING ONE.</b>
+    ///
+    /// <para>An <c>Established</c> with no denominator is the shape this project has been bitten by
+    /// repeatedly: a green that examined nothing reads exactly like a green that examined everything. So
+    /// the pass states its own scope — how many registers were gated, how many of those expectations
+    /// nobody actually stated, and how many registers were deliberately not looked at.</para>
+    /// </summary>
+    private static string Denominator(IReadOnlyList<SlotInert> active)
+    {
+        var gated = active.Sum(s => s.Declaration.ExpectedResults.Count);
+        var excluded = active.Sum(s => s.Declaration.Excluded.Count);
+        var defaulted = active.Sum(s => s.Declaration.Defaulted.Count);
+
+        return $"INERT REST: {gated} of {gated + excluded} result register(s) gated"
+            + (defaulted > 0
+                ? $", OF WHICH {defaulted} DEFAULTED — nobody declared those and they were assumed to rest at 0"
+                : string.Empty)
+            + (excluded > 0
+                ? $"; {excluded} EXCLUDED by declaration, checked by NOBODY."
+                : "; 0 EXCLUDED.");
     }
 
     /// <summary>Observations in slot order, so a single-slot caller sees exactly its own registers.</summary>

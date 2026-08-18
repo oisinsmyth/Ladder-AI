@@ -1,6 +1,7 @@
-using Harness.Gate;
+﻿using Harness.Gate;
 using Harness.Map;
 using Harness.Run;
+using Harness.Wire;
 
 namespace Harness.Loop.Tests;
 
@@ -52,7 +53,14 @@ public class BindingWireFormatTests
             }
           }
         ],
-        "resultSources": [{ "tag": "Alarm", "type": "Bool", "specName": "SPEC.Alarm" }]
+        "resultSources": [
+          { "tag": "Alarm", "type": "Bool", "specName": "SPEC.Alarm",
+            "inertRest": { "value": "true", "basis": "raised after a restart until acknowledged" } },
+          { "tag": "Verdict", "type": "Int", "specName": "SPEC.Verdict",
+            "inertRest": { "value": "-1", "basis": "sentinel: no test performed; 0 is a measured PASS" } },
+          { "tag": "Pulse", "type": "Bool", "specName": "SPEC.Pulse",
+            "inertRest": { "excluded": true, "basis": "one-scan pulse: reads 1 in about one sample of five" } }
+        ]
       }]
     }
     """;
@@ -142,6 +150,99 @@ public class BindingWireFormatTests
         var (unknown, _) = document.AllExtraFieldPaths();
 
         Assert.Contains(unknown, p => p.EndsWith(".encoding.whenNumberic", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void THE_INERT_RESTING_VALUE_reaches_the_domain_AND_IT_IS_NOT_ZERO()
+    {
+        // 🔴 *** FIFTH INSTANCE OF THIS FILE'S SHAPE, AND THE WORST OF THEM. *** The resting value was not
+        // merely unsettable from a binding — it was SUPPLIED, by a hardcoded
+        // `Range(0, ResultRegistersNeeded).ToDictionary(i => i, _ => (ushort)0)` in the wave builder. So the
+        // capability did not look missing; it looked implemented, and every run was gated on an assumption
+        // no document had made.
+        //
+        // *** THE FIXTURE RESTS AT NON-ZERO AND AT A NEGATIVE SENTINEL DELIBERATELY. *** With everything at
+        // zero this test would pass identically against the old hardcoded declaration.
+        var slot = Slot();
+
+        Assert.Equal("true", slot.ResultSources[0].Rest!.Value);
+        Assert.Equal(InertRestKind.Value, slot.ResultSources[0].Rest!.Kind);
+        Assert.Equal("-1", slot.ResultSources[1].Rest!.Value);
+        Assert.Contains("measured PASS", slot.ResultSources[1].Rest!.Basis, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AN_EXCLUDED_RESTING_STATE_reaches_the_domain_WITH_ITS_REASON()
+    {
+        var pulse = Slot().ResultSources[2];
+
+        Assert.True(pulse.Rest!.IsExcluded);
+        Assert.Contains("one-scan pulse", pulse.Rest!.Basis, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void THE_DECLARED_RESTS_REACH_THE_PLAN_AS_THE_REGISTERS_ACTUALLY_READ()
+    {
+        // Through the parser AND through the computation, because the field arriving in the domain object
+        // says nothing about whether anything consumes it — which is the other half of this file's defect
+        // class.
+        var plan = InertRestPlan.For(Slot(), RegisterWordOrder.HighWordFirst);
+
+        Assert.True(plan.Planned, string.Join(" | ", plan.Refusals));
+        Assert.Equal(1, plan.Require().ExpectedResults[0]);       // Bool true
+        Assert.Equal(65535, plan.Require().ExpectedResults[1]);   // Int -1
+        Assert.True(plan.Require().Excluded.ContainsKey(2));      // the pulse
+    }
+
+    [Fact]
+    public void A_MISSPELT_KEY_INSIDE_AN_INERT_REST_IS_VISIBLE_TO_GATE_0b()
+    {
+        // A misspelt `excluded` leaves a signal claiming a resting VALUE of null; a misspelt `basis`
+        // silently removes the only thing a reader can check an exclusion by. Both are dropped in silence
+        // without this.
+        var document = BindingDocument.Read(BindingJson.Replace("\"excluded\": true", "\"exlcuded\": true"));
+
+        var (unknown, _) = document.AllExtraFieldPaths();
+
+        Assert.Contains(unknown, p => p.EndsWith(".inertRest.exlcuded", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void THE_SLOT_LEVEL_ASSUME_ZERO_CLAIM_reaches_the_domain_WITH_ITS_BASIS()
+    {
+        var document = BindingDocument.Read("""
+        {
+          "blockNumber": 9001,
+          "baseByte": 1000,
+          "slots": [{
+            "slotId": "S0",
+            "startCondition": "Stim_Start",
+            "assumedZeroRest": true,
+            "assumedZeroRestBasis": "carried from the deployed binding while its signals are declared",
+            "vectorTargets": [{ "tag": "DB.X", "type": "Int" }],
+            "resultSources": [{ "tag": "Alarm", "type": "Bool" }]
+          }]
+        }
+        """);
+
+        var submission = SubmissionDocument.Read("""
+        {
+          "blockAuthor": "agent-a", "runtimeCompression": 1, "slotsInWaveSet": 1,
+          "resultRegistersPerSlot": 4,
+          "enumeration": { "clauses": ["REQ-1"], "assertions": ["REQ-1:aaaaaa"] },
+          "vectors": []
+        }
+        """);
+
+        var slot = Assert.Single(LoopCli.Compose(submission, document, Array.Empty<HarnessObject>()).Bindings);
+
+        Assert.True(slot.AssumedZeroRest);
+        Assert.Contains("deployed binding", slot.AssumedZeroRestBasis!, StringComparison.Ordinal);
+
+        // And it does what it claims: the undeclared alarm is DEFAULTED, visibly, rather than refusing.
+        var plan = InertRestPlan.For(slot, RegisterWordOrder.HighWordFirst);
+        Assert.True(plan.Planned, string.Join(" | ", plan.Refusals));
+        Assert.Equal(1, plan.DefaultedCount);
     }
 
     [Fact]
