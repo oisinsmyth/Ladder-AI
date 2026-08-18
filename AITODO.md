@@ -120,7 +120,10 @@ other 13 committed reference-corpus files swept afterward to confirm that bug wa
 **S4 — Convention review, DONE — gate reviewed and signed off by the project owner, 2026-07-15.**
 Phase 1 shipped **8 of ~50 rules** (the sign-off figure) built, tested, live-piloted against the
 reference corpus, validated against real untouched JOB9002 content. The FI-09 waves have since taken
-`converter review` to **18** mechanized C-IDs (`ReviewRunner.AllRuleIds`) — see `docs/16` FI-09.
+`converter review` to **19** mechanized C-IDs (`ReviewRunner.AllRuleIds`, public since 2026-08-18
+so the tests read the real list instead of a drifting copy) — see `docs/16` FI-09. The nineteenth is
+**C-410**, the self-restarting timer (`IN` reading its own `Q`), added 2026-08-18 after a live job
+lost most of a day to one; `src/converter/README.md` carries the measurement and the scope call.
 Full history: `docs/evidence/stage-S4.md` ("S4 Phase 1" and "S4: real-content validation" sections).
 
 **S5 — Structured data extraction, ACTIVE**, opened 2026-07-15, no work started — deprioritized

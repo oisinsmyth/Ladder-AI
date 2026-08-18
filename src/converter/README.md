@@ -3404,6 +3404,71 @@ about a branch. Two tests were added: one fixture with a non-inlined member that
 *today*, so the day a real non-inlined one appears, that test fails and demands the resolution be
 re-checked against real data instead of a hand-written fixture.
 
+## 🔴 `review` — C-410, the self-restarting timer: a silent block-killer nobody was checking for (2026-08-18)
+
+A live job lost most of a day to a timer written `TON(X, IN := NOT X.Q, PT := …)`. On real hardware
+it **fires once and then does not re-arm** — or re-arms only after an enormous, irregular delay.
+Established by controlled experiment on the device, not inferred: the same program held a timer with
+an ordinary Bool `IN` keeping perfect time beside a self-referential one that did not, and breaking
+the self-reference through a plain Bool repaired it, measurably. **Six instances in one corpus, found
+because a person happened to grep** — one of them a simulation layer's master clock, whose failure
+mode was *every simulated rate multiplied by zero while every health bit stayed good.*
+
+*That* is the argument for mechanizing it. The defect is silent, fatal to the block it sits in, and
+**structurally detectable** — which is exactly what the mechanical floor is for: checks that survive
+an agent choosing not to look. There were 18 mechanized rules and none of them covered it.
+
+**C-410 (error), registered in `ReviewRunner.AllRuleIds` (now 19).** For every `TimerBinding` in a
+network, it collects the tag references inside that timer's own `IN` and asks whether any reads that
+same instance's own **output** — `<instance>.Q` (the measured case) or `<instance>.ET` (the same loop
+through the other output port; C-408 has its own, separate quarrel with ET comparisons). Two
+severities of the defect, both `Error`, distinguished by literal text in the finding:
+
+| | shape | behaviour | reported |
+|---|---|---|---|
+| **total** | `IN := NOT X.Q` — no external term at all | never re-arms | `SELF-RESTART (TOTAL)` |
+| **partial** | `IN := ArmBit AND NOT X.Q` | first cycle after each disarm→arm works; later cycles inside one armed period do not | `SELF-RESTART (PARTIAL)` |
+
+Both gate. A partial still ships a block that silently stops timing after its first cycle, and *a
+finding that only warns is the class this project has already recorded as getting skimmed* — so the
+severity says "this gates" and the text says which of the two it is.
+
+*** SCOPE IS DIRECT, ON PURPOSE, BECAUSE THE INDIRECT FORM IS THE FIX. *** The repair is to write the
+timer's `Q` to a named Bool and gate the `IN` on that Bool. In the repaired corpus that coil sits in
+the **same network** as the timer it feeds, so even a network-order-sensitive "the intermediate is
+written no later than the timer" variant would flag the repair — and the hardware behaviour is known
+only empirically (route it through a Bool and it works), which is nowhere near enough to guess which
+indirect paths are still broken. **A rule that flags the fix is worse than no rule.** The rule's own
+name states its coverage: *the `IN` reads its own instance.*
+
+*** `.IN` IS NOT AN OUTPUT, AND THE FIRST DRAFT SAID IT WAS. *** Run over the committed corpora, that
+draft reported three timers as deriving their `IN` "from its own output (`X.IN`)". They read the
+timer's own **input image** as a latch's self-holding term (`Trigger OR Self.IN AND NOT Self.Q`) —
+a different construction, and the finding's own sentence was false of it. *A finding that
+misdescribes what it found is how a real rule gets switched off*, so the port filter is part of the
+rule: `Q`/`ET` count, `IN`/`PT` do not. The self-holding one-shot still fires **on its `.Q` alone**,
+which is the term measured to misbehave.
+
+**Mutation-tested in five directions, on the shipped code.** Port test never matches → **10 red**, every
+positive, negatives green. Port filter removed (any member of the instance counts) → **2 red**, exactly
+the two `.IN` tests — the regression above, now guarded. Instance identity dropped at the call site
+(any `Root.Q` reads as self) → **3 red**, including *another timer's Q is chaining, not self-reference*.
+Severity collapsed to always-total → **2 red**, both partial tests, so the split is tested and not
+decorative. Converse (semantics-preserving reorder of the two port comparisons) → **all green**, so the
+suite is not red by coincidence. 17 new tests; 1389 → 1405 converter tests green.
+
+**Corpus impact, stated rather than discovered later.** `ir/reference`: clean. `ir/test-project001`
+and `ir/PlantAutoControl-bench`: **three PARTIAL findings between them**, all the same shape — a
+self-holding one-shot whose drop-out term is its own `Q`. None is a `TOTAL`. Nothing in these corpora
+is flagged for the repaired `Q → named Bool → IN` form, which is the property the rule had to have
+before it could be run anywhere.
+
+**`ReviewRunner.AllRuleIds` is now public and consumed by the tests.** It was private and referenced
+by nothing, while `ReviewRunnerTests` carried a hand-copied duplicate that had **drifted to 12 of the
+18** — so the "every rule gets exactly one status on every content kind" invariant was being asserted
+against a stale subset, and a rule could be registered, never wired into the DB/TYPE/TAGTABLE
+branches, and still pass.
+
 ## Rules (docs/05-architecture.md, 04 §8/§10)
 
 - Unknown elements are hard errors, never warnings or best-effort.

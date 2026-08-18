@@ -889,6 +889,124 @@ public static class Rules
         }
     }
 
+    // C-410 (error) — a timer's own IN never reads that same timer instance's own output.
+    //
+    // Ground truth (a live job, 2026-08-18): a timer written `TON(X, IN := NOT X.Q, PT := ...)`
+    // fires once after startup and then does not re-arm — or re-arms only after an enormous,
+    // irregular delay. Established by controlled experiment on real hardware: in one program a
+    // timer with an ordinary Bool `IN` kept perfect time while a self-referential one did not, and
+    // breaking the self-reference through a plain Bool repaired it, measurably, on the device. Six
+    // instances were found in one corpus, by a person happening to grep for them; one was a
+    // simulation layer's master clock, whose failure mode was every simulated rate multiplied by
+    // zero while every health bit stayed good. That is the whole argument for mechanizing it: the
+    // defect is silent, it is fatal to the block it sits in, and it is detectable structurally.
+    //
+    // *** TWO SEVERITIES OF THE DEFECT, REPORTED DISTINGUISHABLY, BOTH GATING. ***
+    //   TOTAL   — the IN reads the timer's own output and NOTHING ELSE (`IN := NOT X.Q`). The timer
+    //             has no external arming term at all: it never re-arms.
+    //   PARTIAL — the self-reference is conjoined with at least one external term
+    //             (`IN := ArmBit AND NOT X.Q`). Every disarm→arm transition gives a fresh first
+    //             cycle, which works; the second and later cycles inside one armed period do not.
+    // Both are emitted as Error rather than TOTAL=Error/PARTIAL=Warn. The distinction is carried in
+    // the finding text (the literal words SELF-RESTART (TOTAL) / SELF-RESTART (PARTIAL)) so a reader
+    // and a grep can both separate them, but a PARTIAL still ships a block that silently stops
+    // timing after its first cycle — and a finding that only warns is the class this project has
+    // already recorded as getting skimmed. Nothing is hidden by the choice: the severity says
+    // "this gates", the text says which of the two it is.
+    //
+    // *** SCOPE IS DIRECT, DELIBERATELY, AND THE INDIRECT FORM IS THE FIX. ***
+    // The rule fires only when the self-reference is a tag reference INSIDE THE TIMER'S OWN IN
+    // expression. It does NOT chase a path through an intermediate bit, because the one-hop
+    // indirect form — assign the timer's Q to a named Bool, gate the IN on that Bool — IS the
+    // repair this defect has: it is what was applied to the live corpus and measured working on the
+    // device. In that corpus the repaired coil sits in the SAME NETWORK as the timer it feeds, so
+    // even a network-order-sensitive "the intermediate is written no later than the timer" variant
+    // would flag the fix. A rule that flags the fix is worse than no rule, and the mechanism behind
+    // the hardware behaviour is known only empirically (route it through a Bool and it works), which
+    // is not enough to justify guessing which indirect paths are still broken. So this rule is
+    // narrow ON PURPOSE and its name says exactly what it covers: the IN reads its own output.
+    //
+    // *** SELF-REFERENCE MEANS THE INSTANCE'S OWN *OUTPUT* — `Q` OR `ET`, NEVER `IN` OR `PT`. ***
+    // `.Q` is the measured case and `.ET` is the same feedback loop through the other output port
+    // (C-408 has its own, separate quarrel with ET comparisons). A read of the timer's own **`.IN`**
+    // member is a different construction entirely: it is the self-holding term of a latch, using the
+    // instruction's input image as the latch memory instead of a separate Bool. Three timers in the
+    // committed reference corpora do exactly that, and an earlier draft of this rule reported them
+    // as deriving the IN "from its own output" — which is simply not true of an input member, and a
+    // finding that misdescribes what it found is how a real rule gets switched off. An `IN` that
+    // reads BOTH its own `.IN` and its own `.Q` (the self-holding one-shot,
+    // `Trigger OR Self.IN AND NOT Self.Q`) still fires, on the `.Q` alone — the Q feedback is the
+    // thing measured to misbehave, whatever else the rung reads.
+    //
+    // Kind-agnostic: TON is the only permitted timer
+    // (C-406) but a TONR/TOF written this way has the same shape, and a block carrying both defects
+    // should be told about both. The TONR reset port is NOT examined — a retentive timer cleared by
+    // its own Q is a different construction with a different argument, and C-406 already refuses
+    // TONR outright.
+    public static IEnumerable<Finding> CheckC410SelfRestartingTimer(IrBlock block)
+    {
+        foreach (var network in block.Networks)
+        {
+            foreach (var timer in network.Timers)
+            {
+                var leaves = CollectTagRefPaths(timer.In).ToList();
+                var selfPaths = leaves
+                    .Where(path => ReferencesOwnTimerOutput(path, timer.InstancePath))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+
+                if (selfPaths.Count == 0)
+                {
+                    continue;
+                }
+
+                // TOTAL when the IN has no term that is not the timer's own output. Literals do not
+                // count as external terms — `IN := X.ET < T#1S` still arms on nothing but itself. A
+                // read of the timer's own `.IN`/`.PT` DOES count as external here: it is a term the
+                // rung genuinely carries, and calling such a rung TOTAL would claim the timer has no
+                // arming path when what it has is a latch.
+                var externalTerms = leaves.Count(path => !ReferencesOwnTimerOutput(path, timer.InstancePath));
+                var total = externalTerms == 0;
+
+                yield return new Finding(
+                    "C-410",
+                    FindingSeverity.Error,
+                    block.Name,
+                    network.Number,
+                    total
+                        ? $"Timer '{timer.InstancePath}' (network {network.Number}) derives its IN from its own output ({string.Join(", ", selfPaths)}) and from nothing else — SELF-RESTART (TOTAL). Measured on real hardware: a timer wired this way fires once and then does not re-arm, or re-arms only after an enormous, irregular delay."
+                        : $"Timer '{timer.InstancePath}' (network {network.Number}) derives its IN from its own output ({string.Join(", ", selfPaths)}), conjoined with {externalTerms} external term(s) — SELF-RESTART (PARTIAL). Each disarm-to-arm transition gives one fresh cycle that works; the second and later cycles inside one armed period do not.",
+                    $"Break the self-reference through a plain Bool: write the timer's Q to a named Bool of its own (`COIL <Flag> := {timer.InstancePath}.Q`) and gate the timer's IN on that Bool instead of on its own output. That is the repair measured working on the device — the IN must not name the timer itself.");
+            }
+        }
+    }
+
+    // True when `path` reads one of THIS timer instance's own OUTPUT members — `<instance>.Q` or
+    // `<instance>.ET`. Deliberately not "any member of the instance": `.IN` and `.PT` are inputs,
+    // and a read of the timer's own `.IN` is a latch's self-holding term, not output feedback.
+    //
+    // Case-insensitive because TIA identifiers are, and a case difference here would be a silent
+    // miss on the one thing the rule exists to catch. The instance half is prefix-tested rather than
+    // split, so a nested or array instance path (`Group.Dwell.Q`, `Timers[1].Q`) matches its own
+    // instance while a same-prefixed sibling (`XTimer.Q` against instance `X`) does not.
+    private static bool ReferencesOwnTimerOutput(string path, string instancePath)
+    {
+        if (path.Length <= instancePath.Length
+            || !path.StartsWith(instancePath, StringComparison.OrdinalIgnoreCase)
+            || path[instancePath.Length] != '.')
+        {
+            return false;
+        }
+
+        // The first component after the instance is the port; anything below it (a hypothetical
+        // `X.Q.<something>`) is still a read of that port.
+        var member = path[(instancePath.Length + 1)..];
+        var dot = member.IndexOf('.');
+        var port = dot < 0 ? member : member[..dot];
+        return string.Equals(port, "Q", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(port, "ET", StringComparison.OrdinalIgnoreCase);
+    }
+
     // C-103 (warn) — Set/Reset pairs live in the same block, ideally adjacent networks. Mechanized
     // per-file: collect every CoilTag written as a Set (SCOIL, CoilKind.Set) and every one written
     // as a Reset (RCOIL, CoilKind.Reset) across the block's networks, then flag each Set-target with

@@ -577,6 +577,196 @@ public class ReviewRulesTests
         Assert.Empty(Rules.CheckC408EtComparison(MakeBlock("FB", "FB_Test", new[] { network })));
     }
 
+    // ---- C-410: a timer's IN never reads that same timer instance's own output ----
+    //
+    // The negatives matter more than the positives here. The documented repair for this defect is
+    // to route the timer's Q through a named Bool and gate the IN on that Bool — in the live corpus
+    // that repaired coil sits in the SAME NETWORK as the timer — so a rule that chased the indirect
+    // path would flag the fix. RepairedPattern_Clean is that case, and it is the test that decides
+    // whether the rule is safe to run over a repaired corpus at all.
+
+    private static IrBlock TimerBlock(TimerBinding timer, IReadOnlyList<CoilAssignment>? coils = null) =>
+        MakeBlock("FB", "FB_Test", new[]
+        {
+            new IrNetwork(1, "Timing", coils ?? Array.Empty<CoilAssignment>(), Timers: new[] { timer }),
+        });
+
+    [Fact]
+    public void CheckC410_InIsOnlyItsOwnNegatedQ_FlagsTotal()
+    {
+        var timer = new TimerBinding("CycleTimer", new Expr.Not(new Expr.TagRef("CycleTimer.Q")), new Expr.Literal("T#1S"));
+
+        var finding = Assert.Single(Rules.CheckC410SelfRestartingTimer(TimerBlock(timer)));
+        Assert.Equal("C-410", finding.RuleId);
+        Assert.Equal(FindingSeverity.Error, finding.Severity);
+        Assert.Contains("SELF-RESTART (TOTAL)", finding.Description);
+        Assert.Contains("CycleTimer.Q", finding.Description);
+    }
+
+    // The un-negated form is the same loop drawn the other way round (it latches instead of never
+    // re-arming) and is equally a self-reference.
+    [Fact]
+    public void CheckC410_InIsItsOwnQUnnegated_FlagsTotal()
+    {
+        var timer = new TimerBinding("CycleTimer", new Expr.TagRef("CycleTimer.Q"), new Expr.Literal("T#1S"));
+
+        var finding = Assert.Single(Rules.CheckC410SelfRestartingTimer(TimerBlock(timer)));
+        Assert.Contains("SELF-RESTART (TOTAL)", finding.Description);
+    }
+
+    [Fact]
+    public void CheckC410_SelfQConjoinedWithExternalArmBit_FlagsPartial()
+    {
+        var timer = new TimerBinding(
+            "CycleTimer",
+            new Expr.And(new Expr[] { new Expr.TagRef("ArmBit"), new Expr.Not(new Expr.TagRef("CycleTimer.Q")) }),
+            new Expr.Literal("T#1S"));
+
+        var finding = Assert.Single(Rules.CheckC410SelfRestartingTimer(TimerBlock(timer)));
+        Assert.Equal(FindingSeverity.Error, finding.Severity);
+        Assert.Contains("SELF-RESTART (PARTIAL)", finding.Description);
+        Assert.DoesNotContain("(TOTAL)", finding.Description);
+    }
+
+    // A literal is not an external arming term: `IN := X.ET < T#1S` still arms on nothing but the
+    // timer itself, so it is TOTAL, not PARTIAL. Also covers the .ET port — the same feedback loop
+    // through a different member of the same instance.
+    [Fact]
+    public void CheckC410_SelfEtComparedAgainstLiteral_FlagsTotal()
+    {
+        var timer = new TimerBinding(
+            "CycleTimer",
+            new Expr.Compare("<", new Expr.TagRef("CycleTimer.ET"), new Expr.Literal("T#1S")),
+            new Expr.Literal("T#1S"));
+
+        var finding = Assert.Single(Rules.CheckC410SelfRestartingTimer(TimerBlock(timer)));
+        Assert.Contains("SELF-RESTART (TOTAL)", finding.Description);
+        Assert.Contains("CycleTimer.ET", finding.Description);
+    }
+
+    // Kind-agnostic: C-406 refuses TONR outright, but a TONR wired this way carries this defect too
+    // and a block with both should be told about both.
+    [Fact]
+    public void CheckC410_TonrWithSelfReferentialIn_Flags()
+    {
+        var timer = new TimerBinding(
+            "CycleTimer",
+            new Expr.Not(new Expr.TagRef("CycleTimer.Q")),
+            new Expr.Literal("T#1S"),
+            TimerKind.Tonr,
+            new Expr.TagRef("ResetBit"));
+
+        Assert.Single(Rules.CheckC410SelfRestartingTimer(TimerBlock(timer)));
+    }
+
+    // *** THE FIX MUST NOT BE A FINDING. *** Q written to a named Bool, IN gated on that Bool — and
+    // the coil deliberately in the SAME network as the timer, which is where the live corpus puts it.
+    [Fact]
+    public void CheckC410_RepairedPatternViaNamedBool_Clean()
+    {
+        var timer = new TimerBinding("CycleTimer", new Expr.Not(new Expr.TagRef("TickElapsed")), new Expr.Literal("T#1S"));
+        var coils = new[] { new CoilAssignment("TickElapsed", new Expr.TagRef("CycleTimer.Q")) };
+
+        Assert.Empty(Rules.CheckC410SelfRestartingTimer(TimerBlock(timer, coils)));
+    }
+
+    [Fact]
+    public void CheckC410_OrdinaryBoolIn_Clean()
+    {
+        var timer = new TimerBinding("CycleTimer", new Expr.TagRef("IO.RunCommand"), new Expr.Literal("T#5S"));
+
+        Assert.Empty(Rules.CheckC410SelfRestartingTimer(TimerBlock(timer)));
+    }
+
+    // A DIFFERENT timer's Q arming this one is timer chaining (C-408's own prescribed form), not a
+    // self-reference.
+    [Fact]
+    public void CheckC410_AnotherTimersQ_Clean()
+    {
+        var timer = new TimerBinding("StageTwoTimer", new Expr.TagRef("StageOneTimer.Q"), new Expr.Literal("T#5S"));
+
+        Assert.Empty(Rules.CheckC410SelfRestartingTimer(TimerBlock(timer)));
+    }
+
+    // Prefix matching must not swallow a same-prefixed sibling: instance `Cycle`, reference
+    // `CycleTimer.Q` — two different instances that share leading text.
+    [Fact]
+    public void CheckC410_SamePrefixedSiblingInstance_Clean()
+    {
+        var timer = new TimerBinding("Cycle", new Expr.Not(new Expr.TagRef("CycleTimer.Q")), new Expr.Literal("T#1S"));
+
+        Assert.Empty(Rules.CheckC410SelfRestartingTimer(TimerBlock(timer)));
+    }
+
+    // *** A READ OF THE TIMER'S OWN `.IN` IS NOT OUTPUT FEEDBACK. *** `Trigger OR Self.IN` is a
+    // latch using the instruction's input image as its memory — three timers in the committed
+    // reference corpora do this, and an earlier draft reported them as deriving the IN "from its own
+    // output", which is false of an input member.
+    [Fact]
+    public void CheckC410_ReadsOwnInMemberOnly_Clean()
+    {
+        var timer = new TimerBinding(
+            "PulseTimer",
+            new Expr.Or(new Expr[] { new Expr.TagRef("Trigger"), new Expr.TagRef("PulseTimer.IN") }),
+            new Expr.Literal("T#1S"));
+
+        Assert.Empty(Rules.CheckC410SelfRestartingTimer(TimerBlock(timer)));
+    }
+
+    // The same latch WITH a Q drop-out term — the self-holding one-shot. It reads its own Q, so it
+    // fires; and the finding must name the Q, not the `.IN` it also reads.
+    [Fact]
+    public void CheckC410_SelfHoldingOneShotReadingOwnQ_FlagsPartialAndNamesOnlyTheOutput()
+    {
+        var timer = new TimerBinding(
+            "PulseTimer",
+            new Expr.Or(new Expr[]
+            {
+                new Expr.TagRef("Trigger"),
+                new Expr.And(new Expr[] { new Expr.TagRef("PulseTimer.IN"), new Expr.Not(new Expr.TagRef("PulseTimer.Q")) }),
+            }),
+            new Expr.Literal("T#1S"));
+
+        var finding = Assert.Single(Rules.CheckC410SelfRestartingTimer(TimerBlock(timer)));
+        Assert.Contains("SELF-RESTART (PARTIAL)", finding.Description);
+        Assert.Contains("(PulseTimer.Q)", finding.Description);
+        Assert.DoesNotContain("PulseTimer.IN", finding.Description);
+    }
+
+    // TIA identifiers are case-insensitive, so a case difference between the declaration and the
+    // reference must not be a silent miss on the one thing this rule exists to catch.
+    [Fact]
+    public void CheckC410_SelfQWrittenInDifferentCase_Flags()
+    {
+        var timer = new TimerBinding("CycleTimer", new Expr.Not(new Expr.TagRef("cycletimer.Q")), new Expr.Literal("T#1S"));
+
+        Assert.Single(Rules.CheckC410SelfRestartingTimer(TimerBlock(timer)));
+    }
+
+    // A nested/array instance path matches its own members.
+    [Fact]
+    public void CheckC410_NestedInstancePath_FlagsTotal()
+    {
+        var timer = new TimerBinding("Group.Dwell", new Expr.Not(new Expr.TagRef("Group.Dwell.Q")), new Expr.Literal("T#1S"));
+
+        Assert.Single(Rules.CheckC410SelfRestartingTimer(TimerBlock(timer)));
+    }
+
+    // One network, two timers, one defect — the clean sibling must not be dragged in.
+    [Fact]
+    public void CheckC410_TwoTimersOneSelfReferential_FlagsOnlyTheOffender()
+    {
+        var network = new IrNetwork(1, "Timing", Array.Empty<CoilAssignment>(), Timers: new[]
+        {
+            new TimerBinding("GoodTimer", new Expr.TagRef("IO.RunCommand"), new Expr.Literal("T#5S")),
+            new TimerBinding("BadTimer", new Expr.Not(new Expr.TagRef("BadTimer.Q")), new Expr.Literal("T#1S")),
+        });
+
+        var finding = Assert.Single(Rules.CheckC410SelfRestartingTimer(MakeBlock("FB", "FB_Test", new[] { network })));
+        Assert.Contains("BadTimer", finding.Description);
+        Assert.DoesNotContain("GoodTimer", finding.Description);
+    }
+
     // ---- C-001: member/variable names are short PascalCase, underscore-free ----
 
     [Fact]

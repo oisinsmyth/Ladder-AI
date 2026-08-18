@@ -8,7 +8,14 @@ namespace Converter.Review;
 // deliberately not a new dispatch mechanism.
 public static class ReviewRunner
 {
-    private static readonly string[] AllRuleIds = { "C-001", "C-003", "C-005", "C-103", "C-118", "C-119", "C-120", "C-121", "C-122", "C-125", "C-201", "C-301", "C-501", "C-406", "C-408", "C-102", "C-401", "C-404" };
+    // *** THE AUTHORITATIVE LIST OF MECHANIZED RULES. A RULE NOT IN HERE DOES NOT EXIST. ***
+    // Public and consumed by the tests on purpose (2026-08-18): it was private and referenced by
+    // nothing, while ReviewRunnerTests carried its own hand-copied duplicate that had already
+    // drifted to 12 of the 18 — so the invariant "every rule gets a status on every content kind"
+    // was being asserted against a stale subset, and a rule could be added, never wired into a
+    // content-kind branch, and pass. Counting mentions of `C-nnn` anywhere else (docs, comments)
+    // over-counts and is never the answer to "which rules run".
+    public static readonly string[] AllRuleIds = { "C-001", "C-003", "C-005", "C-103", "C-118", "C-119", "C-120", "C-121", "C-122", "C-125", "C-201", "C-301", "C-501", "C-406", "C-408", "C-410", "C-102", "C-401", "C-404" };
 
     // udtIndex (optional) resolves cross-file references — today only C-118's interface-UDT Step
     // (FI-09), built from `--project` when supplied. Null means the caller ran `review` without
@@ -174,6 +181,8 @@ public static class ReviewRunner
 
         Record(statuses, findings, "C-408", RuleCheckStatus.Checked, Rules.CheckC408EtComparison(block));
 
+        Record(statuses, findings, "C-410", RuleCheckStatus.Checked, Rules.CheckC410SelfRestartingTimer(block));
+
         Record(statuses, findings, "C-102", RuleCheckStatus.CheckedVacuous, Rules.CheckC102NoJumps(block));
         Record(statuses, findings, "C-401", RuleCheckStatus.CheckedVacuous, Rules.CheckC401NoCounters(block));
         Record(statuses, findings, "C-404", RuleCheckStatus.CheckedVacuous, Rules.CheckC404NoBuiltInEdgeInstructions(block));
@@ -256,6 +265,7 @@ public static class ReviewRunner
         Record(statuses, findings, "C-406", RuleCheckStatus.Checked, Rules.CheckC406TimerDeclarations(db.Name, allMembers));
 
         statuses.Add(new RuleStatusEntry("C-408", RuleCheckStatus.NotApplicable, 0, "DB-kind file has no networks/instructions"));
+        statuses.Add(new RuleStatusEntry("C-410", RuleCheckStatus.NotApplicable, 0, "DB-kind file declares timer instances but makes no timer CALL, so no IN expression exists here to read a timer's own Q back"));
         statuses.Add(new RuleStatusEntry("C-102", RuleCheckStatus.NotApplicable, 0, "DB-kind file has no networks/instructions"));
         statuses.Add(new RuleStatusEntry("C-401", RuleCheckStatus.NotApplicable, 0, "DB-kind file has no networks/instructions"));
         statuses.Add(new RuleStatusEntry("C-404", RuleCheckStatus.NotApplicable, 0, "DB-kind file has no networks/instructions"));
@@ -296,6 +306,7 @@ public static class ReviewRunner
         statuses.Add(new RuleStatusEntry("C-401", RuleCheckStatus.NotApplicable, 0, "a TYPE file has no networks/instructions"));
         statuses.Add(new RuleStatusEntry("C-404", RuleCheckStatus.NotApplicable, 0, "a TYPE file has no networks/instructions"));
         statuses.Add(new RuleStatusEntry("C-408", RuleCheckStatus.NotApplicable, 0, "a TYPE file has no comparisons"));
+        statuses.Add(new RuleStatusEntry("C-410", RuleCheckStatus.NotApplicable, 0, "a TYPE file declares members only — it calls no timer, so nothing here can wire a timer's IN to its own Q"));
         statuses.Add(new RuleStatusEntry("C-501", RuleCheckStatus.NotApplicable, 0, "a TYPE file has no networks writing alarm-word bits"));
 
         // Always Unclassified — a UDT has no number and no referrer relation. Reported rather than
@@ -382,6 +393,7 @@ public static class ReviewRunner
         statuses.Add(new RuleStatusEntry("C-401", RuleCheckStatus.NotApplicable, 0, "a tag table has no networks/instructions"));
         statuses.Add(new RuleStatusEntry("C-404", RuleCheckStatus.NotApplicable, 0, "a tag table has no networks/instructions"));
         statuses.Add(new RuleStatusEntry("C-408", RuleCheckStatus.NotApplicable, 0, "a tag table has no comparisons"));
+        statuses.Add(new RuleStatusEntry("C-410", RuleCheckStatus.NotApplicable, 0, "a tag table maps symbols to addresses and calls no timer — a self-restarting IN is a property of a timer call"));
         statuses.Add(new RuleStatusEntry("C-501", RuleCheckStatus.NotApplicable, 0, "a tag table has no networks writing alarm-word bits"));
 
         // NOT routed through Partition: the partition already happened per tag above, and re-running

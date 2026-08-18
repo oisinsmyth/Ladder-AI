@@ -25,7 +25,11 @@ public class ReviewRunnerTests : IDisposable
         return path;
     }
 
-    private static readonly string[] AllRuleIds = { "C-001", "C-003", "C-005", "C-118", "C-201", "C-301", "C-501", "C-406", "C-408", "C-102", "C-401", "C-404" };
+    // ReviewRunner's OWN list, not a copy of it (2026-08-18). This was a hand-maintained duplicate
+    // that had drifted to 12 of the 18 registered rules, so every "one status per rule, on every
+    // content kind" assertion below was silently checking a subset — a rule could be registered and
+    // never wired into the DB/TYPE/TAGTABLE branches and still pass.
+    private static readonly string[] AllRuleIds = ReviewRunner.AllRuleIds;
 
     public void Dispose()
     {
@@ -71,6 +75,58 @@ public class ReviewRunnerTests : IDisposable
         Assert.Contains(file.RuleStatuses, s => s.RuleId == "C-102" && s.Status == RuleCheckStatus.CheckedVacuous);
         Assert.Contains(file.RuleStatuses, s => s.RuleId == "C-401" && s.Status == RuleCheckStatus.CheckedVacuous);
         Assert.Contains(file.RuleStatuses, s => s.RuleId == "C-404" && s.Status == RuleCheckStatus.CheckedVacuous);
+    }
+
+    // C-410 end to end: a self-restarting timer must reach the report through the file-dispatch
+    // layer and GATE (exit 1), not merely be findable by calling Rules directly.
+    [Fact]
+    public void ReviewFiles_SelfRestartingTimerBlock_C410CheckedAndGates()
+    {
+        var block = new IrBlock("0", "FB", "FB_Tick", 1, "LAD", "Produces a one-second tick.", new[]
+        {
+            new IrNetwork(1, "One-second tick", Array.Empty<CoilAssignment>(), Timers: new[]
+            {
+                new TimerBinding("CycleTimer", new Expr.Not(new Expr.TagRef("CycleTimer.Q")), new Expr.Literal("T#1S")),
+            }),
+        }, StaticMembers: new[] { new DbMember("CycleTimer", "TON_TIME", Retain: false, StartValue: null) });
+        var path = WriteTempIrFile(IrSerializer.SerializeBlockReadable(block));
+
+        var report = ReviewRunner.ReviewFiles(new[] { path }, ignoreErrors: false);
+        var file = Assert.Single(report.Files);
+
+        Assert.Contains(file.RuleStatuses, s => s.RuleId == "C-410" && s.Status == RuleCheckStatus.Checked);
+        var finding = Assert.Single(file.Findings, f => f.RuleId == "C-410");
+        Assert.Contains("SELF-RESTART (TOTAL)", finding.Description);
+        Assert.Equal(ReviewOutcome.Findings, ReviewOutcome.ExitCode(report, allowUnchecked: false));
+    }
+
+    // The repaired form of the same block — Q written to a named Bool, IN gated on that Bool —
+    // through the same dispatch layer. This is the corpus-wide claim: running the rule over an
+    // already-repaired project must report nothing.
+    [Fact]
+    public void ReviewFiles_RepairedTickBlock_C410CheckedAndClean()
+    {
+        var block = new IrBlock("0", "FB", "FB_Tick", 1, "LAD", "Produces a one-second tick.", new[]
+        {
+            new IrNetwork(1, "One-second tick", new[]
+            {
+                new CoilAssignment("TickElapsed", new Expr.TagRef("CycleTimer.Q")),
+            }, Timers: new[]
+            {
+                new TimerBinding("CycleTimer", new Expr.Not(new Expr.TagRef("TickElapsed")), new Expr.Literal("T#1S")),
+            }),
+        }, StaticMembers: new[]
+        {
+            new DbMember("TickElapsed", "Bool", Retain: false, StartValue: null),
+            new DbMember("CycleTimer", "TON_TIME", Retain: false, StartValue: null),
+        });
+        var path = WriteTempIrFile(IrSerializer.SerializeBlockReadable(block));
+
+        var report = ReviewRunner.ReviewFiles(new[] { path }, ignoreErrors: false);
+        var file = Assert.Single(report.Files);
+
+        Assert.Contains(file.RuleStatuses, s => s.RuleId == "C-410" && s.Status == RuleCheckStatus.Checked);
+        Assert.DoesNotContain(file.Findings, f => f.RuleId == "C-410");
     }
 
     [Fact]
