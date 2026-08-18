@@ -262,6 +262,23 @@ running does not license:
   same day, on the same kind of check.
     ➜ *** A MEASUREMENT THAT MATCHES YOUR HYPOTHESIS IS THE ONE TO RE-TAKE. *** The moment a result
       confirms the defect you went looking for is the moment the instrument stops being questioned.
+    ➜ *** A VARIABLE YOU DID NOT CHOOSE TO VARY IS STILL A VARIABLE — AND BISECTION LAUNDERS IT INTO
+      A CONCLUSION. *** Measured 2026-08-17, HMI lane, at a cost of eleven Portal sessions. An import
+      crashed Portal; eleven bisection runs chased CONTENT — events, field lengths, units, decimal
+      formats, field counts, item counts, XML object counts. **Every one of those was confounded with
+      the SCREEN NUMBER**, because each probe was emitted with its own unique number while every
+      attempt at the real screen reused one. The bisection did not fail noisily; it produced a
+      **confident, precise, false** conclusion (*"16 bound fields crash, 14 are fine"*) that fitted
+      four consecutive rounds of data, complete with a passing control at the same item count.
+        ▪ **What broke it: ordering the results by TIME rather than by content**, which made it
+          immediately visible that every crash shared a name and a number and every pass did not.
+        ▪ **The trap is structural, not careless.** Bisection assumes the thing you are varying is
+          the only thing that differs. When probes are *generated* rather than edited, each one
+          silently acquires fresh identity — a name, a number, a path — and that identity travels
+          with the variable under test.
+        ▪ **So: before bisecting, write down what differs between the passing and failing runs that
+          you did NOT intend to change.** Then hold it constant. One pair differing *only* in the
+          suspected variable settles in a single run what eleven confounded runs could not.
     ➜ **Prefer the artifact to any summary of it** — the store, the export, the emitted bytes — and
       when a count is the finding, **count it in the thing itself.** A total agrees with a wrong
       derivation as readily as with a right one; **per-item evidence does not.** *(The strongest form
