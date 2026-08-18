@@ -99,6 +99,35 @@ here at all. `NEVER` is for ordinary control interlocks.)*
 > **The code already took this reading** (`EnumeratedClause.Instances`); this doc was the only thing
 > that made the other reading available, and it should not be the thing that reopens it.
 
+### 1.2a ***A BOUND CARRIES A KIND, AND THE KIND IS PART OF THE ASSERTION.*** ADDED 2026-08-18
+
+R3 rules that a bound **qualifies** a response rather than splitting it. It does not license writing
+the bound loosely: ***A DURATION IS AMBIGUOUS UNTIL IT SAYS WHICH KIND OF DURATION IT IS***, and the
+two commonest readings license opposite implementations.
+
+| kind | what it constrains | what it therefore permits |
+|---|---|---|
+| **maximum age** | how stale the observed value may be | any update rate fast enough to keep it that fresh |
+| **update cadence** | the interval between successive outputs | an output that is correct and **arbitrarily coarse** |
+
+**Measured 2026-08-18, and the wrong reading was mine.** A bound of *"twice the averaging window"*
+was proposed as a **cadence**. ***The window is the span averaged, not the interval between
+outputs*** — a rolling mean over a 2 s window can be recomputed as often as the program runs. Read as
+a cadence, that bound licenses an output advancing **once every 4 s**, roughly twenty times coarser
+than the design contemplates: **it is satisfied while the averaging it exists to protect is
+defeated.** Read as a **maximum age**, the same number catches the failure and licenses nothing.
+
+➜ **Write the kind into the assertion text.** The ID is a hash of that text, so the distinction has
+to live there to survive into every citation: `WITHIN 4 s of the input changing` is an age, `at least
+every 4 s` is a cadence. **An assertion whose bound does not say which is not decomposed yet.**
+
+➜ 🔴 ***AND NEVER CORROBORATE A BOUND AGAINST HOW LONG THE TEST APPARATUS TAKES TO SEE A CHANGE.***
+That is a bound derived from the test suite — the rule at the head of this document, one level down
+and much harder to notice, because the number that comes back is real, repeatable, and about the
+right order of magnitude. **A round-trip latency is a property of the apparatus.** A bound comes from
+the specification or from the process; where neither supplies one, the honest output is *the clause
+states no bound* — not a plausible number with an experimental provenance.
+
 ### 1.3 Worked examples
 
 | clause text | assertions | why |
@@ -109,6 +138,45 @@ here at all. `NEVER` is for ordinary control interlocks.)*
 | *"The conveyor shall not start unless the guard is closed."* | **1**, `NEVER` form | prohibition, no natural trigger |
 | *"Each of the three feeders shall stop on low level."* | **1 assertion × 3 instances** | R4 — one class-level statement; the enumerator declares the three, giving three coverage units |
 | *"The mixer shall run for 30 s then stop."* | **2** | R1 — *start-on-command* and *stop-after-30-s* have different triggers; a preset defect breaks only the second |
+
+> ⚠️ **These are drawn from the ORDINARY population on purpose, and any example added here must be.**
+> An example is normative whether or not it is labelled so — a reader implements from it and consults
+> the prose only where it does not fit — so *illustrating a rule with the one case that is its
+> documented exception teaches the exception as the rule, and conformance to it looks like
+> conformance.* Where an exception must be shown, show it **beside** the ordinary case with both
+> labelled. (`autonomous-working-agreement.md`, *a worked example must not illustrate a rule with the
+> one case that is its exception*.)
+
+### 1.4 ***THE SUBJECT RULE, AND WHY EVERY EXCLUSION MUST NAME ITS DESTINATION.*** ADDED 2026-08-18
+
+An enumeration is built against a **declared subject** — §1 defines an assertion as a statement about
+*a block's* observable behaviour, which is deliberately narrow and is what keeps R5 enforceable.
+**The narrowness is correct. The problem is that it is invisible.**
+
+**Measured 2026-08-18.** A subject rule excluded, *by construction*, a whole class of obligation
+belonging to a **different component**. Nothing was wrong with the rule. But a later campaign **cited
+into that enumeration for the other component**, and so measured its coverage against a denominator
+answering a different question. ***The proof that this was systematic rather than careless: the
+source clause was already quoted in the file and produced no assertion*** — because it had been mined
+only for its in-subject limb.
+
+> ***A SCOPE DECLARATION MUST LET A READER DECIDE, IN ONE PASS, WHETHER A GIVEN OBLIGATION IS OUT BY
+> DESIGN OR MISSING BY ACCIDENT.***
+
+**This is not the OUT-OF-SCOPE bucket** (§4.3), and conflating them loses the distinction: that
+bucket holds assertions *about this subject* that will not be tested, assigned by a disinterested
+party. An out-of-subject obligation was **never an assertion of this enumeration at all**, and from
+the outside the two are indistinguishable unless the enumeration says so. Therefore:
+
+- **State the subject at the head of the enumeration**, in the same words a citation would have to
+  match — so a citation for another component fails to join instead of silently succeeding.
+- **Where a clause carries limbs outside the subject, record the clause as PARTIALLY MINED**, naming
+  the out-of-subject limb, **its destination artifact, and that artifact's status.** ***Nothing may
+  be excluded to nowhere:*** an exclusion whose destination does not exist yet is a gap and must read
+  as one.
+- ***A CLAUSE APPEARING IN THE FILE IS NOT EVIDENCE THAT ITS OBLIGATIONS WERE ENUMERATED.*** Quoting
+  it is exactly what makes the omission invisible — the text is right there, so a reader checking for
+  coverage finds it and stops looking.
 
 ---
 
@@ -395,6 +463,8 @@ Matching `test-environment-contract.md`'s column, because the skill needs exactl
 | Re-decomposition count differs from last time → reported event | compare |
 | Report carries all four bucket counts and the oldest deferral age | report generator |
 | Assertion text names no rung, operator, address, block or internal tag (R5) | keyword/reference scan against the design |
+| **The enumeration declares its SUBJECT, and every partially-mined clause names a destination for each out-of-subject limb** (§1.4) | presence of the fields — *whether the destination is the right one, and whether it exists, is judgement* |
+| **Every bound states its kind — maximum age or cadence** (§1.2a) | shape, against the two permitted forms |
 
 ### ⚖️ Judgement — and stated as such rather than dressed up
 

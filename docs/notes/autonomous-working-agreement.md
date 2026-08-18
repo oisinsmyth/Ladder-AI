@@ -86,6 +86,7 @@ minutes; five messages over an hour costs them the afternoon.
 | **The orchestrator re-dispatched a lane that was already running, then killed the WRONG one of the two** — the survivor was mid-work (*"Now I'll write the submission"*) while the replacement had just started | After a machine crash the orchestrator judged liveness from the agent's **output file being 0 bytes**. ***THAT FILE IS NOT WRITTEN UNTIL THE AGENT FINISHES — a live agent's output sits at 0 bytes indefinitely***, so size and mtime carry **no** liveness information. Measured twice within ten minutes, including on the replacement | *** LIVENESS COMES ONLY FROM THE NOTIFICATION STREAM *** — the "still running, do NOT spawn a duplicate" reminders and the completion/stopped notifications. **Keep a running ledger of dispatched lanes and read it BEFORE dispatching, not after a user points at the duplicate.** When unsure whether a lane is alive, **message it** — a message to a finished agent resumes it harmlessly; a duplicate dispatch does not. And it is the same *empty is not clean* error, made by the orchestrator about its own tooling |
 | **A path-scoped commit carried every MODIFIED file and NONE of the five NEW ones** — the recorded history built only because the working tree still had them | `git commit -- <path>` commits **the index** for that path, and a new file is not in the index until it is added. ***The rule above already said "New files need `git add` first" — the ORCHESTRATOR'S BRIEFINGS PARAPHRASED IT AS "commit path-scoped, never `git add -A`" AND DROPPED THAT HALF***, to every lane, all day | `git add` the new files, **then** `git commit -- <paths>`, **then read `git status`**. *A commit that succeeds is not a commit that carried what you meant.* And the meta-fix: **a rule quoted from memory into a brief is a rule half-transmitted** — link or paste it, and put the *check* in the brief, not just the instruction |
 | A lane's driver picked up **another lane's in-progress Debug DLLs** and computed its inputs one register off | One agent per *component* does not cover a shared **build output** or a **gitignored scratch dir** — both are outside the rule's reach | A lane that consumes another component's code **extracts it at an explicit commit into its own directory, builds it there, and reports the SHA**. Never reference the live tree or a `bin/` under it |
+| **A lane did the work on a shared single-writer resource WITHOUT claiming the board** — twice in one day, and **both times it happened to come out clean** | ***A BOARD IS ONLY A TOKEN IF EVERY LANE WRITES TO IT.*** Claiming has no mechanical backstop — nothing refuses an unclaimed write — so the only symptom of skipping it is a collision, which may simply not happen that time | **Claim before writing; treat a clean unclaimed run as LUCK, never as a licence.** The lane that reported it called it luck rather than precedent, which is the correct reading: *a coordination protocol that one party may opt out of when it looks unnecessary is not a protocol.* A near miss is the cheapest evidence you will get that the habit has slipped — **spend it** |
 | **The ORCHESTRATOR's path-scoped commit swept in a lane's uncommitted append** to the same file (`9366e57`, the shared test log) | *** PATH-SCOPING PROTECTS THE COMMITTER, NOT THE OTHER LANE'S UNCOMMITTED WORK IN THAT PATH. *** The rule above is about not committing files you did not touch; this is its blind side — **a file that MANY lanes append to is shared mutable state between them**, and no commit discipline reaches it. Benign here only because an append-only file cannot lose content this way | **Treat a shared append-only artifact as a shared resource: append and commit in one step, never leave an append sitting in the tree.** *Prompt committing is cheaper than coordination.* And when reviewing a swept commit, **check the content survived** — the sweep is not automatically a loss, and reporting it as one is its own false finding |
 
 ---
@@ -644,6 +645,11 @@ running does not license:
   and a mutation that did not compile emitted **no result line at all**.
     ➜ **Count your result lines against your case list before reading any of them.** A sweep that
       cannot say how many cases it ran cannot say that they passed.
+    ➜ *** A MUTATION THAT DOES NOT BUILD HAS NOT BEEN TESTED BY ANYTHING — REFORMULATE IT, NEVER
+      COUNT IT. *** Two of a round's attempted mutations failed to compile on 2026-08-18; they were
+      **reformulated until they built and went red**, and only then counted. A mutation is a claim
+      that *this* damage is detected, and a compiler error is not the suite detecting damage — it is
+      the damage never reaching the suite. **"Five mutations, all red" must mean five that RAN.**
 - *** A TEST THAT PASSES FOR THE WRONG REASON IS INDISTINGUISHABLE FROM ONE THAT PASSES. *** Caught by
   the lane that wrote it, 2026-08-14: a test for *"an unknown key is silently dropped"* used
   `specname`, which **binds** — both readers set `PropertyNameCaseInsensitive`. It was green,
@@ -1070,6 +1076,79 @@ running does not license:
       it named the one command the guard blocks in exactly that state. The tests checked the
       *decision*; nobody had read the *sentence* while standing in the situation it describes. Do
       that, out loud, on the device.
+- *** AN EXPECTATION MEASURED FROM THE SYSTEM UNDER TEST INHERITS ITS DEFECTS — AND THEN DEMANDS
+  THEM. *** ⚠️ **FOUR TIMES IN ONE DAY, 2026-08-18, ON ONE ARTIFACT — once for each repair that
+  landed.** A baseline expectation had been captured by **reading the running system**. The system
+  was defective, so the measurement recorded the defective values as normal. *** WHEN THE DEFECT WAS
+  REPAIRED, THE HARNESS REFUSED TO RUN: THE EXPECTATION NOW REQUIRED THE FAULT TO BE PRESENT. ***
+    ➜ **Same family as a test that asserts current behaviour, and worse in one specific way — it
+      BLOCKS rather than merely passing.** A change detector goes red and gets read; this one refuses
+      the run **and names the subject**, so the repair looks like the thing that broke the harness.
+    ➜ **Derive an expectation from the specification, or from a source that could not have caught the
+      subject's defects.** Where a value genuinely can only be observed, *an observed baseline is a
+      measurement with an expiry, not a contract*: record what was sampled and in what condition, at
+      the declaration site, so a later disagreement can be read against how it was obtained.
+    ➜ *** THE TELL IS THE REPAIR LOOP. When fixing the subject makes an expectation fail, establish
+      which of the two is the specification BEFORE touching either. *** All four instances read at
+      the time as unrelated harness bugs, and each was cheaper to blame on the harness than to trace.
+- *** A RESUMED AGENT CANNOT AUDIT ITS OWN PAST OUTPUT FROM MEMORY — AND ITS DENIAL OF AUTHORSHIP IS
+  WEAK EVIDENCE. *** 2026-08-18: an agent disputed authorship of a hypothesis it had itself written,
+  **correctly demanded the artifact be checked rather than conceding**, and the transcript showed the
+  text was its own. Mechanism: ***on a resumed agent, prior INPUTS persist while prior OUTPUTS need
+  not.*** *"I did not write that"* is a statement about what is in context, never about what happened.
+    ➜ **The transcript is the only artifact.** Attribute from it, not from any agent's recollection —
+      including the orchestrator's own, which is subject to exactly the same asymmetry.
+    ➜ *** AND THE DEMAND WAS RIGHT EVEN THOUGH THE ANSWER WAS NOT. *** Had the quotation been
+      fabricated, conceding would have written a false attribution into the record — **the far worse
+      of the two errors.** Grade the challenge, not the outcome: an agent that asks to see the
+      artifact before accepting a quotation about itself is behaving correctly every time it does it.
+- *** A PRODUCER MUST NOT EDIT ITS OWN VERIFIER — AND A CHECKLIST MAINTAINED BY HAND BESIDE THE THING
+  IT CHECKS WILL DRIFT SILENTLY. *** Two instances on 2026-08-18, from opposite ends of the same rule.
+    • **The drifted duplicate.** A rule registry was `private` and referenced by nothing, while the
+      test suite carried a **hand-copied duplicate that had drifted to 12 of 18 entries.** Every
+      *"each rule reports a status on every input kind"* assertion was therefore validated against a
+      **stale subset** — so a rule could be registered, never wired in, and pass. ***A SECOND COPY OF
+      A LIST IS A SECOND SOURCE OF TRUTH WITH NO OWNER.*** ➜ **Derive the list, or make the real one
+      public and read it from the check.** Where the check's input list can be edited without the
+      producer noticing, the check is measuring the copy.
+    • **The refusal.** An enumerator was asked to update the script that verifies its own output and
+      **declined, on the grounds that an enumerator editing its own check is exactly the correlation
+      the scheme exists to remove.** It was right, and ***the refusal cost nothing*** — a different
+      party made the edit in minutes. **Cheap refusals are the ones to reward**, because the
+      expensive ones are where the pressure to concede comes from.
+    ➜ **Ask of any check: who can change what it compares against?** If the answer includes the party
+      being checked, it is a self-report with extra steps. *(Same family as* a check that shares its
+      subject's blind spot*, reached through ownership rather than through logic.)*
+- *** A HARNESS THAT RECORDS WHAT IT INTENDED RATHER THAN WHAT IT COMMITTED MANUFACTURES EVIDENCE
+  AGAINST ITS SUBJECT. *** Measured 2026-08-18. On one path the client wrote the **planned** work into
+  its log as **commanded**, and then never committed it. That guarantees a *"commanded but did not
+  run"* state — which rendered as an accusation that the **subject** never saw its start condition,
+  ***about a subject that was never commanded at all***, and sent an investigation chasing a race
+  condition that did not exist.
+    ➜ *** THE FALSE FINDING CAME OUT OF THE CHANNEL BUILT TO DETECT EXACTLY THAT FAILURE ***, which
+      is precisely what made it credible. **A tool's report about its own actions is an input to its
+      own verdict, and it is the input nobody audits.**
+    ➜ **Write a harness's log of itself at the COMMIT POINT, never at the decision point.** Where the
+      two cannot be one instruction, record *attempted* and *committed* as two separate facts — the
+      pair is readable, either one alone is a guess.
+    ➜ *** A TEST TOOL MUST BE ABLE TO SAY "I DID NOT RUN THIS", AND THAT SENTENCE MUST NEVER BE ABLE
+      TO BECOME "IT FAILED". *** The vocabulary already exists — a refusal and a non-run are distinct
+      verdicts from a disagreement — so what fails here is never the vocabulary, it is a path that
+      does not reach it. **Audit the paths that write the tool's own history first.**
+- *** A WORKED EXAMPLE MUST NOT ILLUSTRATE A RULE WITH THE ONE CASE THAT IS ITS EXCEPTION. ***
+  2026-08-18: an authority document's **single** worked example demonstrated a pattern using the one
+  instance in the system that the same document records as the documented exception to it. **The
+  implementation was correct; the example was not.** Anyone implementing from that example would
+  introduce the very defect the specification forbids — ***and it would look like conformance***,
+  because the example is the part a reader copies.
+    ➜ **An example is normative whether or not it is labelled so.** A reader implements from the
+      example and consults the prose only where the example does not fit, so a rule and its
+      illustration disagreeing is resolved in the illustration's favour, every time.
+    ➜ **Draw examples from the ORDINARY population, and where an exception must be shown, show it
+      BESIDE the rule case with each labelled.** A document carrying exactly one example has no room
+      to do that — ***the second example is not decoration; it is what makes the first one checkable.***
+    ➜ **When auditing a spec, check its examples against its own exception list**, which is a
+      different operation from reading either.
 - **Inference reported as measurement.** `[M]` means measured here, and a `[M]` that turns out to
   be a hand-authored fixture costs more than the gap it hid.
 - **Guessing at hardware, tags or addresses.** Read them, or say they are proposed.

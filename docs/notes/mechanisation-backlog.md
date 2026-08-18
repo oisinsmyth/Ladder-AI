@@ -11,6 +11,15 @@ not a list of things that feel tedious. Where a cost is quoted it was measured.
 > because the lane re-reads its context. *An automation that turns four hand-backs into one is worth
 > more than one that saves an hour of typing.*
 
+> **What puts an item on this page — and it is not tedium.** ***THE TRIGGER IS "THIS WAS FOUND BY
+> LUCK."*** The most expensive defect of 2026-08-18 surfaced because somebody happened to run a
+> search: silent, fatal to the block it sat in, and **structurally detectable** — and no mechanised
+> check covered it. There is one now, and it examines every block on every run. *A defect a person
+> found by chance is one the mechanical floor should have been finding on schedule.* So the question
+> to ask of any find is not how long it took to fix, but ***what would have found it if nobody had
+> looked?*** When the answer is *nothing*, that is the backlog item — regardless of how quick the fix
+> turned out to be.
+
 ---
 
 ## TIER 1 — the ones that paid for themselves the day they were found
@@ -46,6 +55,23 @@ A THIRD instance the same day, in a different shape: a rebuilt binary TIA had no
 **Mechanise:** before a run, compare the invoked binary's timestamp against the newest source under
 the assemblies it loads, and say so. It need not refuse — a warning naming the file would have caught
 all three. Pair it with the existing approval `-Status` probe for the Portal-side binaries.
+
+🔴 **AND TWICE MORE ON 2026-08-18, IN TWO SHAPES THE TIMESTAMP CHECK ABOVE DOES NOT COVER.** This is
+now a repeated class rather than a recurring instance, and each shape has a different last mile:
+
+- **Built, but not into the configuration anyone runs.** A rule was written, tested and committed —
+  and only the **Debug** binary was built, while every consumer invokes **Release**. The commit is
+  green, the tests are green, the source is right, and *the running tool does not have the rule.*
+- **Loaded into the project, but never onto the device.** A repair was imported and compiled into
+  the project and ***never downloaded***. Everything in the engineering tool agreed it was there.
+  **It was caught only by a build-stamp hash read back off the controller** — i.e. by an artifact
+  that can only be produced by the thing actually running.
+
+➜ ***THE GENERAL FORM: EVERY HAND-OFF IN THE CHAIN `source → build → configuration → project →
+device` IS A PLACE THE CHANGE CAN STOP, AND EACH ONE LOOKS GREEN FROM UPSTREAM.*** A check that
+compares source against binary answers one of four questions. **Prefer a stamp read back from the
+far end** — the version the *device* reports, the wording the *invoked* binary prints — over any
+comparison made among the artifacts on this side of the boundary.
 
 ### M-3. Derive the conflict graph instead of hand-building its inputs
 
@@ -115,6 +141,23 @@ declaration carries `stationary over 20 samples / 62 s` instead of a bare value,
 `NotInert` can be read against how hard anyone actually looked. ⚠️ **Do not mechanise the choice of
 window** — how long a plant takes to settle is a process fact and belongs to the person who knows the
 plant. Mechanise the *recording of what was sampled*, which is the half that is currently absent.
+
+#### 🔴 THE SAMPLE SIZE WAS NEVER THE DEFECT — SAMPLING THE WRONG STATE WAS (2026-08-18)
+
+A later stationarity claim was taken over **113 frames spanning 252 seconds, with zero of 84 values
+moving.** Beautifully stable, and wrong: the system had been running for hours through earlier
+attempts, so the sweep measured ***residue, not rest***. **A 3-frame sample taken immediately after a
+restart was correct where the 113-frame one was not.**
+
+***MORE N CANNOT FIX A MEASUREMENT TAKEN IN THE WRONG CONDITION*** — and the large clean sample is
+**more** convincing than the small correct one, which makes this *worse* than the two-sample error
+above rather than a milder version of it. Nobody argues with 113 frames.
+
+➜ **So stating N and the window is necessary and NOT sufficient: the STATE the system was in matters
+more than either.** `113 frames / 252 s, after hours of running` and `3 frames, from a cold restart`
+are different claims and only one of them is about rest. **Record the precondition beside the sample
+count** — what the system had been doing beforehand is a fact the harness already knows and currently
+throws away, and it is the half a reader needs to tell a stationary signal from a stuck one.
 
 ---
 

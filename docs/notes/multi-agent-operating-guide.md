@@ -24,6 +24,16 @@ The same trap catches a per-worktree store: agents work in separate worktrees, s
 claims dir is *always empty, grants everything, and looks like success*. There is no default for
 `--claims` on purpose.
 
+🔴 ***AND A BOARD IS ONLY A TOKEN IF EVERY LANE WRITES TO IT.*** Twice in one day (2026-08-18) a lane
+did the work on a single-writer resource **without claiming it**. Both times it came out clean — and
+**the lane that reported it was right to call that luck rather than a licence.**
+
+Nothing refuses an unclaimed write. The board cannot detect a lane that skipped it, so the only
+symptom of the habit slipping is a collision that may simply not happen that day. **A near miss is
+therefore the cheapest evidence you will ever get that the protocol has stopped being followed —
+spend it, rather than filing it as a success.** *A coordination protocol that one party may opt out
+of whenever it looks unnecessary is not a protocol; it is an intention.*
+
 ### Portal — a token, not a component
 
 **One lane holds it at a time.** Two Openness sessions on one project is unsupported. A collision

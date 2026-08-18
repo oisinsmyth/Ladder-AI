@@ -15,7 +15,7 @@ backlog — **not** the hard rules, the data boundary, the built tooling, or liv
 | `01-scope.md` | Purpose, hard constraints, initial scope, success criteria |
 | `02-roadmap.md` | Staged expansion S0–S9 mapped to the 11 project goals, with entry/exit criteria — **🛑 SUSPENDED 2026-08-17, criteria frozen not waived** |
 | `03-development-plan.md` | How the work gets done: setup, tooling, milestones, cadence — **🛑 SUSPENDED 2026-08-17; holds the canonical suspension notice** |
-| `04-design-philosophy.md` | The 10 principles that settle design arguments |
+| `04-design-philosophy.md` | The 11 principles that settle design arguments |
 | `05-architecture.md` | Pipeline, components, repo layout, portability strategy |
 | `06-lad-conventions.md` | LAD style guide — **populated**; remaining gaps tracked in its own "To fill in" section |
 | `07-pattern-library-spec.md` | What a pattern is and how one earns library admission |

@@ -1,6 +1,6 @@
 # 04 — Design Philosophy
 
-Ten principles. When a design question comes up, the answer that satisfies more of these wins.
+Eleven principles. When a design question comes up, the answer that satisfies more of these wins.
 
 ## 1. The human is the engineer of record
 
@@ -41,3 +41,7 @@ F-blocks and the safety program are outside the pipeline permanently — enforce
 ## 10. Fail loudly and early
 
 Unknown XML elements, unmapped instructions, ambiguous tags: hard errors, not warnings. Silent best-effort conversion is how a debounce timer becomes a latch. If the pipeline isn't sure, it says so and stops.
+
+## 11. Anything that derives a value proves it is still deriving it
+
+Stillness looks like correctness, and it looks like it at every level. A frozen instrument and a settled vessel read identically; so do a stopped calculation and a plant that genuinely has nothing to report. **Freshness is therefore proved by a counter that advances, never by a value that looks reasonable** — and that obligation belongs to *every layer that derives a value*, not only to the boundary where data enters. A conditioned or computed output that stops advancing while its inputs stay live matches no alarm anywhere: every health indicator stays good, every range check passes, and the failure is visible only to someone who already suspected it. Free-running counters, scan ticks and derived rates are the ones to watch, because when they stop, everything downstream multiplies by zero and reports success.

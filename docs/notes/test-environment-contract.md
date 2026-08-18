@@ -929,6 +929,29 @@ only on bad news teaches its reader that its absence means everything was declar
 excluded registers are additionally listed **one line each**, with their provenance — the ordinary
 declared ones are not, because a section nobody finishes gets skimmed.
 
+#### 🔴 WHERE A RESTING VALUE MAY COME FROM — AND READING IT OFF THE RUNNING SYSTEM IS NOT IT
+
+> ***AN `inertRest` CAPTURED BY MEASURING THE SUBJECT INHERITS WHATEVER IS WRONG WITH THE SUBJECT,
+> AND THEN REQUIRES IT.***
+
+**Measured four times in one day, 2026-08-18, on one artifact — once for each repair that landed.**
+The declared resting values had been read off the running program; the program was defective; the
+measurement recorded the defective values as normal. ***Every repair then refused its own run,
+because the declaration had come to demand the fault.***
+
+- **Declare the value from what the signal is SPECIFIED to read at rest.** A sentinel is a sentinel
+  because the design says so, not because that is what came back.
+- **Where a value can only be observed, the observation is a measurement with a precondition, never
+  a contract.** Take it **from a known start state** — after a restart, before the wave has run —
+  and put that precondition in `basis`. *A long, perfectly stationary sample of a system that never
+  stopped moving is the most convincing wrong answer available*; see `mechanisation-backlog.md`
+  M-13, where a 113-frame sweep with **zero of 84 values moving** was residue and a **3-frame**
+  post-restart sample was right.
+- ***AND WHEN A REPAIR TO THE BLOCK MAKES THE INERT GATE FAIL, THE DECLARATION IS A SUSPECT AND NOT
+  A WITNESS.*** The gate names the block, so the block is what gets read — **ask first whether the
+  expectation was ever independent of it.** Four consecutive instances read at the time as unrelated
+  harness bugs.
+
 ---
 
 ### 2.9 What a submission may assume about the PROJECT it is submitted against. ADDED 2026-08-14
@@ -1385,6 +1408,31 @@ ran fine and measured the wrong number. A **drifted model** is a **PROJECT** pro
 experiment ran fine against an object that is not the one the fidelity declaration describes. **Read
 which one the result names before acting**, and in none of the three edit the block.
 
+### 8.1a ***THE HARNESS'S RECORD OF ITS OWN ACTIONS IS AN INPUT TO THE VERDICT.*** ADDED 2026-08-18
+
+> *** A TEST TOOL MUST BE ABLE TO SAY "I DID NOT RUN THIS", AND THAT SENTENCE MUST NEVER BE ABLE TO
+> BECOME "IT FAILED". ***
+
+**Measured.** On one path the client recorded the **planned** command as **commanded**, and then
+never committed it. That guarantees a *commanded-but-did-not-run* state, which rendered as an
+accusation that **the block never saw its start condition** — about a block that was never commanded
+at all. ***The harness manufactured evidence against its own subject, through the very channel built
+to detect that failure***, and sent an investigation chasing a race condition that did not exist.
+
+The channel is what made it credible: a tool's report about its own actions is an input to its own
+verdict, and it is **the one input nobody audits.** So, as contract rather than advice:
+
+- **A self-log entry is written at the COMMIT POINT, never at the decision point.** Where intent and
+  commitment cannot be one instruction, ***attempted*** and ***committed*** are two recorded facts.
+  Either one alone is a guess, and the guess resolves against the block.
+- **A harness's own failure is `STALE` or `REFUSED` — never `FAIL`, and never `TIMED-OUT`.** §8.1
+  already rules that neither is a statement about the block; what fails in this class is not the
+  vocabulary but a path that never reaches it. A `TIMED-OUT` manufactured by an uncommitted command
+  is the worst available outcome: it reads as *the condition never occurred*, which is a claim about
+  the block, **and it closes the question instead of inviting the argument that would settle it.**
+- **The stimulus check is what makes the verdict readable at all** (§8.2, DB-8). *A finding that the
+  block ignored a command is only meaningful beside evidence that the command was sent.*
+
 ### 8.2 ***`Stale` must be unmistakable, and here is why it is hard***
 
 > ***"EVERY REGISTER AGREES" IS ALSO WHAT A MIRROR NO WRITE EVER REACHED LOOKS LIKE.***
@@ -1405,6 +1453,15 @@ counter did not advance, reported as a verdict and not as an exit code, with the
 ***AN ABSENCE OF DISAGREEMENT IS NOT A RESULT.*** Zero torn reads against a frozen block is evidence
 of nothing, and phase 1's client refused to say otherwise. This contract inherits that: **empty is not
 clean.**
+
+> 🔴 ***AND THIS RULE WAS BEING APPLIED ONLY AT THE INSTRUMENT BOUNDARY — IT BELONGS AT EVERY LAYER
+> THAT DERIVES A VALUE.*** Everything above is about the *transport*: a mirror nothing wrote, a
+> counter that stopped advancing. **A value the program itself computes can freeze in exactly the
+> same way while the transport stays perfectly live** — measured 2026-08-18, where a free-running
+> clock stopping multiplied every derived rate by zero and ***every health indicator stayed good.***
+> A conditioned output that stops advancing while its inputs keep moving matches **no alarm
+> anywhere**, and is indistinguishable from a genuinely idle plant. So: *freshness is proved by a
+> counter, not by the value*, one layer in as well as at the edge — `04-design-philosophy.md` #11.
 
 ### 8.3 What a green never licenses
 
