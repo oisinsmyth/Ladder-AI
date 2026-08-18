@@ -90,6 +90,32 @@ work; only a repo-wide sweep catches the repo.**
 during a live run. Mechanically trivial; it is the only item here that is a governance control rather
 than a time saving, and it should be the first one built.
 
+### M-13. A stationarity claim needs a SERIES, and the inert basis is taken from ONE sample 🔴 BLOCKING A RUN TODAY
+
+**What happened.** The resting state a wave's inert check is measured against was captured by a
+**single read** shortly after download, and written down as "the resting state". It was wrong twice, in
+opposite directions, and I made both errors:
+
+- First I recorded that the block *"has no single resting state"*, on the strength of two registers
+  differing between two reads taken **twenty minutes apart**. It does settle; it just takes minutes.
+- Then I recorded the band as **static**, on the strength of **two reads fifteen seconds apart** being
+  byte-identical. A **twenty-sample** sweep of the same band immediately found a signal changing state.
+
+***TWO SAMPLES IS NOT A MEASUREMENT OF STATIONARITY, AND IT READS EXACTLY LIKE ONE.*** Both times the
+evidence was a diff that came back clean, and a clean diff over an inadequate sample is indistinguishable
+from a clean diff over a good one.
+
+**Why it bites.** The inert declaration is an INPUT to admission — a signal declared inert that is in
+fact slow-moving stops the wave at index 0 with `NotInert`, and the disagreement is then attributed to
+the program. It is the same shape as *empty is not clean*: **a sample size of one produces a
+confident-looking answer with no denominator attached.**
+
+**Mechanise:** the basis capture takes **N samples over a stated window** and records BOTH — so the
+declaration carries `stationary over 20 samples / 62 s` instead of a bare value, and a downstream
+`NotInert` can be read against how hard anyone actually looked. ⚠️ **Do not mechanise the choice of
+window** — how long a plant takes to settle is a process fact and belongs to the person who knows the
+plant. Mechanise the *recording of what was sampled*, which is the half that is currently absent.
+
 ---
 
 ## TIER 2 — real savings, no round trip
@@ -138,6 +164,24 @@ submission rather than by testing anything, which is the signature of a tooling 
   resting on a defaulted value into a *deployed* artifact.
 - **M-12. Latch-source trust.** A binding naming a block as the latcher is admitted on trust; a block
   that does not in fact latch would reproduce the original defect with nothing mechanical to say so.
+
+### M-14. One address convention, two independent off-by-ones
+
+**What happened.** A `Bool` result register occupies one register but its bit lives in the **low byte**,
+i.e. the ODD address. Two different parties, on two different days, independently wrote the WORD address
+where the BIT address was meant — and because the two differ by one byte, the wrong address lands inside
+a real, readable, plausible-looking neighbouring register rather than failing.
+
+**Why it is nobody's fault twice.** The element table says `Bool -> 1 register`, which is true and is
+what everyone reads; where in that register the bit sits is a separate fact, recorded only in the
+generated tag table's own `@ %M....0` suffix. Anyone reasoning from the table rather than from the
+generated artifact gets it wrong, and gets a number back.
+
+**Mechanise:** a resolver that turns a result-source **name** into its address by reading the generated
+mirror, so nobody computes one by hand. The map is already emitted and already correct — every hand
+derivation of it is redundant work with a known failure mode. ⚠️ It also wants the converse: an address
+-> name lookup, because the diagnostic direction (*"a byte moved, what is it?"*) is the one where the
+mistake was actually made.
 
 ---
 
