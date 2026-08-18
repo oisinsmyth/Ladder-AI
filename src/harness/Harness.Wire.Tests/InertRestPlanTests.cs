@@ -323,6 +323,40 @@ public class InertRestPlanTests
         Assert.Contains("3 DECLARED", plan.Summary(), StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// 🔴 <b>THE PLAN'S DEFAULT MUST SURVIVE ALL THE WAY INTO THE FAILURE TEXT — and this test exists
+    /// because a mutation proved it was covered only in halves.</b>
+    ///
+    /// <para>Dropping <c>DefaultedResults</c> from the constructed declaration left every loop-level and
+    /// CLI-level test GREEN: they assert on <see cref="InertRestRegister.Provenance"/>, which is a SECOND
+    /// representation of the same fact, so the plumbing between the two — plan → declaration → the
+    /// sentence a reader of a failure actually sees — was asserted at neither end. <b>When a mutation you
+    /// expected to redden stays green, the finding is usually in the assertions.</b></para>
+    /// </summary>
+    [Fact]
+    public void A_DEFAULTED_REGISTER_PLANNED_HERE_IS_NAMED_AS_A_DEFAULT_BY_THE_INERT_PHASE_ITSELF()
+    {
+        var binding = Binding(MirroredSignal.Int("DB_X.Legacy")) with
+        {
+            AssumedZeroRest = true,
+            AssumedZeroRestBasis = "carried from the deployed binding",
+        };
+
+        var plan = InertRestPlan.For(binding, RegisterWordOrder.HighWordFirst);
+
+        // A device that does NOT rest at the assumed zero — which is the entire case the assumption is
+        // wrong about, and the one where the reader must be told the expectation was assumed.
+        var map = MirrorClientTests.Map(result: 1);
+        var wire = new RecordingTransport(map, MirrorClientTests.Stamp);
+        wire.SetResult(0, 0, 7);
+
+        var report = InertPhase.Establish(
+            new MirrorClient(map, wire, MirrorClientTests.Stamp), 0, new ushort[] { 1, 2 }, plan.Require());
+
+        Assert.Equal(InertOutcome.StartConditionsWrong, report.Outcome);
+        Assert.Contains("NOBODY DECLARED THIS REGISTER'S RESTING VALUE", report.Detail, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void THE_UNAFFECTED_CASE_a_binding_that_declares_everything_is_planned_and_refuses_nothing()
     {
