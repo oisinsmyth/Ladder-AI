@@ -52,19 +52,58 @@ public static class Panels
     public static readonly Panel Mtp1000 = new("MTP1000 Unified", "-", 217.0, 136.0, 1280, 800);
     public static readonly Panel Mtp1200 = new("MTP1200 Unified", "-", 261.0, 163.0, 1280, 800);
 
-    private static readonly Dictionary<string, Panel> ByName = new(StringComparer.OrdinalIgnoreCase)
+    /// <summary>Every panel in the table. The one place a new row has to be added.</summary>
+    public static readonly IReadOnlyList<Panel> All = new[]
     {
-        ["KTP700"] = Ktp700Basic,
-        ["KTP700Basic"] = Ktp700Basic,
-        ["KTP900"] = Ktp900Basic,
-        ["KTP900Basic"] = Ktp900Basic,
-        ["KTP400"] = Ktp400Basic,
-        ["KTP400Basic"] = Ktp400Basic,
-        ["MTP700"] = Mtp700,
-        ["MTP1000"] = Mtp1000,
-        ["MTP1200"] = Mtp1200,
+        Ktp700Basic, Ktp900Basic, Ktp400Basic, Mtp700, Mtp1000, Mtp1200,
     };
 
+    private static readonly Dictionary<string, Panel> ByName = BuildIndex();
+
+    /// <summary>
+    /// 🔴 EVERY PANEL ANSWERS TO ITS OWN <see cref="Panel.Name"/>, AND THAT LINE IS THE BUG FIX.
+    ///
+    /// <para>
+    /// The short aliases below are hand-written and were the only keys. But <c>flatten</c> stamps
+    /// <c>Panel = panel.Name</c> into the IR — the literal <c>"KTP700 Basic"</c>, with the space —
+    /// and <c>lint</c>/<c>check</c> resolve that string back through this table. No key matched it,
+    /// so <b>the tool could not read its own output</b>: a <c>flatten</c> → <c>check</c> round trip
+    /// through a <c>.json</c> failed on every panel in the table.
+    /// </para>
+    /// <para>
+    /// It had already been worked around by hand rather than reported — a real job carries paired
+    /// <c>*-ir.json</c> and <c>*-ir-panelfix.json</c> files differing only in that string.
+    /// </para>
+    /// <para>
+    /// Deriving the alias from <see cref="All"/> rather than adding six more literals is deliberate:
+    /// the failure was a hand-maintained list falling out of step with the records it indexes, and a
+    /// seventh literal would leave the eighth panel to reintroduce it.
+    /// </para>
+    /// </summary>
+    private static Dictionary<string, Panel> BuildIndex()
+    {
+        var index = new Dictionary<string, Panel>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["KTP700"] = Ktp700Basic,
+            ["KTP700Basic"] = Ktp700Basic,
+            ["KTP900"] = Ktp900Basic,
+            ["KTP900Basic"] = Ktp900Basic,
+            ["KTP400"] = Ktp400Basic,
+            ["KTP400Basic"] = Ktp400Basic,
+            ["MTP700"] = Mtp700,
+            ["MTP1000"] = Mtp1000,
+            ["MTP1200"] = Mtp1200,
+        };
+
+        foreach (var panel in All)
+        {
+            index[panel.Name] = panel;
+        }
+
+        return index;
+    }
+
+    /// <summary>Every spelling this table accepts — both the short aliases and the full names.</summary>
     public static IReadOnlyCollection<string> KnownNames => ByName.Keys;
 
     /// <summary>
@@ -80,13 +119,13 @@ public static class Panels
             error = "No panel declared. --panel is required and has no default: the KTP700 and KTP900 "
                   + "Basic share a resolution but differ ~28% physically, so guessing one is a "
                   + "quarter-scale sizing error that passes every pixel check. Known panels: "
-                  + string.Join(", ", ByName.Keys.Distinct());
+                  + string.Join(", ", KnownNames);
             return false;
         }
 
         if (!ByName.TryGetValue(name.Trim(), out var found))
         {
-            error = $"Unknown panel '{name}'. Known panels: {string.Join(", ", ByName.Keys.Distinct())}. "
+            error = $"Unknown panel '{name}'. Known panels: {string.Join(", ", KnownNames)}. "
                   + "An unknown panel is refused rather than approximated - see hmi/target-differences.md.";
             return false;
         }

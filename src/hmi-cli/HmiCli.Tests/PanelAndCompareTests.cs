@@ -60,6 +60,45 @@ public class PanelTests
         Assert.False(Panels.TryResolve(name, out _, out var error));
         Assert.NotEmpty(error);
     }
+
+    /// <summary>
+    /// 🔴 THE TOOL MUST BE ABLE TO READ ITS OWN OUTPUT.
+    ///
+    /// <para>
+    /// <c>Flattener</c> stamps <c>Panel = panel.Name</c> into the IR, and <c>lint</c>/<c>check</c>
+    /// resolve that string back through <see cref="Panels"/>. For the whole life of the table no
+    /// key matched a <c>Name</c>, so a <c>flatten</c> → <c>check</c> round trip through a
+    /// <c>.json</c> failed on EVERY panel — and it was worked around by hand-patching the JSON
+    /// rather than reported, so nothing ever failed loudly enough to be fixed.
+    /// </para>
+    /// <para>
+    /// This is written over <see cref="Panels.All"/> rather than as six cases so that adding a
+    /// seventh panel is covered the moment it is added, which is the whole reason the index derives
+    /// its <c>Name</c> keys instead of listing them.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void EveryPanelResolvesByItsOwnName()
+    {
+        Assert.NotEmpty(Panels.All);
+
+        foreach (var panel in Panels.All)
+        {
+            Assert.True(Panels.TryResolve(panel.Name, out var back, out var error),
+                $"'{panel.Name}' is what flatten writes into the IR and it did not resolve: {error}");
+            Assert.Same(panel, back);
+        }
+    }
+
+    /// <summary>The exact string that broke, kept as a case so the fix cannot be quietly undone.</summary>
+    [Theory]
+    [InlineData("KTP700 Basic")]
+    [InlineData("MTP1000 Unified")]
+    public void TheSpellingFlattenWrites_Resolves(string asWrittenByFlatten)
+    {
+        Assert.True(Panels.TryResolve(asWrittenByFlatten, out var panel, out var error), error);
+        Assert.Equal(asWrittenByFlatten, panel.Name);
+    }
 }
 
 /// <summary>

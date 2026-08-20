@@ -99,11 +99,9 @@ if (command == "brand-check")
 if (command == "panels")
 {
     Console.WriteLine($"{"panel",-16} {"order no.",-22} {"mm",-16} {"px",-12} {"px/mm H",-9} px/mm V");
-    foreach (var p in new[]
-             {
-                 Panels.Ktp400Basic, Panels.Ktp700Basic, Panels.Ktp900Basic,
-                 Panels.Mtp700, Panels.Mtp1000, Panels.Mtp1200,
-             })
+    // Panels.All, not a second hand-written list: a row missing from THIS one is a panel the tool
+    // supports and does not admit to supporting, which is how the Name-key gap survived unnoticed.
+    foreach (var p in Panels.All.OrderBy(p => p.WidthPx * p.HeightPx).ThenBy(p => p.Name))
     {
         Console.WriteLine($"{p.Name,-16} {p.OrderNumber,-22} {$"{p.WidthMm} x {p.HeightMm}",-16} "
                         + $"{$"{p.WidthPx}x{p.HeightPx}",-12} {p.PxPerMmH,-9:0.00} {p.PxPerMmV:0.00}");
