@@ -440,10 +440,16 @@ PROGRAM, NOT OF THE CONTROLLER, AND THIS ONE WAS RECORDED AS A RIG FACT.***
 | figure | program it belongs to | evidence |
 |---|---|---|
 | **22.64 ms idle / 23.33 ms loaded** | ***the A1 SPIKE CHECKER*** — 123-register comparisons every scan. Its own source says *"the 16-register unrolled checker is inside that figure"* | 2026-08-13, n=101 idle (spread 22.20–23.02), n=16 loaded |
-| **~2.1 ms** | ***the HARNESS program now deployed*** — no checker | 2026-08-14, **THREE independent paths**: `harness-mirror-read` **2.11 / 2.07 ms**, and `harness-mirror-view` **2.13 ms** (510 scans in 1087 ms) during a separate 13-minute session |
+| **~2.1 ms** | ***a BARE HARNESS program, deployed on 2026-08-14 and NOT on the rig since*** — no checker, and no plant program either | 2026-08-14, **THREE independent paths**: `harness-mirror-read` **2.11 / 2.07 ms**, and `harness-mirror-view` **2.13 ms** (510 scans in 1087 ms) during a separate 13-minute session |
+| **23.80 ms quiet / 24.931 ms loaded** | ***the PLANT program + harness, which is what runs today*** | 2026-08-18, **12,027 scans over 299.8 s, ±0.002 ms**; re-confirmed live 2026-08-20 three times (24.19 over 1,252 scans; 24.24; 24.27). `Harness.Wire/WireTiming.cs` is the authority |
 
-**That program is no longer on the rig.** The checker was the expensive part, so ~2.1 ms for a program
-without one is not a contradiction — **it is a different program.**
+🔴 **THE ~2.1 ms ROW SAID "now deployed" AND WAS QUOTED ONWARD ON THAT BASIS FOR SIX DAYS.** It was
+true when written and became false the moment a plant program went back on the rig. **Every row in
+this table is a property of the PROGRAM, not of the controller** — that is the whole point of the
+table, and the "now" in one cell defeated it.
+
+**Poll load costs a reproducible +1.13 ms/scan**, so the quiet and loaded figures are two operating
+points rather than two estimates of one number, and **a wave only ever runs at the loaded one.**
 
 **The counter's meaning is verified from the IR, not assumed:** exactly one `ADD(HX_ScanCount, 1)`, in
 `FC_HarnessCopyLayer`, called **once** from `Main` (OB1), **no other caller**, and the only other OB is
@@ -453,15 +459,35 @@ without one is not a contradiction — **it is a different program.**
 `timer floor = k × scan` with `k ≈ 5`, giving `500 / 116.65 = 4.29×`. **It is linear in the scan** —
 so ***a "ceiling" that reads like a constant inherits the scan's program-dependence entirely.***
 
-| | scan | floor | `comp_max` on a 500 ms preset |
-|---|---|---|---|
-| as pinned in code | 23.33 ms *(spike checker)* | 116.65 ms | **4.29×** |
-| deployed harness program | ~2.1 ms | ~10.5 ms | ***~47×*** |
+🔴 ***THE TABLE THAT WAS HERE WAS WRONG IN BOTH COLUMNS AND ITS SAFETY ARGUMENT WAS INVERTED.
+CORRECTED 2026-08-20.*** It read:
 
-✅ ***THE DIRECTION IS SAFE, WHICH IS WHY THIS IS NOT URGENT.*** `comp_max` is a **ceiling**, so
-enforcing 4.29× where ~47× is achievable is **over-restrictive, never permissive** — it refuses
-compressions that would in fact resolve. **Nothing built on it is unsound; it is simply leaving ~11×
-of compression unused.**
+| ~~as pinned in code~~ | ~~23.33 ms *(spike checker)*~~ | ~~116.65 ms~~ | ~~**4.29×**~~ |
+|---|---|---|---|
+| ~~deployed harness program~~ | ~~**~2.1 ms**~~ | ~~~10.5 ms~~ | ~~***~47×***~~ |
+
+— and concluded that enforcing 4.29× where ~47× was achievable was *"over-restrictive, never
+permissive"*, so *"nothing built on it is unsound; it is simply leaving ~11× of compression unused."*
+
+**Both inputs have since been settled, and each moves the answer the same way:**
+
+- **The scan is ~24.9 ms loaded / ~23.8 ms quiet**, not ~2.1 ms. Measured over 12,027 scans
+  (2026-08-18) and re-confirmed live three times on 2026-08-20. `Harness.Wire/WireTiming.cs` is the
+  authority. The ~2.1 ms belongs to a much smaller reference program.
+- **The floor is no longer `k × scan` at all.** The owner ratified an **ABSOLUTE 500 ms** timer floor
+  (2026-08-18): `EffectiveTimerFloor = max(500 ms, k × scan)`, and at `k = 5` the scan term is ~125 ms
+  and **never binds**. `TimeCompression.cs` is the authority.
+
+**So `comp_max` on a 2-second preset is `2000 / 500 = 4.0×`, and the code is right.** It is not
+leaving ~11× unused; there was never 47× to use.
+
+🔴 ***AND THE "DIRECTION IS SAFE" ARGUMENT NO LONGER HOLDS — IT POINTS THE OTHER WAY NOW.*** That
+paragraph reasoned that the error was over-restrictive and therefore harmless. Under the corrected
+figures, anyone who acted on ~47× would be compressing **an order of magnitude past the floor**, which
+is permissive, not restrictive. **A wrong number that licenses more compression than the timers can
+resolve is exactly the kind of error that does not announce itself** — the run completes and the
+result is quietly meaningless. This is the highest-traffic page in the repository, which is why it is
+corrected here rather than only in the code that was always right.
 
 ⚠️ **Two things stop this being a one-line fix.** The spec line reads *"UNCHANGED — it depends only on
 the scan, **which did not move**"* — **true when written, and now the sentence to repair.** And the
