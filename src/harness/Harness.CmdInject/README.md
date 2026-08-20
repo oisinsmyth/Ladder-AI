@@ -124,6 +124,32 @@ ordering in which a one-write restore both puts an old sequence back and leaves 
 risking that execution; the choice is which of the two to give up, and reversibility of the *values* plus
 an inert surface is the safer half.
 
+### Raising the enable is itself capable of producing a command — MEASURED ON HARDWARE
+
+The restore puts the band back **with the enable held clear**, which is what stops a stale sequence
+re-executing (above). But a device whose enable is clear is not copying, so **the block's live command
+image keeps whatever it last copied** — it does *not* follow the band back down.
+
+So the next session raises the enable over a **restored** band, the block copies the whole thing in one
+scan, and **any channel whose restored sequence differs from what that channel last acknowledged is a
+command** — issued by the act of enabling, before this tool has written a single operand.
+
+Measured on the rig 2026-08-20: a first run left a channel's acknowledged sequence at 1 while restoring
+its command register to 0; the next run's enable raise copied that 0, the block read `0 <> 1` as a new
+command, and answered it. It was **refused and harmless** — the code copied alongside it was 0, which is
+unrecognised on every channel — and the acknowledgement count did not move. But it was a real command,
+and nothing in this tool asked for it.
+
+**Two consequences.** *A count that moves is still trustworthy* — this cannot fabricate an acceptance,
+because the operands copied with it are the restored ones and an unrecognised code cannot be accepted.
+*An acknowledgement echo that moves before your command is normal*, so do not read one as evidence that
+your own write landed; the count is the verdict, which is the same reason it was chosen everywhere else.
+
+The clean fix is not obvious and is deliberately not attempted here: restoring the band to what the
+block last *copied* rather than to what the registers last *held* would keep the image still, but it
+means writing values the device did not have when the session opened — a different and stronger claim
+than "put it back", and one this tool should not make quietly.
+
 ## Two different gates, both called arming
 
 There are **two** gates and confusing them is how the tool shipped unable to do its job:
