@@ -384,6 +384,45 @@ a deployment-manifest comparison nobody has built.
 
 ---
 
+### M-20. A gate that checks SET MEMBERSHIP cannot see an entry that BECAME false
+
+**Found 2026-08-20 by a ratification review, in a gate that had just passed.** A model-fidelity
+declaration is a set of claims about what a test model does and does not represent. The gate over it
+validates **exact set membership** — every claim cited must be present, none duplicated, the two sets
+disjoint. All of that held.
+
+Then the model changed. **Three claims that were true when written became false**, and the gate saw
+nothing, because *"present in the set"* and *"still true of the subject"* are different properties and
+only the first is checked. One of the falsified claims — *"presents no change of contents at all for
+the whole of a scenario"* — was **being asserted by two live vectors at the time it was found.**
+
+🔴 **THE GENERAL SHAPE: a declaration describes a subject, the subject is versioned, and the
+declaration is not.** Every artifact of this kind is exposed — fidelity declarations, resting-value
+bases, interface reports, anything whose truth is contingent on something that can be edited
+independently. The same day produced four separate instances of the *same* shape: three artifacts and
+a binding note all still describing a network that had been repaired two days earlier.
+
+**Mechanise, cheapest first:**
+
+- **Stamp each declaration entry with the subject version it was verified against** — the build stamp
+  already exists and already changes when the model changes. An entry whose stamp is older than the
+  subject's is **not wrong, but it is UNVERIFIED**, and that is a reportable state rather than a pass.
+- **On any change to a model, re-validate the declaration rather than only appending to it.** The
+  appending is what happened here: six new entries were added correctly and three existing ones were
+  left to rot.
+
+⚠️ **What must NOT be done: soften the gate.** Set membership is exactly right for what it checks, and
+it caught real omissions. The failure is that **nothing else checked the other property**, not that
+this check is wrong. Adding a second check is the fix; loosening the first would lose what works.
+
+⚠️ **And note where the finding came from: an INDEPENDENT ratification, not the gate and not the
+author.** The author had flagged his own authorship as a correlated check and asked for review — the
+review then found three defects he could not have seen, because *he was reading the model he had just
+changed*. That is the independence property paying for itself in a single pass, and it is the argument
+for ratifying declarations rather than merely gating them.
+
+---
+
 ## WHAT MUST NOT BE MECHANISED
 
 *Recorded because the pressure to automate these will be strongest exactly when they are working.*
