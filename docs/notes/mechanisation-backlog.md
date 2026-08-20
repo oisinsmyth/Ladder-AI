@@ -228,6 +228,40 @@ mistake was actually made.
 
 ---
 
+### M-15. A role fully plumbed and NEVER DRIVEN — the PC-side `undriven-scan`
+
+**Found 2026-08-20, by reading, in a component that had just gone green.** The Modbus command-injection
+client declared a `Heartbeat` role, parsed it from the binding, resolved it, type-checked it,
+band-checked it, printed it in the `map` report, and gave it a write-target factory. **That factory had
+zero callers.** Nothing in the client ever wrote the heartbeat.
+
+The test double, meanwhile, modelled an arming gate that would not process a command until the heartbeat
+had changed twice — and every protocol test armed it by calling into the model **directly, past the
+client**. So **99 tests passed over a client that could not arm anything**, and the one comment that
+described the missing piece named a verb that did not exist.
+
+**Why it survived every check.** Everything a reviewer looks for was present and correct: the role
+existed, was validated, was refused when malformed, and appeared in the tool's own output. The only
+absent thing was a **call**, and nothing counts calls. The IL walk in the same test file counts *hits* —
+it never thought to count a *zero*.
+
+🔴 **And note what the test suite did here: the double supplied the exact capability the subject
+lacked.** That is the correlated check one level down from the one this project already guards against —
+not two parties reading the same document, but *a test harness closing the loop its subject cannot*. **A
+green suite is fully compatible with a tool that has never once performed its function.**
+
+**Mechanise:** the structural IL walk already knows how to count references. Point it the other way —
+every public factory on a write-target type, and every declared role, must have **at least one call site
+in the shipped assembly**; a zero is a finding, not a pass. Exactly `undriven-scan`'s shape and exactly
+its reason: *a declared capability with no producer is indistinguishable from a working one until it
+runs.*
+
+⚠️ **The general form is worth more than the check.** When a test double implements one half of a
+protocol, ask **which half the SUBJECT implements**. If the double can be driven into the state a test
+needs without the subject doing anything, that test is about the double.
+
+---
+
 ## WHAT MUST NOT BE MECHANISED
 
 *Recorded because the pressure to automate these will be strongest exactly when they are working.*
