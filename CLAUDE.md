@@ -292,19 +292,31 @@ this project's most expensive failures have all been a green that examined nothi
   `:502` refused. 🔴 ***SCAN TIME: A PROPERTY OF THE PROGRAM, NOT OF THE CONTROLLER — AND IT WAS RECORDED HERE
   AS A RIG FACT (settled 2026-08-14).*** The long-quoted **23.33 ms** (and **22.64 ms** idle) belong to the **A1
   SPIKE CHECKER**, which did 123-register comparisons every scan — its own source says *"the 16-register unrolled
-  checker is inside that figure"* and labels it *"loaded"*. **That program is no longer on the rig.** The deployed
-  **harness** program measures **~2.1 ms** (2.11 and 2.07 across two runs), from the mirror's own counter — whose
-  meaning is verified in the IR rather than assumed: **one `ADD(HX_ScanCount, 1)` in `FC_HarnessCopyLayer`, called
-  ONCE from `Main` (OB1), no other caller, only other OB is `OB100`** ⇒ one tick = one OB1 scan. ***CONSEQUENCE:
-  X-D's compression ceiling (`k × scan = 116.7 ms` ⇒ `k ≈ 5`) RESTS ON A PROGRAM THAT IS NOT RUNNING; at 2.1 ms the
-  floor is ~10.6 ms and the achievable compression is FAR HIGHER than the recorded ~4.3×. Re-derive before quoting.***
-  **The qualifier existed in the source and was lost in the copy.** Round trip **min 63 / med 72 / max 106 ms** — matching §12a's
+  checker is inside that figure"* and labels it *"loaded"*. **That program is no longer on the rig.** 🔴 ***AND THE ~2.1 ms FIGURE THAT REPLACED
+  THEM HERE WAS ALSO WRONG — BY AN ORDER OF MAGNITUDE. CORRECTED 2026-08-20.*** It came from two runs against a much
+  smaller **reference** program and was, again, written down here as a rig fact. **The deployed program measures
+  ~24.9 ms loaded / ~23.8 ms quiet** — 12,027 scans over 299.8 s, ±0.002 ms; poll load costs a reproducible
+  +1.13 ms/scan, so those are two operating points and a wave only ever runs at the loaded one. **The authority is
+  `src/harness/Harness.Wire/WireTiming.cs`, which has carried the correct constants since 2026-08-18 while this file
+  kept the wrong one** — re-confirmed live 2026-08-20 at **24.19 ms over 1,252 scans**. The counter's meaning is
+  verified in the IR rather than assumed: **one `ADD(HX_ScanCount, 1)` in `FC_HarnessCopyLayer`, called ONCE from
+  `Main` (OB1), no other caller, only other OB is `OB100`** ⇒ one tick = one OB1 scan. ***THE CONSEQUENCE THIS
+  PARAGRAPH USED TO DRAW — that the achievable compression is "FAR HIGHER than ~4.3×" — IS WITHDRAWN. It was wrong
+  twice over: the scan is 24.9 ms and not 2.1, and the binding term is no longer `k × scan` at all (see the ceiling
+  bullet below).*** **Note the shape, because it has now happened TWICE in this one paragraph: a scan figure measured
+  against one program, copied here, and stripped of the qualifier saying which program it belonged to.** Round trip **min 63 / med 72 / max 106 ms** — matching §12a's
   `RTT_typ 78` / `RTT_p90 102.79`, **re-confirmed on the current path 2026-08-14**.
 - **32-bit word order is HIGH-WORD-FIRST** — measured off a build stamp with distinguishable
   halves, no longer an assumption. A `Time` spans two registers and inherits it.
-- **X-D's compression ceiling is ~4.3×, not the spec's 10×** (timer floor `k × scan = 116.7 ms`) —
-  ⚠️ **HALF-MEASURED, and on the term X-D says binds first: the scan is measured, `k ≈ 5` is X-D's
-  own number and has never been.** Treat 4.29× as *derived from one measured and one assumed input*.
+- **The compression ceiling is 4.0× ON A 2-SECOND SHORTEST PRESET, not the spec's 10× — and the term
+  that decides it CHANGED (owner ruling, 2026-08-18).** ⚠️ It is `preset / floor`, so **the number moves with the
+  shortest preset in the plan and is not a universal constant** — 4.0× is the worked case, not the answer.
+  The timer floor is an **ABSOLUTE 500 ms**, not a ratio and not `k × scan`:
+  `EffectiveTimerFloor = max(500 ms, k × scan)`, so with `k = 5` at the measured 24.931 ms the scan term is
+  ~125 ms and **never binds**. `comp_max = 2000 / 500 = 4.0×`. ⚠️ This supersedes the old ~4.3× figure and its
+  "HALF-MEASURED" caveat, which described a `k × scan` floor that no longer governs. `k = 5` is **ratified, not
+  measured** — it remains a judgement, but one now dominated by the absolute floor, so nothing rests on it.
+  Authority is `Harness.Results/TimeCompression.cs`, not this line.
 - **Harness objects reserve block numbers 9000–9999** per number space; **OBs are excluded** — an
   OB's number is fixed by its event class.
 
