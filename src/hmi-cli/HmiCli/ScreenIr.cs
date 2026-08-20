@@ -294,6 +294,31 @@ public sealed record IrItem
 
     /// <inheritdoc cref="LayerHideWhen"/>
     [JsonPropertyName("layerHideRange")] public string? LayerHideRange { get; init; }
+
+    /// <summary>
+    /// The SHOW form: this layer's members are visible <b>inside</b> the range
+    /// (<c>data-hmi-layer-show-when</c>), with <c>data-hmi-layer-show-range</c> as <c>low..high</c>.
+    ///
+    /// <para>
+    /// ✅ MEASURED 2026-08-20, and it is why the caveat on <see cref="LayerHideWhen"/> no longer
+    /// applies to both forms. <c>Visible=true</c> inside the range imports and round-trips intact —
+    /// a probe screen wrote it beside a control at <c>Visible=false</c>, and the read-back returned
+    /// each as written with <c>compare</c> clean. Until then only the hide form had ever been put
+    /// through Portal, so the emitter hard-coded it.
+    /// </para>
+    /// <para>
+    /// Prefer whichever form states the intent directly. "Show this dialog while the state is 1000"
+    /// is a show; "hide it while the prompt id is 0" is a hide. Twisting one into the other was only
+    /// ever a workaround for an unmeasured attribute, and it cost the reader a double negative.
+    /// </para>
+    /// <para>
+    /// A layer declares one or the other, never both — see the refusal in <c>PlanLayers</c>.
+    /// </para>
+    /// </summary>
+    [JsonPropertyName("layerShowWhen")] public string? LayerShowWhen { get; init; }
+
+    /// <inheritdoc cref="LayerShowWhen"/>
+    [JsonPropertyName("layerShowRange")] public string? LayerShowRange { get; init; }
 }
 
 /// <summary>

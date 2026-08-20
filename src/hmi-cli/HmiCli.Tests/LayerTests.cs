@@ -177,6 +177,84 @@ public class LayerTests
         Assert.Contains("low..high", ex.Message, StringComparison.Ordinal);
     }
 
+    // ---- the SHOW form, measured 2026-08-20 -----------------------------------------------------
+
+    private static IrItem ShowDecl(string name, string index, string? tag = null, string? range = null) => new()
+    {
+        Type = "Layer", Layer = name, LayerIndex = index, LayerShowWhen = tag, LayerShowRange = range,
+        Geometryless = true, Leaf = true, FontSizePx = 17,
+    };
+
+    /// <summary>
+    /// ✅ `Visible=true` INSIDE the range is now a proven form, so the emitter can author it.
+    ///
+    /// <para>
+    /// Only the hide form had ever been through Portal, so this emitter hard-coded it and an author
+    /// who meant "show this dialog while the state is 1000" had to write it as "hide it while the
+    /// state is not 1000" — a double negative standing in for an unmeasured attribute. A probe
+    /// settled it: the show form imports and round-trips intact, beside a control at false.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void The_show_form_emits_Visible_true_over_the_declared_range()
+    {
+        var doc = Emit(Ir(
+            ShowDecl("memfault", "1", "Silo_W_StateID", "1000..1000"),
+            Box("dlg", "memfault")));
+
+        var anim = doc.Descendants().Single(x => x.Name.LocalName == "Hmi.Dynamic.VisibilityAnimation");
+        var al = anim.Element("AttributeList")!;
+
+        Assert.Equal("true", al.Element("Visible")?.Value);
+        Assert.Equal("1000", al.Element("RangeStart")?.Value);
+        Assert.Equal("1000", al.Element("RangeEnd")?.Value);
+        Assert.Equal("Silo_W_StateID",
+            anim.Descendants().First(x => x.Name.LocalName == "Tag").Element("Name")?.Value);
+    }
+
+    /// <summary>The hide form must keep behaving exactly as it did — this is the regression guard.</summary>
+    [Fact]
+    public void The_hide_form_is_unchanged_by_the_show_form_existing()
+    {
+        var doc = Emit(Ir(Decl("prompt", "1", "Silo_W_PromptID", "0..0"), Box("dlg", "prompt")));
+        var al = doc.Descendants().Single(x => x.Name.LocalName == "Hmi.Dynamic.VisibilityAnimation")
+                    .Element("AttributeList")!;
+
+        Assert.Equal("false", al.Element("Visible")?.Value);
+        Assert.Equal("0", al.Element("RangeStart")?.Value);
+    }
+
+    /// <summary>
+    /// 🔴 Both rules on one layer is refused, and the reason is B1: TIA holds exactly ONE
+    /// visibility animation per object and discards a second in silence. Two declared rules would
+    /// not combine — one would simply vanish, with a green import and a green compile.
+    /// </summary>
+    [Fact]
+    public void Declaring_BOTH_a_hide_and_a_show_rule_is_refused()
+    {
+        var both = new IrItem
+        {
+            Type = "Layer", Layer = "prompt", LayerIndex = "1",
+            LayerHideWhen = "A", LayerHideRange = "0..0",
+            LayerShowWhen = "B", LayerShowRange = "1..1",
+            Geometryless = true, Leaf = true, FontSizePx = 17,
+        };
+
+        var ex = Assert.Throws<LayerException>(() => Emitter.Emit(Ir(both, Box("dlg", "prompt")), "S", 1));
+        Assert.Contains("one rule", ex.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_malformed_show_range_is_refused_and_names_the_show_attribute()
+    {
+        var ex = Assert.Throws<LayerException>(() => Emitter.Emit(Ir(
+            ShowDecl("memfault", "1", "Silo_W_StateID", "nonsense"),
+            Box("dlg", "memfault")), "S", 1));
+
+        Assert.Contains("show-range", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("low..high", ex.Message, StringComparison.Ordinal);
+    }
+
     // ---- the geometry rules and layers ----------------------------------------------------------
 
     private static IrItem Btn(string id, int left, int top, string? layer = null) => new()

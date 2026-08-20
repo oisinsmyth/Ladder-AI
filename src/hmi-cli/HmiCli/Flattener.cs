@@ -82,6 +82,8 @@ window.addEventListener('load', function () {
       layerIndex: el.getAttribute('data-hmi-layer-index'),
       layerHideWhen: el.getAttribute('data-hmi-layer-hide-when'),
       layerHideRange: el.getAttribute('data-hmi-layer-hide-range'),
+      layerShowWhen: el.getAttribute('data-hmi-layer-show-when'),
+      layerShowRange: el.getAttribute('data-hmi-layer-show-range'),
       setTag: el.getAttribute('data-hmi-set'),
       stringLength: el.getAttribute('data-hmi-string'),
       mode: el.getAttribute('data-hmi-mode'),

@@ -938,26 +938,50 @@ public static class Emitter
 
             seenIndex[index] = name;
 
-            IrVisibility? vis = null;
-            if (!string.IsNullOrWhiteSpace(d.LayerHideWhen))
+            // BOTH FORMS ARE NOW MEASURED, so both can be authored (2026-08-20). `Visible=false`
+            // inside the range was the only shape ever put through Portal, so this emitter
+            // hard-coded it and an author wanting "show while X" had to write the double negative.
+            // A probe settled it: `Visible=true` inside the range imports and round-trips intact,
+            // beside a control at false, with `compare` clean.
+            var hasHide = !string.IsNullOrWhiteSpace(d.LayerHideWhen);
+            var hasShow = !string.IsNullOrWhiteSpace(d.LayerShowWhen);
+
+            // One or the other. Both is not a richer rule, it is two rules for one object - which is
+            // the thing B1 proved the platform cannot hold: TIA keeps ONE animation per item and
+            // discards the rest in silence.
+            if (hasHide && hasShow)
             {
-                var raw = (d.LayerHideRange ?? string.Empty).Trim();
+                throw new LayerException($"layer '{name}' declares BOTH data-hmi-layer-hide-when "
+                                       + $"('{d.LayerHideWhen}') and data-hmi-layer-show-when "
+                                       + $"('{d.LayerShowWhen}'). A layer carries one rule. TIA holds "
+                                       + "exactly one visibility animation per object and drops any "
+                                       + "second one WITHOUT reporting it, so the two would not both "
+                                       + "take effect - one would simply vanish. State the intent in "
+                                       + "whichever direction reads straight and use that one.");
+            }
+
+            IrVisibility? vis = null;
+            if (hasHide || hasShow)
+            {
+                var visible = hasShow;
+                var attr = visible ? "show" : "hide";
+                var tag = (visible ? d.LayerShowWhen : d.LayerHideWhen)!.Trim();
+                var raw = ((visible ? d.LayerShowRange : d.LayerHideRange) ?? string.Empty).Trim();
+
                 var parts = raw.Split("..", StringSplitOptions.None);
                 if (parts.Length != 2 || parts.Any(p => p.Trim().Length == 0))
                 {
-                    throw new LayerException($"layer '{name}' declares data-hmi-layer-hide-when "
-                                           + $"'{d.LayerHideWhen}' but its hide-range is '{raw}'. "
+                    throw new LayerException($"layer '{name}' declares data-hmi-layer-{attr}-when "
+                                           + $"'{tag}' but its {attr}-range is '{raw}'. "
                                            + "The range is written low..high, e.g. 0..0.");
                 }
 
-                // Visible=false INSIDE the range: the only form measured against Portal, and the
-                // one TIA itself writes. See IrItem.LayerHideWhen for why hide rather than show.
                 vis = new IrVisibility
                 {
-                    Tag = d.LayerHideWhen!.Trim(),
+                    Tag = tag,
                     RangeStart = parts[0].Trim(),
                     RangeEnd = parts[1].Trim(),
-                    Visible = false,
+                    Visible = visible,
                 };
             }
 
