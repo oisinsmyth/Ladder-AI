@@ -309,6 +309,52 @@ file bearing it, rather than relying on nobody passing the wrong path.
 
 ---
 
+### M-17. A generated artifact with hand-added keys — the generator eats them, and it has now done it twice
+
+**Found 2026-08-20, on the second occurrence.** A submission document is produced by a generator script,
+and fields have been added to the generated output **by hand** afterwards. A subsequent rebuild silently
+destroyed one of them. It was recovered byte-for-byte — and the recovery only happened because the author
+noticed, not because anything detected it.
+
+🔴 **It is the SECOND instance of the same mechanism**: a different hand-added key was destroyed by a
+rebuild one revision earlier. Two occurrences, same cause, and between them nobody made the generator
+aware of the fields being added to its output.
+
+**Why it is worse than a normal lost edit.** The destroyed key is *absent*, not *wrong* — and every
+consumer downstream reads an absent key as "not declared" rather than as "lost". In a system where
+**absent is a positive claim** in several places (`reachableState: []` versus a withheld key,
+`s7Objects: []` versus `noS7Transport`), a silently dropped declaration does not fail: it changes the
+meaning of the document and passes.
+
+**Mechanise:** either the generator owns every key — the fix applied here, and the right one — or the
+generated file carries a checked manifest of the keys it must contain, so a rebuild that drops one is a
+refusal rather than a smaller file. **Do not solve it by remembering to re-add fields after a rebuild.**
+That is what was tried, implicitly, twice.
+
+⚠️ Adjacent, same day: a companion submission in the same folder is now **stale with no generator at
+all** — it can only be maintained by hand and nothing marks it as diverged from the file it was copied
+from. A generated artifact and a hand-maintained one that look alike is how the above happens in the
+first place.
+
+### M-18. One measured constant, three homes — and the copy that gets read is the wrong one
+
+**Three instances, all live on 2026-08-20.** The scan period existed as `24.931` in the gate binary,
+`24.27` in a job artifact, and `22.63` in an earlier one — three numbers, three files, one physical
+quantity. Separately and on the same day, **`CLAUDE.md` carried `~2.1 ms` for the same constant, wrong by
+an order of magnitude**, while the code beside it had been right for two days.
+
+**That last pairing is the lesson.** The code was correct, and its own comment even warned that the wrong
+figure existed elsewhere in the repository — but the wrong copy lived in the file that is **loaded into
+every session**, so the wrong copy is the one that was read, and a dependent conclusion (a compression
+ceiling) was drawn from it and written down as fact.
+
+**Mechanise:** a measured constant gets **one home in code** and every other mention cites it rather than
+restating it. Where prose must quote a number, the quote should be generated or checked against the
+source, because **a hand-copied constant does not drift loudly — it drifts silently and stays plausible.**
+The failure is never the copy being wrong; it is the copy being *readable and confident*.
+
+---
+
 ## WHAT MUST NOT BE MECHANISED
 
 *Recorded because the pressure to automate these will be strongest exactly when they are working.*
