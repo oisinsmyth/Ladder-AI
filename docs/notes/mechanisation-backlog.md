@@ -423,6 +423,43 @@ for ratifying declarations rather than merely gating them.
 
 ---
 
+### M-21. "Cannot be reached from here" and "there is nothing there to reach" look identical in a coverage table
+
+**Found 2026-08-20, and it had hidden sixteen unimplemented behaviours for weeks.** A scope analysis
+marked a group of specified assertions **NOT REACHABLE** and attributed the cause to **slot scope** —
+i.e. *a test at this scope cannot observe them*. A later campaign plan read that, and assigned the
+group to a **wider** slot, on the reasonable assumption that widening would reach them.
+
+**It would not have.** The behaviour those assertions describe **is not implemented at all**: an entire
+operating band exists in the specification, in the scope boundary, and in the state-machine design, and
+has no rung anywhere in the delivered program. The wider slot would have been built, deployed and run,
+and it would have observed nothing — because there was nothing to observe.
+
+🔴 **The two states are indistinguishable in every artifact we keep.** A coverage table shows an
+assertion as uncovered either way. A gap register shows it as blocked either way. Only reading the
+implementation separates them, and the enumerator is *forbidden* from reading the implementation — for
+excellent reasons that are not in question here.
+
+**Why it matters more than a bookkeeping error:** they are opposite kinds of work. *Cannot reach* is a
+**harness** problem and the answer is to build more test infrastructure. *Nothing to reach* is a
+**deliverable** finding and the answer is to write it up for the site — building test
+infrastructure for it is pure waste, and it was about to be built.
+
+**Mechanise:** when a coverage analysis records an assertion as unreachable, it must record **which of
+the two** it means, and *"nothing implements this"* must cite the evidence. `converter cross-check`
+already produces most of it mechanically — an interface member or DB member with **no writer and no
+reader** is exactly the fingerprint, and on the instance above it named every parameter of the missing
+band. The check exists; nothing routed the unreachable list through it.
+
+⚠️ **And the adjudication needs a party who did not write the claim.** The lane that discovered this
+asked explicitly that its own finding be confirmed elsewhere. The confirming lane upheld two of its
+three claims, **refuted the third**, and found that the assertion cited there was implemented under a
+different name **with a genuine defect at one input** — a better finding than the one it was sent to
+check. *A claim that a site's block is missing a feature must survive a party motivated to find it
+already present.*
+
+---
+
 ## WHAT MUST NOT BE MECHANISED
 
 *Recorded because the pressure to automate these will be strongest exactly when they are working.*
