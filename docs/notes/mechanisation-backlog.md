@@ -256,6 +256,12 @@ in the shipped assembly**; a zero is a finding, not a pass. Exactly `undriven-sc
 its reason: *a declared capability with no producer is indistinguishable from a working one until it
 runs.*
 
+🔴 **CONFIRMED TWICE IN ONE COMPONENT, WITHIN A DAY.** Closing the heartbeat gap immediately turned up
+**the same defect one field along**: the acknowledgement's **code echo** was likewise declared, parsed,
+resolved and type-checked — and then dropped on the floor at the point of use. Two instances in one
+small assembly, both found by a person reading, **neither by a test**. That is the argument for
+mechanising it: the class is not rare, and nothing in the ordinary review path looks for it.
+
 ⚠️ **The general form is worth more than the check.** When a test double implements one half of a
 protocol, ask **which half the SUBJECT implements**. If the double can be driven into the state a test
 needs without the subject doing anything, that test is about the double.
