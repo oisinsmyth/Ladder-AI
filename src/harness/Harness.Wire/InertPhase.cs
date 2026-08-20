@@ -143,6 +143,24 @@ public sealed record InertReport(
 /// </summary>
 public static class InertPhase
 {
+    /// <summary>
+    /// 🔴 <b>THE POLLS EITHER WAIT MAY SPEND, AS A NAMED CONSTANT RATHER THAN A LITERAL AT THREE CALL
+    /// SITES.</b>
+    ///
+    /// <para><b>It is the denominator <c>InertRestPlan</c> checks a declared quiescence against.</b> The
+    /// wait is declared in SCANS and paid in POLLS, and the worst case is one scan observed per poll — so
+    /// a quiescence larger than this cannot be observed within the budget under every scan-time /
+    /// round-trip ratio. A literal on both sides is how the plan's refusal and the loop's actual bound
+    /// would come to be different numbers, which is a shape this codebase records four times.</para>
+    ///
+    /// <para><b>200 is unchanged from the literal it replaces</b>, so nothing about today's runs moves.
+    /// Note what it buys and what it does not: at the measured 63–106 ms round trip it is 12.6–21 s of
+    /// wall clock, so a wait near 9.5 s has only about a quarter of the budget to spare in the worst case.
+    /// Raising it is a decision about how long a wave may sit on a wedged rig, and is deliberately taken
+    /// deliberately.</para>
+    /// </summary>
+    public const int PollBudget = 200;
+
     /// <summary>Establish inert for one slot and verify it, both checks.</summary>
     /// <param name="maxPolls">
     /// Bound on scan-counter reads while waiting, so a stopped PLC ends the phase rather than hanging it.
@@ -151,7 +169,7 @@ public static class InertPhase
     /// The next test's values — written HERE, while nothing is running, because they are what establishes
     /// its start condition.
     /// </param>
-    public static InertReport Establish(MirrorClient client, int slotIndex, ushort[] vector, InertDeclaration declaration, int maxPolls = 200) =>
+    public static InertReport Establish(MirrorClient client, int slotIndex, ushort[] vector, InertDeclaration declaration, int maxPolls = PollBudget) =>
         Establish(client, new[] { new SlotInert(slotIndex, vector, declaration) }, maxPolls);
 
     /// <summary>
@@ -168,7 +186,7 @@ public static class InertPhase
     /// simply not raised, D33's inert holds, and their values are don't-care. They are not verified,
     /// because there is nothing they are being asked to be at.</para>
     /// </summary>
-    public static InertReport Establish(MirrorClient client, IReadOnlyList<SlotInert> active, int maxPolls = 200)
+    public static InertReport Establish(MirrorClient client, IReadOnlyList<SlotInert> active, int maxPolls = PollBudget)
     {
         ArgumentNullException.ThrowIfNull(client);
         ArgumentNullException.ThrowIfNull(active);
@@ -182,6 +200,20 @@ public static class InertPhase
             {
                 throw new ArgumentOutOfRangeException(nameof(active), slot.Declaration.QuiescenceScans,
                     "the quiescence check needs at least one scan between its two observations; two reads inside one scan cannot tell a settled value from a changing one.");
+            }
+
+            // 🔴 *** A WINDOW THIS BUDGET CANNOT OBSERVE IS REFUSED BY NAME, NOT LEFT TO STALL. *** The
+            // wait is declared in SCANS and paid in POLLS, and the worst case is one scan observed per
+            // poll — so beyond the budget the loop below runs out and returns ScanCounterStalled, whose
+            // text says "The PLC may be stopped". That sends a reader to the controller for a number
+            // somebody wrote in a binding document. `InertRestPlan` refuses this before anything is
+            // deployed; this is the backstop for a direct caller, and it names BOTH numbers.
+            if (slot.Declaration.QuiescenceScans > maxPolls)
+            {
+                throw new ArgumentOutOfRangeException(nameof(active), slot.Declaration.QuiescenceScans,
+                    $"slot {slot.SlotIndex} declares a quiescence of {slot.Declaration.QuiescenceScans} scan(s) and the poll budget is {maxPolls} poll(s). "
+                    + "One poll observes at least one scan and never more than the link supplies, so this window cannot be observed within the budget. "
+                    + "Left to run it reports ScanCounterStalled, which blames the CPU for a declared number.");
             }
         }
 
@@ -364,7 +396,7 @@ public static class InertPhase
     /// D37's commit: raise the start bools on a LATER scan than the verify, in ONE transaction. Returns
     /// the scan counter at the commit — the tests' T=0.
     /// </summary>
-    public static ScanCount Commit(MirrorClient client, InertReport verified, IEnumerable<int> slotIndices, int maxPolls = 200)
+    public static ScanCount Commit(MirrorClient client, InertReport verified, IEnumerable<int> slotIndices, int maxPolls = PollBudget)
     {
         ArgumentNullException.ThrowIfNull(client);
         ArgumentNullException.ThrowIfNull(verified);

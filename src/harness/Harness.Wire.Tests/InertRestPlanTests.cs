@@ -375,4 +375,86 @@ public class InertRestPlanTests
         Assert.Empty(plan.Require().Defaulted);
         Assert.Empty(plan.Require().Excluded);
     }
+
+    // -------------------------------------------------------------------------------------------------
+    // The quiescence wait — the knob that had no wire and no reader
+    // -------------------------------------------------------------------------------------------------
+
+    private static SlotBinding Quiescent(int scans) =>
+        Binding(new MirroredSignal("DB_X.Verdict", MirrorValueType.Int, Rest: InertRest.At("-1", "sentinel")))
+            with { QuiescenceScans = scans };
+
+    [Fact]
+    public void THE_SLOTS_DECLARED_QUIESCENCE_REACHES_THE_INERT_DECLARATION()
+    {
+        // 🔴 *** IT DID NOT UNTIL 2026-08-20. *** `quiescenceScans` was a PARAMETER of this method with a
+        // default of 1, and `LoopRun` called it with two arguments — so the one knob designed for "this
+        // model takes N scans to settle" was permanently 1 for every slot in every submission, and no
+        // binding field existed that could move it. Measured cost: after a download the check sampled one
+        // scan (~24 ms) later, against a model whose settle after a contents step is ~9 seconds, caught
+        // the block mid-integration and refused it. Deterministic — first run after a download fails, the
+        // second passes.
+        foreach (var scans in new[] { 1, 3, 199 })
+            Assert.Equal(scans, InertRestPlan.For(Quiescent(scans), RegisterWordOrder.HighWordFirst).Require().QuiescenceScans);
+    }
+
+    [Fact]
+    public void THE_DECLARED_WAIT_IS_REPORTED_ON_THE_CLEAN_RUN_TOO_because_a_silent_1_looked_like_a_stated_one()
+    {
+        Assert.Contains("quiescence 9 scan(s)", InertRestPlan.For(Quiescent(9), RegisterWordOrder.HighWordFirst).Summary(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_QUIESCENCE_BEYOND_THE_POLL_BUDGET_IS_REFUSED_NAMING_BOTH_NUMBERS()
+    {
+        // ⚠️ The wait is declared in SCANS and paid in POLLS, and the worst case is one scan observed per
+        // poll. Beyond the budget the wait cannot complete, and today's symptom is ScanCounterStalled —
+        // whose text reads "The PLC may be stopped". That sends a reader to the controller for a number
+        // somebody wrote in a binding document, which is a refusal wearing a diagnosis.
+        var plan = InertRestPlan.For(Quiescent(InertPhase.PollBudget + 1), RegisterWordOrder.HighWordFirst);
+
+        Assert.False(plan.Planned);
+        Assert.Null(plan.Declaration);
+        Assert.Contains(plan.Refusals, r => r.Contains($"{InertPhase.PollBudget + 1}", StringComparison.Ordinal)
+                                            && r.Contains($"{InertPhase.PollBudget} poll(s)", StringComparison.Ordinal));
+        Assert.Contains(plan.Refusals, r => r.Contains("THIS IS A REFUSAL AND NOT A STALL", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void THE_BUDGET_BOUNDARY_ITSELF_IS_NOT_REFUSED_so_the_gate_fires_inside_its_own_scope()
+    {
+        // A gate that fires one value early is a gate somebody widens by hand, and the widening is never
+        // as careful as the original.
+        Assert.True(InertRestPlan.For(Quiescent(InertPhase.PollBudget), RegisterWordOrder.HighWordFirst).Planned);
+    }
+
+    [Fact]
+    public void A_QUIESCENCE_BELOW_ONE_IS_REFUSED_because_two_reads_inside_one_scan_distinguish_nothing()
+    {
+        foreach (var scans in new[] { 0, -1 })
+        {
+            var plan = InertRestPlan.For(Quiescent(scans), RegisterWordOrder.HighWordFirst);
+
+            Assert.False(plan.Planned);
+            Assert.Contains(plan.Refusals, r => r.Contains($"quiescenceScans = {scans}", StringComparison.Ordinal));
+        }
+    }
+
+    [Fact]
+    public void THE_WIRE_LEVEL_BACKSTOP_REFUSES_AN_UNOBSERVABLE_WINDOW_rather_than_reporting_a_STALLED_CPU()
+    {
+        // The plan above refuses before anything is deployed; this is the backstop for a direct caller, and
+        // it is not redundant because only the first one is free. It names BOTH numbers for the same reason
+        // the plan does — the alternative is ScanCounterStalled, which blames the controller.
+        var map = MirrorClientTests.Map(result: 1);
+        var wire = new RecordingTransport(map, MirrorClientTests.Stamp);
+        var client = new MirrorClient(map, wire, MirrorClientTests.Stamp);
+
+        var thrown = Assert.Throws<ArgumentOutOfRangeException>(() => InertPhase.Establish(
+            client, 0, new ushort[] { 1, 2 },
+            new InertDeclaration(new Dictionary<int, ushort> { [0] = 0 }, QuiescenceScans: 12), maxPolls: 11));
+
+        Assert.Contains("12 scan(s)", thrown.Message, StringComparison.Ordinal);
+        Assert.Contains("11 poll(s)", thrown.Message, StringComparison.Ordinal);
+    }
 }

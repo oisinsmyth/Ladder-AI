@@ -422,7 +422,7 @@ public class LoopRunTests
         var (result, _) = Run(Request(defect: TrivialBlockDefect.DoneWhileStillRunning, vector: Vector(expected: "10")));
 
         var package = Assert.Single(result.Packages);
-        Assert.Equal(SettlingState.NotSettled, package.Settling);
+        Assert.Equal(SettlingState.NotSettled, package.Settling.State);
         Assert.Equal(ResultVerdict.Unsettled, package.Verdict);
         Assert.False(package.ConclusiveAboutTheBlock);
         Assert.Contains("NOTHING WAS LEGITIMATELY READ", package.WhatToDoNext, StringComparison.Ordinal);
@@ -436,7 +436,7 @@ public class LoopRunTests
         var (result, _) = Run(Request(vector: Vector(settlingScans: 0)));
 
         var package = Assert.Single(result.Packages);
-        Assert.Equal(SettlingState.NotEstablished, package.Settling);
+        Assert.Equal(SettlingState.NotEstablished, package.Settling.State);
         Assert.Equal(ResultVerdict.Unsettled, package.Verdict);
     }
 
@@ -555,10 +555,16 @@ public class LoopRunTests
             var request = Request(
                 vector: Vector(step: 1, limit: 30_000),
                 compression: compression,
+                // comp_min here is 2000 / 1000 = 2x, so the ceilings have to leave room for it. Under the
+                // RULED ABSOLUTE 500 ms timer floor (2026-08-18) a 2-second DATA preset caps at 4.0x — the
+                // preset was 500 ms while the floor was the scan-derived 116.7 ms, which capped at 4.3x.
+                // The headroom is what this test needs; the ceiling itself is pinned in TimeCompressionTests.
+                // No negligibleFraction: the ratio-distortion bound is the ruled 10x literal-headroom
+                // companion now, and there are no LITERAL presets here for it to bind on anyway.
                 compressionInputs: new BlockCompressionInputs(
                     PlantMs: 2_000, BudgetMs: 1_000,
-                    Presets: new[] { new TimerPreset("Dwell", 500, PresetSource.Data) },
-                    ModelCompStable: 100, NegligibleFraction: 0.01));
+                    Presets: new[] { new TimerPreset("Dwell", 2_000, PresetSource.Data) },
+                    ModelCompStable: 100, NegligibleFraction: null));
 
             var result = LoopRun.Execute(request, new SimulatedGateway(Geometry()), () => elapsed += 400);
 
@@ -578,12 +584,18 @@ public class LoopRunTests
     [Fact]
     public void A_compressed_run_WITH_the_block_level_ceilings_supplied_is_admissible_and_reaches_the_device()
     {
+        // comp_min is 2000 / 1000 = 2x and the run is at 2x, so admissibility turns on the ceilings being
+        // at least that. Under the RULED ABSOLUTE 500 ms timer floor (2026-08-18) a 2-second DATA preset
+        // caps at 4.0x; a 500 ms preset — what this test carried while the floor was the scan-derived
+        // 116.7 ms — now caps at exactly 1.0x and would be refused before the device. That refusal is
+        // correct arithmetic under the new rule, not a regression, so the FIXTURE moves and the assertion
+        // does not.
         var (result, gateway) = Run(Request(
             compression: new RuntimeCompression(2),
             compressionInputs: new BlockCompressionInputs(
                 PlantMs: 2_000, BudgetMs: 1_000,
-                Presets: new[] { new TimerPreset("Dwell", 500, PresetSource.Data) },
-                ModelCompStable: 100, NegligibleFraction: 0.01)));
+                Presets: new[] { new TimerPreset("Dwell", 2_000, PresetSource.Data) },
+                ModelCompStable: 100, NegligibleFraction: null)));
 
         Assert.Equal(LoopOutcome.Ran, result.Outcome);
         Assert.Equal(1, gateway.Deployments);

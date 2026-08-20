@@ -152,4 +152,48 @@ public class SignalJoinTests
         Assert.Contains("NOTHING EXAMINED", report.Detail, StringComparison.Ordinal);
         Assert.Contains("not a pass", report.Detail, StringComparison.Ordinal);
     }
+
+    // ---------------------------------------------------------------------------------------------
+    // Settling names — checkable only since LoopRun.Settling became per-signal
+    // ---------------------------------------------------------------------------------------------
+
+    /// <summary>The same vector, with a settling declaration whose signals are the parameter.</summary>
+    private static SubmissionVector SettlingVector(params string[] signals) =>
+        Vector() with { Settling = new SettlingDeclaration("the named signals are unchanged across 3 scans", signals, 3) };
+
+    [Fact]
+    public void A_SETTLING_SIGNAL_THE_BINDING_DOES_NOT_CARRY_IS_REFUSED_and_named_as_a_SETTLING_signal()
+    {
+        // 🔴 *** THIS FILE'S SUBJECT RECORDED THE ABSENCE OF THIS CHECK AS "A NAMED LIMIT RATHER THAN AN
+        // OVERSIGHT", on the ground that settling compared whole result arrays so an unjoined settling
+        // name cost nothing — and named the day settling became per-signal as the day it would start to.
+        // It has: LoopRun.Settling now compares ONLY the registers these names resolve to, so an unjoined
+        // one SHRINKS the comparison rather than weakening it, and a settling check over no registers is
+        // satisfied by anything.
+        var report = Check(
+            SettlingVector(SpecName, "SPEC.NoSuchSignal"),
+            Binding(Result(Tag, SpecName), Result("iDB_Model.Phase.ScenarioDone", "SPEC.ScenarioDone")));
+
+        Assert.True(report.Any);
+        Assert.Contains(report.Unjoined, u => u.Role == SignalRole.Settling && u.Signal == "SPEC.NoSuchSignal");
+
+        // And the ROLE is what makes the refusal actionable: an unjoined settling name and an unjoined
+        // expectation are repaired in the same document and mean different things about the result.
+        Assert.Contains("Settling:", report.Detail, StringComparison.Ordinal);
+        Assert.Contains("ONE OF THEM IS A SETTLING SIGNAL", report.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void SETTLING_NAMES_THAT_JOIN_ARE_COUNTED_IN_THE_DENOMINATOR_rather_than_passing_unexamined()
+    {
+        // A check that skips what it cannot see reads exactly like one that looked and found nothing. The
+        // denominator moves by the number of settling names, which is what says they were examined at all.
+        var binding = Binding(Result(Tag, SpecName), Result("iDB_Model.Phase.ScenarioDone", "SPEC.ScenarioDone"));
+
+        var without = Check(Vector(), binding);
+        var with = Check(SettlingVector(SpecName, "SPEC.ScenarioDone"), binding);
+
+        Assert.False(with.Any);
+        Assert.Equal(without.Examined + 2, with.Examined);
+    }
 }

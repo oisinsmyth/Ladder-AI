@@ -184,7 +184,7 @@ public class NotInertEvidenceTests
 
         var package = Assert.Single(result.Packages);
 
-        Assert.Equal(SettlingState.Settled, package.Settling);
+        Assert.Equal(SettlingState.Settled, package.Settling.State);
         Assert.Equal(ResultVerdict.Pass, package.Verdict);
     }
 }

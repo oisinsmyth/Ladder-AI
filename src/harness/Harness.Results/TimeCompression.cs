@@ -15,7 +15,12 @@ public enum CompressionBoundKind
     /// <summary>Per assertion: <c>T_event / scan_period</c> if latched, <c>T_event / poll_period</c> if sampled.</summary>
     Assertion,
 
-    /// <summary>Per timer: <c>PT / (k x scan_period)</c>, k ~ 5. <b>X-D says this one often binds first.</b></summary>
+    /// <summary>
+    /// Per timer: <c>PT / floor</c>, where the floor is the RULED absolute
+    /// <see cref="TimeCompression.AbsoluteTimerFloorMs"/> (2026-08-18), which subsumes the scan-derived
+    /// <c>k x scan_period</c>. <b>X-D says this one often binds first, and under the absolute floor it
+    /// binds harder.</b>
+    /// </summary>
     Timer,
 
     /// <summary>The model's own declared <c>comp_stable</c> (M3/M4).</summary>
@@ -24,6 +29,12 @@ public enum CompressionBoundKind
     /// <summary>
     /// The third bound, from the 0.4 sweep: a preset that is a LITERAL does not scale, so compressing the
     /// behaviours around it changes the PROPORTION rather than the logic.
+    ///
+    /// <para><b>Its arithmetic changed on 2026-08-18 and its name did not.</b> The threshold is now the
+    /// RULED <see cref="TimeCompression.LiteralHeadroomMultiple"/> — the compressed behaviour must stay at
+    /// least 10x the literal — rather than a caller-supplied <c>negligibleFraction</c> the specification
+    /// never gave a value for. The kind is unchanged so that results and reports written against it keep
+    /// meaning the same thing.</para>
     /// </summary>
     RatioDistortion,
 }
@@ -122,12 +133,19 @@ public sealed record TimerPreset(string Name, double PresetMs, PresetSource Sour
 /// applied</b> — see there.
 /// </param>
 /// <param name="NegligibleFraction">
-/// The ratio-distortion threshold: how large an UNSCALED literal may become as a fraction of the SHORTEST
-/// COMPRESSED behaviour before the block starts passing or failing for reasons of proportion.
-/// <b>The specification names no value for this</b> — it works an example (0.003% becoming 2.5%) and calls
-/// the good state "negligible" without saying where negligible ends. So it is a required input with no
-/// default, and a plan that does not state one reports the bound <see cref="CompressionBoundState.NotDeclared"/>
-/// rather than quietly picking a number and calling it derived.
+/// 🔴 <b>SUPERSEDED 2026-08-18 AND NO LONGER CONSULTED. Kept so submissions written against it still
+/// parse; <see cref="TimeCompression.Plan"/> reports on its own detail line that it was ignored.</b>
+///
+/// <para>It was the ratio-distortion threshold: how large an UNSCALED literal may become as a fraction of
+/// the shortest compressed behaviour. <b>The specification names no value for it</b> — it works an example
+/// (0.003% becoming 2.5%) and calls the good state "negligible" without saying where negligible ends — so
+/// it was a required input with no default, and a plan that omitted it was refused. Two costs followed: a
+/// number invented per submission, and a run-hour totaliser in the call tree driving the ceiling to
+/// 0.0006x, which forced an undeclarable judgement about which literals "participate".</para>
+///
+/// <para>The replacement is <see cref="TimeCompression.AbsoluteTimerFloorMs"/> — <i>no timer preset may be
+/// compressed below ~500 ms</i> — with <see cref="TimeCompression.LiteralHeadroomMultiple"/> as the
+/// companion for unscaled literals. Both are RULED, so neither is declared per submission.</para>
 /// </param>
 /// <param name="RuntimeCompression">
 /// *** THE FACTOR THE WAVE ACTUALLY RUNS AT, AND THE ONE THE CONTRACT RULES ON. ***
@@ -164,6 +182,11 @@ public sealed record CompressionRequest(
 /// </summary>
 /// <param name="PlantMs">How long the behaviour under test takes in the plant, for <c>comp_min</c>.</param>
 /// <param name="BudgetMs">How long the wave may spend on it.</param>
+/// <param name="NegligibleFraction">
+/// 🔴 <b>SUPERSEDED 2026-08-18 AND NO LONGER CONSULTED</b> — see <see cref="CompressionRequest"/>'s
+/// parameter of the same name. Still carried so a submission written before the ruling parses; the plan
+/// says out loud that a declared value was not used.
+/// </param>
 public sealed record BlockCompressionInputs(
     double? PlantMs,
     double? BudgetMs,
@@ -238,22 +261,33 @@ public sealed record CompressionPlan(
 ///
 /// <para>Two parts of the design pull against each other and neither mentions the other: DB-12 requires
 /// models to run COMPRESSED so long tests are runnable at all, and §12 establishes that polling observes at
-/// one round trip per slot against a 23.33 ms scan. <b>Compression shortens the real-time separation of the
+/// one round trip per slot against a 24.931 ms scan. <b>Compression shortens the real-time separation of the
 /// events being observed</b>, so past a point it pushes an assertion below the sampling floor and
 /// <i>every check still reports green because the assertion was simply never sampled.</i></para>
 ///
-/// <para><b>THE CEILING IS LOWER THAN X-D ASSUMED, AND IT IS THE TERM X-D SAYS BINDS FIRST.</b>
-/// X-D carried <c>~10 ms</c> for the scan and <c>~100 ms</c> for the poll; §12a derivation 5 replaces both.
-/// The timer floor is <c>k x scan = 5 x 23.33 = 116.7 ms</c>, not 50 ms, so <b>on X-D's own 500 ms preset
-/// <c>comp_max(timer)</c> is 4.3x and not the 10x originally assumed</b>.
+/// <para>🔴 <b>THE TIMER TERM IS NOW AN ABSOLUTE FLOOR, RULED BY THE PROJECT OWNER 2026-08-18: NO TIMER
+/// PRESET MAY BE COMPRESSED BELOW ~500 ms.</b> It replaces the ratio-distortion FRACTION as the binding
+/// constraint, and it is a different QUESTION rather than a different number — the fraction asked <i>what
+/// proportion of the behaviour may a fixed timer occupy</i>, the floor asks <i>how short may a timer get
+/// before it stops behaving like a timer</i>, which is the question the hardware answers.
 ///
-/// 🔴 <b>THE 4.29x IS HALF-MEASURED, AND CALLING IT "MEASURED" WAS WRONG.</b> The scan period is measured;
-/// <b><c>k ~ 5</c> IS X-D'S OWN NUMBER AND NEVER HAS BEEN</b> — and it is the term X-D says binds first, so
-/// the assumed half is the load-bearing one. Read 116.7 ms as <b>DERIVED FROM ONE MEASURED AND ONE ASSUMED
-/// INPUT</b>, not as a measurement. It is a plausible engineering figure and it is not evidence; what would
-/// settle it is a preset scaled to five scans on a 1214C, observed to still behave like a timer. No verdict in X-D's worked
-/// example flips — a 4-hour behaviour in a 60 s budget needs 240x and is refused either way — but every
-/// marginal case moves toward REFUSE.</para>
+/// <b>It SUBSUMES both measured floors</b> — <c>k x scan = 5 x 24.931 = 124.7 ms</c> and the p99
+/// sampled-observability floor — so it is the single term that binds, and
+/// <see cref="TimeCompression.EffectiveTimerFloorMs"/> takes the maximum rather than trusting that
+/// ordering to hold forever. <b>On a 2-second shortest preset <c>comp_max(timer)</c> is 4.0x</b>, against
+/// the 4.3x the scan-derived floor gave and the 10x X-D originally assumed.
+///
+/// <b>The companion is ruled too:</b> the compressed behaviour must remain at least 10x the largest
+/// PARTICIPATING unscaled literal (<see cref="TimeCompression.LiteralHeadroomMultiple"/>), which catches
+/// the case the floor alone cannot see — a literal does not scale, so compressing around it changes the
+/// proportion rather than the logic. <b>What this dissolves:</b> under the fraction rule a run-hour
+/// totaliser in the call tree drove the ceiling to 0.0006x, forcing an undeclarable judgement about which
+/// literals participate.
+///
+/// ⚠️ <b><c>k = 5</c> IS NOW RATIFIED RATHER THAN ASSUMED, AND RATIFIED IS STILL NOT MEASURED.</b> Figures
+/// derived from it may be quoted as RULED and not as measured; what would settle it remains a preset
+/// scaled to five scans on a 1214C, observed still behaving like a timer. It no longer decides anything on
+/// its own, since 500 ms is four times larger.</para>
 ///
 /// <para><b>Every constant is read from <c>WireTiming</c>, which transcribes §12a.</b> Nothing is chosen
 /// here. The two that matter take different bands and the difference is not a style choice: the poll period
@@ -264,23 +298,90 @@ public sealed record CompressionPlan(
 public static class TimeCompression
 {
     /// <summary>
-    /// X-D's <c>k</c>: how many scan periods a preset must remain above once scaled. <b>k ~ 5</b>, so the
-    /// floor is <c>5 x 23.33 = 116.7 ms</c>. A preset scaled below a few scan times stops behaving like a
-    /// timer — it rounds toward zero, and the block then passes or fails for reasons unrelated to its logic.
+    /// X-D's <c>k</c>: how many scan periods a preset must remain above once scaled. <b>k = 5 —
+    /// RATIFIED BY THE PROJECT OWNER, 2026-08-18.</b> A preset scaled below a few scan times stops behaving
+    /// like a timer — it rounds toward zero, and the block then passes or fails for reasons unrelated to
+    /// its logic.
     ///
-    /// <para>🔴 <b>[A] — ASSUMED. THIS IS X-D'S NUMBER AND NOTHING HAS MEASURED IT</b>, which matters more
-    /// than it looks: it multiplies the one measured term to produce the floor, and X-D says the timer term
-    /// binds first. Every figure downstream of it — the 116.7 ms floor, the 4.29x cap on a 500 ms preset —
-    /// is therefore DERIVED FROM ONE MEASURED AND ONE ASSUMED INPUT and must not be described as measured.</para>
+    /// <para>⚠️ <b>RATIFIED IS NOT MEASURED, and the distinction is kept.</b> This was carried as
+    /// <c>[A] — ASSUMED</c> because it is X-D's number and nothing had measured it; it is now a DECIDED
+    /// constant rather than an open assumption, so figures derived from it may be quoted as RULED. They
+    /// still may not be quoted as measured, and what would settle it remains the same experiment: a preset
+    /// scaled to five scans on a 1214C, observed still behaving like a timer.</para>
+    ///
+    /// <para><b>It no longer decides anything on its own.</b> Since 2026-08-18 the binding term is
+    /// <see cref="AbsoluteTimerFloorMs"/>, which subsumes <c>k x scan</c> at every scan period this rig has
+    /// produced — see <see cref="EffectiveTimerFloorMs"/>.</para>
     /// </summary>
     public const int TimerScanMultiple = 5;
 
     /// <summary>
-    /// The timer floor in milliseconds: <c>k x scan_period</c>. <b>116.7 ms, not X-D's original 50.</b>
-    /// [D, §12a derivation 5] — <b>D for DERIVED, and one of its two inputs is
-    /// <see cref="TimerScanMultiple"/>, which is ASSUMED.</b> Not a measurement, whatever its precision suggests.
+    /// 🔴 <b>THE ABSOLUTE TIMER FLOOR: NO TIMER PRESET MAY BE COMPRESSED BELOW ~500 ms. RULED BY THE
+    /// PROJECT OWNER, 2026-08-18, AND IT REPLACES THE RATIO-DISTORTION FRACTION AS THE BINDING
+    /// CONSTRAINT.</b>
+    ///
+    /// <para><b>It is a different QUESTION, not a different number.</b> The fraction rule asked <i>"what
+    /// proportion of the behaviour under test may a fixed timer occupy?"</i> — an arithmetic property of
+    /// the test. This asks <i>"how short may a timer get before it stops behaving like a timer?"</i>, which
+    /// is the question the HARDWARE actually answers, and the one a scan-period floor was already reaching
+    /// for.</para>
+    ///
+    /// <para><b>It SUBSUMES both measured floors, which is why it is the single binding constraint:</b>
+    /// <c>k x scan = 5 x 24.931 = 124.7 ms</c>, and the sampled-observability floor at the p99. 500 is above
+    /// both with margin, so a plan cleared here has cleared them — and <see cref="EffectiveTimerFloorMs"/>
+    /// takes the MAXIMUM rather than assuming the ordering, so a rig whose scan period ever exceeds 100 ms
+    /// follows the physics instead of silently keeping a number that has stopped being conservative.</para>
+    ///
+    /// <para><b>What it dissolves.</b> Under the fraction rule a run-hour totaliser sitting in the call
+    /// tree drove the ceiling to 0.0006x, which forced somebody to declare — with nothing to declare it
+    /// from — which literals "participate". The floor asks nothing about literals at all; the companion
+    /// (<see cref="LiteralHeadroomMultiple"/>) restores the one case the floor alone would miss, at a ruled
+    /// multiple rather than an invented fraction.</para>
+    ///
+    /// <para><b>Worked, so it can be checked:</b> a 2-second shortest preset caps compression at
+    /// <c>2000 / 500 = 4.0x</c>.</para>
+    /// </summary>
+    public const double AbsoluteTimerFloorMs = 500.0;
+
+    /// <summary>
+    /// 🔴 <b>THE COMPANION TO THE FLOOR: the compressed behaviour must remain at least 10x the largest
+    /// PARTICIPATING unscaled literal.</b> RULED 2026-08-18, alongside <see cref="AbsoluteTimerFloorMs"/>.
+    ///
+    /// <para><b>It catches what the floor alone would miss.</b> The floor governs presets that SCALE; a
+    /// literal does not scale at all, so compressing the behaviour around it changes the PROPORTION rather
+    /// than the logic, and no timer floor can see that. This is the old ratio-distortion inequality with
+    /// its free variable RULED instead of declared: the previous form took a caller-supplied
+    /// <c>negligibleFraction</c> that the specification never named a value for, so the bound was either
+    /// invented or refused as NOT DECLARED.</para>
+    ///
+    /// <para><b>The PARTICIPATING set is the presets the submission supplies, and nothing here widens
+    /// it.</b> That is the declaration this arithmetic is entitled to read; whether a preset in the call
+    /// tree participates in the behaviour under test is a question for the author, and it is no longer
+    /// forced by a bound that would otherwise collapse to 0.0006x.</para>
+    /// </summary>
+    public const double LiteralHeadroomMultiple = 10.0;
+
+    /// <summary>
+    /// The scan-derived timer floor: <c>k x scan_period</c> — <b>124.7 ms at the measured 24.931 ms scan</b>
+    /// (it read 116.7 ms while the scan constant was 7% low). [D, §12a derivation 5]
+    ///
+    /// <para><b>Reported, and no longer binding on its own.</b> <see cref="EffectiveTimerFloorMs"/> is what
+    /// a ceiling is computed from. This is kept because the SUBSUMPTION is a claim about two numbers, and a
+    /// claim with only one of them in the code is unfalsifiable.</para>
     /// </summary>
     public static double TimerFloorMs => TimerScanMultiple * WireTiming.ScanPeriodMs;
+
+    /// <summary>
+    /// 🔴 <b>THE FLOOR A SCALED PRESET IS ACTUALLY HELD TO: the greater of
+    /// <see cref="AbsoluteTimerFloorMs"/> and <see cref="TimerFloorMs"/>.</b>
+    ///
+    /// <para><b>A maximum rather than a constant, deliberately.</b> The ruling is that 500 ms subsumes
+    /// <c>k x scan</c> — true at 24.931 ms/scan with a factor of four in hand, and FALSE the moment a
+    /// program's scan period passes 100 ms. Hardcoding 500 would then be a floor that has quietly stopped
+    /// being conservative, on a constant this repository has already had to correct once for being 7% low
+    /// in the permissive direction.</para>
+    /// </summary>
+    public static double EffectiveTimerFloorMs => Math.Max(AbsoluteTimerFloorMs, TimerFloorMs);
 
     /// <summary>
     /// The SAMPLED poll period: <c>K x RTT_p99</c>, and <b>>= 201 ms even at K = 1</b>. [D, §12a derivation 5]
@@ -343,8 +444,35 @@ public static class TimeCompression
         return window.PlantScans;
     }
 
-    /// <summary>Compute the whole plan: <c>comp_min</c>, every ceiling, and the verdict.</summary>
+    /// <summary>
+    /// Compute the whole plan: <c>comp_min</c>, every ceiling, and the verdict.
+    ///
+    /// <para>🔴 <b>A DECLARED <c>negligibleFraction</c> IS NO LONGER CONSULTED, AND THE PLAN SAYS SO OUT
+    /// LOUD.</b> The ratio-distortion fraction was replaced on 2026-08-18 by the absolute floor plus the
+    /// ruled <see cref="LiteralHeadroomMultiple"/>. A submission that still carries the field is not
+    /// refused — it was correct when it was written — but an input that is read as though it still governs
+    /// is exactly the silently-ignored field this project keeps finding, so the supersession is appended to
+    /// the plan's own detail rather than left in a doc comment.</para>
+    /// </summary>
     public static CompressionPlan Plan(CompressionRequest request, double floorScans)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var plan = PlanOf(request, floorScans);
+
+        return request.NegligibleFraction is not { } superseded
+            ? plan
+            : plan with
+            {
+                Detail = plan.Detail
+                    + $" ⚠️ THIS SUBMISSION DECLARES negligibleFraction = {superseded:P2} AND IT WAS NOT USED. The ratio-distortion "
+                    + $"FRACTION was replaced on 2026-08-18 by the absolute {AbsoluteTimerFloorMs:0.#} ms timer floor plus the ruled "
+                    + $"{LiteralHeadroomMultiple:0.#}x literal-headroom companion. Nothing here is invalidated by the declaration and "
+                    + "nothing was computed from it; it is named because a stated input that quietly governs nothing is worse than an absent one.",
+            };
+    }
+
+    private static CompressionPlan PlanOf(CompressionRequest request, double floorScans)
     {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(request.Expectations);
@@ -410,15 +538,16 @@ public static class TimeCompression
         {
             switch (preset.Source)
             {
+                // 🔴 *** THE ABSOLUTE FLOOR, RULED 2026-08-18: NO TIMER PRESET MAY BE COMPRESSED BELOW
+                // ~500 ms. *** It replaced `PT / (k x scan)` as the binding term because it asks the
+                // question the hardware answers — how short may a timer get before it stops behaving like
+                // a timer — rather than what proportion of a test a fixed timer may occupy. It SUBSUMES
+                // k x scan (124.7 ms at the measured scan) and the p99 sampled-observability floor, and
+                // EffectiveTimerFloorMs takes the maximum rather than trusting that ordering forever.
                 case PresetSource.Data:
                     bounds.Add(new CompressionBound(CompressionBoundKind.Timer, CompressionBoundState.Computed, preset.Name,
-                        preset.PresetMs / TimerFloorMs,
-                        $"'{preset.Name}' is a DATA preset of {preset.PresetMs:0.#} ms, so the factor scales it: PT / (k x scan) = {preset.PresetMs:0.#} / {TimerFloorMs:0.#} = {preset.PresetMs / TimerFloorMs:0.##}x. *** THE FLOOR IS 116.7 ms, NOT X-D's ORIGINAL 50 *** (§12a derivation 5), so a 500 ms preset caps compression at 4.3x rather than 10x. X-D says this term often binds first."));
-                    break;
-
-                case PresetSource.Literal when request.NegligibleFraction is not { } fraction:
-                    bounds.Add(CompressionBound.NotDeclared(CompressionBoundKind.RatioDistortion, preset.Name,
-                        $"'{preset.Name}' is an UNSCALED literal of {preset.PresetMs:0.#} ms and no negligible-fraction threshold was declared, so the ratio-distortion ceiling could not be computed. The specification works an example (0.003% of a 4-hour interval becoming 2.5% of a 20-second one) and never says where 'negligible' ends, so this input has no default and is not invented here."));
+                        preset.PresetMs / EffectiveTimerFloorMs,
+                        $"'{preset.Name}' is a DATA preset of {preset.PresetMs:0.#} ms, so the factor scales it: PT / floor = {preset.PresetMs:0.#} / {EffectiveTimerFloorMs:0.#} = {preset.PresetMs / EffectiveTimerFloorMs:0.##}x. *** THE FLOOR IS THE ABSOLUTE {AbsoluteTimerFloorMs:0.#} ms (ruled 2026-08-18), NOT the scan-derived k x scan = {TimerScanMultiple} x {WireTiming.ScanPeriodMs:0.###} = {TimerFloorMs:0.#} ms, which it subsumes *** — so a 2-second preset caps compression at {2000.0 / EffectiveTimerFloorMs:0.0}x. X-D says this term often binds first, and under the absolute floor it binds harder."));
                     break;
 
                 case PresetSource.Literal when double.IsNaN(shortestBehaviourPlantMs):
@@ -426,10 +555,17 @@ public static class TimeCompression
                         $"'{preset.Name}' is an UNSCALED literal of {preset.PresetMs:0.#} ms, and no expectation declares a window, so there is no SHORTEST COMPRESSED BEHAVIOUR to measure it against."));
                     break;
 
+                // 🔴 *** THE COMPANION TO THE FLOOR, RULED 2026-08-18: the compressed behaviour must
+                // remain at least 10x the largest PARTICIPATING unscaled literal. *** Same inequality as
+                // the old ratio-distortion bound with its free variable RULED instead of caller-declared —
+                // `negligibleFraction` had no value in the specification, so the bound was either invented
+                // or reported NOT DECLARED and refused the plan. Taking the MINIMUM over the supplied
+                // presets is the same thing as keying on the largest literal, computed per row so the
+                // report names which one binds.
                 case PresetSource.Literal:
                     bounds.Add(new CompressionBound(CompressionBoundKind.RatioDistortion, CompressionBoundState.Computed, preset.Name,
-                        request.NegligibleFraction!.Value * shortestBehaviourPlantMs / preset.PresetMs,
-                        $"'{preset.Name}' is a LITERAL of {preset.PresetMs:0.#} ms and DOES NOT SCALE. The shortest behaviour is {shortestBehaviourPlantMs:0.#} ms of plant time, so keeping the literal within {request.NegligibleFraction!.Value:P2} of it caps the factor at {request.NegligibleFraction!.Value * shortestBehaviourPlantMs / preset.PresetMs:0.##}x. Past that the block passes or fails for reasons of CHANGED PROPORTION rather than changed logic — a different failure from losing observability, and one no other term catches."));
+                        shortestBehaviourPlantMs / (LiteralHeadroomMultiple * preset.PresetMs),
+                        $"'{preset.Name}' is a LITERAL of {preset.PresetMs:0.#} ms and DOES NOT SCALE. The shortest behaviour is {shortestBehaviourPlantMs:0.#} ms of plant time, and the ruled companion requires the COMPRESSED behaviour to stay at least {LiteralHeadroomMultiple:0.#}x this literal, which caps the factor at {shortestBehaviourPlantMs / (LiteralHeadroomMultiple * preset.PresetMs):0.##}x. Past that the block passes or fails for reasons of CHANGED PROPORTION rather than changed logic — a different failure from losing observability, and one no other term catches. *** THE MULTIPLE IS RULED, NOT DECLARED (2026-08-18): *** the caller-supplied `negligibleFraction` this replaced had no value anywhere in the specification, so it was invented per submission or the plan was refused for want of it."));
                     break;
 
                 default:

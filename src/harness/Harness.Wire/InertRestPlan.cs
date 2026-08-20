@@ -117,6 +117,11 @@ public sealed record InertRestPlan(
         $"slot '{SlotId}': {Registers.Count} result register(s) — "
         + $"{DeclaredCount} DECLARED, {ExcludedCount} EXCLUDED by declaration, {DefaultedCount} DEFAULTED, "
         + $"{DerivedCount} DERIVED (latch band)"
+
+        // *** THE WAIT IS REPORTED ON EVERY RUN, INCLUDING THE CLEAN ONE. *** It was silently 1 for the
+        // whole life of the feature and nothing printed it, so the run that caught a model
+        // mid-integration looked exactly like the run that did not.
+        + (Declaration is null ? string.Empty : $", quiescence {Declaration.QuiescenceScans} scan(s)")
         + (Refusals.Count > 0 ? $"; NOT PLANNED, {Refusals.Count} refusal(s)" : string.Empty);
 
     /// <summary>
@@ -127,13 +132,46 @@ public sealed record InertRestPlan(
     /// <b>The same value the stimulus side writes under</b> — reading under one order and writing under the
     /// other cancels out on our own loopback and disagrees only against the device.
     /// </param>
-    public static InertRestPlan For(SlotBinding binding, RegisterWordOrder order, int quiescenceScans = 1)
+    /// <param name="pollBudget">
+    /// 🔴 <b>THE POLLS <c>InertPhase</c> WILL SPEND WAITING FOR THE QUIESCENCE WINDOW — passed so that a
+    /// declaration nothing could ever satisfy is a REFUSAL here rather than a stall out on the wire.</b>
+    ///
+    /// <para>The wait is expressed in SCANS and paid in POLLS, and the worst case is one scan observed per
+    /// poll (the link cannot show you scans you never asked for). So a quiescence of more than
+    /// <paramref name="pollBudget"/> scans is unsatisfiable under some ratio of scan time to round-trip
+    /// time — and today's symptom is <c>InertOutcome.ScanCounterStalled</c>, whose text reads <i>"The PLC
+    /// may be stopped"</i>. <b>That sends a reader to the controller for a number the coordinator wrote.</b></para>
+    /// </param>
+    public static InertRestPlan For(SlotBinding binding, RegisterWordOrder order, int pollBudget = InertPhase.PollBudget)
     {
         ArgumentNullException.ThrowIfNull(binding);
 
         var refusals = new List<string>();
         var notes = new List<string>();
         var registers = new List<InertRestRegister>();
+
+        // 🔴 *** THE WAIT COMES FROM THE BINDING AND IS NO LONGER A PARAMETER WITH A DEFAULT. *** It WAS a
+        // parameter, `quiescenceScans = 1`, and `LoopRun` called this method with two arguments — so the
+        // one knob designed for "this model takes N scans to settle" sat at 1 for every slot ever run, and
+        // no binding field existed to move it. A caller cannot forget to pass what it cannot pass.
+        var quiescenceScans = binding.QuiescenceScans;
+
+        if (quiescenceScans < 1)
+        {
+            refusals.Add(
+                $"slot '{binding.SlotId}' declares quiescenceScans = {quiescenceScans}. The quiescence check needs at least ONE scan between "
+                + "its two observations: two reads inside one scan cannot tell a settled value from a changing one, so a value below 1 asks "
+                + "for a check that cannot distinguish anything. Omit the field to take the floor of 1.");
+        }
+        else if (quiescenceScans > pollBudget)
+        {
+            refusals.Add(
+                $"slot '{binding.SlotId}' declares quiescenceScans = {quiescenceScans} and the inert phase's poll budget is {pollBudget} poll(s). "
+                + "*** THIS IS A REFUSAL AND NOT A STALL. *** The wait is declared in SCANS and paid in POLLS, and the worst case is one scan "
+                + "observed per poll, so this window cannot be observed within the budget under every scan-time/round-trip ratio. Left to run it "
+                + $"reports ScanCounterStalled — whose text says 'The PLC may be stopped' — for a number written in this document. Declare "
+                + $"{pollBudget} or fewer, or raise the budget deliberately.");
+        }
 
         var escape = EscapeOf(binding, refusals);
         var offsets = binding.ResultRegisterOffsets;

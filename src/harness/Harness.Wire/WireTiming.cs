@@ -75,8 +75,49 @@ public static class WireTiming
     /// </summary>
     public const int RttMaxObservedMs = 2216;
 
-    /// <summary>Scan period under load — the row to budget from, because the harness always has traffic on it. [D, §12a]</summary>
-    public const double ScanPeriodMs = 23.33;
+    /// <summary>
+    /// 🔴 <b>THE SCAN PERIOD UNDER POLL LOAD — 24.931 ms, MEASURED ON THE DEPLOYED PROGRAM 2026-08-18.</b>
+    /// [M, §12a] <b>It was 23.33 and that was 7% LOW, in the permissive direction, in every budget,
+    /// ceiling and backstop in this harness.</b>
+    ///
+    /// <para><b>How it was measured:</b> 12,027 scans over 299.8 s of continuous polling, from the
+    /// mirror's own scan counter, ±0.002 ms. Replicated quiet at 23.80 ms
+    /// (<see cref="ScanPeriodQuietMs"/>), twice. <b>Poll load costs a reproducible +1.13 ms/scan</b>, so
+    /// the two figures are not two estimates of one number — they are two different operating points, and
+    /// the loaded one is the only one a wave ever runs at.</para>
+    ///
+    /// <para>🔴 <b>IT IS A PROPERTY OF THE PROGRAM, NOT OF THE CONTROLLER, AND THAT HAS ALREADY BEEN GOT
+    /// WRONG ONCE.</b> A ~2.1 ms figure recorded elsewhere in this repository belongs to a much smaller
+    /// reference program and was quoted as a rig fact — wrong by an order of magnitude. <b>Re-measure this
+    /// constant whenever the program under test changes materially</b>; nothing about the CPU fixes it,
+    /// and no figure taken against a different program may be substituted here.</para>
+    ///
+    /// <para><b>Why the LOADED figure and not the quiet one.</b> Two of its consumers are BOUND-shaped and
+    /// both want the pessimistic value: <see cref="BackstopMs"/> multiplies it (a short scan under-sizes
+    /// the backstop and produces a spurious TIMED-OUT on a healthy test), and
+    /// <c>TimeCompression.TimerFloorMs</c> multiplies it (a short scan lowers the timer floor and admits a
+    /// compression at which a preset stops behaving like a timer). The rest — <see cref="MaxTensorWidth"/>,
+    /// <see cref="ObservabilityFloorScans"/>, <c>ScanBudget.PlantMs</c> — use it as a UNIT CONVERSION
+    /// between scans and milliseconds, where the correct value is simply the true one. The quiet figure is
+    /// the true one for no run this harness performs.</para>
+    /// </summary>
+    public const double ScanPeriodMs = 24.931;
+
+    /// <summary>
+    /// The same program's scan period with NO poll traffic on the link — 23.80 ms, replicated twice.
+    /// [M, §12a] <b>Recorded, never budgeted from.</b>
+    ///
+    /// <para>It exists for the same reason <see cref="RttTypicalMs"/> does: so the CHOICE between the two
+    /// operating points is visible and checkable rather than a number somebody picked. A test asserts the
+    /// order (<c>loaded &gt; quiet</c>), which is the cheapest guard there is against the two being
+    /// transposed — and transposing them would move every bound in this file in the permissive direction,
+    /// silently.</para>
+    ///
+    /// <para><b>The difference is the measurement, not the noise:</b> +1.13 ms/scan attributable to poll
+    /// load, reproducible. A harness that measured itself out of its own budget would be measuring the
+    /// wrong thing.</para>
+    /// </summary>
+    public const double ScanPeriodQuietMs = 23.80;
 
     /// <summary>
     /// The client's per-request timeout: <c>RTT_max x ~1.35</c>. [D, §12a derivation 4]
@@ -186,16 +227,33 @@ public static class WireTiming
         return slotsPerRead * (int)Math.Floor(sMinScans * ScanPeriodMs / RttP99Ms);
     }
 
-    /// <summary>Observability floor in scans at the p99 for a K-slot tensor: a slot is polled every <c>K x RTT</c>. [D, §12a derivation 1]</summary>
+    /// <summary>
+    /// Observability floor in scans at the p99: a slot is re-read once per POLL CYCLE, and a poll cycle is
+    /// <paramref name="readsPerPollCycle"/> round trips. [D, §12a derivation 1]
+    ///
+    /// <para>🔴 <b>THE PARAMETER WAS CALLED <c>slots</c> AND EVERY PRODUCTION CALLER PASSED
+    /// READS-PER-CYCLE.</b> Those are different numbers whenever more than one slot fits in a read: under
+    /// F-1 a read covers <c>R = floor(125 / Wr)</c> WHOLE slots, so a 6-slot wave set of 20-register slots
+    /// is ONE read per cycle, not six. The name said the stricter thing while the callers did the correct
+    /// thing — so a reader checking the call sites against the signature would have "fixed" every one of
+    /// them into a floor up to <c>R</c> times too large. <b>The name is now what the callers pass</b>, and
+    /// the conversion from slots lives in <c>RegisterMap.ReadsPerPollCycle</c>, which is where the map is.
+    /// </para>
+    /// </summary>
+    /// <param name="readsPerPollCycle">
+    /// Round trips one poll cycle costs — <c>ceil(K / R)</c>, i.e. <c>RegisterMap.ReadsPerPollCycle</c>.
+    /// <b>Not the slot count</b>, unless a read covers exactly one slot.
+    /// </param>
     /// <remarks>
-    /// 8.6 scans at K=1 (was 7.4 at <c>RTT_p99</c> = 173), so a SAMPLED level must persist for 9 scans to
-    /// be caught — and for <c>9 x K</c> in a K-slot tensor. A latched observation has no such window.
+    /// 8.1 scans at one read per cycle (was 8.6 at <c>scan</c> = 23.33, and 7.4 at <c>RTT_p99</c> = 173),
+    /// so a SAMPLED level must persist for 9 scans to be caught — and for <c>9 x reads</c> where a cycle
+    /// costs several. A latched observation has no such window.
     /// </remarks>
-    public static double ObservabilityFloorScans(int slots)
+    public static double ObservabilityFloorScans(int readsPerPollCycle)
     {
-        if (slots < 1)
-            throw new ArgumentOutOfRangeException(nameof(slots), slots, "a tensor of no slots is not polled at all.");
+        if (readsPerPollCycle < 1)
+            throw new ArgumentOutOfRangeException(nameof(readsPerPollCycle), readsPerPollCycle, "a poll cycle that issues no read observes nothing at all.");
 
-        return slots * RttP99Ms / ScanPeriodMs;
+        return readsPerPollCycle * RttP99Ms / ScanPeriodMs;
     }
 }

@@ -87,7 +87,10 @@ public class ResultPackageJsonTests
             waveIndex: 7,
             stimulus,
             stimulus is null ? null : StimulusExpectation.AtLeastOneScanPerRoundTrip(8),
-            settling,
+
+            // The rendering is what is under test here, so the state is stated and the detail is a fixture
+            // line — the registers behind a real one are LoopRun.Settling's to name.
+            new SettlingReport(settling, "stated by a test fixture."),
             assertions ?? new[] { AssertionOutcome.Compare("REQ-14.a", "Demo_Count", "10", "10") },
             coRunners,
             Map(),

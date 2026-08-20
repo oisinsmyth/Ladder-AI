@@ -8,12 +8,19 @@ namespace Harness;
 /// cannot support, because the alternative is a green result that means nothing.
 ///
 /// MEASURED ON THE RIG, 2026-08-12, and the numbers this comment used to carry (~100 ms poll against
-/// a ~10 ms scan, "roughly ten times") were all wrong: the scan is 23.33 ms under load, the Modbus
+/// a ~10 ms scan, "roughly ten times") were all wrong: the scan is 24.931 ms under poll load, the Modbus
 /// round trip is 78 ms typical and *** 201 ms AT THE p99 ***, and A POLL IS ONE ROUND TRIP - there is
-/// no separate poll period to tune. So a one-scan event sits ~3.3 scans below the sampler typically
-/// and ~8.6 at the p99, with 3.0 the irreducible floor at the fastest median observed. The floor is
-/// SMALLER than was believed, and it is a distribution rather than a number. No polling rate
+/// no separate poll period to tune. So a one-scan event sits ~3.1 scans below the sampler typically
+/// and ~8.1 at the p99, with ~2.8 the irreducible floor at the fastest median observed (~70 ms). The
+/// floor is SMALLER than was believed, and it is a distribution rather than a number. No polling rate
 /// recovers a one-scan event, which is the part that was right and is why this enum exists.
+///
+/// *** THE SCAN WAS 23.33 HERE UNTIL 2026-08-18 AND THE THREE SCAN FIGURES ABOVE MOVED WITH IT. *** It
+/// was re-measured on the deployed program at 24.931 ms (12,027 scans over 299.8 s of continuous poll
+/// load), so the old 23.33 was 7% low in the permissive direction. Note which way these three moved:
+/// a LONGER scan means a fixed real-time gap spans FEWER scans, so ~3.3/~8.6/3.0 became ~3.1/~8.1/~2.8.
+/// The scan period is a property of the PROGRAM, not of the controller - a ~2.1 ms figure recorded
+/// elsewhere in this repository belongs to a far smaller reference program and is not this one's.
 ///
 /// *** THE p99 WAS 173 HERE UNTIL 2026-08-14 AND THAT WAS STALE BY A DAY. *** It was raised to 201 on
 /// 2026-08-13: 173 came from a 1..16-register sweep applied to full-width slots, and re-measuring at

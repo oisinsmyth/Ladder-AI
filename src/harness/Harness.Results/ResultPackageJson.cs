@@ -68,8 +68,20 @@ public static class ResultPackageJson
             // verdict precedence actually turned on, and a consumer reading only the verdict cannot
             // recover them.
             ["runOutcome"] = package.RunOutcome.ToString(),
-            ["settling"] = package.Settling.ToString(),
+            ["settling"] = package.Settling.State.ToString(),
+
+            // *** THE STATE AND THE REGISTERS IT WAS TAKEN OVER, AS TWO KEYS. *** `settling` keeps its
+            // shape so no consumer of the artifact breaks; the detail is a sibling rather than a longer
+            // string in the same key, because it is the half that names WHICH register moved and from
+            // what to what — and a reader parsing the state must not have to parse prose to get it.
+            ["settlingDetail"] = package.Settling.Detail,
             ["admissibility"] = Admissibility(package.Admissibility),
+
+            // *** THE FLOOR THIS RESULT'S EXPECTATIONS WERE JUDGED AGAINST. *** Rendered because it was
+            // computed with a hardcoded one-read-per-cycle until 2026-08-18 while the gate used the wave
+            // set's real figure, and nothing in the delivered artifact said which number had been used.
+            // Null is "no observability report was supplied", which is a caveat and not a pass.
+            ["observabilityFloorScans"] = package.ObservabilityFloorScans,
 
             // ---- DB-8's seven -----------------------------------------------------------------------
             ["assertions"] = Assertions(package.Assertions),

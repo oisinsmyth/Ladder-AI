@@ -1548,15 +1548,16 @@ public static class SubmissionGate
     /// <b>X-D's other three ceilings, which a submission does not carry — and the treatment depends on
     /// whether anything is actually being compressed.</b>
     ///
-    /// <para>The timer bound (<c>PT / (k x scan)</c>, which X-D says <i>often binds first</i>), the model's
+    /// <para>The timer bound (<c>PT / floor</c>, which X-D says <i>often binds first</i>), the model's
     /// declared <c>comp_stable</c>, and the ratio-distortion bound on unscaled literals are properties of
     /// the BLOCK and the MODEL, not of the vectors. Contract §2 gives an author nowhere to state them.</para>
     ///
     /// <para><b>So: at comp = 1 this is a real pass</b> — nothing is scaled, and none of the three can bind.
     /// That is computed from the submission, not assumed. <b>Above comp = 1 it is NOT CHECKED and fails
-    /// closed</b>, because the plan is then compressing a block whose shortest preset nobody stated. On a
-    /// 500 ms preset the timer ceiling is 4.3x, not the 10x X-D originally assumed, so this is exactly the
-    /// range where a submission would otherwise sail through.</para>
+    /// closed</b>, because the plan is then compressing a block whose shortest preset nobody stated. Under
+    /// the RULED ABSOLUTE 500 ms timer floor (2026-08-18) a 2-second preset caps at 4.0x, not the 10x X-D
+    /// originally assumed — and a 500 ms preset caps at exactly 1.0x, i.e. cannot be compressed at all. So
+    /// this is exactly the range where a submission would otherwise sail through.</para>
     /// </summary>
     private static GateResult CompressionBoundsNotInTheSubmission(
         IReadOnlyList<SubmissionVector> vectors, int runtimeCompression, double floorScans, BlockCompressionInputs? inputs)
@@ -1573,15 +1574,17 @@ public static class SubmissionGate
             return new GateResult("10b time compression — timer / model / ratio ceilings (X-D)", GateStatus.Checked, true, nameof(TimeCompression),
                 $"nothing is compressed at run time — this wave runs at comp={runtimeCompression}, whatever the vectors' declared factor(s) of {string.Join(", ", declaredFactors.Distinct().OrderBy(f => f))} — so X-D's timer, model-stability and ratio-distortion ceilings cannot bind. "
                 + $"That is computed from the submission, not assumed: at comp=1 a DATA preset is unscaled, an unscaled LITERAL keeps its proportion, and the model is not being asked to run at a factor. "
-                + $"For reference, the timer floor is k x scan = {TimeCompression.TimerScanMultiple} x {Harness.Wire.WireTiming.ScanPeriodMs} = {TimeCompression.TimerFloorMs:0.#} ms, so a 500 ms preset would cap compression at {500 / TimeCompression.TimerFloorMs:0.0}x — not the 10x X-D originally assumed.");
+                + $"For reference, the timer floor is the RULED ABSOLUTE {TimeCompression.AbsoluteTimerFloorMs:0.#} ms (2026-08-18), which subsumes the scan-derived k x scan = {TimeCompression.TimerScanMultiple} x {Harness.Wire.WireTiming.ScanPeriodMs:0.###} = {TimeCompression.TimerFloorMs:0.#} ms — so a 2-second preset would cap compression at {2000.0 / TimeCompression.EffectiveTimerFloorMs:0.0}x, not the 10x X-D originally assumed.");
         }
 
         if (inputs is null)
         {
             return GateResult.CouldNotRun("10b time compression — timer / model / ratio ceilings (X-D)", NotCheckedReason.AwaitingAnArtifactThatCouldExist, "TimeCompression.Plan, via BlockCompressionInputs",
                 $"this wave runs at comp={runtimeCompression} with declared factor(s) {string.Join(", ", declaredFactors.Distinct().OrderBy(f => f))}, so compression IS being applied — and three of X-D's four ceilings were compared against nothing. "
-                + $"No timer presets were supplied (the term X-D says OFTEN BINDS FIRST: PT / (k x scan), floor {TimeCompression.TimerFloorMs:0.#} ms, so a 500 ms preset caps at {500 / TimeCompression.TimerFloorMs:0.0}x), no model comp_stable, and no negligible-fraction threshold for the ratio-distortion bound. "
-                + "Supply them as `blockCompression` (with `model.compStable`). An unknown ceiling is not a high one.");
+                + $"No timer presets were supplied (the term X-D says OFTEN BINDS FIRST: PT / floor, where the floor is the RULED ABSOLUTE {TimeCompression.EffectiveTimerFloorMs:0.#} ms, so a 2-second preset caps at {2000.0 / TimeCompression.EffectiveTimerFloorMs:0.0}x) and no model comp_stable. "
+                + "*** A negligible-fraction threshold is NO LONGER ONE OF THE INPUTS (superseded 2026-08-18): *** the ratio-distortion bound is now the ruled "
+                + $"{TimeCompression.LiteralHeadroomMultiple:0.#}x literal-headroom companion, so an unscaled literal needs no declared fraction. "
+                + "Supply the presets as `blockCompression` (with `model.compStable`). An unknown ceiling is not a high one.");
         }
 
         // *** AN INCOMPLETE OBJECT IS NOT CHECKED, NAMING THE FIELD — never a throw. *** PlantMs and

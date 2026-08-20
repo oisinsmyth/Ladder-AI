@@ -97,7 +97,11 @@ public class ResultPackageTests
             stimulus ?? new StimulusEvidence(true, true, 40, 8, ManifestPresence.Loaded,
                 new VersionReport(VersionOutcome.Confirmed, Build.Value, Build.Value, 3, 1, "confirmed")),
             StimulusExpectation.AtLeastOneScanPerRoundTrip(8),
-            settling,
+
+            // These tests are about the VERDICT PRECEDENCE, so the settling state is stated directly and
+            // the detail is a fixture line. Which registers stand behind a state is LoopRun.Settling's to
+            // compute and name, and it is tested there.
+            new SettlingReport(settling, "stated by a test fixture."),
             assertions ?? new[] { AssertionOutcome.Compare("REQ-14.a", "Demo_Count", "10", "10") },
             coRunners ?? Array.Empty<int>(),
             Map(),
@@ -116,6 +120,32 @@ public class ResultPackageTests
         Assert.Equal(ResultVerdict.Pass, package.Verdict);
         Assert.True(package.ConclusiveAboutTheBlock);
         Assert.Contains("not 'the block is correct'", package.WhatToDoNext, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void THE_PACKAGE_CARRIES_THE_FLOOR_ITS_OWN_REPORT_USED_and_never_a_re_derived_one()
+    {
+        // 🔴 *** THE SECOND DERIVATION THIS CLOSES. *** The submission gate computed the observability
+        // floor from the MAP — `reads x RTT_p99 / scan` — while the code building the delivered package
+        // passed a hardcoded ONE read per cycle. On any wave set needing more than one read the package's
+        // floor was too small by that factor, in the PERMISSIVE direction: a window the gate would refuse
+        // rendered `Supportable` in the artifact handed to the block author, with the wrong floor printed
+        // beside it and nothing to notice by.
+        //
+        // The fixture's report was taken at a floor of 9, which is DELIBERATELY NOT
+        // `WireTiming.ObservabilityFloorScans(1)` (~8.06) — a re-derivation at one read per cycle would
+        // produce that instead, so the two are distinguishable. Both halves are asserted, because "equals
+        // the report" and "is not the one-read figure" fail on different mistakes.
+        var package = Package();
+
+        Assert.Equal(9, package.ObservabilityFloorScans);
+        Assert.Equal(Supportable.FloorScans, package.ObservabilityFloorScans);
+        Assert.NotEqual(WireTiming.ObservabilityFloorScans(1), package.ObservabilityFloorScans!.Value, 6);
+
+        // *** NULL IS "NO OBSERVABILITY REPORT WAS SUPPLIED", WHICH IS A CAVEAT AND NOT A PASS. *** Not 0
+        // and not the one-read figure: a floor of zero would admit a one-scan event, which is
+        // unobservable at any rate, and a defaulted floor is a claim nobody made.
+        Assert.Null(Package(declaration: Declaration(observabilitySupported: false)).ObservabilityFloorScans);
     }
 
     [Fact]
@@ -155,7 +185,7 @@ public class ResultPackageTests
     public void A_package_with_no_liveness_evidence_at_all_is_STALE_not_PASS()
     {
         var package = ResultPackageBuilder.Build(Declaration(), Enumeration, Run(), 0, 0,
-            stimulus: null, expectation: null, SettlingState.Settled,
+            stimulus: null, expectation: null, new SettlingReport(SettlingState.Settled, "stated by a test fixture."),
             new[] { AssertionOutcome.Compare("REQ-14.a", "Demo_Count", "10", "10") },
             Array.Empty<int>(), Map(), Build, 1);
 

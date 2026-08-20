@@ -173,7 +173,13 @@ public sealed record ResultPackage(
     Admissibility Admissibility,
     FidelityDeclaration? Fidelity,
     StimulusReport Stimulus,
-    SettlingState Settling,
+
+    /// <summary>
+    /// The settling verdict <b>and the registers it was taken over</b> — see <see cref="SettlingReport"/>.
+    /// It was a bare <see cref="SettlingState"/> until 2026-08-20, so an UNSETTLED result named nothing at
+    /// all and the reader had no way to tell a moving signal from a check that could not run.
+    /// </summary>
+    SettlingReport Settling,
     SlotOutcome RunOutcome,
     IReadOnlyList<AssertionOutcome> Assertions,
 
@@ -191,7 +197,24 @@ public sealed record ResultPackage(
     ValidityStamp Stamp,
     // AMB-19. Null means the question was not asked for this result; the STATES inside it are the
     // answers, and five of the seven are not passes. See BoundsCurrencyCheck.
-    VectorBoundsCurrency? BoundsCurrency = null)
+    VectorBoundsCurrency? BoundsCurrency = null,
+
+    /// <summary>
+    /// 🔴 <b>THE OBSERVABILITY FLOOR THIS RESULT'S EXPECTATIONS WERE JUDGED AGAINST, IN SCANS — and it was
+    /// computed with the wrong number until 2026-08-18.</b>
+    ///
+    /// <para>The submission gate derived the floor from the MAP (<c>reads x RTT_p99 / scan</c>); the code
+    /// that builds this package passed a hardcoded one read per cycle. On any wave set needing more than
+    /// one read per poll cycle the package's floor was too small by that factor, <b>in the permissive
+    /// direction</b> — a window the gate would refuse rendered <c>Supportable</c> here. A one-read wave
+    /// set is unaffected, which is why it went unseen.</para>
+    ///
+    /// <para><b>It is on the package because a verdict that cannot say what it was measured against cannot
+    /// be argued with</b>, and because the wrong number was being printed with no way for a reader to
+    /// notice. Null means no observability report was supplied for this vector — which is a caveat, not a
+    /// pass.</para>
+    /// </summary>
+    double? ObservabilityFloorScans = null)
 {
     /// <summary>
     /// The verdict, in the one precedence that keeps each state meaning what it says.
@@ -254,7 +277,7 @@ public sealed record ResultPackage(
             if (Assertions.Any(a => a.State == AssertionState.Inconclusive))
                 return ResultVerdict.Inconclusive;
 
-            if (Settling != SettlingState.Settled)
+            if (!Settling.IsSettled)
                 return ResultVerdict.Unsettled;
 
             if (Assertions.Any(a => a.State == AssertionState.NotObserved))
@@ -286,8 +309,14 @@ public sealed record ResultPackage(
         ResultVerdict.TimedOut =>
             "The condition never occurred within the declared duration. This is NOT 'the wrong thing happened' — nothing was observed to be wrong. Check the declared duration first, then whether the stimulus reaches the condition at all.",
 
+        // *** THE SETTLING DETAIL IS APPENDED, AND IT IS THE HALF THAT NAMES A REPAIR. *** The sentence
+        // above is true of every road to Unsettled and actionable on none of them: it does not say whether
+        // a declared signal MOVED (and which, and from what to what) or whether the check could not run at
+        // all. Attributing that on the live wave of 2026-08-20 took a forensic pass, because the package
+        // carried a bare enum.
         ResultVerdict.Unsettled =>
-            "The value never met its settling condition, or an assertion was never read. NOTHING WAS LEGITIMATELY READ — this is not 'the value was wrong'. A completion flag is not a settling signal; declare what makes the value final.",
+            "The value never met its settling condition, or an assertion was never read. NOTHING WAS LEGITIMATELY READ — this is not 'the value was wrong'. A completion flag is not a settling signal; declare what makes the value final. "
+            + $"SETTLING: {Settling.Detail}",
 
         ResultVerdict.NotObserved when Assertions.Count == 0 =>
             "NOBODY LOOKED: this vector declares NO assertions at all, so the run could not have said anything about the block whatever it did. "
@@ -348,7 +377,7 @@ public sealed record ResultPackage(
     public string Summary() =>
         $"{Verdict.ToString().ToUpperInvariant()} — vector {VectorId}, slot {SlotIndex} index {WaveIndex}: "
         + $"{Assertions.Count(a => a.State == AssertionState.Held)}/{Assertions.Count} assertion(s) held, "
-        + $"stimulus {Stimulus.Outcome}, settling {Settling}"
+        + $"stimulus {Stimulus.Outcome}, settling {Settling.State}"
         + CoRunningSummary
         + (Stamp.Caveats.Count > 0 ? $" [{Stamp.Caveats.Count} caveat(s)]" : string.Empty);
 
@@ -373,4 +402,38 @@ public enum SettlingState
 
     /// <summary>Nothing established it either way. Not the same as settled, and never treated as it.</summary>
     NotEstablished,
+}
+
+/// <summary>
+/// 🔴 <b>THE SETTLING VERDICT <i>AND WHAT IT WAS TAKEN OVER</i> — because a bare enum could not say which
+/// register moved, and attributing one cost a forensic pass over a whole live wave.</b>
+///
+/// <para><b>The shape is <c>InertReport</c>'s, deliberately.</b> That check collects every disagreeing
+/// register into a set and NAMES them — <c>"slot 0 R003 moved 5 -> 7"</c> — while settling returned a bare
+/// boolean, so a run in which sixteen of sixteen assertions held and every vector came back UNSETTLED said
+/// nothing at all about WHY. The two checks compare registers across a scan gap for the same reason and
+/// there was never a case for one of them reporting and the other not.</para>
+///
+/// <para><b>The detail is present on the PASS as well as the failure</b>, and it carries the denominator:
+/// which signals were examined, at which registers, over how many scans. A settling check that examined
+/// nothing is the shape this project has been bitten by repeatedly, and <see cref="SettlingState.Settled"/>
+/// over zero registers must not be able to look like <see cref="SettlingState.Settled"/> over three.</para>
+/// </summary>
+/// <param name="State">The verdict. Never <see cref="SettlingState.Settled"/> unless registers were actually compared.</param>
+/// <param name="Detail">What was compared, or what stopped it being compared. Never blank.</param>
+public sealed record SettlingReport(SettlingState State, string Detail)
+{
+    /// <summary>Nothing established it either way — with the reason, which is the half a bare enum lost.</summary>
+    public static SettlingReport NotEstablished(string detail) => new(SettlingState.NotEstablished, detail);
+
+    /// <summary>The declared signals held still across the declared scans. <paramref name="detail"/> carries the denominator.</summary>
+    public static SettlingReport Settled(string detail) => new(SettlingState.Settled, detail);
+
+    /// <summary>A declared signal moved. <paramref name="detail"/> names which register, and from what to what.</summary>
+    public static SettlingReport NotSettled(string detail) => new(SettlingState.NotSettled, detail);
+
+    /// <summary>True only for <see cref="SettlingState.Settled"/>. Exposed so no caller reaches for <c>!= NotSettled</c>.</summary>
+    public bool IsSettled => State == SettlingState.Settled;
+
+    public override string ToString() => $"{State}: {Detail}";
 }

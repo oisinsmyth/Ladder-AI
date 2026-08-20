@@ -169,7 +169,31 @@ public sealed record InertRestReport(IReadOnlyList<InertRestPlan> Plans)
             + $"{Plans.Sum(p => p.ExcludedCount)} EXCLUDED by declaration, "
             + $"{Plans.Sum(p => p.DefaultedCount)} DEFAULTED, "
             + $"{Plans.Sum(p => p.DerivedCount)} DERIVED (latch band)."
+
+            // 🔴 *** THE INERT CHECK'S WAIT, REPORTED ON EVERY RUN INCLUDING THE CLEAN ONE. *** It was
+            // permanently 1 for the whole life of the feature — `LoopRun` called `InertRestPlan.For` with
+            // two arguments and the third defaulted — and NOTHING PRINTED IT, so the run that sampled a
+            // model one scan (~24 ms) into a ~9-second settle looked exactly like the run that waited.
+            + Quiescence()
             + (Planned ? string.Empty : $" NOT PLANNED: {Refusals.Count} refusal(s).");
+    }
+
+    /// <summary>
+    /// The declared quiescence across the planned slots. <b>A range rather than a single number</b>,
+    /// because it is per slot and the inert phase takes the MAX across the slots active at an index — so
+    /// one slow model raises the wait for every slot sharing that phase, and a reader must be able to see
+    /// that it did.
+    /// </summary>
+    private string Quiescence()
+    {
+        var declared = Plans.Where(p => p.Declaration is not null).Select(p => p.Declaration!.QuiescenceScans).ToArray();
+
+        if (declared.Length == 0)
+            return string.Empty;
+
+        return declared.Min() == declared.Max()
+            ? $" QUIESCENCE: {declared.Min()} scan(s) on every slot."
+            : $" QUIESCENCE: {declared.Min()}-{declared.Max()} scan(s); the inert phase waits the MAX of the slots active at an index.";
     }
 }
 
@@ -221,7 +245,23 @@ public sealed record LoopGeneration(
     /// <para><b>Null is NOT COMPUTED, never "nothing to say"</b> — it means the run stopped before the
     /// bindings were examined at all.</para>
     /// </summary>
-    InertRestReport? InertRest = null)
+    InertRestReport? InertRest = null,
+
+    /// <summary>
+    /// 🔴 <b>THE OBSERVABILITY FLOOR THIS WAVE SET IS JUDGED AGAINST, COMPUTED ONCE — <c>reads x RTT_p99 /
+    /// scan</c>, where <c>reads</c> is <c>RegisterMap.ReadsPerPollCycle</c>.</b>
+    ///
+    /// <para><b>It is carried rather than re-derived because the two derivations disagreed.</b> The GATE
+    /// computed it from the map; the delivered RESULT PACKAGE passed a hardcoded <c>1</c>. On any wave
+    /// needing more than one read per poll cycle the package's floor was too small BY THAT FACTOR, in the
+    /// permissive direction — so a window the gate would refuse was rendered <c>Supportable</c> in the
+    /// artifact handed to the block author, and the floor printed beside it was not the floor of the wave
+    /// it describes. A one-read wave set is unaffected, which is why nobody had seen it.</para>
+    ///
+    /// <para><b>NaN when generation stopped before the map existed</b>, and never 0 — a floor of zero
+    /// would admit a one-scan event, which is unobservable at any rate.</para>
+    /// </summary>
+    double ObservabilityFloorScans = double.NaN)
 {
     /// <summary>True only when a copy layer exists. Equivalent to <c>Stopped is null</c> by construction.</summary>
     public bool Generated => Stopped is null;

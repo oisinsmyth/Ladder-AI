@@ -39,9 +39,11 @@ public static class ResultPackageBuilder
     /// Build one vector's package.
     /// </summary>
     /// <param name="settling">
-    /// Whether the declared settling condition was met. Required as a judgement the caller has made —
-    /// <see cref="SettlingState.NotEstablished"/> is what to pass when nothing established it, and it is
-    /// deliberately not the same as <see cref="SettlingState.Settled"/>.
+    /// Whether the declared settling condition was met, <b>and over which registers</b>. Required as a
+    /// judgement the caller has made — <see cref="SettlingReport.NotEstablished"/> is what to pass when
+    /// nothing established it, and it is deliberately not the same as <see cref="SettlingReport.Settled"/>.
+    /// It carries a detail because a bare state cannot say WHICH declared signal moved, and on the live
+    /// wave of 2026-08-20 that is exactly what nobody could tell.
     /// </param>
     /// <param name="enumerations">
     /// 🔴 <b>THE ENUMERATIONS THIS RESULT'S CITATION IS JUDGED AGAINST — plural since 2026-08-18.</b> A
@@ -58,7 +60,7 @@ public static class ResultPackageBuilder
         int waveIndex,
         StimulusEvidence? stimulus,
         StimulusExpectation? expectation,
-        SettlingState settling,
+        SettlingReport settling,
         IReadOnlyList<AssertionOutcome> assertions,
 
         // *** NULL IS "NO CO-RUNNING SLICE WAS RECORDED", AND IT IS NOT AN EMPTY ONE. *** See
@@ -73,6 +75,7 @@ public static class ResultPackageBuilder
         ArgumentNullException.ThrowIfNull(enumerations);
         ArgumentNullException.ThrowIfNull(run);
         ArgumentNullException.ThrowIfNull(assertions);
+        ArgumentNullException.ThrowIfNull(settling);
         // `coRunners` is deliberately NOT null-checked: null is a meaningful value here (no slice was
         // recorded), and a throw would push every caller back to the empty list that hid the distinction.
         ArgumentNullException.ThrowIfNull(map);
@@ -106,7 +109,12 @@ public static class ResultPackageBuilder
                 stimulus?.Version?.Observed ?? expectedBuild.Value,
                 map.MapHash,
                 Caveats(declaration, stimulus, slotsCoveredByOneRead)),
-            declaration.BoundsCurrency);
+            declaration.BoundsCurrency,
+
+            // *** THE FLOOR COMES FROM THE REPORT THAT WAS ACTUALLY USED, never re-derived here. *** The
+            // report is the only object that knows which floor its findings were taken against, so
+            // reading it off anything else would reintroduce the second derivation this closes.
+            declaration.Observability?.FloorScans);
     }
 
     /// <summary>

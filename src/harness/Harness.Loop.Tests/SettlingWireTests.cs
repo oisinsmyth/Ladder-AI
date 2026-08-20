@@ -126,7 +126,7 @@ public class SettlingWireTests
         // { UnchangedForScans: > 0 }`, and the document had no way to make it greater than zero.
         var package = RunFromWire("\"settlingUnchangedForScans\": 3,");
 
-        Assert.Equal(SettlingState.Settled, package.Settling);
+        Assert.Equal(SettlingState.Settled, package.Settling.State);
         Assert.Equal(ResultVerdict.Pass, package.Verdict);
     }
 
@@ -138,7 +138,7 @@ public class SettlingWireTests
         // requires a settling CONDITION, so this vector is admissible — it just cannot be evaluated.
         var package = RunFromWire(string.Empty);
 
-        Assert.Equal(SettlingState.NotEstablished, package.Settling);
+        Assert.Equal(SettlingState.NotEstablished, package.Settling.State);
         Assert.Equal(ResultVerdict.Unsettled, package.Verdict);
     }
 
@@ -173,7 +173,7 @@ public class SettlingWireTests
         var result = LoopRun.Execute(request, new SimulatedGateway(Harness.Map.MirrorGeometry.ForCpu1214C(256, MirrorBase)));
         var package = Assert.Single(result.Packages);
 
-        Assert.Equal(SettlingState.NotSettled, package.Settling);
+        Assert.Equal(SettlingState.NotSettled, package.Settling.State);
         Assert.Equal(ResultVerdict.Unsettled, package.Verdict);
         Assert.False(package.ConclusiveAboutTheBlock);
     }

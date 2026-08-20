@@ -21,6 +21,18 @@ public enum SignalRole
     /// and an unjoined name used to fall back to <b>result register 0</b>, which is some other signal.
     /// </summary>
     Completion,
+
+    /// <summary>
+    /// 🔴 <b>A <c>settlingSignals[]</c> entry. Checkable only since 2026-08-20, because until then nothing
+    /// resolved a settling name to a register at all.</b>
+    ///
+    /// <para><b>It is a REFUSAL rather than a per-vector caveat for the reason the other two are:</b>
+    /// settling is now evaluated over exactly the registers these names resolve to, so an unjoined one
+    /// would leave the check comparing FEWER registers than were declared — and a settling check over zero
+    /// registers passes over anything. Empty is not clean, and the failure would present as a clean
+    /// <c>Settled</c>.</para>
+    /// </summary>
+    Settling,
 }
 
 /// <summary>
@@ -77,11 +89,15 @@ public sealed record SignalJoinReport(
 /// entirely — a binding publishes diagnostic registers on purpose (this deliverable carries twenty and
 /// cites four) — and refusing it would fire far outside this check's scope.</para>
 ///
-/// <para>⚠️ <b>SETTLING SIGNALS ARE NOT CHECKED HERE, AND THAT IS A NAMED LIMIT RATHER THAN AN
-/// OVERSIGHT.</b> <c>SettlingDeclaration.Signals</c> is not resolved to a register by anything —
-/// <c>LoopRun.Settling</c> compares whole result arrays — so an unjoined settling name costs nothing
-/// today. It would become checkable the day settling is evaluated per signal, and this comment is where
-/// whoever does that should start.</para>
+/// <para>✅ <b>SETTLING SIGNALS ARE CHECKED HERE SINCE 2026-08-20 — THE DAY THIS PARAGRAPH NAMED.</b> It
+/// used to read <i>"settling signals are not checked here, and that is a named limit"</i>, on the stated
+/// ground that <c>SettlingDeclaration.Signals</c> was resolved to a register by nothing and
+/// <c>LoopRun.Settling</c> compared whole result arrays, so an unjoined settling name cost nothing — and
+/// it said the limit would end the day settling was evaluated per signal. <c>LoopRun.Settling</c> now
+/// resolves each declared name through <c>SlotBinding.ResultRegisterOf</c> and compares ONLY those
+/// registers, so an unjoined name would silently SHRINK the set the check is taken over. <b>A settling
+/// check over zero registers passes over anything</b>, and it would present as a clean <c>Settled</c> —
+/// which is why this is a refusal and not a caveat.</para>
 /// </summary>
 public static class SignalJoin
 {
@@ -127,6 +143,17 @@ public static class SignalJoin
                     unjoined.Add(new UnjoinedSignal(vector.Id, expectation.Signal ?? "<null>", SignalRole.Expectation));
             }
 
+            // 🔴 *** THE SETTLING NAMES, CHECKED HERE SINCE 2026-08-20. *** This file's own summary called
+            // their absence "a named limit rather than an oversight", on the stated ground that
+            // `LoopRun.Settling` compared whole result arrays so an unjoined settling name cost nothing —
+            // and said the day settling became per-signal was the day they became checkable. It has.
+            foreach (var signal in vector.Settling?.Signals ?? Array.Empty<string>())
+            {
+                examined++;
+                if (binding.ResultRegisterOf(signal ?? string.Empty) < 0)
+                    unjoined.Add(new UnjoinedSignal(vector.Id, signal ?? "<null>", SignalRole.Settling));
+            }
+
             examined++;
             if (binding.ResultRegisterOf(vector.CompletionSignal ?? string.Empty) < 0)
                 unjoined.Add(new UnjoinedSignal(vector.Id, vector.CompletionSignal ?? "<null>", SignalRole.Completion));
@@ -167,6 +194,11 @@ public static class SignalJoin
                 ? "*** ONE OF THEM IS A COMPLETION SIGNAL, WHICH IS THE POLL'S OWN WATCH REGISTER. *** Before this refusal existed it "
                   + "defaulted to result register 0 - a different signal - so the wave declared a vector finished on whatever that register "
                   + "happened to read. Fix the name; there is no safe default. "
+                : string.Empty)
+            + (unjoined.Any(u => u.Role == SignalRole.Settling)
+                ? "*** ONE OF THEM IS A SETTLING SIGNAL, AND SETTLING IS NOW EVALUATED OVER EXACTLY THE REGISTERS THESE NAMES RESOLVE TO. *** "
+                  + "An unjoined name does not weaken the check by a little - it removes that signal from it, and a settling check over no "
+                  + "registers is satisfied by anything. Fix the name; there is no safe default. "
                 : string.Empty)
             + "Either the binding is short of the signals the vectors were written against, or the vectors cite names the coordinator did not state.");
     }

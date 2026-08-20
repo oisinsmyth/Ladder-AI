@@ -300,7 +300,9 @@ public static class LoopRun
             wave.Length);
 
         // ---- 8. PACKAGE -----------------------------------------------------------------------------
-        var packages = Package(request, map, stamp, client, wave, deployment, version, roundTripsBefore, ordinalOf, account);
+        // *** THE GATE'S OWN FLOOR IS HANDED IN, NEVER RE-DERIVED. *** See LoopGeneration.ObservabilityFloorScans.
+        var packages = Package(request, map, stamp, client, wave, deployment, version, roundTripsBefore, ordinalOf, account,
+            generation.ObservabilityFloorScans);
 
         // ---- 8b. RELEASE THE RIG — AFTER PACKAGING, NEVER BEFORE ------------------------------------
         //
@@ -560,10 +562,18 @@ public static class LoopRun
         }
 
         // ---- 2. GATE — before anything is spent -----------------------------------------------------
-        // The floor is a property of the WAVE SET, so it is computed from the map rather than declared:
-        // a slot is polled once per read cycle, and a read cycle is ceil(K/R) round trips.
-        var readsPerCycle = map.ReadPlan(Enumerable.Range(0, map.Slots.Count)).Count;
-        var floor = WireTiming.ObservabilityFloorScans(readsPerCycle);
+        //
+        // 🔴 *** THE FLOOR IS COMPUTED HERE, ONCE, AND CARRIED — IT USED TO BE COMPUTED TWICE AND THE TWO
+        // DISAGREED. *** It is a property of the WAVE SET: a slot is re-read once per poll cycle, and a
+        // poll cycle is ceil(K/R) round trips. This site derived it from the map; the site that builds the
+        // DELIVERED RESULT PACKAGE passed a hardcoded 1. On any wave needing more than one read per cycle
+        // the package's floor was too small by that factor, in the PERMISSIVE direction — so a window this
+        // gate would refuse read as `Supportable` in the artifact the block author receives. A one-read
+        // wave set is unaffected, which is why it went unseen.
+        //
+        // The value now travels on LoopGeneration and reaches Package as an argument, so there is nothing
+        // left to keep in step. Same shape as the inert-rest plan and the wave order above it.
+        var floor = WireTiming.ObservabilityFloorScans(map.ReadsPerPollCycle);
 
         // What the copy layer WILL provide, derived from the bindings — available before it is generated,
         // which is what lets the observability gate run before anything is spent.
@@ -676,7 +686,8 @@ public static class LoopRun
             + $"{copyLayer.Require().Tags.Count} mirror tag(s), {map.TotalRegisters} register(s) of mirror. NOTHING WAS DEPLOYED. "
             + inertRest.Summary(),
             OrderOf(request),
-            inertRest);
+            inertRest,
+            floor);
     }
 
     /// <summary>
@@ -714,7 +725,13 @@ public static class LoopRun
     private static IReadOnlyList<ResultPackage> Package(
         LoopRequest request, RegisterMap map, BuildStamp stamp, MirrorClient client,
         WaveResult wave, DeploymentOutcome deployment, VersionReport version, int roundTripsBefore,
-        IReadOnlyDictionary<string, int> ordinalOf, RunAccount account)
+        IReadOnlyDictionary<string, int> ordinalOf, RunAccount account,
+
+        // 🔴 *** THE WAVE SET'S FLOOR, PASSED IN. *** This method used to call
+        // `WireTiming.ObservabilityFloorScans(1)` inline while the gate computed the real one from the
+        // map — see LoopGeneration.ObservabilityFloorScans for the measured consequence. It is a
+        // parameter rather than a re-derivation so the two cannot be different numbers again.
+        double observabilityFloorScans)
     {
         var packages = new List<ResultPackage>();
         var slotsCoveredByOneRead = map.ReadPlan(Enumerable.Range(0, map.Slots.Count)).Max(r => r.SlotCount);
@@ -758,14 +775,14 @@ public static class LoopRun
                     vector.AssertedBehaviours, vector.CompletionSignal, vector.Author, request.BlockAuthor,
                     ObservabilityCheck.Evaluate(vector.Expectations, vector.Form,
                         MirrorObservability.FromBindings(binding.ResultSources),
-                        WireTiming.ObservabilityFloorScans(1), vector.CompressionFactor, request.Compression.Factor)),
+                        observabilityFloorScans, vector.CompressionFactor, request.Compression.Factor)),
                 request.Enumeration,
                 run,
                 slotIndex,
                 waveIndex,
                 stimulus,
                 StimulusExpectation.AtLeastOneScanPerRoundTrip(Math.Max(1, run.PollRounds)),
-                Settling(client, vector, slotIndex, waveIndex, run, distribution),
+                Settling(client, vector, binding, slotIndex, waveIndex, run, distribution),
                 Assertions(vector, binding, run, request.WordOrder),
 
                 // 🔴 *** NULL WHEN NO SLICE WAS RECORDED, NOT AN EMPTY LIST. *** This read
@@ -808,37 +825,164 @@ public static class LoopRun
     /// RECORDED against what is still true N scans later</b>. That directly catches phase 2's defective
     /// build, which raised <c>Done</c> at 10 and went on ramping to 15.</para>
     ///
+    /// <para>🔴 <b>IT COMPARES THE REGISTERS THE DECLARATION NAMES, AND UNTIL 2026-08-20 IT COMPARED THE
+    /// WHOLE SLOT BAND.</b> The line was
+    /// <c>client.ReadResults(slotIndex).SequenceEqual(run.Results)</c>: <c>ReadResults</c> returns every
+    /// register the slot publishes, so a vector saying <i>"settle on these three signals"</i> was answered
+    /// with <i>"were all N registers bit-identical"</i>. <c>SettlingDeclaration.Signals</c> was resolved to
+    /// a register BY NOTHING, in the whole system — <c>SignalJoin</c> recorded that as a named limit and
+    /// named this change as the thing that would end it.</para>
+    ///
+    /// <para><b>MEASURED, ON A LIVE WAVE.</b> A slot whose binding declares five registers as having NO
+    /// resting value — a presenter tick and a counter that run OUTSIDE the index, and a one-scan pulse —
+    /// can never satisfy a whole-band comparison: the band differed on <b>54–69% of adjacent poll
+    /// pairs</b>. The three declared signals had been stable for ~2,000 scans. <b>Sixteen of sixteen
+    /// assertions held and every vector came back UNSETTLED</b> — a wave's worth of rig time spent
+    /// answering a question nobody asked. The registers that moved are exactly the ones the binding
+    /// already says have no resting value, which is why the whole-band form could not have been rescued
+    /// by a tolerance.</para>
+    ///
+    /// <para><b>Every road that is not a comparison is <see cref="SettlingState.NotEstablished"/> WITH ITS
+    /// REASON, and none of them may be <c>Settled</c>.</b> An empty signal list is one of them: a
+    /// per-signal check over zero registers is satisfied by anything, and it would present as a clean
+    /// pass. <c>SignalJoin</c> refuses an unjoinable settling name before the deployment is spent; the
+    /// resolution below is the backstop for a caller that reached here anyway, and it names the signal
+    /// rather than quietly comparing a shorter list.</para>
+    ///
     /// <para><b>Two limits, named rather than hidden.</b> It can only be done for a slot's LAST index —
     /// earlier ones have had an inert phase move the program on, so they report
     /// <see cref="SettlingState.NotEstablished"/>, which is not the same as settled. And it cannot see a
     /// value that moved and came back.</para>
+    ///
+    /// <para>⚠️ <b>THE SAMPLE IS TAKEN AFTER THE INDEX'S WHOLE TAIL RECOVERY, NOT AT THE CLOSE OF THE
+    /// OBSERVATION WINDOW</b>, which is what the declaration's own wording describes. That mismatch is
+    /// unchanged by this fix and is recorded rather than quietly narrowed: <c>run.Observations</c> is the
+    /// retained series and is already passed in, but it is DECIMATED (see <c>ObservationSeries.Stride</c>)
+    /// — with a stride above 1 a change can fall between two retained frames, so reading settling off it
+    /// could report <c>Settled</c> over a value that moved. Moving the sample there is a soundness
+    /// question about the retention rule, not a re-pointing of this method.</para>
     /// </summary>
-    private static SettlingState Settling(MirrorClient client, SubmissionVector vector, int slotIndex, int waveIndex, SlotRunResult run, SlotDistribution distribution)
+    private static SettlingReport Settling(
+        MirrorClient client, SubmissionVector vector, SlotBinding binding, int slotIndex, int waveIndex,
+        SlotRunResult run, SlotDistribution distribution)
     {
         if (vector.Settling is not { UnchangedForScans: > 0 } settling)
-            return SettlingState.NotEstablished;
+        {
+            return SettlingReport.NotEstablished(
+                "the vector declares no `settlingUnchangedForScans`, so its settling condition is prose the runner cannot check. "
+                + "That is NOT settled: nothing established whether the value was final when it was read.");
+        }
 
         // The MERGED ordinal, matching CompletedAtIndex, which counts positions in the tensor the wave
         // actually ran. `vector.Index` counts positions within a GROUP, and on a many-to-one slot the two
         // are different numbers — so comparing the old one would call several vectors "last".
         if (waveIndex != distribution.CompletedAtIndex)
-            return SettlingState.NotEstablished;
+        {
+            return SettlingReport.NotEstablished(
+                $"index {waveIndex} is not slot {slotIndex}'s last ({distribution.CompletedAtIndex}), and a later index's inert phase has "
+                + "already moved the program on — so there is nothing left to re-read that would still be about this vector.");
+        }
 
         if (run.Outcome != SlotOutcome.Completed)
-            return SettlingState.NotEstablished;
+        {
+            return SettlingReport.NotEstablished(
+                $"the run ended {run.Outcome}, so no observation was taken that could be asked whether it was final.");
+        }
+
+        // *** THE DECLARED SIGNALS, RESOLVED THE WAY AN ASSERTION SIGNAL IS. *** `ResultRegisterOf` is the
+        // one join key in this system (MirroredSignal.JoinKey), and it is the third derivation of it that
+        // this file records as having been wrong. There is not a fourth here: this asks the same method.
+        var span = new List<(string Signal, int Register)>();
+        var unresolved = new List<string>();
+
+        foreach (var name in settling.Signals ?? Array.Empty<string>())
+        {
+            var cited = name ?? string.Empty;
+            var register = binding.ResultRegisterOf(cited);
+
+            // -1 is "this binding does not carry the name", and it may NOT be defaulted to 0 — 0 is a real
+            // offset carrying some other signal. SignalJoin refuses this above the device boundary; if one
+            // reaches here the check is weaker than it was declared to be, and that is said out loud.
+            if (register < 0)
+            {
+                unresolved.Add(cited.Length == 0 ? "<blank>" : cited);
+                continue;
+            }
+
+            // The WIDTH matters: a Time occupies two registers, and comparing only the first would miss a
+            // value moving in its other half.
+            var width = Math.Max(1, binding.ResultSignal(cited)?.Registers ?? 1);
+            for (var w = 0; w < width; w++)
+                span.Add((cited, register + w));
+        }
+
+        if (unresolved.Count > 0)
+        {
+            return SettlingReport.NotEstablished(
+                $"{unresolved.Count} of the {settling.Signals?.Count ?? 0} declared settling signal(s) resolve to no register of the binding "
+                + $"serving slot '{vector.Slot}': {string.Join(", ", unresolved.Select(u => $"'{u}'"))}. *** THIS IS NOT A SETTLED RESULT AND IT IS "
+                + "NOT A NARROWER ONE. *** Comparing only the names that DID resolve would answer a weaker question than the one declared, and a "
+                + "settling check over no registers at all is satisfied by anything. The binding states the specification's name as `specName` "
+                + "beside the block's own tag.");
+        }
+
+        if (span.Count == 0)
+        {
+            return SettlingReport.NotEstablished(
+                "the settling declaration names no signal, so there is nothing to hold still. *** EMPTY IS NOT CLEAN: a per-signal settling "
+                + "check over zero registers is satisfied by any program whatsoever, so this is NOT settled. *** Name the signals whose "
+                + "stability makes the observed value final — they are not the block's completion flag.");
+        }
+
+        var outOfBand = span.Where(s => s.Register >= run.Results.Length).ToArray();
+        if (outOfBand.Length > 0)
+        {
+            return SettlingReport.NotEstablished(
+                $"the declaration reaches R{string.Join(", R", outOfBand.Select(s => s.Register.ToString("000")))} and the recorded result band "
+                + $"holds only {run.Results.Length} register(s), so the comparison could not be made against what was observed.");
+        }
 
         var from = client.ReadControl().ScanCounter;
         for (var poll = 0; poll < 200; poll++)
         {
-            if (client.ReadControl().ScanCounter.Since(from) >= settling.UnchangedForScans)
+            if (client.ReadControl().ScanCounter.Since(from) < settling.UnchangedForScans)
+                continue;
+
+            var now = client.ReadResults(slotIndex);
+
+            // *** WHICH REGISTER MOVED, AND FROM WHAT TO WHAT — InertPhase's shape. *** The bare boolean
+            // this replaced is why attributing a whole wave of UNSETTLED verdicts took a forensic pass:
+            // the package could say the value was not final and could not say which value.
+            var moved = span
+                .Where(s => s.Register < now.Length && now[s.Register] != run.Results[s.Register])
+                .Select(s => $"R{s.Register:000} ('{s.Signal}') moved {run.Results[s.Register]} -> {now[s.Register]}")
+                .ToArray();
+
+            if (span.Any(s => s.Register >= now.Length))
             {
-                return client.ReadResults(slotIndex).SequenceEqual(run.Results)
-                    ? SettlingState.Settled
-                    : SettlingState.NotSettled;
+                return SettlingReport.NotEstablished(
+                    $"the re-read of slot {slotIndex} returned {now.Length} register(s) and the declaration reaches R"
+                    + $"{span.Max(s => s.Register):000}, so the comparison could not be completed. Empty is not clean.");
             }
+
+            var denominator =
+                $"{span.Count} register(s) carrying {settling.Signals!.Count} declared signal(s) "
+                + $"({string.Join(", ", span.Select(s => $"R{s.Register:000} '{s.Signal}'"))}), "
+                + $"re-read {settling.UnchangedForScans} scan(s) after the observation";
+
+            return moved.Length == 0
+                ? SettlingReport.Settled(
+                    $"every declared settling signal held its recorded value: {denominator}. *** THIS IS A CLAIM ABOUT THE DECLARED SIGNALS "
+                    + $"AND NOT ABOUT SLOT {slotIndex}'s WHOLE BAND *** — other registers in the band may legitimately be moving, and several "
+                    + "of them are declared to have no resting value at all.")
+                : SettlingReport.NotSettled(
+                    $"{moved.Length} of {span.Count} declared settling register(s) moved after the observation: {string.Join("; ", moved)}. "
+                    + $"Compared over {denominator}. The observed value was still changing, so what was read may be mid-flight.");
         }
 
-        return SettlingState.NotEstablished;
+        return SettlingReport.NotEstablished(
+            $"the scan counter did not advance {settling.UnchangedForScans} scan(s) within 200 poll(s), so the settling comparison was never "
+            + "made. That is an unobserved state and not a quiet one.");
     }
 
     /// <summary>

@@ -614,6 +614,13 @@ public static class LoopCli
                 // BindingDocument, all of them found only after a run had already gone wrong.
                 AssumedZeroRest = s.AssumedZeroRest,
                 AssumedZeroRestBasis = s.AssumedZeroRestBasis,
+
+                // 🔴 *** THE INERT CHECK'S WAIT, OFF THE WIRE. *** `InertRestPlan.For` was called with two
+                // arguments and its third defaulted to 1, so every slot in every submission waited ONE
+                // SCAN before deciding the model was at rest — for a model that takes ~9 seconds after a
+                // contents step, the check reliably caught it mid-integration and blamed the block.
+                // Absent stays 1, which is the floor rather than a blank.
+                QuiescenceScans = s.QuiescenceScans ?? 1,
             })
             .ToArray();
 

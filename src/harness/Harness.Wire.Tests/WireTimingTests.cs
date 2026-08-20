@@ -157,8 +157,11 @@ public class WireTimingTests
     [InlineData(5, 10, 5)]      // W = 25
     [InlineData(6, 10, 6)]      // W = 20 — SIX slots where a padded one admits ONE
     [InlineData(10, 10, 10)]    // W = 12
-    [InlineData(1, 100, 11)]
-    [InlineData(6, 100, 66)]
+    // 🔴 12 and 72, not 11 and 66: floor(100 x 24.931 / 201) = 12, and the cap is R times it. Both rows
+    // moved when the scan period was corrected from 23.33 to the measured 24.931 (2026-08-18) — a longer
+    // scan means a fixed real-time window spans FEWER scans, so a window declared in scans buys more.
+    [InlineData(1, 100, 12)]
+    [InlineData(6, 100, 72)]
     public void The_cap_is_R_times_the_old_one(int slotsPerRead, int sMinScans, int expected)
     {
         Assert.Equal(expected, WireTiming.MaxTensorWidth(slotsPerRead, sMinScans));
@@ -193,13 +196,39 @@ public class WireTimingTests
     }
 
     [Fact]
-    public void The_observability_floor_scales_with_the_number_of_slots_not_with_their_width()
+    public void The_observability_floor_scales_with_the_READS_PER_POLL_CYCLE_not_with_slot_width()
     {
-        // 8.6 scans at K=1 (was 7.4 at RTT_p99 = 173), so a sampled level must persist for 9 scans — and
-        // for 9 x K in a K-slot tensor. This is the number a two-slot wave has to respect.
-        Assert.Equal(201 / 23.33, WireTiming.ObservabilityFloorScans(1), 3);
+        // 8.06 scans at one read per cycle (was 8.6 at scan = 23.33, and 7.4 at RTT_p99 = 173), so a
+        // sampled level must persist for 9 scans — and for 9 x reads where a cycle costs several. The
+        // parameter is READS, not slots: under F-1 one read covers floor(125 / Wr) WHOLE slots, so a
+        // six-slot wave set of 20-register slots is ONE read per cycle, not six.
+        Assert.Equal(201 / WireTiming.ScanPeriodMs, WireTiming.ObservabilityFloorScans(1), 6);
         Assert.Equal(2 * WireTiming.ObservabilityFloorScans(1), WireTiming.ObservabilityFloorScans(2), 6);
         Assert.Throws<ArgumentOutOfRangeException>(() => WireTiming.ObservabilityFloorScans(0));
+    }
+
+    [Fact]
+    public void THE_SCAN_PERIOD_IS_THE_LOADED_MEASURED_FIGURE_and_the_quiet_one_is_recorded_beside_it()
+    {
+        // 🔴 MEASURED ON THE DEPLOYED PROGRAM, 2026-08-18: 12,027 scans over 299.8 s of continuous poll
+        // load, ±0.002 ms. It was 23.33 — 7% LOW, in the permissive direction, in every budget, ceiling
+        // and backstop in this harness.
+        Assert.Equal(24.931, WireTiming.ScanPeriodMs, 6);
+
+        // The quiet figure, replicated twice. Recorded so the CHOICE between two operating points is
+        // visible; a transposition would move every bound in the file the permissive way, silently.
+        Assert.Equal(23.80, WireTiming.ScanPeriodQuietMs, 6);
+        Assert.True(WireTiming.ScanPeriodMs > WireTiming.ScanPeriodQuietMs,
+            "the LOADED period is the one a wave experiences and it must be the larger of the two.");
+
+        // Poll load costs a reproducible +1.13 ms/scan — the two are not two estimates of one number.
+        Assert.Equal(1.131, WireTiming.ScanPeriodMs - WireTiming.ScanPeriodQuietMs, 3);
+
+        // *** IT IS A PROPERTY OF THE PROGRAM, NOT OF THE CONTROLLER. *** A ~2.1 ms figure recorded
+        // elsewhere in this repository belongs to a much smaller reference program and was once quoted as
+        // a rig fact, wrong by an order of magnitude. Pinned so that substitution reddens here.
+        Assert.True(WireTiming.ScanPeriodMs > 10.0,
+            "a single-digit scan period belongs to a different, far smaller program and is not this rig's.");
     }
 
     [Fact]

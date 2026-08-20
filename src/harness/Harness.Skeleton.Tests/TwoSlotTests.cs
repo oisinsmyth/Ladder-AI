@@ -172,7 +172,7 @@ public class TwoSlotTests
     [Fact]
     public void The_echo_is_LATCHED_so_a_slot_that_finished_between_two_polls_still_reports_as_having_run()
     {
-        // A poll gap is 8.6 scans at the p99 and the peak block settles in ONE. A level echo would read
+        // A poll gap is ~8.1 scans at the p99 and the peak block settles in ONE. A level echo would read
         // low at both observations and the log would say the slot never ran — which is the false evidence
         // X-E exists to kill, pointing the wrong way.
         var rig = SkeletonRig.BuildPair(scansPerTransaction: 40);

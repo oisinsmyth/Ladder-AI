@@ -177,6 +177,23 @@ public sealed class SlotBindingDocument
     /// <summary>Why this slot's undeclared resting values may be assumed zero. <b>Required when <see cref="AssumedZeroRest"/> is set</b>, even if it currently covers nothing.</summary>
     public string? AssumedZeroRestBasis { get; set; }
 
+    /// <summary>
+    /// 🔴 <b>SCANS THE INERT CHECK MUST LET PASS BEFORE IT DECIDES THIS SLOT IS QUIESCENT — the wire field
+    /// that did not exist, for the one knob designed to state <i>"this model takes N scans to settle"</i>.</b>
+    ///
+    /// <para><c>InertDeclaration.QuiescenceScans</c> has existed since the inert phase did, and the loop
+    /// called <c>InertRestPlan.For(binding, wordOrder)</c> without the third argument — so it was
+    /// permanently <b>1</b> and no document could say otherwise. <b>It cost a wave:</b> after a download
+    /// the check wrote the next vector and sampled one scan (~24 ms) later, against a model whose settle
+    /// after a contents step is ~9 seconds, and refused the block for being mid-integration.</para>
+    ///
+    /// <para><b>Absent means 1</b> — the floor, not a blank: two reads inside one scan cannot tell a
+    /// settled value from a changing one. Below 1, or above what the poll budget can observe, is a refusal
+    /// naming both numbers (<c>Harness.Wire.InertRestPlan</c>). <b>It does not enter the build stamp:</b>
+    /// it changes how long the client waits before it looks and changes nothing that is downloaded.</para>
+    /// </summary>
+    public int? QuiescenceScans { get; set; }
+
     /// <summary>Unknown keys at slot level. Folded into gate 0b — see <see cref="BindingDocument.UnknownFields"/>.</summary>
     [JsonExtensionData]
     public Dictionary<string, object?>? UnknownFields { get; set; }

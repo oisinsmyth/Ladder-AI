@@ -437,6 +437,53 @@ public class CopyLayerGeneratorTests
     }
 
     [Fact]
+    public void The_build_stamp_DOES_NOT_MOVE_with_the_slots_declared_quiescence_because_that_is_a_CLIENT_wait()
+    {
+        // 🔴 *** THE STAMP MEANS "WHAT IS EXECUTING", AND THE QUIESCENCE IS NOT IN THE DOWNLOAD. ***
+        // `SlotBinding.QuiescenceScans` was added 2026-08-20 to plumb the inert check's wait from the
+        // binding document, and a SlotBinding is a stamp input — so an attribute added to it that reached
+        // the canonical form would change the stamp while the emitted artifact stayed BYTE-IDENTICAL. The
+        // consequence is not cosmetic: `VersionCheck` would report `Stale` against a controller running
+        // precisely the program the coordinator built, whose text says the download "aborted, was refused,
+        // or never reached it" — sending a person to re-download a device that was already right.
+        //
+        // *** AND IT WOULD MEAN A DEPLOYED RIG HAD TO BE RE-DOWNLOADED BEFORE ANY WAVE COULD RUN, for a
+        // number that only decides how long the CLIENT waits before it looks. *** Exactly the shape of the
+        // `armedBy` correction recorded in BuildStamp.Derive, which was found the same way.
+        //
+        // Asserted rather than read off the canonical form, because the canonical form is the thing under
+        // test: a test that re-derives it agrees with itself.
+        var map = OneSlot();
+        var baseline = BuildStamp.Of(map, Binding(), Naming);
+
+        foreach (var scans in new[] { 1, 2, 9, 4500 })
+        {
+            Assert.Equal(
+                baseline.Value,
+                BuildStamp.Of(map, Binding() with { QuiescenceScans = scans }, Naming).Value);
+        }
+
+        // The same for the OTHER client-side declaration the same binding carries, for the same reason:
+        // an assumed-zero-rest claim is an expectation the PC applies to what it reads.
+        Assert.Equal(
+            baseline.Value,
+            BuildStamp.Of(map, Binding() with { AssumedZeroRest = true, AssumedZeroRestBasis = "migration" }, Naming).Value);
+
+        // *** AND THE DOWNLOADED ARTIFACT ITSELF, BYTE FOR BYTE. *** The stamp is a hash of inputs and
+        // this is the thing the hash is a proxy for, so both are asserted: equal stamps over different IR
+        // would be the worse of the two failures, and neither test implies the other.
+        var quiet = CopyLayerGenerator.Generate(map, Binding() with { QuiescenceScans = 9 }, Naming, Stamp);
+        var plain = CopyLayerGenerator.Generate(map, Binding(), Naming, Stamp);
+
+        Assert.True(quiet.Generated);
+        Assert.True(plain.Generated);
+
+        Assert.Equal(
+            plain.Objects.Select(o => $"{o.Kind}:{o.Name}\n{o.Ir}"),
+            quiet.Objects.Select(o => $"{o.Kind}:{o.Name}\n{o.Ir}"));
+    }
+
+    [Fact]
     public void The_build_stamp_is_never_zero()
     {
         // Not a probabilistic hope: the derivation walks the digest for a non-zero word and throws if it

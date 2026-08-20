@@ -466,7 +466,7 @@ public static class CopyLayerGenerator
                 // which is what the program actually ran on. Reading back the mirror bit instead would
                 // only report what the client wrote, which is the plan, and the plan is not evidence.
                 //
-                // LATCHED, because a poll gap is 8.6 scans at the p99 and a short test can start and
+                // LATCHED, because a poll gap is ~8.1 scans at the p99 and a short test can start and
                 // finish between two polls. A level echo would then read low at both, and the log would
                 // say the slot never ran — which is exactly the false evidence X-E exists to kill.
                 networks.Add(new CopyLayerNetwork(number++, CopyLayerNetworkKind.StartEcho,
@@ -492,7 +492,7 @@ public static class CopyLayerGenerator
             }
 
             // The latches, as SET coils - the same shape as the start echo (X-E), for the same reason: a
-            // level coil would fall again the moment the signal did, and a poll gap is 8.6 scans at the
+            // level coil would fall again the moment the signal did, and a poll gap is ~8.1 scans at the
             // p99, so a one-scan event lands between two polls and the log says it never happened.
             //
             // *** A PHASE-ARMED LATCH ADDS THE WINDOW AND THE RESET, AND BOTH COME FROM THE SLOT'S START

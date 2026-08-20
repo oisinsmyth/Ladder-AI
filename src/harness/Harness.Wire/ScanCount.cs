@@ -27,8 +27,9 @@ namespace Harness.Wire;
 /// wrap with no state at all. The old code sign-extended the same 32 bits into a <c>long</c>, which is
 /// what turned a one-scan advance into a nine-figure negative.</para>
 ///
-/// <para>⚠️ <b>Urgency, stated so nobody rushes it:</b> a <c>DInt</c> at 23.33 ms/scan wraps after
-/// <b>~580 days</b> of continuous RUN. This was worth fixing properly, not quickly.</para>
+/// <para>⚠️ <b>Urgency, stated so nobody rushes it:</b> a <c>DInt</c> at the measured 24.931 ms/scan
+/// wraps after <b>~620 days</b> of continuous RUN (it read ~580 days while the scan constant was 23.33,
+/// i.e. 7% low). This was worth fixing properly, not quickly.</para>
 /// </summary>
 public readonly record struct ScanCount
 {

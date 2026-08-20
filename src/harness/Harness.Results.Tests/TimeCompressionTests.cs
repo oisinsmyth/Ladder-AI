@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Reflection;
 using Harness.Results;
 using Harness.Wire;
@@ -7,15 +8,15 @@ namespace Harness.Results.Tests;
 /// <summary>
 /// <b>Build-plan 6.6 — X-D's <c>comp_min</c> calculation and the ceilings it must clear.</b>
 ///
-/// <para>The ceiling is the headline: <b>the timer floor is 116.7 ms, so a 500 ms preset caps compression
-/// at 4.3x and not the 10x X-D originally assumed.</b> Every constant below is read from
-/// <c>WireTiming</c>, which transcribes §12a — nothing is chosen in the tests either.</para>
+/// <para>The ceiling is the headline: <b>the timer floor is the RULED ABSOLUTE 500 ms (2026-08-18), so a
+/// 2-second preset caps compression at 4.0x</b> — not the 4.3x the scan-derived floor gave, and not the
+/// 10x X-D originally assumed. Every constant below is read from <c>TimeCompression</c> and
+/// <c>WireTiming</c>, which transcribe the rulings and §12a — nothing is chosen in the tests either.</para>
 ///
-/// <para>🔴 <b>IT IS NOT A MEASURED CEILING, AND THIS COMMENT USED TO SAY IT WAS.</b> The scan period is
-/// measured; <c>k ~ 5</c> is X-D's own number and never has been — and it is the term X-D says binds
-/// first, so the assumed half is the load-bearing one. Read every figure here as <b>derived from one
-/// measured and one assumed input</b>. The tests below pin the ARITHMETIC, which is exactly as sound as
-/// its inputs and no sounder.</para>
+/// <para>⚠️ <b>RULED IS NOT MEASURED.</b> <c>k = 5</c> was ratified by the project owner on 2026-08-18 and
+/// has still never been measured; it no longer decides anything on its own, because the absolute floor is
+/// four times larger and subsumes it. The scan period IS measured (24.931 ms under poll load). The tests
+/// below pin the ARITHMETIC, which is exactly as sound as its inputs and no sounder.</para>
 /// </summary>
 public class TimeCompressionTests
 {
@@ -45,30 +46,47 @@ public class TimeCompressionTests
     // ---------------------------------------------------------------------------------------------
 
     [Fact]
-    public void THE_TIMER_FLOOR_IS_116_7_ms_AND_A_500_ms_PRESET_CAPS_COMPRESSION_AT_4_3x_NOT_10x()
+    public void THE_TIMER_FLOOR_IS_THE_RULED_ABSOLUTE_500_ms_AND_A_TWO_SECOND_PRESET_CAPS_COMPRESSION_AT_4x()
     {
-        // §12a derivation 5. X-D carried ~10 ms for the scan and 50 ms for the timer floor; both were
-        // wrong, and this is the term X-D itself says OFTEN BINDS FIRST.
-        Assert.Equal(116.65, TimeCompression.TimerFloorMs, 2);
+        // RULED BY THE PROJECT OWNER, 2026-08-18. The fraction rule asked what PROPORTION of a behaviour a
+        // fixed timer may occupy; this asks how SHORT a timer may get before it stops behaving like one,
+        // which is the question the hardware answers. This is the term X-D itself says OFTEN BINDS FIRST.
+        Assert.Equal(500.0, TimeCompression.AbsoluteTimerFloorMs, 6);
+        Assert.Equal(500.0, TimeCompression.EffectiveTimerFloorMs, 6);
 
         var plan = TimeCompression.Plan(
-            Request(presets: new[] { new TimerPreset("Dwell", 500, PresetSource.Data) }),
+            Request(presets: new[] { new TimerPreset("Dwell", 2_000, PresetSource.Data) }),
             Floor);
 
         var timer = plan.Bounds.Single(b => b.Kind == CompressionBoundKind.Timer);
 
-        Assert.Equal(4.29, timer.CompMax, 2);
+        // *** THE NUMBER THE RULING NAMES. ***
+        Assert.Equal(4.0, timer.CompMax, 6);
         Assert.NotEqual(10.0, timer.CompMax, 1);
 
         // And it is stated in the detail, because a number without its provenance gets re-derived wrongly.
-        Assert.Contains("116.7 ms, NOT X-D's ORIGINAL 50", timer.Detail, StringComparison.Ordinal);
+        Assert.Contains("ABSOLUTE 500 ms (ruled 2026-08-18)", timer.Detail, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void The_timer_floor_is_k_times_the_LOADED_scan_period_and_nothing_is_restated_here()
+    public void THE_ABSOLUTE_FLOOR_SUBSUMES_THE_SCAN_DERIVED_ONE_and_the_max_is_taken_rather_than_assumed()
     {
+        // The RULING is that 500 ms subsumes k x scan — true at the measured 24.931 ms scan with a factor
+        // of four in hand, and FALSE the moment a program's scan period passes 100 ms. Both halves are
+        // asserted: the subsumption TODAY, and that the code takes the maximum rather than hardcoding the
+        // winner. Otherwise a future scan-period correction leaves a floor that has quietly stopped being
+        // conservative — on a constant this repository has already had to raise once for being 7% low.
         Assert.Equal(5, TimeCompression.TimerScanMultiple);
         Assert.Equal(TimeCompression.TimerScanMultiple * WireTiming.ScanPeriodMs, TimeCompression.TimerFloorMs, 6);
+
+        // 5 x 24.931 = 124.655, which is the owner's quoted 124.7 ms.
+        Assert.Equal(124.655, TimeCompression.TimerFloorMs, 3);
+        Assert.True(TimeCompression.AbsoluteTimerFloorMs > TimeCompression.TimerFloorMs,
+            "the ruling rests on 500 ms being the larger of the two, and it must be checkable rather than asserted.");
+
+        Assert.Equal(
+            Math.Max(TimeCompression.AbsoluteTimerFloorMs, TimeCompression.TimerFloorMs),
+            TimeCompression.EffectiveTimerFloorMs, 6);
     }
 
     [Fact]
@@ -98,7 +116,7 @@ public class TimeCompressionTests
             // Latched with a long window, so the ASSERTION ceiling is high and the TIMER is what binds —
             // which is X-D's own claim about which term usually does.
             Request(plantMs: 4 * 60 * 60 * 1000, budgetMs: 60 * 1000, expectations: new[] { Latched(1_000) },
-                presets: new[] { new TimerPreset("Dwell", 500, PresetSource.Data) }),
+                presets: new[] { new TimerPreset("Dwell", 2_000, PresetSource.Data) }),
             Floor);
 
         Assert.Equal(CompressionOutcome.Refused, plan.Outcome);
@@ -106,7 +124,8 @@ public class TimeCompressionTests
         Assert.Equal(CompressionBoundKind.Timer, plan.BindingBound);
 
         Assert.Contains("240", plan.Render(), StringComparison.Ordinal);
-        Assert.Contains("4.29", plan.Render(), StringComparison.Ordinal);
+        Assert.Contains("4", plan.Render(), StringComparison.Ordinal);
+        Assert.Equal(4.0, plan.CompMax, 6);
         Assert.Contains("MODEL TASK", plan.Detail, StringComparison.Ordinal);
     }
 
@@ -212,34 +231,106 @@ public class TimeCompressionTests
     }
 
     [Fact]
-    public void A_LITERAL_preset_with_no_declared_negligible_fraction_is_NOT_DECLARED_and_never_invented()
+    public void A_LITERAL_preset_NEEDS_NO_DECLARED_FRACTION_ANY_MORE_because_the_multiple_is_RULED()
     {
+        // 🔴 THE INVERSION OF THE OLD TEST, DELIBERATELY. Until 2026-08-18 an unscaled literal with no
+        // `negligibleFraction` reported NOT DECLARED and refused the whole plan — correctly, because the
+        // specification names no value for that fraction, so the only alternatives were inventing one or
+        // refusing. The ruling supplies the number (10x headroom), so the bound is now COMPUTABLE from the
+        // presets alone and the input has stopped being required.
         var plan = TimeCompression.Plan(
             Request(plantMs: 2_000, budgetMs: 1_000, negligibleFraction: null,
-                presets: new[] { new TimerPreset("Debounce", 500, PresetSource.Literal) }),
+                presets: new[] { new TimerPreset("Debounce", 5, PresetSource.Literal) }),
             Floor);
 
-        Assert.Equal(CompressionOutcome.NotComputable, plan.Outcome);
-
         var bound = plan.Bounds.Single(b => b.Kind == CompressionBoundKind.RatioDistortion);
-        Assert.Equal(CompressionBoundState.NotDeclared, bound.State);
-        Assert.True(double.IsNaN(bound.CompMax));
-        Assert.Contains("never says where 'negligible' ends", bound.Detail, StringComparison.Ordinal);
+        Assert.Equal(CompressionBoundState.Computed, bound.State);
+        Assert.False(double.IsNaN(bound.CompMax));
+        Assert.Contains("THE MULTIPLE IS RULED, NOT DECLARED", bound.Detail, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void The_ratio_distortion_bound_keeps_an_UNSCALED_literal_negligible_against_the_SHORTEST_behaviour()
+    public void A_DECLARED_negligible_fraction_IS_IGNORED_AND_THE_PLAN_SAYS_SO_rather_than_reading_as_though_it_governed()
     {
-        // 20 scans at comp 1 = 466.6 ms of plant behaviour; a 5 ms literal at 1% gives 466.6 x 0.01 / 5.
-        var plan = TimeCompression.Plan(
+        // *** A STATED INPUT THAT QUIETLY GOVERNS NOTHING IS WORSE THAN AN ABSENT ONE. *** Submissions
+        // written before the ruling still carry the field; they are not refused, and they are not allowed
+        // to look as though the number they state is doing any work.
+        var withFraction = TimeCompression.Plan(
             Request(negligibleFraction: 0.01, presets: new[] { new TimerPreset("Debounce", 5, PresetSource.Literal) }),
+            Floor);
+
+        var withoutFraction = TimeCompression.Plan(
+            Request(negligibleFraction: null, presets: new[] { new TimerPreset("Debounce", 5, PresetSource.Literal) }),
+            Floor);
+
+        // The ARITHMETIC is identical — the declaration changes nothing.
+        Assert.Equal(withoutFraction.CompMax, withFraction.CompMax, 6);
+        Assert.Equal(withoutFraction.Outcome, withFraction.Outcome);
+
+        // And the difference is SAID, on the plan that carries the superseded field — the FIELD is named,
+        // the VALUE it declared is quoted back, and the supersession is stated. Only the plan carrying the
+        // field says any of it.
+        Assert.Contains("negligibleFraction = ", withFraction.Detail, StringComparison.Ordinal);
+        Assert.Contains("AND IT WAS NOT USED", withFraction.Detail, StringComparison.Ordinal);
+        Assert.Contains("replaced on 2026-08-18", withFraction.Detail, StringComparison.Ordinal);
+        Assert.DoesNotContain("WAS NOT USED", withoutFraction.Detail, StringComparison.Ordinal);
+
+        // ⚠️ THE DECLARED VALUE IS QUOTED IN THE AMBIENT CULTURE, so the percent form is rendered rather
+        // than spelled out here. It is "1.00%" on this machine and "1.00 %" under the invariant culture,
+        // and the difference is a space — pinning one spelling reddens this test on a machine with a
+        // different locale, which is a failure that says nothing about the rule. What the rule requires is
+        // that the plan quote back the number the submission declared, and that is what is checked.
+        Assert.Contains(0.01.ToString("P2", CultureInfo.CurrentCulture), withFraction.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void The_literal_headroom_companion_keeps_the_COMPRESSED_behaviour_at_least_ten_times_the_literal()
+    {
+        // 🔴 THE RULED VALUE, PINNED AS A LITERAL — and it was not, until a mutation found it. Every other
+        // assertion about this companion reads the constant to build its expectation, so all of them are
+        // arithmetic checks that hold at ANY multiple: setting it to 5 left the whole suite green. The
+        // absolute floor was pinned at 500 from the start and the companion was not, so half the ruling
+        // was unguarded. A test that moves with the number it is checking is not checking the number.
+        Assert.Equal(10.0, TimeCompression.LiteralHeadroomMultiple, 6);
+
+        // 20 scans at comp 1 = 498.6 ms of plant behaviour; a 5 ms literal needs 10x headroom, so the
+        // factor caps at 498.6 / (10 x 5). RULED 2026-08-18, replacing the caller-declared fraction.
+        var plan = TimeCompression.Plan(
+            Request(presets: new[] { new TimerPreset("Debounce", 5, PresetSource.Literal) }),
             Floor);
 
         var bound = plan.Bounds.Single(b => b.Kind == CompressionBoundKind.RatioDistortion);
 
         Assert.Equal(CompressionBoundState.Computed, bound.State);
-        Assert.Equal(20 * WireTiming.ScanPeriodMs * 0.01 / 5, bound.CompMax, 6);
+        Assert.Equal(20 * WireTiming.ScanPeriodMs / (TimeCompression.LiteralHeadroomMultiple * 5), bound.CompMax, 6);
         Assert.Contains("CHANGED PROPORTION", bound.Detail, StringComparison.Ordinal);
+
+        // The COMPANION is what it says it is: at the ceiling, the compressed behaviour is exactly 10x
+        // the literal. Asserted from the other side so the multiple cannot drift out of the sentence.
+        Assert.Equal(TimeCompression.LiteralHeadroomMultiple * 5,
+            20 * WireTiming.ScanPeriodMs / bound.CompMax, 6);
+    }
+
+    [Fact]
+    public void THE_LARGEST_PARTICIPATING_LITERAL_BINDS_and_a_totaliser_no_longer_needs_an_undeclarable_judgement()
+    {
+        // The case that motivated the replacement: several literals, and the ceiling is the one the
+        // LARGEST imposes. Under the fraction rule a run-hour totaliser drove this to 0.0006x and somebody
+        // had to decide, with nothing to decide from, which literals "participate". The participating set
+        // is now simply the presets the submission supplies — and the arithmetic no longer needs a number
+        // the specification never named.
+        var plan = TimeCompression.Plan(
+            Request(presets: new[]
+            {
+                new TimerPreset("Debounce", 5, PresetSource.Literal),
+                new TimerPreset("Filter", 25, PresetSource.Literal),
+            }),
+            Floor);
+
+        var binding = plan.Bounds.Where(b => b.Kind == CompressionBoundKind.RatioDistortion).MinBy(b => b.CompMax)!;
+
+        Assert.Equal("Filter", binding.Subject);
+        Assert.Equal(20 * WireTiming.ScanPeriodMs / (TimeCompression.LiteralHeadroomMultiple * 25), binding.CompMax, 6);
     }
 
     [Fact]

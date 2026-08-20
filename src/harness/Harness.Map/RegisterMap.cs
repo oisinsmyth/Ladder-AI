@@ -295,7 +295,22 @@ public sealed record RegisterMap(
     /// rather than deleted.</item>
     /// </list>
     /// </summary>
-    public int PollRoundTrips => 1 + ReadPlan(Enumerable.Range(0, Slots.Count)).Count;
+    public int PollRoundTrips => 1 + ReadsPerPollCycle;
+
+    /// <summary>
+    /// 🔴 <b>READS ONE POLL CYCLE COSTS — <c>ceil(K / R)</c> — AND IT IS THE OBSERVABILITY FLOOR'S ONLY
+    /// LEGITIMATE INPUT.</b>
+    ///
+    /// <para>The floor is <c>reads x RTT_p99 / scan</c>: a slot is re-read once per CYCLE, so what sets it
+    /// is how many round trips a cycle costs, never how many slots exist. The two coincide only when a
+    /// read covers exactly one slot.</para>
+    ///
+    /// <para><b>It is a named property because it was an expression written out at three call sites</b>
+    /// (<c>map.ReadPlan(Enumerable.Range(0, map.Slots.Count)).Count</c>), and the fourth site — the one
+    /// that builds the delivered result package — passed a hardcoded <c>1</c> instead. One derivation, so
+    /// there is nothing to keep in step.</para>
+    /// </summary>
+    public int ReadsPerPollCycle => ReadPlan(Enumerable.Range(0, Slots.Count)).Count;
 
     /// <summary>FC16 transactions the vector phase costs. May exceed one — see <see cref="VectorWrite"/>.</summary>
     public int VectorWriteTransactions => ModbusLimits.WriteTransactions(VectorBlock.Length);

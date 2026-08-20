@@ -1,4 +1,4 @@
-using Harness.Map;
+﻿using Harness.Map;
 using Harness.Results;
 
 namespace Harness.Results.Tests;
@@ -639,7 +639,7 @@ public class SubmissionGateTests
         var uncompressed = Gate(Check(runtimeCompression: 1), "10b time compression");
         Assert.Equal(GateStatus.Checked, uncompressed.Status);
         Assert.True(uncompressed.Passed);
-        Assert.Contains("4.3x", uncompressed.Detail, StringComparison.Ordinal);
+        Assert.Contains("4.0x", uncompressed.Detail, StringComparison.Ordinal);
 
         var compressed = Gate(Check(runtimeCompression: 2), "10b time compression");
         Assert.Equal(GateStatus.NotChecked, compressed.Status);
@@ -651,10 +651,13 @@ public class SubmissionGateTests
     public void SUPPLYING_THE_BLOCK_LEVEL_CEILINGS_TURNS_10b_INTO_A_REAL_CHECK_and_the_TIMER_can_then_REFUSE()
     {
         // The remedy the NOT CHECKED text names has to exist, or the gate is a dead end wearing the costume
-        // of a build list. Supplied, the plan runs — and a 500 ms DATA preset caps compression at 4.3x, so
-        // a wave at 6x is refused by the term X-D says binds first.
+        // of a build list. Supplied, the plan runs — and under the RULED ABSOLUTE 500 ms floor (2026-08-18)
+        // a 2-second DATA preset caps compression at 4.0x, so a wave at 6x is refused by the term X-D says
+        // binds first. The preset was 500 ms here while the floor was the scan-derived 116.7 ms; the
+        // headline ratio is deliberately the same, so what this test pins is the ARITHMETIC and not a
+        // coincidence of two numbers.
         static BlockCompressionInputs Inputs(double plantMs) =>
-            new(plantMs, 1_000, new[] { new TimerPreset("Dwell", 500, PresetSource.Data) }, 100, 0.01);
+            new(plantMs, 1_000, new[] { new TimerPreset("Dwell", 2_000, PresetSource.Data) }, 100, null);
 
         var ok = Gate(Check(Windowed, runtimeCompression: 2, compressionInputs: Inputs(2_000)), "10b time compression");
         Assert.Equal(GateStatus.Checked, ok.Status);
@@ -674,7 +677,7 @@ public class SubmissionGateTests
         // risk, so the margin between comp_min and comp_max is margin, not headroom to spend.
         var gate = Gate(
             Check(Windowed, runtimeCompression: 3,
-                compressionInputs: new BlockCompressionInputs(1_100, 1_000, new[] { new TimerPreset("Dwell", 500, PresetSource.Data) }, 100, 0.01)),
+                compressionInputs: new BlockCompressionInputs(1_100, 1_000, new[] { new TimerPreset("Dwell", 2_000, PresetSource.Data) }, 100, null)),
             "10b time compression");
 
         Assert.True(gate.Passed);

@@ -635,6 +635,37 @@ public sealed record SlotBinding(
     public string? AssumedZeroRestBasis { get; init; }
 
     /// <summary>
+    /// 🔴 <b>SCANS THE INERT CHECK MUST LET PASS BEFORE IT DECIDES THIS SLOT IS QUIESCENT — the one knob
+    /// designed for <i>"this model takes N scans to settle"</i>, AND NO BINDING FIELD REACHED IT UNTIL
+    /// 2026-08-20.</b>
+    ///
+    /// <para><c>InertDeclaration.QuiescenceScans</c> has existed since the inert phase did, and
+    /// <c>LoopRun</c> called <c>InertRestPlan.For(binding, wordOrder)</c> and never passed the third
+    /// argument — so the value was permanently the parameter default, <b>1</b>, for every slot in every
+    /// submission. Fifth instance of the shape this codebase records four times: a capability documented
+    /// as declared, supplied by the code instead, with no field a document could state it in.</para>
+    ///
+    /// <para><b>IT COST A WAVE.</b> After a download the inert check wrote the next vector and sampled ONE
+    /// SCAN (~24 ms) later, while the model's own settle after a contents step is <b>~9 seconds</b>. The
+    /// check caught the block mid-integration and refused — <c>NotQuiescent</c>, which reads as a defect in
+    /// the program. Deterministic rather than flaky: the first run after any download fails and the second
+    /// passes, because by then the model is already at rest.</para>
+    ///
+    /// <para><b>It is per SLOT because settling time is a property of the MODEL behind that slot</b>, and a
+    /// wave-set-wide value would either under-wait for the slow model or make every fast slot pay for it.
+    /// One slot's declaration does raise the shared inert phase's wait — <c>InertPhase</c> takes the MAX
+    /// across the active slots, since the phase is one window covering all of them.</para>
+    ///
+    /// <para><b>1 is the floor and it is not a default that means "unstated"</b>: two reads inside one scan
+    /// cannot tell a settled value from a changing one, so the check needs at least one scan between its
+    /// observations. A value below 1, or one larger than the poll budget can ever observe, is a REFUSAL
+    /// naming both numbers — see <c>Harness.Wire.InertRestPlan</c>. It is deliberately NOT part of the
+    /// build stamp: it changes how long the CLIENT waits before it looks, and changes nothing that is
+    /// downloaded.</para>
+    /// </summary>
+    public int QuiescenceScans { get; init; } = 1;
+
+    /// <summary>
     /// The specification slot ids a vector may cite for this slot, in the order they were declared.
     /// <b>Never empty</b> — a slot always answers to at least its own id.
     ///

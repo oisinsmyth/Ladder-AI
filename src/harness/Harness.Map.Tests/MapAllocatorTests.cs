@@ -267,6 +267,40 @@ public class MapAllocatorTests
     }
 
     [Fact]
+    public void READS_PER_POLL_CYCLE_IS_THE_OBSERVABILITY_FLOORS_ONLY_INPUT_and_it_is_NOT_the_slot_count()
+    {
+        // 🔴 *** THE PROPERTY THAT EXISTS BECAUSE A HARDCODED `1` STOOD IN FOR IT. *** The observability
+        // floor is `reads x RTT_p99 / scan`. A slot is re-read once per CYCLE, so what sets the floor is
+        // what a CYCLE costs — never how many slots exist. The gate derived it from the map; the code
+        // building the delivered result package passed a literal one read, so on any wave needing more
+        // than one read the package's floor was too small BY THAT FACTOR, in the PERMISSIVE direction.
+        //
+        // A one-read wave set is unaffected, which is why it went unseen — so this test is deliberately
+        // written on wave sets where the two numbers DIFFER, because the fixtures where they agree cannot
+        // tell a correct derivation from a literal.
+        var slots = (int n, int result) => MapAllocator.Allocate(Wave(
+            Enumerable.Range(0, n).Select(i => new SlotRequest($"S{i}", 4, result)).ToArray())).Require();
+
+        // R = 5 at 25 registers: SIX slots ride in TWO reads. Slot count 6, reads 2 — the numbers a
+        // reader "correcting" the floor's caller would have transposed.
+        var sixInTwo = slots(6, 25);
+        Assert.Equal(6, sixInTwo.Slots.Count);
+        Assert.Equal(2, sixInTwo.ReadsPerPollCycle);
+
+        // R = 1 at 123 registers: three slots, three reads — the case where they DO coincide, which is
+        // exactly why coincidence is not evidence.
+        Assert.Equal(3, slots(3, 123).ReadsPerPollCycle);
+
+        // The control read is the +1, and it is the ONLY difference between the two properties. Stated
+        // as an identity so a future edit cannot quietly move the control read into the floor's input.
+        foreach (var map in new[] { sixInTwo, slots(3, 123), slots(1, 4) })
+        {
+            Assert.Equal(map.ReadPlan(Enumerable.Range(0, map.Slots.Count)).Count, map.ReadsPerPollCycle);
+            Assert.Equal(1 + map.ReadsPerPollCycle, map.PollRoundTrips);
+        }
+    }
+
+    [Fact]
     public void A_vector_wider_than_one_FC16_is_allocated_not_refused()
     {
         // The premise this guards against: capping vector width at the FC16 limit. X-A makes the data

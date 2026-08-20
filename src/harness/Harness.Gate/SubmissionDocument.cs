@@ -309,14 +309,22 @@ public sealed class BlockCompressionDocument
     public List<TimerPresetDocument>? Presets { get; set; }
 
     /// <summary>
-    /// The ratio-distortion threshold. The specification works an example and never says where
-    /// "negligible" ends, so this has no default and its absence makes that bound <c>NOT DECLARED</c>.
+    /// 🔴 <b>SUPERSEDED 2026-08-18 AND NO LONGER CONSULTED.</b> It was the ratio-distortion threshold, and
+    /// the specification works an example without ever saying where "negligible" ends — so it had no
+    /// default and its absence made that bound <c>NOT DECLARED</c>, which refused the plan.
+    ///
+    /// <para>The ruling replaced it with <c>TimeCompression.AbsoluteTimerFloorMs</c> (no timer preset
+    /// compressed below ~500 ms) plus the ruled <c>TimeCompression.LiteralHeadroomMultiple</c>, so the
+    /// bound is computable from the presets alone. <b>The field is still PARSED so that submissions
+    /// written before the ruling are not refused for carrying it</b>, and <c>TimeCompression.Plan</c>
+    /// appends to its own detail that the declared value was not used — a stated input that quietly
+    /// governs nothing being worse than an absent one. <b>Omit it in new submissions.</b></para>
     /// </summary>
     public double? NegligibleFraction { get; set; }
 
     /// <summary>
     /// Unknown keys here were outside gate 0b too — and this object carries X-D's ceilings, where a
-    /// dropped <c>negligibleFraction</c> silently becomes an uncomputed bound rather than a refused one.
+    /// dropped field silently becomes an uncomputed bound rather than a refused one.
     /// </summary>
     [JsonExtensionData]
     public Dictionary<string, object?>? UnknownFields { get; set; }

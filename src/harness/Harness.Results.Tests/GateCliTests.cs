@@ -643,7 +643,12 @@ public class GateCliTests
         Assert.Contains("10b time compression", output, StringComparison.Ordinal);
         Assert.Contains("OFTEN BINDS FIRST", output, StringComparison.Ordinal);
 
-        // And the timer ceiling that binds first is quoted at its MEASURED value, not X-D's original.
-        Assert.Contains("4.3x", output, StringComparison.Ordinal);
+        // And the timer ceiling that binds first is quoted at the RULED ABSOLUTE floor (2026-08-18) rather
+        // than X-D's original 10x — and rather than the scan-derived k x scan it now subsumes. On a
+        // 2-second preset that is 2000 / 500 = 4.0x. Both halves are asserted: the number, and the fact
+        // that the text names WHICH floor produced it, because a ceiling quoted without its provenance is
+        // exactly what gets re-derived wrongly next time.
+        Assert.Contains("4.0x", output, StringComparison.Ordinal);
+        Assert.Contains("RULED ABSOLUTE 500 ms", output, StringComparison.Ordinal);
     }
 }
