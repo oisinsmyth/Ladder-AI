@@ -268,6 +268,47 @@ needs without the subject doing anything, that test is about the double.
 
 ---
 
+### M-16. "Read the interface but not the behaviour" is NOT achievable by instruction
+
+**Found 2026-08-20, by an enumerator that refused its own task.** A convention-derived assertion pass —
+one whose entire value comes from being derived *independently* of the implementation — was briefed to
+read "the block's INTERFACE only: what signals exist, their direction and type". The file it was pointed
+at was titled an interface report and was in substance a **470-line behavioural specification**:
+per-network boolean expressions, timer arming conditions, latch and reset semantics, status-code values,
+and a named defect analysis.
+
+**The independence was gone in the first thirty seconds, and it could not have been prevented by care.**
+You cannot know what a document contains without opening it. The agent read it before it could know, and
+then correctly reported that *every* behaviour category in its brief had been pre-answered — leaving no
+residue from which anything genuinely first-principles could be written.
+
+🔴 **IT REFUSED TO EMIT THE ARTIFACT, AND THE REASONING IS THE KEEPER.** A contaminated list looks exactly
+like a clean one, is **more** likely to pass, and — once written — permanently displaces the clean one,
+because nobody re-runs a pass whose output already exists. *A quarantined artifact that gets cited is this
+project's signature failure with a disclaimer attached.* Emitting it "clearly labelled as compromised"
+would have been the worse of the two options.
+
+Note the shape of the trap, which is what makes it general: the offending document **opened by declaring
+that it deliberately does not do the enumerator's job** — and then described the block thoroughly enough
+that nobody who read it could do that job independently. *The separation was designed for, and defeated
+by, the same file.*
+
+**Mechanise:** a **redacted signal inventory** — name, type, direction, carriability, and nothing else —
+generated as a STANDING artifact at interface-report time, not as a remedy after a contamination. One was
+hand-built here to unblock the re-run; the point is that it should never have had to be. Extracting it is
+transcription rather than judgement, so it can be produced mechanically and its exhaustiveness is what
+stops the extractor's own selection leaking in. **Private working statics must be excluded entirely** —
+their *names alone* are implementation vocabulary and seed the restatement by themselves.
+
+⚠️ **The adjacent tooling trap, found in the same pass.** `converter interface-check` reads
+`response_signal:` values as the **required** set and exits 1 as a *fail against the block*. Point it at a
+convention-derived enumeration and every assumption becomes a requirement the block is failed against —
+**exactly inverting "this is a question for the engineer" into "this is a defect".** Convention files now
+carry a top-level `assertionClass: convention-derived` marker; the durable fix is for the tool to refuse a
+file bearing it, rather than relying on nobody passing the wrong path.
+
+---
+
 ## WHAT MUST NOT BE MECHANISED
 
 *Recorded because the pressure to automate these will be strongest exactly when they are working.*
