@@ -239,16 +239,46 @@ public static class ScreenCompare
                 }
             }
 
-            foreach (var anim in e.Descendants().Where(x => x.Name.LocalName.StartsWith("Hmi.Dynamic.", StringComparison.Ordinal)
-                                                            && (string?)x.Attribute("CompositionName") == "Animations"))
+            // 🔴 ANIMATIONS ARE KEYED BY NAME **AND POSITION**, BECAUSE THE NAME IS NOT UNIQUE.
+            //
+            // TIA names EVERY visibility animation "VisibilityAnimation" - all twenty of them in a
+            // real export of one screen on this project. Keying on the name alone meant two
+            // animations on one object collapsed into ONE dictionary entry, the second silently
+            // overwriting the first, so a DROPPED animation compared IDENTICAL.
+            //
+            // That is not hypothetical. Measured 2026-08-20: a Classic screen item accepts exactly
+            // one VisibilityAnimation and TIA DISCARDS a second on import - silently, with a green
+            // import and a green compile. So the one case this comparator exists to catch is
+            // precisely the case it could not see.
+            //
+            // The first occurrence keeps the bare name; later ones take a #n suffix. The per-name
+            // COUNT is emitted as its own field, so a lost animation is a difference in its own
+            // right and not merely an absent key - the same shape as the event list's .count.
+            var animations = e.Descendants()
+                .Where(x => x.Name.LocalName.StartsWith("Hmi.Dynamic.", StringComparison.Ordinal)
+                            && (string?)x.Attribute("CompositionName") == "Animations")
+                .ToList();
+
+            var seen = new Dictionary<string, int>(StringComparer.Ordinal);
+            foreach (var anim in animations)
             {
-                var aname = anim.Element("AttributeList")?.Element("Name")?.Value ?? anim.Name.LocalName;
+                var rawName = anim.Element("AttributeList")?.Element("Name")?.Value ?? anim.Name.LocalName;
+                seen.TryGetValue(rawName, out var already);
+                seen[rawName] = already + 1;
+
+                var aname = already == 0 ? rawName : $"{rawName}#{already + 1}";
+
                 foreach (var leaf in anim.Element("AttributeList")?.Elements() ?? Enumerable.Empty<XElement>())
                 {
                     fields[$"Animation[{aname}].{leaf.Name.LocalName}"] = leaf.Value;
                 }
 
                 fields[$"Animation[{aname}].trigger"] = LinkTargets(anim, doc);
+            }
+
+            foreach (var pair in seen)
+            {
+                fields[$"Animation[{pair.Key}].count"] = pair.Value.ToString(CultureInfo.InvariantCulture);
             }
 
             foreach (var ev in e.Descendants().Where(x => x.Name.LocalName == "Hmi.Event.Event"))

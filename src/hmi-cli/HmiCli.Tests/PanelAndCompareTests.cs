@@ -153,6 +153,77 @@ public class CompareTests
 </Document>
 """;
 
+    /// <summary>
+    /// A rectangle carrying <paramref name="animations"/> visibility animations, ALL NAMED THE SAME,
+    /// which is what TIA writes — every one of them is called "VisibilityAnimation".
+    /// </summary>
+    private static string DocWithAnimations(int animations, int from = 0) => $"""
+<?xml version="1.0" encoding="utf-8"?>
+<Document>
+  <Hmi.Screen.Screen ID="0">
+    <ObjectList>
+      <Hmi.Screen.ScreenLayer ID="1" CompositionName="Layers">
+        <ObjectList>
+          <Hmi.Screen.Rectangle ID="5" CompositionName="ScreenItems">
+            <AttributeList><Height>40</Height><Left>10</Left><ObjectName>Box</ObjectName>
+            <Top>10</Top><Width>100</Width></AttributeList>
+            <ObjectList>
+{string.Concat(Enumerable.Range(from, animations).Select(i => $"""
+              <Hmi.Dynamic.VisibilityAnimation ID="{20 + i}" CompositionName="Animations">
+                <AttributeList><Name>VisibilityAnimation</Name><RangeStart>{i * 100}</RangeStart>
+                <RangeEnd>{(i * 100) + 1}</RangeEnd><Visible>false</Visible></AttributeList>
+              </Hmi.Dynamic.VisibilityAnimation>
+"""))}
+            </ObjectList>
+          </Hmi.Screen.Rectangle>
+        </ObjectList>
+      </Hmi.Screen.ScreenLayer>
+    </ObjectList>
+  </Hmi.Screen.Screen>
+</Document>
+""";
+
+    /// <summary>
+    /// 🔴 THE CASE THIS COMPARATOR EXISTS FOR, AND COULD NOT SEE.
+    ///
+    /// <para>
+    /// Animations were keyed on their <c>Name</c> alone. TIA names EVERY visibility animation
+    /// "VisibilityAnimation", so two on one object collapsed into one dictionary entry — the second
+    /// overwriting the first — and an animation that went missing compared <b>IDENTICAL</b>.
+    /// </para>
+    /// <para>
+    /// Measured live 2026-08-20: a Classic screen item accepts exactly ONE VisibilityAnimation and
+    /// TIA discards a second at import, with a green import and a green compile. So the single
+    /// failure a read-back comparison is for was the one it was blind to.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void AnAnimationSilentlyDroppedByTia_IsADifference()
+    {
+        // ⚠️ THE SECOND ARGUMENT MODELS TIA'S MEASURED BEHAVIOUR EXACTLY, AND THAT IS THE WHOLE
+        // POINT OF THE TEST. TIA is LAST-WINS: the survivor is the SECOND animation, not the first.
+        // So the read-back is "the animation at index 1, alone".
+        //
+        // Under the old name-only keying, the surviving animation's values are precisely the ones
+        // that had overwritten the first in the two-animation document — so both sides produced an
+        // IDENTICAL field set and the comparator reported no difference. Comparing against index 0
+        // instead would pass even WITHOUT the fix, and would prove nothing.
+        var authored = DocWithAnimations(2);
+        var afterTiaDroppedOne = DocWithAnimations(1, from: 1);
+
+        var r = ScreenCompare.Compare(authored, afterTiaDroppedOne);
+
+        Assert.True(r.Differences > 0,
+            "two animations authored, one returned — TIA's measured last-wins drop — must not compare identical");
+    }
+
+    [Fact]
+    public void TheSameAnimationsOnBothSides_CompareEqual()
+    {
+        Assert.Equal(0, ScreenCompare.Compare(DocWithAnimations(2), DocWithAnimations(2)).Differences);
+        Assert.Equal(0, ScreenCompare.Compare(DocWithAnimations(1), DocWithAnimations(1)).Differences);
+    }
+
     [Fact]
     public void IdenticalGeometry_CompareEqual()
     {
