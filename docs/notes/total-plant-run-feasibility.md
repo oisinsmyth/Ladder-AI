@@ -50,6 +50,32 @@ and the conflict graph *at block level*, which is benign and misleading.
 behind an unsolved design problem, and no schedule should be quoted for it.** That is not six months
 of authoring — but it is not a night, and the thing standing in the way is not effort.
 
+> ⚠️ **SUPERSEDED 2026-08-20, AND THE CORRECTION IS LARGE ENOUGH TO CHANGE THE PLAN.** A design review
+> of that "unsolved design problem" found the problem **as stated does not survive measurement**:
+> **four of the six claims it rested on are wrong, and every one of the four errors made it look
+> bigger and less tractable than it is.** In particular —
+>
+> - **the element-table gap unlocks NONE of the ~66%.** Every observation signal in that tier is
+>   Boolean; not one observes a `Real`. Widening the table is worth doing for other reasons and buys
+>   **zero** of these;
+> - **the circularity is real but not load-bearing** — the carried-over value cannot reach the
+>   transitions it appeared to gate, because they share an enable with its only write, one network
+>   earlier in the same scan;
+> - one value called un-restorable **has a reset**, and the claim traces to a *dead, unreferenced*
+>   member whose comment describes a hazard the live logic does not have;
+> - the real blocker is a **missing stimulus head plus repeatability**, and the program already
+>   contains an unused route to the second — reachable through a harness block that is **already
+>   built and staged**.
+>
+> Best option now: **~55 of the tier for two extra registers**, reusing that staged block, with a
+> failure mode that is a visible timeout rather than a wrong answer. **"Do nothing" is no longer the
+> safe default — it is beaten.** Detail is job-specific and lives outside this file.
+>
+> **The transferable lesson is the shape, not the numbers: a problem statement assembled from several
+> artifacts inherited every one of their errors, and they pointed the same way.** Nobody re-read the
+> ladder until someone was asked to design against it. *Price a blocker by measuring it, not by
+> summing what has been written about it.*
+
 ---
 
 ## 1. The correction this page exists to make
