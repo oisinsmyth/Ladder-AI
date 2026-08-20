@@ -355,6 +355,35 @@ The failure is never the copy being wrong; it is the copy being *readable and co
 
 ---
 
+### M-19. The observability gate fences the VECTOR author from the map, and nobody fences the BLOCK author
+
+**Found 2026-08-20, while closing that gate.** The map a conformance submission is judged observable
+against is authored by somebody. The gate's independence argument fences it from the **vector** author —
+and that argument is satisfied. **Nothing anywhere compares the map's author against the BLOCK's author**,
+and on the submission that surfaced this they were *the same identity string*.
+
+That is the D6 hole one level down. A block author who also authors the observability map decides both
+what the block does **and what can be seen of it** — and "what can be seen" is exactly what decides which
+assertions are admissible. A signal that would embarrass the block need never appear in the map, and the
+gate would pass.
+
+⚠️ **Not a refusal and not an accusation** — the identity string is weak evidence and this project has
+already recorded that *what makes two agents different is undefined* (an open contract question). Recorded
+because the CHECK does not exist, not because the map is believed compromised.
+
+**Mechanise:** the same normalised-identity comparison the gate already performs against the vector
+author, performed against the block author too. It is the cheapest possible closure — the comparison code
+exists and is simply not pointed at the second party.
+
+⚠️ **Second, unrelated limit of the same gate, in its own words: it TAKES THE NAME, NOT THE FACT.** Latch
+claims are admitted on *provenance* — "this signal is latched by block X" — with no check that block X is
+in the deployment at all. **A submission can therefore be ADMISSIBLE while naming latching blocks that are
+not loaded**, which is precisely the state the deliverable was in when this was found. Admissible is not
+runnable, and the gate says so out loud rather than pretending otherwise; the check that would close it is
+a deployment-manifest comparison nobody has built.
+
+---
+
 ## WHAT MUST NOT BE MECHANISED
 
 *Recorded because the pressure to automate these will be strongest exactly when they are working.*
