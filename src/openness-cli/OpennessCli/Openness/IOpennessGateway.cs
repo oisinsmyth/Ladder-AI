@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using OpennessCli.Model;
 
 namespace OpennessCli.Openness;
@@ -845,12 +846,90 @@ public sealed class DeleteDidNotTakeEffectException : Exception
     }
 }
 
+/// <summary>
+/// 🔴 THIS USED TO REPORT ONLY THE NAME, AND THAT COST A DEFECT ITS DIAGNOSIS.
+///
+/// <para>
+/// A <c>hmi-delete-screen</c> with eighteen <c>--name</c> flags reported the FIRST name as not
+/// found; the same name alone, in the very next invocation, deleted fine. With nothing but the
+/// name in the message there was no way to tell whether the screen was absent, whether the walk
+/// had failed, or whether the string was not the string it appeared to be — so the cause was
+/// recorded as unexplained rather than guessed at.
+/// </para>
+/// <para>
+/// The message now carries what IS present, and — because <c>--name</c> is taken verbatim
+/// (no trim, no Unicode normalisation) and matched <c>Ordinal</c> — it looks for a near match and
+/// dumps the code points when it finds one. A trailing space or a non-breaking space in a generated
+/// command line is invisible to an echo and to a person reading the output, and it would produce
+/// exactly the observed signature.
+/// </para>
+/// </summary>
 public sealed class ScreenNotFoundException : Exception
 {
-    public ScreenNotFoundException(string screenName)
-        : base($"No classic HMI screen named '{screenName}' found in the project.")
+    public ScreenNotFoundException(string screenName, IEnumerable<string> present)
+        : base(Build(screenName, present))
     {
     }
+
+    private static string Build(string screenName, IEnumerable<string> present)
+    {
+        var list = present.ToList();
+        var message = $"No classic HMI screen named '{screenName}' found in the project. PRESENT: "
+                    + (list.Count == 0
+                        ? "(none — the project holds no classic screens at all)"
+                        : string.Join(", ", list));
+
+        var near = list.Where(p => !string.Equals(p, screenName, StringComparison.Ordinal)
+                                && string.Equals(Fold(p), Fold(screenName), StringComparison.OrdinalIgnoreCase))
+                       .ToList();
+
+        if (near.Count > 0)
+        {
+            message += $"{Environment.NewLine}NEAR MATCH: {string.Join(", ", near.Select(n => $"'{n}'"))} "
+                     + "differ(s) from the requested name only by whitespace, invisible characters or case. "
+                     + "The name is matched EXACTLY and is never trimmed, so this is very likely the cause."
+                     + $"{Environment.NewLine}REQUESTED, code point by code point: {CodePoints(screenName)}"
+                     + $"{Environment.NewLine}NEAREST,   code point by code point: {CodePoints(near[0])}";
+        }
+
+        return message;
+    }
+
+    /// <summary>Trim, collapse whitespace runs, and drop the invisible characters that survive a copy-paste.</summary>
+    private static string Fold(string value)
+    {
+        var sb = new StringBuilder();
+        var lastWasSpace = false;
+
+        foreach (var c in value)
+        {
+            // Zero-width space, ZWNJ, ZWJ, word joiner, BOM: present in the string, absent from the eye.
+            if (c is '​' or '‌' or '‍' or '⁠' or '﻿')
+            {
+                continue;
+            }
+
+            // Includes the non-breaking space ( ), which is the classic paste artefact.
+            if (char.IsWhiteSpace(c))
+            {
+                if (!lastWasSpace)
+                {
+                    sb.Append(' ');
+                }
+
+                lastWasSpace = true;
+                continue;
+            }
+
+            sb.Append(c);
+            lastWasSpace = false;
+        }
+
+        return sb.ToString().Trim();
+    }
+
+    private static string CodePoints(string value) =>
+        string.Join(" ", value.Select(c => c is >= ' ' and <= '~' ? c.ToString() : $"U+{(int)c:X4}"));
 }
 
 public sealed class AmbiguousScreenException : Exception

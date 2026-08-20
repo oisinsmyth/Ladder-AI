@@ -1881,3 +1881,28 @@ the only real price.
 Worth noting the failure was SAFE — the resolution loop runs to completion before anything is
 deleted, so a name that does not resolve aborts the whole call and nothing is removed. The defect
 is a refusal that should not have happened, not a deletion that should not have happened.
+
+#### What the NEXT reproduction will say (2026-08-20)
+
+The cause is still not established, and the change made here does not pretend to establish it — it
+makes the next occurrence *diagnosable*, which is what was actually missing. `ScreenNotFoundException`
+reported **only the name**, so absence, a failed walk, and a string that is not the string it appears
+to be all printed identically. It now reports:
+
+- **`PRESENT:`** — every classic screen name in the project, built through the *same* walk that
+  failed to find the requested one, so the two cannot disagree about what the project holds. A
+  project with no classic screens says so rather than printing an empty list.
+- **`NEAR MATCH:`** — any present name that differs from the requested one only by whitespace,
+  invisible characters or case, followed by **both names dumped code point by code point**.
+
+That second line targets the one hypothesis reading the code could not eliminate: `--name` is taken
+**verbatim** (`TryTakeValue` — no `Trim`, no Unicode normalisation) and matched `Ordinal`. A trailing
+space or a non-breaking space in one element of a long generated command line is invisible to an
+echo, invisible in the output, and produces exactly the observed signature. **The argv was verified
+by echo at the time, and an echo cannot show this.**
+
+Deliberately NOT done: trimming or normalising the name. That would change which screens can be
+addressed on the strength of a hypothesis, and a delete is the one irreversible operation this CLI
+exposes. If the near-match line fires on the next reproduction, the fix follows from evidence; if it
+stays silent, that is evidence too — and the present-set will show whether the screen was there at
+all.

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -3499,7 +3499,7 @@ public sealed class OpennessGateway : IOpennessGateway
                 throw new ScreenExportNotSupportedOnUnifiedException(screenName, unifiedPaths[0]);
             }
 
-            throw new ScreenNotFoundException(screenName);
+            throw new ScreenNotFoundException(screenName, AllClassicScreenNames());
         }
 
         if (matches.Count > 1)
@@ -3527,10 +3527,39 @@ public sealed class OpennessGateway : IOpennessGateway
         }
     }
 
+    /// <summary>
+    /// Every classic screen name in the project, in order — the denominator for a "not found".
+    /// Built through the SAME walk that failed to find the name, so the two cannot disagree about
+    /// what the project contains.
+    /// </summary>
+    private List<string> AllClassicScreenNames()
+    {
+        var all = new List<(Screen Screen, string Path)>();
+        var unified = new List<string>();
+
+        foreach (Device device in _project!.Devices)
+        {
+            foreach (DeviceItem item in device.DeviceItems)
+            {
+                CollectScreensForExport(item, device.Name, null, all, unified);
+            }
+        }
+
+        return all.Select(x => x.Screen.Name)
+                  .Distinct(StringComparer.Ordinal)
+                  .OrderBy(x => x, StringComparer.Ordinal)
+                  .ToList();
+    }
+
+    /// <param name="screenName">
+    /// The name to match, or <c>null</c> for EVERY screen. The null form exists so that a
+    /// "not found" can report what IS present without a second tree walk that could disagree with
+    /// this one — the diagnostic must be built from the same enumeration that failed to find it.
+    /// </param>
     private static void CollectScreensForExport(
         DeviceItem item,
         string parentPath,
-        string screenName,
+        string? screenName,
         List<(Screen Screen, string Path)> classic,
         List<string> unifiedPaths)
     {
@@ -3543,7 +3572,8 @@ public sealed class OpennessGateway : IOpennessGateway
                 CollectClassicScreens(target.ScreenFolder, path, screenName, classic);
                 break;
             case HmiSoftware unified:
-                if (unified.Screens.Any(s => string.Equals(s.Name, screenName, StringComparison.Ordinal)))
+                if (unified.Screens.Any(s => screenName is null
+                                          || string.Equals(s.Name, screenName, StringComparison.Ordinal)))
                 {
                     unifiedPaths.Add(path);
                 }
@@ -3557,15 +3587,16 @@ public sealed class OpennessGateway : IOpennessGateway
         }
     }
 
+    /// <param name="screenName">The name to match, or <c>null</c> for every screen.</param>
     private static void CollectClassicScreens(
         ScreenFolder folder,
         string devicePath,
-        string screenName,
+        string? screenName,
         List<(Screen Screen, string Path)> results)
     {
         foreach (Screen screen in folder.Screens)
         {
-            if (string.Equals(screen.Name, screenName, StringComparison.Ordinal))
+            if (screenName is null || string.Equals(screen.Name, screenName, StringComparison.Ordinal))
             {
                 results.Add((screen, devicePath));
             }
@@ -4402,7 +4433,7 @@ public sealed class OpennessGateway : IOpennessGateway
                     throw new ScreenExportNotSupportedOnUnifiedException(name, unified[0]);
                 }
 
-                throw new ScreenNotFoundException(name);
+                throw new ScreenNotFoundException(name, AllClassicScreenNames());
             }
 
             if (matches.Count > 1)
@@ -4513,7 +4544,7 @@ public sealed class OpennessGateway : IOpennessGateway
 
         if (classic.Count == 0)
         {
-            throw new ScreenNotFoundException(screenName);
+            throw new ScreenNotFoundException(screenName, AllClassicScreenNames());
         }
 
         var screen = classic[0].Screen;
@@ -4620,7 +4651,7 @@ public sealed class OpennessGateway : IOpennessGateway
 
         if (classic.Count == 0)
         {
-            throw new ScreenNotFoundException(screenName);
+            throw new ScreenNotFoundException(screenName, AllClassicScreenNames());
         }
 
         var screen = classic[0].Screen;
