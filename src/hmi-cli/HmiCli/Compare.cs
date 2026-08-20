@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
 
@@ -105,6 +105,22 @@ public static class ScreenCompare
                     // Stated by the emitter and absent from the read-back: TIA discarded it.
                     dropped.Add($"{name}.{key}: '{va}' was DROPPED by TIA");
                 }
+                else if (IsBehavioural(key))
+                {
+                    // 🔴 A BEHAVIOURAL KEY PRESENT ONLY IN THE SECOND DOCUMENT IS AN ADDITION, NOT
+                    // A DEFAULT.
+                    //
+                    // Every second-only field used to be counted as DEFAULTED-BY-TIA, which is
+                    // right for an ATTRIBUTE - TIA genuinely fills in BackColor, EdgeStyle and a
+                    // hundred others the emitter never states. It is wrong for a dynamization:
+                    // TIA does not invent a Property binding, an Event or an Animation.
+                    //
+                    // Measured: a screen came back with six objects newly hidden by a
+                    // VisibilityAnimation and the comparator reported NOTHING, because every one of
+                    // those keys was second-only and went into the defaulted bucket. The widened
+                    // walk found the fields and the counting rule then threw them away again.
+                    changed.Add($"{name}.{key}: ADDED '{vb}' (absent from the first document)");
+                }
                 else
                 {
                     defaulted++;
@@ -114,6 +130,19 @@ public static class ScreenCompare
 
         return new Result(a.Keys.Union(b.Keys, StringComparer.Ordinal).Count(), both, changed, dropped, defaulted);
     }
+
+    /// <summary>
+    /// Is this field key part of what the screen DOES, rather than what it looks like?
+    ///
+    /// The distinction decides whether a one-sided field is an ADDITION or a TIA default, and it is
+    /// keyed on the three compositions TIA never fabricates: a Property binding, an Event, and an
+    /// Animation. Everything else - colours, margins, edge styles - TIA fills in freely, and
+    /// treating those as additions would bury a real change under hundreds of them.
+    /// </summary>
+    private static bool IsBehavioural(string key) =>
+        key.StartsWith("Property[", StringComparison.Ordinal)
+        || key.StartsWith("Event[", StringComparison.Ordinal)
+        || key.StartsWith("Animation[", StringComparison.Ordinal);
 
     private sealed record ItemFacts(string Type, Dictionary<string, string> Fields);
 
@@ -178,11 +207,95 @@ public static class ScreenCompare
                 }
             }
 
+            // 🔴 THE BEHAVIOURAL HALF OF A SCREEN, WHICH THIS COMPARATOR DID NOT LOOK AT AT ALL.
+            //
+            // Until 2026-08-20 Parse read the AttributeList, the text payloads and the fonts - the
+            // PICTURE - and nothing else. It never walked a Property, an Event or an Animation. So
+            // it was blind to:
+            //
+            //   * WHICH TAG A FIELD DISPLAYS   (Hmi.Screen.Property -> dynamization -> Tag)
+            //   * WHAT A BUTTON DOES           (Hmi.Event.Event -> the ordered function list)
+            //   * WHEN AN OBJECT IS VISIBLE    (Hmi.Dynamic.*Animation -> its trigger tag)
+            //
+            // MEASURED, and this is why it is being fixed rather than merely widened: a real screen
+            // came back from TIA with all EIGHT of its select buttons retargeted from one tag to
+            // another - the change that decides which recipe the button starts - and compare
+            // reported `4 changed, 3 dropped` WITHOUT NAMING ONE OF THEM. It saw two objects added
+            // and a field nudged a pixel, and called the rest identical.
+            //
+            // That is this project's recurring failure in its worst form: the tool whose whole job
+            // is "prove the round trip is faithful" was answering a question about geometry.
+            //
+            // Ordering is preserved deliberately. A function list's ORDER is the PLC command
+            // handshake - code written before the sequence bumps - so a reordered list is a
+            // different program, and a comparator that treated the list as a set would call it equal.
+            foreach (var prop in e.Descendants().Where(x => x.Name.LocalName == "Hmi.Screen.Property"))
+            {
+                var pname = prop.Element("AttributeList")?.Element("Name")?.Value ?? "?";
+                foreach (var dyn in prop.Descendants().Where(x => x.Name.LocalName.StartsWith("Hmi.Dynamic.", StringComparison.Ordinal)))
+                {
+                    fields[$"Property[{pname}].dynamic"] = dyn.Name.LocalName;
+                    fields[$"Property[{pname}].tag"] = LinkTargets(dyn, doc);
+                }
+            }
+
+            foreach (var anim in e.Descendants().Where(x => x.Name.LocalName.StartsWith("Hmi.Dynamic.", StringComparison.Ordinal)
+                                                            && (string?)x.Attribute("CompositionName") == "Animations"))
+            {
+                var aname = anim.Element("AttributeList")?.Element("Name")?.Value ?? anim.Name.LocalName;
+                foreach (var leaf in anim.Element("AttributeList")?.Elements() ?? Enumerable.Empty<XElement>())
+                {
+                    fields[$"Animation[{aname}].{leaf.Name.LocalName}"] = leaf.Value;
+                }
+
+                fields[$"Animation[{aname}].trigger"] = LinkTargets(anim, doc);
+            }
+
+            foreach (var ev in e.Descendants().Where(x => x.Name.LocalName == "Hmi.Event.Event"))
+            {
+                var evname = ev.Element("AttributeList")?.Element("Name")?.Value ?? "?";
+                var n = 0;
+                foreach (var fn in ev.Descendants().Where(x => x.Name.LocalName == "Hmi.Event.FunctionListEntry"))
+                {
+                    var fal = fn.Element("AttributeList");
+                    var fnName = fal?.Element("Name")?.Value ?? "?";
+                    var ps = new List<string>();
+                    foreach (var pr in fn.Descendants().Where(x => x.Name.LocalName == "Hmi.Event.FunctionListEntryParameter"))
+                    {
+                        var pal = pr.Element("AttributeList");
+                        var pn = pal?.Element("Name")?.Value ?? "?";
+
+                        // A parameter is EITHER a typed literal in the AttributeList OR an
+                        // @OpenLink in the LinkList. The '@' marks which, so a literal 5 and a tag
+                        // named "5" can never compare equal.
+                        var lit = pal?.Elements().FirstOrDefault(x => x.Name.LocalName == "Value");
+                        ps.Add(lit is not null ? $"{pn}={lit.Value}" : $"{pn}=@{LinkTargets(pr, doc)}");
+                    }
+
+                    fields[$"Event[{evname}].{n}"] = $"{fnName}({string.Join(", ", ps)})";
+                    n++;
+                }
+
+                // The COUNT is stated separately so a function REMOVED from the end of a list is a
+                // change, not a silently absent key that pairs with nothing.
+                fields[$"Event[{evname}].count"] = n.ToString(CultureInfo.InvariantCulture);
+            }
+
             map[name] = new ItemFacts(e.Name.LocalName["Hmi.Screen.".Length..], fields);
         }
 
         return map;
     }
+
+    /// <summary>
+    /// Every link target under <paramref name="e"/>, in document order, as one comparable string.
+    ///
+    /// Moved to <see cref="SimaticLinks"/> on 2026-08-20 when <c>to-ir</c> needed the same reading.
+    /// Two readers of the same document that each know a different set of link forms is how one of
+    /// them ends up silently reporting a wired link as empty - which had already happened once here,
+    /// with the <c>TargetID="#8A9"</c> form. One implementation, both callers.
+    /// </summary>
+    private static string LinkTargets(XElement e, XDocument doc) => SimaticLinks.Joined(e, doc);
 
     /// <summary>
     /// The emitter writes the rich-text payload ESCAPED; TIA re-exports it as LIVE NESTED XML. Both

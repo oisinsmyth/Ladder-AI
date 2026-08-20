@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using HmiCli;
 
 // Exit codes, following openness-cli's convention that a code means one thing:
@@ -17,13 +17,22 @@ hmi-cli - HTML -> HMI screen tooling (WinCC Classic Basic)
   hmi-cli check       (<screen.html> | <screen-ir.json>) --panel <name> [--json]
   hmi-cli emit        (<screen.html> | <screen-ir.json>) --panel <name> --screen-name <name>
                       [--number <n>] [--out <file.xml>] [--handoff <file.md>]
+  hmi-cli to-ir       <screen.xml> [--panel <name>] [--out <screen-ir.json>] [--json]
   hmi-cli compare     <first.xml> <second.xml> [--json]
   hmi-cli panels      [--bands]
   hmi-cli brand-check <#RRGGBB | r,g,b>
 
   --panel is REQUIRED and has no default. The KTP700 and KTP900 Basic share a resolution and
   differ ~28% physically, so a guessed panel is a quarter-scale sizing error that passes every
-  pixel-based check silently (H-407).
+  pixel-based check silently (H-407). On `to-ir` it is OPTIONAL and purely a DECLARATION: a
+  SimaticML document states pixels only, so without it the IR carries no panel and cannot be
+  linted - which is the correct outcome, not a bug.
+
+  `to-ir` produces a PARTIAL IR and says so. SimaticML is an OVERLAP with this IR, not a superset
+  or a subset: it states attributes the IR has no field for, and the IR carries fields SimaticML
+  never states. Fields that cannot be filled are LISTED, never invented. With --out the IR is
+  written there and the report goes to stdout; without --out the IR goes to stdout and the report
+  to stderr, so the output can be piped. Exit 1 if ANYTHING was skipped or left unmapped.
 
   --browser <path>   override browser discovery (Chrome or Edge, headless)
 
@@ -134,6 +143,178 @@ if (command == "panels")
         }
     }
 
+    return ExitClean;
+}
+
+// to-ir takes a SimaticML document rather than a screen, so it is handled before the IR load - the
+// LoadIr path below flattens HTML or deserializes an existing IR and can do neither with this.
+if (command == "to-ir")
+{
+    if (positional.Count == 0)
+    {
+        Console.Error.WriteLine($"to-ir needs a SimaticML screen document.{Environment.NewLine}{Usage}");
+        return ExitUsage;
+    }
+
+    var xmlPath = positional[0];
+    if (!File.Exists(xmlPath))
+    {
+        Console.Error.WriteLine($"No such file: {xmlPath}");
+        return ExitUsage;
+    }
+
+    // The panel is a DECLARATION here and is validated as one. A name that resolves to no panel is
+    // a usage error rather than something to carry through: an IR declaring a panel nobody has is
+    // worse than one declaring none, because it will be size-checked against fiction.
+    string? declaredPanel = null;
+    var requestedPanel = ValueOf("--panel");
+    if (requestedPanel is not null)
+    {
+        if (!Panels.TryResolve(requestedPanel, out var resolvedPanel, out var panelResolveError))
+        {
+            Console.Error.WriteLine(panelResolveError);
+            return ExitUsage;
+        }
+
+        declaredPanel = resolvedPanel.Name;
+    }
+
+    var toIrOut = ValueOf("--out");
+
+    SimaticMlReader.ReadResult read;
+    try
+    {
+        read = SimaticMlReader.Read(File.ReadAllText(xmlPath), Path.GetFullPath(xmlPath), declaredPanel);
+    }
+    catch (System.Xml.XmlException ex)
+    {
+        Console.Error.WriteLine($"'{xmlPath}' is not well-formed XML: {ex.Message}");
+        return ExitUsage;
+    }
+
+    var rep = read.Report;
+    var irJson = JsonSerializer.Serialize(read.Ir, new JsonSerializerOptions { WriteIndented = true });
+
+    // Where the two outputs go depends on --out, so that the IR can always be piped somewhere while
+    // the DENOMINATOR is never suppressed. A report that can be silently dropped is a report that
+    // will be.
+    var reportOut = toIrOut is not null ? Console.Out : Console.Error;
+
+    if (asJson)
+    {
+        reportOut.WriteLine(JsonSerializer.Serialize(rep, new JsonSerializerOptions { WriteIndented = true }));
+    }
+    else
+    {
+        reportOut.WriteLine($"READ: {rep.SourcePath}");
+        reportOut.WriteLine($"SCREEN: {rep.ScreenName ?? "(unnamed)"}  number "
+                          + $"{rep.ScreenNumber?.ToString() ?? "(none)"}  canvas {rep.CanvasWidth}x{rep.CanvasHeight}");
+        reportOut.WriteLine($"PANEL: {(declaredPanel is null ? "NOT DECLARED - the IR carries none, and lint/check will refuse it. SimaticML states pixels only; pass --panel to declare." : declaredPanel + " (declared by --panel, never inferred)")}");
+        reportOut.WriteLine();
+
+        // The denominator, split three ways: what was read, what was refused by name, and what was
+        // met inside a recognised object and could not be represented. The middle number is the one
+        // a caller must not be allowed to miss.
+        reportOut.WriteLine($"OBJECTS: {rep.ObjectsFound} Hmi.Screen.* object(s) found");
+        reportOut.WriteLine($"RECOGNISED: {rep.RecognisedCount} of {rep.ObjectsFound}"
+                          + (rep.Recognised.Count == 0
+                              ? string.Empty
+                              : "  (" + string.Join(", ", rep.Recognised
+                                    .OrderByDescending(k => k.Value).ThenBy(k => k.Key, StringComparer.Ordinal)
+                                    .Select(k => $"{k.Key} {k.Value}")) + ")"));
+
+        if (rep.NotRecognised.Count > 0)
+        {
+            reportOut.WriteLine($"NOT RECOGNISED: {rep.NotRecognised.Count} object(s) - NOT in the IR");
+            foreach (var r in rep.NotRecognised)
+            {
+                reportOut.WriteLine($"  {r.Where}: {r.Detail}");
+            }
+        }
+
+        if (rep.Unmapped.Count > 0)
+        {
+            reportOut.WriteLine($"UNMAPPED: {rep.Unmapped.Count} construct(s) inside recognised objects");
+            foreach (var r in rep.Unmapped)
+            {
+                reportOut.WriteLine($"  [{r.Kind}] {r.Where}: {r.Detail}");
+            }
+        }
+
+        // The ATTRIBUTE-level denominator, reported and NOT gated. An object being recognised says
+        // the IR has a type for it; it does not say the IR has a field for everything it states. On
+        // a real screen the difference is hundreds of TIA-supplied attributes, and calling that a
+        // finding would bury the real ones - but leaving it unstated is what makes "partial" sound
+        // like a formality instead of a number.
+        reportOut.WriteLine();
+        reportOut.WriteLine($"ATTRIBUTES: {rep.AttributesRead} stated across the recognised objects; "
+                          + $"{rep.AttributesOutsideCount} (type, attribute) pair(s) have no IR field "
+                          + "and are re-supplied from the emitter's own defaults on a re-emit "
+                          + "(reported, not a finding - this is the overlap, not a defect):");
+        if (rep.AttributesOutsideTheIr.Count == 0)
+        {
+            reportOut.WriteLine("  (none)");
+        }
+
+        foreach (var g in rep.AttributesOutsideTheIr)
+        {
+            reportOut.WriteLine($"  {g.Key}: {string.Join(", ", g.Value)}");
+        }
+
+        reportOut.WriteLine();
+        reportOut.WriteLine($"PARTIAL: this IR is marked sourceKind=\"simaticml\". "
+                          + $"{rep.Unpopulatable.Count} IR field group(s) CANNOT be populated from a "
+                          + "SimaticML document and were left at their defaults rather than guessed:");
+        foreach (var u in rep.Unpopulatable)
+        {
+            reportOut.WriteLine("  - " + u);
+        }
+    }
+
+    if (toIrOut is not null)
+    {
+        File.WriteAllText(toIrOut, irJson);
+
+        // Under --json, stdout must be PARSEABLE AS ONE DOCUMENT and nothing else. Appending a
+        // human line after the report made `to-ir --json --out x` fail to parse - trailing text
+        // after the closing brace - which is a tool that reports correctly and cannot be consumed.
+        var notice = $"IR: {read.Ir.Items.Count} item(s) -> {toIrOut}";
+        if (asJson)
+        {
+            Console.Error.WriteLine(notice);
+        }
+        else
+        {
+            Console.WriteLine();
+            Console.WriteLine(notice);
+        }
+    }
+    else
+    {
+        Console.WriteLine(irJson);
+    }
+
+    // Empty is not clean. A document that yields no objects is not a screen that happens to be
+    // bare - it is a read that did not work, and every other tool in this repo that reported a pass
+    // over zero comparisons eventually reported a false one.
+    if (rep.NothingRead)
+    {
+        Console.Error.WriteLine("NOTHING READ - this is not a pass");
+        return ExitNothingExamined;
+    }
+
+    if (rep.SkippedCount > 0)
+    {
+        Console.Error.WriteLine($"SUMMARY: {rep.RecognisedCount} of {rep.ObjectsFound} object(s) read, "
+                              + $"{rep.NotRecognised.Count} object(s) NOT RECOGNISED, "
+                              + $"{rep.Unmapped.Count} construct(s) UNMAPPED. The IR is incomplete "
+                              + "with respect to this document.");
+        return ExitFindings;
+    }
+
+    Console.Error.WriteLine($"SUMMARY: all {rep.ObjectsFound} object(s) read, nothing unmapped. "
+                          + "The IR is complete with respect to what SimaticML states AND partial "
+                          + "with respect to the IR - see PARTIAL above.");
     return ExitClean;
 }
 
@@ -299,7 +480,7 @@ switch (command)
         {
             result = Emitter.Emit(ir, screenName, number);
         }
-        catch (Exception ex) when (ex is UnsupportedItemTypeException or UntypedElementException or UnrepresentableStylingException or UnboundFieldException)
+        catch (Exception ex) when (ex is UnsupportedItemTypeException or UntypedElementException or UnrepresentableStylingException or UnboundFieldException or SelfNavigationException or OperandStagingException or StringFieldException or UnboundAnimationException or LayerException)
         {
             Console.Error.WriteLine(ex.Message);
             return ExitFindings;

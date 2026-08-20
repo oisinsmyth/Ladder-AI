@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.Xml.Linq;
 
 namespace HmiCli;
@@ -99,6 +99,62 @@ public static class Coherence
                         + $"circle is {radius * 2}x{radius * 2}. The bounding box and the radius must "
                         + "agree - TIA does not reject a circle that contradicts itself, IT CRASHES "
                         + "THE PORTAL PROCESS on import."));
+                }
+            }
+
+            // 🔴 THE THIRD MEASURED CRASH FAMILY, AND THE ONE THAT WAS DOCUMENTED WITHOUT BEING
+            // GATED. FieldLength is the FORMAT PATTERN'S LENGTH, not its digit count, and a
+            // disagreement between the two does not produce a rejection - it kills the Portal
+            // process with "Access to a disposed object of type 'Siemens.Engineering.Project'".
+            // That was found by bisection, written up in WriteIOField's comment, and then left to
+            // the emitter to get right for ever. The emitter getting it right is not the same thing
+            // as it being checked: the moment a second DataFormat existed, the derivation had a
+            // second call site and nothing was watching either.
+            if (type == "IOField")
+            {
+                var pattern = Read(item, "FormatPattern");
+                var declared = Int(item, "FieldLength");
+
+                if (pattern is null || declared is null)
+                {
+                    findings.Add(new Finding("C-IOFIELD", Severity.Error,
+                        $"IOField '{name}' is missing FormatPattern or FieldLength"));
+                }
+                else if (declared != pattern.Length)
+                {
+                    findings.Add(new Finding("C-IOFIELD", Severity.Error,
+                        $"IOField '{name}' declares FormatPattern \"{pattern}\" ({pattern.Length} "
+                        + $"characters) and FieldLength {declared}. FieldLength is the PATTERN'S "
+                        + "LENGTH, not its digit count. TIA does not reject the disagreement - IT "
+                        + "CRASHES THE PORTAL PROCESS on import."));
+                }
+
+                // The two halves of a field's type must agree as well: a String pattern is QUESTION
+                // MARKS and a Decimal pattern is not, and a field claiming one while carrying the
+                // other is the same shape of self-contradiction one level up.
+                //
+                // 🔴 THIS RULE ORIGINALLY SAID ASTERISKS, AND IT WAS WRONG IN THE SAME DIRECTION AS
+                // THE EMITTER IT WAS GUARDING. Both were written from one reconstruction, so the
+                // gate PASSED the document that crashed Portal and would have REJECTED the correct
+                // one. A check derived from the same guess as the code it checks is not a second
+                // opinion - it is the guess, restated. The character is now harvested from a real
+                // export ('?'), and that is what both sides are keyed on.
+                var dataFormat = Read(item, "DataFormat");
+                if (pattern is not null && dataFormat is not null && pattern.Length > 0)
+                {
+                    var allPlaceholders = pattern.All(c => c == '?');
+                    if (dataFormat == "String" && !allPlaceholders)
+                    {
+                        findings.Add(new Finding("C-IOFIELD", Severity.Error,
+                            $"IOField '{name}' declares DataFormat String with a non-question-mark pattern "
+                            + $"\"{pattern}\""));
+                    }
+                    else if (dataFormat != "String" && allPlaceholders)
+                    {
+                        findings.Add(new Finding("C-IOFIELD", Severity.Error,
+                            $"IOField '{name}' carries a question-mark pattern \"{pattern}\" with "
+                            + $"DataFormat {dataFormat}"));
+                    }
                 }
             }
 

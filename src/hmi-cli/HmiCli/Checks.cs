@@ -269,10 +269,32 @@ public static class Linter
         // overlap is often intentional, and the prototype's any-pair version false-positived seven
         // times on one arm where the overlap was the design.
         var inter = items.Where(i => i.Interactive && !i.Geometryless).ToList();
+
+        // 🔴 TWO ITEMS ON DIFFERENT LAYERS ARE NEVER ON THE GLASS TOGETHER, SO THEY CANNOT COLLIDE.
+        //
+        // A popup's controls sit on a layer the emitter hides whenever the dialog is down, and the
+        // host's controls sit under it. Comparing them reported a real, hard H-503 between a
+        // BATCH ABORT and a dialog's ANSWER 1 — two buttons that can never coexist.
+        //
+        // ⚠️ AND THE OBVIOUS ESCAPE IS WORSE THAN THE BUG. An override on the popup button
+        // suppresses its findings against EVERY item, including the other popup buttons beside it
+        // — so the one place the rule still means something is the place the override switches it
+        // off. Measured: this cost a real popup design a whole button row of usable height, laid
+        // out to dodge the host geometrically rather than take that trade.
+        //
+        // Same-layer pairs are unchanged, which is every screen that has no declared layer.
+        static bool CanCoexist(IrItem x, IrItem y) =>
+            string.Equals(x.Layer ?? string.Empty, y.Layer ?? string.Empty, StringComparison.Ordinal);
+
         for (var a = 0; a < inter.Count; a++)
         {
             for (var b = a + 1; b < inter.Count; b++)
             {
+                if (!CanCoexist(inter[a], inter[b]))
+                {
+                    continue;
+                }
+
                 if (Overlaps(inter[a], inter[b]))
                 {
                     f.Add(new Finding("H-503", Severity.Error,
@@ -288,7 +310,9 @@ public static class Linter
         {
             for (var b = a + 1; b < inter.Count; b++)
             {
-                if (Overlaps(inter[a], inter[b]))
+                // Same reasoning as H-503 above: a gap between two controls that are never on the
+                // glass together is not a gap a thumb can cross.
+                if (!CanCoexist(inter[a], inter[b]) || Overlaps(inter[a], inter[b]))
                 {
                     continue;
                 }

@@ -1858,3 +1858,26 @@ so the commonest user mistake reports as an internal error. What you actually se
 `No device item found under '<path>'` wrapped in the catch-all's inner-exception chain. The fix is a
 dedicated exception type added to the filter; until then, read a 5 from `import`/`create-instance-db`
 as "check the `--group` path against `list`'s `Path` column verbatim" first.
+
+### ⚠️ `hmi-delete-screen` with several `--name` flags — UNEXPLAINED, reproduced 2026-08-20
+
+Passing eighteen `--name` values in one invocation failed with
+
+```
+No classic HMI screen named '09 Parameters' found in the project.
+```
+
+**and the same name, alone, in the very next command, deleted successfully.** Two more single-name
+deletes and then a loop of sixteen all succeeded — 18 of 18 removed, one call each.
+
+The argument parser accumulates repeated `--name` correctly (verified by echoing the constructed
+argv: 36 arguments, `--name` and value alternating, names intact), and `DeleteScreens` resolves each
+name against a freshly-built candidate list per iteration, so neither obvious cause holds.
+
+**The cause is NOT established and is deliberately not guessed at here.** What is measured is the
+behaviour and the workaround: **one name per invocation**. It costs a Portal attach each, which is
+the only real price.
+
+Worth noting the failure was SAFE — the resolution loop runs to completion before anything is
+deleted, so a name that does not resolve aborts the whole call and nothing is removed. The defect
+is a refusal that should not have happened, not a deletion that should not have happened.

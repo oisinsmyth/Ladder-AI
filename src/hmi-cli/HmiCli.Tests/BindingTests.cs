@@ -1,4 +1,4 @@
-using System.Xml.Linq;
+﻿using System.Xml.Linq;
 using HmiCli;
 using Xunit;
 
@@ -131,16 +131,21 @@ public class BindingTests
     // ---- navigation ---------------------------------------------------------------------------
 
     /// <summary>
-    /// 🔴 MEASURED AGAINST A REAL PROJECT, 2026-08-17: an event CANNOT be imported.
-    /// <c>'Create' is not supported by type 'Siemens.Engineering.Hmi.Event.EventComposition'.</c>
+    /// ✅ RETRACTION, 2026-08-18. This test previously asserted that a navigation button emits
+    /// NO event, on the strength of a live
+    ///     'Create' is not supported by type 'Siemens.Engineering.Hmi.Event.EventComposition'.
     ///
-    /// So the emitter must NOT write one - emitting it fails the whole import and takes the working
-    /// half of the screen with it. This test pins that, because the structure is still in the file
-    /// (correct, harvested, and what a future create-capable route would need) and the temptation to
-    /// re-enable it will recur.
+    /// That refusal was real and the conclusion drawn from it was wrong. The failing document
+    /// differed from a real TIA export in THREE ways at once - it used <c>KeyUp</c> (a
+    /// <c>SoftKey</c> event, not a <c>Button</c> one), it put the event LAST in the ObjectList where
+    /// TIA puts it FIRST, and it omitted <c>ActivateScreen</c>'s <c>Object number</c> parameter.
+    /// Corrected on all three, the import returns exit 0 and the event reads back intact.
+    ///
+    /// The test is INVERTED rather than deleted: the old assertion is the one a future reader is
+    /// most likely to reintroduce from the surrounding comments, and this is where they will look.
     /// </summary>
     [Fact]
-    public void A_navigation_button_emits_NO_event_because_events_cannot_be_imported()
+    public void A_navigation_button_emits_an_ActivateScreen_event_on_Release()
     {
         var button = new IrItem
         {
@@ -148,16 +153,33 @@ public class BindingTests
             Text = "HOME", GoTo = "Plant Overview", FontSizePx = 17,
         };
 
-        Assert.Null(Find(Emit(Ir(button)), "Hmi.Event.Event"));
+        var ev = Find(Emit(Ir(button)), "Hmi.Event.Event");
+
+        Assert.NotNull(ev);
+        Assert.Equal("Release", ev!.Element("AttributeList")?.Element("Name")?.Value);
+
+        var fn = ev.Descendants("Hmi.Event.FunctionListEntry").Single();
+        Assert.Equal("ActivateScreen", fn.Element("AttributeList")?.Element("Name")?.Value);
+
+        var ps = fn.Descendants("Hmi.Event.FunctionListEntryParameter").ToList();
+
+        // The target is a LINK, not an attribute value, and the parameter name carries a space.
+        var screen = ps.Single(x => x.Element("AttributeList")?.Element("Name")?.Value == "Screen name");
+        Assert.Equal("Plant Overview", screen.Descendants("Value").Single().Element("Name")?.Value);
+
+        // Object number is NOT optional - omitting it was one of the three original faults.
+        var objNo = ps.Single(x => x.Element("AttributeList")?.Element("Name")?.Value == "Object number");
+        Assert.Equal("System.Int32", objNo.Element("AttributeList")?.Element("Value")?.Attribute("Type")?.Value);
     }
 
     /// <summary>
-    /// The navigation is not silently dropped - it becomes a hand-off item naming the button, the
-    /// event and the target. A silent omission would leave a screen whose buttons do nothing and
-    /// nobody told to wire them.
+    /// The event goes FIRST in the button's ObjectList, before Font. Pinned separately from the
+    /// event's content because document ORDER was one of the three faults that produced the false
+    /// "events cannot be created" verdict, and it is the one that leaves no trace in a diff of
+    /// element names.
     /// </summary>
     [Fact]
-    public void A_navigation_button_produces_a_hand_off_item_naming_its_target()
+    public void A_button_event_is_written_before_the_font()
     {
         var button = new IrItem
         {
@@ -165,11 +187,136 @@ public class BindingTests
             Text = "HOME", GoTo = "Plant Overview", FontSizePx = 17,
         };
 
-        var handOff = Emitter.Emit(Ir(button), "S", 1).HandOff;
+        var btn = Find(Emit(Ir(button)), "Hmi.Screen.Button");
+        var children = btn!.Element("ObjectList")!.Elements().Select(x => x.Name.LocalName).ToList();
 
-        Assert.Single(handOff);
-        Assert.Contains("Plant Overview", handOff[0], StringComparison.Ordinal);
-        Assert.Contains("ActivateScreen", handOff[0], StringComparison.Ordinal);
+        Assert.Equal("Hmi.Event.Event", children[0]);
+        Assert.Contains("Hmi.Globalization.MultiLingualFont", children);
+        Assert.True(children.IndexOf("Hmi.Event.Event")
+                    < children.IndexOf("Hmi.Globalization.MultiLingualFont"));
+    }
+
+    /// <summary>
+    /// A navigating button is FINISHED, so it raises no hand-off. Until 2026-08-18 every button
+    /// raised one, because no event could be generated at all.
+    /// </summary>
+    [Fact]
+    public void A_navigation_button_is_not_a_hand_off_item()
+    {
+        var button = new IrItem
+        {
+            Type = "Button", Left = 0, Top = 400, Width = 120, Height = 68,
+            Text = "HOME", GoTo = "Plant Overview", FontSizePx = 17,
+        };
+
+        Assert.Empty(Emitter.Emit(Ir(button), "S", 1).HandOff);
+    }
+
+    /// <summary>
+    /// 🔴 A COMMAND button writes its CODE FIRST and bumps the SEQUENCE LAST.
+    ///
+    /// The order IS the handshake: the controller reads the code when the sequence changes, so a
+    /// sequence bumped before its code commits the PREVIOUS command - a wrong action from a
+    /// correct-looking button, with every gate green. This test is the only thing standing between
+    /// that and a plausible refactor of the emit order.
+    /// </summary>
+    [Fact]
+    public void A_command_button_writes_the_code_before_it_bumps_the_sequence()
+    {
+        var button = new IrItem
+        {
+            Type = "Button", Left = 0, Top = 400, Width = 120, Height = 68,
+            Text = "START", Cmd = "Cmd_Unit", CmdCode = "12", CmdInt1 = "3", FontSizePx = 17,
+        };
+
+        var ev = Find(Emit(Ir(button)), "Hmi.Event.Event");
+        var fns = ev!.Descendants("Hmi.Event.FunctionListEntry")
+            .Select(x => (fn: x.Element("AttributeList")!.Element("Name")!.Value,
+                          tag: x.Descendants("LinkList").Single().Descendants("Value").Single()
+                                .Element("Name")!.Value))
+            .ToList();
+
+        Assert.Equal(
+            new[] { ("SetTag", "Cmd_Unit_Code"), ("SetTag", "Cmd_Unit_Int1"), ("IncreaseTag", "Cmd_Unit_Seq") },
+            fns);
+    }
+
+    /// <summary>
+    /// Every numeric operand is <c>System.Double</c> - a Word, an Int and a Real tag all take it.
+    /// Matching the parameter to the TAG's type instead is a guess that reads as obviously right,
+    /// and it was measured wrong.
+    /// </summary>
+    [Fact]
+    public void A_command_operand_is_typed_Double_whatever_the_tag_is()
+    {
+        var button = new IrItem
+        {
+            Type = "Button", Left = 0, Top = 400, Width = 120, Height = 68,
+            Text = "START", Cmd = "Cmd_Unit", CmdCode = "12", FontSizePx = 17,
+        };
+
+        var ev = Find(Emit(Ir(button)), "Hmi.Event.Event");
+        var setTag = ev!.Descendants("Hmi.Event.FunctionListEntry")
+            .Single(x => x.Element("AttributeList")?.Element("Name")?.Value == "SetTag");
+        var value = setTag.Descendants("Hmi.Event.FunctionListEntryParameter")
+            .Single(x => x.Element("AttributeList")?.Element("Name")?.Value == "Value")
+            .Element("AttributeList")!.Element("Value")!;
+
+        Assert.Equal("System.Double", value.Attribute("Type")?.Value);
+        Assert.Equal("12", value.Value);
+    }
+
+    /// <summary>
+    /// An operand prefixed <c>@</c> copies another TAG's live value instead of writing a literal.
+    ///
+    /// Two commands on this plant are impossible without it: STEP ADVANCE is refused unless its
+    /// operand equals the vessel's live state, and a recipe chooser must send an ID that is
+    /// editable data and unknowable when the screen is built.
+    /// </summary>
+    [Fact]
+    public void A_command_operand_prefixed_with_at_copies_a_tag_instead_of_a_literal()
+    {
+        var button = new IrItem
+        {
+            Type = "Button", Left = 0, Top = 400, Width = 120, Height = 68,
+            Text = "STEP", Cmd = "Cmd_Unit", CmdCode = "25", CmdInt1 = "@Unit_StateID",
+            FontSizePx = 17,
+        };
+
+        var ev = Find(Emit(Ir(button)), "Hmi.Event.Event");
+        var setInt1 = ev!.Descendants("Hmi.Event.FunctionListEntry")
+            .Single(x => x.Descendants("Name").Any(n => n.Value == "Cmd_Unit_Int1"));
+        var value = setInt1.Descendants("Hmi.Event.FunctionListEntryParameter")
+            .Single(x => x.Element("AttributeList")?.Element("Name")?.Value == "Value");
+
+        // A LINK, not a typed literal - and the '@' must not survive into the tag name.
+        Assert.Equal("Unit_StateID", value.Descendants("Value").Single().Element("Name")?.Value);
+        Assert.Null(value.Element("AttributeList")!.Element("Value"));
+
+        // The code is still a literal, and the sequence bump is still last.
+        var fns = ev.Descendants("Hmi.Event.FunctionListEntry")
+            .Select(x => x.Element("AttributeList")!.Element("Name")!.Value).ToList();
+        Assert.Equal("IncreaseTag", fns[^1]);
+    }
+
+    /// <summary>
+    /// 🔴 A button navigating to its OWN screen is REFUSED.
+    ///
+    /// Emitted, it imports clean and compiles clean, and TIA silently discards the link - leaving an
+    /// ActivateScreen with an empty target and a button that does nothing under the operator's
+    /// finger. Measured on the first real screen through the corrected event path.
+    /// </summary>
+    [Fact]
+    public void A_button_navigating_to_its_own_screen_is_refused()
+    {
+        var button = new IrItem
+        {
+            Type = "Button", Left = 0, Top = 400, Width = 120, Height = 68,
+            Text = "USER", GoTo = "S", ElementId = "btn_self", FontSizePx = 17,
+        };
+
+        var ex = Assert.Throws<SelfNavigationException>(() => Emitter.Emit(Ir(button), "S", 1));
+        Assert.Contains("btn_self", ex.Message, StringComparison.Ordinal);
     }
 
     /// <summary>

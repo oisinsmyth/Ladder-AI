@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 
@@ -72,6 +72,18 @@ window.addEventListener('load', function () {
       alarmFlash: el.hasAttribute('data-hmi-alarm'),
       bind: el.getAttribute('data-hmi-bind'),
       goto: el.getAttribute('data-hmi-goto'),
+      cmd: el.getAttribute('data-hmi-cmd'),
+      cmdCode: el.getAttribute('data-hmi-cmd-code'),
+      cmdInt1: el.getAttribute('data-hmi-cmd-int1'),
+      cmdInt2: el.getAttribute('data-hmi-cmd-int2'),
+      cmdReal1: el.getAttribute('data-hmi-cmd-real1'),
+      cmdReal2: el.getAttribute('data-hmi-cmd-real2'),
+      layer: el.getAttribute('data-hmi-layer'),
+      layerIndex: el.getAttribute('data-hmi-layer-index'),
+      layerHideWhen: el.getAttribute('data-hmi-layer-hide-when'),
+      layerHideRange: el.getAttribute('data-hmi-layer-hide-range'),
+      setTag: el.getAttribute('data-hmi-set'),
+      stringLength: el.getAttribute('data-hmi-string'),
       mode: el.getAttribute('data-hmi-mode'),
       format: el.getAttribute('data-hmi-format'),
       unit: el.getAttribute('data-hmi-unit'),
@@ -220,6 +232,10 @@ window.addEventListener('load', function () {
                 CanvasWidth = panel.WidthPx,
                 CanvasHeight = panel.HeightPx,
                 Source = Path.GetFullPath(htmlPath),
+                // Stated rather than left to the default: this is the COMPLETE path, and the
+                // reverse one (`to-ir`) produces a partial IR that must be distinguishable from it
+                // by reading the artifact alone.
+                SourceKind = "html",
                 ChromeVersion = BrowserVersion(browserPath),
                 Items = items,
             };

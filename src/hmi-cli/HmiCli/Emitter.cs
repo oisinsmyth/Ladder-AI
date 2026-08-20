@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.Text;
 using System.Xml;
 
@@ -32,6 +32,12 @@ public static class Emitter
     private static readonly HashSet<string> Supported = new(StringComparer.Ordinal)
     {
         "Rectangle", "Text", "Button", "Line", "Circle", "AlarmPlaceholder", "IOField", "SymbolicIOField",
+
+        // 🔴 "Layer" IS A DECLARATION, NOT AN ITEM. It emits no screen object of its own - it names
+        // a layer, gives it an index, and carries the visibility rule that PlanLayers copies onto
+        // every member. It is listed here only so the unknown-type guard recognises it; EmitItem is
+        // never called with one, and PlanLayers removes them from the member set.
+        "Layer",
     };
 
     public static IReadOnlyCollection<string> SupportedTypes => Supported;
@@ -51,6 +57,29 @@ public static class Emitter
             // Named refusal, never a silent drop: an item quietly omitted here produces a screen that
             // imports clean, compiles clean, and is missing something nobody is told about.
             throw new UnsupportedItemTypeException(unknown, Supported);
+        }
+
+        // 🔴 A BUTTON THAT NAVIGATES TO ITS OWN SCREEN IS REFUSED. MEASURED 2026-08-18.
+        //
+        // Emitted, it imports clean and compiles clean, and TIA SILENTLY DISCARDS THE LINK - the
+        // read-back carries an ActivateScreen with an EMPTY `Screen name` and the button does
+        // nothing under the operator's finger. Every gate green, one dead control, and nothing
+        // anywhere naming it. Found on the first real screen through this path: a header button
+        // marking the CURRENT screen had been given that screen as its target.
+        //
+        // Refused rather than dropped-with-a-warning because there is no correct rendering of the
+        // request: navigating to the screen you are already on is either a no-op or a mistake, and
+        // the mistake is far likelier. A button that marks "you are here" is a Text, not a Button.
+        var selfNav = ir.Items
+            .Where(i => i.Type == "Button"
+                        && !string.IsNullOrWhiteSpace(i.GoTo)
+                        && string.Equals(i.GoTo!.Trim(), screenName.Trim(), StringComparison.OrdinalIgnoreCase))
+            .Select(i => i.ElementId ?? i.Text ?? "(unnamed button)")
+            .ToList();
+
+        if (selfNav.Count > 0)
+        {
+            throw new SelfNavigationException(screenName, selfNav);
         }
 
         // TEXT STYLING THE PANEL CANNOT EXPRESS IS A HARD ERROR, NOT A SILENT DROP.
@@ -181,6 +210,125 @@ public static class Emitter
             throw new UnboundFieldException(emptyGoto);
         }
 
+        // ------------------------------------------------------------------ data-hmi-set
+        //
+        // A STAGED OPERAND WRITE. Everything about this is narrow on purpose - see IrItem.SetTag.
+        // The refusals below are what keep it from becoming a second, hand-rolled command path.
+        var stagingProblems = new List<string>();
+        foreach (var i in ir.Items.Where(x => !string.IsNullOrWhiteSpace(x.SetTag)))
+        {
+            var spec = i.SetTag!.Trim();
+            var where = $"data-hmi-set=\"{spec}\"";
+
+            if (i.Type != "Button")
+            {
+                stagingProblems.Add($"{where} on a {i.Type ?? "(untyped)"}: only a Button has a press "
+                    + "to hang a write on.");
+                continue;
+            }
+
+            var eq = spec.IndexOf('=');
+            if (eq <= 0 || eq == spec.Length - 1)
+            {
+                stagingProblems.Add($"{where}: expected exactly <Tag>=<value>, where <value> is a "
+                    + "number or @<other tag>.");
+                continue;
+            }
+
+            var target = spec[..eq].Trim();
+            var value = spec[(eq + 1)..].Trim();
+
+            if (target.Length == 0 || value.Length == 0)
+            {
+                stagingProblems.Add($"{where}: the tag or the value is empty.");
+                continue;
+            }
+
+            // 🔴 THE ONE REFUSAL THAT IS NOT TIDINESS. _Seq is the handshake: writing it is ISSUING a
+            // command, and issuing one from here would carry whatever code happens to be standing -
+            // the exact wrong-order fault data-hmi-cmd was built so that nobody could express.
+            // _Code is refused with it because a code staged here and bumped by a later press is the
+            // same fault split across two screens, which is harder to see rather than safer.
+            if (target.EndsWith("_Seq", StringComparison.OrdinalIgnoreCase)
+                || target.EndsWith("_Code", StringComparison.OrdinalIgnoreCase))
+            {
+                stagingProblems.Add($"{where}: refuses to write '{target}'. data-hmi-set STAGES AN "
+                    + "OPERAND and can never issue a command. Bumping a sequence sends whatever code "
+                    + "is standing, and staging a code for a later bump is the same fault spread over "
+                    + "two presses. Use data-hmi-cmd with data-hmi-cmd-code, which cannot be ordered "
+                    + "wrongly.");
+                continue;
+            }
+
+            if (!string.IsNullOrWhiteSpace(i.Cmd))
+            {
+                stagingProblems.Add($"{where}: this button already declares data-hmi-cmd=\"{i.Cmd}\". "
+                    + "A command carries its own operands (data-hmi-cmd-int1 etc.) in the proven order; "
+                    + "two write paths on one press is an ordering question nobody should have to "
+                    + "answer. Use one or the other.");
+            }
+        }
+
+        if (stagingProblems.Count > 0)
+        {
+            throw new OperandStagingException(stagingProblems);
+        }
+
+        // ------------------------------------------------------------------ data-hmi-string
+        var stringProblems = new List<string>();
+        foreach (var i in ir.Items.Where(x => !string.IsNullOrWhiteSpace(x.StringLength)))
+        {
+            var raw = i.StringLength!.Trim();
+            var where = $"data-hmi-string=\"{raw}\"";
+
+            if (i.Type != "IOField")
+            {
+                stringProblems.Add($"{where} on a {i.Type ?? "(untyped)"}: only an IOField can show a "
+                    + "string tag.");
+                continue;
+            }
+
+            if (!int.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out var n)
+                || n < 1 || n > 255)
+            {
+                stringProblems.Add($"{where}: expected a character count between 1 and 255 - it is the "
+                    + "PLC String's declared length, and it becomes both the format pattern and the "
+                    + "FieldLength.");
+                continue;
+            }
+
+            if (!string.IsNullOrWhiteSpace(i.Format))
+            {
+                stringProblems.Add($"{where}: this field also declares data-hmi-format=\"{i.Format}\". "
+                    + "A string field and a numeric field carry DIFFERENT DataFormat values, so a field "
+                    + "declaring both contradicts itself - and TIA does not reject a self-contradicting "
+                    + "field, it crashes the Portal process. Declare one.");
+            }
+        }
+
+        if (stringProblems.Count > 0)
+        {
+            throw new StringFieldException(stringProblems);
+        }
+
+        // ------------------------------------------------------------------ visibility animation
+        //
+        // AN ANIMATION WITH NO TRIGGER TAG IS REFUSED. It imports, and then it never fires - so the
+        // object sits at whichever visibility TIA settles on and looks like an object nobody
+        // animated. The failure family is the unbound IOField's: a control that reads as finished
+        // and is not connected to anything.
+        var animationProblems = ir.Items
+            .Where(i => i.Visibility is not null && string.IsNullOrWhiteSpace(i.Visibility.Tag))
+            .Select(i => $"{i.ElementId ?? i.Type ?? "(untyped)"}: a visibility animation naming no "
+                       + "trigger tag. Without one the rule never evaluates and the object's "
+                       + "visibility is whatever the panel defaults to.")
+            .ToList();
+
+        if (animationProblems.Count > 0)
+        {
+            throw new UnboundAnimationException(animationProblems);
+        }
+
         var handOff = new List<string>();
         var id = 0;
         string NextId() => (++id).ToString("X", CultureInfo.InvariantCulture);
@@ -227,6 +375,13 @@ public static class Emitter
 
             // The layer is not decoration: every screen item hangs off it, and a screen with content
             // but no layer is not a shape TIA produces.
+            //
+            // The BASE layer is index 0 with an empty name and holds everything that names no
+            // layer, which is every screen authored before layers existed - so those emit exactly
+            // as they did. Declared layers follow, in index order, each holding its own members.
+            var layerPlans = PlanLayers(ir);
+            var emitted = 0;
+
             w.WriteStartElement("Hmi.Screen.ScreenLayer");
             w.WriteAttributeString("ID", NextId());
             w.WriteAttributeString("CompositionName", "Layers");
@@ -237,13 +392,48 @@ public static class Emitter
             w.WriteEndElement();
             w.WriteStartElement("ObjectList");
 
-            var emitted = 0;
-            foreach (var item in ir.Items.Where(i => i.Type is not null && !i.Geometryless))
+            foreach (var item in ir.Items.Where(i => i.Type is not null && i.Type != "Layer"
+                                                     && string.IsNullOrWhiteSpace(i.Layer)
+                                                     && !i.Geometryless))
+            {
+                EmitItem(item);
+            }
+
+            w.WriteEndElement(); // base layer ObjectList
+            w.WriteEndElement(); // base ScreenLayer
+
+            // Each declared layer, in index order. VisibleES is true so a person opening the
+            // screen in TIA sees the dialog and can hide it while working behind it - that IS
+            // the job a classic layer can do, and the only one.
+            foreach (var plan in layerPlans)
+            {
+                w.WriteStartElement("Hmi.Screen.ScreenLayer");
+                w.WriteAttributeString("ID", NextId());
+                w.WriteAttributeString("CompositionName", "Layers");
+                w.WriteStartElement("AttributeList");
+                Attr(w, "Index", plan.Index.ToString(CultureInfo.InvariantCulture));
+                Attr(w, "Name", plan.Name);
+                Attr(w, "VisibleES", "true");
+                w.WriteEndElement();
+                w.WriteStartElement("ObjectList");
+
+                foreach (var item in plan.Items.Where(i => !i.Geometryless))
+                {
+                    // The layer's rule, onto the member. See PlanLayers for why this is a copy
+                    // rather than something the layer carries.
+                    EmitItem(OnLayer(item, plan.Visibility));
+                }
+
+                w.WriteEndElement(); // layer ObjectList
+                w.WriteEndElement(); // ScreenLayer
+            }
+
+            void EmitItem(IrItem item)
             {
                 switch (item.Type)
                 {
                     case "Rectangle":
-                        WriteRectangle(w, NextId(), Name(item, "Rectangle", emitted), item, Colour(item.BackColor, HouseGrey), Colour(item.BorderColor, "0, 0, 0"));
+                        WriteRectangle(w, NextId, Name(item, "Rectangle", emitted), item, Colour(item.BackColor, HouseGrey), Colour(item.BorderColor, "0, 0, 0"));
                         emitted++;
                         break;
 
@@ -257,35 +447,45 @@ public static class Emitter
                         var btnName = Name(item, "Button", emitted);
                         WriteButton(w, NextId, btnName, item);
                         emitted++;
-                        // EVERY BUTTON GETS A HAND-OFF LINE, not only the navigating ones.
+                        // ONLY AN INERT BUTTON IS A HAND-OFF NOW.
                         //
-                        // This used to fire only when data-hmi-goto was set, which meant a COMMAND
-                        // button - START, ABORT, ACKNOWLEDGE - was emitted completely inert with
-                        // NOTHING ANYWHERE NAMING IT. Found on a real job: nine command buttons
-                        // across four screens, every one of them dead, and no generated file
-                        // mentioned any of them.
+                        // Until 2026-08-18 EVERY button was one, because no event could be
+                        // generated at all. That is no longer true: a button declaring a command or
+                        // a navigation target gets a real, verified event and is finished. What
+                        // survives - deliberately - is the rule that a button with NO declared
+                        // action is still REPORTED rather than silently emitted dead. That rule was
+                        // earned on a real job: nine command buttons across four screens, every one
+                        // inert, and no generated file naming any of them.
                         //
-                        // That is the silent omission this emitter exists to refuse. No button can
-                        // carry an action on classic (no event can be created at all), so a button
-                        // WITHOUT a declared target is not less incomplete than one with - it is
-                        // MORE, because nobody even knows what it was meant to do.
-                        handOff.Add(string.IsNullOrWhiteSpace(item.GoTo)
-                            ? $"{btnName} (\"{item.Text}\"): INERT - this button has no action and no "
-                              + "event can be generated for it. Define what it does and build the "
-                              + "function list by hand, including any enable condition."
-                            : $"{btnName} (\"{item.Text}\"): add an ActivateScreen event on KeyUp targeting "
-                              + $"\"{item.GoTo}\". THE PANEL CANNOT BE NAVIGATED UNTIL THIS IS DONE BY HAND.");
+                        // A button that is inert now is inert because nobody said what it does, not
+                        // because the tool could not act on it - which makes the line MORE pointed,
+                        // not less.
+                        if (string.IsNullOrWhiteSpace(item.GoTo) && string.IsNullOrWhiteSpace(item.Cmd)
+                            && string.IsNullOrWhiteSpace(item.SetTag))
+                        {
+                            handOff.Add($"{btnName} (\"{item.Text}\"): INERT - no data-hmi-cmd and no "
+                                + "data-hmi-goto, so this button does nothing when pressed. Declare "
+                                + "what it does, or remove it: an operator cannot tell a dead button "
+                                + "from a working one.");
+                        }
+                        else if (!string.IsNullOrWhiteSpace(item.Cmd) && string.IsNullOrWhiteSpace(item.CmdCode))
+                        {
+                            handOff.Add($"{btnName} (\"{item.Text}\"): channel \"{item.Cmd}\" declared "
+                                + "with NO data-hmi-cmd-code. The sequence would be bumped carrying "
+                                + "whatever code was last written - which is a command, and the "
+                                + "WRONG one. Give it a code.");
+                        }
 
                         break;
                     }
 
                     case "Line":
-                        WriteLine(w, NextId(), Name(item, "Line", emitted), item);
+                        WriteLine(w, NextId, Name(item, "Line", emitted), item);
                         emitted++;
                         break;
 
                     case "Circle":
-                        WriteCircle(w, NextId(), Name(item, "Circle", emitted), item);
+                        WriteCircle(w, NextId, Name(item, "Circle", emitted), item);
                         emitted++;
                         break;
 
@@ -306,7 +506,7 @@ public static class Emitter
                         // classic. Emitted as a bordered rectangle plus a label, so it is impossible
                         // to mistake for finished work.
                         var boxName = Name(item, "AlarmPlaceholder", emitted);
-                        WriteRectangle(w, NextId(), boxName, item, "255, 255, 255", "176, 42, 30");
+                        WriteRectangle(w, NextId, boxName, item, "255, 255, 255", "176, 42, 30");
                         WriteTextField(w, NextId, boxName + "_Label", item with { Text = "ALARM VIEW GOES HERE - add manually" });
                         emitted += 2;
                         handOff.Add(
@@ -317,8 +517,9 @@ public static class Emitter
                 }
             }
 
-            w.WriteEndElement(); // layer ObjectList
-            w.WriteEndElement(); // ScreenLayer
+
+            // Every layer closed itself above - the base one before the declared loop, and each
+            // declared one inside it - so only the screen remains open here.
             w.WriteEndElement(); // screen ObjectList
             w.WriteEndElement(); // Screen
             w.WriteEndElement(); // Document
@@ -394,10 +595,84 @@ public static class Emitter
         Attr(w, "Left", ((int)Math.Round(i.Left)).ToString(CultureInfo.InvariantCulture));
     }
 
-    private static void WriteRectangle(XmlWriter w, string id, string name, IrItem i, string back, string border)
+    /// <summary>
+    /// <c>Hmi.Dynamic.VisibilityAnimation</c> - the object is <c>Visible</c> while the trigger tag
+    /// sits inside <c>[RangeStart, RangeEnd]</c>, and the opposite outside it.
+    ///
+    /// STRUCTURE HARVESTED FROM A HAND-EDITED SCREEN THAT CAME BACK FROM TIA, not documentation:
+    /// the four attributes are <c>Name</c>, <c>RangeEnd</c>, <c>RangeStart</c>, <c>Visible</c> (in
+    /// that order - TIA writes its AttributeList alphabetically), and the trigger is a
+    /// <c>Hmi.Dynamic.TagElementTrigger</c> in composition <c>VisibilityTag</c> whose LinkList
+    /// carries the tag.
+    ///
+    /// 🔴 <c>Name</c> IS THE LITERAL STRING <c>VisibilityAnimation</c> ON EVERY SPECIMEN, ACROSS TWO
+    /// UNRELATED PROJECTS - 20 in a screen set a person edited, 27 in a third-party export. It is
+    /// the animation's KIND, not a user-chosen label, so it is written as a constant rather than
+    /// taken from the IR. Inferred from that corpus rather than measured against TIA's schema.
+    ///
+    /// ⚠️ ORDER: animations come FIRST in an item's ObjectList, before Events and before Font.
+    /// Measured across 26 real screens - all 20 specimens are the first child, and the 8 on buttons
+    /// precede the Event. Emitting it after Font has not been tried, so "first" is what is known to
+    /// work rather than what is known to be required.
+    /// </summary>
+    private static void WriteVisibility(XmlWriter w, Func<string> nextId, IrItem i)
+    {
+        if (i.Visibility is null)
+        {
+            return;
+        }
+
+        var v = i.Visibility;
+
+        w.WriteStartElement("Hmi.Dynamic.VisibilityAnimation");
+        w.WriteAttributeString("ID", nextId());
+        w.WriteAttributeString("CompositionName", "Animations");
+        w.WriteStartElement("AttributeList");
+        Attr(w, "Name", "VisibilityAnimation");
+        Attr(w, "RangeEnd", v.RangeEnd);
+        Attr(w, "RangeStart", v.RangeStart);
+        Attr(w, "Visible", v.Visible ? "true" : "false");
+        w.WriteEndElement();
+
+        w.WriteStartElement("ObjectList");
+        w.WriteStartElement("Hmi.Dynamic.TagElementTrigger");
+        w.WriteAttributeString("ID", nextId());
+        w.WriteAttributeString("CompositionName", "VisibilityTag");
+        w.WriteStartElement("LinkList");
+        w.WriteStartElement("Tag");
+        w.WriteAttributeString("TargetID", "@OpenLink");
+        Attr(w, "Name", v.Tag);
+        w.WriteEndElement();
+        w.WriteEndElement();
+        w.WriteEndElement(); // TagElementTrigger
+        w.WriteEndElement(); // ObjectList
+        w.WriteEndElement(); // VisibilityAnimation
+    }
+
+    /// <summary>
+    /// The ObjectList a shape only has when something hangs off it.
+    ///
+    /// Rectangle, Circle and Line carry no font and no text, so they are written as a bare
+    /// AttributeList - which is what a real export shows for an un-animated one. An animated Line in
+    /// the third-party corpus DOES have an ObjectList holding nothing but the animation, so the
+    /// element is opened only when there is something to put in it rather than always.
+    /// </summary>
+    private static void WriteShapeObjectList(XmlWriter w, Func<string> nextId, IrItem i)
+    {
+        if (i.Visibility is null)
+        {
+            return;
+        }
+
+        w.WriteStartElement("ObjectList");
+        WriteVisibility(w, nextId, i);
+        w.WriteEndElement();
+    }
+
+    private static void WriteRectangle(XmlWriter w, Func<string> nextId, string name, IrItem i, string back, string border)
     {
         w.WriteStartElement("Hmi.Screen.Rectangle");
-        w.WriteAttributeString("ID", id);
+        w.WriteAttributeString("ID", nextId());
         w.WriteAttributeString("CompositionName", "ScreenItems");
         w.WriteStartElement("AttributeList");
         Attr(w, "BackColor", back);
@@ -415,16 +690,16 @@ public static class Emitter
         Attr(w, "UseDesignColorSchema", "false");
         Attr(w, "Width", ((int)Math.Round(i.Width)).ToString(CultureInfo.InvariantCulture));
         w.WriteEndElement();
+        WriteShapeObjectList(w, nextId, i);
         w.WriteEndElement();
     }
 
-    private static void WriteCircle(XmlWriter w, string id, string name, IrItem i)
+    private static void WriteCircle(XmlWriter w, Func<string> nextId, string name, IrItem i)
     {
         var radius = (int)Math.Round(Math.Min(i.Width, i.Height) / 2);
-        var side = radius * 2;
 
         w.WriteStartElement("Hmi.Screen.Circle");
-        w.WriteAttributeString("ID", id);
+        w.WriteAttributeString("ID", nextId());
         w.WriteAttributeString("CompositionName", "ScreenItems");
         w.WriteStartElement("AttributeList");
         Attr(w, "BackColor", Colour(i.BackColor, HouseGrey));
@@ -444,13 +719,14 @@ public static class Emitter
         Attr(w, "UseDesignColorSchema", "false");
         Attr(w, "Width", ((int)Math.Round(i.Width)).ToString(CultureInfo.InvariantCulture));
         w.WriteEndElement();
+        WriteShapeObjectList(w, nextId, i);
         w.WriteEndElement();
     }
 
-    private static void WriteLine(XmlWriter w, string id, string name, IrItem i)
+    private static void WriteLine(XmlWriter w, Func<string> nextId, string name, IrItem i)
     {
         w.WriteStartElement("Hmi.Screen.Line");
-        w.WriteAttributeString("ID", id);
+        w.WriteAttributeString("ID", nextId());
         w.WriteAttributeString("CompositionName", "ScreenItems");
         w.WriteStartElement("AttributeList");
         Attr(w, "BackColor", HouseGrey);
@@ -487,6 +763,7 @@ public static class Emitter
         Attr(w, "UseDesignColorSchema", "false");
         Attr(w, "Width", ((int)Math.Round(i.Width)).ToString(CultureInfo.InvariantCulture));
         w.WriteEndElement();
+        WriteShapeObjectList(w, nextId, i);
         w.WriteEndElement();
     }
 
@@ -521,6 +798,7 @@ public static class Emitter
         w.WriteEndElement();
 
         w.WriteStartElement("ObjectList");
+        WriteVisibility(w, nextId, i);
         WriteFont(w, nextId, i);
         WriteText(w, nextId, i.Text ?? string.Empty, "Text");
         w.WriteEndElement();
@@ -562,28 +840,36 @@ public static class Emitter
         w.WriteEndElement();
 
         w.WriteStartElement("ObjectList");
+
+        // ✅ EVENTS ARE EMITTED, AND THEY COME FIRST. RETRACTION, MEASURED 2026-08-18.
+        //
+        // This block used to say an event COULD NOT be created on a classic screen, citing a live
+        //     'Create' is not supported by type 'Siemens.Engineering.Hmi.Event.EventComposition'
+        // and made every button a hand-off item. THAT VERDICT WAS WRONG, and it was wrong for a
+        // reason worth keeping: the failing probe differed from a real TIA export in THREE ways at
+        // once, and the conclusion was drawn as though the only variable were "an event".
+        //
+        //   1. IT USED `KeyUp` ON A BUTTON. `KeyUp` belongs to `Hmi.Screen.SoftKey` - the physical
+        //      bezel keys. A `Hmi.Screen.Button` has `Press` and `Release`. The harvest that
+        //      produced `KeyUp` read the reference screen's SOFTKEYS and attributed their event to
+        //      its buttons. That single mis-attribution is the whole finding: the importer
+        //      POPULATES AN EXISTING event by name and cannot add one, so a name outside the item
+        //      type's fixed set forces the `Create` that the composition refuses - which is exactly
+        //      what the error said, read correctly.
+        //   2. It put the event LAST in the ObjectList. TIA writes Events FIRST, before Font.
+        //   3. It omitted `ActivateScreen`'s second parameter, `Object number`.
+        //
+        // Corrected on all three, a `Press`/`Release` event imports clean and reads back intact.
+        //
+        // The animation goes BEFORE the event: that is the order all 8 animated buttons in the
+        // hand-edited corpus are written in.
+        WriteVisibility(w, nextId, i);
+        WriteButtonEvents(w, nextId, i);
+
         WriteFont(w, nextId, i);
         WriteText(w, nextId, string.Empty, "HelpText");
         WriteText(w, nextId, i.Text ?? string.Empty, "TextOff");
         WriteText(w, nextId, i.Text ?? string.Empty, "TextOn");
-
-        // 🔴 THE EVENT IS DELIBERATELY NOT WRITTEN. MEASURED 2026-08-17, AGAINST A REAL PROJECT:
-        //
-        //     'Create' is not supported by type 'Siemens.Engineering.Hmi.Event.EventComposition'.
-        //
-        // Openness will NOT create an event on a classic screen through an import, and the refusal is
-        // structural rather than a validation failure. Note the asymmetry, which is the trap: TIA
-        // EXPORTS events perfectly well - this emitter's event structure was harvested from a real
-        // export carrying four of them - so a round trip reads as though it should work.
-        //
-        // This is the ALARM VIEW's shape a second time: representable in the document, not creatable
-        // through the API. So it gets the alarm view's treatment - the button is emitted, and the
-        // event becomes a HAND-OFF ITEM the engineer completes in TIA. Emitting it anyway would fail
-        // the whole import and take the working half of the screen down with it.
-        //
-        // WriteNavigationEvent is KEPT, not deleted: it is the correct structure, it is proven
-        // against the corpus, and it is what a future create-capable route would emit. Deleting it
-        // would discard harvested knowledge that cost a Portal session to obtain.
 
         w.WriteEndElement();
 
@@ -591,23 +877,268 @@ public static class Emitter
     }
 
     /// <summary>
-    /// A button that changes screen: <c>ActivateScreen</c> on <c>KeyUp</c>.
+    /// A declared layer and the items that belong to it.
     ///
-    /// 🔴 THE EVENT IS <c>KeyUp</c>, NOT <c>Click</c> - harvested from a real Classic export where all
-    /// four navigation buttons use it. Guessing <c>Click</c> here would produce a document that
-    /// imports and compiles cleanly and does nothing when pressed, which is the worst available
-    /// failure: every gate green, and the screen dead under the operator's finger.
-    ///
-    /// The parameter is named <c>Screen name</c> - with the space, and with that capitalisation - and
-    /// carries the target as a <c>Value</c> LINK rather than as an attribute value.
+    /// The base layer (index 0, no name) is not declared and always exists — it is what every
+    /// screen built before layers existed produces, and it must keep producing exactly that.
     /// </summary>
-    private static void WriteNavigationEvent(XmlWriter w, Func<string> nextId, string targetScreen)
+    private sealed record LayerPlan(string Name, int Index, IrVisibility? Visibility, List<IrItem> Items);
+
+    /// <summary>
+    /// Work out the layers, validate them, and push each layer's visibility rule onto its members.
+    ///
+    /// 🔴 THE PUSH IS THE WHOLE FEATURE. A classic <c>ScreenLayer</c> cannot be hidden at runtime
+    /// (measured: it carries only <c>Index</c>, <c>Name</c> and <c>VisibleES</c>, and
+    /// <c>VisibleES</c> is the TIA editor's own show/hide), so the layer earns its place as the
+    /// AUTHORING grouping and the runtime behaviour comes from a
+    /// <c>Hmi.Dynamic.VisibilityAnimation</c> on every member.
+    ///
+    /// Declaring the rule once and copying it here is what makes a dialog whole. Author it per
+    /// object and the failure mode is a single object left behind on the glass after the dialog
+    /// closes — with nothing about the document, the checks or the render looking wrong.
+    /// </summary>
+    private static List<LayerPlan> PlanLayers(ScreenIr ir)
+    {
+        var declarations = ir.Items.Where(i => i.Type == "Layer").ToList();
+        var members = ir.Items.Where(i => i.Type is not null && i.Type != "Layer").ToList();
+
+        var plans = new List<LayerPlan>();
+        var seenIndex = new Dictionary<int, string>();
+
+        foreach (var d in declarations)
+        {
+            var name = (d.Layer ?? string.Empty).Trim();
+            if (name.Length == 0)
+            {
+                throw new LayerException("a data-hmi=\"Layer\" declaration carries no data-hmi-layer name. "
+                                       + "A layer is referred to by name, so an unnamed one can hold nothing.");
+            }
+
+            if (!int.TryParse((d.LayerIndex ?? string.Empty).Trim(), NumberStyles.Integer,
+                              CultureInfo.InvariantCulture, out var index))
+            {
+                throw new LayerException($"layer '{name}' declares data-hmi-layer-index "
+                                       + $"'{d.LayerIndex}', which is not a whole number.");
+            }
+
+            // Index 0 is the base layer's and is not available: claiming it would silently merge a
+            // dialog into the screen behind it, and the merge would look like a working screen.
+            if (index <= 0)
+            {
+                throw new LayerException($"layer '{name}' asks for index {index}. Index 0 is the base "
+                                       + "layer — everything not on a named layer — and cannot be claimed.");
+            }
+
+            if (seenIndex.TryGetValue(index, out var other))
+            {
+                throw new LayerException($"layers '{other}' and '{name}' both ask for index {index}. "
+                                       + "Two layers at one index is a refusal rather than a merge: "
+                                       + "which one a person sees in TIA would depend on import order.");
+            }
+
+            seenIndex[index] = name;
+
+            IrVisibility? vis = null;
+            if (!string.IsNullOrWhiteSpace(d.LayerHideWhen))
+            {
+                var raw = (d.LayerHideRange ?? string.Empty).Trim();
+                var parts = raw.Split("..", StringSplitOptions.None);
+                if (parts.Length != 2 || parts.Any(p => p.Trim().Length == 0))
+                {
+                    throw new LayerException($"layer '{name}' declares data-hmi-layer-hide-when "
+                                           + $"'{d.LayerHideWhen}' but its hide-range is '{raw}'. "
+                                           + "The range is written low..high, e.g. 0..0.");
+                }
+
+                // Visible=false INSIDE the range: the only form measured against Portal, and the
+                // one TIA itself writes. See IrItem.LayerHideWhen for why hide rather than show.
+                vis = new IrVisibility
+                {
+                    Tag = d.LayerHideWhen!.Trim(),
+                    RangeStart = parts[0].Trim(),
+                    RangeEnd = parts[1].Trim(),
+                    Visible = false,
+                };
+            }
+
+            var mine = members.Where(i => string.Equals(i.Layer, name, StringComparison.Ordinal)).ToList();
+
+            // Empty is not clean. A declared layer with no members is a dialog that was authored
+            // and then lost its contents, and it would emit as a valid, invisible nothing.
+            if (mine.Count == 0)
+            {
+                throw new LayerException($"layer '{name}' is declared and no item names it. "
+                                       + "An empty layer emits as a well-formed nothing, so it is "
+                                       + "refused rather than written.");
+            }
+
+            plans.Add(new LayerPlan(name, index, vis, mine));
+        }
+
+        var declaredNames = plans.Select(p => p.Name).ToHashSet(StringComparer.Ordinal);
+        var orphans = members
+            .Where(i => !string.IsNullOrWhiteSpace(i.Layer) && !declaredNames.Contains(i.Layer!))
+            .Select(i => $"{i.ElementId ?? i.Type} -> '{i.Layer}'")
+            .ToList();
+
+        if (orphans.Count > 0)
+        {
+            throw new LayerException($"{orphans.Count} item(s) name a layer that is not declared: "
+                                   + string.Join(", ", orphans.Take(6))
+                                   + ". A declaration carries the visibility rule, so an item on an "
+                                   + "undeclared layer would be emitted with NO rule — permanently "
+                                   + "on the glass, over whatever the dialog was meant to cover.");
+        }
+
+        // An item may not carry its own visibility AND sit on a layer that carries one: two rules
+        // for one object, and the one that wins is an implementation detail nobody should learn.
+        var doubled = plans.Where(p => p.Visibility is not null)
+            .SelectMany(p => p.Items.Where(i => i.Visibility is not null)
+                                    .Select(i => $"{i.ElementId ?? i.Type} on layer '{p.Name}'"))
+            .ToList();
+
+        if (doubled.Count > 0)
+        {
+            throw new LayerException($"{doubled.Count} item(s) carry their own visibility rule AND sit "
+                                   + "on a layer that declares one: " + string.Join(", ", doubled.Take(6))
+                                   + ". Put the rule in one place.");
+        }
+
+        plans.Sort((a, b) => a.Index.CompareTo(b.Index));
+        return plans;
+    }
+
+    /// <summary>The layer's rule, applied to a member — or the member's own if the layer has none.</summary>
+    private static IrItem OnLayer(IrItem item, IrVisibility? layerVisibility) =>
+        layerVisibility is null ? item : item with { Visibility = layerVisibility };
+
+
+    /// <summary>
+    /// 🔴 THE VERIFIED FUNCTION VOCABULARY, AND THE ONLY NAMES THIS EMITTER MAY EVER WRITE.
+    ///
+    /// A function name outside a device's supported set does NOT produce a validation error. It
+    /// KILLS THE PORTAL PROCESS, surfacing only as
+    ///     'Access to a disposed object of type Siemens.Engineering.Project'
+    /// which names nothing. Measured 2026-08-18, and pinned by a control: a deliberately nonsense
+    /// name (<c>ZzDefinitelyNotAFunction</c>) crashes IDENTICALLY to a plausible-but-wrong one. So a
+    /// wrong guess and pure gibberish are INDISTINGUISHABLE from the outside, and there is no
+    /// feedback channel that would let a caller discover the right name by trying.
+    ///
+    /// That is why this is a whitelist and not a validation. It is the same shape, for the same
+    /// reason, as the converter's <c>(name, version)</c> instruction registry: the tool supplies the
+    /// name, the name cannot be checked cheaply, and being wrong is expensive. New entries are
+    /// earned by HARVESTING A REAL EXPORT, never by reading documentation and never by guessing.
+    ///
+    /// EVERY NAME BELOW WAS HARVESTED FROM A REAL EXPORT OF A HAND-BUILT EVENT. The four this
+    /// emitter actually uses were then round-tripped: imported, exported, and compared field by
+    /// field. Note how badly guessing did before the harvest - <c>SetValue</c> and
+    /// <c>IncreaseValue</c> are the obvious names, they are what the author reached for, and BOTH
+    /// crash Portal. The real names are <c>SetTag</c> and <c>IncreaseTag</c>.
+    /// </summary>
+    private static readonly HashSet<string> VerifiedFunctions = new(StringComparer.Ordinal)
+    {
+        // Harvested + round-trip proven by this emitter.
+        "ActivateScreen",   // (Screen name: link, Object number: Int32)
+        "SetTag",           // (Tag: link, Value: Double)  <- NOT "SetValue", which crashes Portal
+        "IncreaseTag",      // (Tag: link, Value: Double)  <- NOT "IncreaseValue", ditto
+        "SetBit",           // (Tag: link)
+
+        // Harvested from a real export, NOT yet round-tripped by this emitter. Safe to emit - the
+        // name is what the crash is keyed on - but the parameter shapes are unproven here.
+        "DecreaseTag",      // (Tag: link, Value: Double)
+        "ResetBit",         // (Tag: link)
+        "SetBitInTag",      // (Tag: link, Bit: Int32)   - addresses a bit WITHIN a word by number
+        "ResetBitInTag",    // (Tag: link, Bit: Int32)
+        "InvertBit",        // (Tag: link)
+        "StopRuntime",      // (Mode: Int32)
+    };
+
+    /// <summary>
+    /// The events on a button, written FIRST in its ObjectList because that is where TIA writes them.
+    ///
+    /// Two shapes are generated, and both hang off <c>Release</c> rather than <c>Press</c>:
+    /// a touch that lands on the wrong control can still be cancelled by sliding off before lifting,
+    /// which is the behaviour an operator in gloves expects and the only one of the two that is
+    /// recoverable. (<c>Press</c> is equally importable - this is a design choice, not a limit.)
+    /// </summary>
+    private static void WriteButtonEvents(XmlWriter w, Func<string> nextId, IrItem i)
+    {
+        var entries = new List<Action>();
+
+        // A COMMAND: the code (and any operands) FIRST, then the sequence bump LAST.
+        //
+        // 🔴 THE ORDER IS THE HANDSHAKE, NOT A STYLE. The controller reads the code when the
+        // sequence number CHANGES, so a sequence bumped before its code is written commits the
+        // PREVIOUS command - a wrong action, from a correct-looking button, on a panel where every
+        // gate is green. The author names a CHANNEL and never the two tags, so this order is not
+        // something they can get wrong; it is not expressible.
+        if (!string.IsNullOrWhiteSpace(i.Cmd))
+        {
+            var ch = i.Cmd!.Trim();
+            if (!string.IsNullOrWhiteSpace(i.CmdCode))
+            {
+                entries.Add(() => WriteTagFunction(w, nextId, "SetTag", ch + "_Code", i.CmdCode!));
+            }
+
+            if (!string.IsNullOrWhiteSpace(i.CmdInt1))
+            {
+                entries.Add(() => WriteTagFunction(w, nextId, "SetTag", ch + "_Int1", i.CmdInt1!));
+            }
+
+            if (!string.IsNullOrWhiteSpace(i.CmdInt2))
+            {
+                entries.Add(() => WriteTagFunction(w, nextId, "SetTag", ch + "_Int2", i.CmdInt2!));
+            }
+
+            if (!string.IsNullOrWhiteSpace(i.CmdReal1))
+            {
+                entries.Add(() => WriteTagFunction(w, nextId, "SetTag", ch + "_Real1", i.CmdReal1!));
+            }
+
+            if (!string.IsNullOrWhiteSpace(i.CmdReal2))
+            {
+                entries.Add(() => WriteTagFunction(w, nextId, "SetTag", ch + "_Real2", i.CmdReal2!));
+            }
+
+            // The bump is UNCONDITIONAL and LAST. There is no path that writes a code without it.
+            entries.Add(() => WriteTagFunction(w, nextId, "IncreaseTag", ch + "_Seq", "1"));
+        }
+
+        // A STAGED OPERAND. One write, no sequence bump - so nothing is COMMANDED by this press.
+        // Emitted before any navigation for the same reason a command is: the value must be written
+        // while this screen is still the active one.
+        if (!string.IsNullOrWhiteSpace(i.SetTag))
+        {
+            var spec = i.SetTag!.Trim();
+            var eq = spec.IndexOf('=');
+            var target = spec[..eq].Trim();
+            var value = spec[(eq + 1)..].Trim();
+            entries.Add(() => WriteTagFunction(w, nextId, "SetTag", target, value));
+        }
+
+        // NAVIGATION. Emitted after any command on the same button so that a button which both acts
+        // and navigates has sent its command before the screen changes.
+        if (!string.IsNullOrWhiteSpace(i.GoTo))
+        {
+            entries.Add(() => WriteActivateScreen(w, nextId, i.GoTo!.Trim()));
+        }
+
+        if (entries.Count == 0)
+        {
+            return;
+        }
+
+        WriteEvent(w, nextId, "Release", entries);
+    }
+
+    /// <summary>One <c>Hmi.Event.Event</c> wrapping a function list, in TIA's own nesting.</summary>
+    private static void WriteEvent(XmlWriter w, Func<string> nextId, string eventName, List<Action> entries)
     {
         w.WriteStartElement("Hmi.Event.Event");
         w.WriteAttributeString("ID", nextId());
         w.WriteAttributeString("CompositionName", "Events");
         w.WriteStartElement("AttributeList");
-        Attr(w, "Name", "KeyUp");
+        Attr(w, "Name", eventName);
         w.WriteEndElement();
 
         w.WriteStartElement("ObjectList");
@@ -616,35 +1147,132 @@ public static class Emitter
         w.WriteAttributeString("CompositionName", "EventHandler");
         w.WriteStartElement("ObjectList");
 
-        w.WriteStartElement("Hmi.Event.FunctionListEntry");
-        w.WriteAttributeString("ID", nextId());
-        w.WriteAttributeString("CompositionName", "FunctionListEntries");
-        w.WriteStartElement("AttributeList");
-        Attr(w, "Name", "ActivateScreen");
-        Attr(w, "Type", "SystemFunction");
-        w.WriteEndElement();
-
-        w.WriteStartElement("ObjectList");
-        w.WriteStartElement("Hmi.Event.FunctionListEntryParameter");
-        w.WriteAttributeString("ID", nextId());
-        w.WriteAttributeString("CompositionName", "Parameters");
-        w.WriteStartElement("AttributeList");
-        Attr(w, "Name", "Screen name");
-        w.WriteEndElement();
-        w.WriteStartElement("LinkList");
-        w.WriteStartElement("Value");
-        w.WriteAttributeString("TargetID", "@OpenLink");
-        Attr(w, "Name", targetScreen);
-        w.WriteEndElement();
-        w.WriteEndElement();
-        w.WriteEndElement(); // Parameter
-        w.WriteEndElement(); // ObjectList
-        w.WriteEndElement(); // FunctionListEntry
+        foreach (var entry in entries)
+        {
+            entry();
+        }
 
         w.WriteEndElement(); // ObjectList
         w.WriteEndElement(); // FunctionListEventHandler
         w.WriteEndElement(); // ObjectList
         w.WriteEndElement(); // Event
+    }
+
+    private static void BeginFunction(XmlWriter w, Func<string> nextId, string function)
+    {
+        if (!VerifiedFunctions.Contains(function))
+        {
+            // Fail here, loudly, rather than emit a document that kills Portal with a message
+            // naming nothing. See VerifiedFunctions for why this cannot be a runtime check.
+            throw new InvalidOperationException(
+                $"REFUSED: '{function}' is not in the verified system-function vocabulary. An "
+                + "unrecognised function name CRASHES THE TIA PORTAL PROCESS rather than failing "
+                + "validation, so it is never emitted on the strength of a guess. Harvest the name "
+                + "from a real export of a hand-built event and add it to VerifiedFunctions.");
+        }
+
+        w.WriteStartElement("Hmi.Event.FunctionListEntry");
+        w.WriteAttributeString("ID", nextId());
+        w.WriteAttributeString("CompositionName", "FunctionListEntries");
+        w.WriteStartElement("AttributeList");
+        Attr(w, "Name", function);
+        Attr(w, "Type", "SystemFunction");
+        w.WriteEndElement();
+        w.WriteStartElement("ObjectList");
+    }
+
+    private static void EndFunction(XmlWriter w)
+    {
+        w.WriteEndElement(); // ObjectList
+        w.WriteEndElement(); // FunctionListEntry
+    }
+
+    /// <summary>A parameter carrying a tag or screen by NAME, as an <c>@OpenLink</c>.</summary>
+    private static void LinkParam(XmlWriter w, Func<string> nextId, string paramName, string target)
+    {
+        w.WriteStartElement("Hmi.Event.FunctionListEntryParameter");
+        w.WriteAttributeString("ID", nextId());
+        w.WriteAttributeString("CompositionName", "Parameters");
+        w.WriteStartElement("AttributeList");
+        Attr(w, "Name", paramName);
+        w.WriteEndElement();
+        w.WriteStartElement("LinkList");
+        w.WriteStartElement("Value");
+        w.WriteAttributeString("TargetID", "@OpenLink");
+        Attr(w, "Name", target);
+        w.WriteEndElement();
+        w.WriteEndElement();
+        w.WriteEndElement();
+    }
+
+    /// <summary>
+    /// A parameter carrying a literal, as a typed <c>Value</c> INSIDE the AttributeList.
+    ///
+    /// ⚠️ <paramref name="clrType"/> is the CLR type TIA itself writes for that parameter, and it is
+    /// NOT the tag's type. Every numeric operand of a tag-writing function is
+    /// <c>System.Double</c> - a Word tag, an Int tag and a Real tag all take Double - while
+    /// <c>Object number</c> and <c>Bit</c> are <c>System.Int32</c>. Matching the parameter to the
+    /// TAG's type instead is a guess that reads as reasonable and was measured wrong.
+    /// </summary>
+    private static void LiteralParam(XmlWriter w, Func<string> nextId, string paramName, string value, string clrType)
+    {
+        w.WriteStartElement("Hmi.Event.FunctionListEntryParameter");
+        w.WriteAttributeString("ID", nextId());
+        w.WriteAttributeString("CompositionName", "Parameters");
+        w.WriteStartElement("AttributeList");
+        Attr(w, "Name", paramName);
+        w.WriteStartElement("Value");
+        w.WriteAttributeString("Type", clrType);
+        w.WriteString(value);
+        w.WriteEndElement();
+        w.WriteEndElement();
+        w.WriteEndElement();
+    }
+
+    /// <summary>
+    /// <c>SetTag</c> / <c>IncreaseTag</c> / <c>DecreaseTag</c>: (Tag link, value).
+    ///
+    /// The value is EITHER a literal OR another tag, and the author picks with a leading <c>@</c>:
+    /// <c>data-hmi-cmd-int1="3"</c> writes the number 3, <c>data-hmi-cmd-int1="@Silo_W_StateID"</c>
+    /// copies that tag's LIVE VALUE at the moment of the press.
+    ///
+    /// 🔴 THE TAG-VALUED FORM IS NOT COSMETIC — TWO COMMANDS ARE IMPOSSIBLE WITHOUT IT.
+    /// The decoder refuses STEP ADVANCE unless its operand EQUALS the vessel's live state, and a
+    /// recipe chooser must send the recipe's ID, which is editable data and unknowable when the
+    /// screen is built. A literal cannot express either.
+    ///
+    /// Harvested and round-tripped 2026-08-18, not guessed: the shape is the SAME
+    /// <c>@OpenLink</c> a Tag parameter uses, in place of the typed literal. It reads back intact.
+    /// </summary>
+    private static void WriteTagFunction(XmlWriter w, Func<string> nextId, string function, string tag, string value)
+    {
+        BeginFunction(w, nextId, function);
+        LinkParam(w, nextId, "Tag", tag);
+        if (value.StartsWith("@", StringComparison.Ordinal))
+        {
+            LinkParam(w, nextId, "Value", value.Substring(1).Trim());
+        }
+        else
+        {
+            LiteralParam(w, nextId, "Value", value, "System.Double");
+        }
+
+        EndFunction(w);
+    }
+
+    /// <summary>
+    /// <c>ActivateScreen</c>: (Screen name link, Object number Int32).
+    ///
+    /// The parameter is <c>Screen name</c> - with the space and that capitalisation - and the target
+    /// is a LINK, not an attribute value. <c>Object number</c> is not optional: omitting it was one
+    /// of the three faults in the probe that produced the false "events cannot be created" verdict.
+    /// </summary>
+    private static void WriteActivateScreen(XmlWriter w, Func<string> nextId, string targetScreen)
+    {
+        BeginFunction(w, nextId, "ActivateScreen");
+        LinkParam(w, nextId, "Screen name", targetScreen);
+        LiteralParam(w, nextId, "Object number", "0", "System.Int32");
+        EndFunction(w);
     }
 
     /// <summary>
@@ -731,6 +1359,7 @@ public static class Emitter
         w.WriteEndElement();
 
         w.WriteStartElement("ObjectList");
+        WriteVisibility(w, nextId, i);
         WriteFont(w, nextId, i);
         WriteText(w, nextId, string.Empty, "HelpText");
         WriteTagBinding(w, nextId, "ProcessValue", i.Bind!);
@@ -798,7 +1427,28 @@ public static class Emitter
     private static void WriteIOField(XmlWriter w, Func<string> nextId, string name, IrItem i)
     {
         var mode = string.IsNullOrWhiteSpace(i.Mode) ? "Output" : i.Mode!;
-        var format = string.IsNullOrWhiteSpace(i.Format) ? "9999" : i.Format!;
+
+        // A STRING FIELD IS THE SAME OBJECT WITH DataFormat="String" AND A QUESTION-MARK PATTERN.
+        //
+        // 🔴 THE PLACEHOLDER IS '?', NOT '*', AND THE DIFFERENCE CRASHED PORTAL. MEASURED 2026-08-18.
+        //
+        // This was first written as an asterisk pattern - reconstructed from the WinCC classic
+        // vocabulary, flagged UNPROVEN, and gated behind a two-object throwaway screen for exactly
+        // that reason. The gate earned itself on its first use: the probe killed the Portal process,
+        // and removing ONLY this field from it made the same document import clean.
+        //
+        // The correct character was then HARVESTED, not guessed a second time - a real classic
+        // export in the corpus carries `DataFormat String`, `FieldLength 80` and eighty '?'. Every
+        // other attribute the reconstruction chose was right; the placeholder was the whole of it.
+        //
+        // Note what this says about the failure mode. A self-contradicting field does not get
+        // rejected with a message naming the attribute - it takes the process down, reporting only
+        // `Access to a disposed object`. So the ONE unproven character could not have been found by
+        // reading the error, and a screen set built on it would have failed as a set.
+        var isString = !string.IsNullOrWhiteSpace(i.StringLength);
+        var format = isString
+            ? new string('?', int.Parse(i.StringLength!.Trim(), CultureInfo.InvariantCulture))
+            : (string.IsNullOrWhiteSpace(i.Format) ? "9999" : i.Format!);
 
         // 🔴 FieldLength IS THE WHOLE PATTERN'S LENGTH, NOT ITS DIGIT COUNT - AND GETTING IT WRONG
         // CRASHES PORTAL.
@@ -834,7 +1484,7 @@ public static class Emitter
         Attr(w, "BottomMargin", "2");
         // H-203: no radius. The corpus uses 3; the house rule wins, as it does on Button.
         Attr(w, "CornerRadius", "0");
-        Attr(w, "DataFormat", "Decimal");
+        Attr(w, "DataFormat", isString ? "String" : "Decimal");
         // H-204: the corpus uses Double (a 3-D bevel); Solid is the flat equivalent.
         Attr(w, "EdgeStyle", "Solid");
         Attr(w, "Enabled", mode == "Output" ? "false" : "true");
@@ -846,8 +1496,10 @@ public static class Emitter
         Geometry(w, i);
         Attr(w, "HiddenInput", "false");
         // Right-aligned: H-302 wants process values to line up on the decimal point, and a
-        // left-aligned number in a fixed-width field does not.
-        Attr(w, "HorizontalAlignment", "Right");
+        // left-aligned number in a fixed-width field does not. A STRING is left-aligned for the
+        // opposite half of the same reason - words read from the left and have no decimal point to
+        // line up - which is the rule SymbolicIOField already follows.
+        Attr(w, "HorizontalAlignment", isString ? "Left" : "Right");
         Attr(w, "LeftMargin", "3");
         Attr(w, "Mode", mode);
         Attr(w, "ObjectName", name);
@@ -866,6 +1518,7 @@ public static class Emitter
         w.WriteEndElement();
 
         w.WriteStartElement("ObjectList");
+        WriteVisibility(w, nextId, i);
         WriteFont(w, nextId, i);
         WriteText(w, nextId, string.Empty, "HelpText");
         WriteTagBinding(w, nextId, "ProcessValue", i.Bind!);
@@ -934,7 +1587,26 @@ public static class Emitter
         w.WriteAttributeString("CompositionName", "Items");
         w.WriteStartElement("AttributeList");
         Attr(w, "Culture", "en-US");
-        Attr(w, "Text", $"<body><p>{text}</p></body>");
+
+        // 🔴 THE CAPTION IS ESCAPED TWICE, AND MISSING THE INNER PASS IS A PORTAL-SIDE REJECTION.
+        //
+        // This payload is RICH TEXT carried inside an XML attribute, so it goes through two
+        // encodings: the writer escapes it once for the XML, and TIA then parses what comes out as
+        // markup. A caption containing '&' survives the first pass as a bare ampersand and reaches
+        // TIA's HTML parser as an unterminated entity:
+        //
+        //     The argument 'text' (<body><p>CLEAN & MOTORS</p></body>) has an invalid format.
+        //
+        // Measured 2026-08-20 on a real screen title. Note where it did NOT fail: the document is
+        // well-formed XML, `check` passes, the coherence gate passes and the render is correct -
+        // every offline gate is green, because every offline gate reads the caption AFTER one
+        // unescape. Only the import refuses it.
+        //
+        // So the caption is escaped for the INNER markup here, and the XmlWriter does the outer
+        // pass. '<' and '>' get the same treatment: a caption is plain text and must never be able
+        // to inject an element into the body.
+        var escaped = text.Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;");
+        Attr(w, "Text", $"<body><p>{escaped}</p></body>");
         w.WriteEndElement();
         w.WriteEndElement();
         w.WriteEndElement();
@@ -971,6 +1643,40 @@ public sealed class UntypedElementException : Exception
     }
 
     private static string Trim(string t) => t.Length <= 24 ? t : t[..24] + "...";
+}
+
+/// <summary>
+/// A button whose navigation target is the screen it already sits on.
+///
+/// Its own class, and NOT folded into a generic failure, because the diagnosis is the whole value:
+/// TIA accepts the document, drops the link, and reports nothing. Anyone meeting the dead button
+/// later has no route back to the cause.
+/// </summary>
+public sealed class SelfNavigationException : Exception
+{
+    public SelfNavigationException(string screenName, IReadOnlyList<string> buttons)
+        : base($"REFUSED: {buttons.Count} button(s) on '{screenName}' navigate to that same screen "
+               + $"({string.Join(", ", buttons)}). TIA DISCARDS a self-referencing screen link at "
+               + "import WITHOUT ERROR, leaving a button that passes every gate and does nothing "
+               + "under the operator's finger. Mark the current screen with a Text, or give the "
+               + "button a different target.")
+    {
+    }
+}
+
+/// <summary>
+/// A layer that cannot be emitted as declared.
+///
+/// Its own type because every case it covers produces a document that IMPORTS AND COMPILES: an
+/// orphaned item, a doubled rule, an empty layer and a claimed index are all well-formed. What
+/// they are not is what the author meant, and none of them would show up in a check, a compile or
+/// a render - only in front of an operator, once.
+/// </summary>
+public sealed class LayerException : Exception
+{
+    public LayerException(string message) : base("REFUSED: " + message)
+    {
+    }
 }
 
 /// <summary>
@@ -1015,6 +1721,56 @@ public sealed class UnrepresentableStylingException : Exception
              + string.Join(Environment.NewLine, problems.Select(x => "    " + x)) + Environment.NewLine
              + "A classic FontItem states only Culture, FontFamily, FontSize and FontStyle. Emitting "
              + "anyway would produce a screen that looks right in review and different on the panel.")
+    {
+    }
+}
+
+/// <summary>
+/// A <c>data-hmi-set</c> that is not a plain, single, non-handshake operand write.
+///
+/// Its own class because the important refusals are not typos: a write aimed at a <c>_Seq</c> or a
+/// <c>_Code</c>, or sitting on a button that also carries a command, is an attempt - almost always
+/// an innocent one - to assemble a command channel write out of parts. <see cref="IrItem.Cmd"/>'s
+/// whole correctness argument is that the order of that write is not expressible wrongly, and a
+/// second path that CAN express it wrongly would quietly retire that argument.
+/// </summary>
+public sealed class OperandStagingException : Exception
+{
+    public OperandStagingException(IReadOnlyList<string> problems)
+        : base($"REFUSED: {problems.Count} staged tag write(s) this emitter will not produce:"
+             + Environment.NewLine
+             + string.Join(Environment.NewLine, problems.Select(x => "    " + x)))
+    {
+    }
+}
+
+/// <summary>
+/// An IOField declared as a string display that contradicts itself or sits on the wrong item type.
+/// Refused rather than emitted, because the family it belongs to - two attributes that must agree,
+/// which TIA validates by dying rather than by rejecting - has already cost this project a Portal
+/// session once over <c>FieldLength</c>.
+/// </summary>
+public sealed class StringFieldException : Exception
+{
+    public StringFieldException(IReadOnlyList<string> problems)
+        : base($"REFUSED: {problems.Count} string field declaration(s) that cannot be emitted:"
+             + Environment.NewLine
+             + string.Join(Environment.NewLine, problems.Select(x => "    " + x)))
+    {
+    }
+}
+
+/// <summary>
+/// A visibility animation with no trigger tag. Same family as <see cref="UnboundFieldException"/>:
+/// the object imports, the rule never evaluates, and what the operator sees is whatever the panel
+/// defaults to - which looks like a decision somebody made.
+/// </summary>
+public sealed class UnboundAnimationException : Exception
+{
+    public UnboundAnimationException(IReadOnlyList<string> problems)
+        : base($"REFUSED: {problems.Count} visibility animation(s) with nothing to trigger them:"
+             + Environment.NewLine
+             + string.Join(Environment.NewLine, problems.Select(x => "    " + x)))
     {
     }
 }
