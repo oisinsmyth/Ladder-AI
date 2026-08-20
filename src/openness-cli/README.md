@@ -34,6 +34,7 @@ openness-cli hmi           <project> [--screen <name>|*] [--max-items <n>]     #
 openness-cli graphics      <project> [--list] [--inspect <name>] [--export <name> --out <path>] [--import <file>]... [--overwrite]   # the PROJECT-level picture store — see below
 openness-cli graphics      <project> --delete <name>... --yes                  # deletes graphics BY LITERAL NAME (no wildcard form exists); unknown name = hard error, nothing deleted — see below
 openness-cli hmi-delete-screen <project> --name <name>... --yes                # deletes CLASSIC screens, same contract. `hmi-delete` is Unified-only and cannot see one — see below
+openness-cli hmi-delete-tagtable <project> --name <name>... [--device <name>] --yes   # deletes CLASSIC HMI tag tables, same contract again. `hmi-delete --kind TagTables` is Unified-only — see below
 openness-cli xref          <project>                                           # cross-reference data — not built yet
 ```
 
@@ -801,22 +802,39 @@ here: the outer message says only that `Import` threw. The inner one is the enti
 ### What is NOT built
 
 - **No `import-all` equivalent.** These are separate flags, not a mixed-kind bulk restore.
-- **No delete.** `TagTable.Delete()` and `TextList.Delete()` exist; nothing here calls them.
+- **Tag tables CAN be deleted** — `hmi-delete-tagtable`, added 2026-08-20; see *Deleting graphics,
+  classic screens and classic tag tables* below. **Text lists still cannot:** `TextList.Delete()`
+  exists and nothing here calls it.
 - **Individual tags are not wired.** `TagComposition.Import` takes a single-tag document into ONE
   named table; only the table-level route is exposed, because that is the one the export produces.
 - **The Unified refusal is unit-tested, not measured** — the project used for the live run carries
   no Unified device.
 
-## Deleting graphics and classic screens (2026-08-17)
+## Deleting graphics, classic screens and classic tag tables (2026-08-17, tag tables 2026-08-20)
 
 ```
-openness-cli graphics         <project> --delete <name>... --yes
-openness-cli hmi-delete-screen <project> --name <name>... [--device <name>] --yes
+openness-cli graphics            <project> --delete <name>... --yes
+openness-cli hmi-delete-screen   <project> --name <name>... [--device <name>] --yes
+openness-cli hmi-delete-tagtable <project> --name <name>... [--device <name>] --yes
 ```
 
 `hmi-delete-screen` is separate from `hmi-delete` for the same reason `hmi-compile` is separate from
 `compile`: `hmi-delete` is the metamodel command over `HmiSoftware` (Unified) compositions and
-**cannot see a classic screen at all**.
+**cannot see a classic screen at all**. `hmi-delete-tagtable` is separate for exactly that reason
+too — `hmi-delete --kind TagTables` resolves through `FindSingleUnifiedSoftware`, so it is blind to a
+classic device's `TagFolder`.
+
+Everything below applies to all three. Three notes specific to the tag-table verb:
+
+- The walk over `HmiTarget.TagFolder` is **recursive** (`TagFolder.Folders` is a
+  `TagUserFolderComposition`), matching `export --hmitagtable`. A flat walk would report "not found"
+  for a table plainly visible in the project tree.
+- A table on a **Unified** device is refused **by name** (`HmiClassicOnlyObjectException`), not
+  flattened into "not found": the object exists, this route does not reach it, and those are two
+  different corrections.
+- **A deleted classic tag table cannot be re-created through the API.** `TagTableComposition` has no
+  `Create` — a SimaticML import is the only route back, so `export --hmitagtable` first if the
+  content might be wanted again.
 
 ### 🔴 There is no wildcard, and that is deliberate
 

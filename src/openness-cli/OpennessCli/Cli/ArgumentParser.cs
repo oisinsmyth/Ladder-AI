@@ -342,6 +342,19 @@ public sealed record HmiDeleteScreenOptions(
     int TimeoutConnectSeconds,
     int TimeoutOpenSeconds);
 
+// Deleting CLASSIC tag tables. Separate from `hmi-delete --kind TagTables`, which resolves through
+// FindSingleUnifiedSoftware and cannot see a classic tag table at all — the same blind spot that
+// made `hmi-delete-screen` a separate subcommand. Deliberately the same shape as
+// HmiDeleteScreenOptions: both are parsed by ParseNamedDelete, so they cannot drift.
+public sealed record HmiDeleteTagTableOptions(
+    string ProjectIdentifier,
+    IReadOnlyList<string> TagTableNames,
+    string? Device,
+    bool Confirm,
+    string? TiaInstallOverride,
+    int TimeoutConnectSeconds,
+    int TimeoutOpenSeconds);
+
 public abstract record ParseResult
 {
     private ParseResult()
@@ -403,6 +416,8 @@ public abstract record ParseResult
     public sealed record GraphicsSuccess(GraphicsOptions Options) : ParseResult;
 
     public sealed record HmiDeleteScreenSuccess(HmiDeleteScreenOptions Options) : ParseResult;
+
+    public sealed record HmiDeleteTagTableSuccess(HmiDeleteTagTableOptions Options) : ParseResult;
 
     public sealed record Failure(string Message) : ParseResult;
 }
@@ -556,7 +571,13 @@ public static class ArgumentParser
         "    --yes required: without it the plan prints and Portal is NEVER contacted (exit 10). Absence is confirmed by RE-READING after the save.\n" +
         "  openness-cli hmi-delete-screen <project> --name <name>... [--device <name>] --yes\n" +
         "    Deletes CLASSIC HMI screens, same contract. `hmi-delete` is the Unified metamodel command and cannot see a classic screen at all.\n" +
-        "    Delete screens BEFORE the graphics they reference, or the HMI compile fails with \"The graphic for the '<item>' screen object is invalid\".";
+        "    Delete screens BEFORE the graphics they reference, or the HMI compile fails with \"The graphic for the '<item>' screen object is invalid\".\n" +
+        "  openness-cli hmi-delete-tagtable <project> --name <name>... [--device <name>] --yes\n" +
+        "    Deletes CLASSIC HMI tag tables BY EXACT LITERAL NAME, same contract: repeat --name per table, no pattern/prefix/glob form exists,\n" +
+        "    every name resolves BEFORE anything is deleted, and absence is confirmed by RE-READING after the save. A name that does not exist is a\n" +
+        "    HARD ERROR naming what IS present. `hmi-delete --kind TagTables` is the UNIFIED metamodel route and cannot see a classic tag table.\n" +
+        "    --yes required: without it the plan prints and Portal is NEVER contacted (exit 10). A classic tag table cannot be re-created through the\n" +
+        "    API (TagTableComposition has no Create) — only a SimaticML import brings one back, so export it first if you may want it again.";
 
     /// <summary>
     /// Pulls the flags every subcommand shares off whichever options record the parse produced.
@@ -606,6 +627,7 @@ public static class ArgumentParser
         ParseResult.LibrarySuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
         ParseResult.GraphicsSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
         ParseResult.HmiDeleteScreenSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
+        ParseResult.HmiDeleteTagTableSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
         _ => throw new InvalidOperationException($"Unhandled parse result: {result.GetType().Name}"),
     };
 
@@ -643,6 +665,7 @@ public static class ArgumentParser
         ParseResult.LibrarySuccess s => s.Options.ProjectIdentifier,
         ParseResult.GraphicsSuccess s => s.Options.ProjectIdentifier,
         ParseResult.HmiDeleteScreenSuccess s => s.Options.ProjectIdentifier,
+        ParseResult.HmiDeleteTagTableSuccess s => s.Options.ProjectIdentifier,
         _ => throw new InvalidOperationException($"Unhandled parse result: {result.GetType().Name}"),
     };
 
@@ -681,6 +704,7 @@ public static class ArgumentParser
             "library" => ParseLibrary(args),
             "graphics" => ParseGraphics(args),
             "hmi-delete-screen" => ParseHmiDeleteScreen(args),
+            "hmi-delete-tagtable" => ParseHmiDeleteTagTable(args),
             // Reuses ParseCompile so the flags stay identical to `compile`; only the ParseResult
             // differs, which is what routes it to the HMI-aware device lookup.
             "hmi-compile" => ParseCompile(args) switch
@@ -689,7 +713,7 @@ public static class ArgumentParser
                 var other => other,
             },
             var other => new ParseResult.Failure(
-                $"Unknown subcommand '{other}'. Supported subcommands: list, export, import, compile, delete, block-layout, download-plan, create-instance-db, sanity-check, compile-scopes, portal-status, library, graphics, hmi, hmi-compile, hmi-delete-screen, hmi-create-screen, hmi-edit-screen, hmi-create-tag, hmi-inventory, hmi-new, hmi-delete, hmi-set.{Environment.NewLine}{Usage}"),
+                $"Unknown subcommand '{other}'. Supported subcommands: list, export, import, compile, delete, block-layout, download-plan, create-instance-db, sanity-check, compile-scopes, portal-status, library, graphics, hmi, hmi-compile, hmi-delete-screen, hmi-delete-tagtable, hmi-create-screen, hmi-edit-screen, hmi-create-tag, hmi-inventory, hmi-new, hmi-delete, hmi-set.{Environment.NewLine}{Usage}"),
         };
     }
 
@@ -2531,10 +2555,33 @@ public static class ArgumentParser
             confirm));
     }
 
-    // hmi-delete-screen. A separate subcommand rather than a flag on `hmi-edit-screen`: deleting a
-    // whole screen is not an edit to one, and every other mutating command in this tool is its own
-    // verb with its own --yes.
-    private static ParseResult ParseHmiDeleteScreen(string[] args)
+    /// <summary>
+    /// What <c>ParseNamedDelete</c> hands back on success. Not a ParseResult variant: the two
+    /// commands that use it build DIFFERENT options records from the same arguments.
+    /// </summary>
+    private sealed record NamedDeleteArgs(
+        string ProjectIdentifier,
+        IReadOnlyList<string> Names,
+        string? Device,
+        bool Confirm,
+        string? TiaInstallOverride,
+        int TimeoutConnectSeconds,
+        int TimeoutOpenSeconds);
+
+    /// <summary>
+    /// The shared argument shape of every "<c>delete these named objects off an HMI device</c>"
+    /// subcommand: <c>&lt;project&gt; --name &lt;name&gt;... [--device] --yes</c>. One parse for
+    /// `hmi-delete-screen` and `hmi-delete-tagtable` rather than two copies — the second was written
+    /// as a copy of the first, and a copy is where the confirm fence or the duplicate-name check
+    /// goes missing from one of them later.
+    ///
+    /// <para><b>There is no <c>--prefix</c>, <c>--pattern</c> or wildcard form, in either command,
+    /// deliberately.</b> A pattern expanded at delete time is one typo away from taking real content
+    /// with it, and a caller that wants several can enumerate first and pass the names it means. A
+    /// name containing <c>*</c> is carried through as a LITERAL and simply fails to resolve.</para>
+    /// </summary>
+    /// <param name="noun">Names the object kind in the two failure messages, e.g. "screen name".</param>
+    private static ParseResult ParseNamedDelete(string[] args, string noun, Func<NamedDeleteArgs, ParseResult> build)
     {
         string? projectIdentifier = null;
         string? device = null;
@@ -2606,7 +2653,7 @@ public static class ArgumentParser
         // having examined nothing — the empty-is-not-clean defect this project keeps re-finding.
         if (names.Count == 0)
         {
-            return new ParseResult.Failure($"Missing required flag: --name <screen name> (repeatable).{Environment.NewLine}{Usage}");
+            return new ParseResult.Failure($"Missing required flag: --name <{noun}> (repeatable).{Environment.NewLine}{Usage}");
         }
 
         var duplicate = names.GroupBy(n => n, StringComparer.Ordinal).FirstOrDefault(g => g.Count() > 1);
@@ -2615,9 +2662,26 @@ public static class ArgumentParser
             return new ParseResult.Failure($"--name '{duplicate.Key}' was given more than once.{Environment.NewLine}{Usage}");
         }
 
-        return new ParseResult.HmiDeleteScreenSuccess(new HmiDeleteScreenOptions(
+        return build(new NamedDeleteArgs(
             projectIdentifier, names, device, confirm, tiaInstall, timeoutConnect, timeoutOpen));
     }
+
+    // hmi-delete-screen. A separate subcommand rather than a flag on `hmi-edit-screen`: deleting a
+    // whole screen is not an edit to one, and every other mutating command in this tool is its own
+    // verb with its own --yes.
+    private static ParseResult ParseHmiDeleteScreen(string[] args) =>
+        ParseNamedDelete(args, "screen name", a => new ParseResult.HmiDeleteScreenSuccess(
+            new HmiDeleteScreenOptions(
+                a.ProjectIdentifier, a.Names, a.Device, a.Confirm,
+                a.TiaInstallOverride, a.TimeoutConnectSeconds, a.TimeoutOpenSeconds)));
+
+    // hmi-delete-tagtable. Classic-only, and NOT reachable through `hmi-delete --kind TagTables`,
+    // which goes through FindSingleUnifiedSoftware and is blind to a classic device.
+    private static ParseResult ParseHmiDeleteTagTable(string[] args) =>
+        ParseNamedDelete(args, "tag table name", a => new ParseResult.HmiDeleteTagTableSuccess(
+            new HmiDeleteTagTableOptions(
+                a.ProjectIdentifier, a.Names, a.Device, a.Confirm,
+                a.TiaInstallOverride, a.TimeoutConnectSeconds, a.TimeoutOpenSeconds)));
 
     private static ParseResult ParseLibrary(string[] args)
     {

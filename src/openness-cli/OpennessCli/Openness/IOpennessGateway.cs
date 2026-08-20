@@ -352,6 +352,15 @@ public interface IOpennessGateway : IDisposable
     IReadOnlyList<string> DeleteScreens(string? deviceFilter, IReadOnlyList<string> names);
 
     /// <summary>
+    /// Deletes CLASSIC HMI tag tables by exact name, same resolve-all-then-delete-then-verify
+    /// contract as <see cref="DeleteScreens"/>. Classic only: a table on a UNIFIED device is refused
+    /// BY NAME (<see cref="HmiClassicOnlyObjectException"/>) rather than reported as "not found" —
+    /// `hmi-delete --kind TagTables` is the Unified route and cannot see a classic table at all.
+    /// The walk is recursive over <c>TagFolder.Folders</c>, matching <see cref="ExportHmiTagTable"/>.
+    /// </summary>
+    IReadOnlyList<string> DeleteHmiTagTables(string? deviceFilter, IReadOnlyList<string> names);
+
+    /// <summary>
     /// Imports <paramref name="files"/> into the block group at <paramref name="groupPath"/>
     /// (format: "&lt;device&gt;/&lt;group&gt;/.../&lt;group&gt;", matching the Path shown by
     /// `list`). No generic "import wherever it goes" exists on the Siemens side, so an explicit
@@ -719,8 +728,18 @@ public sealed class ScreenNumberCollisionException : Exception
 /// </summary>
 public sealed class HmiTagTableNotFoundException : Exception
 {
-    public HmiTagTableNotFoundException(string tagTableName, IEnumerable<string> present)
-        : base($"No classic HMI tag table named '{tagTableName}' found in the project. PRESENT: {Describe(present)}")
+    /// <param name="present">
+    /// What IS there, device-qualified for the reader ("Name [device/item]").
+    /// </param>
+    /// <param name="bareNames">
+    /// The same tables' UNDECORATED names, when the caller has them. Supplied only so the near-match
+    /// diagnostic has something it can compare against — folding "ZZ_ProbeA [HMI_1/HMI_RT_1]" would
+    /// never match "ZZ_ProbeA ", which is the case the diagnostic exists for. Omitted, the message is
+    /// exactly what it always was.
+    /// </param>
+    public HmiTagTableNotFoundException(string tagTableName, IEnumerable<string> present, IEnumerable<string>? bareNames = null)
+        : base($"No classic HMI tag table named '{tagTableName}' found in the project. PRESENT: {Describe(present)}"
+               + (bareNames is null ? string.Empty : NameDiagnostics.DescribeNearMatch(tagTableName, bareNames) ?? string.Empty))
     {
     }
 
@@ -879,20 +898,40 @@ public sealed class ScreenNotFoundException : Exception
                         ? "(none — the project holds no classic screens at all)"
                         : string.Join(", ", list));
 
-        var near = list.Where(p => !string.Equals(p, screenName, StringComparison.Ordinal)
-                                && string.Equals(Fold(p), Fold(screenName), StringComparison.OrdinalIgnoreCase))
-                       .ToList();
+        return message + (NameDiagnostics.DescribeNearMatch(screenName, list) ?? string.Empty);
+    }
+}
 
-        if (near.Count > 0)
+/// <summary>
+/// The near-match diagnostic, shared by every "no object of that name" refusal that matches
+/// <c>Ordinal</c> on a name taken VERBATIM off the command line (no trim, no Unicode normalisation).
+///
+/// <para>Extracted from <see cref="ScreenNotFoundException"/> when the second such command arrived
+/// (<c>hmi-delete-tagtable</c>, 2026-08-20). The hypothesis it exists to test is not about screens —
+/// it is about a long generated command line, and every repeated-<c>--name</c> subcommand shares
+/// that exposure. A trailing space or a non-breaking space in one element is invisible to an echo,
+/// invisible in the output, and produces exactly the signature recorded in the README.</para>
+/// </summary>
+internal static class NameDiagnostics
+{
+    /// <summary>The near-match block, or <c>null</c> when nothing in <paramref name="present"/> is
+    /// close. Silence is evidence too, so nothing is emitted when there is no candidate.</summary>
+    internal static string? DescribeNearMatch(string requested, IEnumerable<string> present)
+    {
+        var near = present.Where(p => !string.Equals(p, requested, StringComparison.Ordinal)
+                                   && string.Equals(Fold(p), Fold(requested), StringComparison.OrdinalIgnoreCase))
+                          .ToList();
+
+        if (near.Count == 0)
         {
-            message += $"{Environment.NewLine}NEAR MATCH: {string.Join(", ", near.Select(n => $"'{n}'"))} "
-                     + "differ(s) from the requested name only by whitespace, invisible characters or case. "
-                     + "The name is matched EXACTLY and is never trimmed, so this is very likely the cause."
-                     + $"{Environment.NewLine}REQUESTED, code point by code point: {CodePoints(screenName)}"
-                     + $"{Environment.NewLine}NEAREST,   code point by code point: {CodePoints(near[0])}";
+            return null;
         }
 
-        return message;
+        return $"{Environment.NewLine}NEAR MATCH: {string.Join(", ", near.Select(n => $"'{n}'"))} "
+             + "differ(s) from the requested name only by whitespace, invisible characters or case. "
+             + "The name is matched EXACTLY and is never trimmed, so this is very likely the cause."
+             + $"{Environment.NewLine}REQUESTED, code point by code point: {CodePoints(requested)}"
+             + $"{Environment.NewLine}NEAREST,   code point by code point: {CodePoints(near[0])}";
     }
 
     /// <summary>Trim, collapse whitespace runs, and drop the invisible characters that survive a copy-paste.</summary>

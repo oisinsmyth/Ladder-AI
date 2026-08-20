@@ -139,6 +139,12 @@ internal static class Program
                     "classic HMI screen", unconfirmedScreen.Options.ScreenNames, unconfirmedScreen.Options.ProjectIdentifier);
             }
 
+            if (parseResult is ParseResult.HmiDeleteTagTableSuccess { Options.Confirm: false } unconfirmedTable)
+            {
+                return RefuseUnconfirmedDelete(
+                    "classic HMI tag table", unconfirmedTable.Options.TagTableNames, unconfirmedTable.Options.ProjectIdentifier);
+            }
+
             // FI-61: warn BEFORE the attach, because an unapproved binary is refused silently and
             // the attach then burns the whole --timeout-connect with nothing on screen to explain
             // it. Advisory only — never blocks (see OpennessWhitelist's class comment for why).
@@ -260,6 +266,8 @@ internal static class Program
                     return RunGraphics(gateway, graphics.Options, timeoutOpenSeconds);
                 case ParseResult.HmiDeleteScreenSuccess deleteScreen:
                     return RunHmiDeleteScreen(gateway, deleteScreen.Options, timeoutOpenSeconds);
+                case ParseResult.HmiDeleteTagTableSuccess deleteTagTable:
+                    return RunHmiDeleteTagTable(gateway, deleteTagTable.Options, timeoutOpenSeconds);
                 default:
                     throw new InvalidOperationException($"Unhandled parse result: {parseResult.GetType().Name}");
             }
@@ -476,6 +484,20 @@ internal static class Program
             Console.WriteLine(line);
         }
 
+        return lines.Count == 0 ? ExitCodes.CommandError : ExitCodes.Success;
+    }
+
+    private static int RunHmiDeleteTagTable(IOpennessGateway gateway, HmiDeleteTagTableOptions options, int timeoutOpenSeconds)
+    {
+        gateway.OpenProject(options.ProjectIdentifier, TimeSpan.FromSeconds(timeoutOpenSeconds));
+        var lines = gateway.DeleteHmiTagTables(options.Device, options.TagTableNames);
+        foreach (var line in lines)
+        {
+            Console.WriteLine(line);
+        }
+
+        // Empty is not clean: a delete run that produced no lines deleted nothing and verified
+        // nothing, and must not read as a success.
         return lines.Count == 0 ? ExitCodes.CommandError : ExitCodes.Success;
     }
 

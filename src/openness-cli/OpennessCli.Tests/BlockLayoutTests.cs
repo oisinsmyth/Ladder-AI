@@ -691,6 +691,24 @@ internal sealed class FakeGateway : IOpennessGateway
         return names.Select(n => $"deleted screen '{n}'").ToList();
     }
 
+    public IReadOnlyList<string>? DeletedTagTableNames { get; private set; }
+
+    /// <summary>The --device value the delete was given. Null both when it was omitted and when the
+    /// call never happened, so tests pair it with <see cref="DeletedTagTableNames"/>.</summary>
+    public string? DeletedTagTableDevice { get; private set; }
+
+    /// <summary>Models a delete that reported nothing at all — the empty-is-not-clean path.</summary>
+    public bool ReturnNoDeleteLines { get; set; }
+
+    public IReadOnlyList<string> DeleteHmiTagTables(string? deviceFilter, IReadOnlyList<string> names)
+    {
+        DeletedTagTableNames = names;
+        DeletedTagTableDevice = deviceFilter;
+        return ReturnNoDeleteLines
+            ? new List<string>()
+            : names.Select(n => $"deleted HMI tag table '{n}'").ToList();
+    }
+
     public (string MasterCopy, string NewScreen) CloneScreenViaMasterCopy(string screenName) => throw new NotSupportedException();
 
     // ---- import ---------------------------------------------------------------------------------

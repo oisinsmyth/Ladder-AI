@@ -4412,7 +4412,10 @@ public sealed class OpennessGateway : IOpennessGateway
             throw new InvalidOperationException($"{nameof(OpenProject)} must be called before {nameof(DeleteScreens)}.");
         }
 
-        var targets = new List<Screen>();
+        // The PATH is kept beside the screen, not just the screen. The verification below has to ask
+        // "is the thing I deleted still there", and on a project with more than one classic HMI
+        // device a bare NAME cannot express that.
+        var targets = new List<(Screen Screen, string Path)>();
         foreach (var name in names)
         {
             var classic = new List<(Screen Screen, string Path)>();
@@ -4441,16 +4444,18 @@ public sealed class OpennessGateway : IOpennessGateway
                 throw new AmbiguousScreenException(name, matches.Select(m => m.Path));
             }
 
-            targets.Add(matches[0].Screen);
+            targets.Add(matches[0]);
         }
 
+        var deleted = new List<(string Name, string Path)>();
         var lines = new List<string>();
         try
         {
-            foreach (var screen in targets)
+            foreach (var (screen, path) in targets)
             {
                 var name = screen.Name;
                 screen.Delete();
+                deleted.Add((name, path));
                 lines.Add($"deleted screen '{name}'");
             }
         }
@@ -4469,7 +4474,18 @@ public sealed class OpennessGateway : IOpennessGateway
             }
         }
 
-        foreach (var name in names)
+        // 🔴 SURVIVORS ARE MATCHED ON (NAME, PATH), NOT ON NAME.
+        //
+        // This scan used to re-collect by name across EVERY device with no `--device` narrowing, so
+        // a device-scoped delete that legitimately left a same-named screen standing on ANOTHER
+        // device reported it as a survivor — DeleteDidNotTakeEffectException, an internal-fault exit
+        // on a delete that had worked perfectly. Found while building the tag-table delete, which
+        // was modelled on this method and would have inherited it.
+        //
+        // The failure was latent here because this project has one classic HMI device. It stops
+        // being latent the moment a second one exists, and a false "it did not take" on a delete is
+        // the kind of report that gets a working delete run again.
+        foreach (var (name, path) in deleted)
         {
             var classic = new List<(Screen Screen, string Path)>();
             var unified = new List<string>();
@@ -4481,9 +4497,9 @@ public sealed class OpennessGateway : IOpennessGateway
                 }
             }
 
-            if (classic.Count > 0)
+            if (classic.Any(m => string.Equals(m.Path, path, StringComparison.Ordinal)))
             {
-                survivors.Add(name);
+                survivors.Add($"{name} [{path}]");
             }
         }
 
@@ -4493,6 +4509,121 @@ public sealed class OpennessGateway : IOpennessGateway
         }
 
         lines.Add($"VERIFIED BY RE-READ: {names.Count} gone; {stillThere} classic screen(s) remain in the project");
+        return lines;
+    }
+
+    /// <summary>
+    /// The whole classic tag-table corpus, one walk. The delete resolves EVERY name out of this one
+    /// list rather than re-walking per name, so the present-set a "not found" reports is built from
+    /// the very enumeration that failed to find it — <c>AllClassicScreenNames</c>'s reasoning, one
+    /// step tighter because a tag table can be filtered in memory where a screen cannot.
+    /// </summary>
+    private List<(Siemens.Engineering.Hmi.Tag.TagTable Table, string Path)> AllClassicTagTables(
+        IReadOnlyList<(HmiTarget Target, string Path)> classicDevices)
+    {
+        var all = new List<(Siemens.Engineering.Hmi.Tag.TagTable Table, string Path)>();
+        foreach (var (target, path) in classicDevices)
+        {
+            CollectClassicTagTables(target.TagFolder, path, all);
+        }
+
+        return all;
+    }
+
+    /// <summary>The denominator for a "not found": every classic tag table, qualified by its device.</summary>
+    private static List<string> DescribeTagTables(
+        IEnumerable<(Siemens.Engineering.Hmi.Tag.TagTable Table, string Path)> tables) =>
+        tables.Select(t => $"{t.Table.Name} [{t.Path}]").OrderBy(n => n, StringComparer.Ordinal).ToList();
+
+    // Same three rules as DeleteGraphics/DeleteScreens, for the same three measured reasons:
+    // resolve every name BEFORE deleting anything (a half-applied delete is worse than none, and an
+    // unknown name is the likeliest caller mistake); RE-READ afterwards (`block-layout --set`'s
+    // silent no-op is exactly this shape); and NO wildcard, prefix or pattern anywhere — the caller
+    // supplies literal names, because a pattern expanded at delete time is one typo away from taking
+    // a real tag table, and a classic tag table cannot be recreated through the API at all
+    // (TagTableComposition has no Create — only a SimaticML import brings one back).
+    public IReadOnlyList<string> DeleteHmiTagTables(string? deviceFilter, IReadOnlyList<string> names)
+    {
+        if (_project is null)
+        {
+            throw new InvalidOperationException($"{nameof(OpenProject)} must be called before {nameof(DeleteHmiTagTables)}.");
+        }
+
+        var (classicDevices, unifiedDevices) = CollectHmiDevices();
+        var all = AllClassicTagTables(classicDevices);
+
+        // Name AND device path. The re-read below is checked against the pair, not the bare name: a
+        // --device run legitimately leaves a same-named table standing on another device, and
+        // matching on the name alone would report that survivor as this delete having silently failed.
+        var targets = new List<(Siemens.Engineering.Hmi.Tag.TagTable Table, string Path)>();
+        foreach (var name in names)
+        {
+            var matches = all.Where(t => string.Equals(t.Table.Name, name, StringComparison.Ordinal)).ToList();
+            matches = NarrowToDevice(matches, deviceFilter, m => m.Path);
+
+            if (matches.Count == 0)
+            {
+                var unifiedHit = unifiedDevices.FirstOrDefault(u => u.Software.TagTables.Find(name) is not null);
+                if (unifiedHit.Software is not null)
+                {
+                    throw new HmiClassicOnlyObjectException("HMI tag table", name, unifiedHit.Path);
+                }
+
+                // The present-set is the WHOLE classic corpus, not the device-narrowed one: a
+                // --device that matched nothing is exactly when the caller most needs the real names.
+                throw new HmiTagTableNotFoundException(
+                    name,
+                    DescribeTagTables(all),
+                    all.Select(t => t.Table.Name).Distinct(StringComparer.Ordinal).ToList());
+            }
+
+            // Refused, never guessed. Two devices can legitimately hold a table of the same name and
+            // there is no basis in the arguments for choosing one — deleting the wrong one is not
+            // recoverable through this API.
+            if (matches.Count > 1)
+            {
+                throw new AmbiguousHmiTagTableException(name, matches.Select(m => m.Path));
+            }
+
+            targets.Add(matches[0]);
+        }
+
+        // Read the identity BEFORE Delete(): a deleted object's Name is not something to rely on.
+        var deleted = targets.Select(t => (t.Table.Name, t.Path)).ToList();
+
+        var lines = new List<string>();
+        try
+        {
+            foreach (var (table, path) in targets)
+            {
+                var name = table.Name;
+                var tagCount = table.Tags.Count;
+                table.Delete();
+                lines.Add($"deleted HMI tag table '{name}' [{path}] ({tagCount} tag(s))");
+            }
+        }
+        finally
+        {
+            // Delete() mutates the in-memory model only, exactly as Import() does.
+            SaveProject();
+        }
+
+        // A FRESH walk. Re-filtering `all` would only re-read the list this method built before the
+        // delete and would agree with itself no matter what the project did.
+        var (classicAfter, _) = CollectHmiDevices();
+        var remaining = AllClassicTagTables(classicAfter);
+
+        var survivors = deleted
+            .Where(d => remaining.Any(t => string.Equals(t.Table.Name, d.Name, StringComparison.Ordinal)
+                                        && string.Equals(t.Path, d.Path, StringComparison.Ordinal)))
+            .Select(d => $"{d.Name} [{d.Path}]")
+            .ToList();
+        if (survivors.Count > 0)
+        {
+            throw new DeleteDidNotTakeEffectException("HMI tag table(s)", survivors);
+        }
+
+        lines.Add($"VERIFIED BY RE-READ: {names.Count} gone; {remaining.Count} classic HMI tag table(s) remain in the project");
         return lines;
     }
 
