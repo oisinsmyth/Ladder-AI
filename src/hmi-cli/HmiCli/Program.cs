@@ -514,9 +514,20 @@ switch (command)
 
         // The hand-off is the RECORD; the placeholder on the screen is only a reminder. A reminder
         // that exists solely inside the artifact is lost the moment somebody works from the artifact.
+        //
+        // 🔴 READ THE PATH OUTSIDE THE BRANCH. It used to be read INSIDE `HandOff.Count > 0`, so on
+        // a screen with no manual steps the flag was never even looked at: no file, no message, and
+        // no validation of a path that might be misspelled. Measured on a real 46-screen set - every
+        // emit passed `--handoff`, not one file appeared, and the two files in that directory turned
+        // out to be hand-authored by something else entirely.
+        //
+        // AN ABSENT FILE CANNOT SAY "NOTHING TO DO". It reads identically to an emit that never ran,
+        // a flag that was mistyped, and a step that was dropped. So when a path is given, a file is
+        // always written and it states which of those it is.
+        var handOffPath = ValueOf("--handoff");
+
         if (result.HandOff.Count > 0)
         {
-            var handOffPath = ValueOf("--handoff");
             var lines = new List<string>
             {
                 $"# Manual steps required for screen '{screenName}'",
@@ -536,6 +547,22 @@ switch (command)
             {
                 Console.Error.WriteLine(string.Join(Environment.NewLine, lines));
             }
+        }
+        else if (handOffPath is not null)
+        {
+            File.WriteAllLines(handOffPath, new[]
+            {
+                $"# Manual steps required for screen '{screenName}': NONE",
+                string.Empty,
+                "This file is the positive statement that the emit ran and found nothing that has",
+                "to be done by hand. It is written deliberately rather than omitted: an absent file",
+                "reads the same as an emit that never ran, a mistyped --handoff path, or a step that",
+                "was dropped, and those are not the same thing.",
+                string.Empty,
+                $"Emitted {result.ItemCount} item(s). No hand-off placeholder is on this screen.",
+            });
+
+            Console.WriteLine($"HAND-OFF: no manual steps -> {handOffPath}");
         }
 
         // Empty is not clean: a document with no items is not a screen, and reporting it as a
