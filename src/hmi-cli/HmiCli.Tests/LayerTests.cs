@@ -284,6 +284,54 @@ public class LayerTests
         Assert.DoesNotContain(findings, x => x.RuleId is "H-503" or "H-404");
     }
 
+    /// <summary>
+    /// 🔴 THE HOLE THE FIRST VERSION OF THIS EXEMPTION LEFT, AND IT IS THE ONE THAT MATTERS.
+    ///
+    /// <para>
+    /// "Different layers" was treated as proof that two controls never coexist. It is not. A
+    /// dialog's three answer buttons sit on three layers, keyed on three different tags, and are on
+    /// the glass together constantly — so the rule silently stopped comparing exactly the controls a
+    /// popup crowds most tightly, while still reporting a full denominator.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void Interactives_on_different_layers_keyed_on_DIFFERENT_tags_DO_collide()
+    {
+        var ir = Ir(Decl("ans1", "1", "Silo_W_PromptAnswerCode1", "0..0"), Btn("a", 100, 200, "ans1"),
+                    Decl("ans2", "2", "Silo_W_PromptAnswerCode2", "0..0"), Btn("b", 110, 210, "ans2"));
+
+        Assert.Contains(Linter.Run(ir, Panels.Ktp700Basic).Findings, x => x.RuleId == "H-503");
+    }
+
+    /// <summary>
+    /// The case the exemption is FOR: a live control and its greyed stand-in, same tag, disjoint
+    /// visible sets. Provably never together, so never compared.
+    /// </summary>
+    [Fact]
+    public void A_live_control_and_its_greyed_stand_in_do_not_collide()
+    {
+        var ir = Ir(
+            ShowDecl("blocked", "1", "Silo_W_PromptOffer", "1..99"), Btn("grey", 100, 200, "blocked"),
+            Decl("ans1", "2", "Silo_W_PromptOffer", "0..100"), Btn("live", 100, 200, "ans1"));
+
+        Assert.DoesNotContain(Linter.Run(ir, Panels.Ktp700Basic).Findings,
+            x => x.RuleId is "H-503" or "H-404");
+    }
+
+    /// <summary>
+    /// Same tag, but the ranges OVERLAP — so both can be visible and the pair must be compared.
+    /// This is what stops the same-tag test becoming a new blanket exemption.
+    /// </summary>
+    [Fact]
+    public void Same_tag_layers_whose_ranges_overlap_DO_collide()
+    {
+        var ir = Ir(
+            Decl("frame", "1", "Silo_W_PromptID", "0..0"), Btn("f", 100, 200, "frame"),
+            Decl("ans1", "2", "Silo_W_PromptID", "0..100"), Btn("a", 110, 210, "ans1"));
+
+        Assert.Contains(Linter.Run(ir, Panels.Ktp700Basic).Findings, x => x.RuleId == "H-503");
+    }
+
     [Fact]
     public void Interactives_on_the_SAME_layer_still_collide()
     {

@@ -283,8 +283,63 @@ public static class Linter
         // out to dodge the host geometrically rather than take that trade.
         //
         // Same-layer pairs are unchanged, which is every screen that has no declared layer.
-        static bool CanCoexist(IrItem x, IrItem y) =>
-            string.Equals(x.Layer ?? string.Empty, y.Layer ?? string.Empty, StringComparison.Ordinal);
+        //
+        // 🔴 NARROWED 2026-08-20 — "DIFFERENT LAYER" WAS FAR TOO STRONG A LICENCE.
+        //
+        // It exempted ANY cross-layer pair. But different layers does not mean never together, it
+        // means keyed on different rules — and a dialog's three answer buttons sit on three layers,
+        // keyed on three tags, and are routinely on the glass AT ONCE. So this rule silently stopped
+        // comparing exactly the controls a popup crowds together, while still reporting a clean
+        // denominator. That is this project's own recurring defect, reproduced in the fix for it.
+        //
+        // Exclusivity is only PROVABLE when two layers read the SAME tag and their visible sets do
+        // not intersect. Anything else — different tags, no rule, overlapping ranges — has to be
+        // compared, because nothing in the document says the two cannot appear together.
+        var layerRules = ir.Items
+            .Where(i => i.Type == "Layer" && !string.IsNullOrWhiteSpace(i.Layer))
+            .GroupBy(i => i.Layer!, StringComparer.Ordinal)
+            .ToDictionary(g => g.Key, g => LayerRule.From(g.First()), StringComparer.Ordinal);
+
+        bool CanCoexist(IrItem x, IrItem y)
+        {
+            var lx = x.Layer ?? string.Empty;
+            var ly = y.Layer ?? string.Empty;
+
+            if (string.Equals(lx, ly, StringComparison.Ordinal))
+            {
+                return true;
+            }
+
+            layerRules.TryGetValue(lx, out var rx);
+            layerRules.TryGetValue(ly, out var ry);
+
+            // ⚠️ A RULED LAYER AGAINST THE BASE LAYER STAYS EXEMPT, AND IT IS AN ASSUMPTION.
+            //
+            // A condition-driven dialog is drawn OVER its host, on an opaque backing, and the host's
+            // controls are not part of the dialog's own crowding — laying a dialog out to dodge the
+            // host geometrically costs it a whole row of usable height for a collision the operator
+            // never sees. So this pair is not compared.
+            //
+            // What it assumes: that a covered control cannot take the press. THAT IS UNMEASURED on
+            // this project — a covered control's press-through behaviour has never been tested on a
+            // panel. If it turns out a covered control does take the press, this exemption is the
+            // line to delete, and the dialogs go back to dodging their hosts.
+            var oneIsBaseLayer = lx.Length == 0 || ly.Length == 0;
+            if (oneIsBaseLayer)
+            {
+                return false;
+            }
+
+            // Two RULED layers: exclusivity is provable only on a shared tag with disjoint visible
+            // sets. Different tags, or no rule, means nothing in the document says they are
+            // exclusive — so they are compared.
+            if (rx is null || ry is null || !string.Equals(rx.Tag, ry.Tag, StringComparison.Ordinal))
+            {
+                return true;
+            }
+
+            return rx.CanBeVisibleWith(ry);
+        }
 
         for (var a = 0; a < inter.Count; a++)
         {
