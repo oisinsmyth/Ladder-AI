@@ -1161,6 +1161,139 @@ public class CopyLayerGeneratorTests
     }
 
     /// <summary>
+    /// 🔴 <b>THE ARM TERM MOVES THE STAMP ON A TRANSIENT SIGNAL — PINNED, so narrowing it further is a
+    /// DECISION rather than a regression.</b>
+    ///
+    /// <para>The test above varies two things at once (re-arming, then the window). This isolates the
+    /// window alone on a signal that already latches and already re-arms, which is the one case where
+    /// <c>ArmedBy</c> genuinely reaches the emitted IR: it becomes a series contact on the latch's SCOIL
+    /// and a clause in the latch tag's comment.</para>
+    /// </summary>
+    [Fact]
+    public void AN_ARM_WINDOW_ON_A_TRANSIENT_SIGNAL_MOVES_THE_STAMP_because_it_is_a_series_contact()
+    {
+        var map = OneSlot(result: 4);
+
+        var phaseArmed = Binding(sources: new[]
+        {
+            new MirroredSignal("DB_Unit.Pulse", MirrorValueType.Bool, Transient: true, RearmsEachIndex: true),
+        });
+
+        var windowed = phaseArmed with
+        {
+            ResultSources = new[]
+            {
+                new MirroredSignal("DB_Unit.Pulse", MirrorValueType.Bool,
+                    Transient: true, RearmsEachIndex: true, ArmedBy: "DB_Unit.Armed"),
+            },
+        };
+
+        Assert.NotEqual(
+            BuildStamp.Of(map, phaseArmed, Naming).Value,
+            BuildStamp.Of(map, windowed, Naming).Value);
+
+        // The reason it must: the arm tag is IN the emitted rung, so the two downloads differ.
+        var ir = CopyLayerGenerator.Generate(map, windowed, Naming, Stamp)
+            .Objects.Single(o => o.Kind == HarnessObjectKind.Block).Ir;
+
+        Assert.Contains("DB_Unit.Armed", ir, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// 🔴 <b>AND IT MUST NOT MOVE THE STAMP ON A NON-TRANSIENT ONE — because there is no rung for it to
+    /// be a contact in (D2's second consumer, corrected 2026-08-20).</b>
+    ///
+    /// <para><c>ArmedBy</c> on a signal that is not <see cref="MirroredSignal.Transient"/> is read by
+    /// <c>SlotBinding.ArmRegisterOf</c> ALONE, which narrows the frames a <c>Sampled</c> expectation is
+    /// judged over. That is CLIENT-SIDE JUDGEMENT: it is not in the download, and the stamp means what is
+    /// EXECUTING. Hashing it made the version register refuse a controller running exactly the program
+    /// the coordinator built.</para>
+    /// </summary>
+    [Fact]
+    public void AN_ARM_WINDOW_ON_A_NON_TRANSIENT_SIGNAL_DOES_NOT_MOVE_THE_STAMP()
+    {
+        var map = OneSlot(result: 4);
+
+        // A LEVEL and the arm tag it is judged against, both mirrored in the same result band — which is
+        // what makes ArmRegisterOf resolve, and is the only thing `armedBy` does here.
+        var plain = Binding(sources: new[]
+        {
+            new MirroredSignal("DB_Unit.Response", MirrorValueType.Bool),
+            new MirroredSignal("DB_Unit.Armed", MirrorValueType.Bool),
+        });
+
+        var windowed = plain with
+        {
+            ResultSources = new[]
+            {
+                new MirroredSignal("DB_Unit.Response", MirrorValueType.Bool, ArmedBy: "DB_Unit.Armed"),
+                new MirroredSignal("DB_Unit.Armed", MirrorValueType.Bool),
+            },
+        };
+
+        // The window is genuinely DECLARED and genuinely RESOLVES — otherwise this would pass by
+        // asserting nothing, which is the shape that let the defect through in the first place.
+        Assert.True(windowed.ResultSources[0].ArmWindowStated);
+        Assert.True(windowed.ArmRegisterOf("DB_Unit.Response") >= 0);
+
+        Assert.Equal(
+            BuildStamp.Of(map, plain, Naming).Value,
+            BuildStamp.Of(map, windowed, Naming).Value);
+    }
+
+    /// <summary>
+    /// 🔴 <b>THE NEGATIVE CONTROL, AND IT IS THE WHOLE ARGUMENT: the two downloads are BYTE-IDENTICAL.</b>
+    ///
+    /// <para>The stamp is derived here rather than fixed, so the generated block carries the real
+    /// constant and the comparison covers the stamp literal itself — which is precisely and only what
+    /// differed when this was measured. A stamp that separates two identical artifacts does not confirm
+    /// a build; it refuses one.</para>
+    /// </summary>
+    [Fact]
+    public void TWO_BINDINGS_DIFFERING_ONLY_IN_A_NON_TRANSIENT_ARM_WINDOW_EMIT_THE_SAME_BYTES()
+    {
+        var map = OneSlot(result: 4);
+
+        var plain = Binding(sources: new[]
+        {
+            new MirroredSignal("DB_Unit.Response", MirrorValueType.Bool),
+            new MirroredSignal("DB_Unit.Armed", MirrorValueType.Bool),
+        });
+
+        var windowed = plain with
+        {
+            ResultSources = new[]
+            {
+                new MirroredSignal("DB_Unit.Response", MirrorValueType.Bool, ArmedBy: "DB_Unit.Armed"),
+                new MirroredSignal("DB_Unit.Armed", MirrorValueType.Bool),
+            },
+        };
+
+        static IReadOnlyList<HarnessObject> Emit(RegisterMap map, SlotBinding binding)
+        {
+            var result = CopyLayerGenerator.Generate(map, binding, Naming, BuildStamp.Of(map, binding, Naming));
+            Assert.True(result.Generated);
+            Assert.Empty(result.Refusals);
+            return result.Objects;
+        }
+
+        var a = Emit(map, plain);
+        var b = Emit(map, windowed);
+
+        Assert.Equal(a.Count, b.Count);
+
+        foreach (var (left, right) in a.Zip(b))
+        {
+            Assert.Equal(left.Kind, right.Kind);
+            Assert.Equal(left.Name, right.Name);
+            Assert.Equal(left.Ir, right.Ir);
+        }
+
+        // And no width moved either, so the map hash could never have carried it.
+        Assert.Equal(plain.ResultRegistersNeeded, windowed.ResultRegistersNeeded);
+    }
+
+    /// <summary>
     /// <b>APPENDED, NEVER INSERTED.</b> A signal that shapes no latch must hash exactly as it always did,
     /// so every stamp already computed for a plain binding — including the one in the deployed copy layer
     /// — is unchanged by this work.

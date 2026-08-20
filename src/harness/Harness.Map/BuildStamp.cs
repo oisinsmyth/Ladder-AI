@@ -105,6 +105,30 @@ public readonly record struct BuildStamp(uint Value)
             // APPENDED, NEVER INSERTED. A signal that shapes no latch emits exactly the line it always
             // did, so every stamp already computed for a plain binding is unchanged — including the one
             // in the currently-deployed copy layer.
+            //
+            // 🔴 *** THE ARM LINE IS A QUALIFIER ON THE LATCH LINE, AND UNTIL 2026-08-20 IT WAS NOT
+            // WRITTEN THAT WAY (D2's second consumer, missed). *** The sentence above — "ArmedBy decides
+            // the RUNGS the copy layer emits" — is TRUE ONLY OF A TRANSIENT SIGNAL. `ArmedBy` acquired a
+            // SECOND consumer on 2026-08-18, `SlotBinding.ArmRegisterOf`, which narrows the FRAMES a
+            // Sampled expectation is judged over by reading the arm tag's own mirrored register. That
+            // consumer EMITS NO RUNG AND NO REGISTER: the generator reaches `ArmWindow` in exactly two
+            // places (the latch tag's comment and the latch rung's arm term) and both are inside a walk
+            // of `LatchRegisterOffsets`, which is keyed on `Transient`. So declaring `armedBy` on a
+            // NON-transient signal moved this stamp while the emitted artifact stayed BYTE-IDENTICAL —
+            // measured by diffing the generated IR, where the only difference was the stamp constant.
+            //
+            // That is wrong on the stamp's own terms. *** THE STAMP MEANS "WHAT IS EXECUTING". *** An
+            // evaluation window is a property of how the CLIENT JUDGES the frames it polls; it is not in
+            // the download and cannot be read out of it, so hashing it makes the version register refuse
+            // a controller that is running precisely the program the coordinator built — the same
+            // false-`Stale` failure the self-reference exclusion below was added to remove.
+            //
+            // Gated on `Transient`, not on `PhaseArmed`, deliberately: the `arm=` line QUALIFIES the
+            // `latch=` line, so the canonical form can never carry an arm without the latch it modifies.
+            // That is one case wider than strictly necessary — a `Transient` signal that does not re-arm
+            // takes no arm term in its rung — and wider is the safe direction here, because
+            // over-hashing separates two builds that are the same while under-hashing conflates two that
+            // are not, and only the second can confirm the wrong program.
             foreach (var source in binding.ResultSources ?? Array.Empty<MirroredSignal>())
             {
                 canonical.Append($"r={source.Tag}:{source.Type}");
@@ -112,7 +136,7 @@ public readonly record struct BuildStamp(uint Value)
                 if (source.Transient)
                     canonical.Append(source.RearmsEachIndex ? " latch=phase-armed" : " latch=unconditional");
 
-                if (source.ArmWindowStated)
+                if (source.Transient && source.ArmWindowStated)
                     canonical.Append($" arm={source.ArmWindow}");
 
                 canonical.Append('\n');
