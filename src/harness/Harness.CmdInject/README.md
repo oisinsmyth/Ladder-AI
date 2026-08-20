@@ -111,6 +111,10 @@ session, and a sequence *inequality* is exactly what makes the block execute —
 under a live enable would re-execute a stale command. The band is therefore written with the enable bit
 held clear.
 
+The heartbeat register is inside the band, so it goes back with everything else. **Whether putting it back
+changes anything about the block's own state is not something this tool knows, and it relies on neither
+answer** — it stamps again next session, which is why the arming step is unconditional.
+
 ⚠️ **The consequence, stated plainly rather than buried: the enable is left DOWN, so the device is not
 left exactly as it was found, and the enable cannot persist between invocations.** A separate `enable`
 verb would have its own session, and its own restore would drop what it had just raised. A `send` that
@@ -120,12 +124,78 @@ ordering in which a one-write restore both puts an old sequence back and leaves 
 risking that execution; the choice is which of the two to give up, and reversibility of the *values* plus
 an inert surface is the safer half.
 
-## Arming
+## Two different gates, both called arming
+
+There are **two** gates and confusing them is how the tool shipped unable to do its job:
+
+- **`--arm` is OUR gate.** It decides whether this binary may write at all.
+- **The heartbeat is THE BLOCK's gate.** It decides whether the thing on the other end will act on what we
+  wrote.
+
+A run can pass the first and fail the second. Until the heartbeat step existed that is what *every* run
+did: the role was declared, parsed, resolved, type-checked, band-checked and printed by `map`, the write
+target had a factory — **and the factory had zero callers.** Nothing ever wrote it. On the rig that
+surfaces as a command refused as unarmed, reported honestly as `NotAcknowledged`, with no path to any other
+answer and no indication which end was at fault.
+
+### The tool's gate
 
 Every write verb requires `--arm`, and its presence is read **before** the verb is parsed, so flag order
 cannot change the answer. Without it, `send` prints the plan and the exact frames byte by byte, constructs
 no transport, and exits 10 — printing `current: NOT READ` rather than inventing a before-picture, because a
-dry run that opened a socket "just to read" would turn the arming gate into a decoration.
+dry run that opened a socket "just to read" would turn the arming gate into a decoration. The dry run
+prints the **arming plan** too: it is the only description of the writes a real run makes before the
+command, and leaving it out would have the dry run describe the smaller half of what `--arm` does.
+
+### The block's gate
+
+**The arming path, in order, inside one session:**
+
+1. the enable is up — found up, or raised by `--raise-enable`;
+2. the enable is **read back from the device**, because a heartbeat written while it is clear lands in
+   memory and never reaches the block, and from this end that is indistinguishable from a write that
+   worked. A clear enable stamps *nothing* and refuses;
+3. stamp: one register, one value;
+4. **wait for the scan counter to advance**, read from the control registers this session already reads
+   and already trusts;
+5. repeat 3–4 until the plan's changes are made — the wait happens after the **last** stamp too, so the
+   block has sampled it before the command's sequence arrives;
+6. *then* read the prior acknowledgement count, allocate a sequence, and write the command.
+
+**Why the scan wait rather than a delay.** The block samples the heartbeat once per scan and compares it
+with what it read last time, so two writes that land inside one scan are **one** change — or **none**, if
+the second put the first's value back. Wall-clock spacing makes separation *probable*; it does not make it
+*observed*, and this tool does not ship probable. The counter is already on the wire and already carries
+the restart check, so the separation costs a read and is a fact rather than an assumption. A counter that
+will not advance is `ScanStalled`: a refusal that names the reason and writes no command, never a further
+stamp issued hopefully.
+
+**Why every stamp is a change by construction.** The values are generated from what the session's opening
+read *found* in the register: the first differs from that, and each one after differs from the one before.
+**There is no method anywhere in this tool that takes a heartbeat value**, so "the client wrote the same
+number twice" — which satisfies a write count and arms nothing — is not a mistake that can be made at a
+call site. Any inequality counts; nothing depends on the sequence being monotonic, and the resting value
+zero is skipped because a change *to* the value a never-written register serves is the one change a
+liveness gate might decline to count.
+
+**Why it is unconditional.** Nothing readable reports whether the device is already armed, so a "do we
+need to?" branch would be a guess — and a wrong guess is a command that cannot succeed against a device
+that looks healthy. Redundant stamps are cheap. What this buys is the case that matters: a run works
+**from cold**, against a device nobody has touched since it started scanning.
+
+**There is no keepalive, and there is not going to be one.** No background thread, no liveness loop.
+Arming is stamped inside the session that needs it and this tool maintains nothing between invocations.
+
+⚠️ **Two numbers here are parameters and not constants, because the code does not settle them.**
+`--heartbeat-changes` defaults to the number the protocol model requires — the model's number, not one read
+off a block — and `--heartbeat-scans` defaults to **2 rather than 1**: one advance would be enough if we
+knew where inside a scan the counter is incremented relative to where the heartbeat is sampled, and nothing
+available to this tool establishes that. Two is the smallest number sufficient whatever that answer turns
+out to be, and it costs at most one extra read against a round trip already an order of magnitude longer
+than a scan. `--heartbeat-scan-attempts` bounds the wait (the first read is the baseline, so fewer than two
+is refused). The gap *between* those reads is a code-level parameter left at zero and deliberately not
+given a flag: each attempt is itself a round trip, so there is nothing to add a wait on top of.
+`--heartbeat-changes 0` opts out entirely, and the run says so rather than looking like a run that armed.
 
 **What arming this against the bench rig actually takes**, in order, none of which this tool can supply
 itself:
@@ -138,7 +208,8 @@ itself:
    — `harness-mirror-view` reads it off the device, and it is also the stamp `Harness.Map.BuildStamp`
    derived at generation time;
 4. `--arm` on the invocation;
-5. `--raise-enable` if the enable is not already up when the session opens;
+5. `--raise-enable` if the enable is not already up when the session opens — **required for the arming to
+   work at all**, not only for the command: the heartbeat reaches the block through the same gate;
 6. **separate** consent for the safety-permissive substitution. `--arm` authorises injection; it does not
    stand in for a safety contact, and nothing here writes that register today.
 
@@ -155,8 +226,15 @@ a command. The cost is one round trip.
 
 A poll has four outcomes and no fifth — `Acknowledged`, `Pending`, `Superseded`, and the incoherent cell
 (the device echoes our sequence but its processed-count did not move). It is keyed on the **count**; the
-result code is read, printed verbatim and never branched on. It is carried as a `string` so a call site
-comparing it to an integer would not compile.
+result code and the **echoed command code** are read, printed verbatim and never branched on. Both are
+carried as a `string` so a call site comparing one to an integer would not compile.
+
+The code echo is the fourth acknowledgement member and it earns its place: the result register is **held**
+until the next command is processed, so the code beside it is the only thing that says *which* command a
+held result belongs to. It is reported and never reasoned from, for a second reason as well — **a refusal
+cascade publishes one value and the check written last wins**, so one refusal value in a protocol of this
+shape masks every other reason a command was declined. A reader who saw it and concluded "the cause was X"
+would be right only by luck about everything except X.
 
 Two things follow that are easy to get backwards, and both are tested:
 
@@ -166,6 +244,16 @@ Two things follow that are easy to get backwards, and both are tested:
 - **a fresh success whose result register still reads the previous command's value is still a success.**
   Every fact on the wire is true and reading the result gives you the opposite of what happened. This case
   is the reason the verdict is keyed on the count, and it is the case the whole design exists for.
+
+🔴 **And one thing this suite used to get wrong, recorded because it is the failure this project exists to
+avoid.** Every protocol test used to arm the model by calling a helper on it directly — *the test harness
+supplying the exact capability the tool was missing*. Ninety-nine tests passed over a client that could not
+arm anything, and the first place that could have failed was the rig. Every command in that file is now
+armed **by the client, inside its own session**; if the client stops being able to arm, those tests stop
+passing. The two helpers that still write the heartbeat directly are named
+`PokeHeartbeatBypassingTheClient` and `ArmBypassingTheClient`, so a call site cannot use one without saying
+what it is doing, and they are used only where the *device's prior state* is the subject — never to get a
+command through.
 
 🔴 **The protocol model in `FakePlcProtocolTests` is evidence about the CLIENT and never about the PLC.**
 The model and the client were written from one document by one hand. A green run says only: *given a device
@@ -199,6 +287,7 @@ map  --tags <path> --area <path> --binding <path>
 send --tags <path> --area <path> --binding <path> --channel <name> [--set <role>=<value>]...
      [--target <host>] [--allowlist <path>] [--expect-stamp <v>] [--port n] [--unit n]
      [--raise-enable] [--poll-attempts n] [--poll-interval-ms n] [--arm]
+     [--heartbeat-changes n] [--heartbeat-scans n] [--heartbeat-scan-attempts n]
      Without --arm: print the plan and the exact frames, construct nothing, exit 10.
 
 operand roles for --set: code, int1, int2, real1, real2.
@@ -208,4 +297,10 @@ Exit codes: `0` ok · `2` usage · `3` map/binding refused · `4` allowlist unus
 `6` not write-eligible · `7` not isolated · `8` no expected stamp · `9` fence fault · `10` dry run ·
 `11` frame refused · `12` no transport supplied · `13` connect failed · `14` build stamp mismatch ·
 `15` band not restorable · `16` enable clear · `17` not acknowledged · `18` aborted (restart / failed read
-/ Ctrl-C) · **`19` restore failed — the band may be dirty, and this outranks every other outcome.**
+/ Ctrl-C / **a scan counter that would not advance under the arming**) · **`19` restore failed — the band
+may be dirty, and this outranks every other outcome.**
+
+An arming failure exits at the code for its own cause — `16` for a clear enable, `14` for a stamp that
+changed under it, `18` for a stalled or restarted CPU — and **never** `17`. A block that was never
+commanded because it could not be armed is not a command that went unacknowledged, and the whole point of
+refusing there is that those two answers stay apart.

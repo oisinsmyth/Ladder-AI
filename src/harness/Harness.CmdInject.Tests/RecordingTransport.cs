@@ -70,6 +70,24 @@ internal sealed class RecordingTransport : IInjectionTransport
         Poke(ControlRegisters.ScanCounter + 1, words[1]);
     }
 
+    /// <summary>
+    /// Whether the free-running scan counter advances on every read, as a RUNNING CPU's does.
+    ///
+    /// <para><b>On by default, because that is what "a transport presenting itself the way a running
+    /// harness program does" means.</b> A counter that never moves is a STOPPED CPU — which the arming
+    /// path is required to refuse rather than stamp into — so a test that wants that state turns this off
+    /// and gets it deliberately, instead of every test getting it by omission.</para>
+    /// </summary>
+    internal bool ScanAdvancesOnRead { get; set; } = true;
+
+    private void AdvanceScan()
+    {
+        var now = ScanCount.FromRegisters(
+            Peek(ControlRegisters.ScanCounter), Peek(ControlRegisters.ScanCounter + 1), RegisterWordOrder.HighWordFirst);
+
+        PublishScan(unchecked(now.Raw + 1));
+    }
+
     public void WriteRegisters(int startRegister, IReadOnlyList<ushort> values)
     {
         if (FailWrites?.Invoke(startRegister, values) is { } failure) throw failure;
@@ -86,6 +104,9 @@ internal sealed class RecordingTransport : IInjectionTransport
     public ushort[] ReadRegisters(int startRegister, int count)
     {
         if (FailReads?.Invoke(startRegister, count) is { } failure) throw failure;
+
+        // A read that failed advanced nothing, so this sits after the failure and not before it.
+        if (ScanAdvancesOnRead) AdvanceScan();
 
         Events.Add(new RecordedEvent(IsWrite: false, startRegister, count));
 

@@ -110,6 +110,26 @@ public static class Program
         if (pollInterval < 0)
             return (CmdInjectExit)Refuse($"--poll-interval-ms {pollInterval} is not a wait.");
 
+        // THE BLOCK'S ARMING GATE. Separate flags from --arm on purpose: --arm authorises THIS BINARY to
+        // write, and these describe what the DEVICE needs before it will act on what was written.
+        if (!TryInt(args, "--heartbeat-changes", HeartbeatPlan.ModelledChanges, out var heartbeatChanges)) return CmdInjectExit.Usage;
+        if (heartbeatChanges < 0)
+            return (CmdInjectExit)Refuse($"--heartbeat-changes {heartbeatChanges} is not a number of changes. Zero is the opt-out.");
+
+        if (!TryInt(args, "--heartbeat-scans", HeartbeatPlan.DefaultScansBetweenStamps, out var heartbeatScans)) return CmdInjectExit.Usage;
+        if (heartbeatScans < 1)
+        {
+            return (CmdInjectExit)Refuse($"--heartbeat-scans {heartbeatScans} would separate the stamps by nothing. The block samples " +
+                                         "the heartbeat once per scan, so two writes inside one scan are one change or none.");
+        }
+
+        if (!TryInt(args, "--heartbeat-scan-attempts", HeartbeatPlan.DefaultScanWaitAttempts, out var heartbeatScanAttempts)) return CmdInjectExit.Usage;
+        if (heartbeatScanAttempts < 2)
+        {
+            return (CmdInjectExit)Refuse($"--heartbeat-scan-attempts {heartbeatScanAttempts} cannot observe an advance: the first read is " +
+                                         "the baseline, so fewer than two would refuse every time and look like a stalled CPU.");
+        }
+
         var target = Option(args, "--target");
         var allowlist = AllowlistPath.Resolve(Option(args, "--allowlist"), Environment.GetEnvironmentVariable);
 
@@ -118,7 +138,8 @@ public static class Program
             target, allowlist, expectedStamp, port, (byte)unit,
             RaiseEnable: args.Contains("--raise-enable"),
             PollAttempts: pollAttempts,
-            PollIntervalMs: pollInterval);
+            PollIntervalMs: pollInterval,
+            Heartbeat: new HeartbeatPlan(heartbeatChanges, heartbeatScans, heartbeatScanAttempts));
 
         // *** THE COMPOSITION ROOT. *** This line is the whole of what makes this binary able to write, and
         // it is the only place a socket-capable factory is named. Everything below it takes the factory as a
@@ -191,15 +212,22 @@ public static class Program
         output.WriteLine("  send --tags <path> --area <path> --binding <path> --channel <name> [--set <role>=<value>]...");
         output.WriteLine("       [--target <host>] [--allowlist <path>] [--expect-stamp <v>] [--port n] [--unit n]");
         output.WriteLine("       [--raise-enable] [--poll-attempts n] [--poll-interval-ms n] [--arm]");
+        output.WriteLine("       [--heartbeat-changes n] [--heartbeat-scans n] [--heartbeat-scan-attempts n]");
         output.WriteLine("       Without --arm: print the plan and the exact frames, construct nothing, exit 10.");
         output.WriteLine("       With --arm: run the fence, confirm the build stamp BEFORE any write, capture the");
-        output.WriteLine("       command band as a restore point, write, poll for the acknowledgement, and put the");
-        output.WriteLine("       band back — on every exit path, Ctrl-C included, verified by re-read.");
+        output.WriteLine("       command band as a restore point, raise the enable, stamp the heartbeat, write, poll");
+        output.WriteLine("       for the acknowledgement, and put the band back — on every exit path, Ctrl-C included.");
         output.WriteLine();
         output.WriteLine("  --expect-stamp is REQUIRED to write. It is the only identity this link carries; without it");
         output.WriteLine("  the address is a routing hint and nothing confirms which CPU answered.");
         output.WriteLine("  --raise-enable raises the master enable inside the session. The restore drops it again, so");
         output.WriteLine("  the enable cannot persist between invocations and a send that needs it must raise it here.");
+        output.WriteLine();
+        output.WriteLine("  ARMING IS THE BLOCK'S GATE AND --arm IS NOT IT. --arm authorises this binary to write; the");
+        output.WriteLine("  heartbeat is what makes the block act on what was written. Every armed send stamps it, in the");
+        output.WriteLine("  same session, AFTER the enable is up (the heartbeat reaches the block through that gate), each");
+        output.WriteLine("  stamp separated by a scan-counter advance READ BACK from the device — the block samples once per");
+        output.WriteLine("  scan, so two writes inside one scan are one change or none. --heartbeat-changes 0 opts out.");
         output.WriteLine();
         output.WriteLine("  operand roles for --set: code, int1, int2, real1, real2.");
         output.WriteLine();
@@ -207,7 +235,7 @@ public static class Program
         output.WriteLine("            6 not write-eligible | 7 not isolated | 8 no expected stamp | 9 fence fault");
         output.WriteLine("            10 dry run (no --arm) | 11 frame refused | 12 no transport supplied");
         output.WriteLine("            13 connect failed | 14 build stamp mismatch | 15 band not restorable");
-        output.WriteLine("            16 enable clear | 17 not acknowledged | 18 aborted (restart/read/Ctrl-C)");
+        output.WriteLine("            16 enable clear | 17 not acknowledged | 18 aborted (restart/read/Ctrl-C/scan stalled)");
         output.WriteLine("            19 RESTORE FAILED — the band may be dirty; this outranks every other outcome");
     }
 

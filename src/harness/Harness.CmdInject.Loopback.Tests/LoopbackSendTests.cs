@@ -52,9 +52,15 @@ public class LoopbackSendTests : IDisposable
         // is about the bytes, not about the verdict.
         Assert.Equal(CmdInjectExit.NotAcknowledged, exit);
 
-        // 3. THE MEASUREMENT. The first two writes the server received are the command, and every register
-        //    value in them equals what the dry run printed.
-        var commandWrites = slave.Registers.Writes.Take(2).ToList();
+        // 3. THE MEASUREMENT. The command's two writes are the two the server received after the arming
+        //    stamps, and every register value in them equals what the dry run printed. The stamps are
+        //    skipped by NAME rather than by count, so a change in how many the plan makes cannot silently
+        //    slide this window onto the wrong writes.
+        var commandWrites = slave.Registers.Writes
+            .Where(w => w.Start != LoopbackFixture.HeartbeatRegister)
+            .Take(2)
+            .ToList();
+
         var received = new Dictionary<int, ushort>();
         foreach (var (start, values) in commandWrites)
         {
@@ -85,14 +91,45 @@ public class LoopbackSendTests : IDisposable
         // Measured on the wire, not in a recording double: two separate FC16s, operands first, and the one
         // that carries the sequence carries NOTHING else. A single write of the whole channel would land the
         // new sequence before its operands, executing a command against the previous one's values.
-        var first = slave.Registers.Writes[0];
-        var second = slave.Registers.Writes[1];
+        var command = slave.Registers.Writes.Where(w => w.Start != LoopbackFixture.HeartbeatRegister).ToList();
+        var first = command[0];
+        var second = command[1];
 
         Assert.Equal(LoopbackFixture.CodeRegister, first.Start);
         Assert.Equal(2, first.Values.Length);
         Assert.Equal(LoopbackFixture.SeqRegister, second.Start);
         Assert.Single(second.Values);
         Assert.Equal((ushort)1, second.Values[0]);
+    }
+
+    [Fact]
+    public void TheArmingStampsReachARealServer_AsDistinctValuesInSeparateWrites()
+    {
+        using var slave = new LoopbackSlave();
+        _fixture.Present(slave.Registers, LoopbackFixture.Stamp, enable: true);
+
+        SendRun.Execute(
+            _fixture.Send(armed: true, slave.Port), new SequenceLedger(),
+            new ModbusInjectionTransportFactory(), new StringWriter(), new InstantClock());
+
+        // The arming is not a claim about our own formatter: these are the writes a real Modbus server was
+        // asked to apply, through real PDU encode/decode over a socket. Each is one register, each carries a
+        // different value, and both precede the command.
+        // The band restore ALSO starts at the heartbeat register on this fixture — the heartbeat is the
+        // lowest member of the command band — so a stamp is identified by being one register wide as well
+        // as by where it starts. Matching on the address alone counted the restore as a third stamp.
+        var stamps = slave.Registers.Writes.Where(IsStamp).ToList();
+
+        Assert.Equal(HeartbeatPlan.ModelledChanges, stamps.Count);
+        Assert.Equal(stamps.Count, stamps.Select(s => s.Values[0]).Distinct().Count());
+
+        var firstCommandWrite = slave.Registers.Writes.FindIndex(w => w.Start == LoopbackFixture.CodeRegister);
+        var lastStamp = slave.Registers.Writes.FindLastIndex(IsStamp);
+        Assert.True(lastStamp < firstCommandWrite, "every stamp must precede the command it is arming the block for.");
+
+        // And the separation was OBSERVED, not assumed: control reads of the scan counter really happened.
+        Assert.Contains(slave.Registers.Reads, r => r.Start == ControlRegisters.BuildStamp && r.Count == ControlRegisters.Count);
+        Assert.True(IsStamp(slave.Registers.Writes[0]), "the first write of the run is the first arming stamp.");
     }
 
     [Fact]
@@ -129,21 +166,23 @@ public class LoopbackSendTests : IDisposable
             _fixture.Send(armed: true, slave.Port), new SequenceLedger(),
             new ModbusInjectionTransportFactory(), new StringWriter(), new InstantClock());
 
-        // Four writes reached the server: operands, sequence, enable-down, band.
-        Assert.Equal(4, slave.Registers.Writes.Count);
+        // Six writes reached the server: two arming stamps, operands, sequence, enable-down, band.
+        Assert.Equal(HeartbeatPlan.ModelledChanges + 4, slave.Registers.Writes.Count);
 
-        var enableDrop = slave.Registers.Writes[2];
+        var enableDrop = slave.Registers.Writes[^2];
         Assert.Equal(enableTag.Register, enableDrop.Start);
         Assert.Single(enableDrop.Values);
         Assert.Equal(0, enableDrop.Values[0] & (1 << enableTag.BitInRegister));
 
-        var bandRestore = slave.Registers.Writes[3];
+        var bandRestore = slave.Registers.Writes[^1];
         Assert.Equal(LoopbackFixture.CommandBandFirst, bandRestore.Start);
         Assert.Equal(LoopbackFixture.CommandBandCount, bandRestore.Values.Length);
 
-        // And the band really is back as it was found — including the value that was in it before the run.
+        // And the band really is back as it was found — including the value that was in it before the run,
+        // and the heartbeat the arming changed twice.
         Assert.Equal((ushort)0x0777, slave.Registers[LoopbackFixture.Int1Register]);
         Assert.Equal((ushort)0, slave.Registers[LoopbackFixture.SeqRegister]);
+        Assert.Equal((ushort)0, slave.Registers[LoopbackFixture.HeartbeatRegister]);
         Assert.Equal(0, slave.Registers[enableTag.Register] & (1 << enableTag.BitInRegister));
     }
 
@@ -179,6 +218,16 @@ public class LoopbackSendTests : IDisposable
 
         Assert.Equal(CmdInjectExit.ConnectFailed, exit);
     }
+
+    /// <summary>
+    /// One arming stamp as the server received it: one register wide, at the heartbeat address.
+    ///
+    /// <para>The width is part of the test, not decoration. On this fixture the heartbeat is the lowest
+    /// member of the command band, so the restore's whole-band write starts at the same address — and a
+    /// filter on the address alone counts it as a stamp.</para>
+    /// </summary>
+    private static bool IsStamp((int Start, ushort[] Values) write) =>
+        write.Start == LoopbackFixture.HeartbeatRegister && write.Values.Length == 1;
 
     /// <summary>Parse the dry run's own byte dump back out of its output: <c>reg  NNN = 0xVVVV</c>.</summary>
     private static Dictionary<int, ushort> PrintedRegisters(string output)

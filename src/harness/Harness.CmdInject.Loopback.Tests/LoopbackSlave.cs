@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Sockets;
+using Harness.Wire;
 using NModbus;
 
 namespace Harness.CmdInject.Loopback.Tests;
@@ -27,14 +28,37 @@ internal sealed class RecordedRegisters : IPointSource<ushort>
         set => _store[register] = value;
     }
 
+    /// <summary>
+    /// Whether the free-running scan counter advances on every read, as a RUNNING CPU's does.
+    ///
+    /// <para>On, because the arming path waits for an OBSERVED advance before it makes a second heartbeat
+    /// stamp, and a bank whose counter never moved would be a stopped CPU — which the client is required to
+    /// refuse. It is set through the indexer rather than <see cref="WritePoints"/> so it never appears in
+    /// <see cref="Writes"/>: this is the device scanning, not a client writing.</para>
+    /// </summary>
+    internal bool ScanAdvancesOnRead { get; set; } = true;
+
     public ushort[] ReadPoints(ushort startAddress, ushort numberOfPoints)
     {
+        if (ScanAdvancesOnRead) AdvanceScan();
+
         Reads.Add((startAddress, numberOfPoints));
 
         var answer = new ushort[numberOfPoints];
         for (var i = 0; i < numberOfPoints; i++)
             answer[i] = this[startAddress + i];
         return answer;
+    }
+
+    private void AdvanceScan()
+    {
+        const int first = Harness.CmdInject.ControlRegisters.ScanCounter;
+
+        var now = ScanCount.FromRegisters(this[first], this[first + 1], RegisterWordOrder.HighWordFirst);
+        var words = RegisterWords.From32(unchecked(now.Raw + 1), RegisterWordOrder.HighWordFirst);
+
+        this[first] = words[0];
+        this[first + 1] = words[1];
     }
 
     public void WritePoints(ushort startAddress, ushort[] points)

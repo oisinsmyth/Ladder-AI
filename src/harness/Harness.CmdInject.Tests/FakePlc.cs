@@ -19,8 +19,13 @@ namespace Harness.CmdInject.Tests;
 ///
 /// <para><b>What is modelled, and why each one is here:</b></para>
 /// <list type="bullet">
-/// <item><b>Arming by heartbeat.</b> Nothing is processed until the heartbeat register has CHANGED twice.
-/// The client never learns what "unarmed" means numerically — it reads outcomes, not codes.</item>
+/// <item><b>Arming by heartbeat, sampled ONCE PER SCAN.</b> Nothing is processed until the heartbeat
+/// register has CHANGED twice — and a change is something a scan observes, not something a write makes, so
+/// two writes with no scan between them are one change or none. The sample is reached only while the
+/// master enable is up, so a heartbeat written under a clear enable counts for nothing. Once counted, a
+/// change is never un-counted except by <see cref="Restart"/>, and further changes past the threshold are
+/// harmless — which is why the client stamps every session instead of asking whether it needs to. The
+/// client never learns what "unarmed" means numerically: it reads outcomes, not codes.</item>
 /// <item><b>Sequence inequality.</b> A command is recognised when the sequence register differs from the
 /// acknowledged one. Equality is not a command, and zero is the resting value.</item>
 /// <item><b>The count moves only on success.</b> This is the entire basis of the client's verdict, and a
@@ -83,8 +88,14 @@ internal sealed class FakePlc : IInjectionTransport
     /// <summary>Every write the client made, in order. A resend would appear here as a second sequence write.</summary>
     internal List<RecordedWrite> Writes { get; } = new();
 
-    /// <summary>Whether the model considers itself armed. Two heartbeat CHANGES, not two writes.</summary>
-    internal bool Armed => _heartbeatChanges >= 2;
+    /// <summary>How many heartbeat CHANGES the model requires before it will process anything.</summary>
+    internal const int ChangesToArm = 2;
+
+    /// <summary>Whether the model considers itself armed. Heartbeat CHANGES, not heartbeat writes.</summary>
+    internal bool Armed => _heartbeatChanges >= ChangesToArm;
+
+    /// <summary>How many changes the model has counted — the denominator behind <see cref="Armed"/>.</summary>
+    internal int HeartbeatChangesSeen => _heartbeatChanges;
 
     /// <summary>The acknowledgement count, for a test that wants the number rather than the register.</summary>
     internal ushort AckCount => _ackCount;
@@ -100,14 +111,48 @@ internal sealed class FakePlc : IInjectionTransport
     }
 
     /// <summary>
-    /// Arm the model the way the client's own <c>arm</c> verb would: change the heartbeat register, twice,
-    /// through the transport interface. The model counts CHANGES, so two identical writes do not arm it.
+    /// 🔴 <b>WRITE THE HEARTBEAT REGISTER BEHIND THE CLIENT'S BACK.</b> Setup only, and the name is long
+    /// on purpose so a call site cannot use it without saying what it is doing.
+    ///
+    /// <para><b>No test may arm the model with this in order to send a command through the client.</b>
+    /// That was how the arming gate stayed invisible: the suite supplied the exact capability the tool was
+    /// missing, so 99 tests passed over a client that could not arm anything, and the first place it could
+    /// have failed was the rig. The client arms the model or the test fails. This exists for the two cases
+    /// where the DEVICE's prior state is the subject — a surface some earlier session left armed, and the
+    /// negative control proving that two identical writes are not two changes.</para>
     /// </summary>
-    internal void ArmByHeartbeat()
+    internal void PokeHeartbeatBypassingTheClient(ushort value) =>
+        WriteRegisters(_binding.BandRoles[InjectionRole.Heartbeat].Register, new[] { value });
+
+    /// <summary>
+    /// 🔴 <b>PUT THE MODEL IN AN ALREADY-ARMED STATE WITHOUT THE CLIENT.</b> Only for tests whose subject
+    /// is what happens to a surface somebody else left armed — never as a way of getting a command through.
+    /// See <see cref="PokeHeartbeatBypassingTheClient"/>.
+    /// </summary>
+    internal void ArmBypassingTheClient()
     {
-        var register = _binding.BandRoles[InjectionRole.Heartbeat].Register;
-        WriteRegisters(register, new ushort[] { 1 });
-        WriteRegisters(register, new ushort[] { 2 });
+        for (var i = 1; i <= ChangesToArm; i++)
+        {
+            PokeHeartbeatBypassingTheClient((ushort)i);
+            Scan();
+        }
+    }
+
+    /// <summary>
+    /// Run one scan: the counter advances and the block SAMPLES its inputs.
+    ///
+    /// <para>🔴 <b>THE HEARTBEAT IS SAMPLED HERE AND NOWHERE ELSE, WHICH IS THE WHOLE POINT.</b> A write
+    /// puts a value in memory; only a scan compares it with the previous one. So two writes with no scan
+    /// between them are ONE change — or none, if the second put the first's value back — and a client that
+    /// writes twice quickly arms nothing. Modelling this in the write handler instead would have made
+    /// every double write look like two changes, which is exactly the confusion that must not be possible
+    /// to have.</para>
+    /// </summary>
+    internal void Scan()
+    {
+        _scan++;
+        PublishScan(_scan);
+        SampleHeartbeat();
     }
 
     /// <summary>Set the master enable directly, as a previous session or a person at the panel would have.</summary>
@@ -176,9 +221,10 @@ internal sealed class FakePlc : IInjectionTransport
     public ushort[] ReadRegisters(int startRegister, int count)
     {
         // One scan between observations: the counter advances whether or not anything happened, which is what
-        // makes "the counter stalled" and "the command was not processed" different findings.
-        _scan++;
-        PublishScan(_scan);
+        // makes "the counter stalled" and "the command was not processed" different findings. The block also
+        // samples its inputs here, so a client that wants two heartbeat CHANGES has to leave a scan between
+        // them — and the only way it can observe one is by reading.
+        Scan();
 
         var answer = new ushort[count];
         for (var i = 0; i < count; i++)
@@ -194,15 +240,31 @@ internal sealed class FakePlc : IInjectionTransport
 
     // ---- the block ------------------------------------------------------------------------------
 
+    /// <summary>
+    /// The once-per-scan heartbeat sample.
+    ///
+    /// <para>🔴 <b>THE HEARTBEAT REACHES THE BLOCK ONLY THROUGH THE ENABLE.</b> A heartbeat written while
+    /// the enable is clear lands in memory and is never sampled, so it counts for nothing — and from the
+    /// client's side it looks exactly like a write that worked. That is why the client reads the enable
+    /// back before it stamps rather than believing its own earlier write.</para>
+    ///
+    /// <para><b>Nothing here ever un-counts a change.</b> Once counted, a change stays counted until
+    /// <see cref="Restart"/>, and further changes past the threshold are harmless — which is why the
+    /// client stamps unconditionally instead of asking whether it needs to.</para>
+    /// </summary>
+    private void SampleHeartbeat()
+    {
+        if (!EnableIsSet) return;
+
+        var heartbeat = Peek(_binding.BandRoles[InjectionRole.Heartbeat].Register);
+        if (heartbeat == _lastHeartbeat) return;
+
+        _lastHeartbeat = heartbeat;
+        _heartbeatChanges++;
+    }
+
     private void Evaluate()
     {
-        var heartbeat = Peek(_binding.BandRoles[InjectionRole.Heartbeat].Register);
-        if (heartbeat != _lastHeartbeat)
-        {
-            _lastHeartbeat = heartbeat;
-            _heartbeatChanges++;
-        }
-
         var seq = Peek(_channel.SequenceRegister);
 
         // Equality is not a command, and zero is the resting value — a command carrying it would be invisible.

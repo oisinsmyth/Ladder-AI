@@ -72,6 +72,12 @@ public class SendRunTests : IDisposable
         Assert.Equal(0, factory.Opens);
         Assert.Contains("NOT READ", output.ToString(), StringComparison.Ordinal);
         Assert.Contains("bytes", output.ToString(), StringComparison.Ordinal);
+
+        // The arming plan is part of the plan a dry run prints. It is the only description of the writes a
+        // real run makes BEFORE the command, and leaving it out would make the dry run describe the smaller
+        // half of what --arm would do.
+        Assert.Contains("arming", output.ToString(), StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("scan", output.ToString(), StringComparison.OrdinalIgnoreCase);
     }
 
     // ---- every refusal opens nothing -------------------------------------------------------------
@@ -170,16 +176,80 @@ public class SendRunTests : IDisposable
         Assert.Equal(Rig, factory.LastHost);
         Assert.Equal(503, factory.LastPort);
 
-        // The command reached the transport operands-first, sequence-alone, before anything else was written.
-        Assert.Equal(104, transport.Writes[0].StartRegister);
-        Assert.Equal(103, transport.Writes[1].StartRegister);
+        // SIX writes, in one fixed order: the two heartbeat stamps that arm the block, the command's two
+        // transactions, and the two the restore makes. The arming comes FIRST and it is part of the run's
+        // shape, not a detail — a command written before it would be one the block declines to process.
+        var heartbeat = Fixtures.DefaultResolved().BandRoles[InjectionRole.Heartbeat].Register;
+
+        Assert.Equal(6, transport.Writes.Count);
+
+        Assert.Equal(heartbeat, transport.Writes[0].StartRegister);
+        Assert.Single(transport.Writes[0].Values);
+        Assert.Equal(heartbeat, transport.Writes[1].StartRegister);
         Assert.Single(transport.Writes[1].Values);
+        Assert.NotEqual(transport.Writes[0].Values[0], transport.Writes[1].Values[0]);
+
+        // Then the command reached the transport operands-first, sequence-alone.
+        Assert.Equal(104, transport.Writes[2].StartRegister);
+        Assert.Equal(103, transport.Writes[3].StartRegister);
+        Assert.Single(transport.Writes[3].Values);
 
         // And the band was put back afterwards: the enable alone, then the whole band.
-        Assert.Equal(4, transport.Writes.Count);
-        Assert.Single(transport.Writes[2].Values);
-        Assert.Equal(Fixtures.CommandBand.FirstRegister, transport.Writes[3].StartRegister);
-        Assert.Equal(Fixtures.CommandBand.RegisterCount, transport.Writes[3].Values.Count);
+        Assert.Single(transport.Writes[4].Values);
+        Assert.Equal(Fixtures.CommandBand.FirstRegister, transport.Writes[5].StartRegister);
+        Assert.Equal(Fixtures.CommandBand.RegisterCount, transport.Writes[5].Values.Count);
+    }
+
+    [Fact]
+    public void TheArmingHappensAfterTheEnableIsRaised_AndTheRestorePutsTheHeartbeatBack()
+    {
+        // The order is load-bearing: the heartbeat reaches the block only while the enable is up, so a stamp
+        // made before the raise would land in memory and count for nothing.
+        var transport = Running(enable: false);
+        var factory = new RecordingFactory(transport);
+        var binding = Fixtures.DefaultResolved();
+        var enable = binding.BandRoles[InjectionRole.Enable].Register;
+        var heartbeat = binding.BandRoles[InjectionRole.Heartbeat].Register;
+
+        SendRun.Execute(
+            Options(armed: true, Rig, Allowlist("ok.json"), Stamp) with { RaiseEnable = true, PollAttempts = 1, PollIntervalMs = 0 },
+            new SequenceLedger(), factory, new StringWriter(), new InstantClock());
+
+        var enableRaise = transport.Writes.FindIndex(w => w.StartRegister == enable && w.Values.Count == 1);
+        var firstStamp = transport.Writes.FindIndex(w => w.StartRegister == heartbeat && w.Values.Count == 1);
+
+        Assert.True(enableRaise >= 0 && firstStamp >= 0, "both the enable raise and the heartbeat stamp must have happened.");
+        Assert.True(enableRaise < firstStamp, "the enable was raised no earlier than the first stamp, so the stamp reached nothing.");
+
+        // And the heartbeat register goes back to what the session found there, like every other register in
+        // the band. What that does to the block's own arming state is not something this tool claims to know.
+        Assert.Equal((ushort)0, transport.Peek(heartbeat));
+    }
+
+    [Fact]
+    public void AStampedRunOverAStalledScanCounter_RefusesBeforeWritingACommand()
+    {
+        // A CPU that is not scanning samples nothing, so a second stamp would be issued hopefully. The run
+        // refuses there rather than sending a command whose "not acknowledged" would be unreadable.
+        var transport = Running();
+        transport.ScanAdvancesOnRead = false;
+        var factory = new RecordingFactory(transport);
+
+        var output = new StringWriter();
+        var exit = SendRun.Execute(
+            Options(armed: true, Rig, Allowlist("ok.json"), Stamp) with
+            {
+                PollAttempts = 1,
+                PollIntervalMs = 0,
+                Heartbeat = new HeartbeatPlan(HeartbeatPlan.ModelledChanges, ScanWaitAttempts: 3),
+            },
+            new SequenceLedger(), factory, output, new InstantClock());
+
+        Assert.Equal(CmdInjectExit.Aborted, exit);
+        Assert.Contains("ScanStalled", output.ToString(), StringComparison.Ordinal);
+
+        // The command never went out: no write to the sequence register.
+        Assert.DoesNotContain(transport.Writes, w => w.StartRegister == Fixtures.DefaultChannel().SequenceRegister && w.Values.Count == 1);
     }
 
     [Fact]

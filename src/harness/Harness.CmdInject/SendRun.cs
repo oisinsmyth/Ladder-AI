@@ -23,6 +23,12 @@ namespace Harness.CmdInject;
 /// </param>
 /// <param name="PollAttempts">How many acknowledgement reads before giving up. Giving up is an outcome.</param>
 /// <param name="PollIntervalMs">Gap between poll reads.</param>
+/// <param name="Heartbeat">
+/// How this session satisfies the block's arming gate — <b>which is not the same thing as <c>--arm</c></b>.
+/// Null means <see cref="HeartbeatPlan.Default"/>: arming is done on every session, unconditionally,
+/// because the tool cannot read whether the device needs it and a wrong guess is a command that cannot
+/// succeed. See <see cref="HeartbeatPlan"/> for why the numbers are parameters and not constants.
+/// </param>
 public sealed record SendOptions(
     string TagTablePath,
     string AreaPointerPath,
@@ -37,7 +43,12 @@ public sealed record SendOptions(
     byte UnitId,
     bool RaiseEnable = false,
     int PollAttempts = 20,
-    int PollIntervalMs = 250);
+    int PollIntervalMs = 250,
+    HeartbeatPlan? Heartbeat = null)
+{
+    /// <summary>The heartbeat plan this run will use — the declared one, or the default.</summary>
+    public HeartbeatPlan Arming => Heartbeat ?? HeartbeatPlan.Default;
+}
 
 /// <summary>
 /// The <c>send</c> verb.
@@ -53,8 +64,15 @@ public sealed record SendOptions(
 /// holding as an observable fact, not an exit code a disconnected gate could also produce.</para>
 ///
 /// <para><b>Past the fence, the order is fixed and every step of it is a gate:</b> open → confirm the build
-/// stamp <i>before any write</i> → capture the restore point → check the enable → read the prior
-/// acknowledgement count → allocate a sequence → write → poll → <b>restore, on every exit path.</b></para>
+/// stamp <i>before any write</i> → capture the restore point → <b>raise the enable</b> → <b>stamp the
+/// heartbeat, each stamp separated by an observed scan advance</b> → read the prior acknowledgement count →
+/// allocate a sequence → write → poll → <b>restore, on every exit path.</b></para>
+///
+/// <para>🔴 <b>THE ENABLE COMES BEFORE THE STAMPS AND THAT ORDER IS LOAD-BEARING, NOT TIDINESS.</b> The
+/// heartbeat reaches the block only while the enable is up, so a stamp made first would land in memory,
+/// count for nothing, and look from here exactly like one that worked. And the prior acknowledgement count
+/// is read AFTER the arming, not before it: the count the verdict is measured against has to be the count
+/// as it stands at the moment before our command, not before our arming writes.</para>
 /// </summary>
 public static class SendRun
 {
@@ -97,12 +115,14 @@ public static class SendRun
         var request = new CommandRequest(options.ChannelName, options.Operands);
 
         if (!options.Armed)
-            return DryRun(channel, request, ledger, output);
+            return DryRun(options, resolution.Binding!, channel, request, ledger, output);
 
         return Armed(options, resolution.Binding!, channel, request, ledger, factory, clock ?? new RealInjectionClock(), cancel, output);
     }
 
-    private static CmdInjectExit DryRun(ResolvedChannel channel, CommandRequest request, SequenceLedger ledger, TextWriter output)
+    private static CmdInjectExit DryRun(
+        SendOptions options, ResolvedBinding binding, ResolvedChannel channel, CommandRequest request,
+        SequenceLedger ledger, TextWriter output)
     {
         // Peek, never Allocate: a dry run must not consume a sequence, and it has not read the device to
         // know where the device's own counter stands.
@@ -121,6 +141,8 @@ public static class SendRun
         output.WriteLine("== DRY RUN (no --arm) ==");
         output.WriteLine("  current: NOT READ — this invocation contacted nothing.");
         output.WriteLine($"  sequence that WOULD be allocated: {wouldBeSequence} (peeked, not consumed)");
+        output.WriteLine();
+        PrintArmingPlan(options.Arming, binding, output);
         output.WriteLine();
         PrintFrames(build.Frames!, output);
         output.WriteLine();
@@ -210,21 +232,54 @@ public static class SendRun
             {
                 output.WriteLine("== REFUSED: the master enable reads CLEAR ==");
                 output.WriteLine("  The block acts on a command only while the enable is set, so this command would be written and");
-                output.WriteLine("  ignored — and an ignored command is indistinguishable from a rejected one at this end. Nothing was");
-                output.WriteLine("  written. Pass --raise-enable to raise it inside this session (the restore drops it again on the way out).");
+                output.WriteLine("  ignored — and an ignored command is indistinguishable from a rejected one at this end. The heartbeat");
+                output.WriteLine("  reaches the block through the same gate, so arming cannot work either: a stamp made now would land in");
+                output.WriteLine("  memory and count for nothing. Nothing was written. Pass --raise-enable to raise it inside this session");
+                output.WriteLine("  (the restore drops it again on the way out).");
                 return CmdInjectExit.EnableClear;
             }
 
-            output.WriteLine("  --raise-enable given: raising the master enable inside this session.");
+            output.WriteLine("  --raise-enable given: raising the master enable inside this session, BEFORE any heartbeat stamp.");
             session.RaiseEnable();
         }
+
+        // THE BLOCK'S ARMING GATE, satisfied here and nowhere else. Unconditional: nothing readable reports
+        // whether the device needs it, so the alternative is a guess, and the redundant write is cheaper than
+        // the wrong guess. See InjectionSession.StampHeartbeat.
+        output.WriteLine();
+        PrintArmingPlan(options.Arming, session.Binding, output);
+
+        HeartbeatStampReport stamped;
+        try
+        {
+            stamped = session.StampHeartbeat(options.Arming, cancel);
+        }
+        catch (Exception ex)
+        {
+            output.WriteLine($"== the heartbeat could not be stamped ({ex.GetType().Name}): {ex.Message} ==");
+            return CmdInjectExit.Aborted;
+        }
+
+        output.WriteLine($"  arming  : {stamped.Ending} — {stamped.Message}");
+
+        if (!stamped.MayCommand)
+        {
+            output.WriteLine("== REFUSED before the command: the block is not armed and this run cannot make it so ==");
+            output.WriteLine("  No command was written. A command sent into an unarmed block comes back as NOT ACKNOWLEDGED, which is");
+            output.WriteLine("  the same answer a wrong address gives — refusing here is what keeps those two apart.");
+            return ForStampEnding(stamped.Ending);
+        }
+
+        output.WriteLine();
 
         ushort priorCount;
         try
         {
-            // BEFORE allocating a sequence: a sequence picked without having read the device is one that could
-            // collide with what the device has already acknowledged, and the acknowledgement verdict is keyed
-            // on this count moving.
+            // AFTER the arming, and before allocating a sequence. After, because the count the verdict is
+            // measured against must be the count as it stands immediately before OUR command — arming writes
+            // are writes, and a count read before them would be measuring across them. Before the allocation,
+            // because a sequence picked without having read the device is one that could collide with what the
+            // device has already acknowledged.
             priorCount = session.ReadAckCount(channel);
         }
         catch (Exception ex)
@@ -261,7 +316,13 @@ public static class SendRun
         output.WriteLine($"== {wait.Ending} after {wait.Attempts} poll(s) ==");
         output.WriteLine($"  {wait.Message}");
         if (wait.Last is { } last)
-            output.WriteLine($"  last reading: seq {(last.SeqMatches ? "matched" : "did not match")}, count {(last.CountAdvanced ? "advanced" : "did not move")}, result {last.Result}");
+        {
+            output.WriteLine($"  last reading: seq {(last.SeqMatches ? "matched" : "did not match")}, " +
+                             $"count {(last.CountAdvanced ? "advanced" : "did not move")}, " +
+                             $"code echo {last.AckCode ?? "(no role in this binding)"}, result {last.Result}");
+            output.WriteLine("  The code echo and the result are REPORTED, never reasoned from: a refusal cascade publishes one value");
+            output.WriteLine("  and the check written last wins, so a result code can mask every other reason a command was declined.");
+        }
         output.WriteLine("  The command is NOT resent under any ending. This tool sends once and reports what it saw.");
         output.WriteLine();
 
@@ -288,6 +349,51 @@ public static class SendRun
         SessionRefusal.None => CmdInjectExit.Ok,
         _ => throw new ArgumentOutOfRangeException(nameof(refusal), refusal, "unmapped session refusal."),
     };
+
+    /// <summary>
+    /// Map an arming ending to an exit code. <b>Every one of these is a refusal BEFORE the command</b>, so
+    /// none of them may look like an outcome the command had — an unarmed block that was never commanded is
+    /// not a command that went unacknowledged.
+    /// </summary>
+    private static CmdInjectExit ForStampEnding(HeartbeatEnding ending) => ending switch
+    {
+        HeartbeatEnding.EnableClear => CmdInjectExit.EnableClear,
+        HeartbeatEnding.StampChanged => CmdInjectExit.StampMismatch,
+        HeartbeatEnding.ScanStalled => CmdInjectExit.Aborted,
+        HeartbeatEnding.Restarted => CmdInjectExit.Aborted,
+        HeartbeatEnding.ReadFailed => CmdInjectExit.Aborted,
+        HeartbeatEnding.Cancelled => CmdInjectExit.Aborted,
+        HeartbeatEnding.Stamped => CmdInjectExit.Ok,
+        HeartbeatEnding.NotRequested => CmdInjectExit.Ok,
+        _ => throw new ArgumentOutOfRangeException(nameof(ending), ending, "unmapped heartbeat ending."),
+    };
+
+    /// <summary>
+    /// The arming plan, printed before it is carried out — and printed by the DRY RUN too, where it is the
+    /// only description of the writes a real run would make before the command.
+    /// </summary>
+    private static void PrintArmingPlan(HeartbeatPlan plan, ResolvedBinding binding, TextWriter output)
+    {
+        output.WriteLine("== arming (the BLOCK's gate — not the same thing as --arm) ==");
+
+        if (!binding.BandRoles.TryGetValue(InjectionRole.Heartbeat, out var tag))
+        {
+            output.WriteLine("  the binding declares no heartbeat role, so nothing can be stamped.");
+            return;
+        }
+
+        if (!plan.Stamps)
+        {
+            output.WriteLine($"  heartbeat reg {tag.Register}: NOT stamped — zero changes were asked for. The block arms on");
+            output.WriteLine("  heartbeat changes, so unless something else has stamped it the command will be seen and not processed.");
+            return;
+        }
+
+        output.WriteLine($"  heartbeat reg {tag.Register}: {plan}");
+        output.WriteLine("  each stamp is a CHANGE (values are generated from what the register is found holding, never supplied),");
+        output.WriteLine("  and each is followed by a scan-counter advance READ BACK from the device — the block samples the");
+        output.WriteLine("  heartbeat once per scan, so two writes inside one scan are one change or none.");
+    }
 
     private static void PrintRestore(RestoreReport restore, TextWriter output)
     {

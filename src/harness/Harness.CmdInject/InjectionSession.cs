@@ -160,6 +160,11 @@ public sealed record RestoreReport(bool Ok, IReadOnlyList<string> Steps, string?
 /// when the session ends, and the report says so rather than pretending the device was left untouched.
 /// There is no ordering in which a one-write restore can both put an old sequence back and leave the
 /// surface live without risking that execution.</para>
+///
+/// <para>⚠️ <b>THE SAME ARGUMENT PUTS THE HEARTBEAT HERE.</b> The block arms on heartbeat CHANGES, the
+/// heartbeat register is inside the command band, and the restore puts that band back — so arming cannot
+/// survive a session either, and <see cref="StampHeartbeat"/> is a step of this one rather than a verb of
+/// its own.</para>
 /// </summary>
 public sealed class InjectionSession : IDisposable
 {
@@ -185,6 +190,9 @@ public sealed class InjectionSession : IDisposable
         _restorePoint = restorePoint;
         _openingScan = openingScan;
     }
+
+    /// <summary>The resolved binding this session is acting through. Read-only: the session never re-resolves.</summary>
+    public ResolvedBinding Binding => _binding;
 
     /// <summary>The band exactly as the opening read found it. A copy — nothing can edit the restore point.</summary>
     public IReadOnlyList<ushort> RestorePoint => _restorePoint.ToArray();
@@ -366,6 +374,209 @@ public sealed class InjectionSession : IDisposable
             $"raise the master enable — bit {tag.BitInRegister} of register {tag.Register}"));
     }
 
+    /// <summary>
+    /// Stamp the heartbeat — <b>the block's own arming gate, satisfied INSIDE the session that is about to
+    /// command.</b>
+    ///
+    /// <para>🔴 <b>IT IS DONE UNCONDITIONALLY, EVERY SESSION, AND THERE IS DELIBERATELY NO "DO WE NEED
+    /// TO?" BRANCH.</b> This tool cannot read the device's arming state — there is no register that
+    /// reports it — so a conditional would be a guess, and a wrong guess is a command that cannot succeed
+    /// against a device that looks healthy. Redundant stamps are cheap; the guess is not. What this
+    /// guarantees is the case that matters: a run works <b>from cold</b>, against a device nobody has
+    /// touched since it started scanning.</para>
+    ///
+    /// <para>🔴 <b>THE ENABLE MUST BE UP FIRST, AND IT IS READ FROM THE DEVICE RATHER THAN BELIEVED.</b>
+    /// A heartbeat written while the enable is clear lands in memory and never reaches the block — it
+    /// counts for nothing, and from this end it looks exactly like a working write. So the enable is read
+    /// back before the first stamp, and a clear one is a refusal that stamps nothing rather than a stamp
+    /// issued into a void.</para>
+    ///
+    /// <para>🔴 <b>EACH STAMP IS FOLLOWED BY AN OBSERVED SCAN ADVANCE.</b> The block samples the heartbeat
+    /// once per scan, so two writes inside one scan are one change — or none. The free-running scan
+    /// counter is already read by this session at the control registers and already trusted by its restart
+    /// check, so the separation is measured on the device instead of assumed from wall-clock spacing. A
+    /// counter that will not advance is <see cref="HeartbeatEnding.ScanStalled"/>: a refusal that names
+    /// the reason, never a further stamp issued hopefully.</para>
+    ///
+    /// <para>🔴 <b>EVERY STAMP IS A CHANGE, BY CONSTRUCTION.</b> The values come from
+    /// <see cref="HeartbeatStamps"/> and are seeded from what the opening read FOUND in the register, so
+    /// the first differs from what was there and each one after differs from the one before. This method
+    /// takes no value and there is no overload that does: a client that wrote the same number twice —
+    /// which satisfies a write count and arms nothing — is not a mistake that can be made at a call
+    /// site.</para>
+    ///
+    /// <para><b>The writes go through <see cref="InjectionDispatch"/> like every other write in this
+    /// tool</b>, so the single-chokepoint walk still counts one, and a stamp dirties the band exactly as a
+    /// command does — which is what makes the restore put the heartbeat REGISTER back on the way out.
+    /// Whether putting the register back changes anything about the block's own state is not something
+    /// this tool knows, and it relies on neither answer: it stamps again next time.</para>
+    /// </summary>
+    public HeartbeatStampReport StampHeartbeat(HeartbeatPlan plan, CancellationToken cancel)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+
+        if (!_binding.BandRoles.TryGetValue(InjectionRole.Heartbeat, out var tag))
+        {
+            throw new InvalidOperationException(
+                "this binding declares no heartbeat role, so there is no register to stamp. A binding loaded from a file " +
+                "cannot reach here — the heartbeat is a required band role — and inventing a register is the leak this " +
+                "design removes.");
+        }
+
+        var found = _restorePoint[Offset(tag.Register)];
+        var written = new List<ushort>();
+        var scanReads = 0;
+
+        HeartbeatStampReport End(HeartbeatEnding ending, string message) =>
+            new(ending, tag.Register, found, written, scanReads, message);
+
+        if (!plan.Stamps)
+        {
+            return End(HeartbeatEnding.NotRequested,
+                $"the heartbeat at register {tag.Register} was NOT stamped: this run asked for zero changes. The block arms on " +
+                "heartbeat changes, so unless something else has stamped it, a command sent now is one the block will see and " +
+                "decline to process — and this tool cannot read which of those it is.");
+        }
+
+        // THE ENABLE, READ FROM THE DEVICE. Not EnableWasSet, which is the opening capture, and not a flag
+        // saying we raised it: a stamp that does not reach the block is the failure this check exists for,
+        // and believing our own earlier write is exactly how it would be missed.
+        bool enableUp;
+        try
+        {
+            enableUp = ReadEnableIsSet();
+        }
+        catch (Exception ex)
+        {
+            return End(HeartbeatEnding.ReadFailed,
+                $"the master enable could not be read back before stamping ({ex.GetType().Name}): {ex.Message}. Nothing was " +
+                "stamped: a heartbeat written with the enable down never reaches the block, and a read that failed is not a " +
+                "reading that it is up.");
+        }
+
+        if (!enableUp)
+        {
+            return End(HeartbeatEnding.EnableClear,
+                $"the master enable reads CLEAR at the device, so NOTHING was stamped. The heartbeat reaches the block only " +
+                $"while the enable is up; a stamp made now would land in register {tag.Register} and count for nothing, and " +
+                "from this end that is indistinguishable from a stamp that worked.");
+        }
+
+        var values = HeartbeatStamps.From(found, plan.Changes);
+
+        for (var i = 0; i < values.Count; i++)
+        {
+            if (cancel.IsCancellationRequested)
+            {
+                return End(HeartbeatEnding.Cancelled,
+                    $"cancelled after {written.Count} of {plan.Changes} stamp(s). The band is put back on the way out.");
+            }
+
+            Write(new CommandTransaction(
+                InjectionWriteTarget.Heartbeat(_binding), new[] { values[i] },
+                $"stamp the heartbeat — register {tag.Register} := {values[i]} (change {i + 1} of {plan.Changes})"));
+
+            written.Add(values[i]);
+
+            // AFTER EVERY STAMP, INCLUDING THE LAST. The last one has to be sampled before the command's
+            // sequence is processed, or the command arrives at a block that has counted one change fewer
+            // than we think it has.
+            var (ending, message) = AwaitScanAdvance(plan, cancel, ref scanReads);
+            if (ending is not HeartbeatEnding.Stamped)
+                return End(ending, $"after stamp {i + 1} of {plan.Changes}: {message}");
+        }
+
+        return End(HeartbeatEnding.Stamped,
+            $"the heartbeat at register {tag.Register} was changed {written.Count} time(s) — {found} -> " +
+            $"{string.Join(" -> ", written)} — with an observed advance of at least {plan.ScansBetweenStamps} scan(s) after " +
+            $"each, over {scanReads} control read(s). Every value differs from the one before it; a repeated value would be a " +
+            "write and not a change.");
+    }
+
+    /// <summary>
+    /// Wait until the free-running scan counter has advanced by the plan's margin.
+    ///
+    /// <para><b>The FIRST read is the baseline and is taken after the write has returned</b>, so the value
+    /// it reports is a scan in which the stamp was already applied. Every read after it is compared to
+    /// that baseline, which is why a plan must allow at least two: one read can establish a baseline and
+    /// can never clear it.</para>
+    ///
+    /// <para>The read covers the build stamp as well as the counter — it is the same four registers — so
+    /// identity is re-confirmed here for free, on the same rule the poll loop uses: a download landing
+    /// mid-arming makes every address a guess.</para>
+    /// </summary>
+    private (HeartbeatEnding Ending, string Message) AwaitScanAdvance(HeartbeatPlan plan, CancellationToken cancel, ref int reads)
+    {
+        var baseline = default(ScanCount);
+        var haveBaseline = false;
+
+        for (var attempt = 1; attempt <= plan.ScanWaitAttempts; attempt++)
+        {
+            if (cancel.IsCancellationRequested)
+                return (HeartbeatEnding.Cancelled, "cancelled while waiting for the scan counter to advance.");
+
+            if (attempt > 1 && plan.ScanWaitIntervalMs > 0)
+                _clock.Wait(plan.ScanWaitIntervalMs, cancel);
+
+            ushort[] control;
+            try
+            {
+                control = _transport.ReadRegisters(ControlRegisters.BuildStamp, ControlRegisters.Count);
+            }
+            catch (Exception ex)
+            {
+                return (HeartbeatEnding.ReadFailed,
+                    $"a control read failed while waiting for the scan counter ({ex.GetType().Name}): {ex.Message}. A silence " +
+                    "is not an advance, so nothing is concluded from it and no further stamp is made.");
+            }
+
+            reads++;
+
+            if (control.Length < ControlRegisters.Count)
+            {
+                return (HeartbeatEnding.ReadFailed,
+                    $"a control read returned {control.Length} register(s) instead of {ControlRegisters.Count}. A short read is " +
+                    "a different answer, not a partial one.");
+            }
+
+            var stamp = ControlRegisters.StampFrom(control);
+            if (stamp != _options.ExpectedStamp)
+            {
+                return (HeartbeatEnding.StampChanged,
+                    $"the build stamp changed under the arming — it now reads {stamp.Literal}, not the declared " +
+                    $"{_options.ExpectedStamp.Literal}. A download landed, so every address this tool holds now describes a " +
+                    "different program and nothing further is written.");
+            }
+
+            var scan = ControlRegisters.ScanFrom(control);
+            if (!scan.IsPlausibleAdvanceFrom(_openingScan))
+            {
+                return (HeartbeatEnding.Restarted,
+                    $"the scan counter reads {scan}, which is not a forward advance from this session's opening {_openingScan} " +
+                    "— the CPU restarted. Nothing about the stamps already made still holds, and none is repeated here.");
+            }
+
+            if (!haveBaseline)
+            {
+                baseline = scan;
+                haveBaseline = true;
+                continue;
+            }
+
+            if (scan.Since(baseline) >= plan.ScansBetweenStamps)
+            {
+                return (HeartbeatEnding.Stamped,
+                    $"the scan counter advanced {scan.Since(baseline)} scan(s), from {baseline} to {scan} — at least " +
+                    $"{plan.ScansBetweenStamps} was required, so the stamp cannot have shared a scan with the next one.");
+            }
+        }
+
+        return (HeartbeatEnding.ScanStalled,
+            $"the scan counter did not advance by {plan.ScansBetweenStamps} within {plan.ScanWaitAttempts} control read(s). A " +
+            "counter that will not move is a CPU that is not scanning, which means nothing is sampling the heartbeat — so the " +
+            "next stamp would be issued hopefully rather than observed, and it is not issued at all.");
+    }
+
     /// <summary>Apply a built command: operands first, sequence alone second.</summary>
     public void Apply(CommandFrames frames)
     {
@@ -439,15 +650,23 @@ public sealed class InjectionSession : IDisposable
                     "The command is NOT resent: its fate before the restart is unknown, and repeating it is how one command becomes two.");
             }
 
+            // The echoed COMMAND CODE is read when the binding declares it — it is the only thing that says
+            // which command a HELD result belongs to, since the result register keeps its value until the
+            // next command is processed. Absent stays absent: an echo of zero is a reading, and no role is not.
+            var codeEcho = ackTags.TryGetValue(InjectionRole.AckCode, out var codeTag)
+                ? ResultText(registers[codeTag.Register])
+                : null;
+
             var observed = new AckObservation(
                 registers[ackTags[InjectionRole.AckSeq].Register],
                 registers[ackTags[InjectionRole.AckCount].Register],
-                ResultText(registers[ackTags[InjectionRole.AckResult].Register]));
+                ResultText(registers[ackTags[InjectionRole.AckResult].Register]),
+                codeEcho);
 
             last = AckModel.Classify(sentSequence, priorCount, observed);
 
             output.WriteLine($"    poll {attempt,3}: ackSeq={observed.AckSeq} ackCount={observed.AckCount} " +
-                             $"result={observed.Result} -> {last.Outcome}");
+                             $"ackCode={observed.AckCode ?? "(no role)"} result={observed.Result} -> {last.Outcome}");
 
             switch (last.Outcome)
             {
@@ -586,6 +805,24 @@ public sealed class InjectionSession : IDisposable
     private MirrorTag EnableTag => _binding.BandRoles[InjectionRole.Enable];
 
     private int Offset(int register) => register - _binding.CommandBand.FirstRegister;
+
+    /// <summary>
+    /// The master enable AS THE DEVICE HAS IT NOW, not as the opening capture found it.
+    ///
+    /// <para>Deliberately a read rather than a flag. <see cref="EnableWasSet"/> answers "how did we find
+    /// it", which is the right question for the restore and the wrong one before a stamp — and a boolean
+    /// remembering that we raised it would be this tool believing its own write.</para>
+    /// </summary>
+    private bool ReadEnableIsSet()
+    {
+        var tag = EnableTag;
+        var words = _transport.ReadRegisters(tag.Register, 1);
+
+        if (words.Length != 1)
+            throw new WireException($"the master enable at register {tag.Register} read back {words.Length} register(s).");
+
+        return (words[0] & (1 << tag.BitInRegister)) != 0;
+    }
 
     private void Write(CommandTransaction transaction)
     {

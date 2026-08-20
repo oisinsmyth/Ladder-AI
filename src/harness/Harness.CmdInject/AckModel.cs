@@ -38,15 +38,31 @@ public enum AckOutcome
 /// tried to compare it to an integer would not compile (the same trick as <c>ScanCount</c> having no
 /// <c>operator -</c>). What the codes mean is job data that changes with the plant, and a second copy of
 /// that meaning on the PC would drift from the block and eventually refuse what the block would accept.
+///
+/// <para>⚠️ <b>AND THERE IS A SECOND REASON, WHICH IS ABOUT THE CODES THEMSELVES.</b> A refusal cascade
+/// evaluated in order publishes ONE value, and the check written last wins — so one refusal value in a
+/// protocol of this shape can mask every other reason the command was declined. A reader who saw that
+/// value and concluded "the cause was X" would be right only by luck about everything except X. That is a
+/// property of how the codes are produced, not of any particular plant, and it is the strongest possible
+/// argument for reporting the code and never reasoning from it.</para>
 /// </param>
-public sealed record AckObservation(ushort AckSeq, ushort AckCount, string Result);
+/// <param name="AckCode">
+/// The echo of the command code the device processed, when the binding declares that role.
+/// <b>Reported, never decisive — the same rule as <see cref="Result"/>, and carried as a string for the
+/// same reason.</b> What it is FOR is telling you which command a HELD result belongs to: the result
+/// register keeps its value until the next command is processed, so the code beside it is the only thing
+/// that says which command produced it. Null when the binding declares no such role — <b>absent, which is
+/// not the same as an echo of zero.</b>
+/// </param>
+public sealed record AckObservation(ushort AckSeq, ushort AckCount, string Result, string? AckCode = null);
 
 /// <summary>What one classification decided, with both observed facts kept beside the verdict.</summary>
 /// <param name="Outcome">The cell of the 2×2.</param>
 /// <param name="SeqMatches">Whether the acknowledged sequence equals the one sent.</param>
 /// <param name="CountAdvanced">Whether the processed-count moved from before the send.</param>
 /// <param name="Result">The result code, carried through verbatim — reported, never decisive.</param>
-public sealed record AckClassification(AckOutcome Outcome, bool SeqMatches, bool CountAdvanced, string Result);
+/// <param name="AckCode">The echoed command code, carried through verbatim — reported, never decisive. Null when the binding declares no such role.</param>
+public sealed record AckClassification(AckOutcome Outcome, bool SeqMatches, bool CountAdvanced, string Result, string? AckCode = null);
 
 /// <summary>
 /// Classifies an acknowledgement — <b>keyed on the count, cross-checked against the sequence, blind to the
@@ -76,6 +92,6 @@ public static class AckModel
             (true, true) => AckOutcome.Acknowledged,
         };
 
-        return new AckClassification(outcome, seqMatches, countAdvanced, observed.Result);
+        return new AckClassification(outcome, seqMatches, countAdvanced, observed.Result, observed.AckCode);
     }
 }
