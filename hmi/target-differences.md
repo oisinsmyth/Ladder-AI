@@ -142,7 +142,7 @@ Evidence tiers: `[MEASURED]` observed live · `[VENDOR-DOC]` primary source · `
 | 29 | **KTP700 / KTP900 are 800×480 at 16-bit colour (65,536)** | Classic Basic | *Basic Panels 2nd Gen Operating Instructions*, 05/2021, A5E33293231-AD | `[VENDOR-DOC]` | **completes row 23.** The import path preserves 24-bit exactly *and* the panel displays 16-bit — so the owner's observed "TIA corrects it to the closest available" is a DISPLAY/PICKER quantisation, exactly where row 23 predicted it, not a loss in the file path |
 | 30 | 🔴🔴 **A SCREEN-NUMBER COLLISION CRASHES THE PORTAL PROCESS.** Importing a screen whose number is already held by a DIFFERENT screen does not fail validation — Portal dies, reporting only `Access to a disposed object of type 'Siemens.Engineering.Project'` | Classic (Comfort measured) | live import, control run in BOTH directions on a real project | `[MEASURED]` | **`Root screen` holds number 1**, so the first screen anyone numbers naturally collides. Third member of the Line-endpoint / Circle-radius family: TIA validates none of them and dies instead of refusing. Guard now in `import --screen`, refusing before Portal is contacted |
 | 31 | 🔴 **Openness does NOT expose a classic screen's NUMBER.** Neither `Number` nor `ScreenNumber` reads, and `GetAttributeInfos` offers no attribute containing "Number" | Classic | attribute reads + self-description sweep, live | `[MEASURED]` | consistent with `hmi --json` reporting `screenNumber: null` for every classic screen. **So row 30's guard cannot use the object model** — it reads the number from an EXPORT instead. THE DOCUMENT IS RICHER THAN THE API, for the third time (screens, alarm view, now numbers) |
-| 32 | 🔴 **AN EVENT CANNOT BE CREATED ON A CLASSIC SCREEN THROUGH AN IMPORT:** `'Create' is not supported by type 'Siemens.Engineering.Hmi.Event.EventComposition'` | Classic | live import of a single button carrying one ActivateScreen event | `[MEASURED]` | **so NAVIGATION cannot be generated at all** — it is a hand-off item, exactly like the alarm view. ⚠️ Note the trap: **TIA EXPORTS events perfectly well** (the emitted structure was harvested from a real export carrying four), so a round trip reads as though it should work. **This is the alarm view's shape a SECOND time, which answers row 21's closing question — it is a CLASS, not an alarm-specific quirk** |
+| 32 | ❌ **RETRACTED 2026-08-18 — SEE ROW 41. THE CLAIM BELOW IS FALSE; the measurement was real and the conclusion drawn from it was not.** ~~AN EVENT CANNOT BE CREATED ON A CLASSIC SCREEN THROUGH AN IMPORT:~~ `'Create' is not supported by type 'Siemens.Engineering.Hmi.Event.EventComposition'` | Classic | live import of a single button carrying one ActivateScreen event | `[MEASURED]` | **so NAVIGATION cannot be generated at all** — it is a hand-off item, exactly like the alarm view. ⚠️ Note the trap: **TIA EXPORTS events perfectly well** (the emitted structure was harvested from a real export carrying four), so a round trip reads as though it should work. **This is the alarm view's shape a SECOND time, which answers row 21's closing question — it is a CLASS, not an alarm-specific quirk** |
 | 33 | **`FieldLength` is the FormatPattern's LENGTH, not its digit count** — corpus: pattern `99999.999`, FieldLength `9` (length 9, digits 8) | Classic | corpus read + emitter regression test | `[MEASURED]` | two attributes that must agree, same family as Circle's radius. Found while hunting row 30 and **NOT its cause** — recorded separately so it is not credited with that fix |
 | 34 | 🔴🔴 **`hmi-compile` RUNS INCREMENTALLY BY DEFAULT AND CAN EXAMINE NO SCREEN AT ALL.** A run that reports a handful of hardware errors and "not one names a screen" may have looked at nothing | Classic | live, on a full "Compile all" that TIA switched to itself | `[MEASURED]` | **this retracts a claim recorded earlier the same day** — *"a dangling tag imports clean AND compiles clean, nothing downstream catches it"*. A FULL compile catches it **per field**, naming the screen and the object: 239 errors, all `The process tag is invalid. The tag does not exist.` So `hmi-compile` IS a real gate on tag existence. **The compiler states its own mode** (`Compilation mode was switched from "Compile changes" to "Compile all"`) — read that line before believing a green, exactly as `compile-all` already teaches for PLC blocks |
 
@@ -152,6 +152,11 @@ Evidence tiers: `[MEASURED]` observed live · `[VENDOR-DOC]` primary source · `
 | 38 | 🔴 **AN `AcquisitionCycle` CAN RESOLVE AT IMPORT AND STILL FAIL THE COMPILE.** `250 ms` and `125 ms` import clean, read back correctly, and then produce `Invalid acquisition cycle for tag <x>`; `100 ms`, `500 ms` and `1 s` compile clean | Classic Basic | live, four import+compile pairs | `[MEASURED]` | **`TargetID="@OpenLink"` resolving is NOT evidence the link is valid** — the cycle object exists in the project and is still not permitted here. The accepted set looks like multiples of 100 ms, but that is `[INFERENCE]` from five points. **Always compile after a cycle change**; a read-back agrees with the document either way |
 | 39 | ✅ **An INTERNAL (non-PLC) tag is expressed by OMITTING the `Connection` and `ControllerTag` links** — with or without an `AcquisitionCycle`, both import clean and read back with both links absent | Classic Basic | two single-tag probes + read-back | `[MEASURED]` | the panel-internal tags a screen needs for selection/entry fields are generable, so they do not have to be a hand-off item |
 | 40 | ⚠️ **Text-list entry text is sent ESCAPED and comes back UNESCAPED.** The document carries `&lt;body&gt;&lt;p&gt;…`; the export carries `<body><p>…` as real child elements | Classic Basic | five lists, sent vs read back | `[MEASURED]` | **a naive text comparison reports every entry as empty and every list as broken.** Unescape before comparing — this cost a false "the import dropped all the text" reading on a run that was in fact perfect |
+| 41 | 🔴 **RETRACTION OF ROW 32 — AN EVENT *CAN* BE IMPORTED ONTO A CLASSIC BUTTON.** The `'Create' is not supported by type 'EventComposition'` refusal was real but was NOT about events. The failing document differed from a real TIA export in **three** ways at once: (a) it used the event name `KeyUp`, which belongs to `Hmi.Screen.SoftKey` — a **Button** has `Press` and `Release`; (b) it placed the event LAST in the item's `ObjectList`, where TIA writes events FIRST, before `Font`; (c) it omitted `ActivateScreen`'s second parameter, `Object number`. Corrected on all three, the import returns **exit 0 and the event reads back intact** | Classic | live import + read-back, against a held-constant control screen that re-imported clean either side | `[MEASURED]` | **navigation is GENERABLE and was never a hand-off item.** The mechanism, read correctly, is in the error text all along: the importer **populates an existing event by name and cannot add one**, so a name outside the item type's fixed set forces the `Create` the composition refuses. ⚠️ **The false verdict was produced by a harvest that read the reference screen's SOFTKEYS and attributed their event name to its BUTTONS** — a one-word mis-attribution that closed off a whole capability for a day and was written into the emitter as settled fact. **Row 32 is retained above, struck, as the record of how it read while it was believed** |
+| 42 | 🔴🔴 **AN UNRECOGNISED SYSTEM-FUNCTION NAME KILLS THE PORTAL PROCESS.** Not a validation error — the aftermath is row 30/35's `Access to a disposed object of type 'Siemens.Engineering.Project'`, naming nothing. **Pinned by a control: a deliberately nonsense name crashes IDENTICALLY to a plausible-but-wrong one**, so a wrong guess and pure gibberish are indistinguishable from outside, and no amount of trying can reveal the right name | Classic | 6 single-function imports, one variable each, against two passing controls | `[MEASURED]` | **therefore the emitter carries a WHITELIST, not a validation** — same shape and same reason as the converter's `(name, version)` instruction registry: the tool supplies the name, the name cannot be checked cheaply, and being wrong costs a session. Entries are earned by harvesting a real export, never by reading documentation. **A function-name guess is not a cheap experiment here; it is the most expensive kind** |
+| 43 | ✅ **THE VERIFIED CLASSIC FUNCTION VOCABULARY**, harvested from a real export of hand-built events: `SetTag`, `IncreaseTag`, `DecreaseTag` *(Tag: link, Value: `System.Double`)*; `SetBit`, `ResetBit`, `InvertBit` *(Tag: link)*; `SetBitInTag`, `ResetBitInTag` *(Tag: link, Bit: `System.Int32`)*; `ActivateScreen` *(Screen name: link, Object number: `System.Int32`)*; `StopRuntime` *(Mode: `System.Int32`)* | Classic | one hand-built screen, exported and read | `[MEASURED]` | 🔴 **NOTE HOW BADLY THE OBVIOUS NAMES DID.** `SetValue` and `IncreaseValue` are what an author reaches for and **both crash Portal**; the real names are `SetTag` and `IncreaseTag`. ⚠️ **`Value` is `System.Double` for EVERY numeric tag** — a `Word`, an `Int` and a `Real` tag all take Double. Matching the parameter to the *tag's* type is a guess that reads as obviously right and is wrong. ✅ `SetBitInTag`/`ResetBitInTag` address a bit **inside a word by number** — the WRITE direction of the gap row 37 records on the read side |
+| 44 | 🔴 **A NAVIGATION LINK TO THE SCREEN'S OWN NAME IS SILENTLY DISCARDED.** The document imports clean and compiles clean; the read-back carries an `ActivateScreen` whose `Screen name` link is **empty**, and the button does nothing when pressed | Classic | emit → import → read-back of one real screen; every other link on the same screen resolved | `[MEASURED]` | **every gate green, one dead control, nothing anywhere naming it** — the failure class this tier exists to refuse. Found on the first real screen through the corrected event path, where a header button marking the CURRENT screen had been given that screen as its target. Now a **named refusal at emit time**, not a warning: there is no correct rendering of the request, and "you are here" is a Text, not a Button |
+| 45 | ⚠️ **A LINK RESOLVES AGAINST WHAT IS IN THE PROJECT AT IMPORT TIME** — every cross-screen target that already existed resolved; the only one that did not was the self-reference in row 44 | Classic | same run | `[INFERENCE]` from one run — **the ordering question is NOT settled**: whether a link to a screen that does not exist YET is dropped the same silent way has not been tested, and a first-time bulk import of a cross-linked set is exactly where it would bite. **Verify by reading links back after a bulk import, never by trusting the import's exit code** |
 
 ## Row 16 — why deferring the 7" project is safe, and what it costs
 
@@ -499,3 +504,56 @@ Is this alarm-specific, or a **class**? The same A/B on a **trend view**, a **re
 **user-view** and a plain **date/time field** would say whether "complex ActiveX-style controls do
 not serialize" is the real rule. That determines whether the emitter needs a small blacklist or a
 whitelist of what it is allowed to believe.
+---
+
+## 🔴 A Classic screen item holds exactly ONE `VisibilityAnimation`, and the second is discarded in silence
+
+**Measured 2026-08-20, live, against a real Classic project.** Two probe screens, each carrying two
+rectangles identical in every attribute except `ObjectName`, `Left`, and the one shape under test.
+Single-variable by construction, with the pass/fail criteria written down *before* the run.
+
+### The result
+
+A rectangle authored with **two** `Hmi.Dynamic.VisibilityAnimation` elements came back from a
+read-back export with **one**.
+
+```
+import        exit 0
+hmi-compile   exit 0        <- reports success, and is blind to this
+read-back     Rect_Probe  Rectangle  1 animation(s)
+                  name=VisibilityAnimation   range=500..32767  Visible=false
+```
+
+Two details matter more than the verdict:
+
+- **It is LAST-WINS.** The survivor is the second element, not the first.
+- **The survivor is RENAMED.** It went in as `VisibilityAnimation2` and came back as
+  `VisibilityAnimation`. TIA is not ignoring an extra element; it is normalising the composition down
+  to a single canonically-named member.
+
+### Why this belongs in this file and not in a job folder
+
+It is the **document-is-richer pattern running backwards**, and that is a new direction for it. Every
+previous row here records SimaticML expressing something the API cannot create. This one records
+SimaticML *accepting* something the object model will not hold — the file is well-formed, the import
+succeeds, the compile succeeds, and the surplus is dropped between them.
+
+**Nothing but a read-back can see it.** That makes it a member of the same family as the alarm-view
+finding (Row 21): a green import that is not evidence the document arrived as written.
+
+### What it costs
+
+Per-control enable/disable *inside* a condition-driven group cannot be built by stacking a second
+animation on the control — the group's rule and the control's own rule cannot coexist on one object.
+That is a design constraint on every dialog-style construct, not a limitation of any one screen.
+
+### ✅ The neighbouring probe PASSED, and the pair is worth keeping together
+
+`Visible=true` **inside** the range imports and round-trips intact (`compare` clean, the attribute
+read straight back out as `true` beside a control reading `false`). Only the `Visible=false` form had
+ever been measured, and emitters written against that assumption hard-code the hide form. **"Show
+while a tag sits inside a range" is a proven form**; an emitter that cannot author it has a
+capability gap, not a platform limit.
+
+⚠️ **Both results are STORAGE results.** They say the document comes back as written. Neither says
+the panel EVALUATES the animation at runtime, which remains unmeasured.
