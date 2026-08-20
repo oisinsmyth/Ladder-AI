@@ -1,0 +1,43 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <RootNamespace>Harness.CmdInject.Loopback.Tests</RootNamespace>
+  </PropertyGroup>
+
+  <!-- Versions come from the repo-root Directory.Packages.props (F-38, central package management). -->
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="NModbus" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <!--
+    L5 — THE ONLY TEST PROJECT IN THIS TOOL THAT OPENS A SOCKET, AND IT IS A SEPARATE PROJECT FOR THAT
+    REASON ALONE.
+
+    Harness.CmdInject.Tests must stay socket-free: its whole value is that "nothing opened" is asserted
+    against a counter on a port that CANNOT open anything. Putting a real listener in that assembly would
+    make every one of those assertions weaker by association, and would make a flaky network stack able to
+    redden the suite that proves the fence.
+
+    What this project buys that the pure suite cannot: the frames the dry run PRINTS are compared against
+    the registers a REAL Modbus server RECEIVED, through the real NModbus encode/decode, over a real
+    (loopback-only) TCP socket. Before this, the byte dump was a claim about our own formatting code.
+
+    The listener binds IPAddress.Loopback and an EPHEMERAL port: nothing is reachable off this machine and
+    no fixed port can collide with a real service. NModbus is referenced here, and only here among the
+    test projects, to HOST the slave — the client half still comes from Harness.Wire, unchanged.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\Harness.CmdInject\Harness.CmdInject.csproj" />
+  </ItemGroup>
+
+</Project>

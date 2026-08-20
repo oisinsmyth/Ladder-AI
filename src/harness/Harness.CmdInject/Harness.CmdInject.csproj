@@ -1,0 +1,46 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>Harness.CmdInject</RootNamespace>
+    <AssemblyName>harness-cmd-inject</AssemblyName>
+  </PropertyGroup>
+
+  <!--
+    THE WRITE HALF OF THE VIRTUAL PANEL. THIS BUILD CAN OPEN A SOCKET AND WRITE.
+
+    This project holds the PROTOCOL and NOT the MAP. Register numbers, tag names, channel names,
+    command codes and result codes are live-run restricted data (docs/13-data-boundary.md) and are
+    forbidden in committed source, comments, fixtures and error strings. So the tool holds ROLES —
+    which register plays `seq`, which plays `ackCount` — and the map loads at runtime from a binding
+    file in the job folder. Not one job value is compiled in; every fixture uses invented vocabulary.
+    The only registers named here are 0-1 (build stamp) and 2-3 (scan counter), which the copy layer's
+    allocator places identically for every job and which a binding must NOT be able to redirect.
+
+    *** THE CHOKEPOINTS ARE COUNTED, NOT DECLARED. *** InjectionStructureTests walks every method body
+    in the compiled assembly and asserts: (a) nothing here names System.Net.Sockets — Harness.Wire owns
+    every socket, and this count must stay ZERO; (b) EXACTLY ONE method names the injection transport's
+    own write member (InjectionDispatch.ApplyEach, through which every command, enable and restore write
+    passes); (c) EXACTLY ONE names a write member of the wire stack (ModbusInjectionTransport); (d)
+    EXACTLY ONE constructs a session via NModbusTransport.Connect, so there is one place the calibrated
+    ModbusPolicy — Retries = 0, which is NOT the library default — could be got wrong. Each walk carries
+    a denominator (bodies examined > 0) and a live positive control.
+
+    Phase 1's version of (b) and (c) were zeroes, because that build deliberately could not write. They
+    were moved up a level rather than deleted when the port landed: a zero here would now be a test
+    asserting that the tool does not work.
+
+    Map parsing is REUSED, never re-implemented: Harness.MirrorView.MirrorMapParser already parses this
+    tag-table + area-pointer shape unchanged. MirrorView is a Web SDK project, so referencing it flows
+    a Microsoft.AspNetCore.App framework reference in transitively — heavy for a console tool, but the
+    honest alternative (a second parser, or duplicate-compiling its source) is worse: a second parser
+    is a second thing to drift, and duplicate-compiling would define Harness.MirrorView.* types twice.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\Harness.MirrorView\Harness.MirrorView.csproj" />
+    <ProjectReference Include="..\Harness.Map\Harness.Map.csproj" />
+    <ProjectReference Include="..\Harness.Wire\Harness.Wire.csproj" />
+    <ProjectReference Include="..\..\device-guard\DeviceGuard\DeviceGuard.csproj" />
+  </ItemGroup>
+
+</Project>

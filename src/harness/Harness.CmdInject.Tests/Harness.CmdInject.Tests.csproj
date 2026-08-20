@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <RootNamespace>Harness.CmdInject.Tests</RootNamespace>
+  </PropertyGroup>
+
+  <!-- Versions come from the repo-root Directory.Packages.props (F-38, central package management). -->
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <!--
+    No device and no socket. The send tests drive a RECORDING factory, so "the fence refused and nothing
+    opened" is asserted against a counter rather than against an exit code — the distinction that matters,
+    because a disconnected gate can still produce the right exit code by accident.
+
+    NOTE: this project deliberately CONTAINS a class that names IInjectionTransport.WriteRegisters
+    (PlantedInjectionWrite). It is the live positive control for the IL walk, and it must stay here and
+    never move into the shipped assembly.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\Harness.CmdInject\Harness.CmdInject.csproj" />
+    <ProjectReference Include="..\Harness.MirrorView\Harness.MirrorView.csproj" />
+  </ItemGroup>
+
+</Project>
