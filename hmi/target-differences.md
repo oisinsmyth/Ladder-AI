@@ -557,3 +557,30 @@ capability gap, not a platform limit.
 
 ⚠️ **Both results are STORAGE results.** They say the document comes back as written. Neither says
 the panel EVALUATES the animation at runtime, which remains unmeasured.
+
+### ✅ And the layer mechanism itself DOES survive the round trip — eight of them, gap included
+
+Recorded beside the animation finding above because the two are easily conflated. **One animation
+per item is a hard limit; the number of LAYERS is not.**
+
+Measured through the real authoring path — HTML → emit → import → compile → export — with seven
+declared layers plus the base, at indices `1, 2, 3, 5, 6, 7, 8`:
+
+```
+import exit 0 · compile ERRORS 0 · ScreenLayer count: 8
+Index 0 ''   1 'L1'   2 'L2'   3 'L3'   5 'L5'   6 'L6'   7 'L7'   8 'L8'
+```
+
+Three facts, and the third is the one worth having:
+
+- **Eight layers round-trip**, each holding its own items.
+- **Layer NAMES survive**, so a layer is addressable after import and not merely present.
+- 🔴 **TIA DOES NOT RENUMBER AROUND A GAP.** Index 4 was deliberately skipped and index 5 came back
+  as index 5. Had it renumbered, every control above the gap would have landed on a different layer
+  than it was authored on — with a clean import, a clean compile, and nothing to see.
+
+Why this needed measuring at all: until it ran, **every read-back in the corpus carried exactly ONE
+`ScreenLayer`**, and the mechanism had only ever been proved as far as `emit`. A whole dialog design
+rested on an unproven assumption that the document survives.
+
+Not settled: the ceiling. Eight is proven; nothing here says where the limit is.
