@@ -302,23 +302,115 @@ dangerous instrument in the system.
 
 ---
 
-## 5. What has to be built, ranked
+## 5. The gap register — phases and priorities
 
-1. ✅ **`harness-gate derive` + gate 0c** — **DONE 2026-08-21** (§3.4a). Attribution and enforcement
-   are in and tested; the *computation* half (map from the binding, then compare) is not, and is
-   item 1b below.
-   1b. **Compute `map` from the binding and compare it to the authored one** — strictly stronger than
-   attributing it, and the copy-layer generator can already do it.
-2. **The gate queue** — tool-owned, batching, replacing the text-file claim board.
-3. **State in files** — `project.yaml`, `blocks/<name>.md`, explicit state field.
-4. **`Harness.Loop` run end to end for the first time** — it is built and has never run; everything
-   above assumes it works.
-5. **Element-table widening** — `Real`, `DInt`, `Word` at minimum; each is one table row plus a
-   copy shape (§3.5.2).
-6. **The DAG** — `depends-on:` captured at creation, wave = DAG level.
-7. **Carve-out partition check** — project-wide, with a residual list.
-8. **Pre-flight interpreter** — extend `LadInterpreter` to the block subset (§4.4).
-9. **The GUI** — last, as a viewer over 3.
+**Priority is assigned on three questions, in this order:** does something else rest on it (a
+blocker outranks a big win); how much does it move the 20-minute budget; and what does it cost to
+get wrong. **P0** = nothing downstream is trustworthy until it is done. **P1** = a named lever on
+the budget. **P2** = real, but it waits.
+
+Status vocabulary: ✅ done · 🔨 specified, not built · ❓ needs a decision before it can be specified.
+
+---
+
+### Phase 1 — Close the derive mechanism · **P0** · *specified in full, plan written 2026-08-21*
+
+The mechanism shipped in §3.4a attributes but does not compute, and five gaps remain inside it.
+They are grouped as one phase deliberately: each on its own leaves the tool half-honest, and the
+refusals only become load-bearing once the values are actually recomputed.
+
+| # | gap | resolution | evidence it is feasible |
+|---|---|---|---|
+| 1.1 | `map` is attributed, not computed | recompute from the binding, **compare**, refuse on mismatch | `MirrorObservability.FromBindings` already exists and is what the loop uses |
+| 1.2 | `runtimeCompression` has **no producer artifact anywhere** | compute via `TimeCompression.Plan` from the attributed `blockCompression`; factor 1 with no declared bounds is trivially computed; **> 1 with no bounds is a refusal** | measured on a real job — 4 of 5 fields attributed, this one had nothing on disk |
+| 1.3 | the storage and conflict composers are across a solution boundary | **file contract, not a project reference** — parse `reachable-state.json` and the conflict-graph document in-harness | verified: **zero** project references between `src/harness` and `src/wave-control`, and the harness is deliberately dependency-free |
+| 1.4 | the artifact hash is over text-as-read | hash **bytes**, via an optional byte reader; the text path stays as a documented fallback | current limit is recorded in `DerivationHash` |
+| 1.5 | pointing the tool at the **wrong artifact** is possible | **kind validation** — each producer declares what its artifact must parse as, and an artifact that is itself a *"not computed"* report is refused | 🔴 measured on a real job: the conflict-graph artifact **was** a `notComputed` report while the submission carried `conflictEdges` anyway |
+
+> 🔴 **1.5 is the one that turned out to matter most, and it was found by accident.** On a real job
+> the artifact that should have produced the conflict edges says, in its own words, that it could not
+> compute them — and the submission declares the edges regardless. Attribution alone would happily
+> stamp that. **An artifact must be the right KIND, and must not itself be a report of failure.**
+
+---
+
+### Phase 2 — Run the loop once · **P0**
+
+🔨 **`Harness.Loop` is built and has never run end to end.** Every number in §4's budget assumes it
+works, and the closed-loop conformance path has never taken a wave from author to green.
+
+- 2.1 Run it end to end on a trivial block.
+- 2.2 Replace §4.2's `[E]` estimate lines with `[M]` measurements from that run.
+
+**Why P0 rather than P1:** it is not a lever, it is the assumption under every lever. Building
+Phase 3 or 5 on top of a loop that has never completed is speculation with a build cost.
+
+---
+
+### Phase 3 — The gate queue · **P1** · *biggest single lever on the budget*
+
+🔨 Tool-owned, batching, replacing the hand-edited claim board — which has **already been raced
+once**. Download granularity is device-level (34–92 s measured), so batching is the whole reason
+§4.2's batched column beats the serial one.
+
+---
+
+### Phase 4 — The workbench spine · **P1**
+
+Four items that only pay off together; each is cheap and none is useful alone.
+
+- 4.1 **State in files** — `project.yaml`, `blocks/<name>.md`, explicit state field. Everything else
+  in this phase reads and writes it.
+- 4.2 **The dependency DAG** — `depends-on:` captured at creation; the parallel wave is a DAG level.
+- 4.3 **Carve-out as a partition with a residual** — *the one place a silent gap stays invisible
+  until commissioning.* Reuse `signal-sweep`'s denominator-plus-residue pattern.
+- 4.4 **Per-block `writes:` list** — turns external-conflict detection into a set intersection.
+
+---
+
+### Phase 5 — Pre-flight interpreter · **P1** · *biggest lever on iteration count*
+
+🔨 Extend `Harness.Skeleton/LadInterpreter.cs` to the block-under-test's IR subset (§4.4). The
+20-minute target rests on iteration count, and this is the only item that attacks it directly.
+**Its limit is not negotiable and is restated wherever it is offered:** not a CPU model, green there
+is never evidence about a 1214C, and it is a pre-filter — never a substitute for the rig.
+
+---
+
+### Phase 6 — Element-table widening · **P2** · *smaller than previously thought*
+
+🔨 `Real`, `DInt`, `Word`. Now known to be **one enum member, one element-table row, one copy shape**
+each: `MirrorValueType` has four members, so an unsupported type is currently *inexpressible* rather
+than mishandled (§3.5). Deferred because nothing is blocked on it until a real block needs one.
+
+---
+
+### Phase 7 — The HMI oracle · **P2** · ❓ *decision before specification*
+
+There is no rig loop for HMI and the device compile is shallow enough to accept a zero-width screen,
+so **"until green" cannot mean the same thing.** This cannot be planned until the oracle is chosen —
+see §7 Q1. Until then, HMI lanes end at *"compiles and reads back"*, and saying so is the honest
+position.
+
+---
+
+### Phase 8 — Multi-agent contention · **P2**
+
+🔨 The claims registry, wave-set admission, slot colouring and escalation ladder are built and
+**have never run with two agents actually contending.** Same class of risk as Phase 2, one tier
+lower because less rests on it today.
+
+---
+
+### Phase 9 — The GUI · **P2**
+
+🔨 Last, and as a **viewer over Phase 4's files** — never as the system of record (§4.4.7).
+
+---
+
+**Rolled-up ordering:** 1 → 2 → 3 → 4 → 5 → (6, 7, 8, 9 as they become blocking). Phases 1 and 2 are
+independent of each other and can run in either order; everything from 3 onward assumes 2 has
+happened.
 
 ---
 
@@ -381,6 +473,14 @@ opinion.** That single sentence is why §3 is the most valuable part of this des
   and the two places derivation must refuse. Added the finding that the copy-layer ladder is
   **already generated** and the real gap is the hand-authored submission document. Capability
   assessment compressed to §6.
+- **v2.2 — 2026-08-21.** §5 replaced by a **phased, prioritised gap register** (nine phases, P0/P1/P2
+  on a stated rule). Phase 1 — the five gaps left inside the derive mechanism — is specified in full
+  and has an implementation plan. Two feasibility facts pinned while writing it:
+  `MirrorObservability.FromBindings` and `TimeCompression.Plan` make 1.1 and 1.2 genuinely
+  computable in-harness, and there are **zero project references** between `src/harness` and
+  `src/wave-control`, so 1.3 is a file contract rather than a reference. 🔴 And one finding: on a
+  real job the conflict-graph artifact is a **`notComputed` report** while the submission declares
+  the edges anyway — which is why 1.5 (artifact kind validation) exists at all.
 - **v2.1 — 2026-08-21.** §3.4a and §3.5 rewritten to describe what was actually BUILT rather than
   what was planned: `harness-gate derive` attributes rather than computes, and that line is drawn
   explicitly. Six refusals shipped; one planned refusal dropped as **redundant** — `MirrorValueType`
