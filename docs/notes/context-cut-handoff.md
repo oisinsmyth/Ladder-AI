@@ -155,8 +155,33 @@ directly attacks the "agents recheck each other's claims" cost.
 ## Traps for whoever picks this up
 
 - **The Write tool strips CRLF.** It silently wrote `CLAUDE.md` as LF during this work; caught by
-  the `file` check, fixed with a binary rewrite. Tracked text here is CRLF — use Edit for changes,
-  and if you must Write a whole file, convert afterwards and verify with `file <path>`.
+  the `file` check, fixed with a binary rewrite. Use Edit for changes, and if you must Write a
+  whole file, convert afterwards. **The Edit tool preserves CRLF** — verified 167/167 on this file
+  — so there is no reason to avoid it.
+- **Verify CRLF by counting bytes, not with `grep`, `awk`, or `file`.** All three lie here, and two
+  of them lie confidently. In this Git Bash, `grep -c $'\r'` returns **0** on a genuine CRLF file
+  and `awk '/\r$/'` never matches, because the shell strips CR before the pattern sees it — so the
+  obvious check reports "no CRLF" on a file that is entirely CRLF. `file` only reports what
+  terminator it saw *somewhere*, so it cannot detect a partly-converted file. The one reliable
+  check is to compare counts, which must be equal:
+
+  ```
+  tr -cd '\r' < <path> | wc -c
+  tr -cd '\n' < <path> | wc -c
+  ```
+
+  (Corollary: `cmd_a && cmd_b` after a `grep -c` that legitimately finds nothing never runs
+  `cmd_b` — grep exits 1 on zero matches. A verification chain built that way silently skips its
+  own checks.)
+- **CRLF is not universal here — `.ir` and `.xml` are LF by design.** `.gitattributes` pins
+  `*.ir` and `*.xml` to `text eol=lf` so tool-written formats byte-compare in tests (owner-approved
+  2026-07-16). "Converting" either back to CRLF is a regression, not a fix. CRLF applies to `.md`,
+  `.cs`, `.ps1`, `.py`.
+- **A byte figure must say whether it is blob or worktree.** `core.autocrlf=true`, so git stores
+  `.md` as LF and materialises CRLF: `CLAUDE.md` is 19,444 bytes as a blob and 19,593 in the
+  worktree, one byte per line apart. Every size in this project's record is the **worktree**
+  number (`56656a1` quotes 20,478 = blob 20,329 + 149). Quote the same one or the budget gate and
+  the commit log disagree by 149 bytes.
 - **Run `tools/check-claude-md-migration.py` before committing any further trim.** It is the only
   thing standing between a tidy-up and a silently lost fact.
 - **The Data boundary paragraph is deliberately untouched, and should stay that way.** It reads
