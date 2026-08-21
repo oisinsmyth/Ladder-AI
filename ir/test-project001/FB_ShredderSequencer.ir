@@ -214,6 +214,7 @@ NETWORK 14 "Motor And Pusher Mode Commands"
   MOVE(EN := NOT PusherModeForceOff, IN := IO.OperatorPusherMode) => IO.PusherModeCmd
 
 NETWORK 15 "Output Commands"
-  COIL IO.RunDischargeConv := IO.Step >= 20
+  COMMENT "Cycle output commands: the discharge conveyor runs from the discharge-start step onward and stays on for the rest of the cycle, the pre-start siren sounds during PreStart or whenever the pusher asks for its own jog warning, and InCycle reports any step other than Idle. The discharge steps are listed one by one rather than written as a span, so that a step added inside the cycle later has to make a visible decision about whether the conveyor runs during it instead of being swept in silently. That listing is why this rung carries five parallel branches where a rung would normally be held to two - the enumeration is the reason for the width, not an oversight."
+  COIL IO.RunDischargeConv := IO.Step = 20 OR IO.Step = 30 OR IO.Step = 40 OR IO.Step = 50 OR IO.Step = 60
   COIL IO.PreStartSounder := IO.Step = 10 OR IO.PusherJogPreStartSounder
   COIL IO.InCycle := IO.Step <> 0

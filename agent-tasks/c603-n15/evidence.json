@@ -1,0 +1,667 @@
+{
+  "schema": "ladder-ai/agent-evidence/1",
+  "task": "C-603 fix: enumerate the ranged step predicate on IO.RunDischargeConv in NETWORK 15 of FB_ShredderSequencer, and add the network comment it lacked. IR half + Portal half both complete.",
+  "kind": "modify",
+  "skill": "gen-block-modify-fix",
+  "files": [
+    {
+      "path": "ir/test-project001/FB_ShredderSequencer.ir",
+      "ir_hash": "242FEACF8F90162F136ECC810D152CF5E26DF2CCCE06CBAFA183E78B24E516CE"
+    }
+  ],
+  "checks": [
+    {
+      "tool": "converter preflight",
+      "exit": 0,
+      "json": {
+        "files": [
+          {
+            "filePath": "ir/test-project001/FB_ShredderSequencer.ir",
+            "name": "FB_ShredderSequencer",
+            "findings": []
+          }
+        ],
+        "indexWarnings": []
+      }
+    },
+    {
+      "tool": "converter diff --only 15",
+      "exit": 0,
+      "json": {
+        "blockName": "FB_ShredderSequencer",
+        "blockNameMismatch": false,
+        "otherBlockName": "FB_ShredderSequencer",
+        "hasAnyChange": true,
+        "header": {
+          "changed": false,
+          "titleChanged": false,
+          "titleBefore": "Shredder Plant Sequencer",
+          "titleAfter": "Shredder Plant Sequencer",
+          "commentChanged": false,
+          "commentBefore": "Shredder plant sequencer (C-118-C-125): commands the shredder motor (via FB_MotorFwdRevSystem, wired at FC_ControlMain) and gates infeed/discharge conveyors and upstream enable, through a stepped cycle. Step legend (C-120): 0=Idle (stopped, waiting for a start condition) - 10=PreStart (siren warning before motion; arms the motor via MotorStartArm) - 20=DischargeStart (discharge conveyor starting, timed) - 30=ReverseRun (reverse commanded; the motor FB's own ReverseDelay entry pause elapses inside this step, then ReverseRunTimer counts ShredderReverseRunTime of CONFIRMED reverse feedback) - 40=WaitForwardRun (waiting for forward-run feedback) - 50=Running (normal production; infeed/upstream-enable timers and overcurrent detection are live) - 60=OvercurrentAbort (tripped - pause, then retry into ReverseRun, or stay out if too many reversals). Stop-all (REQ-012/013/062): StopCmd = stop button OR downstream lost OR control circuit unhealthy - aborts every step to Idle. Pusher handling is split (owner amendment 2026-07-16): stop button/unhealthy force pusher mode 0 (parks AND blocks jog), while any live stop reason - downstream loss included - raises PusherCycleInhibitCmd (no cycle launches or continues into a stopped plant, hand-jog stays available).",
+          "commentAfter": "Shredder plant sequencer (C-118-C-125): commands the shredder motor (via FB_MotorFwdRevSystem, wired at FC_ControlMain) and gates infeed/discharge conveyors and upstream enable, through a stepped cycle. Step legend (C-120): 0=Idle (stopped, waiting for a start condition) - 10=PreStart (siren warning before motion; arms the motor via MotorStartArm) - 20=DischargeStart (discharge conveyor starting, timed) - 30=ReverseRun (reverse commanded; the motor FB's own ReverseDelay entry pause elapses inside this step, then ReverseRunTimer counts ShredderReverseRunTime of CONFIRMED reverse feedback) - 40=WaitForwardRun (waiting for forward-run feedback) - 50=Running (normal production; infeed/upstream-enable timers and overcurrent detection are live) - 60=OvercurrentAbort (tripped - pause, then retry into ReverseRun, or stay out if too many reversals). Stop-all (REQ-012/013/062): StopCmd = stop button OR downstream lost OR control circuit unhealthy - aborts every step to Idle. Pusher handling is split (owner amendment 2026-07-16): stop button/unhealthy force pusher mode 0 (parks AND blocks jog), while any live stop reason - downstream loss included - raises PusherCycleInhibitCmd (no cycle launches or continues into a stopped plant, hand-jog stays available).",
+          "interfaceChanged": false
+        },
+        "summary": {
+          "total": 15,
+          "changed": 1,
+          "added": 0,
+          "removed": 0,
+          "identical": 14
+        },
+        "networks": [
+          {
+            "number": 1,
+            "kind": "Identical",
+            "title": "Stop Command",
+            "beforeText": null,
+            "afterText": null
+          },
+          {
+            "number": 2,
+            "kind": "Identical",
+            "title": "HMI Time Conversions",
+            "beforeText": null,
+            "afterText": null
+          },
+          {
+            "number": 3,
+            "kind": "Identical",
+            "title": "Reversal Re-Arm Window Timer",
+            "beforeText": null,
+            "afterText": null
+          },
+          {
+            "number": 4,
+            "kind": "Identical",
+            "title": "Reversal Counter",
+            "beforeText": null,
+            "afterText": null
+          },
+          {
+            "number": 5,
+            "kind": "Identical",
+            "title": "Shredder Blocked Fault (Too Many Reversals)",
+            "beforeText": null,
+            "afterText": null
+          },
+          {
+            "number": 6,
+            "kind": "Identical",
+            "title": "Step 0 (Idle) - Transition",
+            "beforeText": null,
+            "afterText": null
+          },
+          {
+            "number": 7,
+            "kind": "Identical",
+            "title": "Step 10 (PreStart) - Timer And Transitions",
+            "beforeText": null,
+            "afterText": null
+          },
+          {
+            "number": 8,
+            "kind": "Identical",
+            "title": "Step 20 (DischargeStart) - Timer, Timeout Fault, And Transitions",
+            "beforeText": null,
+            "afterText": null
+          },
+          {
+            "number": 9,
+            "kind": "Identical",
+            "title": "Step 30 (ReverseRun) - Timer And Transitions",
+            "beforeText": null,
+            "afterText": null
+          },
+          {
+            "number": 10,
+            "kind": "Identical",
+            "title": "Step 40 (WaitForwardRun) - Transitions",
+            "beforeText": null,
+            "afterText": null
+          },
+          {
+            "number": 11,
+            "kind": "Identical",
+            "title": "Step 50 (Running) - Infeed Restart, Upstream Enable, And Outputs",
+            "beforeText": null,
+            "afterText": null
+          },
+          {
+            "number": 12,
+            "kind": "Identical",
+            "title": "Step 50 - Overcurrent Detection, Trip, And Transitions",
+            "beforeText": null,
+            "afterText": null
+          },
+          {
+            "number": 13,
+            "kind": "Identical",
+            "title": "Step 60 (OvercurrentAbort) - Timer And Transitions",
+            "beforeText": null,
+            "afterText": null
+          },
+          {
+            "number": 14,
+            "kind": "Identical",
+            "title": "Motor And Pusher Mode Commands",
+            "beforeText": null,
+            "afterText": null
+          },
+          {
+            "number": 15,
+            "kind": "Changed",
+            "title": "Output Commands",
+            "beforeText": "NETWORK 15 \"Output Commands\"\n  COIL IO.RunDischargeConv := IO.Step >= 20\n  COIL IO.PreStartSounder := IO.Step = 10 OR IO.PusherJogPreStartSounder\n  COIL IO.InCycle := IO.Step <> 0\n",
+            "afterText": "NETWORK 15 \"Output Commands\"\n  COMMENT \"Cycle output commands: the discharge conveyor runs from the discharge-start step onward and stays on for the rest of the cycle, the pre-start siren sounds during PreStart or whenever the pusher asks for its own jog warning, and InCycle reports any step other than Idle. The discharge steps are listed one by one rather than written as a span, so that a step added inside the cycle later has to make a visible decision about whether the conveyor runs during it instead of being swept in silently. That listing is why this rung carries five parallel branches where a rung would normally be held to two - the enumeration is the reason for the width, not an oversight.\"\n  COIL IO.RunDischargeConv := IO.Step = 20 OR IO.Step = 30 OR IO.Step = 40 OR IO.Step = 50 OR IO.Step = 60\n  COIL IO.PreStartSounder := IO.Step = 10 OR IO.PusherJogPreStartSounder\n  COIL IO.InCycle := IO.Step <> 0\n"
+          }
+        ],
+        "allowedNetworks": [
+          15
+        ],
+        "invarianceViolations": [],
+        "headerChangeAllowed": false,
+        "hasUnclaimedHeaderChange": false,
+        "hasNonGatingCommentChange": false,
+        "unchangedRemainder": 14,
+        "hasInvarianceViolation": false
+      }
+    },
+    {
+      "tool": "openness-cli import --group 'S7-1200 station_1/PLC1 6ES7 214-1AG40-0XB0'",
+      "exit": 0,
+      "json": {
+        "imported": 1,
+        "block": "FB_ShredderSequencer",
+        "consistentAfterImport": false,
+        "note": "INCONSISTENT immediately after import is expected (FI-52); cleared by the per-block compile below."
+      }
+    },
+    {
+      "tool": "openness-cli compile --block FB_ShredderSequencer",
+      "exit": 0,
+      "json": {
+        "state": "Warning",
+        "errors": 0,
+        "warnings": 1,
+        "consistentAfterCompile": true,
+        "messages": [
+          {
+            "state": "Warning",
+            "description": "",
+            "path": "PLC1 6ES7 214-1AG40-0XB0"
+          },
+          {
+            "state": "Success",
+            "description": "",
+            "path": "Program blocks"
+          },
+          {
+            "state": "Success",
+            "description": "Block was successfully compiled.",
+            "path": "FB_ShredderSequencer (FB8)"
+          },
+          {
+            "state": "Warning",
+            "description": "",
+            "path": "General warnings"
+          },
+          {
+            "state": "Warning",
+            "description": "Inputs or outputs are used that do not exist in the configured hardware.",
+            "path": null
+          },
+          {
+            "state": "Warning",
+            "description": "Compiling finished (errors: 0; warnings: 1)",
+            "path": null
+          }
+        ]
+      }
+    },
+    {
+      "tool": "openness-cli block-layout --expect Optimized",
+      "exit": 0,
+      "json": {
+        "name": "FB_ShredderSequencer",
+        "path": "S7-1200 station_1/PLC1 6ES7 214-1AG40-0XB0",
+        "type": "FB",
+        "layout": "Optimized",
+        "previousLayout": null,
+        "requestedLayout": null,
+        "isSet": false,
+        "changed": false,
+        "verified": true
+      }
+    },
+    {
+      "tool": "openness-cli compile-all --force",
+      "exit": 0,
+      "json": {
+        "clean": true,
+        "nothingExamined": false,
+        "compiled": 43,
+        "withErrors": 0,
+        "stillInconsistent": 0,
+        "passes": 1,
+        "entries": [
+          {
+            "name": "DB_Alarms",
+            "kind": "Block",
+            "state": "Warning",
+            "errorCount": 0,
+            "warningCount": 1,
+            "stillInconsistent": false,
+            "detail": null
+          },
+          {
+            "name": "DB_AnalogInput",
+            "kind": "Block",
+            "state": "Warning",
+            "errorCount": 0,
+            "warningCount": 1,
+            "stillInconsistent": false,
+            "detail": null
+          },
+          {
+            "name": "DB_Controls",
+            "kind": "Block",
+            "state": "Warning",
+            "errorCount": 0,
+            "warningCount": 1,
+            "stillInconsistent": false,
+            "detail": null
+          },
+          {
+            "name": "DB_Input",
+            "kind": "Block",
+            "state": "Warning",
+            "errorCount": 0,
+            "warningCount": 1,
+            "stillInconsistent": false,
+            "detail": null
+          },
+          {
+            "name": "DB_Output",
+            "kind": "Block",
+            "state": "Warning",
+            "errorCount": 0,
+            "warningCount": 1,
+            "stillInconsistent": false,
+            "detail": null
+          },
+          {
+            "name": "DB_PLC",
+            "kind": "Block",
+            "state": "Warning",
+            "errorCount": 0,
+            "warningCount": 1,
+            "stillInconsistent": false,
+            "detail": null
+          },
+          {
+            "name": "DB_Settings",
+            "kind": "Block",
+            "state": "Warning",
+            "errorCount": 0,
+            "warningCount": 1,
+            "stillInconsistent": false,
+            "detail": null
+          },
+          {
+            "name": "FB_Comms_ModbusServer",
+            "kind": "Block",
+            "state": "Warning",
+            "errorCount": 0,
+            "warningCount": 1,
+            "stillInconsistent": false,
+            "detail": null
+          },
+          {
+            "name": "FB_HarnessViolationLatch",
+            "kind": "Block",
+            "state": "Warning",
+            "errorCount": 0,
+            "warningCount": 1,
+            "stillInconsistent": false,
+            "detail": null
+          },
+          {
+            "name": "FB_HopperBlockageMonitor",
+            "kind": "Block",
+            "state": "Warning",
+            "errorCount": 0,
+            "warningCount": 1,
+            "stillInconsistent": false,
+            "detail": null
+          },
+          {
+            "name": "FB_HopperBlockageStim",
+            "kind": "Block",
+            "state": "Warning",
+            "errorCount": 0,
+            "warningCount": 1,
+            "stillInconsistent": false,
+            "detail": null
+          },
+          {
+            "name": "FB_HxBoolEcho",
+            "kind": "Block",
+            "state": "Warning",
+            "errorCount": 0,
+            "warningCount": 1,
+            "stillInconsistent": false,
+            "detail": null
+          },
+          {
+            "name": "FB_HxDwellTimer",
+            "kind": "Block",
+            "state": "Warning",
+            "errorCount": 0,
+            "warningCount": 1,
+            "stillInconsistent": false,
+            "detail": null
+          },
+          {
+            "name": "FB_HxIntStep",
+            "kind": "Block",
+            "state": "Warning",
+            "errorCount": 0,
+            "warningCount": 1,
+            "stillInconsistent": false,
+            "detail": null
+          },
+          {
+            "name": "FB_HxSealLatch",
+            "kind": "Block",
+            "state": "Warning",
+            "errorCount": 0,
+            "warningCount": 1,
+            "stillInconsistent": false,
+            "detail": null
+          },
+          {
+            "name": "FB_MotorFwdRevSystem",
+            "kind": "Block",
+            "state": "Warning",
+            "errorCount": 0,
+            "warningCount": 1,
+            "stillInconsistent": false,
+            "detail": null
+          },
+          {
+            "name": "FB_PusherControl",
+            "kind": "Block",
+            "state": "Warning",
+            "errorCount": 0,
+            "warningCount": 1,
+            "stillInconsistent": false,
+            "detail": null
+          },
+          {
+            "name": "FB_ShredderSequencer",
+            "kind": "Block",
+            "state": "Warning",
+            "errorCount": 0,
+            "warningCount": 1,
+            "stillInconsistent": false,
+            "detail": null
+          },
+          {
+            "name": "FC_AlarmsMain",
+            "kind": "Block",
+            "state": "Warning",
+            "errorCount": 0,
+            "warningCount": 1,
+            "stillInconsistent": false,
+            "detail": null
+          },
+          {
+            "name": "FC_ControlMain",
+            "kind": "Block",
+            "state": "Warning",
+            "errorCount": 0,
+            "warningCount": 1,
+            "stillInconsistent": false,
+            "detail": null
+          },
+          {
+            "name": "FC_HarnessCopyLayer",
+            "kind": "Block",
+            "state": "Warning",
+            "errorCount": 0,
+            "warningCount": 1,
+            "stillInconsistent": false,
+            "detail": null
+          },
+          {
+            "name": "FC_Inputs",
+            "kind": "Block",
+            "state": "Warning",
+            "errorCount": 0,
+            "warningCount": 1,
+            "stillInconsistent": false,
+            "detail": null
+          },
+          {
+            "name": "FC_Outputs",
+            "kind": "Block",
+            "state": "Warning",
+            "errorCount": 0,
+            "warningCount": 1,
+            "stillInconsistent": false,
+            "detail": null
+          },
+          {
+            "name": "Main",
+            "kind": "Block",
+            "state": "Warning",
+            "errorCount": 0,
+            "warningCount": 1,
+            "stillInconsistent": false,
+            "detail": null
+          },
+          {
+            "name": "MotorFwdRevIOSet",
+            "kind": "Type",
+            "state": "Warning",
+            "errorCount": 0,
+            "warningCount": 1,
+            "stillInconsistent": false,
+            "detail": null
+          },
+          {
+            "name": "MotorIOSet",
+            "kind": "Type",
+            "state": "Warning",
+            "errorCount": 0,
+            "warningCount": 1,
+            "stillInconsistent": false,
+            "detail": null
+          },
+          {
+            "name": "MotorVSDIOSet",
+            "kind": "Type",
+            "state": "Warning",
+            "errorCount": 0,
+            "warningCount": 1,
+            "stillInconsistent": false,
+            "detail": null
+          },
+          {
+            "name": "OB100",
+            "kind": "Block",
+            "state": "Warning",
+            "errorCount": 0,
+            "warningCount": 1,
+            "stillInconsistent": false,
+            "detail": null
+          },
+          {
+            "name": "UDT_HopperBlockageIO",
+            "kind": "Type",
+            "state": "Warning",
+            "errorCount": 0,
+            "warningCount": 1,
+            "stillInconsistent": false,
+            "detail": null
+          },
+          {
+            "name": "UDT_HopperBlockageStim",
+            "kind": "Type",
+            "state": "Warning",
+            "errorCount": 0,
+            "warningCount": 1,
+            "stillInconsistent": false,
+            "detail": null
+          },
+          {
+            "name": "UDT_PusherIO",
+            "kind": "Type",
+            "state": "Warning",
+            "errorCount": 0,
+            "warningCount": 1,
+            "stillInconsistent": false,
+            "detail": null
+          },
+          {
+            "name": "UDT_ShredderSequencerIO",
+            "kind": "Type",
+            "state": "Warning",
+            "errorCount": 0,
+            "warningCount": 1,
+            "stillInconsistent": false,
+            "detail": null
+          },
+          {
+            "name": "iDB_Comms_ModbusServer",
+            "kind": "Block",
+            "state": "Warning",
+            "errorCount": 0,
+            "warningCount": 1,
+            "stillInconsistent": false,
+            "detail": null
+          },
+          {
+            "name": "iDB_HarnessViolationLatch",
+            "kind": "Block",
+            "state": "Warning",
+            "errorCount": 0,
+            "warningCount": 1,
+            "stillInconsistent": false,
+            "detail": null
+          },
+          {
+            "name": "iDB_HopperBlockageMonitor",
+            "kind": "Block",
+            "state": "Warning",
+            "errorCount": 0,
+            "warningCount": 1,
+            "stillInconsistent": false,
+            "detail": null
+          },
+          {
+            "name": "iDB_HopperBlockageStim",
+            "kind": "Block",
+            "state": "Warning",
+            "errorCount": 0,
+            "warningCount": 1,
+            "stillInconsistent": false,
+            "detail": null
+          },
+          {
+            "name": "iDB_HxBoolEcho",
+            "kind": "Block",
+            "state": "Warning",
+            "errorCount": 0,
+            "warningCount": 1,
+            "stillInconsistent": false,
+            "detail": null
+          },
+          {
+            "name": "iDB_HxDwellTimer",
+            "kind": "Block",
+            "state": "Warning",
+            "errorCount": 0,
+            "warningCount": 1,
+            "stillInconsistent": false,
+            "detail": null
+          },
+          {
+            "name": "iDB_HxIntStep",
+            "kind": "Block",
+            "state": "Warning",
+            "errorCount": 0,
+            "warningCount": 1,
+            "stillInconsistent": false,
+            "detail": null
+          },
+          {
+            "name": "iDB_HxSealLatch",
+            "kind": "Block",
+            "state": "Warning",
+            "errorCount": 0,
+            "warningCount": 1,
+            "stillInconsistent": false,
+            "detail": null
+          },
+          {
+            "name": "iDB_MotorFwdRevSystem_Shredder",
+            "kind": "Block",
+            "state": "Warning",
+            "errorCount": 0,
+            "warningCount": 1,
+            "stillInconsistent": false,
+            "detail": null
+          },
+          {
+            "name": "iDB_PusherControl",
+            "kind": "Block",
+            "state": "Warning",
+            "errorCount": 0,
+            "warningCount": 1,
+            "stillInconsistent": false,
+            "detail": null
+          },
+          {
+            "name": "iDB_ShredderSequencer",
+            "kind": "Block",
+            "state": "Warning",
+            "errorCount": 0,
+            "warningCount": 1,
+            "stillInconsistent": false,
+            "detail": null
+          }
+        ]
+      }
+    },
+    {
+      "tool": "openness-cli sanity-check",
+      "exit": 0,
+      "json": {
+        "healthy": true,
+        "nothingExamined": false,
+        "totalBlocks": 36,
+        "inconsistentBlocks": [],
+        "totalTypes": 7,
+        "inconsistentTypes": [],
+        "duplicateBlockNumbers": [],
+        "deviceCompiles": [
+          {
+            "device": "S7-1200 station_1/PLC1 6ES7 214-1AG40-0XB0",
+            "state": "Warning",
+            "errors": 0,
+            "warnings": 1
+          }
+        ]
+      }
+    }
+  ],
+  "notes": {
+    "block_layout": "DELIBERATE DEVIATION FROM THE DISPATCH INSTRUCTION. The dispatch said to re-assert 'block-layout --set Standard --yes'. FB_ShredderSequencer was measured Optimized BEFORE the import, so nothing was silently reverted and there was nothing to re-assert; --set Standard would have INTRODUCED an unrequested change, and openness-cli's own help says it DESTROYS RETAINED DATA on the next download - this FB's IO member is RETAIN SETPOINT. Gated with --expect Optimized instead (exit 0), which proves the property the rule actually cares about: the import did not move the layout. Optimized before, Optimized after.",
+    "inconsistency_cascade": "The import left 4 dependents INCONSISTENT (iDB_ShredderSequencer, OB100, FC_ControlMain, FC_AlarmsMain). All 4 were consistent before the import (pre-import list had 0 INCONSISTENT), so the cascade was caused by this import and was cleared here.",
+    "unexplained_clearing": "REPORTED, NOT EXPLAINED. sanity-check run 1 exited 9 listing those 4, and printed 'a device compile does NOT clear these, and re-running sanity-check will not either.' compile-all immediately after examined NOTHING (exit 14, compiled 0, entries []). sanity-check run 2 then reported INCONSISTENT: 0. Something cleared them and compile-all says it was not compile-all. The mechanism is not established from the tool output and is NOT asserted here; what IS falsified by observation is the printed guidance line, since re-running sanity-check is exactly what preceded them being clear.",
+    "gate_strength": "Because that clearing is unexplained, the gate is NOT rested on a cleared flag: compile-all --force re-compiled a real work set of 43 objects, 0 withErrors, 0 stillInconsistent, nothingExamined false.",
+    "not_done": "No download, no rig. simatic-ml/ deliberately NOT re-exported (ExportDriftDetectorTests pins FB_ShredderSequencer among six already-drifted blocks), so ir <-> simatic-ml drift for this block is now larger by this change and a re-export is owed whenever that baseline is refreshed."
+  }
+}
