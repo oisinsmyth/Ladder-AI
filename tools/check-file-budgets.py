@@ -67,7 +67,13 @@ BUDGETS = [
     (".claude/skills/gen-pid-analysis/SKILL.md", 8704),
     (".claude/skills/review-conventions/SKILL.md", 30208),
     (".claude/skills/review-functional/SKILL.md", 18944),
-    (".claude/skills/review-simplicity/SKILL.md", 12288),
+    # Raised 12288 -> 12800 on 2026-08-21, and NOT because the file needed room:
+    # the C-603 mechanization paragraph was compressed twice to fit under 12,288 and
+    # landed at 12,267, leaving 21 bytes. That is the exact state this table's own
+    # seeding comment calls out as a gate that cries wolf - a typo fix would fail it.
+    # This restores the >= 256 slack floor the seeding rule requires. It buys the file
+    # 533 bytes, none of which is spent.
+    (".claude/skills/review-simplicity/SKILL.md", 12800),
 ]
 
 STAGED = "--staged" in sys.argv[1:]
