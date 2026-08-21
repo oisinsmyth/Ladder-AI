@@ -126,55 +126,25 @@ this skill exists to prevent.
 ### An absent field is decided per case, and never defaulted
 
 ***"THE FIELD WAS ABSENT" MUST NOT QUIETLY BECOME "THE CHECK PASSED" — NOR AUTOMATICALLY "REFUSED".***
-The two are different facts and the gate distinguishes them. Measured on the built exe:
+The two are different facts and the gate distinguishes them.
 
-| what is absent | outcome | why that one |
-|---|---|---|
-| `enumeration.enumerator` | ***NOT CHECKED*** | a property of the **enumeration**, which a resubmission of the *vector* cannot fix. Reporting it refused would send an author to edit the wrong artifact |
-| `enumeration.forms` | ***NOT CHECKED*** | same — the flat projection simply carries no forms to be the authority |
-| a vector's `assertionForm` (i.e. `Unstated`) | ***REFUSED*** | the vector had one field to fill and left it |
-| a form for the **cited** assertion, or `Unstated` on either side | ***REFUSED*** | the comparison cannot be made, and an uncomparable form is not a passing one |
-| an expectation's `expected` (the predicate) | ***REFUSED*** | measured: a null predicate became the literal `<no predicate>`, was compared against the observed value, and produced a **FAIL** — *a vector that never said what right looks like told its author the block was wrong* |
-| `completionValue` / `completionSignal` | ***REFUSED*** | the same shape one field over: an unstated value yields **`TIMED-OUT`** on a healthy block. **Contract §2.2 removed the default of 1** — a near-universal default is what makes the rare `Step = 90` block invisible |
-| `kills` | ***REFUSED*** | §10 requires mutation and this is the only mechanism there is |
-| any `inputs` value or `completionValue` **outside its element's range** | ***REFUSED BY NAME, never a modulo*** | §2.6. The refusal prints *what it would have become*: `75000` arrives as **`9464`** — a plausible dwell nobody questions — and every boundary keyed on it fires early, returning a confident `FAIL` against a correct block. **Measured: 81 duration values in the deliverable set exceed 65 535 ms** |
-| an `inputs` value present but **empty** | ***REFUSED*** | ***zero is a value a block could legitimately be driven with***, so supplying one invents the stimulus |
-| a signal the vector says **nothing about** | **not checked — legitimate** | an undriven input is the *inert declaration's* business. **Absent is not present-and-empty** |
-| a mirrored signal's **element type** | ***REFUSED*** | the table's zero value is `Unstated`; nothing can be range-checked against a type with no width |
-| a **completion signal wider than one register** | ***REFUSED as INEXPRESSIBLE*** | comparing it tests the **high half** and reports `TIMED-OUT` forever on a block that finished — and ***a spurious `TIMED-OUT` is worse than a spurious `FAIL`, because it is believed*** |
-| the conflict graph (both `computedConflicts` and `conflictEdges`) | ***NOT CHECKED*** | a blacklist compared against an absent graph is a blacklist nobody checked |
-| provenance on any conflict edge | ***NOT CHECKED*** | *"0 multi-writer findings"* and *"nobody recorded why these conflict"* are the same empty report. **All-or-nothing: ONE unprovenanced edge disables the report for the whole submission** |
-| `conflictEdges` present as **`null`** | ***REFUSED*** | §2.7. **Not the same as omitted** — a lenient deserializer restores the false *"ran and found nothing"* claim one layer down |
-| a signal in neither `map.storage` nor `map.harnessOnly` | ***NOT CHECKED*** | §2.7, and ***measured at 16 of 17 signals*** in the deliverable submission. `providedFor` says HOW a signal is watched, never WHERE it is |
-| a signal in **both** | ***REFUSED***, naming it | it cannot both occupy storage and occupy none |
-| a `storage` entry's `owner` | **a POSITIVE claim, not an omission** | the path is **global** — DB member, PLC tag, `iDB_…`, physical address — and already unique |
-| a declared join resolving to **more than one** storage | ***REFUSED, naming EVERY candidate*** | ***never resolved to one***; picking a candidate is the aliasing that manufactured fictional multi-writers |
-| a conflict edge's **signal class** | ***NOT CHECKED*** (`Unstated`) | **derived from the writing blocks, never declared.** There is no field for it, and an unclassifiable signal fails closed |
-| a mirrored signal's `specName` | ***NOT CHECKED***, naming the tag | §2.8. A property of the **binding**, so resubmitting the vector cannot supply it. ***Never "same as `tag`"*** — as a default it matches by accident where the names coincide and misses everywhere else. **If they genuinely are the same, STATE it** |
-| a signal's **instrumentation mode** | **CHECKED — DERIVED, a real pass** | there is no field for it, so a caller assertion is **inexpressible**. The generator emits no per-signal latch, so `Sampled` is the derived answer |
-| `latchedBy` | **no latch is claimed** — a derivation, not a default | fails closed: `Sampled` stands and any `Latched` expectation is refused |
-| **proof that a `latchedBy` block is deployed** | ***never performed*** | ***the gate takes the NAME, not the FACT.*** Verify it yourself |
-| ***an UNKNOWN field, anywhere in a submission*** | ***REFUSED, NAMING IT*** | ***a silently-ignored field reads as ACCEPTED*** — the author is most careful exactly where the hole is. §2.4 |
-| `blockCompression`, at `runtimeCompression` > 1 | ***NOT CHECKED*** | three of X-D's four ceilings compared against nothing |
-| `blockCompression`, at `runtimeCompression` = 1 | **CHECKED — a real pass** | nothing is scaled, so none of the three *can* bind. **Computed from the submission, not assumed** |
-| a preset's `source` (`Data`/`Literal`) | ***REFUSED*** | the two answers push OPPOSITE ways — a data preset lowers the timer ceiling, a literal one lowers the ratio-distortion ceiling. No fail-safe guess exists |
-| `negligibleFraction` | **NOT DECLARED, never invented** | the spec works an example and never says where "negligible" ends. Above comp 1 this blocks; it is not an exemption |
-| `model.compStable`, above comp 1 | ***REFUSED*** | the plan is asking a model to run at a rate nobody declared |
-| `deployment` (§4.5's layout record) | ***NOT CHECKED*** | a property of the **download**, not of a vector. Absent is **not** the same as `s7Objects: []`, which is a positive claim that no S7comm path reaches a data block |
-| an `s7Objects` row's `layout`, or `layoutSetAfterImport` | ***REFUSED*** | absence means "no opinion" and **TIA resolves no opinion to `Optimized`**, which is invisible on the wire. A stale stamp means it reverted at the last import |
-| a vector's `boundsUsed` (§2.5) | ***NOT CHECKED*** | ***this is the AMB-19 hole itself, not a formality*** — a vector that records no bound **cannot be found stale by anything**, so it survives a retune with every gate green. **It keeps this status even beside a provably stale sibling**: *"we compared and refused"* must not hide *"and these we could not compare at all"* |
-| `enumeration.bounds` | ***NOT CHECKED*** | an absent table is not an agreeing one |
-| a declared bound that **differs** from the table | **REFUSED, reported `STALE`** | ***never `FAIL`.*** The block may be correct and the vector predates a retune |
-| a declared bound the table does **not contain** | **REFUSED, reported `Unknown`** | a disagreement about which bounds *exist*; its repair precedes any question about a value, so it outranks `Stale` |
-| `enumeration.normalisedTexts` | ***NOT CHECKED*** | the stamper's output is taken on trust — **and the omission is exactly what a compromised stamper would emit** |
-| `enumeration.requiredObservations` | ***NOT CHECKED*** | a relational assertion's second signal goes unobserved and the relation is untested while everything reports green |
+**The table is contract §2.4, and it is the single authoritative version.** It carries every row this
+section used to restate and about a dozen more, and **no gate may invent a treatment that is not in
+it.** Read it per run rather than from memory: it is ahead of anything remembered — the
+`boundsUsed: {}` ruling of 2026-08-17 (§2.5) landed after this section was written, and a remembered
+row would now be wrong. §2.4's complement matters as much as the table: ***an UNKNOWN field is a
+refusal naming it, never silently ignored*** — an author is most careful exactly where the hole is.
 
-**Contract §2.4 is the single authoritative version of this table** — it covers the document fields this
-one omits, and no gate may invent a treatment that is not in it. The four treatments are different
-facts: **REFUSED** (fix the vector) · ***NOT CHECKED*** (fix another artifact — never a pass) ·
-**NOT DECLARED** (a bound nobody computed, ***which is not a ceiling of infinity***) ·
-**reported-but-not-gating** (computed to be unable to bind, and printed anyway so an absent line never
-reads as a check that passed).
+The four treatments are different facts: **REFUSED** (fix the vector) · ***NOT CHECKED*** (fix
+another artifact — never a pass) · **NOT DECLARED** (a bound nobody computed, ***which is not a
+ceiling of infinity***) · **reported-but-not-gating** (computed to be unable to bind, printed anyway
+so an absent line never reads as a check that passed).
+
+Two of §2.4's rows carry an instruction to *you* rather than a rule about the document, so they are
+repeated here: **a `specName` that genuinely equals its `tag` must SAY so** rather than be left
+absent — as a default it matches by accident where the names coincide and misses everywhere else;
+and **the gate takes the NAME, not the FACT, for `latchedBy` — verify yourself that the named block
+is deployed and latches this signal.**
 
 > 🔴 ***AND THIS IS WHY `AssertionForm.Unstated` IS THE ZERO VALUE.*** It used to be `When = 0`, so an
 > omitted field was silently handed **the permissive form** — the exact hole 3e exists to close,
@@ -238,111 +208,61 @@ the whole pipeline exists to prevent. If either side is unrecorded, that is *als
 **unknown is not independent.**
 
 ### Gate 3 — `Basis`, both halves
-A clause alone is *admissible and nearly worthless*. The clause says where the requirement came from;
-**the assertion says what would be observed if the block were correct, and that is the decorrelating
-half** — two readings of one clause produce two *visibly different* assertions instead of two greens.
-The assertion must be an **ID cited from the spec-derived enumeration**. An author who *writes* an
-assertion rather than *citing* one has re-created the correlated check with extra steps.
+**Contract §3**, which carries the full rule plus the autopsy it came from, the §7-denominator trap,
+the enumeration-document requirements and the checkable/not-checkable split.
+
+The half that does the work: a clause alone is *admissible and nearly worthless*. **The assertion
+says what would be observed if the block were correct, and that is the decorrelating half** — and it
+must be an **ID cited from the enumeration**, never written. An author who *writes* an assertion
+rather than *citing* one has re-created the correlated check with extra steps.
 
 ### Gate 3i — bounds currency, ***the hole made entirely out of correct decisions***
-Contract **§2.5**. Two rulings, each right on its own: **no hashed assertion text contains a numeric
-bound** (which is what makes a re-issue cost zero re-hashes), and **retuning the bounds table therefore
-re-hashes nothing.** Together:
+**Contract §2.5 and its five subsections** — the mismatch-is-`STALE`-never-`FAIL` ruling, why it
+outranks both its neighbours, why the comparison is asymmetric on purpose, and the four states of
+which only one is a pass.
 
-> *** A RETUNE CHANGES THE TRUTH CONDITIONS OF EVERY ASSERTION REFERRING TO THE TABLE WHILE MOVING ZERO
-> IDs *** — 22 of 27 on the hopper enumeration. A vector written against `T#60S` goes on passing after
-> the bound becomes `T#90S`: nothing dangles, nothing recomputes wrong, and no `Stale` fires, because
-> staleness keys on assertion **IDs** and not on bound **values**.
+The shape, so you recognise it: **no hashed assertion text contains a numeric bound**, and retuning
+the bounds table therefore **re-hashes nothing** — so a retune changes the truth conditions of every
+assertion referring to the table while moving zero IDs. A vector written against the old bound goes
+on passing, because staleness keys on assertion **IDs** and not on bound **values**.
 
-- **`boundsUsed` is REQUIRED for admissibility.** `{ "persistence_threshold": "T#60S" }` on the vector,
-  compared against `enumeration.bounds`. **Carry the bare value** — the enumeration's YAML wraps the
-  number in provenance prose; a mis-transcription then shows up as a loud STALE naming both strings.
-- 🔴 ***A MISMATCH IS `STALE` AND NEVER `FAIL`.*** A `FAIL` says the block disagreed with the
-  specification; here the block may be perfectly correct and the vector predates a retune nobody told it
-  about. The refusal ends ***"Do NOT edit the block on the strength of this finding"*** and a test
-  asserts that sentence — **it is load-bearing text.** Same defect as the missing predicate, one field
-  over: a fact nobody supplied, surfacing as a verdict about the block.
-- **It outranks both neighbours in the result package.** Before **admissibility**, because `Refused`
-  reads as *the author broke a rule* and this author broke none. Before **content**, because ***a
-  retuned bound is `Stale` even when an assertion disagreed*** — a disagreement measured against the
-  wrong number is not evidence.
-- **A vector stating no bound is NOT CHECKED, and keeps that status beside a provably stale sibling.**
-  Both refuse, so nothing is admitted either way; only the report differs — and *"we compared and
-  refused"* must not hide *"and these we could not compare at all."*
-- **`Unknown` (a bound the table does not contain) outranks `Stale`**: a broken reference has to be
-  repaired before any question about its value can be asked.
-- ***The comparison is ASYMMETRIC on purpose — say so, or somebody will "fix" it.*** The bound's **name**
-  is case-insensitive because a wrong name yields a refusal, so laxity there **fails closed**. The
-  bound's **value** is ordinal and case-preserving because laxity there would turn a real difference into
-  a ***pass***. And it is deliberately **not a duration parser**: `T#60S` and `T#1M` are the same
-  interval and it reports them as different — *teaching it to equate them is how a comparator starts
-  passing.* The cost of the strictness is a human reading two values; the cost of the leniency is a
-  silent green.
+🔴 **Read §2.5 rather than remembering this section**: the `boundsUsed: {}` ruling of 2026-08-17 — an
+empty bounds object is a **claim** that is verified, not a silence that is accepted — postdates
+everything this skill used to say here.
 
 ### Gate 4 — fidelity (M4)
-Set-difference: every asserted behaviour must be in the model's `Represents`. A model that claims
-nothing, or that claims and disclaims the same behaviour, is **unusable** — a declaration that says two
-things says nothing.
+Set-difference: every asserted behaviour must be in the model's `Represents`. **A model that claims
+nothing, or that claims and disclaims the same behaviour, is unusable — a declaration that says two
+things says nothing.**
 
-> 🔴 ***AND THE DECLARATION DESCRIBES THE MODEL AS ITS IR STATES IT.*** If the deployed object has
-> **drifted**, the fidelity declaration describes a *different object from the one that will run*, and
-> every M4 pass is a set-difference against the wrong set. ***A stimulus model that has drifted from its
-> IR is a model whose behaviour nobody has checked*** — measured: `iDB_HopperBlockageStim`, the stimulus
-> model the live vector set depends on, was one of four drifted objects. **Not admissible; the verdict is
-> `STALE`, never `FAIL` and never `REFUSED`** (contract §2.9).
+⚠️ **M4 has no section of its own in the contract, and `§4` is NOT it — §4 is observability.** The
+set-difference rule lives in §1's element table and §10's row; the drift half is **§2.9**.
+
+> 🔴 ***THE DECLARATION DESCRIBES THE MODEL AS ITS IR STATES IT.*** If the deployed object has
+> **drifted**, the declaration describes a *different object from the one that will run*, and every
+> M4 pass is a set-difference against the wrong set. **Not admissible; the verdict is `STALE`, never
+> `FAIL` and never `REFUSED`** (contract §2.9).
 
 ### Gate 5 — observability, ***the one with teeth***
-Read the floor from **§12a derivation 1**. Do not carry the number here or in your report: it has moved
-twice, and a restated constant will one day refuse the wrong vectors with great confidence.
+**Read the floor from §12a derivation 1** — which is in `docs/notes/PC-Client-Modbus-Spec-Draft-final.txt`,
+not in the contract. **Do not carry the number here or in your report**: it has moved twice, and a
+restated constant will one day refuse the wrong vectors with great confidence.
 
-- **A one-scan event is unobservable at any polling rate** — a poll IS one round trip; there is no rate
-  to turn up. **A same-scan coincidence is unobservable by sampling at all.**
-- ***PREFER LATCHED.*** Not merely cheaper: it is the only mode immune to the tail. A small but real
-  fraction of poll gaps are enormous, and a sampled assertion landing in one is **a silent wrong
-  answer, not an error**. A latch cannot fall in a gap.
-- **Scan counts are meaningless without the `comp` they were stated at.** A behaviour occupying 20
-  scans at `comp = 1` occupies 2 at `comp = 10` — *crossing the floor with nobody editing the vector.*
-  The vector declares its `comp`; the floor is re-checked at the `comp` actually used.
-- **The declaration must exist before the download that generates the copy layer**, and is frozen for
-  the wave set. This is the single most common way an author is surprised.
+The rules are **contract §4.1–§4.4**: the physical floor (a one-scan event is unobservable at any
+polling rate; a same-scan coincidence is unobservable by sampling at all), the three modes and why
+you ***PREFER LATCHED*** (it is the only mode immune to the tail — a sampled assertion landing in a
+long poll gap is a silent wrong answer, not an error), what must be declared per expectation, and why
+**scan counts are meaningless without the `comp` they were stated at**.
 
-> 🔴 ***DECLARING `Latched` DOES NOT MAKE A SIGNAL LATCHED — AND THIS GATE HAS FAILED IN BOTH DIRECTIONS
-> AT ONCE.*** Measured on one live run: **17 `Latched` expectations across 11 of 27 vectors.** **13
-> refusals were CORRECT** — the copy layer emits a plain **coil** for those signals, and a coil is not a
-> latch. ***4 were FALSE REFUSALS***: those signals genuinely **are** latched on the device by a
-> deployed hand-authored block, and there was **no mode field to say so** while the code hard-coded
-> every signal to `Sampled`. *A real, deployed latch was structurally undeclarable.*
->
-> **So the mode is DERIVED from what the copy layer generates** (contract §2.8), and ***there is no field
-> in which anyone may declare one*** — which makes a caller assertion **inexpressible rather than merely
-> unchecked**. A field that cannot be written cannot be written wrongly.
->
-> The one statable thing is **who performs a latch**: `latchedBy`, naming the **BLOCK**. `latched: true`
-> would swap the generator's assumption for a caller's and improve nothing; **a block name is provenance**
-> — checkable against the deployed object set. **Absent `latchedBy` means no latch is claimed**, so
-> `Sampled` stands and a `Latched` expectation is refused. *A derivation, not a default.*
->
-> 🔴 ***BUT THE GATE TAKES THE NAME, NOT THE FACT.*** It does not verify that the named block is deployed
-> or that it latches this signal. **Verify that yourself.** *(And note how this nearly stayed hidden: the
-> gate's own admission was rendered only when the report had no problems, so four claims went through
-> unremarked. **An admission that appears only when everything passed is missing from every report anyone
-> reads closely** — the reports people study are the ones with findings in them.)*
->
-> ⚠️ ***A BLOCK THAT LATCHES ITS OWN OUTPUT IS A VALUE UNDER TEST, NOT INSTRUMENTATION.*** If the
-> sealing or holding **is the behaviour being asserted**, declare those expectations **`Sampled`** and
-> leave `latchedBy` absent. Naming the block under test as its own instrumenter claims that the thing
-> being tested is why the test can see anything — true by construction, and the correlated check arriving
-> through a new door. **`latchedBy` names an INSTRUMENT: something that exists so a value can be
-> observed, and would be pointless otherwise.**
+**The mode is DERIVED, and that is contract §2.8** — including why `latchedBy` names a **block**
+rather than asserting a mode, why declaring `Latched` does not make a signal latched, and why a block
+that latches **its own output** is a value under test rather than instrumentation. Two instructions
+out of that section are yours to act on rather than merely know:
 
-> 🔴 ***AND CHECK WHICH NAME YOU ARE READING.*** The harness assumed **the specification's signal name
-> IS the block's tag name**. One run, three mechanical paths broken by that one assumption: gate 5's 17
-> refusals, a static interface check reporting a signal missing, and the conflict graph resolving **1 of
-> 17** signals — *the one being `HopperBlockedAlarm`, **the only signal whose two names coincide***.
-> A mirrored signal carries **both**: `tag` (on the controller) and `specName` (in the specification).
-> ***An absent `specName` is a REFUSAL and never "same as tag"*** — that defaulting rule is the
-> assumption being removed. *The translation had only ever lived in a prose markdown table, which is why
-> a predicted finding could be laundered in it: prose is what no gate reads.*
+- 🔴 **The gate takes the NAME, not the FACT.** It does not verify the named block is deployed or
+  that it latches this signal. **Verify that yourself.**
+- ⚠️ If the sealing or holding **is the behaviour being asserted**, declare those expectations
+  **`Sampled`** and leave `latchedBy` absent.
 
 **If a vector is refused here, STOP AND ESCALATE — do not fix it by editing the block.** The obvious
 repair (add a status output so the behaviour is visible) collides with D13/§2.1, and whether an author
@@ -350,73 +270,48 @@ may change a block's interface purely to make it testable is **open with the own
 Adding one is not yours to decide.
 
 ### Gate 6 — settling
-***A completion flag is NOT a settling signal.*** Phase 2's defective build **raised `Done` at 10 and
-went on ramping to 15**, so a faster-than-floor poll reads mid-ramp and returns a **confidently wrong
-verdict** — the harness observes a value, believes it, compares it, and is wrong. That is the worst
-outcome available in this system. If the settling condition names only the block's done-signal, it is
-refused. The block's own opinion of its progress is *a claim under test*, not evidence about the
-observation.
+**Contract §5**, plus **§5.1**'s ruling (keep the caller-supplied model, with `NotEstablished` as the
+third value) and its open gap, neither of which this skill used to carry.
+
+***A completion flag is NOT a settling signal.*** A defective build raised `Done` early and went on
+ramping, so a faster-than-floor poll reads mid-ramp and returns a **confidently wrong verdict** — the
+worst outcome available in this system. If the settling condition names only the block's done-signal,
+it is refused: **the block's own opinion of its progress is a claim under test**, not evidence about
+the observation.
 
 ### Gate 7 — start bool
-> 🔴 ***A SLOT MAY DECLARE `startCondition: null`, AND IT IS ADMISSIBLE*** (contract §6.1, ruled
-> 2026-08-14). ***The two objects are different and the prose used to conflate them:*** the slot's start
-> **bool** is a mirror bit, always exactly one per slot; `startCondition` is the ***block's own existing
-> start gate***, and a purely reactive block — a comparator, a level alarm — has none. Inventing one
-> would **fabricate a stimulus**, and binding to a test-only input added for the purpose is scaffolding
-> inside the block under test.
->
-> **But price it, because the generator guards the start bool and the X-E start echo behind the SAME
-> test — a null-start slot gets neither:**
-> - ***No "when".*** No per-slot T=0, so **do not admit a `Stamped` assertion or any timing claim** on
->   such a slot. `MaxDuration` bounds it from the *wave's* commit, not this block's start.
-> - ***No per-slot evidence the code ran.*** X-E echoes the block's own condition; there is none.
-> - 🔴 ***A `NEVER` PASSING ON A NULL-START SLOT CANNOT BE TOLD FROM "THE BLOCK NEVER RAN"*** — a
->   `Never` passes by seeing nothing, and the per-slot evidence that anything happened is exactly what is
->   missing. **It carries no weight until liveness is established some other way.**
->
-> A pass here says *these assertions held somewhere in this wave*, never *after this slot started*.
+**Contract §6** (exactly one per slot, bound by **name** and never by bit position, raised in one
+transaction on a later scan than the inert-establish, its rising edge recorded as T=0 rather than
+inferred) and **§6.1** (`startCondition: null` is admissible, and it is a claim).
 
-Exactly one per slot. ***Bound by NAME, never by bit position*** — the bit order within the start-bool
-register is `[I]`, not `[M]`, and the simulator and `BitAddressOf` agree *from the same premise*, so
-their agreement is worth nothing. Raised in one transaction with every other slot's start bool (X-A,
-the commit); raised on a **later scan** than the inert-establish (D33/D37), enforced against the
-**observed** counter, never assumed. Its rising edge is T=0, and T=0 is recorded rather than inferred.
+What to act on from §6.1's cost list: a null-start slot gets no per-slot T=0 and no per-slot evidence
+the code ran, so **do not admit a `Stamped` assertion or any timing claim on one**, and a `NEVER`
+passing on such a slot cannot be told from "the block never ran". A pass there says *these assertions
+held somewhere in this wave*, never *after this slot started*.
 
 ### Gate 8 — blacklist
-***May only ever ADD exclusions, never remove them.*** Computed disjointness (D9) is the floor; an
-agent must never be able to declare itself compatible with something the graph says it conflicts with.
-Every entry carries a **reason** — the failure mode is defensive over-blacklisting, concurrency
-collapsing toward serial, and nobody noticing *because it still works*. Note for the author: the
-blacklist names **blocks**, but admission colours **slots**, so naming a block excludes every slot
-testing it — usually what was meant, occasionally much wider.
+**Contract §7.** Add-only over computed disjointness (D9); every entry carries a reason; the failure
+mode is defensive over-blacklisting and nobody noticing *because it still works*. Note for the
+author: the blacklist names **blocks** while admission colours **slots**, so naming a block excludes
+every slot testing it.
 
 ### Gates 8 and 8c — ***first check whether they COULD have been fed at all***
-Both consume `conflictEdges`, and a conflict graph is a statement about **storage**: two blocks conflict
-because they write *the same location*. **A submission names signals; nothing joined them to storage.**
+Both consume `conflictEdges`, and a conflict graph is a statement about **storage**: two blocks
+conflict because they write *the same location*. **A submission names signals; nothing joined them to
+storage** — measured at **16 of 17 signals resolving to no PLC storage path**, so these two gates were
+not merely unsupplied, they were *inexpressible*.
 
-> *** MEASURED: 16 OF 17 SIGNALS IN THE DELIVERABLE SUBMISSION RESOLVE TO NO PLC STORAGE PATH. *** They
-> are harness-side logical names. `map.providedFor` carries **observability modes** — it says HOW a
-> signal can be watched and never WHERE it is — so **these two gates were not merely unsupplied, they
-> were inexpressible.** Contract **§2.7** is the join: `map.storage` (signal → `{owner?, path}`) and
-> `map.harnessOnly` (signals that occupy no PLC storage, as a positive claim).
+**Contract §2.7** is the join and carries the rules: `map.storage` and `map.harnessOnly`, `owner` and
+`path` as separate keys, the three states, and why an ambiguous resolution is refused naming every
+candidate. Two things there are instructions rather than rules:
 
-- ***A BARE LEAF NAME IS NOT A STORAGE REFERENCE.*** Matching a signal to storage by the shape of its
-  name — "find the path that ends with this" — re-introduces **the aliasing defect that manufactured
-  fictional multi-writers** (`IO.Step` in two UDTs; a `Time` temp declared separately in three FBs), at
-  the gate boundary instead of inside the analysis. **Two of the four cross-block multi-writer findings
-  this project ever recorded were fiction produced that way.** Never resolve by name shape, and do not
-  accept a submission that asks you to.
-- **`owner` and `path` are separate keys, not one dotted string** — *an emitted string is not a schema*,
-  and a consumer handed `A.B.C` cannot tell an owning block from a DB without parsing.
-- ***An ambiguous resolution is refused NAMING EVERY CANDIDATE***, never resolved to one. Instance
-  aliases of one storage are collapsed first, so a refusal means genuinely different storage.
-- **A signal in neither map is NOT CHECKED; in both, REFUSED.** `harnessOnly` is a claim the author
-  makes, and it is what turns *"this may be a mirror-only signal, or the name may be wrong"* — two
-  entirely different repairs behind one silence — into a fact.
-- ⚠️ ***AND THE JOIN NEEDS TO KNOW WHICH NAME IT IS KEYING ON.*** `map.storage` says where a **tag**
-  lives; the specification cites a **spec name**. The one signal that resolved out of seventeen resolved
-  because those two strings happen to be identical (§2.8). **A submission carrying no `specName` cannot
-  be fixed by declaring storage** — check §2.8 first.
+- ***A BARE LEAF NAME IS NOT A STORAGE REFERENCE.*** Matching by name shape re-introduces the aliasing
+  defect that manufactured fictional multi-writers — two of the four cross-block multi-writer findings
+  this project ever recorded were fiction produced that way. **Never resolve by name shape, and do not
+  accept a submission that asks you to.**
+- ⚠️ The join needs to know **which name it is keying on**: `map.storage` says where a **tag** lives,
+  the specification cites a **spec name**. **A submission carrying no `specName` cannot be fixed by
+  declaring storage — check §2.8 first.**
 
 ### Gate 8c — multi-writer provenance (X-G)
 Two blocks that both write one coil are a conflict, so the packer puts them in different tensors and
@@ -424,28 +319,18 @@ Two blocks that both write one coil are a conflict, so the packer puts them in d
 must carry, per edge, **why** the two conflict, **on which signal**, and **whether that signal is part
 of the deliverable**.
 
+**Contract §2.7**'s refusal-semantics subsections carry the rest, with §10's row: `[]` is the
+**earned** claim that the graph ran and found nothing while a `null` lets a lenient deserializer
+restore that claim falsely; the signal class is **derived from the writing blocks, never declared**;
+and the provenance test is ***all-or-nothing***, so one unprovenanced edge turns 8c to NOT CHECKED for
+the entire submission. 🔴 `computedConflicts` is therefore **never emitted** — *say so, or somebody
+"fixes" the omission.*
+
 - **A finding is REPORTED, NOT REFUSED**, and that is a decision: the defect is in the *deliverable*,
   not in the submission, and refusing here would make a vector author answerable for a program defect
-  they cannot fix. **Whether it should instead be a hard refusal is an open owner question** — flag it,
-  do not settle it. *(It is in tension with the standing "a warning is not a gate" rule; the reading
-  taken is that this warning is about a program the vector author cannot repair.)*
-- ***The teeth are on the ABSENCE of provenance.*** An unprovenanced graph is **NOT CHECKED**: a bare
-  block list and a fully-analysed clean graph produce the identical empty report, and only one of them
-  means anything. `computedConflicts` (bare names) is *legal and unprovenanced* — mixing it with
-  `conflictEdges` leaves the packing set complete and 8c NOT CHECKED, which is the honest answer.
-- 🔴 **Which is why `computedConflicts` is now NEVER EMITTED, deliberately** — say so, or somebody
-  "fixes" the omission. The provenance test is ***all-or-nothing***, so ***one unprovenanced edge turns
-  8c to NOT CHECKED for the ENTIRE submission***: a helpful-looking extra edge — a call-graph coupling,
-  which is about **no signal** and so can carry no signal class — would **silently disable the
-  multi-writer report it was added beside.** Call-graph and shared-model coupling belong in the
-  **author's blacklist**, which is add-only for exactly this reason.
-- **The signal CLASS is derived from the writing blocks, never declared.** There is no field for it. An
-  unclassifiable signal carries `Unstated` through to the gate — *the refusal is carried across, not
-  resolved into a guess*.
-- ***`conflictEdges` is OMITTED when the graph did not run — not `[]`, and NOT `null`.*** `[]` is the
-  **earned** claim that the graph ran over a whole corpus and found nothing; **a `null` lets a lenient
-  deserializer restore that false claim one layer down.** A partial corpus makes it concrete: an
-  unparsed file may hold the second writer that makes a signal a conflict.
+  they cannot fix. **Whether it should instead be a hard refusal is an open owner question** — flag
+  it, do not settle it. *(It is in tension with the standing "a warning is not a gate" rule; the
+  reading taken is that this warning is about a program the vector author cannot repair.)*
 
 ### Gates 10a and 10b — time compression (X-D)
 ***A scan count and the `comp` it was stated at are ONE FACT.*** The hazard runs in both directions and
@@ -479,27 +364,19 @@ Gate 5 asks whether a window clears a floor. **This is prior to that and it is b
 > NOT AN ERROR. THE BLOCK IS SIMPLY ABSENT, AND IT FAILS AT THE FIRST *DATA* READ RATHER THAN AT
 > CONNECT.***
 
-**The invariant (contract §4.5, the coordinator's ruling, overturnable at one line):** *the harness
-never touches a deliverable block's data directly — it touches harness-generated objects only.* That is
-the isolation the copy layer already provides, so **the block under test stays `Optimized`, the platform
-default, and a deliverable pays nothing.**
+**Contract §4.5** carries the invariant and its consequences: the harness touches harness-generated
+objects only, so the block under test stays `Optimized` and a deliverable pays nothing; the `%MW`
+mirror is not a data block and has no layout to revert, while a harness *data block* is guaranteed by
+**re-assertion**; the layout **reverts at every import, silently**, so `--set Standard` after each
+import and `--expect Standard` as the gate — ***`--expect` only tells you it broke; `--set` repairs
+it***; and ***never accept `drift-check` as the gate for this***, because the `Normalizer` ignores the
+attribute and reports MATCH in both directions.
 
-- **Two mechanisms, and conflating them is the mistake to avoid.** The `%MW` mirror — the wave's whole
-  surface, **start bools included** — is **not a data block at all**, so it has no layout to revert;
-  its guarantee is the **address**. A harness *data block* is guaranteed by **re-assertion**. Somebody
-  hunting for `--expect Standard` on the mirror will not find one, and that is not a missing check.
-- ***THE LAYOUT REVERTS AT EVERY IMPORT, SILENTLY*** (the exported `.xml` carries no `MemoryLayout`
-  element, so the import states no opinion). So: `block-layout --set Standard --yes` after **each**
-  import, then `--expect Standard` as the gate. ***`--expect` only tells you it broke; `--set` is what
-  repairs it.***
-- ***NEVER ACCEPT `drift-check` AS THE GATE FOR THIS.*** The `Normalizer` ignores the attribute, so it
-  reports MATCH in **both** directions. A green from a blind check is worse than no check.
-- 🔴 **True today, enforced by nothing.** Audited 2026-08-13: the wave path is Modbus-into-`%M`
-  throughout and cannot break the invariant; the rig marker DB is a harness object declared `Standard`.
-  **But `S7Transport` resolves tags through a HAND-WRITTEN JSON tag map and will address any DB**, and
-  the write fence is scoped on an **area name from that same map** — so it checks that the caller's
-  claimed area matches the tag's, never what *kind of object* it is. **If a submission's transport is
-  that tag map, ask which DBs it names before believing the invariant holds for it.**
+🔴 **True today, enforced by nothing** (§4.5's audit). The one thing to *do* rather than know:
+**`S7Transport` resolves tags through a hand-written JSON tag map and will address any DB**, and the
+write fence is scoped on an area name from that same map — so it checks that the caller's claimed area
+matches the tag's, never what *kind of object* it is. **If a submission's transport is that tag map,
+ask which DBs it names before believing the invariant holds for it.**
 
 ---
 
@@ -525,53 +402,49 @@ So for every vector, require and record:
 
 ## Step 4 — how to read a result, ***including what it does not mean***
 
-| verdict | means | does **not** mean |
-|---|---|---|
-| **PASS** | these assertions held | that the block is correct — only *these* assertions, under *this* model, at *this* fidelity |
-| **FAIL** | an assertion was observed and disagreed | that the vector is right. ***Fix the block against the SPECIFICATION, not against the vector*** |
-| **TIMED-OUT** | the condition never occurred within `MaxDuration` | the wrong thing happened. Kept distinct because an agent told only FAIL goes and fixes the wrong thing |
-| **UNSETTLED** | the value never met its settling condition | that the value was wrong — **nothing was legitimately read at all** |
-| ***STALE*** | ***the experiment never ran*** — **or the vector's premise expired** (§2.5) | anything whatsoever about the block |
-| **REFUSED** | the vector was inadmissible | a defect in the block |
+**The verdict table is contract §8.1**, with its two "does not mean" columns — plus **§8.1a**, which
+this skill never carried: ***the harness's record of its own actions is an input to the verdict.***
+
+The one row that is an instruction: on a **FAIL**, ***fix the block against the SPECIFICATION, not
+against the vector.*** And the three verdicts that are not failures — `TIMED-OUT`, `UNSETTLED`,
+`STALE` — are kept distinct precisely because an agent told only `FAIL` goes and fixes the wrong
+thing.
 
 > ⚠️ ***A SPURIOUS `TIMED-OUT` IS WORSE THAN A SPURIOUS `FAIL`, BECAUSE IT IS BELIEVED.*** A `FAIL`
 > invites an argument with the specification and someone goes and looks; a `TIMED-OUT` reads as *the
 > condition simply never occurred* and **closes the question**. That asymmetry is why a value that
-> cannot fit its mirror element is **refused** rather than compared (§2.6) — and why a 32-bit completion
-> signal is refused as *inexpressible* rather than compared against its high half.
+> cannot fit its mirror element is **refused** rather than compared (§2.6) — and why a 32-bit
+> completion signal is refused as *inexpressible* rather than compared against its high half.
 
-### ***`Stale` has TWO ROADS, and they send you to different halves of the system***
+### ***`Stale` has THREE ROADS, and they send you to different halves of the system***
 
-| road | it is a … | what to do |
-|---|---|---|
-| frozen mirror / no stimulus confirmed | ***RIG*** problem | the experiment never ran. Nothing here is evidence about anything |
-| an out-of-date `boundsUsed` (AMB-19) | ***VECTOR*** problem | the experiment ran fine and **measured the wrong number**. Re-read the vector against the current bounds table and re-submit |
-| a **drifted** model or block (§2.9) | ***PROJECT*** problem | the experiment ran fine **against an object that is not the one the fidelity declaration describes**. Re-export or re-import, then re-run |
+**Contract §8.1** — the paragraph beginning ***"`STALE` HAS THREE ROADS"***, not §2.5's "Two roads"
+heading, which predates the drift road and covers only two of them. A rig problem (the experiment
+never ran), a **vector** problem (an out-of-date `boundsUsed` — it ran fine and measured the wrong
+number), and a **project** problem (a drifted model or block, §2.9 — it ran fine against an object
+that is not the one the fidelity declaration describes).
 
-**In none of the three do you edit the block** — and telling somebody *"the experiment never ran"* when
-it was the premise that expired, or the project that moved, sends them to the wrong place entirely.
-**Read which road the result names.**
+**In none of the three do you edit the block** — and telling somebody *"the experiment never ran"*
+when it was the premise that expired, or the project that moved, sends them to the wrong place
+entirely. **Read which road the result names.**
 
 > 🔴 ***AND CHECK THE PROJECT BEFORE THE WAVE, NOT AFTER.*** `drift-check --complete` against a fresh
 > controller dump — **and read its SCOPE line**, because a green summary without it only means
 > *everything paired matched*. Measured on the first whole-project run: **4 DRIFTED, one of them the
-> stimulus model the live vector set depends on**, and **3 EXPORT-ONLY** — objects in the controller with
-> no `.ir` at all, which make the corpus partial and are ***named, never counted***.
+> stimulus model the live vector set depends on**, and **3 EXPORT-ONLY** — objects in the controller
+> with no `.ir` at all, which make the corpus partial and are ***named, never counted***.
 
 ### `Stale` is the one that will fool you
 
+**Contract §8.2** (why it is hard to make unmistakable, including the addendum on proving freshness
+by a counter at every derived layer) and **§8.3** (what a green never licenses).
+
 > ***"EVERY REGISTER AGREES" IS ALSO WHAT A MIRROR NO WRITE EVER REACHED LOOKS LIKE.***
 
-A frozen mirror is *perfectly self-consistent*: it passes every coherence check and every
-did-the-values-agree test, because nothing ever changed them. So **liveness must be established
-independently of content** — the stimulus check, a counter that advanced **by the expected amount**
-(not merely "moved"), and manifest presence, which separates *wrong* from *never loaded*.
+A frozen mirror is *perfectly self-consistent*: it passes every coherence check, because nothing ever
+changed the values. So **liveness must be established independently of content**.
 
 ***READ THE VERDICT, NOT THE EXIT CODE.*** And: **an absence of disagreement is not a result.**
-
-A green never licenses more than it says. It does not generalise past the model's fidelity
-declaration; it does not survive its validity stamp (program version + map version, DB-2); and it does
-not mean the co-running slice was benign — only that nothing detected interference.
 
 ---
 
