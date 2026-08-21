@@ -216,3 +216,59 @@ be genuinely skill-local (i.e. no agent outside that skill can reach the situati
 and 20,277 bytes after. The Commands-block content it shed was migrated into
 `src/converter/README.md` and `src/openness-cli/README.md`; what was checked is recorded in
 `docs/notes/claude-md-migration-inventory.md` (working file - delete once the cut has settled).
+
+## D-10 — `lad-coder` reading raw SimaticML, and the IR gap that sent it there
+
+**What:** two coupled fixes. They are recorded as one item deliberately, because doing the first
+without the second makes the agent's job impossible rather than safer.
+
+*(a) The boundary.* `lad-coder` must not read raw SimaticML. Owner's ruling, 2026-08-21, on
+reviewing an instrumented `explain-plc-block` run: *"XML is for the converter only, except in
+weird unexpected situations where there may be a problem with the xml, but still that is not for
+the lad-coder to deal with."* So even the exception case - a suspect or malformed export - is a
+converter concern to be reported upward, not something the ladder agent opens the XML to settle.
+
+The run in question (`ir/test-project001/FB_ShredderSequencer.ir`, read-only) cross-read
+`simatic-ml/test-project001/FB_ShredderSequencer.xml` and reasoned from its `Parts`/`Wires` -
+specifically the `Mul(71).eno -> Convert(72).en` chaining - to establish execution order.
+
+**The agent broke no stated rule.** That is the finding, not an excuse. Hard rule 7 is written
+entirely around *writes*: "Edit only IR, never raw SimaticML ... don't hand-patch XML." Reading
+is not prohibited by its letter. `.claude/agents/lad-coder.md` does not mention SimaticML at all.
+The prohibition on reads is real but currently unwritten, so it needs stating in both places.
+
+*(b) The reason it went there.* The agent read the XML because **the IR does not tell it execution
+order**. IR groups statements within a network by instruction kind, and nothing in `ir/SPEC.md`'s
+reachable path, the resident `CLAUDE.md`, or the `explain-plc-block` skill says that kind-order is
+not execution order. Read literally in IR order, the block's Network 2 appears to run ten `MUL`s
+into one shared TEMP before any `CONVERT` consumes it - i.e. all ten timer presets taking the last
+product. The agent was one step from reporting that as a headline defect; it is false, and the
+export's wiring is what disproved it. It caught itself only because an unrelated block comment
+happened to mention kind-ordering.
+
+This is ADR-0010 territory (*no IR that the AI cannot change*): a semantic the AI must reason
+about is legible only in the sidecar/export, not in the readable IR.
+
+**Ordering constraint:** fix (b) at or before (a). Closing the XML boundary on its own removes the
+only route the agent had to a fact it needs, and the next run ships the false defect instead of
+catching it.
+
+**Fix shape:**
+- Hard rule 7 restated to cover reads, not just edits, with the escalate-don't-investigate path for
+  a suspect export named explicitly.
+- The same boundary stated in `.claude/agents/lad-coder.md`, which is currently silent on it.
+- Execution order made legible without leaving IR. Minimum viable: an explicit warning in the
+  `explain-plc-block` skill's Method that IR statement order is kind-order, never execution order.
+  Better: `ir/SPEC.md` states it where a reader will hit it. Best, and the actual ADR-0010 answer:
+  the IR renders enable-chain order so the question does not arise.
+
+**Why deferred:** recorded as a future fix at the owner's direction, 2026-08-21, rather than
+patched inline during the CLAUDE.md context-cut validation.
+
+**Revisit trigger:** picked up as its own change; or immediately, if any `lad-coder` report is seen
+citing SimaticML as evidence again - that is this item recurring, not a new finding.
+
+**Provenance:** surfaced by the second instrumented `explain-plc-block` re-run against the cut
+`CLAUDE.md` (`docs/notes/context-cut-handoff.md`). That run also confirmed subagents receive the
+post-cut file (19,593 bytes, `## Routing rules` present) and found no regression attributable to
+the cut itself.

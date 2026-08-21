@@ -80,11 +80,32 @@ Release src/converter/converter.sln` clean; all 15 normative hard-rule keywords 
   `explain-plc-block` dispatch, instrumented to report gaps. **A generation or fix run has not
   been tried**, and those exercise far more of the file — the READMEs are now on the critical
   path in a way they were not before. That is the next validation worth doing.
-- **The session-caching behaviour is inferred, not proven.** The smoke-test subagent reported its
-  injected `CLAUDE.md` was still the old 96KB copy, and the parent session's was too. The likely
-  mechanism is that project instructions are read once at session start. **Restart Claude Code to
-  pick up the new file**; confirm by asking a fresh session whether its context contains a
-  `## Routing rules` heading, which exists only in the new file.
+- ~~**The session-caching behaviour is inferred, not proven.**~~ **SETTLED 2026-08-21.** The
+  mechanism was as suspected: project instructions are read once at session start, so the original
+  smoke test ran with the old 96KB copy injected and was measuring only the file on disk. After a
+  restart, a second instrumented `explain-plc-block` dispatch reported its own injected
+  `CLAUDE.md` carries the `## Routing rules` heading at ~19-20KB. **Subagents receive the cut
+  file.** If you cut further, restart before believing any dispatch's report about it.
+
+### What the second run found
+
+Re-run 2026-08-21 against `ir/test-project001/FB_ShredderSequencer.ir`, read-only, instrumented.
+
+- **No regression attributable to the cut.** Orientation cost was two `ls` calls to locate the
+  Release converter exe. Both things restored in `56656a1` paid off measurably: the Green-tier
+  line for `test-project001` saved a `docs/13` open, and the one-line `digest --fingerprint` index
+  entry saved opening the converter README.
+- **Dead weight is real but is NOT an argument for trimming further.** The agent reported ~80% of
+  the resident file inert for this task - all twelve routing rules, the whole `openness-cli` table,
+  the compile-gate detail, the mechanical-floor exit-1/exit-2 principle. That is expected for a
+  read-only explain and says nothing about the write path, which is exactly what those rules serve
+  and what still has not been tested.
+- **One real gap, now recorded as `deferred-items.md` D-10** - and it is not `CLAUDE.md`'s. The
+  agent read raw SimaticML to establish execution order, because IR kind-orders statements and
+  nothing legible to it says kind-order is not execution order. Owner's ruling: the ladder agent
+  has no business in the XML at all. Hard rule 7 as written prohibits only *editing* it, so no
+  stated rule was broken. See D-10 - the boundary fix and the IR-legibility fix are coupled, and
+  doing the boundary alone makes the next run ship the false defect this one narrowly avoided.
 
 ## What is left
 
