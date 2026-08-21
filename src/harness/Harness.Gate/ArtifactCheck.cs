@@ -76,6 +76,16 @@ public static class ArtifactCheck
     /// </summary>
     private static ArtifactVerdict Deployment(string content)
     {
+        // 🔴 *** A DOWNLOAD IS PERFORMED BY download-probe, WHICH EMITS A LOG - NOT A LoopResult. ***
+        //
+        // This check originally accepted only a serialized LoopResult, on the reasoning that the loop's
+        // gateway performs the deployment. Measured on a real submission: that gateway has never run,
+        // every actual download on this rig was done by `download-probe`, and its evidence is a text log.
+        // So `deployment` was UNATTRIBUTABLE in practice - a field nothing could satisfy, which is a gate
+        // that refuses correct work rather than one that catches anything.
+        if (content.Contains("==== download-probe", StringComparison.Ordinal))
+            return ProbeLog(content);
+
         JsonDocument document;
         try
         {
@@ -83,7 +93,7 @@ public static class ArtifactCheck
         }
         catch (JsonException ex)
         {
-            return new ArtifactVerdict(false, $"WRONG KIND - the deployment artifact is not valid JSON: {ex.Message}");
+            return new ArtifactVerdict(false, $"WRONG KIND - the deployment artifact is neither a download-probe log nor valid JSON: {ex.Message}");
         }
 
         using (document)
@@ -109,6 +119,43 @@ public static class ArtifactCheck
                 + "The deployment it describes did not complete, so it cannot be the provenance for a deployment "
                 + "declaration." + detail);
         }
+    }
+
+    /// <summary>
+    /// A <c>download-probe</c> log, judged on <b>its own TRANSFER VERDICT and nothing else</b>.
+    ///
+    /// <para>*** THE PROBE'S OWN DOCUMENTATION SAYS WHY: "transfers NOTHING. Read the TRANSFER VERDICT,
+    /// never the state." *** A download can report <c>state=Success</c> having moved nothing at all — the
+    /// target was already up to date — so keying on the state would accept a deployment that did not
+    /// happen.</para>
+    ///
+    /// <para><b>The whole token is matched, never a substring.</b> The three rendered values are
+    /// <c>TRANSFERRED</c>, <c>NOTHINGTRANSFERRED</c> and <c>UNDETERMINED</c> — and <c>TRANSFERRED</c> is a
+    /// substring of the failure case, so a <c>Contains</c> would read "nothing was transferred" as
+    /// success. Anything that is not exactly the good token is refused: fail closed.</para>
+    /// </summary>
+    private static ArtifactVerdict ProbeLog(string content)
+    {
+        const string marker = "TRANSFER VERDICT : ";
+
+        var at = content.IndexOf(marker, StringComparison.Ordinal);
+        if (at < 0)
+        {
+            return new ArtifactVerdict(false,
+                "ARTIFACT REPORTS FAILURE - the download-probe log carries no TRANSFER VERDICT line at all, so it "
+                + "does not say whether anything reached the controller. A run that cannot say is not evidence that it did.");
+        }
+
+        var rest = content[(at + marker.Length)..];
+        var end = rest.IndexOfAny(new[] { '\r', '\n', ' ' });
+        var verdict = (end < 0 ? rest : rest[..end]).Trim();
+
+        return string.Equals(verdict, "TRANSFERRED", StringComparison.Ordinal)
+            ? new ArtifactVerdict(true, "a download-probe log whose TRANSFER VERDICT is TRANSFERRED.")
+            : new ArtifactVerdict(false,
+                $"ARTIFACT REPORTS FAILURE - the download-probe log's own TRANSFER VERDICT is '{verdict}', not "
+                + "'TRANSFERRED'. The probe distinguishes a download that completed from one that moved anything, "
+                + "and only the second is evidence of a deployment.");
     }
 
     private static ArtifactVerdict TagMap(string content)

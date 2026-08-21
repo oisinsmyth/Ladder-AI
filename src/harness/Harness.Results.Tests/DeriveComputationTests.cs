@@ -103,6 +103,48 @@ public class DeriveComputationTests
     }
 
     [Fact]
+    public void A_DOWNLOAD_PROBE_LOG_IS_ACCEPTED_because_that_is_what_actually_performs_a_download()
+    {
+        // 🔴 *** MEASURED: `deployment` WAS UNATTRIBUTABLE IN PRACTICE. *** This check originally took
+        // only a serialized LoopResult, on the reasoning that the loop's gateway deploys. That gateway has
+        // never run; every real download on the rig is done by `download-probe`, whose evidence is a text
+        // log. A field nothing can satisfy is a gate that refuses correct work.
+        var (exit, output, _) = Derive(deploy: ProbeLog("TRANSFERRED"));
+
+        Assert.True(exit == DeriveExit.Derived, output);
+    }
+
+    [Fact]
+    public void AND_A_PROBE_LOG_THAT_MOVED_NOTHING_IS_REFUSED_even_though_TRANSFERRED_is_a_substring()
+    {
+        // *** THE SUBSTRING TRAP, PINNED. *** The rendered failure value is NOTHINGTRANSFERRED, which
+        // CONTAINS "TRANSFERRED" - so a Contains check would read "nothing was transferred" as success.
+        // The probe's own docs say it outright: "transfers NOTHING. Read the TRANSFER VERDICT, never the
+        // state." A download can report state=Success having moved nothing.
+        var (exit, output, _) = Derive(deploy: ProbeLog("NOTHINGTRANSFERRED"));
+
+        Assert.Equal(DeriveExit.Refused, exit);
+        Assert.Contains("ARTIFACT REPORTS FAILURE", output, StringComparison.Ordinal);
+        Assert.Contains("NOTHINGTRANSFERRED", output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AND_A_PROBE_LOG_WITH_NO_VERDICT_LINE_IS_REFUSED()
+    {
+        var (exit, output, _) = Derive(deploy: "==== download-probe ====\nstarted : whenever\n");
+
+        Assert.Equal(DeriveExit.Refused, exit);
+        Assert.Contains("no TRANSFER VERDICT line", output, StringComparison.Ordinal);
+    }
+
+    /// <summary>A download-probe log carrying one rendered TRANSFER VERDICT value.</summary>
+    private static string ProbeLog(string verdict) =>
+        "==== download-probe ============================================================\n"
+        + "project        : somewhere/Scratch.ap20\n"
+        + $"TRANSFER VERDICT : {verdict}\n"
+        + "Download completed: state=Success, errors=0, warnings=0.\n";
+
+    [Fact]
     public void AN_UNRECOGNISED_DEPLOY_OUTCOME_IS_REFUSED_because_this_check_fails_closed()
     {
         // A new outcome value will be added by somebody who is not thinking about this check.
