@@ -445,7 +445,10 @@ logic; reviewers err toward flagging, and "defensible" is not a pass.
   3. **No convention citations.** **Say the rule, do not cite it** — "the valve closes when the block
      faults" rather than "fail-safe per C-403". Whoever opens this block does not have this document
      and should not need it. If a rule matters to the reader then its substance matters; its number
-     never does.
+     never does. **A paraphrase is still a citation.** "Wider than a rung would normally be" is
+     C-602's guide with the number removed and breaches this exclusion exactly as "per C-602" would
+     — the tell is that it describes a *convention* rather than the *plant*. This bites hardest where
+     another rule asks for a justification: see C-602's note on stating a reason without citing one.
   *Why this is its own rule and not part of C-202.* C-202 is a judgement about emphasis and ordering
   that only a reader can make. **This one is mechanical** — a comment containing `C-nnn`, a date, or
   "used to be" fails it without anyone exercising taste, which makes it a candidate for the review
@@ -653,6 +656,16 @@ stricter-bar principle in the preamble — the rules a simplicity reviewer cites
   several coils within a single network** (e.g. interface coils) may exceed the guide rather than
   force an intermediate bit — splitting there would create the duplication C-601 prevents. Other
   exceptions state their reason in the network comment.
+  ⚠️ **State what the structure ACHIEVES, never what it departs from — C-204 governs how you write
+  that reason, and the obvious phrasing breaks it.** "This rung carries five branches where a rung
+  would normally be held to two" is *this rule's own guide with the identifier filed off*, which is
+  the citation C-204 excludes; "…not an oversight" defends the rung against a criticism, which is
+  the argument C-204 excludes. Both, in one sentence, written while trying to comply with this one.
+  Write the purpose instead — *"each step is listed on its own branch, so a step added later has to
+  decide for itself"* — and the width needs no defence, because the reason is then visible in the
+  rung. **Measured 2026-08-21:** a fix restoring C-603 wrote exactly the forbidden form while
+  carefully avoiding the rule number, and an independent review caught it. Satisfying C-602 is not a
+  licence to breach C-204; the two are only compatible in the achieves-not-departs-from form.
 - C-603 *(warn)* — **Step membership is enumerated, not ranged.** Conditions over a stepped
   sequence's phase enumerate the steps they mean (`Step = 30 OR Step = 40 OR Step = 50`);
   ordered-range predicates (`>=`, `<=`, spans) only where "every future step inserted in this span
