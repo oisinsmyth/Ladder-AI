@@ -14,9 +14,9 @@ hand while calling it "AI-assisted." If a human-facing agent quietly does the LA
 generation pipeline (`docs/15-generation-pipeline.md`) never gets exercised, and nothing gets
 learned about whether it actually works. You are that exercise, every single time.
 
-**Read `CLAUDE.md` at the repo root in full before doing anything else.** Its hard rules apply to
-you in full and without exception — you did not inherit a summary of them, read the actual file.
-The rest of this doc assumes you have.
+**`CLAUDE.md`'s hard rules are already in your context — they were injected with this file, they
+apply to you in full and without exception, and you do not need to read the file again.** The rest
+of this doc assumes them.
 
 ## What lands here
 
@@ -65,29 +65,12 @@ done manually, not skill-driven — that's the signal the project uses to decide
 been run enough times to be worth turning into a skill (`docs/evidence/stage-S6.md`'s working
 convention: second manual run of a stage = build its skill).
 
-## Hard rules, restated because they bind you most directly
+## Hard rules
 
-1. LAD only, **for PLC program content** — never SCL/STL/FBD/GRAPH/CFC as logic that runs on the
-   controller. (Clarified 2026-08-11: the rule governs what executes on the PLC. Test fixtures,
-   scripts and anything PC-side are not PLC program content and are not constrained by it.)
-2. Safety = stop. F-blocks, F-runtime groups, the safety program — never read, write, convert,
-   explain, or reference. Report and stop if you encounter one.
-3. Never invent tags, addresses, DB numbers, or hardware. Grep the current `ir/<project>/` export;
-   anything not there is `proposed`, not written against.
-4. Compile gate before "done." `openness-cli import` + `compile` on the scratch project, every
-   time, before you report anything as finished. Fix and retry on failure; never hand back
-   non-compiling logic as done.
-5. The real project is human-gated; everything before it is yours. Iterate against the scratch copy
-   as often as you need — import, compile, fix, re-import — **without asking each time**; the gate
-   is the promotion, not the intermediate steps. **Do not import into the real project without
-   permission.** What you hand back is a diff plus evidence (compile results, test results,
-   reviewer findings) for the dispatching agent and ultimately the engineer, who decides whether it
-   is promoted. *(Amended 2026-08-11. The old wording — "Never bypass review. Your output is a
-   proposal" — read as though every step needed sign-off. It never did, and under an autonomous
-   development loop that reading is actively wrong. See `10-non-goals.md` #4(a).)*
-6. No writing to a device **in service** — never download to it, online-edit it, force its tags, or write its data (`10-non-goals.md` #3). On a device in service the engineer makes the change in TIA Portal. (Re-scoped 2026-08-11 by ADR-0009: the gate is the *target*, not the kind of write. Writing to an **allowlisted test rig with its outputs physically incapable of actuating** is permitted and every write class is available there. **No such tooling exists yet** — until it does, this is a rule about what may be built, not a capability you have. The old blanket "no hardware access" was removed 2026-08-10; read-only device access is governed by ADR-0008.) **And when it does exist: no write to a device or a project happens without a verified restore point captured first — if the restore point cannot be captured, the write does not happen** (`10-non-goals.md` #4(b)). On live-job content that restore point is a deliberate backup, not a commit: `Live Runs/` is gitignored and nothing there reverts by itself.
-7. Edit only IR, never raw SimaticML. If the converter rejects something, that's a converter bug or
-   an unsupported construct — report it, don't hand-patch XML.
+The hard rules are in `CLAUDE.md`, already in your context, and they bind you in full. They are
+**not** restated here: a second copy drifts from the first, and this one had — it still described
+the rig tooling as not yet existing, and numbered the rules differently from the file it was
+copying. `CLAUDE.md` is the only statement of them.
 
 ## Portal-queue discipline
 
