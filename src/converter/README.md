@@ -3645,3 +3645,40 @@ branches, and still pass.
 dotnet build   # from this directory (converter.sln)
 dotnet test
 ```
+
+### ⚠️ An instance DB round-tripped from a TIA export cannot be re-imported: `Remanence` on a multi-instance
+
+**Measured 2026-08-21.** A TIA export of an instance DB, taken through `to-ir` and back through
+`to-xml`, is refused at import:
+
+```
+iDB_<seq>_<inst>.<member>: The Openness import failed: The attribute 'Remanence' cannot be set.
+import-all  SUMMARY: 14 imported, 4 failed, 0 rejected   exit 13
+```
+
+The member named is a **multi-instance static** — one whose datatype is a quoted FB name
+(`FillStartWin : "FB_MoveWindow"`). TIA will not accept `Remanence` on one, and the round trip puts
+it there.
+
+**Why `BlockSourceWriter`'s existing guard does not cover it.** That writer already omits `Remanence`
+for multi-instances (`WriteMember(..., omitRemanence:)`), deriving the set of multi-instance names
+**from the block's own CALL and fixed-shape instruction instances**. An instance DB has **no CALLs**,
+so the derivation has nothing to work from and `DbSourceWriter` emits the attribute unguarded.
+
+**Why the obvious fixes are wrong.** A quoted datatype is *not* enough on its own — in the same
+section, `IO : "UDT_SiloSequence" RETAIN` is a UDT and legitimately carries `Remanence`, while
+`FillStartWin : "FB_MoveWindow"` is an FB and must not. Telling them apart needs `--project` type
+resolution plumbed into the DB writer. **And a name-prefix test (`FB_…`) is not acceptable** — this
+repo already rules that out for reachability, for the same reason: anything can be renamed into a
+prefix.
+
+**Workaround, and why it costs nothing today.** *Do not import an instance DB.* TIA regenerates an
+instance DB's contents from its FB, so importing the FB is sufficient — verified on the run that
+found this: four instance-DB imports failed, and the new member was nevertheless present in all four
+when read back out of the controller, with `compile-all` reporting 33 compiled / 0 errors and
+`sanity-check OVERALL: HEALTHY`.
+
+🔴 **The trap is that the corpus looks importable and is not.** `preflight`, `review` and `to-xml`
+all pass; only the import refuses. `import-all` fails closed (exit 13) and names the member, which is
+what stops it being silent — but a caller reading only "the FB imported" would not learn that the
+instance DBs did not.
