@@ -88,8 +88,16 @@ public static class DiffRunner
         var oldComment = Normalize(oldBlock.Comment);
         var newComment = Normalize(newBlock.Comment);
 
-        var oldInterface = InterfaceCanonical(oldBlock, oldSidecars);
-        var newInterface = InterfaceCanonical(newBlock, newSidecars);
+        // Two canonicals per side, and the pair is the whole point (2026-08-21). STRUCTURE is the
+        // interface with every member COMMENT blanked — names, datatypes, RETAIN/SETPOINT, start
+        // values, external-access flags, nesting. WHOLE additionally carries the comment text. A
+        // difference in STRUCTURE gates; a difference visible only in WHOLE is documentation.
+        var oldStructure = InterfaceCanonical(StripMemberComments(oldBlock), oldSidecars);
+        var newStructure = InterfaceCanonical(StripMemberComments(newBlock), newSidecars);
+        var oldWhole = InterfaceCanonical(oldBlock, oldSidecars);
+        var newWhole = InterfaceCanonical(newBlock, newSidecars);
+
+        var structureChanged = !string.Equals(oldStructure, newStructure, StringComparison.Ordinal);
 
         return new HeaderDiff(
             TitleChanged: !string.Equals(oldTitle, newTitle, StringComparison.Ordinal),
@@ -98,8 +106,46 @@ public static class DiffRunner
             CommentChanged: !string.Equals(oldComment, newComment, StringComparison.Ordinal),
             CommentBefore: oldComment,
             CommentAfter: newComment,
-            InterfaceChanged: !string.Equals(oldInterface, newInterface, StringComparison.Ordinal));
+            InterfaceChanged: structureChanged,
+            // Deliberately NOT "whole differs" — that is true whenever the structure changed too, and
+            // would report a comment edit on every retype. This is the carve-out only: the structure
+            // is identical AND the text is not, i.e. nothing changed but the documentation.
+            InterfaceCommentChanged: !structureChanged
+                && !string.Equals(oldWhole, newWhole, StringComparison.Ordinal));
     }
+
+    // A copy of the block whose interface members carry no COMMENT, recursively through nested
+    // members. Model-level rather than text-level on purpose: stripping comment lines out of the
+    // serialized form would be a parser guessing at its own output, and a member comment can carry
+    // anything including text that looks like the grammar around it.
+    //
+    // ONLY `Comment` is blanked. Every other DbMember field stays in the comparison — Retain,
+    // SetPoint, Datatype, StartValue, Subelements, the three External* flags, Informative and its
+    // InformativeComment. That restraint is the point: DiffModel's own note says the dangerous
+    // direction here is one careless generalisation, so "documentation" means the field that exists
+    // to hold prose, not everything that looks descriptive. InformativeComment in particular is left
+    // gating - it is tied to the Informative flag, and nobody has established it cannot matter.
+    private static IrBlock StripMemberComments(IrBlock block) => block with
+    {
+        InputMembers = StripMemberComments(block.InputMembers),
+        OutputMembers = StripMemberComments(block.OutputMembers),
+        InOutMembers = StripMemberComments(block.InOutMembers) ?? Array.Empty<DbMember>(),
+        StaticMembers = StripMemberComments(block.StaticMembers),
+        TempMembers = StripMemberComments(block.TempMembers) ?? Array.Empty<DbMember>(),
+        ConstantMembers = StripMemberComments(block.ConstantMembers),
+    };
+
+    // null maps to null, never to empty. A section that is absent from the source and a section that
+    // is present-but-empty are a real, must-preserve distinction (IrSerializer.SerializeInterface),
+    // and collapsing them here would make an interface change invisible to the gate.
+    private static IReadOnlyList<DbMember>? StripMemberComments(IReadOnlyList<DbMember>? members) =>
+        members?.Select(StripMemberComments).ToList();
+
+    private static DbMember StripMemberComments(DbMember member) => member with
+    {
+        Comment = null,
+        NestedMembers = StripMemberComments(member.NestedMembers),
+    };
 
     // The block's INTERFACE section as sidecar-free, UId-free text, extracted from the canonical
     // whole-block serialization. Everything from "SIDECAR" onward (volatile UIds) and every network

@@ -458,4 +458,184 @@ public class DiffTests : IDisposable
         Assert.Contains("UNCHANGED REMAINDER: 2 network(s) proven identical", text);
         Assert.DoesNotContain("NOTHING WAS PROVEN", text);
     }
+
+    // ---- MEMBER COMMENTS: the 2026-08-21 carve-out, and the restraint around it ------------------
+    //
+    // A member's COMMENT is documentation, exactly as the block comment is. It used to sit inside the
+    // interface canonical, so repairing one was indistinguishable from a Bool -> Int retype and gated.
+    // The tests below fix BOTH directions: the repair must pass, and every other member field must
+    // still gate. The second half is the load-bearing half - a carve-out that leaked would let a real
+    // interface change through under cover of a comment edit.
+
+    private static IReadOnlyList<DbMember> StaticsWithComments(
+        params (string Name, string Type, string? Comment)[] members) =>
+        members.Select(m => new DbMember(m.Name, m.Type, Retain: false, StartValue: null, Comment: m.Comment))
+               .ToArray();
+
+    [Fact]
+    public void OnlyGate_InterfaceMemberCommentRepair_DoesNotGate()
+    {
+        var nets = new[] { Coil(1, "N1", "OutA", "InA"), Coil(2, "N2", "OutB", "InB") };
+        var report = DiffRunner.Run(
+            WriteIr(Block("FB_X", nets, statics: StaticsWithComments(("A", "Bool", "Step register (C-115)")))),
+            WriteIr(Block("FB_X", nets, statics: StaticsWithComments(("A", "Bool", "Step register")))),
+            new[] { 1 });
+
+        Assert.False(report.Header.InterfaceChanged);
+        Assert.True(report.Header.InterfaceCommentChanged);
+        Assert.False(report.Header.BehaviourBearingChange);
+        Assert.False(report.HasInvarianceViolation);
+        Assert.True(report.HasNonGatingCommentChange);
+
+        var text = DiffOutputFormatter.FormatText(report);
+        Assert.Contains("INVARIANCE OK", text);
+        Assert.Contains("INTERFACE member comments differ", text);
+    }
+
+    // THE MUTATION THAT MATTERS. Retype AND repair a comment in one edit: it must still gate, and the
+    // reason must name the INTERFACE, never the comment - a reader told "comment" deletes the comment.
+    [Fact]
+    public void OnlyGate_MemberRetypedAlongsideAMemberCommentRepair_StillGates()
+    {
+        var nets = new[] { Coil(1, "N1", "OutA", "InA"), Coil(2, "N2", "OutB", "InB") };
+        var report = DiffRunner.Run(
+            WriteIr(Block("FB_X", nets, statics: StaticsWithComments(("A", "Bool", "Step register (C-115)")))),
+            WriteIr(Block("FB_X", nets, statics: StaticsWithComments(("A", "Int", "Step register")))),
+            new[] { 1 });
+
+        Assert.True(report.Header.InterfaceChanged);
+        // Mutually exclusive by construction: the structure moved, so this is not a comment-only edit.
+        Assert.False(report.Header.InterfaceCommentChanged);
+        Assert.True(report.HasInvarianceViolation);
+
+        var text = DiffOutputFormatter.FormatText(report);
+        Assert.Contains("INVARIANCE VIOLATION", text);
+        Assert.Contains("an INTERFACE member changed", text);
+    }
+
+    // The carve-out is ONE field. Everything else about a member still answers --only's question yes.
+    [Fact]
+    public void OnlyGate_MemberRetainFlagChanged_StillGates()
+    {
+        var nets = new[] { Coil(1, "N1", "OutA", "InA"), Coil(2, "N2", "OutB", "InB") };
+        var before = new[] { new DbMember("A", "Bool", Retain: false, StartValue: null, Comment: "same") };
+        var after = new[] { new DbMember("A", "Bool", Retain: true, StartValue: null, Comment: "same") };
+
+        var report = DiffRunner.Run(
+            WriteIr(Block("FB_X", nets, statics: before)),
+            WriteIr(Block("FB_X", nets, statics: after)),
+            new[] { 1 });
+
+        Assert.True(report.Header.InterfaceChanged);
+        Assert.True(report.HasInvarianceViolation);
+    }
+
+    [Fact]
+    public void OnlyGate_MemberStartValueChanged_StillGates()
+    {
+        var nets = new[] { Coil(1, "N1", "OutA", "InA"), Coil(2, "N2", "OutB", "InB") };
+        var before = new[] { new DbMember("A", "Int", Retain: false, StartValue: "0", Comment: "same") };
+        var after = new[] { new DbMember("A", "Int", Retain: false, StartValue: "5", Comment: "same") };
+
+        var report = DiffRunner.Run(
+            WriteIr(Block("FB_X", nets, statics: before)),
+            WriteIr(Block("FB_X", nets, statics: after)),
+            new[] { 1 });
+
+        Assert.True(report.Header.InterfaceChanged);
+        Assert.True(report.HasInvarianceViolation);
+    }
+
+    // Renaming a member is not a comment change either - a caller resolves against the name.
+    [Fact]
+    public void OnlyGate_MemberRenamed_StillGates()
+    {
+        var nets = new[] { Coil(1, "N1", "OutA", "InA"), Coil(2, "N2", "OutB", "InB") };
+        var report = DiffRunner.Run(
+            WriteIr(Block("FB_X", nets, statics: StaticsWithComments(("A", "Bool", "same")))),
+            WriteIr(Block("FB_X", nets, statics: StaticsWithComments(("B", "Bool", "same")))),
+            new[] { 1 });
+
+        Assert.True(report.Header.InterfaceChanged);
+        Assert.True(report.HasInvarianceViolation);
+    }
+
+    // Comments are stripped RECURSIVELY, or a nested member's comment would still gate and the fix
+    // would work only for flat interfaces - which the block that motivated it does not have.
+    [Fact]
+    public void OnlyGate_NestedMemberCommentRepair_DoesNotGate()
+    {
+        var nets = new[] { Coil(1, "N1", "OutA", "InA"), Coil(2, "N2", "OutB", "InB") };
+        var before = new[]
+        {
+            new DbMember("IO", "Struct", Retain: false, StartValue: null, NestedMembers: new[]
+            {
+                new DbMember("Step", "Int", Retain: false, StartValue: null, Comment: "step (C-115)"),
+            }),
+        };
+        var after = new[]
+        {
+            new DbMember("IO", "Struct", Retain: false, StartValue: null, NestedMembers: new[]
+            {
+                new DbMember("Step", "Int", Retain: false, StartValue: null, Comment: "step"),
+            }),
+        };
+
+        var report = DiffRunner.Run(
+            WriteIr(Block("FB_X", nets, statics: before)),
+            WriteIr(Block("FB_X", nets, statics: after)),
+            new[] { 1 });
+
+        Assert.False(report.Header.InterfaceChanged);
+        Assert.True(report.Header.InterfaceCommentChanged);
+        Assert.False(report.HasInvarianceViolation);
+    }
+
+    // ... and a nested member RETYPED still gates, so the recursion strips comments and nothing else.
+    [Fact]
+    public void OnlyGate_NestedMemberRetyped_StillGates()
+    {
+        var nets = new[] { Coil(1, "N1", "OutA", "InA"), Coil(2, "N2", "OutB", "InB") };
+        var before = new[]
+        {
+            new DbMember("IO", "Struct", Retain: false, StartValue: null, NestedMembers: new[]
+            {
+                new DbMember("Step", "Int", Retain: false, StartValue: null, Comment: "step"),
+            }),
+        };
+        var after = new[]
+        {
+            new DbMember("IO", "Struct", Retain: false, StartValue: null, NestedMembers: new[]
+            {
+                new DbMember("Step", "Bool", Retain: false, StartValue: null, Comment: "step"),
+            }),
+        };
+
+        var report = DiffRunner.Run(
+            WriteIr(Block("FB_X", nets, statics: before)),
+            WriteIr(Block("FB_X", nets, statics: after)),
+            new[] { 1 });
+
+        Assert.True(report.Header.InterfaceChanged);
+        Assert.True(report.HasInvarianceViolation);
+    }
+
+    // Both flavours of documentation at once: the line must name BOTH, or a reader repairs one and
+    // believes the other was what changed.
+    [Fact]
+    public void OnlyGate_BlockAndMemberCommentsBothRepaired_NamesBoth()
+    {
+        var nets = new[] { Coil(1, "N1", "OutA", "InA"), Coil(2, "N2", "OutB", "InB") };
+        var report = DiffRunner.Run(
+            WriteIr(Block("FB_X", nets, statics: StaticsWithComments(("A", "Bool", "step (C-115)")), comment: StaleComment)),
+            WriteIr(Block("FB_X", nets, statics: StaticsWithComments(("A", "Bool", "step")), comment: FixedComment)),
+            new[] { 1 });
+
+        Assert.True(report.Header.CommentChanged);
+        Assert.True(report.Header.InterfaceCommentChanged);
+        Assert.False(report.HasInvarianceViolation);
+
+        var text = DiffOutputFormatter.FormatText(report);
+        Assert.Contains("the block comment AND one or more INTERFACE member comments differ", text);
+    }
 }

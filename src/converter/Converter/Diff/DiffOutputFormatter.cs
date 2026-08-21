@@ -42,6 +42,11 @@ public static class DiffOutputFormatter
                 sb.Append(" interface");
             }
 
+            if (report.Header.InterfaceCommentChanged)
+            {
+                sb.Append(" interface-comment");
+            }
+
             sb.Append('\n');
         }
 
@@ -108,7 +113,8 @@ public static class DiffOutputFormatter
             // misled by stale comments twice in two days. Non-gating is not invisible.
             if (report.HasNonGatingCommentChange)
             {
-                sb.Append("HEADER COMMENT CHANGED (does not gate): the block comment differs and nothing else\n")
+                sb.Append("HEADER COMMENT CHANGED (does not gate): ").Append(NonGatingCommentClause(report))
+                  .Append(" and nothing else\n")
                   .Append("       in the header does. A comment cannot alter what the PLC does, so it cannot be a\n")
                   .Append("       change outside --only — but READ IT: this is where a stale comment gets repaired,\n")
                   .Append("       and it is equally where a correct one gets silently discarded.\n");
@@ -151,6 +157,11 @@ public static class DiffOutputFormatter
                 commentBefore = report.Header.CommentBefore,
                 commentAfter = report.Header.CommentAfter,
                 interfaceChanged = report.Header.InterfaceChanged,
+                // Structure identical, member comment text different. A machine reader that gated on
+                // interfaceChanged alone keeps working unchanged - this is strictly a new, narrower
+                // signal, never a reclassification of something that used to gate as something that
+                // still does.
+                interfaceCommentChanged = report.Header.InterfaceCommentChanged,
             },
             summary = new
             {
@@ -212,10 +223,28 @@ public static class DiffOutputFormatter
         // A comment change reaches here only ALONGSIDE a behaviour-bearing one; on its own it does not
         // gate at all. Said anyway, and said as an aside, so a reader cannot come away thinking the
         // comment repair is what was refused — that misreading is what would send them to delete it.
-        return report.Header.CommentChanged
-            ? reason + " (the block comment also changed; on its own that would not gate)"
+        return report.Header.CommentChanged || report.Header.InterfaceCommentChanged
+            ? reason + " (" + NonGatingCommentSubject(report)
+                     + " also changed; on their own those would not gate)"
             : reason;
     }
+
+    // WHICH documentation changed, named. "the block comment" was hard-coded here until member
+    // comments stopped gating (2026-08-21), and a reader told the wrong subject goes and inspects
+    // the wrong text — the precise failure this whole line exists to prevent.
+    private static string NonGatingCommentSubject(DiffReport report) =>
+        (report.Header.CommentChanged, report.Header.InterfaceCommentChanged) switch
+        {
+            (true, true) => "the block comment AND one or more INTERFACE member comments",
+            (false, true) => "one or more INTERFACE member comments",
+            _ => "the block comment",
+        };
+
+    // Subject plus its verb, agreeing in number. Kept beside the subject rather than assembled at each
+    // call site so the three places that say this cannot drift into saying it differently.
+    private static string NonGatingCommentClause(DiffReport report) =>
+        NonGatingCommentSubject(report)
+        + (report.Header.InterfaceCommentChanged ? " differ" : " differs");
 
     // What the OK verdict examined in the header, spelled out rather than left to be assumed.
     private static string HeaderClause(DiffReport report)
@@ -227,7 +256,8 @@ public static class DiffOutputFormatter
 
         if (report.Header.CommentOnlyChange)
         {
-            return "}, header behaviour-bearing fields unchanged (block comment differs — see below)";
+            return "}, header behaviour-bearing fields unchanged ("
+                   + NonGatingCommentClause(report) + " — see below)";
         }
 
         return "}, header unchanged";
