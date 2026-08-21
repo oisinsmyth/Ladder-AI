@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Reflection.Emit;
 using Converter.ConflictGraph;
 using Converter.CrossCheck;
 using Xunit;
@@ -226,10 +227,23 @@ public static class IlWalkScanner
         member is Type type ? type.FullName : member.DeclaringType?.FullName;
 
     /// <summary>
-    /// Deliberately coarse: every 4-byte window is offered to the token resolver rather than the IL
-    /// being decoded precisely. That OVER-reports candidate tokens and UNDER-reports nothing — and since
-    /// the load-bearing assertion is that a set is EMPTY, over-reporting is the safe direction. A false
-    /// positive fails a test and gets read; a false negative lets the guarded thing through unnoticed.
+    /// 🔴 <b>DECODES THE IL. It used to slide a 4-byte window over every byte offset</b> and offer each
+    /// to the token resolver, on the stated reasoning that over-reporting is the safe direction for an
+    /// assertion that a set is EMPTY — <i>"a false positive fails a test and gets read."</i>
+    ///
+    /// <para><b>That reasoning was sound and the consequence was not.</b> A misaligned window inside an
+    /// unrelated instruction stream can resolve to a real member token by coincidence, so the guard
+    /// passed or failed on <b>metadata token layout</b> — i.e. on luck, changing with any edit anywhere
+    /// in the assembly. Measured 2026-08-21: an edit confined to <c>Converter.Diff</c> turned the walk
+    /// red naming <c>Converter.Digest.NetworkSignature</c>, a type whose source contains no reference to
+    /// <see cref="StorageGroup"/> at all. Read, as the design intended — and what reading it found was
+    /// the scanner, not a sixth join site.</para>
+    ///
+    /// <para><b>A guard that flips on unrelated edits gets its allowlist grown to quiet it</b>, and each
+    /// entry is a permanent hole in exactly the check this file exists to be. So: walk the instruction
+    /// stream, resolve ONLY the operands of token-carrying opcodes. Precise in both directions — it
+    /// cannot invent a reference, and it still cannot miss one, because every token an instruction can
+    /// carry is now visited deliberately rather than stumbled upon.</para>
     /// </summary>
     private static bool References(byte[] il, MethodBase owner, Func<MemberInfo, bool> forbidden, out string detail)
     {
@@ -238,26 +252,130 @@ public static class IlWalkScanner
         var typeArgs = SafeGenericArguments(owner.DeclaringType);
         var methodArgs = owner is MethodInfo { IsGenericMethodDefinition: true } m ? m.GetGenericArguments() : Type.EmptyTypes;
 
-        for (var i = 0; i + 4 <= il.Length; i++)
+        foreach (var token in TokenOperands(il))
         {
-            var token = BitConverter.ToInt32(il, i);
-
+            MemberInfo? member;
             try
             {
-                var member = module.ResolveMember(token, typeArgs, methodArgs);
-                if (member is not null && forbidden(member))
-                {
-                    detail = $"references {DeclaringName(member)}.{member.Name}";
-                    return true;
-                }
+                member = module.ResolveMember(token, typeArgs, methodArgs);
             }
             catch (Exception)
             {
-                // Not a member token. Expected constantly — see the remarks on coarseness.
+                // A token this module cannot resolve in this context — a generic-context edge case, not
+                // a random byte window any more. Skipped, not counted as a reference.
+                continue;
+            }
+
+            if (member is not null && forbidden(member))
+            {
+                detail = $"references {DeclaringName(member)}.{member.Name}";
+                return true;
             }
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// Every metadata token carried as an operand, in instruction order. Throws rather than guessing if
+    /// the stream does not decode — a body this walk could not read is a body it must not silently
+    /// claim to have examined (the denominator discipline, applied one level down).
+    /// </summary>
+    private static IEnumerable<int> TokenOperands(byte[] il)
+    {
+        var tokens = new List<int>();
+
+        for (var i = 0; i < il.Length;)
+        {
+            OpCode op;
+            if (il[i] == 0xFE)
+            {
+                if (i + 1 >= il.Length)
+                {
+                    throw new InvalidOperationException("IL ends mid-opcode (0xFE prefix with no second byte)");
+                }
+
+                op = TwoByte.TryGetValue(il[i + 1], out var two)
+                    ? two
+                    : throw new InvalidOperationException($"unknown two-byte opcode 0xFE{il[i + 1]:X2}");
+                i += 2;
+            }
+            else
+            {
+                op = OneByte.TryGetValue(il[i], out var one)
+                    ? one
+                    : throw new InvalidOperationException($"unknown opcode 0x{il[i]:X2} at offset {i}");
+                i += 1;
+            }
+
+            // InlineSwitch is the only variable-length operand: a 4-byte count then that many 4-byte
+            // branch targets. Get it wrong and every subsequent instruction decodes as garbage.
+            if (op.OperandType == OperandType.InlineSwitch)
+            {
+                var count = BitConverter.ToUInt32(il, i);
+                i += 4 + ((int)count * 4);
+                continue;
+            }
+
+            var size = OperandSize(op.OperandType);
+            if (IsTokenOperand(op.OperandType))
+            {
+                tokens.Add(BitConverter.ToInt32(il, i));
+            }
+
+            i += size;
+        }
+
+        return tokens;
+    }
+
+    // InlineString and InlineSig are tokens too, but never resolve to a MEMBER — a user-string handle
+    // and a standalone signature respectively. Excluded so ResolveMember is not asked a question it can
+    // only answer by throwing.
+    private static bool IsTokenOperand(OperandType type) => type
+        is OperandType.InlineMethod
+        or OperandType.InlineField
+        or OperandType.InlineType
+        or OperandType.InlineTok;
+
+    private static int OperandSize(OperandType type) => type switch
+    {
+        OperandType.InlineNone => 0,
+        OperandType.ShortInlineBrTarget or OperandType.ShortInlineI
+            or OperandType.ShortInlineVar => 1,
+        OperandType.InlineVar => 2,
+        OperandType.InlineBrTarget or OperandType.InlineField or OperandType.InlineI
+            or OperandType.InlineMethod or OperandType.InlineSig or OperandType.InlineString
+            or OperandType.InlineTok or OperandType.InlineType or OperandType.ShortInlineR => 4,
+        OperandType.InlineI8 or OperandType.InlineR => 8,
+        _ => throw new InvalidOperationException($"unhandled operand type {type}"),
+    };
+
+    // Built from OpCodes itself rather than hand-tabulated, so the table cannot drift from the runtime's
+    // own view of the instruction set.
+    private static readonly Dictionary<byte, OpCode> OneByte = BuildTable(single: true);
+
+    private static readonly Dictionary<byte, OpCode> TwoByte = BuildTable(single: false);
+
+    private static Dictionary<byte, OpCode> BuildTable(bool single)
+    {
+        var table = new Dictionary<byte, OpCode>();
+        foreach (var field in typeof(OpCodes).GetFields(BindingFlags.Public | BindingFlags.Static))
+        {
+            if (field.GetValue(null) is not OpCode op)
+            {
+                continue;
+            }
+
+            var value = (ushort)op.Value;
+            var isSingle = value <= 0xFF;
+            if (isSingle == single)
+            {
+                table[(byte)(value & 0xFF)] = op;
+            }
+        }
+
+        return table;
     }
 
     private static Type[] SafeGenericArguments(Type? type)
