@@ -1,6 +1,6 @@
 # CLAUDE.md — Ladder-AI
 
-AI-assisted Siemens LAD engineering. **The deliverable is an AI capable of programming ladder logic — not ladder logic produced by us.** You (Claude Code, in the main conversation) talk to the engineer, plan work, and orchestrate; you never read, write, review, or explain LAD/IR content yourself — that's the `lad-coder` sub-agent's job (hard rule 8, no size exception). TIA Openness handles the TIA Portal side. A human engineer reviews everything the pipeline produces before it enters the TIA project.
+AI-assisted Siemens LAD engineering. **The deliverable is an AI capable of programming ladder logic — not ladder logic produced by us.** You (Claude Code, in the main conversation) talk to the engineer, plan work, and orchestrate; you never read, write, review, or explain LAD/IR content yourself — that's the `lad-coder` / `lad-reader` sub-agents' job (hard rule 8, no size exception). TIA Openness handles the TIA Portal side. A human engineer reviews everything the pipeline produces before it enters the TIA project.
 
 **This file states what binds you; it does not restate what the tools do** — that lives in `src/converter/README.md`, `src/openness-cli/README.md` and `docs/notes/`. Look things up there.
 
@@ -24,7 +24,7 @@ AI-assisted Siemens LAD engineering. **The deliverable is an AI capable of progr
 
 7. **Edit only IR, never raw SimaticML.** SimaticML is converter territory. If the converter rejects something, that's a converter bug or an unsupported construct — report it, don't hand-patch XML.
 
-8. **All LAD/IR work goes through the `lad-coder` sub-agent (`.claude/agents/lad-coder.md`) — never do it yourself.** Covers: writing or editing `.ir` files; the preflight/convert/import/compile/export loop tied to a change; `review-*` / `explain-plc-block` reads, even when nothing is written; `patterns/` edits. **No exceptions for size** — a one-line fix goes through the sub-agent too. With no skill for the stage it still does it, manually, to the same contract. Your job: plan, dispatch, **verify the actual diff and compile evidence — a summary is not proof** — and present to the engineer. Not for PC-side tooling (`src/openness-cli/`, `src/converter/`, `extract/`, `tests/golden/`), where normal software rules apply.
+8. **All LAD/IR work goes through a LAD sub-agent — never do it yourself.** **Writes → `lad-coder`** (`.claude/agents/lad-coder.md`): `.ir` files, the preflight/convert/import/compile/export loop tied to a change, `patterns/` edits. **Reads → `lad-reader`** (`.claude/agents/lad-reader.md`): `review-*` / `explain-plc-block`, even when nothing is written — *`lad-coder` remains permitted for reads, so a read is never blocked if `lad-reader` is unavailable.* **No exceptions for size** — a one-line fix goes through the sub-agent too. With no skill for the stage it still does it, manually, to the same contract. Your job: plan, dispatch, **verify the actual diff and compile evidence — a summary is not proof** — and present to the engineer. Not for PC-side tooling (`src/openness-cli/`, `src/converter/`, `extract/`, `tests/golden/`), where normal software rules apply.
 
 ## Routing rules — decide before you look anything up
 
@@ -114,7 +114,7 @@ Measured rig facts (addresses, scan time, word order, compression ceiling, reser
 
 ## Workflow
 
-Generation follows `docs/15-generation-pipeline.md` (ADR-0004): analyse / design / build / check stages handing off through committed artifacts in `gen/<project>/`, adversarial reviews in fresh context, and two hard engineer gates — architecture sign-off before coding, final presentation at the end. **The whole workflow runs inside the dispatched `lad-coder` sub-agent** (hard rule 8); you plan the request, dispatch it, and verify what comes back.
+Generation follows `docs/15-generation-pipeline.md` (ADR-0004): analyse / design / build / check stages handing off through committed artifacts in `gen/<project>/`, adversarial reviews in fresh context, and two hard engineer gates — architecture sign-off before coding, final presentation at the end. **The whole workflow runs inside the dispatched `lad-coder` sub-agent** (hard rule 8; its review stages run in `lad-reader`); you plan the request, dispatch it, and verify what comes back.
 
 Quality bar, in order: **function → readability & simplicity → efficiency** (`docs/06-lad-conventions.md` preamble). Modifying existing logic adds one thing: touch only the named network(s), and prove the rest identical with `converter diff --only`.
 

@@ -40,7 +40,7 @@ seconds are attacking a rounding error inside a forty-minute stage.
 | 2 | `design-for-testability` cut + per-skill budget gate | tokens | **done 2026-08-21** |
 | 3 | Warm/batched Portal round trips | time | open, low ceiling |
 | 4 | Parallel Portal lanes | — | **measure first; probably don't** |
-| 5 | A read-only agent variant | tokens | needs an owner ruling |
+| 5 | A read-only agent variant (`lad-reader`) | tokens | **done 2026-08-21** |
 
 ---
 
@@ -206,7 +206,7 @@ Needs a hard-rule-8 amendment (rule 8 routes *all* LAD/IR work, reads included, 
   The economics did not favour it either: 37 tool calls against the control's 15, for 13% fewer
   tokens and 75 seconds saved. Thrashing ate the saving.
 
-  No `model:` frontmatter was added to `lad-coder`, `hmi-designer` or `assertion-enumerator` — all
+  No `model:` frontmatter was added to `lad-coder`, `lad-reader`, `hmi-designer` or `assertion-enumerator` — all
   three are judgement work. Mechanism caveat: an unavailable model falls back to **the parent**, so
   the failure direction is expensive rather than cheap.
 - **`agent-tasks/DISPATCH-TEMPLATE.md` was still instructing every board dispatch to read

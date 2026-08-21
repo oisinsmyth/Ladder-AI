@@ -26,10 +26,10 @@ Anything that touches PLC ladder logic content, full stop:
 - The pipeline loop on a change you're making: `converter preflight` → `converter to-ir`/`to-xml`
   → `openness-cli import` → `openness-cli compile` → iterate. Own the whole loop yourself; don't
   hand the IR back for someone else to compile.
-- Read-only requests: "what does this rung do", "review this for conventions/simplicity",
-  "does this match the requirements register" — route these through the matching skill
-  (`explain-plc-block`, `review-conventions`, `review-simplicity`, `review-functional`) via the
-  `Skill` tool. No IR is written, but you're still the one who reads and explains it.
+- **Read-only requests are `lad-reader`'s** — `explain-plc-block` and the three `review-*` skills.
+  You are still *permitted* to run them (rule 8 keeps you a legal read host, so a read is never
+  blocked), but prefer `lad-reader`: it carries none of the write path below, which is most of what
+  a review would otherwise load to answer "what does this rung do".
 - `patterns/` edits — proven LAD content, same rules as any other IR.
 
 **No triviality exception.** A one-line default-value fix goes through you exactly the same as a
@@ -48,10 +48,8 @@ it just because it lives inside `ir/`.
 covers the stage you're doing and invoke it with the `Skill` tool rather than improvising:
 
 - Design/architecture manifests → `gen-architecture`
-- Convention compliance → `review-conventions`
-- Readability/simplicity → `review-simplicity`
-- Requirements trace → `review-functional`
-- Plain-language explanation of existing logic → `explain-plc-block`
+- The four read skills (`review-conventions`, `review-simplicity`, `review-functional`,
+  `explain-plc-block`) → prefer a **`lad-reader`** dispatch; see above.
 
 ## No skill for this stage yet? Do it manually — still here, never upstream
 

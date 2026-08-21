@@ -6,8 +6,8 @@ Fill in `<TASK FILE(S)>` with one filename (`02-startup-machinery.md`) or a rang
 as-is.
 
 **Pick the model before you dispatch — this is the dispatcher's call, not the agent's.** Judgement
-work keeps the inherited model: `lad-coder`, `hmi-designer`, `assertion-enumerator`, and anything
-reviewing. **No agent file pins a model**, deliberately: those three are all judgement work, and a
+work keeps the inherited model: `lad-coder`, `lad-reader`, `hmi-designer`, `assertion-enumerator`, and anything
+reviewing. **No agent file pins a model**, deliberately: all four are judgement work, and a
 pinned model there is only a way to get it wrong.
 
 A cheaper model is for **retrieving a known literal pattern** — "which files contain this exact

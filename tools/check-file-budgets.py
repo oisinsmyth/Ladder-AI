@@ -44,6 +44,7 @@ BUDGETS = [
     (".claude/agents/assertion-enumerator.md", 5120),
     (".claude/agents/hmi-designer.md", 7680),
     (".claude/agents/lad-coder.md", 8704),
+    (".claude/agents/lad-reader.md", 5120),
 
     (".claude/skills/design-for-testability/SKILL.md", 43008),
     (".claude/skills/enumerate-assertions/SKILL.md", 19968),

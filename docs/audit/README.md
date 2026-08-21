@@ -179,7 +179,7 @@ itself a first-class audit target — auditing this layer is not the same as rea
 - **Skill inventory vs docs:** do the skills the docs reference actually exist in `.claude/skills/`, and do
   their descriptions match what they do? Does `docs/15`'s build-order table match the real skill +
   `lad-coder` inventory, including which stages are "built" vs "performed manually to contract"?
-- **Sub-agent coherence:** `.claude/agents/lad-coder.md`'s stated contract still matches the workflow in
+- **Sub-agent coherence:** `.claude/agents/lad-coder.md` and `lad-reader.md`'s stated contracts still match the workflow in
   `CLAUDE.md` and `docs/15`.
 - **Hard-rule coherence:** the 8 hard rules still describe the tooling as it now is (e.g. commands they
   reference exist; the dispatch model in rule 8 matches the actual skill/agent set) — a coherence check on
