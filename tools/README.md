@@ -95,6 +95,50 @@ something. Negative-tested by disabling the fence: **9 of 11 go red**, six of th
 powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\confirm-roundtrip-fence.tests.ps1
 ```
 
+## `check-doc-migration.py` — prove a doc cut dropped nothing (2026-08-21)
+
+Every time content is moved out of a file that grew too big, the same question follows: did
+anything fall on the floor? This answers it for any `(baseline, file, destinations)`.
+
+```
+python tools/check-doc-migration.py <baseline-ref> <file> <dest> [<dest> ...]
+                                    [--fenced-section "## Heading"] [--allow <fragments-file>]
+```
+
+Markers are backticked identifiers (4–60 chars) and long `--flags`. **Prose is deliberately not
+checked** — on a cut whose purpose is removing narration, holding the narration as a requirement
+would fail the gate by design. That is a real limit, and it means a fact stated only in prose is
+outside the gate's reach; say so when you rely on it rather than implying coverage it lacks.
+
+Exit **0** nothing dropped, **1** at least one marker unaccounted for, **2** the gate could not run
+(bad ref, unreadable file, absent section, **a destination path that does not exist**). Exit 2 is
+not a pass — a mistyped destination contributes an empty haystack, which without that check would
+either fail everything or quietly shrink what was searched.
+
+`--allow` names a file of audited regex artefacts, one per line. **Do not add to it to silence a
+real drop** — migrate the fact, then confirm it greps positive in its new home. An allowlist that
+grows every time the gate complains is a gate that has been turned off slowly.
+
+**`check-claude-md-migration.py` is now a thin wrapper around this**, passing the CLAUDE.md
+baseline (`a1eca27`), its nine destinations, `--fenced-section "## Commands"` and
+`tools/claude-md-migration.fragments`. The filename, default baseline and output are unchanged
+because `AITODO.md` and `docs/notes/context-cut-handoff.md` both cite it. Verified
+behaviour-preserving across the refactor: still **252 markers, 249 findable, 3 fragments, 0
+unaccounted, exit 0** — identical to before.
+
+### It has been executed, in both directions
+
+`check-doc-migration.tests.py` — 10 cases, offline, each building a throwaway git repo and running
+the script unmodified as a child process.
+
+```
+python tools/check-doc-migration.tests.py
+```
+
+Negative-tested by disabling the drop detection: **3 of 10 go red** — the three that assert a
+refusal. The other seven cover the permit direction and the three cannot-run paths, which a
+disabled comparison does not affect.
+
 ## `check-claude-md-budget.py` — the anti-regrowth gate (2026-08-21)
 
 `CLAUDE.md` is injected into every dispatch, so its size is a tax on every request in the project.
