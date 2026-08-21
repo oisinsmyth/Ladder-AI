@@ -61,8 +61,13 @@ From doc 06's preamble — quote it in spirit, apply it literally:
 - The block's interface UDT files too — several rules live there, and the iDB is *not* where
   interface comments belong (member comments on a UDT-typed member's inner fields come from the
   UDT's own definition).
-- `docs/06-lad-conventions.md` — read the preamble, Commenting, and Simplicity & readability
-  sections before your first finding so you cite current rule text, not memory of it.
+- `docs/06-lad-conventions.md` — read the preamble, Commenting, Simplicity & readability, **and
+  C-204** before your first finding, so you cite current rule text and not memory of it.
+  🔴 **C-204 is a Commenting rule filed under `## Data`** (doc 06 line ~436, between the
+  `## Data` heading and C-301). Reading the three named sections and stopping **misses it**, and
+  it is the rule that decides whether a comment may cite a convention at all — measured
+  2026-08-21, on a review whose whole question was that. **Scope doc 06 by rule ID, never by
+  heading.**
 
 ## Method
 
@@ -169,10 +174,6 @@ Order findings most-severe first within each block. Every finding cites a rule I
 names the defect but the one-reading test fails, cite the preamble ("one-reading test") — and
 note it as a candidate rule gap, because that's how C-601–C-607 themselves were born.
 
-**Persisting this report.** Returned live in conversation, keep it whole. When it is saved as a
-committed doc (a skill-validation record, a kept gate review), split it at write time: any large
-verbatim block — e.g. a full blind-run transcript from validating this skill — goes in
-`docs/evidence/<name>.md`; the saved note keeps the findings summary, verdict, and a link. Large
-raw dumps live in `docs/evidence/`, never inline in `docs/notes/` or `docs/notes/stage-gates.md` —
-the split convention, stated in `docs/15-generation-pipeline.md` ("Artifacts"), origin FI-19/FI-20
-in `docs/16-future-ideas.md`. Born in the right shape, not split by hand later.
+**Persisting this report.** Return it whole; **saving it is the dispatcher's job, not yours** — a
+reviewer dispatched into `lad-reader` holds no `Write` and cannot do it. (If you are saving one:
+large verbatim blocks go to `docs/evidence/<name>.md`, the note keeps summary and verdict.)
