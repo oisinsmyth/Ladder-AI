@@ -95,6 +95,70 @@ something. Negative-tested by disabling the fence: **9 of 11 go red**, six of th
 powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\confirm-roundtrip-fence.tests.ps1
 ```
 
+## `check-claude-md-budget.py` — the anti-regrowth gate (2026-08-21)
+
+`CLAUDE.md` is injected into every dispatch, so its size is a tax on every request in the project.
+It grew **45,130 → 96,245 bytes in eleven days, and not one commit in that span reduced it** — the
+mechanism being that new findings land in `CLAUDE.md` because it is the file everyone reads. Prose
+asking people to keep it small was in place for that entire span. This is the gate that replaces
+the prose.
+
+**Ceiling: 20,480 bytes (20 KiB)**, the value held throughout the context cut. Bytes are always
+reported CRLF-equivalent: `core.autocrlf=true` here, so git stores the file LF and materialises it
+CRLF, and `--staged` adds the newline count back rather than reporting the smaller blob figure.
+Every size in the project's record is the worktree number, so without that the gate and the commit
+log would disagree by 149 bytes.
+
+Exit **0** within budget, **1** over budget, **2** the gate could not run (unreadable, or not
+staged when `--staged` was asked for). **Exit 2 is not a pass** — same 1-vs-2 split as the
+mechanical floor.
+
+```
+python tools/check-claude-md-budget.py [--staged]
+```
+
+It checks size only. It does **not** check whether a fact was dropped — that is
+`check-claude-md-migration.py`, which should be run before any trim.
+
+### Making it fail closed
+
+The script alone is advisory, and this repo's own maxim is *a warning is not a gate*. `hooks/pre-commit`
+runs it with `--staged` whenever `CLAUDE.md` is in the staged set and **refuses the commit** on
+non-zero. Git will not install that for you — once per clone:
+
+```
+git config core.hooksPath hooks
+```
+
+The hook fails closed by design: if `python` is missing or the script is unreadable, the non-zero
+exit refuses the commit rather than waving it through. `hooks/*` is pinned `eol=lf` in
+`.gitattributes`, because with `core.autocrlf=true` a tracked hook would otherwise check out CRLF
+and `sh` would fail on the shebang — silently disabling the gate. `--no-verify` bypasses it, which
+is the behaviour the gate exists to prevent.
+
+### It has been executed, in both directions
+
+`check-claude-md-budget.tests.py` — 9 cases, offline, no framework, ~1 s. Each case copies the
+script under test **unmodified** into a temporary tree beside a fixture `CLAUDE.md` of known size
+and runs it as a child process; no testability flag was added to the script, since a gate with a
+"point me at a different file" option can be aimed away from the file it guards. Both directions
+are asserted, and so are the reason strings — refusing for the wrong reason is a different defect
+from refusing correctly, and an exit code cannot tell them apart.
+
+```
+python tools/check-claude-md-budget.tests.py
+```
+
+Negative-tested by disabling the size comparison: **2 of 9 go red** — the two that assert refusal.
+The other seven legitimately still pass, because they cover the permit direction and the
+cannot-run paths, which a disabled comparison does not affect. Note the honest ratio rather than a
+flattering one: it is a nine-case suite of which two are the refusal itself.
+
+**End-to-end, the gate was observed refusing a real commit**, not merely exiting non-zero: a padded
+20,993-byte `CLAUDE.md` was staged and `git commit` returned 1 with `COMMIT REFUSED`, leaving `HEAD`
+unmoved. Deviation from convention worth noting: this suite is `.tests.py`, not `.tests.ps1`,
+matching the language of the script under test.
+
 ## Benchmarks
 
 `bench-machine.ps1` measures a machine on the axes that matter for this repo; `bench-compare.ps1`

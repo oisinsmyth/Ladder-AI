@@ -1,0 +1,38 @@
+#!/bin/sh
+#
+# Refuses a commit that puts CLAUDE.md over its size budget.
+#
+# This exists because CLAUDE.md grew 45,130 -> 96,245 bytes in eleven days and not one
+# commit in that span reduced it. Every byte is injected into every dispatch, so the
+# file is a tax on every request in the project. Prose asking people to check was in
+# place for that entire span and did not hold.
+#
+# Install (once per clone - git will not do this for you):
+#
+#     git config core.hooksPath hooks
+#
+# Confirm it is live with:  git config core.hooksPath   ->  hooks
+#
+# Scope: only fires when CLAUDE.md is in the staged set, so every other commit is
+# untouched. It does NOT check whether facts were dropped - that is
+# tools/check-claude-md-migration.py, which you should run before any trim.
+#
+# Fails closed on purpose. If python is missing or the script is unreadable, the
+# non-zero exit refuses the commit rather than waving it through: a gate that
+# disappears when its dependencies do is not a gate.
+#
+# `git commit --no-verify` bypasses this. Bypassing it is the exact behaviour the gate
+# exists to prevent - if the budget is genuinely wrong, change the ceiling in
+# tools/check-claude-md-budget.py in its own commit, with a reason.
+
+if git diff --cached --name-only | grep -qx 'CLAUDE.md'; then
+    if ! python tools/check-claude-md-budget.py --staged; then
+        echo ""
+        echo "COMMIT REFUSED: CLAUDE.md is over its size budget."
+        echo "Move the fact to its owning doc (README or docs/notes), or change the"
+        echo "ceiling deliberately in its own commit. --no-verify is not the answer."
+        exit 1
+    fi
+fi
+
+exit 0

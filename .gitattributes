@@ -5,3 +5,7 @@
 # Owner-approved 2026-07-16 (batch finding, Stream D).
 *.ir text eol=lf
 *.xml text eol=lf
+
+# Git hooks are executed by sh. With core.autocrlf=true a tracked hook checks out
+# CRLF and sh fails on the shebang line, silently disabling the gate.
+hooks/* text eol=lf
