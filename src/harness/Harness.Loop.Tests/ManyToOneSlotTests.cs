@@ -221,14 +221,18 @@ public class ManyToOneSlotTests
         Assert.Equal("24", result.Packages.Single(p => p.VectorId == "G-1").Assertions[0].Observed);
         Assert.Equal("21", result.Packages.Single(p => p.VectorId == "H-0").Assertions[0].Observed);
 
-        // *** AND THE MERGED ORDER IS OBSERVABLE IN THE VERDICTS, WHICH IS A SECOND, INDEPENDENT WITNESS
-        // TO IT. *** Settling can only be established for a slot's LAST index — earlier ones have had an
-        // inert phase move the program on — so exactly one package settles, and it is the last in the
-        // MERGED order. GROUP-B is second in the stated order, so that is H-0. Were the groups merged the
-        // other way round, or not merged at all, a different vector would be the settled one.
-        Assert.Equal(ResultVerdict.Pass, result.Packages.Single(p => p.VectorId == "H-0").Verdict);
-        Assert.Equal(ResultVerdict.Unsettled, result.Packages.Single(p => p.VectorId == "G-0").Verdict);
-        Assert.Equal(ResultVerdict.Unsettled, result.Packages.Single(p => p.VectorId == "G-1").Verdict);
+        // 🔴 *** THIS BLOCK USED TO ASSERT THAT EXACTLY ONE OF THE THREE SETTLED, AND IT WAS ASSERTING A
+        // DEFECT. *** Settling was decided after the WHOLE wave by re-reading the device, so only a slot's
+        // LAST index still had its own state and every earlier vector came back UNSETTLED by construction.
+        // The dwell is now taken at each index's own close, so all three settle — which is the point of
+        // the change, and this test is where it shows.
+        //
+        // *** WHAT WAS LOST WITH IT, SAID RATHER THAN SILENTLY DROPPED: *** the old assertion doubled as a
+        // second witness to the MERGED ORDER, because the single settled package had to be the last one
+        // merged. That witness was a side effect of the defect and cannot survive its fix. The merged order
+        // is still checked directly — and better — by the three Observed values above: G-0/G-1/H-0 read
+        // 20/24/21, and a wrong merge gives a package the wrong run and therefore the wrong NUMBER.
+        Assert.All(result.Packages, p => Assert.Equal(ResultVerdict.Pass, p.Verdict));
     }
 
     [Fact]

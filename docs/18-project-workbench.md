@@ -348,16 +348,36 @@ refusals only become load-bearing once the values are actually recomputed.
 
 ---
 
-### Phase 2 — Run the loop once · **P0**
+### Phase 2 — Make the loop ANSWER · **P0** · ✅ **FIXED 2026-08-21 (simulator); rig re-run outstanding**
 
-🔨 **`Harness.Loop` is built and has never run end to end.** Every number in §4's budget assumes it
-works, and the closed-loop conformance path has never taken a wave from author to green.
+🔴 **THIS PHASE WAS WRITTEN ON A FALSE PREMISE AND THE PREMISE CAME FROM THIS PROJECT'S OWN NOTES.**
+It said *"`Harness.Loop` is built and has never run end to end"*, taken from `CLAUDE.md`'s status
+table. **The loop had already run end to end twice** — 2026-08-18 and 2026-08-20, the latter reading
+`"outcome": "Ran"` with three result packages and **one genuine `Pass`**. The readiness page even
+carries the warning *"check the artifacts before relying on any negative claim in it"*, immediately
+above the claim that was trusted instead. **A stale negative was quoted onward into a design doc and
+a work plan.**
 
-- 2.1 Run it end to end on a trivial block.
-- 2.2 Replace §4.2's `[E]` estimate lines with `[M]` measurements from that run.
+**What was actually broken was sharper.** Of three vectors, two came back `Unsettled` — and *every
+assertion held* (1/1, 1/1, 4/4), stimulus `Confirmed` throughout. The block was fine:
 
-**Why P0 rather than P1:** it is not a lever, it is the assumption under every lever. Building
-Phase 3 or 5 on top of a loop that has never completed is speculation with a build cost.
+> Settling was decided during **result-package building, after the whole wave**, by re-reading the
+> device. By then the next index's inert phase had moved the program on, so `LoopRun.Settling` had to
+> refuse any index that was not the slot's last — correctly, *given where it was called*.
+> **Only the last vector on a slot could ever settle. Two thirds of that wave were unanswerable by
+> construction.**
+
+- 2.1 ✅ The dwell now happens **at each index's own close**, inside `WaveRun`, before the caller
+  advances. `SettlingEveryIndexTests` asserts three vectors on one slot all settle — and **fails
+  against the old code**, verified by temporarily disabling the dwell (3 of its 5 tests went red, and
+  the 2 that stayed green were the two that should be unaffected).
+- 2.2 🔨 **Outstanding: the rig re-run.** "3 of 3 answer" is proven in the simulator only.
+- 2.3 🔨 **Outstanding: replace §4.2's `[E]` estimates with `[M]`** — that needs the rig run.
+
+⚠️ **One misreading recorded so nobody re-derives it:** the low `framesRead` counts (1, 12, 14) in
+those packages are **not** a slow poll. `ObservationSeries` retains **distinct frames — frames where
+the value CHANGED** — not poll rounds, so a stable signal legitimately yields one. `PollsObserved` is
+the denominator.
 
 ---
 
@@ -487,6 +507,14 @@ opinion.** That single sentence is why §3 is the most valuable part of this des
   and the two places derivation must refuse. Added the finding that the copy-layer ladder is
   **already generated** and the real gap is the hand-authored submission document. Capability
   assessment compressed to §6.
+- **v2.4 — 2026-08-21.** **Phase 2 rewritten and its fix landed (simulator).** The phase as written was
+  false: the loop had already run end to end twice, and one vector had genuinely `Pass`ed — a stale
+  `CLAUDE.md` row quoted onward into this doc and a work plan. The real defect was that **settling
+  could only be established for the LAST vector on a slot**, because the sample was taken after the
+  whole wave; every earlier vector was `Unsettled` by construction while its assertions all held. The
+  dwell now happens at each index's own close in `WaveRun`. 2160 tests pass, 0 warnings; the new tests
+  were negative-tested by disabling the dwell. **Rig re-run still outstanding**, so the 3-of-3 claim is
+  simulator-only.
 - **v2.3 — 2026-08-21.** **Phase 1 closed.** All five gaps inside the derive mechanism are built and
   tested (2148 passing, 0 warnings). The deriver now RECOMPUTES rather than only citing, and gate 0c
   counts *recomputed* / *by rule* / *cited* separately so "derived" stops being one word. The live-job

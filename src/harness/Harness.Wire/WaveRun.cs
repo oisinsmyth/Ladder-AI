@@ -233,6 +233,10 @@ public static class WaveRun
 
         var deadline = nowMs() + backstop;
 
+        // slot -> what it looked like when IT completed. The dwell below compares against this, not
+        // against a band re-read after every slot has finished.
+        var closes = new Dictionary<int, (SettlingProbe? Probe, ushort[] AtClose, ScanCount At)>();
+
         while (outstanding.Count > 0)
         {
             var control = client.ReadControl();
@@ -256,6 +260,10 @@ public static class WaveRun
                 if (vector.CompletionRegister < results.Length && results[vector.CompletionRegister] == vector.CompletionValue)
                 {
                     var series = recorder.Build();
+
+                    // Remembered so the settling dwell below can compare against THIS slot's values at
+                    // ITS close, rather than against whatever the band reads once every slot has finished.
+                    closes[slotIndex] = (vector.Settling, results, control.ScanCounter);
 
                     done.Add((slotIndex, new SlotRunResult(SlotOutcome.Completed, results, startScan, control.ScanCounter,
                         polls, 0, inert,
@@ -282,6 +290,45 @@ public static class WaveRun
             }
         }
 
-        return done.OrderBy(d => d.SlotIndex).ToArray();
+        // -------------------------------------------------------------------------------------------
+        // 🔴 THE SETTLING DWELL — HERE, AND NOWHERE LATER
+        // -------------------------------------------------------------------------------------------
+        //
+        // *** BEFORE THIS, ONLY THE LAST VECTOR ON A SLOT COULD EVER SETTLE. *** Settling was decided
+        // while building the result packages, after the WHOLE WAVE, by re-reading the device — and by then
+        // the next index's inert phase had moved the program on, so `LoopRun.Settling` had to refuse any
+        // index that was not the slot's last. Measured on a real wave: three vectors on one slot, every
+        // assertion held, and the two that were not last came back UNSETTLED for that reason alone.
+        //
+        // This point is still INSIDE the index: every slot has reached its completion condition, and the
+        // caller has not started the next index's inert phase. It is the last moment at which the state
+        // is the one these vectors produced.
+        //
+        // ⚠️ *** WHAT THIS MEASURES, STATED EXACTLY: *** the probed registers held the values they had at
+        // THIS SLOT'S OWN CLOSE, across the dwell ending here. A slot that finished early therefore gets
+        // MORE quiet time than the dwell it asked for, not less — and a value that moved and moved back
+        // within it reads as unchanged. Both are properties of a two-point comparison and are why the
+        // report says which registers were compared and over how many scans.
+        var settled = new List<(int SlotIndex, SlotRunResult Result)>();
+
+        foreach (var (slotIndex, result) in done)
+        {
+            if (result.Outcome != SlotOutcome.Completed
+                || !closes.TryGetValue(slotIndex, out var close)
+                || close.Probe is null)
+            {
+                settled.Add((slotIndex, result));
+                continue;
+            }
+
+            var sample = SlotRun.Dwell(client, slotIndex, close.Probe, close.AtClose, close.At);
+            settled.Add((slotIndex, result with
+            {
+                Settling = sample,
+                Detail = sample is null ? result.Detail : result.Detail + " " + sample.Detail,
+            }));
+        }
+
+        return settled.OrderBy(d => d.SlotIndex).ToArray();
     }
 }

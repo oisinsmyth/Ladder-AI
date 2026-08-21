@@ -789,7 +789,11 @@ public static class LoopRun
                 waveIndex,
                 stimulus,
                 StimulusExpectation.AtLeastOneScanPerRoundTrip(Math.Max(1, run.PollRounds)),
-                Settling(client, vector, binding, slotIndex, waveIndex, run, distribution),
+                // No client, no waveIndex, no distribution: the dwell was already taken at this index's
+                // close and travels on `run`. Those three parameters existed only to re-read the device
+                // afterwards and to work out whether it was still safe to - which it only was for the
+                // last index on the slot.
+                Settling(vector, binding, slotIndex, run),
                 Assertions(vector, binding, run, request.WordOrder),
 
                 // 🔴 *** NULL WHEN NO SLICE WAS RECORDED, NOT AN EMPTY LIST. *** This read
@@ -870,25 +874,13 @@ public static class LoopRun
     /// question about the retention rule, not a re-pointing of this method.</para>
     /// </summary>
     private static SettlingReport Settling(
-        MirrorClient client, SubmissionVector vector, SlotBinding binding, int slotIndex, int waveIndex,
-        SlotRunResult run, SlotDistribution distribution)
+        SubmissionVector vector, SlotBinding binding, int slotIndex, SlotRunResult run)
     {
-        if (vector.Settling is not { UnchangedForScans: > 0 } settling)
-        {
-            return SettlingReport.NotEstablished(
-                "the vector declares no `settlingUnchangedForScans`, so its settling condition is prose the runner cannot check. "
-                + "That is NOT settled: nothing established whether the value was final when it was read.");
-        }
-
-        // The MERGED ordinal, matching CompletedAtIndex, which counts positions in the tensor the wave
-        // actually ran. `vector.Index` counts positions within a GROUP, and on a many-to-one slot the two
-        // are different numbers — so comparing the old one would call several vectors "last".
-        if (waveIndex != distribution.CompletedAtIndex)
-        {
-            return SettlingReport.NotEstablished(
-                $"index {waveIndex} is not slot {slotIndex}'s last ({distribution.CompletedAtIndex}), and a later index's inert phase has "
-                + "already moved the program on — so there is nothing left to re-read that would still be about this vector.");
-        }
+        // The declaration is resolved by the SAME method that built the wave's probe, so the explanation
+        // and the measurement can never be about different registers.
+        var resolution = ResolveSettling(vector, binding);
+        if (resolution.Refusal is { } refusal)
+            return SettlingReport.NotEstablished(refusal);
 
         if (run.Outcome != SlotOutcome.Completed)
         {
@@ -896,100 +888,32 @@ public static class LoopRun
                 $"the run ended {run.Outcome}, so no observation was taken that could be asked whether it was final.");
         }
 
-        // *** THE DECLARED SIGNALS, RESOLVED THE WAY AN ASSERTION SIGNAL IS. *** `ResultRegisterOf` is the
-        // one join key in this system (MirroredSignal.JoinKey), and it is the third derivation of it that
-        // this file records as having been wrong. There is not a fourth here: this asks the same method.
-        var span = new List<(string Signal, int Register)>();
-        var unresolved = new List<string>();
-
-        foreach (var name in settling.Signals ?? Array.Empty<string>())
-        {
-            var cited = name ?? string.Empty;
-            var register = binding.ResultRegisterOf(cited);
-
-            // -1 is "this binding does not carry the name", and it may NOT be defaulted to 0 — 0 is a real
-            // offset carrying some other signal. SignalJoin refuses this above the device boundary; if one
-            // reaches here the check is weaker than it was declared to be, and that is said out loud.
-            if (register < 0)
-            {
-                unresolved.Add(cited.Length == 0 ? "<blank>" : cited);
-                continue;
-            }
-
-            // The WIDTH matters: a Time occupies two registers, and comparing only the first would miss a
-            // value moving in its other half.
-            var width = Math.Max(1, binding.ResultSignal(cited)?.Registers ?? 1);
-            for (var w = 0; w < width; w++)
-                span.Add((cited, register + w));
-        }
-
-        if (unresolved.Count > 0)
+        // *** NULL IS "NOBODY TOOK THE SAMPLE", NEVER "IT SETTLED". *** Unreachable while the wave builds
+        // a probe for every vector that declares one - which is exactly why it is stated rather than
+        // assumed: a future path that forgets to pass the probe must surface here, not pass silently.
+        if (run.Settling is not { } sample)
         {
             return SettlingReport.NotEstablished(
-                $"{unresolved.Count} of the {settling.Signals?.Count ?? 0} declared settling signal(s) resolve to no register of the binding "
-                + $"serving slot '{vector.Slot}': {string.Join(", ", unresolved.Select(u => $"'{u}'"))}. *** THIS IS NOT A SETTLED RESULT AND IT IS "
-                + "NOT A NARROWER ONE. *** Comparing only the names that DID resolve would answer a weaker question than the one declared, and a "
-                + "settling check over no registers at all is satisfied by anything. The binding states the specification's name as `specName` "
-                + "beside the block's own tag.");
+                $"no settling dwell was taken at the close of slot {slotIndex}'s index, so nothing established whether the observed "
+                + "value was final. The declaration resolved, so this is a gap in the run rather than in the vector.");
         }
 
-        if (span.Count == 0)
-        {
-            return SettlingReport.NotEstablished(
-                "the settling declaration names no signal, so there is nothing to hold still. *** EMPTY IS NOT CLEAN: a per-signal settling "
-                + "check over zero registers is satisfied by any program whatsoever, so this is NOT settled. *** Name the signals whose "
-                + "stability makes the observed value final — they are not the block's completion flag.");
-        }
+        if (!sample.Taken)
+            return SettlingReport.NotEstablished(sample.Detail);
 
-        var outOfBand = span.Where(s => s.Register >= run.Results.Length).ToArray();
-        if (outOfBand.Length > 0)
-        {
-            return SettlingReport.NotEstablished(
-                $"the declaration reaches R{string.Join(", R", outOfBand.Select(s => s.Register.ToString("000")))} and the recorded result band "
-                + $"holds only {run.Results.Length} register(s), so the comparison could not be made against what was observed.");
-        }
+        var probe = resolution.Probe!;
+        var denominator =
+            $"{probe.Registers.Count} register(s) carrying {vector.Settling!.Signals!.Count} declared signal(s) "
+            + $"({string.Join(", ", probe.Registers.Select(r => $"R{r.Register:000} '{r.Signal}'"))}), "
+            + $"re-read {sample.ScansWaited} scan(s) after the close of this index";
 
-        var from = client.ReadControl().ScanCounter;
-        for (var poll = 0; poll < 200; poll++)
-        {
-            if (client.ReadControl().ScanCounter.Since(from) < settling.UnchangedForScans)
-                continue;
-
-            var now = client.ReadResults(slotIndex);
-
-            // *** WHICH REGISTER MOVED, AND FROM WHAT TO WHAT — InertPhase's shape. *** The bare boolean
-            // this replaced is why attributing a whole wave of UNSETTLED verdicts took a forensic pass:
-            // the package could say the value was not final and could not say which value.
-            var moved = span
-                .Where(s => s.Register < now.Length && now[s.Register] != run.Results[s.Register])
-                .Select(s => $"R{s.Register:000} ('{s.Signal}') moved {run.Results[s.Register]} -> {now[s.Register]}")
-                .ToArray();
-
-            if (span.Any(s => s.Register >= now.Length))
-            {
-                return SettlingReport.NotEstablished(
-                    $"the re-read of slot {slotIndex} returned {now.Length} register(s) and the declaration reaches R"
-                    + $"{span.Max(s => s.Register):000}, so the comparison could not be completed. Empty is not clean.");
-            }
-
-            var denominator =
-                $"{span.Count} register(s) carrying {settling.Signals!.Count} declared signal(s) "
-                + $"({string.Join(", ", span.Select(s => $"R{s.Register:000} '{s.Signal}'"))}), "
-                + $"re-read {settling.UnchangedForScans} scan(s) after the observation";
-
-            return moved.Length == 0
-                ? SettlingReport.Settled(
-                    $"every declared settling signal held its recorded value: {denominator}. *** THIS IS A CLAIM ABOUT THE DECLARED SIGNALS "
-                    + $"AND NOT ABOUT SLOT {slotIndex}'s WHOLE BAND *** — other registers in the band may legitimately be moving, and several "
-                    + "of them are declared to have no resting value at all.")
-                : SettlingReport.NotSettled(
-                    $"{moved.Length} of {span.Count} declared settling register(s) moved after the observation: {string.Join("; ", moved)}. "
-                    + $"Compared over {denominator}. The observed value was still changing, so what was read may be mid-flight.");
-        }
-
-        return SettlingReport.NotEstablished(
-            $"the scan counter did not advance {settling.UnchangedForScans} scan(s) within 200 poll(s), so the settling comparison was never "
-            + "made. That is an unobserved state and not a quiet one.");
+        return sample.Unchanged
+            ? SettlingReport.Settled(
+                $"every declared settling signal held its recorded value: {denominator}. *** THIS IS A CLAIM ABOUT THE DECLARED SIGNALS "
+                + $"AND NOT ABOUT SLOT {slotIndex}'s WHOLE BAND *** - other registers in the band may legitimately be moving, and several "
+                + "of them are declared to have no resting value at all.")
+            : SettlingReport.NotSettled(
+                $"{sample.Detail} Compared over {denominator}. The observed value was still changing, so what was read may be mid-flight.");
     }
 
     /// <summary>
@@ -1461,7 +1385,77 @@ public static class LoopRun
             // *** THE DURATION CARRIES ITS OWN comp. *** The declaration is in scans at the AUTHOR's
             // factor, and the wave re-expresses it at the factor it runs — see ScanBudget. The schema gate
             // has already refused a MaxDuration below 1, so the construction cannot throw here.
-            new ScanBudget(vector.MaxDurationScans, Math.Max(1, vector.CompressionFactor)));
+            new ScanBudget(vector.MaxDurationScans, Math.Max(1, vector.CompressionFactor)),
+
+            // 🔴 *** THE SETTLING PROBE TRAVELS WITH THE VECTOR SO THE DWELL HAPPENS AT ITS OWN CLOSE. ***
+            // Settling used to be decided after the whole wave, by re-reading the device - at which point
+            // only the LAST index on a slot still had its state, and every other vector was NotEstablished
+            // by construction.
+            ResolveSettling(vector, binding).Probe);
+    }
+
+    /// <summary>One resolution of a vector's settling declaration: the probe, or why there is none.</summary>
+    private sealed record SettlingResolution(SettlingProbe? Probe, string? Refusal);
+
+    /// <summary>
+    /// 🔴 <b>THE ONE PLACE A SETTLING DECLARATION IS TURNED INTO REGISTERS.</b>
+    ///
+    /// <para>Called twice — once to build the wave's probe, once to explain the outcome — and it is one
+    /// METHOD rather than two copies deliberately. <c>ResultRegisterOf</c> is the single join key in this
+    /// system, and the method this logic was lifted out of records it as having been re-derived wrongly
+    /// three times already. It is pure: no device, no clock.</para>
+    /// </summary>
+    private static SettlingResolution ResolveSettling(SubmissionVector vector, SlotBinding binding)
+    {
+        if (vector.Settling is not { UnchangedForScans: > 0 } settling)
+        {
+            return new SettlingResolution(null,
+                "the vector declares no `settlingUnchangedForScans`, so its settling condition is prose the runner cannot check. "
+                + "That is NOT settled: nothing established whether the value was final when it was read.");
+        }
+
+        var span = new List<SettlingRegister>();
+        var unresolved = new List<string>();
+
+        foreach (var name in settling.Signals ?? Array.Empty<string>())
+        {
+            var cited = name ?? string.Empty;
+            var register = binding.ResultRegisterOf(cited);
+
+            // -1 is "this binding does not carry the name", and it may NOT be defaulted to 0 — 0 is a real
+            // offset carrying some other signal.
+            if (register < 0)
+            {
+                unresolved.Add(cited.Length == 0 ? "<blank>" : cited);
+                continue;
+            }
+
+            // The WIDTH matters: a Time occupies two registers, and comparing only the first would miss a
+            // value moving in its other half.
+            var width = Math.Max(1, binding.ResultSignal(cited)?.Registers ?? 1);
+            for (var w = 0; w < width; w++)
+                span.Add(new SettlingRegister(cited, register + w));
+        }
+
+        if (unresolved.Count > 0)
+        {
+            return new SettlingResolution(null,
+                $"{unresolved.Count} of the {settling.Signals?.Count ?? 0} declared settling signal(s) resolve to no register of the binding "
+                + $"serving slot '{vector.Slot}': {string.Join(", ", unresolved.Select(u => $"'{u}'"))}. *** THIS IS NOT A SETTLED RESULT AND IT IS "
+                + "NOT A NARROWER ONE. *** Comparing only the names that DID resolve would answer a weaker question than the one declared, and a "
+                + "settling check over no registers at all is satisfied by anything. The binding states the specification's name as `specName` "
+                + "beside the block's own tag.");
+        }
+
+        if (span.Count == 0)
+        {
+            return new SettlingResolution(null,
+                "the settling declaration names no signal, so there is nothing to hold still. *** EMPTY IS NOT CLEAN: a per-signal settling "
+                + "check over zero registers is satisfied by any program whatsoever, so this is NOT settled. *** Name the signals whose "
+                + "stability makes the observed value final — they are not the block's completion flag.");
+        }
+
+        return new SettlingResolution(new SettlingProbe(span, settling.UnchangedForScans), null);
     }
 
     // -------------------------------------------------------------------------------------------------

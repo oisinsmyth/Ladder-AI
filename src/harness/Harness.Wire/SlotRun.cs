@@ -20,12 +20,57 @@ namespace Harness.Wire;
 /// <see cref="ScanBudget"/> rather than an <c>int</c> because a scan count consumed at the wrong <c>comp</c>
 /// produces a spurious TIMED-OUT on a healthy test.
 /// </param>
+/// <param name="Settling">
+/// 🔴 <b>THE DWELL TO TAKE AT THIS INDEX'S CLOSE, WHILE ITS STATE IS STILL THE CURRENT ONE.</b>
+///
+/// <para>*** BEFORE THIS EXISTED, ONLY THE LAST VECTOR ON A SLOT COULD EVER SETTLE. *** Settling was
+/// evaluated while building the result packages, after the WHOLE wave had finished, by re-reading the
+/// device — and by then the next index's inert phase had moved the program on, so every non-final
+/// vector was <c>NotEstablished</c> by construction. Measured on a real wave: three vectors on one
+/// slot, all assertions held, and the two that were not last came back UNSETTLED for that reason
+/// alone.</para>
+///
+/// <para>Null means the caller declared no settling for this vector, which stays
+/// <c>NotEstablished</c> downstream — never "settled".</para>
+/// </param>
 public sealed record WireVector(
     ushort[] Values,
     InertDeclaration Inert,
     int CompletionRegister,
     ushort CompletionValue,
-    ScanBudget Duration);
+    ScanBudget Duration,
+    SettlingProbe? Settling = null);
+
+/// <summary>
+/// What to hold still, and for how long, to decide whether an observed value was FINAL.
+/// </summary>
+/// <param name="Registers">
+/// The result registers the declared settling signals resolve to, <b>already widened</b> — a Time
+/// occupies two registers and comparing only the first would miss a value moving in its other half.
+/// Resolution happens once, at the caller, using the one join key in this system.
+/// </param>
+/// <param name="UnchangedForScans">Scans the band must hold still. Must be positive; a zero dwell settles anything.</param>
+public sealed record SettlingProbe(IReadOnlyList<SettlingRegister> Registers, int UnchangedForScans);
+
+/// <summary>
+/// One probed register, <b>carrying the SIGNAL NAME it came from</b>.
+///
+/// <para>🔴 <b>The name is not decoration.</b> A report that says only <c>R003 moved 5 -> 7</c> makes
+/// attributing a wave of unsettled verdicts a forensic exercise — which this codebase records having
+/// done once already. The declaration is written in signal names, so the finding has to come back in
+/// them.</para>
+/// </summary>
+public sealed record SettlingRegister(string Signal, int Register);
+
+/// <summary>
+/// The dwell, taken. <b>Reported whatever it found</b> — the point is that the sample EXISTS for every
+/// index, not that it was favourable.
+/// </summary>
+/// <param name="Taken">False when the dwell could not be performed; the reason is in <paramref name="Detail"/>.</param>
+/// <param name="Unchanged">True only when every probed register read the same value after the dwell as at the close.</param>
+/// <param name="Detail">Which register moved and from what to what, or why no sample was taken.</param>
+/// <param name="ScansWaited">Scans actually waited, so a dwell cut short by the poll bound is visible rather than assumed.</param>
+public sealed record SettlingSample(bool Taken, bool Unchanged, string Detail, long ScansWaited);
 
 /// <summary>How one vector ended. TIMED-OUT is deliberately not FAILED.</summary>
 public enum SlotOutcome
@@ -75,7 +120,16 @@ public sealed record SlotRunResult(
     int RoundTrips,
     InertReport Inert,
     string Detail,
-    ObservationSeries Observations)
+    ObservationSeries Observations,
+
+    /// <summary>
+    /// The settling dwell taken at this index's close, or null when none was asked for.
+    ///
+    /// <para><b>Null is "nobody asked", not "it settled".</b> The evaluator turns a null into
+    /// <c>NotEstablished</c> with that reason, which is the same treatment every other missing input
+    /// gets in this system.</para>
+    /// </summary>
+    SettlingSample? Settling = null)
 {
     /// <summary>Scans from T=0 to the observation that recognised completion.</summary>
     /// <summary>Scans from T=0, taken MODULARLY so the count is right across the counter's wrap.</summary>
@@ -151,13 +205,25 @@ public static class SlotRun
 
             if (vector.CompletionRegister < results.Length && results[vector.CompletionRegister] == vector.CompletionValue)
             {
+                // 🔴 *** THE DWELL HAPPENS HERE, AND NOWHERE ELSE WILL DO. *** This is the last moment at
+                // which the program is still in the state this vector left it: the caller has not advanced
+                // to the next index, so its inert phase has not yet moved anything. Taking the sample after
+                // the wave - which is where settling used to be decided - is why only the LAST vector on a
+                // slot could ever establish it.
+                var settling = Dwell(client, slotIndex, vector.Settling, results, control.ScanCounter);
+
                 return new SlotRunResult(SlotOutcome.Completed, results, startScan, control.ScanCounter, polls,
                     client.RoundTrips - roundTripsBefore, inert,
                     $"completion register R{vector.CompletionRegister:000} reached {vector.CompletionValue} after {control.ScanCounter.Since(startScan)} scan(s) and {polls} poll round(s). "
-                    + recorder.Build().Describe(),
-                    recorder.Build());
+                    + recorder.Build().Describe()
+                    + (settling is null ? string.Empty : " " + settling.Detail),
+                    recorder.Build(),
+                    settling);
             }
 
+            // *** NO DWELL ON A TIMED-OUT INDEX, DELIBERATELY. *** Settling asks whether an observed value
+            // was FINAL, and a run that never reached its completion condition has no observed value to
+            // ask about. Dwelling here would produce a confident "unchanged" over a program still mid-test.
             if (nowMs() >= deadline)
             {
                 return new SlotRunResult(SlotOutcome.TimedOut, results, startScan, control.ScanCounter, polls,
@@ -169,5 +235,75 @@ public static class SlotRun
                     recorder.Build());
             }
         }
+    }
+
+    /// <summary>
+    /// Hold for the declared scans, then re-read the slot's band and report whether the probed registers
+    /// moved.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Every road that is not a comparison returns <c>Taken: false</c> WITH ITS REASON.</b> A
+    /// sample that could not be taken must never arrive downstream looking like one that was taken and
+    /// found nothing — that is the shape of green this project keeps having to retract.</para>
+    ///
+    /// <para><b>The poll bound is the same 200 the previous implementation used</b>, kept so the change
+    /// is a MOVE rather than a move plus a quiet re-tuning. Exhausting it is <c>Taken: false</c>, not a
+    /// pass: it means the dwell never completed.</para>
+    /// </remarks>
+    internal static SettlingSample? Dwell(
+        MirrorClient client, int slotIndex, SettlingProbe? probe, ushort[] atClose, ScanCount from)
+    {
+        if (probe is null)
+            return null;
+
+        if (probe.UnchangedForScans <= 0)
+        {
+            return new SettlingSample(false, false,
+                $"the settling dwell was declared as {probe.UnchangedForScans} scan(s), and a zero-length dwell is "
+                + "satisfied by any program whatsoever. NOT settled.", 0);
+        }
+
+        if (probe.Registers.Count == 0)
+        {
+            return new SettlingSample(false, false,
+                "the settling probe names no register, so there is nothing to hold still. EMPTY IS NOT CLEAN: a "
+                + "comparison over zero registers is satisfied by anything. NOT settled.", 0);
+        }
+
+        var outOfBand = probe.Registers.Where(r => r.Register < 0 || r.Register >= atClose.Length).ToArray();
+        if (outOfBand.Length > 0)
+        {
+            return new SettlingSample(false, false,
+                $"the settling probe reaches R{string.Join(", R", outOfBand.Select(r => r.Register.ToString("000")))} and the slot's "
+                + $"band holds {atClose.Length} register(s), so the comparison could not be made against what was observed.", 0);
+        }
+
+        for (var poll = 0; poll < 200; poll++)
+        {
+            var waited = client.ReadControl().ScanCounter.Since(from);
+            if (waited < probe.UnchangedForScans)
+                continue;
+
+            var now = client.ReadResults(slotIndex);
+
+            // Named by SIGNAL as well as register: the declaration is written in signal names, so the
+            // finding has to come back in them.
+            var moved = probe.Registers
+                .Where(r => r.Register < now.Length && now[r.Register] != atClose[r.Register])
+                .Select(r => $"R{r.Register:000} ('{r.Signal}') moved {atClose[r.Register]} -> {now[r.Register]}")
+                .ToArray();
+
+            return moved.Length == 0
+                ? new SettlingSample(true, true,
+                    $"settled: every one of the {probe.Registers.Count} probed register(s) held its value across "
+                    + $"{waited} scan(s) after the close.", waited)
+                : new SettlingSample(true, false,
+                    $"NOT settled: {moved.Length} probed register(s) moved in the {waited} scan(s) after the close - "
+                    + string.Join(", ", moved) + ". The observed value was not final.", waited);
+        }
+
+        return new SettlingSample(false, false,
+            $"the dwell of {probe.UnchangedForScans} scan(s) had not elapsed after 200 poll round(s), so no comparison "
+            + "was made. That is NOT settled - it is a dwell that never completed.", 0);
     }
 }
