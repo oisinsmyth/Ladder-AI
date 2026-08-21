@@ -127,7 +127,10 @@ public class ObservationWindowTests
                 (DoneSpec, new SignalStorage("DemoTail", TailRecoveryBlock.DoneTag)),
             }),
             UnknownFields: Array.Empty<string>(),
-            AnnotationFields: Array.Empty<string>());
+            AnnotationFields: Array.Empty<string>(),
+
+            // No submission document, so no derivable field was hand-authored. Gate 0c's claim, stated.
+            Derivation: DerivationEvidence.NoDocument);
     }
 
     /// <summary>One scan per transaction, so the poll rate resolves the window rather than stepping over it.</summary>

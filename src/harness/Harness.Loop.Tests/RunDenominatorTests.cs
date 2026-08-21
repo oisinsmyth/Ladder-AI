@@ -123,7 +123,10 @@ public class RunDenominatorTests
                 (TrivialBlock.DoneTag, new SignalStorage("DemoUnit", TrivialBlock.DoneTag)),
             }),
             UnknownFields: Array.Empty<string>(),
-            AnnotationFields: Array.Empty<string>());
+            AnnotationFields: Array.Empty<string>(),
+
+            // No submission document, so no derivable field was hand-authored. Gate 0c's claim, stated.
+            Derivation: DerivationEvidence.NoDocument);
     }
 
     private static string Console(LoopResult result)

@@ -137,8 +137,16 @@ public class LoopCliTests
                 "table.ir" => "TAGTABLE Default tag table\n  TAGS\n",
                 "dup.ir" => BlockIr,
                 "hold.ir" => SecondBlockIr,
-                "good-sub.json" => GateParityTests.SubmissionJson(),
+                // DERIVED, because that is what an admissible submission is once gate 0c is in the list:
+                // a derivable field with no provenance record is refused as hand-authored, and these two
+                // tests are the ones that need the pair to actually be admitted.
+                "good-sub.json" => DerivedFixture.WithDerivation(
+                    GateParityTests.SubmissionJson(), DerivedFixture.ArtifactPath, GateParityTests.BindingJson()),
                 "good-binding.json" => GateParityTests.BindingJson(),
+
+                // The artifact those provenance records name. Gate 0c re-hashes it; serving it here is
+                // what makes the check RUN rather than report that it could not look.
+                DerivedFixture.ArtifactPath => GateParityTests.BindingJson(),
 
                 // The SAME admissible pair, with the slot serving TWO specification ids and no stated
                 // order. Built by injection rather than by hand so it cannot drift from the fixture the

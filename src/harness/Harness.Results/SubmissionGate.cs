@@ -211,7 +211,14 @@ public static class SubmissionGate
         /// silently-ignored field is worse than a rejected one, because it reads as accepted.
         /// </summary>
         IReadOnlyList<string>? unknownFields = null,
-        IReadOnlyList<string>? annotationFields = null)
+        IReadOnlyList<string>? annotationFields = null,
+
+        /// <summary>
+        /// The deriver's provenance block, and which derivable fields the document actually carried.
+        /// <b>Null is NOT CHECKED, never a pass</b> — a caller that supplies nothing has not established
+        /// that the fields a tool already knows were produced rather than typed.
+        /// </summary>
+        DerivationEvidence? derivation = null)
     {
         ArgumentNullException.ThrowIfNull(vectors);
         ArgumentNullException.ThrowIfNull(enumerations);
@@ -227,6 +234,7 @@ public static class SubmissionGate
         }
 
         gates.Add(UnknownFields(unknownFields, annotationFields));
+        gates.Add(DerivedFields(derivation));
         gates.Add(Schema(vectors));
         gates.Add(Authorship(vectors, blockAuthor));
         gates.Add(SubjectResolution(vectors, enumerations));
@@ -304,6 +312,135 @@ public static class SubmissionGate
             + "contract has moved ahead of the code or the document is stale; this gate does not decide which, it makes the "
             + "disagreement impossible to miss. Remove the field, or implement it."
             + " (An intentional COMMENT belongs under a leading '_', which is excluded by name.)" + annotated);
+    }
+
+    // -------------------------------------------------------------------------------------------------
+    // 0c — derived fields
+    // -------------------------------------------------------------------------------------------------
+
+    /// <summary>
+    /// 🔴 <b>A FIELD A TOOL ALREADY KNOWS, TYPED BY HAND, IS A REFUSAL NAMING IT.</b>
+    ///
+    /// <para>*** THE GATES WERE GRADING A TRANSCRIPTION. *** A dozen sub-documents — the map, storage,
+    /// the conflict edges, the deployment stamps, the compression ceilings — are each produced by
+    /// something that already exists, and nothing composed them into the document this gate reads. So an
+    /// agent retyped them, and every downstream gate then checked the retyping faithfully. A gate that
+    /// verifies a hand-copied number verifies the copying.</para>
+    ///
+    /// <para><b>Precedent, in this codebase, on exactly one field:</b> <c>--binding</c> supplies the
+    /// observability map from the coordinator instead of from the vector author, and gate 5 moves from
+    /// NOT CHECKED to a real verdict because of it. This is that same move, made general.</para>
+    ///
+    /// <para><b>Why a present-and-underived field is refused rather than warned:</b> a warning on the
+    /// path that reaches the rig is read once and skimmed thereafter. The refusal names the field, which
+    /// is the thing the author has to go and delete.</para>
+    ///
+    /// <para><b>Why ZERO derivable fields present is a PASS, and not the empty-is-not-clean refusal the
+    /// rest of this system applies.</b> This gate asks one question — <i>was anything here hand-authored
+    /// that a tool already knows?</i> — and with no such field present the honest answer is no. The
+    /// ABSENCE of those fields is a real finding, but it belongs to the gates that consume them: omit the
+    /// deployment and gate 11 reports NOT CHECKED, omit the graph and gate 8 does, and a single NOT
+    /// CHECKED already makes the whole submission NOT ADMISSIBLE. <b>So omission is not an escape route
+    /// from this gate — it is a worse outcome by a different door</b>, and duplicating the complaint here
+    /// would make 0c a gate that refuses ordinary submissions, which is how a gate gets switched off. The
+    /// denominator is printed on every run so the scope of the claim is never in doubt.</para>
+    /// </summary>
+    private static GateResult DerivedFields(DerivationEvidence? evidence)
+    {
+        const string name = "0c derived fields";
+
+        if (evidence is null)
+        {
+            return GateResult.CouldNotRun(name, NotCheckedReason.HarnessCapabilityMissing, "the deriver's provenance block",
+                "nobody supplied the derivation evidence, so a field a tool already knows could have been typed by hand and "
+                + "graded as though it were measured. That is not a pass: the gates downstream would then be checking the "
+                + "transcription rather than the truth.");
+        }
+
+        var present = evidence.DerivableFieldsPresent;
+        var records = evidence.Records;
+
+        // *** PRINTED ON EVERY RUN, INCLUDING ZERO. *** Every other number this gate can report is a
+        // reason a check did NOT happen; this one is the denominator, and a claim without it is the
+        // shape of green this project keeps having to retract.
+        var denominator =
+            $" DENOMINATOR: {present.Count} derivable field(s) present, {records.Count} with a derivation record, "
+            + $"{records.Count(r => r.ArtifactWasRead)} re-hashed against the artifact on disk.";
+
+        if (present.Count == 0)
+        {
+            return new GateResult(name, GateStatus.Checked, true, nameof(SubmissionGate),
+                "no derivable field is present, so nothing here was hand-authored. Their ABSENCE is not this gate's "
+                + "question and is not being waved through: the gates that consume them (8 conflicts, 10b compression, "
+                + "11 memory layout) report NOT CHECKED without them, and one NOT CHECKED already makes the submission "
+                + "NOT ADMISSIBLE." + denominator);
+        }
+
+        var authored = present
+            .Where(f => !records.Any(r => string.Equals(r.Field, f, StringComparison.Ordinal)))
+            .ToArray();
+
+        var unknownProducer = records
+            .Where(r => !DerivationProducer.Known.Contains(r.Producer))
+            .ToArray();
+
+        var attestsToNothing = records
+            .Where(r => !present.Contains(r.Field, StringComparer.Ordinal))
+            .ToArray();
+
+        var stale = records.Where(r => r.ArtifactWasRead && !r.HashMatches).ToArray();
+        var unread = records.Where(r => !r.ArtifactWasRead).ToArray();
+
+        var problems = new List<string>();
+
+        if (authored.Length > 0)
+        {
+            problems.Add(
+                $"{authored.Length} field(s) were AUTHORED, not derived: {string.Join(", ", authored)}. "
+                + "Each is produced by a tool that already exists; derive it and let the provenance say so.");
+        }
+
+        if (unknownProducer.Length > 0)
+        {
+            problems.Add(
+                $"{unknownProducer.Length} record(s) name a producer this gate does not know: "
+                + string.Join(", ", unknownProducer.Select(r => $"{r.Field} <- '{r.Producer}'"))
+                + ". An open producer set would let the author attest to their own transcription.");
+        }
+
+        if (attestsToNothing.Length > 0)
+        {
+            problems.Add(
+                $"{attestsToNothing.Length} record(s) attest to a field the document does not carry: "
+                + string.Join(", ", attestsToNothing.Select(r => r.Field))
+                + ". The deriver produced it and the submission does not have it, so one of the two lost data.");
+        }
+
+        if (stale.Length > 0)
+        {
+            problems.Add(
+                $"{stale.Length} field(s) were derived from an artifact that has CHANGED since: "
+                + string.Join(", ", stale.Select(r => $"{r.Field} <- {r.Artifact}"))
+                + ". The derivation is stale; re-derive rather than re-stamp.");
+        }
+
+        if (problems.Count > 0)
+        {
+            return new GateResult(name, GateStatus.Checked, false, nameof(SubmissionGate),
+                string.Join(" ", problems) + denominator);
+        }
+
+        if (unread.Length > 0)
+        {
+            return GateResult.CouldNotRun(name, NotCheckedReason.AwaitingAnArtifactThatCouldExist, nameof(SubmissionGate),
+                $"{unread.Length} field(s) carry a derivation this gate could not verify, because the artifact could not be "
+                + $"read: {string.Join(", ", unread.Select(r => $"{r.Field} <- {r.Artifact}"))}. An unreadable artifact is "
+                + "not a matching one." + denominator);
+        }
+
+        return new GateResult(name, GateStatus.Checked, true, nameof(SubmissionGate),
+            "every derivable field the submission carries was produced by a named tool, and every artifact still hashes to "
+            + "what the derivation recorded." + denominator);
     }
 
     private static GateResult Schema(IReadOnlyList<SubmissionVector> vectors)

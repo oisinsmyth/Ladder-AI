@@ -152,6 +152,18 @@ public class GateParityTests
     private static (SubmissionReport Standalone, SubmissionReport Loop) Both(
         string submissionJson, string bindingJson, Func<string, string>? readFile = null)
     {
+        // *** THE FIXTURES ARE DERIVED SUBMISSIONS, BECAUSE THAT IS NOW WHAT AN ADMISSIBLE ONE IS. ***
+        // Gate 0c refuses a derivable field carrying no provenance record, so an authored fixture would be
+        // NOT ADMISSIBLE on both sides — which this file's own control test warns is the state in which
+        // every other test here passes while measuring nothing. Stamping happens only when the caller
+        // supplied no reader, i.e. only for the in-memory fixtures; the deliverable-corpus test brings its
+        // own File.ReadAllText and is left exactly as it is on disk.
+        if (readFile is null)
+        {
+            submissionJson = DerivedFixture.WithDerivation(submissionJson, DerivedFixture.ArtifactPath, bindingJson);
+            readFile = DerivedFixture.ReaderFor(bindingJson);
+        }
+
         var submission = SubmissionDocument.Read(submissionJson);
         var binding = BindingDocument.Read(bindingJson);
 
@@ -557,6 +569,12 @@ public class GateParityTests
         Assert.Equal(inputs.CompressionInputs is null, request.CompressionInputs is null);
         Assert.Equal(inputs.Fidelity is null, request.Fidelity is null);
         Assert.Equal(inputs.Conflicts is null, request.ComputedConflicts is null);
+
+        // Gate 0c's evidence joins the parity net the day it is added, rather than after it has drifted.
+        // Compared field by field: "both non-null" agrees just as readily with a wrong derivation.
+        Assert.Equal(inputs.Derivation is null, request.Derivation is null);
+        Assert.Equal(inputs.Derivation?.Records.Count, request.Derivation?.Records.Count);
+        Assert.Equal(inputs.Derivation?.DerivableFieldsPresent, request.Derivation?.DerivableFieldsPresent);
 
         // *** AND IT IS NOT VACUOUS. *** These are the values the loop used to discard: the real documents
         // carry 27 vectors, a non-empty annotation set and a declared 2.7 join, so every equality above is

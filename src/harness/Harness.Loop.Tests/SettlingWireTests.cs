@@ -105,12 +105,14 @@ public class SettlingWireTests
     private static ResultPackage RunFromWire(string settlingField)
     {
         var request = LoopCli.Compose(
-            SubmissionDocument.Read(Submission(settlingField)),
+            SubmissionDocument.Read(DerivedFixture.WithDerivation(Submission(settlingField), DerivedFixture.ArtifactPath, Binding)),
             BindingDocument.Read(Binding),
             TrivialBlock.Generate(ProgramBase, blockNumber: 901, TrivialBlockDefect.None),
-            // The typed caller's claim, made explicitly: no unknown field can arrive from these two
-            // documents because both parse clean — and the composed request carries what they said.
-            readFile: null);
+            // The fixture is a DERIVED submission, so gate 0c can attribute its map, deployment and
+            // conflict edges rather than refusing them as hand-authored. The reader exists only to serve
+            // the artifact those records name: gate 0c re-hashes it, and an artifact it cannot read is
+            // NOT CHECKED rather than a pass.
+            readFile: DerivedFixture.ReaderFor(Binding));
 
         var result = LoopRun.Execute(request, new SimulatedGateway(Harness.Map.MirrorGeometry.ForCpu1214C(256, MirrorBase)));
 
@@ -150,9 +152,11 @@ public class SettlingWireTests
         foreach (var scans in new[] { 1, 3, 42 })
         {
             var request = LoopCli.Compose(
-                SubmissionDocument.Read(Submission($"\"settlingUnchangedForScans\": {scans},")),
+                SubmissionDocument.Read(DerivedFixture.WithDerivation(
+                    Submission($"\"settlingUnchangedForScans\": {scans},"), DerivedFixture.ArtifactPath, Binding)),
                 BindingDocument.Read(Binding),
-                Array.Empty<Harness.Map.HarnessObject>());
+                Array.Empty<Harness.Map.HarnessObject>(),
+                readFile: DerivedFixture.ReaderFor(Binding));
 
             Assert.Equal(scans, Assert.Single(request.Vectors).Settling!.UnchangedForScans);
         }
@@ -166,9 +170,11 @@ public class SettlingWireTests
         // than a missed one. With no wire field the settling check could never fire on any real
         // submission — the defect would have been read as a Pass or an ordinary Fail on the number.
         var request = LoopCli.Compose(
-            SubmissionDocument.Read(Submission("\"settlingUnchangedForScans\": 3,")),
+            SubmissionDocument.Read(DerivedFixture.WithDerivation(
+                Submission("\"settlingUnchangedForScans\": 3,"), DerivedFixture.ArtifactPath, Binding)),
             BindingDocument.Read(Binding),
-            TrivialBlock.Generate(ProgramBase, blockNumber: 901, TrivialBlockDefect.DoneWhileStillRunning));
+            TrivialBlock.Generate(ProgramBase, blockNumber: 901, TrivialBlockDefect.DoneWhileStillRunning),
+            readFile: DerivedFixture.ReaderFor(Binding));
 
         var result = LoopRun.Execute(request, new SimulatedGateway(Harness.Map.MirrorGeometry.ForCpu1214C(256, MirrorBase)));
         var package = Assert.Single(result.Packages);

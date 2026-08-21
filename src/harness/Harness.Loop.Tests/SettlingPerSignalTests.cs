@@ -127,10 +127,15 @@ public class SettlingPerSignalTests
     private static LoopResult Run(string settlingSignals, TrivialBlockDefect defect, int unchangedForScans = 3) =>
         LoopRun.Execute(
             LoopCli.Compose(
-                SubmissionDocument.Read(Submission(settlingSignals, unchangedForScans)),
+                SubmissionDocument.Read(DerivedFixture.WithDerivation(
+                    Submission(settlingSignals, unchangedForScans), DerivedFixture.ArtifactPath, Binding)),
                 BindingDocument.Read(Binding),
                 TrivialBlock.Generate(ProgramBase, blockNumber: 901, defect),
-                readFile: null),
+
+                // A DERIVED fixture, so gate 0c attributes the map/deployment/edges instead of refusing
+                // them as hand-authored. The reader serves the artifact those records name; 0c re-hashes
+                // it, and one it cannot read is NOT CHECKED rather than a pass.
+                readFile: DerivedFixture.ReaderFor(Binding)),
             new SimulatedGateway(Harness.Map.MirrorGeometry.ForCpu1214C(256, MirrorBase)));
 
     private static ResultPackage Package(string settlingSignals, TrivialBlockDefect defect, int unchangedForScans = 3)

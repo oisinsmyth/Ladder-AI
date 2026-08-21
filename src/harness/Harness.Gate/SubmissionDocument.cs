@@ -15,7 +15,30 @@ namespace Harness.Gate;
 public sealed class SubmissionDocument
 {
     public string? BlockAuthor { get; set; }
-    public int RuntimeCompression { get; set; } = 1;
+
+    /// <summary>
+    /// The runtime compression factor.
+    ///
+    /// <para><b>Key presence is tracked</b> (see <see cref="RuntimeCompressionKeyPresent"/>) because this
+    /// is a derivable field with a DEFAULT: absent and <c>1</c> deserialise to the same value, so gate 0c
+    /// could not otherwise tell a field nobody wrote from one somebody typed. Same device the
+    /// <c>conflictEdges</c> setter already uses, for the same reason.</para>
+    /// </summary>
+    public int RuntimeCompression
+    {
+        get => _runtimeCompression;
+        set
+        {
+            _runtimeCompression = value;
+            RuntimeCompressionKeyPresent = true;
+        }
+    }
+
+    private int _runtimeCompression = 1;
+
+    /// <summary>Whether the document CARRIED a <c>runtimeCompression</c> key, as opposed to defaulting to 1.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool RuntimeCompressionKeyPresent { get; private set; }
 
     /// <summary>Slots in the wave set. Feeds §12a derivation 1's floor, which scales with tensor width.</summary>
     public int SlotsInWaveSet { get; set; } = 1;
@@ -136,6 +159,41 @@ public sealed class SubmissionDocument
     public List<VectorDocument>? Vectors { get; set; }
 
     /// <summary>
+    /// 🔴 <b>THE DERIVER'S PROVENANCE BLOCK — one entry per field a tool produced.</b>
+    ///
+    /// <para><b>Deliberately not an <c>_</c>-prefixed annotation.</b> Gate 0b excludes those BY NAME and
+    /// never reads them, and this is the one piece of metadata that has to be read: gate 0c decides
+    /// whether a derivable field was produced or typed, and it cannot do that from something the reader
+    /// is contracted to skip.</para>
+    /// </summary>
+    public List<DerivationDocument>? Derivation { get; set; }
+
+    /// <summary>
+    /// Which of <see cref="Harness.Results.DerivableField.All"/> this document actually carried.
+    ///
+    /// <para><b>KEY PRESENCE, NOT VALUE TRUTHINESS.</b> A field that is present and empty was still
+    /// written by somebody, and it is the writing this gate is about. <c>conflictEdges</c> and
+    /// <c>runtimeCompression</c> therefore use their key-presence flags rather than their values — the
+    /// first because an explicit null is a distinct and illegal third state, the second because it has a
+    /// default that is indistinguishable from an author typing it.</para>
+    /// </summary>
+    public IReadOnlyList<string> DerivableFieldsPresent()
+    {
+        var present = new List<string>();
+
+        if (Map is not null) present.Add(Harness.Results.DerivableField.Map);
+        if (Map?.Storage is not null) present.Add(Harness.Results.DerivableField.Storage);
+        if (ConflictEdgesKeyPresent) present.Add(Harness.Results.DerivableField.ConflictEdges);
+        if (ComputedConflicts is not null) present.Add(Harness.Results.DerivableField.ComputedConflicts);
+        if (BlockCompression is not null) present.Add(Harness.Results.DerivableField.BlockCompression);
+        if (Deployment is not null) present.Add(Harness.Results.DerivableField.Deployment);
+        if (!string.IsNullOrWhiteSpace(TagMapPath)) present.Add(Harness.Results.DerivableField.TagMapPath);
+        if (RuntimeCompressionKeyPresent) present.Add(Harness.Results.DerivableField.RuntimeCompression);
+
+        return present;
+    }
+
+    /// <summary>
     /// 🔴 <b>FIELDS THIS SCHEMA DOES NOT KNOW, CAPTURED RATHER THAN DISCARDED.</b>
     ///
     /// <para>*** A SILENTLY-IGNORED FIELD IS WORSE THAN A REJECTED ONE, BECAUSE IT READS AS ACCEPTED. ***
@@ -193,6 +251,11 @@ public sealed class SubmissionDocument
         Collect(UnknownFields, string.Empty, found);
         Collect(Map?.UnknownFields, "map", found);
         Collect(Enumeration?.UnknownFields, "enumeration", found);
+
+        // The provenance block gets the same treatment as every other sub-document. It is the one whose
+        // whole job is to be READ, so a key dropped in silence here is a derivation nobody checked.
+        foreach (var (record, index) in (Derivation ?? new List<DerivationDocument>()).Select((d, i) => (d, i)))
+            Collect(record.UnknownFields, $"derivation[{index}]", found);
 
         // *** EVERY ELEMENT, NOT JUST THE FIRST. *** A typo in the second subject's enumeration is exactly
         // as silently dropped as one in the first, and it is the one nobody would go looking for.
@@ -252,6 +315,29 @@ public sealed class SubmissionDocument
         PropertyNameCaseInsensitive = true,
         ReadCommentHandling = JsonCommentHandling.Skip,
         AllowTrailingCommas = true,
+        Converters = { new JsonStringEnumConverter() },
+    };
+
+    /// <summary>
+    /// Serialise a submission back to the wire form.
+    ///
+    /// <para>🔴 <b>THE COUNTERPART TO <see cref="Read"/>, AND IT LIVES HERE FOR THE SAME REASON.</b> The
+    /// deriver first carried its own reader options, which silently lacked the enum converter this
+    /// document needs — so a perfectly good submission threw on parse and was passed through untouched.
+    /// One document, one reader, one writer: a second set of options is a second opinion about the
+    /// format, and it fails in the direction that looks like nothing happening.</para>
+    ///
+    /// <para><b>camelCase on the way out</b>, matching the contract and every hand-authored submission.
+    /// Reading is case-insensitive, so this is a compatibility choice rather than a requirement.</para>
+    /// </summary>
+    public static string Write(SubmissionDocument document) =>
+        JsonSerializer.Serialize(document, WriteOptions);
+
+    private static readonly JsonSerializerOptions WriteOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        WriteIndented = true,
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
         Converters = { new JsonStringEnumConverter() },
     };
 }
@@ -541,6 +627,32 @@ public sealed class StorageDocument
 
     /// <summary>The path within that owner, or the global path verbatim.</summary>
     public string? Path { get; set; }
+}
+
+/// <summary>
+/// One derived field's provenance, as written by <c>harness-gate derive</c>.
+///
+/// <para><b>The author does not write these and cannot usefully forge one:</b> the producer must be a
+/// name gate 0c knows, and the hash must still match the artifact on disk. Typing a plausible-looking
+/// entry by hand for a field you also typed by hand fails on the hash, which is the point.</para>
+/// </summary>
+public sealed class DerivationDocument
+{
+    /// <summary>Fields this schema does not know. Named and refused by gate 0b — never silently dropped.</summary>
+    [JsonExtensionData]
+    public Dictionary<string, object?>? UnknownFields { get; set; }
+
+    /// <summary>The submission field this attests to, by its own JSON property name.</summary>
+    public string? Field { get; set; }
+
+    /// <summary>The tool that produced it. Must be one gate 0c recognises.</summary>
+    public string? Producer { get; set; }
+
+    /// <summary>Path to the artifact it was derived from, as the deriver saw it.</summary>
+    public string? Artifact { get; set; }
+
+    /// <summary>The artifact's SHA-256 at derivation time. Re-hashed by the gate; a mismatch is a stale derivation.</summary>
+    public string? ArtifactSha256 { get; set; }
 }
 
 public sealed class VectorDocument

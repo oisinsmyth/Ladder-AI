@@ -33,7 +33,12 @@ public class SubmissionGateTests
             [AssertionIdValue] = new HashSet<string>(StringComparer.Ordinal) { "Demo_Count" },
         };
 
-    private static SubmissionVector Vector(
+    /// <summary>
+    /// <b><c>internal</c> so the gate-0c tests can build their typed cases from the SAME vector this
+    /// suite's own control uses.</b> A second hand-rolled vector is a second thing that can stop being
+    /// admissible for reasons unrelated to what the test is about.
+    /// </summary>
+    internal static SubmissionVector Vector(
         string id = "V-1",
         string slot = "S0",
         string author = "agent-b",
@@ -67,6 +72,18 @@ public class SubmissionGateTests
             boundsUsed ?? SpecifiedBounds);
 
     /// <summary>The enumeration's bounds table for these fixtures — AMB-19's right-hand side.</summary>
+    /// <summary>
+    /// The standard enumeration these fixtures cite into, for the gate-0c tests.
+    ///
+    /// <para>Exposed as a method rather than by making four separate statics internal: the IDs must
+    /// RECOMPUTE from their own text (gate 3g), so the parts have to travel together or the caller
+    /// assembles a set that fails for a reason that has nothing to do with derivation.</para>
+    /// </summary>
+    internal static AssertionEnumerationSet EnumerationForDerivationTests() =>
+        AssertionEnumeration.Of(new[] { ClauseId }, new[] { AssertionIdValue },
+            new Dictionary<string, AssertionForm> { [AssertionIdValue] = AssertionForm.When },
+            "agent-c", Texts, Observations, SpecifiedBounds);
+
     private static readonly IReadOnlyDictionary<string, string> SpecifiedBounds =
         new Dictionary<string, string>(StringComparer.Ordinal) { ["ramp_limit"] = "10", ["dwell"] = "T#5S" };
 
@@ -119,8 +136,10 @@ public class SubmissionGateTests
             conflictEdgesExplicitlyNull: false,
 
             // These fixtures build typed objects rather than parsing a document, so the unknown-field set
-            // is a COMPUTED empty rather than an unasked question.
-            unknownFields: Array.Empty<string>());
+            // is a COMPUTED empty rather than an unasked question. The same is true of gate 0c: with no
+            // document there is no authored field to attribute, and the claim is made explicitly.
+            unknownFields: Array.Empty<string>(),
+            derivation: DerivationEvidence.NoDocument);
 
     /// <summary>
     /// One vector whose expectation declares a WINDOW, so X-D's assertion ceiling is computable for it.
@@ -1035,7 +1054,7 @@ public class SubmissionGateTests
             9, 1, ConflictGraph.Empty, null,
             new DeploymentDeclaration("fixture-import", Array.Empty<S7ObjectDeclaration>(), NoS7Transport: true),
             null,
-            Joined, false, Array.Empty<string>());
+            Joined, false, Array.Empty<string>(), derivation: DerivationEvidence.NoDocument);
 
         var gate = Gate(report, "11 memory layout");
 
@@ -1059,7 +1078,7 @@ public class SubmissionGateTests
                 new[] { new S7ObjectDeclaration("DB_X", 100, "DB_X", DeclaredLayout.Standard, "fixture-import") },
                 NoS7Transport: true),
             TagMapReach.Of(Array.Empty<S7Reach>()),
-            Joined, false, Array.Empty<string>());
+            Joined, false, Array.Empty<string>(), derivation: DerivationEvidence.NoDocument);
 
         var gate = Gate(report, "11 memory layout");
 

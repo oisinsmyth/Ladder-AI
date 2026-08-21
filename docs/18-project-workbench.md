@@ -188,19 +188,57 @@ Everything else — which register `Running` lands in, the `%M` address, the COI
 there, the scan budget, the backstop, the compression factor, the build stamp, the deployment
 record — is produced by the tool, from the map it generated itself.
 
-### 3.5 Two places this must refuse rather than shrug
+### 3.4a What was BUILT, 2026-08-21 — and the line between it and §3.4
+
+**Shipped:** `harness-gate derive`, plus gate **`0c derived fields`** in `Harness.Results/SubmissionGate.cs`.
+
+> ⚠️ **The deriver ATTRIBUTES; it does not yet COMPUTE.** It records, for every derivable field a
+> submission carries, which named producer it came from, out of which artifact, and that artifact's
+> SHA-256 — and the gate re-hashes it. It does **not** recalculate the map, the conflict graph or the
+> compression ceilings. That distinction is deliberate and is not being blurred: a tool that *claimed*
+> to compute them while copying would be the same transcription problem with a longer command line.
+
+Attribution alone still closes the loop, because the four checks are structural: gate 0c refuses a
+derivable field carrying no record; only the deriver writes records; the producer must come from a
+closed set; and the artifact must still hash to what was recorded. So a derivable field cannot reach
+the gate as an unattributed opinion. What remains possible — pointing the tool at the wrong artifact
+— is a visible, reviewable act rather than an invisible one.
+
+**Still to build:** computing `map` from the binding and comparing it against the authored one (the
+copy-layer generator can already do this, and derive-and-compare is strictly stronger than
+attribute); and the reachable-state and compression composers, which live in a different solution
+(`src/wave-control`).
+
+### 3.5 Where this must refuse rather than shrug
 
 This is the part I would insist on, because it is this project's signature failure mode wearing a
-new hat: **a derived submission is only trustworthy if the derivation has a denominator.**
+new hat: **a derived submission is only trustworthy if the derivation has a denominator.** All of
+the following are built and tested:
 
-1. **Every vector in must be a vector mapped.** If a signal an assertion names is not in the map,
-   the deriver **names the vector and refuses**. It must never quietly drop it — that is a green
-   over a smaller set, which is exactly how "a check that examined nothing" happens.
-2. **The element table is three types wide.** `Bool`, `Int`, `Time` — confirmed in
-   `Harness.Map/CopyLayer.cs`. A `Real`, `DInt`, `Word`, `String`, a UDT member or an array element
-   **is not observable today**. The generator must name the type and refuse. **This is the real
-   ceiling on "any block can be tested automatically"**, it is not visible from outside, and
-   widening the table is a bounded, high-value job (§7.2).
+1. **A derivable field with no record is refused, and every such field is named** — not counted.
+2. **A stale artifact is refused.** Recorded hash vs the artifact now; a mismatch says *re-derive
+   rather than re-stamp*.
+3. **An unreadable artifact is NOT CHECKED, never a pass.** "Could not look" is not "it matched".
+4. **An unknown producer is refused by name.** Without a closed set, `"producer": "me"` satisfies the
+   gate and the author is attesting to their own transcription.
+5. **The denominator prints on every run**, including the passing one and the zero case.
+6. **`runtimeCompression` cannot be withheld.** It has a default, so dropping the key leaves `1` in
+   place — withholding it would not withhold anything, it would forge the quieter claim.
+
+**One planned refusal was dropped, and the reason is a finding.** *"The generator must name an
+unsupported type and refuse"* is **redundant**: `MirrorValueType` has exactly four members —
+`Unstated`, `Bool`, `Int`, `Time` — so a `Real` or `DInt` signal **cannot be expressed in a binding
+at all**. The ceiling is enforced by the type system rather than mishandled at runtime. That makes
+widening it a smaller job than §7.2 assumed — one enum member, one element-table row, one copy shape
+— and it means the limitation surfaces as an unparseable binding rather than as a wrong mirror.
+
+**The gate-0c-on-zero decision, recorded because it deviates from house style.** Zero derivable
+fields present is a **pass**, not the usual empty-is-not-clean refusal. 0c asks whether anything was
+hand-authored; with nothing present the honest answer is no. The absence of those fields belongs to
+the gates that consume them — omit the deployment and gate 11 cannot run, omit the graph and gate 8
+cannot — and a single NOT CHECKED already makes the submission NOT ADMISSIBLE. **Omission is a worse
+outcome by a different door, not an escape route**, and that claim is asserted by a test rather than
+left as prose.
 
 ---
 
@@ -266,8 +304,11 @@ dangerous instrument in the system.
 
 ## 5. What has to be built, ranked
 
-1. **`harness derive`** — submission from artifacts; gates re-pointed at the derivation; refuses
-   with a named vector on any unmapped signal (§3.4, §3.5).
+1. ✅ **`harness-gate derive` + gate 0c** — **DONE 2026-08-21** (§3.4a). Attribution and enforcement
+   are in and tested; the *computation* half (map from the binding, then compare) is not, and is
+   item 1b below.
+   1b. **Compute `map` from the binding and compare it to the authored one** — strictly stronger than
+   attributing it, and the copy-layer generator can already do it.
 2. **The gate queue** — tool-owned, batching, replacing the text-file claim board.
 3. **State in files** — `project.yaml`, `blocks/<name>.md`, explicit state field.
 4. **`Harness.Loop` run end to end for the first time** — it is built and has never run; everything
@@ -340,3 +381,11 @@ opinion.** That single sentence is why §3 is the most valuable part of this des
   and the two places derivation must refuse. Added the finding that the copy-layer ladder is
   **already generated** and the real gap is the hand-authored submission document. Capability
   assessment compressed to §6.
+- **v2.1 — 2026-08-21.** §3.4a and §3.5 rewritten to describe what was actually BUILT rather than
+  what was planned: `harness-gate derive` attributes rather than computes, and that line is drawn
+  explicitly. Six refusals shipped; one planned refusal dropped as **redundant** — `MirrorValueType`
+  has four members, so an unsupported type is inexpressible rather than mishandled, which also makes
+  widening the element table smaller than §7.2 assumed. Recorded the gate-0c-on-zero deviation and
+  the test that backs it. Measured on the live job: **5 derivable fields per submission, all five
+  hand-authored today, and 4 of the 5 have a real producing artifact on disk while
+  `runtimeCompression` has none.**

@@ -12,7 +12,12 @@ namespace Harness.Results.Tests;
 /// </summary>
 public class GateCliTests
 {
-    private const string Good = """
+    /// <summary>
+    /// <b><c>internal</c> so the gate-0c tests can reuse the ONE known-admissible submission.</b> A second
+    /// fixture written to be admissible is a second thing that can quietly stop being admissible, and
+    /// then those tests pass while measuring nothing.
+    /// </summary>
+    internal const string Good = """
     {
       "blockAuthor": "agent-a",
       "runtimeCompression": 1,
@@ -62,7 +67,7 @@ public class GateCliTests
     /// transport uses — a declared reachable set would be the author vouching for the artifact the gate
     /// exists to check them against.
     /// </summary>
-    private const string TagMap = """
+    internal const string TagMap = """
     { "tags": [ { "name": "Marker_Build", "area": "DB_HarnessMarker", "db": 100, "byte": 0, "type": "DInt" } ] }
     """;
 
@@ -75,7 +80,7 @@ public class GateCliTests
     /// than not running. Every test below therefore passes <c>--binding</c>; the one that does not is the
     /// test of the refusal.</para>
     /// </summary>
-    private const string Binding = """
+    internal const string Binding = """
     {
       "slots": [{
         "slotId": "S0",
@@ -86,15 +91,23 @@ public class GateCliTests
     }
     """;
 
-    private static (int Exit, string Output) Run(string json, string[]? args = null)
+    /// <param name="derive">
+    /// Stamp provenance first, so the fixture is a DERIVED submission rather than an authored one.
+    /// <b>Default true, because that is now what an admissible submission looks like</b> — gate 0c refuses
+    /// a derivable field carrying no record, and these tests are about the OTHER gates. The tests that
+    /// exercise 0c itself pass <c>false</c> and assert the refusal by name.
+    /// </param>
+    private static (int Exit, string Output) Run(string json, string[]? args = null, bool derive = true)
     {
         var writer = new StringWriter();
+        var submission = derive ? DerivedFixture.WithDerivation(json, "binding.json", Binding) : json;
+
         var exit = GateCli.Run(args ?? new[] { "check", "sub.json", "--binding", "binding.json" }, writer,
             path => path switch
             {
                 "tags.json" => TagMap,
                 "binding.json" => Binding,
-                _ => json,
+                _ => submission,
             });
         return (exit, writer.ToString());
     }

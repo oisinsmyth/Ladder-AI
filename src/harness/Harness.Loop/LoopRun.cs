@@ -81,7 +81,13 @@ public sealed record LoopRequest(
     // the honest omission, and a lenient deserializer turns it back into an empty list one layer down. A
     // typed caller cannot express it at all, so false is the computed answer there; a document CAN, and
     // LoopCli now carries what the document said.
-    bool ConflictEdgesExplicitlyNull = false)
+    bool ConflictEdgesExplicitlyNull = false,
+
+    // Gate 0c's evidence: which derivable fields the document carried, and the deriver's provenance for
+    // each. Carried from the request for exactly the reason UnknownFields is - the loop is the path that
+    // spends rig time, so a gate that is weaker here than in the standalone CLI is the weaker check
+    // guarding the more expensive door. Null is NOT CHECKED, never a pass.
+    DerivationEvidence? Derivation = null)
 {
     /// <summary>The factor, defaulting to uncompressed only where the caller passed nothing at all.</summary>
     public RuntimeCompression Compression => RuntimeCompression ?? Harness.Wire.RuntimeCompression.Uncompressed;
@@ -600,7 +606,8 @@ public static class LoopRun
             // passing an empty list; nobody says it for them.
             conflictEdgesExplicitlyNull: request.ConflictEdgesExplicitlyNull,
             unknownFields: request.UnknownFields,
-            annotationFields: request.AnnotationFields);
+            annotationFields: request.AnnotationFields,
+            derivation: request.Derivation);
 
         if (stopWhenInadmissible && gate.Verdict != SubmissionVerdict.AdmissibleSubjectToJudgement)
         {

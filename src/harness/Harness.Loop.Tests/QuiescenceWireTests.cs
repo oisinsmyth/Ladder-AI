@@ -112,10 +112,14 @@ public class QuiescenceWireTests
 
     private static LoopRequest Compose(string quiescenceField) =>
         LoopCli.Compose(
-            SubmissionDocument.Read(Submission),
+            SubmissionDocument.Read(DerivedFixture.WithDerivation(Submission, DerivedFixture.ArtifactPath, Submission)),
             BindingDocument.Read(Binding(quiescenceField)),
             TrivialBlock.Generate(ProgramBase, blockNumber: 901),
-            readFile: null);
+
+            // A DERIVED fixture, so gate 0c attributes the map/deployment/edges instead of refusing them.
+            // The artifact is the submission text itself here, because the BINDING varies per test while
+            // the hash recorded in the records must match whatever the reader returns.
+            readFile: DerivedFixture.ReaderFor(Submission));
 
     // ---------------------------------------------------------------------------------------------
 

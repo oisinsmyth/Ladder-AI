@@ -64,7 +64,16 @@ public sealed record GateInputs(
     bool ConflictEdgesExplicitlyNull,
     IReadOnlyList<string> UnknownFields,
     IReadOnlyList<string> AnnotationFields,
-    int RuntimeCompression);
+    int RuntimeCompression,
+
+    /// <summary>
+    /// Gate 0c's input: the deriver's provenance block, plus which derivable fields the document
+    /// carried. <b>It is in this record rather than derived per-caller for the same reason everything
+    /// else here is</b> — two derivations of one input set is how the loop's gate and the CLI's came to
+    /// disagree about twelve of them, and this one governs whether the other twelve were produced or
+    /// typed.
+    /// </summary>
+    DerivationEvidence? Derivation = null);
 
 /// <summary>
 /// The runnable gate. <c>harness-gate check &lt;submission.json&gt;</c>.
@@ -223,7 +232,8 @@ public static class GateCli
             inputs.Storage,
             inputs.ConflictEdgesExplicitlyNull,
             inputs.UnknownFields,
-            inputs.AnnotationFields);
+            inputs.AnnotationFields,
+            inputs.Derivation);
     }
 
     /// <summary>
@@ -254,7 +264,60 @@ public static class GateCli
             document.ConflictEdgesExplicitlyNull,
             extra.Unknown,
             extra.Annotations,
-            Math.Max(1, document.RuntimeCompression));
+            Math.Max(1, document.RuntimeCompression),
+            ToDerivationEvidence(document, readFile));
+    }
+
+    /// <summary>
+    /// Gate 0c's evidence: the provenance records the document carries, each re-hashed against the
+    /// artifact it names, plus the set of derivable fields the document actually carried.
+    ///
+    /// <para><b>An unreadable artifact yields a null observed hash, not a missing record</b> — the gate
+    /// then reports NOT CHECKED for that field. Dropping the record instead would make an unreadable
+    /// artifact look like a field nobody derived, i.e. turn "could not look" into "hand-authored", which
+    /// blames the submission for the harness's problem.</para>
+    ///
+    /// <para>🔴 <b>NEVER NULL FOR A DOCUMENT, INCLUDING ONE WITH NO <c>derivation</c> KEY.</b> Null is
+    /// reserved for a caller with no document channel at all — a hand-built typed request — where NOT
+    /// CHECKED is the honest answer. A PARSED document always yields evidence, because the absence of the
+    /// key is itself the finding: no records plus no derivable fields is a clean scoped pass, and no
+    /// records plus derivable fields present is precisely the hand-authored submission this gate exists
+    /// to refuse. Returning null for both would collapse those two into one NOT CHECKED and lose the
+    /// refusal.</para>
+    /// </summary>
+    public static DerivationEvidence ToDerivationEvidence(SubmissionDocument document, Func<string, string>? readFile)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+
+        var records = new List<DerivationRecord>();
+
+        foreach (var d in document.Derivation ?? new List<DerivationDocument>())
+        {
+            var artifact = d.Artifact ?? string.Empty;
+            string? observed = null;
+
+            if (readFile is not null && !string.IsNullOrWhiteSpace(artifact))
+            {
+                try
+                {
+                    observed = DerivationHash.Of(readFile(artifact));
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException or ArgumentException)
+                {
+                    // Unreadable is not unchanged. Left null so the gate says it could not verify.
+                    observed = null;
+                }
+            }
+
+            records.Add(new DerivationRecord(
+                d.Field ?? string.Empty,
+                d.Producer ?? string.Empty,
+                artifact,
+                d.ArtifactSha256 ?? string.Empty,
+                observed));
+        }
+
+        return new DerivationEvidence(records, document.DerivableFieldsPresent());
     }
 
     /// <summary>

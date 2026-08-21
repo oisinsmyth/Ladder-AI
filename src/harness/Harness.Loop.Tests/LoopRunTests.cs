@@ -133,7 +133,12 @@ public class LoopRunTests
             // which it is false. Omitting these now yields NOT CHECKED on gate 0b, which is the loud
             // failure the default was chosen to produce.
             UnknownFields: Array.Empty<string>(),
-            AnnotationFields: Array.Empty<string>());
+            AnnotationFields: Array.Empty<string>(),
+
+            // Same claim, same reason, for gate 0c: there is no submission document here, so no derivable
+            // field was hand-authored. Said out loud rather than defaulted, because the caller for which
+            // it is FALSE - LoopCli, which parses one - is the caller that spends rig time.
+            Derivation: DerivationEvidence.NoDocument);
 
     private static (LoopResult Result, SimulatedGateway Gateway) Run(LoopRequest? request = null, SimulatedGateway? gateway = null)
     {
