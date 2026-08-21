@@ -3343,8 +3343,9 @@ designing only for that would be designing for the case that happens to exist.*
 
 🔴 **2026-08-21 — reporting the alias was not enough, because the line beside it asserted a verdict
 that contradicted it.** A block-local row printed `[block-local to FB_X — not a cross-block conflict;
-also addressable as iDB_X.member]` **while another block wrote that very alias.** Four rows in
-`ir/test-project001` read that way, every one with `OB100` writing the alias through the instance DB.
+also addressable as iDB_X.member]` **while another block wrote that very alias.** **8 of the 27**
+block-local multi-writer rows in `ir/test-project001` read that way, with `OB100` and
+`FC_ControlMain` writing the aliases through the instance DBs.
 
 The key spaces are **still not pooled** — the reasoning above is unchanged and still right. What is
 new is that each group now carries `aliasWriters`: the writers of its `iDB_…` aliases that live
@@ -3353,7 +3354,8 @@ Consequences:
 
 - The `— not a cross-block conflict` half is asserted **only when `aliasWriters` is empty**. Where it
   is not, the row instead names the outside writers and says plainly that this IS cross-block
-  contention. On the reference corpus 19 rows keep the annotation and 4 lose it.
+  contention. On the reference corpus **19 rows keep the annotation and 8 lose it** — counted off the
+  tool's own JSON, after a first pass eyeballed three name patterns and undercounted it as 4.
 - **`soleWriters` had the same blindness on EIGHT rows, and that is the more dangerous half.** One
   internal writer plus an outside alias writer gives `Writers.Count == 1`, so such a row appears
   **only** in the sole-writer table and never in the multi-writer one — and that table exists to
