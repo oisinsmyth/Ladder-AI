@@ -216,7 +216,13 @@ Hand back (per `lad-coder`'s "what you hand back" contract — your summary is n
   compile's `State`** — `compile` stopped failing on a warnings-only state on 2026-08-12, because a
   project carrying a permanent hardware warning made **every** per-block compile look failed. Report
   warnings; do not gate on them.)*
-- the tag-status result (all `exists`), and any gap that stopped the run.
+- the tag-status result (all `exists`), and any gap that stopped the run;
+- **`evidence.json`** — the raw `--json` and exit code of each gate above, plus a `converter ir-hash`
+  per file touched. Schema in `.claude/agents/lad-coder.md`. The prose above still stands; this is what
+  the dispatcher actually verifies, with `python tools/check-agent-evidence.py <path>`, which recomputes
+  every hash itself. **Set `"kind": "new"`** — that is what tells the verifier not to demand a
+  `diff --only` invariance gate, there being nothing here to prove invariant against. For a tier-(a)
+  instantiation the *caller* you edited is a modification: list it in `files` and record its diff.
 
 Then **append one telemetry line** to `gen/<project>/telemetry.log` per `docs/notes/gen-telemetry.md`
 (`gen-block-new` in the skill column; include blocked/abandoned runs — the most informative rows;

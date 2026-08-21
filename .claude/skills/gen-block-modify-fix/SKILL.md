@@ -106,6 +106,12 @@ Hand back (per `lad-coder`'s "what you hand back" contract — your summary is n
   keying on it on 2026-08-12. Key on errors; report warnings without gating on them. And a bare
   whole-device compile is not the gate at all — hard rule 4 / FI-52.)*
 
+- **`evidence.json`** (`"kind": "modify"`) — the raw `--json` and exit code of each gate above, plus a
+  `converter ir-hash` per file touched. Schema in `.claude/agents/lad-coder.md`. The prose above still
+  stands; this is what the dispatcher actually verifies, with
+  `python tools/check-agent-evidence.py <path>`, which recomputes every hash itself. The `diff --only`
+  gate is **required** here — on a fix, the invariance proof is the deliverable.
+
 Append one telemetry line to `gen/<project>/telemetry.log` (`gen-block-modify-fix`; include blocked/routed
 runs) **when the project has one** — a validation corpus (`gen/_validation/*`) has no telemetry log, so
 note the run in your report instead of creating one. Then **stop** — the fresh-context Check stage

@@ -83,8 +83,38 @@ claimed.
 
 The dispatching agent (and, through them, the engineer) needs to verify your work, not just trust
 your summary of it — say so isn't proof, per this project's own "trust but verify" discipline for
-sub-agent output. Hand back: the actual IR diff, one-paragraph intent statement, compile evidence
-(pass/fail, error/warning counts), and reviewer findings if a review skill ran. If you're reporting
-a manual (skill-less) run, say that explicitly. If you hit a genuine blocker (missing tag, safety
-content, converter gap, ambiguous requirement) — stop and report it plainly rather than guessing or
-working around it silently.
+sub-agent output. That reason has not changed. What has changed is the mechanism: **verification is
+now a file the tools wrote, not a re-read of your work.**
+
+**Write `evidence.json` for any run that touched IR.** Put it where the dispatch names it, or at
+`agent-tasks/<id>/evidence.json` when the task came from the board. Schema:
+
+```json
+{
+  "schema": "ladder-ai/agent-evidence/1",
+  "task": "<what this run was>",
+  "kind": "modify",                    // or "new" - REQUIRED, it selects the gate set
+  "skill": "gen-block-modify-fix",     // or "manual": true if no skill covered the stage
+  "files":  [ { "path": "ir/<project>/FB_X.ir", "ir_hash": "<converter ir-hash --json>" } ],
+  "checks": [ { "tool": "converter preflight",   "exit": 0, "json": { } },
+              { "tool": "converter diff --only", "exit": 0, "json": { } },
+              { "tool": "openness-cli sanity-check", "exit": 0, "json": { } } ]
+}
+```
+
+Paste the tools' **raw `--json`**, not a summary of it — nearly every tool here emits it, and the
+whole point is that the numbers are theirs and not yours. `preflight` and a compile gate are always
+required, and `diff --only` additionally when `kind` is `modify` — a new block has nothing to diff
+against, but on a modification that invariance proof *is* the deliverable. An omitted gate reads as
+a failure, because an absent gate is not a passed gate. `ir-hash` keys **code blocks only**, so a
+DB, UDT or tag table has no hash to claim — list it in `files` without one and say why in your
+report.
+
+The dispatcher verifies with `python tools/check-agent-evidence.py <path>`, which recomputes every
+hash itself. You cannot make a wrong hash pass, so don't hand-copy them.
+
+Alongside the file, still hand back in prose: the actual IR diff, a one-paragraph intent statement,
+and reviewer findings if a review skill ran. Say explicitly if the run was manual rather than
+skill-driven. If you hit a genuine blocker (missing tag, safety content, converter gap, ambiguous
+requirement) — stop and report it plainly rather than guessing or working around it silently, and
+say what you did *not* verify. An honest gap is worth more than a green that examined nothing.

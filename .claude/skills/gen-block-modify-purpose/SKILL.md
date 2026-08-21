@@ -102,6 +102,13 @@ Hand back (per `lad-coder`'s contract — your summary is not proof):
   keying on it on 2026-08-12. Key on errors; report warnings without gating on them. And a bare
   whole-device compile is not the gate at all — hard rule 4 / FI-52.)*
 
+- **`evidence.json`** (`"kind": "modify"`) — the raw `--json` and exit code of each gate above, plus a
+  `converter ir-hash` per file touched. Schema in `.claude/agents/lad-coder.md`. The prose above still
+  stands; this is what the dispatcher actually verifies, with
+  `python tools/check-agent-evidence.py <path>`, which recomputes every hash itself. Note that the
+  evidence file records the `diff --only` **exit code**, which `--allow-header` can only make greener —
+  so it does not relieve you of quoting the interface delta in prose, for exactly the reason above.
+
 Append a `gen/<project>/telemetry.log` line (`gen-block-modify-purpose`) when the project has one (a
 validation corpus has none — note the run in your report instead). Then **stop** — the fresh-context Check
 stage and final gate (`docs/11-review-workflow.md`) belong to others. Never treat your own change as

@@ -159,6 +159,64 @@ flattering one: it is a nine-case suite of which two are the refusal itself.
 unmoved. Deviation from convention worth noting: this suite is `.tests.py`, not `.tests.ps1`,
 matching the language of the script under test.
 
+## `check-agent-evidence.py` — verifying a hand-back without re-reading it (2026-08-21)
+
+Hard rule 8 requires the dispatching agent to verify the sub-agent's **actual** diff and compile
+evidence — "a summary is not proof". Until now that meant re-reading the work, which is the largest
+single source of the recheck-each-other cost the context cut was about. The sub-agent now writes
+`evidence.json` carrying the tools' raw `--json`, and this reads it.
+
+```
+python tools/check-agent-evidence.py <path-to-evidence.json>
+```
+
+Schema and the field-by-field contract live in `.claude/agents/lad-coder.md`; the dispatch-board
+convention is in `agent-tasks/README.md`. Exit **0** verified, **1** a gate failed or a hash
+drifted, **2** the file could not be read or is not this schema — **nothing verified**, which is
+not a pass.
+
+**What it actually checks:** exit codes, and `converter ir-hash` values it **recomputes itself**
+from the files on disk. An agent can write anything in a summary; it cannot write a hash that
+survives recomputation. It forms no opinion on whether the logic is right — that is the reviewer's
+job and the engineer's, and an automated second opinion there would be the correlated check this
+project exists to avoid. A green means *verified, now review*, never *reviewed*.
+
+Three rules it enforces that are easy to get wrong:
+
+- **EMPTY IS NOT CLEAN.** Exit 2 from any recorded gate is refused outright, and evidence naming
+  zero files touched is refused as "not a clean run, no run".
+- **An absent gate is not a passed gate.** `preflight` and a compile gate are always required;
+  `diff --only` additionally when `kind` is `modify`. `kind` is required and unstated is exit 2 —
+  a new block has nothing to prove invariance against, a modification must have it, and guessing
+  between them would either waive a real gate or invent one.
+- **KEY ON ERRORS, NEVER ON STATE.** A healthy station compile legitimately returns `Warning` with
+  `errors=0`; a suite case asserts that still verifies.
+
+**Known limitation, recorded rather than hidden.** The error-counter sweep is **not pinned to a
+captured payload**: no live `compile`/`sanity-check` `--json` has been captured yet, since that
+needs Portal. It currently requires any integer field whose name mentions errors or inconsistency
+to be zero. Pin the real field names the first time a live payload is in hand, and delete the
+generic sweep.
+
+### It has been executed, in both directions
+
+`check-agent-evidence.tests.py` — 16 cases, offline, ~5 s, run against a real block in
+`ir/test-project001`. Skipped cases are counted and **fail the run**, because a suite that
+quietly skipped its hash-dependent half would report green having examined nothing.
+
+```
+python tools/check-agent-evidence.tests.py
+```
+
+The suite earned its keep on first execution: it caught the verifier using `check_output` for
+`ir-hash`, which exits 1 on a non-block file — so a `.ir` DB in `files` produced a *correct refusal
+carrying a useless message*, the tool's own explanation having been discarded with the exception.
+Found only because the cases assert the reason string and not merely the exit code.
+
+Also verified end-to-end against real artifacts: a hand-authored `evidence.json` for
+`FB_HopperBlockageMonitor` verified clean, and the same file with **one character** changed in the
+recorded hash was refused with both hashes printed.
+
 ## Benchmarks
 
 `bench-machine.ps1` measures a machine on the axes that matter for this repo; `bench-compare.ps1`

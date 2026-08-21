@@ -30,6 +30,33 @@ in-progress claim and picked a different task), and once on an *architecture dec
 interface-change sign-off got asked of the owner twice in two concurrent sessions and got two
 different answers, discovered only when the results were reconciled — see "Lessons learned" below).
 
+## The hand-back contract: `evidence.json`
+
+**A task that touched IR hands back `agent-tasks/<id>/evidence.json` alongside its prose report.**
+It carries the raw `--json` of `preflight`, `diff --only` and a compile gate, each with its exit
+code, plus a `converter ir-hash` for every file touched. Schema and field-by-field notes are in
+`.claude/agents/lad-coder.md`.
+
+The dispatcher verifies it with one command, which recomputes every hash itself:
+
+```
+python tools/check-agent-evidence.py agent-tasks/<id>/evidence.json
+```
+
+**Why this exists.** Hard rule 8 requires the dispatcher to verify the sub-agent's *actual* diff
+and compile evidence rather than its summary. Before this, that meant re-reading the work — the
+single largest source of the recheck-each-other cost, and the thing the 2026-08-21 context cut was
+about. An agent can write anything in a summary; it cannot write an `ir-hash` that survives being
+recomputed from the file on disk.
+
+**What a green from it does and does not license.** It says the gates ran, they passed, and the
+files are what the agent said they were. It says **nothing** about whether the logic is right —
+that is the reviewer's job and the engineer's, and an automated opinion there would be exactly the
+correlated check this project exists to avoid. Read it as "verified, now review", never as
+"reviewed".
+
+The evidence file is a hand-back artifact, not a permanent record: it goes when the task file goes.
+
 ## The shared-resource pattern: a Portal-backed scratch project
 
 Any TIA Portal scratch project is a genuine single-writer resource — CLAUDE.md's environment notes:
