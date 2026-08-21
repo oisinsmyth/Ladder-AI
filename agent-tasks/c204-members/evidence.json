@@ -1,0 +1,431 @@
+{
+  "schema": "ladder-ai/agent-evidence/1",
+  "task": "Finish the C-204 sweep on ir/test-project001/FB_ShredderSequencer.ir - the three INTERFACE MEMBER comments (lines 12/43/103) the earlier run (54b3e9a) stopped on. Comment text only; zero logic change and zero interface-shape change.",
+  "kind": "modify",
+  "manual": true,
+  "files": [
+    {
+      "path": "ir/test-project001/FB_ShredderSequencer.ir",
+      "ir_hash": "47BBAC212171A9BCA8579FD51654FC0844D7921D6CD4EA68D4576EEAED903D32"
+    }
+  ],
+  "checks": [
+    {
+      "tool": "converter preflight",
+      "exit": 0,
+      "json": {
+        "files": [
+          {
+            "filePath": "ir/test-project001/FB_ShredderSequencer.ir",
+            "name": "FB_ShredderSequencer",
+            "findings": []
+          }
+        ],
+        "indexWarnings": []
+      }
+    },
+    {
+      "tool": "converter diff --only 1",
+      "exit": 0,
+      "json": {
+        "blockName": "FB_ShredderSequencer",
+        "blockNameMismatch": false,
+        "otherBlockName": "FB_ShredderSequencer",
+        "hasAnyChange": true,
+        "header": {
+          "changed": true,
+          "titleChanged": false,
+          "titleBefore": "Shredder Plant Sequencer",
+          "titleAfter": "Shredder Plant Sequencer",
+          "commentChanged": false,
+          "commentBefore": "Shredder plant sequencer: commands the shredder motor (via FB_MotorFwdRevSystem, wired at FC_ControlMain) and gates infeed/discharge conveyors and upstream enable, through a stepped cycle. Step legend: 0=Idle (stopped, waiting for a start condition) - 10=PreStart (siren warning before motion; arms the motor via MotorStartArm) - 20=DischargeStart (discharge conveyor starting, timed) - 30=ReverseRun (reverse commanded; the motor FB's own ReverseDelay entry pause elapses inside this step, then ReverseRunTimer counts ShredderReverseRunTime of CONFIRMED reverse feedback) - 40=WaitForwardRun (waiting for forward-run feedback) - 50=Running (normal production; infeed/upstream-enable timers and overcurrent detection are live) - 60=OvercurrentAbort (tripped - pause, then retry into ReverseRun, or stay out if too many reversals). Stop-all (REQ-012/013/062): StopCmd = stop button OR downstream lost OR control circuit unhealthy - aborts every step to Idle. Pusher handling is split: stop button/unhealthy force pusher mode 0 (parks AND blocks jog), while any live stop reason - downstream loss included - raises PusherCycleInhibitCmd (no cycle launches or continues into a stopped plant, hand-jog stays available).",
+          "commentAfter": "Shredder plant sequencer: commands the shredder motor (via FB_MotorFwdRevSystem, wired at FC_ControlMain) and gates infeed/discharge conveyors and upstream enable, through a stepped cycle. Step legend: 0=Idle (stopped, waiting for a start condition) - 10=PreStart (siren warning before motion; arms the motor via MotorStartArm) - 20=DischargeStart (discharge conveyor starting, timed) - 30=ReverseRun (reverse commanded; the motor FB's own ReverseDelay entry pause elapses inside this step, then ReverseRunTimer counts ShredderReverseRunTime of CONFIRMED reverse feedback) - 40=WaitForwardRun (waiting for forward-run feedback) - 50=Running (normal production; infeed/upstream-enable timers and overcurrent detection are live) - 60=OvercurrentAbort (tripped - pause, then retry into ReverseRun, or stay out if too many reversals). Stop-all (REQ-012/013/062): StopCmd = stop button OR downstream lost OR control circuit unhealthy - aborts every step to Idle. Pusher handling is split: stop button/unhealthy force pusher mode 0 (parks AND blocks jog), while any live stop reason - downstream loss included - raises PusherCycleInhibitCmd (no cycle launches or continues into a stopped plant, hand-jog stays available).",
+          "interfaceChanged": false,
+          "interfaceCommentChanged": true
+        },
+        "summary": {
+          "total": 15,
+          "changed": 0,
+          "added": 0,
+          "removed": 0,
+          "identical": 15
+        },
+        "networks": [
+          {
+            "number": 1,
+            "kind": "Identical",
+            "title": "Stop Command",
+            "beforeText": null,
+            "afterText": null
+          },
+          {
+            "number": 2,
+            "kind": "Identical",
+            "title": "HMI Time Conversions",
+            "beforeText": null,
+            "afterText": null
+          },
+          {
+            "number": 3,
+            "kind": "Identical",
+            "title": "Reversal Re-Arm Window Timer",
+            "beforeText": null,
+            "afterText": null
+          },
+          {
+            "number": 4,
+            "kind": "Identical",
+            "title": "Reversal Counter",
+            "beforeText": null,
+            "afterText": null
+          },
+          {
+            "number": 5,
+            "kind": "Identical",
+            "title": "Shredder Blocked Fault (Too Many Reversals)",
+            "beforeText": null,
+            "afterText": null
+          },
+          {
+            "number": 6,
+            "kind": "Identical",
+            "title": "Step 0 (Idle) - Transition",
+            "beforeText": null,
+            "afterText": null
+          },
+          {
+            "number": 7,
+            "kind": "Identical",
+            "title": "Step 10 (PreStart) - Timer And Transitions",
+            "beforeText": null,
+            "afterText": null
+          },
+          {
+            "number": 8,
+            "kind": "Identical",
+            "title": "Step 20 (DischargeStart) - Timer, Timeout Fault, And Transitions",
+            "beforeText": null,
+            "afterText": null
+          },
+          {
+            "number": 9,
+            "kind": "Identical",
+            "title": "Step 30 (ReverseRun) - Timer And Transitions",
+            "beforeText": null,
+            "afterText": null
+          },
+          {
+            "number": 10,
+            "kind": "Identical",
+            "title": "Step 40 (WaitForwardRun) - Transitions",
+            "beforeText": null,
+            "afterText": null
+          },
+          {
+            "number": 11,
+            "kind": "Identical",
+            "title": "Step 50 (Running) - Infeed Restart, Upstream Enable, And Outputs",
+            "beforeText": null,
+            "afterText": null
+          },
+          {
+            "number": 12,
+            "kind": "Identical",
+            "title": "Step 50 - Overcurrent Detection, Trip, And Transitions",
+            "beforeText": null,
+            "afterText": null
+          },
+          {
+            "number": 13,
+            "kind": "Identical",
+            "title": "Step 60 (OvercurrentAbort) - Timer And Transitions",
+            "beforeText": null,
+            "afterText": null
+          },
+          {
+            "number": 14,
+            "kind": "Identical",
+            "title": "Motor And Pusher Mode Commands",
+            "beforeText": null,
+            "afterText": null
+          },
+          {
+            "number": 15,
+            "kind": "Identical",
+            "title": "Output Commands",
+            "beforeText": null,
+            "afterText": null
+          }
+        ],
+        "allowedNetworks": [
+          1
+        ],
+        "invarianceViolations": [],
+        "headerChangeAllowed": false,
+        "hasUnclaimedHeaderChange": false,
+        "hasNonGatingCommentChange": true,
+        "unchangedRemainder": 15,
+        "hasInvarianceViolation": false
+      }
+    },
+    {
+      "tool": "openness-cli compile --block FB_ShredderSequencer",
+      "exit": 0,
+      "json": {
+        "state": "Warning",
+        "errors": 0,
+        "warnings": 1,
+        "consistentAfterCompile": true,
+        "messages": [
+          {
+            "state": "Warning",
+            "description": "",
+            "path": "PLC1 6ES7 214-1AG40-0XB0"
+          },
+          {
+            "state": "Success",
+            "description": "",
+            "path": "Program blocks"
+          },
+          {
+            "state": "Success",
+            "description": "Block was successfully compiled.",
+            "path": "FB_ShredderSequencer (FB8)"
+          },
+          {
+            "state": "Warning",
+            "description": "",
+            "path": "General warnings"
+          },
+          {
+            "state": "Warning",
+            "description": "Inputs or outputs are used that do not exist in the configured hardware.",
+            "path": null
+          },
+          {
+            "state": "Warning",
+            "description": "Compiling finished (errors: 0; warnings: 1)",
+            "path": null
+          }
+        ]
+      }
+    },
+    {
+      "tool": "openness-cli compile --block iDB_ShredderSequencer",
+      "exit": 0,
+      "json": {
+        "state": "Warning",
+        "errors": 0,
+        "warnings": 1,
+        "consistentAfterCompile": true,
+        "messages": [
+          {
+            "state": "Warning",
+            "description": "",
+            "path": "PLC1 6ES7 214-1AG40-0XB0"
+          },
+          {
+            "state": "Warning",
+            "description": "",
+            "path": "General warnings"
+          },
+          {
+            "state": "Warning",
+            "description": "Inputs or outputs are used that do not exist in the configured hardware.",
+            "path": null
+          },
+          {
+            "state": "Information",
+            "description": "",
+            "path": "Program blocks"
+          },
+          {
+            "state": "Information",
+            "description": "No block was compiled. All blocks are up-to-date.",
+            "path": null
+          },
+          {
+            "state": "Warning",
+            "description": "Compiling finished (errors: 0; warnings: 1)",
+            "path": null
+          }
+        ]
+      }
+    },
+    {
+      "tool": "openness-cli compile --block FC_ControlMain",
+      "exit": 0,
+      "json": {
+        "state": "Warning",
+        "errors": 0,
+        "warnings": 1,
+        "consistentAfterCompile": true,
+        "messages": [
+          {
+            "state": "Warning",
+            "description": "",
+            "path": "PLC1 6ES7 214-1AG40-0XB0"
+          },
+          {
+            "state": "Warning",
+            "description": "",
+            "path": "General warnings"
+          },
+          {
+            "state": "Warning",
+            "description": "Inputs or outputs are used that do not exist in the configured hardware.",
+            "path": null
+          },
+          {
+            "state": "Information",
+            "description": "",
+            "path": "Program blocks"
+          },
+          {
+            "state": "Information",
+            "description": "No block was compiled. All blocks are up-to-date.",
+            "path": null
+          },
+          {
+            "state": "Warning",
+            "description": "Compiling finished (errors: 0; warnings: 1)",
+            "path": null
+          }
+        ]
+      }
+    },
+    {
+      "tool": "openness-cli compile --block FC_AlarmsMain",
+      "exit": 0,
+      "json": {
+        "state": "Warning",
+        "errors": 0,
+        "warnings": 1,
+        "consistentAfterCompile": true,
+        "messages": [
+          {
+            "state": "Warning",
+            "description": "",
+            "path": "PLC1 6ES7 214-1AG40-0XB0"
+          },
+          {
+            "state": "Warning",
+            "description": "",
+            "path": "General warnings"
+          },
+          {
+            "state": "Warning",
+            "description": "Inputs or outputs are used that do not exist in the configured hardware.",
+            "path": null
+          },
+          {
+            "state": "Information",
+            "description": "",
+            "path": "Program blocks"
+          },
+          {
+            "state": "Information",
+            "description": "No block was compiled. All blocks are up-to-date.",
+            "path": null
+          },
+          {
+            "state": "Warning",
+            "description": "Compiling finished (errors: 0; warnings: 1)",
+            "path": null
+          }
+        ]
+      }
+    },
+    {
+      "tool": "openness-cli compile --block OB100",
+      "exit": 0,
+      "json": {
+        "state": "Warning",
+        "errors": 0,
+        "warnings": 1,
+        "consistentAfterCompile": true,
+        "messages": [
+          {
+            "state": "Warning",
+            "description": "",
+            "path": "PLC1 6ES7 214-1AG40-0XB0"
+          },
+          {
+            "state": "Warning",
+            "description": "",
+            "path": "General warnings"
+          },
+          {
+            "state": "Warning",
+            "description": "Inputs or outputs are used that do not exist in the configured hardware.",
+            "path": null
+          },
+          {
+            "state": "Information",
+            "description": "",
+            "path": "Program blocks"
+          },
+          {
+            "state": "Information",
+            "description": "No block was compiled. All blocks are up-to-date.",
+            "path": null
+          },
+          {
+            "state": "Warning",
+            "description": "Compiling finished (errors: 0; warnings: 1)",
+            "path": null
+          }
+        ]
+      }
+    },
+    {
+      "tool": "openness-cli sanity-check (run 1, post-import)",
+      "exit": 9,
+      "transient": "Run 1 immediately after the import: the post-import dependent cascade. iDB_ShredderSequencer, FC_ControlMain, FC_AlarmsMain and OB100 listed INCONSISTENT because FB8's interface was re-imported. Superseded by the five per-block compiles above and by sanity-check run 2 below, which is the gate.",
+      "json": {
+        "note": "run 1 was text-mode, not --json; its stdout is quoted verbatim in the prose report and in the agent-tasks/README.md row-5 comment",
+        "overall": "ISSUES FOUND",
+        "totalBlocks": 36,
+        "inconsistentBlocks": 4,
+        "totalTypes": 7,
+        "inconsistentTypes": 0,
+        "deviceCompile": {
+          "state": "Warning",
+          "errors": 0,
+          "warnings": 1,
+          "scope": "station"
+        }
+      }
+    },
+    {
+      "tool": "openness-cli sanity-check (run 2, the gate)",
+      "exit": 0,
+      "json": {
+        "healthy": true,
+        "nothingExamined": false,
+        "totalBlocks": 36,
+        "inconsistentBlocks": [],
+        "totalTypes": 7,
+        "inconsistentTypes": [],
+        "duplicateBlockNumbers": [],
+        "deviceCompiles": [
+          {
+            "device": "S7-1200 station_1/PLC1 6ES7 214-1AG40-0XB0",
+            "state": "Warning",
+            "errors": 0,
+            "warnings": 1
+          }
+        ]
+      }
+    },
+    {
+      "tool": "converter diff (round trip: edited IR vs TIA re-export -> to-ir)",
+      "exit": 0,
+      "json": {
+        "note": "text-mode run; stdout verbatim",
+        "summary": "SUMMARY: 15 network(s): 0 changed, 0 added, 0 removed, 15 identical",
+        "headerChangeReported": false
+      }
+    }
+  ]
+}

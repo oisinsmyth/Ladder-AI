@@ -9,7 +9,7 @@ INTERFACE
   INPUT
   OUTPUT
   STATIC
-    IO : "UDT_ShredderSequencerIO" RETAIN SETPOINT COMMENT "Caller-visible interface (C-115) - FC_ControlMain writes CycleStart/CycleStop/feedback/tunables in, reads Run*/EnableUpstream/PreStartSounder/motor-command bits out. See the block header for the Step value legend."
+    IO : "UDT_ShredderSequencerIO" RETAIN SETPOINT COMMENT "Caller-visible interface - every signal into or out of this block crosses here, nothing bypasses it: FC_ControlMain writes CycleStart/CycleStop/feedback/tunables in, reads Run*/EnableUpstream/PreStartSounder/motor-command bits out. See the block header for the Step value legend."
       CycleStart : Bool
       AutoStartSignal : Bool
       CycleStop : Bool
@@ -40,7 +40,7 @@ INTERFACE
       PusherParkCmd : Bool
       PusherCycleInhibitCmd : Bool
     StopCmd : Bool COMMENT "Stop-all: operator CycleStop, loss of DownstreamRunning (nowhere for shredded material to go), or loss of SystemHealthy (control circuit/E-stop - REQ-062: recovery must demand a fresh start press, so the sequence may not sit in a run step through an E-stop). Read by every step's own stop transition below and mirrored to the pusher as PusherCycleInhibitCmd."
-    PusherModeForceOff : Bool COMMENT "Named once (C-601): the hard pusher force - operator stop or circuit-unhealthy, plus the overcurrent-abort step. Forces PusherModeCmd to 0, which parks the pusher AND blocks jogging. Deliberately NOT the full StopCmd (owner amendment 2026-07-16): downstream absence must leave hand-jog available (REQ-040), so it reaches the pusher only as PusherCycleInhibitCmd."
+    PusherModeForceOff : Bool COMMENT "The hard pusher force - operator stop or circuit-unhealthy, plus the overcurrent-abort step. Forces PusherModeCmd to 0, which parks the pusher AND blocks jogging. Deliberately narrower than the full StopCmd: downstream absence must leave hand-jog available (REQ-040), so it reaches the pusher only as PusherCycleInhibitCmd."
     ReversalWindowTimeMS : DInt
     PreStartSounderTimeMS : DInt
     DischargeConveyorTimeoutMS : DInt
@@ -100,7 +100,7 @@ INTERFACE
       ET : Time
       IN : Bool
       Q : Bool
-    OvercurrentTripped : Bool COMMENT "KNOWN GAP, not wired to real current yet: both timers below are gated 'AND NOT AlwaysTrue' (permanently false placeholders) because DB_AnalogInput.ShredderMotorCurrent > DB_Settings.OvercurrentSetpointMedium/High is a genuine Real-vs-Real comparison this converter's synthesizer can't type correctly yet (hardcodes Int) - flagged and deferred rather than guessed at. This bit, and Step 50's own overcurrent-abort transition, are dead code until that's built."
+    OvercurrentTripped : Bool COMMENT "KNOWN GAP, not wired to real current yet: both timers below are gated 'AND NOT AlwaysTrue' (permanently false placeholders) because DB_AnalogInput.ShredderMotorCurrent > DB_Settings.OvercurrentSetpointMedium/High is a genuine Real-vs-Real comparison this converter's synthesizer can't type correctly yet (hardcodes Int). This bit, and Step 50's own overcurrent-abort transition, are dead code until that's built."
     OvercurrentAbortPauseTimer : TON_TIME VERSION 1.0 SETPOINT
       PT : Time
       ET : Time
