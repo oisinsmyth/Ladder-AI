@@ -69,11 +69,36 @@ public readonly record struct BuildStamp(uint Value)
         IReadOnlyList<SlotBinding> bindings,
         CopyLayerNaming naming,
         IEnumerable<HarnessObject>? programUnderTest,
-        out IReadOnlyList<string> excludedAsSelfReferential)
+        out IReadOnlyList<string> excludedAsSelfReferential) =>
+        Derive(map, bindings, naming, programUnderTest, out excludedAsSelfReferential, out _);
+
+    /// <summary>
+    /// 🔴 <b>THE DERIVATION, ALSO REPORTING THE PROGRAM MANIFEST IT HASHED.</b>
+    ///
+    /// <para>*** A RUN THAT CANNOT BE REPRODUCED CANNOT BE RE-VERIFIED, AND THAT WAS MEASURED. *** A wave
+    /// ran green on a controller; a later attempt to re-run it was refused on a build-stamp mismatch, and
+    /// <b>nothing recorded which program set the successful run's stamp had been computed over</b>. The
+    /// stamp is a hash — two different sets give two different stamps and neither can be inverted — so the
+    /// earlier run was unreproducible the moment its command line was gone.</para>
+    ///
+    /// <para><b>The manifest is built in the SAME loop that feeds the hash</b>, deliberately. A second
+    /// walk applying the same ordering and the same self-referential exclusion would be a second opinion
+    /// about what was hashed, and the whole value of the manifest is that it cannot disagree with the
+    /// stamp beside it.</para>
+    /// </summary>
+    public static BuildStamp Derive(
+        RegisterMap map,
+        IReadOnlyList<SlotBinding> bindings,
+        CopyLayerNaming naming,
+        IEnumerable<HarnessObject>? programUnderTest,
+        out IReadOnlyList<string> excludedAsSelfReferential,
+        out ProgramManifest manifest)
     {
         ArgumentNullException.ThrowIfNull(map);
         ArgumentNullException.ThrowIfNull(bindings);
         ArgumentNullException.ThrowIfNull(naming);
+
+        var hashed = new List<ProgramManifestEntry>();
 
         var canonical = new StringBuilder();
         canonical.Append("harness-build/1\n");
@@ -174,6 +199,13 @@ public readonly record struct BuildStamp(uint Value)
             }
 
             canonical.Append($"obj={obj.Kind}:{obj.Name}\n{obj.Ir}\n");
+
+            // Recorded HERE, in the loop that feeds the hash, so the manifest cannot describe a different
+            // set from the one that was stamped.
+            hashed.Add(new ProgramManifestEntry(
+                obj.Kind.ToString(),
+                obj.Name,
+                Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(obj.Ir))).ToLowerInvariant()));
         }
 
         excludedAsSelfReferential = selfReferential;
@@ -184,11 +216,59 @@ public readonly record struct BuildStamp(uint Value)
         {
             var word = (uint)((digest[offset] << 24) | (digest[offset + 1] << 16) | (digest[offset + 2] << 8) | digest[offset + 3]);
             if (word != 0)
-                return new BuildStamp(word);
+            {
+                var stamp = new BuildStamp(word);
+                manifest = new ProgramManifest(hashed, selfReferential, stamp.Value);
+                return stamp;
+            }
         }
 
         // Thirty-two consecutive zero bytes out of SHA-256. Not reachable in practice, and a throw is the
         // honest treatment: silently substituting a constant would make one build stamp mean two things.
         throw new InvalidOperationException("the digest yielded no non-zero 32-bit word; a zero build stamp cannot be told from bit memory that was never written.");
     }
+}
+
+/// <summary>One object the build stamp was computed over.</summary>
+/// <param name="Kind">The object's kind, exactly as it appears in the canonical form.</param>
+/// <param name="Name">Its name, exactly as it appears in the canonical form.</param>
+/// <param name="Sha256">
+/// A hash of the object's IR TEXT. <b>The name alone is not enough</b>: the defect this exists for is a
+/// stamp that no longer matches, and "the same twelve names" is equally true of twelve files that have
+/// since been edited. The hash is what distinguishes a different SET from a changed one.
+/// </param>
+public sealed record ProgramManifestEntry(string Kind, string Name, string Sha256);
+
+/// <summary>
+/// 🔴 <b>WHAT THE BUILD STAMP WAS COMPUTED OVER — recorded so a run can be reproduced.</b>
+///
+/// <para>*** MEASURED 2026-08-21: A WAVE THAT RAN GREEN COULD NOT BE RE-RUN. *** The verifying gateway
+/// refused a later attempt on a stamp mismatch, and nothing recorded which program set the successful
+/// run's stamp had come from. Two candidate sets were tried and produced two different stamps, neither
+/// the device's. A hash cannot be inverted, so the earlier run became unreproducible the moment its
+/// command line was lost — and the result package, which is the artifact meant to outlive the run, kept
+/// the outcome and not the input.</para>
+///
+/// <para><b>This is the input side of the same claim the stamp makes.</b> The stamp says <i>a program
+/// hashing to this is executing</i>; the manifest says <i>and here is what was hashed</i>. Neither is
+/// much use alone once the shell history is gone.</para>
+/// </summary>
+/// <param name="Objects">Every object hashed, in the order the canonical form appends them.</param>
+/// <param name="ExcludedAsSelfReferential">
+/// The harness's own generated objects, refused BY NAME rather than dropped. A caller who passes a whole
+/// IR directory has no way to know it also handed over the copy layer, and an exclusion nobody can see is
+/// indistinguishable from an object that was never supplied.
+/// </param>
+/// <param name="Stamp">The stamp these objects produced, carried beside them so the pair travels together.</param>
+public sealed record ProgramManifest(
+    IReadOnlyList<ProgramManifestEntry> Objects,
+    IReadOnlyList<string> ExcludedAsSelfReferential,
+    uint Stamp)
+{
+    /// <summary>
+    /// <b>An empty manifest is a real state and says so.</b> A run declaring no program under test
+    /// hashes no objects; that is different from a run whose manifest was never recorded, and the two
+    /// must not render the same.
+    /// </summary>
+    public bool HashedNothing => Objects.Count == 0;
 }

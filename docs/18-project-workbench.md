@@ -389,8 +389,20 @@ assertion held* (1/1, 1/1, 4/4), stimulus `Confirmed` throughout. The block was 
     unchanged IR) **but was not attempted: Portal was busy** — two active sessions on other projects
     plus two Openness-invisible processes, the stale-pileup state associated with connect failures.
     A download is the one operation that must not be interrupted.
-  - ➜ **Worth fixing regardless of this run: the result package should record the program manifest
-    the stamp was computed over.** Then a wave is reproducible by construction.
+  - ✅ **Fixed for every future run: the result package now records the program manifest** — every
+    object hashed, with a per-object content hash, the self-referential exclusions by name, and the
+    stamp they produced, all emitted from the *same* derivation that computes the stamp. The
+    per-object hash is the load-bearing part: it distinguishes a **different set** from a **changed
+    file**, which were the two live explanations for the mismatch and could not be told apart.
+    **It does not help retroactively** — the 2026-08-20 run predates it.
+  - 🔎 **A bounded search for the missing set was run and failed, and the bound is stated:** eight
+    combinations (two bindings × four program sets), computed **offline** via `--generate-only`,
+    which constructs no gateway and reads no host. **None reproduced the device's stamp.** One
+    binding produced an identical stamp for all four sets, so it is not discriminating. The set is
+    not recoverable from the artifacts that exist.
+  - 🔨 **Still blocked.** The redeploy remains the only route and Portal was still busy on re-check
+    ~20 minutes later — unchanged: two active sessions on other projects, two Openness-invisible
+    processes.
 - 2.3 🔨 **Outstanding: replace §4.2's `[E]` estimates with `[M]`** — that needs the rig run.
 
 > ⚠️ **A dependency worth naming: Phase 1 now gates Phase 2's own verification.** Nothing is wrong

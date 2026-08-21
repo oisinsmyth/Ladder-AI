@@ -152,7 +152,8 @@ public static class LoopRun
                 generation.Retention, null, null, null,
                 Array.Empty<ResultPackage>(), generation.Caveats, generation.Detail,
                 NothingAttempted(request, generation.Stopped!.Value, generation.Detail, ordinalOf: null, generation.Map),
-                generation.InertRest);
+                generation.InertRest,
+                generation.Manifest);
         }
 
         var map = generation.Map!;
@@ -201,7 +202,8 @@ public static class LoopRun
                 // No merged order exists on this path, so no vector HAS a wave index — the accounting
                 // reports -1 rather than 0, since 0 is a real index and would read as "it was first".
                 NothingAttempted(request, outcome, detail, ordinalOf: null, map),
-                generation.InertRest);
+                generation.InertRest,
+                generation.Manifest);
         }
 
         var ordinalOf = order.OrdinalOf;
@@ -235,7 +237,8 @@ public static class LoopRun
             return new LoopResult(LoopOutcome.RestNotDeclared, gate, generation.SizeReport, retention, null, null, null,
                 Array.Empty<ResultPackage>(), caveats, detail,
                 NothingAttempted(request, LoopOutcome.RestNotDeclared, detail, ordinalOf, map),
-                inertRest);
+                inertRest,
+                generation.Manifest);
         }
 
         // ---- 5. DEPLOY — the device boundary --------------------------------------------------------
@@ -249,7 +252,8 @@ public static class LoopRun
             return new LoopResult(LoopOutcome.NotDeployed, gate, generation.SizeReport, retention, deployment, null, null,
                 Array.Empty<ResultPackage>(), caveats, detail,
                 NothingAttempted(request, LoopOutcome.NotDeployed, detail, ordinalOf, map),
-                inertRest);
+                inertRest,
+                generation.Manifest);
         }
 
         using var transport = gateway.Open();
@@ -275,7 +279,8 @@ public static class LoopRun
             return new LoopResult(LoopOutcome.NotConfirmed, gate, generation.SizeReport, retention, deployment, version, null,
                 Array.Empty<ResultPackage>(), caveats, detail,
                 NothingAttempted(request, LoopOutcome.NotConfirmed, detail, ordinalOf, map),
-                inertRest);
+                inertRest,
+                generation.Manifest);
         }
 
         // ---- 7. RUN ---------------------------------------------------------------------------------
@@ -357,7 +362,8 @@ public static class LoopRun
             + InertRefusals(wave)
             + released,
             account,
-            inertRest);
+            inertRest,
+            generation.Manifest);
     }
 
     /// <summary>
@@ -636,7 +642,9 @@ public static class LoopRun
         }
 
         // ---- 3. GENERATE ----------------------------------------------------------------------------
-        var stamp = BuildStamp.Of(map, request.Bindings, request.Naming, request.ProgramUnderTest);
+        // The manifest comes out of the SAME derivation as the stamp. A run that cannot say what its
+        // stamp was computed over cannot be re-run - measured, on a wave that had gone green.
+        var stamp = BuildStamp.Derive(map, request.Bindings, request.Naming, request.ProgramUnderTest, out _, out var manifest);
         var copyLayer = CopyLayerGenerator.Generate(map, request.Bindings, request.Naming, stamp);
 
         if (!copyLayer.Generated)
@@ -694,7 +702,8 @@ public static class LoopRun
             + inertRest.Summary(),
             OrderOf(request),
             inertRest,
-            floor);
+            floor,
+            manifest);
     }
 
     /// <summary>

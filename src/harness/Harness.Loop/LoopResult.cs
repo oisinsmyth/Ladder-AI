@@ -261,7 +261,18 @@ public sealed record LoopGeneration(
     /// <para><b>NaN when generation stopped before the map existed</b>, and never 0 — a floor of zero
     /// would admit a one-scan event, which is unobservable at any rate.</para>
     /// </summary>
-    double ObservabilityFloorScans = double.NaN)
+    double ObservabilityFloorScans = double.NaN,
+
+    /// <summary>
+    /// What <see cref="Stamp"/> was computed over. Carried from the derivation rather than re-derived —
+    /// a second walk over the same objects is a second opinion about what was hashed, and the manifest's
+    /// whole value is that it cannot disagree with the stamp beside it.
+    ///
+    /// <para><b>Appended at the END of this list deliberately.</b> Inserting it mid-list silently
+    /// re-bound three positional arguments at a call site and the compiler caught it; a record with this
+    /// many parameters is one where position is load-bearing.</para>
+    /// </summary>
+    ProgramManifest? Manifest = null)
 {
     /// <summary>True only when a copy layer exists. Equivalent to <c>Stopped is null</c> by construction.</summary>
     public bool Generated => Stopped is null;
@@ -331,7 +342,23 @@ public sealed record LoopResult(
     ///
     /// <para>Null means NOT COMPUTED — the run stopped before the bindings were examined.</para>
     /// </summary>
-    InertRestReport? InertRest = null)
+    InertRestReport? InertRest = null,
+
+    /// <summary>
+    /// 🔴 <b>WHAT THE BUILD STAMP WAS COMPUTED OVER — so this run can be re-run.</b>
+    ///
+    /// <para>*** MEASURED: A WAVE THAT RAN GREEN COULD NOT BE RE-RUN. *** A later attempt was refused on
+    /// a stamp mismatch and nothing recorded which program set the successful run had stamped. Two
+    /// candidate sets were tried, produced two different stamps, and neither was the device's. A hash
+    /// cannot be inverted, so the run became unreproducible the moment its command line was gone — and
+    /// the result package, the artifact meant to OUTLIVE the run, had kept the outcome and not the
+    /// input.</para>
+    ///
+    /// <para><b>Null means the run stopped before the stamp was computed</b>, which is a real state and
+    /// not an empty manifest — a run that hashed nothing says so through
+    /// <see cref="ProgramManifest.HashedNothing"/> instead.</para>
+    /// </summary>
+    ProgramManifest? ProgramManifest = null)
 {
     /// <summary>Packages that say something about the block. Only <c>Pass</c> and <c>Fail</c> do.</summary>
     public IReadOnlyList<ResultPackage> Conclusive =>

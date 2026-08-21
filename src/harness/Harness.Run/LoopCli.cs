@@ -1004,10 +1004,50 @@ public static class LoopCli
         foreach (var caveat in result.Caveats)
             loopCaveats.Add(new JsonObject { ["id"] = caveat.Id, ["detail"] = caveat.Detail });
 
+        // 🔴 *** WHAT THE BUILD STAMP WAS COMPUTED OVER - SO THIS RUN CAN BE RE-RUN. ***
+        //
+        // Measured 2026-08-21: a wave that had gone green could not be re-run. The verifying gateway
+        // refused a later attempt on a stamp mismatch, and NOTHING RECORDED WHICH PROGRAM SET the
+        // successful run had stamped. Two candidate sets were tried and gave two different stamps,
+        // neither the device's. A hash cannot be inverted, so the run became unreproducible the moment
+        // its command line was gone - and this file, the artifact meant to OUTLIVE the run, had kept the
+        // outcome and not the input.
+        //
+        // `null` here is "the run stopped before the stamp was computed", which is not the same as a run
+        // that hashed nothing - that one says so through `hashedNothing`.
+        JsonNode? programUnderTest = null;
+        if (result.ProgramManifest is { } manifest)
+        {
+            var objects = new JsonArray();
+            foreach (var o in manifest.Objects)
+                objects.Add(new JsonObject { ["kind"] = o.Kind, ["name"] = o.Name, ["sha256"] = o.Sha256 });
+
+            var excluded = new JsonArray();
+            foreach (var e in manifest.ExcludedAsSelfReferential)
+                excluded.Add(e);
+
+            programUnderTest = new JsonObject
+            {
+                ["stamp"] = $"16#{manifest.Stamp:X8}",
+                ["objectCount"] = manifest.Objects.Count,
+
+                // A run declaring no program under test hashed no objects. That is a REAL state and a
+                // different one from a manifest nobody recorded, so it is said rather than inferred from
+                // an empty array.
+                ["hashedNothing"] = manifest.HashedNothing,
+                ["objects"] = objects,
+
+                // Named, never dropped: a caller who passed a whole IR directory has no way to know it
+                // also handed over the copy layer.
+                ["excludedAsSelfReferential"] = excluded,
+            };
+        }
+
         var document = new JsonObject
         {
             ["outcome"] = result.Outcome.ToString(),
             ["detail"] = result.Detail,
+            ["programUnderTest"] = programUnderTest,
 
             // The coverage arithmetic, stated rather than left to be derived — and derivable anyway from
             // `dispositions`, which is what makes these three numbers checkable against the rows below.
