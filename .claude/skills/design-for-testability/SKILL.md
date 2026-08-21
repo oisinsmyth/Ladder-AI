@@ -16,7 +16,7 @@ Ladder-AI project. The contract is `docs/notes/test-environment-contract.md`; th
 enforcement half. **Read the contract this run — never from memory.** It is a DRAFT and it carries
 pointers rather than constants on purpose, so a remembered figure is a wrong figure.
 
-Read `CLAUDE.md` first if you have not. Hard rules apply: this skill **never edits a block** and never
+`CLAUDE.md` is already in your context — do not re-read it. Hard rules apply: this skill **never edits a block** and never
 writes observability code into one (D13/§2.1 put instrumentation in the copy layer). It produces an
 admissibility report.
 

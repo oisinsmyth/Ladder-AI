@@ -20,7 +20,7 @@ Ladder-AI project. This is docs/15's `gen-block-modify-fix` stage (pipeline skil
 S7 capability: take **one named defect** in an **existing** block and produce a **fixed block whose only
 changed networks are the ones the defect names** — every other network provably identical in IR. It is
 the highest-risk capability the project builds (changing working logic), so its whole discipline is
-*minimal, scoped, and proven*. Read `CLAUDE.md` in full first — hard rules bind you, and CLAUDE.md's
+*minimal, scoped, and proven*. `CLAUDE.md` is already in your context — do not re-read it. Hard rules bind you, and CLAUDE.md's
 "Workflow for modifying existing logic (Stage S7+)" is the contract this skill mechanizes.
 
 **You run inside `lad-coder`** (hard rule 8). If reached otherwise, stop — a human-facing agent must

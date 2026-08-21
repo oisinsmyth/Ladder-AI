@@ -20,7 +20,7 @@ Ladder-AI project. This is docs/15's `gen-block-new` stage (pipeline skill #7): 
 gate-1-signed item from `gen/<project>/architecture.md`** and produces **one new block's IR**,
 imported and compiled clean on the scratch project. It is the skill that finally moves S6 from
 "pipeline built" to "generating" — and the one that closes S6's exit criterion (ten fresh
-plain-language generation requests). Read `CLAUDE.md` at the repo root in full first if you haven't;
+plain-language generation requests). `CLAUDE.md` is already in your context — do not re-read it;
 its hard rules bind you and this doc assumes them.
 
 **You run inside `lad-coder`** (CLAUDE.md hard rule 8). If you were reached any other way, stop — a

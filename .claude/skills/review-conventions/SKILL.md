@@ -19,7 +19,7 @@ Naming, Structure, Commenting, Data, Instructions, Alarms (C-0xx–C-5xx) — al
 siblings: `/review-simplicity` (tier 2 of the priority order, the Simplicity & readability
 section) and the functional review (tier 1, requirements). It is docs/15's `review-conventions`
 stage (pipeline skill #11): the mechanical `converter review` tool wrapped by an AI pass over
-everything the tool can't check. Read `CLAUDE.md` at the repo root first if you haven't — its
+everything the tool can't check. `CLAUDE.md` is already in your context — do not re-read it. Its
 hard rules apply (you review LAD only; if anything looks like an F-/safety block, stop and report
 it; never modify what you review).
 

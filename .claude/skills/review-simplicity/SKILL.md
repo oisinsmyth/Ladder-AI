@@ -12,7 +12,7 @@ allowed-tools:
 
 Ladder-AI project. This skill enforces tier 2 of the LAD priority order (function → **readability
 & simplicity** → efficiency) — `docs/06-lad-conventions.md`, preamble and the "Simplicity &
-readability" section (C-601–C-607). Read `CLAUDE.md` at the repo root first if you haven't — its
+readability" section (C-601–C-607). `CLAUDE.md` is already in your context — do not re-read it. Its
 hard rules apply (you review LAD only; if anything looks like an F-/safety block, stop and report
 it; never modify what you review).
 

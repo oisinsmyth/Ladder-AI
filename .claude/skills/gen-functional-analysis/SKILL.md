@@ -14,7 +14,7 @@ allowed-tools:
 
 Ladder-AI project. Second rung of the structured spec pipeline (A → B → C → D):
 A `gen-pid-analysis` → **B this skill** → C `gen-equipment-spec` → D `gen-code-structure`.
-Read `CLAUDE.md` first; its hard rules bind you.
+`CLAUDE.md` is already in your context — do not re-read it; its hard rules bind you.
 
 **You produce plant INTENT, at process abstraction. Nothing lower.**
 

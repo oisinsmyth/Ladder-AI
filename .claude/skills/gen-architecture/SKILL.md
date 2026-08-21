@@ -24,7 +24,7 @@ Ladder-AI project. This is docs/15's `gen-architecture` stage (pipeline skill #5
 analysis artifacts and produces `gen/<project>/architecture.md` — the block manifest the engineer
 signs off at **hard gate 1, before any block is coded**. Docs/15 calls gate 1 "the cheapest place
 to kill a C-127-class mistake"; this skill exists so structural defects die here, at design price,
-not at end-of-line review. Read `CLAUDE.md` at the repo root first if you haven't — its hard rules
+not at end-of-line review. `CLAUDE.md` is already in your context — do not re-read it. Its hard rules
 apply throughout.
 
 **You are a designer — not a coder, not a reviewer.**

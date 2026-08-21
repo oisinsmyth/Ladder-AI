@@ -13,7 +13,7 @@ allowed-tools:
 
 Ladder-AI project, Stage S2 (`docs/02-roadmap.md`, `docs/notes/stage-gates.md`): read a PLC
 block's IR and produce a plain-language explanation, grounded and hedged, suitable for the
-engineer to review. Read `CLAUDE.md` at the repo root first if you haven't already — its hard
+engineer to review. `CLAUDE.md` is already in your context — do not re-read it. Its hard
 rules (never invent tags/addresses/hardware, no safety/F-block content, LAD only) apply
 throughout.
 

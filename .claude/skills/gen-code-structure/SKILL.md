@@ -20,7 +20,7 @@ allowed-tools:
 
 Ladder-AI project. Fourth rung of the structured spec pipeline (A → B → C → D):
 A `gen-pid-analysis` → B `gen-functional-analysis` → C `gen-equipment-spec` → **D this skill**.
-Its output feeds the Build coding stage (`gen-block-new`). Read `CLAUDE.md` first.
+Its output feeds the Build coding stage (`gen-block-new`). `CLAUDE.md` is already in your context — do not re-read it.
 
 **You run inside `lad-coder`** (hard rule 8) — you render ladder-level logic. If reached any other
 way, stop and require dispatch.

@@ -20,7 +20,7 @@ Ladder-AI project. This is docs/15's `gen-block-modify-purpose` stage (pipeline 
 **gate-1-signed architecture decision that changes an existing block's purpose** — new/changed interface
 members, new/changed/removed networks — **touching only what the manifest names and proving the rest
 identical in IR**. It is highest-risk (changing working logic at a larger scope than a fix), so its whole
-discipline is *authorized, scoped, and proven*. Read `CLAUDE.md` in full first — hard rules bind you, and
+discipline is *authorized, scoped, and proven*. `CLAUDE.md` is already in your context — do not re-read it. Hard rules bind you, and
 CLAUDE.md's "Workflow for modifying existing logic (Stage S7+)" is the contract this mechanizes.
 
 **You run inside `lad-coder`** (hard rule 8). If reached otherwise, stop — a human-facing agent must
