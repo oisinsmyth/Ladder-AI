@@ -4,7 +4,7 @@
 
 This gate is the only thing standing between a tidy-up and a silently lost fact, so it
 is the last place to accept a guard that has never been watched refuse anything. Same
-method as check-claude-md-budget.tests.py: each case builds a throwaway git repo, copies
+method as check-file-budgets.tests.py: each case builds a throwaway git repo, copies
 the script under test into it UNMODIFIED, and runs it as a child process. No testability
 hooks were added to the script - a gate that can be aimed elsewhere can be aimed away.
 

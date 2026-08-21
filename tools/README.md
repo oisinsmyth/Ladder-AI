@@ -139,127 +139,65 @@ Negative-tested by disabling the drop detection: **3 of 10 go red** — the thre
 refusal. The other seven cover the permit direction and the three cannot-run paths, which a
 disabled comparison does not affect.
 
-## `check-claude-md-budget.py` — the anti-regrowth gate (2026-08-21)
+## `check-file-budgets.py` — the size ratchet on everything injected (2026-08-21)
 
-`CLAUDE.md` is injected into every dispatch, so its size is a tax on every request in the project.
-It grew **45,130 → 96,245 bytes in eleven days, and not one commit in that span reduced it** — the
-mechanism being that new findings land in `CLAUDE.md` because it is the file everyone reads. Prose
-asking people to keep it small was in place for that entire span. This is the gate that replaces
-the prose.
-
-**Ceiling: 20,480 bytes (20 KiB)**, the value held throughout the context cut. Bytes are always
-reported CRLF-equivalent: `core.autocrlf=true` here, so git stores the file LF and materialises it
-CRLF, and `--staged` adds the newline count back rather than reporting the smaller blob figure.
-Every size in the project's record is the worktree number, so without that the gate and the commit
-log would disagree by 149 bytes.
-
-Exit **0** within budget, **1** over budget, **2** the gate could not run (unreadable, or not
-staged when `--staged` was asked for). **Exit 2 is not a pass** — same 1-vs-2 split as the
-mechanical floor.
+`CLAUDE.md`, the three agent briefs and the thirteen skills are loaded before an agent does any
+work, so their bytes are a tax on **every** dispatch. `CLAUDE.md` grew **45,130 → 96,245 bytes in
+eleven days and not one commit in that span reduced it** — because no commit ever had to justify
+growth. This makes growth explicit.
 
 ```
-python tools/check-claude-md-budget.py [--staged]
+python tools/check-file-budgets.py [--staged]
 ```
 
-It checks size only. It does **not** check whether a fact was dropped — that is
-`check-claude-md-migration.py`, which should be run before any trim.
+**Ceilings are a ratchet, not a judgement about the right size.** Each was seeded on 2026-08-21 from
+that file's size, rounded up to a 512-byte boundary **with at least 256 bytes of slack**. Nobody can
+say what the right size for a skill is; everybody can say whether it grew, and growth is the failure
+mode that actually happened. Raising one is a commit of its own, saying what earned it.
+
+The slack floor is not cosmetic: a first pass rounded to the next 512 alone and left one file **20
+bytes** under its ceiling, where a typo fix would have failed the gate. A gate that cries wolf on
+trivial edits is one people learn to bypass.
+
+Exit **0** all within ceiling, **1** something is over *or the table names a file that can no longer
+be read*, **2** the gate could not run. A file **not** in the table is ignored, so the hook can run
+unconditionally; a file **in** the table that vanished is a failure rather than a skip, or the table
+rots and a deletion quietly removes a budget nobody notices is gone.
+
+Bytes are CRLF-equivalent, as for every size figure in this project: `core.autocrlf=true`, so
+`--staged` adds the newline count back rather than reporting the smaller blob.
 
 ### Making it fail closed
 
-The script alone is advisory, and this repo's own maxim is *a warning is not a gate*. `hooks/pre-commit`
-runs it with `--staged` whenever `CLAUDE.md` is in the staged set and **refuses the commit** on
-non-zero. Git will not install that for you — once per clone:
+`hooks/pre-commit` runs it with `--staged` on every commit and **refuses** on non-zero. Git will not
+install that for you — once per clone:
 
 ```
 git config core.hooksPath hooks
 ```
 
-The hook fails closed by design: if `python` is missing or the script is unreadable, the non-zero
-exit refuses the commit rather than waving it through. `hooks/*` is pinned `eol=lf` in
-`.gitattributes`, because with `core.autocrlf=true` a tracked hook would otherwise check out CRLF
-and `sh` would fail on the shebang — silently disabling the gate. `--no-verify` bypasses it, which
-is the behaviour the gate exists to prevent.
+All the logic, including working out which budgeted files are actually staged, lives in the Python
+where the tests cover it. The hook stays a three-line invocation on purpose: a hook that grows a
+loop per budgeted path is a hook nobody tests. `hooks/*` is pinned `eol=lf` in `.gitattributes`,
+because with `core.autocrlf=true` a tracked hook would check out CRLF and `sh` would fail on the
+shebang — silently disabling the gate.
 
 ### It has been executed, in both directions
 
-`check-claude-md-budget.tests.py` — 9 cases, offline, no framework, ~1 s. Each case copies the
-script under test **unmodified** into a temporary tree beside a fixture `CLAUDE.md` of known size
-and runs it as a child process; no testability flag was added to the script, since a gate with a
-"point me at a different file" option can be aimed away from the file it guards. Both directions
-are asserted, and so are the reason strings — refusing for the wrong reason is a different defect
-from refusing correctly, and an exit code cannot tell them apart.
+`check-file-budgets.tests.py` — 12 cases, offline. Each copies the script into a throwaway tree and
+rewrites **only its `BUDGETS` table** to point at fixtures; every other line, including all the
+measuring and reporting, runs as shipped.
 
 ```
-python tools/check-claude-md-budget.tests.py
+python tools/check-file-budgets.tests.py
 ```
 
-Negative-tested by disabling the size comparison: **2 of 9 go red** — the two that assert refusal.
-The other seven legitimately still pass, because they cover the permit direction and the
-cannot-run paths, which a disabled comparison does not affect. Note the honest ratio rather than a
-flattering one: it is a nine-case suite of which two are the refusal itself.
+Negative-tested by disabling the size comparison: **4 of 12 go red**. The other eight cover the
+permit direction, the staged-set selection and the CRLF arithmetic, which a disabled comparison does
+not affect.
 
-**End-to-end, the gate was observed refusing a real commit**, not merely exiting non-zero: a padded
-20,993-byte `CLAUDE.md` was staged and `git commit` returned 1 with `COMMIT REFUSED`, leaving `HEAD`
-unmoved. Deviation from convention worth noting: this suite is `.tests.py`, not `.tests.ps1`,
-matching the language of the script under test.
-
-## `check-agent-evidence.py` — verifying a hand-back without re-reading it (2026-08-21)
-
-Hard rule 8 requires the dispatching agent to verify the sub-agent's **actual** diff and compile
-evidence — "a summary is not proof". Until now that meant re-reading the work, which is the largest
-single source of the recheck-each-other cost the context cut was about. The sub-agent now writes
-`evidence.json` carrying the tools' raw `--json`, and this reads it.
-
-```
-python tools/check-agent-evidence.py <path-to-evidence.json>
-```
-
-Schema and the field-by-field contract live in `.claude/agents/lad-coder.md`; the dispatch-board
-convention is in `agent-tasks/README.md`. Exit **0** verified, **1** a gate failed or a hash
-drifted, **2** the file could not be read or is not this schema — **nothing verified**, which is
-not a pass.
-
-**What it actually checks:** exit codes, and `converter ir-hash` values it **recomputes itself**
-from the files on disk. An agent can write anything in a summary; it cannot write a hash that
-survives recomputation. It forms no opinion on whether the logic is right — that is the reviewer's
-job and the engineer's, and an automated second opinion there would be the correlated check this
-project exists to avoid. A green means *verified, now review*, never *reviewed*.
-
-Three rules it enforces that are easy to get wrong:
-
-- **EMPTY IS NOT CLEAN.** Exit 2 from any recorded gate is refused outright, and evidence naming
-  zero files touched is refused as "not a clean run, no run".
-- **An absent gate is not a passed gate.** `preflight` and a compile gate are always required;
-  `diff --only` additionally when `kind` is `modify`. `kind` is required and unstated is exit 2 —
-  a new block has nothing to prove invariance against, a modification must have it, and guessing
-  between them would either waive a real gate or invent one.
-- **KEY ON ERRORS, NEVER ON STATE.** A healthy station compile legitimately returns `Warning` with
-  `errors=0`; a suite case asserts that still verifies.
-
-**Known limitation, recorded rather than hidden.** The error-counter sweep is **not pinned to a
-captured payload**: no live `compile`/`sanity-check` `--json` has been captured yet, since that
-needs Portal. It currently requires any integer field whose name mentions errors or inconsistency
-to be zero. Pin the real field names the first time a live payload is in hand, and delete the
-generic sweep.
-
-### It has been executed, in both directions
-
-`check-agent-evidence.tests.py` — 16 cases, offline, ~5 s, run against a real block in
-`ir/test-project001`. Skipped cases are counted and **fail the run**, because a suite that
-quietly skipped its hash-dependent half would report green having examined nothing.
-
-```
-python tools/check-agent-evidence.tests.py
-```
-
-The suite earned its keep on first execution: it caught the verifier using `check_output` for
-`ir-hash`, which exits 1 on a non-block file — so a `.ir` DB in `files` produced a *correct refusal
-carrying a useless message*, the tool's own explanation having been discarded with the exception.
-Found only because the cases assert the reason string and not merely the exit code.
-
-Also verified end-to-end against real artifacts: a hand-authored `evidence.json` for
-`FB_HopperBlockageMonitor` verified clean, and the same file with **one character** changed in the
-recorded hash was refused with both hashes printed.
+**End-to-end, the gate was observed refusing a real commit** — see the commit that introduced it.
+It replaces the earlier CLAUDE.md-only budget script, whose cases are ported here.
 
 ## Benchmarks
 

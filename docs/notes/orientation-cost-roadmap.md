@@ -37,7 +37,7 @@ seconds are attacking a rounding error inside a forty-minute stage.
 | # | item | axis | status |
 |---|---|---|---|
 | 1 | Dispatch efficiency + README entry points | time + tokens | **done 2026-08-21** |
-| 2 | `design-for-testability` cut + per-skill budget gate | tokens | open |
+| 2 | `design-for-testability` cut + per-skill budget gate | tokens | **done 2026-08-21** |
 | 3 | Warm/batched Portal round trips | time | open, low ceiling |
 | 4 | Parallel Portal lanes | — | **measure first; probably don't** |
 | 5 | A read-only agent variant | tokens | needs an owner ruling |
@@ -71,8 +71,9 @@ the report`, and `## What I had to guess` (5.1 KB, ~3% overlap, entirely origina
 rather than restating it. `gen-block-new` is already smaller than post-cut `CLAUDE.md`. Cutting
 either would delete instruction, not restatement.
 
-Then generalise `tools/check-claude-md-budget.py` to a per-file budget table and widen
-`hooks/pre-commit`, so the skills cannot regrow the way `CLAUDE.md` did.
+**DONE 2026-08-21:** `tools/check-file-budgets.py` now ratchets all 18 injected files —
+`CLAUDE.md`, the three agent briefs and the thirteen skills — and `hooks/pre-commit` refuses a
+commit that breaches any of them. It replaces the CLAUDE.md-only budget script.
 
 ### The bigger cost is what the skills tell agents to go and READ
 

@@ -2,7 +2,7 @@
 
     python tools/check-agent-evidence.tests.py
 
-Same reason as check-claude-md-budget.tests.py: a verifier nobody has watched REFUSE
+Same reason as check-file-budgets.tests.py: a verifier nobody has watched REFUSE
 anything is a verifier nobody should trust. This one matters more than most, because
 its whole purpose is to let the orchestrator stop re-reading the sub-agent's work - so
 if it waves through a bad hand-back, the check it replaced was better than it is.
