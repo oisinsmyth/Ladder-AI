@@ -1,6 +1,6 @@
 # CLAUDE.md — Ladder-AI
 
-AI-assisted Siemens LAD engineering. **The deliverable is an AI capable of programming ladder logic — not ladder logic produced by us.** You (Claude Code, in the main conversation) talk to the engineer, plan work, and orchestrate; you never read, write, review, or explain LAD/IR content yourself — that's the `lad-coder` sub-agent's job, always, no matter how small the task (hard rule 8). TIA Openness handles the TIA Portal side. A human engineer reviews everything the pipeline produces before it enters the TIA project.
+AI-assisted Siemens LAD engineering. **The deliverable is an AI capable of programming ladder logic — not ladder logic produced by us.** You (Claude Code, in the main conversation) talk to the engineer, plan work, and orchestrate; you never read, write, review, or explain LAD/IR content yourself — that's the `lad-coder` sub-agent's job (hard rule 8, no size exception). TIA Openness handles the TIA Portal side. A human engineer reviews everything the pipeline produces before it enters the TIA project.
 
 **This file states what binds you. It does not restate what the tools do** — that lives in `src/converter/README.md` and `src/openness-cli/README.md`, and in `docs/notes/`. Look things up there; do not expect this file to carry them.
 
@@ -96,14 +96,11 @@ When in doubt: `docs/04-design-philosophy.md` for principles, `docs/02-roadmap.m
 | `candidate-scan`, `undriven-scan`, `relation-reconcile`, `signal-sweep`, `interface-check` | the mechanical floor — checks that survive an agent choosing not to look |
 | `reachable-state`, `ir-hash`, `sanitize`, `claim` / `claims` | computed slot disjointness, content hashing, de-identification, and the multi-agent reservation registry |
 
-**A recurring principle across all of them: EMPTY IS NOT CLEAN.** A check that examined nothing does not pass — it says so and exits non-zero. When you read a green, read what it says it *compared*.
+**A principle across all of them: EMPTY IS NOT CLEAN.** Across the mechanical floor (`candidate-scan`, `undriven-scan`, `reuse-scan`, `relation-reconcile`, `signal-sweep`), **exit 1 = found something; exit 2 = EXAMINED NOTHING** — a `--scope` that matched nothing, an `--fb` with no instances, a leg compared against nothing. **Exit 2 is never a pass**, and mistaking it for one turns a false finding into a green. When you read a green, read what it says it *compared*.
 
 ### Tests and builds
 
-```
-dotnet test                                            # PC-side tests; pytest tests/ once extract/ (S5) exists
-dotnet build -c Release src/converter/converter.sln    # AFTER ANY CONVERTER CHANGE — see the routing rule
-```
+`dotnet test` — PC-side tests (pytest `tests/` once `extract/` exists). `dotnet build -c Release src/converter/converter.sln` — **after any converter change**, see the routing rule.
 
 TIA project open is slow — be patient, don't kill and retry.
 
@@ -113,11 +110,11 @@ A block can be deployed to a bench rig and observed while it runs.
 
 ➜ ***BEFORE USING ANY OF THIS ON A REAL JOB, READ `docs/notes/live-project-readiness.md` FIRST.*** One page: the per-component status column, the traps that have each cost a day, and the one-line answer — **deploy / read-back / analyse is ready; the closed-loop conformance path has never run a wave end to end.** 🔴 Read that status column before relying on anything: most of the harness is built and unit-tested, a smaller part has been run against a controller, **these are different claims**, and this project's most expensive failures have all been a green that examined nothing.
 
-Measured rig facts (addresses, scan time, word order, compression ceiling, reserved block numbers) live there too — **do not re-derive them, and do not quote a figure without the program it was measured against.** Design, build record, submission contract and the 42-defect campaign record: `docs/notes/PC-Client-Modbus-Spec-Draft-final.txt`, `test-environment-build-plan.md`, `test-environment-contract.md`, `hammer-campaign-results.md`.
+Measured rig facts (addresses, scan time, word order, compression ceiling, reserved block numbers) live there too — **do not re-derive them, and do not quote a figure without the program it was measured against.** The design spec, build record, submission contract and 42-defect campaign record sit beside it in `docs/notes/`.
 
 ## Workflow
 
-Generation follows the staged pipeline in `docs/15-generation-pipeline.md` (ADR-0004): analyse / design / build / check stages handing off through committed artifacts in `gen/<project>/`, adversarial reviews in fresh context, and two hard engineer gates — architecture sign-off before any coding, final presentation at the end. **The whole workflow runs inside the dispatched `lad-coder` sub-agent** (hard rule 8); you plan the request, dispatch it, and verify what comes back.
+Generation follows `docs/15-generation-pipeline.md` (ADR-0004): analyse / design / build / check stages handing off through committed artifacts in `gen/<project>/`, adversarial reviews in fresh context, and two hard engineer gates — architecture sign-off before coding, final presentation at the end. **The whole workflow runs inside the dispatched `lad-coder` sub-agent** (hard rule 8); you plan the request, dispatch it, and verify what comes back.
 
 Quality bar, in order: **function → readability & simplicity → efficiency** (`docs/06-lad-conventions.md` preamble). Modifying existing logic adds one thing: touch only the named network(s), and prove the rest identical with `converter diff --only`.
 
@@ -149,4 +146,4 @@ Openness requires membership of the "Siemens TIA Openness" Windows group, and th
 
 **Everything else — whitelist mechanics, concurrent sessions, block-consistency quirks, the TIA behaviours found the hard way — is in `docs/notes/openness-quirks.md`.** The routing rules above carry only what you must know *before* you act.
 
-The S6 sandbox project is `test-project001` everywhere in docs and IR — a deliberate de-identification. **The live TIA Portal project folder on disk keeps its original name, `GenProject1/`**; if you're opening the actual `.ap20`, that's `GenProject1/GenProject1.ap20`.
+The S6 sandbox is `test-project001` everywhere in docs and IR — a deliberate de-identification, and **Green-tier throughout** (`docs/13-data-boundary.md`). **The live TIA Portal folder on disk keeps its original name: `GenProject1/GenProject1.ap20`.** Harness objects reserve block numbers **9000–9999** per number space; OBs are excluded, an OB's number being fixed by its event class.
