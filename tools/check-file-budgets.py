@@ -47,8 +47,10 @@ BUDGETS = [
     # which change what the agent must DO rather than explaining something: the
     # evidence.json `deferred`/`transient` fields (a run could not otherwise hand back a
     # split gate honestly), and round-trip discipline (two real dispatches spent 41 and 67
-    # tool calls, and round-trips dominate wall clock). The file is 8,853 -> ~9,180 after
-    # both. It was 6,234 post-cut, so this is real growth and deliberately visible.
+    # tool calls, and round-trips dominate wall clock). It was 6,234 post-cut, so this is
+    # real growth and deliberately visible. Landed at 9,058, not the ~9,180 first predicted
+    # here - the round-trip text overshot 9216 by 177 and was compressed rather than the
+    # ceiling raised a second time, which is the pattern this budget exists to prevent.
     (".claude/agents/lad-coder.md", 9216),
     (".claude/agents/lad-reader.md", 5120),
 

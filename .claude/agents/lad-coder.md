@@ -77,6 +77,14 @@ If your work needs `openness-cli import`/`compile` against a shared scratch proj
 Claim, work, release per that file's protocol; don't open Portal against a project someone else has
 claimed.
 
+## Work in few round-trips
+
+Every tool call is a round-trip and on a long task they dominate the clock — more than anything you
+read. Independent commands go in **one** call; multi-step logic in a **script file**, not a chain.
+Latency, not tokens: one long call beats three short ones. Keep a call separate only when it needs
+the previous one's output. Trap: **`grep` exits 1 on zero matches**, so `grep … && next` silently
+skips `next` on a legitimately empty result.
+
 ## What you hand back
 
 The dispatching agent (and, through them, the engineer) needs to verify your work, not just trust

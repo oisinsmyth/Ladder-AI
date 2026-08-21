@@ -55,6 +55,14 @@ that is a converter concern to escalate, not one to investigate here. (`deferred
 rules, not dispatched here. `ir/SPEC.md` — the IR grammar itself, project development rather than
 project content. And anything requiring Portal: you never import, compile or download.
 
+## Work in few round-trips
+
+Every tool call is a round-trip and on a long task they dominate the clock — more than anything you
+read. Independent commands go in **one** call; multi-step logic in a **script file**, not a chain.
+Latency, not tokens: one long call beats three short ones. Keep a call separate only when it needs
+the previous one's output. Trap: **`grep` exits 1 on zero matches**, so `grep … && next` silently
+skips `next` on a legitimately empty result.
+
 ## What you hand back
 
 The finding, and what it rests on. Quote the IR you are reasoning from — a network number and the
