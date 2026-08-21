@@ -194,3 +194,25 @@ data-boundary approval is needed).
 **Revisit trigger:** none specified; owner's call, or a suitable blind target turning up.
 `docs/16-future-ideas.md` FI-05 stays the analysis record — update its status there too if this
 is ever picked back up or closed.
+
+## D-9 — Push CLAUDE.md's Routing rules down into the skills that own them
+
+**What:** the `## Routing rules` section in `CLAUDE.md` holds operational rules that were
+extracted from the historical narration during the 2026-08-21 context cut - e.g.
+"`gen-block-modify-fix` must never pass `--allow-header`", "re-assert `block-layout --set
+Standard` after every import", the `--claims` store-root rule. Each of these is owned by a
+specific skill or command. The alternative shape is to move each rule into the skill that
+governs it and drop the resident section.
+
+**Why deferred:** owner decision, 2026-08-21. A rule that lives only in a skill is invisible to
+any agent not running that skill, and several of these bite agents who are not running one -
+the `--claims` and Portal-token rules in particular apply to whoever is orchestrating. Resident
+was chosen for this pass; the cost is roughly 2 KB of context on every dispatch.
+
+**Revisit trigger:** the routing set growing past ~10 lines, or a specific rule being shown to
+be genuinely skill-local (i.e. no agent outside that skill can reach the situation it guards).
+
+**Record for the cut this came from:** `CLAUDE.md` was 96,655 bytes at parent commit `a1eca27`
+and 20,277 bytes after. The Commands-block content it shed was migrated into
+`src/converter/README.md` and `src/openness-cli/README.md`; what was checked is recorded in
+`docs/notes/claude-md-migration-inventory.md` (working file - delete once the cut has settled).

@@ -1783,6 +1783,8 @@ the PLC does?*
 - **A comment edit is never cover for a behaviour-bearing one** — both together still exit 1,
   naming the INTERFACE, not the comment.
 - The JSON carries `commentChanged` and `interfaceChanged` as separate fields.
+- The human-readable form prints `HEADER changed: interface` (or `: comment`) naming which half
+  moved, so the verdict and the exit code can be read against each other.
 
 `--allow-header` is the named escape (FI-71's shape), and it means ROUTE, not DECLARE:
 
@@ -2725,6 +2727,46 @@ regenerated XML still says `Standard`. All 908 converter tests pass (up from 890
 golden-harness suites (39, including `ExportDriftDetectorTests`) stay green.
 
 ## Fixed-shape instruction registry, unconnected ports, and two one-way-IR fixes (2026-08-12)
+
+### `MB_SERVER` 5.3 — registered, and proven end to end (migrated from CLAUDE.md 2026-08-21)
+
+**Instruction names are keyed on `(NAME, VERSION)`, and an unknown version is REFUSED.** TIA emits
+three different spellings of the Modbus family; version is exactly what changes a port list, and the
+port list is what the converter SUPPLIES, so accepting an unknown version means applying the WRONG
+TEMPLATE — it converts, imports, and misbehaves on the controller. New instructions of this shape
+are a TABLE ENTRY in `SimaticMl/FixedShapeInstructions.cs`, not five files edited in lockstep.
+
+✅ **`MB_SERVER` 5.3 is REGISTERED and the IR path works** — `MbServer53` was added to
+`FixedShapeInstructions.cs` on 2026-08-12.
+
+Both the legacy `Modbus_*` entries and the real `MB_MASTER` / `MB_COMM_LOAD` names are kept
+deliberately; migrating the legacy ones onto the registry is ruled **NOT NOW**
+(`docs/notes/deferred-items.md` D-8). Revisit only on a real export that CONTRADICTS the retained
+names — tidiness is not a trigger.
+
+***And the `Array[..] of Struct` never applied to us at all:*** it belongs to the Siemens **sample**
+block used to characterise the port list, not to anything we author. `MB_HOLD_REG` is an **area
+pointer over marker memory** (`P#M1000.0 WORD n`), not a reference to an `Array[..] of Int` static,
+so the structured interface simply never arises. Two statics suffice: an `MB_SERVER` instance and a
+`TCON_IP_v4`.
+
+Proven in `GenProject1` 2026-08-13 — imported, compiled (`errors=0`), and confirmed from **TIA's own
+re-export** (`Part Name="MB_SERVER" Version="5.3"`, the pointer, `LocalPort 503`), never from an
+exit code. The converter half was verified behaviourally too: the Release binary takes a real
+`MB_SERVER` IR block to SimaticML, exit 0, part emitted.
+
+🔴 **A converter limitation is NEVER by itself a reason a block cannot reach a project.** The
+converter's registry governs **IR → SimaticML only**. `openness-cli export` / `import` produce and
+consume SimaticML **straight from TIA and never touch the converter**. A stale note claiming
+`MB_SERVER` was deliberately unregistered was once read as "it cannot be moved into a project", and
+that stopped a rig deployment a step early. `MB_SERVER` is a `<Part>`, measured: an InOut port wires
+as an ORDINARY SYMBOLIC `<Access>` in normal input order, so the `<Call>` / `Section="InOut"`
+whitelist is IRRELEVANT to it.
+
+**Unconnected ports, concretely:** `REQ := OPEN` for a deliberately unwired input, `DONE => OPEN`
+for an output — versus **no argument at all** when the port is absent from `<Wires>` entirely.
+`OPEN` is a reserved bare word (precedent: `TRUE` / `ENO`); a tag genuinely named `OPEN` on such a
+port is a hard error naming the collision, never a silent mangle.
 
 Four defects, found together on ONE real exported block — a genuine TIA V20 export of a live
 S7-1200 (classic 1214C) Modbus TCP FC — each of which alone stopped it round-tripping. The fixture
