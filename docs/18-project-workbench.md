@@ -313,7 +313,21 @@ Status vocabulary: ✅ done · 🔨 specified, not built · ❓ needs a decision
 
 ---
 
-### Phase 1 — Close the derive mechanism · **P0** · *specified in full, plan written 2026-08-21*
+### Phase 1 — Close the derive mechanism · **P0** · ✅ **DONE 2026-08-21**
+
+> **All five closed.** `map` is now recomputed from the binding and compared; `runtimeCompression` is
+> settled by a stated rule (uncompressed needs no bounds, a factor above 1 with none is refused); the
+> composer outputs are read in-harness through a file contract; artifacts are hashed over **bytes**;
+> and an artifact must be the right **kind** and must not be a **report of failure**.
+>
+> 🔴 **The dry run over the live job found four defects in this work that its own tests did not**, and
+> all four were the same class — *a check that is too strict is as damaging as one that is too weak*:
+> the map comparison refused an incomplete-but-harmless map (now asymmetric — over-claiming refuses,
+> under-claiming reports); the storage check accused 131 correct declarations because the two
+> documents use different canonical spellings (now canonicalised, and a total miss reads as *wrong
+> closure*, not 131 findings); a **valid, fully-computed conflict graph was refused as WRONG KIND**
+> because it uses a third key spelling; and derive hashing over bytes while the gate hashed text would
+> have made **every** record read as stale. Each is now a test.
 
 The mechanism shipped in §3.4a attributes but does not compute, and five gaps remain inside it.
 They are grouped as one phase deliberately: each on its own leaves the tool half-honest, and the
@@ -473,6 +487,14 @@ opinion.** That single sentence is why §3 is the most valuable part of this des
   and the two places derivation must refuse. Added the finding that the copy-layer ladder is
   **already generated** and the real gap is the hand-authored submission document. Capability
   assessment compressed to §6.
+- **v2.3 — 2026-08-21.** **Phase 1 closed.** All five gaps inside the derive mechanism are built and
+  tested (2148 passing, 0 warnings). The deriver now RECOMPUTES rather than only citing, and gate 0c
+  counts *recomputed* / *by rule* / *cited* separately so "derived" stops being one word. The live-job
+  dry run earned its place: it found **four defects the unit tests did not**, every one an
+  over-strict check making a false accusation against valid data — including a fully-computed
+  conflict graph refused as the wrong kind. On the live job the map is now genuinely computed and
+  matched, and the remaining refusals are real: two artifacts that report their own failure, and one
+  precise storage gap.
 - **v2.2 — 2026-08-21.** §5 replaced by a **phased, prioritised gap register** (nine phases, P0/P1/P2
   on a stated rule). Phase 1 — the five gaps left inside the derive mechanism — is specified in full
   and has an implementation plan. Two feasibility facts pinned while writing it:

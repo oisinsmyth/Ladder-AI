@@ -32,11 +32,22 @@ public static class DeriveExit
 /// <param name="Stamped">Fields that got a provenance record.</param>
 /// <param name="Withheld">Fields removed because nothing could attribute them.</param>
 /// <param name="Unattributable">Fields present, not attributable, and NOT withheld — the refusal set.</param>
+/// <param name="Rejected">
+/// 🔴 <b>Fields whose ARTIFACT was refused — the wrong kind, or the right kind reporting failure.</b>
+/// Kept apart from <paramref name="Unattributable"/> because they are different mistakes with
+/// different fixes: one means "you supplied nothing", this means "what you supplied is not an answer".
+/// </param>
+/// <param name="Mismatched">
+/// Fields whose recomputed value DISAGREED with the authored one. The strongest finding this tool can
+/// make, and the reason 1.1 recomputes rather than merely citing.
+/// </param>
 public sealed record DeriveOutcome(
     SubmissionDocument Document,
     IReadOnlyList<string> Stamped,
     IReadOnlyList<string> Withheld,
-    IReadOnlyList<string> Unattributable);
+    IReadOnlyList<string> Unattributable,
+    IReadOnlyList<string> Rejected,
+    IReadOnlyList<string> Mismatched);
 
 /// <summary>
 /// 🔴 <b><c>harness-gate derive</c> — the tool that makes gate 0c satisfiable.</b>
@@ -79,7 +90,8 @@ public static class DeriveCli
         IReadOnlyDictionary<string, string> artifactByField,
         IReadOnlyDictionary<string, string> producerByField,
         Func<string, string> readFile,
-        bool withholdUnattributable)
+        bool withholdUnattributable,
+        Func<string, byte[]>? readBytes = null)
     {
         ArgumentNullException.ThrowIfNull(document);
         ArgumentNullException.ThrowIfNull(artifactByField);
@@ -89,11 +101,46 @@ public static class DeriveCli
         var stamped = new List<string>();
         var withheld = new List<string>();
         var unattributable = new List<string>();
+        var rejected = new List<string>();
+        var mismatched = new List<string>();
         var records = new List<DerivationDocument>();
 
         foreach (var field in document.DerivableFieldsPresent())
         {
-            if (!artifactByField.TryGetValue(field, out var artifact) || string.IsNullOrWhiteSpace(artifact))
+            var producer = producerByField.TryGetValue(field, out var p) ? p : DefaultProducerFor(field);
+            var supplied = artifactByField.TryGetValue(field, out var artifact) && !string.IsNullOrWhiteSpace(artifact);
+
+            // ---- the by-rule field, which has no artifact and must not pretend to ------------------
+            if (DerivationProducer.KindFor(producer) == ArtifactKind.None)
+            {
+                if (supplied)
+                {
+                    rejected.Add($"{field}: '{producer}' produces no artifact, so --artifact {field}=... attributes it to a "
+                        + "file that cannot be its source. Remove the flag; this field is settled by rule.");
+                    continue;
+                }
+
+                var rule = RuleFor(document, field);
+                if (rule is { } refusal)
+                {
+                    unattributable.Add($"{field}: {refusal}");
+                    continue;
+                }
+
+                records.Add(new DerivationDocument
+                {
+                    Field = field,
+                    Producer = producer,
+                    Artifact = string.Empty,
+                    ArtifactSha256 = string.Empty,
+                    Verified = DerivationVerification.ByRule,
+                });
+
+                stamped.Add(field);
+                continue;
+            }
+
+            if (!supplied)
             {
                 if (withholdUnattributable)
                 {
@@ -102,7 +149,7 @@ public static class DeriveCli
                 }
                 else
                 {
-                    unattributable.Add(field);
+                    unattributable.Add($"{field}: no readable artifact was supplied for it. Pass --artifact {field}=<path>.");
                 }
 
                 continue;
@@ -111,7 +158,7 @@ public static class DeriveCli
             string content;
             try
             {
-                content = readFile(artifact);
+                content = readFile(artifact!);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException or ArgumentException)
             {
@@ -119,23 +166,102 @@ public static class DeriveCli
                 // unreadable, says it could not verify — that is honest, because the record already
                 // existed. Here the record is being CREATED, and stamping a hash for a file we could not
                 // open would be manufacturing the evidence.
-                unattributable.Add(field);
+                unattributable.Add($"{field}: the artifact '{artifact}' could not be read.");
                 continue;
             }
+
+            // ---- 1.5: the artifact must be the right KIND, and must not be a report of failure -----
+            var verdict = ArtifactCheck.Inspect(DerivationProducer.KindFor(producer), content);
+            if (!verdict.Accepted)
+            {
+                rejected.Add($"{field}: {verdict.Detail}");
+                continue;
+            }
+
+            // ---- 1.1: recompute where we can, and COMPARE ------------------------------------------
+            //
+            // *** ONLY A COMPARISON THAT ACTUALLY RAN EARNS `Computed`. *** NotComparable is stamped
+            // Attributed, not quietly promoted — labelling a field "computed" when nothing was compared
+            // would be this project's signature failure committed by the tool built to prevent it.
+            var comparison = Recompute.Check(field, document, content);
+
+            if (comparison.Outcome == Recompute.Outcome.Differs)
+            {
+                mismatched.Add($"{field}: {comparison.Detail}");
+                continue;
+            }
+
+            var verified = comparison.Outcome == Recompute.Outcome.Matched
+                ? DerivationVerification.Computed
+                : DerivationVerification.Attributed;
+
+            var (hash, overBytes) = Hash(artifact!, content, readBytes);
 
             records.Add(new DerivationDocument
             {
                 Field = field,
-                Producer = producerByField.TryGetValue(field, out var p) ? p : DefaultProducerFor(field),
-                Artifact = artifact,
-                ArtifactSha256 = DerivationHash.Of(content),
+                Producer = producer,
+                Artifact = artifact!,
+                ArtifactSha256 = hash,
+                Verified = verified,
+                HashedOverBytes = overBytes,
             });
 
             stamped.Add(field);
         }
 
         document.Derivation = records;
-        return new DeriveOutcome(document, stamped, withheld, unattributable);
+        return new DeriveOutcome(document, stamped, withheld, unattributable, rejected, mismatched);
+    }
+
+    /// <summary>
+    /// Hash the artifact's BYTES when a byte reader is available, its text otherwise — <b>and report
+    /// which</b>, so the weaker check is never silently substituted for the stronger one.
+    /// </summary>
+    private static (string Hash, bool OverBytes) Hash(string artifact, string content, Func<string, byte[]>? readBytes)
+    {
+        if (readBytes is not null)
+        {
+            try
+            {
+                return (DerivationHash.OfBytes(readBytes(artifact)), true);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException or ArgumentException)
+            {
+                // Fall through to the text hash rather than refusing: the artifact demonstrably READ a
+                // moment ago, so this is a byte-reader problem and the weaker hash is still a real check.
+                // It is recorded as the weaker one, which is the part that matters.
+            }
+        }
+
+        return (DerivationHash.Of(content), false);
+    }
+
+    /// <summary>
+    /// 🔴 <b>THE ONE FIELD SETTLED BY RULE RATHER THAN BY RECOMPUTATION — and the rule is stated, not
+    /// buried.</b>
+    ///
+    /// <para><c>runtimeCompression</c> has no producing artifact anywhere: <c>TimeCompression.Plan</c>
+    /// takes the declared factor as an INPUT and returns bounds, and gate 10b already grades those
+    /// bounds. Re-grading them here would be a second opinion on one question. So the deriver's job is
+    /// narrower and sharper: <b>a compression factor above 1 with no declared bounds behind it is an
+    /// unbacked number, and unbacked numbers are what this whole mechanism exists to stop.</b></para>
+    ///
+    /// <para>Returns null when the rule is satisfied, or the refusal text when it is not.</para>
+    /// </summary>
+    private static string? RuleFor(SubmissionDocument document, string field)
+    {
+        if (!string.Equals(field, DerivableField.RuntimeCompression, StringComparison.Ordinal))
+            return null;
+
+        if (document.BlockCompression is not null)
+            return null;
+
+        return document.RuntimeCompression <= 1
+            ? null
+            : $"the submission declares runtimeCompression {document.RuntimeCompression} with no blockCompression "
+              + "bounds behind it. Uncompressed needs no bounds; a factor above 1 is a claim about how far the "
+              + "plant's timing was squeezed, and nothing here supports it. Declare blockCompression, or run at 1.";
     }
 
     /// <summary>
@@ -178,10 +304,16 @@ public static class DeriveCli
             case DerivableField.Deployment: document.Deployment = null; break;
             case DerivableField.TagMapPath: document.TagMapPath = null; break;
 
-            // 🔴 *** runtimeCompression CANNOT BE WITHHELD AND IS NOT SILENTLY SKIPPED. *** It is an int
-            // with a default, so removing it restores the default 1 — a VALUE, indistinguishable from an
-            // author typing 1, which is the precise thing the key-presence flag exists to tell apart.
-            // Withholding it would therefore not withhold anything; it would forge a quieter claim.
+            // 🔴 *** runtimeCompression CANNOT BE WITHHELD. *** It is an int with a default, so removing
+            // it restores the default 1 — a VALUE, indistinguishable from an author typing 1, which is
+            // the precise thing the key-presence flag exists to tell apart. Withholding it would not
+            // withhold anything; it would forge a quieter claim.
+            //
+            // *** THIS BRANCH IS NOW STRUCTURALLY UNREACHABLE, AND IT STAYS ANYWAY. *** The by-rule path
+            // settles this field before withholding is ever considered, so nothing today can arrive
+            // here. It is kept because the hazard is silent: if a later change gave this producer an
+            // artifact kind, the field would fall through to withholding and forge the claim with no
+            // symptom. A guard against a silent failure is worth its unreachability.
             case DerivableField.RuntimeCompression:
                 throw new InvalidOperationException(
                     "runtimeCompression cannot be withheld: it has a default, so removing the key leaves the value 1 in "
@@ -193,7 +325,12 @@ public static class DeriveCli
     }
 
     /// <summary>The runnable command. <c>harness-gate derive --submission &lt;in&gt; --out &lt;out&gt; [...]</c>.</summary>
-    public static int Run(IReadOnlyList<string> args, TextWriter output, Func<string, string> readFile, Action<string, string> writeFile)
+    public static int Run(
+        IReadOnlyList<string> args,
+        TextWriter output,
+        Func<string, string> readFile,
+        Action<string, string> writeFile,
+        Func<string, byte[]>? readBytes = null)
     {
         ArgumentNullException.ThrowIfNull(args);
         ArgumentNullException.ThrowIfNull(output);
@@ -289,7 +426,7 @@ public static class DeriveCli
         DeriveOutcome outcome;
         try
         {
-            outcome = Stamp(document, artifacts, producers, readFile, withhold);
+            outcome = Stamp(document, artifacts, producers, readFile, withhold, readBytes);
         }
         catch (InvalidOperationException ex)
         {
@@ -301,20 +438,43 @@ public static class DeriveCli
         // stamped; this one says how many were in scope at all.
         output.WriteLine($"EXAMINED: {present.Count} derivable field(s) present in the submission.");
 
-        foreach (var field in outcome.Stamped)
-            output.WriteLine($"  DERIVED    {field} <- {artifacts[field]} ({DefaultProducerOrOverride(field, producers)})");
+        foreach (var record in document.Derivation ?? new List<DerivationDocument>())
+        {
+            var how = record.Verified switch
+            {
+                DerivationVerification.Computed => "COMPUTED  ",
+                DerivationVerification.ByRule => "BY RULE   ",
+                _ => "ATTRIBUTED",
+            };
+
+            var source = string.IsNullOrEmpty(record.Artifact) ? "(no artifact - settled by rule)" : record.Artifact;
+            var over = string.IsNullOrEmpty(record.Artifact) ? string.Empty : record.HashedOverBytes ? " [bytes]" : " [text]";
+            output.WriteLine($"  {how} {record.Field} <- {source} ({record.Producer}){over}");
+        }
 
         foreach (var field in outcome.Withheld)
             output.WriteLine($"  WITHHELD   {field} - nothing attributed it, and --withhold-unattributable was given.");
 
-        foreach (var field in outcome.Unattributable)
-            output.WriteLine($"  REFUSED    {field} - no readable artifact was supplied for it. Pass --artifact {field}=<path>.");
+        foreach (var line in outcome.Mismatched)
+            output.WriteLine($"  MISMATCH   {line}");
 
-        if (outcome.Unattributable.Count > 0)
+        foreach (var line in outcome.Rejected)
+            output.WriteLine($"  BAD SOURCE {line}");
+
+        foreach (var line in outcome.Unattributable)
+            output.WriteLine($"  REFUSED    {line}");
+
+        var refusals = outcome.Unattributable.Count + outcome.Rejected.Count + outcome.Mismatched.Count;
+        if (refusals > 0)
         {
+            // *** THE THREE ARE COUNTED TOGETHER AND REPORTED APART. *** They are one decision - nothing
+            // is written - but three different mistakes: nothing supplied, the wrong thing supplied, and
+            // the right thing disagreeing with what the submission claims.
             output.WriteLine(
-                $"REFUSED: {outcome.Unattributable.Count} field(s) could not be attributed. Nothing was written - a "
-                + "submission stamped with a partial provenance would pass gate 0c for the fields it happened to cover.");
+                $"REFUSED: {refusals} field(s) - {outcome.Unattributable.Count} unattributed, "
+                + $"{outcome.Rejected.Count} with an unusable artifact, {outcome.Mismatched.Count} whose recomputed value "
+                + "disagreed. Nothing was written - a submission stamped with a partial provenance would pass gate 0c "
+                + "for the fields it happened to cover.");
             return DeriveExit.Refused;
         }
 
@@ -336,12 +496,14 @@ public static class DeriveCli
             return DeriveExit.WithheldSomething;
         }
 
-        output.WriteLine($"DERIVED: all {outcome.Stamped.Count} derivable field(s) attributed and hashed.");
+        var records = document.Derivation ?? new List<DerivationDocument>();
+        output.WriteLine(
+            $"DERIVED: {outcome.Stamped.Count} field(s) - "
+            + $"{records.Count(r => r.Verified == DerivationVerification.Computed)} recomputed and matched, "
+            + $"{records.Count(r => r.Verified == DerivationVerification.ByRule)} settled by rule, "
+            + $"{records.Count(r => r.Verified == DerivationVerification.Attributed)} cited to an artifact but not recomputed.");
         return DeriveExit.Derived;
     }
-
-    private static string DefaultProducerOrOverride(string field, IReadOnlyDictionary<string, string> producers) =>
-        producers.TryGetValue(field, out var p) ? p : DefaultProducerFor(field);
 
     private static void Usage(TextWriter output)
     {

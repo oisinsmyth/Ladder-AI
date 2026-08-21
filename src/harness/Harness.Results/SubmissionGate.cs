@@ -363,9 +363,17 @@ public static class SubmissionGate
         // *** PRINTED ON EVERY RUN, INCLUDING ZERO. *** Every other number this gate can report is a
         // reason a check did NOT happen; this one is the denominator, and a claim without it is the
         // shape of green this project keeps having to retract.
+        //
+        // 🔴 THE THREE VERIFICATION CLASSES ARE REPORTED SEPARATELY, because "derived" was one word
+        // covering two very different claims: a value RECOMPUTED and matched is evidence, a value merely
+        // cited to a file is a citation. A single count lets the weaker one hide inside the stronger.
         var denominator =
-            $" DENOMINATOR: {present.Count} derivable field(s) present, {records.Count} with a derivation record, "
-            + $"{records.Count(r => r.ArtifactWasRead)} re-hashed against the artifact on disk.";
+            $" DENOMINATOR: {present.Count} derivable field(s) present, {records.Count} with a derivation record "
+            + $"({records.Count(r => r.Verified == DerivationVerification.Computed)} recomputed and matched, "
+            + $"{records.Count(r => r.Verified == DerivationVerification.ByRule)} settled by rule, "
+            + $"{records.Count(r => r.Verified == DerivationVerification.Attributed)} cited only), "
+            + $"{records.Count(r => r.ArtifactWasRead)} re-hashed against the artifact on disk "
+            + $"({records.Count(r => r.HashedOverBytes)} over bytes).";
 
         if (present.Count == 0)
         {
@@ -389,7 +397,19 @@ public static class SubmissionGate
             .ToArray();
 
         var stale = records.Where(r => r.ArtifactWasRead && !r.HashMatches).ToArray();
-        var unread = records.Where(r => !r.ArtifactWasRead).ToArray();
+
+        // 🔴 *** A BY-RULE RECORD HAS NO ARTIFACT, AND THAT IS NOT AN UNREAD ONE. *** It is settled by a
+        // stated rule precisely because nothing produces a file for it, so demanding one would put the
+        // gate permanently at NOT CHECKED for a field that is as verified as it can be. A record
+        // claiming ByRule while NAMING an artifact is a different thing and is refused below.
+        var unread = records
+            .Where(r => r.Verified != DerivationVerification.ByRule)
+            .Where(r => !r.ArtifactWasRead)
+            .ToArray();
+
+        var ruleWithArtifact = records
+            .Where(r => r.Verified == DerivationVerification.ByRule && !string.IsNullOrWhiteSpace(r.Artifact))
+            .ToArray();
 
         var problems = new List<string>();
 
@@ -422,6 +442,15 @@ public static class SubmissionGate
                 $"{stale.Length} field(s) were derived from an artifact that has CHANGED since: "
                 + string.Join(", ", stale.Select(r => $"{r.Field} <- {r.Artifact}"))
                 + ". The derivation is stale; re-derive rather than re-stamp.");
+        }
+
+        if (ruleWithArtifact.Length > 0)
+        {
+            problems.Add(
+                $"{ruleWithArtifact.Length} record(s) claim to be settled BY RULE while naming an artifact: "
+                + string.Join(", ", ruleWithArtifact.Select(r => $"{r.Field} <- {r.Artifact}"))
+                + ". By-rule means no file produces this value, so naming one claims a provenance that does not exist "
+                + "and exempts itself from the hash check at the same time.");
         }
 
         if (problems.Count > 0)

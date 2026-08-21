@@ -653,6 +653,22 @@ public sealed class DerivationDocument
 
     /// <summary>The artifact's SHA-256 at derivation time. Re-hashed by the gate; a mismatch is a stale derivation.</summary>
     public string? ArtifactSha256 { get; set; }
+
+    /// <summary>
+    /// How hard the claim is: <c>Computed</c>, <c>ByRule</c> or <c>Attributed</c>.
+    ///
+    /// <para><b>Defaults to <c>Attributed</c>, the weakest</b>, so a record written before this field
+    /// existed — or by anything that omits it — claims the least rather than the most.</para>
+    /// </summary>
+    public Harness.Results.DerivationVerification Verified { get; set; } = Harness.Results.DerivationVerification.Attributed;
+
+    /// <summary>
+    /// Whether the hash was taken over the artifact's BYTES rather than its text as read.
+    ///
+    /// <para><b>Defaults to false for the same reason:</b> the text hash is the weaker check, and an
+    /// omitted field must not silently claim the stronger one.</para>
+    /// </summary>
+    public bool HashedOverBytes { get; set; }
 }
 
 public sealed class VectorDocument

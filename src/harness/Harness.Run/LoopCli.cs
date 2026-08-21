@@ -87,7 +87,12 @@ public static class LoopCli
         Func<string, int, byte, IRegisterTransport>? connect = null,
         Func<string, string?>? env = null,
         Func<string, IReadOnlyList<string>>? expandProgramPath = null,
-        Func<string, IMirrorFeedPublisher>? openFeed = null)
+        Func<string, IMirrorFeedPublisher>? openFeed = null,
+
+        // Passed to Compose so the loop re-hashes a byte-stamped provenance record the same way
+        // harness-gate does. Absent means the loop can only verify text-stamped records, which it
+        // reports as NOT CHECKED rather than as a pass.
+        Func<string, byte[]>? readBytes = null)
     {
         ArgumentNullException.ThrowIfNull(args);
         ArgumentNullException.ThrowIfNull(output);
@@ -227,7 +232,7 @@ public static class LoopCli
         // no host is read. It sits here rather than after the fence so that the absence is structural
         // rather than a flag somebody could reorder past.
         if (generateOnly)
-            return GenerateOnly(submissionPath, bindingPath, submission, binding, program, readFile, emitDir, output, writeFile);
+            return GenerateOnly(submissionPath, bindingPath, submission, binding, program, readFile, emitDir, output, writeFile, readBytes);
 
         // ---- THE FENCE, BEFORE ANYTHING OPENS A SOCKET ----------------------------------------------
         var port = 0;
@@ -285,7 +290,7 @@ public static class LoopCli
         LoopRequest request;
         try
         {
-            request = Compose(submission, binding, program, readFile);
+            request = Compose(submission, binding, program, readFile, readBytes);
         }
         catch (Exception ex)
         {
@@ -387,12 +392,16 @@ public static class LoopCli
         Func<string, string> readFile,
         string? emitDir,
         TextWriter output,
-        Action<string, string> writeFile)
+        Action<string, string> writeFile,
+
+        // Carried through here too: this path runs the same gate, so it must be able to verify a
+        // byte-stamped provenance record rather than reporting it NOT CHECKED.
+        Func<string, byte[]>? readBytes)
     {
         LoopRequest request;
         try
         {
-            request = Compose(submission, binding, program, readFile);
+            request = Compose(submission, binding, program, readFile, readBytes);
         }
         catch (Exception ex)
         {
@@ -588,13 +597,19 @@ public static class LoopCli
         SubmissionDocument submission,
         BindingDocument binding,
         IReadOnlyList<HarnessObject> program,
-        Func<string, string>? readFile = null)
+        Func<string, string>? readFile = null,
+
+        // 🔴 *** THE BYTE READER GOES THROUGH TOO, OR THE LOOP'S GATE IS WEAKER THAN THE CLI'S AGAIN. ***
+        // A provenance record stamped over BYTES can only be re-hashed over bytes. Without this the loop
+        // would report every derived field NOT CHECKED where harness-gate verified it - the precise
+        // asymmetry GateParityTests exists to catch, and the loop is the path that spends rig time.
+        Func<string, byte[]>? readBytes = null)
     {
         ArgumentNullException.ThrowIfNull(submission);
         ArgumentNullException.ThrowIfNull(binding);
         ArgumentNullException.ThrowIfNull(program);
 
-        var inputs = GateCli.InputsOf(submission, binding, readFile);
+        var inputs = GateCli.InputsOf(submission, binding, readFile, readBytes);
 
         var bindings = (binding.Slots ?? new List<SlotBindingDocument>())
             .Select(s => new SlotBinding(

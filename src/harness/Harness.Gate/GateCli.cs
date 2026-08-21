@@ -84,7 +84,7 @@ public sealed record GateInputs(
 /// </summary>
 public static class GateCli
 {
-    public static int Run(IReadOnlyList<string> args, TextWriter output, Func<string, string> readFile)
+    public static int Run(IReadOnlyList<string> args, TextWriter output, Func<string, string> readFile, Func<string, byte[]>? readBytes = null)
     {
         ArgumentNullException.ThrowIfNull(args);
         ArgumentNullException.ThrowIfNull(output);
@@ -148,7 +148,7 @@ public static class GateCli
             // Evaluate is INSIDE the try: a document that parses as JSON and then names a mode nothing
             // implements is still a document that could not be read, and it must reach the same
             // NOTHING EXAMINED outcome rather than escaping as an unhandled throw.
-            report = Evaluate(document, readFile, binding);
+            report = Evaluate(document, readFile, binding, readBytes);
         }
         catch (Exception ex)
         {
@@ -172,14 +172,14 @@ public static class GateCli
     /// The coordinator's bindings. <b>Supplying them is what gives gate 5 an authority other than the
     /// vector author</b>; without them the map is self-declared and gate 5 refuses to be the deciding voice.
     /// </param>
-    public static SubmissionReport Evaluate(SubmissionDocument document, Func<string, string>? readFile = null, BindingDocument? binding = null)
+    public static SubmissionReport Evaluate(SubmissionDocument document, Func<string, string>? readFile = null, BindingDocument? binding = null, Func<string, byte[]>? readBytes = null)
     {
         ArgumentNullException.ThrowIfNull(document);
 
         // *** ONE DERIVATION, SHARED WITH THE LOOP. *** See GateInputs: everything below that is not the
         // observability map or the floor comes from here, so a value this CLI checks and a value the loop
         // checks are the same value rather than two derivations that agree today.
-        var inputs = InputsOf(document, binding, readFile);
+        var inputs = InputsOf(document, binding, readFile, readBytes);
 
         var map = new MirrorObservability(
             (document.Map?.ProvidedFor ?? new Dictionary<string, List<string>>())
@@ -245,7 +245,7 @@ public static class GateCli
     /// could not be made</b> and the gate reports NOT CHECKED — never an empty reachable set, which is the
     /// opposite claim.
     /// </param>
-    public static GateInputs InputsOf(SubmissionDocument document, BindingDocument? binding = null, Func<string, string>? readFile = null)
+    public static GateInputs InputsOf(SubmissionDocument document, BindingDocument? binding = null, Func<string, string>? readFile = null, Func<string, byte[]>? readBytes = null)
     {
         ArgumentNullException.ThrowIfNull(document);
 
@@ -265,7 +265,7 @@ public static class GateCli
             extra.Unknown,
             extra.Annotations,
             Math.Max(1, document.RuntimeCompression),
-            ToDerivationEvidence(document, readFile));
+            ToDerivationEvidence(document, readFile, readBytes));
     }
 
     /// <summary>
@@ -285,7 +285,10 @@ public static class GateCli
     /// to refuse. Returning null for both would collapse those two into one NOT CHECKED and lose the
     /// refusal.</para>
     /// </summary>
-    public static DerivationEvidence ToDerivationEvidence(SubmissionDocument document, Func<string, string>? readFile)
+    public static DerivationEvidence ToDerivationEvidence(
+        SubmissionDocument document,
+        Func<string, string>? readFile,
+        Func<string, byte[]>? readBytes = null)
     {
         ArgumentNullException.ThrowIfNull(document);
 
@@ -296,11 +299,19 @@ public static class GateCli
             var artifact = d.Artifact ?? string.Empty;
             string? observed = null;
 
-            if (readFile is not null && !string.IsNullOrWhiteSpace(artifact))
+            if (!string.IsNullOrWhiteSpace(artifact))
             {
                 try
                 {
-                    observed = DerivationHash.Of(readFile(artifact));
+                    // 🔴 *** RE-HASH THE WAY THE RECORD SAYS IT WAS HASHED, OR NOT AT ALL. *** A record
+                    // stamped over BYTES compared against a hash taken over TEXT will never match, so
+                    // mixing the two would report every derived field as STALE - a gate that refuses
+                    // everything, for a reason having nothing to do with the submission. Where the record
+                    // claims bytes and no byte reader was supplied, the honest answer is that this gate
+                    // could not verify it, which is NOT CHECKED rather than a failure.
+                    observed = d.HashedOverBytes
+                        ? readBytes is null ? null : DerivationHash.OfBytes(readBytes(artifact))
+                        : readFile is null ? null : DerivationHash.Of(readFile(artifact));
                 }
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException or ArgumentException)
                 {
@@ -314,7 +325,9 @@ public static class GateCli
                 d.Producer ?? string.Empty,
                 artifact,
                 d.ArtifactSha256 ?? string.Empty,
-                observed));
+                observed,
+                d.Verified,
+                d.HashedOverBytes));
         }
 
         return new DerivationEvidence(records, document.DerivableFieldsPresent());

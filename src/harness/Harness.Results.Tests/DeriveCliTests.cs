@@ -22,33 +22,55 @@ public class DeriveCliTests
     [Fact]
     public void A_DERIVED_SUBMISSION_IS_ADMISSIBLE_END_TO_END()
     {
-        // Every derivable field is attributed, whether or not this submission carries it — an artifact
-        // for an absent field is simply unused. Enumerating the registry rather than listing the fields
-        // by hand means a NEW derivable field joins this test the day it is added, instead of quietly
-        // being the one thing the end-to-end proof does not cover.
+        // Every derivable field that TAKES an artifact, whether or not this submission carries it — an
+        // artifact for an absent field is simply unused. Enumerating the registry rather than listing
+        // fields by hand means a NEW derivable field joins this test the day it is added, instead of
+        // quietly being the one thing the end-to-end proof does not cover.
+        //
+        // Fields whose producer emits NO artifact are excluded, and supplying one for them is its own
+        // refusal — see the by-rule tests below.
         var artifacts = DerivableField.All
-            .SelectMany(f => new[] { "--artifact", $"{f}=binding.json" })
+            .Where(f => DerivationProducer.KindFor(DeriveCli.DefaultProducerFor(f)) != ArtifactKind.None)
+            .SelectMany(f => new[] { "--artifact", $"{f}={ArtifactFor(f)}" })
             .ToArray();
 
         var (exit, output, written) = Derive(
             new[] { "--submission", "sub.json", "--out", "derived.json" }.Concat(artifacts).ToArray());
 
-        Assert.Equal(DeriveExit.Derived, exit);
+        // The tool's own output is the failure message. A bare Assert.Equal here says only "0 != 1",
+        // which for a tool whose entire job is explaining WHY it refused is a wasted diagnostic.
+        Assert.True(exit == DeriveExit.Derived, output);
         Assert.Contains("EXAMINED:", output, StringComparison.Ordinal);
         Assert.Contains("DERIVED:", output, StringComparison.Ordinal);
 
+        // The strong claims, named: the map was RECOMPUTED from the binding and matched, and the
+        // by-rule field was settled without an artifact. Asserting only "exit 0" would pass just as
+        // happily if every field had been merely cited.
+        Assert.Contains("COMPUTED   " + DerivableField.Map, output, StringComparison.Ordinal);
+        Assert.Contains("BY RULE    " + DerivableField.RuntimeCompression, output, StringComparison.Ordinal);
+        Assert.Contains("recomputed and matched", output, StringComparison.Ordinal);
+
         // The gate, over the deriver's own output. No hand-written provenance anywhere in this path.
+        // 🔴 The gate must be handed the SAME artifacts the deriver hashed. Serving one file for every
+        // path made every record read as STALE - which is the hash check doing exactly its job, on a
+        // fixture that was lying to it.
         var writer = new StringWriter();
         var gateExit = GateCli.Run(new[] { "check", "derived.json", "--binding", "binding.json" }, writer,
             path => path switch
             {
                 "derived.json" => written["derived.json"],
                 "tags.json" => GateCliTests.TagMap,
+                "reachable.json" => ReachableState,
+                "conflicts.json" => ConflictGraph,
+                "deploy.json" => DeployResult,
                 _ => GateCliTests.Binding,
             });
 
-        Assert.Equal(GateExit.AdmissibleSubjectToJudgement, gateExit);
+        Assert.True(gateExit == GateExit.AdmissibleSubjectToJudgement, writer.ToString());
         Assert.Contains("0c derived fields", writer.ToString(), StringComparison.Ordinal);
+
+        // And the gate's own denominator must show the strong claim, not just a count of records.
+        Assert.Contains("recomputed and matched", writer.ToString(), StringComparison.Ordinal);
     }
 
     // ---------------------------------------------------------------------------------------------
@@ -123,8 +145,7 @@ public class DeriveCliTests
     public void WITHHOLDING_REMOVES_THE_FIELD_NAMES_IT_AND_EXITS_THREE()
     {
         var (exit, output, written) = Derive(
-            "--submission", "sub.json", "--out", "derived.json", "--withhold-unattributable",
-            "--artifact", $"{DerivableField.RuntimeCompression}=binding.json");
+            "--submission", "sub.json", "--out", "derived.json", "--withhold-unattributable");
 
         Assert.Equal(DeriveExit.WithheldSomething, exit);
         Assert.Contains("WITHHELD   " + DerivableField.Map, output, StringComparison.Ordinal);
@@ -137,22 +158,73 @@ public class DeriveCliTests
     }
 
     [Fact]
-    public void RUNTIME_COMPRESSION_CANNOT_BE_WITHHELD_AND_THE_REFUSAL_EXPLAINS_WHY()
+    public void RUNTIME_COMPRESSION_IS_SETTLED_BY_RULE_AND_NEVER_ENTERS_WITHHOLDING()
     {
-        // 🔴 It has a DEFAULT. Removing the key leaves the value 1 in place, so "withholding" it would not
-        // withhold anything — it would forge the quieter claim that the run was uncompressed.
+        // 🔴 *** IT HAS A DEFAULT, SO IT CANNOT BE WITHHELD AT ALL: *** removing the key leaves the value
+        // 1 in place, which would not withhold anything - it would forge the quieter claim that the run
+        // was uncompressed. The protection is now STRUCTURAL rather than a guard: no artifact produces
+        // this value, so it is settled by rule before the withholding path is ever reached.
         var (exit, output, written) = Derive(
-            "--submission", "sub.json", "--out", "derived.json", "--withhold-unattributable",
-            "--artifact", $"{DerivableField.Map}=binding.json");
+            "--submission", "sub.json", "--out", "derived.json", "--withhold-unattributable");
+
+        Assert.Equal(DeriveExit.WithheldSomething, exit);
+        Assert.Contains("BY RULE    " + DerivableField.RuntimeCompression, output, StringComparison.Ordinal);
+        Assert.DoesNotContain("WITHHELD   " + DerivableField.RuntimeCompression, output, StringComparison.Ordinal);
+
+        // And it survives into the output, because withholding it was never the answer.
+        var derived = SubmissionDocument.Read(written["derived.json"]);
+        Assert.Contains(DerivableField.RuntimeCompression, derived.DerivableFieldsPresent(), StringComparer.Ordinal);
+    }
+
+    [Fact]
+    public void AN_ARTIFACT_FOR_A_BY_RULE_FIELD_IS_REFUSED_because_no_file_can_be_its_source()
+    {
+        var (exit, output, written) = Derive(
+            "--submission", "sub.json", "--out", "derived.json",
+            "--artifact", $"{DerivableField.RuntimeCompression}=binding.json");
 
         Assert.Equal(DeriveExit.Refused, exit);
-        Assert.Contains("runtimeCompression cannot be withheld", output, StringComparison.Ordinal);
+        Assert.Contains("BAD SOURCE " + DerivableField.RuntimeCompression, output, StringComparison.Ordinal);
+        Assert.Contains("produces no artifact", output, StringComparison.Ordinal);
         Assert.Empty(written);
     }
 
     // ---------------------------------------------------------------------------------------------
     // fixtures
     // ---------------------------------------------------------------------------------------------
+
+    // ---------------------------------------------------------------------------------------------
+    // artifacts, one per KIND
+    // ---------------------------------------------------------------------------------------------
+    //
+    // 🔴 Every artifact used to be `binding.json`, which passed while the deriver only hashed. It does
+    // not any more, and that is the kind check working: a reachable-state field pointed at a binding is
+    // WRONG KIND. One file per kind is now the minimum a derived submission needs.
+
+    /// <summary>The closure the submission's declared storage path must appear in.</summary>
+    private const string ReachableState = """
+    { "blocks": [ { "block": "DemoUnit", "reachableState": [ "Demo_Count", "Demo_Done" ] } ] }
+    """;
+
+    /// <summary>A graph that RAN and found nothing — the earned claim the submission's empty list makes.</summary>
+    private const string ConflictGraph = """
+    { "edges": [] }
+    """;
+
+    /// <summary>A deployment that actually happened. Anything but <c>Ran</c> is a failure report.</summary>
+    private const string DeployResult = """
+    { "outcome": "Ran", "detail": "the wave ran." }
+    """;
+
+    private static string ArtifactFor(string field) => DerivationProducer.KindFor(DeriveCli.DefaultProducerFor(field)) switch
+    {
+        ArtifactKind.Binding => "binding.json",
+        ArtifactKind.ReachableState => "reachable.json",
+        ArtifactKind.ConflictGraph => "conflicts.json",
+        ArtifactKind.DeployResult => "deploy.json",
+        ArtifactKind.TagMap => "tags.json",
+        _ => "binding.json",
+    };
 
     private static (int Exit, string Output, Dictionary<string, string> Written) Derive(
         params string[] args) => DeriveOver(GateCliTests.Good, args);
@@ -177,6 +249,9 @@ public class DeriveCliTests
                 "sub.json" => submission,
                 "binding.json" => GateCliTests.Binding,
                 "tags.json" => GateCliTests.TagMap,
+                "reachable.json" => ReachableState,
+                "conflicts.json" => ConflictGraph,
+                "deploy.json" => DeployResult,
                 _ => throw new FileNotFoundException(path),
             },
             (path, content) => written[path] = content);

@@ -91,6 +91,27 @@ public static class DerivationProducer
     {
         CopyLayerGenerator, ReachableState, SlotConflictDerivation, DeviceGateway, TimeCompression, S7TagMap,
     };
+
+    /// <summary>
+    /// 🔴 <b>WHAT EACH PRODUCER'S ARTIFACT MUST TURN OUT TO BE.</b>
+    ///
+    /// <para>*** MEASURED ON A REAL JOB, TWICE, AND BOTH WOULD HAVE BEEN STAMPED. *** The artifact that
+    /// should have produced the conflict edges was a <c>notComputed</c> report — it resolved none of the
+    /// submission's signals and said so — while the submission declared the edges anyway. The deployment
+    /// artifact read <c>outcome: NotDeployed</c>, its own detail stating the device was not running the
+    /// staged build. Both exist, both are readable, both hash. <b>An artifact being PRESENT is not the
+    /// artifact being an ANSWER.</b></para>
+    /// </summary>
+    public static ArtifactKind KindFor(string producer) => producer switch
+    {
+        CopyLayerGenerator => ArtifactKind.Binding,
+        ReachableState => ArtifactKind.ReachableState,
+        SlotConflictDerivation => ArtifactKind.ConflictGraph,
+        DeviceGateway => ArtifactKind.DeployResult,
+        S7TagMap => ArtifactKind.TagMap,
+        TimeCompression => ArtifactKind.None,
+        _ => ArtifactKind.None,
+    };
 }
 
 /// <summary>
@@ -109,9 +130,78 @@ public static class DerivationHash
     public static string Of(string content)
     {
         ArgumentNullException.ThrowIfNull(content);
-        var bytes = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(content));
-        return Convert.ToHexString(bytes).ToLowerInvariant();
+        return Hex(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(content)));
     }
+
+    /// <summary>
+    /// Lowercase hex SHA-256 of the artifact's ACTUAL BYTES — the strong form.
+    ///
+    /// <para><b>Preferred wherever a byte reader is available</b>, because it closes the gap
+    /// <see cref="Of"/> documents: a change visible only below the text layer (a BOM appearing, an
+    /// encoding that round-trips) leaves the text hash identical. Which form was used is recorded on
+    /// the record itself, so the weaker one is never invisible.</para>
+    /// </summary>
+    public static string OfBytes(byte[] content)
+    {
+        ArgumentNullException.ThrowIfNull(content);
+        return Hex(System.Security.Cryptography.SHA256.HashData(content));
+    }
+
+    private static string Hex(byte[] hash) => Convert.ToHexString(hash).ToLowerInvariant();
+}
+
+/// <summary>
+/// 🔴 <b>HOW HARD THE CLAIM BEHIND A DERIVED FIELD ACTUALLY IS.</b>
+///
+/// <para>*** "DERIVED" WAS ONE UNDIFFERENTIATED WORD, AND IT COVERED TWO VERY DIFFERENT THINGS. *** A
+/// field whose value was RECOMPUTED and matched is evidence; a field merely pointed at a file is a
+/// citation. Both are better than a typed number, and they are not the same, so the gate counts them
+/// separately and says so.</para>
+/// </summary>
+public enum DerivationVerification
+{
+    /// <summary>
+    /// <b>The value was recomputed from the artifact and matched.</b> The strong form — a mismatch
+    /// would have been a refusal, so a record carrying this is a checked claim.
+    /// </summary>
+    Computed = 0,
+
+    /// <summary>
+    /// <b>Settled by a stated rule rather than by recomputation</b>, because nothing computes it. The
+    /// rule is named in the refusal path, so it is auditable — see <c>runtimeCompression</c>, where
+    /// "1 with no declared bounds" is trivially true and "&gt; 1 with no bounds" is refused.
+    /// </summary>
+    ByRule = 1,
+
+    /// <summary>
+    /// <b>Cited to an artifact of the right kind, but not recomputed.</b> Nothing in-harness produces
+    /// the value. Still meaningfully stronger than a typed field — the artifact must exist, be the
+    /// right kind, not be a failure report, and still hash — but it is the weakest of the three and is
+    /// reported as its own count rather than folded in with the others.
+    /// </summary>
+    Attributed = 2,
+}
+
+/// <summary>What an artifact must turn out to BE, before its hash is worth recording.</summary>
+public enum ArtifactKind
+{
+    /// <summary>No artifact at all — the value is settled by rule.</summary>
+    None = 0,
+
+    /// <summary>The coordinator's binding document.</summary>
+    Binding = 1,
+
+    /// <summary><c>converter reachable-state</c> output.</summary>
+    ReachableState = 2,
+
+    /// <summary>A conflict-graph document.</summary>
+    ConflictGraph = 3,
+
+    /// <summary>A serialized loop result, carrying the deployment's own outcome.</summary>
+    DeployResult = 4,
+
+    /// <summary>An S7 tag map.</summary>
+    TagMap = 5,
 }
 
 /// <summary>
@@ -130,12 +220,23 @@ public static class DerivationHash
 /// keeps every refusal path in this assembly testable with no filesystem in the room. <c>null</c> is
 /// therefore "the caller could not read it", which is NOT CHECKED, and never "it matched".</para>
 /// </param>
+/// <param name="Verified">
+/// How hard the claim is — recomputed, settled by rule, or merely cited. <b>Reported as three separate
+/// counts</b> rather than folded into one word; see <see cref="DerivationVerification"/>.
+/// </param>
+/// <param name="HashedOverBytes">
+/// True when the hash was taken over the artifact's actual bytes, false when over its text as read.
+/// <b>Recorded rather than assumed, so the weaker form is never invisible</b> — a text hash cannot see
+/// a change below the text layer, and a reader has to be able to tell which check they got.
+/// </param>
 public sealed record DerivationRecord(
     string Field,
     string Producer,
     string Artifact,
     string DeclaredSha256,
-    string? ObservedSha256)
+    string? ObservedSha256,
+    DerivationVerification Verified = DerivationVerification.Attributed,
+    bool HashedOverBytes = false)
 {
     /// <summary>True when the gate's caller managed to read the artifact at all.</summary>
     public bool ArtifactWasRead => ObservedSha256 is not null;

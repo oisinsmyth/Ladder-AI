@@ -5,5 +5,10 @@ using Harness.Gate;
 return args.Length > 0 && string.Equals(args[0], "stamp", StringComparison.Ordinal)
     ? StampCli.Run(args, Console.Out, File.ReadAllText, File.WriteAllText)
     : args.Length > 0 && string.Equals(args[0], "derive", StringComparison.Ordinal)
-        ? DeriveCli.Run(args, Console.Out, File.ReadAllText, File.WriteAllText)
-        : GateCli.Run(args, Console.Out, File.ReadAllText);
+        // File.ReadAllBytes is passed so the artifact hash is taken over BYTES rather than over text as
+        // read - the stronger form, and the default wherever a real filesystem is available. The text
+        // path remains for callers that only have a text reader, and the record says which was used.
+        ? DeriveCli.Run(args, Console.Out, File.ReadAllText, File.WriteAllText, File.ReadAllBytes)
+        // The same byte reader on the gate side: a record stamped over bytes must be RE-hashed over
+        // bytes, or every derived field reads as stale for a reason nothing to do with the submission.
+        : GateCli.Run(args, Console.Out, File.ReadAllText, File.ReadAllBytes);
