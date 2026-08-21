@@ -137,6 +137,49 @@ public class DeriveComputationTests
     }
 
     // ---------------------------------------------------------------------------------------------
+    // storage — a suffix is not an identity
+    // ---------------------------------------------------------------------------------------------
+
+    [Fact]
+    public void A_CLOSURE_THAT_ONLY_SHARES_A_SUFFIX_DOES_NOT_COUNT_AS_A_MATCH()
+    {
+        // 🔴 *** THE FALSE POSITIVE THIS REPLACED, MEASURED ON A REAL JOB. *** A first cut also indexed
+        // every path with its root dropped, so `iDB_ValveUnderTest.IO.FTC` "matched"
+        // `FB_SiloVessel|ValveDischarge.IO.FTC` - a different location, in a closure covering none of the
+        // block under test. Three of four declarations matched that way against an artifact that mentions
+        // none of them. A suffix is not an identity.
+        //
+        // The submission declares `DemoUnit.Demo_Count`; this closure carries only `SomethingElse.Demo_Count`.
+        var (exit, output, _) = Derive(
+            submission: GateCliTests.Good.Replace(
+                """{ "owner": "DemoUnit", "path": "Demo_Count" }""",
+                """{ "owner": "DemoUnit", "path": "DemoUnit.Demo_Count" }""",
+                StringComparison.Ordinal),
+            reachable: """{ "blocks": [ { "block": "Other", "reachableState": [ "SomethingElse.Demo_Count" ] } ] }""");
+
+        // Not a match, and not an accusation either: the honest answer is that nothing was checked.
+        Assert.True(exit == DeriveExit.Derived, output);
+        Assert.Contains("ATTRIBUTED " + DerivableField.Storage, output, StringComparison.Ordinal);
+        Assert.DoesNotContain("COMPUTED   " + DerivableField.Storage, output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AND_THE_SAME_PATH_SPELLED_WITH_A_BAR_STILL_MATCHES()
+    {
+        // The one normalisation that IS sound: a closure writes `FB_X|A.B` for what a submission writes
+        // as `FB_X.A.B`. Same root, separator only.
+        var (exit, output, _) = Derive(
+            submission: GateCliTests.Good.Replace(
+                """{ "owner": "DemoUnit", "path": "Demo_Count" }""",
+                """{ "owner": "DemoUnit", "path": "FB_Demo.IO.Demo_Count" }""",
+                StringComparison.Ordinal),
+            reachable: """{ "blocks": [ { "block": "FB_Demo", "reachableState": [ "FB_Demo|IO.Demo_Count" ] } ] }""");
+
+        Assert.True(exit == DeriveExit.Derived, output);
+        Assert.Contains("COMPUTED   " + DerivableField.Storage, output, StringComparison.Ordinal);
+    }
+
+    // ---------------------------------------------------------------------------------------------
     // 1.4 — hashed over bytes, and it says so
     // ---------------------------------------------------------------------------------------------
 

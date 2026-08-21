@@ -267,11 +267,7 @@ public static class Recompute
         if (read.Outcome != ComposerReadOutcome.Read)
             return Differs(read.Detail);
 
-        // *** BOTH SIDES ARE INDEXED UNDER THEIR ROOTED FORM AND THEIR SUFFIX. *** The closure
-        // canonicalises an `iDB.<suffix>` reference onto the owning FB, so a storage entry written as
-        // `iDB_X.A.B` and a closure entry written as `FB_X|A.B` are the SAME LOCATION under two
-        // spellings. Comparing the rooted strings alone finds nothing and blames the submission.
-        var reachable = read.Entries.Values.SelectMany(v => v).SelectMany(Forms).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var reachable = read.Entries.Values.SelectMany(v => v).Select(Canonical).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         var paths = declared
             .Where(kv => !string.IsNullOrWhiteSpace(kv.Value?.Path))
@@ -282,24 +278,25 @@ public static class Recompute
             return NotComparable("the submission's storage entries declare no paths.");
 
         var absent = paths
-            .Where(p => !Forms(p.Path).Any(f => reachable.Contains(f)))
+            .Where(p => !reachable.Contains(Canonical(p.Path)))
             .Select(p => $"{p.Signal} -> {p.Path}")
             .OrderBy(s => s, StringComparer.Ordinal)
             .ToArray();
 
-        // 🔴 *** A TOTAL MISS IS NOT 131 FINDINGS - IT IS THE WRONG CLOSURE. ***
+        // 🔴 *** A TOTAL MISS IS NOT N FINDINGS - IT IS THE WRONG CLOSURE, OR TWO VOCABULARIES. ***
         //
-        // Measured on a real job: every declared path was reported absent, because the closure covered a
-        // different part of the program entirely. Reported as a mismatch, that is a spurious accusation
-        // against 131 correct declarations - the same class of false finding the drift-check pairing bug
-        // produced. When the two documents share NO vocabulary at all, the honest verdict is that this
-        // comparison did not run, said out loud, with the likely cause named.
+        // Measured on a real job twice over. Once where every declared path was absent because the
+        // closure covered a different part of the program entirely; and once where the closure names
+        // locations as `FB_X|A.B` while the submission declares them as `iDB_Y.A.B` - the same locations
+        // under names no textual rule can join, because an instance DB's name does not contain its FB's.
+        // Reported as a mismatch either way, that is a spurious accusation against correct declarations.
         if (absent.Length == paths.Length)
         {
             return NotComparable(
-                $"none of the {paths.Length} declared storage path(s) appear in this closure, and the two share no "
-                + "vocabulary at all. That reads as the wrong closure for this submission rather than as every "
-                + "declaration being wrong, so nothing is being asserted about them either way.");
+                $"none of the {paths.Length} declared storage path(s) appear in this closure. Either it was computed over "
+                + "different blocks, or the two documents name locations differently - a closure says `FB_X|A.B` where a "
+                + "submission may say `iDB_Y.A.B`, and an instance DB's name does not contain its FB's, so no textual rule "
+                + "joins them. NOTHING IS BEING ASSERTED ABOUT THESE DECLARATIONS EITHER WAY: this field is cited, not checked.");
         }
 
         return absent.Length == 0
@@ -308,22 +305,21 @@ public static class Recompute
     }
 
     /// <summary>
-    /// The spellings one storage location can legitimately wear: the path as written, and the same path
-    /// with its root dropped — which is what makes an <c>iDB_X.A.B</c> declaration and an
-    /// <c>FB_X|A.B</c> closure entry recognisable as one location.
+    /// 🔴 <b>ONE STORAGE PATH, NORMALISED ONLY FOR THE SEPARATOR — THE ROOT IS NEVER DROPPED.</b>
+    ///
+    /// <para>*** DROPPING THE ROOT WAS A FALSE-POSITIVE FACTORY, AND IT WAS MEASURED. *** A first cut
+    /// also yielded the path with everything before the first dot removed, so that an
+    /// <c>iDB_X.A.B</c> declaration could meet an <c>FB_X|A.B</c> closure entry. It did — and it also
+    /// matched <c>iDB_ValveUnderTest.IO.FTC</c> against <c>FB_SiloVessel|ValveDischarge.IO.FTC</c>, a
+    /// completely different location in a closure that covered none of the block under test. Three of
+    /// four declarations "matched" that way, against an artifact that mentions none of them.</para>
+    ///
+    /// <para><b>A suffix is not an identity.</b> Instance-DB names cannot be mapped to their FB textually
+    /// — an <c>iDB_ValveUnderTest</c> is an instance of <c>FB_Valve</c> — so where the two documents use
+    /// different vocabularies the honest answer is that the comparison could not be made, which is what
+    /// the caller reports. It is not a licence to match on whatever the tail happens to be.</para>
     /// </summary>
-    private static IEnumerable<string> Forms(string path)
-    {
-        yield return path;
-
-        var bar = path.IndexOf('|');
-        if (bar >= 0 && bar < path.Length - 1)
-            yield return path[(bar + 1)..];
-
-        var dot = path.IndexOf('.');
-        if (dot >= 0 && dot < path.Length - 1)
-            yield return path[(dot + 1)..];
-    }
+    private static string Canonical(string path) => path.Replace('|', '.');
 
     /// <summary>Every declared conflict edge must appear in the graph the artifact carries.</summary>
     private static Result CompareConflicts(SubmissionDocument document, string artifact)
