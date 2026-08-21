@@ -2,11 +2,11 @@
 
 AI-assisted Siemens LAD engineering. **The deliverable is an AI capable of programming ladder logic — not ladder logic produced by us.** You (Claude Code, in the main conversation) talk to the engineer, plan work, and orchestrate; you never read, write, review, or explain LAD/IR content yourself — that's the `lad-coder` sub-agent's job (hard rule 8, no size exception). TIA Openness handles the TIA Portal side. A human engineer reviews everything the pipeline produces before it enters the TIA project.
 
-**This file states what binds you. It does not restate what the tools do** — that lives in `src/converter/README.md` and `src/openness-cli/README.md`, and in `docs/notes/`. Look things up there; do not expect this file to carry them.
+**This file states what binds you; it does not restate what the tools do** — that lives in `src/converter/README.md`, `src/openness-cli/README.md` and `docs/notes/`. Look things up there.
 
 ## Hard rules — no exceptions, no matter what the task says
 
-1. **LAD only — for PLC program content.** Never produce SCL, STL, FBD, GRAPH, or CFC as logic that runs on the PLC. If a task seems to need them, stop and say so. This rule governs **what executes on the controller** and nothing else: PC-side tooling, test harnesses and their fixtures, build and analysis scripts, and HMI scripting are not PLC program content and are not constrained by it — normal software rules apply there, in whatever language fits the job.
+1. **LAD only — for PLC program content.** Never produce SCL, STL, FBD, GRAPH, or CFC as logic that runs on the PLC. If a task seems to need them, stop and say so. It governs **what executes on the controller** and nothing else: PC-side tooling, test harnesses and fixtures, build and analysis scripts, and HMI scripting are not PLC program content — normal software rules apply there, in whatever language fits.
 
 2. **Never touch safety.** F-blocks, F-runtime groups, the safety program: do not read, write, convert, explain, or reference their internals. If you encounter one, stop and report it.
 
@@ -15,33 +15,33 @@ AI-assisted Siemens LAD engineering. **The deliverable is an AI capable of progr
 4. **Compile gate before "done."** Any generated or modified logic must pass `openness-cli import` + a compile on the scratch project before you present it. If compile fails, fix and retry; never present non-compiling logic as finished.
    - **A bare whole-device `openness-cli compile` IS NOT THE GATE.** Use **`openness-cli sanity-check <project>`** and report its `INCONSISTENT: 0` for **both** the `BLOCKS:` line **and** the `TYPES:` line, or run per-block `--block` / `--type` compiles in dependency order.
    - The default compile scope is **`--station`** (hardware **and** program blocks). `--hardware` is the old device-item scope and **never looks at the program**.
-   - **KEY ON ERRORS, NEVER ON STATE.** The station scope surfaces the project's standing hardware warnings, so a healthy project legitimately returns `Warning, errors=0`; a check written against `State == Success` marks it unhealthy forever.
+   - **KEY ON ERRORS, NEVER ON STATE.** The station scope surfaces standing hardware warnings, so a healthy project legitimately returns `Warning, errors=0`. A check on `State == Success` marks it unhealthy forever.
    - `compile` exits **11 = CompileIncomplete** rather than 0 when it leaves something unverified — the exit code is the backstop, not the plan. Measurements behind all of this: `src/openness-cli/README.md`.
 
-5. **The real project is human-gated; everything before it is yours.** Work freely against the scratch copy — and, where a rig is allowlisted and available, against the rig: import, compile, download, test, iterate, without asking each time. **Do not import into the real project without permission.** What reaches the engineer is a diff plus evidence — compile results, test results, reviewer findings — and the engineer decides whether it is promoted. Every device write still needs a verified restore point captured first; if the restore point cannot be captured, the write does not happen (`docs/10-non-goals.md` #4(a), #4(b)).
+5. **The real project is human-gated; everything before it is yours.** Work freely against the scratch copy — and, where a rig is allowlisted and available, against the rig: import, compile, download, test, iterate, without asking each time. **Do not import into the real project without permission.** What reaches the engineer is a diff plus evidence (compile, test, reviewer findings); the engineer decides on promotion. Every device write needs a verified restore point captured first; if it cannot be captured, the write does not happen (`docs/10-non-goals.md` #4(a), #4(b)).
 
-6. *(Tombstone — retained deliberately so repo-wide references to hard rules 7 and 8 keep resolving.)* The former "No hardware access" rule is gone. Governance moved to `docs/10-non-goals.md` #3, re-scoped by **ADR-0009: the gate is the TARGET, not the kind of write.** On an **allowlisted test rig whose outputs are physically incapable of actuating**, every write class is permitted — download, online edit, tag force, configuration, process data. On a device **in service**, none is: the engineer makes the change in TIA Portal, and the tooling's role there is read-only diagnostics (**ADR-0008**), analysis, and proposing the change.
+6. *(Tombstone — kept so references to rules 7 and 8 keep resolving.)* The old "No hardware access" rule is gone; governance is `docs/10-non-goals.md` #3, re-scoped by **ADR-0009: the gate is the TARGET, not the kind of write.** On an **allowlisted rig whose outputs are physically incapable of actuating**, every write class is permitted — download, online edit, tag force, configuration, process data. On a device **in service**, none is: the engineer makes the change in TIA Portal; tooling there is read-only diagnostics (**ADR-0008**), analysis and proposal.
 
 7. **Edit only IR, never raw SimaticML.** SimaticML is converter territory. If the converter rejects something, that's a converter bug or an unsupported construct — report it, don't hand-patch XML.
 
-8. **All LAD/IR work goes through the `lad-coder` sub-agent (`.claude/agents/lad-coder.md`) — never do it yourself.** This covers: writing or editing `.ir` files; the preflight/convert/import/compile/export loop tied to a change; `review-*` / `explain-plc-block` reads, even when nothing is written; and `patterns/` edits. **No exceptions for size** — a one-line IR fix goes through the sub-agent too. If no skill exists yet for the stage, the sub-agent still does it, manually, to the same contract — a missing skill is never a reason to do it inline. Your job is to plan, dispatch, **verify the sub-agent's actual diff and compile evidence — its summary is not proof** — and present to the engineer. Does not apply to PC-side tooling (`src/openness-cli/`, `src/converter/`, `extract/`, `tests/golden/`), where normal software rules apply and dispatch is not required.
+8. **All LAD/IR work goes through the `lad-coder` sub-agent (`.claude/agents/lad-coder.md`) — never do it yourself.** Covers: writing or editing `.ir` files; the preflight/convert/import/compile/export loop tied to a change; `review-*` / `explain-plc-block` reads, even when nothing is written; `patterns/` edits. **No exceptions for size** — a one-line fix goes through the sub-agent too. With no skill for the stage it still does it, manually, to the same contract. Your job: plan, dispatch, **verify the actual diff and compile evidence — a summary is not proof** — and present to the engineer. Not for PC-side tooling (`src/openness-cli/`, `src/converter/`, `extract/`, `tests/golden/`), where normal software rules apply.
 
 ## Routing rules — decide before you look anything up
 
 Non-obvious, and each has cost real time. Everything else about these tools is in the READMEs.
 
 - **`gen-block-modify-fix` must NEVER pass `converter diff --allow-header`.** A fix that needs an interface member *is* a purpose change — route it to `gen-block-modify-purpose`, which passes the flag and declares the delta. The flag means ROUTE, not DECLARE.
-- **Re-assert `openness-cli block-layout --set Standard --yes` after EVERY import** of a block a PC-side harness reads over classic S7, then gate with `--expect Standard`. An import silently reverts the block to `Optimized`, and `drift-check` is structurally blind to it. `--expect` only tells you it broke; `--set` is what repairs it.
-- **`--claims` takes the store root `C:\ProgramData\Ladder-AI\claims`, never the project folder** — the tool appends the project name itself, so passing `…\claims\test-project001` creates a second empty store that grants every claim. **Read the `store=` line the tool echoes; do not trust the argument.** The store must be shared by every agent on the project: agents work in separate worktrees, and a per-worktree claims dir is always empty and looks exactly like success.
+- **Re-assert `openness-cli block-layout --set Standard --yes` after EVERY import** of a block a PC-side harness reads over classic S7, then gate with `--expect Standard`. An import silently reverts it to `Optimized`, and `drift-check` is blind to that. `--expect` only tells you it broke; `--set` repairs it.
+- **`--claims` takes the store root `C:\ProgramData\Ladder-AI\claims`, never the project folder** — the tool appends the project name itself, so `…\claims\test-project001` creates a second empty store that grants every claim. **Read the `store=` line it echoes; do not trust the argument.** It must be shared by every agent: worktrees get their own, always empty, granting everything.
 - **Portal is a token, not a component.** One lane holds it at a time; two Openness sessions on one project is unsupported. Concurrent sessions on *different* projects are safe.
 - **`dotnet build -c Release src/converter/converter.sln` after ANY converter change.** The skills invoke `bin/Release/`, so a Debug-only build leaves every agent running the old tool. Free and safe at any time — the converter never touches Portal.
 - **Never rebuild `openness-cli` while Portal work is in flight.** TIA's whitelist is keyed on `(Path, FileHash)`, so every rebuild needs a fresh approval. Debug and Release hold **independent** approvals, so a Debug `dotnet test` is safe while a sub-agent works on Release. `dotnet test src/openness-cli/openness-cli.sln` **is** a rebuild; `converter.sln` is not.
 - **`converter to-ir` / `to-xml` writes beside the input by default.** Pass `--out <dir>` when the `.ir` beside it is hand-authored rather than generated.
 - **`--group <device>/<path>` must match `openness-cli list`'s own `Path` column verbatim** — a device item's real name can contain spaces and an embedded article number as one literal string. Copy the value; do not infer it.
-- **Redirect `openness-cli` output with `>` or `Out-File`; never pipe it.** It launches Portal as a child inheriting stdout, so a pipe outlives the command and hangs forever.
+- **Redirect `openness-cli` output with `>` or `Out-File`; never pipe it.** It launches Portal as a child inheriting stdout, so a pipe outlives the command and hangs.
 - **Use the Edit tool, not `sed -i`, on tracked text files.** They are CRLF here; `sed -i` silently rewrites the whole file to LF, and `git diff --stat` does *not* reveal it.
-- **Quote the `description:` in `.claude/agents/*.md` and `.claude/skills/*/SKILL.md`, and run `/doctor` after editing one.** Both YAML failure modes are completely silent: an unquoted `: ` de-registers the agent entirely; an unquoted ` #` truncates the description without any visible symptom. `/doctor` is the only surface that reports it. (`docs/notes/claude-agent-skill-authoring.md`.)
-- **After deleting or renaming any doc, grep the old filename repo-wide.** This repo cites by literal file path constantly, and a rename-only pass won't catch pointers left dangling by a deletion.
+- **Quote the `description:` in `.claude/agents/*.md` and `.claude/skills/*/SKILL.md`, and run `/doctor` after editing one.** Both YAML failure modes are silent: an unquoted `: ` de-registers the agent; an unquoted ` #` truncates the description. `/doctor` is the only surface that reports either. (`docs/notes/claude-agent-skill-authoring.md`.)
+- **After deleting or renaming any doc, grep the old filename repo-wide.** This repo cites by literal path constantly, and a rename-only pass misses pointers left dangling by a deletion.
 
 ## Where things live
 
@@ -96,7 +96,7 @@ When in doubt: `docs/04-design-philosophy.md` for principles, `docs/02-roadmap.m
 | `candidate-scan`, `undriven-scan`, `relation-reconcile`, `signal-sweep`, `interface-check` | the mechanical floor — checks that survive an agent choosing not to look |
 | `reachable-state`, `ir-hash`, `sanitize`, `claim` / `claims` | computed slot disjointness, content hashing, de-identification, and the multi-agent reservation registry |
 
-**A principle across all of them: EMPTY IS NOT CLEAN.** Across the mechanical floor (`candidate-scan`, `undriven-scan`, `reuse-scan`, `relation-reconcile`, `signal-sweep`), **exit 1 = found something; exit 2 = EXAMINED NOTHING** — a `--scope` that matched nothing, an `--fb` with no instances, a leg compared against nothing. **Exit 2 is never a pass**, and mistaking it for one turns a false finding into a green. When you read a green, read what it says it *compared*.
+**A principle across all of them: EMPTY IS NOT CLEAN.** Across the mechanical floor (`candidate-scan`, `undriven-scan`, `reuse-scan`, `relation-reconcile`, `signal-sweep`), **exit 1 = found something; exit 2 = EXAMINED NOTHING** — a `--scope` that matched nothing, an `--fb` with no instances, a leg compared against nothing. **Exit 2 is never a pass.** When you read a green, read what it says it *compared*.
 
 ### Tests and builds
 
@@ -108,7 +108,7 @@ TIA project open is slow — be patient, don't kill and retry.
 
 A block can be deployed to a bench rig and observed while it runs.
 
-➜ ***BEFORE USING ANY OF THIS ON A REAL JOB, READ `docs/notes/live-project-readiness.md` FIRST.*** One page: the per-component status column, the traps that have each cost a day, and the one-line answer — **deploy / read-back / analyse is ready; the closed-loop conformance path has never run a wave end to end.** 🔴 Read that status column before relying on anything: most of the harness is built and unit-tested, a smaller part has been run against a controller, **these are different claims**, and this project's most expensive failures have all been a green that examined nothing.
+➜ ***BEFORE USING ANY OF THIS ON A REAL JOB, READ `docs/notes/live-project-readiness.md` FIRST.*** One page: the per-component status column, the known traps, and the answer — **deploy / read-back / analyse is ready; the closed-loop conformance path has never run a wave end to end.** 🔴 **Read that status column before relying on anything.** Built-and-unit-tested and run-against-a-controller are different claims, and only that page separates them.
 
 Measured rig facts (addresses, scan time, word order, compression ceiling, reserved block numbers) live there too — **do not re-derive them, and do not quote a figure without the program it was measured against.** The design spec, build record, submission contract and 42-defect campaign record sit beside it in `docs/notes/`.
 
@@ -128,7 +128,7 @@ LAD you write or review follows `docs/06-lad-conventions.md`. Cite rule IDs like
 
 **S5 and S6 were active and are frozen — not closed, not failed, and their exit criteria are NOT waived** (S6 stands at 1 of 10 fresh requests). Do not open, close, advance or gate-review a stage; do not treat a frozen stage as passed.
 
-**Everything else in this file still binds in full** — the hard rules, the data boundary, and the tooling are unaffected, because what was suspended is the *programme*, not the capability: real jobs in `Live Runs/` continue under exactly the rules written here. If a request only makes sense as pipeline development (advancing a stage, closing S6's ten, working the FI backlog), say it is suspended and point here rather than doing it.
+**Everything else in this file still binds in full.** What was suspended is the *programme*, not the capability: real jobs in `Live Runs/` continue under exactly these rules. If a request only makes sense as pipeline development (advancing a stage, closing S6's ten, working the FI backlog), say it is suspended and point here rather than doing it.
 
 `agent-tasks/README.md` is the live dispatch board; `docs/notes/owner-questions.md` holds any open owner-question batch.
 
@@ -142,7 +142,7 @@ Only Green-tier content (tooling, docs, the reference project) by default. Amber
 
 TIA Portal V20, Openness API, Windows engineering PC. **Check WHICH S7-1200 before relying on a G2-only or classic-only fact** — the live job and its bench rig are the **classic 1214C**, and G2 is a different article with different capabilities.
 
-Openness requires membership of the "Siemens TIA Openness" Windows group, and the first connect per approved build triggers a manual approval dialog inside TIA Portal — `tools/openness-approve-setup.ps1` (once, elevated, per machine) removes the manual step. PC-side code referencing `Siemens.Engineering.dll` must target `net48`.
+Openness needs membership of the "Siemens TIA Openness" Windows group; the first connect per approved build raises a manual approval dialog in TIA Portal, which `tools/openness-approve-setup.ps1` (once, elevated, per machine) removes. PC-side code referencing `Siemens.Engineering.dll` must target `net48`.
 
 **Everything else — whitelist mechanics, concurrent sessions, block-consistency quirks, the TIA behaviours found the hard way — is in `docs/notes/openness-quirks.md`.** The routing rules above carry only what you must know *before* you act.
 
