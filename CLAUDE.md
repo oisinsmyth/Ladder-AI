@@ -87,12 +87,12 @@ When in doubt: `docs/04-design-philosophy.md` for principles, `docs/02-roadmap.m
 | `to-ir` / `to-xml` | SimaticML ↔ IR. Auto-detects block / DB / UDT / tag table. `--out`, `--no-sidecar`, `--allow-blind-types` |
 | `preflight` | static pre-import checks — a filter **before** the compile gate, never a substitute |
 | `review` | mechanical convention checks; authoritative rule list is `ReviewRunner.AllRuleIds` |
-| `digest` | compact structural orientation; never review input. `--fingerprint` collapses copy-pasted networks |
+| `digest` | compact structural orientation; never review input. Takes **files**, not a dir. `--fingerprint` adds a per-network `SIG:` line — output grows, you compare them |
 | `tagstatus` | classify names against the export — the hard-rule-3 anti-laundering gate |
 | `diff` | network-level IR invariance. `--only`, `--allow-header`; see the routing rule |
 | `compare` | Normalizer-compare two SimaticML exports — the confirm loop's judgement half |
 | `drift-check` | ir ↔ simatic-ml export drift. `--complete` declares the exports dir the whole picture |
-| `cross-check`, `trace`, `reuse-scan`, `target-scan` | whole-project reference facts, REQ traces, reuse-first and new-block gap hunting |
+| `cross-check`, `trace`, `reuse-scan`, `target-scan` | whole-project reference facts, REQ traces, reuse-first and new-block gap hunting. `reuse-scan` is query-shaped: `--project` alone exits 1, it needs a `--tag`/`--kind` |
 | `candidate-scan`, `undriven-scan`, `relation-reconcile`, `signal-sweep`, `interface-check` | the mechanical floor — checks that survive an agent choosing not to look |
 | `reachable-state`, `ir-hash`, `sanitize`, `claim` / `claims` | computed slot disjointness, content hashing, de-identification, and the multi-agent reservation registry |
 
