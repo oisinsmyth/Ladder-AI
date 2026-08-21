@@ -74,6 +74,44 @@ a hazard.
 a recoverable mistake and an unrecoverable one, and #4(b) would forbid the write outright — as would
 `docs/10` #3 and ADR-0009, which put a device in service out of scope entirely.
 
+## What actually happened, 2026-08-21
+
+The write this page covers went ahead and completed.
+
+- **Baseline captured first:** `export-all --tagtables` of the rig project → **125 exported, 0
+  refused, 0 failed, COMPLETE**, into `~/.ladder/restore-points/2026-08-21-testenviroment/`. That
+  directory is the one `FileRestorePointStore` documents as the store's home and which had never
+  existed on this machine until now.
+- **Folder pre-flight first:** `download-probe --to-folder` reached the download's own compile — the
+  one `sanity-check`, `compile --block`, the device compile and `compile-all` all reported clean
+  through while a real download failed — and returned **exit 0**, `ConsistentBlocksDownload →
+  Answered`. Its verdict correctly read *"NO — NOTHING REACHED ANY CONTROLLER (this was a FOLDER
+  run)"*, which is the 2026-08-13 defect's fix working.
+- **The download:** `--options Software --disruptive`, exit 0. **53 item(s) reported loaded BY
+  NAME**, `TRANSFER VERDICT: TRANSFERRED`, `run state: Stopped → Started`. Read from the load
+  manifest, never from `state=Success` — which has reported success on a run that transferred
+  nothing.
+- **Confirmed by an independent read, not by inference:** `rig-read` over classic S7comm (a
+  different transport from the download's own report) returned **`state : Running (8)`**, order code
+  `6ES7 214-1AG40-0XB0`, 74 ms round trip.
+
+**A state change worth knowing:** the rig now carries the S6 sandbox program, not the live job's
+harness program. Restoring the latter is the baseline above, by the documented delete-all →
+`import-all` → `compile-all` → `sanity-check` route.
+
+### Incidental finding — the rig's identity check can never pass as configured
+
+`rig-read` exited **4**, and not because of this deploy. The device-allowlist entry declares a
+serial number, and an S7-1200 over classic S7comm reports its **order code** while this CPU refuses
+SZL 0x001C — so no configured source can read a serial and the check cannot pass. The tool says so
+plainly and names the two fixes (a `marker` block naming a DB the program publishes an identifier
+in, or `useCpuInfoSerial`), with the right warning attached: **do not remove the serial to make it
+pass**, because the order code is identical across every unit of the model, so an entry without a
+serial verifies a model and not a device.
+
+Unrelated to the restore-point gap, but it means `rig-read`'s non-zero exit is currently expected on
+this rig and must not be read as a failed deploy.
+
 ## What would close it
 
 A `ProgramAndData` restore-point store: capture retentive areas and DB actual values off the
