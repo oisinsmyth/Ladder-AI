@@ -7,13 +7,30 @@ as-is.
 
 **Pick the model before you dispatch — this is the dispatcher's call, not the agent's.** Judgement
 work keeps the inherited model: `lad-coder`, `hmi-designer`, `assertion-enumerator`, and anything
-reviewing. Mechanical work — grep sweeps, file discovery, doc inventories, "which files mention X" —
-runs on a cheaper, faster model, passed per dispatch. It returns sooner as well as cheaper, and the
-telemetry says reasoning time is the bottleneck (`docs/notes/orientation-cost-roadmap.md`), so this
-is one of the few levers that moves the wall clock. **No agent file pins a model**, deliberately:
-the three above are all judgement work, and a pinned model there is only a way to get it wrong.
-Caveat: if a requested model is unavailable to the account, the **parent** model runs instead — the
-failure direction is expensive, not cheap, so check what came back rather than assuming.
+reviewing. **No agent file pins a model**, deliberately: those three are all judgement work, and a
+pinned model there is only a way to get it wrong.
+
+A cheaper model is for **retrieving a known literal pattern** — "which files contain this exact
+string". It is **not** for **classifying against a fuzzy criterion**, even when the task is phrased
+as a search. The line is whether the agent has to *decide what counts*.
+
+**This was measured on 2026-08-21, and the cheap side lost.** The same sweep prompt was run twice.
+Both runs returned an identical, correct list of 13 files matching a literal string — the retrieval
+half. On the half that required judging *"is this an instruction to read a large file in full"*,
+where the wording varies and each candidate needs a size check, the cheap run reported **"No
+instances found"** and the control found five, including the largest orientation cost in the repo
+(a 117 KB contract, read unscoped, every run). It did not report a smaller number; it reported
+none.
+
+**Treat a cheap model's "no hits" as UNPROVEN, never as clean** — the same rule as the mechanical
+floor's exit 2. An under-search and a clean result are the same shape.
+
+The economics did not favour it either: the cheap run spent 37 tool calls to the control's 15, for
+13% fewer tokens and 75 seconds saved. Thrashing ate most of the saving. Tier for cost only where
+the task is genuinely literal, and never where a false negative is expensive.
+
+Caveat on the mechanism: if a requested model is unavailable to the account, the **parent** model
+runs instead — the failure direction is expensive, not cheap, so check what came back.
 
 ---
 
