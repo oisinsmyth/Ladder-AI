@@ -24,7 +24,8 @@ reference is worth splitting out" point.)
    is committed sidecar-*less* — `to-ir` omits the sidecar and `to-xml` re-derives it on the way back to
    XML (ADR-0005, Accepted, which **retired** the old D-6 "can't add a statement to a stored sidecar"
    problem, `docs/notes/deferred-items.md` D-6). So for the common case the loop is just: keep your readable
-   edit → `converter to-xml` (derive is the default; `--synthesize` forces it) → import → compile →
+   edit → `converter to-xml --project <ir-dir> --out <staging>` (derive is the default; `--synthesize`
+   forces it) → import → compile →
    re-export → `to-ir`. There is no stored sidecar to strip.
    - **PRE-CHECK — the residual limit is the still-unsynthesizable construct set, not the old gap list.**
      Re-deriving requires the ENTIRE block to be within the synthesizable subset (it re-derives every
@@ -33,7 +34,11 @@ reference is worth splitting out" point.)
      synthesize fine; all three test-project001 FBs synthesize byte-exact and are committed readable-only.
      What genuinely remains out of subset is **`Limit`/`Wait`/`FillBlockI`/`Modbus*`**: a block using one of
      those still carries a **stored** sidecar and can't be re-derived, so its compile gate can't be reached.
-     Check `converter preflight`'s `[convert]` line up front; if the block hits one, report it as the
+     Check for that set up front by grepping the IR for `Limit`/`Wait`/`FillBlockI`/`Modbus*` and, if it
+     is clean, by running `converter to-xml --project <ir-dir> --out <staging>` and reading the exit code.
+     *(Corrected 2026-08-21: this said to check "`converter preflight`'s `[convert]` line". **There is no
+     `[convert]` line** - preflight emits `FILE`/`NAME`/`CLEAN`/`SUMMARY` and nothing else, so the
+     instruction could not be followed as written.)* If the block hits one, report it as the
      converter gap it is — the fix is **adding that construct to synthesis** (guarded by the parity harness),
      **not** the retired D-6 scoped merge — don't force it.
    - Re-deriving regenerates every network's sidecar UIds, which is fine for the *invariance check* (it reads
@@ -79,7 +84,7 @@ reference is worth splitting out" point.)
    remainder is **empty**, and `INVARIANCE OK` proves nothing at all — it says so
    (`NOTHING WAS PROVEN`). Same shape as `drift-check`'s `COMPARED: <n>`: *an invariance claim over an
    empty remainder is another empty-is-not-clean.* **Read that line before quoting an exit 0 as proof.**
-6. **Compile gate** (hard rule 4): `converter preflight` (zero findings) → import to the **scratch** project
+6. **Compile gate** (hard rule 4): `converter preflight <file> --project <ir-dir>` (zero findings) → import to the **scratch** project
    → `openness-cli compile` clean. An **FB with multi-instance timers compiles only after its instance DB
    exists** — `openness-cli create-instance-db` first if there isn't one. Playbook first on any failure;
    claim the `agent-tasks/README.md` Portal queue before import/compile.
