@@ -100,6 +100,16 @@ now a file the tools wrote, not a re-read of your work.**
 }
 ```
 
+**Two fields, for the two ways a gate legitimately is not a pass.** Neither buys a green:
+
+- `"deferred": "<why>"` **instead of** `exit` — the gate did not run (Portal withheld, run split).
+  **Still exits 1**, but names which and why rather than reading like one you left out. "DEFERRED"
+  in `tool` declares nothing.
+- `"transient": "<why>"` **alongside** `exit` — it ran, failed, was superseded (the post-import
+  cascade). Context, not gated; does **not** satisfy a required gate, so the passing one must exist.
+
+Both need a reason, or it is an omission with a field name on it.
+
 Paste the tools' **raw `--json`**, not a summary of it — nearly every tool here emits it, and the
 whole point is that the numbers are theirs and not yours. `preflight` and a compile gate are always
 required, and `diff --only` additionally when `kind` is `modify` — a new block has nothing to diff

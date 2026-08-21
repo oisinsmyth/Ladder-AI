@@ -218,6 +218,85 @@ def db_file_cannot_be_hash_claimed():
 
 # --- it cannot run -----------------------------------------------------------------
 
+def declared_deferral_is_reported_and_still_fails():
+    """The whole point: a split run can now produce a hand-back that SAYS what it deferred,
+    without that becoming a way to get a green."""
+    doc = good_doc(real_hash())
+    doc["checks"] = [c for c in doc["checks"] if "sanity-check" not in c["tool"]]
+    doc["checks"].append({"tool": "openness-cli sanity-check",
+                          "deferred": "Portal withheld by the dispatcher; IR half only"})
+    code, out, _ = run(doc)
+    assert_eq(code, EXIT_PROBLEMS, "a deferred gate is NOT a pass")
+    assert_in("DEFERRED, declared rather than missing", out, "its own section")
+    assert_in("Portal withheld", out, "the reason is shown")
+    assert "required gate absent" not in out, \
+        "a declared deferral must not also read as absent - that was the old, wrong output"
+
+
+def deferral_without_a_reason_fails():
+    doc = good_doc(real_hash())
+    doc["checks"] = [c for c in doc["checks"] if "sanity-check" not in c["tool"]]
+    doc["checks"].append({"tool": "openness-cli sanity-check", "deferred": "  "})
+    code, out, _ = run(doc)
+    assert_eq(code, EXIT_PROBLEMS, "exit code")
+    assert_in("just an omission", out, "the reason")
+
+
+def deferral_carrying_an_exit_fails():
+    """It either ran or it did not. Both would let a real result hide behind a deferral."""
+    doc = good_doc(real_hash())
+    doc["checks"].append({"tool": "openness-cli compile", "exit": 0,
+                          "deferred": "did not run"})
+    code, out, _ = run(doc)
+    assert_eq(code, EXIT_PROBLEMS, "exit code")
+    assert_in("either ran or it did", out, "the reason")
+
+
+def the_word_deferred_in_tool_launders_nothing():
+    """THE SUBSTRING TRAP. Required gates are matched by substring over tool names, so a
+    marker written into `tool` satisfies the token test. It must still fail."""
+    doc = good_doc(real_hash())
+    doc["checks"] = [c for c in doc["checks"] if "sanity-check" not in c["tool"]]
+    doc["checks"].append({"tool": "openness-cli sanity-check DEFERRED (portal busy)"})
+    code, out, _ = run(doc)
+    assert_eq(code, EXIT_PROBLEMS, "a marker in `tool` declares nothing")
+    assert_in("no exit code recorded", out, "it fails as an unrecorded exit, not as a deferral")
+    assert "DEFERRED, declared rather than missing" not in out, \
+        "a string in `tool` must never reach the deferral bucket"
+
+
+def transient_is_context_and_does_not_gate():
+    doc = good_doc(real_hash())
+    doc["checks"].append({"tool": "openness-cli sanity-check (post-import cascade)",
+                          "exit": 9,
+                          "transient": "ordinary dependent-block cascade, cleared by the "
+                                       "recompile recorded above"})
+    code, out, _ = run(doc)
+    assert_eq(code, EXIT_OK, "a superseded en-route failure must not gate")
+    assert_in("ran and failed en route", out, "its own section")
+    assert_in("VERIFIED", out, "verdict")
+
+
+def transient_does_not_satisfy_a_required_gate():
+    """The structural protection against relabelling a genuine failure: the real passing
+    gate must still be present."""
+    doc = good_doc(real_hash())
+    doc["checks"] = [c for c in doc["checks"] if "sanity-check" not in c["tool"]]
+    doc["checks"].append({"tool": "openness-cli sanity-check", "exit": 9,
+                          "transient": "cascade"})
+    code, out, _ = run(doc)
+    assert_eq(code, EXIT_PROBLEMS, "exit code")
+    assert_in("required gate absent", out, "a transient check is not the gate")
+
+
+def transient_without_a_reason_fails():
+    doc = good_doc(real_hash())
+    doc["checks"].append({"tool": "openness-cli compile", "exit": 9, "transient": ""})
+    code, out, _ = run(doc)
+    assert_eq(code, EXIT_PROBLEMS, "exit code")
+    assert_in("transient with no reason", out, "the reason")
+
+
 def wrong_schema_is_exit_2():
     code, out, err = run({"schema": "something-else", "files": [], "checks": []})
     assert_eq(code, EXIT_NOT_VERIFIED, "exit code")
@@ -255,6 +334,13 @@ CASES = [
     ("a non-zero error counter is refused", error_counter_fails, True),
     ("Warning state with errors=0 still verifies", warning_state_does_not_fail, True),
     ("a DB hash claim is refused", db_file_cannot_be_hash_claimed, True),
+    ("a declared deferral is reported and still fails", declared_deferral_is_reported_and_still_fails, True),
+    ("a deferral with no reason fails", deferral_without_a_reason_fails, True),
+    ("a deferral carrying an exit code fails", deferral_carrying_an_exit_fails, True),
+    ("the word DEFERRED in `tool` launders nothing", the_word_deferred_in_tool_launders_nothing, True),
+    ("a transient check is context and does not gate", transient_is_context_and_does_not_gate, True),
+    ("a transient check does not satisfy a required gate", transient_does_not_satisfy_a_required_gate, True),
+    ("a transient with no reason fails", transient_without_a_reason_fails, True),
     ("a wrong schema exits 2", wrong_schema_is_exit_2, False),
     ("malformed JSON exits 2", malformed_json_is_exit_2, False),
     ("a missing evidence file exits 2", missing_file_is_exit_2, False),

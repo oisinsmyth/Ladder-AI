@@ -9,8 +9,25 @@ So the agent writes what the tools said, and this reads it.
     python tools/check-agent-evidence.py <path-to-evidence.json>
 
 Exit 0 = every gate in the file passed and every hash still matches. Exit 1 = a gate
-failed, a hash drifted, or a required gate is absent. Exit 2 = the file could not be
-read or is not this schema, so NOTHING WAS VERIFIED.
+failed, a hash drifted, a required gate is absent, or a gate was DEFERRED. Exit 2 = the
+file could not be read or is not this schema, so NOTHING WAS VERIFIED.
+
+TWO FIELDS FOR THE TWO WAYS A GATE LEGITIMATELY DOES NOT READ AS A PASS:
+
+  `"deferred": "<why>"` on a check - it did not run, and the run says so. A split run (the
+  Portal-free half, which agent-tasks/README.md explicitly supports) could not produce a
+  verifiable hand-back at all before this, and the only routes to green were to fabricate
+  a compile entry or name a check "compile" with exit 0. **The exit stays 1.** A deferred
+  gate is not a pass; the declaration only makes the report say WHICH and WHY rather than
+  reading identically to a gate somebody quietly omitted. Carries no `exit`.
+
+  `"transient": "<why>"` on a check - it ran, failed, and was superseded. The post-import
+  dependent-block cascade exits 9 and clears on the recompile that follows. Reported as
+  context, not gated. It does NOT satisfy a required gate, so the real passing one must
+  still be there - which is what stops this relabelling a genuine failure.
+
+Both require a reason. A deferral or a transient without one is just an omission with a
+field name on it.
 
 WHAT THIS DELIBERATELY DOES NOT DO. It does not judge the logic, re-derive the diff, or
 form an opinion on whether the change was a good idea. Those are the reviewer's job and
@@ -74,6 +91,8 @@ KINDS = ("new", "modify")
 
 out = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
 problems = []
+deferred = []   # (tool, why) - declared, not run. Keeps the exit NON-zero.
+transient = []  # (tool, exit, why) - ran, failed en route, superseded. Context only.
 
 
 def fail(msg):
@@ -116,7 +135,11 @@ if not checks:
     fail("evidence carries ZERO checks - nothing was gated")
 
 # --- an absent gate is not a passed gate -------------------------------------------
-seen = " ".join(str(c.get("tool", "")) for c in checks).lower()
+# A DEFERRED check counts as present here (the gate is named and accounted for), so the
+# report says "deferred" rather than the misleading "absent". A TRANSIENT one does NOT -
+# a gate that ran and failed en route is not the gate; the real passing one must exist.
+seen = " ".join(str(c.get("tool", "")) for c in checks
+                if not c.get("transient")).lower()
 required = list(GATES_ALWAYS) + (list(GATES_MODIFY) if kind == "modify" else [])
 for label, tokens in required:
     if not any(t in seen for t in tokens):
@@ -125,10 +148,49 @@ for label, tokens in required:
 # --- exit codes --------------------------------------------------------------------
 for check in checks:
     tool = str(check.get("tool", "<unnamed>"))
+
+    # DECLARED DEFERRAL. A run may legitimately be split - agent-tasks/README.md says the
+    # IR half is exclusive of nothing, so a Portal-free half is a supported shape. Before
+    # this existed such a run could not produce a verifiable hand-back at all, and the only
+    # routes to green were to fabricate a compile entry or name a check "compile" with
+    # exit 0. Both launder an unrun gate into a passed one.
+    #
+    # THE EXIT STAYS NON-ZERO. A deferred gate is not a pass and this must never become a
+    # way to get one. What changes is only that the report distinguishes
+    # deferred-and-declared from silently-missing - two different facts that used to
+    # produce the same output. The declaration must be THIS FIELD: writing "DEFERRED" into
+    # `tool` declares nothing, and still fails below for having no exit code.
+    if "deferred" in check:
+        why = str(check.get("deferred") or "").strip()
+        if not why:
+            fail("%s: deferred with no reason - a deferral without one is just an omission"
+                 % tool)
+        elif "exit" in check:
+            fail("%s: declared deferred AND carries an exit code - it either ran or it did "
+                 "not" % tool)
+        else:
+            deferred.append((tool, why))
+        continue
+
     if "exit" not in check:
         fail("%s: no exit code recorded - an unrecorded exit is not a pass" % tool)
         continue
     code = check.get("exit")
+
+    # RAN AND FAILED EN ROUTE. The ordinary post-import dependent-block cascade exits 9 and
+    # is cleared by the recompile that follows; both real runs hit it and had nowhere to put
+    # it, so one used a free-form `notes` array that nothing reads. Recorded as context, not
+    # as a gate - and because a transient check is excluded from the required-gate scan
+    # above, the real passing gate must still be present. That is what stops this being a
+    # way to relabel a genuine failure.
+    if "transient" in check:
+        why = str(check.get("transient") or "").strip()
+        if not why:
+            fail("%s: marked transient with no reason" % tool)
+        else:
+            transient.append((tool, code, why))
+        continue
+
     if code == 2:
         fail("%s: exit 2 = EXAMINED NOTHING. That is never a pass." % tool)
     elif code != PASS_EXIT:
@@ -224,7 +286,23 @@ out.write("skill                          : %s\n"
 out.write("files touched                  : %d\n" % len(files))
 out.write("hashes recomputed here         : %d\n" % checked_hashes)
 out.write("gates recorded                 : %d\n" % len(checks))
+out.write("deferred (declared, not run)   : %d\n" % len(deferred))
+out.write("transient (ran, superseded)    : %d\n" % len(transient))
 out.write("PROBLEMS                       : %d\n" % len(problems))
+
+if transient:
+    out.write("\n--- ran and failed en route, superseded by a later passing gate ---\n")
+    for tool, code, why in transient:
+        out.write("  %s (exit %s)\n      %s\n" % (tool, code, why))
+
+if deferred:
+    out.write("\n--- DEFERRED, declared rather than missing ---\n")
+    for tool, why in deferred:
+        out.write("  %s\n      %s\n" % (tool, why))
+    out.write("\nThis is NOT a pass. A deferred gate is one that did not run, and the run is\n")
+    out.write("incomplete until it does. What the declaration buys is that this report names\n")
+    out.write("WHICH gate and WHY, instead of reading identically to one quietly left out.\n")
+
 if problems:
     out.write("\n--- the hand-back does not verify ---\n")
     for p in problems:
@@ -236,4 +314,4 @@ else:
     out.write("It says NOTHING about whether the logic is correct - that is the review.\n")
 out.flush()
 
-raise SystemExit(1 if problems else 0)
+raise SystemExit(1 if (problems or deferred) else 0)
