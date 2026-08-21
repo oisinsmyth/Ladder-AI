@@ -70,6 +70,16 @@ public enum RuleCheckStatus
 
 public sealed record RuleStatusEntry(string RuleId, RuleCheckStatus Status, int FindingCount, string? Reason);
 
+// C-603's check returns TWO things, and the second one is the whole reason it is a record rather
+// than the plain IEnumerable<Finding> every other rule returns. Findings are the ranged step
+// predicates the rule JUDGED. UnattributedRanges are ranged step predicates it FOUND but could not
+// attribute to a write target — so it could not ask the network comment about them by name, and it
+// did not judge them. A caller that only read Findings would see an empty list and report a pass;
+// ReviewRunner reads both and records the rule Skipped (exit 2, REVIEW INCOMPLETE) whenever the
+// second list is non-empty. EMPTY IS NOT CLEAN, expressed in the return type so it cannot be
+// forgotten at the call site.
+public sealed record C603Result(IReadOnlyList<Finding> Findings, IReadOnlyList<string> UnattributedRanges);
+
 // One file's own review outcome. FileError is populated only when --ignore-errors let a
 // parse/format failure be recorded instead of aborting the whole run (Program.cs's own
 // SimaticMlFormatException/UnsupportedConstructException/NonReducibleNetworkException/

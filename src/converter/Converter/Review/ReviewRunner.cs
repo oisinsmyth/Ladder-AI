@@ -15,7 +15,7 @@ public static class ReviewRunner
     // was being asserted against a stale subset, and a rule could be added, never wired into a
     // content-kind branch, and pass. Counting mentions of `C-nnn` anywhere else (docs, comments)
     // over-counts and is never the answer to "which rules run".
-    public static readonly string[] AllRuleIds = { "C-001", "C-003", "C-005", "C-103", "C-118", "C-119", "C-120", "C-121", "C-122", "C-125", "C-201", "C-301", "C-501", "C-406", "C-408", "C-410", "C-102", "C-401", "C-404" };
+    public static readonly string[] AllRuleIds = { "C-001", "C-003", "C-005", "C-103", "C-118", "C-119", "C-120", "C-121", "C-122", "C-125", "C-201", "C-301", "C-501", "C-406", "C-408", "C-410", "C-102", "C-401", "C-404", "C-603" };
 
     // udtIndex (optional) resolves cross-file references — today only C-118's interface-UDT Step
     // (FI-09), built from `--project` when supplied. Null means the caller ran `review` without
@@ -130,6 +130,27 @@ public static class ReviewRunner
         // block has no step logic.
         Record(statuses, findings, "C-119", RuleCheckStatus.Checked, Rules.CheckC119IdleIsStepZero(block));
         Record(statuses, findings, "C-120", RuleCheckStatus.Checked, Rules.CheckC120StepsMultipleOfTen(block));
+
+        // C-603 is single-file (it reads a step condition and the network comment that should state
+        // its range intent) — but unlike C-119/C-120 it gets an explicit subject test, because a
+        // block with no Step register anywhere has no step-membership condition at all and a zero
+        // there should say "nothing to read", not "read and clean". The third state is the one that
+        // matters: the check can FIND a ranged step predicate it cannot attribute to a write target
+        // (a CALL input argument, a MOVE's IN value), and an unattributed range is a range whose
+        // intent was never asked about. That is Skipped — exit 2, the same fail-closed treatment
+        // C-118/C-122/C-125 get when their subject exists and goes unjudged — never a silent pass.
+        if (!Rules.UsesStepRegister(block))
+        {
+            statuses.Add(new RuleStatusEntry("C-603", RuleCheckStatus.NotApplicable, 0, "this block references no Step register, so it has no stepped-sequence phase condition for C-603 to read"));
+        }
+        else
+        {
+            var c603 = Rules.CheckC603StepMembershipEnumerated(block);
+            findings.AddRange(c603.Findings);
+            statuses.Add(c603.UnattributedRanges.Count > 0
+                ? new RuleStatusEntry("C-603", RuleCheckStatus.Skipped, c603.Findings.Count, $"{c603.UnattributedRanges.Count} ordered-range step predicate(s) sit outside any write's guarding condition, so C-603 could not identify the subject whose range intent the network comment would have to state, and did not judge them: {string.Join("; ", c603.UnattributedRanges)}")
+                : new RuleStatusEntry("C-603", RuleCheckStatus.Checked, c603.Findings.Count, null));
+        }
 
         // C-122's PT-home check is cross-file (FI-09) — like C-118 it needs the --project index to
         // resolve the block's interface UDT. Same subject-bearing split: its subject is a step-gated
@@ -256,6 +277,7 @@ public static class ReviewRunner
         statuses.Add(new RuleStatusEntry("C-118", RuleCheckStatus.NotApplicable, 0, "DB-kind file has no interface UDT / step logic"));
         statuses.Add(new RuleStatusEntry("C-119", RuleCheckStatus.NotApplicable, 0, "DB-kind file has no step logic"));
         statuses.Add(new RuleStatusEntry("C-120", RuleCheckStatus.NotApplicable, 0, "DB-kind file has no step logic"));
+        statuses.Add(new RuleStatusEntry("C-603", RuleCheckStatus.NotApplicable, 0, "DB-kind file declares data only — it has no conditions over a step register, and no network comment to state a range intent in"));
         statuses.Add(new RuleStatusEntry("C-121", RuleCheckStatus.NotApplicable, 0, "DB-kind file has no networks"));
         statuses.Add(new RuleStatusEntry("C-122", RuleCheckStatus.NotApplicable, 0, "DB-kind file has no networks/timers"));
         statuses.Add(new RuleStatusEntry("C-125", RuleCheckStatus.NotApplicable, 0, "DB-kind file has no networks/timers/fault coils"));
@@ -299,6 +321,7 @@ public static class ReviewRunner
         statuses.Add(new RuleStatusEntry("C-118", RuleCheckStatus.NotApplicable, 0, "C-118 places a Step register relative to a BLOCK's interface UDT; a TYPE file is that UDT, it has no interface of its own"));
         statuses.Add(new RuleStatusEntry("C-119", RuleCheckStatus.NotApplicable, 0, "a TYPE file has no step logic"));
         statuses.Add(new RuleStatusEntry("C-120", RuleCheckStatus.NotApplicable, 0, "a TYPE file has no step logic"));
+        statuses.Add(new RuleStatusEntry("C-603", RuleCheckStatus.NotApplicable, 0, "a TYPE file may DECLARE the Step member, but it holds no condition that reads one and no network comment to state a range intent in"));
         statuses.Add(new RuleStatusEntry("C-121", RuleCheckStatus.NotApplicable, 0, "a TYPE file has no networks"));
         statuses.Add(new RuleStatusEntry("C-122", RuleCheckStatus.NotApplicable, 0, "a TYPE file has no timer calls"));
         statuses.Add(new RuleStatusEntry("C-125", RuleCheckStatus.NotApplicable, 0, "a TYPE file has no timer calls or coils"));
@@ -386,6 +409,7 @@ public static class ReviewRunner
         statuses.Add(new RuleStatusEntry("C-118", RuleCheckStatus.NotApplicable, 0, "a tag table has no step logic and no interface UDT"));
         statuses.Add(new RuleStatusEntry("C-119", RuleCheckStatus.NotApplicable, 0, "a tag table has no step logic"));
         statuses.Add(new RuleStatusEntry("C-120", RuleCheckStatus.NotApplicable, 0, "a tag table has no step logic"));
+        statuses.Add(new RuleStatusEntry("C-603", RuleCheckStatus.NotApplicable, 0, "a tag table maps symbols to addresses — it contains no comparison against a step register, and nothing it holds is a condition at all"));
         statuses.Add(new RuleStatusEntry("C-121", RuleCheckStatus.NotApplicable, 0, "a tag table has no networks"));
         statuses.Add(new RuleStatusEntry("C-122", RuleCheckStatus.NotApplicable, 0, "a tag table has no timer calls"));
         statuses.Add(new RuleStatusEntry("C-125", RuleCheckStatus.NotApplicable, 0, "a tag table has no timer calls or coils"));

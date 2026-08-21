@@ -34,7 +34,7 @@ says **where each one is documented and why you would reach for it**.
 | `to-xml --synthesize` | IR → SimaticML with no donor XML | Sidecar synthesis — `--synthesize` |
 | `sanitize` | de-identify a SimaticML export against a mapping | synopsis above |
 | `preflight` | static checks **before** a Portal round trip — a filter, not the compile gate | `preflight` — static checks before any Portal round trip |
-| `review` | mechanical convention checks (C-0xx–C-5xx) | `review` — harness scope / C-410 / tag-table sections |
+| `review` | mechanical convention checks (C-0xx–C-6xx) | `review` — harness scope / C-410 / C-603 / tag-table sections |
 | `digest` | compact structural orientation; never review input | `digest` — compact structural summary |
 | `digest --fingerprint` | collapse copy-pasted networks to structural signatures | `--fingerprint` — per-network structural signatures |
 | `tagstatus` | classify names against the export — the hard-rule-3 anti-laundering gate | `tagstatus` — classify tag names exists/proposed |
@@ -3949,6 +3949,68 @@ by nothing, while `ReviewRunnerTests` carried a hand-copied duplicate that had *
 18** — so the "every rule gets exactly one status on every content kind" invariant was being asserted
 against a stale subset, and a rule could be registered, never wired into the DB/TYPE/TAGTABLE
 branches, and still pass.
+
+## 🔴 `review` — C-603, and the exemption that had to be per-subject (2026-08-21)
+
+A C-603 breach sat in `FB_ShredderSequencer` for weeks. `converter review` returned `0 finding(s)`
+on the block every time it was run, because **C-603 was not one of the 19 mechanized rules**. It was
+found by a human-directed read and cost two fix dispatches and two review dispatches. *A rule the
+runner can see costs an exit code; a rule it cannot costs a review round.*
+
+**C-603 (warn), registered in `ReviewRunner.AllRuleIds` (now 20)** — doc 06: *"Step membership is
+enumerated, not ranged."* An ordered-range predicate over the C-118 phase register (`>=`, `<=`, `>`,
+`<`, and the two-sided spans built from them) is a finding; `Step = n` and `Step <> n` never are —
+neither is ordered, so neither can absorb the step C-120 exists to let a later revision insert.
+"A step register" is **not** re-derived here: it is `HasStepLeaf`, the same leaf-named-`Step` test
+C-118/C-121/C-122 already key off, so the rule cannot see a different sequence than its neighbours.
+
+*** THE WHOLE DESIGN IS IN THE EXEMPTION, AND THE OBVIOUS EXEMPTION IS WRONG. *** Doc 06 allows a
+range "where 'every future step inserted in this span belongs here too' is the stated intent
+(comment)". Judging whether a paragraph of English states that intent is taste, and this runner does
+not do taste. Judging whether the network *has* a comment is worthless — and measurably so:
+`FB_ShredderSequencer` network 14 before the fix had **one comment covering three ranged coils**,
+stated the range intent for exactly one of them (`PusherParkCmd`, still legitimately a range today),
+and carried two unstated ranges beside it. **A has-a-comment exemption passes all three.**
+
+So the mechanized test is per **subject**: *the network comment must name the write target whose
+guarding condition carries the range*, matched on a word boundary against the target's leaf name
+(`IO.PusherParkCmd` → `PusherParkCmd`) or its full dotted path. A comment that never mentions the
+coil cannot have stated an intent for it; a comment that does is where a reader would go to find it.
+The check is deliberately **one-sided** — it can prove the intent was *not* stated, never that it
+was, and the finding text says what the reviewer still has to confirm. Same deferral shape as
+C-121's "a named bit may be a genuine equivalent of `Step = <from>`".
+
+- **A hyphen counts as part of the word.** No S7 identifier has one (C-005), so `reverse-run` is
+  English compounding, not the coil `Run`. Wrong direction to be wrong in: an exemption granted on
+  ordinary prose is worse than a finding raised on `PusherParkCmd-driven`.
+- **One exception to the name anchor: a range guarding a write to the Step register itself.** `Step`
+  is not distinctive prose in a sequencer — every network comment in the block contains the word, so
+  anchoring there would auto-exempt every transition. Those are always findings; the repair is
+  C-601's (name the condition to a bit, and the bit's name becomes the anchor) or enumeration, which
+  is what C-121's `Step = <from>` transitions want anyway.
+
+**EMPTY IS NOT CLEAN, expressed in the return type.** `CheckC603StepMembershipEnumerated` returns a
+`C603Result`, not the plain `IEnumerable<Finding>` every other rule returns, because it has two
+answers. `Findings` are the ranges it judged. `UnattributedRanges` are ranges it **found** somewhere
+that is not a write's guarding condition (a `CALL` input argument, a `MOVE`'s `IN`), where it cannot
+identify the subject to ask the comment about — so it did not judge them. `ReviewRunner` reads both:
+a non-empty second list records C-603 **Skipped**, which is **exit 2, REVIEW INCOMPLETE**, the same
+fail-closed treatment C-118/C-122/C-125 get when their subject exists and goes unjudged. A caller
+reading only `Findings` would have seen an empty list and reported a pass — the return type is what
+makes that impossible to write by accident. A block with no Step register at all is `NotApplicable`
+with its own reason, never `Checked`-and-zero.
+
+**Corpus impact, stated rather than discovered later.** Every `.ir` under `ir/` and `patterns/`:
+C-603 reports `NotApplicable` or `Checked` with **zero** findings. No new exit-2 anywhere. The one
+retained range in the corpus — `FB_ShredderSequencer`'s `PusherParkCmd`, `IO.Step >= 20 AND IO.Step
+<= 40` — passes on its network comment naming it. Reconstructed from commit `27bc689` (the pre-fix
+state), the same rule raises 3 findings and still passes `PusherParkCmd`, which is the discriminating
+test (`ReviewC603Tests`, 17 tests, both directions on every claim).
+
+⚠️ **C-603 is `warn`, and `ReviewOutcome.ExitCode` only gates on `Error` findings** — so a C-603
+finding prints and counts but exits 0, exactly like C-120's and C-601-family severities generally.
+The rule now *appears in the report*, which is the round it saves; making it *gate* is a severity
+decision in doc 06, not a converter one.
 
 ## Rules (docs/05-architecture.md, 04 §8/§10)
 

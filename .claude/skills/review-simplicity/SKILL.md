@@ -94,9 +94,12 @@ the worst readability defects had no citable rule until a human read the block c
   or more than ~6 contacts → needs justification (network comment) or a split into named bits.
   Respect the documented exception (multi-coil fan-out in one network) and expect other
   exceptions to state their reason in the comment — an uncommented breach is a finding.
-- **C-603 (warn) — ranged step predicates.** Grep: `Step >=`, `Step <=`, `Step >`, `Step <`
-  (excluding `<>`). Every hit needs a comment stating that future inserted steps are *meant* to
-  join the span. `Step = n` and `Step <> 0` are always fine.
+- **C-603 (warn) — ranged step predicates. Mechanized: `converter review` finds these.** It flags
+  every ordered step range whose network comment does not *name the coil it drives*. Start from its
+  list, don't grep. **Yours is what it cannot judge:** naming the coil exempts it mechanically, but
+  only you can say whether that sentence states "every future step in this span belongs here too" —
+  a named coil whose comment does not is still a finding the tool will never raise. A `C-603 …
+  skipped` line is a range it could not attribute to any coil (exit 2): read the reason and judge it.
 - **C-604 (error) — constants vs placeholders.** Grep `AlwaysTrue`. Classify every hit:
   (a) the mapping-FC rail idiom (`input-mapping`/`output-mapping` pattern shape) — sanctioned,
   skip; (b) known-gap placeholder — must have a comment naming the gap; (c) deliberate constant
