@@ -4,9 +4,21 @@
 tooling ready to use in the morning on a live project.* This is the answer, and it is written to be
 **read once, quickly, before you start** — not to be complete.
 
-> 🔴 **THE ONE-LINE ANSWER.** The **deployment, read-back and analysis** path is ready and has been
-> run against a real controller. The **closed-loop test path is NOT** — no conformance wave has ever
-> executed end to end. Use the first. Do not build a plan on the second today.
+> 🔴 **THE ONE-LINE ANSWER, AS WRITTEN 2026-08-14.** The **deployment, read-back and analysis** path
+> is ready and has been run against a real controller. The **closed-loop test path is NOT** — no
+> conformance wave has ever executed end to end. Use the first. Do not build a plan on the second
+> today.
+
+> ✅ **UPDATED 2026-08-21 — THE SECOND HALF OF THAT ANSWER IS NO LONGER TRUE.** A wave **has** run
+> end to end, twice: 2026-08-18 and 2026-08-20, the latter producing `"outcome": "Ran"` with three
+> result packages, 3 of 3 submitted vectors attempted over 1,939 round trips, and the rig released
+> with every start bool low. **Result packages exist.** The verdicts were `Unsettled` rather than
+> passes, so what is proven is that the loop *executes*, not that it answers — but "there is no
+> result package in existence" is false and was quoted onward for a week.
+>
+> **This page is dated. Check the artifacts before relying on any negative claim in it** — that is
+> the same failure mode as the ~2.1 ms scan row below, which said "now deployed" and was quoted
+> onward for six days.
 
 > ✅ **THE RELEASE BINARY IS NOW CURRENT — rebuilt and verified, nothing owed.** It was stale and it is
 > not any more. See *THE RELEASE BINARY WAS STALE* below for how that was proved.
@@ -88,7 +100,7 @@ it parsed as **nothing at all** before the fix, so it is an unambiguous currency
 
 | | why |
 |---|---|
-| **The conformance loop end to end** | ***A WAVE HAS NEVER RUN.*** The 27 vectors were authored, admitted as far as the gates, and never executed. There is no result package in existence. **This was a DECISION, not a drift** — see below |
+| **The conformance loop end to end** | ⚠️ **SUPERSEDED 2026-08-21 — a wave HAS now run, twice (08-18 and 08-20).** Result packages exist; the 08-20 run reports `"outcome": "Ran"`, 3 of 3 vectors attempted, 1,939 round trips, rig released. What is NOT established is that the loop *answers*: those verdicts were `Unsettled`, and `conclusiveAboutTheBlock` was 1. So read this row as "the loop executes; its output has not yet been shown to settle a question about a block". *(As written 2026-08-14: **A WAVE HAS NEVER RUN** — the 27 vectors authored, admitted as far as the gates, never executed, no result package in existence. **A DECISION, not a drift** — see below.)* |
 | ~~**The phase-armed latch**~~ | ✅ ***BUILT 2026-08-14*** (`4738e21`, `b9bc470`) — this row is retained struck-through because **it was stale for several hours and was quoted onward while stale.** The generator emits `SCOIL <latch> := <start bool> AND [<arm>] AND <signal>` / `RCOIL := NOT <start bool>` — clear on a **level, never an edge** — and it **cost ZERO arm registers**, because `InertPhase.Establish` already lowers every start bool before each index. ⚠️ **Reachability caveat: the COMMITTED binding does not yet declare `transient`/`rearmsEachIndex`/`armedBy`, so it will not generate the latches until it does.** The refusal survives only for a slot with **no start condition**, where the sole expressible latch is the unconditional one |
 | **Wave duration as a planning figure** | Measured on one rig over one tunnel. **Reference only.** Nothing is scheduled against it |
 | **The permit half of the write fences** | Tonight's fence work attacked **refusals**. The permit path is `NOT CHECKED` |
