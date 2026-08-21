@@ -43,7 +43,13 @@ BUDGETS = [
 
     (".claude/agents/assertion-enumerator.md", 5120),
     (".claude/agents/hmi-designer.md", 7680),
-    (".claude/agents/lad-coder.md", 8704),
+    # Raised 8704 -> 9216 on 2026-08-21. Earned by two additions the same day, both of
+    # which change what the agent must DO rather than explaining something: the
+    # evidence.json `deferred`/`transient` fields (a run could not otherwise hand back a
+    # split gate honestly), and round-trip discipline (two real dispatches spent 41 and 67
+    # tool calls, and round-trips dominate wall clock). The file is 8,853 -> ~9,180 after
+    # both. It was 6,234 post-cut, so this is real growth and deliberately visible.
+    (".claude/agents/lad-coder.md", 9216),
     (".claude/agents/lad-reader.md", 5120),
 
     (".claude/skills/design-for-testability/SKILL.md", 43008),
