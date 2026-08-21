@@ -39,7 +39,41 @@ openness-cli xref          <project>                                           #
 ```
 
 Plain-text/JSON output, non-zero exit codes on failure — designed to be driven from a shell. The
-codes and what each means: "Exit codes" at the end of this file.
+codes and what each means: the file-wide **`## Exit codes`** table near the end. (Not `### Exit
+codes — graphics`, which covers that one command.)
+
+## What's in here
+
+**This file is two documents interleaved**: a command reference, and a log of findings and
+incidents recorded against each command — the dated 🔴/⚠️ headings, usually sitting under the
+command they were found in. The fence above is the invocation synopsis; the table below says where
+each command is *documented*, including the ones the fence does not list.
+
+| command | what you use it for | section |
+|---|---|---|
+| `list`, `export`, `import` | enumerate; one object out; one ordered same-kind set in | synopsis above, plus `## Usage` |
+| `export-all` | every block + type out — the disk-vs-controller check's export half | `export-all` — the disk-vs-controller check's missing half |
+| `import-all` | a whole mixed program back, dependency-order retry | `import-all` — putting a whole program back |
+| `compile` | per-item or scoped compile. **Default scope is `--station`** | `## Exit codes` → the three-compile-scopes section |
+| `compile-all` | the gate's bulk half | `compile-all` — the gate's bulk half |
+| `sanity-check` | block **and type** consistency + compile health. Run this first when export/import/compile misbehaves | synopsis above |
+| `block-layout` | read or `--set` a block's memory layout. **Destructive** | `block-layout` — optimized vs standard block access |
+| `download-plan` | read-only, dry-run only; device-level granularity | `download-plan` — what a download would comprise |
+| `download-probe` | the only binary that can transfer a program, allowlist-fenced | the `download-probe` sections under `## Exit codes` |
+| `library` | project-library walk; `--export-version`, `--probe-documents` | `library` — the project-library walk |
+| `delete`, `create-instance-db`, `portal-status` | delete a block (refuses safety, `--yes`); scaffold an iDB; Portal-process health | synopsis above |
+| `hmi` | read-only HMI walk; `--scripts`, `--schema` | `hmi` — the read-only HMI walk |
+| `hmi-create-screen` / `hmi-edit-screen` | the two HMI write probes; dynamization, events | `hmi-create-screen` / `hmi-edit-screen` |
+| `--map` / `--map-clear` | mapping tables — the second route to flashing | `--map` / `--map-clear` — mapping tables |
+| `hmi-compile` | compile the HMI device. **Weaker than `compile` success** | `hmi-compile` — compiling the HMI device |
+| `graphics` | project-level picture store | `graphics` — the project-level picture store |
+| classic HMI tags / text lists | import-only; `Override` **replaces**, never merges | Classic HMI tags and text lists |
+| deletion commands | graphics, classic screens, classic tag tables | Deleting graphics, classic screens and classic tag tables |
+
+**Exit codes that are not failures-as-usual**: `8` = compile errors, `11` = CompileIncomplete,
+`12` = ExportIncomplete, `13` = ImportIncomplete, `14` = nothing examined. **Key on errors, never
+on state** — the `--station` scope surfaces standing hardware warnings, so a healthy project
+legitimately returns `Warning, errors=0`.
 `export`/`import`/`compile` live-verified end-to-end against real project data, 2026-07-10 —
 see `docs/notes/stage-gates.md` S1.
 
@@ -634,7 +668,12 @@ a `GraphicView` naming a picture that does not exist fails the HMI compile by na
 
 — which is the negative control that makes a clean compile of the same screen mean something.
 
-### Exit codes
+### Exit codes — `graphics` only
+
+*(Renamed 2026-08-21. This heading was `### Exit codes`, colliding with the file-wide `## Exit
+codes` table near the end — the same slug, and the file's own synopsis says "see 'Exit codes' at
+the end of this file", which a by-name search resolved to whichever it hit first. The two are not
+the same list.)*
 
 `--import` failures surface as `CommandError` (7) carrying the **whole** exception chain verbatim,
 because on a capability question the refusal text *is* the result. A `--import` that reports zero

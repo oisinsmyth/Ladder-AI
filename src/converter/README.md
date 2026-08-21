@@ -17,6 +17,48 @@ converter diff <old.ir> <new.ir> [--only <network> ...] [--json]  # which networ
 `to-ir`/`to-xml`/`sanitize` all auto-detect DB vs code-block content (root element name for XML
 input, first line for IR/text input) and route accordingly — no separate flag needed.
 
+## What's in here
+
+**This file is two documents interleaved**: a command reference, and a log of findings and
+incidents recorded against each command. The table below is the reference half. Roughly half the
+headings in the file are the other half — dated war stories, usually marked 🔴 or ⚠️, sitting under
+the command they were found in. Both are worth reading; only one answers "how do I run this".
+
+`converter --help` prints the authoritative flags and exit codes for every command. This table
+says **where each one is documented and why you would reach for it**.
+
+| command | what you use it for | section |
+|---|---|---|
+| `to-ir` / `to-xml` | SimaticML ↔ IR, both directions | `to-ir` / `to-xml` — output path and unresolved member types |
+| `to-ir --no-sidecar` | readable-only IR, sidecar omitted after verifying derivability | `to-ir --no-sidecar` — store readable-only IR |
+| `to-xml --synthesize` | IR → SimaticML with no donor XML | Sidecar synthesis — `--synthesize` |
+| `sanitize` | de-identify a SimaticML export against a mapping | synopsis above |
+| `preflight` | static checks **before** a Portal round trip — a filter, not the compile gate | `preflight` — static checks before any Portal round trip |
+| `review` | mechanical convention checks (C-0xx–C-5xx) | `review` — harness scope / C-410 / tag-table sections |
+| `digest` | compact structural orientation; never review input | `digest` — compact structural summary |
+| `digest --fingerprint` | collapse copy-pasted networks to structural signatures | `--fingerprint` — per-network structural signatures |
+| `tagstatus` | classify names against the export — the hard-rule-3 anti-laundering gate | `tagstatus` — classify tag names exists/proposed |
+| `diff` | network-level IR invariance; `--only` proves the rest untouched | `diff` — network-level IR invariance |
+| `compare` | Normalizer-compare two SimaticML exports — the confirm loop's judgement half | `compare` — the confirm loop's judgement half |
+| `drift-check` | ir ↔ simatic-ml export drift | `drift-check` — ir↔simatic-ml export-drift detector |
+| `cross-check` | whole-project cross-block reference facts (never verdicts) | `cross-check` — whole-project cross-block facts |
+| `trace` | forward-pass REQ trace over the reader/writer graph | `trace` — forward-pass REQ verdict tracer |
+| `reuse-scan` | reuse-first: who already references this tag / implements this kind | `reuse-scan` — reuse-first duplicate-logic finder |
+| `target-scan` | new-block gap hunting: REQ × tag-status × as-built | `target-scan` — S6 new-block target gap-hunter |
+| `candidate-scan` | every signal that could satisfy a requirement | `candidate-scan` — compute the candidate set for a requirement |
+| `undriven-scan` | per-instance interface drive states — what nothing writes | `undriven-scan` — per-instance interface drive states |
+| `relation-reconcile` | reconcile (instance, relation-id) sets across the spec artifacts | `relation-reconcile` — relation-set reconciliation |
+| `signal-sweep` | project-level residual signal coverage | `signal-sweep` — project-level residual signal coverage |
+| `interface-check` | does the block carry the signals the spec names | `interface-check` — the static comparison D6's green rests on |
+| `reachable-state` | computed slot disjointness — storage a block's CALL tree touches | `reachable-state` — D9's producer |
+| `conflict-graph` | submission-scoped conflict edges for the harness gates | `conflict-graph` — the submission-scoped emission |
+| `ir-hash` | stable readable-IR content hash, immune to SIDECAR/UId churn | `ir-hash` — stable readable-IR content hash |
+| `claim` / `claims` | reserve a shared resource before writing IR | `claim` / `claims` — reserve a shared resource |
+
+**EMPTY IS NOT CLEAN.** Across the mechanical floor — `candidate-scan`, `undriven-scan`,
+`reuse-scan`, `relation-reconcile`, `signal-sweep` — **exit 1 = found something; exit 2 = EXAMINED
+NOTHING**. Exit 2 is never a pass. When you read a green, read what it says it *compared*.
+
 ## Current scope
 
 *(Corrected 2026-08-05. This section read "walking skeleton" and denied arithmetic and FC/FB
