@@ -1822,11 +1822,26 @@ the PLC does?*
 - **A block COMMENT cannot** — comment-only ⇒ **exit 0**, with `HEADER COMMENT CHANGED (does not
   gate)` on its own line. Non-gating is not invisible: that line is where a stale comment gets
   repaired, and equally where a correct one gets silently discarded.
+- **NOR CAN AN INTERFACE MEMBER'S COMMENT** (2026-08-21). The interface used to be compared as one
+  serialized blob, so member comment text sat inside `interfaceChanged` and repairing one was
+  indistinguishable from a retype. Measured: deleting the seven characters `(C-115)` from a member
+  comment produced `INVARIANCE VIOLATION: an INTERFACE member changed`, exit 1, while the identical
+  edit to the BLOCK comment exited 0 — the same defect as the 2026-08-14 narrowing, one level down,
+  and it left a C-204 sweep with no route to the breaches living in member comments.
+- **The carve-out is ONE field.** `Retain`, `SetPoint`, datatype, start value, the `External*` flags,
+  nesting and the member NAME all still gate. The comparison is done twice — once with member
+  comments blanked (that is `interfaceChanged`), once whole — and `interfaceCommentChanged` is set
+  only when the structure compared **equal** and the text did not. The two are mutually exclusive by
+  construction, so a retype can never be reported as a comment edit.
 - **A comment edit is never cover for a behaviour-bearing one** — both together still exit 1,
   naming the INTERFACE, not the comment.
-- The JSON carries `commentChanged` and `interfaceChanged` as separate fields.
-- The human-readable form prints `HEADER changed: interface` (or `: comment`) naming which half
-  moved, so the verdict and the exit code can be read against each other.
+- The JSON carries `commentChanged`, `interfaceChanged` and `interfaceCommentChanged` as separate
+  fields. A consumer gating on `interfaceChanged` alone is unaffected: the new field is a strictly
+  narrower signal, never a reclassification of something that used to gate.
+- The human-readable form prints `HEADER changed: interface` (or `: comment`, `: interface-comment`)
+  naming which half moved, so the verdict and the exit code can be read against each other. The
+  non-gating line NAMES its subject — `the block comment`, `one or more INTERFACE member comments`,
+  or both — because a reader told the wrong subject inspects the wrong text.
 
 `--allow-header` is the named escape (FI-71's shape), and it means ROUTE, not DECLARE:
 
@@ -3325,6 +3340,28 @@ an internal write landing in **both**, and pooling with either would invent a co
 bug did. The aliases are **reported** on the fact (`instanceAliases`) so a consumer can join them
 knowingly. Every FB in `test-project001` has exactly one instance DB — *which is precisely why
 designing only for that would be designing for the case that happens to exist.*
+
+🔴 **2026-08-21 — reporting the alias was not enough, because the line beside it asserted a verdict
+that contradicted it.** A block-local row printed `[block-local to FB_X — not a cross-block conflict;
+also addressable as iDB_X.member]` **while another block wrote that very alias.** Four rows in
+`ir/test-project001` read that way, every one with `OB100` writing the alias through the instance DB.
+
+The key spaces are **still not pooled** — the reasoning above is unchanged and still right. What is
+new is that each group now carries `aliasWriters`: the writers of its `iDB_…` aliases that live
+**outside** the owning block (the owner's own writes are excluded, or every FB would self-conflict).
+Consequences:
+
+- The `— not a cross-block conflict` half is asserted **only when `aliasWriters` is empty**. Where it
+  is not, the row instead names the outside writers and says plainly that this IS cross-block
+  contention. On the reference corpus 19 rows keep the annotation and 4 lose it.
+- **`soleWriters` had the same blindness on EIGHT rows, and that is the more dangerous half.** One
+  internal writer plus an outside alias writer gives `Writers.Count == 1`, so such a row appears
+  **only** in the sole-writer table and never in the multi-writer one — and that table exists to
+  answer *"what loses its only writer if I delete this?"*. `FB_MotorFwdRevSystem.IO.FaultFB` is
+  written by `FC_ControlMain` **and** `OB100` through the iDB, and read as sole-written.
+- **Reported, never subtracted** — the same discipline `unreachableWriterBlocks` follows. Such rows
+  stay in `soleWriters` carrying `aliasWriters`, because dropping them would hide them entirely.
+- A consumer that dismissed a row on `owner is not null` **must now also check `aliasWriters`.**
 
 **Sibling analyses checked.** `deadMembers`' interface half already restricted the bare form to the
 owning FB; `ioBoundary` and `siblingRefs` carry the block on every row. All three are

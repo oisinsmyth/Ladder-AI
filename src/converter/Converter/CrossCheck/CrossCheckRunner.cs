@@ -38,7 +38,9 @@ public static class CrossCheckRunner
                         .Where(b => !reachable.Contains(b))
                         .OrderBy(b => b, StringComparer.Ordinal).ToList()
                     : new List<string>();
-                return new MultiWriterFact(g.Path, writers, g.Owner, g.InstanceAliases, unreachable, reachabilityKnown);
+                return new MultiWriterFact(
+                    g.Path, writers, g.Owner, g.InstanceAliases, unreachable, reachabilityKnown,
+                    g.AliasWriters.Select(ToWriter).ToList());
             })
             .ToList();
 
@@ -59,7 +61,13 @@ public static class CrossCheckRunner
                 g.Path,
                 ToWriter(g.Writers[0]),
                 g.Readers.Select(ToReader).ToList(),
-                g.Owner))
+                g.Owner,
+                // REPORTED, NEVER SUBTRACTED — the same discipline UnreachableWriterBlocks follows
+                // above. A group with one internal writer and an outside alias writer has
+                // Writers.Count == 1, so it appears ONLY here and never in the multi-writer table.
+                // Dropping it from this table would hide it entirely; carrying the alias writers lets
+                // the row say plainly that "sole" is not true of it.
+                g.AliasWriters.Select(ToWriter).ToList()))
             .ToList();
 
         var deadMembers = new List<DeadMemberFact>();
