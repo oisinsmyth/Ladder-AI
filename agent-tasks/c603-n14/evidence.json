@@ -1,0 +1,562 @@
+{
+  "schema": "ladder-ai/agent-evidence/1",
+  "task": "C-603 fix wave 2 on FB_ShredderSequencer: repair NETWORK 15's defective comment (span-vs-enumeration contradiction removed; the filed-off numeric-width defence deleted) and complete the C-603 enumeration in NETWORK 14 (MotorAutoStartCmd, MotorPreStartDoneCmd), plus repair N14's C-204 convention citation to plain substance.",
+  "kind": "modify",
+  "skill": "gen-block-modify-fix",
+  "files": [
+    {
+      "path": "ir/test-project001/FB_ShredderSequencer.ir",
+      "ir_hash": "166D0ECFF1F834525159B700292EB02030CB0EB0E41DCA646B17F9895694817C"
+    }
+  ],
+  "checks": [
+    {
+      "tool": "converter preflight",
+      "exit": 0,
+      "json": {
+        "files": [
+          {
+            "filePath": "ir/test-project001/FB_ShredderSequencer.ir",
+            "name": "FB_ShredderSequencer",
+            "findings": []
+          }
+        ],
+        "indexWarnings": []
+      }
+    },
+    {
+      "tool": "converter diff --only 14 15 (invariance proof)",
+      "exit": 0,
+      "json": {
+        "blockName": "FB_ShredderSequencer",
+        "blockNameMismatch": false,
+        "otherBlockName": "FB_ShredderSequencer",
+        "hasAnyChange": true,
+        "header": {
+          "changed": false,
+          "titleChanged": false,
+          "titleBefore": "Shredder Plant Sequencer",
+          "titleAfter": "Shredder Plant Sequencer",
+          "commentChanged": false,
+          "commentBefore": "Shredder plant sequencer (C-118-C-125): commands the shredder motor (via FB_MotorFwdRevSystem, wired at FC_ControlMain) and gates infeed/discharge conveyors and upstream enable, through a stepped cycle. Step legend (C-120): 0=Idle (stopped, waiting for a start condition) - 10=PreStart (siren warning before motion; arms the motor via MotorStartArm) - 20=DischargeStart (discharge conveyor starting, timed) - 30=ReverseRun (reverse commanded; the motor FB's own ReverseDelay entry pause elapses inside this step, then ReverseRunTimer counts ShredderReverseRunTime of CONFIRMED reverse feedback) - 40=WaitForwardRun (waiting for forward-run feedback) - 50=Running (normal production; infeed/upstream-enable timers and overcurrent detection are live) - 60=OvercurrentAbort (tripped - pause, then retry into ReverseRun, or stay out if too many reversals). Stop-all (REQ-012/013/062): StopCmd = stop button OR downstream lost OR control circuit unhealthy - aborts every step to Idle. Pusher handling is split (owner amendment 2026-07-16): stop button/unhealthy force pusher mode 0 (parks AND blocks jog), while any live stop reason - downstream loss included - raises PusherCycleInhibitCmd (no cycle launches or continues into a stopped plant, hand-jog stays available).",
+          "commentAfter": "Shredder plant sequencer (C-118-C-125): commands the shredder motor (via FB_MotorFwdRevSystem, wired at FC_ControlMain) and gates infeed/discharge conveyors and upstream enable, through a stepped cycle. Step legend (C-120): 0=Idle (stopped, waiting for a start condition) - 10=PreStart (siren warning before motion; arms the motor via MotorStartArm) - 20=DischargeStart (discharge conveyor starting, timed) - 30=ReverseRun (reverse commanded; the motor FB's own ReverseDelay entry pause elapses inside this step, then ReverseRunTimer counts ShredderReverseRunTime of CONFIRMED reverse feedback) - 40=WaitForwardRun (waiting for forward-run feedback) - 50=Running (normal production; infeed/upstream-enable timers and overcurrent detection are live) - 60=OvercurrentAbort (tripped - pause, then retry into ReverseRun, or stay out if too many reversals). Stop-all (REQ-012/013/062): StopCmd = stop button OR downstream lost OR control circuit unhealthy - aborts every step to Idle. Pusher handling is split (owner amendment 2026-07-16): stop button/unhealthy force pusher mode 0 (parks AND blocks jog), while any live stop reason - downstream loss included - raises PusherCycleInhibitCmd (no cycle launches or continues into a stopped plant, hand-jog stays available).",
+          "interfaceChanged": false
+        },
+        "summary": {
+          "total": 15,
+          "changed": 2,
+          "added": 0,
+          "removed": 0,
+          "identical": 13
+        },
+        "networks": [
+          {
+            "number": 1,
+            "kind": "Identical",
+            "title": "Stop Command",
+            "beforeText": null,
+            "afterText": null
+          },
+          {
+            "number": 2,
+            "kind": "Identical",
+            "title": "HMI Time Conversions",
+            "beforeText": null,
+            "afterText": null
+          },
+          {
+            "number": 3,
+            "kind": "Identical",
+            "title": "Reversal Re-Arm Window Timer",
+            "beforeText": null,
+            "afterText": null
+          },
+          {
+            "number": 4,
+            "kind": "Identical",
+            "title": "Reversal Counter",
+            "beforeText": null,
+            "afterText": null
+          },
+          {
+            "number": 5,
+            "kind": "Identical",
+            "title": "Shredder Blocked Fault (Too Many Reversals)",
+            "beforeText": null,
+            "afterText": null
+          },
+          {
+            "number": 6,
+            "kind": "Identical",
+            "title": "Step 0 (Idle) - Transition",
+            "beforeText": null,
+            "afterText": null
+          },
+          {
+            "number": 7,
+            "kind": "Identical",
+            "title": "Step 10 (PreStart) - Timer And Transitions",
+            "beforeText": null,
+            "afterText": null
+          },
+          {
+            "number": 8,
+            "kind": "Identical",
+            "title": "Step 20 (DischargeStart) - Timer, Timeout Fault, And Transitions",
+            "beforeText": null,
+            "afterText": null
+          },
+          {
+            "number": 9,
+            "kind": "Identical",
+            "title": "Step 30 (ReverseRun) - Timer And Transitions",
+            "beforeText": null,
+            "afterText": null
+          },
+          {
+            "number": 10,
+            "kind": "Identical",
+            "title": "Step 40 (WaitForwardRun) - Transitions",
+            "beforeText": null,
+            "afterText": null
+          },
+          {
+            "number": 11,
+            "kind": "Identical",
+            "title": "Step 50 (Running) - Infeed Restart, Upstream Enable, And Outputs",
+            "beforeText": null,
+            "afterText": null
+          },
+          {
+            "number": 12,
+            "kind": "Identical",
+            "title": "Step 50 - Overcurrent Detection, Trip, And Transitions",
+            "beforeText": null,
+            "afterText": null
+          },
+          {
+            "number": 13,
+            "kind": "Identical",
+            "title": "Step 60 (OvercurrentAbort) - Timer And Transitions",
+            "beforeText": null,
+            "afterText": null
+          },
+          {
+            "number": 14,
+            "kind": "Changed",
+            "title": "Motor And Pusher Mode Commands",
+            "beforeText": "NETWORK 14 \"Motor And Pusher Mode Commands\"\n  COMMENT \"MotorStartArm asserts only through PreStart: one operator start press = one motor arming (FC_ControlMain hands it to the motor FB's self-clearing RecentStart - REQ-062). PusherParkCmd holds through the machine-start steps 20-40 (range intent, C-603: any step inserted inside the start ramp still wants the pusher home) - long enough for the pusher's warned repark to fire even when the discharge confirm is quick (REQ-045); from Running onward the pusher's own cycle-entry repark takes over. Pusher stop handling is two-tier (REQ-012/013 + owner amendment 2026-07-16): PusherModeForceOff (stop button/unhealthy/step-60, mirroring the step-60 overcurrent force) drives mode 0 - parks the pusher and blocks jog - while PusherCycleInhibitCmd mirrors the full StopCmd so downstream loss still stops cycle behavior without taking hand-jog away (REQ-040).\"\n  COIL IO.MotorReverseCmd := IO.Step = 30\n  COIL IO.MotorAutoStartCmd := IO.Step >= 30 AND IO.Step <= 50\n  COIL IO.MotorPreStartDoneCmd := IO.Step >= 20\n  COIL IO.MotorStartArm := IO.Step = 10\n  COIL IO.PusherParkCmd := IO.Step >= 20 AND IO.Step <= 40\n  COIL PusherModeForceOff := IO.CycleStop OR NOT IO.SystemHealthy OR IO.Step = 60\n  COIL IO.PusherCycleInhibitCmd := StopCmd\n  MOVE(EN := PusherModeForceOff, IN := 0) => IO.PusherModeCmd\n  MOVE(EN := NOT PusherModeForceOff, IN := IO.OperatorPusherMode) => IO.PusherModeCmd\n",
+            "afterText": "NETWORK 14 \"Motor And Pusher Mode Commands\"\n  COMMENT \"MotorStartArm asserts only through PreStart: one operator start press = one motor arming (FC_ControlMain hands it to the motor FB's self-clearing RecentStart - REQ-062). MotorAutoStartCmd lists the steps that command the shredder motor to run - ReverseRun, WaitForwardRun and Running - and MotorPreStartDoneCmd lists the steps in which the pre-start warning already given still counts as in force - DischargeStart, ReverseRun, WaitForwardRun, Running and OvercurrentAbort; both are listed step by step rather than written as a span, so a step added inside the cycle later has to decide for itself whether the motor is commanded during it and whether the warning still stands. OvercurrentAbort is deliberately one of the steps where it still stands: the abort pauses the cycle and resumes at ReverseRun without sounding the siren again (REQ-027), so the warning given at PreStart is still the warning in force through the pause, and the motor FB's pre-start memory stays latched across it. PusherParkCmd holds through the machine-start steps 20-40 as a deliberate range - any step inserted inside the start ramp still wants the pusher home - long enough for the pusher's warned repark to fire even when the discharge confirm is quick (REQ-045); from Running onward the pusher's own cycle-entry repark takes over. Pusher stop handling is two-tier (REQ-012/013 + owner amendment 2026-07-16): PusherModeForceOff (stop button/unhealthy/step-60, mirroring the step-60 overcurrent force) drives mode 0 - parks the pusher and blocks jog - while PusherCycleInhibitCmd mirrors the full StopCmd so downstream loss still stops cycle behavior without taking hand-jog away (REQ-040).\"\n  COIL IO.MotorReverseCmd := IO.Step = 30\n  COIL IO.MotorAutoStartCmd := IO.Step = 30 OR IO.Step = 40 OR IO.Step = 50\n  COIL IO.MotorPreStartDoneCmd := IO.Step = 20 OR IO.Step = 30 OR IO.Step = 40 OR IO.Step = 50 OR IO.Step = 60\n  COIL IO.MotorStartArm := IO.Step = 10\n  COIL IO.PusherParkCmd := IO.Step >= 20 AND IO.Step <= 40\n  COIL PusherModeForceOff := IO.CycleStop OR NOT IO.SystemHealthy OR IO.Step = 60\n  COIL IO.PusherCycleInhibitCmd := StopCmd\n  MOVE(EN := PusherModeForceOff, IN := 0) => IO.PusherModeCmd\n  MOVE(EN := NOT PusherModeForceOff, IN := IO.OperatorPusherMode) => IO.PusherModeCmd\n"
+          },
+          {
+            "number": 15,
+            "kind": "Changed",
+            "title": "Output Commands",
+            "beforeText": "NETWORK 15 \"Output Commands\"\n  COMMENT \"Cycle output commands: the discharge conveyor runs from the discharge-start step onward and stays on for the rest of the cycle, the pre-start siren sounds during PreStart or whenever the pusher asks for its own jog warning, and InCycle reports any step other than Idle. The discharge steps are listed one by one rather than written as a span, so that a step added inside the cycle later has to make a visible decision about whether the conveyor runs during it instead of being swept in silently. That listing is why this rung carries five parallel branches where a rung would normally be held to two - the enumeration is the reason for the width, not an oversight.\"\n  COIL IO.RunDischargeConv := IO.Step = 20 OR IO.Step = 30 OR IO.Step = 40 OR IO.Step = 50 OR IO.Step = 60\n  COIL IO.PreStartSounder := IO.Step = 10 OR IO.PusherJogPreStartSounder\n  COIL IO.InCycle := IO.Step <> 0\n",
+            "afterText": "NETWORK 15 \"Output Commands\"\n  COMMENT \"Cycle output commands: the discharge conveyor runs during DischargeStart, ReverseRun, WaitForwardRun, Running and OvercurrentAbort, each on its own branch; the pre-start siren sounds during PreStart or whenever the pusher asks for its own jog warning; and InCycle reports any step other than Idle. The discharge steps are listed one by one rather than written as a span, so that a step added inside the cycle later has to make a visible decision about whether the conveyor runs during it instead of being swept in silently.\"\n  COIL IO.RunDischargeConv := IO.Step = 20 OR IO.Step = 30 OR IO.Step = 40 OR IO.Step = 50 OR IO.Step = 60\n  COIL IO.PreStartSounder := IO.Step = 10 OR IO.PusherJogPreStartSounder\n  COIL IO.InCycle := IO.Step <> 0\n"
+          }
+        ],
+        "allowedNetworks": [
+          14,
+          15
+        ],
+        "invarianceViolations": [],
+        "headerChangeAllowed": false,
+        "hasUnclaimedHeaderChange": false,
+        "hasNonGatingCommentChange": false,
+        "unchangedRemainder": 13,
+        "hasInvarianceViolation": false
+      }
+    },
+    {
+      "tool": "converter review --project",
+      "exit": 0,
+      "json": {
+        "uncheckedRuleCount": 0,
+        "uncheckedRules": [],
+        "harnessScopedFindingCount": 0,
+        "harnessObjectCount": 0,
+        "unclassifiedObjectCount": 0,
+        "files": [
+          {
+            "filePath": "ir/test-project001/FB_ShredderSequencer.ir",
+            "blockName": "FB_ShredderSequencer",
+            "fileError": null,
+            "harnessClass": "Plant",
+            "harnessBasis": "FB 8 is outside the reserved harness band 9000-9999, so this is plant content and every rule gates",
+            "harnessScopedFindings": [],
+            "ruleStatuses": [
+              {
+                "ruleId": "C-001",
+                "status": "Checked",
+                "findingCount": 0,
+                "reason": null
+              },
+              {
+                "ruleId": "C-003",
+                "status": "Checked",
+                "findingCount": 0,
+                "reason": null
+              },
+              {
+                "ruleId": "C-005",
+                "status": "Checked",
+                "findingCount": 0,
+                "reason": null
+              },
+              {
+                "ruleId": "C-103",
+                "status": "Checked",
+                "findingCount": 0,
+                "reason": null
+              },
+              {
+                "ruleId": "C-118",
+                "status": "Checked",
+                "findingCount": 0,
+                "reason": null
+              },
+              {
+                "ruleId": "C-121",
+                "status": "Checked",
+                "findingCount": 0,
+                "reason": null
+              },
+              {
+                "ruleId": "C-119",
+                "status": "Checked",
+                "findingCount": 0,
+                "reason": null
+              },
+              {
+                "ruleId": "C-120",
+                "status": "Checked",
+                "findingCount": 0,
+                "reason": null
+              },
+              {
+                "ruleId": "C-122",
+                "status": "Checked",
+                "findingCount": 0,
+                "reason": null
+              },
+              {
+                "ruleId": "C-125",
+                "status": "Checked",
+                "findingCount": 0,
+                "reason": null
+              },
+              {
+                "ruleId": "C-201",
+                "status": "Checked",
+                "findingCount": 0,
+                "reason": null
+              },
+              {
+                "ruleId": "C-301",
+                "status": "Checked",
+                "findingCount": 0,
+                "reason": null
+              },
+              {
+                "ruleId": "C-501",
+                "status": "Checked",
+                "findingCount": 0,
+                "reason": null
+              },
+              {
+                "ruleId": "C-406",
+                "status": "Checked",
+                "findingCount": 0,
+                "reason": null
+              },
+              {
+                "ruleId": "C-408",
+                "status": "Checked",
+                "findingCount": 0,
+                "reason": null
+              },
+              {
+                "ruleId": "C-410",
+                "status": "Checked",
+                "findingCount": 0,
+                "reason": null
+              },
+              {
+                "ruleId": "C-102",
+                "status": "CheckedVacuous",
+                "findingCount": 0,
+                "reason": null
+              },
+              {
+                "ruleId": "C-401",
+                "status": "CheckedVacuous",
+                "findingCount": 0,
+                "reason": null
+              },
+              {
+                "ruleId": "C-404",
+                "status": "CheckedVacuous",
+                "findingCount": 0,
+                "reason": null
+              }
+            ],
+            "findings": []
+          }
+        ]
+      }
+    },
+    {
+      "tool": "openness-cli sanity-check",
+      "exit": 0,
+      "json": {
+        "healthy": true,
+        "nothingExamined": false,
+        "totalBlocks": 36,
+        "inconsistentBlocks": [],
+        "totalTypes": 7,
+        "inconsistentTypes": [],
+        "duplicateBlockNumbers": [],
+        "deviceCompiles": [
+          {
+            "device": "S7-1200 station_1/PLC1 6ES7 214-1AG40-0XB0",
+            "state": "Warning",
+            "errors": 0,
+            "warnings": 1
+          }
+        ]
+      }
+    },
+    {
+      "tool": "openness-cli compile --block FB_ShredderSequencer",
+      "exit": 0,
+      "json": {
+        "state": "Warning",
+        "errors": 0,
+        "warnings": 1,
+        "consistentAfterCompile": true,
+        "messages": [
+          {
+            "state": "Warning",
+            "description": "",
+            "path": "PLC1 6ES7 214-1AG40-0XB0"
+          },
+          {
+            "state": "Warning",
+            "description": "",
+            "path": "General warnings"
+          },
+          {
+            "state": "Warning",
+            "description": "Inputs or outputs are used that do not exist in the configured hardware.",
+            "path": null
+          },
+          {
+            "state": "Information",
+            "description": "",
+            "path": "Program blocks"
+          },
+          {
+            "state": "Information",
+            "description": "No block was compiled. All blocks are up-to-date.",
+            "path": null
+          },
+          {
+            "state": "Warning",
+            "description": "Compiling finished (errors: 0; warnings: 1)",
+            "path": null
+          }
+        ]
+      }
+    },
+    {
+      "tool": "openness-cli compile --block iDB_ShredderSequencer",
+      "exit": 0,
+      "json": {
+        "state": "Warning",
+        "errors": 0,
+        "warnings": 1,
+        "consistentAfterCompile": true,
+        "messages": [
+          {
+            "state": "Warning",
+            "description": "",
+            "path": "PLC1 6ES7 214-1AG40-0XB0"
+          },
+          {
+            "state": "Warning",
+            "description": "",
+            "path": "General warnings"
+          },
+          {
+            "state": "Warning",
+            "description": "Inputs or outputs are used that do not exist in the configured hardware.",
+            "path": null
+          },
+          {
+            "state": "Information",
+            "description": "",
+            "path": "Program blocks"
+          },
+          {
+            "state": "Information",
+            "description": "No block was compiled. All blocks are up-to-date.",
+            "path": null
+          },
+          {
+            "state": "Warning",
+            "description": "Compiling finished (errors: 0; warnings: 1)",
+            "path": null
+          }
+        ]
+      }
+    },
+    {
+      "tool": "openness-cli compile --block FC_ControlMain",
+      "exit": 0,
+      "json": {
+        "state": "Warning",
+        "errors": 0,
+        "warnings": 1,
+        "consistentAfterCompile": true,
+        "messages": [
+          {
+            "state": "Warning",
+            "description": "",
+            "path": "PLC1 6ES7 214-1AG40-0XB0"
+          },
+          {
+            "state": "Warning",
+            "description": "",
+            "path": "General warnings"
+          },
+          {
+            "state": "Warning",
+            "description": "Inputs or outputs are used that do not exist in the configured hardware.",
+            "path": null
+          },
+          {
+            "state": "Information",
+            "description": "",
+            "path": "Program blocks"
+          },
+          {
+            "state": "Information",
+            "description": "No block was compiled. All blocks are up-to-date.",
+            "path": null
+          },
+          {
+            "state": "Warning",
+            "description": "Compiling finished (errors: 0; warnings: 1)",
+            "path": null
+          }
+        ]
+      }
+    },
+    {
+      "tool": "openness-cli compile --block FC_AlarmsMain",
+      "exit": 0,
+      "json": {
+        "state": "Warning",
+        "errors": 0,
+        "warnings": 1,
+        "consistentAfterCompile": true,
+        "messages": [
+          {
+            "state": "Warning",
+            "description": "",
+            "path": "PLC1 6ES7 214-1AG40-0XB0"
+          },
+          {
+            "state": "Warning",
+            "description": "",
+            "path": "General warnings"
+          },
+          {
+            "state": "Warning",
+            "description": "Inputs or outputs are used that do not exist in the configured hardware.",
+            "path": null
+          },
+          {
+            "state": "Information",
+            "description": "",
+            "path": "Program blocks"
+          },
+          {
+            "state": "Information",
+            "description": "No block was compiled. All blocks are up-to-date.",
+            "path": null
+          },
+          {
+            "state": "Warning",
+            "description": "Compiling finished (errors: 0; warnings: 1)",
+            "path": null
+          }
+        ]
+      }
+    },
+    {
+      "tool": "openness-cli compile --block OB100",
+      "exit": 0,
+      "json": {
+        "state": "Warning",
+        "errors": 0,
+        "warnings": 1,
+        "consistentAfterCompile": true,
+        "messages": [
+          {
+            "state": "Warning",
+            "description": "",
+            "path": "PLC1 6ES7 214-1AG40-0XB0"
+          },
+          {
+            "state": "Warning",
+            "description": "",
+            "path": "General warnings"
+          },
+          {
+            "state": "Warning",
+            "description": "Inputs or outputs are used that do not exist in the configured hardware.",
+            "path": null
+          },
+          {
+            "state": "Information",
+            "description": "",
+            "path": "Program blocks"
+          },
+          {
+            "state": "Information",
+            "description": "No block was compiled. All blocks are up-to-date.",
+            "path": null
+          },
+          {
+            "state": "Warning",
+            "description": "Compiling finished (errors: 0; warnings: 1)",
+            "path": null
+          }
+        ]
+      }
+    },
+    {
+      "tool": "openness-cli block-layout --expect Optimized",
+      "exit": 0,
+      "json": {
+        "name": "FB_ShredderSequencer",
+        "path": "S7-1200 station_1/PLC1 6ES7 214-1AG40-0XB0",
+        "type": "FB",
+        "layout": "Optimized",
+        "previousLayout": null,
+        "requestedLayout": null,
+        "isSet": false,
+        "changed": false,
+        "verified": true
+      }
+    }
+  ],
+  "notes": [
+    "ROUND-TRIP PROOF (not in the required gate set, recorded because it is the strongest evidence here): after the import and compile, the block was re-exported from TIA to a TEMP dir (NOT into simatic-ml/), converted back with `converter to-ir`, and diffed against the edited IR - `SUMMARY: 15 network(s): 0 changed, 0 added, 0 removed, 15 identical`, exit 0. TIA altered nothing on import.",
+    "HONEST RECORD OF A NON-ZERO EXIT THIS RUN: the FIRST `openness-cli sanity-check` after the import exited 9 with 5 inconsistent blocks (the imported FB, its iDB, and the three callers) - the ordinary post-import state. It is not listed as a gate above because it was superseded; the passing run recorded here is the second. The five per-block compiles in between EACH reported 'No block was compiled. All blocks are up-to-date.' with consistentAfterCompile=true, so they are recorded for their read-back, not for work they did.",
+    "BLOCK LAYOUT: read BEFORE the import and measured Optimized; `--set Standard` was deliberately NOT run (an unrequested change, and this FB's interface member is RETAIN SETPOINT, so a layout change destroys retained data on the next download). The gate is `--expect Optimized`, matching what was observed, not what the routing rule's harness case would want.",
+    "NOT VERIFIED: behaviour. No download, no rig run, no test vector. The compile gate never proves behaviour, and the semantic decision in this fix (MotorPreStartDoneCmd holding through OvercurrentAbort) is argued from the IR and REQ-027, not measured."
+  ]
+}
