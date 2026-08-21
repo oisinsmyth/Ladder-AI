@@ -29,6 +29,16 @@ documented/committed, delete it from this file rather than letting it accumulate
 > empty. The owner decisions listed here **stay open and stay waiting**; they are not resolved by the
 > suspension, and the items depending on them stay unverified. Read this section as the resume list.
 
+**CONTEXT CUT — Phases 0+1 DONE 2026-08-21, Phases 2–4 OPEN. Full handoff:
+`docs/notes/context-cut-handoff.md`.** `CLAUDE.md` went 96,655 → 19,593 bytes and `lad-coder`
+stopped re-reading it in full; per-dispatch orientation dropped ~55k → ~11.4k tokens. The command
+reference moved into the two READMEs, which already claimed to be authoritative for it. **This is
+repo tooling, not pipeline development, so the 2026-08-17 suspension does not hold it** — Phases 2
+(hookify gates), 3 (`evidence.json` hand-back) and 4 (size budget) can be picked up whenever.
+**Phase 4 first if only one gets done**: without it the file regrows, which is exactly how it got
+to 96KB. Gate before any further trim: `python tools/check-claude-md-migration.py`. Only a
+read-only `lad-coder` task has been run against the cut file — a generation or fix run has not.
+
 **OWNER DECISION WAITING (2026-08-10): five committed tooling fixes cannot be verified without a
 Release rebuild.** FI-63, FI-66, FI-68 and FI-70's `export-all` are built, unit-tested and committed,
 and **none has been exercised against a live Portal**. A rebuild revokes the binary's TIA Openness

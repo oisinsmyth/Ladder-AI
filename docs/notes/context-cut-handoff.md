@@ -1,0 +1,146 @@
+# CLAUDE.md context cut — handoff
+
+**Status as of 2026-08-21: Phases 0 and 1 are DONE and committed. Phases 2, 3 and 4 are NOT
+started.** Nothing is half-finished; the work stops at a clean boundary. This page is what a
+fresh agent needs to pick it up.
+
+## Why this was done
+
+Work in this repo was slow per request, and fanning out to parallel agents did not help. The
+measured cause: **orientation cost per dispatch dominated the actual work, and parallelism
+multiplied it rather than amortising it.** A single `lad-coder` dispatch running `gen-block-new`
+loaded ~55,000 tokens before reading one line of IR — `CLAUDE.md` injected (96,655 bytes), the
+agent file, `CLAUDE.md` **again** because the agent was told to read it in full, and the skill.
+Five parallel lanes meant ~275k tokens of setup, none of it shared.
+
+There was a second effect that mattered as much. `CLAUDE.md` had become a changelog read as
+instructions — 61 lines carrying date stamps, 29 carrying retractions ("this previously read",
+"was wrong", "cost a day") — and it was **actively instructing the re-reading and re-verification
+being complained about**: *"its summary is not proof"*, *"you did not inherit a summary of them,
+read the actual file"*, *"empty is not clean"* (×6). Agents re-derived everything because they
+were told to.
+
+## What was done
+
+| commit | what |
+|---|---|
+| `c078fab` | `lad-coder` no longer re-reads `CLAUDE.md` in full, and no longer restates hard rules 1–7 |
+| `71891b9` | CLAUDE-only command knowledge migrated into the two READMEs, `openness-quirks.md`, `docs/15` |
+| `5f4d5a4` | `CLAUDE.md` 96,655 → 20,277 bytes |
+| `56656a1` | three things a smoke-test dispatch proved had been cut too far, put back |
+| `8d9a178` | remaining narration reworded to plain statements, 20,478 → 19,593 bytes |
+
+**Result: `CLAUDE.md` 96,655 → 19,593 bytes; `lad-coder.md` 8,747 → 6,234.** Per-dispatch
+orientation ~55,000 → ~11,400 tokens (79%, 4.9×). Five parallel lanes: ~275k → ~57k.
+
+### The key structural finding
+
+Half of `CLAUDE.md` (48,432 bytes) was a Commands block duplicating `src/converter/README.md`
+(268KB, 92 command headings) and `src/openness-cli/README.md` (144KB, 62 headings) — which
+`CLAUDE.md` **already named as authoritative**. But ~15% was NOT duplicated: the newest findings
+had been landing in `CLAUDE.md` *because it is the file everyone reads*. That is the growth
+mechanism, and it is why Phase 4 matters more than it looks.
+
+`openness-cli library` had no README section at all — `--export-version` and `--probe-documents`
+existed only in `CLAUDE.md`. It has one now.
+
+### What is in the new CLAUDE.md, and what moved
+
+Resident: hard rules 1–8 (normative text, unweakened), a **new `## Routing rules` section**
+holding operational rules previously buried in narration, `Where things live`, a Commands
+**index** (name → one-line → "read the README"), the stage-suspension notice, and the Data
+boundary **verbatim**.
+
+Moved: command reference → the two READMEs; environment detail → `docs/notes/openness-quirks.md`;
+test-environment facts → `docs/notes/live-project-readiness.md` (which already carried every one
+of them); the 20% freeform threshold → `docs/15-generation-pipeline.md`. `docs/06`'s C-201 already
+carried the network-title rule, so Conventions needed no migration.
+
+## What is verified, and how
+
+Run the gate before committing any further trim of `CLAUDE.md`:
+
+```
+python tools/check-claude-md-migration.py
+```
+
+Every falsifiable marker the **pre-cut** `CLAUDE.md` carried must still be findable in
+`CLAUDE.md` or a destination doc. Currently **249 of 252 found, 3 known markdown fragments
+allowlisted, exit 0**. It is negative-tested: removing one destination makes it report 89
+unaccounted and exit 1. Do not add to `KNOWN_FRAGMENTS` to silence a real drop — migrate the fact
+and confirm it greps positive in its new home.
+
+Also verified at the time of the cut: every path cited in `CLAUDE.md` resolves; all touched files
+kept CRLF; agent and skill frontmatter parses with no truncated descriptions; `dotnet build -c
+Release src/converter/converter.sln` clean; all 15 normative hard-rule keywords still present.
+
+## What is NOT verified
+
+- **Only a read-only task has been run against the cut file.** One `lad-coder`
+  `explain-plc-block` dispatch, instrumented to report gaps. **A generation or fix run has not
+  been tried**, and those exercise far more of the file — the READMEs are now on the critical
+  path in a way they were not before. That is the next validation worth doing.
+- **The session-caching behaviour is inferred, not proven.** The smoke-test subagent reported its
+  injected `CLAUDE.md` was still the old 96KB copy, and the parent session's was too. The likely
+  mechanism is that project instructions are read once at session start. **Restart Claude Code to
+  pick up the new file**; confirm by asking a fresh session whether its context contains a
+  `## Routing rules` heading, which exists only in the new file.
+
+## What is left
+
+In priority order.
+
+**Phase 4 — the anti-regrowth size budget. Do this one first if you only do one.** Without it the
+file regrows: it went 52KB → 96.6KB over its last 30 commits, by exactly the mechanism described
+above. Needs a fail-closed check (this repo's own maxim: *a warning is not a gate*) asserting
+`CLAUDE.md` stays under budget — 20,480 bytes was the ceiling held during the cut. `tools/` holds
+the precedent for a checked script (`confirm-roundtrip-fence.tests.ps1`), and
+`tools/check-claude-md-migration.py` is the shape to follow. The rule to encode alongside it: new
+findings land in the README or `docs/notes`; `CLAUDE.md` gets a line only if it changes what an
+agent must do *before* it looks anything up.
+
+**Phase 2 — promote deleted warnings to hookify gates.** Mechanism is already proven in this repo:
+`.claude/hookify.block-safety-fblock-content.local.md` and `.claude/hookify.block-simaticml-edits.local.md`
+both work. Hookify supports `event: bash` with a `pattern`, so both day-costing traps are directly
+expressible: the `--claims` store-root shadowing (regex on a `--claims` path whose last segment
+repeats the project name) and a Debug-binary invocation where Release is expected.
+
+**Phase 3 — the `evidence.json` hand-back.** Hard rule 8 requires verifying the sub-agent's actual
+diff and compile evidence, which currently means the orchestrator re-reads the work. Nearly every
+tool already has `--json`. Change the hand-back contract so the agent writes
+`agent-tasks/<id>/evidence.json` carrying the raw `--json` of preflight / `diff --only` / compile /
+`sanity-check` plus `converter ir-hash` for every file touched. Verification then becomes running
+one command against exit codes and hashes, instead of a re-read. This is the change that most
+directly attacks the "agents recheck each other's claims" cost.
+
+## Open items for the owner
+
+- **`explain-plc-block` skill defect (pre-existing, not caused by the cut).** Its data-boundary
+  trigger says "not the synthetic `ir/reference/` corpus" and never names `test-project001`, so by
+  literal reading every explanation of the main sandbox is routed to `docs/13-data-boundary.md`.
+  `CLAUDE.md` now states the tier (Green) so it is settleable from context, but the skill should
+  name the sandbox alongside `ir/reference/`. One line.
+- **Four `FB_Hx*` corpus blocks are called from OB1 but nothing writes their inputs.** Found
+  incidentally by the smoke test: `FC_HarnessCopyLayer` has no `Dwell*` reference and
+  `HarnessMirror` declares no registers for them; `converter undriven-scan --fb FB_HxDwellTimer`
+  exits 1 with 3 undriven members. The agent read this as "copy layer not generated yet" rather
+  than a defect, since all four siblings are identical. **Question: is the Hx wiring expected to be
+  committed alongside these blocks, or produced at deploy time?** If the latter this is simply
+  pending; if the former, four blocks are inert.
+- **D-9 in `docs/notes/deferred-items.md`** records the deferred option of pushing the Routing
+  rules down into the skills that own them. Not recommended as things stand — several of those
+  rules bite an orchestrator that is not running any skill.
+
+## Traps for whoever picks this up
+
+- **The Write tool strips CRLF.** It silently wrote `CLAUDE.md` as LF during this work; caught by
+  the `file` check, fixed with a binary rewrite. Tracked text here is CRLF — use Edit for changes,
+  and if you must Write a whole file, convert afterwards and verify with `file <path>`.
+- **Run `tools/check-claude-md-migration.py` before committing any further trim.** It is the only
+  thing standing between a tidy-up and a silently lost fact.
+- **The Data boundary paragraph is deliberately untouched, and should stay that way.** It reads
+  redundant — "don't tier-triage it, don't ask per-file, don't hold back" — but each clause closes
+  a different behavioural loophole rather than restating one, and it is the only rule here whose
+  failure mode is a confidentiality breach rather than a wasted hour.
+- **`docs/notes/claude-md-migration-inventory.md`** is a working file recording what was checked
+  per command. Delete it once the cut has settled; it will go stale.
