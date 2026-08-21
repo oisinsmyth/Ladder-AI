@@ -13,8 +13,16 @@ allowed-tools:
 
 Ladder-AI project. The definition is `docs/notes/assertion-enumeration.md`; §7 of
 `docs/notes/PC-Client-Modbus-Spec-Draft-final.txt` settles where the unit sits; the contract that
-cites your output is `docs/notes/test-environment-contract.md` §3. **Read the definition this run.**
-It is a DRAFT and it has open items that change what you should do.
+cites your output is `docs/notes/test-environment-contract.md` §3. **Read the definition this run** —
+§1 through §6, which is nearly all of it and is deliberately not scoped down: this skill *is* the
+decomposition procedure and that document *is* its definition.
+
+The reason it must be re-read rather than remembered is concentrated, so start there: **§7, "What
+this leaves open"** — 18 lines, four items, and item 3 (*who performs the enumeration*) is
+self-flagged as the one that matters most, because if the block's author enumerates, D6's
+independence is lost at the denominator. ⚠️ §7 is the *declared* register, not a complete change log:
+**§1.2a and §1.4 are stamped ADDED 2026-08-18, five days after the document's own status header**,
+and §7 does not mention either.
 
 > ***THE DENOMINATOR COMES FROM THE SPECIFICATION, NEVER FROM THE TEST SUITE.*** Any unit defined by
 > what somebody wrote a vector for is self-referential: you cannot be missing an assertion nobody

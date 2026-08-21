@@ -53,8 +53,13 @@ dispatch this to `lad-coder`.
   would disturb elsewhere).
 - **The requirements register** (`gen/<project>/requirements.md` or the corpus spec) — for the REQ the
   fix restores; a fix that compiles but doesn't actually satisfy the REQ is a miss.
-- **`docs/06-lad-conventions.md`** (read fresh) — the touched networks still answer to conventions (C-126
-  grouping, titles/comments, the stricter generated-code bar); **`docs/notes/compile-error-playbook.md`**.
+- **`docs/06-lad-conventions.md`** (read fresh, **by rule ID and never by section heading** — C-204 is a
+  Commenting rule physically sitting under `## Data`) — the touched networks still answer to conventions:
+  C-126 grouping, **C-201–C-204** (titles and comments), the stricter generated-code bar, **plus the rule
+  family the touched network belongs to** — a polarity fix lands on C-403/C-404, a fault-reset fix on
+  C-123/C-130/C-507/C-508. That last clause is deliberately open-ended: a fix touches a network of
+  unknown family, so a closed list would be wrong for most fixes.
+  Also **`docs/notes/compile-error-playbook.md`**.
 
 ## Method — follow the shared modification choreography
 

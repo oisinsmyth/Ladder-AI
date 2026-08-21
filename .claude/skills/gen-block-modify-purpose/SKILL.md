@@ -52,9 +52,13 @@ dispatch this to `lad-coder`.
   nearly the whole block → route to `gen-block-new`.
 - **The as-built block's IR** — full IR; know which networks the manifest keeps (they must prove invariant)
   vs changes.
-- **The requirements register** — the new/changed REQs the purpose delivers; **`docs/06`** (read fresh —
-  esp. C-115 handshake vocabulary for the new interface, C-118/C-125 if the new purpose is a sequence,
-  C-126, the stricter bar); **`docs/notes/compile-error-playbook.md`**.
+- **The requirements register** — the new/changed REQs the purpose delivers; **`docs/06`** (read fresh,
+  **by rule ID and never by section heading** — C-204 is a Commenting rule physically sitting under
+  `## Data`): C-115 handshake vocabulary for the new interface, **C-132** (the interface is one STATIC
+  UDT member) and **C-605** (interface members carry comments) — both directly in play the moment you
+  add a member — C-118/C-125 if the new purpose is a sequence, C-126, **C-201–C-204**, the stricter
+  bar, **plus the rule family any changed network belongs to**.
+  Also **`docs/notes/compile-error-playbook.md`**.
 
 ## Method — follow the shared modification choreography
 

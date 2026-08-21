@@ -93,9 +93,42 @@ So a `design-for-testability` dispatch loads its own 59 KB **and is told to read
 already paraphrases**. That is the same duplication measured above, paid twice in the same run.
 
 The "never from memory" instructions exist for a real reason — those documents are drafts and a
-remembered figure is a wrong figure — so the fix is **scoping, not deletion**: name the section, as
-`assertion-enumerator` already does with "§3", rather than the whole file. The six `docs/06` ones
-already name their rule IDs and could cite sections instead of the file.
+remembered figure is a wrong figure — so the fix is **scoping, not deletion**.
+
+### DONE 2026-08-21 — and most of them turned out NOT to be scopable
+
+Four were scoped, two were rule-range **bugs** rather than size wins, and **three were examined and
+deliberately left alone**. That last group is the useful part of this record: the reasons are not
+obvious, and without them the idea gets retried.
+
+**Scoped:** `hmi-designer` → `target-differences.md` (the four intro sections and the whole Ledger
+table, ~120 lines of 586, narrative on demand); `assertion-enumerator` → `assertion-enumeration.md`
+§1/§3.2/§4.3/§7; `gen-code-structure` and `gen-architecture` → `docs/06` **by rule ID**.
+
+**Fixed as bugs:** `gen-architecture` scoped `C-113–C-127`, one short of **C-128/C-130/C-131/C-132**
+— all error-severity and all deciding manifest content. `gen-code-structure` named only the preamble
+while choosing interface members and rendering boolean logic, the surface of C-115/C-132/C-601/
+C-603/C-605. Both now cite the full set.
+
+**🔴 DO NOT SCOPE these three — examined and rejected:**
+
+- **`design-for-testability:16` → the contract.** The weakest candidate despite being the biggest
+  file. The skill cites 17 sections spanning §2.1–§10; volatility is 16 inline date-stamps with **no
+  changelog**; §2 alone is 59% of the document; and the constants the instruction actually protects
+  live in **`PC-Client-Modbus-Spec-Draft-final.txt` §12a**, a different file, referenced 12 times
+  from the contract. Scoping does not touch the real risk.
+- **`review-conventions:47` → `docs/06`.** The rule IDs in that sentence are named as rules that were
+  *revised* on 2026-07-16 — the reason memory is untrustworthy, not the reading list. The skill
+  reviews six of the eight rule sections. Scoping to those IDs inverts the sentence.
+- **`gen-block-new:87` → `docs/06`.** Its named list omits **C-201, C-403, C-406, C-410, C-132,
+  C-127–C-133, C-508** and all of C-601–C-611, every one error-severity. Unscoped, the reader meets
+  them on the way past; scoped, they disappear. A correct scope here is "everything except the
+  not-in-force block" — a 6% saving that is not worth the edit.
+
+Two traps found while doing it, both worth carrying forward: **`C-204` is a Commenting rule that
+physically sits under `## Data`**, so `docs/06` must be cited **by rule ID and never by heading**;
+and **`target-differences.md`'s Ledger must be read whole** — row 32 is struck through and retracted
+by row 41 nine rows later, so a reader who greps for one row can read a dead row as live.
 
 ## 3 — Warm and batch the Portal round trips
 

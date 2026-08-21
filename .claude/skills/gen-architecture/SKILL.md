@@ -91,10 +91,14 @@ apply throughout.
   Read each candidate pattern's `pattern.md` including its **admission status**; a
   proposed-not-yet-admitted pattern may be mapped, but the manifest says so (the engineer signs
   off knowing which patterns are proven and which are pending).
-- **`docs/06-lad-conventions.md`** — read fresh this run, never from memory: the preamble
-  (priority order, stricter bar), C-109/C-110 (call structure), C-113–C-127 (paradigms,
-  chains, sequences, cross-instance rule), C-30x (data landscape), C-501–C-503 (alarm skeleton),
-  and C-601/C-604/C-606/C-607 insofar as the *design* can make them impossible or inevitable.
+- **`docs/06-lad-conventions.md`** — read fresh this run, never from memory, and **by rule ID rather
+  than by section heading** (C-204 is a Commenting rule that physically sits under `## Data`): the
+  preamble (priority order, stricter bar), C-109/C-110 (call structure), **C-113–C-133** (paradigms,
+  chains, sequences, cross-instance rule — and the four that decide manifest content and used to sit
+  outside this range: **C-128** no automatic restart, **C-130** one condensed latched fault bit per
+  block, **C-131** feedback proves non-arrival never arrival, **C-132** the interface is one STATIC
+  UDT member), C-30x (data landscape), C-501–C-503 (alarm skeleton), and C-601/C-604/C-606/C-607
+  insofar as the *design* can make them impossible or inevitable.
 
 ## Method — from REQs toward blocks, never the reverse
 
