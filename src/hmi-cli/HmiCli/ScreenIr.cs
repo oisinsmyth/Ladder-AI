@@ -125,20 +125,36 @@ public sealed record IrItem
     [JsonPropertyName("cmdReal2")] public string? CmdReal2 { get; init; }
 
     /// <summary>
-    /// A SINGLE tag write on a button press (<c>data-hmi-set="&lt;Tag&gt;=&lt;value&gt;"</c>), with
-    /// the same <c>@</c> convention as a command operand: <c>=3</c> writes the literal 3,
+    /// Staged tag write(s) on a button press
+    /// (<c>data-hmi-set="&lt;Tag&gt;=&lt;value&gt;[; &lt;Tag&gt;=&lt;value&gt;]..."</c>), with the
+    /// same <c>@</c> convention as a command operand: <c>=3</c> writes the literal 3,
     /// <c>=@Other_Tag</c> copies that tag's live value at the press.
     ///
-    /// 🔴 IT IS DELIBERATELY ONE WRITE, AND IT DELIBERATELY CANNOT NAME A <c>_Seq</c> OR A
-    /// <c>_Code</c>. This exists to STAGE AN OPERAND - to arm a value that some LATER, separate
-    /// press will act on - and that is the whole of its remit. Allowing several writes, or a write
-    /// to the handshake tags, would let an author hand-build a command channel write out of parts,
-    /// in an order of their choosing; <see cref="Cmd"/>'s entire correctness argument is that the
-    /// order is not expressible wrongly, and this must not be the hole in it.
+    /// 🔴 IT DELIBERATELY CANNOT NAME A <c>_Seq</c> OR A <c>_Code</c>, AND DELIBERATELY
+    /// CANNOT SIT ON A BUTTON THAT ALSO CARRIES <see cref="Cmd"/>. This exists to STAGE OPERANDS -
+    /// to arm values that some LATER, separate press will act on - and that is the whole of its
+    /// remit. A write to the handshake tags, or a staged write beside a command on one press, would
+    /// let an author hand-build a command channel write out of parts in an order of their choosing;
+    /// <see cref="Cmd"/>'s entire correctness argument is that the order is not expressible wrongly,
+    /// and this must not be the hole in it.
     ///
-    /// The motivating case: a recipe chooser row that ARMS a recipe number and navigates back,
-    /// leaving the act to the START button on the screen the operator returns to. A press that both
-    /// chose and started could not be undone, and the same screen has to be safe to merely BROWSE.
+    /// ⚠ SEVERAL WRITES ARE ALLOWED; THE TWO REFUSALS ABOVE ARE WHAT MAKE THAT SAFE, AND THEY
+    /// ARE UNCHANGED. Until 2026-08-21 this took exactly one write, and the stated reason mixed two
+    /// separate things: "no several writes" and "no handshake tags, no command on the same press".
+    /// Only the second carries the argument - a press that writes six operands and issues nothing
+    /// is no closer to a hand-rolled command than a press that writes one. The first was refusing a
+    /// legitimate shape: JOB9004's percent-parameter store has SIX entry members that one command
+    /// takes together, so seeding them is six copies from six published values, and expressing that
+    /// as six buttons would be six chances to press five of them.
+    ///
+    /// 🔴 A REPEATED TARGET IS REFUSED. Two writes to one tag in a single press is an
+    /// ordering question with no good answer, which is the same objection that keeps a command off
+    /// this attribute.
+    ///
+    /// The motivating case for the single form: a recipe chooser row that ARMS a recipe number and
+    /// navigates back, leaving the act to the START button on the screen the operator returns to. A
+    /// press that both chose and started could not be undone, and the same screen has to be safe to
+    /// merely BROWSE.
     /// </summary>
     [JsonPropertyName("setTag")] public string? SetTag { get; init; }
 

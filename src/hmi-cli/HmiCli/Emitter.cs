@@ -227,36 +227,74 @@ public static class Emitter
                 continue;
             }
 
-            var eq = spec.IndexOf('=');
-            if (eq <= 0 || eq == spec.Length - 1)
+            // SEVERAL WRITES, SEMICOLON-SEPARATED, IN THE AUTHOR'S ORDER. Splitting here rather
+            // than at the emitter keeps ONE parse: a segment that this loop refuses is a segment
+            // WriteButtonEvents never sees.
+            var writes = ParseStagedWrites(spec);
+            if (writes.Count == 0)
             {
-                stagingProblems.Add($"{where}: expected exactly <Tag>=<value>, where <value> is a "
-                    + "number or @<other tag>.");
+                stagingProblems.Add($"{where}: no write in it. Expected <Tag>=<value>, or several "
+                    + "separated by ';'.");
                 continue;
             }
 
-            var target = spec[..eq].Trim();
-            var value = spec[(eq + 1)..].Trim();
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var segmentFault = false;
 
-            if (target.Length == 0 || value.Length == 0)
+            foreach (var segment in writes)
             {
-                stagingProblems.Add($"{where}: the tag or the value is empty.");
-                continue;
+                var eq = segment.IndexOf('=');
+                if (eq <= 0 || eq == segment.Length - 1)
+                {
+                    stagingProblems.Add($"{where}: segment \"{segment}\" is not <Tag>=<value>, where "
+                        + "<value> is a number or @<other tag>.");
+                    segmentFault = true;
+                    continue;
+                }
+
+                var target = segment[..eq].Trim();
+                var value = segment[(eq + 1)..].Trim();
+
+                if (target.Length == 0 || value.Length == 0)
+                {
+                    stagingProblems.Add($"{where}: segment \"{segment}\" has an empty tag or value.");
+                    segmentFault = true;
+                    continue;
+                }
+
+                // TWO WRITES TO ONE TAG IN ONE PRESS is an ordering question with no good answer,
+                // and the likeliest cause is a copy-paste in a generated seed list - which would
+                // leave one of the intended targets unwritten while the list LOOKS complete.
+                if (!seen.Add(target))
+                {
+                    stagingProblems.Add($"{where}: writes '{target}' more than once in a single "
+                        + "press. Which write lands last is not a question an author should have to "
+                        + "answer, and a repeated target usually means another one is missing.");
+                    segmentFault = true;
+                    continue;
+                }
+
+                // 🔴 THE ONE REFUSAL THAT IS NOT TIDINESS. _Seq is the handshake: writing it is
+                // ISSUING a command, and issuing one from here would carry whatever code happens to
+                // be standing - the exact wrong-order fault data-hmi-cmd was built so that nobody
+                // could express. _Code is refused with it because a code staged here and bumped by a
+                // later press is the same fault split across two screens, which is harder to see
+                // rather than safer.
+                if (target.EndsWith("_Seq", StringComparison.OrdinalIgnoreCase)
+                    || target.EndsWith("_Code", StringComparison.OrdinalIgnoreCase))
+                {
+                    stagingProblems.Add($"{where}: refuses to write '{target}'. data-hmi-set STAGES "
+                        + "AN OPERAND and can never issue a command. Bumping a sequence sends "
+                        + "whatever code is standing, and staging a code for a later bump is the "
+                        + "same fault spread over two presses. Use data-hmi-cmd with "
+                        + "data-hmi-cmd-code, which cannot be ordered wrongly.");
+                    segmentFault = true;
+                    continue;
+                }
             }
 
-            // 🔴 THE ONE REFUSAL THAT IS NOT TIDINESS. _Seq is the handshake: writing it is ISSUING a
-            // command, and issuing one from here would carry whatever code happens to be standing -
-            // the exact wrong-order fault data-hmi-cmd was built so that nobody could express.
-            // _Code is refused with it because a code staged here and bumped by a later press is the
-            // same fault split across two screens, which is harder to see rather than safer.
-            if (target.EndsWith("_Seq", StringComparison.OrdinalIgnoreCase)
-                || target.EndsWith("_Code", StringComparison.OrdinalIgnoreCase))
+            if (segmentFault)
             {
-                stagingProblems.Add($"{where}: refuses to write '{target}'. data-hmi-set STAGES AN "
-                    + "OPERAND and can never issue a command. Bumping a sequence sends whatever code "
-                    + "is standing, and staging a code for a later bump is the same fault spread over "
-                    + "two presses. Use data-hmi-cmd with data-hmi-cmd-code, which cannot be ordered "
-                    + "wrongly.");
                 continue;
             }
 
@@ -1078,6 +1116,20 @@ public static class Emitter
     };
 
     /// <summary>
+    /// Split a <c>data-hmi-set</c> specification into its individual <c>Tag=value</c> writes.
+    ///
+    /// One parser, used by the validation pass AND by the emission pass, so a segment that is
+    /// refused is by construction a segment that is never written. Empty segments are dropped
+    /// rather than refused - a trailing <c>;</c> in a generated list is a formatting artefact and
+    /// not an author's intent - but a specification that yields NO segments is refused by the
+    /// caller, because that one is an author who meant something.
+    /// </summary>
+    internal static List<string> ParseStagedWrites(string spec) =>
+        spec.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(s => s.Length > 0)
+            .ToList();
+
+    /// <summary>
     /// The events on a button, written FIRST in its ObjectList because that is where TIA writes them.
     ///
     /// Two shapes are generated, and both hang off <c>Release</c> rather than <c>Press</c>:
@@ -1128,16 +1180,22 @@ public static class Emitter
             entries.Add(() => WriteTagFunction(w, nextId, "IncreaseTag", ch + "_Seq", "1"));
         }
 
-        // A STAGED OPERAND. One write, no sequence bump - so nothing is COMMANDED by this press.
-        // Emitted before any navigation for the same reason a command is: the value must be written
-        // while this screen is still the active one.
+        // STAGED OPERANDS. Writes with no sequence bump - so nothing is COMMANDED by this press.
+        // Emitted before any navigation for the same reason a command is: the values must be
+        // written while this screen is still the active one.
+        //
+        // IN THE AUTHOR'S ORDER, and that is deliberate even though nothing here depends on it: a
+        // list whose emitted order differs from its written order is a list an author cannot read
+        // back off the screen source, and the next thing hung off this attribute might care.
         if (!string.IsNullOrWhiteSpace(i.SetTag))
         {
-            var spec = i.SetTag!.Trim();
-            var eq = spec.IndexOf('=');
-            var target = spec[..eq].Trim();
-            var value = spec[(eq + 1)..].Trim();
-            entries.Add(() => WriteTagFunction(w, nextId, "SetTag", target, value));
+            foreach (var segment in ParseStagedWrites(i.SetTag!.Trim()))
+            {
+                var eq = segment.IndexOf('=');
+                var target = segment[..eq].Trim();
+                var value = segment[(eq + 1)..].Trim();
+                entries.Add(() => WriteTagFunction(w, nextId, "SetTag", target, value));
+            }
         }
 
         // NAVIGATION. Emitted after any command on the same button so that a button which both acts

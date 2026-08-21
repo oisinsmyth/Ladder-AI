@@ -99,6 +99,94 @@ public class StagedWriteTests
         Assert.DoesNotContain(result.HandOff, h => h.Contains("INERT"));
     }
 
+    // ---- several writes on one press (2026-08-21) ---------------------------------------------
+    //
+    // JOB9004's percent-parameter store: ONE plant command takes SIX entry members together, so
+    // seeding them is six copies from six published values. Six buttons would be six chances to
+    // press five of them. The refusals that make the single form safe are unchanged and are
+    // re-asserted below AGAINST THE LIST FORM, because a guard that only covers the shape it was
+    // written for is not a guard.
+
+    [Fact]
+    public void Several_staged_writes_emit_one_SetTag_each_IN_ORDER_and_still_NO_sequence_bump()
+    {
+        var doc = Emit(Ir(Button(set:
+            "Cmd_MCMinPctEntry=@Plant_MCMinPct; Cmd_MCMaxPctEntry=@Plant_MCMaxPct; Ui_Store=1")));
+
+        var functions = Functions(doc);
+        Assert.Equal(3, functions.Count);
+        Assert.All(functions, f => Assert.Equal("SetTag", FunctionName(f)));
+        Assert.DoesNotContain(functions, f => FunctionName(f) == "IncreaseTag");
+
+        // ORDER IS THE AUTHOR'S. Read the Tag parameter of each write back out in document order.
+        var targets = functions
+            .Select(f => f.Descendants()
+                .First(e => e.Name.LocalName == "Hmi.Event.FunctionListEntryParameter"
+                            && e.Element("AttributeList")?.Element("Name")?.Value == "Tag")
+                .Element("LinkList")!.Descendants().First(e => e.Name.LocalName == "Name").Value)
+            .ToList();
+        Assert.Equal(new[] { "Cmd_MCMinPctEntry", "Cmd_MCMaxPctEntry", "Ui_Store" }, targets);
+    }
+
+    [Fact]
+    public void Several_staged_writes_are_all_emitted_BEFORE_the_navigation()
+    {
+        var doc = Emit(Ir(Button(set: "A_Tag=1; B_Tag=2", goTo: "02 Silo Detail W")));
+        Assert.Equal(new[] { "SetTag", "SetTag", "ActivateScreen" },
+                     Functions(doc).Select(FunctionName).ToArray());
+    }
+
+    [Fact]
+    public void A_trailing_separator_is_not_a_write_and_is_not_an_error()
+    {
+        var doc = Emit(Ir(Button(set: "A_Tag=1; ")));
+        Assert.Single(Functions(doc));
+    }
+
+    [Fact]
+    public void A_specification_that_is_only_separators_is_REFUSED()
+    {
+        Assert.Throws<OperandStagingException>(() => Emit(Ir(Button(set: ";;"))));
+    }
+
+    [Fact]
+    public void A_sequence_tag_hidden_LATER_in_a_list_is_still_REFUSED()
+    {
+        // The whole point of testing the list form separately: a guard that only looked at the
+        // first segment would pass this, and this is the shape an author would reach for.
+        var ex = Assert.Throws<OperandStagingException>(() =>
+            Emit(Ir(Button(set: "A_Tag=1; Cmd_Plant_Seq=1"))));
+        Assert.Contains("_Seq", ex.Message);
+    }
+
+    [Fact]
+    public void A_code_tag_hidden_LATER_in_a_list_is_still_REFUSED()
+    {
+        Assert.Throws<OperandStagingException>(() =>
+            Emit(Ir(Button(set: "A_Tag=1; B_Tag=2; Cmd_Plant_Code=6"))));
+    }
+
+    [Fact]
+    public void A_list_on_a_button_that_also_commands_is_REFUSED()
+    {
+        Assert.Throws<OperandStagingException>(() =>
+            Emit(Ir(Button(set: "A_Tag=1; B_Tag=2", cmd: "Cmd_Plant", code: "6"))));
+    }
+
+    [Fact]
+    public void The_same_target_written_twice_in_one_press_is_REFUSED()
+    {
+        var ex = Assert.Throws<OperandStagingException>(() =>
+            Emit(Ir(Button(set: "A_Tag=1; B_Tag=2; A_Tag=3"))));
+        Assert.Contains("more than once", ex.Message);
+    }
+
+    [Fact]
+    public void A_malformed_segment_anywhere_in_a_list_is_REFUSED()
+    {
+        Assert.Throws<OperandStagingException>(() => Emit(Ir(Button(set: "A_Tag=1; B_Tag"))));
+    }
+
     // ---- what it refuses ----------------------------------------------------------------------
 
     [Fact]
