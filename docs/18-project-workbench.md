@@ -371,15 +371,26 @@ assertion held* (1/1, 1/1, 4/4), stimulus `Confirmed` throughout. The block was 
   advances. `SettlingEveryIndexTests` asserts three vectors on one slot all settle — and **fails
   against the old code**, verified by temporarily disabling the dwell (3 of its 5 tests went red, and
   the 2 that stayed green were the two that should be unaffected).
-- 2.2 🔨 **Outstanding: the rig re-run — attempted 2026-08-21 and BLOCKED, by Phase 1.** The rig is
-  reachable and owner-allowlisted, a read-only mirror read succeeded, and the loop was driven with the
-  **verifying** gateway (imports nothing, compiles nothing, downloads nothing). It stopped at
-  `NotAdmissible` **before contacting the device**, on exactly one gate: **`0c derived fields`**. The
-  live submission's derivable fields are hand-authored, and two of the artifacts that should back them
-  report their own failure (§3.5). **This is the consequence Phase 1 predicted in writing — "it makes
-  the live submissions harder to admit" — arriving on the first attempt to use it.** It is the gate
-  working, not a regression: the route forward is to repair those artifacts (recompute the conflict
-  graph; redeploy so the deployment result reads `Ran`), derive, and re-run.
+- 2.2 🔨 **Outstanding: the rig re-run. The artifact blocker is CLEARED; a different one now stands.**
+  - ✅ **Gate 0c cleared.** The reachable-state closure was regenerated from its producer — scoped to
+    the two FBs the submission's storage references, **exit 0, nothing withheld** (the first attempts
+    withheld closures by name because the corpus was incomplete, and a partially-withheld report is
+    correctly refused). The submission then **derived all five fields** and the gate returned
+    **ADMISSIBLE**. This was the consequence Phase 1 predicted, and repairing the artifact was the
+    intended remedy — it worked.
+  - 🔴 **The wave still cannot run, and the reason is a gap in the artifact trail.** The verifying
+    gateway refuses: the device's build stamp does not match the staged one. The stamp is a hash over
+    the `--program` set, **two different sets give two different stamps** (confirmed), and **no
+    recorded artifact says which set the successful 2026-08-20 run used** — the result package keeps
+    the outcome and the manifest is computed but never serialised. *A run that cannot be reproduced
+    cannot be re-verified.* The device's build has been unchanged since 2026-08-17, and the block IR
+    is unchanged since then too, so nothing is wrong on the rig — the bookkeeping is missing.
+  - 🔨 **A redeploy would resolve it** (pre-authorised for this rig, and it would push the same
+    unchanged IR) **but was not attempted: Portal was busy** — two active sessions on other projects
+    plus two Openness-invisible processes, the stale-pileup state associated with connect failures.
+    A download is the one operation that must not be interrupted.
+  - ➜ **Worth fixing regardless of this run: the result package should record the program manifest
+    the stamp was computed over.** Then a wave is reproducible by construction.
 - 2.3 🔨 **Outstanding: replace §4.2's `[E]` estimates with `[M]`** — that needs the rig run.
 
 > ⚠️ **A dependency worth naming: Phase 1 now gates Phase 2's own verification.** Nothing is wrong
