@@ -29,15 +29,22 @@ documented/committed, delete it from this file rather than letting it accumulate
 > empty. The owner decisions listed here **stay open and stay waiting**; they are not resolved by the
 > suspension, and the items depending on them stay unverified. Read this section as the resume list.
 
-**CONTEXT CUT — Phases 0+1 DONE 2026-08-21, Phases 2–4 OPEN. Full handoff:
+**CONTEXT CUT — ALL PHASES DONE 2026-08-21. Full handoff:
 `docs/notes/context-cut-handoff.md`.** `CLAUDE.md` went 96,655 → 19,593 bytes and `lad-coder`
 stopped re-reading it in full; per-dispatch orientation dropped ~55k → ~11.4k tokens. The command
 reference moved into the two READMEs, which already claimed to be authoritative for it. **This is
-repo tooling, not pipeline development, so the 2026-08-17 suspension does not hold it** — Phases 2
-(hookify gates), 3 (`evidence.json` hand-back) and 4 (size budget) can be picked up whenever.
-**Phase 4 first if only one gets done**: without it the file regrows, which is exactly how it got
-to 96KB. Gate before any further trim: `python tools/check-claude-md-migration.py`. Only a
-read-only `lad-coder` task has been run against the cut file — a generation or fix run has not.
+repo tooling, not pipeline development, so the 2026-08-17 suspension does not hold it.** Phase 4
+(size budget, `4df5b57`), Phase 2 (hookify gates, `cc4fe05`) and Phase 3 (`evidence.json`
+hand-back, `970067a`) all landed. Gate before any further trim:
+`python tools/check-claude-md-migration.py`; the budget gate then refuses the commit itself.
+**A fresh clone needs `git config core.hooksPath hooks` once, or the budget gate is not installed.**
+
+**Still outstanding: only read-only `lad-coder` tasks have ever been run against the cut file — a
+generation or fix run has not.** Two `explain-plc-block` dispatches, the second confirming
+subagents receive the cut file. The write path is where the READMEs are now load-bearing, and it is
+also what Phase 3's `evidence.json` contract was written for, so neither has been exercised in
+anger. That is the next validation worth doing; it needs Portal, a target defect and the compile
+gate.
 
 **OWNER DECISION WAITING (2026-08-10): five committed tooling fixes cannot be verified without a
 Release rebuild.** FI-63, FI-66, FI-68 and FI-70's `export-all` are built, unit-tested and committed,

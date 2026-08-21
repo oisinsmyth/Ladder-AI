@@ -1,8 +1,18 @@
 # CLAUDE.md context cut — handoff
 
-**Status as of 2026-08-21: Phases 0 and 1 are DONE and committed. Phases 2, 3 and 4 are NOT
-started.** Nothing is half-finished; the work stops at a clean boundary. This page is what a
-fresh agent needs to pick it up.
+**Status as of 2026-08-21: ALL PHASES ARE DONE AND COMMITTED — 0, 1, 2, 3 and 4.** The one thing
+still outstanding is the **write-path validation**: a real generation or fix run against the cut
+file has still never happened. See "What is NOT verified".
+
+| phase | what | commit |
+|---|---|---|
+| 0 + 1 | the cut itself | `c078fab` … `8d9a178` |
+| 4 | anti-regrowth size budget, fail-closed via a pre-commit hook | `4df5b57` |
+| 2 | hookify gates for the two day-costing traps | `cc4fe05` |
+| 3 | `evidence.json` hand-back + verifier | `970067a` |
+
+**One-time setup a fresh clone needs:** `git config core.hooksPath hooks`, or the budget gate is
+not installed. Confirm with `git config core.hooksPath` → `hooks`.
 
 ## Why this was done
 
@@ -107,9 +117,27 @@ Re-run 2026-08-21 against `ir/test-project001/FB_ShredderSequencer.ir`, read-onl
   stated rule was broken. See D-10 - the boundary fix and the IR-legibility fix are coupled, and
   doing the boundary alone makes the next run ship the false defect this one narrowly avoided.
 
-## What is left
+## What was left — all three done 2026-08-21
 
-In priority order.
+Kept below as written, because the reasoning is still the reasoning; what each one turned into is
+recorded first. Two things were learned in the doing that the plans above did not anticipate:
+
+- **Phase 4 could not be done without Phase 2's mechanism, and then turned out not to want it.**
+  Phase 4 asked for a fail-closed check. This repo has no CI, no git hooks and no pre-commit
+  config, and **hookify fails open** — its hooks always `sys.exit(0)`, and a missing interpreter or
+  wrong CWD disables every rule silently. Worse, hookify can only regex the *text* of an edit, so
+  it cannot compute a resulting file size at all. A tracked `hooks/pre-commit` plus
+  `core.hooksPath` is the only mechanism here that actually refuses.
+- **A gate the size budget alone would not have caught:** `.gitattributes` had to pin `hooks/*` to
+  `eol=lf`, or `core.autocrlf=true` checks the hook out CRLF and `sh` fails on the shebang —
+  disabling the gate silently, which is the failure mode a gate must never have.
+
+Both hookify rules carry a residual worth knowing before writing a third: the matched field is the
+whole command line, so writing *about* a blocked command through `Bash` trips the block. Measured
+immediately — the heredoc authoring the rules' own test vectors was denied. Author such content
+with the `Write` tool; the rules are `event: bash`.
+
+The original text, in the original priority order:
 
 **Phase 4 — the anti-regrowth size budget. Do this one first if you only do one.** Without it the
 file regrows: it went 52KB → 96.6KB over its last 30 commits, by exactly the mechanism described
