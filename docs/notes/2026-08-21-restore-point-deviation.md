@@ -112,6 +112,35 @@ serial verifies a model and not a device.
 Unrelated to the restore-point gap, but it means `rig-read`'s non-zero exit is currently expected on
 this rig and must not be read as a failed deploy.
 
+#### Both named fixes were tried. Neither is available today.
+
+**`useCpuInfoSerial` — tested against the device, refused.** Setting it makes the plan *usable*
+(`sources: order code, CPU info (SZL 0x001C)` / `usable: True`), so the configuration gap closes —
+and then the CPU declines: `could not read CPU info: rc=8388608: CLI: Invalid CPU answer`, 158 ms.
+The exit is still 4 and the run now pays an extra failed round trip for nothing, so **the setting
+was reverted**. `IdentitySourcePlan`'s own message predicted this ("on the CPU measured here,
+refuses SZL 0x001C"); this is that prediction confirmed against the device rather than trusted.
+
+**`marker` — not available while the rig carries this program.** A marker names the DB *the program
+publishes its identifier in*, so it is a property of what is deployed, not of the CPU. The harness
+program has such a value — the 32-bit word order was measured off its build stamp. **`test-project001`
+does not**, and that is what the rig carries after the 2026-08-21 deploy.
+
+So the honest position: **the identity check cannot pass on this rig today, and neither documented
+fix changes that.** It is not a misconfiguration to be tidied. What would close it, in order of
+sense:
+
+1. **Put a program back on the rig that publishes an identifier**, then point a `marker` at it. Free
+   if the rig returns to the harness program anyway.
+2. **Publish one deliberately** — a small identifier DB in whatever the rig runs, treated as harness
+   content in the 9000–9999 band. A program change and a deploy, so a decision rather than a tidy-up.
+
+🔴 **What must NOT happen is the third option**, and the code says so at the point of refusal:
+removing the serial number to make the check pass. The order code is identical across every unit of
+the model, and on this network the same address reaches different physical controllers depending on
+which tunnel is up — so an entry without a serial verifies a model, which here is close to no check
+at all.
+
 ## What would close it
 
 A `ProgramAndData` restore-point store: capture retentive areas and DB actual values off the
