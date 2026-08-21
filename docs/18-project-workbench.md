@@ -371,8 +371,21 @@ assertion held* (1/1, 1/1, 4/4), stimulus `Confirmed` throughout. The block was 
   advances. `SettlingEveryIndexTests` asserts three vectors on one slot all settle — and **fails
   against the old code**, verified by temporarily disabling the dwell (3 of its 5 tests went red, and
   the 2 that stayed green were the two that should be unaffected).
-- 2.2 🔨 **Outstanding: the rig re-run.** "3 of 3 answer" is proven in the simulator only.
+- 2.2 🔨 **Outstanding: the rig re-run — attempted 2026-08-21 and BLOCKED, by Phase 1.** The rig is
+  reachable and owner-allowlisted, a read-only mirror read succeeded, and the loop was driven with the
+  **verifying** gateway (imports nothing, compiles nothing, downloads nothing). It stopped at
+  `NotAdmissible` **before contacting the device**, on exactly one gate: **`0c derived fields`**. The
+  live submission's derivable fields are hand-authored, and two of the artifacts that should back them
+  report their own failure (§3.5). **This is the consequence Phase 1 predicted in writing — "it makes
+  the live submissions harder to admit" — arriving on the first attempt to use it.** It is the gate
+  working, not a regression: the route forward is to repair those artifacts (recompute the conflict
+  graph; redeploy so the deployment result reads `Ran`), derive, and re-run.
 - 2.3 🔨 **Outstanding: replace §4.2's `[E]` estimates with `[M]`** — that needs the rig run.
+
+> ⚠️ **A dependency worth naming: Phase 1 now gates Phase 2's own verification.** Nothing is wrong
+> with either, but the ordering means no live wave can run until the job's artifacts support the
+> fields its submissions declare. That is the intended effect of the gate and the real cost of it,
+> and both belong in the same sentence.
 
 ⚠️ **One misreading recorded so nobody re-derives it:** the low `framesRead` counts (1, 12, 14) in
 those packages are **not** a slow poll. `ObservationSeries` retains **distinct frames — frames where
