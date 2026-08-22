@@ -658,7 +658,7 @@ internal static class Program
             return ExitUnusable;
         }
 
-        string? resourceToken = null, leasesDir = null, holder = null, purpose = null, evidencePath = null;
+        string? resourceToken = null, leasesDir = null, holder = null, purpose = null, evidencePath = null, attestation = null;
         var ttlMinutes = DefaultLeaseTtlMinutes;
         int? processId = null;
         var json = false;
@@ -672,6 +672,7 @@ internal static class Program
                 case "--holder": holder = Next(args, ref i); break;
                 case "--purpose": purpose = Next(args, ref i); break;
                 case "--portal-evidence": evidencePath = Next(args, ref i); break;
+                case "--attest-portal-unjudgeable": attestation = Next(args, ref i); break;
                 case "--ttl":
                     if (!int.TryParse(Next(args, ref i), out ttlMinutes) || ttlMinutes <= 0)
                     {
@@ -780,7 +781,7 @@ internal static class Program
         {
             var outcome = LeaseRunner.Acquire(
                 store, resource.Resource, resource.Target, holder, processId.Value,
-                TimeSpan.FromMinutes(ttlMinutes), purpose, evidence);
+                TimeSpan.FromMinutes(ttlMinutes), purpose, evidence, attestation);
 
             var caveat = resource.Resource == LeaseResource.Rig && outcome.Held ? LeaseRunner.RigCaveat : null;
             return Emit(outcome, store.Root, json, caveat);

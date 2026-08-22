@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 
 namespace Ladder.Converter.Leases;
 
@@ -83,7 +83,8 @@ public static class LeaseRunner
         int processId,
         TimeSpan ttl,
         string? purpose,
-        PortalEvidenceResult? evidence)
+        PortalEvidenceResult? evidence,
+        string? attestation = null)
     {
         if (RequiresPortalEvidence(resource))
         {
@@ -108,7 +109,29 @@ public static class LeaseRunner
 
             if (evidence.Verdict != PortalEvidenceVerdict.Clear)
             {
-                return new LeaseOutcome(LeaseResult.EvidenceInconclusive, null, evidence.Detail);
+                // 🔴 THE NAMED ESCAPE, AND IT COVERS THIS CASE ONLY.
+                //
+                // `CannotDecide` means the evidence could not answer the question — an Openness-invisible
+                // Portal reports `projectPath: null`, identical to one with nothing open. A PERSON can
+                // answer it, by looking at the machine, and when they have there is no honest reason for
+                // the tool to keep refusing. What there IS reason to refuse is the answer going
+                // unrecorded, so this takes an ATTESTATION rather than a bare flag: the sentence is
+                // carried into the lease's purpose and shows up in `lease status` for as long as the
+                // lease is held.
+                //
+                // *** IT DOES NOT COVER HeldOutsideTheTool, WHICH IS CHECKED ABOVE AND RETURNS BEFORE
+                // REACHING HERE. *** That verdict is a FACT — a named pid has the project — and an
+                // attestation that contradicts a measurement is not an attestation, it is an override of
+                // the measurement. There is deliberately no flag for it.
+                if (!string.IsNullOrWhiteSpace(attestation))
+                {
+                    return store.TryAcquire(resource, target, holder, processId, ttl,
+                        $"[PORTAL GATE ATTESTED, NOT MEASURED: {attestation.Trim()}] {(purpose ?? string.Empty).Trim()}".Trim());
+                }
+
+                return new LeaseOutcome(LeaseResult.EvidenceInconclusive, null, evidence.Detail
+                    + " If you have established by hand that it does not, say so with --attest-portal-unjudgeable \"<what you checked>\": "
+                    + "the sentence is recorded on the lease, because a gate opened on somebody's word should say whose and on what basis.");
             }
         }
 
