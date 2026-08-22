@@ -31,6 +31,19 @@
   <ItemGroup>
     <ProjectReference Include="..\Harness.Gate\Harness.Gate.csproj" />
     <ProjectReference Include="..\Harness.Map\Harness.Map.csproj" />
+
+    <!--
+      Harness.Device for DeploymentPlan, IProcessRunner and the exit-code reading; Harness.Loop for
+      DeploymentOutcome.
+
+      *** THE BATCH DOES NOT RE-DERIVE THE PORTAL SEQUENCE. *** DeploymentPlan already encodes the
+      order, the layout re-assert after EVERY import (required, not precautionary - a re-import silently
+      reverts a block to Optimized, where classic S7comm cannot see it at all), and the exit-code reading
+      where "ran, reported nothing, examined nothing" is NotProven rather than Ok. A second copy of that
+      would be a second place for it to drift.
+    -->
+    <ProjectReference Include="..\Harness.Device\Harness.Device.csproj" />
+    <ProjectReference Include="..\Harness.Loop\Harness.Loop.csproj" />
   </ItemGroup>
 
 </Project>

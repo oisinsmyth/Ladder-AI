@@ -1,3 +1,6 @@
+using Harness.Device;
+using Harness.Loop;
+using Harness.Map;
 using System.Text;
 
 namespace Harness.Batch;
@@ -31,9 +34,15 @@ public static class BatchCli
         "Usage: harness-batch enqueue --queue <dir> --lane <name> --binding <file> --submission <file> --program <path>... [--purpose <text>]\n"
         + "       harness-batch plan    --queue <dir> [--out <merged-binding.json>]\n"
         + "       harness-batch list    --queue <dir>\n"
-        + "       harness-batch dequeue --queue <dir> --lane <name>";
+        + "       harness-batch dequeue --queue <dir> --lane <name>\n"
+        + "       harness-batch run     --queue <dir> --merged <file> --staging <dir> --leases <dir> --holder <id> --holder-pid <n>\n"
+        + "                             --portal-project <path> --portal-evidence <file> --rig <address> [--port <n>] [--unit <n>]\n"
+        + "                             [--converter <exe>] [--harness-run <exe>] [--allowlist <file>] [--ttl <minutes>]\n"
+        + "                             [--deploy-config <file.json>] --yes    # WITHOUT --yes: prints every command, contacts NOTHING";
 
-    public static int Run(string[] args, TextWriter output, Func<string, string> readFile, Action<string, string> writeFile)
+    public static int Run(
+        string[] args, TextWriter output, Func<string, string> readFile, Action<string, string> writeFile,
+        IProcessRunner? runner = null, Func<IReadOnlyList<HarnessObject>, DeploymentOutcome>? deploy = null)
     {
         ArgumentNullException.ThrowIfNull(args);
         ArgumentNullException.ThrowIfNull(output);
@@ -45,14 +54,18 @@ public static class BatchCli
         }
 
         var verb = args[0];
-        if (verb is not ("enqueue" or "plan" or "list" or "dequeue"))
+        if (verb is not ("enqueue" or "plan" or "list" or "dequeue" or "run"))
         {
-            output.WriteLine($"unknown sub-command '{verb}' — expected one of: enqueue, plan, list, dequeue");
+            output.WriteLine($"unknown sub-command '{verb}' — expected one of: enqueue, plan, list, dequeue, run");
             output.WriteLine(Usage);
             return BatchExit.Unusable;
         }
 
         string? queue = null, lane = null, binding = null, submission = null, outPath = null, purpose = null;
+        string? merged = null, staging = null, leases = null, holder = null, portalProject = null;
+        string? portalEvidence = null, rig = null, converterExe = null, harnessRunExe = null, allowlist = null;
+        int holderPid = 0, rigPort = 503, rigUnit = 1, ttlMinutes = 60;
+        var confirmed = false;
         var programs = new List<string>();
 
         for (var i = 1; i < args.Length; i++)
@@ -70,6 +83,22 @@ public static class BatchCli
                     while (i + 1 < args.Length && !args[i + 1].StartsWith("--", StringComparison.Ordinal))
                         programs.Add(args[++i]);
                     break;
+                case "--merged": merged = Next(args, ref i); break;
+                case "--staging": staging = Next(args, ref i); break;
+                case "--leases": leases = Next(args, ref i); break;
+                case "--holder": holder = Next(args, ref i); break;
+                case "--portal-project": portalProject = Next(args, ref i); break;
+                case "--portal-evidence": portalEvidence = Next(args, ref i); break;
+                case "--rig": rig = Next(args, ref i); break;
+                case "--converter": converterExe = Next(args, ref i); break;
+                case "--harness-run": harnessRunExe = Next(args, ref i); break;
+                case "--allowlist": allowlist = Next(args, ref i); break;
+                case "--deploy-config": _ = Next(args, ref i); break;   // read by Program.cs, which builds the gateway
+                case "--yes": confirmed = true; break;
+                case "--holder-pid": if (!Number(args, ref i, "--holder-pid", output, out holderPid)) return BatchExit.Unusable; break;
+                case "--port": if (!Number(args, ref i, "--port", output, out rigPort)) return BatchExit.Unusable; break;
+                case "--unit": if (!Number(args, ref i, "--unit", output, out rigUnit)) return BatchExit.Unusable; break;
+                case "--ttl": if (!Number(args, ref i, "--ttl", output, out ttlMinutes)) return BatchExit.Unusable; break;
                 default:
                     output.WriteLine($"Unexpected argument: {args[i]}");
                     return BatchExit.Unusable;
@@ -97,8 +126,119 @@ public static class BatchCli
             "enqueue" => Enqueue(store, output, lane, binding, submission, programs, purpose),
             "plan" => Plan(store, output, readFile, writeFile, outPath),
             "list" => List(store, output),
-            _ => Dequeue(store, output, lane),
+            "dequeue" => Dequeue(store, output, lane),
+            _ => Run(store, output, readFile, runner, deploy, new RunArgs(
+                merged, staging, leases, holder, holderPid, portalProject, portalEvidence,
+                rig, rigPort, rigUnit, converterExe, harnessRunExe, allowlist, ttlMinutes, confirmed)),
         };
+    }
+
+    private sealed record RunArgs(
+        string? Merged, string? Staging, string? Leases, string? Holder, int HolderPid,
+        string? PortalProject, string? PortalEvidence, string? Rig, int RigPort, int RigUnit,
+        string? ConverterExe, string? HarnessRunExe, string? Allowlist, int TtlMinutes, bool Confirmed);
+
+    /// <summary>
+    /// 🔴 <b><c>--yes</c> is required, and without it Portal is NEVER CONTACTED.</b>
+    ///
+    /// <para>The same shape <c>download-probe</c>, <c>block-layout --set</c> and
+    /// <c>hmi-create-screen</c> already use, and for a stronger reason than any of them: this takes two
+    /// gates, writes a program into a project and downloads it to a controller. The dry run prints every
+    /// command in order, which is worth having on its own — the deploy is otherwise about seven
+    /// hand-assembled Portal-touching steps.</para>
+    /// </summary>
+    private static int Run(
+        LaneQueue store, TextWriter output, Func<string, string> readFile,
+        IProcessRunner? runner, Func<IReadOnlyList<HarnessObject>, DeploymentOutcome>? deploy, RunArgs args)
+    {
+        var lanes = store.All();
+        var batch = BatchPlanner.Plan(lanes, readFile);
+
+        if (!batch.Planned)
+        {
+            output.Write(BatchPlanner.Describe(batch));
+            output.WriteLine("  NOTHING WAS RUN: a batch that could not be planned is not a batch that can be deployed.");
+            return lanes.Count == 0 ? BatchExit.NothingBatched : BatchExit.Refused;
+        }
+
+        var options = new BatchRunOptions(
+            ConverterExe: args.ConverterExe ?? "converter",
+            HarnessRunExe: args.HarnessRunExe ?? "harness-run",
+            LeasesDirectory: args.Leases ?? string.Empty,
+            PortalProject: args.PortalProject ?? string.Empty,
+            RigAddress: args.Rig ?? string.Empty,
+            Holder: args.Holder ?? string.Empty,
+            HolderPid: args.HolderPid,
+            StagingDirectory: args.Staging ?? string.Empty,
+            MergedBindingPath: args.Merged ?? string.Empty,
+            PortalEvidencePath: args.PortalEvidence ?? string.Empty,
+            RigPort: args.RigPort,
+            RigUnit: args.RigUnit,
+            DeviceAllowlistPath: args.Allowlist,
+            LeaseTtlMinutes: args.TtlMinutes);
+
+        var plan = BatchRunPlan.For(batch, lanes, options);
+
+        output.WriteLine($"lanes {lanes.Count}: {string.Join(", ", batch.LanesBatched)}");
+        output.WriteLine();
+
+        foreach (var step in plan.Steps)
+            output.WriteLine($"  [{step.Kind}]{(step.Lane is null ? "" : " " + step.Lane)}  {step.CommandLineText}");
+
+        foreach (var refusal in plan.Refusals)
+            output.WriteLine($"  REFUSED  {refusal}");
+
+        output.WriteLine();
+
+        if (!plan.Planned)
+            return BatchExit.Unusable;
+
+        // 🔴 CHECKED BEFORE THE GATES, NOT AT THE DEPLOY STEP. BatchRunner would stop there and release
+        // correctly, but it would have taken and handed back two gates to discover a missing argument —
+        // locking another agent out of Portal and the rig for the duration of a run that could never
+        // have deployed.
+        if (args.Confirmed && deploy is null)
+        {
+            output.WriteLine("REFUSED  --yes needs --deploy-config <file.json>, which supplies the Portal project, the group path, the "
+                + "binaries and the download target (DeviceGatewayOptions). Without it there is nothing to deploy with, and taking the "
+                + "gates first would lock another agent out of a run that cannot happen. NO GATE WAS TAKEN.");
+            return BatchExit.Unusable;
+        }
+
+        if (!args.Confirmed)
+        {
+            // Portal has not been contacted, no lease has been taken, and nothing has been written. Said
+            // explicitly rather than left to be inferred from the absence of output.
+            output.WriteLine("DRY RUN — --yes was not passed, so NO GATE WAS TAKEN, NOTHING WAS WRITTEN and PORTAL WAS NOT CONTACTED.");
+            output.WriteLine("The commands above are the ones that would run, in that order.");
+            return BatchExit.Ok;
+        }
+
+        if (runner is null)
+        {
+            output.WriteLine("REFUSED  --yes was passed but this build has no process runner wired in, so nothing could be executed. "
+                + "Nothing was written and no gate was taken.");
+            return BatchExit.Unusable;
+        }
+
+        var result = BatchRunner.Execute(plan, runner, deploy);
+
+        output.WriteLine(result.Headline);
+        output.WriteLine();
+
+        foreach (var step in result.Steps)
+            output.WriteLine($"  {(step.Ok ? "ok    " : step.Verdict.ToString().ToUpperInvariant())}  [{step.Step.Kind}]  {step.Reason}");
+
+        return result.Outcome == BatchRunOutcome.Ran ? BatchExit.Ok : BatchExit.Refused;
+    }
+
+    private static bool Number(string[] args, ref int i, string flag, TextWriter output, out int value)
+    {
+        if (int.TryParse(Next(args, ref i), out value) && value > 0)
+            return true;
+
+        output.WriteLine($"{flag} requires a positive whole number.");
+        return false;
     }
 
     private static int Enqueue(
