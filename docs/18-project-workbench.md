@@ -624,6 +624,14 @@ at:**
   scenario still occupies the same real time. The tick is a *vector input*, not a block preset, so it
   sits outside the compressed-preset table — and at ×4 it lands on exactly one scan, which is why the
   model ceiling is where it is.
+- 🔴 **THE BUILD STAMP DOES NOT COVER THE PARAMETERS, SO COMPRESSING THEM CHANGES THE CONTROLLER
+  WITHOUT CHANGING THE STAMP.** Measured on the last wave's own manifest: the stamp is derived over
+  **8 objects**, and the parameter DB is not one of them — nor is the block under test itself, which
+  appears only as its instance DB. Two result packages describing materially different programs would
+  therefore carry the **same** stamp, and the verifying gateway — whose entire job is to refuse a
+  program that is not the one described — would not notice. **The deploy must add the parameter DB to
+  the program-under-test set**, which changes the stamp and so obliges the copy layer to be regenerated
+  and redeployed with it. That is the coherent sequence, not an extra step to trim.
 - ⚠️ **Nothing yet ties `runtimeCompression` to evidence that the presets were actually applied.** The
   gate checks the *ceilings* admit the factor; it cannot check the device was changed. A submission
   declaring 4 against a program deployed without the scaled values would shrink the backstop 4× on a
