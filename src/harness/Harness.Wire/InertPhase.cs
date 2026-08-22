@@ -80,13 +80,29 @@ namespace Harness.Wire;
 /// spurious-wrap case above.</para>
 /// </param>
 /// <param name="GuardSignal">The guard's name, for the report.</param>
+/// <param name="Width">
+/// 🔴 <b>REGISTERS THE SIGNAL OCCUPIES — 1 for a Bool or Int, 2 for a Time, AND GETTING THIS WRONG IS
+/// SILENT.</b>
+///
+/// <para>The map is HIGH-WORD-FIRST, and <c>ResultRegisterOf</c> returns a signal's FIRST register. So
+/// for a <c>Time</c> the first register is the HIGH word, and any elapsed value under 65.536 s leaves it
+/// at <b>0 permanently</b> while every millisecond lands in the second. A one-register
+/// <see cref="PhaseTrigger.Below"/> on such a signal is therefore satisfied on the FIRST POLL, ALWAYS —
+/// it reports a freshly-restarted window on every wave, including waves where no window is running.</para>
+///
+/// <para>This is not hypothetical: the same high-word blindness is already recorded against a mirrored
+/// timer elsewhere in this system, where a declaration written against the high word alone could not see
+/// the signal move at all. So the value is assembled across the full width before anything is compared.</para>
+/// </param>
 public sealed record PhaseCondition(
     int Register,
     string Signal,
     PhaseTrigger Trigger,
-    ushort? Threshold = null,
+    uint? Threshold = null,
     int? GuardRegister = null,
-    string? GuardSignal = null)
+    string? GuardSignal = null,
+    int Width = 1,
+    RegisterWordOrder WordOrder = RegisterWordOrder.HighWordFirst)
 {
     public int Register { get; } = Register >= 0
         ? Register
@@ -96,7 +112,19 @@ public sealed record PhaseCondition(
         ? Trigger
         : throw new ArgumentOutOfRangeException(nameof(Trigger), "a phase condition with no trigger states nothing. Unstated is deliberately not a usable value.");
 
-    public ushort? Threshold { get; } = Trigger switch
+    public int Width { get; } = Width is 1 or 2
+        ? Width
+        : throw new ArgumentOutOfRangeException(nameof(Width), Width, "a mirrored element occupies one register (Bool, Int) or two (Time). Anything else is not a width this map produces.");
+
+    /// <summary>The signal's value at this poll, assembled across its full width. Never one word of two.</summary>
+    public uint ValueIn(ushort[] registers) => Width == 2
+        ? RegisterWords.To32(registers[Register], registers[Register + 1], WordOrder)
+        : registers[Register];
+
+    /// <summary>True when the whole signal, not just its first register, lies inside the slot's band.</summary>
+    public bool FitsWithin(int bandLength) => Register + Width <= bandLength;
+
+    public uint? Threshold { get; } = Trigger switch
     {
         PhaseTrigger.Decreases when Threshold is not null =>
             throw new ArgumentException("Decreases compares against the PREVIOUS sample, not against a number. A threshold here would be silently ignored.", nameof(Threshold)),
@@ -109,7 +137,7 @@ public sealed record PhaseCondition(
     /// Whether this poll satisfies the condition. <paramref name="hasPrevious"/> is false on the first
     /// poll, which <see cref="PhaseTrigger.Decreases"/> can never satisfy.
     /// </summary>
-    public bool IsMet(ushort value, bool hasPrevious, ushort previous) => Trigger switch
+    public bool IsMet(uint value, bool hasPrevious, uint previous) => Trigger switch
     {
         PhaseTrigger.Decreases => hasPrevious && value < previous,
         PhaseTrigger.Below => value < Threshold!.Value,
@@ -516,7 +544,7 @@ public static class InertPhase
         out string detail,
         out ScanCount reached)
     {
-        var previous = new Dictionary<int, ushort>();
+        var previous = new Dictionary<int, uint>();
         var metAt = new Dictionary<int, long>();
 
         // Slots whose guard was low on the LAST poll. Kept so the timeout can say "the clock never
@@ -547,11 +575,13 @@ public static class InertPhase
                 // A register outside the slot's own band is a REFUSAL, not a wait that never ends. The
                 // budget would eventually expire and report "the phase never occurred", which blames the
                 // block for what is a declaration error.
-                if (phase.Register >= values.Length)
+                // The WHOLE signal has to fit, not just its first register — a Time straddling the end of
+                // the band would read its high word and index past the array for its low one.
+                if (!phase.FitsWithin(values.Length))
                 {
-                    detail = $"slot {slot.SlotIndex} declares its phase on {phase} but that slot publishes only "
-                        + $"{values.Length} result register(s). The register is outside the band, so the condition could never be observed — "
-                        + "this is a declaration that does not fit the map, not a block that never reached its phase.";
+                    detail = $"slot {slot.SlotIndex} declares its phase on {phase}, which occupies {phase.Width} register(s) from "
+                        + $"R{phase.Register:000}, but that slot publishes only {values.Length}. The signal is outside the band, so the "
+                        + "condition could never be observed — a declaration that does not fit the map, not a block that never reached its phase.";
                     return false;
                 }
 
@@ -578,7 +608,8 @@ public static class InertPhase
                     }
                 }
 
-                var value = values[phase.Register];
+                // Assembled across the FULL width. One word of a two-word Time is the silent always-true.
+                var value = phase.ValueIn(values);
                 var had = previous.TryGetValue(slot.SlotIndex, out var last);
                 previous[slot.SlotIndex] = value;
 

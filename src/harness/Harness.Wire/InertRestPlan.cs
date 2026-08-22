@@ -311,7 +311,7 @@ public sealed record InertRestPlan(
         // A phase naming a signal the slot does not publish cannot be observed, and left to run it burns
         // the whole poll budget and then reports "the phase never occurred" — which blames the block for
         // what is a declaration that does not fit the map. Same shape as the quiescence refusal above.
-        var phase = PhaseOf(binding, registers, refusals);
+        var phase = PhaseOf(binding, order, registers, refusals);
 
         var declaration = refusals.Count > 0
             ? null
@@ -337,7 +337,7 @@ public sealed record InertRestPlan(
     /// otherwise surface at run time as the poll budget expiring — i.e. as "the block never reached its
     /// phase", which points at the wrong thing entirely.</para>
     /// </summary>
-    private static PhaseCondition? PhaseOf(SlotBinding binding, IReadOnlyList<InertRestRegister> registers, List<string> refusals)
+    private static PhaseCondition? PhaseOf(SlotBinding binding, RegisterWordOrder order, IReadOnlyList<InertRestRegister> registers, List<string> refusals)
     {
         var signal = binding.PhaseSignal;
         var trigger = binding.PhaseTrigger;
@@ -440,7 +440,13 @@ public sealed record InertRestPlan(
             guardRegister = resolved;
         }
 
-        return new PhaseCondition(register, signal, trigger, binding.PhaseThreshold, guardRegister, guardSignal);
+        // 🔴 *** THE WIDTH COMES FROM THE BINDING'S OWN DECLARATION, NOT FROM AN ASSUMPTION OF 1. *** A
+        // Time occupies two registers high-word-first, so watching only the first means watching the HIGH
+        // word — permanently 0 for any elapsed value under 65.536 s, which makes `Below` true on every
+        // poll and reports a freshly-restarted window on a wave where none is running.
+        var width = Math.Max(1, binding.ResultSignal(signal)?.Registers ?? 1);
+
+        return new PhaseCondition(register, signal, trigger, binding.PhaseThreshold, guardRegister, guardSignal, width, order);
     }
 
     /// <summary>

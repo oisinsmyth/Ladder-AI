@@ -737,7 +737,7 @@ public sealed record SlotBinding(
     /// <see cref="Harness.Map.PhaseTrigger.AtOrAbove"/>; refused with
     /// <see cref="Harness.Map.PhaseTrigger.Decreases"/>, which compares against the previous sample.
     /// </summary>
-    public ushort? PhaseThreshold { get; init; }
+    public uint? PhaseThreshold { get; init; }
 
     /// <summary>
     /// 🔴 <b>A signal that must be SET for a phase sample to count — required in practice for any clock

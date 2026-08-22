@@ -219,7 +219,7 @@ public sealed class SlotBindingDocument
     /// The comparison value for <c>Below</c> and <c>AtOrAbove</c>; refused with <c>Decreases</c>, which
     /// compares against the previous sample rather than a number.
     /// </summary>
-    public ushort? PhaseThreshold { get; set; }
+    public uint? PhaseThreshold { get; set; }
 
     /// <summary>
     /// A signal that must be SET for a phase sample to count. <b>Required in practice for any clock that

@@ -283,6 +283,55 @@ public class PhaseAlignmentTests
         Assert.Contains("while Window_Armed", report.Detail, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// 🔴 <b>A <c>Time</c> IS TWO REGISTERS, HIGH-WORD-FIRST, AND WATCHING ONE OF THEM IS SILENTLY
+    /// ALWAYS-TRUE.</b>
+    ///
+    /// <para><c>ResultRegisterOf</c> returns a signal's FIRST register, which for a Time is the HIGH word
+    /// — and any elapsed value under 65.536 s leaves it at <b>0 permanently</b> while every millisecond
+    /// lands in the second. So a one-register <c>Below</c> on a window clock reports a freshly-restarted
+    /// window on the first poll of every wave, including waves where no window is running at all. The
+    /// same high-word blindness is already recorded against a mirrored timer elsewhere in this system.</para>
+    /// </summary>
+    [Fact]
+    public void A_TIME_phase_reads_BOTH_registers_because_the_high_word_alone_is_always_zero()
+    {
+        // 30 000 ms mid-window: high word 0, low word 30000.
+        var registers = new ushort[] { 0, 0, 30_000 };
+
+        var wide = new PhaseCondition(1, "Window_ET", PhaseTrigger.Below, 2_000, Width: 2);
+        Assert.Equal(30_000u, wide.ValueIn(registers));
+        Assert.False(wide.IsMet(wide.ValueIn(registers), hasPrevious: false, previous: 0));
+
+        // *** THE CONTROL, AND IT IS THE BUG. *** The same clock read as ONE register sees the high word,
+        // which is 0, and declares the window freshly restarted.
+        var narrow = new PhaseCondition(1, "Window_ET", PhaseTrigger.Below, 2_000);
+        Assert.Equal(0u, narrow.ValueIn(registers));
+        Assert.True(narrow.IsMet(narrow.ValueIn(registers), hasPrevious: false, previous: 0));
+
+        // And a genuinely fresh window IS caught at full width — so the fix did not simply disable the
+        // trigger, which is the other way a check like this goes quiet.
+        Assert.True(wide.IsMet(wide.ValueIn(new ushort[] { 0, 0, 900 }), hasPrevious: false, previous: 0));
+
+        // A width the map cannot produce is refused rather than truncated.
+        Assert.Throws<ArgumentOutOfRangeException>(() => new PhaseCondition(1, "X", PhaseTrigger.Decreases, Width: 3));
+    }
+
+    [Fact]
+    public void A_TIME_phase_that_would_run_off_the_end_of_the_band_is_refused_on_its_SECOND_register()
+    {
+        var (client, wire) = Wired();   // two result registers
+        WindowClock(wire, start: 0, step: 100, period: 1000);
+
+        // R001 is the last register, so a two-register signal starting there does not fit — and the first
+        // register alone would have looked perfectly addressable.
+        var report = InertPhase.Establish(client, 0, Vector, Declaration(
+            new PhaseCondition(1, "Window_ET", PhaseTrigger.Decreases, Width: 2)));
+
+        Assert.Equal(InertOutcome.PhaseNotReached, report.Outcome);
+        Assert.Contains("occupies 2 register(s)", report.Detail, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void A_clock_cannot_be_its_own_guard()
     {
