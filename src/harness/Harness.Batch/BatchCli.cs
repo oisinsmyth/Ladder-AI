@@ -42,7 +42,7 @@ public static class BatchCli
 
     public static int Run(
         string[] args, TextWriter output, Func<string, string> readFile, Action<string, string> writeFile,
-        IProcessRunner? runner = null, Func<DeploymentOutcome>? deploy = null)
+        IProcessRunner? runner = null, Func<IReadOnlyList<string>, DeploymentOutcome>? deploy = null)
     {
         ArgumentNullException.ThrowIfNull(args);
         ArgumentNullException.ThrowIfNull(output);
@@ -157,7 +157,7 @@ public static class BatchCli
     /// </summary>
     private static int Run(
         LaneQueue store, TextWriter output, Func<string, string> readFile,
-        IProcessRunner? runner, Func<DeploymentOutcome>? deploy, RunArgs args)
+        IProcessRunner? runner, Func<IReadOnlyList<string>, DeploymentOutcome>? deploy, RunArgs args)
     {
         var lanes = store.All();
         var batch = BatchPlanner.Plan(lanes, readFile);
@@ -169,6 +169,21 @@ public static class BatchCli
             return lanes.Count == 0 ? BatchExit.NothingBatched : BatchExit.Refused;
         }
 
+        // 🔴 DEFAULTS TO THIS PROCESS, AND THE CONVERTER'S OPPOSITE RULE DOES NOT APPLY HERE.
+        //
+        // `converter lease acquire` REFUSES to default --pid to itself, because a converter invocation
+        // exits the moment it returns: the lease would be held by a dead process from birth and every
+        // reclaim decision would fall back to the TTL alone.
+        //
+        // `harness-batch run` is the other case. It SPANS the whole lease - it takes the gates, deploys,
+        // runs every wave and releases - so it is exactly "the process that holds the gate for the
+        // lease's lifetime", which is what that flag asks for. Requiring an operator to supply one
+        // instead produced the failure this comment came from: a pid copied from an earlier shell that
+        // had since exited, refused as not running, on the real rig.
+        //
+        // Still overridable, for a wrapper that genuinely outlives this process.
+        var holderPid = args.HolderPid > 0 ? args.HolderPid : Environment.ProcessId;
+
         var options = new BatchRunOptions(
             ConverterExe: args.ConverterExe ?? "converter",
             HarnessRunExe: args.HarnessRunExe ?? "harness-run",
@@ -176,7 +191,7 @@ public static class BatchCli
             PortalProject: args.PortalProject ?? string.Empty,
             RigAddress: args.Rig ?? string.Empty,
             Holder: args.Holder ?? string.Empty,
-            HolderPid: args.HolderPid,
+            HolderPid: holderPid,
             StagingDirectory: args.Staging ?? string.Empty,
             MergedBindingPath: args.Merged ?? string.Empty,
             PortalEvidencePath: args.PortalEvidence ?? string.Empty,
@@ -230,7 +245,12 @@ public static class BatchCli
             return BatchExit.Unusable;
         }
 
-        var result = BatchRunner.Execute(plan, runner, deploy);
+        // The program union goes to the deployment, so the stamp it writes to the device is computed
+        // over the SAME objects every lane's wave will compute over. Passing none - which this did -
+        // stamps the device with a value no wave can reproduce, and the wave then refuses with a
+        // version mismatch that reads as a failed download. Measured on the rig: device 16#CBE1D692,
+        // staged 16#679E7923, and the download had in fact succeeded.
+        var result = BatchRunner.Execute(plan, runner, () => deploy!(batch.ProgramPaths));
 
         output.WriteLine(result.Headline);
         output.WriteLine();

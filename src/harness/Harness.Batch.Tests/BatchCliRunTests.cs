@@ -71,7 +71,7 @@ public sealed class BatchCliRunTests : IDisposable
         var writer = new StringWriter();
         var runner = new CountingRunner();
         var exit = BatchCli.Run(RunArgs(extra), writer, File.ReadAllText, File.WriteAllText, runner,
-            () => new DeploymentOutcome(true, true, new HashSet<string>(), "loaded"));
+            _ => new DeploymentOutcome(true, true, new HashSet<string>(), "loaded"));
         return (exit, writer.ToString(), runner.Calls);
     }
 
@@ -139,7 +139,7 @@ public sealed class BatchCliRunTests : IDisposable
         args[2] = Path.Combine(_root, "empty-queue");
 
         var exit = BatchCli.Run(args, writer, File.ReadAllText, File.WriteAllText, runner,
-            () => new DeploymentOutcome(true, true, new HashSet<string>(), "loaded"));
+            _ => new DeploymentOutcome(true, true, new HashSet<string>(), "loaded"));
 
         Assert.Equal(BatchExit.NothingBatched, exit);
         Assert.Equal(0, runner.Calls);

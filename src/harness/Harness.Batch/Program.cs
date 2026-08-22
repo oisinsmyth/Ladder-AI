@@ -16,7 +16,7 @@ var runner = new ProcessRunner(staging);
 // RATHER THAN A DEFAULT. DeviceGatewayOptions carries ten required values — the Portal project, the
 // group path, the three binaries, the download target — and not one of them has a safe guess. A default
 // here would be this file inventing where to write a program and which controller to download it to.
-Func<DeploymentOutcome>? deploy = null;
+Func<IReadOnlyList<string>, DeploymentOutcome>? deploy = null;
 
 var configPath = ValueOf("--deploy-config");
 if (configPath is not null)
@@ -59,7 +59,7 @@ if (configPath is not null)
     var mergedPath = ValueOf("--merged");
     var submissionPath = ValueOf("--deploy-submission");
 
-    deploy = () =>
+    deploy = programPaths =>
     {
         if (mergedPath is null || submissionPath is null)
         {
@@ -71,10 +71,27 @@ if (configPath is not null)
         LoopRequest request;
         try
         {
+            // 🔴 THE PROGRAM UNDER TEST, LOADED FROM THE SAME PATHS THE WAVES USE.
+            //
+            // This passed Array.Empty<HarnessObject>(). The build stamp covers the program under test, so
+            // the device was stamped over ZERO objects while every wave computes over the real ones —
+            // measured on the rig as device 16#CBE1D692 against staged 16#679E7923, with the download
+            // having in fact succeeded. The wave then refuses with a version mismatch whose text says the
+            // device is not running this build, which is true and points at entirely the wrong cause.
+            //
+            // ProgramUnderTest.Load is the loader harness-run itself uses, so the two cannot disagree
+            // about what a directory of .ir files contains.
+            var program = ProgramUnderTest.Load(
+                programPaths,
+                File.ReadAllText,
+                path => Directory.Exists(path)
+                    ? Directory.GetFiles(path, "*.ir").OrderBy(p => p, StringComparer.Ordinal).ToArray()
+                    : new[] { path });
+
             request = LoopCli.Compose(
                 Harness.Gate.SubmissionDocument.Read(File.ReadAllText(submissionPath)),
                 Harness.Gate.BindingDocument.Read(File.ReadAllText(mergedPath)),
-                Array.Empty<HarnessObject>(),
+                program,
                 File.ReadAllText,
                 File.ReadAllBytes);
         }
