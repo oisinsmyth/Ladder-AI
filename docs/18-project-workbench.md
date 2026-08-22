@@ -271,10 +271,15 @@ how this project got a rig scan time wrong by an order of magnitude, twice.
 | compile | ~60 s | ~25 s | `[M]` `compile-all --force` 217 s / 126 |
 | download (device-level) | 34–92 s | 5–9 s | `[M]` recovery downloads 34 s and 92 s |
 | sanity-check | 4 s | <1 s | `[M]` |
-| wave run + read-back | ~1 min | ~1 min | `[M]` scan 24.931 ms, RTT typ 78 ms, comp 4.0× |
+| wave run + read-back | 🔴 **~2.7 min PER VECTOR** | 🔴 **~2.7 min PER VECTOR** | `[M]` **2026-08-22, measured: 3 indices, 6,185 round trips** — the ~1 min figure this replaces was an estimate for the WHOLE wave and is wrong by about 8× |
 | **first-pass total** | **≈ 15 min** | **≈ 14 min** | |
 | **with one fix iteration** | **≈ 22 min** | **≈ 17 min** | |
 | **with three fix iterations** | **≈ 36 min** | **≈ 23 min** | |
+
+> 🔴 **THE FIRST MEASURED LINE BROKE THE BUDGET, AND THAT IS WHAT THE `[E]` MARKS WERE FOR.** One
+> estimate replaced by measurement moved the wave from ~1 min to ~2.7 min *per vector* — on a
+> three-vector block that is ~8 min against a 20-min target, before authoring. The remaining `[E]`
+> lines are not more trustworthy for having survived longer; they are simply unmeasured.
 
 ### 4.3 The honest verdict on 20 minutes
 
@@ -348,7 +353,23 @@ refusals only become load-bearing once the values are actually recomputed.
 
 ---
 
-### Phase 2 — Make the loop ANSWER · **P0** · ✅ **FIXED 2026-08-21 (simulator); rig re-run outstanding**
+### Phase 2 — Make the loop ANSWER · **P0** · ✅ **DONE — CONFIRMED ON THE RIG 2026-08-22**
+
+> **The wave ran on the controller and all three vectors settled.**
+>
+> | vector | slot / index | verdict | settling |
+> |---|---|---|---|
+> | vector A | 0 / **0** | **Pass** — 5/5 assertions held | **Settled** |
+> | vector B | 0 / **1** | **Pass** — 4/4 held | **Settled** |
+> | vector C | 0 / **2** | **Pass** — 7/7 held | **Settled** |
+>
+> **3 of 3 conclusive.** Indices 0 and 1 are the ones that were `Unsettled` *by construction* before
+> the fix — only a slot's last index could establish settling. This is the confirmation 2.2 asked for.
+>
+> **It took the vessel lane to get here.** Every earlier attempt used the valve lane, and the rig runs
+> the vessel harness (§ below). The run also exercised the program manifest on hardware: 8 objects,
+> stamp `16#9F25F5DA`, matching the device — so this run, unlike the one that started all this, is
+> reproducible.
 
 🔴 **THIS PHASE WAS WRITTEN ON A FALSE PREMISE AND THE PREMISE CAME FROM THIS PROJECT'S OWN NOTES.**
 It said *"`Harness.Loop` is built and has never run end to end"*, taken from `CLAUDE.md`'s status
@@ -371,7 +392,8 @@ assertion held* (1/1, 1/1, 4/4), stimulus `Confirmed` throughout. The block was 
   advances. `SettlingEveryIndexTests` asserts three vectors on one slot all settle — and **fails
   against the old code**, verified by temporarily disabling the dwell (3 of its 5 tests went red, and
   the 2 that stayed green were the two that should be unaffected).
-- 2.2 🔨 **Outstanding: the rig re-run. The artifact blocker is CLEARED; a different one now stands.**
+- 2.2 ✅ **DONE 2026-08-22** — see the result table above. The history below is kept because the
+  route to it is the useful part: three separate blockers, each of which looked like the last one.
   - ✅ **Gate 0c cleared.** The reachable-state closure was regenerated from its producer — scoped to
     the two FBs the submission's storage references, **exit 0, nothing withheld** (the first attempts
     withheld closures by name because the corpus was incomplete, and a partially-withheld report is
@@ -403,7 +425,21 @@ assertion held* (1/1, 1/1, 4/4), stimulus `Confirmed` throughout. The block was 
   - 🔨 **Still blocked.** The redeploy remains the only route and Portal was still busy on re-check
     ~20 minutes later — unchanged: two active sessions on other projects, two Openness-invisible
     processes.
-- 2.3 🔨 **Outstanding: replace §4.2's `[E]` estimates with `[M]`** — that needs the rig run.
+- 2.3 ✅ **Partly done, and one measurement contradicts the budget.** From the 2026-08-22 run:
+  - **download `[M]` 85.4 s** (23:38:48.33 → 23:40:13.72), inside the 34–92 s already recorded.
+  - 🔴 **wave `[M]`: 3 indices, 6,185 round trips.** At the measured RTT that is **~8 minutes for 3
+    vectors — roughly 2.7 min per vector**, against §4.2's estimate of *"~1 min"* for the whole wave.
+    **The budget line is wrong by about 8×** and §4.2 now says so.
+  - ⚠️ **Not attributed to the settling dwell.** The dwell does add a per-index cost, and an earlier
+    3-vector wave on the *other* lane cost 1,939 round trips — but that is a different lane with
+    different vectors, so the comparison does not carry. *Measured, not explained.*
+  - **Still `[E]`: import, compile and sanity.** The deploy script did not time its steps — a gap
+    worth closing before the next deploy, since those are three of the budget's lines.
+
+- 2.4 ✅ **The rig's own state, recorded because it changed twice today:** `21D74D35` (pre-existing,
+  unreproducible) → `65BB248D` (my valve deploy, which degraded observation) → `357CBC4B` (restore,
+  matching the project) → **`9F25F5DA`** (the vessel harness now on it, and the first build whose
+  inputs are recorded in the result package).
 
 > ⚠️ **A dependency worth naming: Phase 1 now gates Phase 2's own verification.** Nothing is wrong
 > with either, but the ordering means no live wave can run until the job's artifacts support the
@@ -543,6 +579,17 @@ opinion.** That single sentence is why §3 is the most valuable part of this des
   and the two places derivation must refuse. Added the finding that the copy-layer ladder is
   **already generated** and the real gap is the hand-authored submission document. Capability
   assessment compressed to §6.
+- **v2.5 — 2026-08-22.** **PHASE 2 CLOSED — confirmed on the controller.** Three vectors on one slot,
+  all three `Pass`, **all three `Settled`**; indices 0 and 1 are the ones that were unanswerable by
+  construction before the fix. Getting there took four discoveries, each of which looked like the
+  last blocker: **the rig runs the VESSEL harness** (every earlier attempt used the valve lane — the
+  copy layer references 155 slot-prefixed mirror tags for the OTHER lane); **a stamp search that read the wrong number** (a
+  first-match grep picked up build stamps quoted in declaration *comments* rather than the tool's own
+  `BUILD STAMP` line); **`deployment` was unattributable by construction** (Phase 1 demanded a
+  `LoopResult` where every real download emits a `download-probe` log — fixed, with the substring trap
+  that `TRANSFERRED` is inside `NOTHINGTRANSFERRED`); and **one missing `map.storage` entry** which
+  alone caused *68 of 68 signals unresolved* in the conflict graph. 2.3 measured two lines and **the
+  first one broke the budget** — the wave is ~2.7 min per vector, not ~1 min per wave.
 - **v2.4 — 2026-08-21.** **Phase 2 rewritten and its fix landed (simulator).** The phase as written was
   false: the loop had already run end to end twice, and one vector had genuinely `Pass`ed — a stale
   `CLAUDE.md` row quoted onward into this doc and a work plan. The real defect was that **settling

@@ -357,12 +357,12 @@ public static class Recompute
     /// <para>*** DROPPING THE ROOT WAS A FALSE-POSITIVE FACTORY, AND IT WAS MEASURED. *** A first cut
     /// also yielded the path with everything before the first dot removed, so that an
     /// <c>iDB_X.A.B</c> declaration could meet an <c>FB_X|A.B</c> closure entry. It did — and it also
-    /// matched <c>iDB_ValveUnderTest.IO.FTC</c> against <c>FB_SiloVessel|ValveDischarge.IO.FTC</c>, a
+    /// matched <c>iDB_Alpha.IO.Flag</c> against <c>FB_Beta|Sub.IO.Flag</c>, a
     /// completely different location in a closure that covered none of the block under test. Three of
     /// four declarations "matched" that way, against an artifact that mentions none of them.</para>
     ///
     /// <para><b>A suffix is not an identity.</b> Instance-DB names cannot be mapped to their FB textually
-    /// — an <c>iDB_ValveUnderTest</c> is an instance of <c>FB_Valve</c> — so where the two documents use
+    /// — an <c>iDB_Alpha</c> may be an instance of some <c>FB_Gamma</c> — so where the two documents use
     /// different vocabularies the honest answer is that the comparison could not be made, which is what
     /// the caller reports. It is not a licence to match on whatever the tail happens to be.</para>
     /// </summary>
