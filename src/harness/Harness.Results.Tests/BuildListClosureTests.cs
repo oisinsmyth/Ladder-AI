@@ -101,6 +101,7 @@ public class BuildListClosureTests
       "tagTableName": "HarnessMirror",
       "tagPrefix": "HX_",
       "baseByte": 1000,
+      "declaredRegisters": 576,
       "slots": [
         {
           "slotId": "S0",

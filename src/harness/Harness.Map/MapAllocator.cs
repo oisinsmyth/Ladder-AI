@@ -109,6 +109,17 @@ public static class MapAllocator
         if (resultBlock.End > geometry.AvailableRegisters)
             refusals.Add($"the map needs {resultBlock.End} registers but only {geometry.AvailableRegisters} are addressable from %M{geometry.BaseByte} to the top of {geometry.TotalBytes} bytes of bit memory — over by {resultBlock.End - geometry.AvailableRegisters}.");
 
+        // 🔴 THE CEILING THAT ACTUALLY BINDS, AND UNTIL 2026-08-22 NOTHING CHECKED IT. The check above is
+        // against BIT MEMORY — 3,596 registers at base %M1000 — while MB_HOLD_REG on the rig declares
+        // 576. One lane uses ~165, so the gap never bit; a batch of four overflows it.
+        //
+        // A design-time refusal rather than a runtime discovery, because the runtime symptom is the
+        // worst kind: the map allocates, the copy layer generates, the download succeeds, and the wave
+        // then gets reads REFUSED BY THE SERVER partway through the band — which reads as a device fault
+        // and sends a reader to the controller instead of to the area pointer.
+        if (resultBlock.End > geometry.DeclaredRegisters)
+            refusals.Add($"the map needs {resultBlock.End} registers but MB_HOLD_REG declares only {geometry.DeclaredRegisters} — over by {resultBlock.End - geometry.DeclaredRegisters}. Registers past the declared area exist in %M and CANNOT BE READ OVER MODBUS AT ALL: the server refuses them, so the overflow would appear as a failing wave rather than as a map that does not fit. Widen the area pointer in the comms block (P#M{geometry.BaseByte}.0 WORD n) and redeploy, or run fewer slots in this wave set.");
+
         if (refusals.Count > 0)
             return new MapResult(null, refusals, sizeReport);
 

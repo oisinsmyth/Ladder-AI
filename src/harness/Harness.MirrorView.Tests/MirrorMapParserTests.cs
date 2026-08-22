@@ -77,7 +77,7 @@ public class MirrorMapParserTests
     public void EveryTag_RoundTripsThroughMirrorGeometry()
     {
         var map = RealMap();
-        var geometry = MirrorGeometry.ForCpu1214C(retentiveBytes: 0, baseByte: map.BaseByte);
+        var geometry = MirrorGeometry.ForCpu1214C(retentiveBytes: 0, baseByte: map.BaseByte, declaredRegisters: (MirrorGeometry.Cpu1214CBitMemoryBytes - map.BaseByte) / 2);
 
         Assert.NotEmpty(map.Tags);
 

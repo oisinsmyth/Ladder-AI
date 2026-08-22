@@ -81,7 +81,7 @@ public class CopyLayerConverterRoundTripTests
     private static CopyLayerResult Mixed()
     {
         var map = MapAllocator.Allocate(new WaveSetRequest(
-            MirrorGeometry.ForCpu1214C(retentiveBytes: 256, baseByte: 4000),
+            MirrorGeometry.ForCpu1214C(retentiveBytes: 256, baseByte: 4000, declaredRegisters: (MirrorGeometry.Cpu1214CBitMemoryBytes - 4000) / 2),
             new[] { new SlotRequest("S0", 4, 4) })).Require();
 
         var binding = new SlotBinding(
@@ -167,7 +167,7 @@ public class CopyLayerConverterRoundTripTests
     public void A_PHASE_ARMED_LATCH_ROUND_TRIPS_THROUGH_THE_REAL_CONVERTER()
     {
         var map = MapAllocator.Allocate(new WaveSetRequest(
-            MirrorGeometry.ForCpu1214C(retentiveBytes: 256, baseByte: 4000),
+            MirrorGeometry.ForCpu1214C(retentiveBytes: 256, baseByte: 4000, declaredRegisters: (MirrorGeometry.Cpu1214CBitMemoryBytes - 4000) / 2),
             new[] { new SlotRequest("S0", 2, 4) })).Require();
 
         var binding = new SlotBinding(

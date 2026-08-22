@@ -676,6 +676,20 @@ public static class LoopCli
                 Math.Max(1, b.ResultRegistersNeeded)))
             .ToArray();
 
+        // 🔴 REQUIRED, WHERE baseByte AND retentiveBytes BELOW ARE DEFAULTED, AND THE ASYMMETRY IS THE
+        // POINT. Those two have obvious rig values and a wrong one shows up at once as addresses that do
+        // not line up. This number decides whether the map FITS INSIDE WHAT MODBUS CAN REACH, and a
+        // default would be a value this code invented, silently answering that question for a submission
+        // that never stated it. Same rule as --declared-registers in harness-mirror-read.
+        if (binding.DeclaredRegisters is not int declaredRegisters)
+        {
+            throw new InvalidDataException(
+                "the binding document does not state `declaredRegisters`: the width MB_HOLD_REG declares in the comms block's area "
+                + "pointer (P#M<base>.0 WORD n), in registers. It is REQUIRED and is not defaulted, because it is the ceiling a map is "
+                + "checked against — registers past it exist in %M but cannot be read over Modbus at all, so a map that overflows it "
+                + "produces reads REFUSED BY THE SERVER mid-wave rather than a refusal here. On the rig it is 576.");
+        }
+
         return new LoopRequest(
             inputs.Vectors,
             inputs.Enumeration,
@@ -684,7 +698,8 @@ public static class LoopCli
             inputs.Conflicts,
             MirrorGeometry.ForCpu1214C(
                 retentiveBytes: binding.RetentiveBytes ?? 256,
-                baseByte: binding.BaseByte ?? 1000),
+                baseByte: binding.BaseByte ?? 1000,
+                declaredRegisters: declaredRegisters),
             slots,
             bindings,
             new CopyLayerNaming(

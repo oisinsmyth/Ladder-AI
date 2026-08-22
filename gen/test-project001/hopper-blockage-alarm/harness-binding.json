@@ -23,6 +23,8 @@
   "tagTableName": "HarnessMirror",
   "tagPrefix": "HX_",
   "baseByte": 1000,
+  "_declaredRegistersNote": "37 is READ FROM the comms block, not chosen here: ir/test-project001/FB_Comms_ModbusServer.ir declares MB_HOLD_REG := P#M1000.0 WORD 37. Corroborated live 2026-08-14, where harness-mirror-view read FC03(0,37) against the rig. Required since 2026-08-22 because the map is now checked against what Modbus can actually reach, not only against bit memory.",
+  "declaredRegisters": 37,
   "slots": [
     {
       "_slotId": "🔴 `HBA`, RULED 2026-08-14 BY THE COORDINATOR, AND THE RULING IS FREE BECAUSE `serves` MADE IT COSMETIC. This read `SLOT-HBA-ALL` - an invented token, flagged as the only one in the file - back when the slot id was the ONLY join to a vector's `slot` field. It is not any more: `serves` carries the citable ids, so the slot id is now purely an internal key (the tag fragment, and a map-hash input) that no vector cites. `HBA` is what the DEPLOYED mirror uses - `ir/test-project001/HarnessMirror.ir` declares HX_HBA_Start, HX_HBA_V000..V019, HX_HBA_R000..R007 - so keeping it leaves 35 tag names unchanged, where the invented token would rename every one of them to express a grouping key that no longer addresses anything. Cost with no purchaser.",

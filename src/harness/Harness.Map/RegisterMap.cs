@@ -450,7 +450,15 @@ public sealed record RegisterMap(
         {
             var canonical = new StringBuilder();
             canonical.Append("harness-map/1\n");
-            canonical.Append($"mem={Geometry.TotalBytes} retain={Geometry.RetentiveBytes} base={Geometry.BaseByte}\n");
+            // 🔴 `declared` joined this line on 2026-08-22, and its ABSENCE was a documented claim that
+            // was simply false: `total-plant-run-feasibility.md` stated the declared width "is a map-hash
+            // input so the build stamp moves". It was not an input at all, so widening or narrowing
+            // MB_HOLD_REG changed what the wire could reach while every stamp stayed identical — a client
+            // and a controller could disagree about the size of the window and still match.
+            //
+            // Adding it MOVES THE STAMP for every existing submission, which is the correct consequence
+            // and not a side effect: those stamps were computed without a term they should always have had.
+            canonical.Append($"mem={Geometry.TotalBytes} retain={Geometry.RetentiveBytes} base={Geometry.BaseByte} declared={Geometry.DeclaredRegisters}\n");
             canonical.Append($"ver={Version.Register}:{Version.Length}\n");
             canonical.Append($"scan={ScanCounter.Register}:{ScanCounter.Length}\n");
             canonical.Append($"start={StartBools.Register}:{StartBools.Length}\n");

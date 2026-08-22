@@ -12,7 +12,7 @@ namespace Harness.Map.Tests;
 /// </summary>
 public class SlotSizeReportTests
 {
-    private static MirrorGeometry Rig() => MirrorGeometry.ForCpu1214C(retentiveBytes: 256, baseByte: 4000);
+    private static MirrorGeometry Rig() => MirrorGeometry.ForCpu1214C(retentiveBytes: 256, baseByte: 4000, declaredRegisters: (MirrorGeometry.Cpu1214CBitMemoryBytes - 4000) / 2);
 
     private static MapResult Allocate(params (string Id, int Result)[] slots) =>
         MapAllocator.Allocate(new WaveSetRequest(Rig(),

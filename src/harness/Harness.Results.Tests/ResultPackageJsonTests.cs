@@ -38,7 +38,7 @@ public class ResultPackageJsonTests
 
     private static RegisterMap Map() =>
         MapAllocator.Allocate(new WaveSetRequest(
-            MirrorGeometry.ForCpu1214C(256, 4000),
+            MirrorGeometry.ForCpu1214C(256, 4000, declaredRegisters: (MirrorGeometry.Cpu1214CBitMemoryBytes - 4000) / 2),
             new[] { new SlotRequest("S0", 2, 2) })).Require();
 
     private static readonly ObservabilityReport Supportable = ObservabilityCheck.Evaluate(

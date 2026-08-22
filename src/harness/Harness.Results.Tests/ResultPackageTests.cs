@@ -20,7 +20,7 @@ public class ResultPackageTests
 
     private static RegisterMap Map(int slots = 1, int result = 2) =>
         MapAllocator.Allocate(new WaveSetRequest(
-            MirrorGeometry.ForCpu1214C(256, 4000),
+            MirrorGeometry.ForCpu1214C(256, 4000, declaredRegisters: (MirrorGeometry.Cpu1214CBitMemoryBytes - 4000) / 2),
             Enumerable.Range(0, slots).Select(i => new SlotRequest($"S{i}", 2, result)).ToArray())).Require();
 
     private static VectorDeclaration Declaration(

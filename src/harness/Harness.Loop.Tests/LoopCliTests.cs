@@ -33,6 +33,7 @@ public class LoopCliTests
     {
       "blockNumber": 9001,
       "baseByte": 1000,
+      "declaredRegisters": 576,
       "slots": [{
         "slotId": "HBA",
         "vectorTargets": [{ "tag": "Stim_Total", "type": "Time" }],
@@ -52,6 +53,7 @@ public class LoopCliTests
     {
       "blockNumber": 9001,
       "baseByte": 1000,
+      "declaredRegisters": 576,
       "slots": [{
         "slotId": "HBA",
         "vectorTargets": [{ "tag": "Stim_Total", "type": "Time" }],
@@ -66,6 +68,7 @@ public class LoopCliTests
     {
       "blockNumber": 9001,
       "baseByte": 1000,
+      "declaredRegisters": 576,
       "slots": [{
         "slotId": "HBA",
         "assumedZeroRest": true,
@@ -85,6 +88,7 @@ public class LoopCliTests
     {
       "blockNumber": 9001,
       "baseByte": 1000,
+      "declaredRegisters": 576,
       "retentiveBytes": 16,
       "slots": [{
         "slotId": "HBA",

@@ -26,7 +26,7 @@ public class ProgramManifestTests
 
     private static RegisterMap OneSlot() =>
         MapAllocator.Allocate(new WaveSetRequest(
-            MirrorGeometry.ForCpu1214C(retentiveBytes: 256, baseByte: 4000),
+            MirrorGeometry.ForCpu1214C(retentiveBytes: 256, baseByte: 4000, declaredRegisters: (MirrorGeometry.Cpu1214CBitMemoryBytes - 4000) / 2),
             new[] { new SlotRequest("S0", 3, 2) })).Require();
 
     private static SlotBinding Binding() => new(

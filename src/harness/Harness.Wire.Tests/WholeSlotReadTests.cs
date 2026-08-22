@@ -18,7 +18,7 @@ public class WholeSlotReadTests
 
     private static RegisterMap Map(int slots, int result, int vector = 2) =>
         MapAllocator.Allocate(new WaveSetRequest(
-            MirrorGeometry.ForCpu1214C(256, 4000),
+            MirrorGeometry.ForCpu1214C(256, 4000, declaredRegisters: (MirrorGeometry.Cpu1214CBitMemoryBytes - 4000) / 2),
             Enumerable.Range(0, slots).Select(i => new SlotRequest($"S{i}", vector, result)).ToArray())).Require();
 
     private static (MirrorClient Client, RecordingTransport Wire) Wired(RegisterMap map)

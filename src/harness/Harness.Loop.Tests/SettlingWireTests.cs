@@ -87,6 +87,7 @@ public class SettlingWireTests
       "blockName": "FC_HarnessCopyLayer",
       "blockNumber": 900,
       "baseByte": {{MirrorBase}},
+      "declaredRegisters": 576,
       "slots": [{
         "slotId": "S0",
         "startCondition": "{{TrivialBlock.StartTag}}",
@@ -116,7 +117,7 @@ public class SettlingWireTests
             // NOT CHECKED rather than a pass.
             readFile: DerivedFixture.ReaderFor(Binding));
 
-        var result = LoopRun.Execute(request, new SimulatedGateway(Harness.Map.MirrorGeometry.ForCpu1214C(256, MirrorBase)));
+        var result = LoopRun.Execute(request, new SimulatedGateway(Harness.Map.MirrorGeometry.ForCpu1214C(256, MirrorBase, declaredRegisters: (Harness.Map.MirrorGeometry.Cpu1214CBitMemoryBytes - MirrorBase) / 2)));
 
         Assert.Equal(LoopOutcome.Ran, result.Outcome);
         return Assert.Single(result.Packages);
@@ -178,7 +179,7 @@ public class SettlingWireTests
             TrivialBlock.Generate(ProgramBase, blockNumber: 901, TrivialBlockDefect.DoneWhileStillRunning),
             readFile: DerivedFixture.ReaderFor(Binding));
 
-        var result = LoopRun.Execute(request, new SimulatedGateway(Harness.Map.MirrorGeometry.ForCpu1214C(256, MirrorBase)));
+        var result = LoopRun.Execute(request, new SimulatedGateway(Harness.Map.MirrorGeometry.ForCpu1214C(256, MirrorBase, declaredRegisters: (Harness.Map.MirrorGeometry.Cpu1214CBitMemoryBytes - MirrorBase) / 2)));
         var package = Assert.Single(result.Packages);
 
         Assert.Equal(SettlingState.NotSettled, package.Settling.State);

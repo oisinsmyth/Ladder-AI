@@ -247,7 +247,7 @@ public class CopyLayerAgainstRealTiaExportTests
         // Both conformance vector sets observe only Bools, so this was not a corner case — it was every
         // signal either set asserts on.
         var map = MapAllocator.Allocate(new WaveSetRequest(
-            MirrorGeometry.ForCpu1214C(retentiveBytes: 256, baseByte: 1000),
+            MirrorGeometry.ForCpu1214C(retentiveBytes: 256, baseByte: 1000, declaredRegisters: (MirrorGeometry.Cpu1214CBitMemoryBytes - 1000) / 2),
             new[] { new SlotRequest("HBA", 0, 2) })).Require();
 
         var binding = new SlotBinding("HBA", Array.Empty<MirroredSignal>(), null, MirroredSignal.Bools(
@@ -268,7 +268,7 @@ public class CopyLayerAgainstRealTiaExportTests
     private static CopyLayerResult Mixed()
     {
         var map = MapAllocator.Allocate(new WaveSetRequest(
-            MirrorGeometry.ForCpu1214C(retentiveBytes: 256, baseByte: 4000),
+            MirrorGeometry.ForCpu1214C(retentiveBytes: 256, baseByte: 4000, declaredRegisters: (MirrorGeometry.Cpu1214CBitMemoryBytes - 4000) / 2),
             new[] { new SlotRequest("S0", 4, 4) })).Require();
 
         var binding = new SlotBinding(

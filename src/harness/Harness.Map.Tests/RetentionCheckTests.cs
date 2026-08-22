@@ -11,7 +11,7 @@ namespace Harness.Map.Tests;
 /// </summary>
 public class RetentionCheckTests
 {
-    private static readonly MirrorGeometry Rig = MirrorGeometry.ForCpu1214C(retentiveBytes: 256, baseByte: 4000);
+    private static readonly MirrorGeometry Rig = MirrorGeometry.ForCpu1214C(retentiveBytes: 256, baseByte: 4000, declaredRegisters: (MirrorGeometry.Cpu1214CBitMemoryBytes - 4000) / 2);
 
     private static HarnessObject Db(string ir) => new("DB_Harness", HarnessObjectKind.DataBlock, ir);
 
@@ -259,7 +259,7 @@ public class RetentionCheckTests
     {
         // The geometry is itself a harness object for this purpose: a mirror placed inside the retentive
         // window makes every tag in it retentive, however clean each tag line reads.
-        var inside = MirrorGeometry.ForCpu1214C(retentiveBytes: 4096, baseByte: 1000);
+        var inside = MirrorGeometry.ForCpu1214C(retentiveBytes: 4096, baseByte: 1000, declaredRegisters: (MirrorGeometry.Cpu1214CBitMemoryBytes - 1000) / 2);
         var verdict = RetentionCheck.Check(new[] { CleanTable("%MW4000") }, inside);
 
         Assert.False(verdict.Passed);

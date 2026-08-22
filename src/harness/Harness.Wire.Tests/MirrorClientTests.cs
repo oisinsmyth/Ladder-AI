@@ -17,7 +17,7 @@ public class MirrorClientTests
         slots.AddRange(extraSlots.Select(id => new SlotRequest(id, vector, result)));
 
         return MapAllocator.Allocate(new WaveSetRequest(
-            MirrorGeometry.ForCpu1214C(retentiveBytes: 256, baseByte: 4000), slots)).Require();
+            MirrorGeometry.ForCpu1214C(retentiveBytes: 256, baseByte: 4000, declaredRegisters: (MirrorGeometry.Cpu1214CBitMemoryBytes - 4000) / 2), slots)).Require();
     }
 
     private static (MirrorClient Client, RecordingTransport Wire) Wired(RegisterMap? map = null)
@@ -166,7 +166,7 @@ public class MirrorClientTests
         // one-transaction commit is what makes a torn data write a detectable non-event. Narrowing a slot
         // to fit FC16 would trade a free register for a constraint that buys nothing.
         var map = MapAllocator.Allocate(new WaveSetRequest(
-            MirrorGeometry.ForCpu1214C(256, 4000),
+            MirrorGeometry.ForCpu1214C(256, 4000, declaredRegisters: (MirrorGeometry.Cpu1214CBitMemoryBytes - 4000) / 2),
             new[] { new SlotRequest("S0", 200, 2) })).Require();
 
         var wire = new RecordingTransport(map, Stamp);

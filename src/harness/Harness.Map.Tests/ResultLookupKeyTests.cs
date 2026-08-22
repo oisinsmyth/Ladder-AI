@@ -104,7 +104,7 @@ public class ResultLookupKeyTests
         // firing. It is the exact failure the phase-armed throw further down was written for, arrived at
         // from the other side.
         var map = MapAllocator.Allocate(new WaveSetRequest(
-            MirrorGeometry.ForCpu1214C(retentiveBytes: 256, baseByte: 4000),
+            MirrorGeometry.ForCpu1214C(retentiveBytes: 256, baseByte: 4000, declaredRegisters: (MirrorGeometry.Cpu1214CBitMemoryBytes - 4000) / 2),
             new[] { new SlotRequest("S0", 1, 4) })).Require();
 
         var result = CopyLayerGenerator.Generate(

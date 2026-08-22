@@ -21,7 +21,7 @@ public class CopyLayerGeneratorTests
 
     private static RegisterMap OneSlot(int vector = 3, int result = 2) =>
         MapAllocator.Allocate(new WaveSetRequest(
-            MirrorGeometry.ForCpu1214C(retentiveBytes: 256, baseByte: 4000),
+            MirrorGeometry.ForCpu1214C(retentiveBytes: 256, baseByte: 4000, declaredRegisters: (MirrorGeometry.Cpu1214CBitMemoryBytes - 4000) / 2),
             new[] { new SlotRequest("S0", vector, result) })).Require();
 
     private static SlotBinding Binding(
@@ -218,7 +218,7 @@ public class CopyLayerGeneratorTests
     public void A_pure_observation_binding_writes_nothing_and_is_still_generated()
     {
         var map = MapAllocator.Allocate(new WaveSetRequest(
-            MirrorGeometry.ForCpu1214C(256, 4000),
+            MirrorGeometry.ForCpu1214C(256, 4000, declaredRegisters: (MirrorGeometry.Cpu1214CBitMemoryBytes - 4000) / 2),
             new[] { new SlotRequest("S0", 0, 2) })).Require();
 
         var plan = CopyLayerGenerator.Generate(map,
@@ -234,7 +234,7 @@ public class CopyLayerGeneratorTests
     // ---------------------------------------------------------------------------------------------
 
     private static RegisterMap TwoSlots() => MapAllocator.Allocate(new WaveSetRequest(
-        MirrorGeometry.ForCpu1214C(retentiveBytes: 256, baseByte: 4000),
+        MirrorGeometry.ForCpu1214C(retentiveBytes: 256, baseByte: 4000, declaredRegisters: (MirrorGeometry.Cpu1214CBitMemoryBytes - 4000) / 2),
         new[] { new SlotRequest("S0", 2, 2), new SlotRequest("S1", 2, 2) })).Require();
 
     private static CopyLayerResult TwoSlotLayer() => CopyLayerGenerator.Generate(
@@ -516,7 +516,7 @@ public class CopyLayerGeneratorTests
         // unbound slot is a mirror region nothing maintains, and its zeros are indistinguishable from a
         // result.
         var map = MapAllocator.Allocate(new WaveSetRequest(
-            MirrorGeometry.ForCpu1214C(256, 4000),
+            MirrorGeometry.ForCpu1214C(256, 4000, declaredRegisters: (MirrorGeometry.Cpu1214CBitMemoryBytes - 4000) / 2),
             new[] { new SlotRequest("S0", 2, 2), new SlotRequest("S1", 2, 2) })).Require();
 
         var result = CopyLayerGenerator.Generate(map, Binding(), Naming, Stamp);
@@ -539,7 +539,7 @@ public class CopyLayerGeneratorTests
     public void A_binding_wider_than_its_allocated_region_is_refused()
     {
         var narrow = MapAllocator.Allocate(new WaveSetRequest(
-            MirrorGeometry.ForCpu1214C(256, 4000),
+            MirrorGeometry.ForCpu1214C(256, 4000, declaredRegisters: (MirrorGeometry.Cpu1214CBitMemoryBytes - 4000) / 2),
             new[] { new SlotRequest("S0", 1, 1) })).Require();
 
         var result = CopyLayerGenerator.Generate(narrow, Binding(), Naming, Stamp);
@@ -580,7 +580,7 @@ public class CopyLayerGeneratorTests
         // so what this test was actually protecting — no illegal character ever reaches a tag name — is
         // asserted directly rather than through a refusal that also blocked legitimate ids.
         var map = MapAllocator.Allocate(new WaveSetRequest(
-            MirrorGeometry.ForCpu1214C(256, 4000),
+            MirrorGeometry.ForCpu1214C(256, 4000, declaredRegisters: (MirrorGeometry.Cpu1214CBitMemoryBytes - 4000) / 2),
             new[] { new SlotRequest("S 0", 2, 2) })).Require();
 
         var result = CopyLayerGenerator.Generate(map,
@@ -1349,11 +1349,25 @@ public class CopyLayerGeneratorTests
     public void A_BINDING_WITH_NO_LATCH_HASHES_TO_THE_SAME_STAMP_AS_BEFORE()
     {
         // 🔴 THIS CONSTANT WAS NOT READ OUT OF THIS CODE. It was computed by re-implementing the
-        // PRE-CHANGE canonical form (git HEAD's BuildStamp.Of and RegisterMap.MapHash) in a separate
-        // language and hashing it there — so it is an authority outside the assembly, not a value the
-        // implementation agreed with itself about. If this goes red, a stamp already published to a
-        // controller has silently changed meaning.
-        Assert.Equal(0x055BE3AEu, BuildStamp.Of(OneSlot(), Binding(), Naming).Value);
+        // canonical form (BuildStamp.Of and RegisterMap.MapHash) in a separate language and hashing it
+        // there — so it is an authority outside the assembly, not a value the implementation agreed with
+        // itself about. If this goes red, a stamp already published to a controller has silently changed
+        // meaning.
+        //
+        // 🔴 *** IT WENT RED ON 2026-08-22, AND THAT WAS THE CORRECT OUTCOME — 0x055BE3AE -> 0x58613924.
+        // *** `declared=` joined the map hash that day. Its absence had been a documented claim that was
+        // simply false (`total-plant-run-feasibility.md` said the width "is a map-hash input so the build
+        // stamp moves"; it was not an input at all), so widening or narrowing MB_HOLD_REG changed what the
+        // wire could reach while every stamp stayed identical. Every stamp computed before that date was
+        // computed without a term it should always have had, and moving them is the repair rather than
+        // the damage.
+        //
+        // *** THE REPLACEMENT VALUE WAS RE-DERIVED THE SAME WAY, NOT COPIED OUT OF THE FAILURE MESSAGE.
+        // *** Pasting in the "Actual:" number would have quietly converted this from an outside authority
+        // into the implementation agreeing with itself, which is the one thing it exists not to be. The
+        // external model was validated first by reproducing 0x055BE3AE with the new term omitted; only
+        // then was its WITH-term output taken.
+        Assert.Equal(0x58613924u, BuildStamp.Of(OneSlot(), Binding(), Naming).Value);
     }
 
     /// <summary>

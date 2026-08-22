@@ -31,6 +31,7 @@ public class PublishFlagTests
     {
       "blockNumber": 9001,
       "baseByte": 1000,
+      "declaredRegisters": 576,
       "slots": [{
         "slotId": "HBA",
         "vectorTargets": [{ "tag": "Stim_Total", "type": "Time" }],

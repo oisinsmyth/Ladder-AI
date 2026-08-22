@@ -180,14 +180,23 @@ public static class MirrorReadRun
         // project keeps having to retract.
         var betweenControls = System.Diagnostics.Stopwatch.StartNew();
 
-        // ---- 4. THE WHOLE DECLARED AREA, IN ONE TRANSACTION ----
+        // ---- 4. THE WHOLE DECLARED AREA ----
         //
-        // One request over the full width, because that is the question in its plainest form: can a
-        // Modbus client see the area the IR declares? A wide read that fails is reported as the failure
-        // it is. It is NOT narrowed and retried into a success — the sweep below finds the real edge,
-        // and it reports it under a FAILING verdict, never as a pass on a smaller question.
-        output.WriteLine($"== step 2: the whole declared area, one FC03 over registers 0..{options.LastDeclaredRegister} ==");
-        var wide = RegisterRead.Perform(source, 0, options.DeclaredRegisters);
+        // The full width, because that is the question in its plainest form: can a Modbus client see the
+        // area the IR declares? A read that fails is reported as the failure it is. It is NOT narrowed
+        // and retried into a success — the sweep below finds the real edge, and it reports it under a
+        // FAILING verdict, never as a pass on a smaller question.
+        //
+        // 🔴 IT IS SPLIT ACROSS TRANSACTIONS WHERE IT MUST BE, AND THAT IS NOT THE NARROWING JUST RULED
+        // OUT. FC03 carries at most 125 registers; this step used to issue one request whatever the width
+        // and only worked because the live run declared 37. At 576 it would come back refused, and the
+        // verdict would read as a boundary finding about the DEVICE when the request was simply illegal.
+        // Splitting still asks about every register 0..n-1 — it changes the transport, not the question.
+        // The boundary probe below stays UNPAGED, deliberately: it reads the first register past the area
+        // and requires exception 2, and paging that would mask the refusal being measured.
+        var pages = (options.DeclaredRegisters + Harness.Map.ModbusLimits.MaxReadRegisters - 1) / Harness.Map.ModbusLimits.MaxReadRegisters;
+        output.WriteLine($"== step 2: the whole declared area, registers 0..{options.LastDeclaredRegister} in {pages} FC03(s) of at most {Harness.Map.ModbusLimits.MaxReadRegisters} ==");
+        var wide = RegisterRead.PerformPaged(source, 0, options.DeclaredRegisters);
         output.WriteLine($"  FC03(0, {options.DeclaredRegisters})  {wide.Describe()}");
         output.WriteLine();
 

@@ -107,6 +107,7 @@ public class SettlingPerSignalTests
       "blockName": "FC_HarnessCopyLayer",
       "blockNumber": 900,
       "baseByte": {{MirrorBase}},
+      "declaredRegisters": 576,
       "slots": [{
         "slotId": "S0",
         "startCondition": "{{TrivialBlock.StartTag}}",
@@ -138,7 +139,7 @@ public class SettlingPerSignalTests
                 // them as hand-authored. The reader serves the artifact those records name; 0c re-hashes
                 // it, and one it cannot read is NOT CHECKED rather than a pass.
                 readFile: DerivedFixture.ReaderFor(Binding)),
-            new SimulatedGateway(Harness.Map.MirrorGeometry.ForCpu1214C(256, MirrorBase)));
+            new SimulatedGateway(Harness.Map.MirrorGeometry.ForCpu1214C(256, MirrorBase, declaredRegisters: (Harness.Map.MirrorGeometry.Cpu1214CBitMemoryBytes - MirrorBase) / 2)));
 
     private static ResultPackage Package(string settlingSignals, TrivialBlockDefect defect, int unchangedForScans = 3)
     {

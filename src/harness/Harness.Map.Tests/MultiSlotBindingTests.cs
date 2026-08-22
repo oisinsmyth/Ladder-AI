@@ -26,7 +26,7 @@ public class MultiSlotBindingTests
 
     private static RegisterMap Map(params string[] slotIds) =>
         MapAllocator.Allocate(new WaveSetRequest(
-            MirrorGeometry.ForCpu1214C(retentiveBytes: 256, baseByte: 4000),
+            MirrorGeometry.ForCpu1214C(retentiveBytes: 256, baseByte: 4000, declaredRegisters: (MirrorGeometry.Cpu1214CBitMemoryBytes - 4000) / 2),
             slotIds.Select(id => new SlotRequest(id, 3, 2)).ToArray())).Require();
 
     /// <summary>One slot's binding with its OWN stimulus, sharing whatever observations it is given.</summary>
@@ -163,7 +163,7 @@ public class MultiSlotBindingTests
         };
 
         var map = MapAllocator.Allocate(new WaveSetRequest(
-            MirrorGeometry.ForCpu1214C(256, 4000),
+            MirrorGeometry.ForCpu1214C(256, 4000, declaredRegisters: (MirrorGeometry.Cpu1214CBitMemoryBytes - 4000) / 2),
             new[] { new SlotRequest("A", 3, 3), new SlotRequest("B", 3, 3) })).Require();
 
         var bindings = new[] { Lane("A", "DB_A", sources), Lane("B", "DB_B", sources) };

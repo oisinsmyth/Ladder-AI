@@ -94,6 +94,62 @@ public sealed record RegisterRead(
         }
     }
 
+    /// <summary>
+    /// 🔴 <b>The same read, split into transactions the protocol can actually carry.</b>
+    ///
+    /// <para><b>Why this exists.</b> FC03 carries at most 125 registers, and until 2026-08-22 neither
+    /// this tool nor <c>harness-mirror-view</c> mentioned that limit anywhere — both issued ONE
+    /// <c>Perform(source, 0, declaredRegisters)</c> over the whole area. It worked only because the live
+    /// run used <c>--declared-registers 37</c>. Against the rig's real 576 that read is 4.6x the ceiling
+    /// and comes back refused, which the viewer then renders as <i>"the area is narrower than the map
+    /// declares"</i> — pointing at the area pointer when the fault is in the request.</para>
+    ///
+    /// <para>⚠️ <b>The boundary probe must NOT use this.</b> <c>MirrorReadRun</c> proves the declared
+    /// width from both sides by reading the first register PAST the area and requiring exception 2.
+    /// Paging that read would split it and mask the very refusal being measured — so the probe stays on
+    /// <see cref="Perform"/>, deliberately, and this is only for the bulk read.</para>
+    ///
+    /// <para>A failing page is reported as ITSELF — its own start and count — with the whole request
+    /// named in the failure text. Reporting the whole span would claim a boundary at an address that was
+    /// never asked for.</para>
+    /// </summary>
+    public static RegisterRead PerformPaged(IRegisterSource source, int start, int count, int pageSize = Harness.Map.ModbusLimits.MaxReadRegisters)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+
+        if (pageSize < 1)
+            throw new ArgumentOutOfRangeException(nameof(pageSize), pageSize, "a page of no registers reads nothing.");
+
+        if (count <= pageSize)
+            return Perform(source, start, count);
+
+        var values = new List<ushort>(count);
+        long elapsed = 0;
+
+        for (var offset = 0; offset < count; offset += pageSize)
+        {
+            var length = Math.Min(pageSize, count - offset);
+            var page = Perform(source, start + offset, length);
+            elapsed += page.ElapsedMs;
+
+            if (page.Outcome != ReadOutcome.Ok)
+            {
+                return page with
+                {
+                    ElapsedMs = elapsed,
+                    Failure = $"{page.Failure} [page {start + offset}..{start + offset + length - 1} of the "
+                        + $"{count}-register read from {start}, split into {pageSize}-register transactions because FC03 carries no more]",
+                };
+            }
+
+            values.AddRange(page.Values);
+        }
+
+        // Reported as the WHOLE request, because that is what the caller asked for and every page of it
+        // succeeded. The paging is a protocol detail, not a different measurement.
+        return new RegisterRead(start, count, ReadOutcome.Ok, values.ToArray(), null, null, elapsed);
+    }
+
     /// <summary>One line describing what happened, with the raw words when there are any.</summary>
     public string Describe() => Outcome switch
     {

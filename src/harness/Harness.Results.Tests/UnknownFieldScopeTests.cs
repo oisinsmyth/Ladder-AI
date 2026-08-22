@@ -126,6 +126,7 @@ public class UnknownFieldScopeTests
       "blockName": "FC_HarnessCopyLayer",
       "blockNumber": 9000,
       "baseByte": 1000,
+      "declaredRegisters": 576,
       "slots": [{
         "slotId": "S0",
         "startCondition": "HX_Start",
@@ -275,7 +276,7 @@ public class UnknownFieldScopeTests
         var sources = BindingDocument.Read(bindingJson).Slots![0].ResultSources!.Select(GateCli.ToMirroredSignal).ToArray();
 
         var map = MapAllocator.Allocate(new WaveSetRequest(
-            MirrorGeometry.ForCpu1214C(256, 1000),
+            MirrorGeometry.ForCpu1214C(256, 1000, declaredRegisters: (MirrorGeometry.Cpu1214CBitMemoryBytes - 1000) / 2),
             new[] { new SlotRequest("S0", 2, 3) }));
 
         return CopyLayerGenerator.Generate(

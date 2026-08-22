@@ -31,6 +31,21 @@ public sealed class BindingDocument
     public int? RetentiveBytes { get; set; }
 
     /// <summary>
+    /// 🔴 <b>The width <c>MB_HOLD_REG</c> declares, in registers — the reachable ceiling.</b>
+    ///
+    /// <para><b>Required, and deliberately not defaulted</b>, unlike <see cref="BaseByte"/> and
+    /// <see cref="RetentiveBytes"/> above. Those two have obvious rig values and a wrong guess shows up
+    /// immediately as addresses that do not match; this one governs whether a map FITS, and a default
+    /// would be a number this code invented silently deciding that question. It is the same rule
+    /// <c>harness-mirror-read</c>'s <c>--declared-registers</c> already enforces: <i>"defaulting it would
+    /// let a run conclude against a width nobody stated."</i></para>
+    ///
+    /// <para>It is the <c>n</c> in the comms block's area pointer, <c>P#M&lt;base&gt;.0 WORD n</c>. On the
+    /// rig that is 576.</para>
+    /// </summary>
+    public int? DeclaredRegisters { get; set; }
+
+    /// <summary>
     /// 🔴 <b>THE BINDING DOCUMENT WAS OUTSIDE GATE 0b, AND IT IS THE DOCUMENT WHERE A DROPPED FIELD HAS
     /// ALREADY COST A RUN.</b>
     ///

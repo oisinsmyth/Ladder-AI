@@ -179,7 +179,7 @@ public class PhaseAlignmentTests
     private static (MirrorClient Client, RecordingTransport Wire) WiredWide()
     {
         var map = MapAllocator.Allocate(new WaveSetRequest(
-            MirrorGeometry.ForCpu1214C(256, 4000),
+            MirrorGeometry.ForCpu1214C(256, 4000, declaredRegisters: (MirrorGeometry.Cpu1214CBitMemoryBytes - 4000) / 2),
             new[] { new SlotRequest("S0", 2, 3) })).Require();
 
         var wire = new RecordingTransport(map, Stamp);

@@ -24,6 +24,7 @@ public class BindingWireFormatTests
     {
       "blockNumber": 9001,
       "baseByte": 1000,
+      "declaredRegisters": 576,
       "slots": [{
         "slotId": "INTERNAL-KEY",
         "serves": ["G-ONE", "G-TWO", "G-BOUNDARY"],
@@ -214,6 +215,7 @@ public class BindingWireFormatTests
         {
           "blockNumber": 9001,
           "baseByte": 1000,
+          "declaredRegisters": 576,
           "slots": [{
             "slotId": "S0",
             "startCondition": "Stim_Start",
@@ -254,6 +256,7 @@ public class BindingWireFormatTests
         {
           "blockNumber": 9001,
           "baseByte": 1000,
+          "declaredRegisters": 576,
           "slots": [{
             "slotId": "S0",
             "startCondition": "Stim_Start",

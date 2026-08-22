@@ -210,6 +210,27 @@ IR edit, a re-import, a re-compile and a re-download, plus relocating the panel 
 table is generated). **A mismatch between those two lines is silent, so both must be read back**, and
 the width is a map-hash input so the build stamp moves.
 
+> 🔴 **That last clause was FALSE when written, and was made true on 2026-08-22.** `declared` was not
+> in `RegisterMap.MapHash`'s canonical form at all — the line carried `mem=`, `retain=` and `base=` and
+> nothing else — so widening or narrowing `MB_HOLD_REG` changed what the wire could reach while **every
+> build stamp stayed identical**. A client and a controller could disagree about the size of the window
+> and still match, which is the one thing the version register exists to prevent. It is now hashed, and
+> `DeclaredAreaCeilingTests` pins it: two maps differing only in the declared width hash differently.
+> The pinned-stamp test moved with it, `0x055BE3AE → 0x58613924`, re-derived outside the assembly rather
+> than copied out of the failure message.
+>
+> **Also corrected:** *"nothing in `src/harness/` hardcodes it"* is still true, but it was being read as
+> *"nothing checks it"*, which was the real gap — `MapAllocator` compared a map only against **bit
+> memory** (3,596 registers at base `%M1000`) and never against the declared 576. A batch of four lanes
+> would have overflowed it and shown up as reads refused by the server partway through the band, i.e.
+> as a device fault. That is now a refusal at derivation time naming both numbers.
+>
+> ⚠️ **And the widening is not the two-line edit this paragraph describes, on the PC side.** Both
+> `harness-mirror-view` and `harness-mirror-read` issued **one unchunked `FC03(0, declared)`** and
+> neither file referenced the 125-register protocol limit; at 576 that read is 4.6× the ceiling and
+> comes back refused. They now page. The boundary probe stays deliberately unpaged — paging it would
+> split the read whose refusal is the measurement.
+
 ### 3c. What fits
 
 Measured bills: **6 control + 24 vector + 23 result = 53** (driver slot); **6 + 63 + 95 = 164**

@@ -24,7 +24,7 @@ public class MirrorWriteTargetTests
 
     private static RegisterMap Map(int slots = 2, int vector = 3, int result = 4) =>
         MapAllocator.Allocate(new WaveSetRequest(
-            MirrorGeometry.ForCpu1214C(retentiveBytes: 256, baseByte: 4000),
+            MirrorGeometry.ForCpu1214C(retentiveBytes: 256, baseByte: 4000, declaredRegisters: (MirrorGeometry.Cpu1214CBitMemoryBytes - 4000) / 2),
             Enumerable.Range(0, slots).Select(i => new SlotRequest($"S{i}", vector, result)).ToArray())).Require();
 
     // ---------------------------------------------------------------------------------------------

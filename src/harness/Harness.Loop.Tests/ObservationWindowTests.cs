@@ -48,7 +48,7 @@ public class ObservationWindowTests
     private const string ArmedSpec = "SPEC.Armed";
     private const string DoneSpec = "SPEC.Done";
 
-    private static MirrorGeometry Geometry() => MirrorGeometry.ForCpu1214C(256, MirrorBase);
+    private static MirrorGeometry Geometry() => MirrorGeometry.ForCpu1214C(256, MirrorBase, declaredRegisters: (MirrorGeometry.Cpu1214CBitMemoryBytes - MirrorBase) / 2);
 
     private static AssertionEnumeration Enumeration() =>
         AssertionEnumeration.Of(

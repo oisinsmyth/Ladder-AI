@@ -533,7 +533,7 @@ public class MirrorFeedPublisherTests : IDisposable
 
     private static RegisterMap SmallMap() =>
         MapAllocator.Allocate(new WaveSetRequest(
-            MirrorGeometry.ForCpu1214C(retentiveBytes: 256, baseByte: 1000),
+            MirrorGeometry.ForCpu1214C(retentiveBytes: 256, baseByte: 1000, declaredRegisters: (MirrorGeometry.Cpu1214CBitMemoryBytes - 1000) / 2),
             new[] { new SlotRequest("S1", 2, 2) })).Require();
 
     /// <summary>A transport that answers with zeros and counts. The reads are the measurement.</summary>

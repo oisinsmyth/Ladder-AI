@@ -94,7 +94,7 @@ internal sealed class SkeletonRig
         IReadOnlyList<SlotBinding> bindings,
         int scansPerTransaction)
     {
-        var geometry = MirrorGeometry.ForCpu1214C(RetentiveBytes, MirrorBaseByte);
+        var geometry = MirrorGeometry.ForCpu1214C(RetentiveBytes, MirrorBaseByte, declaredRegisters: (MirrorGeometry.Cpu1214CBitMemoryBytes - MirrorBaseByte) / 2);
         var map = MapAllocator.Allocate(new WaveSetRequest(geometry, slots)).Require();
         var naming = new CopyLayerNaming(BlockNumber: 900);
 

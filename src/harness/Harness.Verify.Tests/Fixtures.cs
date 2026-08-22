@@ -84,6 +84,7 @@ internal static class Fixtures
       "blockName": "FC_HarnessCopyLayer",
       "blockNumber": 9001,
       "baseByte": 1000,
+      "declaredRegisters": 576,
       "slots": [{
         "slotId": "S0",
         "startCondition": "Demo_Start",

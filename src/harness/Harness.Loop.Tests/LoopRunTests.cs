@@ -20,7 +20,7 @@ public class LoopRunTests
     private const int MirrorBase = 4000;
     private const int ProgramBase = 3000;
 
-    internal static MirrorGeometry Geometry() => MirrorGeometry.ForCpu1214C(256, MirrorBase);
+    internal static MirrorGeometry Geometry() => MirrorGeometry.ForCpu1214C(256, MirrorBase, declaredRegisters: (MirrorGeometry.Cpu1214CBitMemoryBytes - MirrorBase) / 2);
 
     // A REAL assertion ID, COMPUTED rather than invented. Gate 3g recomputes every ID from its own
     // normalised text and refuses a mismatch, which is what lets the stamping step (assertion-
@@ -396,7 +396,7 @@ public class LoopRunTests
         //
         // That is recorded as an ORDERING fact instead: the earlier gate fires, by name. If a later change
         // makes 0.1b reachable through this loop, this test goes red and demands the real one be written.
-        var request = Request() with { Geometry = MirrorGeometry.ForCpu1214C(retentiveBytes: MirrorBase + 2, baseByte: MirrorBase) };
+        var request = Request() with { Geometry = MirrorGeometry.ForCpu1214C(retentiveBytes: MirrorBase + 2, baseByte: MirrorBase, declaredRegisters: (MirrorGeometry.Cpu1214CBitMemoryBytes - MirrorBase) / 2) };
         var gateway = new SimulatedGateway(Geometry());
 
         var result = LoopRun.Execute(request, gateway);
@@ -767,7 +767,7 @@ public class LoopRunTests
         // so OVER-declaring gives a floor that is too HIGH — the conservative error. *** THE PERMISSIVE
         // DIRECTION IS UNDER-DECLARING *** — which is what naming the slots you are submitting rather than
         // the wave set they run in produces.
-        var geometry = MirrorGeometry.ForCpu1214C(retentiveBytes: 256, baseByte: 4000);
+        var geometry = MirrorGeometry.ForCpu1214C(retentiveBytes: 256, baseByte: 4000, declaredRegisters: (MirrorGeometry.Cpu1214CBitMemoryBytes - 4000) / 2);
 
         double previous = 0;
 

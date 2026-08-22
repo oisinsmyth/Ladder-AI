@@ -44,7 +44,7 @@ public class NonInterferenceTests
     {
         var log = new CoRunningLog();
         var map = MapAllocator.Allocate(new WaveSetRequest(
-            MirrorGeometry.ForCpu1214C(256, 4000),
+            MirrorGeometry.ForCpu1214C(256, 4000, declaredRegisters: (MirrorGeometry.Cpu1214CBitMemoryBytes - 4000) / 2),
             Enumerable.Range(0, 2).Select(i => new SlotRequest($"S{i}", 1, 1)).ToArray())).Require();
 
         var commanded = tensors.Select(t => t.SlotIndex).ToArray();
@@ -129,7 +129,7 @@ public class NonInterferenceTests
         // comparing them proves nothing. A differential over runs that did not happen is worthless.
         var broken = new CoRunningLog();
         var map = MapAllocator.Allocate(new WaveSetRequest(
-            MirrorGeometry.ForCpu1214C(256, 4000),
+            MirrorGeometry.ForCpu1214C(256, 4000, declaredRegisters: (MirrorGeometry.Cpu1214CBitMemoryBytes - 4000) / 2),
             new[] { new SlotRequest("S0", 1, 1), new SlotRequest("S1", 1, 1) })).Require();
         broken.Record(0, new[] { 0, 1 }, new ControlSnapshot(1, default, new ushort[] { 0b11 }, new ushort[] { 0b01 }), 2);
 

@@ -94,6 +94,7 @@ public class QuiescenceWireTests
       "blockName": "FC_HarnessCopyLayer",
       "blockNumber": 900,
       "baseByte": {{MirrorBase}},
+      "declaredRegisters": 576,
       "slots": [{
         "slotId": "S0",
         "startCondition": "{{TrivialBlock.StartTag}}",
@@ -160,7 +161,7 @@ public class QuiescenceWireTests
         // written in a binding document, which is a refusal wearing a diagnosis.
         var result = LoopRun.Execute(
             Compose($"\"quiescenceScans\": {InertPhase.PollBudget + 1},"),
-            new SimulatedGateway(MirrorGeometry.ForCpu1214C(256, MirrorBase)));
+            new SimulatedGateway(MirrorGeometry.ForCpu1214C(256, MirrorBase, declaredRegisters: (MirrorGeometry.Cpu1214CBitMemoryBytes - MirrorBase) / 2)));
 
         Assert.Equal(LoopOutcome.RestNotDeclared, result.Outcome);
         Assert.Empty(result.Packages);
@@ -174,7 +175,7 @@ public class QuiescenceWireTests
     {
         var result = LoopRun.Execute(
             Compose("\"quiescenceScans\": 4,"),
-            new SimulatedGateway(MirrorGeometry.ForCpu1214C(256, MirrorBase)));
+            new SimulatedGateway(MirrorGeometry.ForCpu1214C(256, MirrorBase, declaredRegisters: (MirrorGeometry.Cpu1214CBitMemoryBytes - MirrorBase) / 2)));
 
         Assert.Equal(LoopOutcome.Ran, result.Outcome);
         Assert.Contains("QUIESCENCE: 4 scan(s)", result.InertRest!.Summary(), StringComparison.Ordinal);

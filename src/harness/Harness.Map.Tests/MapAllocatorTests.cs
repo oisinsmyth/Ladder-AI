@@ -9,9 +9,18 @@ namespace Harness.Map.Tests;
 /// </summary>
 public class MapAllocatorTests
 {
-    /// <summary>The rig's geometry with the mirror placed clear of a 256-byte retentive window.</summary>
-    private static MirrorGeometry Rig(int retentiveBytes = 256, int baseByte = 4000) =>
-        MirrorGeometry.ForCpu1214C(retentiveBytes, baseByte);
+    /// <summary>
+    /// The rig's geometry with the mirror placed clear of a 256-byte retentive window.
+    ///
+    /// <para><c>declaredRegisters</c> defaults to the memory-derived maximum so the DECLARED ceiling is
+    /// as permissive as the bit-memory one and these tests keep measuring what they were written to
+    /// measure. The tests that exercise the declared ceiling pass a narrow width explicitly — which is
+    /// the honest shape, since on the rig it is 576 and not 2,096.</para>
+    /// </summary>
+    private static MirrorGeometry Rig(int retentiveBytes = 256, int baseByte = 4000, int? declaredRegisters = null) =>
+        MirrorGeometry.ForCpu1214C(
+            retentiveBytes, baseByte,
+            declaredRegisters ?? (MirrorGeometry.Cpu1214CBitMemoryBytes - baseByte) / 2);
 
     private static WaveSetRequest Wave(params SlotRequest[] slots) => new(Rig(), slots);
 
@@ -423,7 +432,7 @@ public class MapAllocatorTests
     public void A_mirror_inside_the_retentive_window_is_refused()
     {
         var request = new WaveSetRequest(
-            MirrorGeometry.ForCpu1214C(retentiveBytes: 512, baseByte: 256),
+            MirrorGeometry.ForCpu1214C(retentiveBytes: 512, baseByte: 256, declaredRegisters: (MirrorGeometry.Cpu1214CBitMemoryBytes - 256) / 2),
             new[] { new SlotRequest("S0", 1, 1) });
 
         var result = MapAllocator.Allocate(request);
@@ -436,7 +445,7 @@ public class MapAllocatorTests
     public void An_odd_mirror_base_is_refused_because_every_register_would_straddle()
     {
         var request = new WaveSetRequest(
-            MirrorGeometry.ForCpu1214C(retentiveBytes: 0, baseByte: 4001),
+            MirrorGeometry.ForCpu1214C(retentiveBytes: 0, baseByte: 4001, declaredRegisters: 1),
             new[] { new SlotRequest("S0", 1, 1) });
 
         Assert.False(MapAllocator.Allocate(request).Allocated);

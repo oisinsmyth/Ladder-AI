@@ -97,9 +97,15 @@ public sealed class MirrorPoller : IDisposable
             }
         }
 
-        // ---- 3. ONE FC03 OVER THE WHOLE DECLARED AREA ----
+        // ---- 3. THE WHOLE DECLARED AREA, IN AS MANY FC03s AS THE PROTOCOL NEEDS ----
+        //
+        // 🔴 This said "ONE FC03" and issued exactly that, over a width nothing bounded. FC03 carries at
+        // most 125 registers and this file did not mention the limit; it worked only because the live run
+        // declared 37. At the rig's real 576 the read is 4.6x the ceiling and comes back refused — which
+        // the switch below renders as "the area is narrower than the map declares", i.e. it accuses the
+        // area pointer of a fault that is in the request.
         var clock = Stopwatch.StartNew();
-        var read = RegisterRead.Perform(_session, 0, _options.DeclaredRegisters);
+        var read = RegisterRead.PerformPaged(_session, 0, _options.DeclaredRegisters);
         clock.Stop();
 
         switch (read.Outcome)

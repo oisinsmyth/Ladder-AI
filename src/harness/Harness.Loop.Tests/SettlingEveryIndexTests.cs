@@ -117,7 +117,7 @@ public class SettlingEveryIndexTests
     private static LoopResult Run(TrivialBlockDefect defect, params SubmissionVector[] vectors) =>
         LoopRun.Execute(Request(vectors, defect), new SimulatedGateway(Geometry()));
 
-    private static MirrorGeometry Geometry() => MirrorGeometry.ForCpu1214C(256, MirrorBase);
+    private static MirrorGeometry Geometry() => MirrorGeometry.ForCpu1214C(256, MirrorBase, declaredRegisters: (MirrorGeometry.Cpu1214CBitMemoryBytes - MirrorBase) / 2);
 
     private static SubmissionVector Vector(string id, int index, int step, int settlingScans = 3)
     {

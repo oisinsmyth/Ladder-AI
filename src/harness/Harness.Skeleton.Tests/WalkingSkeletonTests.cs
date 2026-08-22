@@ -218,7 +218,7 @@ public class WalkingSkeletonTests
         // tag. Placed inside the window it is refused for exactly the reason the mirror would be.
         var inside = TrivialBlock.Generate(baseByte: 100, blockNumber: 901);
 
-        var verdict = RetentionCheck.Check(inside, MirrorGeometry.ForCpu1214C(256, 4000));
+        var verdict = RetentionCheck.Check(inside, MirrorGeometry.ForCpu1214C(256, 4000, declaredRegisters: (MirrorGeometry.Cpu1214CBitMemoryBytes - 4000) / 2));
 
         Assert.False(verdict.Passed);
         Assert.Contains(verdict.Findings, f => f.Detail.Contains("retentive M window", StringComparison.Ordinal));

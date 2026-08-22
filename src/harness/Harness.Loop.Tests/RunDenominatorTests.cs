@@ -41,7 +41,7 @@ public class RunDenominatorTests
     /// </summary>
     private const int LiveTransactions = 40;
 
-    private static MirrorGeometry Geometry() => MirrorGeometry.ForCpu1214C(256, MirrorBase);
+    private static MirrorGeometry Geometry() => MirrorGeometry.ForCpu1214C(256, MirrorBase, declaredRegisters: (MirrorGeometry.Cpu1214CBitMemoryBytes - MirrorBase) / 2);
 
     private static AssertionEnumeration Enumeration(IReadOnlyDictionary<string, string>? bounds) =>
         AssertionEnumeration.Of(

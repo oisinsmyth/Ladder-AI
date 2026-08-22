@@ -35,16 +35,37 @@ namespace Harness.Map;
 /// program declares no retentive bit memory — but it must be stated, never assumed.
 /// </param>
 /// <param name="BaseByte">Byte address of Modbus holding register 0 — the <c>MB_HOLD_REG</c> pointer.</param>
-public sealed record MirrorGeometry(int TotalBytes, int RetentiveBytes, int BaseByte)
+/// <param name="DeclaredRegisters">
+/// 🔴 <b>The width <c>MB_HOLD_REG</c> actually declares — the ONLY registers a Modbus client can reach.</b>
+///
+/// <para><b>This is a second and much smaller ceiling than <see cref="AvailableRegisters"/>, and until
+/// 2026-08-22 nothing compared a map against it.</b> Bit memory allows 3,596 registers at base
+/// <c>%M1000</c>; the area pointer on the rig declares <b>576</b>. One lane uses ~165, so the gap has
+/// never bitten — a batch of four would overflow it, and the symptom would not be a refusal at
+/// derivation time. It would be reads REFUSED BY THE SERVER partway through the band, i.e. a wave that
+/// looks like a device fault.</para>
+///
+/// <para><b>Required, never defaulted.</b> The same rule <c>--declared-registers</c> already enforces
+/// in <c>harness-mirror-read</c>: <i>"defaulting it would let a run conclude against a width nobody
+/// stated."</i> A default here would be a number this code invented, silently governing whether a map
+/// fits.</para>
+/// </param>
+public sealed record MirrorGeometry(int TotalBytes, int RetentiveBytes, int BaseByte, int DeclaredRegisters)
 {
     /// <summary>Bit memory on the classic 1214C: 8192 bytes / 4096 words [R, System Manual V4.4 Table A-48].</summary>
     public const int Cpu1214CBitMemoryBytes = 8192;
 
-    /// <summary>The 1214C geometry, with the two program-dependent numbers supplied by the caller.</summary>
-    public static MirrorGeometry ForCpu1214C(int retentiveBytes, int baseByte) =>
-        new(Cpu1214CBitMemoryBytes, retentiveBytes, baseByte);
+    /// <summary>The 1214C geometry, with the three program-dependent numbers supplied by the caller.</summary>
+    public static MirrorGeometry ForCpu1214C(int retentiveBytes, int baseByte, int declaredRegisters) =>
+        new(Cpu1214CBitMemoryBytes, retentiveBytes, baseByte, declaredRegisters);
 
-    /// <summary>Holding registers addressable from <see cref="BaseByte"/> to the top of bit memory.</summary>
+    /// <summary>
+    /// Holding registers addressable from <see cref="BaseByte"/> to the top of bit memory.
+    ///
+    /// <para>⚠️ <b>This is the MEMORY ceiling, not the reachable one.</b> A register inside it but beyond
+    /// <see cref="DeclaredRegisters"/> exists in <c>%M</c> and cannot be read over Modbus at all. Both
+    /// are checked; this one is almost never the binding constraint.</para>
+    /// </summary>
     public int AvailableRegisters => Refusals.Count > 0 ? 0 : (TotalBytes - BaseByte) / 2;
 
     /// <summary>Byte address of the <c>%MW</c> word carrying holding register <paramref name="register"/>.</summary>
@@ -130,6 +151,15 @@ public sealed record MirrorGeometry(int TotalBytes, int RetentiveBytes, int Base
 
             if (TotalBytes > 0 && BaseByte >= 0 && BaseByte >= TotalBytes)
                 refusals.Add($"mirror base %M{BaseByte} is beyond the CPU's {TotalBytes} bytes of bit memory.");
+
+            if (DeclaredRegisters <= 0)
+                refusals.Add($"the declared Modbus area is {DeclaredRegisters} register(s). An area nothing can be read from is not a mirror — this is the width MB_HOLD_REG states in the comms block's area pointer (P#M<base>.0 WORD n).");
+
+            // The declared area cannot extend past the memory it is a window onto. A pointer that does is
+            // a program-side mistake, and it would show up as reads that succeed on the wire and address
+            // memory the CPU does not have.
+            if (DeclaredRegisters > 0 && TotalBytes > 0 && BaseByte >= 0 && BaseByte + (2 * DeclaredRegisters) > TotalBytes)
+                refusals.Add($"the declared Modbus area of {DeclaredRegisters} register(s) from %M{BaseByte} runs to %M{BaseByte + (2 * DeclaredRegisters) - 1}, past the CPU's {TotalBytes} bytes of bit memory. Either the area pointer or the base is wrong.");
 
             return refusals;
         }
