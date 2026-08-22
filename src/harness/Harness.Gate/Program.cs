@@ -4,6 +4,10 @@ using Harness.Gate;
 // without a process — a decision only reachable through a process is a decision nobody tests.
 return args.Length > 0 && string.Equals(args[0], "stamp", StringComparison.Ordinal)
     ? StampCli.Run(args, Console.Out, File.ReadAllText, File.WriteAllText)
+    : args.Length > 0 && string.Equals(args[0], "compress", StringComparison.Ordinal)
+        // Emits the scaled preset table for a deploy to apply. It touches no device and edits no IR:
+        // what it produces is a FILE, so the deploy and the wave can be shown to mean the same factor.
+        ? CompressCli.Run(args, Console.Out, File.ReadAllText, File.WriteAllText)
     : args.Length > 0 && string.Equals(args[0], "derive", StringComparison.Ordinal)
         // File.ReadAllBytes is passed so the artifact hash is taken over BYTES rather than over text as
         // read - the stronger form, and the default wherever a real filesystem is available. The text

@@ -636,11 +636,37 @@ public static class LoopCli
                 // contents step, the check reliably caught it mid-integration and blamed the block.
                 // Absent stays 1, which is the floor rather than a blank.
                 QuiescenceScans = s.QuiescenceScans ?? 1,
+
+                // 🔴 *** THE PHASE CONDITION, AND AN UNRECOGNISED TRIGGER IS A THROW RATHER THAN Unstated.
+                // *** Falling back to Unstated would silently drop the whole declaration: `InertRestPlan`
+                // would then see a signal with no trigger and refuse for the WRONG reason, or — if the
+                // signal were also absent — say nothing at all and run the wave unaligned while the
+                // document plainly asked for alignment. A typo'd trigger must name itself.
+                PhaseSignal = s.PhaseSignal,
+                PhaseTrigger = ParsePhaseTrigger(s.PhaseTrigger, s.SlotId),
+                PhaseThreshold = s.PhaseThreshold,
             })
             .ToArray();
 
         if (bindings.Length == 0)
             throw new InvalidDataException("the binding document names no slots. Empty is not clean: a loop with nothing bound would generate a copy layer that mirrors nothing.");
+
+        static Harness.Map.PhaseTrigger ParsePhaseTrigger(string? declared, string? slotId)
+        {
+            if (string.IsNullOrWhiteSpace(declared))
+                return Harness.Map.PhaseTrigger.Unstated;
+
+            if (Enum.TryParse<Harness.Map.PhaseTrigger>(declared, ignoreCase: true, out var parsed)
+                && parsed != Harness.Map.PhaseTrigger.Unstated)
+            {
+                return parsed;
+            }
+
+            throw new InvalidDataException(
+                $"slot '{slotId}' declares phaseTrigger '{declared}', which is not one of Decreases, Below or AtOrAbove. "
+                + "*** REFUSED RATHER THAN TREATED AS UNSTATED: *** a dropped trigger runs the wave with no phase alignment at all "
+                + "while the document plainly asked for it, and the resulting wave looks exactly like an aligned one.");
+        }
 
         var slots = bindings
             .Select(b => new SlotRequest(

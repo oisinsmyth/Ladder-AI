@@ -306,13 +306,21 @@ public sealed record InertRestPlan(
                 + "hole is filled silently instead of refusing.");
         }
 
+        // ---- THE PHASE CONDITION, RESOLVED HERE BECAUSE THIS IS WHERE THE RESULT SOURCES ARE ------------
+        //
+        // A phase naming a signal the slot does not publish cannot be observed, and left to run it burns
+        // the whole poll budget and then reports "the phase never occurred" — which blames the block for
+        // what is a declaration that does not fit the map. Same shape as the quiescence refusal above.
+        var phase = PhaseOf(binding, registers, refusals);
+
         var declaration = refusals.Count > 0
             ? null
             : new InertDeclaration(
                 registers.Where(r => r.Gated).ToDictionary(r => r.Register, r => r.Expected),
                 quiescenceScans,
                 registers.Where(r => !r.Gated).ToDictionary(r => r.Register, r => r.Detail),
-                registers.Where(r => r.Provenance == InertRestProvenance.Defaulted).Select(r => r.Register).ToHashSet());
+                registers.Where(r => r.Provenance == InertRestProvenance.Defaulted).Select(r => r.Register).ToHashSet(),
+                phase);
 
         return new InertRestPlan(
             binding.SlotId,
@@ -320,6 +328,90 @@ public sealed record InertRestPlan(
             registers.OrderBy(r => r.Register).ToArray(),
             refusals,
             notes);
+    }
+
+    /// <summary>
+    /// Turn the binding's phase declaration into a register, or add the reason it cannot be one.
+    ///
+    /// <para><b>Every refusal here is a declaration that does not fit the map</b>, and each would
+    /// otherwise surface at run time as the poll budget expiring — i.e. as "the block never reached its
+    /// phase", which points at the wrong thing entirely.</para>
+    /// </summary>
+    private static PhaseCondition? PhaseOf(SlotBinding binding, IReadOnlyList<InertRestRegister> registers, List<string> refusals)
+    {
+        var signal = binding.PhaseSignal;
+        var trigger = binding.PhaseTrigger;
+
+        if (string.IsNullOrWhiteSpace(signal))
+        {
+            // A trigger with nothing to watch is a half-written declaration, and silently ignoring it
+            // would leave the author believing the wave is phase-aligned when it is not.
+            if (trigger != PhaseTrigger.Unstated)
+            {
+                refusals.Add(
+                    $"slot '{binding.SlotId}' declares phaseTrigger = {trigger} and no phaseSignal. A trigger with nothing to watch "
+                    + "cannot be evaluated, and ignoring it would leave a wave believing it is phase-aligned when nothing is aligning it.");
+            }
+
+            return null;
+        }
+
+        if (trigger == PhaseTrigger.Unstated)
+        {
+            refusals.Add(
+                $"slot '{binding.SlotId}' declares phaseSignal '{signal}' and no phaseTrigger. There is no default trigger: "
+                + "'decreases' waits for a wrap and costs up to a full window period, 'below' can be satisfied immediately, and "
+                + "picking either on the author's behalf changes both what is proven and what the wave costs.");
+            return null;
+        }
+
+        var register = binding.ResultRegisterOf(signal);
+
+        if (register < 0)
+        {
+            refusals.Add(
+                $"slot '{binding.SlotId}' declares its phase on '{signal}', which resolves to no result register of this binding. "
+                + "*** THE SIGNAL MUST BE ONE THE SLOT PUBLISHES *** — the phase is observed through the mirror like any other "
+                + "reading, so a signal that is not in the result sources is one the client can never see. Left to run, this expires "
+                + "the poll budget and reports that the block never reached its phase.");
+            return null;
+        }
+
+        if (trigger == PhaseTrigger.Decreases && binding.PhaseThreshold is not null)
+        {
+            refusals.Add(
+                $"slot '{binding.SlotId}' declares phaseTrigger = Decreases with a phaseThreshold of {binding.PhaseThreshold}. "
+                + "Decreases compares against the PREVIOUS sample, not against a number, so the threshold would be silently ignored.");
+            return null;
+        }
+
+        if (trigger is PhaseTrigger.Below or PhaseTrigger.AtOrAbove && binding.PhaseThreshold is null)
+        {
+            refusals.Add(
+                $"slot '{binding.SlotId}' declares phaseTrigger = {trigger} with no phaseThreshold. There is nothing to compare against.");
+            return null;
+        }
+
+        // 🔴 *** A PHASE SIGNAL THAT IS ALSO GATED BY THE INERT CHECKS MAKES INERT UNSATISFIABLE. ***
+        //
+        // The phase is observed DURING the inert phase, which means the signal has to be moving then —
+        // that is the whole idea: a free-running window timer. But check two refuses exactly that, because
+        // a gated register that changes between the two observations is `NotQuiescent`. So the two
+        // declarations contradict each other, and the symptom is the WORST possible one: a wave that never
+        // starts, reporting that the BLOCK is not at rest, for a signal the coordinator asked to watch
+        // precisely because it never is.
+        if (registers.FirstOrDefault(r => r.Register == register) is { Gated: true })
+        {
+            refusals.Add(
+                $"slot '{binding.SlotId}' watches '{signal}' (R{register:000}) for its phase AND gates the same register in the inert "
+                + "value check. *** THESE CONTRADICT EACH OTHER. *** A phase signal has to be MOVING during the inert phase or there is no "
+                + "phase to observe, and check two refuses a gated register that moves between its two observations. Left in place, inert "
+                + "never establishes and reports NotQuiescent — blaming the block for a signal that was asked to be running. Exclude the "
+                + "register from the inert declaration, with the phase as its stated reason.");
+            return null;
+        }
+
+        return new PhaseCondition(register, signal, trigger, binding.PhaseThreshold);
     }
 
     /// <summary>

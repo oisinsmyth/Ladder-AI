@@ -539,7 +539,12 @@ public static class GateCli
     /// <para>Null only when the document says nothing at all. An object present but incomplete is passed
     /// through so the gate can name the missing field, rather than being flattened to "absent".</para>
     /// </summary>
-    private static BlockCompressionInputs? ToCompressionInputs(SubmissionDocument document)
+    /// <summary>
+    /// The document's compression inputs. <b>Public so <c>harness-gate compress</c> reads them through
+    /// exactly this path</b> — two readers for one section is how the gate and the tool that feeds it end
+    /// up disagreeing, which has already happened once in this file's history with the derive reader.
+    /// </summary>
+    public static BlockCompressionInputs? ToCompressionInputs(SubmissionDocument document)
     {
         if (document.BlockCompression is null && document.Model?.CompStable is null)
             return null;

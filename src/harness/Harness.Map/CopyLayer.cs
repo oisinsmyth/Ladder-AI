@@ -530,6 +530,49 @@ public sealed record MirroredSignal(
 /// decides both the mirror tag and the rung shape. One signal occupies one register whatever its width;
 /// packing is an explicit non-goal, and the client's register index is this list's index.
 /// </param>
+/// <summary>
+/// How a slot's declared phase condition recognises that the thing it watches has restarted.
+///
+/// <para>Lives here rather than in <c>Harness.Wire</c> because <see cref="SlotBinding"/> carries the
+/// declaration and this assembly cannot reference that one.</para>
+/// </summary>
+public enum PhaseTrigger
+{
+    /// <summary>The zero value, and unusable — a trigger nobody stated cannot be the one that happened to be first.</summary>
+    Unstated = 0,
+
+    /// <summary>
+    /// The register's value went DOWN between two consecutive polls — the wrap.
+    ///
+    /// <para>A tumbling window's elapsed time climbs to its preset and resets, so a decrease is the
+    /// instant a fresh window began, observable without knowing the preset, the arm instant, or anything
+    /// else about the block. <b>It can never be satisfied on the first poll</b> — there is no previous
+    /// value to have decreased from — which is correct rather than a limitation: a single sample cannot
+    /// witness a transition.</para>
+    ///
+    /// <para>⚠️ <b>It always waits for the NEXT wrap, so it costs up to a full window period</b> — two
+    /// minutes of pure waiting on a two-minute window, even when the wave is already well placed. Prefer
+    /// <see cref="Below"/> where the quantity is monotonic.</para>
+    /// </summary>
+    Decreases,
+
+    /// <summary>
+    /// The value is below the threshold. <b>For a MONOTONIC quantity that resets — a timer's elapsed
+    /// value — this is the trigger to prefer, and it is not the weaker one.</b>
+    ///
+    /// <para>"Elapsed is under 5 s" means "the window started under 5 s ago", which is the fact the phase
+    /// is wanted for; and unlike <see cref="Decreases"/> it can be satisfied on the FIRST poll, so a wave
+    /// that is already well placed pays nothing at all.</para>
+    ///
+    /// <para>⚠️ <b>It is genuinely weaker where the quantity is NOT monotonic</b>, because then "currently
+    /// low" does not imply "recently reset". The choice belongs to whoever knows the signal.</para>
+    /// </summary>
+    Below,
+
+    /// <summary>The value is at or above the threshold. Same caveat as <see cref="Below"/> about non-monotonic signals.</summary>
+    AtOrAbove,
+}
+
 public sealed record SlotBinding(
     string SlotId,
     IReadOnlyList<MirroredSignal> VectorTargets,
@@ -664,6 +707,37 @@ public sealed record SlotBinding(
     /// downloaded.</para>
     /// </summary>
     public int QuiescenceScans { get; init; } = 1;
+
+    /// <summary>
+    /// 🔴 <b>Hold the inert phase until this slot's block is at a known point in its own cycle, instead
+    /// of writing every vector to survive an unknown one.</b> The signal to watch — a name this binding
+    /// already publishes as a result source, so it resolves to a register the same way a settling signal
+    /// does. Null means no phase condition: the test starts from wherever the block's clocks happen to be.
+    ///
+    /// <para><b>What it buys, measured.</b> Where a block's windows are TUMBLING and the arm instant
+    /// depends on how the previous index left the plant, a vector that cannot know the phase must place
+    /// its stimulus late enough to land inside a live window under BOTH the earliest and latest arm. On
+    /// the one wave that has run end to end, <b>that hedge was about half of the dominant index</b>.</para>
+    ///
+    /// <para><b>Declared per SLOT and not per vector, deliberately.</b> The phase is a property of the
+    /// block the slot drives, so every vector on it wants the same answer; and the inert declaration is
+    /// built from this binding, which is where the signal can be checked against what the slot actually
+    /// publishes. A vector-level knob would be resolvable in a place that cannot see the result sources.</para>
+    ///
+    /// <para>⚠️ <b>It is NOT part of the build stamp</b>, for <see cref="QuiescenceScans"/>'s reason: it
+    /// changes when the client commits, and nothing that is downloaded.</para>
+    /// </summary>
+    public string? PhaseSignal { get; init; }
+
+    /// <summary>How <see cref="PhaseSignal"/> is recognised as restarted. Required whenever that is set.</summary>
+    public PhaseTrigger PhaseTrigger { get; init; } = PhaseTrigger.Unstated;
+
+    /// <summary>
+    /// The comparison value for <see cref="Harness.Map.PhaseTrigger.Below"/> and
+    /// <see cref="Harness.Map.PhaseTrigger.AtOrAbove"/>; refused with
+    /// <see cref="Harness.Map.PhaseTrigger.Decreases"/>, which compares against the previous sample.
+    /// </summary>
+    public ushort? PhaseThreshold { get; init; }
 
     /// <summary>
     /// The specification slot ids a vector may cite for this slot, in the order they were declared.

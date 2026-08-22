@@ -194,6 +194,33 @@ public sealed class SlotBindingDocument
     /// </summary>
     public int? QuiescenceScans { get; set; }
 
+    /// <summary>
+    /// Hold the inert phase until this slot's block is at a known point in its own cycle. The name of a
+    /// signal this slot already publishes as a result source; absent means no phase condition, and the
+    /// test starts from wherever the block's clocks happen to be.
+    ///
+    /// <para>Where a block's windows are TUMBLING and the arm instant depends on how the previous index
+    /// left the plant, a vector that cannot know the phase has to be written to survive every arm
+    /// instant — and on the one wave that has run end to end, that hedge was about half of the dominant
+    /// index. See <c>Harness.Map.SlotBinding.PhaseSignal</c>.</para>
+    /// </summary>
+    public string? PhaseSignal { get; set; }
+
+    /// <summary>
+    /// How <see cref="PhaseSignal"/> is recognised as restarted: <c>Decreases</c>, <c>Below</c> or
+    /// <c>AtOrAbove</c>. <b>Required whenever <see cref="PhaseSignal"/> is set, and deliberately without a
+    /// default</b> — <c>Decreases</c> waits for a wrap and costs up to a full window period while
+    /// <c>Below</c> can be satisfied immediately, so choosing one on the author's behalf changes both what
+    /// is proven and what the wave costs.
+    /// </summary>
+    public string? PhaseTrigger { get; set; }
+
+    /// <summary>
+    /// The comparison value for <c>Below</c> and <c>AtOrAbove</c>; refused with <c>Decreases</c>, which
+    /// compares against the previous sample rather than a number.
+    /// </summary>
+    public ushort? PhaseThreshold { get; set; }
+
     /// <summary>Unknown keys at slot level. Folded into gate 0b — see <see cref="BindingDocument.UnknownFields"/>.</summary>
     [JsonExtensionData]
     public Dictionary<string, object?>? UnknownFields { get; set; }

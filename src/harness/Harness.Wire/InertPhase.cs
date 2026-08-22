@@ -1,3 +1,5 @@
+using Harness.Map;
+
 namespace Harness.Wire;
 
 /// <summary>
@@ -40,11 +42,77 @@ namespace Harness.Wire;
 /// could disagree about one thing, and the disagreement would present as a test that started from a
 /// state nobody declared.
 /// </remarks>
+/// <summary>
+/// <b>Hold the inert phase until the block's own clock is at a known point, instead of guessing where
+/// it is.</b>
+///
+/// <para>🔴 <b>What this exists to remove, measured.</b> A block's movement windows are TUMBLING: the
+/// reference re-captures at every expiry, and when a window arms depends on how the previous index left
+/// the plant. A vector that does not know the arm instant has to place its stimulus late enough to land
+/// inside a live window under BOTH the earliest and latest possible arm — and on the one wave that has
+/// run end to end, <b>half of the dominant index was that hedge rather than behaviour under test</b>.
+/// Its author wrote it down: <i>"THIS IS WHY THE INDEX IS SIX MINUTES: robustness to an unknown warm-up
+/// state, not generosity."</i></para>
+///
+/// <para><b>It is a measurement replacing a guess, so it makes the test stronger and not merely
+/// faster.</b> The failure it removes is worse than the time it costs: a step landing outside a live
+/// window yields a verdict that never becomes conclusive, <i>"which reads as a clean pass having tested
+/// nothing."</i></para>
+/// </summary>
+/// <param name="Register">The result register to watch, resolved from the signal by the map.</param>
+/// <param name="Signal">The signal's name, carried for the report — a register number alone is unreadable.</param>
+/// <param name="Threshold">
+/// Required by <see cref="PhaseTrigger.Below"/> and <see cref="PhaseTrigger.AtOrAbove"/>, and refused
+/// with <see cref="PhaseTrigger.Decreases"/>, which compares against the previous sample and not a number.
+/// </param>
+public sealed record PhaseCondition(int Register, string Signal, PhaseTrigger Trigger, ushort? Threshold = null)
+{
+    public int Register { get; } = Register >= 0
+        ? Register
+        : throw new ArgumentOutOfRangeException(nameof(Register), Register, "a phase condition watches a register in the slot's own result band.");
+
+    public PhaseTrigger Trigger { get; } = Trigger != PhaseTrigger.Unstated
+        ? Trigger
+        : throw new ArgumentOutOfRangeException(nameof(Trigger), "a phase condition with no trigger states nothing. Unstated is deliberately not a usable value.");
+
+    public ushort? Threshold { get; } = Trigger switch
+    {
+        PhaseTrigger.Decreases when Threshold is not null =>
+            throw new ArgumentException("Decreases compares against the PREVIOUS sample, not against a number. A threshold here would be silently ignored.", nameof(Threshold)),
+        PhaseTrigger.Below or PhaseTrigger.AtOrAbove when Threshold is null =>
+            throw new ArgumentException($"{Trigger} needs a threshold to compare against.", nameof(Threshold)),
+        _ => Threshold,
+    };
+
+    /// <summary>
+    /// Whether this poll satisfies the condition. <paramref name="hasPrevious"/> is false on the first
+    /// poll, which <see cref="PhaseTrigger.Decreases"/> can never satisfy.
+    /// </summary>
+    public bool IsMet(ushort value, bool hasPrevious, ushort previous) => Trigger switch
+    {
+        PhaseTrigger.Decreases => hasPrevious && value < previous,
+        PhaseTrigger.Below => value < Threshold!.Value,
+        PhaseTrigger.AtOrAbove => value >= Threshold!.Value,
+        _ => false,
+    };
+
+    public override string ToString() => Trigger == PhaseTrigger.Decreases
+        ? $"{Signal} (R{Register:000}) decreases"
+        : $"{Signal} (R{Register:000}) {Trigger} {Threshold}";
+}
+
 public sealed record InertDeclaration(
     IReadOnlyDictionary<int, ushort> ExpectedResults,
     int QuiescenceScans = 1,
     IReadOnlyDictionary<int, string>? ExcludedResults = null,
-    IReadOnlySet<int>? DefaultedResults = null)
+    IReadOnlySet<int>? DefaultedResults = null,
+
+    /// <summary>
+    /// Optional: hold the inert phase until the block's own clock is at a known point before committing.
+    /// <b>Absent means the vector accepts an unknown phase</b> — which is legitimate for a test with no
+    /// windowed behaviour, and expensive for one with it.
+    /// </summary>
+    PhaseCondition? Phase = null)
 {
     /// <summary>Excluded registers with their stated reasons. Never null — an absent map is an empty one.</summary>
     public IReadOnlyDictionary<int, string> Excluded =>
@@ -99,6 +167,18 @@ public enum InertOutcome
     /// ADVANCE would be worse still, because the modular difference makes it a very large positive.
     /// </summary>
     ScanCounterWentBackwards,
+
+    /// <summary>
+    /// A <see cref="PhaseCondition"/> was declared and did not occur inside the poll budget.
+    ///
+    /// <para><b>Deliberately NOT <see cref="Established"/> with a note.</b> The whole point of declaring
+    /// a phase is that the vector's stimulus timing is written against it; committing anyway would run
+    /// the test from the unknown phase the declaration exists to eliminate, and the result would look
+    /// exactly like one taken from the right phase. It is also not
+    /// <see cref="ScanCounterStalled"/> — the counter may be advancing perfectly well while the watched
+    /// quantity simply never wraps.</para>
+    /// </summary>
+    PhaseNotReached,
 }
 
 /// <summary>
@@ -360,9 +440,122 @@ public static class InertPhase
         // is precisely the race D37 states the rule against.
         var scanAtVerify = client.ReadControl().ScanCounter;
 
-        return new InertReport(InertOutcome.Established, scanAtVerify, Flatten(active, first), Flatten(active, second),
+        // ---- PHASE ALIGNMENT, HERE AND NOWHERE EARLIER -----------------------------------------------
+        //
+        // After both inert checks, so the phase is observed on a state already verified as the next
+        // test's start conditions; and immediately before returning, so `Commit` follows as closely as
+        // the link allows. Every scan between observing the phase and raising the start bool is a scan of
+        // the window that the vector will not get, so this is the last possible moment.
+        var phased = active.Where(s => s.Declaration.Phase is not null).ToArray();
+
+        if (phased.Length == 0)
+        {
+            return new InertReport(InertOutcome.Established, scanAtVerify, Flatten(active, first), Flatten(active, second),
+                $"start conditions established and unchanged over {quiescence} scan(s) on {active.Count} slot(s). "
+                + Denominator(active)
+                // Said on the passing run: an absent phase declaration is a CHOICE with a cost, and one
+                // that is invisible in the artifact is one nobody revisits when a wave takes six minutes.
+                + " NO PHASE CONDITION DECLARED: the test starts from wherever the block's own clocks happen to be, "
+                + "so any vector whose timing depends on a window must be written to survive every arm instant.");
+        }
+
+        if (!AwaitPhase(client, phased, maxPolls, scanAtVerify, out var phaseDetail, out var scanAtPhase))
+        {
+            return new InertReport(InertOutcome.PhaseNotReached, scanAtPhase, Flatten(active, first), Flatten(active, second),
+                phaseDetail);
+        }
+
+        return new InertReport(InertOutcome.Established, scanAtPhase, Flatten(active, first), Flatten(active, second),
             $"start conditions established and unchanged over {quiescence} scan(s) on {active.Count} slot(s). "
-            + Denominator(active));
+            + Denominator(active) + " " + phaseDetail);
+    }
+
+    /// <summary>
+    /// Poll until every declared phase condition has been observed, or the budget runs out.
+    ///
+    /// <para><b>Each slot latches the moment ITS condition is first met</b>, and the loop ends when all
+    /// have. ⚠️ <b>The SPREAD between the first and last is reported and NOT gated</b>, and it matters:
+    /// where two slots latch scans apart, only the LAST one is genuinely fresh at the commit and the
+    /// earlier one has already burned that many scans of its window. Gating it would be a new judgement
+    /// about how much staleness is tolerable, which nothing here is in a position to make — but a spread
+    /// nobody printed is a spread nobody knows about.</para>
+    /// </summary>
+    private static bool AwaitPhase(
+        MirrorClient client,
+        IReadOnlyList<SlotInert> phased,
+        int maxPolls,
+        ScanCount from,
+        out string detail,
+        out ScanCount reached)
+    {
+        var previous = new Dictionary<int, ushort>();
+        var metAt = new Dictionary<int, long>();
+        var polls = 0;
+        reached = from;
+
+        while (polls < maxPolls)
+        {
+            var control = client.ReadControl();
+            reached = control.ScanCounter;
+            polls++;
+
+            var observed = client.ReadResults(phased.Select(s => s.SlotIndex));
+
+            foreach (var slot in phased)
+            {
+                if (metAt.ContainsKey(slot.SlotIndex))
+                    continue;
+
+                var phase = slot.Declaration.Phase!;
+                var values = observed[slot.SlotIndex];
+
+                // A register outside the slot's own band is a REFUSAL, not a wait that never ends. The
+                // budget would eventually expire and report "the phase never occurred", which blames the
+                // block for what is a declaration error.
+                if (phase.Register >= values.Length)
+                {
+                    detail = $"slot {slot.SlotIndex} declares its phase on {phase} but that slot publishes only "
+                        + $"{values.Length} result register(s). The register is outside the band, so the condition could never be observed — "
+                        + "this is a declaration that does not fit the map, not a block that never reached its phase.";
+                    return false;
+                }
+
+                var value = values[phase.Register];
+                var had = previous.TryGetValue(slot.SlotIndex, out var last);
+                previous[slot.SlotIndex] = value;
+
+                if (phase.IsMet(value, had, last))
+                    metAt[slot.SlotIndex] = control.ScanCounter.Since(from);
+            }
+
+            if (metAt.Count == phased.Count)
+            {
+                var spread = metAt.Values.Max() - metAt.Values.Min();
+
+                detail = $"PHASE ESTABLISHED for {metAt.Count} slot(s) after {polls} poll round(s): "
+                    + string.Join("; ", phased.Select(s => $"slot {s.SlotIndex} {s.Declaration.Phase} at +{metAt[s.SlotIndex]} scan(s)"))
+                    + ".";
+
+                if (spread > 0)
+                {
+                    detail += $" ⚠️ SPREAD {spread} scan(s) between the first and last slot to reach its phase — only the LAST is fresh at the commit, "
+                        + "and the others have already spent that many scans of their window. Reported, not gated.";
+                }
+
+                return true;
+            }
+        }
+
+        var waiting = phased.Where(s => !metAt.ContainsKey(s.SlotIndex))
+            .Select(s => $"slot {s.SlotIndex} {s.Declaration.Phase}"
+                + (previous.TryGetValue(s.SlotIndex, out var v) ? $" (last read {v})" : " (never read)"));
+
+        detail = $"the declared phase did not occur within the poll budget of {maxPolls} round(s): still waiting on "
+            + string.Join("; ", waiting)
+            + ". NOT ESTABLISHED rather than committed anyway: the vector's stimulus timing is written against this phase, "
+            + "so starting from an unknown one produces a result indistinguishable from a correct run.";
+
+        return false;
     }
 
     /// <summary>
