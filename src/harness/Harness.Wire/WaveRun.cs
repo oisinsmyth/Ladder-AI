@@ -68,15 +68,43 @@ public sealed record TimeoutAbandon(int? ConsecutiveIndices)
         ConsecutiveIndices is int n ? $"abandon after {n} consecutive TIMED-OUT index(es)" : "never abandon";
 }
 
+/// <summary>
+/// 🔴 <b>Why a wave stopped before its last index, when something stopped it.</b>
+///
+/// <para><b>Absent means it ran to the end.</b> Not "probably fine" — the wave either reached its
+/// length or it says here why it did not.</para>
+/// </summary>
+/// <param name="AtIndex">The index that was in flight. Everything BEFORE it completed and is reported.</param>
+/// <param name="IndicesCompleted">
+/// How many indices finished. <b>The denominator</b>: a package that does not say how much of the wave
+/// happened cannot be told apart from a whole one.
+/// </param>
+public sealed record WaveInterruption(int AtIndex, int IndicesCompleted, int IndicesNeverAttempted, string Detail)
+{
+    public override string ToString() =>
+        $"THE WAVE DID NOT FINISH: it stopped at index {AtIndex}. {IndicesCompleted} index(es) completed and are reported; "
+        + $"{IndicesNeverAttempted} were never attempted. {Detail}";
+}
+
 /// <summary>What a whole wave produced.</summary>
 /// <param name="Length">Indices run — MAX tensor length across the slots (D26a), never a colouring decision.</param>
+/// <param name="Interruption">
+/// 🔴 <b>Null when the wave ran to its end.</b> Before this existed, a dropped link threw out of
+/// <c>Run</c>, out of <c>LoopRun.Execute</c>, and out of <c>harness-run</c> before it ever wrote a
+/// package — so a wave that had completed most of its indices produced NOTHING, and the only record was
+/// a stack trace in a terminal.
+/// </param>
 public sealed record WaveResult(
     int Length,
     IReadOnlyList<SlotDistribution> Distributions,
     CoRunningLog Log,
-    int RoundTrips)
+    int RoundTrips,
+    WaveInterruption? Interruption = null)
 {
     public SlotDistribution For(int slotIndex) => Distributions.Single(d => d.SlotIndex == slotIndex);
+
+    /// <summary>Stated positively so a caller has to handle it rather than notice a null.</summary>
+    public bool RanToCompletion => Interruption is null;
 }
 
 /// <summary>
@@ -156,6 +184,12 @@ public static class WaveRun
         var consecutiveTimeouts = tensors.ToDictionary(t => t.SlotIndex, _ => 0);
         var abandoned = new HashSet<int>();
 
+        // 🔴 Set when the link dies mid-wave. Everything already in `collected` is still distributed
+        // below — that is the whole point of catching it here rather than letting it reach the CLI,
+        // where it escaped before `Write(result)` and threw away every completed index.
+        WaveInterruption? interruption = null;
+        var indicesCompleted = 0;
+
         for (var index = 0; index < length; index++)
         {
             // Active = the slots that still have a vector at THIS index. The rest are null: not
@@ -168,116 +202,160 @@ public static class WaveRun
             if (active.Length == 0)
                 break;
 
-            var inert = InertPhase.Establish(client,
-                active.Select(t => new SlotInert(t.SlotIndex, t.Vectors[index].Values, t.Vectors[index].Inert)).ToArray());
+            InertReport? inertForCatch = null;
 
-            // 🔴 *** PLANNED, NOT COMMANDED — AND THE NAME IS THE FIX. ***
-            //
-            // This variable was called `commanded` and was handed to the co-running log on BOTH paths
-            // below, including the one where `InertPhase.Commit` is never called. `Establish` has just
-            // written LOW start bools and CLEARED the echo, so on the refusal path the log compared a
-            // fabricated commanded set against a freshly-zeroed echo and could only ever report X-E's
-            // `CommandedButDidNotRun`: *"the slot was commanded and the echo says its block never saw its
-            // start condition"*.
-            //
-            // Measured on JOB9004's vessel wave, 2026-08-18: the run's own last control frame read
-            // StartBools = 0x0000 — the commit provably had not happened — while the result package
-            // accused the block of not starting, and the investigation that produced went hunting a
-            // start-bit write race in this client that does not exist. A plan is not evidence; the whole
-            // of X-E is that sentence, and this is where the log was quietly breaking it.
-            //
-            // It becomes `commanded` at exactly one point in this method: after `Commit` returns.
-            var planned = active.Select(t => t.SlotIndex).ToArray();
-
-            if (!inert.Established)
+            try
             {
+                var inert = InertPhase.Establish(client,
+                    active.Select(t => new SlotInert(t.SlotIndex, t.Vectors[index].Values, t.Vectors[index].Inert)).ToArray());
+
+                // Captured for the catch below, which cannot see into this scope. If the link dies AFTER
+                // this point the real inert report is reported with the lost index; if it dies during
+                // Establish, the catch synthesises one that says the phase never concluded — rather than
+                // one that looks like a measurement.
+                inertForCatch = inert;
+
+                // 🔴 *** PLANNED, NOT COMMANDED — AND THE NAME IS THE FIX. ***
+                //
+                // This variable was called `commanded` and was handed to the co-running log on BOTH paths
+                // below, including the one where `InertPhase.Commit` is never called. `Establish` has just
+                // written LOW start bools and CLEARED the echo, so on the refusal path the log compared a
+                // fabricated commanded set against a freshly-zeroed echo and could only ever report X-E's
+                // `CommandedButDidNotRun`: *"the slot was commanded and the echo says its block never saw its
+                // start condition"*.
+                //
+                // Measured on JOB9004's vessel wave, 2026-08-18: the run's own last control frame read
+                // StartBools = 0x0000 — the commit provably had not happened — while the result package
+                // accused the block of not starting, and the investigation that produced went hunting a
+                // start-bit write race in this client that does not exist. A plan is not evidence; the whole
+                // of X-E is that sentence, and this is where the log was quietly breaking it.
+                //
+                // It becomes `commanded` at exactly one point in this method: after `Commit` returns.
+                var planned = active.Select(t => t.SlotIndex).ToArray();
+
+                if (!inert.Established)
+                {
+                    foreach (var t in active)
+                    {
+                        collected[t.SlotIndex].Add(new SlotRunResult(SlotOutcome.NotInert, Array.Empty<ushort>(), default, default, 0, 0, inert,
+                            "the test never started, which is not a test failure: " + inert.Detail,
+                            // No poll round ran at all. Stated, not defaulted.
+                            ObservationSeries.Empty));
+                    }
+
+                    // D34 alternates inert/test unconditionally, but an inert phase that could not be
+                    // ESTABLISHED is O6's residual — a wave-blocking condition rather than a test failure —
+                    // and continuing would run every later index from a state nobody verified.
+                    //
+                    // The echo is still READ here: a latch set at an index where this client raised nothing is
+                    // `RanButWasNotCommanded`, which is real and more alarming here than anywhere else.
+                    log.RecordNotCommitted(index, planned, client.ReadControlUnverified(), client.Map.Slots.Count);
+                    break;
+                }
+
+                // ---- THE COMMIT. Everything above ran with the start bools LOW; everything below runs with
+                // them HIGH, and only from here is `planned` also `commanded`.
+                var commanded = planned;
+                var startScan = InertPhase.Commit(client, inert, commanded);
+
+                var perIndex = Observe(client, compression, active, index, startScan, inert, nowMs);
+                foreach (var (slotIndex, result) in perIndex)
+                {
+                    collected[slotIndex].Add(result);
+
+                    // CONSECUTIVE, so anything that is not a timeout resets the run. A slot that times out,
+                    // then completes, then times out has not stopped answering — it has produced two
+                    // different answers, and only an unbroken run is evidence that it has stopped.
+                    consecutiveTimeouts[slotIndex] = result.Outcome == SlotOutcome.TimedOut
+                        ? consecutiveTimeouts[slotIndex] + 1
+                        : 0;
+                }
+
+                // 🔴 *** THE ECHO IS READ HERE, AFTER THE OBSERVATION AND BEFORE THE NEXT INDEX'S INERT PHASE
+                // CLEARS IT. *** That ordering is the whole handshake: the latch is set by the copy layer in
+                // the same scan the start bit is copied, survives every poll gap (a short test can start and
+                // finish between two polls), is read once here, and is released by the NEXT
+                // `InertPhase.Establish` — never after a commit. Clearing it on the far side of a commit would
+                // wipe a latch that had just been set and would be indistinguishable, in every artifact this
+                // system produces, from a block that never started.
+                log.Record(index, commanded, client.ReadControl(), client.Map.Slots.Count);
+
+                // ---- ABANDONMENT. After the co-running log, so the abandoned slot's slice includes the index
+                // that stopped it; before the exit loop, so it leaves by this path rather than that one.
+                foreach (var tensor in active.OrderBy(t => t.SlotIndex))
+                {
+                    // A slot on its last index is finishing anyway — the exit loop below owns it, and calling
+                    // it "abandoned" would claim vectors were skipped when there were none left.
+                    if (index + 1 >= tensor.Length || !abandon.Reached(consecutiveTimeouts[tensor.SlotIndex]))
+                        continue;
+
+                    abandoned.Add(tensor.SlotIndex);
+
+                    // Said on the LAST RESULT, because that is what VectorDisposition.SlotExitedFirst quotes
+                    // back for every index that never ran. Without it the package reports the vectors as
+                    // NEVER ATTEMPTED and says only that the slot "stopped" — true, and silent about why.
+                    var last = collected[tensor.SlotIndex][^1];
+                    collected[tensor.SlotIndex][^1] = last with
+                    {
+                        Detail = last.Detail
+                            + $" *** SLOT ABANDONED: {consecutiveTimeouts[tensor.SlotIndex]} consecutive index(es) ended TIMED-OUT and the "
+                            + $"declared policy is to {abandon}. Its remaining {tensor.Length - (index + 1)} index(es) were NOT submitted "
+                            + "to the device. A slot that has not answered twice running is not answering, and re-arming it costs a full "
+                            + "backstop per index for no evidence. *** THIS IS NOT A STATEMENT THAT THOSE VECTORS WOULD HAVE FAILED — "
+                            + "nothing was learned about them, which is why they are reported as NEVER ATTEMPTED rather than as results.",
+                    };
+
+                    var abandonedDistribution = new SlotDistribution(tensor.SlotIndex, index,
+                        collected[tensor.SlotIndex], log.SliceFor(tensor.SlotIndex));
+
+                    distributions.Add(abandonedDistribution);
+                    onSlotComplete?.Invoke(abandonedDistribution);
+                }
+
+                // D26a rule 3 — a slot exits when its OWN tensor is done, and its results go out THEN.
+                // Abandoned slots are excluded: they were distributed above, at the index that stopped them.
+                foreach (var tensor in tensors.Where(t => t.Length == index + 1 && !abandoned.Contains(t.SlotIndex)).OrderBy(t => t.SlotIndex))
+                {
+                    var distribution = new SlotDistribution(tensor.SlotIndex, index,
+                        collected[tensor.SlotIndex], log.SliceFor(tensor.SlotIndex));
+
+                    distributions.Add(distribution);
+                    onSlotComplete?.Invoke(distribution);
+                }
+            }
+            catch (WireLinkLostException lost)
+            {
+                // 🔴 *** THE WAVE STOPS, AND EVERYTHING ALREADY OBSERVED SURVIVES. ***
+                //
+                // Before this existed the exception left Run, left LoopRun.Execute, and reached the top
+                // of harness-run — which never got as far as writing a package. A wave that had completed
+                // most of its indices produced NOTHING, and the only record was a stack trace.
+                //
+                // Only WireLinkLostException is caught. Catching Exception here would swallow every
+                // programming error in the observation path and file it as network weather, which is a
+                // worse defect than the one being fixed.
                 foreach (var t in active)
                 {
-                    collected[t.SlotIndex].Add(new SlotRunResult(SlotOutcome.NotInert, Array.Empty<ushort>(), default, default, 0, 0, inert,
-                        "the test never started, which is not a test failure: " + inert.Detail,
-                        // No poll round ran at all. Stated, not defaulted.
+                    // A slot that already has a result at THIS index keeps it: the link can die after
+                    // Observe returned, on the control read. Adding a second result for the same index
+                    // would put the tensor and the collected list out of step for every index after it.
+                    if (collected[t.SlotIndex].Count > index)
+                        continue;
+
+                    collected[t.SlotIndex].Add(new SlotRunResult(
+                        SlotOutcome.LinkLost, Array.Empty<ushort>(), default, default, 0, 0,
+                        inertForCatch ?? new InertReport(InertOutcome.LinkLost, default,
+                            Array.Empty<ushort>(), Array.Empty<ushort>(),
+                            "the link went away before the inert phase concluded, so nothing was established or refuted about the slot's rest state."),
+                        "NOTHING WAS LEARNED ABOUT THIS VECTOR: " + lost.Message,
                         ObservationSeries.Empty));
                 }
 
-                // D34 alternates inert/test unconditionally, but an inert phase that could not be
-                // ESTABLISHED is O6's residual — a wave-blocking condition rather than a test failure —
-                // and continuing would run every later index from a state nobody verified.
-                //
-                // The echo is still READ here: a latch set at an index where this client raised nothing is
-                // `RanButWasNotCommanded`, which is real and more alarming here than anywhere else.
-                log.RecordNotCommitted(index, planned, client.ReadControlUnverified(), client.Map.Slots.Count);
+                interruption = new WaveInterruption(index, indicesCompleted, Math.Max(0, length - index - 1), lost.Message);
                 break;
             }
 
-            // ---- THE COMMIT. Everything above ran with the start bools LOW; everything below runs with
-            // them HIGH, and only from here is `planned` also `commanded`.
-            var commanded = planned;
-            var startScan = InertPhase.Commit(client, inert, commanded);
-
-            var perIndex = Observe(client, compression, active, index, startScan, inert, nowMs);
-            foreach (var (slotIndex, result) in perIndex)
-            {
-                collected[slotIndex].Add(result);
-
-                // CONSECUTIVE, so anything that is not a timeout resets the run. A slot that times out,
-                // then completes, then times out has not stopped answering — it has produced two
-                // different answers, and only an unbroken run is evidence that it has stopped.
-                consecutiveTimeouts[slotIndex] = result.Outcome == SlotOutcome.TimedOut
-                    ? consecutiveTimeouts[slotIndex] + 1
-                    : 0;
-            }
-
-            // 🔴 *** THE ECHO IS READ HERE, AFTER THE OBSERVATION AND BEFORE THE NEXT INDEX'S INERT PHASE
-            // CLEARS IT. *** That ordering is the whole handshake: the latch is set by the copy layer in
-            // the same scan the start bit is copied, survives every poll gap (a short test can start and
-            // finish between two polls), is read once here, and is released by the NEXT
-            // `InertPhase.Establish` — never after a commit. Clearing it on the far side of a commit would
-            // wipe a latch that had just been set and would be indistinguishable, in every artifact this
-            // system produces, from a block that never started.
-            log.Record(index, commanded, client.ReadControl(), client.Map.Slots.Count);
-
-            // ---- ABANDONMENT. After the co-running log, so the abandoned slot's slice includes the index
-            // that stopped it; before the exit loop, so it leaves by this path rather than that one.
-            foreach (var tensor in active.OrderBy(t => t.SlotIndex))
-            {
-                // A slot on its last index is finishing anyway — the exit loop below owns it, and calling
-                // it "abandoned" would claim vectors were skipped when there were none left.
-                if (index + 1 >= tensor.Length || !abandon.Reached(consecutiveTimeouts[tensor.SlotIndex]))
-                    continue;
-
-                abandoned.Add(tensor.SlotIndex);
-
-                // Said on the LAST RESULT, because that is what VectorDisposition.SlotExitedFirst quotes
-                // back for every index that never ran. Without it the package reports the vectors as
-                // NEVER ATTEMPTED and says only that the slot "stopped" — true, and silent about why.
-                var last = collected[tensor.SlotIndex][^1];
-                collected[tensor.SlotIndex][^1] = last with
-                {
-                    Detail = last.Detail
-                        + $" *** SLOT ABANDONED: {consecutiveTimeouts[tensor.SlotIndex]} consecutive index(es) ended TIMED-OUT and the "
-                        + $"declared policy is to {abandon}. Its remaining {tensor.Length - (index + 1)} index(es) were NOT submitted "
-                        + "to the device. A slot that has not answered twice running is not answering, and re-arming it costs a full "
-                        + "backstop per index for no evidence. *** THIS IS NOT A STATEMENT THAT THOSE VECTORS WOULD HAVE FAILED — "
-                        + "nothing was learned about them, which is why they are reported as NEVER ATTEMPTED rather than as results.",
-                };
-
-                var abandonedDistribution = new SlotDistribution(tensor.SlotIndex, index,
-                    collected[tensor.SlotIndex], log.SliceFor(tensor.SlotIndex));
-
-                distributions.Add(abandonedDistribution);
-                onSlotComplete?.Invoke(abandonedDistribution);
-            }
-
-            // D26a rule 3 — a slot exits when its OWN tensor is done, and its results go out THEN.
-            // Abandoned slots are excluded: they were distributed above, at the index that stopped them.
-            foreach (var tensor in tensors.Where(t => t.Length == index + 1 && !abandoned.Contains(t.SlotIndex)).OrderBy(t => t.SlotIndex))
-            {
-                var distribution = new SlotDistribution(tensor.SlotIndex, index,
-                    collected[tensor.SlotIndex], log.SliceFor(tensor.SlotIndex));
-
-                distributions.Add(distribution);
-                onSlotComplete?.Invoke(distribution);
-            }
+            indicesCompleted++;
         }
 
         // Any slot the loop never distributed — because inert failed and the wave stopped — still gets
@@ -288,7 +366,7 @@ public static class WaveRun
                 collected[tensor.SlotIndex], log.SliceFor(tensor.SlotIndex)));
         }
 
-        return new WaveResult(length, distributions, log, client.RoundTrips - roundTripsBefore);
+        return new WaveResult(length, distributions, log, client.RoundTrips - roundTripsBefore, interruption);
     }
 
     /// <summary>
@@ -300,6 +378,7 @@ public static class WaveRun
     /// a group that was happening anyway, which costs nothing: the transaction is the unit, not the
     /// register.</para>
     /// </summary>
+
     private static IReadOnlyList<(int SlotIndex, SlotRunResult Result)> Observe(
         MirrorClient client,
         RuntimeCompression compression,

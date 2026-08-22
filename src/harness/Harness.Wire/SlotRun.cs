@@ -87,6 +87,19 @@ public enum SlotOutcome
     /// because it is believed.
     /// </summary>
     TimedOut,
+
+    /// <summary>
+    /// 🔴 <b>The link to the device went away while this index was in flight. NOTHING was learned about
+    /// this vector.</b>
+    ///
+    /// <para><b>Its own outcome, and specifically NOT <see cref="TimedOut"/>.</b> The note above says
+    /// why in general — <i>"a spurious TIMED-OUT is worse than a spurious FAILED, because it is
+    /// believed"</i> — and it applies exactly here: a timeout is a claim about the PLANT, that a
+    /// condition did not occur within the backstop. A dropped socket says nothing whatever about the
+    /// plant, and filing it as a timeout would send a reader to the block, the vector's scenario clock
+    /// and the compression factor, all of which are innocent.</para>
+    /// </summary>
+    LinkLost,
 }
 
 /// <summary>What one vector produced, and what it cost.</summary>

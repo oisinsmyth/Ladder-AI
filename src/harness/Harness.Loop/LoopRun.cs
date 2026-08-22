@@ -393,6 +393,13 @@ public static class LoopRun
             // refused and on which register is on `SlotRunResult.Inert` and is rendered nowhere. Two agents
             // spent a day on a `NotInert` whose stated cause was one field away.
             + InertRefusals(wave)
+            // 🔴 *** AND WHETHER THE WAVE WAS CUT SHORT BY THE LINK RATHER THAN BY ITS OWN PLAN. *** A
+            // dropped connection used to destroy the run outright — the exception escaped this method and
+            // harness-run never reached its Write(result) — so there was no headline to put it on. Now
+            // that the results survive, the reason they are partial has to survive with them: a package
+            // set that is short by nine indices and does not say why is one a reader will explain to
+            // themselves.
+            + (wave.Interruption is { } interruption ? " *** " + interruption + " *** " : string.Empty)
             + released,
             account,
             inertRest,

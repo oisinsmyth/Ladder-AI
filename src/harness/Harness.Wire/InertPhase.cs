@@ -235,6 +235,13 @@ public enum InertOutcome
     /// quantity simply never wraps.</para>
     /// </summary>
     PhaseNotReached,
+
+    /// <summary>
+    /// The link went away before the inert phase could conclude. <b>Not a statement about the device's
+    /// state</b> — the phase was never completed, so nothing here says whether the slot was quiescent.
+    /// Distinct from every value above, each of which is a MEASUREMENT that came back wrong.
+    /// </summary>
+    LinkLost,
 }
 
 /// <summary>

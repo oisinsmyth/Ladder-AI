@@ -75,7 +75,9 @@ public sealed class NModbusTransport : IRegisterTransport
     {
         Bounds(startRegister, count, Harness.Map.ModbusLimits.MaxReadRegisters, "FC03 read");
 
-        var registers = _master.ReadHoldingRegisters(_unitId, (ushort)startRegister, (ushort)count);
+        var registers = LinkGuarded(
+            () => _master.ReadHoldingRegisters(_unitId, (ushort)startRegister, (ushort)count),
+            $"FC03 at register {startRegister} for {count} register(s)");
 
         // Empty is not clean: a short answer is a different answer, not a partial success.
         if (registers is null || registers.Length != count)
@@ -92,7 +94,53 @@ public sealed class NModbusTransport : IRegisterTransport
         ArgumentNullException.ThrowIfNull(values);
         Bounds(startRegister, values.Length, Harness.Map.ModbusLimits.MaxWriteRegisters, "FC16 write");
 
-        _master.WriteMultipleRegisters(_unitId, (ushort)startRegister, values);
+        LinkGuarded<object?>(
+            () =>
+            {
+                _master.WriteMultipleRegisters(_unitId, (ushort)startRegister, values);
+                return null;
+            },
+            $"FC16 at register {startRegister} for {values.Length} register(s)");
+    }
+
+    /// <summary>
+    /// 🔴 <b>Turn a lost link into <see cref="WireLinkLostException"/>, and leave everything else alone.</b>
+    ///
+    /// <para>This is the ONLY layer that can tell the difference. Above it, a
+    /// <see cref="SocketException"/> and a bug in the poll loop are both just exceptions, and a wave
+    /// that caught both would report programming errors as network weather.</para>
+    ///
+    /// <para><b><see cref="SlaveException"/> is deliberately NOT caught.</b> A Modbus exception response
+    /// is the server ANSWERING: exception 2 on the first register past the declared area is how
+    /// <c>MB_SERVER</c>'s width is measured from the far side. Rewriting that as a lost link would
+    /// destroy a measurement and invent a fault.</para>
+    /// </summary>
+    private static T LinkGuarded<T>(Func<T> transaction, string what)
+    {
+        try
+        {
+            return transaction();
+        }
+        catch (SlaveException)
+        {
+            // The server answered. Not our business.
+            throw;
+        }
+        catch (Exception error) when (
+            error is SocketException
+                or IOException
+                or TimeoutException
+                or ObjectDisposedException
+                or InvalidOperationException)
+        {
+            // InvalidOperationException is in the list because NModbus raises it for a master whose
+            // stream has already been torn down — the second transaction after a drop, rather than the
+            // first. Excluding it would let the failure that FOLLOWS the one we handled escape raw.
+            throw new WireLinkLostException(
+                $"{what} could not be completed: the link to the device is gone ({error.GetType().Name}: {error.Message}). "
+                + "Everything observed before this point is kept and reported; nothing after it was attempted.",
+                error);
+        }
     }
 
     private static void Bounds(int startRegister, int count, int limit, string what)

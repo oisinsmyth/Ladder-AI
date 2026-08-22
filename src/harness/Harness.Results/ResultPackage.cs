@@ -247,6 +247,17 @@ public sealed record ResultPackage(
             if (RunOutcome == SlotOutcome.NotInert)
                 return ResultVerdict.Stale;
 
+            // 🔴 The link went away with this vector in flight. Stale for the same reason NotInert is —
+            // "the experiment never ran, and this says nothing whatsoever about the block" — and above
+            // NotObserved because it NAMES WHY nothing was read, which NotObserved cannot.
+            //
+            // *** Emphatically NOT TimedOut. *** A timeout is a claim about the plant: that a condition
+            // did not occur inside the backstop. A dropped socket makes no such claim, and filing it as
+            // one would send a reader to the block, the scenario clock and the compression factor, none
+            // of which is implicated.
+            if (RunOutcome == SlotOutcome.LinkLost)
+                return ResultVerdict.Stale;
+
             // 🔴 *** NOBODY LOOKED COMES BEFORE THE CONDITION NEVER OCCURRED, AND THAT ORDER IS THE FIX.
             // *** This test used to sit three gates lower, so a run that read NOTHING was reported as
             // TimedOut whenever the completion register did not reach its value, and as Unsettled whenever
