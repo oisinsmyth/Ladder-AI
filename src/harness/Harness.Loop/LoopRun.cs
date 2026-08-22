@@ -160,6 +160,22 @@ public static class LoopRun
         // INSPECTS stops being the artifact that gets DEPLOYED.
         var generation = Generate(request);
 
+        // 🔴 *** ADOPT THE RE-EXPRESSED VECTORS, OR THIS METHOD WRITES THE UNSCALED ONES. ***
+        //
+        // `Generate` re-expresses the scenario coordinates at the wave's factor, and it did so by
+        // reassigning its OWN `request` parameter — which is a local. This method held its own reference,
+        // built the tensors from it at step 7, and every coordinate reached the device UNSCALED while the
+        // gate log reported all 18 of them re-expressed.
+        //
+        // MEASURED ON THE RIG, 2026-08-22: the block ran its timers 4x faster against a full-length
+        // scenario. Index 0 hit its backstop with 5 of 5 assertions HOLDING, the next index could not
+        // establish inert because the plant was still mid-run, and the third was never attempted. The
+        // block was never at fault and nothing in the artifacts said so.
+        //
+        // One assignment, at the one point where the two could differ.
+        if (generation.Vectors is { } rewritten)
+            request = request with { Vectors = rewritten };
+
         if (!generation.Generated)
         {
             // *** EVERY SUBMITTED VECTOR IS ACCOUNTED FOR EVEN HERE, WHERE NOTHING RAN. *** A stop before
@@ -750,7 +766,13 @@ public static class LoopRun
             OrderOf(request),
             inertRest,
             floor,
-            manifest);
+            manifest,
+
+            // *** THE RE-EXPRESSED VECTORS, HANDED BACK RATHER THAN LEFT IN A LOCAL. *** Reassigning the
+            // `request` parameter above scales nothing for the caller, which holds its own reference —
+            // measured on the rig, where the gate reported 18 coordinates re-expressed and the device got
+            // all 18 unscaled.
+            request.Vectors);
     }
 
     /// <summary>

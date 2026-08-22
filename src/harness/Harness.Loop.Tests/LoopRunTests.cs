@@ -92,6 +92,58 @@ public class LoopRunTests
         (TrivialBlock.DoneTag, new SignalStorage("DemoUnit", TrivialBlock.DoneTag)),
     });
 
+    /// <summary>
+    /// 🔴 <b>THE RE-EXPRESSED VECTORS MUST REACH THE DEVICE, NOT JUST THE REPORT.</b>
+    ///
+    /// <para><b>Measured on the rig, 2026-08-22.</b> <c>Generate</c> re-expressed the scenario
+    /// coordinates by reassigning its own <c>request</c> parameter — a LOCAL — while <c>Execute</c> built
+    /// the wave from the request IT still held. The gate log said "18 coordinates re-expressed at comp 4"
+    /// and the device received all 18 UNSCALED. The block then ran its timers four times faster against a
+    /// full-length scenario: index 0 hit its backstop <b>with 5 of 5 assertions holding</b>, the next
+    /// index could not establish inert because the plant was still mid-run, and the third never ran.</para>
+    ///
+    /// <para><b>Why the existing tests all passed.</b> They checked that <c>ScenarioScale.Apply</c>
+    /// COMPUTES the right values, and that the gate REPORTS them. Neither followed the number to the
+    /// wire. This one does: the ramp stops at whatever limit the device actually received, so the
+    /// expectation below holds <b>only if the scaled value was written</b> — an unscaled 40 makes the
+    /// count overshoot and the assertion fail.</para>
+    /// </summary>
+    [Fact]
+    public void THE_SCALED_COORDINATE_REACHES_THE_DEVICE_and_not_merely_the_report()
+    {
+        // The ceilings are the ones the compressed-run test below already establishes as admissible; the
+        // ONLY thing this test changes is that a coordinate is declared as scaling. Declared 40, so at
+        // comp 2 the device must receive 20 — and the block ramps to whatever it actually got.
+        var request = Request(
+            vector: Vector(step: 5, limit: 40, expected: "20"),
+            compression: new RuntimeCompression(2),
+            compressionInputs: new BlockCompressionInputs(
+                PlantMs: 2_000, BudgetMs: 1_000,
+                Presets: new[] { new TimerPreset("Dwell", 2_000, PresetSource.Data) },
+                ModelCompStable: 100, NegligibleFraction: null))
+            with
+        { ScenarioTimeInputs = new[] { TrivialBlock.LimitTag } };
+
+        var map = LoopRun.Generate(request).Map!;
+        var (result, gateway) = Run(request);
+
+        Assert.Equal(LoopOutcome.Ran, result.Outcome);
+
+        // The value ON THE DEVICE, read out of the simulated PLC's own memory rather than out of any
+        // report this run produced. A report is exactly what was right last time while the device was wrong.
+        var binding = request.Bindings[0];
+        var target = binding.VectorTargets.ToList().FindIndex(t => t.JoinKey == TrivialBlock.LimitTag);
+        var register = map.VectorBlock.Register + binding.VectorRegisterOffsets[target];
+
+        // %MW is BIG-endian and BitConverter is little-endian on x86, so the naive read returns 0x1400
+        // for a stored 20. Combined explicitly rather than reversed in place, because a byte order got
+        // settled on this project by reading the DEVICE and is not something to re-guess in a test.
+        var at = Geometry().BaseByte + register * 2;
+        var written = (ushort)((gateway.Plc.Memory[at] << 8) | gateway.Plc.Memory[at + 1]);
+
+        Assert.Equal(20, written);
+    }
+
     internal static LoopRequest Request(
         SubmissionVector? vector = null,
         AssertionEnumeration? enumeration = null,

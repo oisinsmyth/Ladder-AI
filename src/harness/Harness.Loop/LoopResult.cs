@@ -272,7 +272,28 @@ public sealed record LoopGeneration(
     /// re-bound three positional arguments at a call site and the compiler caught it; a record with this
     /// many parameters is one where position is load-bearing.</para>
     /// </summary>
-    ProgramManifest? Manifest = null)
+    ProgramManifest? Manifest = null,
+
+    /// <summary>
+    /// 🔴 <b>THE VECTORS AS THEY WILL BE WRITTEN — scenario coordinates re-expressed at the wave's
+    /// factor. THE CALLER MUST BUILD ITS TENSORS FROM THESE AND NOT FROM ITS OWN REQUEST.</b>
+    ///
+    /// <para><b>This field exists because of a measured defect on the rig, 2026-08-22.</b>
+    /// <c>Generate</c> re-expressed the coordinates by reassigning its own <c>request</c> parameter — a
+    /// LOCAL — while <c>Execute</c> went on building the wave from the request IT still held. So the gate
+    /// reported "18 coordinates re-expressed at comp 4" and the device received every one of them
+    /// UNSCALED: the block ran its timers four times faster against a full-length scenario, index 0 hit
+    /// its backstop with 5 of 5 assertions holding, and the next index could not establish inert because
+    /// the plant was still mid-run.</para>
+    ///
+    /// <para><b>It is the exact failure this file warns about elsewhere</b> — a check that examines the
+    /// right value beside a writer that writes a different one, where the check's green then reads as
+    /// evidence about the writer. Returning the vectors makes the correct value the only one a caller
+    /// has, rather than the one it has to remember to ask for.</para>
+    ///
+    /// <para>Null when generation stopped before the vectors were re-expressed.</para>
+    /// </summary>
+    IReadOnlyList<SubmissionVector>? Vectors = null)
 {
     /// <summary>True only when a copy layer exists. Equivalent to <c>Stopped is null</c> by construction.</summary>
     public bool Generated => Stopped is null;
