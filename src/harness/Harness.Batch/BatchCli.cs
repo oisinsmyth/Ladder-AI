@@ -254,9 +254,11 @@ public static class BatchCli
         // version mismatch that reads as a failed download. Measured on the rig: device 16#CBE1D692,
         // staged 16#679E7923, and the download had in fact succeeded.
         var result = BatchRunner.Execute(plan, runner, () => deploy!(batch.ProgramPaths),
-            settleAfterDownload: args.SettleSeconds >= 0
-                ? TimeSpan.FromSeconds(args.SettleSeconds)
-                : BatchRunner.DefaultSettleAfterDownload);
+            // 🔴 THE BLIND WAIT NOW DEFAULTS OFF. The wave retries its own inert phase instead, which
+            // MEASURES readiness rather than guessing at it — and the fixed 15 s was measured to be too
+            // short anyway, so keeping it as the default would be paying for a wait that does not work.
+            // --settle-seconds survives for a caller who wants a wait as well.
+            settleAfterDownload: TimeSpan.FromSeconds(args.SettleSeconds >= 0 ? args.SettleSeconds : 0));
 
         output.WriteLine(result.Headline);
         output.WriteLine();

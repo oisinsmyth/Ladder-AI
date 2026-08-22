@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 
 namespace Harness.Wire;
 
@@ -69,6 +69,42 @@ public sealed record TimeoutAbandon(int? ConsecutiveIndices)
 }
 
 /// <summary>
+/// 🔴 <b>Retrying the INERT PHASE at the first index, because a download leaves the plant moving.</b>
+///
+/// <para><b>What this replaces.</b> The batch runner slept for a fixed 15 s after a download and then
+/// started the wave anyway. Measured 2026-08-22: the wave still refused <c>NotQuiescent</c> — the vessel
+/// model's R013/R014 were still alternating — and a re-run minutes later passed 3 of 3. A blind wait is
+/// a guess at a duration nobody has measured, and it is wrong in both directions: too short and the
+/// wave refuses, too long and every deploy pays for the worst case.</para>
+///
+/// <para><b>The inert phase IS the readiness test.</b> It takes two observations a scan apart and
+/// compares them, which is precisely "has this slot's result band stopped moving". So the fix is to ASK
+/// AGAIN rather than to wait blind — and the number of attempts it took is then a MEASUREMENT of the
+/// settling time, which is the thing nobody has.</para>
+///
+/// <para>⚠️ <b>FIRST INDEX ONLY, and that is not an optimisation.</b> A slot that is not quiescent at
+/// index 3 has been disturbed by something the wave itself did, and retrying there would paper over a
+/// real finding — the model is not returning to rest between indices, which is exactly what D33 exists
+/// to catch. Only the first index has an excuse, and only because a download just happened.</para>
+///
+/// <para><b>The caller licenses it.</b> The wave does not decide to be lenient; whoever knows a
+/// download just occurred passes this. Default is <see cref="None"/>.</para>
+/// </summary>
+/// <param name="Attempts">Total inert attempts at index 0, including the first. 1 means no retry.</param>
+public sealed record InertSettle(int Attempts, TimeSpan Between)
+{
+    /// <summary>No retry. The behaviour everywhere that has not just downloaded.</summary>
+    public static readonly InertSettle None = new(1, TimeSpan.Zero);
+
+    public static InertSettle Retry(int attempts, TimeSpan between) => attempts >= 1
+        ? new InertSettle(attempts, between)
+        : throw new ArgumentOutOfRangeException(nameof(attempts), attempts, "an inert phase is attempted at least once.");
+
+    public override string ToString() =>
+        Attempts <= 1 ? "no inert retry" : $"up to {Attempts} inert attempts at index 0, {Between.TotalSeconds:0.#}s apart";
+}
+
+/// <summary>
 /// 🔴 <b>Why a wave stopped before its last index, when something stopped it.</b>
 ///
 /// <para><b>Absent means it ran to the end.</b> Not "probably fine" — the wave either reached its
@@ -99,7 +135,13 @@ public sealed record WaveResult(
     IReadOnlyList<SlotDistribution> Distributions,
     CoRunningLog Log,
     int RoundTrips,
-    WaveInterruption? Interruption = null)
+    WaveInterruption? Interruption = null,
+
+    /// <summary>
+    /// How many inert attempts the FIRST index needed, when a retry was licensed. <b>The measurement the
+    /// fixed wait never produced</b> — null when no retry was asked for or none was needed.
+    /// </summary>
+    string? SettleReport = null)
 {
     public SlotDistribution For(int slotIndex) => Distributions.Single(d => d.SlotIndex == slotIndex);
 
@@ -151,13 +193,18 @@ public static class WaveRun
         IReadOnlyList<SlotTensor> tensors,
         Func<long>? nowMs = null,
         Action<SlotDistribution>? onSlotComplete = null,
-        TimeoutAbandon? abandon = null)
+        TimeoutAbandon? abandon = null,
+        InertSettle? inertSettle = null,
+        Action<TimeSpan>? pauseFor = null)
     {
         ArgumentNullException.ThrowIfNull(client);
         ArgumentNullException.ThrowIfNull(compression);
         ArgumentNullException.ThrowIfNull(tensors);
 
         abandon ??= TimeoutAbandon.Default;
+        var settle = inertSettle ?? InertSettle.None;
+        var pause = pauseFor ?? Thread.Sleep;
+        string? settleReport = null;
 
         if (tensors.Count == 0)
             throw new ArgumentException("a wave over no slots runs nothing. Empty is not clean.", nameof(tensors));
@@ -206,8 +253,38 @@ public static class WaveRun
 
             try
             {
-                var inert = InertPhase.Establish(client,
-                    active.Select(t => new SlotInert(t.SlotIndex, t.Vectors[index].Values, t.Vectors[index].Inert)).ToArray());
+                var slotInerts = active
+                    .Select(t => new SlotInert(t.SlotIndex, t.Vectors[index].Values, t.Vectors[index].Inert))
+                    .ToArray();
+
+                var inert = InertPhase.Establish(client, slotInerts);
+
+                // Retried ONLY at index 0, and only when the caller said a download just happened. Every
+                // attempt is counted so the settling time is reported rather than assumed — that count is
+                // the measurement the fixed 15 s wait never produced.
+                var inertAttempts = 1;
+                if (index == 0 && settle.Attempts > 1)
+                {
+                    while (!inert.Established && inertAttempts < settle.Attempts)
+                    {
+                        if (settle.Between > TimeSpan.Zero)
+                            pause(settle.Between);
+
+                        inertAttempts++;
+                        inert = InertPhase.Establish(client, slotInerts);
+                    }
+
+                    if (inertAttempts > 1)
+                    {
+                        settleReport = inert.Established
+                            ? $"the first index needed {inertAttempts} inert attempt(s) over "
+                              + $"{(inertAttempts - 1) * settle.Between.TotalSeconds:0.#}s before the plant was quiescent — "
+                              + "the post-download transient, MEASURED rather than waited out."
+                            : $"the first index made {inertAttempts} inert attempt(s) over "
+                              + $"{(inertAttempts - 1) * settle.Between.TotalSeconds:0.#}s and the plant was STILL not quiescent. "
+                              + "That is no longer a startup transient — something is moving that the declaration does not expect.";
+                    }
+                }
 
                 // Captured for the catch below, which cannot see into this scope. If the link dies AFTER
                 // this point the real inert report is reported with the lost index; if it dies during
@@ -366,7 +443,7 @@ public static class WaveRun
                 collected[tensor.SlotIndex], log.SliceFor(tensor.SlotIndex)));
         }
 
-        return new WaveResult(length, distributions, log, client.RoundTrips - roundTripsBefore, interruption);
+        return new WaveResult(length, distributions, log, client.RoundTrips - roundTripsBefore, interruption, settleReport);
     }
 
     /// <summary>

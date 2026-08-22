@@ -104,7 +104,12 @@ public sealed record LoopRequest(
     // scenario. Cannot be inferred: a stimulus model's inputs mix times, selectors and levels, and its own
     // tick is time-valued and must NOT scale. Null at comp > 1 is a refusal; EMPTY is the positive claim
     // that this stimulus has no time-valued scenario data.
-    IReadOnlyList<string>? ScenarioTimeInputs = null)
+    IReadOnlyList<string>? ScenarioTimeInputs = null,
+
+    // 🔴 Retry the INERT phase at index 0. Passed by whoever knows a download just happened; the wave
+    // does not decide to be lenient on its own. Null means no retry, which is right everywhere that
+    // has not just deployed.
+    Harness.Wire.InertSettle? InertSettle = null)
 {
     /// <summary>The factor, defaulting to uncompressed only where the caller passed nothing at all.</summary>
     public RuntimeCompression Compression => RuntimeCompression ?? Harness.Wire.RuntimeCompression.Uncompressed;
@@ -329,7 +334,7 @@ public static class LoopRun
             .ToArray();
 
         var roundTripsBefore = client.RoundTrips;
-        var wave = WaveRun.Run(client, compression, tensors, nowMs);
+        var wave = WaveRun.Run(client, compression, tensors, nowMs, inertSettle: request.InertSettle);
 
         // ---- 7b. ACCOUNT FOR EVERY SUBMITTED VECTOR, BEFORE PACKAGING ANY OF THEM -------------------
         //
@@ -400,6 +405,11 @@ public static class LoopRun
             // set that is short by nine indices and does not say why is one a reader will explain to
             // themselves.
             + (wave.Interruption is { } interruption ? " *** " + interruption + " *** " : string.Empty)
+            // 🔴 THE SETTLING MEASUREMENT, WHICH THE RUN OTHERWISE SPENDS AND DOES NOT REPORT. A wave that
+            // waited three minutes for the plant to go quiet and a wave that started immediately are
+            // different evidence, and the first is the only source anyone has for how long the
+            // post-download transient actually lasts.
+            + (wave.SettleReport is { } settleReport ? " SETTLING: " + settleReport : string.Empty)
             + released,
             account,
             inertRest,

@@ -67,7 +67,17 @@ public sealed record BatchRunOptions(
     /// one with nothing open — and the lease records the sentence for as long as it is held. It cannot
     /// override a MEASURED holder, and the lease refuses that regardless of what is passed here.</para>
     /// </summary>
-    string? PortalAttestation = null);
+    string? PortalAttestation = null,
+
+    /// <summary>
+    /// Inert attempts at the first index of each lane's wave, including the first. <b>12 attempts 5 s
+    /// apart is up to a minute of ASKING</b>, which ends as soon as the plant is quiescent — where the
+    /// blind 15 s wait it replaces cost 15 s always and was measured to be too short anyway.
+    /// </summary>
+    int InertRetries = 12,
+
+    /// <summary>Seconds between inert attempts. Roughly 200 scans at the measured 24.9 ms.</summary>
+    int InertRetryIntervalSeconds = 5);
 
 /// <summary>The ordered steps of one batch run, or every reason there are none.</summary>
 public sealed record BatchRunPlan(IReadOnlyList<BatchStep> Steps, IReadOnlyList<string> Refusals)
@@ -210,6 +220,21 @@ public sealed record BatchRunPlan(IReadOnlyList<BatchStep> Steps, IReadOnlyList<
                 arguments.Add("--allowlist");
                 arguments.Add(options.DeviceAllowlistPath);
             }
+
+            // 🔴 RETRY THE INERT PHASE AT INDEX 0 RATHER THAN SLEEP BEFORE THE WAVE.
+            //
+            // A download leaves the plant moving, and the first wave after one refuses NotQuiescent —
+            // measured twice on the rig. The blind wait that used to sit here was a guess at a duration
+            // NOBODY HAS MEASURED, and 15 s was measured to be too short. The inert phase already IS the
+            // readiness test: two observations a scan apart, compared. So the wave asks again, and the
+            // number of attempts it needed is REPORTED — which finally measures the settling time
+            // instead of guessing it.
+            //
+            // Only the batch passes this, and only because it has just deployed.
+            arguments.Add("--inert-retry");
+            arguments.Add(options.InertRetries.ToString());
+            arguments.Add("--inert-retry-interval");
+            arguments.Add(options.InertRetryIntervalSeconds.ToString());
 
             arguments.Add("--out");
             arguments.Add(Path.Combine(options.StagingDirectory, $"{lane.Name}-result.json"));

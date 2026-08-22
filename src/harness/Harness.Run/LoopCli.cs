@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using DeviceGuard;
@@ -92,7 +92,10 @@ public static class LoopCli
         // Passed to Compose so the loop re-hashes a byte-stamped provenance record the same way
         // harness-gate does. Absent means the loop can only verify text-stamped records, which it
         // reports as NOT CHECKED rather than as a pass.
-        Func<string, byte[]>? readBytes = null)
+        Func<string, byte[]>? readBytes = null,
+
+        // Retry the inert phase at index 0. Supplied by a caller that has just deployed - see InertSettle.
+        Harness.Wire.InertSettle? inertSettle = null)
     {
         ArgumentNullException.ThrowIfNull(args);
         ArgumentNullException.ThrowIfNull(output);
@@ -109,6 +112,16 @@ public static class LoopCli
         var bindingPath = Option(args, "--binding");
         var host = Option(args, "--host");
         var unit = byte.TryParse(Option(args, "--unit"), out var u) ? u : (byte)1;
+
+        // 🔴 RETRY THE INERT PHASE AT INDEX 0, rather than sleeping past a transient nobody measured.
+        // Supplied by a caller that has just downloaded - harness-batch does. Absent means no retry,
+        // which is right for every run that did not just deploy: a slot that is not quiescent then has
+        // been disturbed by something, and retrying would paper over the finding.
+        var inertRetries = int.TryParse(Option(args, "--inert-retry"), out var ir) && ir > 0 ? ir : 1;
+        var inertGapSeconds = double.TryParse(Option(args, "--inert-retry-interval"), out var ig) && ig > 0 ? ig : 5;
+        var settleFromArgs = inertRetries > 1
+            ? Harness.Wire.InertSettle.Retry(inertRetries, TimeSpan.FromSeconds(inertGapSeconds))
+            : null;
         var outPath = Option(args, "--out");
         var verify = args.Contains("--verify");
         var generateOnly = args.Contains("--generate-only");
@@ -290,7 +303,7 @@ public static class LoopCli
         LoopRequest request;
         try
         {
-            request = Compose(submission, binding, program, readFile, readBytes);
+            request = Compose(submission, binding, program, readFile, readBytes, settleFromArgs);
         }
         catch (Exception ex)
         {
@@ -603,7 +616,10 @@ public static class LoopCli
         // A provenance record stamped over BYTES can only be re-hashed over bytes. Without this the loop
         // would report every derived field NOT CHECKED where harness-gate verified it - the precise
         // asymmetry GateParityTests exists to catch, and the loop is the path that spends rig time.
-        Func<string, byte[]>? readBytes = null)
+        Func<string, byte[]>? readBytes = null,
+
+        // Retry the inert phase at index 0. Supplied by a caller that has just deployed - see InertSettle.
+        Harness.Wire.InertSettle? inertSettle = null)
     {
         ArgumentNullException.ThrowIfNull(submission);
         ArgumentNullException.ThrowIfNull(binding);
@@ -723,7 +739,8 @@ public static class LoopCli
             Derivation: inputs.Derivation,
             ScenarioEndInput: inputs.ScenarioEndInput,
             MaxIndexScans: inputs.MaxIndexScans,
-            ScenarioTimeInputs: inputs.ScenarioTimeInputs);
+            ScenarioTimeInputs: inputs.ScenarioTimeInputs,
+            InertSettle: inertSettle);
     }
 
     private static IReadOnlyList<MirroredSignal> Signals(List<MirroredSignalDocument>? rows) =>
