@@ -77,18 +77,18 @@ public class WaveRunTests
         var atTwo = RunToTimeout(declaredAtOne, new RuntimeCompression(2));
 
         // Same declaration, different wave: the scan term halves and nothing else moves.
-        Assert.Contains($"backstop of {WireTiming.BackstopMs(declaredAtOne, RuntimeCompression.Uncompressed, 3)} ms", atOne, StringComparison.Ordinal);
-        Assert.Contains($"backstop of {WireTiming.BackstopMs(declaredAtOne, new RuntimeCompression(2), 3)} ms", atTwo, StringComparison.Ordinal);
+        Assert.Contains($"backstop of {WireTiming.BackstopMs(declaredAtOne, RuntimeCompression.Uncompressed, OneSlotRoundTrips)} ms", atOne, StringComparison.Ordinal);
+        Assert.Contains($"backstop of {WireTiming.BackstopMs(declaredAtOne, new RuntimeCompression(2), OneSlotRoundTrips)} ms", atTwo, StringComparison.Ordinal);
         Assert.NotEqual(atOne, atTwo);
 
         // And the other direction, which is the one that reports TIMED-OUT on a healthy test: a duration
         // declared at comp=10 needs TEN TIMES the scans when the wave runs uncompressed.
         var declaredAtTen = new ScanBudget(20, 10);
-        Assert.Contains($"backstop of {WireTiming.BackstopMs(declaredAtTen, RuntimeCompression.Uncompressed, 3)} ms",
+        Assert.Contains($"backstop of {WireTiming.BackstopMs(declaredAtTen, RuntimeCompression.Uncompressed, OneSlotRoundTrips)} ms",
             RunToTimeout(declaredAtTen, RuntimeCompression.Uncompressed), StringComparison.Ordinal);
 
-        Assert.True(WireTiming.BackstopMs(declaredAtTen, RuntimeCompression.Uncompressed, 3)
-                  > WireTiming.BackstopMs(declaredAtTen, new RuntimeCompression(10), 3));
+        Assert.True(WireTiming.BackstopMs(declaredAtTen, RuntimeCompression.Uncompressed, OneSlotRoundTrips)
+                  > WireTiming.BackstopMs(declaredAtTen, new RuntimeCompression(10), OneSlotRoundTrips));
     }
 
     [Fact]
@@ -107,10 +107,133 @@ public class WaveRunTests
             new SlotTensor(1, new[] { Vector() with { Duration = new ScanBudget(5, 10) } }),
         }, () => elapsed += 250);
 
-        var expected = WireTiming.BackstopMs(new ScanBudget(5, 10), RuntimeCompression.Uncompressed, 4);
+        var expected = WireTiming.BackstopMs(new ScanBudget(5, 10), RuntimeCompression.Uncompressed, TwoSlotRoundTrips);
 
         Assert.Contains($"backstop of {expected} ms", wave.For(0).Results[0].Detail, StringComparison.Ordinal);
     }
+
+    // ---------------------------------------------------------------------------------------------
+    // Abandoning a slot that has stopped answering (2026-08-22)
+    // ---------------------------------------------------------------------------------------------
+
+    /// <summary>
+    /// <b>A wedged slot used to be re-armed at every remaining index, paying a FULL BACKSTOP each time.</b>
+    /// Against one real submission's declared budgets — 6,168 + 8,568 + 44,328 scans — that is ~24.7
+    /// minutes spent producing no evidence at all.
+    /// </summary>
+    [Fact]
+    public void A_slot_that_times_out_twice_running_is_ABANDONED_and_its_remaining_indices_are_never_submitted()
+    {
+        var (client, wire, _) = Wired(slots: 1);
+        wire.OnTransaction = _ => { };   // nothing ever completes: every index will time out
+
+        var elapsed = 0L;
+        var wave = WaveRun.Run(client, RuntimeCompression.Uncompressed,
+            new[] { Tensor(0, length: 5) }, () => elapsed += 250);
+
+        var results = wave.For(0).Results;
+
+        // FIVE before the policy existed. This is the assertion that goes red if the abandon is removed.
+        Assert.Equal(2, results.Count);
+        Assert.All(results, r => Assert.Equal(SlotOutcome.TimedOut, r.Outcome));
+
+        // The reason has to travel on the LAST RESULT, because that is what VectorDisposition
+        // .SlotExitedFirst quotes back for every index that never ran. A short distribution alone says
+        // the slot stopped; it does not say why.
+        Assert.Contains("SLOT ABANDONED", results[^1].Detail, StringComparison.Ordinal);
+        Assert.Contains("3 index(es) were NOT submitted", results[^1].Detail, StringComparison.Ordinal);
+
+        // And it must not read as a verdict on the vectors that never ran.
+        Assert.Contains("NOT A STATEMENT THAT THOSE VECTORS WOULD HAVE FAILED", results[^1].Detail, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// <b>CONSECUTIVE, not cumulative.</b> A slot that times out, completes, then times out has not stopped
+    /// answering — it has given two different answers, and only an unbroken run is evidence that it has
+    /// gone quiet.
+    /// </summary>
+    [Fact]
+    public void A_completion_between_two_timeouts_RESETS_the_run()
+    {
+        var (client, wire, _) = Wired(slots: 1);
+
+        // Complete on the SECOND arming only. Armings are counted on the low->high edge of the start bool,
+        // which is the only thing at this level that marks one index from the next.
+        var armings = -1;
+        var wasRunning = false;
+        wire.OnTransaction = t =>
+        {
+            var running = (t.StartBoolRegisters[0] & 1) != 0;
+            if (running && !wasRunning)
+                armings++;
+
+            wasRunning = running;
+
+            var complete = running && armings == 1;
+            t.SetResult(0, 0, complete ? (ushort)10 : (ushort)0);
+            t.SetResult(0, 1, complete ? (ushort)1 : (ushort)0);
+        };
+
+        var elapsed = 0L;
+        var wave = WaveRun.Run(client, RuntimeCompression.Uncompressed,
+            new[] { Tensor(0, length: 5) }, () => elapsed += 250);
+
+        var outcomes = wave.For(0).Results.Select(r => r.Outcome).ToArray();
+
+        // timeout, completion (resets), timeout, timeout -> abandoned with one index left.
+        // If the counter were cumulative rather than consecutive this would be THREE results, abandoning
+        // at index 2 on the strength of two timeouts either side of a healthy one.
+        Assert.Equal(
+            new[] { SlotOutcome.TimedOut, SlotOutcome.Completed, SlotOutcome.TimedOut, SlotOutcome.TimedOut },
+            outcomes);
+    }
+
+    /// <summary>
+    /// The pre-2026-08-22 behaviour stays expressible, so this test proves the POLICY is what stops the
+    /// slot rather than some other change in the loop.
+    /// </summary>
+    [Fact]
+    public void TimeoutAbandon_Never_runs_every_index_however_many_time_out()
+    {
+        var (client, wire, _) = Wired(slots: 1);
+        wire.OnTransaction = _ => { };
+
+        var elapsed = 0L;
+        var wave = WaveRun.Run(client, RuntimeCompression.Uncompressed,
+            new[] { Tensor(0, length: 5) }, () => elapsed += 250, abandon: TimeoutAbandon.Never);
+
+        Assert.Equal(5, wave.For(0).Results.Count);
+        Assert.DoesNotContain("SLOT ABANDONED", wave.For(0).Results[^1].Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Abandoning_before_a_slot_has_timed_out_once_is_refused_and_the_default_is_two()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() => TimeoutAbandon.AfterConsecutive(0));
+        Assert.Equal(2, TimeoutAbandon.Default.ConsecutiveIndices);
+        Assert.Null(TimeoutAbandon.Never.ConsecutiveIndices);
+
+        // The limit is a floor to REACH, not an equality — a policy of 2 must still stop a slot sitting
+        // on 3, which is what happens if a later edit ever lets a run continue past the limit.
+        Assert.True(TimeoutAbandon.Default.Reached(3));
+        Assert.False(TimeoutAbandon.Default.Reached(1));
+        Assert.False(TimeoutAbandon.Never.Reached(int.MaxValue));
+    }
+
+    /// <summary>
+    /// Round trips <c>WaveRun</c> budgets for ONE index at one slot: one vector write, one result read,
+    /// <b>one CONTROL read</b>, and the commit.
+    ///
+    /// <para>🔴 <b>The control read joined this count on 2026-08-22 and these numbers went 3 → 4 and
+    /// 4 → 5.</b> <c>Observe</c> always issued it; <c>WireTiming.RoundTripsPerIndex</c> never counted it,
+    /// so the backstop was short by one <c>RTT_p99</c> per poll round — short in the direction that
+    /// produces a spurious TIMED-OUT on a healthy test. Named rather than inlined so the next change to
+    /// the transaction shape has to come through here.</para>
+    /// </summary>
+    private const int OneSlotRoundTrips = 4;
+
+    /// <inheritdoc cref="OneSlotRoundTrips"/>
+    private const int TwoSlotRoundTrips = 5;
 
     private static string RunToTimeout(ScanBudget duration, RuntimeCompression compression)
     {

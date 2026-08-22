@@ -73,7 +73,19 @@ public sealed record GateInputs(
     /// disagree about twelve of them, and this one governs whether the other twelve were produced or
     /// typed.
     /// </summary>
-    DerivationEvidence? Derivation = null);
+    DerivationEvidence? Derivation = null,
+
+    /// <summary>
+    /// The document's <c>scenarioEndInput</c> — which input carries the scenario's end, in plant
+    /// milliseconds. Gate 1b bounds every vector's <c>MaxDuration</c> against it; null leaves that gate
+    /// NOT CHECKED.
+    /// </summary>
+    string? ScenarioEndInput = null,
+
+    /// <summary>
+    /// The document's <c>maxIndexScans</c> — gate 1b's flat ceiling, for vectors with no scenario clock.
+    /// </summary>
+    int? MaxIndexScans = null);
 
 /// <summary>
 /// The runnable gate. <c>harness-gate check &lt;submission.json&gt;</c>.
@@ -233,7 +245,9 @@ public static class GateCli
             inputs.ConflictEdgesExplicitlyNull,
             inputs.UnknownFields,
             inputs.AnnotationFields,
-            inputs.Derivation);
+            inputs.Derivation,
+            inputs.ScenarioEndInput,
+            inputs.MaxIndexScans);
     }
 
     /// <summary>
@@ -265,7 +279,9 @@ public static class GateCli
             extra.Unknown,
             extra.Annotations,
             Math.Max(1, document.RuntimeCompression),
-            ToDerivationEvidence(document, readFile, readBytes));
+            ToDerivationEvidence(document, readFile, readBytes),
+            document.ScenarioEndInput,
+            document.MaxIndexScans);
     }
 
     /// <summary>

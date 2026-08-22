@@ -165,9 +165,23 @@ public static class WireTiming
 
     /// <summary>
     /// Round trips one wave index costs:
-    /// <c>K x ceil(Wv / 123) + P x ceil(K / R) + 1</c> — K slots, <c>Wv</c> vector registers per slot,
-    /// P poll rounds, <c>R = floor(125 / Wr)</c> whole slots per read, plus the one-transaction commit.
-    /// [D, §12a derivation 2]
+    /// <c>K x ceil(Wv / 123) + P x (1 + ceil(K / R)) + 1</c> — K slots, <c>Wv</c> vector registers per
+    /// slot, P poll rounds, <c>R = floor(125 / Wr)</c> whole slots per read, plus the one-transaction
+    /// commit. [D, §12a derivation 2]
+    ///
+    /// <para>🔴 <b>THE <c>P x 1</c> CONTROL TERM WAS MISSING UNTIL 2026-08-22, AND §12a's WRITTEN FORMULA
+    /// STILL OMITS IT.</b> <c>WaveRun.Observe</c> issues <b>two</b> round trips per poll round — one
+    /// <c>ReadControl</c> and one <c>ReadResults</c> — and only the second was counted. Measured on a real
+    /// wave: 3,052 poll rounds against 6,185 round trips, i.e. almost exactly <c>2 x P</c>, where this
+    /// formula predicted <c>P</c>. <c>RegisterMap.PollRoundTrips</c> has always had it right
+    /// (<c>1 + ReadsPerPollCycle</c>) — the two disagreed, and this one was the wrong one.</para>
+    ///
+    /// <para><b>Why it mattered rather than being cosmetic:</b> the only consumer is
+    /// <see cref="BackstopMs"/>, so the backstop was under-budgeted by <c>P x RTT_p99</c> — an error in
+    /// the direction that produces a <b>spurious TIMED-OUT on a healthy test</b>, which this file
+    /// elsewhere calls the worse of the two failures because it is believed. <b>This is a deviation from
+    /// §12a as written and is deliberate:</b> the formula there describes fewer transactions than the
+    /// client actually issues, and a cost model may not be more optimistic than the code it models.</para>
     ///
     /// <para><b>The read term was <c>P x K</c> until F-1 was adopted on 2026-08-13</b> — one FC03 per
     /// slot. It is now <c>P x ceil(K/R)</c>, and since <c>R = floor(125 / Wr)</c>, <b>slot width has
@@ -195,7 +209,11 @@ public static class WireTiming
         var slotsPerRead = Math.Max(1, Harness.Map.ModbusLimits.MaxReadRegisters / resultRegistersPerSlot);
         var reads = pollRounds * ((slots + slotsPerRead - 1) / slotsPerRead);
 
-        return (slots * writes) + reads + 1;
+        // One CONTROL read per poll round, on top of the result read(s). Not in §12a's written formula;
+        // it is in the client, which is what the budget has to survive.
+        var controlReads = pollRounds;
+
+        return (slots * writes) + reads + controlReads + 1;
     }
 
     /// <summary>

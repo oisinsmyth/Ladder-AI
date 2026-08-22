@@ -43,6 +43,30 @@ public sealed class SubmissionDocument
     /// <summary>Slots in the wave set. Feeds §12a derivation 1's floor, which scales with tensor width.</summary>
     public int SlotsInWaveSet { get; set; } = 1;
 
+    /// <summary>
+    /// The input path whose value is the SCENARIO'S END, in plant milliseconds — e.g. the stimulus model's
+    /// end-of-run time. Every vector's <c>MaxDuration</c> is bounded against its own value for this input
+    /// (gate 1b).
+    ///
+    /// <para><b>Named rather than inferred, because the harness cannot know it.</b> Which input carries a
+    /// scenario's end is a property of the stimulus MODEL, not of the wire, and there is no fail-safe
+    /// guess: pick the wrong input and the bound is nonsense in whichever direction that input happens to
+    /// point. Absent, gate 1b is NOT CHECKED — which makes the submission NOT ADMISSIBLE, deliberately,
+    /// because the alternative is a backstop bounded by nothing at ~24.7 minutes a wedged slot.</para>
+    /// </summary>
+    public string? ScenarioEndInput { get; set; }
+
+    /// <summary>
+    /// A flat ceiling, in scans, on any one vector's <c>maxDurationScans</c> (gate 1b).
+    ///
+    /// <para><b>For vectors that have no scenario clock.</b> A ramp-to-limit test finishes when a count
+    /// reaches a limit and has no end TIME at all, so <see cref="ScenarioEndInput"/> has nothing to point
+    /// at — and without this there is no bound available to it whatsoever. Declared by the coordinator,
+    /// who is the one who knows how long a wave may take; it applies to every vector, and never displaces
+    /// the tighter per-scenario bound where that is available.</para>
+    /// </summary>
+    public int? MaxIndexScans { get; set; }
+
     /// <summary>Result-region width in registers, for the slots-per-read arithmetic the floor uses.</summary>
     public int ResultRegistersPerSlot { get; set; } = 1;
 

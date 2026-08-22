@@ -130,7 +130,15 @@ public class ObservationWindowTests
             AnnotationFields: Array.Empty<string>(),
 
             // No submission document, so no derivable field was hand-authored. Gate 0c's claim, stated.
-            Derivation: DerivationEvidence.NoDocument);
+            Derivation: DerivationEvidence.NoDocument,
+
+            // Gate 1b's flat ceiling: these vectors are ramp-to-limit and have no scenario clock, so
+            // there is nothing tighter to bound MaxDuration against. See LoopRunTests.Request.
+            //
+            // 800 rather than that file's 200 because THIS fixture declares MaxDurationScans: 400 — these
+            // tests are about observation WINDOWS and need a long one. The ceiling is a per-submission
+            // decision for exactly this reason, and 200 would refuse the fixture correctly.
+            MaxIndexScans: 800);
     }
 
     /// <summary>One scan per transaction, so the poll rate resolves the window rather than stepping over it.</summary>

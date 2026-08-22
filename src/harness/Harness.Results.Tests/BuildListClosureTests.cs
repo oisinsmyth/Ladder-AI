@@ -32,6 +32,9 @@ public class BuildListClosureTests
       "blockAuthor": "agent-a",
       "runtimeCompression": 1,
       "slotsInWaveSet": 1,
+      // Gate 1b: 400 ms is 17 scans, so the vector's 20-scan maxDuration clears the floor and sits well
+      // under the ceiling. Without this the fixture stops being COMPLETE, which is what this file asserts.
+      "scenarioEndInput": "Demo_EndAt",
       "resultRegistersPerSlot": 20,
       "conflictEdges": [
         { "blockA": "FC_Demo", "blockB": "FC_Other", "provenance": "SharedModel", "signal": "Demo_Count", "class": "HarnessInstrumentation" }
@@ -60,6 +63,7 @@ public class BuildListClosureTests
         "id": "V-1", "slot": "S0", "index": 0, "author": "agent-b",
         "clause": "REQ-014", "assertion": "REQ-014:ffcc38",
         "startBool": "Demo_Start",
+        "inputs": { "Demo_EndAt": "400" },
         "expectations": [{ "signal": "Demo_Count", "nature": "PersistentState", "mode": "Latched", "windowScans": 0, "expected": "10" }],
         "settlingCondition": "count unchanged across 3 scans", "settlingSignals": ["Demo_Count"],
         "maxDurationScans": 20,

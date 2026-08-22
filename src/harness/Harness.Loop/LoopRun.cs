@@ -87,7 +87,17 @@ public sealed record LoopRequest(
     // each. Carried from the request for exactly the reason UnknownFields is - the loop is the path that
     // spends rig time, so a gate that is weaker here than in the standalone CLI is the weaker check
     // guarding the more expensive door. Null is NOT CHECKED, never a pass.
-    DerivationEvidence? Derivation = null)
+    DerivationEvidence? Derivation = null,
+
+    // Gate 1b: the input path whose value is the SCENARIO'S END, in plant milliseconds — what every
+    // vector's MaxDuration is bounded against. Carried from the request for the same reason as the two
+    // fields above: the loop is the path that spends rig time, and an unbounded backstop costs ~24.7
+    // minutes on a wedged slot. Null is NOT CHECKED, never a pass.
+    string? ScenarioEndInput = null,
+
+    // Gate 1b's flat ceiling, in scans, for vectors with no scenario clock — a ramp-to-limit test has no
+    // end TIME, so ScenarioEndInput has nothing to point at and this is the only bound available to it.
+    int? MaxIndexScans = null)
 {
     /// <summary>The factor, defaulting to uncompressed only where the caller passed nothing at all.</summary>
     public RuntimeCompression Compression => RuntimeCompression ?? Harness.Wire.RuntimeCompression.Uncompressed;
@@ -613,7 +623,9 @@ public static class LoopRun
             conflictEdgesExplicitlyNull: request.ConflictEdgesExplicitlyNull,
             unknownFields: request.UnknownFields,
             annotationFields: request.AnnotationFields,
-            derivation: request.Derivation);
+            derivation: request.Derivation,
+            scenarioEndInput: request.ScenarioEndInput,
+            maxIndexScans: request.MaxIndexScans);
 
         if (stopWhenInadmissible && gate.Verdict != SubmissionVerdict.AdmissibleSubjectToJudgement)
         {

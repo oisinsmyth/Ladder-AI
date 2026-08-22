@@ -138,7 +138,14 @@ public class LoopRunTests
             // Same claim, same reason, for gate 0c: there is no submission document here, so no derivable
             // field was hand-authored. Said out loud rather than defaulted, because the caller for which
             // it is FALSE - LoopCli, which parses one - is the caller that spends rig time.
-            Derivation: DerivationEvidence.NoDocument);
+            Derivation: DerivationEvidence.NoDocument,
+
+            // Gate 1b. These vectors are ramp-to-limit: they finish when a count reaches a limit, so they
+            // have no scenario clock and `ScenarioEndInput` would have nothing to point at. A flat ceiling
+            // is the only bound available to that shape, and it is the coordinator's to declare. 200 scans
+            // against the fixture's MaxDuration of 20 — bounded with room, so a fixture change that trips
+            // this gate is a real change rather than a fixture running along an edge.
+            MaxIndexScans: 200);
 
     private static (LoopResult Result, SimulatedGateway Gateway) Run(LoopRequest? request = null, SimulatedGateway? gateway = null)
     {
@@ -536,8 +543,11 @@ public class LoopRunTests
         var atThree = TimeoutDetail(3);
 
         // 20 scans declared at comp=3, run at comp=1, is SIXTY scans of real time — and the backstop says so.
-        Assert.Contains($"backstop of {WireTiming.BackstopMs(new ScanBudget(20, 1), RuntimeCompression.Uncompressed, 3)} ms", atOne, StringComparison.Ordinal);
-        Assert.Contains($"backstop of {WireTiming.BackstopMs(new ScanBudget(20, 3), RuntimeCompression.Uncompressed, 3)} ms", atThree, StringComparison.Ordinal);
+        // 4, not 3: one write + one result read + one CONTROL read + the commit. The control read joined
+        // WireTiming.RoundTripsPerIndex on 2026-08-22 — Observe always issued it and the formula never
+        // counted it, leaving the backstop short in the spurious-TIMED-OUT direction.
+        Assert.Contains($"backstop of {WireTiming.BackstopMs(new ScanBudget(20, 1), RuntimeCompression.Uncompressed, 4)} ms", atOne, StringComparison.Ordinal);
+        Assert.Contains($"backstop of {WireTiming.BackstopMs(new ScanBudget(20, 3), RuntimeCompression.Uncompressed, 4)} ms", atThree, StringComparison.Ordinal);
         Assert.NotEqual(atOne, atThree);
     }
 
@@ -579,10 +589,10 @@ public class LoopRunTests
 
         // Same vector, same declaration of 20 scans at comp=1: run at comp=2 the test really does take ten
         // scans, and the bound follows it.
-        Assert.Contains($"backstop of {WireTiming.BackstopMs(new ScanBudget(20, 1), RuntimeCompression.Uncompressed, 3)} ms",
+        Assert.Contains($"backstop of {WireTiming.BackstopMs(new ScanBudget(20, 1), RuntimeCompression.Uncompressed, 4)} ms",
             TimeoutDetail(RuntimeCompression.Uncompressed), StringComparison.Ordinal);
 
-        Assert.Contains($"backstop of {WireTiming.BackstopMs(new ScanBudget(20, 1), new RuntimeCompression(2), 3)} ms",
+        Assert.Contains($"backstop of {WireTiming.BackstopMs(new ScanBudget(20, 1), new RuntimeCompression(2), 4)} ms",
             TimeoutDetail(new RuntimeCompression(2)), StringComparison.Ordinal);
     }
 

@@ -23,6 +23,9 @@ public class GateCliTests
       "runtimeCompression": 1,
       "slotsInWaveSet": 1,
       "resultRegistersPerSlot": 20,
+      // Gate 1b: where the scenario ends, so MaxDuration is bounded by something. 400 ms is 17 scans, so
+      // the 20-scan maxDuration clears 1b's floor and sits far under its ceiling.
+      "scenarioEndInput": "Demo_EndAt",
       "computedConflicts": [],
       "model": { "id": "M_Ramp", "represents": ["ramp-to-limit"], "validatedAgainstPlantData": true, "declaredBy": "agent-m" },
       "enumeration": { "clauses": ["REQ-014"], "assertions": ["REQ-014:ffcc38"],
@@ -47,6 +50,7 @@ public class GateCliTests
         "id": "V-1", "slot": "S0", "index": 0, "author": "agent-b",
         "clause": "REQ-014", "assertion": "REQ-014:ffcc38",
         "startBool": "Demo_Start",
+        "inputs": { "Demo_EndAt": "400" },
         "expectations": [{ "signal": "Demo_Count", "nature": "PersistentState", "mode": "Sampled", "windowScans": 20, "expected": "10" }],
         "settlingCondition": "count unchanged across 3 scans", "settlingSignals": ["Demo_Count"],
         "maxDurationScans": 20,
@@ -384,6 +388,7 @@ public class GateCliTests
             "id": "V-1", "slot": "S0", "index": 0, "author": "agent-b",
             "clause": "REQ-014", "assertion": "REQ-014:ffcc38",
             "startBool": "Demo_Start",
+        "inputs": { "Demo_EndAt": "400" },
             "expectations": [{ "signal": "Demo_Count", "nature": "PersistentState", "mode": "Latched", "windowScans": 0, "expected": "10" }],
             "settlingCondition": "count unchanged across 3 scans", "settlingSignals": ["Demo_Count"],
             "maxDurationScans": 20,

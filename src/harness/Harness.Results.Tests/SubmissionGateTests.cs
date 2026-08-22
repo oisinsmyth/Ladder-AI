@@ -38,6 +38,19 @@ public class SubmissionGateTests
     /// suite's own control uses.</b> A second hand-rolled vector is a second thing that can stop being
     /// admissible for reasons unrelated to what the test is about.
     /// </summary>
+    /// <summary>
+    /// Gate 1b's two halves for these fixtures: which input carries the scenario's end, and its value.
+    ///
+    /// <para>400 ms is 17 scans at the measured 24.931 ms period, so the fixture's 20-scan
+    /// <c>maxDuration</c> sits ABOVE the scenario's own end (1b's floor) and far below
+    /// <c>ceil(17 x 1.5) + 500</c> (1b's ceiling). Both bounds are cleared with room, so a fixture change
+    /// that trips this gate is a real change and not a fixture running along an edge.</para>
+    /// </summary>
+    internal const string ScenarioEndInput = "Demo_EndAt";
+
+    /// <inheritdoc cref="ScenarioEndInput"/>
+    internal const string ScenarioEndMs = "400";
+
     internal static SubmissionVector Vector(
         string id = "V-1",
         string slot = "S0",
@@ -54,10 +67,11 @@ public class SubmissionGateTests
         // AMB-19: the default vector DECLARES the bound it was written against, because the default
         // fixture is supposed to be a COMPLETE submission. Pass an empty dictionary to model the vector
         // that says nothing — that is the hole, and it has its own tests below.
-        IReadOnlyDictionary<string, string>? boundsUsed = null) =>
+        IReadOnlyDictionary<string, string>? boundsUsed = null,
+        string? scenarioEndMs = null) =>
         new(id, slot, 0, new AgentIdentity(author),
             basis ?? new Basis("REQ-014", AssertionIdValue),
-            new Dictionary<string, string> { ["Demo_Step"] = "5" },
+            new Dictionary<string, string> { ["Demo_Step"] = "5", [ScenarioEndInput] = scenarioEndMs ?? ScenarioEndMs },
             startBool,
             expectations ?? new[] { new ObservabilityDeclaration("Demo_Count", SignalNature.PersistentState, InstrumentationMode.Latched, 0, "10") },
             form,
@@ -110,7 +124,9 @@ public class SubmissionGateTests
         bool omitConflictGraph = false,
         AssertionEnumeration? enumeration = null,
         BlockCompressionInputs? compressionInputs = null,
-        SignalStorageMap? storage = null) =>
+        SignalStorageMap? storage = null,
+        string? scenarioEndInput = ScenarioEndInput,
+        int? maxIndexScans = null) =>
         SubmissionGate.Check(
             vectors ?? new[] { Vector() },
             enumeration ?? AssertionEnumeration.Of(new[] { "REQ-014" }, new[] { AssertionIdValue },
@@ -139,7 +155,143 @@ public class SubmissionGateTests
             // is a COMPUTED empty rather than an unasked question. The same is true of gate 0c: with no
             // document there is no authored field to attribute, and the claim is made explicitly.
             unknownFields: Array.Empty<string>(),
-            derivation: DerivationEvidence.NoDocument);
+            derivation: DerivationEvidence.NoDocument,
+
+            // Gate 1b: the default fixture stands for a COMPLETE submission, so it names where its
+            // scenario ends. Omit it and 1b is NOT CHECKED — which is the point of the gate, and has its
+            // own test rather than being the default everything else runs under.
+            scenarioEndInput: scenarioEndInput,
+            maxIndexScans: maxIndexScans);
+
+    // ---------------------------------------------------------------------------------------------
+    // Gate 1b — the backstop is bounded by the scenario the vector itself declares (2026-08-22)
+    // ---------------------------------------------------------------------------------------------
+
+    /// <summary>
+    /// <b>The measured case that produced this gate.</b> One real submission declared 6,168 / 8,568 /
+    /// 44,328 scans against 2,007 / 2,793 / 14,468 actually used — a flat ~3.07x hedge that nothing
+    /// checked, worth ~24.7 minutes of wall clock if the slot never completes.
+    /// </summary>
+    [Fact]
+    public void A_backstop_far_above_the_vector_OWN_scenario_is_REFUSED_naming_the_ratio_and_the_wasted_seconds()
+    {
+        // 358 s of scenario is 14,360 scans; the declared 44,328 is 3.09x it.
+        var report = Check(new[] { Vector(maxDuration: 44_328, scenarioEndMs: "358000") });
+        var gate = Gate(report, "1b backstop bound");
+
+        Assert.False(gate.Passed);
+        Assert.Equal(GateStatus.Checked, gate.Status);
+        Assert.Contains("3.09x", gate.Detail, StringComparison.Ordinal);
+
+        // The cost has to be in the message: a ratio is an abstraction, and the reason anyone cares is
+        // the wall clock a wedged index burns before it says TIMED-OUT.
+        Assert.Contains(" s of wall clock", gate.Detail, StringComparison.Ordinal);
+        Assert.Equal(SubmissionVerdict.NotAdmissible, report.Verdict);
+    }
+
+    /// <summary>
+    /// The other direction, and the more dangerous one: a backstop the scenario cannot finish inside is a
+    /// spurious TIMED-OUT <b>by construction</b> on a perfectly healthy test.
+    /// </summary>
+    [Fact]
+    public void A_backstop_BELOW_the_scenario_own_end_is_REFUSED_because_it_fires_on_a_HEALTHY_test()
+    {
+        // 400 ms is 17 scans. Ten is not enough for the scenario to reach its own end.
+        var gate = Gate(Check(new[] { Vector(maxDuration: 10) }), "1b backstop bound");
+
+        Assert.False(gate.Passed);
+        Assert.Contains("fires on a HEALTHY test", gate.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_right_sized_backstop_passes_and_the_gate_states_its_denominator()
+    {
+        var gate = Gate(Check(), "1b backstop bound");
+
+        Assert.True(gate.Passed);
+
+        // Every other number this gate prints is a reason a vector was NOT bounded. This one is the
+        // denominator, and it is printed on every run — the same shape as drift-check's COMPARED line.
+        Assert.Contains("BOUNDED: 1 of 1 vector(s)", gate.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void WITHOUT_a_scenarioEndInput_the_gate_is_NOT_CHECKED_and_that_makes_the_submission_INADMISSIBLE()
+    {
+        var report = Check(scenarioEndInput: null);
+        var gate = Gate(report, "1b backstop bound");
+
+        // NOT CHECKED, never a vacuous pass: nothing said where the scenario ends, so nothing bounded the
+        // backstop, and an unbounded backstop is the whole cost this gate exists to stop.
+        Assert.Equal(GateStatus.NotChecked, gate.Status);
+        Assert.Equal(NotCheckedReason.AwaitingAnArtifactThatCouldExist, gate.Reason);
+        Assert.Equal(SubmissionVerdict.NotAdmissible, report.Verdict);
+    }
+
+    [Fact]
+    public void A_vector_that_does_not_carry_the_named_input_is_REFUSED_rather_than_skipped()
+    {
+        // The gate is told where to look and the vector does not have it. Skipping this one and reporting
+        // the rest as bounded would be the "empty is not clean" failure at the level of a single vector.
+        var gate = Gate(Check(scenarioEndInput: "Demo_NoSuchInput"), "1b backstop bound");
+
+        Assert.False(gate.Passed);
+        Assert.Contains("BOUNDED: 0 of 1 vector(s)", gate.Detail, StringComparison.Ordinal);
+        Assert.Contains("bounded by nothing", gate.Detail, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// <b>The bound for a vector with no scenario clock at all.</b> A ramp-to-limit test finishes when a
+    /// count reaches a limit and has no end TIME, so <c>scenarioEndInput</c> has nothing to point at — and
+    /// without the flat ceiling there is no bound available to that shape whatsoever.
+    /// </summary>
+    [Fact]
+    public void WITH_NO_SCENARIO_CLOCK_the_flat_ceiling_bounds_the_backstop_and_the_gate_says_it_is_the_WEAKER_claim()
+    {
+        var report = Check(new[] { Vector(maxDuration: 150) }, scenarioEndInput: null, maxIndexScans: 200);
+        var gate = Gate(report, "1b backstop bound");
+
+        Assert.Equal(GateStatus.Checked, gate.Status);
+        Assert.True(gate.Passed);
+
+        // *** THE TWO BOUNDS MUST NOT READ ALIKE. *** "Bounded by a flat ceiling" is materially weaker
+        // than "checked against the scenario this vector itself describes", and a submission where every
+        // vector took the weaker route must not look like one where every vector took the stronger.
+        Assert.Contains("by the flat ceiling of 200 scan(s) ONLY", gate.Detail, StringComparison.Ordinal);
+        Assert.DoesNotContain("checked against", gate.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_backstop_above_the_flat_ceiling_is_REFUSED_even_with_no_scenario_clock()
+    {
+        var gate = Gate(Check(new[] { Vector(maxDuration: 5_000) }, scenarioEndInput: null, maxIndexScans: 200), "1b backstop bound");
+
+        Assert.False(gate.Passed);
+        Assert.Contains("against the declared ceiling of 200", gate.Detail, StringComparison.Ordinal);
+        Assert.Contains(" s of wall clock", gate.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void The_ceiling_applies_even_WITH_a_scenario_clock_because_it_is_the_outer_bound_not_a_fallback()
+    {
+        // The scenario says 400 ms = 17 scans, so the per-scenario bound is ceil(17 x 1.5) + 500 = 526 and
+        // a MaxDuration of 300 clears it comfortably. The flat ceiling of 100 does NOT, and it still
+        // fires: the ceiling is an OUTER bound that applies to every vector, not a fallback used only
+        // where the scenario clock is missing. Whichever bound is tighter is the one that refuses.
+        var gate = Gate(Check(new[] { Vector(maxDuration: 300) }, maxIndexScans: 100), "1b backstop bound");
+
+        Assert.False(gate.Passed);
+        Assert.Contains("against the declared ceiling of 100", gate.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_scenario_end_that_is_not_a_positive_number_of_milliseconds_is_REFUSED()
+    {
+        var gate = Gate(Check(new[] { Vector(scenarioEndMs: "T#6M") }), "1b backstop bound");
+
+        Assert.False(gate.Passed);
+        Assert.Contains("not a positive whole number of milliseconds", gate.Detail, StringComparison.Ordinal);
+    }
 
     /// <summary>
     /// One vector whose expectation declares a WINDOW, so X-D's assertion ceiling is computable for it.

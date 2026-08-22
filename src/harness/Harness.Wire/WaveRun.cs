@@ -26,6 +26,48 @@ public sealed record SlotDistribution(
     IReadOnlyList<SlotRunResult> Results,
     IReadOnlyList<(int WaveIndex, IReadOnlyList<int> CoRunners)> CoRunning);
 
+/// <summary>
+/// When to stop re-arming a slot that keeps timing out. <b>The cost this bounds is not hypothetical:</b>
+/// nothing in the wave ever stopped attempting a slot, so a wedged one was re-armed at every remaining
+/// index and paid a FULL BACKSTOP each time. Measured against one real submission's declared budgets —
+/// 6,168 + 8,568 + 44,328 scans — a slot that never completes costs <b>~24.7 minutes and produces no
+/// evidence at all.</b>
+///
+/// <para><b>Why a count and not "stop at the first one".</b> A single TIMED-OUT is genuinely ambiguous:
+/// X-B invented that outcome precisely so "the condition never occurred" stays distinguishable from a
+/// failure, and one index can legitimately not reach its condition while the next does. Two in a row is
+/// a slot that is not answering.</para>
+///
+/// <para>🔴 <b>ABANDONING IS NOT FAILING, AND IT MUST NOT READ AS COVERAGE.</b> The indices not run are
+/// reported through the EXISTING <c>NEVER ATTEMPTED</c> path — <c>VectorDisposition.SlotExitedFirst</c> —
+/// which already states the index reached, the outcome that stopped it, and that nothing there is
+/// evidence about the block. No result is fabricated for a vector that was never submitted.</para>
+/// </summary>
+/// <param name="ConsecutiveIndices">
+/// How many consecutive TIMED-OUT indices end the slot. <b><c>null</c> means never abandon</b> — stated,
+/// not defaulted, so "keep going forever" is a choice someone made rather than a field left blank.
+/// </param>
+public sealed record TimeoutAbandon(int? ConsecutiveIndices)
+{
+    /// <summary>Never stop re-arming. The behaviour before 2026-08-22, kept expressible so a test can ask for it.</summary>
+    public static readonly TimeoutAbandon Never = new((int?)null);
+
+    /// <summary>Stop after <paramref name="indices"/> consecutive TIMED-OUT indices.</summary>
+    public static TimeoutAbandon AfterConsecutive(int indices) => indices >= 1
+        ? new TimeoutAbandon(indices)
+        : throw new ArgumentOutOfRangeException(nameof(indices), indices, "abandoning after fewer than one timed-out index would stop a slot that has not yet timed out once. Use TimeoutAbandon.Never to disable.");
+
+    /// <summary>Two consecutive timeouts — the policy argued for above.</summary>
+    public static readonly TimeoutAbandon Default = AfterConsecutive(2);
+
+    /// <summary>Whether a run of <paramref name="consecutiveTimeouts"/> has reached this policy's limit.</summary>
+    public bool Reached(int consecutiveTimeouts) =>
+        ConsecutiveIndices is int limit && consecutiveTimeouts >= limit;
+
+    public override string ToString() =>
+        ConsecutiveIndices is int n ? $"abandon after {n} consecutive TIMED-OUT index(es)" : "never abandon";
+}
+
 /// <summary>What a whole wave produced.</summary>
 /// <param name="Length">Indices run — MAX tensor length across the slots (D26a), never a colouring decision.</param>
 public sealed record WaveResult(
@@ -68,16 +110,26 @@ public static class WaveRun
     /// another is a backstop that fires on a healthy test. Required, never defaulted — see
     /// <see cref="ScanBudget"/>.
     /// </param>
+    /// <param name="abandon">
+    /// When to stop re-arming a slot that keeps timing out. <b>Omitted means
+    /// <see cref="TimeoutAbandon.Default"/>, which DOES abandon</b> — pass <see cref="TimeoutAbandon.Never"/>
+    /// for the pre-2026-08-22 behaviour of retrying a wedged slot at every remaining index. The permissive
+    /// option is the one you have to ask for, because it is the one that costs ~24.7 minutes for no
+    /// evidence.
+    /// </param>
     public static WaveResult Run(
         MirrorClient client,
         RuntimeCompression compression,
         IReadOnlyList<SlotTensor> tensors,
         Func<long>? nowMs = null,
-        Action<SlotDistribution>? onSlotComplete = null)
+        Action<SlotDistribution>? onSlotComplete = null,
+        TimeoutAbandon? abandon = null)
     {
         ArgumentNullException.ThrowIfNull(client);
         ArgumentNullException.ThrowIfNull(compression);
         ArgumentNullException.ThrowIfNull(tensors);
+
+        abandon ??= TimeoutAbandon.Default;
 
         if (tensors.Count == 0)
             throw new ArgumentException("a wave over no slots runs nothing. Empty is not clean.", nameof(tensors));
@@ -98,11 +150,23 @@ public static class WaveRun
 
         var length = tensors.Max(t => t.Length);
 
+        // Per slot: how many indices IN A ROW have ended TIMED-OUT, and which slots have been given up
+        // on. A slot in `abandoned` is not active at any later index and its remaining vectors are never
+        // submitted — reported as NEVER ATTEMPTED, never as a result.
+        var consecutiveTimeouts = tensors.ToDictionary(t => t.SlotIndex, _ => 0);
+        var abandoned = new HashSet<int>();
+
         for (var index = 0; index < length; index++)
         {
             // Active = the slots that still have a vector at THIS index. The rest are null: not
             // commanded, not verified, values don't-care.
-            var active = tensors.Where(t => index < t.Length).ToArray();
+            var active = tensors.Where(t => index < t.Length && !abandoned.Contains(t.SlotIndex)).ToArray();
+
+            // Every slot that had indices left has been abandoned. Continuing would run inert phases
+            // against nothing, which is the "empty is not clean" shape: a wave that examined nothing
+            // must not spend the remaining indices looking busy.
+            if (active.Length == 0)
+                break;
 
             var inert = InertPhase.Establish(client,
                 active.Select(t => new SlotInert(t.SlotIndex, t.Vectors[index].Values, t.Vectors[index].Inert)).ToArray());
@@ -152,7 +216,16 @@ public static class WaveRun
 
             var perIndex = Observe(client, compression, active, index, startScan, inert, nowMs);
             foreach (var (slotIndex, result) in perIndex)
+            {
                 collected[slotIndex].Add(result);
+
+                // CONSECUTIVE, so anything that is not a timeout resets the run. A slot that times out,
+                // then completes, then times out has not stopped answering — it has produced two
+                // different answers, and only an unbroken run is evidence that it has stopped.
+                consecutiveTimeouts[slotIndex] = result.Outcome == SlotOutcome.TimedOut
+                    ? consecutiveTimeouts[slotIndex] + 1
+                    : 0;
+            }
 
             // 🔴 *** THE ECHO IS READ HERE, AFTER THE OBSERVATION AND BEFORE THE NEXT INDEX'S INERT PHASE
             // CLEARS IT. *** That ordering is the whole handshake: the latch is set by the copy layer in
@@ -163,8 +236,41 @@ public static class WaveRun
             // system produces, from a block that never started.
             log.Record(index, commanded, client.ReadControl(), client.Map.Slots.Count);
 
+            // ---- ABANDONMENT. After the co-running log, so the abandoned slot's slice includes the index
+            // that stopped it; before the exit loop, so it leaves by this path rather than that one.
+            foreach (var tensor in active.OrderBy(t => t.SlotIndex))
+            {
+                // A slot on its last index is finishing anyway — the exit loop below owns it, and calling
+                // it "abandoned" would claim vectors were skipped when there were none left.
+                if (index + 1 >= tensor.Length || !abandon.Reached(consecutiveTimeouts[tensor.SlotIndex]))
+                    continue;
+
+                abandoned.Add(tensor.SlotIndex);
+
+                // Said on the LAST RESULT, because that is what VectorDisposition.SlotExitedFirst quotes
+                // back for every index that never ran. Without it the package reports the vectors as
+                // NEVER ATTEMPTED and says only that the slot "stopped" — true, and silent about why.
+                var last = collected[tensor.SlotIndex][^1];
+                collected[tensor.SlotIndex][^1] = last with
+                {
+                    Detail = last.Detail
+                        + $" *** SLOT ABANDONED: {consecutiveTimeouts[tensor.SlotIndex]} consecutive index(es) ended TIMED-OUT and the "
+                        + $"declared policy is to {abandon}. Its remaining {tensor.Length - (index + 1)} index(es) were NOT submitted "
+                        + "to the device. A slot that has not answered twice running is not answering, and re-arming it costs a full "
+                        + "backstop per index for no evidence. *** THIS IS NOT A STATEMENT THAT THOSE VECTORS WOULD HAVE FAILED — "
+                        + "nothing was learned about them, which is why they are reported as NEVER ATTEMPTED rather than as results.",
+                };
+
+                var abandonedDistribution = new SlotDistribution(tensor.SlotIndex, index,
+                    collected[tensor.SlotIndex], log.SliceFor(tensor.SlotIndex));
+
+                distributions.Add(abandonedDistribution);
+                onSlotComplete?.Invoke(abandonedDistribution);
+            }
+
             // D26a rule 3 — a slot exits when its OWN tensor is done, and its results go out THEN.
-            foreach (var tensor in tensors.Where(t => t.Length == index + 1).OrderBy(t => t.SlotIndex))
+            // Abandoned slots are excluded: they were distributed above, at the index that stopped them.
+            foreach (var tensor in tensors.Where(t => t.Length == index + 1 && !abandoned.Contains(t.SlotIndex)).OrderBy(t => t.SlotIndex))
             {
                 var distribution = new SlotDistribution(tensor.SlotIndex, index,
                     collected[tensor.SlotIndex], log.SliceFor(tensor.SlotIndex));

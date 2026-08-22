@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using Harness.Wire;
 
 namespace Harness.Results;
 
@@ -218,7 +219,23 @@ public static class SubmissionGate
         /// <b>Null is NOT CHECKED, never a pass</b> — a caller that supplies nothing has not established
         /// that the fields a tool already knows were produced rather than typed.
         /// </summary>
-        DerivationEvidence? derivation = null)
+        DerivationEvidence? derivation = null,
+
+        /// <summary>
+        /// The input path whose value is the scenario's END, in plant milliseconds — the thing every
+        /// vector's <c>MaxDuration</c> is bounded against. <b>Null leaves gate 1b NOT CHECKED</b>: the
+        /// harness cannot know which of a stimulus model's inputs carries that, and guessing it is how a
+        /// backstop ends up bounded by nothing.
+        /// </summary>
+        string? scenarioEndInput = null,
+
+        /// <summary>
+        /// A flat ceiling, in scans, on any one vector's <c>MaxDuration</c> — the bound for vectors with
+        /// <b>no scenario clock at all</b> (a ramp-to-limit test has no end time, so there is nothing
+        /// tighter available to it). Applies to every vector when declared, and never replaces
+        /// <paramref name="scenarioEndInput"/>'s tighter per-vector bound.
+        /// </summary>
+        int? maxIndexScans = null)
     {
         ArgumentNullException.ThrowIfNull(vectors);
         ArgumentNullException.ThrowIfNull(enumerations);
@@ -236,6 +253,7 @@ public static class SubmissionGate
         gates.Add(UnknownFields(unknownFields, annotationFields));
         gates.Add(DerivedFields(derivation));
         gates.Add(Schema(vectors));
+        gates.Add(Backstop(vectors, scenarioEndInput, maxIndexScans));
         gates.Add(Authorship(vectors, blockAuthor));
         gates.Add(SubjectResolution(vectors, enumerations));
         gates.Add(BasisGate(vectors, enumerations));
@@ -470,6 +488,147 @@ public static class SubmissionGate
         return new GateResult(name, GateStatus.Checked, true, nameof(SubmissionGate),
             "every derivable field the submission carries was produced by a named tool, and every artifact still hashes to "
             + "what the derivation recorded." + denominator);
+    }
+
+    /// <summary>
+    /// Multiplicative headroom over the scenario's own declared length. <b>Measured, not chosen:</b>
+    /// across the three vectors of the one wave that has run to completion on a controller, actual scans
+    /// over scenario scans were <c>1.25</c>, <c>1.16</c> and <c>1.008</c>. 1.5 clears the worst of those
+    /// with room and is nowhere near the ~3.07x the same submission declared.
+    /// </summary>
+    private const double BackstopMargin = 1.5;
+
+    /// <summary>
+    /// Flat allowance on top, because the overhead a scenario pays before its own clock starts — arming,
+    /// the inert phase, one poll round of detection lag — <b>does not scale with the scenario</b>. On the
+    /// measured wave it was ~400 scans, and it is the whole reason the ratio was 1.25 on the 40-second
+    /// vector and 1.008 on the six-minute one. A purely multiplicative bound would be far too tight on a
+    /// short scenario and far too loose on a long one.
+    /// </summary>
+    private const int BackstopFixedOverheadScans = 500;
+
+    /// <summary>
+    /// <b>The backstop a vector declares must be bounded by the scenario that vector itself describes.</b>
+    ///
+    /// <para>🔴 <b>Nothing bounded it before 2026-08-22.</b> <c>MaxDurationScans</c> was authored freely and
+    /// the only check was <c>&gt;= 1</c>. It is linear in the deadline
+    /// (<see cref="WireTiming.BackstopMs"/>), and <c>WaveRun</c> takes the MAXIMUM across the tensor — so
+    /// one generous number set the deadline for every slot at that index. Measured on a real submission:
+    /// 6,168 + 8,568 + 44,328 scans declared against 2,007 + 2,793 + 14,468 actually used, a flat ~3.07x
+    /// hedge, and <b>~24.7 minutes of wall clock if the slot never completes.</b></para>
+    ///
+    /// <para><b>Both directions are refused, and the low one is the more dangerous.</b> A backstop BELOW
+    /// the scenario's own end cannot be satisfied by a healthy test that runs to that end — it is a
+    /// spurious TIMED-OUT by construction, and this file's own note is that a spurious TIMED-OUT is worse
+    /// than a spurious FAILED because it is believed.</para>
+    ///
+    /// <para><b>NOT CHECKED without <c>scenarioEndInput</c>, deliberately.</b> The harness cannot know
+    /// which of a stimulus model's inputs carries the scenario's end — that is a property of the model,
+    /// not of the wire — so it has to be named. A submission that does not name it leaves this gate NOT
+    /// CHECKED, which makes the submission NOT ADMISSIBLE, and that is the intended pressure: the
+    /// alternative is a vacuous pass over a number nobody bounded.</para>
+    /// </summary>
+    private static GateResult Backstop(IReadOnlyList<SubmissionVector> vectors, string? scenarioEndInput, int? maxIndexScans)
+    {
+        const string name = "1b backstop bound — the scenario the vector itself declares";
+
+        if (string.IsNullOrWhiteSpace(scenarioEndInput) && maxIndexScans is null)
+        {
+            return GateResult.CouldNotRun(name, NotCheckedReason.AwaitingAnArtifactThatCouldExist, "the submission's scenarioEndInput / maxIndexScans",
+                "nothing bounds MaxDuration. Declare `scenarioEndInput` (the input path whose value is the scenario's end, in plant "
+                + "milliseconds) for the tight per-vector bound, or `maxIndexScans` for a flat ceiling where the vectors have no scenario "
+                + "clock at all — a ramp-to-limit test genuinely has no end time, and a ceiling is the only bound available to it. "
+                + "It is NOT CHECKED rather than passed because an unbounded backstop is exactly the thing that costs ~24.7 minutes on a wedged slot.");
+        }
+
+        var problems = new List<string>();
+        var bounded = 0;
+        var byCeilingOnly = 0;
+
+        foreach (var v in vectors)
+        {
+            var label = $"{v.Id} (slot {v.Slot}, index {v.Index})";
+
+            // The flat ceiling applies to EVERY vector when it is declared, scenario clock or not. It is
+            // the weaker of the two bounds and never replaces the tighter one — it catches the vector the
+            // tighter bound cannot see.
+            if (maxIndexScans is int ceiling && v.MaxDurationScans > ceiling)
+            {
+                var over = (int)((v.MaxDurationScans - ceiling) * WireTiming.ScanPeriodMs / 1000);
+                problems.Add($"{label}: MaxDuration is {v.MaxDurationScans} scans against the declared ceiling of {ceiling}. "
+                    + $"That is {over} s of wall clock this index would burn before reporting TIMED-OUT, on every index that wedges.");
+                continue;
+            }
+
+            if (string.IsNullOrWhiteSpace(scenarioEndInput))
+            {
+                // Bounded by the ceiling and nothing tighter. Counted separately: it is a real bound, and
+                // it is NOT the same claim as "checked against the scenario this vector describes".
+                byCeilingOnly++;
+                bounded++;
+                continue;
+            }
+
+            if (!v.Inputs.TryGetValue(scenarioEndInput, out var raw))
+            {
+                if (maxIndexScans is not null)
+                {
+                    byCeilingOnly++;
+                    bounded++;
+                    continue;
+                }
+
+                problems.Add($"{label}: declares no input `{scenarioEndInput}`, so its scenario has no stated end and its "
+                    + $"MaxDuration of {v.MaxDurationScans} scans is bounded by nothing.");
+                continue;
+            }
+
+            if (!int.TryParse(raw, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var endMs) || endMs < 1)
+            {
+                problems.Add($"{label}: `{scenarioEndInput}` reads \"{raw}\", which is not a positive whole number of milliseconds.");
+                continue;
+            }
+
+            var scenarioScans = (int)Math.Ceiling(endMs / WireTiming.ScanPeriodMs);
+            var allowed = (int)Math.Ceiling(scenarioScans * BackstopMargin) + BackstopFixedOverheadScans;
+
+            if (v.MaxDurationScans < scenarioScans)
+            {
+                problems.Add($"{label}: MaxDuration is {v.MaxDurationScans} scans but the scenario runs to {endMs} ms, which is "
+                    + $"{scenarioScans} scans at the measured {WireTiming.ScanPeriodMs} ms period. A backstop shorter than the scenario "
+                    + "fires on a HEALTHY test, and a spurious TIMED-OUT is believed in a way a spurious FAILED is not.");
+                continue;
+            }
+
+            if (v.MaxDurationScans > allowed)
+            {
+                var wasted = (int)((v.MaxDurationScans - allowed) * WireTiming.ScanPeriodMs / 1000);
+                problems.Add($"{label}: MaxDuration is {v.MaxDurationScans} scans against a scenario of {scenarioScans} scans ({endMs} ms) — "
+                    + $"{v.MaxDurationScans / (double)scenarioScans:0.00}x. The bound is {allowed} scans "
+                    + $"(x{BackstopMargin} plus {BackstopFixedOverheadScans} scans of arming and inert overhead, which does not scale with the scenario). "
+                    + $"The excess is {wasted} s of wall clock this index would burn before reporting TIMED-OUT, paid on every index that wedges.");
+                continue;
+            }
+
+            bounded++;
+        }
+
+        // The denominator, on every run: every other number here is a reason a vector was NOT bounded.
+        // *** THE TWO BOUNDS ARE COUNTED SEPARATELY AND DELIBERATELY. *** "Bounded by a flat ceiling" is a
+        // materially weaker claim than "bounded by the scenario this vector itself describes", and
+        // collapsing them into one number would let a submission of entirely ceiling-bounded vectors read
+        // exactly like one where every backstop was checked against its own scenario.
+        var denominator = $"BOUNDED: {bounded} of {vectors.Count} vector(s)"
+            + (string.IsNullOrWhiteSpace(scenarioEndInput) ? "" : $", checked against `{scenarioEndInput}`")
+            + (byCeilingOnly > 0 ? $" — of which {byCeilingOnly} by the flat ceiling of {maxIndexScans} scan(s) ONLY, with no scenario clock to check against" : "")
+            + ".";
+
+        return problems.Count == 0
+            ? new GateResult(name, GateStatus.Checked, true, nameof(SubmissionGate),
+                $"{denominator} Every backstop sits at or above its scenario's own end and no more than "
+                + $"x{BackstopMargin} + {BackstopFixedOverheadScans} scans above it.")
+            : new GateResult(name, GateStatus.Checked, false, nameof(SubmissionGate),
+                denominator + " " + string.Join(" ", problems));
     }
 
     private static GateResult Schema(IReadOnlyList<SubmissionVector> vectors)

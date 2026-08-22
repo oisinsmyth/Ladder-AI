@@ -144,7 +144,10 @@ public class ManyToOneSlotTests
             AnnotationFields: Array.Empty<string>(),
 
             // No submission document, so no derivable field was hand-authored. Gate 0c's claim, stated.
-            Derivation: DerivationEvidence.NoDocument);
+            Derivation: DerivationEvidence.NoDocument,
+
+            // Gate 1b's flat ceiling — no scenario clock on these vectors. See LoopRunTests.Request.
+            MaxIndexScans: 200);
 
     private static LoopResult Run(LoopRequest request) =>
         LoopRun.Execute(request, new SimulatedGateway(Geometry()));

@@ -678,7 +678,9 @@ public static class LoopCli
             UnknownFields: inputs.UnknownFields,
             AnnotationFields: inputs.AnnotationFields,
             ConflictEdgesExplicitlyNull: inputs.ConflictEdgesExplicitlyNull,
-            Derivation: inputs.Derivation);
+            Derivation: inputs.Derivation,
+            ScenarioEndInput: inputs.ScenarioEndInput,
+            MaxIndexScans: inputs.MaxIndexScans);
     }
 
     private static IReadOnlyList<MirroredSignal> Signals(List<MirroredSignalDocument>? rows) =>

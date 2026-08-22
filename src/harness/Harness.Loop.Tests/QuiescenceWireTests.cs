@@ -42,6 +42,8 @@ public class QuiescenceWireTests
       "blockAuthor": "agent-a",
       "runtimeCompression": 1,
       "slotsInWaveSet": 1,
+      // Gate 1b's flat ceiling — these vectors have no scenario clock. See GateParityTests.
+      "maxIndexScans": 200,
       "resultRegistersPerSlot": 2,
       "conflictEdges": [],
       "deployment": { "noS7Transport": true },

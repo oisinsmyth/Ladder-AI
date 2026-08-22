@@ -106,8 +106,8 @@ public class WireTimingTests
         var sized = WireTiming.RoundTripsPerIndex(slots: 6, vectorRegistersPerSlot: 4, resultRegistersPerSlot: 20, pollRounds: 2);
         var padded = WireTiming.RoundTripsPerIndex(slots: 6, vectorRegistersPerSlot: 4, resultRegistersPerSlot: 123, pollRounds: 2);
 
-        Assert.Equal(6 * 1 + 2 * 1 + 1, sized);      // R = 6, so all six slots in ONE read per round
-        Assert.Equal(6 * 1 + 2 * 6 + 1, padded);     // R = 1, so six reads per round
+        Assert.Equal(6 * 1 + 2 * (1 + 1) + 1, sized);      // R = 6, so all six slots in ONE read per round
+        Assert.Equal(6 * 1 + 2 * (1 + 6) + 1, padded);     // R = 1, so six reads per round
         Assert.True(padded > sized);
     }
 
@@ -120,8 +120,8 @@ public class WireTimingTests
         var five = WireTiming.RoundTripsPerIndex(5, 10, 25, 2);   // R = 5: one read per round
         var six = WireTiming.RoundTripsPerIndex(6, 10, 25, 2);    // R = 5: two reads per round
 
-        Assert.Equal(5 + 2 + 1, five);
-        Assert.Equal(6 + 4 + 1, six);
+        Assert.Equal(5 + 2 * (1 + 1) + 1, five);
+        Assert.Equal(6 + 2 * (1 + 2) + 1, six);
 
         var four = WireTiming.RoundTripsPerIndex(4, 10, 25, 2);
         Assert.Equal(1, five - four);                             // rides along inside the group
@@ -133,6 +133,28 @@ public class WireTimingTests
     {
         Assert.Equal(WireTiming.RoundTripsPerIndex(1, 123, 20, 1), WireTiming.RoundTripsPerIndex(1, 1, 20, 1));
         Assert.Equal(WireTiming.RoundTripsPerIndex(1, 123, 20, 1) + 1, WireTiming.RoundTripsPerIndex(1, 124, 20, 1));
+    }
+
+    [Fact]
+    public void Every_poll_round_costs_a_CONTROL_read_as_well_as_a_result_read()
+    {
+        // *** REGRESSION GUARD, 2026-08-22. *** WaveRun.Observe issues ReadControl AND ReadResults on
+        // every poll round; this formula counted only the second. Its one consumer is BackstopMs, so the
+        // backstop was short by P x RTT_p99 — wrong in the direction that produces a spurious TIMED-OUT
+        // on a HEALTHY test. Measured on a real wave: 3,052 poll rounds, 6,185 round trips.
+        //
+        // Delete the control term and this goes red. RegisterMap.PollRoundTrips (1 + ReadsPerPollCycle)
+        // always said the same thing; the two now agree.
+        const int resultWidth = 95;   // R = floor(125 / 95) = 1, so exactly one result read per round
+
+        var oneRound = WireTiming.RoundTripsPerIndex(1, 10, resultWidth, pollRounds: 1);
+        var twoRounds = WireTiming.RoundTripsPerIndex(1, 10, resultWidth, pollRounds: 2);
+
+        Assert.Equal(2, twoRounds - oneRound);
+
+        // And the poll term must be the ONLY thing the control read rides on: at zero poll rounds there
+        // is no control read to pay for, which is what keeps the write-term test below honest.
+        Assert.Equal(1 + 1, WireTiming.RoundTripsPerIndex(1, 10, resultWidth, pollRounds: 0));
     }
 
     [Fact]

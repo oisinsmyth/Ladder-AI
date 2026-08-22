@@ -61,6 +61,9 @@ public class GateParityTests
       "blockAuthor": "agent-a",
       "runtimeCompression": {{runtimeCompression}},
       "slotsInWaveSet": 1,
+      // Gate 1b: ramp-to-limit vectors have no scenario clock, so a flat ceiling is the only bound
+      // available to them. 200 against a maxDurationScans of 20 — bounded with room.
+      "maxIndexScans": 200,
       "resultRegistersPerSlot": 2,
       {{extraTopLevelField ?? string.Empty}}
       {{conflictEdges}}
