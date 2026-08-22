@@ -67,6 +67,25 @@ public sealed class SubmissionDocument
     /// </summary>
     public int? MaxIndexScans { get; set; }
 
+    /// <summary>
+    /// Which of the vectors' inputs are SCENARIO COORDINATES — plant times the stimulus model plays out,
+    /// which must be re-expressed at the wave's factor (gate 10c).
+    ///
+    /// <para>🔴 <b>Compressing the block without the scenario is not a slower run, it is a different
+    /// test.</b> The model plays its scenario against an IEC timer read in real milliseconds, so scaling
+    /// the presets alone leaves the run exactly as long as before while every event the vector placed
+    /// relative to a window lands somewhere else.</para>
+    ///
+    /// <para><b>Omitted and EMPTY are different claims.</b> Omitted above comp 1 is NOT CHECKED. Empty is
+    /// the positive statement that this stimulus has no time-valued scenario data — the ramp-to-limit
+    /// case, whose completion is a count reaching a limit rather than a clock.</para>
+    ///
+    /// <para><b>Do not list the model's own tick.</b> It is time-valued and must not scale: the tick sets
+    /// the dither period the model's stability ceiling is computed from, so shortening it removes the term
+    /// that makes that ceiling calculable.</para>
+    /// </summary>
+    public List<string>? ScenarioTimeInputs { get; set; }
+
     /// <summary>Result-region width in registers, for the slots-per-read arithmetic the floor uses.</summary>
     public int ResultRegistersPerSlot { get; set; } = 1;
 

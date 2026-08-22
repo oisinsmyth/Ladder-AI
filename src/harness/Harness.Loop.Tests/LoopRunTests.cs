@@ -145,7 +145,13 @@ public class LoopRunTests
             // is the only bound available to that shape, and it is the coordinator's to declare. 200 scans
             // against the fixture's MaxDuration of 20 — bounded with room, so a fixture change that trips
             // this gate is a real change rather than a fixture running along an edge.
-            MaxIndexScans: 200);
+            MaxIndexScans: 200,
+
+            // Gate 10c: EMPTY is the positive claim that this stimulus has no time-valued scenario data,
+            // and it is TRUE here rather than convenient — these vectors are ramp-to-limit, completion is a
+            // count reaching a limit, and there is no clock whose scale could disagree with the block's.
+            // Omitting it would be NOT CHECKED, which is the honest answer for a stimulus that HAS one.
+            ScenarioTimeInputs: Array.Empty<string>());
 
     private static (LoopResult Result, SimulatedGateway Gateway) Run(LoopRequest? request = null, SimulatedGateway? gateway = null)
     {

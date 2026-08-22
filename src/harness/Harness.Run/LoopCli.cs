@@ -707,7 +707,8 @@ public static class LoopCli
             ConflictEdgesExplicitlyNull: inputs.ConflictEdgesExplicitlyNull,
             Derivation: inputs.Derivation,
             ScenarioEndInput: inputs.ScenarioEndInput,
-            MaxIndexScans: inputs.MaxIndexScans);
+            MaxIndexScans: inputs.MaxIndexScans,
+            ScenarioTimeInputs: inputs.ScenarioTimeInputs);
     }
 
     private static IReadOnlyList<MirroredSignal> Signals(List<MirroredSignalDocument>? rows) =>

@@ -235,7 +235,14 @@ public static class SubmissionGate
         /// tighter available to it). Applies to every vector when declared, and never replaces
         /// <paramref name="scenarioEndInput"/>'s tighter per-vector bound.
         /// </summary>
-        int? maxIndexScans = null)
+        int? maxIndexScans = null,
+
+        /// <summary>
+        /// Which of the vectors' inputs are SCENARIO COORDINATES — plant times that must be re-expressed
+        /// at the wave's factor. Null above comp 1 leaves gate 10c NOT CHECKED; empty is the positive
+        /// claim that this stimulus has no time-valued scenario data.
+        /// </summary>
+        IReadOnlyList<string>? scenarioTimeInputs = null)
     {
         ArgumentNullException.ThrowIfNull(vectors);
         ArgumentNullException.ThrowIfNull(enumerations);
@@ -254,6 +261,7 @@ public static class SubmissionGate
         gates.Add(DerivedFields(derivation));
         gates.Add(Schema(vectors));
         gates.Add(Backstop(vectors, scenarioEndInput, maxIndexScans));
+        gates.Add(ScenarioScaleGate(vectors, runtimeCompression, scenarioTimeInputs));
         gates.Add(Authorship(vectors, blockAuthor));
         gates.Add(SubjectResolution(vectors, enumerations));
         gates.Add(BasisGate(vectors, enumerations));
@@ -528,6 +536,49 @@ public static class SubmissionGate
     /// CHECKED, which makes the submission NOT ADMISSIBLE, and that is the intended pressure: the
     /// alternative is a vacuous pass over a number nobody bounded.</para>
     /// </summary>
+    /// <summary>
+    /// 🔴 <b>Does the SCENARIO scale with the block?</b>
+    ///
+    /// <para>Compressing a block's timer presets makes its windows run <c>n</c> times faster. The stimulus
+    /// model plays its scenario against an IEC timer read in REAL milliseconds, so unless its coordinates
+    /// are re-expressed too, <b>the run takes exactly as long as before and every event the vector placed
+    /// relative to a window lands somewhere else.</b> The verdicts still appear, and they are about a test
+    /// nobody designed — which is why this gates rather than warns.</para>
+    ///
+    /// <para><b>At comp 1 it is a real computed pass</b>, on the same reasoning gate 10b uses: nothing is
+    /// scaled, so nothing can disagree about scale. <b>Omitted above comp 1 is NOT CHECKED</b>, and an
+    /// EMPTY list is the positive claim that this stimulus has no time-valued scenario data — the
+    /// ramp-to-limit case, whose completion is a count reaching a limit and has no clock at all.</para>
+    /// </summary>
+    private static GateResult ScenarioScaleGate(IReadOnlyList<SubmissionVector> vectors, int runtimeCompression, IReadOnlyList<string>? scenarioTimeInputs)
+    {
+        const string name = "10c scenario scale — does the scenario shrink WITH the block";
+
+        if (runtimeCompression <= 1)
+        {
+            return new GateResult(name, GateStatus.Checked, true, nameof(ScenarioScale),
+                $"this wave runs at comp={runtimeCompression}, so no scenario coordinate is re-expressed and none can disagree with the "
+                + "block's scale. Computed from the submission, not assumed: at comp 1 the block's presets are unscaled too.");
+        }
+
+        if (scenarioTimeInputs is null)
+        {
+            return GateResult.CouldNotRun(name, NotCheckedReason.AwaitingAnArtifactThatCouldExist, "the submission's scenarioTimeInputs",
+                $"this wave runs at comp={runtimeCompression}, so the block IS being compressed, and nothing says which of the vectors' "
+                + "inputs are scenario coordinates. Which they are cannot be inferred — a stimulus model's inputs mix times, selectors and "
+                + "levels, and its own tick is time-valued and must NOT scale. Declare `scenarioTimeInputs`, or declare it EMPTY to claim "
+                + "positively that this stimulus has no time-valued scenario data.");
+        }
+
+        // The SAME implementation the loop runs, deliberately. A gate that computed this a second way is
+        // how a green here stops being evidence about what the loop will actually write.
+        var result = ScenarioScale.Apply(vectors, new RuntimeCompression(runtimeCompression), scenarioTimeInputs);
+
+        return result.Ok
+            ? new GateResult(name, GateStatus.Checked, true, nameof(ScenarioScale), result.Report)
+            : new GateResult(name, GateStatus.Checked, false, nameof(ScenarioScale), result.Report);
+    }
+
     private static GateResult Backstop(IReadOnlyList<SubmissionVector> vectors, string? scenarioEndInput, int? maxIndexScans)
     {
         const string name = "1b backstop bound — the scenario the vector itself declares";

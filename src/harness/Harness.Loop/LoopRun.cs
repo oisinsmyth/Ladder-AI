@@ -97,7 +97,14 @@ public sealed record LoopRequest(
 
     // Gate 1b's flat ceiling, in scans, for vectors with no scenario clock — a ramp-to-limit test has no
     // end TIME, so ScenarioEndInput has nothing to point at and this is the only bound available to it.
-    int? MaxIndexScans = null)
+    int? MaxIndexScans = null,
+
+    // Which of the vectors' inputs are SCENARIO COORDINATES — plant times the stimulus model plays out,
+    // which must be re-expressed at the wave's factor or the block runs compressed against an uncompressed
+    // scenario. Cannot be inferred: a stimulus model's inputs mix times, selectors and levels, and its own
+    // tick is time-valued and must NOT scale. Null at comp > 1 is a refusal; EMPTY is the positive claim
+    // that this stimulus has no time-valued scenario data.
+    IReadOnlyList<string>? ScenarioTimeInputs = null)
 {
     /// <summary>The factor, defaulting to uncompressed only where the caller passed nothing at all.</summary>
     public RuntimeCompression Compression => RuntimeCompression ?? Harness.Wire.RuntimeCompression.Uncompressed;
@@ -625,7 +632,8 @@ public static class LoopRun
             annotationFields: request.AnnotationFields,
             derivation: request.Derivation,
             scenarioEndInput: request.ScenarioEndInput,
-            maxIndexScans: request.MaxIndexScans);
+            maxIndexScans: request.MaxIndexScans,
+            scenarioTimeInputs: request.ScenarioTimeInputs);
 
         if (stopWhenInadmissible && gate.Verdict != SubmissionVerdict.AdmissibleSubjectToJudgement)
         {
@@ -633,6 +641,33 @@ public static class LoopRun
                 $"the submission was {gate.Verdict}, so no copy layer was generated, nothing was deployed and no wave was run. "
                 + $"{gate.Refused.Count} gate(s) refused, {gate.NotChecked.Count} could not run.");
         }
+
+        // ---- 2a. SCENARIO SCALE — the scenario has to shrink WITH the block --------------------------
+        //
+        // 🔴 *** AFTER THE GATE AND BEFORE EVERYTHING ELSE, AND BOTH HALVES OF THAT MATTER. ***
+        //
+        // AFTER, because the gates read the values the AUTHOR declared: gate 1b bounds a backstop against
+        // its own scenario's end, and both sides of that comparison have to be in the units the vector was
+        // written in. Scaling first would compare a plant-time budget against a compressed scenario and
+        // refuse a correct submission.
+        //
+        // BEFORE, because everything downstream — the width check immediately below, and the encoder that
+        // finally writes the registers — must see what actually reaches the device. This file already
+        // records what happens when a check and a writer disagree about the same value: the check's green
+        // reads as evidence about the writer, and it is not.
+        var scenario = ScenarioScale.Apply(request.Vectors, compression, request.ScenarioTimeInputs);
+        caveats = caveats.Append(new LoopCaveat("scenario-scale", scenario.Report)).ToArray();
+
+        if (!scenario.Ok)
+        {
+            return LoopGeneration.Stop(LoopOutcome.NotRepresentable, gate, mapResult.SizeReport, null, caveats,
+                $"the scenario could not be re-expressed at comp {compression.Factor}, so nothing was generated and nothing was deployed. "
+                + "*** COMPRESSING THE BLOCK WITHOUT THE SCENARIO IS NOT A SLOWER RUN, IT IS A DIFFERENT TEST: *** the wave takes exactly "
+                + "as long as before and every event placed relative to a window lands somewhere else. "
+                + string.Join(" | ", scenario.Refusals));
+        }
+
+        request = request with { Vectors = scenario.Vectors };
 
         // ---- 2b. WIDTH — every value must survive the element declared to carry it -------------------
         //

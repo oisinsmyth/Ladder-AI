@@ -85,7 +85,13 @@ public sealed record GateInputs(
     /// <summary>
     /// The document's <c>maxIndexScans</c> — gate 1b's flat ceiling, for vectors with no scenario clock.
     /// </summary>
-    int? MaxIndexScans = null);
+    int? MaxIndexScans = null,
+
+    /// <summary>
+    /// The document's <c>scenarioTimeInputs</c> — which inputs are scenario coordinates that scale with
+    /// the factor. Null above comp 1 leaves gate 10c NOT CHECKED.
+    /// </summary>
+    IReadOnlyList<string>? ScenarioTimeInputs = null);
 
 /// <summary>
 /// The runnable gate. <c>harness-gate check &lt;submission.json&gt;</c>.
@@ -247,7 +253,8 @@ public static class GateCli
             inputs.AnnotationFields,
             inputs.Derivation,
             inputs.ScenarioEndInput,
-            inputs.MaxIndexScans);
+            inputs.MaxIndexScans,
+            inputs.ScenarioTimeInputs);
     }
 
     /// <summary>
@@ -281,7 +288,8 @@ public static class GateCli
             Math.Max(1, document.RuntimeCompression),
             ToDerivationEvidence(document, readFile, readBytes),
             document.ScenarioEndInput,
-            document.MaxIndexScans);
+            document.MaxIndexScans,
+            document.ScenarioTimeInputs);
     }
 
     /// <summary>
