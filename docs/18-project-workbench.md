@@ -445,8 +445,11 @@ assertion held* (1/1, 1/1, 4/4), stimulus `Confirmed` throughout. The block was 
 
 - 2.4 ✅ **The rig's own state, recorded because it changed twice today:** `21D74D35` (pre-existing,
   unreproducible) → `65BB248D` (my valve deploy, which degraded observation) → `357CBC4B` (restore,
-  matching the project) → **`9F25F5DA`** (the vessel harness now on it, and the first build whose
-  inputs are recorded in the result package).
+  matching the project) → `9F25F5DA` (the vessel harness, and the first build whose inputs are recorded
+  in the result package) → `622F3EB7` (**time-compressed at ×4**, and the first build whose stamp covers
+  the parameter DB — nine objects, not eight) → `2D379A9E` (W2's phase signals; **rejected on
+  measurement, the wave could not start**) → back to **`622F3EB7`**, restored and re-confirmed
+  2026-08-22: three vectors, all `Pass`, all `Settled`, 3 of 3 conclusive, 134 s.
 
 > ⚠️ **A dependency worth naming: Phase 1 now gates Phase 2's own verification.** Nothing is wrong
 > with either, but the ordering means no live wave can run until the job's artifacts support the
