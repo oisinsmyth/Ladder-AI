@@ -73,6 +73,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Harness.CmdInject.Tests", "
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Harness.CmdInject.Loopback.Tests", "Harness.CmdInject.Loopback.Tests\Harness.CmdInject.Loopback.Tests.csproj", "{BBE7048B-0A8B-43E5-8889-3CAE0F10BFCF}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Harness.Batch", "Harness.Batch\Harness.Batch.csproj", "{60A25E4F-609B-4C51-BBB4-D2E9BD6228B4}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Harness.Batch.Tests", "Harness.Batch.Tests\Harness.Batch.Tests.csproj", "{C01FCB46-4769-48C2-9D01-1196F811B275}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -222,5 +226,13 @@ Global
 		{BBE7048B-0A8B-43E5-8889-3CAE0F10BFCF}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{BBE7048B-0A8B-43E5-8889-3CAE0F10BFCF}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{BBE7048B-0A8B-43E5-8889-3CAE0F10BFCF}.Release|Any CPU.Build.0 = Release|Any CPU
+		{60A25E4F-609B-4C51-BBB4-D2E9BD6228B4}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{60A25E4F-609B-4C51-BBB4-D2E9BD6228B4}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{60A25E4F-609B-4C51-BBB4-D2E9BD6228B4}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{60A25E4F-609B-4C51-BBB4-D2E9BD6228B4}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C01FCB46-4769-48C2-9D01-1196F811B275}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C01FCB46-4769-48C2-9D01-1196F811B275}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C01FCB46-4769-48C2-9D01-1196F811B275}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C01FCB46-4769-48C2-9D01-1196F811B275}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

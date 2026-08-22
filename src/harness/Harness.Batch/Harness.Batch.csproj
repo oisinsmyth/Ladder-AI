@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>Harness.Batch</RootNamespace>
+    <AssemblyName>harness-batch</AssemblyName>
+  </PropertyGroup>
+
+  <!--
+    *** WHAT A BATCH IS, AND WHAT IT IS NOT. ***
+
+    It is N lanes sharing ONE deployment. Each block still pays about two minutes of gate - import 4-5s,
+    compile 24-25s, sanity 3s, download 86s - and the two harness lanes that exist cannot even coexist:
+    both declare blockNumber 9001, prefix HX_ and base %M1000, so swapping between them is a full
+    redeploy.
+
+    It is NOT a merge of submissions. Only the BINDINGS are merged, into one copy layer whose map covers
+    every lane's slots; each lane then runs its OWN submission against that shared map, and its gate
+    evaluation is untouched. That works because the wave already treats a slot with no vector at an
+    index as INERT - the same mechanism that covers an excised slot - so a lane's run simply leaves the
+    other lanes' slots unraised.
+
+    And the download time is not the prize. FI-65 #4: "two blocks that each compiled clean in isolation
+    can still conflict (C-308 multi-writer, dead wiring, IO boundary), and only a union check sees it."
+    A batch is the only place that check is possible at all.
+  -->
+  <ItemGroup>
+    <PackageReference Include="System.Text.Json" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Harness.Gate\Harness.Gate.csproj" />
+    <ProjectReference Include="..\Harness.Map\Harness.Map.csproj" />
+  </ItemGroup>
+
+</Project>
