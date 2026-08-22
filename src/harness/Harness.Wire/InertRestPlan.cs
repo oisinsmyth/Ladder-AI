@@ -337,6 +337,46 @@ public sealed record InertRestPlan(
     /// otherwise surface at run time as the poll budget expiring — i.e. as "the block never reached its
     /// phase", which points at the wrong thing entirely.</para>
     /// </summary>
+    /// <summary>
+    /// Resolve a phase signal by EITHER its specification name or its block tag.
+    ///
+    /// <para>🔴 <b>Because the surrounding document already uses both spellings for the same idea.</b>
+    /// <c>armedBy</c> resolves on <c>MirroredSignal.Tag</c>; a settling signal and every cited expectation
+    /// resolve on <c>JoinKey</c>, which is the specification name where one is declared. A phase guard is
+    /// almost always the very signal some <c>armedBy</c> already names, so a binding would carry the two
+    /// side by side in different spellings and one of them would silently resolve to nothing.</para>
+    ///
+    /// <para><b>An ambiguous name is refused rather than preferred.</b> Where a spec name for one signal
+    /// happens to equal the tag of another, picking either is a guess about which the author meant.</para>
+    /// </summary>
+    private static int PhaseRegisterOf(SlotBinding binding, string signal, List<string> refusals)
+    {
+        var byJoinKey = binding.ResultRegisterOf(signal);
+
+        var offsets = binding.ResultRegisterOffsets;
+        var byTag = -1;
+
+        for (var i = 0; i < binding.ResultSources.Count; i++)
+        {
+            if (string.Equals(binding.ResultSources[i].Tag, signal, StringComparison.Ordinal))
+            {
+                byTag = offsets[i];
+                break;
+            }
+        }
+
+        if (byJoinKey >= 0 && byTag >= 0 && byJoinKey != byTag)
+        {
+            refusals.Add(
+                $"slot '{binding.SlotId}' names '{signal}' for its phase, and that resolves to TWO different registers — "
+                + $"R{byJoinKey:000} as a specification name and R{byTag:000} as a block tag. Picking either would be a guess "
+                + "about which signal the author meant.");
+            return -1;
+        }
+
+        return byJoinKey >= 0 ? byJoinKey : byTag;
+    }
+
     private static PhaseCondition? PhaseOf(SlotBinding binding, RegisterWordOrder order, IReadOnlyList<InertRestRegister> registers, List<string> refusals)
     {
         var signal = binding.PhaseSignal;
@@ -365,7 +405,7 @@ public sealed record InertRestPlan(
             return null;
         }
 
-        var register = binding.ResultRegisterOf(signal);
+        var register = PhaseRegisterOf(binding, signal, refusals);
 
         if (register < 0)
         {
@@ -417,7 +457,7 @@ public sealed record InertRestPlan(
 
         if (!string.IsNullOrWhiteSpace(guardSignal))
         {
-            var resolved = binding.ResultRegisterOf(guardSignal);
+            var resolved = PhaseRegisterOf(binding, guardSignal, refusals);
 
             if (resolved < 0)
             {
@@ -444,7 +484,12 @@ public sealed record InertRestPlan(
         // Time occupies two registers high-word-first, so watching only the first means watching the HIGH
         // word — permanently 0 for any elapsed value under 65.536 s, which makes `Below` true on every
         // poll and reports a freshly-restarted window on a wave where none is running.
-        var width = Math.Max(1, binding.ResultSignal(signal)?.Registers ?? 1);
+        // Resolved the same either/or way as the register above — a width taken from a JoinKey lookup
+        // while the register came from a Tag lookup would be two answers about two different signals.
+        var declared = binding.ResultSignal(signal)
+            ?? binding.ResultSources.FirstOrDefault(s => string.Equals(s.Tag, signal, StringComparison.Ordinal));
+
+        var width = Math.Max(1, declared?.Registers ?? 1);
 
         return new PhaseCondition(register, signal, trigger, binding.PhaseThreshold, guardRegister, guardSignal, width, order);
     }
