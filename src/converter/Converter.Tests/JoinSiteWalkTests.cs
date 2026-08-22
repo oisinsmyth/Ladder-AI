@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Reflection.Emit;
 using Converter.ConflictGraph;
 using Converter.CrossCheck;
 using Xunit;
@@ -10,12 +11,22 @@ namespace Converter.Tests;
 /// 🔴 <b>THE DENOMINATOR.</b> An empty hit set is true of <i>nothing found</i> and of <i>nothing looked
 /// at</i>, and only this number separates them. Every assertion built on this walk asserts it.
 /// </param>
+/// <param name="Undecodable">
+/// 🔴 <b>Method bodies the decoder could not read to the end, with the reason.</b>
+///
+/// <para><b>Reported, never skipped.</b> A body abandoned mid-walk is a slice of the assembly this scan
+/// did NOT examine, and quietly dropping it is precisely the false negative that the old
+/// slide-a-window-over-the-bytes approach was chosen to avoid. The gain from decoding properly is that
+/// there are no spurious hits; it may not be paid for with silent gaps, so the caller asserts this is
+/// empty.</para>
+/// </param>
 public sealed record IlScan(
     IReadOnlyList<string> Hits,
     IReadOnlyList<string> HitTypes,
     int TypesEnumerated,
     int MethodsEnumerated,
-    int BodiesExamined);
+    int BodiesExamined,
+    IReadOnlyList<string> Undecodable);
 
 /// <summary>
 /// 🔴 <b>THE CHECK THAT MAKES A SHARED RESOLVER MORE THAN A GOOD INTENTION.</b>
@@ -81,6 +92,15 @@ public class JoinSiteWalkTests
 
         // THE DENOMINATOR, asserted before the finding: zero hits over zero bodies is not a pass.
         Assert.True(scan.BodiesExamined > 0, "the walk examined no method bodies at all, so it can claim nothing");
+
+        // *** AND THE SECOND HALF OF THE DENOMINATOR, added when the walk stopped sliding a window over
+        // the bytes and started decoding them. *** Precise decoding buys no false positives; it may not be
+        // paid for with silent gaps, so a body abandoned part-way through is a finding in its own right.
+        // Without this, one unrecognised opcode would quietly hide every join site after it.
+        Assert.True(
+            scan.Undecodable.Count == 0,
+            $"{scan.Undecodable.Count} method body(ies) could not be decoded to the end, so the walk did not examine them: "
+            + string.Join(" | ", scan.Undecodable));
 
         var undeclared = scan.HitTypes
             .Where(t => !DeclaredJoinSites.Contains(StripCompilerSuffix(t)))
@@ -158,6 +178,7 @@ public static class IlWalkScanner
         ArgumentNullException.ThrowIfNull(forbidden);
 
         var hits = new List<string>();
+        var undecodable = new List<string>();
         var hitTypes = new List<string>();
         var types = 0;
         var methods = 0;
@@ -175,7 +196,7 @@ public static class IlWalkScanner
             // denominator.
             Assert.Fail($"{ex.LoaderExceptions.Length} type(s) in {assembly.GetName().Name} could not be loaded, "
                         + "so the walk cannot claim to have examined the assembly.");
-            return new IlScan(hits, hitTypes, 0, 0, 0);
+            return new IlScan(hits, hitTypes, 0, 0, 0, undecodable);
         }
 
         const BindingFlags All = BindingFlags.Public | BindingFlags.NonPublic
@@ -207,7 +228,7 @@ public static class IlWalkScanner
                 }
 
                 bodies++;
-                if (References(il, method, forbidden, out var detail))
+                if (References(il, method, forbidden, out var detail, out var couldNotDecode))
                 {
                     hits.Add($"{type.FullName}.{method.Name}: {detail}");
                     if (type.FullName is { } name && !hitTypes.Contains(name, StringComparer.Ordinal))
@@ -215,10 +236,15 @@ public static class IlWalkScanner
                         hitTypes.Add(name);
                     }
                 }
+
+                if (couldNotDecode is not null)
+                {
+                    undecodable.Add($"{type.FullName}.{method.Name}: {couldNotDecode}");
+                }
             }
         }
 
-        return new IlScan(hits, hitTypes, types, methods, bodies);
+        return new IlScan(hits, hitTypes, types, methods, bodies, undecodable);
     }
 
     /// <summary>The declaring type's full name, or the type's own when the member IS a type.</summary>
@@ -226,38 +252,188 @@ public static class IlWalkScanner
         member is Type type ? type.FullName : member.DeclaringType?.FullName;
 
     /// <summary>
-    /// Deliberately coarse: every 4-byte window is offered to the token resolver rather than the IL
-    /// being decoded precisely. That OVER-reports candidate tokens and UNDER-reports nothing — and since
-    /// the load-bearing assertion is that a set is EMPTY, over-reporting is the safe direction. A false
-    /// positive fails a test and gets read; a false negative lets the guarded thing through unnoticed.
+    /// 🔴 <b>THE IL IS DECODED, NOT SLID OVER — and it used to be slid over, which cost a red build for
+    /// a join that does not exist.</b>
+    ///
+    /// <para><b>What this replaces.</b> Every 4-byte window was offered to the token resolver, on the
+    /// argument that it <i>"OVER-reports candidate tokens and UNDER-reports nothing"</i>, so a false
+    /// positive would merely fail a test and get read. That is sound reasoning about a guard nobody
+    /// perturbs — and unsound in practice: <b>a random four bytes inside an unrelated method can resolve
+    /// to a real member, and which four bytes do that CHANGES whenever the assembly does.</b> Measured
+    /// 2026-08-22: adding an unrelated feature made this test name two types as join sites, neither of
+    /// which mentions the guarded type anywhere in its source.</para>
+    ///
+    /// <para><b>Why that is worse than a nuisance.</b> The pressure a spurious red creates is to widen
+    /// the allowlist, and the allowlist is the guard. An entry added for a coincidence would then mask a
+    /// genuine join site written in that type later — the check would still be green and would no longer
+    /// be checking. A guard that cries wolf gets disarmed.</para>
+    ///
+    /// <para><b>The no-false-negative property is kept, and strengthened.</b> Only real operand tokens
+    /// are resolved, so nothing that IS a reference is missed — and an opcode this decoder does not
+    /// recognise is <b>reported rather than skipped</b> (see <see cref="IlScan.Undecodable"/>), because
+    /// silently abandoning a method body is exactly the false negative the coarse walk was protecting
+    /// against.</para>
     /// </summary>
-    private static bool References(byte[] il, MethodBase owner, Func<MemberInfo, bool> forbidden, out string detail)
+    private static bool References(byte[] il, MethodBase owner, Func<MemberInfo, bool> forbidden, out string detail, out string? undecodable)
     {
         detail = string.Empty;
+        undecodable = null;
+
         var module = owner.Module;
         var typeArgs = SafeGenericArguments(owner.DeclaringType);
         var methodArgs = owner is MethodInfo { IsGenericMethodDefinition: true } m ? m.GetGenericArguments() : Type.EmptyTypes;
 
-        for (var i = 0; i + 4 <= il.Length; i++)
-        {
-            var token = BitConverter.ToInt32(il, i);
+        var i = 0;
 
-            try
+        while (i < il.Length)
+        {
+            OpCode op;
+
+            if (il[i] == 0xFE)
             {
-                var member = module.ResolveMember(token, typeArgs, methodArgs);
-                if (member is not null && forbidden(member))
+                if (i + 1 >= il.Length)
                 {
-                    detail = $"references {DeclaringName(member)}.{member.Name}";
-                    return true;
+                    undecodable = $"a two-byte opcode prefix at offset {i} with nothing after it";
+                    return false;
+                }
+
+                if (!TwoByteKnown[il[i + 1]])
+                {
+                    undecodable = $"unknown two-byte opcode 0xFE{il[i + 1]:X2} at offset {i}";
+                    return false;
+                }
+
+                op = TwoByte[il[i + 1]];
+                i += 2;
+            }
+            else
+            {
+                if (!OneByteKnown[il[i]])
+                {
+                    undecodable = $"unknown opcode 0x{il[i]:X2} at offset {i}";
+                    return false;
+                }
+
+                op = OneByte[il[i]];
+                i += 1;
+            }
+
+            // Only these operand kinds ARE metadata tokens for a member. InlineString and InlineSig are
+            // tokens too, but resolve to a string literal and a standalone signature — offering them to
+            // ResolveMember would only manufacture noise of the kind this rewrite exists to remove.
+            var isMemberToken = op.OperandType is OperandType.InlineField
+                or OperandType.InlineMethod or OperandType.InlineTok or OperandType.InlineType;
+
+            if (isMemberToken)
+            {
+                if (i + 4 > il.Length)
+                {
+                    undecodable = $"a token operand at offset {i} runs off the end of the body";
+                    return false;
+                }
+
+                try
+                {
+                    var member = module.ResolveMember(BitConverter.ToInt32(il, i), typeArgs, methodArgs);
+                    if (member is not null && forbidden(member))
+                    {
+                        detail = $"references {DeclaringName(member)}.{member.Name}";
+                        return true;
+                    }
+                }
+                catch (Exception)
+                {
+                    // A token in a genuine operand slot that will not resolve — a generic parameter this
+                    // context cannot close, most often. Not a hit, and not a decode failure either.
                 }
             }
-            catch (Exception)
+
+            var operandSize = SizeOf(op.OperandType, il, i, out var switchOverflow);
+
+            if (switchOverflow)
             {
-                // Not a member token. Expected constantly — see the remarks on coarseness.
+                undecodable = $"a switch table at offset {i} runs off the end of the body";
+                return false;
             }
+
+            i += operandSize;
         }
 
         return false;
+    }
+
+    /// <summary>Operand width in bytes. <c>InlineSwitch</c> is variable and reads its own count.</summary>
+    private static int SizeOf(OperandType operand, byte[] il, int at, out bool overflow)
+    {
+        overflow = false;
+
+        switch (operand)
+        {
+            case OperandType.InlineNone:
+                return 0;
+
+            case OperandType.ShortInlineBrTarget:
+            case OperandType.ShortInlineI:
+            case OperandType.ShortInlineVar:
+                return 1;
+
+            case OperandType.InlineVar:
+                return 2;
+
+            case OperandType.InlineI8:
+            case OperandType.InlineR:
+                return 8;
+
+            case OperandType.InlineSwitch:
+                if (at + 4 > il.Length)
+                {
+                    overflow = true;
+                    return 0;
+                }
+
+                var count = BitConverter.ToInt32(il, at);
+                if (count < 0 || at + 4 + (4L * count) > il.Length)
+                {
+                    overflow = true;
+                    return 0;
+                }
+
+                return 4 + (4 * count);
+
+            default:
+                // InlineBrTarget, InlineField, InlineI, InlineMethod, InlineSig, InlineString,
+                // InlineTok, InlineType, ShortInlineR — all four bytes.
+                return 4;
+        }
+    }
+
+    private static readonly OpCode[] OneByte = new OpCode[0x100];
+    private static readonly OpCode[] TwoByte = new OpCode[0x100];
+    private static readonly bool[] OneByteKnown = new bool[0x100];
+    private static readonly bool[] TwoByteKnown = new bool[0x100];
+
+    static IlWalkScanner()
+    {
+        foreach (var field in typeof(OpCodes).GetFields(BindingFlags.Public | BindingFlags.Static))
+        {
+            if (field.GetValue(null) is not OpCode op)
+            {
+                continue;
+            }
+
+            var low = (byte)(op.Value & 0xFF);
+
+            if (op.Size == 1)
+            {
+                OneByte[low] = op;
+                OneByteKnown[low] = true;
+            }
+            else
+            {
+                TwoByte[low] = op;
+                TwoByteKnown[low] = true;
+            }
+        }
     }
 
     private static Type[] SafeGenericArguments(Type? type)
