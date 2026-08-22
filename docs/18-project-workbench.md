@@ -280,6 +280,13 @@ how this project got a rig scan time wrong by an order of magnitude, twice.
 > estimate replaced by measurement moved the wave from ~1 min to ~2.7 min *per vector* — on a
 > three-vector block that is ~8 min against a 20-min target, before authoring. The remaining `[E]`
 > lines are not more trustworthy for having survived longer; they are simply unmeasured.
+>
+> ⚠️ **AND THE CAUSE IS NOT THE HARNESS — IT IS THE VECTORS.** Diagnosed 2026-08-22 (§5, Phase 10):
+> polling is 98.7% of the traffic and ~0% of the elapsed time, because the loop merely keeps pace with
+> a scenario whose length the vector itself declares. On the dominant index the declared scenario end
+> predicted the measured runtime to **0.8%**. So this line does not come down by making the wire
+> faster; it comes down by **compressing the plant clock** or by **not spending half an index hedging
+> against an unknown warm-up phase.** Both are Phase 10.
 
 ### 4.3 The honest verdict on 20 minutes
 
@@ -514,9 +521,62 @@ lower because less rests on it today.
 
 ---
 
-**Rolled-up ordering:** 1 → 2 → 3 → 4 → 5 → (6, 7, 8, 9 as they become blocking). Phases 1 and 2 are
-independent of each other and can run in either order; everything from 3 onward assumes 2 has
-happened.
+### Phase 10 — Wave time · **P0** · *runs BEFORE Phases 3–9*
+
+Added 2026-08-22, after Phase 2's first measurement broke the budget: **~2.7 min per vector**, i.e.
+**8.1 min for a three-vector block** against a 20-minute target, before any authoring. Numbered last
+and prioritised first — priority governs order here, so nothing renumbers.
+
+**The diagnosis, and it is not what it looks like.** The wave is **not wire-bound**. 3,052 poll rounds
+× 2 round trips = 6,104 of the 6,185 — 98.7% of the traffic and ~0% of the problem. The loop polls
+once per 6.4 scans and keeps pace with the plant. **The elapsed time is the controller's own: the
+scenario length is a vector input, and on the dominant index the declared scenario end predicted the
+measured runtime to 0.8%.** The wave takes as long as the vectors say it takes. **74% of it was one
+index, and half of that index was a hedge** against an unknown warm-up phase — the vector's own note
+says so.
+
+| | measured | after W1 | + W2 | + W3 |
+|---|---|---|---|---|
+| healthy 3-vector wave | **8.1 min** | 8.1 min | ~5.1 min | ~1.3 min |
+| wedged 3-vector wave | **~24.7 min** | ✅ **~2.5 min** | — | — |
+
+- **W1 · Bound the backstop, stop re-running a wedged slot** — ✅ **DONE 2026-08-22.** A timed-out slot
+  was re-armed at every remaining index at full backstop cost; only a failure to establish inert ever
+  stopped a wave. And nothing bounded `maxDurationScans` beyond `>= 1`, while `WaveRun` takes the
+  *maximum* across the tensor — so one generous number set the deadline for every slot at that index.
+  Now: **`TimeoutAbandon`** (default 2 consecutive timeouts, reported through the existing NEVER
+  ATTEMPTED path — abandoning is not failing), and **gate 1b**, which bounds every vector against the
+  scenario it declares *and* against a flat ceiling for vectors that have no scenario clock at all.
+  **Both directions refused** — a backstop *below* the scenario's own end fires on a healthy test.
+  Also corrected `RoundTripsPerIndex`, which omitted the per-poll control read and so under-sized the
+  backstop in the spurious-TIMED-OUT direction.
+- **W2 · Phase-aligned scenario start** — the largest healthy-run win that needs no block change.
+  Replace *robustness to an unknown arm instant* with a measured one, so a vector places its stimulus
+  at a small fixed offset instead of straddling the whole uncertainty band. **Blocked on a mirror
+  widening** (the phase signal has to be readable) and therefore on a redeploy.
+- **W3 · Apply compression** — the multiplier. The *planner* is complete and gates 10a/10b are built:
+  `TimeCompression.Plan` returns `CompMin`/`CompMax` across all four ceilings and the 500 ms absolute
+  floor is enforced. **Only the application is missing** — nothing scales a preset on the device, and
+  the copy layer's own caveat list says "no time compression". Raising the factor today would shrink
+  the backstop against a plant still running at 1× and produce a spurious TIMED-OUT. **The block-side
+  precondition holds** (a read confirmed the gating presets are DB data, not `T#` literals, and the
+  shortest one gives a 4.0× ceiling — the worked case already recorded), **but there is no runtime
+  write path**: the copy layer references no parameter DB, so compression has to arrive as
+  download-time values, which is a redeploy and a new build stamp.
+
+**Investigated and rejected — recorded so they are not re-proposed:**
+
+| candidate | why not |
+|---|---|
+| merge the control read into the result read | the map is `[control][vector][result]` and one FC03 spans 125 registers; it does not fit at this width, and it would enlarge the **unverified** read from 6 registers to the whole map before the version check fires (DB-6) |
+| pace the poll loop | worth **1–2%**. The recorder already discards a frame equal to its predecessor, and the loop already runs at 6.4 scans against an 8.06-scan observability floor |
+| run one block's vectors as concurrent slots | **slower, not faster.** Reachable-state closures are computed per FB **type** and the instance root is discarded, so two instances of one block get *identical* closures, conflict, and land in **separate wave sets** — an extra wave. Making them disjoint means reversing a deliberate fail-safe |
+
+---
+
+**Rolled-up ordering:** 1 → 2 → **10** → 3 → 4 → 5 → (6, 7, 8, 9 as they become blocking). Phases 1
+and 2 are independent of each other and can run in either order; everything from 3 onward assumes 2
+has happened. Phase 10 arrived after 2 and outranks 3–9 on priority.
 
 ---
 

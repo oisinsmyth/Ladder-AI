@@ -319,6 +319,22 @@ this project's most expensive failures have all been a green that examined nothi
   Authority is `Harness.Results/TimeCompression.cs`, not this line.
 - **Harness objects reserve block numbers 9000–9999** per number space; **OBs are excluded** — an
   OB's number is fixed by its event class.
+- 🔴 **A WAVE COSTS WHAT ITS VECTORS DECLARE, NOT WHAT THE WIRE COSTS (measured 2026-08-22).** On the
+  one wave that has run to completion, **98.7% of the round trips were polling and ~0% of the elapsed
+  time was** — the loop polls once per ~6.4 scans and merely keeps pace with the controller. The
+  scenario length is a **vector input**, and on the dominant index the declared scenario end predicted
+  the measured runtime to **0.8%**. So a slow wave is a vector-authoring finding, not a transport one;
+  do not go looking at the poll loop. Levers are time compression and not hedging against an unknown
+  warm-up phase — `docs/18-project-workbench.md` §5 Phase 10 records the three candidates that were
+  investigated and **rejected**, so they are not re-proposed.
+- ⚠️ **A WEDGED SLOT USED TO COST ~24.7 MINUTES AND PRODUCE NOTHING.** A timed-out slot was re-armed at
+  every remaining index at full backstop cost, and only a failure to establish inert ever stopped a
+  wave. Since 2026-08-22 a slot is abandoned after **2 consecutive TIMED-OUT indices** (`TimeoutAbandon`,
+  `Never` for the old behaviour), and **gate 1b** bounds every vector's `maxDurationScans` — against the
+  scenario the vector declares (`scenarioEndInput`) and/or against a flat ceiling (`maxIndexScans`) for
+  vectors that have no scenario clock at all. **Neither declared is NOT CHECKED, so a submission written
+  before this date is now INADMISSIBLE until it declares one** — that is deliberate, and it is the
+  cheapest place to find out that a backstop was bounded by nothing.
 
 🔴 **Two traps that have each cost a day:**
 
