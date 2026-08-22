@@ -1,4 +1,4 @@
-using Harness.Device;
+﻿using Harness.Device;
 using Harness.Loop;
 using Harness.Map;
 using System.Text;
@@ -42,7 +42,7 @@ public static class BatchCli
 
     public static int Run(
         string[] args, TextWriter output, Func<string, string> readFile, Action<string, string> writeFile,
-        IProcessRunner? runner = null, Func<IReadOnlyList<HarnessObject>, DeploymentOutcome>? deploy = null)
+        IProcessRunner? runner = null, Func<DeploymentOutcome>? deploy = null)
     {
         ArgumentNullException.ThrowIfNull(args);
         ArgumentNullException.ThrowIfNull(output);
@@ -149,7 +149,7 @@ public static class BatchCli
     /// </summary>
     private static int Run(
         LaneQueue store, TextWriter output, Func<string, string> readFile,
-        IProcessRunner? runner, Func<IReadOnlyList<HarnessObject>, DeploymentOutcome>? deploy, RunArgs args)
+        IProcessRunner? runner, Func<DeploymentOutcome>? deploy, RunArgs args)
     {
         var lanes = store.All();
         var batch = BatchPlanner.Plan(lanes, readFile);

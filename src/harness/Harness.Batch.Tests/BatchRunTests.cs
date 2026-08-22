@@ -1,4 +1,4 @@
-using Harness.Batch;
+﻿using Harness.Batch;
 using Harness.Device;
 using Harness.Loop;
 using Harness.Map;
@@ -62,8 +62,8 @@ public class BatchRunTests
 
     private static ScriptedRunner AllOk() => new((_, _) => 0);
 
-    private static Func<IReadOnlyList<HarnessObject>, DeploymentOutcome> Deploys(bool loaded) =>
-        _ => new DeploymentOutcome(true, loaded, new HashSet<string>(), loaded ? "loaded" : "the download did not transfer");
+    private static Func<DeploymentOutcome> Deploys(bool loaded) =>
+        () => new DeploymentOutcome(true, loaded, new HashSet<string>(), loaded ? "loaded" : "the download did not transfer");
 
     // ---------------------------------------------------------------------------------------------
     // The plan.
@@ -195,7 +195,7 @@ public class BatchRunTests
         var runner = new ScriptedRunner((_, args) => args.Contains("portal:" + Options().PortalProject) ? 1 : 0);
 
         var result = BatchRunner.Execute(PlanFor("valve", "vessel"), runner,
-            _ => { deployed = true; return new DeploymentOutcome(true, true, new HashSet<string>(), ""); });
+            () => { deployed = true; return new DeploymentOutcome(true, true, new HashSet<string>(), ""); });
 
         Assert.Equal(BatchRunOutcome.GateRefused, result.Outcome);
         Assert.False(deployed);

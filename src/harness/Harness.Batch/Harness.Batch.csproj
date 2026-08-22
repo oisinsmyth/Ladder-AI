@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
@@ -44,6 +44,13 @@
     -->
     <ProjectReference Include="..\Harness.Device\Harness.Device.csproj" />
     <ProjectReference Include="..\Harness.Loop\Harness.Loop.csproj" />
+
+    <!--
+      Harness.Run for LoopCli.Compose ONLY. It is an Exe, and referencing one is unusual - but the
+      alternative is a second copy of the submission-and-binding-to-LoopRequest composition, which is
+      exactly the derivation GateParityTests exists to stop drifting. One composition, one reference.
+    -->
+    <ProjectReference Include="..\Harness.Run\Harness.Run.csproj" />
   </ItemGroup>
 
 </Project>

@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using Harness.Loop;
 using Harness.Map;
 using Harness.Device;
@@ -68,7 +68,7 @@ public static class BatchRunner
     public static BatchRunResult Execute(
         BatchRunPlan plan,
         IProcessRunner runner,
-        Func<IReadOnlyList<HarnessObject>, DeploymentOutcome>? deploy = null,
+        Func<DeploymentOutcome>? deploy = null,
         TimeSpan? stepTimeout = null)
     {
         ArgumentNullException.ThrowIfNull(plan);
@@ -101,6 +101,18 @@ public static class BatchRunner
                 // The deployment is delegated whole, because DeploymentPlan already owns its ordering,
                 // its layout re-assert and its exit-code reading. A batch that re-derived those would be
                 // a second place for them to drift.
+                //
+                // 🔴 THE DELEGATE TAKES NO ARGUMENTS, AND IT USED TO TAKE THE OBJECT LIST — WHICH THIS
+                // METHOD DOES NOT HAVE. It passed `Array.Empty<HarnessObject>()`, so the gateway would
+                // have planned a deployment over NO objects: staged nothing, imported nothing, and
+                // reported on an empty set. Found while wiring the first real rig run, which is the only
+                // place it could have been found — every test substituted the deployment too, so the
+                // empty list was handed to a fake that ignored it.
+                //
+                // The objects come from generation, which happens in the caller's closure and in-process,
+                // so each one carries the Kind its generator gave it. Reconstructing them from the
+                // emitted .ir files would mean INFERRING TagTable-vs-Block from file content, and the
+                // gateway routes imports on exactly that distinction.
                 if (deploy is null)
                 {
                     outcome = BatchRunOutcome.NotDeployed;
@@ -108,7 +120,7 @@ public static class BatchRunner
                     break;
                 }
 
-                var deployment = deploy(Array.Empty<HarnessObject>());
+                var deployment = deploy();
                 var deployed = deployment.Attempted && deployment.Loaded;
                 executed.Add(new BatchStepResult(step,
                     new ProcessResult(true, false, deployed ? 0 : 1, deployment.Detail, string.Empty, deployment.Detail),
