@@ -47,7 +47,13 @@ public sealed record BatchRunResult(
     IReadOnlyList<string> LanesRun,
     IReadOnlyList<string> LanesNotRun,
     bool LeasesReleased,
-    string Headline);
+    string Headline,
+
+    /// <summary>
+    /// How long the run waited after the download before the first wave, or zero if it did not. Carried
+    /// because a wave that passed after a settle and one that passed without it are different evidence.
+    /// </summary>
+    TimeSpan SettledAfterDownload = default);
 
 /// <summary>
 /// Executes a <see cref="BatchRunPlan"/>.
@@ -65,11 +71,39 @@ public sealed record BatchRunResult(
 /// </summary>
 public static class BatchRunner
 {
+    /// <summary>
+    /// 🔴 <b>How long to wait after a successful download before the first wave.</b>
+    ///
+    /// <para><b>Measured, 2026-08-22:</b> the first wave after a download refused inert with
+    /// <c>NotQuiescent</c> — slot 0 R013 moved 1→0 and R014 0→1 between the two observations — and a
+    /// re-run minutes later passed 3 of 3. The same transient is recorded once before, from the restore
+    /// wave of an earlier session. The refusal is CORRECT: a model still integrating toward its rest
+    /// value is not inert, and running the test then would be testing a start state nobody established.
+    /// What is wrong is paying it on every deploy.</para>
+    ///
+    /// <para>⚠️ <b>15 s is a JUDGEMENT, not a measurement.</b> What was measured is that the transient
+    /// exists and that it had cleared by the next run some minutes later; nobody has measured how long it
+    /// actually takes. 15 s is ~600 scans at the measured 24.9 ms and ~150 presenter ticks at the 100 ms
+    /// cadence, which is generous for a model settling and cheap against a 111 s deploy. If a wave still
+    /// refuses <c>NotQuiescent</c> on the first index, this number is the first thing to raise — and
+    /// raising it is a workaround until someone measures the real settling time.</para>
+    /// </summary>
+    public static readonly TimeSpan DefaultSettleAfterDownload = TimeSpan.FromSeconds(15);
+
+    /// <param name="settleAfterDownload">
+    /// Wait between a successful deployment and the first wave. <see cref="TimeSpan.Zero"/> disables it.
+    /// </param>
+    /// <param name="sleep">
+    /// Injected so the wait is a DECISION a test can observe rather than a delay a test has to sit
+    /// through. Every test asserts the duration; none of them waits.
+    /// </param>
     public static BatchRunResult Execute(
         BatchRunPlan plan,
         IProcessRunner runner,
         Func<DeploymentOutcome>? deploy = null,
-        TimeSpan? stepTimeout = null)
+        TimeSpan? stepTimeout = null,
+        TimeSpan? settleAfterDownload = null,
+        Action<TimeSpan>? sleep = null)
     {
         ArgumentNullException.ThrowIfNull(plan);
         ArgumentNullException.ThrowIfNull(runner);
@@ -89,6 +123,7 @@ public static class BatchRunner
         var outcome = BatchRunOutcome.Ran;
         var stopReason = string.Empty;
         var gatesTaken = new List<BatchStep>();
+        var settled = TimeSpan.Zero;
 
         foreach (var step in plan.Steps)
         {
@@ -128,7 +163,22 @@ public static class BatchRunner
                     deployment.Detail));
 
                 if (deployed)
+                {
+                    // The settle sits HERE — after a deployment that loaded, before any wave — and
+                    // nowhere else. It is not a general retry and it does not run when the deployment
+                    // failed: there is nothing to settle toward if nothing was downloaded.
+                    // Defaults to NO WAIT. The 15 s policy lives at the CLI edge, where an operator can
+                    // see and change it; a library that slept by default charged every test that never
+                    // mentioned settling - measured as 75 s across one test class.
+                    var settle = settleAfterDownload ?? TimeSpan.Zero;
+                    if (settle > TimeSpan.Zero)
+                    {
+                        (sleep ?? Thread.Sleep)(settle);
+                        settled = settle;
+                    }
+
                     continue;
+                }
 
                 outcome = BatchRunOutcome.NotDeployed;
                 stopReason = "the deployment did not load, so NO LANE WAS RUN: " + deployment.Detail;
@@ -190,7 +240,7 @@ public static class BatchRunner
         }
 
         return new BatchRunResult(outcome, executed, lanesRun, lanesNotRun, released,
-            Headline(outcome, plan, lanesRun, lanesNotRun, released, stopReason));
+            Headline(outcome, plan, lanesRun, lanesNotRun, released, stopReason, settled), settled);
     }
 
     /// <summary>The <c>--resource</c> value, so an acquire and its release can be paired.</summary>
@@ -251,7 +301,8 @@ public static class BatchRunner
 
     private static string Headline(
         BatchRunOutcome outcome, BatchRunPlan plan,
-        IReadOnlyList<string> lanesRun, IReadOnlyList<string> lanesNotRun, bool released, string stopReason)
+        IReadOnlyList<string> lanesRun, IReadOnlyList<string> lanesNotRun, bool released, string stopReason,
+        TimeSpan settled)
     {
         var planned = plan.Steps.Count(s => s.Kind == BatchStepKind.Wave);
 
@@ -279,6 +330,9 @@ public static class BatchRunner
         // *** RUN IS NOT PASSED. *** This component attempts waves; it does not read verdicts, and a
         // reader who took "THE BATCH RAN" for "every lane passed" would be believing something nothing
         // here checked.
+        if (settled > TimeSpan.Zero)
+            sb.Append($" Waited {settled.TotalSeconds:0}s after the download before the first wave, for the post-download transient.");
+
         sb.Append(" Each lane's verdict is in its own result package — a wave that ran is not a wave that passed.");
 
         sb.Append(released

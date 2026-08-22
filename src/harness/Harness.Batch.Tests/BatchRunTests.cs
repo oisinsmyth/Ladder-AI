@@ -299,6 +299,77 @@ public class BatchRunTests
     }
 
     /// <summary>
+    /// 🔴 <b>The post-download settle: after a deployment that LOADED, before the first wave.</b>
+    ///
+    /// <para>Measured on the rig — the first wave after a download refused inert with
+    /// <c>NotQuiescent</c> (R013 1→0, R014 0→1 between the two observations) and a re-run minutes later
+    /// passed 3 of 3. The refusal is correct; paying it on every deploy is not.</para>
+    /// </summary>
+    [Fact]
+    public void A_successful_deployment_is_followed_by_a_settle_BEFORE_the_first_wave()
+    {
+        var waits = new List<TimeSpan>();
+        var runner = new ScriptedRunner((_, args) =>
+        {
+            // Any wave reaching the device before the settle has happened is the bug this prevents.
+            if (args.Contains("--verify"))
+                Assert.NotEmpty(waits);
+            return 0;
+        });
+
+        var result = BatchRunner.Execute(PlanFor("valve", "vessel"), runner, Deploys(loaded: true),
+            settleAfterDownload: TimeSpan.FromSeconds(15), sleep: waits.Add);
+
+        Assert.Equal(new[] { TimeSpan.FromSeconds(15) }, waits);
+        Assert.Equal(TimeSpan.FromSeconds(15), result.SettledAfterDownload);
+        Assert.Contains("Waited 15s after the download", result.Headline);
+    }
+
+    /// <summary>
+    /// <b>It waits ONCE, not per lane.</b> The transient belongs to the download, not to a wave, so a
+    /// per-lane wait would charge every lane for one event.
+    /// </summary>
+    [Fact]
+    public void The_settle_happens_once_however_many_lanes_there_are()
+    {
+        var waits = new List<TimeSpan>();
+
+        BatchRunner.Execute(PlanFor("a", "b", "c", "d"), AllOk(), Deploys(loaded: true),
+            settleAfterDownload: TimeSpan.FromSeconds(15), sleep: waits.Add);
+
+        Assert.Single(waits);
+    }
+
+    /// <summary>
+    /// <b>And NOT when the deployment failed.</b> There is nothing to settle toward if nothing was
+    /// downloaded, and waiting would add 15 s to every failed deploy for no reason.
+    /// </summary>
+    [Fact]
+    public void A_deployment_that_did_not_load_is_NOT_followed_by_a_settle()
+    {
+        var waits = new List<TimeSpan>();
+
+        var result = BatchRunner.Execute(PlanFor("valve"), AllOk(), Deploys(loaded: false),
+            settleAfterDownload: TimeSpan.FromSeconds(15), sleep: waits.Add);
+
+        Assert.Empty(waits);
+        Assert.Equal(TimeSpan.Zero, result.SettledAfterDownload);
+    }
+
+    /// <summary>Zero disables it, and the headline then claims no wait that did not happen.</summary>
+    [Fact]
+    public void A_zero_settle_waits_not_at_all()
+    {
+        var waits = new List<TimeSpan>();
+
+        var result = BatchRunner.Execute(PlanFor("valve"), AllOk(), Deploys(loaded: true),
+            settleAfterDownload: TimeSpan.Zero, sleep: waits.Add);
+
+        Assert.Empty(waits);
+        Assert.DoesNotContain("Waited", result.Headline);
+    }
+
+    /// <summary>
     /// <b>RAN IS NOT PASSED.</b> This component attempts waves; it does not read verdicts. A reader who
     /// took "THE BATCH RAN" for "every lane passed" would be believing something nothing here checked.
     /// </summary>

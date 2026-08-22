@@ -64,6 +64,7 @@ public sealed class BatchCliRunTests : IDisposable
         "--portal-project", @"C:\projects\Rig\Rig.ap20",
         "--portal-evidence", Path.Combine(_root, "portal.json"),
         "--rig", "10.10.10.10",
+        "--settle-seconds", "0",
     }.Concat(extra).ToArray();
 
     private (int Exit, string Output, int Calls) Invoke(params string[] extra)

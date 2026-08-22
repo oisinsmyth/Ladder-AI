@@ -65,6 +65,7 @@ public static class BatchCli
         string? merged = null, staging = null, leases = null, holder = null, portalProject = null;
         string? portalEvidence = null, rig = null, converterExe = null, harnessRunExe = null, allowlist = null;
         int holderPid = 0, rigPort = 503, rigUnit = 1, ttlMinutes = 60;
+        var settleSeconds = -1;   // -1 = not stated, use the default
         string? attestation = null;
         var confirmed = false;
         var programs = new List<string>();
@@ -102,6 +103,7 @@ public static class BatchCli
                 case "--deploy-submission": _ = Next(args, ref i); break;
                 case "--attest-portal-unjudgeable": attestation = Next(args, ref i); break;
                 case "--yes": confirmed = true; break;
+                case "--settle-seconds": if (!Number(args, ref i, "--settle-seconds", output, out settleSeconds, allowZero: true)) return BatchExit.Unusable; break;
                 case "--holder-pid": if (!Number(args, ref i, "--holder-pid", output, out holderPid)) return BatchExit.Unusable; break;
                 case "--port": if (!Number(args, ref i, "--port", output, out rigPort)) return BatchExit.Unusable; break;
                 case "--unit": if (!Number(args, ref i, "--unit", output, out rigUnit)) return BatchExit.Unusable; break;
@@ -136,7 +138,8 @@ public static class BatchCli
             "dequeue" => Dequeue(store, output, lane),
             _ => Run(store, output, readFile, runner, deploy, new RunArgs(
                 merged, staging, leases, holder, holderPid, portalProject, portalEvidence,
-                rig, rigPort, rigUnit, converterExe, harnessRunExe, allowlist, ttlMinutes, confirmed, attestation)),
+                rig, rigPort, rigUnit, converterExe, harnessRunExe, allowlist, ttlMinutes, confirmed, attestation,
+                settleSeconds)),
         };
     }
 
@@ -144,7 +147,7 @@ public static class BatchCli
         string? Merged, string? Staging, string? Leases, string? Holder, int HolderPid,
         string? PortalProject, string? PortalEvidence, string? Rig, int RigPort, int RigUnit,
         string? ConverterExe, string? HarnessRunExe, string? Allowlist, int TtlMinutes, bool Confirmed,
-        string? PortalAttestation);
+        string? PortalAttestation, int SettleSeconds);
 
     /// <summary>
     /// 🔴 <b><c>--yes</c> is required, and without it Portal is NEVER CONTACTED.</b>
@@ -250,7 +253,10 @@ public static class BatchCli
         // stamps the device with a value no wave can reproduce, and the wave then refuses with a
         // version mismatch that reads as a failed download. Measured on the rig: device 16#CBE1D692,
         // staged 16#679E7923, and the download had in fact succeeded.
-        var result = BatchRunner.Execute(plan, runner, () => deploy!(batch.ProgramPaths));
+        var result = BatchRunner.Execute(plan, runner, () => deploy!(batch.ProgramPaths),
+            settleAfterDownload: args.SettleSeconds >= 0
+                ? TimeSpan.FromSeconds(args.SettleSeconds)
+                : BatchRunner.DefaultSettleAfterDownload);
 
         output.WriteLine(result.Headline);
         output.WriteLine();
@@ -261,9 +267,13 @@ public static class BatchCli
         return result.Outcome == BatchRunOutcome.Ran ? BatchExit.Ok : BatchExit.Refused;
     }
 
-    private static bool Number(string[] args, ref int i, string flag, TextWriter output, out int value)
+    /// <param name="allowZero">
+    /// Zero is meaningful for <c>--settle-seconds</c> — it disables the wait — and meaningless for a
+    /// port or a TTL, so it is opted into rather than allowed everywhere.
+    /// </param>
+    private static bool Number(string[] args, ref int i, string flag, TextWriter output, out int value, bool allowZero = false)
     {
-        if (int.TryParse(Next(args, ref i), out value) && value > 0)
+        if (int.TryParse(Next(args, ref i), out value) && (value > 0 || (allowZero && value == 0)))
             return true;
 
         output.WriteLine($"{flag} requires a positive whole number.");
