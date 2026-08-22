@@ -689,6 +689,21 @@ judges frames and changes nothing that executes, so `BuildStamp` deliberately ex
 re-run needed no redeploy.** Gate 0c did catch the binding's changed hash and refused until the
 submission was re-derived, which is exactly the intended sequence: *"re-derive rather than re-stamp."*
 
+🔴 **A DROPPED LINK DESTROYS A WAVE AND LEAVES NO RECORD AT ALL — found 2026-08-22, twice.** A remote
+rig reached over a tunnel produced `SocketException 10060` mid-observation, and the loop exited with an
+**unhandled exception**: no result package, no partial distribution, no statement that the link went
+away. A run that had already established inert and was polling normally simply vanished.
+
+**The distinction already exists one layer away and was never brought here:** `harness-mirror-read`
+separates `RefusedByServer` from `TransportFailed` precisely because *a silence is not a refusal*. The
+wave path has no equivalent, so **"the network died" is indistinguishable from "the tool crashed"**, and
+neither is distinguishable from a run that never started. On a rig reached over a tunnel — which is how
+this one is reached — that is not an edge case.
+
+**What it should do:** end the wave with a real outcome naming the transport, keep the indices already
+distributed, and mark the rest NEVER ATTEMPTED with the link as the stated reason. Contained, and it is
+the same "empty is not clean" shape as the rest of this phase.
+
 **Investigated and rejected — recorded so they are not re-proposed:**
 
 | candidate | why not |
