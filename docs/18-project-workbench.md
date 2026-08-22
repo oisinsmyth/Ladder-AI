@@ -606,6 +606,24 @@ at:**
   window and 10 × 500 ms = 5 s. Measured both ways through the CLI. **So the real question is not "how
   fast" but "does that literal participate" — a judgement about the block, now forced into the open by
   having to declare it.**
+- ✅ **RULED BY THE OWNER 2026-08-22: the short literal does NOT participate**, so the ratio bound does
+  not bind and the factor stands at **4**.
+- 🔴 **Declaring the wave at 4 then refused on a ceiling nobody had looked at: the stimulus MODEL
+  declares no `comp_stable`.** *"The wave runs at comp=4, so the model IS being driven at a factor, and
+  nothing establishes that it behaves there. An undeclared stability ceiling is not an infinite one."*
+  Correct, and it is the ceiling that had stayed invisible because at comp 1 the whole gate is vacuous.
+  **Three independent constraints then converge on ~4 and that is worth noticing rather than assuming:**
+  `comp_min` from the budget is **3.98**, the timer floor gives **4.0**, and the stimulus model's tick —
+  data, 100 ms — divided by the measured 24.931 ms scan gives **4.01**, i.e. one tick per scan, which is
+  the floor of what a scan-driven ticker can do. So 4 is simultaneously the least that fits and the most
+  that any of the three allows. **`comp_stable` is a claim about the model and must be declared by
+  whoever owns it, not derived here** — the arithmetic above is a proposed basis to ratify, in the same
+  sense `k = 5` is ratified rather than measured.
+- 🔴 **And the stimulus clock has to scale WITH the block, or nothing gets faster.** The scenario times
+  are plant milliseconds played out by the model's own tick; scale the block's presets alone and the
+  scenario still occupies the same real time. The tick is a *vector input*, not a block preset, so it
+  sits outside the compressed-preset table — and at ×4 it lands on exactly one scan, which is why the
+  model ceiling is where it is.
 - ⚠️ **Nothing yet ties `runtimeCompression` to evidence that the presets were actually applied.** The
   gate checks the *ceilings* admit the factor; it cannot check the device was changed. A submission
   declaring 4 against a program deployed without the scaled values would shrink the backstop 4× on a
