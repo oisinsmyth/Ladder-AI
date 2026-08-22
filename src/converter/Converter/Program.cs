@@ -20,6 +20,7 @@ using Converter.TagStatus;
 using Converter.TargetScan;
 using Converter.Trace;
 using Converter.UndrivenScan;
+using Ladder.Converter.Leases;
 
 namespace Converter;
 
@@ -137,6 +138,11 @@ internal static class Program
             return RunClaims(args[1..]);
         }
 
+        if (args.Length >= 1 && args[0] == "lease")
+        {
+            return RunLease(args[1..]);
+        }
+
         // FI-73. The convert path is its own method so its argument handling can be tested: an unknown
         // --flag used to be treated as a FILENAME here, and the only way to prove the refusal works is to
         // call it directly.
@@ -178,6 +184,7 @@ internal static class Program
             Console.Error.WriteLine("       converter signal-sweep --project <ir-dir> --specs <dir> [--register <file>] [--unclaimed <file>] [--json]   # project-level residual signal coverage (FI-39); exit 1 if any signal is in no spec and no disposition table");
             Console.Error.WriteLine("       converter claim  --project <ir-dir> --claims <dir> --agent <id> --kind <k> (--value <v> | --allocate [--type FB|FC|OB|DB] [--floor <n>] [--in <word|block>]) [--purpose <text>] [--json]   # reserve a shared resource BEFORE writing IR (FI-65); exit 1 refused, 2 unusable. X-J RESERVED BAND (2026-08-14): block numbers 9000-9999 are reserved for harness-generated objects per number space, FB/FC/DB, OB EXCLUDED (an OB's number is fixed by its event class, and applying a band to OBs emits a false finding on OB80, the first harness object the spec lists). A PLAIN --allocate CANNOT return a band number - the band is REMOVED from the candidate set, not deprioritised. --floor 9000 aims the search INTO the band, and that allocation is CONFINED to it: running out is `BandExhausted` naming the band, NEVER a quiet step past 9999 into deliverable numbers. An explicit --value inside the band is ACCEPTED and SAID SO in the outcome, not refused - the block does not exist yet (that is what an allocation claim means), so nothing derivable distinguishes a harness claim from a plant one, and a --harness flag would be a caller assertion forgotten exactly when it matters. The band is read from HarnessNumberRange.Declared(), never restated here");
             Console.Error.WriteLine("       converter claims --project <ir-dir> --claims <dir> [--check] [--release --agent <id> (--kind <k> --value <v> | --all) [--force]] [--agent <id>] [--json]   # list/verify/release claims (FI-65); exit 1 on conflict");
+            Console.Error.WriteLine("       converter lease  acquire|release|status --resource portal:<project>|rig:<address> --leases <dir> --holder <id> --pid <n> [--ttl <minutes>] [--purpose <text>] [--portal-evidence <file.json>] [--json]   # a REAL lock on Portal and the rig (FI-65 component 3), sibling of the claims registry and deliberately NOT the same semantics: a claim is held until released, a lease EXPIRES, because one crashed agent must not wedge the gate forever. Reclaim needs BOTH halves - the holder provably gone AND the lease expired; a LIVE holder past its TTL is reported and NEVER evicted (a long download is not a dead one). Identity is holder + pid + PROCESS START TIME, because pids are reused. A Portal lease REFUSES without --portal-evidence <file.json>, the output of `openness-cli portal-status --json`: the converter cannot see which project a Portal process has open (that fact lives behind Siemens.Engineering, net48) so it consumes the evidence the tool that CAN produce it wrote, and ABSENT IS A REFUSAL. Every branch fails closed - a process Openness cannot see reports `projectPath: null`, IDENTICAL to one with nothing open, so an OS-ONLY process is `cannot decide`, not `free`. A rig lease takes no evidence and SAYS SO: nothing detects a rig in use, MB_SERVER's one connection is discovered BY FAILURE. exit 0 acquired/reclaimed, 1 refused, 2 unusable");
             return 1;
         }
 
@@ -607,6 +614,212 @@ internal static class Program
 
         Console.Error.WriteLine(reason);
         return 1;
+    }
+
+    // FI-65 component 3. --leases is required, falling back only to LADDER_LEASES_DIR, for exactly the
+    // reason --claims is: a per-worktree store is always empty, grants everything, and looks precisely
+    // like success. The doubled-root guard that ClaimStore carries has nothing to do here — LeaseStore
+    // appends no project segment, so there is no segment to double.
+    private static string? ResolveLeasesDir(string? flag)
+    {
+        if (!string.IsNullOrWhiteSpace(flag))
+        {
+            return flag;
+        }
+
+        var fromEnv = Environment.GetEnvironmentVariable("LADDER_LEASES_DIR");
+        return string.IsNullOrWhiteSpace(fromEnv) ? null : fromEnv;
+    }
+
+    private const string LeaseUsage =
+        "Usage: converter lease acquire --resource portal:<project>|rig:<address> --leases <dir> --holder <id> --pid <n> [--ttl <minutes>] [--purpose <text>] [--portal-evidence <file.json>] [--json]\n"
+        + "       converter lease release --resource portal:<project>|rig:<address> --leases <dir> --holder <id> [--json]\n"
+        + "       converter lease status  --leases <dir> [--json]";
+
+    // The lease's default lifetime. Unlike a declared width or a scenario clock, a DEFAULT IS SAFE
+    // here: the TTL is a bound on how long a DEAD holder blocks the gate, and it can never on its own
+    // evict a living one (LeaseStore requires the holder be provably gone as well). Too short costs a
+    // reclaim that a live holder would have refused anyway; it cannot produce a wrong answer.
+    private const int DefaultLeaseTtlMinutes = 30;
+
+    internal static int RunLease(string[] args)
+    {
+        if (args.Length == 0)
+        {
+            Console.Error.WriteLine(LeaseUsage);
+            return ExitUnusable;
+        }
+
+        var verb = args[0];
+        if (verb is not ("acquire" or "release" or "status"))
+        {
+            Console.Error.WriteLine($"unknown lease sub-command '{verb}' — expected one of: acquire, release, status");
+            Console.Error.WriteLine(LeaseUsage);
+            return ExitUnusable;
+        }
+
+        string? resourceToken = null, leasesDir = null, holder = null, purpose = null, evidencePath = null;
+        var ttlMinutes = DefaultLeaseTtlMinutes;
+        int? processId = null;
+        var json = false;
+
+        for (var i = 1; i < args.Length; i++)
+        {
+            switch (args[i])
+            {
+                case "--resource": resourceToken = Next(args, ref i); break;
+                case "--leases": leasesDir = Next(args, ref i); break;
+                case "--holder": holder = Next(args, ref i); break;
+                case "--purpose": purpose = Next(args, ref i); break;
+                case "--portal-evidence": evidencePath = Next(args, ref i); break;
+                case "--ttl":
+                    if (!int.TryParse(Next(args, ref i), out ttlMinutes) || ttlMinutes <= 0)
+                    {
+                        Console.Error.WriteLine("--ttl requires a positive whole number of minutes");
+                        return ExitUnusable;
+                    }
+
+                    break;
+                case "--pid":
+                    if (!int.TryParse(Next(args, ref i), out var parsedPid) || parsedPid <= 0)
+                    {
+                        Console.Error.WriteLine("--pid requires a positive integer");
+                        return ExitUnusable;
+                    }
+
+                    processId = parsedPid;
+                    break;
+                case "--json": json = true; break;
+                default:
+                    Console.Error.WriteLine($"Unexpected argument: {args[i]}");
+                    return ExitUnusable;
+            }
+        }
+
+        var resolvedLeases = ResolveLeasesDir(leasesDir);
+        if (resolvedLeases is null)
+        {
+            Console.Error.WriteLine("--leases <dir> is required (or set LADDER_LEASES_DIR). It must be a directory SHARED by every agent on this machine — "
+                + "a per-worktree path would grant every lease and coordinate nothing. The shared root is C:\\ProgramData\\Ladder-AI\\leases.");
+            return ExitUnusable;
+        }
+
+        var store = new LeaseStore(resolvedLeases);
+
+        if (verb == "status")
+        {
+            var now = DateTime.UtcNow;
+            var all = store.All();
+            Console.WriteLine(json
+                ? LeaseOutputFormatter.FormatReportJson(all, store.Root, now)
+                : LeaseOutputFormatter.FormatReportText(all, store.Root, now));
+            return 0;
+        }
+
+        var resource = LeaseRunner.ParseResource(resourceToken);
+        if (!resource.Ok)
+        {
+            Console.Error.WriteLine(resource.Error);
+            return ExitUnusable;
+        }
+
+        if (string.IsNullOrWhiteSpace(holder))
+        {
+            Console.Error.WriteLine("--holder <id> is required, and must identify THIS agent specifically. The race this replaces happened because "
+                + "two entries carried the same non-specific holder name and were indistinguishable afterwards.");
+            return ExitUnusable;
+        }
+
+        if (verb == "release")
+        {
+            if (evidencePath is not null)
+            {
+                Console.Error.WriteLine("--portal-evidence applies to acquire, not release. Releasing a lease you hold needs no evidence about anyone else.");
+                return ExitUnusable;
+            }
+
+            var released = store.Release(resource.Resource, resource.Target, holder);
+            return Emit(released, store.Root, json, null);
+        }
+
+        // 🔴 --pid IS REQUIRED AND DELIBERATELY NOT DEFAULTED TO THIS PROCESS. Measured while smoke-testing
+        // the verb: defaulting it to Environment.ProcessId records a holder that is DEAD THE INSTANT THE
+        // COMMAND RETURNS, because a CLI invocation is a short-lived process. Every later acquire then
+        // reads "its process is gone", the liveness half of the reclaim rule becomes dead code, and
+        // reclaim silently degenerates into the pure timer the store was written to avoid — while still
+        // LOOKING like an evidence-based one. Pass the pid of whatever actually holds the gate for the
+        // lease's lifetime: the deploy script (`--pid $$`), the agent session, the wave runner.
+        if (processId is null)
+        {
+            Console.Error.WriteLine(
+                "--pid <n> is required on acquire, and must be the process that HOLDS THE GATE for the lease's lifetime — not this one. "
+                + "It is not defaulted to the converter's own pid on purpose: this process exits the moment it returns, so the lease would "
+                + "be held by a dead process from birth and every reclaim decision would fall back to the TTL alone. "
+                + "From a shell script: PowerShell `--pid $PID`, Git Bash `--pid $(cat /proc/$$/winpid)` — NOT `$$`, which under MSYS is an "
+                + "emulated pid the OS does not know and which this command will reject as not running.");
+            return ExitUnusable;
+        }
+
+        PortalEvidenceResult? evidence = null;
+        if (evidencePath is not null)
+        {
+            if (!File.Exists(evidencePath))
+            {
+                Console.Error.WriteLine($"portal evidence file not found: {evidencePath}");
+                return ExitUnusable;
+            }
+
+            // The age comes from the file's mtime because `portal-status` writes no run timestamp into
+            // its JSON. That is a weaker signal than a stamped one and the refusal message says so
+            // rather than letting a reader assume otherwise.
+            var age = DateTime.UtcNow - File.GetLastWriteTimeUtc(evidencePath);
+            evidence = PortalEvidence.Judge(File.ReadAllText(evidencePath), resource.Target, age);
+        }
+
+        try
+        {
+            var outcome = LeaseRunner.Acquire(
+                store, resource.Resource, resource.Target, holder, processId.Value,
+                TimeSpan.FromMinutes(ttlMinutes), purpose, evidence);
+
+            var caveat = resource.Resource == LeaseResource.Rig && outcome.Held ? LeaseRunner.RigCaveat : null;
+            return Emit(outcome, store.Root, json, caveat);
+        }
+        catch (InvalidOperationException ex)
+        {
+            // TryAcquire refuses to record a holder whose pid is not running — a --pid typo, or a
+            // wrapper passing its parent's. Nothing was decided, so this is unusable input, not a refusal.
+            Console.Error.WriteLine(ex.Message);
+
+            // The likeliest cause on this machine, and it costs a confusing round trip otherwise: under
+            // Git Bash `$$` is an MSYS pid with no Windows process behind it, so a caller who followed
+            // the obvious advice lands here rather than on a working lease.
+            Console.Error.WriteLine(
+                "  If that pid came from `$$` in Git Bash, it is an MSYS pid and not a Windows one — use `$(cat /proc/$$/winpid)`.");
+            return ExitUnusable;
+        }
+    }
+
+    private static int Emit(LeaseOutcome outcome, string storeRoot, bool json, string? caveat)
+    {
+        var text = json
+            ? LeaseOutputFormatter.FormatOutcomeJson(outcome, storeRoot, caveat)
+            : LeaseOutputFormatter.FormatOutcomeText(outcome, storeRoot, caveat);
+
+        // `Held` is "the caller now holds it", which a release deliberately is not — so success here is
+        // the wider notion of "the act happened".
+        if (outcome.Held || outcome.Result == LeaseResult.Released)
+        {
+            Console.WriteLine(text);
+            return 0;
+        }
+
+        Console.Error.WriteLine(text);
+
+        // 1 is a real answer about the world — someone has it, or something unjudgeable is in the way,
+        // and the caller should act on that. 2 means nothing was decided and retrying identically will
+        // not help. A release of a lease that was not held is the second kind.
+        return outcome.Result is LeaseResult.Invalid ? ExitUnusable : 1;
     }
 
     private static string? Next(string[] args, ref int i) => i + 1 < args.Length ? args[++i] : null;

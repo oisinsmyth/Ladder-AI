@@ -37,6 +37,13 @@ public enum LeaseResult
     /// <summary>The lease is now held by the caller.</summary>
     Acquired,
 
+    /// <summary>
+    /// The caller's own lease was given up. Distinct from <see cref="Acquired"/> because they are
+    /// opposite acts, and a release rendered as "ACQUIRED" is a log line that means the reverse of what
+    /// happened.
+    /// </summary>
+    Released,
+
     /// <summary>Another holder has it and is alive. <b>The collision, prevented.</b></summary>
     HeldByAnother,
 
@@ -55,7 +62,18 @@ public enum LeaseResult
     /// </summary>
     HeldOutsideTheTool,
 
-    /// <summary>Malformed request — no resource, no holder, a non-positive TTL.</summary>
+    /// <summary>
+    /// 🔴 The evidence could not answer the question, so the lease is refused.
+    ///
+    /// <para><b>Kept apart from <see cref="HeldOutsideTheTool"/> deliberately.</b> That one is a fact
+    /// about the world — a named PID has the project. This one is a fact about our knowledge, and the
+    /// remedy is different: there is nobody to wait for and nothing to close on the strength of this
+    /// alone, so folding the two together would send a reader looking for a holder that was never
+    /// identified.</para>
+    /// </summary>
+    EvidenceInconclusive,
+
+    /// <summary>Malformed request — no resource, no holder, a non-positive TTL, unusable evidence.</summary>
     Invalid,
 }
 

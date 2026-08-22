@@ -171,7 +171,7 @@ public sealed class LeaseStore
         }
 
         TryDelete(path);
-        return new LeaseOutcome(LeaseResult.Acquired, existing, $"released {resource.ToString().ToLowerInvariant()}:{target}.");
+        return new LeaseOutcome(LeaseResult.Released, existing, $"released {resource.ToString().ToLowerInvariant()}:{target}.");
     }
 
     // -------------------------------------------------------------------------------------------
@@ -186,6 +186,12 @@ public sealed class LeaseStore
 
             try
             {
+                // 🔴 overwrite: false IS THE LOCK. Not a precaution around one — there is no other
+                // mutual exclusion here. Replacing this with `if (!File.Exists(path))` followed by a
+                // write compiles, reads sensibly, and passes the cross-process race test; it was
+                // measured doing exactly that over 96 contended CLI launches. What catches it is
+                // LeaseStoreTests.Thirty_two_callers_released_TOGETHER_produce_exactly_one_holder, where
+                // 23 of 32 callers then threw UnauthorizedAccessException colliding on the destination.
                 File.Move(temp, path, overwrite: false);
                 return new LeaseOutcome(LeaseResult.Acquired, lease, lease.ToString());
             }

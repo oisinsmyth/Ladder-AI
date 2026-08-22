@@ -162,8 +162,99 @@ public sealed class LeaseStoreTests : IDisposable
         Assert.NotNull(store.Read(LeaseResource.Portal, "proj.ap20"));
 
         var right = store.Release(LeaseResource.Portal, "proj.ap20", "agent-a");
-        Assert.True(right.Held);
+
+        // Released, NOT Acquired — and `Held` is deliberately false, because after a release the caller
+        // does not hold it. This used to reuse Acquired as a success sentinel, which rendered a release
+        // as "ACQUIRED" in the CLI: a log line meaning the exact reverse of what happened.
+        Assert.Equal(LeaseResult.Released, right.Result);
+        Assert.False(right.Held);
         Assert.Null(store.Read(LeaseResource.Portal, "proj.ap20"));
+    }
+
+    /// <summary>
+    /// 🔴 <b>The atomicity of the slot write, tested where it can actually be observed.</b>
+    ///
+    /// <para><b>This exists because the PROCESS race could not see it.</b> <c>LeaseProcessRaceTests</c>
+    /// runs the real CLI and proves end-to-end exclusion, but it was MEASURED against a deliberately
+    /// broken store — one whose acquire was <c>File.Exists</c> then write, instead of an atomic move —
+    /// and it passed, twice, over 96 contended launches. The window between the check and the write is
+    /// tens of microseconds and process start-up jitter is milliseconds wide, so the racers simply never
+    /// land inside it. The process test is not weak about what it covers; it is blind to THIS.</para>
+    ///
+    /// <para>Threads can be released together, which is the whole point of the barrier below: every
+    /// caller arrives at the slot at the same instant, so a check-then-write is hit reliably rather than
+    /// by luck. <b>Verified by neutering the store and watching this redden</b> — the claim rests on
+    /// that run, not on the argument.</para>
+    ///
+    /// <para>An in-process race is a weaker experiment than a cross-process one for everything EXCEPT
+    /// simultaneity, and simultaneity is exactly what this one is for. The two tests are complements,
+    /// and neither substitutes for the other.</para>
+    /// </summary>
+    [Fact]
+    public void Thirty_two_callers_released_TOGETHER_produce_exactly_one_holder()
+    {
+        const int callers = 32;
+
+        var store = Store(T0);
+        var barrier = new System.Threading.Barrier(callers);
+        var outcomes = new LeaseOutcome[callers];
+        var threads = new System.Threading.Thread[callers];
+        var thrown = new Exception?[callers];
+
+        // Dedicated threads, NOT Parallel.For: the thread pool ramps up a few workers at a time, so a
+        // barrier of 32 waits for the pool to grow and the test took 20 seconds to reach the very
+        // simultaneity it exists to create. Explicit threads are all running before any of them signals.
+        for (var i = 0; i < callers; i++)
+        {
+            var index = i;
+            threads[index] = new System.Threading.Thread(() =>
+            {
+                var holder = $"agent-{index}";
+                barrier.SignalAndWait();
+
+                // Caught rather than allowed to escape: an unhandled exception on a plain Thread kills
+                // the test HOST, which turns a precise finding into "the run aborted". A caller that
+                // throws under contention is itself the failure being looked for, so it has to survive
+                // long enough to be reported.
+                try
+                {
+                    outcomes[index] = store.TryAcquire(
+                        LeaseResource.Rig, "10.10.10.10", holder, LivePid, TimeSpan.FromMinutes(10), null);
+                }
+                catch (Exception error)
+                {
+                    thrown[index] = error;
+                }
+            });
+            threads[index].Start();
+        }
+
+        foreach (var thread in threads)
+        {
+            Assert.True(thread.Join(TimeSpan.FromSeconds(30)), "a caller never returned from TryAcquire.");
+        }
+
+        // 🔴 The sharpest signal a non-atomic slot write gives: two callers both pass the existence
+        // check and collide on the write, and Windows answers with UnauthorizedAccessException. A store
+        // that throws under contention has no defined winner at all.
+        var failures = thrown.Where(e => e is not null).ToList();
+        Assert.True(failures.Count == 0,
+            $"{failures.Count} of {callers} callers THREW instead of returning an outcome — the slot write is not atomic: "
+            + string.Join("; ", failures.Take(3).Select(e => e!.GetType().Name + ": " + e.Message)));
+
+        var acquired = outcomes.Where(o => o.Result == LeaseResult.Acquired).ToList();
+        Assert.True(acquired.Count == 1,
+            $"exactly one caller may acquire, but {acquired.Count} did: "
+            + string.Join(", ", acquired.Select(o => o.Holder?.Holder)));
+
+        // And the rest were told who has it, rather than merely failing.
+        Assert.All(outcomes.Where(o => o.Result != LeaseResult.Acquired), o =>
+        {
+            Assert.Equal(LeaseResult.HeldByAnother, o.Result);
+            Assert.Equal(acquired[0].Holder!.Holder, o.Holder!.Holder);
+        });
+
+        Assert.Single(Directory.GetFiles(_root, "*.lease"));
     }
 
     [Fact]
