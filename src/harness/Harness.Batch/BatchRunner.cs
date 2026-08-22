@@ -225,7 +225,11 @@ public static class BatchRunner
             // 0 acquired or released; 1 refused (someone has it, or a person is in the project); 2 unusable.
             BatchStepKind.LeaseAcquire or BatchStepKind.LeaseRelease => result.ExitCode switch
             {
-                0 => new StepReading(StepVerdict.Ok, "the gate is held."),
+                // Worded per verb. It read "the gate is held" for BOTH, so every successful release
+                // reported the opposite of what had happened — visible in the first real rig run, where
+                // two correct releases both claimed the gate was still held.
+                0 => new StepReading(StepVerdict.Ok,
+                    step.Kind == BatchStepKind.LeaseAcquire ? "the gate is held." : "the gate was handed back."),
                 1 => new StepReading(StepVerdict.Failed, "REFUSED: " + FirstLine(result.StandardError, result.StandardOutput)),
                 _ => new StepReading(StepVerdict.NotProven, "nothing was decided: " + FirstLine(result.StandardError, result.StandardOutput)),
             },

@@ -237,8 +237,26 @@ public static class BatchPlanner
     private static int VectorRegistersOf(SlotBindingDocument slot) =>
         (slot.VectorTargets ?? new List<MirroredSignalDocument>()).Sum(RegistersFor);
 
-    private static int ResultRegistersOf(SlotBindingDocument slot) =>
-        (slot.ResultSources ?? new List<MirroredSignalDocument>()).Sum(RegistersFor);
+    /// <summary>
+    /// 🔴 <b>VALUE registers PLUS LATCH registers, and the latch term is what this was missing.</b>
+    ///
+    /// <para>Measured on the rig 2026-08-22: this reported the vessel lane at <b>154</b> registers while
+    /// the real derivation needed <b>165</b> — the difference being exactly its 11 transient result
+    /// signals, each of which carries a latch register appended after the values. The planner therefore
+    /// UNDER-counted, and a capacity gate that under-counts is worse than no gate: it says "fits" and
+    /// hands the refusal to the step after it.</para>
+    ///
+    /// <para>The authority is <c>SlotBinding.ResultRegistersNeeded</c>, which says so in as many words —
+    /// <i>"not the signal count, and not the value width alone — a transient signal also carries a LATCH
+    /// register, so the budget moves when a latch is added."</i> This is the same sum over the JSON
+    /// documents, and <c>BatchPlannerWidthTests</c> pins the two against each other so the copy cannot
+    /// drift in silence.</para>
+    /// </summary>
+    private static int ResultRegistersOf(SlotBindingDocument slot)
+    {
+        var sources = slot.ResultSources ?? new List<MirroredSignalDocument>();
+        return sources.Sum(RegistersFor) + sources.Count(s => s.Transient);
+    }
 
     /// <summary>
     /// Width per signal, from the element table: <c>Bool</c> and <c>Int</c> take one register, <c>Time</c>

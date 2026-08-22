@@ -57,7 +57,17 @@ public sealed record BatchRunOptions(
     int RigPort = 503,
     int RigUnit = 1,
     string? DeviceAllowlistPath = null,
-    int LeaseTtlMinutes = 60);
+    int LeaseTtlMinutes = 60,
+
+    /// <summary>
+    /// 🔴 The operator's sentence for <c>--attest-portal-unjudgeable</c>, or null.
+    ///
+    /// <para>Carried through to the PORTAL acquire only. It covers the one verdict a tool cannot
+    /// settle — a Portal process Openness cannot see, which reports the same <c>projectPath: null</c> as
+    /// one with nothing open — and the lease records the sentence for as long as it is held. It cannot
+    /// override a MEASURED holder, and the lease refuses that regardless of what is passed here.</para>
+    /// </summary>
+    string? PortalAttestation = null);
 
 /// <summary>The ordered steps of one batch run, or every reason there are none.</summary>
 public sealed record BatchRunPlan(IReadOnlyList<BatchStep> Steps, IReadOnlyList<string> Refusals)
@@ -129,17 +139,35 @@ public sealed record BatchRunPlan(IReadOnlyList<BatchStep> Steps, IReadOnlyList<
         // submission will do for this step — the copy layer is a function of the map, the bindings and
         // the naming, and of none of the vectors — but the first lane's is used rather than a synthetic
         // one, because a submission that exists is one somebody has already gated.
+        // 🔴 *** THE UNION OF EVERY LANE'S PROGRAM, NOT THE GENERATOR LANE'S — AND THE BUILD STAMP IS WHY.
+        // ***
+        //
+        // The stamp is computed over map + bindings + naming + PROGRAM UNDER TEST, and it means "what is
+        // executing". A batch deploys every lane's blocks, so the stamp of what lands on the controller
+        // covers all of them. A step that hashed one lane's program would stamp the device with a value
+        // no lane could reproduce.
+        //
+        // The same union goes to every WAVE below, and that is the part worth stating plainly: a lane
+        // verifying with only its OWN program computes a different stamp from the one deployed, the
+        // version check fails, and the package comes back Stale — which reads as "the download never
+        // reached it" and sends a reader to re-download a device that is already correct. Being batched
+        // must not change a lane's verdict, and this is what that costs.
+        var programUnion = lanes.SelectMany(l => l.ProgramPaths).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+
         var generatorLane = lanes[0];
+        var generateArgs = new List<string>
+        {
+            "--submission", generatorLane.SubmissionPath,
+            "--binding", options.MergedBindingPath,
+            "--generate-only",
+            "--emit", options.StagingDirectory,
+        };
+        AddPrograms(generateArgs, programUnion);
+
         steps.Add(new BatchStep(
             BatchStepKind.Generate,
             options.HarnessRunExe,
-            new[]
-            {
-                "--submission", generatorLane.SubmissionPath,
-                "--binding", options.MergedBindingPath,
-                "--generate-only",
-                "--emit", options.StagingDirectory,
-            },
+            generateArgs,
             "generate the merged copy layer and mirror tag table for every lane's slots",
             generatorLane.Name));
 
@@ -173,11 +201,9 @@ public sealed record BatchRunPlan(IReadOnlyList<BatchStep> Steps, IReadOnlyList<
                 "--unit", options.RigUnit.ToString(),
             };
 
-            foreach (var program in lane.ProgramPaths)
-            {
-                arguments.Add("--program");
-                arguments.Add(program);
-            }
+            // The UNION, not this lane's own — see the note above the Generate step. A lane that hashed
+            // only its own program would compute a stamp the device does not carry and report Stale.
+            AddPrograms(arguments, programUnion);
 
             if (!string.IsNullOrWhiteSpace(options.DeviceAllowlistPath))
             {
@@ -201,6 +227,20 @@ public sealed record BatchRunPlan(IReadOnlyList<BatchStep> Steps, IReadOnlyList<
         steps.Add(Lease(options, "release", "portal:" + options.PortalProject, withEvidence: false));
 
         return new BatchRunPlan(steps, Array.Empty<string>());
+    }
+
+    /// <summary>
+    /// <c>harness-run --program</c> is multi-valued and consumes tokens until the next flag, so each path
+    /// gets its own <c>--program</c>. Repeating the flag is what keeps a path containing a space from
+    /// being read as two.
+    /// </summary>
+    private static void AddPrograms(List<string> arguments, IReadOnlyList<string> programs)
+    {
+        foreach (var program in programs)
+        {
+            arguments.Add("--program");
+            arguments.Add(program);
+        }
     }
 
     private static BatchStep Lease(BatchRunOptions options, string verb, string resource, bool withEvidence)
@@ -229,6 +269,15 @@ public sealed record BatchRunPlan(IReadOnlyList<BatchStep> Steps, IReadOnlyList<
             {
                 arguments.Add("--portal-evidence");
                 arguments.Add(options.PortalEvidencePath);
+
+                // On the Portal acquire only, and only when the operator supplied one. It rides beside
+                // the evidence rather than replacing it: the evidence still has to be present and fresh,
+                // and this speaks only to the process nothing could classify.
+                if (!string.IsNullOrWhiteSpace(options.PortalAttestation))
+                {
+                    arguments.Add("--attest-portal-unjudgeable");
+                    arguments.Add(options.PortalAttestation);
+                }
             }
         }
 

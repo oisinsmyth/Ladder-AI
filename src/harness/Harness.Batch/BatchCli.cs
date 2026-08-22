@@ -65,6 +65,7 @@ public static class BatchCli
         string? merged = null, staging = null, leases = null, holder = null, portalProject = null;
         string? portalEvidence = null, rig = null, converterExe = null, harnessRunExe = null, allowlist = null;
         int holderPid = 0, rigPort = 503, rigUnit = 1, ttlMinutes = 60;
+        string? attestation = null;
         var confirmed = false;
         var programs = new List<string>();
 
@@ -93,7 +94,13 @@ public static class BatchCli
                 case "--converter": converterExe = Next(args, ref i); break;
                 case "--harness-run": harnessRunExe = Next(args, ref i); break;
                 case "--allowlist": allowlist = Next(args, ref i); break;
-                case "--deploy-config": _ = Next(args, ref i); break;   // read by Program.cs, which builds the gateway
+                // Read by Program.cs, which builds the gateway and generates the copy layer in-process.
+                // They still have to be ACCEPTED here or the parser's unknown-argument arm rejects them —
+                // which is exactly what happened on the first real rig run, at exit 2 before any gate was
+                // taken. Listed together so the next one added does not repeat it.
+                case "--deploy-config":
+                case "--deploy-submission": _ = Next(args, ref i); break;
+                case "--attest-portal-unjudgeable": attestation = Next(args, ref i); break;
                 case "--yes": confirmed = true; break;
                 case "--holder-pid": if (!Number(args, ref i, "--holder-pid", output, out holderPid)) return BatchExit.Unusable; break;
                 case "--port": if (!Number(args, ref i, "--port", output, out rigPort)) return BatchExit.Unusable; break;
@@ -129,14 +136,15 @@ public static class BatchCli
             "dequeue" => Dequeue(store, output, lane),
             _ => Run(store, output, readFile, runner, deploy, new RunArgs(
                 merged, staging, leases, holder, holderPid, portalProject, portalEvidence,
-                rig, rigPort, rigUnit, converterExe, harnessRunExe, allowlist, ttlMinutes, confirmed)),
+                rig, rigPort, rigUnit, converterExe, harnessRunExe, allowlist, ttlMinutes, confirmed, attestation)),
         };
     }
 
     private sealed record RunArgs(
         string? Merged, string? Staging, string? Leases, string? Holder, int HolderPid,
         string? PortalProject, string? PortalEvidence, string? Rig, int RigPort, int RigUnit,
-        string? ConverterExe, string? HarnessRunExe, string? Allowlist, int TtlMinutes, bool Confirmed);
+        string? ConverterExe, string? HarnessRunExe, string? Allowlist, int TtlMinutes, bool Confirmed,
+        string? PortalAttestation);
 
     /// <summary>
     /// 🔴 <b><c>--yes</c> is required, and without it Portal is NEVER CONTACTED.</b>
@@ -175,7 +183,8 @@ public static class BatchCli
             RigPort: args.RigPort,
             RigUnit: args.RigUnit,
             DeviceAllowlistPath: args.Allowlist,
-            LeaseTtlMinutes: args.TtlMinutes);
+            LeaseTtlMinutes: args.TtlMinutes,
+            PortalAttestation: args.PortalAttestation);
 
         var plan = BatchRunPlan.For(batch, lanes, options);
 

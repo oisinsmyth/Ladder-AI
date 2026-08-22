@@ -134,6 +134,51 @@ public class BatchRunTests
         });
     }
 
+    /// <summary>
+    /// 🔴 <b>EVERY step gets the UNION of the lanes' programs — generation AND every wave.</b>
+    ///
+    /// <para>The build stamp is computed over map + bindings + naming + PROGRAM UNDER TEST, and it means
+    /// "what is executing". A batch deploys every lane's blocks, so the deployed stamp covers all of
+    /// them. A lane verifying against only its OWN program computes a different stamp, the version check
+    /// fails, and the package comes back <c>Stale</c> — whose text says the download "never reached it",
+    /// sending a reader to re-download a device that is already correct.</para>
+    ///
+    /// <para>Being batched must not change a lane's verdict. This is what that costs, and it is not
+    /// visible from any single lane's run.</para>
+    /// </summary>
+    [Fact]
+    public void Generation_AND_every_wave_get_the_UNION_of_the_lanes_programs()
+    {
+        var plan = PlanFor("valve", "vessel");
+
+        var expected = new[] { @"valve\ir", @"vessel\ir" };
+
+        foreach (var step in plan.Steps.Where(s => s.Kind is BatchStepKind.Generate or BatchStepKind.Wave))
+        {
+            var programs = step.Arguments
+                .Select((a, i) => (a, i))
+                .Where(x => x.a == "--program")
+                .Select(x => step.Arguments[x.i + 1])
+                .ToArray();
+
+            Assert.Equal(expected, programs);
+        }
+    }
+
+    /// <summary>
+    /// Each path takes its own <c>--program</c>. <c>harness-run</c>'s parser consumes tokens until the
+    /// next flag, so two paths under one flag would work until one contained a space — which every real
+    /// project path on this machine does.
+    /// </summary>
+    [Fact]
+    public void Each_program_path_gets_its_own_flag()
+    {
+        var plan = PlanFor("valve", "vessel");
+        var wave = plan.Steps.First(s => s.Kind == BatchStepKind.Wave);
+
+        Assert.Equal(2, wave.Arguments.Count(a => a == "--program"));
+    }
+
     [Fact]
     public void A_plan_missing_a_gate_argument_is_refused_before_any_step_exists()
     {
