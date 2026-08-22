@@ -267,11 +267,11 @@ how this project got a rig scan time wrong by an order of magnitude, twice.
 | block IR authoring | 6 min | 6 min | `[E]`, from 40 min–2 h today less spec archaeology |
 | vector authoring (~10 lines each) | 2 min | 2 min | `[E]`, after §3.4 |
 | PC-side pre-flight | 0.5 min | 0.5 min | `[E]` |
-| stage + import | ~40 s | ~15 s | `[M]` `import-all` 182 s / 126 objects |
-| compile | ~60 s | ~25 s | `[M]` `compile-all --force` 217 s / 126 |
-| download (device-level) | 34–92 s | 5–9 s | `[M]` recovery downloads 34 s and 92 s |
-| sanity-check | 4 s | <1 s | `[M]` |
-| wave run + read-back | 🔴 **~2.7 min PER VECTOR** | 🔴 **~2.7 min PER VECTOR** | `[M]` **2026-08-22, measured: 3 indices, 6,185 round trips** — the ~1 min figure this replaces was an estimate for the WHOLE wave and is wrong by about 8× |
+| download (device-level) | 34–92 s | 5–9 s | `[M]` recovery downloads 34 s and 92 s; **86 s measured again 2026-08-22** |
+| wave run + read-back | ✅ **~45 s per vector** | ✅ **~45 s per vector** | `[M]` **2026-08-22 at comp 4, measured on the controller: 3 vectors, 135 s, 1,662 round trips.** Was **~2.7 min per vector** (485 s, 6,185 round trips) uncompressed — **3.6× on wall clock, 3.7× on traffic.** A three-vector block is now **2.25 min**, not 8.1 |
+| stage + import | ~40 s | ~15 s | `[M]` **5 s measured 2026-08-22** for a 3-object import — the estimate was ~8× pessimistic |
+| compile | ~60 s | ~25 s | `[M]` **24 s measured 2026-08-22** (`compile-all`, whole device) |
+| sanity-check | 4 s | <1 s | `[M]` **3 s measured 2026-08-22** |
 | **first-pass total** | **≈ 15 min** | **≈ 14 min** | |
 | **with one fix iteration** | **≈ 22 min** | **≈ 17 min** | |
 | **with three fix iterations** | **≈ 36 min** | **≈ 23 min** | |
@@ -521,7 +521,28 @@ lower because less rests on it today.
 
 ---
 
-### Phase 10 — Wave time · **P0** · *runs BEFORE Phases 3–9*
+### Phase 10 — Wave time · **P0** · ✅ **DELIVERED ON THE CONTROLLER 2026-08-22**
+
+> **8.1 min → 2.25 min for a three-vector block; 6,185 → 1,662 round trips. 3.6× on wall clock.**
+> Measured at comp 4 on the rig, not predicted. Two of the three verdicts reproduce the uncompressed
+> run exactly — `Pass` 5/5 and `Pass` 4/4, both `Settled`. **The third moved from `Pass` 7/7 to
+> `Inconclusive` 6/7, and that is the one open item below.**
+>
+> Also measured, replacing three long-standing `[E]` estimates: **import 5 s** (est. ~40), **compile
+> 24 s** (est. ~60), **sanity 3 s** (est. 4). The first two were pessimistic by ~8× and ~2.5×.
+>
+> 🔴 **The first compressed run FAILED, and the cause was mine rather than the block's.** `Generate`
+> re-expressed the scenario coordinates by reassigning its own parameter — a local — while `Execute`
+> built the wave from the request it still held. The gate reported 18 coordinates re-expressed and the
+> device received all 18 unscaled, so the block ran its windows 4× fast against a full-length scenario:
+> index 0 hit its backstop **with every assertion holding**, and nothing in any artifact said the block
+> was fine. **Nine tests covered the computation and one the gate; none followed the value to the wire**,
+> which is exactly the class this codebase warns about twice elsewhere. Fixed, with a test that reads
+> the value out of the device's own memory.
+
+### The original scope
+
+
 
 Added 2026-08-22, after Phase 2's first measurement broke the budget: **~2.7 min per vector**, i.e.
 **8.1 min for a three-vector block** against a 20-minute target, before any authoring. Numbered last
@@ -535,10 +556,15 @@ measured runtime to 0.8%.** The wave takes as long as the vectors say it takes. 
 index, and half of that index was a hedge** against an unknown warm-up phase — the vector's own note
 says so.
 
-| | measured | after W1 | + W2 | + W3 |
-|---|---|---|---|---|
-| healthy 3-vector wave | **8.1 min** | 8.1 min | ~5.1 min | ~1.3 min |
-| wedged 3-vector wave | **~24.7 min** | ✅ **~2.5 min** | — | — |
+| | before | after |
+|---|---|---|
+| healthy 3-vector wave | 8.1 min, 6,185 round trips | ✅ **2.25 min, 1,662 round trips** |
+| wedged 3-vector wave | ~24.7 min | ✅ **~2.5 min** |
+
+⚠️ **3.6×, not the nominal 4×, and the shortfall is understood rather than noise.** Each index carries
+~1.4 s of dwells that are **literals inside the stimulus model** and cannot scale, and the inert phases
+and poll overhead between indices are real time either way. **W2 (phase alignment) was built and is
+NOT deployed** — its mirror signals were left out of this deploy, so none of the above depends on it.
 
 - **W1 · Bound the backstop, stop re-running a wedged slot** — ✅ **DONE 2026-08-22.** A timed-out slot
   was re-armed at every remaining index at full backstop cost; only a failure to establish inert ever
@@ -639,6 +665,21 @@ at:**
   the other side. The natural close is for `runtimeCompression`'s derivation to cite the compressed
   preset table instead of being settled by rule, but the evidence it should really cite is a read-back
   of the applied values, which needs the deploy. **Open, and named here rather than assumed away.**
+
+🔴 **THE ONE OPEN ITEM: compression moved a verdict, and the harness refused to blame the block for
+it.** On the dominant index a `becomesAndHolds` expectation on the observed weight went from `Pass`
+7/7 to **`Inconclusive` 6/7**. The signal reached its value and then fell back, and the evaluation said:
+*"NO ARM WINDOW WAS DECLARED for it, so nothing says whether that fall-back is inside the phase or is
+the model's own required return to inert. THIS IS NOT A DISAGREEMENT AND MUST NOT BE ACTIONED AGAINST
+THE BLOCK."* **It also named its own fix** — declare `armedBy` for that signal in the binding and the
+question becomes decidable on evidence already collected.
+
+⚠️ **The likely mechanism, marked as a hypothesis because it has not been measured:** the model's
+recovery toward inert is documented in the submission as running at a **per-SCAN** rate, and a per-scan
+rate does not shrink when plant time is compressed. At 4× the same recovery therefore occupies four
+times the fraction of the index, and the harness sees it where before it did not. **If that holds, it
+is a general fidelity limit of compression rather than anything specific to this block** — and it is
+the kind of thing that would be invisible without the uncompressed run to compare against.
 
 **Investigated and rejected — recorded so they are not re-proposed:**
 
