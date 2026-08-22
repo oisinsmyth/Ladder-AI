@@ -156,6 +156,26 @@ public class CompressedPresetsTests
         Assert.Contains("EXAMINED: 1 declared preset(s) at comp 1", table.Summary, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// 🔴 <b>The ratio bound cannot bind at factor 1, and the first draft of this class had it binding.</b>
+    /// A 2-second behaviour beside a 500 ms literal is a ratio of 4, under the ruled 10 — so an
+    /// uncompressed submission carrying any short literal would have been refused before anything was
+    /// compressed at all. Gate 10b's own text: <i>at comp = 1 none of the three can bind.</i>
+    /// </summary>
+    [Fact]
+    public void The_ratio_bound_does_NOT_bind_at_factor_ONE_because_no_proportion_moved()
+    {
+        var table = CompressedPresets.For(new[] { Data("Window", 2_000), Literal("Debounce", 500) }, factor: 1);
+
+        Assert.False(table.RatioDistorted);
+        Assert.True(table.Usable);
+        Assert.Contains("cannot bind", table.RatioDetail, StringComparison.Ordinal);
+
+        // ... and the SAME pair at factor 2 is refused, which is what makes the line above a real
+        // exemption rather than the bound being broken.
+        Assert.True(CompressedPresets.For(new[] { Data("Window", 2_000), Literal("Debounce", 500) }, factor: 2).RatioDistorted);
+    }
+
     [Fact]
     public void An_empty_declaration_is_not_usable_above_factor_one()
     {

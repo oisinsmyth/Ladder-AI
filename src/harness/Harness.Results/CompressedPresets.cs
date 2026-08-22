@@ -104,14 +104,30 @@ public sealed record CompressedPresetTable(
     /// <b>"Participating" is decided by DECLARATION</b> — a literal in this table counts, one nobody
     /// declared does not — which puts the judgement where somebody can see it.</para>
     /// </summary>
+    /// <remarks>
+    /// 🔴 <b>IT CANNOT BIND AT FACTOR 1, AND THE FIRST DRAFT OF THIS CLASS GOT THAT WRONG.</b> The bound
+    /// is about the distortion COMPRESSION introduces — a literal does not scale, so shrinking the
+    /// behaviour around it changes their proportion. At factor 1 nothing is scaled, so no proportion
+    /// moved and there is nothing for the bound to be about. Gate 10b says the same thing in the same
+    /// words: <i>"at comp = 1 this is a REAL computed pass — nothing is scaled, so none of the three can
+    /// bind."</i>
+    ///
+    /// <para>Without this the bound compared an UNCOMPRESSED block against the multiple and refused it:
+    /// a 2-second behaviour beside a 500 ms literal is a ratio of 4, under the ruled 10, so every
+    /// submission carrying a short literal would have been refused before anything was compressed at
+    /// all.</para>
+    /// </remarks>
     public bool RatioDistorted =>
-        LargestLiteralMs is { } literal
+        Factor > 1
+        && LargestLiteralMs is { } literal
         && ShortestScaledMs is { } shortest
         && shortest < literal * TimeCompression.LiteralHeadroomMultiple;
 
     /// <summary>Why the ratio bound refused, or that it did not bind. Never silent.</summary>
     public string RatioDetail =>
-        LargestLiteralMs is not { } literal
+        Factor == 1
+            ? "RATIO: nothing is scaled at factor 1, so no proportion moved and the ratio-distortion bound cannot bind. Computed, not assumed."
+        : LargestLiteralMs is not { } literal
             ? "RATIO: no literal was declared, so the ratio-distortion bound does not bind. That is a statement about the DECLARATION, not about the block — an undeclared literal in the call tree is one nothing here can see."
         : ShortestScaledMs is not { } shortest
             ? $"RATIO: nothing scaled, so there is no compressed behaviour to compare against the {literal:0} ms literal."

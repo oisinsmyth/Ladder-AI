@@ -550,19 +550,51 @@ says so.
   **Both directions refused** — a backstop *below* the scenario's own end fires on a healthy test.
   Also corrected `RoundTripsPerIndex`, which omitted the per-poll control read and so under-sized the
   backstop in the spurious-TIMED-OUT direction.
-- **W2 · Phase-aligned scenario start** — the largest healthy-run win that needs no block change.
-  Replace *robustness to an unknown arm instant* with a measured one, so a vector places its stimulus
-  at a small fixed offset instead of straddling the whole uncertainty band. **Blocked on a mirror
-  widening** (the phase signal has to be readable) and therefore on a redeploy.
-- **W3 · Apply compression** — the multiplier. The *planner* is complete and gates 10a/10b are built:
-  `TimeCompression.Plan` returns `CompMin`/`CompMax` across all four ceilings and the 500 ms absolute
-  floor is enforced. **Only the application is missing** — nothing scales a preset on the device, and
-  the copy layer's own caveat list says "no time compression". Raising the factor today would shrink
-  the backstop against a plant still running at 1× and produce a spurious TIMED-OUT. **The block-side
-  precondition holds** (a read confirmed the gating presets are DB data, not `T#` literals, and the
-  shortest one gives a 4.0× ceiling — the worked case already recorded), **but there is no runtime
-  write path**: the copy layer references no parameter DB, so compression has to arrive as
-  download-time values, which is a redeploy and a new build stamp.
+- **W2 · Phase-aligned scenario start** — ⚙️ **HARNESS HALF BUILT 2026-08-22; NOT YET EXERCISED.**
+  Hold the inert phase until the block's own clock is at a known point, then commit. `PhaseCondition`
+  names a result register, a trigger and a threshold; the wait sits after both inert checks and
+  immediately before returning, so the commit follows as closely as the link allows. Failing to reach
+  the phase inside the poll budget is `PhaseNotReached`, which stops the wave — committing anyway
+  would run the test from the very phase the declaration exists to remove, and the result would be
+  indistinguishable from a correct one. Declared **per slot**, since the phase is a property of the
+  block and the binding is the only place the signal can be checked against what the slot publishes.
+  **A trap it surfaced:** a phase signal must be *moving* during inert or there is no phase to
+  observe — and the quiescence check refuses a gated register that moves. Those two declarations
+  contradict each other, and left alone inert never establishes and blames the block. Now a build-time
+  refusal naming both halves. **Still blocked on the mirror carrying the phase signal.**
+- **W3 · Apply compression** — ⚙️ **HARNESS HALF BUILT 2026-08-22; NOT YET EXERCISED.** The planner was
+  always complete — `TimeCompression.Plan` returns `CompMin`/`CompMax` across all four ceilings, gates
+  10a/10b check them, `ScanBudget` re-expresses every duration at the factor — and **nothing ever
+  changed a preset on the device**, so the factor governed only how long the harness would *wait*.
+  `CompressedPresets` now produces the table a deploy applies, and `harness-gate compress` emits it as
+  a file carrying the factor it was computed at. A literal is reported and never scaled; a preset that
+  would land under the ruled 500 ms floor is **refused, not clamped** (clamping one while its
+  neighbours scale changes the *ratio*, which is a different plant, not a faster one); a preset already
+  under the floor at 1× is a separate outcome, because lowering the factor cures the first and never
+  the second. X-D's ratio-distortion bound is enforced here too, since this table is the only place
+  that knows both halves. **The block-side precondition holds** — a read confirmed 19 of 23 presets are
+  DB data, not `T#` literals, and the shortest gives the recorded 4.0× ceiling — **but there is no
+  runtime write path**, so the values arrive at download time, which is the same deploy W2 needs.
+
+🔴 **Two findings from putting real numbers through W3, both of which change what the deploy is aiming
+at:**
+
+- ***THE BINDING CONSTRAINT IS NOT THE 4.0× TIMER CEILING THIS PROJECT HAS BEEN QUOTING.*** With the
+  block's 17 gating presets declared, `comp_min` for the target budget comes out at **4** and every
+  preset clears the 500 ms floor — the quoted answer. But the block's call tree also contains a
+  **500 ms literal**, and X-D's ratio-distortion companion requires the shortest compressed behaviour
+  to stay **10× the largest *participating* literal**. Declare that literal as participating and
+  **compression is refused outright at any factor above 1**, because the shortest behaviour is a 2 s
+  window and 10 × 500 ms = 5 s. Measured both ways through the CLI. **So the real question is not "how
+  fast" but "does that literal participate" — a judgement about the block, now forced into the open by
+  having to declare it.**
+- ⚠️ **Nothing yet ties `runtimeCompression` to evidence that the presets were actually applied.** The
+  gate checks the *ceilings* admit the factor; it cannot check the device was changed. A submission
+  declaring 4 against a program deployed without the scaled values would shrink the backstop 4× on a
+  plant still running at 1× — the exact spurious TIMED-OUT this work exists to avoid, arrived at from
+  the other side. The natural close is for `runtimeCompression`'s derivation to cite the compressed
+  preset table instead of being settled by rule, but the evidence it should really cite is a read-back
+  of the applied values, which needs the deploy. **Open, and named here rather than assumed away.**
 
 **Investigated and rejected — recorded so they are not re-proposed:**
 
