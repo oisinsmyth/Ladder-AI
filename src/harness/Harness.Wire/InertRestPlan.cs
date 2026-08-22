@@ -411,7 +411,36 @@ public sealed record InertRestPlan(
             return null;
         }
 
-        return new PhaseCondition(register, signal, trigger, binding.PhaseThreshold);
+        // ---- the guard, if one was declared ---------------------------------------------------------
+        int? guardRegister = null;
+        var guardSignal = binding.PhaseGuardSignal;
+
+        if (!string.IsNullOrWhiteSpace(guardSignal))
+        {
+            var resolved = binding.ResultRegisterOf(guardSignal);
+
+            if (resolved < 0)
+            {
+                refusals.Add(
+                    $"slot '{binding.SlotId}' declares its phase guard on '{guardSignal}', which resolves to no result register of this "
+                    + "binding. The guard is read through the mirror like the phase itself, so a signal the slot does not publish is one "
+                    + "the client can never see.");
+                return null;
+            }
+
+            if (resolved == register)
+            {
+                refusals.Add(
+                    $"slot '{binding.SlotId}' names '{guardSignal}' as both its phase signal and its phase guard (both R{register:000}). "
+                    + "A clock cannot be its own arm indicator: the guard exists precisely because the clock reads 0 in BOTH the "
+                    + "'just restarted' and the 'not running' cases, and comparing it against itself cannot separate them.");
+                return null;
+            }
+
+            guardRegister = resolved;
+        }
+
+        return new PhaseCondition(register, signal, trigger, binding.PhaseThreshold, guardRegister, guardSignal);
     }
 
     /// <summary>

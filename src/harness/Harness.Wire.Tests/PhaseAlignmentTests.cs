@@ -168,6 +168,142 @@ public class PhaseAlignmentTests
     }
 
     // ---------------------------------------------------------------------------------------------
+    // The guard — for a clock that is not free-running
+    // ---------------------------------------------------------------------------------------------
+
+    /// <summary>
+    /// R000 gated at rest, R001 the phase clock (excluded), <b>R002 the arm indicator</b> (excluded — it
+    /// changes when the block arms, so it has no resting value either).
+    /// </summary>
+    /// <summary>Three result registers, because the guard needs one of its own beside the clock.</summary>
+    private static (MirrorClient Client, RecordingTransport Wire) WiredWide()
+    {
+        var map = MapAllocator.Allocate(new WaveSetRequest(
+            MirrorGeometry.ForCpu1214C(256, 4000),
+            new[] { new SlotRequest("S0", 2, 3) })).Require();
+
+        var wire = new RecordingTransport(map, Stamp);
+        return (new MirrorClient(map, wire, Stamp), wire);
+    }
+
+    private static InertDeclaration GuardedDeclaration(PhaseCondition phase) => new(
+        new Dictionary<int, ushort> { [0] = 0 },
+        1,
+        new Dictionary<int, string>
+        {
+            [1] = "the phase clock: running by design",
+            [2] = "the arm indicator: changes with the block's own state",
+        },
+        null,
+        phase);
+
+    /// <summary>
+    /// 🔴 <b>THE FALSE POSITIVE THE GUARD EXISTS FOR, and it was found on a real block rather than
+    /// imagined.</b> An arm-gated timer reads <b>0 while disarmed</b> — and 0 is exactly what "the window
+    /// just restarted" looks like. Without a guard, <c>Below</c> is satisfied on the very first poll and
+    /// the wave commits believing a fresh window has begun when no window is running at all.
+    /// </summary>
+    [Fact]
+    public void A_DISARMED_clock_reading_zero_does_NOT_satisfy_Below_once_a_guard_is_declared()
+    {
+        var (client, wire) = WiredWide();
+
+        // Disarmed forever: clock pinned at 0, arm indicator low.
+        wire.OnTransaction = t =>
+        {
+            t.SetResult(0, 0, 0);
+            t.SetResult(0, 1, 0);   // the clock — reads 0 because it is NOT RUNNING
+            t.SetResult(0, 2, 0);   // the arm — low
+        };
+
+        var guarded = InertPhase.Establish(client, 0, Vector, GuardedDeclaration(
+            new PhaseCondition(1, "Window_ET", PhaseTrigger.Below, 50, GuardRegister: 2, GuardSignal: "Window_Armed")), maxPolls: 5);
+
+        Assert.Equal(InertOutcome.PhaseNotReached, guarded.Outcome);
+
+        // And it says WHICH problem it is: a window that never armed, not one that failed to wrap. Those
+        // send a reader to completely different places.
+        Assert.Contains("ITS GUARD IS LOW", guarded.Detail, StringComparison.Ordinal);
+
+        // *** THE CONTROL. *** The same clock, the same instant, with no guard declared: satisfied
+        // immediately and confidently wrong. This is the behaviour the guard replaces.
+        var unguarded = InertPhase.Establish(client, 0, Vector, GuardedDeclaration(
+            new PhaseCondition(1, "Window_ET", PhaseTrigger.Below, 50)), maxPolls: 5);
+
+        Assert.True(unguarded.Established, unguarded.Detail);
+        Assert.Contains("PHASE ESTABLISHED", unguarded.Detail, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The worse half of the same defect: the arm→disarm edge takes the clock from mid-ramp back to 0,
+    /// which is a DECREASE. Without the guard that reads as a wrap; with it the sample is discarded, and
+    /// discarded includes the remembered previous value so no later comparison can straddle the disarm.
+    /// </summary>
+    [Fact]
+    public void The_DISARM_edge_is_not_mistaken_for_a_wrap()
+    {
+        var (client, wire) = WiredWide();
+
+        // Ramps while armed, then disarms: 300, 400, 500, then arm low and clock 0, and stays there.
+        var step = 0;
+        wire.OnTransaction = t =>
+        {
+            step++;
+            var armed = step <= 3;
+            t.SetResult(0, 0, 0);
+            t.SetResult(0, 1, armed ? (ushort)(200 + step * 100) : (ushort)0);
+            t.SetResult(0, 2, armed ? (ushort)1 : (ushort)0);
+        };
+
+        var report = InertPhase.Establish(client, 0, Vector, GuardedDeclaration(
+            new PhaseCondition(1, "Window_ET", PhaseTrigger.Decreases, GuardRegister: 2, GuardSignal: "Window_Armed")), maxPolls: 6);
+
+        // The only "decrease" available was the disarm, and it must not count.
+        Assert.Equal(InertOutcome.PhaseNotReached, report.Outcome);
+    }
+
+    [Fact]
+    public void With_the_guard_SET_the_phase_is_established_normally()
+    {
+        var (client, wire) = WiredWide();
+
+        var value = (ushort)0;
+        wire.OnTransaction = t =>
+        {
+            t.SetResult(0, 0, 0);
+            t.SetResult(0, 1, value);
+            t.SetResult(0, 2, 1);          // armed throughout
+            value = (ushort)((value + 1) % 1000);
+        };
+
+        var report = InertPhase.Establish(client, 0, Vector, GuardedDeclaration(
+            new PhaseCondition(1, "Window_ET", PhaseTrigger.Below, 50, GuardRegister: 2, GuardSignal: "Window_Armed")));
+
+        Assert.True(report.Established, report.Detail);
+        Assert.Contains("while Window_Armed", report.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_clock_cannot_be_its_own_guard()
+    {
+        var binding = Binding("Window_ET", PhaseTrigger.Below, 50) with { PhaseGuardSignal = "Window_ET" };
+        var plan = InertRestPlan.For(binding, RegisterWordOrder.HighWordFirst);
+
+        // The guard exists because the clock reads 0 in BOTH the "just restarted" and the "not running"
+        // cases; comparing it against itself cannot separate them.
+        Assert.Contains(plan.Refusals, r => r.Contains("cannot be its own arm indicator", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void A_guard_signal_the_slot_does_not_publish_is_refused_by_name()
+    {
+        var binding = Binding("Window_ET", PhaseTrigger.Below, 50) with { PhaseGuardSignal = "Not_Published" };
+        var plan = InertRestPlan.For(binding, RegisterWordOrder.HighWordFirst);
+
+        Assert.Contains(plan.Refusals, r => r.Contains("phase guard on 'Not_Published'", StringComparison.Ordinal));
+    }
+
+    // ---------------------------------------------------------------------------------------------
     // The declaration itself
     // ---------------------------------------------------------------------------------------------
 

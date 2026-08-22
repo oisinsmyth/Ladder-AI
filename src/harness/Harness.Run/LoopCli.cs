@@ -645,6 +645,7 @@ public static class LoopCli
                 PhaseSignal = s.PhaseSignal,
                 PhaseTrigger = ParsePhaseTrigger(s.PhaseTrigger, s.SlotId),
                 PhaseThreshold = s.PhaseThreshold,
+                PhaseGuardSignal = s.PhaseGuardSignal,
             })
             .ToArray();
 

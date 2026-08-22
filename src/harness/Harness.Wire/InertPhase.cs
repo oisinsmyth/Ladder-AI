@@ -65,7 +65,28 @@ namespace Harness.Wire;
 /// Required by <see cref="PhaseTrigger.Below"/> and <see cref="PhaseTrigger.AtOrAbove"/>, and refused
 /// with <see cref="PhaseTrigger.Decreases"/>, which compares against the previous sample and not a number.
 /// </param>
-public sealed record PhaseCondition(int Register, string Signal, PhaseTrigger Trigger, ushort? Threshold = null)
+/// <param name="GuardRegister">
+/// 🔴 <b>Optional, and REQUIRED IN PRACTICE FOR ANY CLOCK THAT IS NOT FREE-RUNNING.</b> A register that
+/// must read non-zero for a sample to count at all.
+///
+/// <para><b>The false positive it closes, found on a real block.</b> An arm-gated timer reads <b>0 while
+/// disarmed</b> — and 0 is exactly what "the window just restarted" looks like. So
+/// <see cref="PhaseTrigger.Below"/> on such a clock is satisfied on the first poll, every time,
+/// <i>reporting that a window just began when no window is running at all.</i> <see cref="PhaseTrigger.Decreases"/>
+/// is worse: the arm→disarm edge takes the value from mid-ramp back to 0, which reads as a wrap.</para>
+///
+/// <para><b>While the guard is low, samples are DISCARDED rather than merely unmatched</b> — including
+/// the remembered previous value. Keeping it would let a comparison straddle a disarm, which is the
+/// spurious-wrap case above.</para>
+/// </param>
+/// <param name="GuardSignal">The guard's name, for the report.</param>
+public sealed record PhaseCondition(
+    int Register,
+    string Signal,
+    PhaseTrigger Trigger,
+    ushort? Threshold = null,
+    int? GuardRegister = null,
+    string? GuardSignal = null)
 {
     public int Register { get; } = Register >= 0
         ? Register
@@ -96,9 +117,16 @@ public sealed record PhaseCondition(int Register, string Signal, PhaseTrigger Tr
         _ => false,
     };
 
-    public override string ToString() => Trigger == PhaseTrigger.Decreases
-        ? $"{Signal} (R{Register:000}) decreases"
-        : $"{Signal} (R{Register:000}) {Trigger} {Threshold}";
+    public override string ToString()
+    {
+        var core = Trigger == PhaseTrigger.Decreases
+            ? $"{Signal} (R{Register:000}) decreases"
+            : $"{Signal} (R{Register:000}) {Trigger} {Threshold}";
+
+        return GuardRegister is { } guard
+            ? $"{core}, while {GuardSignal} (R{guard:000}) is set"
+            : core;
+    }
 }
 
 public sealed record InertDeclaration(
@@ -490,6 +518,10 @@ public static class InertPhase
     {
         var previous = new Dictionary<int, ushort>();
         var metAt = new Dictionary<int, long>();
+
+        // Slots whose guard was low on the LAST poll. Kept so the timeout can say "the clock never
+        // armed" rather than "the phase never occurred" — different problems, different places to look.
+        var guardLow = new HashSet<int>();
         var polls = 0;
         reached = from;
 
@@ -500,6 +532,9 @@ public static class InertPhase
             polls++;
 
             var observed = client.ReadResults(phased.Select(s => s.SlotIndex));
+
+            // Whether the guard was low is a property of THIS poll, not of the run so far.
+            guardLow.Clear();
 
             foreach (var slot in phased)
             {
@@ -518,6 +553,29 @@ public static class InertPhase
                         + $"{values.Length} result register(s). The register is outside the band, so the condition could never be observed — "
                         + "this is a declaration that does not fit the map, not a block that never reached its phase.";
                     return false;
+                }
+
+                // ---- THE GUARD, BEFORE THE SAMPLE IS EVEN REMEMBERED --------------------------------
+                if (phase.GuardRegister is { } guardRegister)
+                {
+                    if (guardRegister >= values.Length)
+                    {
+                        detail = $"slot {slot.SlotIndex} declares its phase guard on '{phase.GuardSignal}' (R{guardRegister:000}) but that slot "
+                            + $"publishes only {values.Length} result register(s). A declaration that does not fit the map, not a block that "
+                            + "never reached its phase.";
+                        return false;
+                    }
+
+                    if (values[guardRegister] == 0)
+                    {
+                        // *** DISCARDED, NOT MERELY UNMATCHED. *** A remembered value from before a disarm
+                        // would let the next comparison straddle it — and the arm→disarm edge takes the
+                        // clock from mid-ramp back to 0, which reads as a wrap. That is the spurious phase
+                        // this guard exists to prevent, so the memory goes too.
+                        previous.Remove(slot.SlotIndex);
+                        guardLow.Add(slot.SlotIndex);
+                        continue;
+                    }
                 }
 
                 var value = values[phase.Register];
@@ -548,7 +606,9 @@ public static class InertPhase
 
         var waiting = phased.Where(s => !metAt.ContainsKey(s.SlotIndex))
             .Select(s => $"slot {s.SlotIndex} {s.Declaration.Phase}"
-                + (previous.TryGetValue(s.SlotIndex, out var v) ? $" (last read {v})" : " (never read)"));
+                + (guardLow.Contains(s.SlotIndex)
+                    ? " — ITS GUARD IS LOW: the clock is not running at all, so this is not a window that failed to wrap, it is a window that never armed"
+                    : previous.TryGetValue(s.SlotIndex, out var v) ? $" (last read {v})" : " (never read)"));
 
         detail = $"the declared phase did not occur within the poll budget of {maxPolls} round(s): still waiting on "
             + string.Join("; ", waiting)

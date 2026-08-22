@@ -221,6 +221,14 @@ public sealed class SlotBindingDocument
     /// </summary>
     public ushort? PhaseThreshold { get; set; }
 
+    /// <summary>
+    /// A signal that must be SET for a phase sample to count. <b>Required in practice for any clock that
+    /// is not free-running:</b> an arm-gated timer reads 0 while disarmed, which is indistinguishable
+    /// from "the window just restarted" — so without a guard the phase is confidently wrong rather than
+    /// absent. Null means the clock free-runs, which is a claim about the block.
+    /// </summary>
+    public string? PhaseGuardSignal { get; set; }
+
     /// <summary>Unknown keys at slot level. Folded into gate 0b — see <see cref="BindingDocument.UnknownFields"/>.</summary>
     [JsonExtensionData]
     public Dictionary<string, object?>? UnknownFields { get; set; }

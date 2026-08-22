@@ -740,6 +740,20 @@ public sealed record SlotBinding(
     public ushort? PhaseThreshold { get; init; }
 
     /// <summary>
+    /// 🔴 <b>A signal that must be SET for a phase sample to count — required in practice for any clock
+    /// that is not free-running.</b>
+    ///
+    /// <para><b>Measured on a real block.</b> An arm-gated timer reads <b>0 while disarmed</b>, and 0 is
+    /// exactly what "the window just restarted" looks like: <c>Below</c> is then satisfied on the first
+    /// poll every time, reporting a fresh window when none is running. <c>Decreases</c> is worse — the
+    /// arm→disarm edge takes the clock from mid-ramp to 0, which reads as a wrap.</para>
+    ///
+    /// <para>Null is legitimate and means the clock free-runs. <b>That is a claim about the block</b>, and
+    /// getting it wrong yields a phase that is confidently wrong rather than absent.</para>
+    /// </summary>
+    public string? PhaseGuardSignal { get; init; }
+
+    /// <summary>
     /// The specification slot ids a vector may cite for this slot, in the order they were declared.
     /// <b>Never empty</b> — a slot always answers to at least its own id.
     ///

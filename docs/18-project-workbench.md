@@ -562,6 +562,24 @@ says so.
   observe — and the quiescence check refuses a gated register that moves. Those two declarations
   contradict each other, and left alone inert never establishes and blames the block. Now a build-time
   refusal naming both halves. **Still blocked on the mirror carrying the phase signal.**
+
+  🔴 **And a second trap, found by reading the actual block rather than reasoning about it: the window
+  whose phase the hedge is about is NOT free-running.** It is arm-gated behind a two-minute settle, so
+  its elapsed time reads **0 whenever it is disarmed** — and 0 is exactly what *"the window just
+  restarted"* looks like. A `Below` trigger would be satisfied on the first poll every time, reporting
+  a fresh window when none is running; a `Decreases` trigger is worse, because the arm→disarm edge
+  takes the clock from mid-ramp to 0, which reads as a wrap. **A phase condition may therefore declare
+  a guard signal that must be set for a sample to count at all, and while the guard is low samples are
+  discarded rather than merely unmatched** — keeping one would let a comparison straddle a disarm. Both
+  false positives have tests, and the unguarded case is asserted alongside as the control.
+
+  ⚠️ **Two consequences for the deploy, neither settled here.** (1) The block *does* have a genuinely
+  free-running clock — a short averaging window — but it is an **independent** clock: knowing its phase
+  says nothing about the gated window's, so it is a different measurement rather than a cheaper proxy.
+  (2) Waiting for the gated window to arm can take up to its two-minute settle, and the inert phase's
+  poll budget is ~200 rounds ≈ 30 s of wall clock. **Aligning to that window means raising the budget,
+  which lengthens how long a genuinely wedged inert phase takes to detect.** That is a trade to make
+  deliberately, not a default to slide.
 - **W3 · Apply compression** — ⚙️ **HARNESS HALF BUILT 2026-08-22; NOT YET EXERCISED.** The planner was
   always complete — `TimeCompression.Plan` returns `CompMin`/`CompMax` across all four ceilings, gates
   10a/10b check them, `ScanBudget` re-expresses every duration at the factor — and **nothing ever
