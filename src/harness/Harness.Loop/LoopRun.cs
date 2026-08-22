@@ -774,7 +774,7 @@ public static class LoopRun
         //
         // Computed here and refused in Execute, exactly as the wave order is: the resting values decide
         // nothing about the copy layer, so `--generate-only` prints the IR AND this report.
-        var inertRest = InertRestOf(request);
+        var inertRest = InertRestOf(request, map);
 
         return new LoopGeneration(null, gate, mapResult.SizeReport, map, stamp, copyLayer, retention, caveats,
             $"the copy layer was generated: {copyLayer.Objects.Count} object(s), {copyLayer.Require().Networks.Count} network(s), "
@@ -800,8 +800,27 @@ public static class LoopRun
     /// to disagree — and this file already records three instances of exactly that, all of them on the
     /// signal join. One computation, two consumers.</para>
     /// </summary>
-    private static InertRestReport InertRestOf(LoopRequest request) =>
-        new(request.Bindings.Select(b => InertRestPlan.For(b, request.WordOrder)).ToArray());
+    /// <param name="map">
+    /// 🔴 <b>Passed so the plan knows what the map ALLOCATED each slot, not just what the binding wired.</b>
+    /// In a multi-slot wave set those differ — slots are fixed-size at the width of the widest — and the
+    /// difference is padding that carries no signal. Without this the inert phase refuses
+    /// <c>RestNotDeclared</c> over registers nobody could declare: measured on the first two-lane batch as
+    /// 72 registers, 95 allocated minus the valve lane's own 23.
+    /// </param>
+    private static InertRestReport InertRestOf(LoopRequest request, RegisterMap? map = null) =>
+        new(request.Bindings
+            .Select(b => InertRestPlan.For(
+                b,
+                request.WordOrder,
+                allocatedResultRegisters: AllocatedResultRegisters(map, b.SlotId)))
+            .ToArray());
+
+    /// <summary>
+    /// The result width the map gave this slot, or null when there is no map yet — in which case nothing
+    /// is treated as padding, because a caller that does not know the allocation must not narrow the band.
+    /// </summary>
+    private static int? AllocatedResultRegisters(RegisterMap? map, string? slotId) =>
+        map?.Slots.FirstOrDefault(s => string.Equals(s.SlotId, slotId, StringComparison.Ordinal))?.Result.Length;
 
     /// <summary>
     /// The merged <c>(group, index)</c> order for this request — <b>one computation, read by generation

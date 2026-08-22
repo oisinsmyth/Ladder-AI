@@ -142,7 +142,30 @@ public sealed record InertRestPlan(
     /// time — and today's symptom is <c>InertOutcome.ScanCounterStalled</c>, whose text reads <i>"The PLC
     /// may be stopped"</i>. <b>That sends a reader to the controller for a number the coordinator wrote.</b></para>
     /// </param>
-    public static InertRestPlan For(SlotBinding binding, RegisterWordOrder order, int pollBudget = InertPhase.PollBudget)
+    /// <param name="allocatedResultRegisters">
+    /// 🔴 <b>The width the MAP gave this slot, which in a multi-slot wave set is the width of the WIDEST
+    /// slot, not this one's.</b>
+    ///
+    /// <para>Slots are fixed-size (X-A) so a client's bounds check can be <c>base + index x slot_size</c>.
+    /// The consequence, which only appeared on the first real two-lane batch: a narrow lane's slot is
+    /// handed result registers its binding never wired. The valve lane refused <c>RestNotDeclared</c>
+    /// over exactly 72 of them — 95 allocated minus its own 23.</para>
+    ///
+    /// <para><b>Those registers are ALLOCATION PADDING and they are excluded by CONSTRUCTION, not by
+    /// declaration.</b> They carry no signal, so there is no resting value anyone could state, and
+    /// demanding one asks an author to describe something that is not there. Excluding them is not a
+    /// weakening of the coverage rule: the rule exists so that a register carrying a SIGNAL cannot go
+    /// unexamined, and padding carries none.</para>
+    ///
+    /// <para>⚠️ Null means "no allocation known", and then nothing is padded — a caller that does not
+    /// know the map does not get to silently narrow the band. Any value BELOW the binding's own need is
+    /// ignored rather than trusted, because that would exclude real signals.</para>
+    /// </param>
+    public static InertRestPlan For(
+        SlotBinding binding,
+        RegisterWordOrder order,
+        int pollBudget = InertPhase.PollBudget,
+        int? allocatedResultRegisters = null)
     {
         ArgumentNullException.ThrowIfNull(binding);
 
@@ -313,12 +336,30 @@ public sealed record InertRestPlan(
         // what is a declaration that does not fit the map. Same shape as the quiescence refusal above.
         var phase = PhaseOf(binding, order, registers, refusals);
 
+        // ---- ALLOCATION PADDING, EXCLUDED BY CONSTRUCTION ----------------------------------------
+        //
+        // See the parameter note. Everything from this slot's own need up to what the map allocated it
+        // carries no signal; the exclusion is recorded with a reason so the report says WHY it was not
+        // checked rather than silently narrowing the band.
+        var padding = new Dictionary<int, string>();
+        if (allocatedResultRegisters is int allocated && allocated > width)
+        {
+            for (var r = width; r < allocated; r++)
+            {
+                padding[r] = $"ALLOCATION PADDING, excluded by construction: slot '{binding.SlotId}' wires {width} result "
+                    + $"register(s) and the map allocated it {allocated}, because slots are fixed-size at the width of the "
+                    + "widest slot in the wave set (X-A). This register carries no signal, so it has no resting value to "
+                    + "declare — and a coverage rule exists to stop a SIGNAL going unexamined, which this is not.";
+            }
+        }
+
         var declaration = refusals.Count > 0
             ? null
             : new InertDeclaration(
                 registers.Where(r => r.Gated).ToDictionary(r => r.Register, r => r.Expected),
                 quiescenceScans,
-                registers.Where(r => !r.Gated).ToDictionary(r => r.Register, r => r.Detail),
+                registers.Where(r => !r.Gated).ToDictionary(r => r.Register, r => r.Detail)
+                    .Concat(padding).ToDictionary(p => p.Key, p => p.Value),
                 registers.Where(r => r.Provenance == InertRestProvenance.Defaulted).Select(r => r.Register).ToHashSet(),
                 phase);
 
