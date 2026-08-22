@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using System.Text.Json;
 using Harness.Gate;
 using Harness.Map;
@@ -16,7 +16,10 @@ public sealed record BatchPlanResult(
     IReadOnlyList<string> Refusals,
     string? MergedBindingJson,
     RegisterMap? Map,
-    IReadOnlyList<string> ProgramPaths)
+    IReadOnlyList<string> ProgramPaths,
+
+    /// <summary>Whether every deployed code block is in the scan - or that it could not be determined.</summary>
+    ReachabilityReport? Reachability = null)
 {
     public bool Planned => Refusals.Count == 0 && MergedBindingJson is not null;
 }
@@ -150,6 +153,10 @@ public static class BatchPlanner
             }
         }
 
+        // ---- IS EVERY DEPLOYED BLOCK ACTUALLY IN THE SCAN? ---------------------------------------
+        var reachability = Reachability.Of(programPaths);
+        refusals.AddRange(reachability.Refusals);
+
         if (refusals.Count > 0)
             return new BatchPlanResult(lanes.Count, Array.Empty<string>(), refusals, null, null, programPaths);
 
@@ -185,7 +192,8 @@ public static class BatchPlanner
             Array.Empty<string>(),
             merged,
             map.Map,
-            programPaths);
+            programPaths,
+            reachability);
     }
 
     /// <summary>
@@ -293,6 +301,11 @@ public static class BatchPlanner
                 + $"declared area {map.Geometry.DeclaredRegisters}\n");
             sb.Append($"  stamp input   base %M{map.Geometry.BaseByte}, map hash {map.MapHash[..12]}…\n");
         }
+
+        // Printed on EVERY plan, pass or refuse. "Could not check" is a RESULT, and an unstated one reads
+        // as "checked and fine" — which is exactly how an uncalled slot FC reached a controller.
+        if (result.Reachability is { } reach)
+            sb.Append("  scan      ").Append(reach.Summary).Append('\n');
 
         foreach (var refusal in result.Refusals)
             sb.Append("  REFUSED  ").Append(refusal).Append('\n');

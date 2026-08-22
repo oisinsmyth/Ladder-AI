@@ -280,24 +280,47 @@ public static class BatchRunner
                 // two correct releases both claimed the gate was still held.
                 0 => new StepReading(StepVerdict.Ok,
                     step.Kind == BatchStepKind.LeaseAcquire ? "the gate is held." : "the gate was handed back."),
-                1 => new StepReading(StepVerdict.Failed, "REFUSED: " + FirstLine(result.StandardError, result.StandardOutput)),
-                _ => new StepReading(StepVerdict.NotProven, "nothing was decided: " + FirstLine(result.StandardError, result.StandardOutput)),
+                1 => new StepReading(StepVerdict.Failed, "REFUSED: " + LastLines(result.StandardError, result.StandardOutput)),
+                _ => new StepReading(StepVerdict.NotProven, "nothing was decided: " + LastLines(result.StandardError, result.StandardOutput)),
             },
 
             // harness-run: Generated == Ran == 0, deliberately.
             BatchStepKind.Generate or BatchStepKind.Wave => result.ExitCode == 0
                 ? new StepReading(StepVerdict.Ok, "ran.")
-                : new StepReading(StepVerdict.Failed, $"exit {result.ExitCode}: " + FirstLine(result.StandardError, result.StandardOutput)),
+                : new StepReading(StepVerdict.Failed, $"exit {result.ExitCode}: " + LastLines(result.StandardError, result.StandardOutput)),
 
             _ => new StepReading(StepVerdict.NotProven, $"exit {result.ExitCode}, and this step kind has no reading."),
         };
     }
 
-    private static string FirstLine(params string[] candidates) =>
-        candidates
-            .SelectMany(c => (c ?? string.Empty).Split('\n'))
-            .Select(l => l.Trim())
-            .FirstOrDefault(l => l.Length > 0) ?? "(no output)";
+    /// <summary>
+    /// 🔴 <b>The LAST lines, not the first — and the first is what this used to take.</b>
+    ///
+    /// <para>Every tool here prints a banner before it prints a verdict, so the first non-empty line
+    /// of a failing run is a heading. Measured repeatedly on 2026-08-22: a batch that stopped at
+    /// generation reported <i>"program : 8 object(s) under test; THE BUILD STAMP IS TAKEN OVER 8 OF
+    /// THEM."</i> — informational, true, and nothing to do with the failure. The real reasons (a map
+    /// that did not fit, a submission gate refusal, an unresolved member type) were all on the last
+    /// lines, and finding them meant re-running each child command by hand. Three round trips, three
+    /// times.</para>
+    ///
+    /// <para>stderr wins when there is any, because a tool that wrote there was reporting a problem.
+    /// Several lines rather than one: these tools end on a verdict plus the sentence that explains it,
+    /// and taking one line splits them.</para>
+    /// </summary>
+    private static string LastLines(string standardError, string standardOutput, int lines = 4)
+    {
+        var source = string.IsNullOrWhiteSpace(standardError) ? standardOutput : standardError;
+
+        var tail = (source ?? string.Empty)
+            .Split('\n')
+            .Select(l => l.TrimEnd('\r').Trim())
+            .Where(l => l.Length > 0)
+            .TakeLast(lines)
+            .ToArray();
+
+        return tail.Length == 0 ? "(no output)" : string.Join(" / ", tail);
+    }
 
     private static string Headline(
         BatchRunOutcome outcome, BatchRunPlan plan,
