@@ -268,7 +268,7 @@ how this project got a rig scan time wrong by an order of magnitude, twice.
 | vector authoring (~10 lines each) | 2 min | 2 min | `[E]`, after §3.4 |
 | PC-side pre-flight | 0.5 min | 0.5 min | `[E]` |
 | download (device-level) | 34–92 s | 5–9 s | `[M]` recovery downloads 34 s and 92 s; **86 s measured again 2026-08-22** |
-| wave run + read-back | ✅ **~45 s per vector** | ✅ **~45 s per vector** | `[M]` **2026-08-22 at comp 4, measured on the controller: 3 vectors, 135 s, 1,662 round trips.** Was **~2.7 min per vector** (485 s, 6,185 round trips) uncompressed — **3.6× on wall clock, 3.7× on traffic.** A three-vector block is now **2.25 min**, not 8.1 |
+| wave run + read-back | ✅ **~45 s per vector** | ✅ **~45 s per vector** | `[M]` **2026-08-22 at comp 4, measured on the controller: 3 vectors, 134 s, 1,676 round trips, ALL THREE Pass and Settled.** Was **~2.7 min per vector** (485 s, 6,185 round trips) uncompressed — **3.6× on wall clock, 3.7× on traffic.** A three-vector block is now **2.25 min**, not 8.1 |
 | stage + import | ~40 s | ~15 s | `[M]` **5 s measured 2026-08-22** for a 3-object import — the estimate was ~8× pessimistic |
 | compile | ~60 s | ~25 s | `[M]` **24 s measured 2026-08-22** (`compile-all`, whole device) |
 | sanity-check | 4 s | <1 s | `[M]` **3 s measured 2026-08-22** |
@@ -523,10 +523,10 @@ lower because less rests on it today.
 
 ### Phase 10 — Wave time · **P0** · ✅ **DELIVERED ON THE CONTROLLER 2026-08-22**
 
-> **8.1 min → 2.25 min for a three-vector block; 6,185 → 1,662 round trips. 3.6× on wall clock.**
-> Measured at comp 4 on the rig, not predicted. Two of the three verdicts reproduce the uncompressed
-> run exactly — `Pass` 5/5 and `Pass` 4/4, both `Settled`. **The third moved from `Pass` 7/7 to
-> `Inconclusive` 6/7, and that is the one open item below.**
+> **8.1 min → 2.23 min for a three-vector block; 6,185 → 1,676 round trips. 3.6× on wall clock.**
+> Measured at comp 4 on the rig, not predicted. ✅ **ALL THREE VERDICTS REPRODUCE THE UNCOMPRESSED RUN
+> EXACTLY — `Pass` 5/5, 4/4 and 7/7, all three `Settled`, 3 of 3 conclusive.** That equality is the
+> whole claim: compression changed how long the wave took and **not what it measured**.
 >
 > Also measured, replacing three long-standing `[E]` estimates: **import 5 s** (est. ~40), **compile
 > 24 s** (est. ~60), **sanity 3 s** (est. 4). The first two were pessimistic by ~8× and ~2.5×.
@@ -558,7 +558,7 @@ says so.
 
 | | before | after |
 |---|---|---|
-| healthy 3-vector wave | 8.1 min, 6,185 round trips | ✅ **2.25 min, 1,662 round trips** |
+| healthy 3-vector wave | 8.1 min, 6,185 round trips | ✅ **2.23 min, 1,676 round trips** |
 | wedged 3-vector wave | ~24.7 min | ✅ **~2.5 min** |
 
 ⚠️ **3.6×, not the nominal 4×, and the shortfall is understood rather than noise.** Each index carries
@@ -666,20 +666,28 @@ at:**
   preset table instead of being settled by rule, but the evidence it should really cite is a read-back
   of the applied values, which needs the deploy. **Open, and named here rather than assumed away.**
 
-🔴 **THE ONE OPEN ITEM: compression moved a verdict, and the harness refused to blame the block for
-it.** On the dominant index a `becomesAndHolds` expectation on the observed weight went from `Pass`
-7/7 to **`Inconclusive` 6/7**. The signal reached its value and then fell back, and the evaluation said:
-*"NO ARM WINDOW WAS DECLARED for it, so nothing says whether that fall-back is inside the phase or is
-the model's own required return to inert. THIS IS NOT A DISAGREEMENT AND MUST NOT BE ACTIONED AGAINST
-THE BLOCK."* **It also named its own fix** — declare `armedBy` for that signal in the binding and the
-question becomes decidable on evidence already collected.
+✅ **THE ONE THING COMPRESSION DID MOVE, AND HOW IT CLOSED.** On the first compressed run the dominant
+index's `becomesAndHolds` expectation on the observed weight went `Pass` 7/7 → **`Inconclusive` 6/7**:
+the signal reached its value and then fell back. **The evaluation refused to read that as the block's
+fault and named its own remedy** — *"NO ARM WINDOW WAS DECLARED for it, so nothing says whether that
+fall-back is inside the phase or is the model's own required return to inert. THIS IS NOT A
+DISAGREEMENT AND MUST NOT BE ACTIONED AGAINST THE BLOCK."*
 
-⚠️ **The likely mechanism, marked as a hypothesis because it has not been measured:** the model's
-recovery toward inert is documented in the submission as running at a **per-SCAN** rate, and a per-scan
-rate does not shrink when plant time is compressed. At 4× the same recovery therefore occupies four
-times the fraction of the index, and the harness sees it where before it did not. **If that holds, it
-is a general fidelity limit of compression rather than anything specific to this block** — and it is
-the kind of thing that would be invisible without the uncompressed run to compare against.
+Declaring `armedBy` for that signal restored `Pass` 7/7. **Why it was a real gap rather than a
+workaround:** the model's recovery toward inert begins at the window's close, so those frames were
+never inside the assertion's phase — at comp 1 they simply fell outside what was polled, and at comp 4
+they did not. **The arm window states which frames the assertion is about, and that had been left
+implicit in the timing.** Eighteen other signals in the same binding already declared it.
+
+⚠️ **The general lesson, and it will recur:** compression exposes anything whose timing was implicit.
+A rate the model runs **per SCAN** does not shrink when plant time is compressed, so it occupies a
+larger share of a compressed index. **This is a reason to keep an uncompressed reference run** — the
+discrepancy was only visible because there was one to compare against.
+
+🔴 **And the stamp correctly did NOT move.** `armedBy` on a non-transient signal changes how the CLIENT
+judges frames and changes nothing that executes, so `BuildStamp` deliberately excludes it — **the
+re-run needed no redeploy.** Gate 0c did catch the binding's changed hash and refused until the
+submission was re-derived, which is exactly the intended sequence: *"re-derive rather than re-stamp."*
 
 **Investigated and rejected — recorded so they are not re-proposed:**
 
