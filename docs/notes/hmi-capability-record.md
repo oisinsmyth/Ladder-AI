@@ -7,11 +7,29 @@ the documents listed at the bottom; this is the index, not the record of record.
 
 > ## Scope — read before using any of this
 >
-> **HMI engineering is a NON-GOAL** (`docs/10-non-goals.md`), pending **ADR-0007**, which is
-> **Proposed and undecided**. Everything below is a **capability probe** run under
-> `docs/13-data-boundary.md`'s JOB9002 write extension, against a **scratch copy**, using invented
-> `ZZ_AI_*` names only. Nine `hmi-*` commands exist and **five of them write**. Their disposition —
-> keep, freeze, or remove — is part of what ADR-0007 decides. Do not treat this page as a licence.
+> ✅ **ADR-0007 WAS ACCEPTED 2026-08-17** (`docs/adr/adr-0007-hmi-engineering-scope.md:3-5`). HMI
+> engineering **left** `docs/10-non-goals.md`'s "Not now" list the same day (`:21-23`) and is active
+> work at full screen-authoring size. ⚠️ **This block read *"HMI engineering is a NON-GOAL … pending
+> ADR-0007, which is Proposed and undecided"* until 2026-08-23 — six days after the decision, and
+> three delivered waves later.** Corrected rather than overwritten: this is the page written so
+> *"nobody has to reconstruct it from eleven sections"*, so a stale scope line here is reconstructed
+> onward by everyone who trusts it.
+>
+> 🔴 **WHAT THAT DOES *NOT* CHANGE: THIS PAGE IS STILL NOT THE PROGRAMME, AND STILL NOT A LICENCE.**
+> Two limits survive the ADR intact and matter more now that the scope line no longer stops a reader
+> at the door:
+>
+> - **Everything measured below is a UNIFIED capability probe**, run under `docs/13-data-boundary.md`'s
+>   JOB9002 write extension against a **scratch copy**, using invented `ZZ_AI_*` names only. Nine
+>   `hmi-*` commands exist and **five of them write**.
+> - 🔴 **THE ACCEPTED PROGRAMME TARGETS CLASSIC BASIC, WHICH IS A DIFFERENT API.** Classic and Unified
+>   are disjoint Openness surfaces sharing no types — *Classic is a file pipeline with no screen
+>   object model; Unified is an object model with no file pipeline.* **A Unified measurement on this
+>   page is not evidence about the Classic path**, and the Classic path is the one being built. Its
+>   record is `hmi/PLAN.md` and `hmi/wave-1-results.md` … `wave-3-results.md`; its tooling is
+>   `src/hmi-cli`; its authoring agent is `hmi-designer`.
+>
+> **Read this page as the measured Unified surface. Read `hmi/` for what the programme is doing.**
 
 ---
 
@@ -261,4 +279,5 @@ The "all attempted" rows are the useful ones: those refusal sets are **facts**, 
 | `docs/notes/hmi-rdf-store.md` | **why there is no screen export** — Unified stores each screen and faceplate as its own binary `.rdf` in the project's HMI store, so no document exists to hand out. Also: a change rewrites **only** its own object's file (measured over ~15 save cycles), which supplies **per-screen invariance checking without decoding anything** |
 | `docs/notes/hmi-ai-design-options.md` | 47 options for using this in engineering, ranked — an options menu, not a plan. **§14 is a recommended path**, added separately and separable from the menu |
 | `docs/evidence/hmi-capability-probes.md` | transcripts, redacted/anonymised per `docs/13` |
-| `docs/adr/adr-0007-hmi-engineering-scope.md` | **the open decision** |
+| `docs/adr/adr-0007-hmi-engineering-scope.md` | ✅ **the decision — ACCEPTED 2026-08-17**, not open. *(This row read "the open decision" until 2026-08-23.)* |
+| `hmi/PLAN.md` + `hmi/wave-1-results.md` … `wave-3-results.md` | **the accepted programme and what it has actually run — CLASSIC BASIC.** Not on this page, and not measurable from it |

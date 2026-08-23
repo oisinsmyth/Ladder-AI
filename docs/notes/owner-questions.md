@@ -25,8 +25,15 @@ needs a dedicated conversation) gets its own task file in `agent-tasks/` — see
 `README.md` for the format and the concurrency/Portal-queue rules. This doc is where questions get
 answered; `agent-tasks/` is where the resulting work gets dispatched.
 
-**TWO BATCHES ARE OPEN BELOW** (2026-08-23 workbench, then the 2026-08-05 audit's 13 `decide` items).
+**TWO BATCHES ARE BELOW** (2026-08-23 workbench, then the 2026-08-05 audit's 13 `decide` items).
 Read both before concluding nothing is waiting on you.
+
+🔴 **AS OF 2026-08-23 THE WORKBENCH BATCH HAS NOTHING BLOCKING IN IT.** B4 and B5 are both answered
+and both are recorded below with their answers; Q2 is open and blocks nothing. **The 13 audit items
+below are the ones actually waiting on you.** Said here because this file's own recurring failure is
+that its heading and its contents disagree — see the process finding at the head of the workbench
+batch, which has now fired in both directions: once with the questions missing, once with an answer
+missing.
 
 **Last cleared:** 2026-07-17. The 2026-07-17 batch (~50 items, sections A–F, three rounds of
 owner answers) is fully resolved. Where things landed:
@@ -61,24 +68,63 @@ one of them (B4) had already been **answered and built** while still listed ther
 looking for open owner questions looks here first, finds a batch cleared in July, and concludes there
 are none.
 
-⚠️ **LABEL COLLISION, stated so nobody merges the two.** The 2026-08-05 audit batch below already uses
-`B-4` and `B-5` for entirely unrelated items (S0's gate; design-philosophy §10). The workbench
-questions are written **`B4` / `B5`, unhyphenated**, exactly as `AITODO.md` and
-`docs/notes/workbench-phase6-plan.md` write them. They are not the same items and neither answers the
-other.
+⚠️ **AND IT RECURRED THE SAME DAY, IN THE OPPOSITE DIRECTION.** Hours after this batch was opened to
+hold the missing *questions*, it was holding a missing *answer*: B5 was answered, this file's heading
+still read *"The one that is open"*, and the only entry under it was that question. **The failure is
+not "questions go missing" — it is that nothing makes updating this file part of asking or answering
+anything.** Both directions cost the same thing: a session plans against a blocker that is not there,
+or against a clear board that is not clear.
 
-## The one that is open
+⚠️ **LABEL COLLISION — THERE ARE NOW THREE `B5`s ACROSS TWO VISIBILITY DOMAINS. DO NOT ADD A FOURTH,
+AND DO NOT MERGE ANY TWO.**
 
-- 🔴 **B5 · Which block becomes the third conformance lane?** *Blocked on this and nothing else.*
-  Two lanes have run — valve and vessel, off one deployment, on the rig (`d289a27`). **Two is not N**,
-  and every claim the batching design makes is a claim about N. **Phase 4 was built specifically to
-  make a third lane cheap**: the slot FC and the 18-network stimulus shell are now generated rather
-  than hand-written (`SlotFcGenerator`, `StimShellGenerator` — `d3d5ab1`), and a lane's program set is
-  an emitted manifest rather than a typed flag. It has still never happened.
-  → **Needed:** name the block. It is the right next rig event — it needs Portal, a deployment and rig
-  time, so it is not something a session can start without you. Note the mirror's band D ends at 1023
-  with the panel above it, so a third lane also exercises the space the Phase 6 guards are being built
-  for.
+| label | where | what |
+|---|---|---|
+| **`B-5`** (hyphenated) | the 2026-08-05 audit batch, below | F-46 — extend design-philosophy §10 to the spec layer |
+| **`B5`** (unhyphenated) | here, `AITODO.md`, `docs/notes/workbench-phase6-plan.md` | which block becomes the third conformance lane — **the entry immediately below** |
+| **`B5`** | the live job's own gitignored open-questions doc | an unrelated job question that happens to reuse the letter |
+
+`B-4` / `B4` collide the same way (S0's gate; the stray-Portal ruling). **Neither pair answers the
+other.** Anything new written here should use a label that is not `B<n>`.
+
+## The one that was open — ✅ **ANSWERED, and the lane is NOT blocked on you**
+
+- ✅ **B5 (workbench) · Which block becomes the third conformance lane? — ANSWERED: `FB_SiloSequence`.**
+  🔴 **This entry read *"Blocked on this and nothing else"* until 2026-08-23, after the answer was
+  given.** So did `AITODO.md:88` and `docs/notes/workbench-phase6-plan.md:150`, `:367`, `:395`. **Three
+  tracked files told a session the third lane was waiting on one sentence from the owner, and it was
+  not.**
+  🔴 **The process finding above recurred IN THE OPPOSITE DIRECTION, inside the same batch.** Last time
+  the *questions* were missing from the file that exists to hold them; this time the **answer** was.
+  A file that records questions and not answers is a file that manufactures blockers.
+
+  **Where the lane actually stands: not blocked on the owner — blocked behind two decisions of its
+  own.** Both were taken up in the live job's work and **both are recorded only in that job's
+  gitignored folder**, so their substance is not written here (`docs/13-data-boundary.md`, "Live
+  runs"). **The SHAPE, which is what a session planning against this file needs:**
+
+  1. **A scope decision about how deep the lane observes, and it must be taken BEFORE the lane is
+     built** — it changes the interface, the drive surface and the register bill, none of which is
+     cheap to revise afterwards. The cheap option's claims rest on the harness asserting values it
+     does not itself compute; the thorough option's register bill **overruns the 125-register FC03
+     read limit outright**, which is a design-time refusal rather than a slow path.
+  2. **Part of the intended assertion set for this lane has no implementing logic to test**, so a
+     planned sub-slot cannot be built at all and the campaign's reachable coverage ceiling is
+     materially lower than the figure on record. ➜ **The right output is a GAP REPORT, not a slot** —
+     specified-and-unbuilt behaviour is worth more to the site than more Passes, and it costs one
+     document rather than one deployment. ⚠️ **It must be confirmed by someone other than the finding's
+     author** (D6), and it is **M-21 recurring**: *"cannot be reached"* recorded where *"there is
+     nothing to reach"* is true.
+
+  ➜ **The specifics of both — counts, the behaviour involved, the register arithmetic — are in the job
+  folder and stay there.** This entry exists so that a session reading the knowledge base stops
+  planning against "blocked on the owner", not so that it can plan the lane from here.
+
+  ⚠️ **What is still true and unchanged:** two lanes have run — off one deployment, on the rig
+  (`d289a27`) — **two is not N**, and every claim the batching design makes is a claim about N. Phase 4
+  built `SlotFcGenerator` and `StimShellGenerator` (`d3d5ab1`) specifically to make a third lane cheap.
+  A third lane is still the right next **rig** event, and it still needs Portal, a deployment and rig
+  time. It is now gated on the two decisions above rather than on a name.
 
 ## The one that is answered, recorded here so the file holds the answer too
 

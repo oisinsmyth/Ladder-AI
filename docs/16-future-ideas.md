@@ -36,7 +36,87 @@ IDs are `FI-xx`, citable the same way as `R-xx` (risks), `C-xxx` (conventions), 
 **Verdict / revisit trigger:** the outcome, or what reopens the debate.
 ```
 
+## Index — coverage repair, 2026-08-23
+
+🔴 **THE SECTION BELOW CALLS ITSELF "THE INDEX", IS DATED 2026-08-05, AND INDEXES ROUGHLY HALF OF
+THIS DOCUMENT.** It is the newest thing a reader meets and it stops at FI-39. **Twenty-nine entries
+are not in it** — `FI-40`…`FI-54` (fifteen, seven of them raised the same day the index was written)
+and `FI-61`…`FI-73` plus `FI-76` (fourteen, essentially all of the live-job work). A reader who trusts
+it misses the entire second half of the backlog, including everything learned on real jobs.
+
+⚠️ **This index states POINTERS AND A DENOMINATOR, and deliberately restates NO status.** That is
+`FI-40`'s own rule — *retire the hand-restated-status drift class* — and re-copying statuses here is
+precisely how the 2026-08-05 section rotted. **Each entry below carries its own authoritative status.
+Go and read it.**
+
+**Denominator: 68 entries exist**, numbered `FI-01`…`FI-54`, `FI-61`…`FI-73`, `FI-76`.
+
+🔴 **AND THE NUMBERING HAS HOLES THAT ARE NOT GAPS IN WORK — `FI-55`…`FI-60`, `FI-74` and `FI-75`
+HAVE NO ENTRY IN THIS FILE AT ALL, YET ARE CITED AS SETTLED FACT ELSEWHERE.** Measured by
+`git grep`: FI-55 and FI-58 in `docs/notes/compile-error-playbook.md:218`, `:271-274`; FI-56, FI-59
+and FI-75 in `docs/notes/test-environment-build-plan.md:930-1034`, `:1106`, `:1143-1146`; FI-74 in
+`docs/notes/live-project-readiness.md:51`, `docs/notes/openness-api-survey-plc-online.md:156` and
+`docs/notes/test-environment-build-plan.md:480`, `:1669`. **Eight numbers were issued against work
+that was done and written up somewhere else.** Left as a finding rather than back-filled here: writing
+eight entries from other documents' summaries is doc-to-doc citation, which is the failure mode this
+whole page keeps recording. **Whoever did that work owns the entries.**
+
+**FI-40 … FI-54** — the greenfield/live-job wave, 2026-08-05 → 08-08:
+
+| | |
+|---|---|
+| **FI-40** | a mechanical status check: retire the hand-restated-status drift class *(this section is that class)* |
+| **FI-41** | `converter review`: TAGTABLE files pass vacuously, including C-001 and C-005 |
+| **FI-42** | four converter/CLI gaps that only appear when you BUILD a data landscape |
+| **FI-43** | `openness-cli`: no `delete --type`, no in-place update |
+| **FI-44** | *"empty is not clean"*: the mechanical floor exited 0 having examined nothing |
+| **FI-45** | the checks could not parse two shapes that are ordinary, not exotic |
+| **FI-46** | three residuals from the FI-44/45 wave, found and deliberately not fixed |
+| **FI-47** | ` RETAIN` on a UDT member parses clean and is silently dropped crossing to XML |
+| **FI-48** | `to-xml` can reorder coils within a network, and coil order is semantic |
+| **FI-49** | a member name shared across two types is an unenforced contract |
+| **FI-50** | `undriven-scan` could not see a multi-instance — the house interface style |
+| **FI-51** | an array subscript could only be expressed on the LAST component of a path |
+| **FI-52** | the compile gate could return a false pass, and the warning was in the wrong place |
+| **FI-53** | the reference graph did not credit a read taken THROUGH an array element |
+| **FI-54** | the HMI capability probe programme |
+
+**FI-61 … FI-73, FI-76** — Openness, converter and harness work, 2026-08-07 → 08-17:
+
+| | |
+|---|---|
+| **FI-61** | a rebuilt binary is refused by Openness silently, and every message blamed the wrong thing |
+| **FI-62** | `sanity-check` enumerated blocks only, so a UDT could be inconsistent behind a green gate |
+| **FI-63** | the first instance DB created after a project open got number 0, and a green compile hid it |
+| **FI-64** | a PLC data type carrying a named-type member could not be read back at all |
+| **FI-65** | an Openness manager: multi-agent Portal access, bulk transfer, an import/export ledger |
+| **FI-66** | `sanity-check` reported a count its own documented remedy could not reduce |
+| **FI-67** | `cross-check` could not be asked the one question a back-out must ask |
+| **FI-68** | a relative `--out` failed with an exception naming a different problem entirely |
+| **FI-69** | a statement-order violation in the IR blamed the network header |
+| **FI-70** | nothing compared the IR on disk against what is actually in the controller |
+| **FI-71** | `to-xml` guessed a member type and only warned about it, for the third time |
+| **FI-72** | both converters wrote beside their input, and silently overwrote hand-authored IR |
+| **FI-73** | an unknown `--flag` was treated as a FILENAME; a stale Release build is how it surfaced |
+| **FI-76** | the map model: derive the block structure from the border, build it in order-waves |
+
+⚠️ **The entries are NOT in numeric order in this file** — FI-67 precedes FI-66, and FI-71/72/73
+precede FI-68/69/70. Read by heading, not by position.
+
+⚠️ **Two dead claims that survive in the superseded sections below, flagged rather than edited into
+dated records.** Both 2026-07-20 sections end with a *"Parked / deferred"* line carrying **D-7 — the 6
+stale `simatic-ml/test-project001` exports; needs a live-Portal re-export (owner)**. ✅ **D-7 IS
+DISCHARGED** — verified by a live `drift-check` in this tree on 2026-08-23 (`0 drifted, 26 match`,
+`COMPARED: 26`), all six blocks `MATCH`; see FI-26's own entry and
+`tests/golden/GoldenHarness.Tests/ExportDriftDetectorTests.cs:87`. The lines below are left as written
+because they are the dated record of 2026-07-20, when they were true.
+
+---
+
 ## Implementation status — 2026-08-05
+
+⚠️ **SUPERSEDED AS AN INDEX by "Index — coverage repair, 2026-08-23" above — it stops at FI-39 and is
+missing 29 entries.** Kept unedited as the dated record of where the backlog stood on 2026-08-05.
 
 **Supersedes the two 2026-07-20 sections below** ("Implementation status — 2026-07-20" and
 "Prioritization — remaining work (2026-07-20)"), which are kept as the dated record of where the backlog
@@ -495,8 +575,26 @@ gaps, it doesn't write logic. **This closes FI-24's tag-status half; the provena
   `FB_ShredderSequencer`, `FB_PusherControl`, `DB_Settings`, and 3 iDBs; `reference` is clean) → green
   now, red the moment an in-sync block silently drifts. Clearing a baseline entry means re-exporting
   that block from TIA (a live-Portal step, the owner's call — the detector makes the drift visible). 3
-  unit tests + 2 golden. **The 6 stale blocks are consciously deferred — `docs/notes/deferred-items.md`
-  D-7 (owner, 2026-07-20).**
+  unit tests + 2 golden.
+  ✅ **UPDATE 2026-08-23 — D-7 IS DISCHARGED; THIS ENTRY CLAIMED THE OPPOSITE UNTIL TODAY.** It read
+  *"the 6 stale blocks are consciously deferred — `deferred-items.md` D-7 (owner, 2026-07-20)"*, which
+  had been false for ten days. **All six are `MATCH`**, verified by a live run in this tree rather
+  than quoted: `SUMMARY: 0 drifted, 26 match, 17 skipped, 0 export-only, 0 error, 0 pairing-failure ·
+  COMPARED: 26 object(s)`. The golden guard's own baseline says so at
+  `tests/golden/GoldenHarness.Tests/ExportDriftDetectorTests.cs:87` — *"D-7 IS DISCHARGED, AND WHAT
+  REMAINS IS NOT D-7"*. Route: three iDBs left 2026-08-13 (`f2a548a` showed their filed reason had
+  never been true), `FB_PusherControl` / `FB_ShredderSequencer` on the live re-export in `f0fb0cb`,
+  and `DB_Settings` **survived its own re-export** and was re-filed rather than left under a dead
+  reason. Debt paid in `4ff6d80`.
+  🔴 **That zero is over 26 of 43, and the detector says so.** 17 objects have no committed export and
+  are **skipped, not judged**. A wider third-leg run on 2026-08-23, with the tag tables included
+  (opt-in, and `SKIPPED` in every prior run), compared **43** and found **5 drifted, 38 match, 0
+  skipped, 2 export-only** — `DB_PLC`, `DefaultTagTable`, `FC_HarnessCopyLayer`, `HarnessMirror`,
+  `iDB_HopperBlockageStim`. ⚠️ **The smaller earlier figures were INCOMPLETE, not wrong** — those runs
+  compared exactly what they said they compared, over a smaller population, which is what `COMPARED:`
+  exists to make visible. **None of the five is a D-7 block**; they are a separate, later harness debt
+  recorded in `docs/notes/deferred-items.md`'s D-7 header, and they do **not** inherit D-7's deferral
+  or its owner ruling.
 - **Raised:** 2026-07-20 · **Source:** the 2026-07-20 housekeeping scan. The committed `simatic-ml/<project>/*.xml` exports can silently drift from their `ir/<project>/*.ir` after a fix that is never re-exported — hit this session: `FB_ShredderSequencer.ir` carried the B-5/REQ-028 re-arming fix while its `.xml` still had the pre-fix logic, which poisoned the synthesis-parity audit (diffs that looked like real synthesis gaps were partly stale-XML noise, e.g. `PusherControl 543→198`). The team worked around it by switching the oracle from synth-vs-external-XML to synth-vs-own-sidecar (`CommittedBlocksRoundTripTests`/`FrozenAnswerKeyRoundTripTests`) — i.e. *tolerated* the drift rather than detecting it.
 **Merits:** A `converter` check (or a golden test) that Normalizer-compares each committed `ir/<proj>/<block>.ir` against its paired `simatic-ml/<proj>/<block>.xml` and **fails on semantic divergence** turns silent drift into a red build instead of an invisible landmine that amplifies into every downstream audit. All machinery already exists — `Normalizer` (`Converter.SimaticMl`), `to-xml`, both parsers.
 **Costs / risks:** The committed round-trip tests deliberately *tolerate* the drift (own-sidecar oracle) — this is the complementary *detector*, not a replacement. Must pair files correctly and skip unpaired ones (some `ir/` blocks have no `simatic-ml/` counterpart and vice-versa) so it never false-fails.
@@ -1265,7 +1363,8 @@ Also: the bottleneck has never been notation fluency — it is grounding (real t
 **Dependencies:** **FI-18 and FI-35 both carry unknowns this closes.** FI-18's boundary contract cannot be drawn without knowing what the HMI side can be made to expose — the readable `Tag`/`PlcTag` join, first-class trigger bit numbers, and the three separate alarm-class axes are all phase-1 findings that turn FI-18 from guesswork into a mapping decision. FI-35 §5's "can Openness drive the HMI alarm list directly?" is answered (yes on Unified, absolutely not on classic), but its *generation* half is still untested — **no alarm has ever been created** — which is phase 2's first item. Also **ADR-0007**, which this programme feeds and which decides whether any of it may become capability rather than probe. Phase 4 waits on classic hardware.
 **PROGRAMME RUN AND CLOSED, 2026-08-08/09.** Six phases (`docs/notes/hmi-capability-probe-plan.md`), raw transcripts in `docs/evidence/hmi-capability-probes.md`. The Unified phases named above are **all done**; only phase 4 (classic) remains, and it is externally gated as cost 6 says. Live coverage went ~2% → ~3% of members, but the useful movement is that **item types and dynamization kinds are now exhaustively attempted**, so their refusal sets are facts rather than gaps. The bet in Merits paid out again, and again mostly in negatives: **deletion orphans silently**, **alarm text cannot be written at all**, ~~**3 of 6 dynamization kinds refuse** (including `Flashing`)~~ **— RETRACTED by P7, see below —** and **`GetCreationInfos` overstates creatability by 21 of 56**. **P7 (2026-08-09, unplanned, prompted by the owner asking about the refusals) showed the dynamization finding was the PROBE's fault**: kinds are gated on the target property's type, and P3 had bound all three to a Boolean. `Flashing` creates on colour properties, `ResourceList` on text properties — **5 of 6 kinds create**. The bet paid out a third way there: walking corrected the walk. The methodological finding is the durable one — **a refusal is evidence about that call, never about the capability**, because the message never says why; this project has now generalised from one refusal and been wrong twice. Cost 1 is closed (deletion exercised across nine kinds, all cleaned up). Cost 2 held exactly as written — a failed create persisted without a `Save()`. The programme also exposed three defects in the probe *tooling*, all one class: **it reported the intent rather than the outcome** (`--in` silently discarded while claiming success; refusals counted as changes; partial refusal exiting 0). All fixed and guarded.
 
-**Verdict / revisit trigger:** Open, but **its Unified half is spent** — the remaining Unified questions are narrow follow-ups (why `set_Text` refuses; whether `RaisedStateTagBitNumber` is contextual; whether the three refused dynamization kinds have another route), not a programme. **The decision now sits with ADR-0007, which has the measurement it was waiting for.** Revisit if ADR-0007 is rejected (the write commands then need a disposition) or if a classic job arrives and unblocks phase 4.
+**Verdict / revisit trigger:** Open, but **its Unified half is spent** — the remaining Unified questions are narrow follow-ups (why `set_Text` refuses; whether `RaisedStateTagBitNumber` is contextual; whether the three refused dynamization kinds have another route), not a programme. ~~**The decision now sits with ADR-0007, which has the measurement it was waiting for.** Revisit if ADR-0007 is rejected (the write commands then need a disposition) or if a classic job arrives and unblocks phase 4.~~
+✅ **UPDATED 2026-08-23 — ADR-0007 WAS ACCEPTED 2026-08-17** (`docs/adr/adr-0007-hmi-engineering-scope.md:3-5`); HMI engineering left `docs/10-non-goals.md:21-23` the same day. **The rejection branch above is dead** and the write commands need no disposition on that account. **Phase 4 (classic) is not merely unblocked — it has been overtaken:** the accepted programme *targets* Classic Basic, and its keystone read came back positive on 2026-08-17 — a Classic Basic screen exports as SimaticML with full content, 224 KB, root `<Hmi.Screen.Screen>`, layers and groups present in the file (`hmi/wave-1-results.md:21-52`). Three waves have run; the record is `hmi/PLAN.md` and `hmi/wave-1-results.md` … `wave-3-results.md`, the tooling is `src/hmi-cli`, the authoring agent is `hmi-designer`. ➜ **This entry's remaining Unified follow-ups are a different API from the programme** — Classic and Unified share no types — so they stay parked here rather than being read as programme work.
 ### FI-61 — a rebuilt binary is refused by Openness silently, and every message we had blamed the wrong thing
 
 - **The bug is not in our code; the bug is that our code could not say so.** TIA whitelists Openness

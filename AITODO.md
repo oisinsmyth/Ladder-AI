@@ -30,9 +30,33 @@ documented/committed, delete it from this file rather than letting it accumulate
 > reader to skip the cross-check step that would have caught it. Fixed, and recorded rather than
 > silently overwritten.
 
-**IN FLIGHT: `docs/18-project-workbench.md` Phase 4, on branch `worktree-workbench-design-v1`.** This
+**IN FLIGHT: NOTHING IN `docs/18-project-workbench.md` §5. THE TEN-PHASE LIST IS FINISHED.** Six
+phases are delivered and have run on a controller (1, 2, 3, 4, **6**, 10); Phase 5 is decided and
+declined as a build; Phase 7 is closed; Phase 8 is built but never contended; Phase 9 is struck. This
 work is **not part of the suspended staged plan** (`docs/03-development-plan.md`) — it is tooling for
 real jobs, which the suspension notice explicitly leaves running.
+
+> ⚠️ **This line read *"IN FLIGHT: Phase 4"* until 2026-08-23 evening** — after Phase 4 closed that
+> morning, after Phase 6 was re-scoped, delivered (`7dbac3c`) and **run on the rig** (`ce2163b`) that
+> same day, and with **no mention of Phase 6 anywhere in this file.** The recovery procedure at the
+> top of this document tells the next session to trust this section. Recorded rather than overwritten,
+> because this is the second time in one week that the fix has been *"update the stale line"* when the
+> fix is that **closing a phase must include closing its status lines, in the same commit.**
+
+🔴 **WHAT IS ACTUALLY NEXT IS NOT A PHASE — see `docs/18` §5z.** Assertion coverage has not moved
+across any rig event since 2026-08-18 (the same 2 and 3 assertions cited every time), and the reason
+nobody noticed is that **the enumeration has no producer** — a caveat on every result package, emitted
+by `src/harness/Harness.Loop/LoopRun.cs:1658-1662`. The instrument is fine and almost nobody is
+feeding it. An eighth round of instrument-building is the wrong answer however tidy it looks.
+
+- **Phase 6 — DELIVERED AND RUN ON THE RIG 2026-08-23**, and **re-scoped before it was built**: not
+  the element table, but *"the area, derived"*. Y0–Y3 plus `777fac0` / `182b3f9`, closed in `7dbac3c`;
+  follow-ups `818ba02` `c53858e` `6937df0` `0d0ebac` `dc8308d`. **On the controller (`ce2163b`):** both
+  lanes 3 of 3 PASS, stamp `16#B85BE93C` → `16#95D8731D` read back off the device, area exactly 1024
+  pinned from both sides, stamp coverage 15 of 15. 🔴 **The value was not the green** — setting the run
+  up found that `Main` calls the virtual panel's FC and no lane declared it, so **every build stamp
+  before it hashed a program short of an object the controller runs.** The element table is re-labelled
+  **"on demand, not a phase"** in `docs/18` §5.
 
 - **Phase 3 — DELIVERED and run on the rig.** `converter lease` (a real lock, raced), the mirror's
   ceiling probed from both sides, `harness-batch`, link-loss survival. **Two lanes off one download,
@@ -85,11 +109,18 @@ real jobs, which the suspension notice explicitly leaves running.
   possible and **failed** stops the terminate (`PortalCloseExecution.cs:167-173`). 🔴 **Never run
   against a live Portal.** The decision half is pure and unit-tested; the execution half has no live
   evidence. Documented in `src/openness-cli/README.md` (`portal-close` section) and CLAUDE.md's index.
-- **Still open for the owner: B5 — which block becomes the third conformance lane.** Phase 4 built
-  `SlotFcGenerator` and `StimShellGenerator` precisely to make a third lane cheap, and it has never
-  happened — **two is not N**, and it is the right next rig event. Blocked on this and nothing else.
-  Also now recorded in `docs/notes/owner-questions.md`, which is where a session looking for open
-  owner questions will look first.
+- ✅ **B5 — ANSWERED: `FB_SiloSequence` is the third conformance lane. THE LANE IS NOT BLOCKED ON THE
+  OWNER.** 🔴 **This line read *"Blocked on this and nothing else"* after the answer was given**, as did
+  `docs/notes/owner-questions.md:72` and `docs/notes/workbench-phase6-plan.md:150`/`:367`/`:395` —
+  three tracked files manufacturing a blocker that did not exist. **Two decisions of the lane's own now
+  stand ahead of authoring it**, and their substance lives only in the live job's gitignored folder:
+  (1) a scope choice about observation depth that must be taken *before* the build, because it changes
+  the interface, the drive surface and the register bill, and whose thorough option overruns the
+  125-register FC03 read limit outright; (2) part of the intended assertion set has no implementing
+  logic, so a planned sub-slot cannot be built and the right output is an **independently confirmed gap
+  report** (D6), not a slot — **M-21 recurring**. **Canonical record, with the shape written and the
+  data-boundary line drawn: `docs/notes/owner-questions.md`.** Two lanes have run off one deployment on
+  the rig (`d289a27`); **two is not N**, and a third lane is still the right next *rig* event.
 
 > 🛑 **SUSPENDED 2026-08-17 — this applies to the STAGED PLAN below, not to the workbench work above.**
 > Everything in this section and in *Outstanding works* below is **held,

@@ -82,7 +82,54 @@ task 03's "rebase onto in-flight sidecar-stripped drafts" step — the whole-fil
 `to-xml --synthesize` ran clean on the first try, verified directly (not just `preflight`). Not yet
 imported/compiled (still waiting on its own queue slot), but D-6 is not what's blocking it.
 
-## D-7 — Stale `simatic-ml/test-project001` exports (ir↔simatic-ml drift)
+## D-7 — ~~Stale `simatic-ml/test-project001` exports (ir↔simatic-ml drift)~~ — ✅ **DISCHARGED**
+
+> ✅ **DISCHARGED. ALL SIX BLOCKS ARE IN SYNC, AND THIS FILE DID NOT KNOW.** Measured live in this
+> worktree, 2026-08-23, not taken from another document:
+>
+> ```
+> $ converter drift-check --project ir/test-project001 --exports simatic-ml/test-project001
+> SUMMARY: 0 drifted, 26 match, 17 skipped, 0 export-only, 0 error, 0 pairing-failure
+> COMPARED: 26 object(s) put through the Normalizer
+> PROVENANCE: 26 of 26 export(s) compared carry TIA's <DocumentInfo>
+> ```
+>
+> **All six of D-7's named blocks are in that 26 and all six read `MATCH`.** The test that pinned them
+> says so in its own words — `tests/golden/GoldenHarness.Tests/ExportDriftDetectorTests.cs:87`, section
+> header **`test-project001: D-7 IS DISCHARGED, AND WHAT REMAINS IS NOT D-7`** — and records the route:
+> the three instance DBs left the baseline 2026-08-13 when converter `f2a548a` showed *their reason had
+> never been true*; `FB_PusherControl` and `FB_ShredderSequencer` cleared on the live re-export in
+> `f0fb0cb`; `DB_Settings` **survived its own re-export**, so *"deferred re-export"* was disproven for
+> it and it was re-filed under a real reason rather than left under a dead one, and it too is in sync
+> as of 2026-08-23. The re-export debt was paid in `4ff6d80`.
+>
+> 🔴 **READ THE DENOMINATOR, NOT THE ZERO — AND THE ZERO ABOVE IS OVER 26 OF 43.** `ir/test-project001`
+> holds **43** objects; 17 have no committed export and were **skipped, not judged**. A wider run of the
+> same detector against a fuller export set (the third leg, run 2026-08-23 with the tag tables included
+> — they are opt-in and were `SKIPPED` in every prior run) compared **43** and reports:
+>
+> ```
+> SUMMARY: 5 drifted, 38 match, 0 skipped, 2 export-only, 0 error, 0 pairing-failure
+> COMPARED: 43 object(s) put through the Normalizer
+> ```
+>
+> ⚠️ **The earlier smaller figures were INCOMPLETE, not wrong.** Those runs genuinely compared what they
+> say they compared; they examined a smaller population. That distinction is the entire reason
+> `COMPARED:` prints on every run, and it must survive being quoted onward.
+>
+> **NONE of the five is a D-7 block.** They are `DB_PLC`, `DefaultTagTable`, `FC_HarnessCopyLayer`,
+> `HarnessMirror`, `iDB_HopperBlockageStim` — harness objects, a separate and later debt. Two of them
+> are worth a line so they are not re-derived as findings:
+> - **`HarnessMirror`'s register map is INTACT** — all 24 registers identical on both sides. The whole
+>   drift is two tags present in committed IR and absent from the controller. Same unpaid change as the
+>   copy-layer drift, one commit `084b778`, **neither half deployed** — one finding, not two.
+> - **`DefaultTagTable` drifts the OTHER WAY**: live is the superset, 11 TIA-generated clock/system bits
+>   absent from the IR. Nothing references them and nothing is broken today.
+>
+> ➜ **D-7 is closed. The harness-object drift above is a different item and does not inherit D-7's
+> deferral, its owner ruling, or its revisit trigger.** The historical entry is kept below unedited,
+> because the *route* to the discharge — one of the six disproving the reason all six were filed under —
+> is the part worth reading.
 
 **What:** `converter drift-check` (FI-26, built 2026-07-20) surfaced **6** test-project001 blocks whose
 committed `simatic-ml/*.xml` has drifted from the fixed `.ir`: `FB_ShredderSequencer`, `FB_PusherControl`,

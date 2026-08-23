@@ -18,8 +18,26 @@ toolchain passes that pair by construction. And the **foreign-occupant fixture i
 real `%M` claims in the reference area are the mirror's own, so a green suite is not evidence the
 derivation reproduces the measured 256–323 / 53-tag collision.
 
-⚠️ **No wave has run against a controller with any of this attached.** The demonstrations are
-generate-only. That is a rig event and it has not happened.
+~~⚠️ **No wave has run against a controller with any of this attached.** The demonstrations are
+generate-only. That is a rig event and it has not happened.~~
+
+✅ **IT HAPPENED THE SAME DAY — `ce2163b`.** Both lanes **3 of 3 PASS**, build stamp
+`16#B85BE93C` → `16#95D8731D` **read back off the controller** and matching both result packages, area
+exactly 1024 pinned from both sides, **stamp coverage 15 of 15, no gaps**
+(`docs/notes/total-plant-run-feasibility.md:235-251`). 🔴 **And the value was not the green:** setting
+the run up found that `Main` calls the virtual panel's FC and **no lane declared it**, so **every build
+stamp before this one hashed a program short of an object the controller runs** — Y3's own stated
+residual, occupied on the first real run. Reachability 6 of 6 → **7 of 7**; neighbour corpus 0 tag
+tables → **1 tag table, 7 blocks**.
+
+⚠️ **Two limits above survive the rig run unchanged and must travel with any quote of it:** every check
+here still reads the **staged corpus, never the CPU**, and the **foreign-occupant fixture is still
+invented**.
+
+✅ **The element table is now re-labelled *"on demand, not a phase"* in `docs/18` §5**, as this plan
+recommended at `:97`. ⚠️ **That recommendation sat unapplied for the whole of the phase that replaced
+it**, which is how `docs/18` §5 still read 🔨 *"Element-table widening · P2"* on the evening of the day
+Phase 6 shipped and ran. **A recommendation to re-label is not applied by making it.**
 
 ---
 
@@ -392,7 +410,17 @@ failure class this whole phase is about.
 
 ## Blocked / needs the owner
 
-- 🔴 **B5 — which block becomes the third conformance lane.** Recorded in **`AITODO.md` only.**
+> ✅ **CORRECTION 2026-08-23 — B5 IS ANSWERED AND THIS SECTION'S HEADLINE CLAIM IS DEAD.** Three
+> places in this plan say the third conformance lane is blocked on the owner — here, `:150`
+> (*"Blocked on **B5**"*) and `:367` — and one says the answer is *"recorded in `AITODO.md` only"*.
+> **The answer is `FB_SiloSequence`, and the lane is not blocked on the owner.** Two decisions of the
+> lane's own now stand ahead of authoring it, and the canonical tracked record — with the shape stated
+> and the live-run data boundary drawn — is **`docs/notes/owner-questions.md`**, not `AITODO.md` and
+> not here. This plan is a *delivered* Phase 6 record; its body is left as written, but do not carry
+> the blocked claim out of it.
+
+- ~~🔴 **B5 — which block becomes the third conformance lane.** Recorded in **`AITODO.md` only.**~~
+  ✅ **Answered — see the correction above.**
 - **Q2 — element-table width** (`docs/18:902-903`). Answering it converts "on demand" into a scoped
   item with the right type list. Blocks nothing today.
 - **Not blocked, offered:** the `TtlOnly` lease-liveness mode; a per-item permission for the

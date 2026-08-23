@@ -1,15 +1,22 @@
 # 18 — The Project Workbench: a block-centric workflow (v2)
 
-**Status (2026-08-23): PARTLY ADOPTED AND BEING BUILT — no longer a whole-cloth proposal.** Phases 1,
-2, 3 and 10 are delivered against a real rig; Phase 4 has been **redefined** (see §5) and Phase 5 has
-been **measured and redirected** — kept, but as a design-loop instrument rather than a pre-filter
-before the rig (see §5, and `docs/notes/preflight-interpreter-classification.md` for the counts). The
-rest is still proposal.
+**Status (2026-08-23, second revision that day): ADOPTED AND LARGELY BUILT. Six of the ten phases are
+delivered against a real rig; the four that are not are each CLOSED rather than pending.** Phases 1,
+2, 3, 4, 6 and 10 are delivered and have run on a controller. Phase 4 was **redefined** and Phase 6
+**re-scoped** before either was built (see §5 — both kept their numbers, neither kept its original
+scope). Phase 5 is **decided and declined as a build**; Phase 7 is **closed, its premise overtaken**;
+Phase 8 is **built but never contended**; Phase 9 is **struck**. **Nothing in §5 is now waiting to be
+picked up as the next thing** — §5's closing note says what is, and it is not a phase.
 
-🔴 **This line read "Not adopted" until 2026-08-23, with four phases marked delivered inside the same
-document.** A reader who trusted the header would have discounted the whole page, including the parts
-that are running on a controller. Recorded rather than quietly overwritten, because the same shape —
-a status line that stopped tracking its own body — is what §3.2's table also did.
+🔴 **THIS LINE HAS NOW UNDERSTATED ITS OWN BODY TWICE, TWO DAYS APART, AND THAT IS THE FINDING.** It
+read *"Not adopted"* until 2026-08-23 with four phases marked delivered inside the same document; it
+was repaired that morning to *"the rest is still proposal"* and by that evening Phase 6 had been
+re-scoped, delivered and **run on a controller** while the header still called it proposal. A reader
+who trusts the header discounts the whole page, including the parts running on hardware. Recorded
+rather than quietly overwritten, because the same shape — a status line that stopped tracking its own
+body — is what §3.2's table did, what §5's Phase 3 and Phase 4 headings did, and what the change log
+below did. **The repair is not a better sentence; it is that closing a phase includes closing its
+markers, in the same commit.**
 
 **What changed from v1:** v1 recorded the owner's design and listed eight problems with it. v2
 applies those eight, and adds the owner's two new directives — **a ~20-minute per-block budget
@@ -390,12 +397,35 @@ dangerous instrument in the system.
 
 ## 5. The gap register — phases and priorities
 
+> 🔴 **READ THIS BEFORE THE LIST. THE LIST IS FINISHED — THERE IS NO "NEXT PHASE" TO PICK.**
+>
+> | | |
+> |---|---|
+> | ✅ delivered, and run on a controller | **1 · 2 · 3 · 4 · 6 · 10** |
+> | ✅ decided · 🚫 declined as a build | **5** |
+> | 🚫 closed, premise overtaken | **7** |
+> | ✅ built · ⚠️ never contended (residual is a contract question, M-19) | **8** |
+> | 🚫 struck, its subject deleted | **9** |
+>
+> **4 and 6 kept their numbers and did NOT keep their scope** — the spine and the element table were
+> both argued down before they were built, and what shipped under those numbers is different work.
+> Read the heading, not the number.
+>
+> ➜ **What is actually binding is not in this list. It is in §5z at the foot of this section, and it
+> is that the enumeration has no producer.** A session that scrolls this register looking for the next
+> thing to build will find six greens and three closures and conclude the register is the wrong
+> question. **That conclusion is correct — §5z is the answer to it.** Jump there.
+
 **Priority is assigned on three questions, in this order:** does something else rest on it (a
 blocker outranks a big win); how much does it move the 20-minute budget; and what does it cost to
 get wrong. **P0** = nothing downstream is trustworthy until it is done. **P1** = a named lever on
 the budget. **P2** = real, but it waits.
 
-Status vocabulary: ✅ done · 🔨 specified, not built · ❓ needs a decision before it can be specified.
+Status vocabulary: ✅ done · 🔨 specified, not built · ❓ needs a decision before it can be specified ·
+🚫 **closed without being built** — struck, or decided-and-declined. **A phase with no marker is a
+defect in this list, not a phase in flight.** *(🚫 added 2026-08-23. The vocabulary was never the
+problem — every marker below that misreported was precise and stale, not imprecise. What was missing
+was a symbol for the outcome three phases actually reached: closed, on evidence, without a build.)*
 
 ---
 
@@ -605,7 +635,24 @@ hand-built shell plus a hand-built slot FC. Three lanes is an OUTCOME of this ph
 
 ---
 
-### Phase 5 — ~~Pre-flight interpreter~~ → **the interpreter, REDIRECTED** · **P1** · *measured 2026-08-23*
+### Phase 5 — ~~Pre-flight interpreter~~ → **the interpreter, REDIRECTED** · **P1** · ✅ **DECIDED 2026-08-23 · 🚫 DECLINED AS A BUILD**
+
+> ⚠️ **This heading carried NO STATUS MARKER AT ALL until 2026-08-23**, in a section whose own
+> vocabulary line is three paragraphs above it. An unmarked phase in a marked list reads as in-flight,
+> which is the one thing Phase 5 is not.
+>
+> **What is decided:** the measurement the phase demanded was taken (`docs/notes/preflight-interpreter-classification.md`),
+> it inverted the expected answer, and the redirect below is the ruling — **the interpreter belongs in
+> the design loop, not in front of the rig.** **What is declined:** building it. Nothing is scheduled,
+> and the phase is not waiting on Portal, a rig or an owner answer.
+>
+> ➜ **Forwarding address — the next interpreter action is NOT a build.** It is the cheap disproof this
+> phase's own method demands: **attempt two or three `converter review` rule specifications over the 17
+> B rows.** 8 of the 10 bucket-A rows already went that way (*found once expensively → mechanised as a
+> rule*), and if the B rows go the same way the instrument is never needed. That attempt is a session,
+> not a phase, and it **needs a new per-item data-boundary permission**, because a rule specification
+> derived from B rows is written in the shape of a defect. Reverse this decision by producing those
+> rule specifications, not by re-reading the note.
 
 🔴 **THE PHASE IS NOT STRUCK. ITS STATED PURPOSE IS.** The measurement this phase demanded before any
 build has now been taken — full record, rubric, controls and limits in
@@ -658,34 +705,142 @@ there is no rig immediately downstream to contradict a wrong green.
 
 ---
 
-### Phase 6 — Element-table widening · **P2** · *smaller than previously thought*
+### Phase 6 — ~~Element-table widening~~ → **the area, DERIVED** · **P1** · ✅ **DELIVERED AND RUN ON A CONTROLLER 2026-08-23** · *re-scoped before it was built*
 
-🔨 `Real`, `DInt`, `Word`. Now known to be **one enum member, one element-table row, one copy shape**
-each: `MirrorValueType` has four members, so an unsupported type is currently *inexpressible* rather
-than mishandled (§3.5). Deferred because nothing is blocked on it until a real block needs one.
+> ⚠️ **THIS HEADING READ 🔨 *"Element-table widening · P2"* UNTIL 2026-08-23 — on the evening of the
+> day the phase it names was re-scoped, built and run on hardware.** It was the worst line in the
+> document: the only marker still describing work that had been argued down *and* replaced *and*
+> proven on a controller, in a list a new session reads to choose what to do next.
+>
+> **Delivered.** Y0–Y3 plus two unplanned items of the same subject — the reservation guard was inert
+> on three of the four paths that build a map, and the rule it enforces had two derivations:
+> `8bf2716` · `ea362c6` · `40dc0d9` · `466185a` · `66a0ab8` · `777fac0` · `182b3f9`, closed in
+> `7dbac3c`. Follow-ups the same day: `818ba02` (the slack floor becomes mechanical) · `c53858e` ·
+> `6937df0` · `0d0ebac` (the derived width meets the controller; the third leg becomes a step) ·
+> `dc8308d`.
+>
+> **On the rig** (`ce2163b`; measurements at `docs/notes/total-plant-run-feasibility.md:235-251`):
+> both lanes **3 of 3 PASS**, build stamp **`16#B85BE93C` → `16#95D8731D`** read back off the
+> controller and matching both result packages, the area still exactly **1024** pinned from both
+> sides, **stamp coverage 15 of 15, no gaps**.
+>
+> 🔴 **THE VALUE OF THAT RUN WAS NOT THE GREEN.** Setting it up found that `Main` calls the virtual
+> panel's FC and **no lane declared it**, so the deployed program contained a block the tooling did
+> not know about and **every build stamp before this one hashed a program short of an object the
+> controller runs** — Y3's own stated residual (*"an object executing on the device that appears in no
+> corpus"*), occupied on the very first real run. Reachability 6 of 6 → **7 of 7**; neighbour corpus
+> 0 tag tables → **1 tag table, 7 blocks**.
+
+**What Phase 6 became:** *the mirror no longer takes anybody's word for where it lives.* `served-area`
+reads the served width off the block that serves it — both homes or neither; `neighbours` derives who
+else is in the area **and who declares them**; the build stamp says **n of m** and names what it
+skipped. All three print a denominator on every run including the zero case, and all three state in
+their own output what they cannot see.
+
+🔴 **Two limits that survive the phase and must not be dropped when it is quoted:** every check here
+reads the **staged corpus, never the CPU** — the committed block says 37 while the rig runs 1024, and
+this toolchain passes that pair by construction — and the **foreign-occupant fixture is invented**,
+since all 26 real `%M` claims in the reference area are the mirror's own.
+
+**The element table — ON DEMAND, NOT A PHASE.** *(Re-label applied 2026-08-23; it was recommended when
+Phase 6 was re-scoped and then left unapplied for the length of the phase it was replaced by, which is
+how the stale marker above survived.)* `Real`, `DInt`, `Word` are **one enum member, one element-table
+row, one copy shape** each. `MirrorValueType` has exactly four members —
+`src/harness/Harness.Map/CopyLayer.cs:18-52` — so an unsupported type is **inexpressible rather than
+mishandled**: it surfaces as an unparseable binding, which is the safe failure, and the type system is
+doing the work (§3.5). It is **not numbered work and not deferred work**: it is an hour, the day a
+real block needs a type, arriving with that block's actual type in hand. Building it speculatively
+would answer open owner question **Q2** (§7) by fiat on its cheap half and leave the expensive half —
+UDT members, array elements — exactly where it is. **It has no consumer to be wrong about.**
 
 ---
 
-### Phase 7 — The HMI oracle · **P2** · ❓ *decision before specification*
+### Phase 7 — ~~The HMI oracle~~ · ✅ **CLOSED 2026-08-23 — Q1 IS ANSWERED AND THE ANSWER IS BUILT**
 
-There is no rig loop for HMI and the device compile is shallow enough to accept a zero-width screen,
-so **"until green" cannot mean the same thing.** This cannot be planned until the oracle is chosen —
-see §7 Q1. Until then, HMI lanes end at *"compiles and reads back"*, and saying so is the honest
-position.
+> **This phase never had a size, a deliverable or a line in §4.2's budget table** — the only phase in
+> §5 with none of the three — and its premise was overtaken **six days before it was written.**
+>
+> **Q1 asked what the HMI oracle is, and listed read-back comparison after import first. That is the
+> one that exists.** `hmi-cli compare` — file-vs-file SimaticML comparison, `converter compare`
+> re-aimed at screens — ran on a real round trip: **13 objects, 0 differences**, with same-file-twice
+> refused at exit 2 (`hmi/wave-3-results.md:11`, `:102`; the full path is *author → flatten → check →
+> emit → import 4.8 s → compile 0 errors → export → compare*). Q1's runner-up, the coherence check,
+> was **built and graded**: TIA's import catches malformed documents and not incoherent ones, and the
+> gate that closes that hole is *"a gate nobody has seen fire is not a gate"* — it is tested against
+> the exact document that crashed the Portal process. Q1's third candidate, a person looking at a
+> screenshot, is what the geometry read-back replaces.
+>
+> **And the non-goal the phase was written under is gone.** `docs/adr/adr-0007-hmi-engineering-scope.md:3-5`
+> — **ACCEPTED 2026-08-17** by the owner; HMI engineering left `docs/10-non-goals.md`'s "Not now" list
+> and became active work with a plan of its own (`hmi/PLAN.md`), and three waves have run.
+
+➜ **Forwarding address: §5 does not own HMI and should stop holding a phase-shaped hole for it.** The
+programme is `hmi/PLAN.md`, its record is `hmi/wave-1-results.md` … `wave-3-results.md`, and the agent
+that owns screen content is `hmi-designer`. §7's Q1 below is answered and marked so.
+
+⚠️ **CLOSING THIS PHASE DOES NOT CLOSE THE `hmi/` PROGRAMME, AND THE DIFFERENCE MATTERS.** Phase 7 was
+one question about an oracle. The programme is screen authoring for **Classic Basic**, and its own
+"not built" list is long and current: T8 preflight, T9 unwired-check, **9 specified-but-unchecked
+convention rules** — including **H-107**, the colour half of a physical-safety rule whose size half
+*is* checked — the regeneration guard the placeholder workflow depends on, and an `hmi-designer` agent
+that is **written and never dispatched** (`hmi/wave-3-results.md:105-114`). Doc 17's own denominator
+was reconciled in the same wave: **26 rules claimed, 14 actually checked.**
+
+🔴 **AND A CORRECTION IN THE SAME DIRECTION AS EVERYTHING ELSE IN THIS PASS.** Until 2026-08-23
+`hmi/README.md` flagged the programme's **keystone read** — *does a Basic panel export as SimaticML at
+all* — as **untried**, and this phase was closed against that belief. **It was tried on 2026-08-17 and
+came back positive**: one screen → 224 KB of SimaticML, root `<Hmi.Screen.Screen>`, layers and groups
+present in the file, absolute geometry on every item (`hmi/wave-1-results.md:21-52`). The same
+paragraph called the programme's write target open; write access was granted the same day
+(`docs/13-data-boundary.md:375`, `:399`). **Two settled facts sat marked "not yet true" for six days
+in the README a reader meets first** — the identical failure this document keeps recording about
+itself, in a folder it does not own. Both corrected there.
 
 ---
 
-### Phase 8 — Multi-agent contention · **P2**
+### Phase 8 — Multi-agent contention · **P2** · ✅ **BUILT** · ⚠️ **NEVER CONTENDED BY TWO AGENTS**
 
-🔨 The claims registry, wave-set admission, slot colouring and escalation ladder are built and
-**have never run with two agents actually contending.** Same class of risk as Phase 2, one tier
-lower because less rests on it today.
+> ⚠️ **This heading carried 🔨 — *"specified, not built"* — above a sentence that says the parts "are
+> built".** One line contradicting the next, in the vocabulary the section defines. The marker was
+> wrong; the sentence was right.
+
+The claims registry (`src/converter/Converter/Claims/` — `ClaimStore`, `ClaimValidator`,
+`ReservedBand`), wave-set admission (`src/wave-control/WaveControl/AdmissionController.cs`), slot
+colouring and the escalation ladder (`EscalationLadder.cs`) are all built. **What has never happened
+is two agents actually contending.**
+
+⚠️ **And one clause of the original entry is overtaken: the lease *was* raced.** `converter lease` is a
+real lock and **two processes ran the race** — `9b4a863` (the lock and the IL walk that decodes rather
+than guesses), `e7b2af9` (*"a CLI, a human gate, and a race that two processes actually run"*). That
+is Phase 3's delivery, not Phase 8's, and it narrows what is left here rather than closing it: the
+lock is exercised, the **multi-agent admission and escalation path above it** is not.
+
+🔴 **The residual is narrower than "run it with two agents", and it is a contract question, not a
+build.** `harness-batch run` self-supplies its own pid and is honest about doing so, because it spans
+the lease (`src/harness/Harness.Batch/BatchCli.cs:188-196`); the gap bites the **agent-across-shells**
+case. But *what makes two agents different* is a recorded open question — `docs/notes/mechanisation-backlog.md`
+**M-19** — and until it has an answer, "two agents contending" has no definition to test against.
+**Answer M-19 before scheduling a contention run.**
 
 ---
 
-### Phase 9 — The GUI · **P2**
+### Phase 9 — ~~The GUI~~ · 🚫 **STRUCK 2026-08-23 — ITS SUBJECT NO LONGER EXISTS**
 
-🔨 Last, and as a **viewer over Phase 4's files** — never as the system of record (§4.4.7).
+> 🔴 **It was specified as *"a viewer over Phase 4's files"*, and Phase 4's files were struck by Phase
+> 4 itself, the same day, in the section directly above.** The `project.yaml` + `blocks/<name>.md`
+> spine (§2.1, §4.4) is gone: 4.4's `writes:` list violates §3.1, 4.1 lost its consumer with it, and
+> what Phase 4 delivered instead was *a lane is a thing the tool makes*. **There are no Phase 4 files
+> to view.** This is the exact failure mode this document keeps recording — a status line left
+> pointing at a deleted deliverable — arriving one heading later than the strike that caused it.
+
+➜ **Forwarding address, because a struck phase without one is how this happened.** Nothing rests on a
+GUI: no lane, no gate, no budget line in §4.2, and §5's priority rule disqualifies it on all three
+questions. If a viewer is ever wanted, **its subject is not a file spine** — it is the state that
+already exists and is already tool-owned: the gate queue and batch plan (Phase 3), the emitted lane
+manifests (`d3d5ab1`), and the result packages. **§4.4.7's rule survives the strike and is the part
+worth keeping:** state lives in files the agents read and write directly, and a GUI may only ever be a
+viewer over them — never the system of record. That rule is why the spine was proposed and it is also
+why the spine was struck; it does not need a phase to stay true.
 
 ---
 
@@ -882,9 +1037,58 @@ the same "empty is not clean" shape as the rest of this phase.
 
 ---
 
-**Rolled-up ordering:** 1 → 2 → **10** → 3 → 4 → 5 → (6, 7, 8, 9 as they become blocking). Phases 1
-and 2 are independent of each other and can run in either order; everything from 3 onward assumes 2
-has happened. Phase 10 arrived after 2 and outranks 3–9 on priority.
+**Rolled-up ordering, as it actually ran:** 1 → 2 → **10** → 3 → 4 → 5 (decided, not built) → 6.
+Phases 1 and 2 were independent and could run in either order; everything from 3 onward assumed 2 had
+happened; 10 arrived after 2 and outranked the rest on priority.
+
+---
+
+## 5z — 🔴 THE LIST IS FINISHED. WHAT IS BINDING IS NOT ON IT.
+
+**Read this before picking a phase, because there is no phase left to pick.** Six are delivered, one
+is decided-and-declined, one is closed, one is struck, and Phase 8's residual is a contract question
+(M-19) rather than a build. **A session that comes here looking for "the next phase" and finds one has
+misread a marker.**
+
+**Apply §5's own priority rule to what remains and it disqualifies more instrument-building.** The
+rule is: *does something else rest on it · how much does it move the 20-minute budget · what does it
+cost to get wrong.* Two facts settle it:
+
+1. 🔴 **THE INSTRUMENT IS FINE AND ALMOST NOBODY IS FEEDING IT.** Coverage against the spec-derived
+   assertion enumeration stands at **2 and 3 distinct assertions on the two blocks that have run a
+   wave** (`docs/notes/preflight-interpreter-classification.md:144-146`), and it has **not moved
+   across any rig event since 2026-08-18** — 08-18, 08-20, the 08-23 batch, and the 08-23 Phase 6 run
+   cite the same assertions. What changed over those runs is the *verdict quality on the same
+   assertions* (Unsettled / Inconclusive / Stale / NotDeployed → Pass), not how many assertions were
+   asserted. Every finding in that window is a harness, deployment or declaration defect; **zero are
+   plant defects.** ⚠️ **And the recount found something
+   no register holds: two vectors on one lane cite the SAME assertion**, so that lane's vector count
+   rose and its coverage did not move at all.
+2. 🔴 **THE ENUMERATION HAS NO PRODUCER, AND THAT IS WHY (1) IS INVISIBLE.** Stated as a caveat on
+   **every result package** since 2026-08-18, unchanged, in the code that emits it —
+   `src/harness/Harness.Loop/LoopRun.cs:1658-1662`: *"the assertion form has no authority behind it…
+   nothing checks it against the enumeration, **because the enumeration still has no producer**. So
+   F-3 is enforced against what a vector CLAIMS, not against what the assertion IS."* Nothing counts
+   the numerator, which is exactly why two vectors could cite one assertion and no gate noticed.
+
+➜ **So the next thing is a producer for the enumeration, not another instrument.** The data already
+exists as JSON projections — `assertions`, `forms`, `requiredObservations`, `assertionBounds`,
+`scope`. What is missing is the party that owns it and the gate that reads it. That turns coverage
+into a computed fact instead of something somebody adds up, closes F-3's authority gap, and turns a
+vector's admission from a negotiation into a check — **and it is also what would make the Phase 5
+interpreter question answerable**, since an interpreter with no vectors catches nothing.
+
+⚠️ **The caveat against that recommendation, stated with it.** **C = 0 is structural**: the delivered
+plant program has never been executed, so no defect that only a running controller could expose can
+be in any corpus read here. If five rig runs found only harness defects partly because the harness is
+only asking five questions, the ratio could look very different at forty. **That is an argument for
+feeding the instrument. It is not an argument that the plant is clean, and nothing here should be
+read as one.**
+
+**The other live item is a rig event, not a build:** the third conformance lane. **Two is not N**, and
+every claim the batching design makes is a claim about N. Its owner question is **answered** — see
+`docs/notes/owner-questions.md` — and **two further gates now stand ahead of authoring it**, recorded
+there. It is no longer blocked on the owner in the way this document's satellites claimed all week.
 
 ---
 
@@ -921,13 +1125,24 @@ opinion.** That single sentence is why §3 is the most valuable part of this des
 
 ## 7. Open questions
 
-- **Q1 — HMI.** The same shape applies, but *"until green" cannot mean the same thing*: there is no
-  rig loop, and the HMI device compile is shallow enough to accept a zero-width screen. **What is
-  the HMI oracle?** Candidates: read-back comparison after import, a tag-binding completeness
-  check, a person looking at a screenshot. Until one exists, HMI lanes end at "compiles and reads
-  back", not at "green".
-- **Q2 — Element-table width.** Which types must be observable for real blocks? `Real` and `DInt`
-  look unavoidable; UDT members and array elements are a bigger question (§3.5.2).
+- ~~**Q1 — HMI.**~~ ✅ **ANSWERED — the first candidate it listed is the one that got built.**
+  `hmi-cli compare` is read-back comparison after import: **13 objects, 0 differences on a real round
+  trip**, same-file-twice refused at exit 2 (`hmi/wave-3-results.md:11`). A coherence gate refuses an
+  incoherent document *before* it can reach TIA, tested against the exact document that crashed the
+  Portal process. **And the non-goal the question was asked under is gone** — ADR-0007 **ACCEPTED
+  2026-08-17** (`docs/adr/adr-0007-hmi-engineering-scope.md:3-5`). The programme, its plan and its
+  waves are `hmi/`; **this document does not own them.** Phase 7 closed on this answer.
+  ⚠️ **What is answered is the oracle, not the capability.** The programme's keystone read — *does a
+  Basic panel export as SimaticML at all* — was also answered, positively, on 2026-08-17
+  (`hmi/wave-1-results.md:21-52`), but its "not built" list is long and current: T8, T9, nine
+  unchecked convention rules including H-107's colour half, the regeneration guard, and an agent never
+  dispatched (`hmi/wave-3-results.md:105-114`).
+- **Q2 — Element-table width. STILL OPEN, AND STILL BLOCKING NOTHING.** Which types must be observable
+  for real blocks? `Real` and `DInt` look unavoidable; UDT members and array elements are a bigger
+  question (§3.5.2). ➜ **Do not build ahead of the answer.** Widening is **on demand, not a phase**
+  (§5 Phase 6): one enum member, one element-table row, one copy shape, the day a real block needs a
+  type — with that block's actual type in hand. Answering Q2 converts "on demand" into a scoped item
+  with a decided type list; building it first answers the cheap half by fiat.
 - **Q3 — Batch size.** Ten blocks per deployment makes the budget; it also makes a failure harder
   to attribute. Is a failed batch re-run individually, or bisected?
 - **Q4 — Do DBs get a lane?** They have a description and a carve-out but no behaviour to test.
@@ -941,6 +1156,38 @@ opinion.** That single sentence is why §3 is the most valuable part of this des
 
 ## 8. Change log
 
+- **v3.3 — 2026-08-23 (evening).** 🔴 **§5 IS NOW TRUE, AND THE REASON IT WAS NOT IS THAT NOTHING MADE
+  CLOSING A MARKER PART OF CLOSING A PHASE.** v3 recorded exactly this against itself — *"a change log
+  that stops tracking its own document is §3.2's failure in miniature"* — and **it recurred inside 24
+  hours**: this log stopped at v3.1 with no Phase 6 entry while Phase 6 was re-scoped, delivered
+  (`7dbac3c`) and **run on a controller** (`ce2163b`) the same day. Corrected in this pass, each
+  against a commit, source line or measured run and never against another document:
+  **Phase 6** — the worst line in the document, still reading 🔨 *"Element-table widening · P2"* — is
+  now *"the area, DERIVED"*, ✅ delivered and run on hardware (stamp `16#B85BE93C` → `16#95D8731D`,
+  stamp coverage 15 of 15, both lanes 3 of 3 PASS), and the element table is **re-labelled "on demand,
+  not a phase"** as its own replacement plan recommended and nobody applied.
+  **Phase 5** had **no marker at all**; it is ✅ decided / 🚫 declined as a build, with the next
+  interpreter action named as the cheap disproof rather than a build.
+  **Phase 7** is 🚫 **closed** — Track 2 below.
+  **Phase 8**'s 🔨 contradicted its own next sentence (*"are built"*); it is ✅ built / never contended,
+  and the clause saying the lease had never been raced is overtaken — two processes ran the race in
+  Phase 3 (`9b4a863`, `e7b2af9`). Its residual is re-stated as a **contract question (M-19)**, not a
+  build.
+  **Phase 9** is 🚫 **struck**: it was specified as *"a viewer over Phase 4's files"* and Phase 4 struck
+  that spine in the section directly above it — a status line resting on a deleted deliverable, one
+  heading from the strike that deleted it. **Every strike in this pass carries a forwarding address**,
+  because the absence of one is how Phase 9 got there.
+  **The §0 header** understated its own body for the second time in two days and now says so.
+  **New: §5z**, because a corrected list is still not a plan — it records that the list is *finished*
+  and that the binding constraint is off it: coverage frozen at 2 and 3 assertions across every rig
+  event since 08-18, and **the enumeration has no producer**, stated on every result package by
+  `src/harness/Harness.Loop/LoopRun.cs:1658-1662`. **Q1 is marked answered; Q2 stays open and is
+  marked as blocking nothing.** Phases 1, 2, 3, 4 and 10 were checked and needed nothing; §3.x's
+  arguments, §5's priority rule, the ✅/🔨/❓/P0–P2 vocabulary and every measured number and recorded
+  defect are deliberately untouched — the failure here was maintenance, not design.
+- **v3.2 — 2026-08-23.** *(Number reserved and deliberately left empty: the Phase 6 delivery
+  (`7dbac3c`) and its rig run (`ce2163b`) belonged here and were never written. The gap is left
+  visible rather than back-filled, because it is the evidence for the finding in v3.3.)*
 - **v3.1 — 2026-08-23.** **PHASE 5's DECIDING MEASUREMENT TAKEN, AND THE PHASE REDIRECTED RATHER THAN
   STRUCK.** 93 rows classified of 115 recorded — **A 10 / B 17 / C 0 / D 56 / U 10** — full record in
   `docs/notes/preflight-interpreter-classification.md`. 🔴 **The rubric turned out to be the finding:**
