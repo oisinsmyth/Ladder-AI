@@ -1257,8 +1257,21 @@ which the comparison runs against the wrong object and yields a false `MATCH` or
 with nothing to indicate which. A disambiguating suffix would break the basename pairing the recipe
 depends on, so the collision is reported and both are left for a human.
 
-`--tagtables` is opt-in: a tag table has no `.ir` counterpart in the shape the corpus uses, so
-including it by default would manufacture `EXPORT-ONLY` findings that mean nothing.
+`--tagtables` is opt-in. **The rationale once given for that — "a tag table has no `.ir` counterpart
+in the shape the corpus uses, so including it by default would manufacture `EXPORT-ONLY` findings
+that mean nothing" — is false for this project's own reference corpus, and was corrected 2026-08-23.**
+`ir/test-project001` carries **both** tag tables as `.ir`, and both paired cleanly on the declared
+name, including the cross-name pair `DefaultTagTable.ir` ↔ `Default tag table.xml`. The pairing
+failure the old wording predicted did not occur.
+
+The default is left as it is — opt-in is still defensible for a corpus that genuinely lacks
+tag-table IR — but **know what it costs where the IR exists.** Two consecutive `drift-check` legs
+against `test-project001` reported `3 drifted / 38 match` with both tag tables `SKIPPED`; the first
+run passing `--tagtables` reported `5 drifted`, and the two it had been hiding were the register map
+(`HarnessMirror`) and `DefaultTagTable`. Neither earlier run was wrong — each correctly reported
+what it compared, which is what the `COMPARED:` line is for — but the denominator was smaller than
+the reader assumed. **Pass `--tagtables` whenever the corpus has tag-table IR to compare against.**
+(`docs/notes/test-environment-contract.md` §2.9.)
 
 Exit **0** only when the directory is the whole project; **12** (`ExportIncomplete`) when everything
 attempted succeeded but something was refused; **7** when an export failed.

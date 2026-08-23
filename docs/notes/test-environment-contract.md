@@ -987,6 +987,87 @@ because the declaration had come to demand the fault.***
 > `DefaultTagTable` and `HarnessMirror` were `SKIPPED` both times — and **`HarnessMirror` is where the
 > register map lives.** The third leg as run has never examined the one object most worth comparing.
 
+> #### UPDATE 2026-08-23 (later) — the tag tables were compared for the first time, and BOTH drift
+>
+> The run the paragraph above says has never happened has now happened once, by hand: an
+> `export-all … --tagtables` dump, then `drift-check --complete` against it. Verbatim:
+>
+> ```
+> SUMMARY: 5 drifted, 38 match, 0 skipped, 2 export-only, 0 error, 0 pairing-failure
+> COMPARED: 43 object(s) put through the Normalizer
+> PROVENANCE: 43 of 43 export(s) compared carry TIA's <DocumentInfo>
+> SCOPE: --complete - the exports dir was taken as the WHOLE picture, so the 2 absence(s) above are findings, not ordinary states.
+> ```
+>
+> **DRIFTED (5), by name:** `DB_PLC`, `DefaultTagTable`, `FC_HarnessCopyLayer`, `HarnessMirror`,
+> `iDB_HopperBlockageStim`. **EXPORT-ONLY (2), by name:** `MotorIOSet`, `MotorVSDIOSet` — both UDTs,
+> 27 and 47 members. `0 skipped` and `PROVENANCE: 43 of 43`: nothing went unjudged, and every
+> document on the other side came from TIA.
+>
+> 🔴 **`3 drifted / 38 match` was INCOMPLETE, NOT WRONG — and the distinction is the whole lesson.**
+> Both earlier runs correctly reported what they compared; `--tagtables` is opt-in, so the two tag
+> tables were `SKIPPED` and never entered the population at all. The number was right over a smaller
+> denominator. ***That is precisely what the `COMPARED:` line exists to expose, and this is the first
+> case where it paid.*** Read what a green says it compared, never just what it says it found.
+> Pairing worked in both directions, including the cross-name pair `DefaultTagTable.ir` ↔
+> `Default tag table.xml` — matched on the declared name (`TAGTABLE Default tag table` in both
+> converted headers), not the filename.
+>
+> **`HarnessMirror`: the register map is INTACT, and that is the good half.** Every one of the 24
+> registers present on both sides is identical — address, width, type, attributes, comment, and the
+> UId sequence 1…46 through `HX_HBA_R007` @ `%M1069.0`. The whole drift is **two tags in the
+> committed IR that DO NOT EXIST live**: `HX_HBA_L008` @ `%M1071.0` and `HX_HBA_L009` @ `%M1073.0`.
+>
+> **This is the SAME unpaid change as the copy-layer drift, not a second one.** `084b778` added the
+> two tags to `HarnessMirror.ir` and `NETWORK 8 "Result latches - slot HBA"` to
+> `FC_HarnessCopyLayer.ir` in one commit; neither half reached the controller. Live is
+> self-consistent: 8 committed copy-layer networks against 7 live, the absent one holding all four
+> coils (`SCOIL`/`RCOIL` on both latch tags), networks 2–7 identical, and network 1 differing only in
+> the build stamp — committed `16#33434A68`, live `16#21D74D35`, which is the value `084b778` itself
+> overwrote. `grep HX_HBA_L00|M1071|M1073` over the converted live copy layer returns zero hits. So
+> the landmine one entry up is confirmed from the tag-table side too: **the names are not declared
+> live either.**
+>
+> 🔴 **AND THE ONLY TEST SUITE THAT NAMES THOSE ADDRESSES IS VALIDATING A FILE, NOT A PLANT.**
+> `HX_HBA_L008`/`L009` appear in exactly **one** source file —
+> `src/harness/Harness.MirrorView.Tests/MirrorMapParserTests.cs`, three times. It asserts
+> `%M1071.0`/`%M1073.0` and the `PHASE-ARMED` comment text, and it reaches them through `RealMap()`,
+> which parses the **committed `ir/test-project001/HarnessMirror.ir` artifact**. Nothing in that path
+> touches the controller, so ***it will stay green forever regardless of what is on the rig.***
+> Meanwhile the controller returns a constant `0` from unallocated, unwritten M memory. Those two
+> registers are the phase-armed latches for two momentary observables that are **otherwise
+> unobservable at all** — so **a vector on either reports "never fired", which reads as a clean
+> negative, with a green suite standing behind it. Silent at both ends.**
+>
+> Two other harness files mention the extent and neither is load-bearing, which is worth writing down
+> so nobody re-derives it: `Harness.Batch/BatchPlanner.cs` reaches latches only as a **count**
+> (`sources.Sum(RegistersFor) + sources.Count(s => s.Transient)`) off the JSON slot bindings, never
+> the tag table; `Harness.Batch/Neighbours.cs` encodes *"all 26 %M claims inside `%M1000..%M1073`
+> belong to `HarnessMirror`"* in a **comment**, above an exclusion branch that matches on container
+> **name**. Both figures describe the committed map — 26 tags topping at `%M1073`; live is 24 topping
+> at `%M1069.0` — but no executable code reads either number.
+>
+> **`DefaultTagTable` drifts the OTHER WAY: live is the superset.** Eleven TIA-generated clock/system
+> bits exist live and are absent from the committed IR — `Clock_Byte` `%MB0`, `System_Byte` `%MB1`,
+> `Clock_10Hz`/`5Hz`/`2.5Hz`/`2Hz`/`1.25Hz`/`1Hz`/`0.625Hz` across `%M0.0`–`%M0.6`, `AlwaysFALSE`
+> `%M1.3`, and `DiagStatusUpdate` `%M1.1`. All 101 shared tags match exactly, UIds included. The IR
+> already carries siblings of the same two bytes, so this reads as a capture-time omission rather
+> than a project change — **inference, not established.** Nothing in `ir/test-project001/` references
+> any of the eleven and none touch the harness `%M1000`+ area, so **nothing is broken today.**
+>
+> ⚠️ **UNTESTED HAZARD, AND IT STAYS UNTESTED FOR NOW: nobody has established whether a PLC
+> tag-table import MERGES or REPLACES.** If it replaces, importing the partial `DefaultTagTable.ir`
+> would **delete those eleven tags from the controller**. Find out before importing that object —
+> do not find out by importing it. One reason to take it seriously: `src/openness-cli/README.md`
+> records that for the **HMI** tag table, `ImportOptions.Override` **replaces rather than merges**.
+> Different object, same API family — **a reason for concern, explicitly NOT evidence about the PLC
+> case.**
+>
+> **What this changes about the method, not just the numbers.** `--tagtables` being opt-in is exactly
+> what hid two real drifts across two runs of the leg whose job is to find them. **Pass `--tagtables`
+> on every `drift-check` leg against this project** — the corpus carries both tag tables as `.ir`,
+> so there is nothing to be gained by omitting them and a register map to be lost.
+
 #### A DRIFTED model is NOT admissible, and the verdict is `STALE`
 
 > 🔴 **One of the four is `iDB_HopperBlockageStim` — *the stimulus model the live vector set depends
