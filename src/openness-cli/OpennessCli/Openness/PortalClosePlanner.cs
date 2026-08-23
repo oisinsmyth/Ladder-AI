@@ -5,24 +5,41 @@ using OpennessCli.Model;
 
 namespace OpennessCli.Openness;
 
-/// <summary>How a process would be closed — the mechanism, which is not the same for all of them.</summary>
+/// <summary>
+/// How a process would be closed.
+///
+/// <para>🔴 <b>EVERY CLOSE IS A TERMINATE, AND THAT IS NOT A DESIGN CHOICE — IT IS WHAT OPENNESS
+/// OFFERS.</b> <c>TiaPortal.Dispose()</c> on a handle obtained by <c>Attach()</c> releases only THIS
+/// tool's reference; it does not close the process or touch what is open in it
+/// (<c>OpennessGateway.DisposeAllExcept</c> relies on exactly that, and this project has attached to
+/// human sessions across many live tests without ever closing one). Disposing self-launched instances is
+/// the only case where it ends a process. <b>So for anything this tool did not launch, "close" means
+/// terminating the OS process, and the ONLY variable is whether a save happened first.</b></para>
+///
+/// <para>An earlier draft of this enum modelled a "graceful close through Openness" for empty instances.
+/// There is no such operation. Recorded rather than quietly corrected, because the wrong model would have
+/// produced a command that reported closing something it had merely let go of.</para>
+/// </summary>
 public enum PortalCloseMethod
 {
     /// <summary>Not a target. <see cref="PortalClosePlan.Reason"/> says why.</summary>
     Leave = 0,
 
-    /// <summary>Attach, <b>SAVE the open project</b>, then close through Openness. The good case.</summary>
-    SaveThenClose = 1,
+    /// <summary>
+    /// Attach, <b>SAVE the open project</b>, release, then terminate. The owner's ruling — <i>"save where
+    /// you can, then close"</i> — and this is the branch where you can.
+    /// </summary>
+    SaveThenTerminate = 1,
 
-    /// <summary>Attach and close through Openness. Nothing open, so nothing to save.</summary>
-    CloseEmpty = 2,
+    /// <summary>Terminate. Openness can see it and nothing is open, so there is nothing to save.</summary>
+    TerminateEmpty = 2,
 
     /// <summary>
-    /// 🔴 <b>Terminate the OS process — Openness cannot see it, so it cannot be asked to save.</b> The
-    /// owner's ruling is "save where you can, then close", and this is the branch where you cannot. It is
-    /// reported by name on every run rather than folded in with the graceful closes.
+    /// 🔴 <b>Terminate WITHOUT saving — Openness cannot see it, so it cannot be asked.</b> This is the
+    /// branch the ruling's <i>"where you can"</i> carves out, and it is reported by name on every run
+    /// rather than folded in with the ones that were saved.
     /// </summary>
-    KillUnsaveable = 3,
+    TerminateUnsaveable = 3,
 }
 
 /// <summary>What will happen to one process, and why.</summary>
@@ -93,7 +110,7 @@ public static class PortalClosePlanner
             case PortalProcessClass.InUse:
                 // 🔴 NAMED OR NOT AT ALL. A sweep must never take a session somebody is working in.
                 return named
-                    ? Plan(PortalCloseMethod.SaveThenClose,
+                    ? Plan(PortalCloseMethod.SaveThenTerminate,
                         "named explicitly by --pid, and it has a project open: it will be SAVED and then closed. " +
                         "A sweep would never have selected it.")
                     : Plan(PortalCloseMethod.Leave,
@@ -101,12 +118,12 @@ public static class PortalClosePlanner
                         "Name it with --pid if you really mean it; no sweep will ever select it.");
 
             case PortalProcessClass.SelfLaunchedOrphan:
-                return Plan(PortalCloseMethod.CloseEmpty,
+                return Plan(PortalCloseMethod.TerminateEmpty,
                     "an empty instance this tool launched and did not clean up. Nothing is open, so there is " +
                     "nothing to save.");
 
             case PortalProcessClass.StrayEmpty:
-                return Plan(PortalCloseMethod.CloseEmpty,
+                return Plan(PortalCloseMethod.TerminateEmpty,
                     "an empty instance this tool did not launch - a human's window, a first-connect-dialog wait, " +
                     "or stale pileup. Nothing is open, so there is nothing to save; but note it may be somebody's " +
                     "window and closing it will be noticed.");
@@ -116,7 +133,7 @@ public static class PortalClosePlanner
                 // Openness cannot see the process, so there is nothing to attach to and nothing to ask.
                 if (named)
                 {
-                    return Plan(PortalCloseMethod.KillUnsaveable,
+                    return Plan(PortalCloseMethod.TerminateUnsaveable,
                         "named explicitly by --pid. Openness cannot see it, so it CANNOT BE SAVED - it will be " +
                         "terminated. Anything unsaved in it is lost.");
                 }
@@ -139,7 +156,7 @@ public static class PortalClosePlanner
                             age.Value.TotalMinutes, minimumAgeMinutes));
                 }
 
-                return Plan(PortalCloseMethod.KillUnsaveable,
+                return Plan(PortalCloseMethod.TerminateUnsaveable,
                     string.Format(
                         "Openness cannot see it and it is {0:0} minute(s) old, so it is not merely starting. It " +
                         "CANNOT BE SAVED - there is nothing to attach to - so it will be terminated.",
@@ -169,8 +186,8 @@ public static class PortalClosePlanner
         }
 
         var targets = plans.Count(p => p.Method != PortalCloseMethod.Leave);
-        var unsaveable = plans.Count(p => p.Method == PortalCloseMethod.KillUnsaveable);
-        var saved = plans.Count(p => p.Method == PortalCloseMethod.SaveThenClose);
+        var unsaveable = plans.Count(p => p.Method == PortalCloseMethod.TerminateUnsaveable);
+        var saved = plans.Count(p => p.Method == PortalCloseMethod.SaveThenTerminate);
 
         return string.Format("{0} of {1} Portal process(es) selected", targets, plans.Count) +
                (saved > 0 ? string.Format("; {0} will be SAVED first", saved) : string.Empty) +

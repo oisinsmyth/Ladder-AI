@@ -57,7 +57,7 @@ public class PortalCloseTests
     {
         var plan = Only(new[] { Proc(100, @"C:\proj\Thing.ap20") }, 100);
 
-        Assert.Equal(PortalCloseMethod.SaveThenClose, plan.Method);
+        Assert.Equal(PortalCloseMethod.SaveThenTerminate, plan.Method);
         Assert.Contains("SAVED", plan.Reason);
     }
 
@@ -66,7 +66,7 @@ public class PortalCloseTests
     {
         var plan = Only(new[] { Proc(101, marked: true) });
 
-        Assert.Equal(PortalCloseMethod.CloseEmpty, plan.Method);
+        Assert.Equal(PortalCloseMethod.TerminateEmpty, plan.Method);
         Assert.Contains("nothing to save", plan.Reason);
     }
 
@@ -76,7 +76,7 @@ public class PortalCloseTests
     {
         var plan = Only(new[] { Proc(102) });
 
-        Assert.Equal(PortalCloseMethod.CloseEmpty, plan.Method);
+        Assert.Equal(PortalCloseMethod.TerminateEmpty, plan.Method);
         Assert.Contains("will be noticed", plan.Reason);
     }
 
@@ -92,7 +92,7 @@ public class PortalCloseTests
     {
         var plan = Only(new[] { Proc(103, visible: false, ageMinutes: 90) });
 
-        Assert.Equal(PortalCloseMethod.KillUnsaveable, plan.Method);
+        Assert.Equal(PortalCloseMethod.TerminateUnsaveable, plan.Method);
         Assert.Contains("CANNOT BE SAVED", plan.Reason);
         Assert.Contains("terminated", plan.Reason);
     }
@@ -116,7 +116,7 @@ public class PortalCloseTests
     {
         var plan = Only(new[] { Proc(104, visible: false, ageMinutes: 1) }, 104);
 
-        Assert.Equal(PortalCloseMethod.KillUnsaveable, plan.Method);
+        Assert.Equal(PortalCloseMethod.TerminateUnsaveable, plan.Method);
     }
 
     /// <summary>
