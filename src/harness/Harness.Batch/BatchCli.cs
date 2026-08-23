@@ -30,6 +30,14 @@ public static class BatchExit
 /// </summary>
 public static class BatchCli
 {
+    /// <summary>
+    /// The converter <c>run</c> uses when the caller names none. <b>One constant, because the served-area
+    /// derivation and the run plan's own commands must not be able to name two different binaries</b> —
+    /// a batch that derived its width with one converter and drift-checked with another would report two
+    /// facts about two programs under one heading.
+    /// </summary>
+    private const string DefaultConverter = "converter";
+
     private const string Usage =
         "Usage: harness-batch enqueue --queue <dir> --lane <name> --binding <file> --submission <file>\n"
         + "                             (--manifest <file> | --program <path>...) [--purpose <text>]\n"
@@ -45,7 +53,11 @@ public static class BatchCli
         + "       harness-batch run     --queue <dir> --merged <file> --staging <dir> --leases <dir> --holder <id> --holder-pid <n>\n"
         + "                             --portal-project <path> --portal-evidence <file> --rig <address> [--port <n>] [--unit <n>]\n"
         + "                             [--converter <exe>] [--harness-run <exe>] [--allowlist <file>] [--ttl <minutes>]\n"
-        + "                             [--deploy-config <file.json>] --yes    # WITHOUT --yes: prints every command, contacts NOTHING";
+        + "                             [--deploy-config <file.json>] --neighbours derive|declared-only --yes\n"
+        + "                             # WITHOUT --yes: prints every command, contacts NOTHING\n"
+        + "                             # --converter DEFAULTS to `converter` here and the served width DERIVES on this path\n"
+        + "                             # --neighbours is REQUIRED with --yes and has NO DEFAULT: the path that reaches a\n"
+        + "                             # controller does not get to decide this by leaving a flag off";
 
     public static int Run(
         string[] args, TextWriter output, Func<string, string> readFile, Action<string, string> writeFile,
@@ -149,12 +161,25 @@ public static class BatchCli
                 break;
 
             case "derive":
-                if (string.IsNullOrWhiteSpace(converterExe))
+                // 🔴 ON `run`, THE CONVERTER DEFAULTS, SO `derive` NEEDS NO SECOND FLAG — and that is not a
+                // convenience, it is the fix for a nudge this pair of changes would otherwise create.
+                // `run --yes` now REQUIRES a --neighbours decision; if `derive` then cost an EXTRA flag
+                // that `declared-only` does not, THE ESCAPE WOULD BE STRICTLY CHEAPER TO TYPE THAN THE
+                // GUARD, which is the last shape you want on the choice a counter exists to watch.
+                //
+                // It is NOT the downgrade this check was written against. A defaulted `converter` that is
+                // not on PATH still fails CLOSED: NeighbourProbe reports "the converter did not start",
+                // that is a NotDerived, and NotDerived GATES the batch. What stays refused is the case
+                // where nothing can supply an exe at all — `plan`, which deliberately does not default one
+                // (see Plan() below) and whose guard is
+                // NeighbourDerivationTests.Neighbours_derive_without_a_converter_is_refused_rather_than_downgraded.
+                if (string.IsNullOrWhiteSpace(converterExe) && verb != "run")
                 {
                     output.WriteLine("--neighbours derive needs --converter <exe>: the %M occupants of the served area are derived by "
                         + "`converter neighbours`, and there is no second way to obtain them. REFUSED rather than downgraded to "
                         + "declared-only — a derivation that silently becomes a weaker check is the exact shape this guard exists to "
-                        + "prevent. Pass --converter, or say `--neighbours declared-only`, which is counted.");
+                        + "prevent. Pass --converter, or say `--neighbours declared-only`, which is counted. (`run` defaults the "
+                        + "converter and needs no flag; `plan` starts no process unless you name one.)");
                     return BatchExit.Unusable;
                 }
 
@@ -250,6 +275,76 @@ public static class BatchCli
     }
 
     /// <summary>
+    /// 🔴 <b>ON THE PATH THAT REACHES A CONTROLLER, THE NEIGHBOUR DECISION IS MADE — NOT DEFAULTED, AND
+    /// NOT DECIDABLE BY OMISSION.</b>
+    ///
+    /// <para><b>A blanket default was investigated and rejected on evidence, and the reasoning is kept
+    /// here so nobody re-proposes it.</b> <see cref="NeighbourFact.Gates"/> is deliberately a REFUSAL
+    /// INPUT rather than a report — the break from <see cref="UnionPreflight"/>'s weaker-fallback shape —
+    /// so defaulting <c>derive</c> on would turn two ORDINARY, non-error situations into batch refusals:
+    /// a corpus with no <c>MB_SERVER</c> call (every batch whose lanes do not stage the comms block), and
+    /// one unparseable file anywhere in the union (the producer emits no list at all, by design).
+    /// Defaulting <c>declared-only</c> on is worse still: it switches the guard off silently and the
+    /// escape counter — the one thing that would ever surface it — would tick on every run and become
+    /// unreadable.</para>
+    ///
+    /// <para><b>Requiring the choice costs neither.</b> No plan that succeeds today begins refusing; the
+    /// deployment path simply stops being decidable by leaving a flag off. This is
+    /// <c>feedback_a_warning_is_not_a_gate</c> applied where it belongs — a check that only warns gets
+    /// skimmed, so fail closed on the path that reaches production.</para>
+    ///
+    /// <para>🔴 <b>THE RUNNING ESCAPE TOTAL IS IN THE REFUSAL TEXT, and that is not decoration.</b> Making
+    /// the choice mandatory makes <c>declared-only</c> the routine opt-out, which is exactly the "escape
+    /// becomes routine" failure <see cref="NeighbourEscapeLog"/> exists to surface. A counter nobody is
+    /// shown at the moment of choosing is a counter that never gets read.</para>
+    /// </summary>
+    /// <remarks>
+    /// <b>Scoped to <c>run --yes</c>, and to a run that could otherwise happen.</b>
+    /// <list type="bullet">
+    /// <item><c>plan</c> and dry runs keep today's behaviour exactly — neither contacts a controller, and
+    /// <c>NeighbourDerivationTests.Naming_no_mode_at_all_still_says_NOT_DERIVED…</c> is a guard on the
+    /// <c>plan</c> half of that.</item>
+    /// <item><b>A missing deploy gateway wins the tie.</b> "<c>--yes</c> with nothing to deploy with
+    /// starts NOTHING" is the older, stronger promise with its own test, and a run that cannot happen
+    /// should not be made to answer a question about a run that cannot happen.</item>
+    /// <item><b>An empty queue wins it too.</b> Exit 3 says the batch examined nothing, which is the more
+    /// basic fact; asking for a decision about zero lanes would bury it.</item>
+    /// </list>
+    /// </remarks>
+    private static bool RequiresANeighbourDecision(
+        LaneQueue store, TextWriter output, Func<IReadOnlyList<string>, DeploymentOutcome>? deploy,
+        RunArgs args, IReadOnlyList<Lane> lanes)
+    {
+        if (!args.Confirmed || args.Neighbours != NeighbourMode.NotAsked || deploy is null || lanes.Count == 0)
+            return false;
+
+        var escapes = NeighbourEscapeLog.Count(store.Root);
+
+        output.WriteLine("REFUSED  `run --yes` needs an explicit --neighbours decision. There is no default, because both");
+        output.WriteLine("         possible defaults are wrong here and the choice belongs to whoever is deploying.");
+        output.WriteLine();
+        output.WriteLine("           --neighbours derive          DERIVES every %M occupant of the served area from the program");
+        output.WriteLine("                                        corpus and REFUSES a mirror that would enter one. Costs one");
+        output.WriteLine("                                        converter subprocess, and it GATES: an unparseable file in the");
+        output.WriteLine("                                        union, or a corpus with no MB_SERVER call, stops the batch");
+        output.WriteLine("                                        rather than passing quietly. Needs --converter <exe>.");
+        output.WriteLine();
+        output.WriteLine("           --neighbours declared-only   deploys on whatever the bindings DECLARED. Nothing derives the");
+        output.WriteLine("                                        occupants, so an UNDECLARED one is invisible to this run — the");
+        output.WriteLine("                                        exact shape that put a generated mirror and a hand-authored");
+        output.WriteLine("                                        panel in the same 53 registers. It is THE ONE NAMED ESCAPE AND");
+        output.WriteLine($"                                        IT IS COUNTED: taken {escapes} time(s) against this queue already.");
+        output.WriteLine();
+        output.WriteLine("         That count is the point. If `declared-only` becomes the routine answer the guard is back to");
+        output.WriteLine("         declared-only and nobody notices — so it is printed where the choice is made, not in a log");
+        output.WriteLine("         somebody would have to go and read.");
+        output.WriteLine();
+        output.WriteLine("         NO GATE WAS TAKEN, NOTHING WAS WRITTEN and PORTAL WAS NOT CONTACTED.");
+
+        return true;
+    }
+
+    /// <summary>
     /// 🔴 <b><c>--yes</c> is required, and without it Portal is NEVER CONTACTED.</b>
     ///
     /// <para>The same shape <c>download-probe</c>, <c>block-layout --set</c> and
@@ -264,8 +359,11 @@ public static class BatchCli
     {
         var lanes = store.All();
 
-        // 🔴 THE SERVED WIDTH, DERIVED BEFORE THE MAP IS BUILT — and every precondition on it is one of
-        // this command's existing contracts rather than a new caution.
+        if (RequiresANeighbourDecision(store, output, deploy, args, lanes))
+            return BatchExit.Unusable;
+
+        // 🔴 THE SERVED WIDTH, DERIVED ON THE DEFAULT DEPLOYMENT PATH — and every precondition left on it
+        // is one of this command's existing contracts rather than a new caution.
         //
         //   --yes            the dry run's contract is that it starts NO PROCESS AT ALL. Same trade the
         //                    reachability parity check already makes: eroding a clean invariant to gain a
@@ -274,25 +372,32 @@ public static class BatchCli
         //   a deploy gateway "--yes with nothing to deploy with starts NOTHING" is a stated promise with
         //                    its own test, and the refusal for it sits below the planner. Deriving here
         //                    unconditionally would start a process before that refusal.
-        //   --converter      NAMED, never defaulted to "converter" the way the cross-check is. This check
-        //                    is new; a run that does not name a converter reports the width as DECLARED
-        //                    and unchecked, in as many words, rather than acquiring a subprocess nobody
-        //                    asked for. ⚠️ Consequence to know: the DEFAULT deployment path does not
-        //                    derive. Flipping that is one line here plus the subprocess count in
-        //                    BatchCliRunTests, which is a deliberate, separately-evidenced act.
+        //
+        // 🔴 --converter IS NOW DEFAULTED, 2026-08-23, and this is the flip the previous version of this
+        // comment named and priced: "the DEFAULT deployment path does not derive. Flipping that is one
+        // line here plus the subprocess count in BatchCliRunTests." Both were paid. The old reasoning was
+        // that a run which did not name a converter should not acquire a subprocess nobody asked for —
+        // true of a check that was NEW, and no longer true of one that has run on the rig. A guard whose
+        // default is off is a guard that exists rather than one that runs, and the path this default
+        // governs is the one that reaches a controller. `run` already defaults every other binary it
+        // invokes (ConverterExe/HarnessRunExe/OpennessCliExe, below), so this stops being the odd one out.
+        //
+        // ⚠️ `plan` IS DELIBERATELY NOT FLIPPED WITH IT. `plan` starts no process at all today, and
+        // acquiring that by default would surprise every existing caller for no deployment safety —
+        // nothing downloads off a plan. ServedAreaGateTests.Plan_without_a_converter_says_the_width_was
+        // _declared_and_starts_no_process is the guard on that asymmetry; see Plan() below.
         //
         // The corpus is the lanes' own program paths, which need no staging directory — so the check
         // lands before anything is materialised, imported or downloaded.
-        var served = args.Confirmed && runner is not null && deploy is not null && args.ConverterExe is not null
+        var served = args.Confirmed && runner is not null && deploy is not null
             ? ServedAreaProbe.Derive(
-                args.ConverterExe,
+                args.ConverterExe ?? DefaultConverter,
                 lanes.SelectMany(l => l.ProgramPaths).Distinct(StringComparer.OrdinalIgnoreCase).ToList(),
                 runner)
             : ServedAreaFact.NotDerived(
                 (args.Confirmed ? string.Empty : "a dry run starts NO process, and ")
-                + (args.ConverterExe is null ? "no --converter <exe> was named, so " : "")
-                + "the program corpus was not read. The width is DECLARED, not derived: pass --yes with "
-                + "--converter to check it against the MB_SERVER call that serves it.");
+                + "the program corpus was not read. The width is DECLARED, not derived: pass --yes to "
+                + "check it against the MB_SERVER call that serves it.");
 
         // 🔴 THE DRY RUN CANNOT DERIVE, AND IT SAYS SO AS A USAGE ERROR RATHER THAN DERIVING NOTHING.
         // The dry run's contract is that it starts NO process at all — a promise with its own test — so
@@ -307,7 +412,10 @@ public static class BatchCli
             return BatchExit.Unusable;
         }
 
-        var neighbours = Neighbours(args.Neighbours, store, output, args.ConverterExe, lanes, served, runner, "run");
+        // The SAME defaulted exe the width was derived with — never a second resolution. Two derivations
+        // about one area reached through two different binaries would be two facts under one heading.
+        var neighbours = Neighbours(
+            args.Neighbours, store, output, args.ConverterExe ?? DefaultConverter, lanes, served, runner, "run");
 
         var batch = BatchPlanner.Plan(lanes, readFile, served, neighbours);
 
@@ -334,7 +442,7 @@ public static class BatchCli
         var holderPid = args.HolderPid > 0 ? args.HolderPid : Environment.ProcessId;
 
         var options = new BatchRunOptions(
-            ConverterExe: args.ConverterExe ?? "converter",
+            ConverterExe: args.ConverterExe ?? DefaultConverter,
             HarnessRunExe: args.HarnessRunExe ?? "harness-run",
             OpennessCliExe: args.OpennessCliExe ?? "openness-cli",
             LeasesDirectory: args.Leases ?? string.Empty,

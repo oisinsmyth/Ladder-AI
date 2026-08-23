@@ -84,6 +84,37 @@ public sealed class BatchCliRunTests : IDisposable
         return args.Take(index).Concat(args.Skip(index + 2)).ToArray();
     }
 
+    /// <summary>
+    /// 🔴 Records WHAT was executed, not only how many times. <see cref="CountingRunner"/> is a bare
+    /// <c>int++</c> over no argument, order or identity — deliberately, because it backs a negative
+    /// control — and a test that needs to know a particular subprocess ran cannot be written on it.
+    /// Answers by verb where the test needs a document back, keyed rather than sequenced so a change in
+    /// call ORDER does not fail a test for the wrong reason.
+    /// </summary>
+    private sealed class RecordingRunner : IProcessRunner
+    {
+        private readonly Dictionary<string, string> _answers = new(StringComparer.Ordinal);
+
+        internal List<(string Executable, IReadOnlyList<string> Arguments)> Calls { get; } = new();
+
+        internal IEnumerable<string> Verbs => Calls.Select(c => c.Arguments.Count > 0 ? c.Arguments[0] : string.Empty);
+
+        internal RecordingRunner Answering(string verb, string standardOutput)
+        {
+            _answers[verb] = standardOutput;
+            return this;
+        }
+
+        public ProcessResult Run(string executable, IReadOnlyList<string> arguments, TimeSpan timeout)
+        {
+            Calls.Add((executable, arguments));
+
+            var verb = arguments.Count > 0 ? arguments[0] : string.Empty;
+            return new ProcessResult(true, false, 0,
+                _answers.TryGetValue(verb, out var stdout) ? stdout : string.Empty, string.Empty, string.Empty);
+        }
+    }
+
     private (int Exit, string Output, int Calls) Invoke(params string[] extra)
     {
         var writer = new StringWriter();
@@ -91,6 +122,14 @@ public sealed class BatchCliRunTests : IDisposable
         var exit = BatchCli.Run(RunArgs(extra), writer, File.ReadAllText, File.WriteAllText, runner,
             _ => new DeploymentOutcome(true, true, new HashSet<string>(), "loaded"));
         return (exit, writer.ToString(), runner.Calls);
+    }
+
+    private (int Exit, string Output) InvokeWith(IProcessRunner runner, params string[] extra)
+    {
+        var writer = new StringWriter();
+        var exit = BatchCli.Run(RunArgs(extra), writer, File.ReadAllText, File.WriteAllText, runner,
+            _ => new DeploymentOutcome(true, true, new HashSet<string>(), "loaded"));
+        return (exit, writer.ToString());
     }
 
     // ---------------------------------------------------------------------------------------------
@@ -167,25 +206,47 @@ public sealed class BatchCliRunTests : IDisposable
     /// <summary>
     /// 🔴 <b>The negative control.</b> Every test above asserts nothing ran; a CLI that never executed
     /// anything would pass all of them. With <c>--yes</c> and a gateway, the runner IS called.
+    ///
+    /// <para>⚠️ <b>EDITED 2026-08-23, TWICE, DELIBERATELY, AND NEITHER EDIT IS INCIDENTAL TO READ.</b></para>
+    /// <para><b>(1) The invocation gained <c>--neighbours declared-only</c>: a CLI CONTRACT CHANGE.</b>
+    /// <c>run --yes</c> now REFUSES until the neighbour decision is named, so this test's old argument
+    /// list no longer describes a run that happens. It is filed as a contract change, not under "no
+    /// existing test edited" — the flag is now part of what a deploying caller must type. The escape is
+    /// the right value here because this test is about the SUBPROCESS COUNT and <c>derive</c> would add
+    /// a subprocess of its own; the derive path has its own control below.</para>
+    /// <para><b>(2) The count moved 9 → 10</b>, because <c>--converter</c> now DEFAULTS on <c>run</c> and
+    /// the served width therefore derives on the default deployment path. This assertion is a bare
+    /// integer over an <c>int++</c> that records no argument, order or identity — nothing here would
+    /// notice if the ten calls were ten copies of <c>lease release</c>. Its stated purpose above is the
+    /// negative control "a CLI that never executed anything would pass all of them", and <b>that claim
+    /// survives at 10 exactly as it stood at 9.</b> The real sequence guard is elsewhere and is NOT in
+    /// the blast radius: <c>BatchRunTests.With_everything_succeeding_every_step_runs_in_order</c> asserts
+    /// 7 verbs each BY CONTENT over <c>BatchRunner.Execute</c>, and both derivations are direct
+    /// <c>runner.Run</c> calls from <c>BatchCli</c> that never become plan steps.</para>
     /// </summary>
     [Fact]
     public void With_yes_and_a_gateway_the_runner_IS_called()
     {
-        var (exit, _, calls) = Invoke("--yes");
+        var (exit, _, calls) = Invoke("--yes", "--neighbours", "declared-only");
 
         Assert.Equal(BatchExit.Ok, exit);
 
-        // 1 parity + 2 acquire + export-all + drift-check + generate + 1 wave + 2 release. The deployment
-        // goes through the gateway, not the runner, so it is not in this count.
+        // served-area + 1 parity + 2 acquire + export-all + drift-check + generate + 1 wave + 2 release.
+        // The deployment goes through the gateway, not the runner, so it is not in this count.
+        //
+        // The served-area call comes FIRST and is the one added on 2026-08-23: --converter defaults now,
+        // so the width the map is allocated against is derived from the program on every deploying run
+        // rather than only when somebody remembered a flag.
         //
         // The drift pair is here because --staging is set: the run stages the program union and compares
         // it against the project, since the build stamp claims the supplied program is what executes and
         // nothing used to verify that.
         //
-        // The parity call is the reachability cross-check, and it comes FIRST — before any gate. It runs
-        // only under --yes, deliberately: it would be useful in a dry run too, but the dry run's contract
-        // is that it starts no process at all, and that invariant is worth more than the convenience.
-        Assert.Equal(9, calls);
+        // The parity call is the reachability cross-check, and it runs before any gate. Both it and the
+        // served-area derivation run only under --yes, deliberately: they would be useful in a dry run
+        // too, but the dry run's contract is that it starts no process at all, and that invariant is
+        // worth more than the convenience.
+        Assert.Equal(10, calls);
     }
 
     // ---------------------------------------------------------------------------------------------
@@ -237,5 +298,192 @@ public sealed class BatchCliRunTests : IDisposable
         Assert.Contains("[DriftCheck]", output);
         Assert.Contains("requested path(s)", output);
         Assert.DoesNotContain("NOT STAGED", output);
+    }
+
+    // =============================================================================================
+    // A1 — THE SERVED WIDTH DERIVES ON THE DEFAULT DEPLOYMENT PATH.
+    //
+    // Until now `--converter` had to be NAMED for `run` to derive it, which meant the guard existed and
+    // the path that reaches a controller did not take it. BatchCli.cs said so in its own words and
+    // named the price of flipping it: "one line here plus the subprocess count in BatchCliRunTests".
+    // =============================================================================================
+
+    /// <summary>
+    /// 🔴 <b>No <c>--converter</c> anywhere in the argument list, and the width is derived anyway.</b>
+    ///
+    /// <para>Asserted on the CALL, not on a count: the point is that <c>converter served-area</c> ran,
+    /// and a count cannot tell one subprocess from another. The executable is asserted too, because the
+    /// default is a NAME resolved on PATH and a default of <c>""</c> would satisfy a verb-only check.</para>
+    /// </summary>
+    [Fact]
+    public void With_yes_the_served_width_is_DERIVED_even_though_no_converter_was_named()
+    {
+        var args = RunArgs("--yes", "--neighbours", "declared-only");
+        Assert.DoesNotContain("--converter", args);
+
+        var runner = new RecordingRunner();
+        var writer = new StringWriter();
+
+        var exit = BatchCli.Run(args, writer, File.ReadAllText, File.WriteAllText, runner,
+            _ => new DeploymentOutcome(true, true, new HashSet<string>(), "loaded"));
+
+        Assert.Equal(BatchExit.Ok, exit);
+        Assert.Contains(runner.Calls, c => c.Executable == "converter" && c.Arguments[0] == "served-area");
+
+        // And the report stops blaming a missing flag for a derivation that now happens by default.
+        Assert.DoesNotContain("no --converter <exe> was named", writer.ToString());
+    }
+
+    /// <summary>
+    /// The width derives on the DEPLOYING path only. A dry run still starts no process at all, so it
+    /// still says the width was declared — the invariant `run` has always had, unchanged by the default.
+    /// </summary>
+    [Fact]
+    public void The_default_converter_does_NOT_make_a_dry_run_start_a_process()
+    {
+        var runner = new RecordingRunner();
+        var (exit, output) = InvokeWith(runner);
+
+        Assert.Equal(BatchExit.Ok, exit);
+        Assert.Empty(runner.Calls);
+        Assert.Contains("DECLARED, not derived", output);
+    }
+
+    // =============================================================================================
+    // A2 — THE NEIGHBOUR DECISION IS REQUIRED ON `run --yes`. NOT DEFAULTED — REQUIRED.
+    //
+    // A blanket default was rejected on evidence: NeighbourFact.Gates is a REFUSAL INPUT, so defaulting
+    // `derive` on would turn two ordinary situations (a corpus with no MB_SERVER call; one unparseable
+    // file anywhere in the union) into batch refusals. Requiring the choice refuses NOTHING that
+    // succeeds today — it only stops the deployment path being decidable by omission.
+    // =============================================================================================
+
+    /// <summary>
+    /// 🔴 <b>The refusal is a DECISION, not an obstacle: it names both options and what each costs.</b>
+    /// A refusal naming only the flag would be answered with whichever value is shortest to type, which
+    /// on this flag is the escape.
+    /// </summary>
+    [Fact]
+    public void Run_yes_REFUSES_until_a_neighbour_decision_is_NAMED()
+    {
+        var runner = new RecordingRunner();
+        var (exit, output) = InvokeWith(runner, "--yes");
+
+        Assert.Equal(BatchExit.Unusable, exit);
+
+        // A pure argument check, taken before anything costs anything.
+        Assert.Empty(runner.Calls);
+
+        Assert.Contains("--neighbours derive", output);
+        Assert.Contains("--neighbours declared-only", output);
+        Assert.Contains("NO GATE WAS TAKEN", output);
+    }
+
+    /// <summary>
+    /// 🔴 <b>THE RUNNING ESCAPE TOTAL IS IN THE REFUSAL, because making the choice mandatory makes
+    /// <c>declared-only</c> the routine opt-out — the exact "escape becomes routine" failure
+    /// <see cref="NeighbourEscapeLog"/> exists to surface. A counter nobody reads is not a counter.</b>
+    /// </summary>
+    [Fact]
+    public void The_refusal_prints_how_often_this_queue_has_ALREADY_taken_the_escape()
+    {
+        var (_, fresh) = InvokeWith(new RecordingRunner(), "--yes");
+        Assert.Contains("taken 0 time(s)", fresh);
+
+        NeighbourEscapeLog.Record(_queue, "run --yes");
+        NeighbourEscapeLog.Record(_queue, "run --yes");
+
+        var (_, after) = InvokeWith(new RecordingRunner(), "--yes");
+        Assert.Contains("taken 2 time(s)", after);
+    }
+
+    /// <summary>
+    /// The older, stronger promise wins the tie. <c>"--yes with nothing to deploy with starts NOTHING"</c>
+    /// is refused for its own reason, not swallowed by a newer argument check — a run that cannot happen
+    /// should not be made to answer a question about a run that cannot happen.
+    /// </summary>
+    [Fact]
+    public void A_missing_deploy_gateway_is_still_reported_as_ITSELF_and_not_as_a_missing_neighbour_decision()
+    {
+        var writer = new StringWriter();
+
+        var exit = BatchCli.Run(RunArgs("--yes"), writer, File.ReadAllText, File.WriteAllText,
+            new RecordingRunner(), deploy: null);
+
+        Assert.Equal(BatchExit.Unusable, exit);
+        Assert.Contains("--deploy-config", writer.ToString());
+        Assert.DoesNotContain("--neighbours declared-only", writer.ToString());
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // 🔴 THE NEGATIVE CONTROLS. A required flag that ALSO changes behaviour when supplied is a
+    // different change from the one intended, and only these tell the two apart. Both pass against the
+    // binary BEFORE this change as well as after — that is what makes them controls rather than
+    // evidence.
+    // ---------------------------------------------------------------------------------------------
+
+    /// <summary>With the escape named, the run deploys exactly as it did before the flag was required.</summary>
+    [Fact]
+    public void With_declared_only_named_run_yes_behaves_EXACTLY_as_it_did_before()
+    {
+        var runner = new RecordingRunner();
+        var (exit, output) = InvokeWith(runner, "--yes", "--neighbours", "declared-only");
+
+        Assert.Equal(BatchExit.Ok, exit);
+        Assert.DoesNotContain("taken 0 time(s)", output);      // the refusal did not fire
+        Assert.Contains("[Deploy]", output);
+        Assert.Contains("ESCAPE `--neighbours declared-only` TAKEN", output);
+        Assert.Contains("NEIGHBOURS: NOT DERIVED", output);
+    }
+
+    /// <summary>
+    /// 🔴 <b>THE GUARD MUST NOT COST MORE KEYSTROKES THAN THE ESCAPE.</b>
+    ///
+    /// <para>A2 makes the <c>--neighbours</c> choice mandatory. If <c>derive</c> then also demanded a
+    /// <c>--converter</c> that <c>declared-only</c> does not, the escape would be strictly cheaper to
+    /// type than the guard — on precisely the choice <see cref="NeighbourEscapeLog"/> exists to watch.
+    /// So <c>run</c> derives the neighbour list with the same defaulted converter it derives the width
+    /// with.</para>
+    ///
+    /// <para>It is not the silent downgrade the argument check was written against: a defaulted
+    /// <c>converter</c> that is not on PATH still produces a NotDerived, and NotDerived GATES. <c>plan</c>
+    /// keeps the refusal, because <c>plan</c> defaults no converter at all.</para>
+    /// </summary>
+    [Fact]
+    public void On_run_derive_needs_no_second_flag_so_the_escape_is_never_the_cheaper_answer()
+    {
+        var args = RunArgs("--yes", "--neighbours", "derive");
+        Assert.DoesNotContain("--converter", args);
+
+        var runner = new RecordingRunner()
+            .Answering("served-area",
+                """{ "derived": true, "baseByte": 1000, "registers": 576, "denominator": "served area: base 1000, 576 register(s)" }""")
+            .Answering("neighbours",
+                """{ "derived": true, "scanned": { "tagTables": 2, "blocks": 18 }, "neighbours": [], "denominator": "neighbours: 0 region(s) derived from 2 tag table(s) + 18 block(s)" }""");
+
+        var writer = new StringWriter();
+        var exit = BatchCli.Run(args, writer, File.ReadAllText, File.WriteAllText, runner,
+            _ => new DeploymentOutcome(true, true, new HashSet<string>(), "loaded"));
+
+        Assert.Equal(BatchExit.Ok, exit);
+        Assert.Contains(runner.Calls, c => c.Executable == "converter" && c.Arguments[0] == "neighbours");
+    }
+
+    /// <summary>And with <c>derive</c> named, the derivation runs and the run proceeds — likewise unchanged.</summary>
+    [Fact]
+    public void With_derive_named_run_yes_behaves_EXACTLY_as_it_did_before()
+    {
+        var runner = new RecordingRunner()
+            .Answering("served-area",
+                """{ "derived": true, "baseByte": 1000, "registers": 576, "denominator": "served area: base 1000, 576 register(s)" }""")
+            .Answering("neighbours",
+                """{ "derived": true, "scanned": { "tagTables": 2, "blocks": 18 }, "neighbours": [], "denominator": "neighbours: 0 region(s) derived from 2 tag table(s) + 18 block(s)" }""");
+
+        var (exit, output) = InvokeWith(runner, "--yes", "--converter", "converter.exe", "--neighbours", "derive");
+
+        Assert.Equal(BatchExit.Ok, exit);
+        Assert.DoesNotContain("taken 0 time(s)", output);      // the refusal did not fire
+        Assert.Contains("neighbours", runner.Verbs);
+        Assert.Contains("[Deploy]", output);
     }
 }
