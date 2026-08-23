@@ -313,6 +313,12 @@ public static class LoopRun
 
         // ---- 5. DEPLOY — the device boundary --------------------------------------------------------
         var deployment = gateway.Deploy(copyLayer.Objects.Concat(request.ProgramUnderTest).ToArray(), stamp);
+
+        // 🔴 IMMEDIATELY, AND BEFORE THE NOT-DEPLOYED STOP. The refusing and partial paths are the ones a
+        // reader examines closely, and they are exactly the runs where "which gateway was this?" decides
+        // what the absence means. Every LoopResult below this line carries the observed text.
+        caveats = WithDeployment(caveats, gateway, deployment);
+
         if (!deployment.Attempted || !deployment.Loaded)
         {
             var detail =
@@ -1677,6 +1683,23 @@ public static class LoopRun
                 + "declaration against the enumeration's own form, and this run stopped before the gate — so nothing here "
                 + "establishes which of the two F-3 was enforced against."),
 
+            // 🔴 *** THE PRE-BOUNDARY TEXT, AND IT NAMES NO GATEWAY BECAUSE NONE HAS BEEN CALLED. ***
+            //
+            // `LoopResult.OwedOnTheDevice[0]` asserted, as a hand-maintained constant, that no step of the
+            // deployment gateway had ever been executed. That is a claim about HISTORY, and no constant in
+            // this codebase can observe history — which is how it and item 2 survived commit 1b4d433,
+            // whose whole subject was correcting stale items in that same array (it rewrote items 4 and 5
+            // and left these two byte-identical). Same defect class as F-3-authority above: prose
+            // asserting a system state, unable to move when the state moves.
+            //
+            // What IS observable is which gateway THIS run was handed, because the loop is handed one.
+            // `WithDeployment` replaces this the moment step 5 returns. A run that stops above the device
+            // boundary keeps this text, which is then exactly right.
+            new LoopCaveat("device-gateway",
+                "NO DEPLOYMENT HAS BEEN ATTEMPTED AT THIS POINT IN THE RUN, so nothing here is evidence about hardware. "
+                + "Whether anything reached Portal or a controller is decided by the gateway this loop is handed, and step 5 "
+                + "has not called it — a run that stops above the device boundary keeps this text."),
+
             new LoopCaveat("DB-8-saw-nothing",
                 $"DB-8 CANNOT DISTINGUISH 'SAW NOTHING' FROM 'NOTHING HAPPENED'. A sampled assertion that observed no "
                 + $"disagreement is AssertionState.Held, identical to one that saw nothing because nothing occurred. "
@@ -1732,6 +1755,51 @@ public static class LoopRun
 
         return caveats
             .Select(c => c.Id == "F-3-authority" ? new LoopCaveat(c.Id, detail) : c)
+            .ToArray();
+    }
+
+    /// <summary>
+    /// 🔴 <b>REPLACE THE <c>device-gateway</c> CAVEAT WITH WHICH GATEWAY ACTUALLY DEPLOYED THIS RUN.</b>
+    ///
+    /// <para><b>The constant this derives away.</b> <see cref="LoopResult.OwedOnTheDevice"/>'s first item
+    /// stated flatly that no step of the deployment gateway had ever been executed against Portal or a
+    /// controller. Nothing in the codebase emits that array — <c>git grep</c> finds the declaration, four
+    /// <c>.md</c> files, two cross-references and one test asserting the strings are PRESENT — so its own
+    /// justification, <i>"a caveat somebody has to go and look up is a caveat nobody reads"</i>, was false
+    /// of itself. It was a lookup, and it went stale where a commit correcting its neighbours could not
+    /// see it.</para>
+    ///
+    /// <para><b>What can be observed is narrower than what it asserted, and it is per run.</b> The loop
+    /// does not know whether a gateway has EVER run; it knows exactly which one ran HERE, because it was
+    /// handed one. That fact travels on the result and into the artifact, where a reader meets it without
+    /// looking anything up — which is what the array claimed for itself and never did.</para>
+    ///
+    /// <para>⚠️ <b>The TYPE is reported, and the type is all this can check.</b> A gateway reporting a load
+    /// it did not perform is indistinguishable from one that did, from in here. Naming it is what lets a
+    /// reader — or a later reconciliation against the tracked record — tell a simulated run from a real
+    /// one, which is precisely what no result artifact could do before.</para>
+    /// </summary>
+    private static LoopCaveat[] WithDeployment(
+        IReadOnlyList<LoopCaveat> caveats, IDeviceGateway gateway, DeploymentOutcome deployment)
+    {
+        var type = gateway.GetType().FullName ?? gateway.GetType().Name;
+
+        var detail =
+            !deployment.Attempted
+                ? $"NO DEPLOYMENT WAS ATTEMPTED. The gateway this run was handed is {type}, and it reported the attempt as "
+                  + "NOT ATTEMPTED — so nothing reached a device and nothing about the block was tested here. That is not a "
+                  + "failed download; the two call for different actions. It said: " + deployment.Detail
+                : deployment.Loaded
+                    ? $"DEPLOYED BY {type}, WHICH REPORTED THE PROGRAM LOADED — {deployment.Manifest.Count} object(s) named in "
+                      + "the manifest it recovered. *** THE GATEWAY'S TYPE IS THE ONLY THING HERE THAT SAYS WHETHER A DEVICE WAS "
+                      + "INVOLVED, and this result cannot check it: a gateway reporting a load it did not perform is "
+                      + "indistinguishable from one that did. *** It said: " + deployment.Detail
+                    : $"{type} ATTEMPTED THE DEPLOYMENT AND DID NOT REPORT EVERY OBJECT AS TAKEN — {deployment.Manifest.Count} "
+                      + "object(s) in the manifest it recovered, which is an incomplete transfer rather than an absent one. "
+                      + "It said: " + deployment.Detail;
+
+        return caveats
+            .Select(c => c.Id == "device-gateway" ? new LoopCaveat(c.Id, detail) : c)
             .ToArray();
     }
 

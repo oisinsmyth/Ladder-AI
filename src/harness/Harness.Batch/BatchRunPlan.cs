@@ -425,6 +425,34 @@ public sealed record BatchRunPlan(
             "generate the merged copy layer and mirror tag table for every lane's slots",
             generatorLane.Name));
 
+        // 🔴 *** ASSERTION COVERAGE FOR THE OTHER LANES ARRIVES AT THEIR WAVE STEP, AND NOWHERE EARLIER. ***
+        //
+        // This step runs for lanes[0] alone — correctly, because the copy layer is MERGED and generating
+        // it once per lane would be N conflicting emissions of one artifact — and it is the only step
+        // above the waves that reports what a submission is worth. Each Wave step now emits its own lane's
+        // figure, to its console and to its `--out` artifact, taken from the gate that lane was actually
+        // admitted by; so the wired path covers every lane and NO `harness gate` step is planned here.
+        // A second computation of one measurement is a second rendering to read, a second place for the
+        // enumeration and binding arguments to diverge from what the wave gated on, and a figure that
+        // could disagree with the submission that ran.
+        //
+        // WHAT THAT LEAVES is a batch that dies before its waves — at the deployment, say — having
+        // reported coverage for the generator lane and for no other, which looks exactly like a batch
+        // whose other lanes were measured and found fine.
+        //
+        // ⚠️ ONLY WHEN THERE IS MORE THAN ONE LANE. With a single lane the Generate step IS that lane and
+        // there is no gap; a notice on every plan is a notice nobody reads, which is the rule this file
+        // already applies to the package caveats.
+        if (lanes.Count > 1)
+        {
+            notices.Add("ASSERTION COVERAGE FOR EVERY LANE BUT THE GENERATOR LANE IS COMPUTED ONLY AT ITS WAVE STEP. "
+                + $"The Generate step runs for '{generatorLane.Name}' alone, so it reports that lane's distinct-assertions-cited "
+                + $"figure and no other; the remaining {lanes.Count - 1} lane(s) report theirs when their own wave runs, into "
+                + "that wave's console and its result artifact. A BATCH THAT STOPS BEFORE THE WAVES HAS MEASURED THE OTHER "
+                + "LANES' COVERAGE NOT AT ALL — which is not the same as measuring it and finding it adequate, and there is "
+                + "deliberately no threshold anywhere that would make it look like a check.");
+        }
+
         // ---- 3. THE DEPLOYMENT. -----------------------------------------------------------------
         //
         // Deliberately NOT re-planned here. DeploymentPlan already encodes the order, the layout

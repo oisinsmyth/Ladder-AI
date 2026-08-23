@@ -979,17 +979,24 @@ public static class LoopCli
     /// of the other sentences are written by <see cref="StampCoverage.Line"/> itself, so this method never
     /// decides which case it is looking at — the only branch here is "no manifest was recorded at all",
     /// which is a run that stopped before the stamp was computed.</para>
+    ///
+    /// <para>🔴 <b>THE LABEL SAYS <i>WHICH</i> COVERAGE, AND THAT IS NOT COSMETIC.</b> It was the bare word
+    /// <c>COVERAGE</c> while it was the only one on this path. It now shares an output stream with
+    /// <see cref="AssertionCoverage"/>, which counts ASSERTIONS CITED over a third party's enumeration —
+    /// a different unit, a different denominator, a different subject, and nothing to do with this number.
+    /// Two things called "coverage" in one report is its own defect: the unqualified one reads as the
+    /// general figure of which the other is a part, and it is not.</para>
     /// </summary>
     private static void WriteCoverage(ProgramManifest? manifest, TextWriter output)
     {
         if (manifest?.Coverage is not { } coverage)
         {
-            output.WriteLine("COVERAGE    : <not computed — this run stopped before the build stamp was derived, so it made no claim");
-            output.WriteLine("              about what was hashed. That is NOT a stamp that covered everything.>");
+            output.WriteLine("STAMP COVERAGE: <not computed — this run stopped before the build stamp was derived, so it made no claim");
+            output.WriteLine("                about what was hashed. That is NOT a stamp that covered everything.>");
             return;
         }
 
-        output.WriteLine("COVERAGE    : " + coverage.Line);
+        output.WriteLine("STAMP COVERAGE: " + coverage.Line);
     }
 
     /// <summary>
@@ -1132,6 +1139,25 @@ public static class LoopCli
         output.WriteLine();
 
         WriteInertRest(result.InertRest, result.Outcome.ToString(), output);
+
+        // 🔴 *** WHAT THIS WAVE WAS WORTH, ON THE PATH THAT ACTUALLY SPENDS THE RIG. ***
+        //
+        // The numerator shipped with two renderings and NEITHER was here: `GateCli`, and `WriteGate`, whose
+        // only caller is the `--generate-only` branch. In `harness-batch` the Generate step passes
+        // `--generate-only` for lanes[0] ALONE while the Wave step is per-lane without it, so a two-lane
+        // batch printed the fraction once, for lane 0, and never computed it for lane 1 — the exact blind
+        // spot the count was built to close, still open for every lane but the first.
+        //
+        // It is taken off `result.Gate`, which the wave already carries, so it is the figure from the gate
+        // THIS run was admitted by rather than a second computation that could disagree with it.
+        //
+        // IMMEDIATELY ABOVE THE VECTOR ACCOUNTING, because the two are read against each other: three
+        // vectors that ran and bought two assertions is the shape nobody noticed for five days, and the
+        // numbers that show it should not be separated by a screen.
+        foreach (var line in (result.Gate?.Coverage ?? AssertionCoverage.NotComputed).Lines())
+            output.WriteLine(line);
+
+        output.WriteLine();
 
         // *** THE DENOMINATOR, PRINTED ON EVERY RUN INCLUDING THE COMPLETE ONE. *** A section that appears
         // only when something went short teaches a reader that its absence means everything ran.
@@ -1379,6 +1405,21 @@ public static class LoopCli
             ["programUnderTest"] = programUnderTest,
             ["postDownloadSettling"] = settling,
             ["scanPeriod"] = scan,
+
+            // 🔴 *** WHAT THE SUBMISSION WAS WORTH, IN THE ARTIFACT THAT OUTLIVES THE RUN. ***
+            //
+            // It landed in NO artifact at all: `programUnderTest.coverage` above is StampCoverage — which
+            // objects the build stamp hashed — and the assertion figure existed only as terminal output on
+            // the `--generate-only` path. So a reviewer opening two lanes' result files could compare their
+            // outcomes and not what either of them bought.
+            //
+            // 🔴 PER SUBJECT AND WITH NO AGGREGATE. See `ResultPackageJson.AssertionCoverageOf`: two
+            // subjects summed is the denominator of neither, so nothing here is summable.
+            //
+            // A gate-less run renders `NotComputed` rather than being absent — an absent key reads as
+            // "fine" to everyone who did not write the emitter, and 0 of 0 reads as a measurement.
+            ["assertionCoverage"] = ResultPackageJson.AssertionCoverageOf(
+                result.Gate?.Coverage ?? AssertionCoverage.NotComputed),
 
             // The coverage arithmetic, stated rather than left to be derived — and derivable anyway from
             // `dispositions`, which is what makes these three numbers checkable against the rows below.

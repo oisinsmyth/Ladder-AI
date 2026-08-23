@@ -103,6 +103,26 @@ public sealed record AssertionCoverage(
     IReadOnlyList<string> VectorsCitingNothing,
     IReadOnlyList<string> VectorsUnresolved)
 {
+    /// <summary>
+    /// 🔴 <b>WHAT THIS NUMBER CANNOT SEE — one source, so no rendering can leave one out.</b>
+    ///
+    /// <para><see cref="Lines"/> prints these and the result artifact carries them verbatim. They were
+    /// literals inside <see cref="Lines"/> while the console was the only reader; the moment a second
+    /// rendering existed, a second copy of them would have been a second thing to keep current — and the
+    /// blind spots are the half a reader is most likely to be quoted without.</para>
+    ///
+    /// <para>*** THE WORD "UNCLASSIFIED" IS DELIBERATELY NOT USED HERE. *** The enumerator's residual
+    /// bucket is spelled that way in its own skill, and this report shares an output stream with the gate
+    /// triage, whose whole claim is that no NOT CHECKED verdict in it is unclassified. Two unrelated senses
+    /// of one word in one report is how a reader concludes the wrong thing from a search.</para>
+    /// </summary>
+    public static readonly IReadOnlyList<string> BlindSpots = new[]
+    {
+        "It counts what was CITED at admission, NOT what passed. A cited assertion whose vector later fails, times out, goes unsettled or is never deployed still counts here.",
+        "It cannot judge whether the DENOMINATOR is complete. The enumeration is a third party's decomposition of the spec, and the clauses it could not decompose are not visible from a submission.",
+        "It cannot know which assertions have NO IMPLEMENTING LOGIC to test. Those are unreachable rather than uncovered, and only the enumerator's gap report separates the two.",
+    };
+
     /// <summary>The value a report carries before anything computed one. <b>Never a zero fraction.</b></summary>
     public static readonly AssertionCoverage NotComputed = new(
         CoverageState.NotComputed,
@@ -245,13 +265,9 @@ public sealed record AssertionCoverage(
         }
 
         lines.Add("  WHAT THIS NUMBER CANNOT SEE — stated every run, not only the bad ones:");
-        lines.Add("    - It counts what was CITED at admission, NOT what passed. A cited assertion whose vector later fails, times out, goes unsettled or is never deployed still counts here.");
-        // *** THE WORD "UNCLASSIFIED" IS DELIBERATELY NOT USED HERE. *** The enumerator's residual bucket
-        // is spelled that way in its own skill, and this report shares an output stream with the gate
-        // triage, whose whole claim is that no NOT CHECKED verdict in it is unclassified. Two unrelated
-        // senses of one word in one report is how a reader concludes the wrong thing from a search.
-        lines.Add("    - It cannot judge whether the DENOMINATOR is complete. The enumeration is a third party's decomposition of the spec, and the clauses it could not decompose are not visible from a submission.");
-        lines.Add("    - It cannot know which assertions have NO IMPLEMENTING LOGIC to test. Those are unreachable rather than uncovered, and only the enumerator's gap report separates the two.");
+
+        foreach (var spot in BlindSpots)
+            lines.Add("    - " + spot);
 
         return lines;
     }

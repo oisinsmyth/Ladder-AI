@@ -195,6 +195,91 @@ public static class ResultPackageJson
     }
 
     /// <summary>
+    /// 🔴 <b>ASSERTION COVERAGE IN THE ARTIFACT — because it was in NO artifact at all.</b>
+    ///
+    /// <para><b>The measured gap.</b> The numerator shipped with two renderings, both to a terminal:
+    /// <c>GateCli</c>, and <c>harness-run --generate-only</c>. The run that spends rig time printed
+    /// <see cref="StampCoverage"/> and wrote <c>programUnderTest.coverage</c> — a different measurement —
+    /// so the assertion figure survived only in scrollback, for one lane of a batch, and no reviewer
+    /// opening a result package weeks later could find it or compare two lanes.</para>
+    ///
+    /// <para>🔴 <b>NO AGGREGATE IS EMITTED, AND THAT IS THE POINT.</b> There is no top-level numerator,
+    /// denominator or fraction here, because two subjects summed is the denominator of neither and a
+    /// fraction is the shape a consumer would most want to add up. The only fractions in this document are
+    /// per subject, and each carries the party that produced its denominator.</para>
+    ///
+    /// <para><b>Both renderings come from one object.</b> <c>lines</c> is <see cref="AssertionCoverage.Lines"/>
+    /// verbatim and <c>blindSpots</c> is <see cref="AssertionCoverage.BlindSpots"/> verbatim, for the same
+    /// reason <see cref="CoverageOf"/> is public: two hand-rolled copies of one measurement is how two
+    /// artifacts describing one run come to disagree.</para>
+    /// </summary>
+    public static JsonNode AssertionCoverageOf(AssertionCoverage coverage)
+    {
+        ArgumentNullException.ThrowIfNull(coverage);
+
+        var subjects = new JsonArray();
+        foreach (var subject in coverage.Subjects)
+        {
+            subjects.Add(new JsonObject
+            {
+                ["subject"] = subject.Subject,
+
+                // Beside the fraction on purpose: deleting assertions is the one remaining way to move the
+                // ratio, so the party that owns the denominator is named wherever the number is.
+                ["enumerator"] = subject.Enumerator,
+                ["numerator"] = subject.Numerator,
+                ["denominator"] = subject.Denominator,
+                ["fraction"] = subject.Fraction,
+                ["vectorsResolvedHere"] = subject.VectorsResolvedHere,
+
+                // The fact the vector count hides: vectors spent beyond the first on an assertion already
+                // cited. Emitted as zero too — a key that vanishes when nothing is redundant teaches its
+                // reader that absence means it was checked.
+                ["redundantVectors"] = subject.RedundantVectors,
+                ["covered"] = Cited(subject.Covered),
+                ["multiplyCited"] = Cited(subject.MultiplyCited),
+
+                // NEVER in the numerator. A citation the enumeration does not answer is an error in the
+                // vector, not an extension of the denominator.
+                ["citedNotEnumerated"] = Cited(subject.CitedNotEnumerated),
+            });
+        }
+
+        return new JsonObject
+        {
+            // NotComputed / NoDenominator / Computed — three states, none of which is a zero fraction.
+            ["state"] = coverage.State.ToString(),
+            ["vectorsExamined"] = coverage.VectorsExamined,
+            ["vectorsCitingNothing"] = Strings(coverage.VectorsCitingNothing),
+            ["vectorsUnresolved"] = Strings(coverage.VectorsUnresolved),
+            ["subjects"] = subjects,
+
+            // 🔴 In the artifact, not only on the terminal. A reader of the file is the person most likely
+            // to quote the fraction onward as a completeness claim.
+            ["blindSpots"] = Strings(AssertionCoverage.BlindSpots),
+            ["lines"] = Strings(coverage.Lines()),
+        };
+    }
+
+    private static JsonArray Cited(IReadOnlyList<CitedAssertion> cited)
+    {
+        var array = new JsonArray();
+        foreach (var assertion in cited)
+        {
+            array.Add(new JsonObject
+            {
+                ["assertionId"] = assertion.AssertionId,
+
+                // Every vector, not a count: two vectors citing one assertion is two vectors and ONE unit
+                // of coverage, and naming them is what makes the redundancy actionable.
+                ["vectors"] = Strings(assertion.Vectors),
+            });
+        }
+
+        return array;
+    }
+
+    /// <summary>
     /// A list of names as JSON strings.
     ///
     /// <para><c>JsonArray.Add(string)</c> binds to the GENERIC overload and boxes a
