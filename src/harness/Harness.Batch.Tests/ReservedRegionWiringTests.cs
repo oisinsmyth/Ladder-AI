@@ -191,4 +191,98 @@ public class ReservedRegionWiringTests
 
         Assert.False(BatchPlanner.Plan(new[] { LaneNamed("valve", "a.json") }, Reader(bindings)).Planned);
     }
+
+    // ---------------------------------------------------------------------------------------------
+    // 🔴 THE MERGED DOCUMENT MUST CARRY WHAT THE MAP WAS ALLOCATED AGAINST.
+    //
+    // Found on the live deployment, 2026-08-23: every lane binding declared the panel and the merged
+    // binding did not, because MergeBindings copied a fixed list of fields and this one was not on it.
+    // The guard still bit at plan time — the union reaches the geometry before allocation — so every
+    // test above passed while the durable artifact silently lost the neighbour. These four are about
+    // what SURVIVES the plan, which is what `run --merged` and the copy-layer generator actually read.
+
+    /// <summary>
+    /// 🔴 <b>The reservation reaches the merged binding.</b> Fails against the old MergeBindings, which
+    /// dropped it by omission — and note the plan SUCCEEDS in both cases, so nothing else here catches it.
+    /// </summary>
+    [Fact]
+    public void The_merged_binding_carries_the_reservation_the_map_was_allocated_against()
+    {
+        var bindings = new Dictionary<string, string>
+        {
+            ["a.json"] = Binding("Valve_S0", 1024, PanelAt704),
+            ["b.json"] = Binding("Vessel_S0", 1024, PanelAt704),
+        };
+
+        var result = BatchPlanner.Plan(
+            new[] { LaneNamed("valve", "a.json"), LaneNamed("vessel", "b.json") }, Reader(bindings));
+
+        Assert.True(result.Planned, string.Join(" | ", result.Refusals));
+        Assert.Contains("\"reservedRegions\"", result.MergedBindingJson!, StringComparison.Ordinal);
+        Assert.Contains("\"register\": 704", result.MergedBindingJson!, StringComparison.Ordinal);
+        Assert.Contains("\"length\": 320", result.MergedBindingJson!, StringComparison.Ordinal);
+        Assert.Contains("virtual panel", result.MergedBindingJson!, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// 🔴 <b>A neighbour only ONE lane declared survives into the merged document.</b> The union half is
+    /// already proven above by a refusal; this proves it also survives the WRITE, which is the half that
+    /// was broken. Two identical declarations must also collapse to one entry rather than appearing twice.
+    /// </summary>
+    [Fact]
+    public void A_neighbour_declared_by_only_one_lane_survives_into_the_merged_document()
+    {
+        var bindings = new Dictionary<string, string>
+        {
+            ["a.json"] = Binding("Valve_S0", 1024),                // declares nothing
+            ["b.json"] = Binding("Vessel_S0", 1024, PanelAt704),   // declares the panel
+        };
+
+        var result = BatchPlanner.Plan(
+            new[] { LaneNamed("valve", "a.json"), LaneNamed("vessel", "b.json") }, Reader(bindings));
+
+        Assert.True(result.Planned, string.Join(" | ", result.Refusals));
+
+        var occurrences = result.MergedBindingJson!.Split("\"register\": 704").Length - 1;
+        Assert.Equal(1, occurrences);
+    }
+
+    /// <summary>
+    /// Both lanes declaring the SAME neighbour yields ONE entry, not two. The geometry already collapses
+    /// identical declarations; this pins that the written document does too, so a merged binding cannot
+    /// grow an entry per lane and read as though the area had N neighbours.
+    /// </summary>
+    [Fact]
+    public void Two_lanes_declaring_the_same_neighbour_write_it_once()
+    {
+        var bindings = new Dictionary<string, string>
+        {
+            ["a.json"] = Binding("Valve_S0", 1024, PanelAt704),
+            ["b.json"] = Binding("Vessel_S0", 1024, PanelAt704),
+        };
+
+        var result = BatchPlanner.Plan(
+            new[] { LaneNamed("valve", "a.json"), LaneNamed("vessel", "b.json") }, Reader(bindings));
+
+        var occurrences = result.MergedBindingJson!.Split("\"register\": 704").Length - 1;
+        Assert.Equal(1, occurrences);
+    }
+
+    /// <summary>
+    /// 🔴 <b>NEGATIVE CONTROL, and the distinction is the field's whole honesty.</b> No lane declaring a
+    /// neighbour must write NO reservedRegions key — never an empty list. <i>"No lane declared a
+    /// neighbour"</i> and <i>"the area is otherwise empty"</i> are different facts, and an empty array
+    /// asserts the second one. Without this, emitting <c>[]</c> unconditionally would pass every test
+    /// above.
+    /// </summary>
+    [Fact]
+    public void No_declared_neighbour_writes_no_reservation_key_rather_than_an_empty_list()
+    {
+        var bindings = new Dictionary<string, string> { ["a.json"] = Binding("Valve_S0", 1024) };
+
+        var result = BatchPlanner.Plan(new[] { LaneNamed("valve", "a.json") }, Reader(bindings));
+
+        Assert.True(result.Planned, string.Join(" | ", result.Refusals));
+        Assert.DoesNotContain("reservedRegions", result.MergedBindingJson!, StringComparison.Ordinal);
+    }
 }

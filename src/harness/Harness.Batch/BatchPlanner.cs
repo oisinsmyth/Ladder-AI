@@ -221,7 +221,7 @@ public static class BatchPlanner
             return new BatchPlanResult(lanes.Count, Array.Empty<string>(), refusals, null, null, programPaths);
         }
 
-        var merged = MergeBindings(documents.Select(d => d.Binding).ToList());
+        var merged = MergeBindings(documents.Select(d => d.Binding).ToList(), reserved);
 
         return new BatchPlanResult(
             lanes.Count,
@@ -237,7 +237,33 @@ public static class BatchPlanner
     /// The merged binding: lane 0's geometry and naming — every lane having been made to agree on both —
     /// with every lane's slots concatenated in queue order.
     /// </summary>
-    private static string MergeBindings(IReadOnlyList<BindingDocument> documents)
+    /// <summary>
+    /// 🔴 <b><paramref name="reserved"/> is passed in rather than re-derived, so the merged document
+    /// states the reservations THE MAP WAS ACTUALLY ALLOCATED AGAINST</b> — not a second union that
+    /// could disagree with the first.
+    ///
+    /// <para><b>Found 2026-08-23, on the deployment that exists because of the collision.</b> This method
+    /// copied seven scalars and the slots and dropped <c>ReservedRegions</c> BY OMISSION — twenty lines
+    /// after the comment explaining that silently dropping a neighbour "is the same class of silence this
+    /// whole guard closes." The guard still bit at plan time, because the union reaches
+    /// <c>geometry.Reserving</c> before allocation; what was lost is the DURABLE ARTIFACT. The merged
+    /// binding is what <c>run --merged</c> consumes, what the copy layer is generated from, and what the
+    /// next reader opens — and it no longer knew the neighbour existed.</para>
+    ///
+    /// <para>⚠️ <b>The failure that makes this more than tidiness:</b> <c>run --merged &lt;file&gt;</c> against
+    /// a merged binding written by an earlier <c>plan</c> would allocate with NO neighbour knowledge at
+    /// all. The reservation would have been enforced once, at plan time, and then thrown away — which is
+    /// indistinguishable from never having declared one.</para>
+    ///
+    /// <para>Union semantics are the geometry's, unchanged: identical declarations collapse, and two
+    /// lanes declaring overlapping-but-different regions are refused upstream rather than reconciled
+    /// here. An empty union writes <c>null</c>, not <c>[]</c>, because <b>"no lane declared a neighbour"
+    /// and "the area is otherwise empty" are different facts</b> and the field's own documentation turns
+    /// on that distinction.</para>
+    /// </summary>
+    private static string MergeBindings(
+        IReadOnlyList<BindingDocument> documents,
+        IReadOnlyList<ReservedRegion> reserved)
     {
         var first = documents[0];
         var merged = new BindingDocument
@@ -249,6 +275,16 @@ public static class BatchPlanner
             BaseByte = first.BaseByte,
             RetentiveBytes = first.RetentiveBytes,
             DeclaredRegisters = first.DeclaredRegisters,
+            ReservedRegions = reserved.Count == 0
+                ? null
+                : reserved
+                    .Select(r => new ReservedRegionDocument
+                    {
+                        Register = r.Register,
+                        Length = r.Length,
+                        Owner = r.Owner,
+                    })
+                    .ToList(),
             Slots = documents.SelectMany(d => d.Slots ?? new List<SlotBindingDocument>()).ToList(),
         };
 
