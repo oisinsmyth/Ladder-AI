@@ -715,6 +715,12 @@ public static class LoopRun
             maxIndexScans: request.MaxIndexScans,
             scenarioTimeInputs: request.ScenarioTimeInputs);
 
+        // *** THE CAVEAT CATCHES UP WITH THE GATE, HERE, BEFORE ANY PATH THAT CARRIES IT ONWARD. *** Above
+        // this line the F-3 entry says the comparison has not happened; below it, it says what gate 3e
+        // found. Placed before the inadmissible stop on purpose: a REFUSING report is the one that gets
+        // read closely, and it is the one where "the form was never checked" would be most misleading.
+        caveats = WithFormAuthority(caveats, gate);
+
         if (stopWhenInadmissible && gate.Verdict != SubmissionVerdict.AdmissibleSubjectToJudgement)
         {
             return LoopGeneration.Stop(LoopOutcome.NotAdmissible, gate, mapResult.SizeReport, null, caveats,
@@ -1655,11 +1661,21 @@ public static class LoopRun
 
         return new[]
         {
+            // 🔴 *** THE PRE-GATE TEXT, AND IT SAYS ONLY WHAT IS TRUE BEFORE THE GATE. *** This entry used
+            // to assert, as a constant, that nothing checks the form against the enumeration and that the
+            // enumeration has no producer. Gate 3e (`assertion form authority`) makes both false whenever
+            // the enumeration carries forms, and it has been returning CHECKED on real submissions — so
+            // the caveat went on telling every reader an enforcement was absent while it was running.
+            //
+            // A caveat computed from the REQUEST cannot report a GATE, so this one reports the only thing
+            // it can know at this point: the comparison has not happened YET. `WithFormAuthority` replaces
+            // it with gate 3e's actual finding the moment there is one, and a run that stops before the
+            // gate keeps this text, which is then exactly right.
             new LoopCaveat("F-3-authority",
-                "THE ASSERTION FORM HAS NO AUTHORITY BEHIND IT. F-3 refuses a SAMPLED observation of a NEVER assertion, "
-                + "and the form is declared BY THE VECTOR — nothing checks it against the enumeration, because the "
-                + "enumeration still has no producer. So F-3 is enforced against what a vector CLAIMS, not against what "
-                + "the assertion IS, and an author who cites a NEVER and declares WHEN gets the permissive path."),
+                "THE ASSERTION FORM HAS NOT BEEN COMPARED AGAINST THE ENUMERATION AT THIS POINT. F-3 refuses a SAMPLED "
+                + "observation of a NEVER assertion, and the form is declared BY THE VECTOR. Gate 3e compares that "
+                + "declaration against the enumeration's own form, and this run stopped before the gate — so nothing here "
+                + "establishes which of the two F-3 was enforced against."),
 
             new LoopCaveat("DB-8-saw-nothing",
                 $"DB-8 CANNOT DISTINGUISH 'SAW NOTHING' FROM 'NOTHING HAPPENED'. A sampled assertion that observed no "
@@ -1667,6 +1683,56 @@ public static class LoopRun
                 + $"F-3 prevents the case where that is dangerous (a NEVER assertion); it does not fix the package. "
                 + $"This submission declares {sampled} sampled expectation(s) of {total}."),
         };
+    }
+
+    /// <summary>
+    /// 🔴 <b>REPLACE THE <c>F-3-authority</c> CAVEAT WITH WHAT GATE 3e ACTUALLY FOUND.</b>
+    ///
+    /// <para><b>A caveat is what a reader is told the result does not establish</b>, so a standing,
+    /// unconditional statement that an enforcement is absent is worse than a stale comment: it teaches
+    /// every reader to discount an enforcement that is present, and it travels on the package where it
+    /// gets quoted onward. This one did, on every result package for five days after the gate that closes
+    /// it shipped.</para>
+    ///
+    /// <para><b>The caveat's ID does not change.</b> A reader looking for F-3's status looks for
+    /// <c>F-3-authority</c>, and renaming it on the good news would make the good news invisible to
+    /// exactly the search that was written to find the bad.</para>
+    ///
+    /// <para><b>And CLOSED is scoped to THIS SUBMISSION, never to the system.</b> Gate 3e can only compare
+    /// a declared form against an enumeration that carries one; the enumeration's own independence is gate
+    /// 3d's question, and the decomposition behind the form is nobody's mechanical check at all.</para>
+    /// </summary>
+    private static LoopCaveat[] WithFormAuthority(LoopCaveat[] caveats, SubmissionReport gate)
+    {
+        var result = gate.Gates.FirstOrDefault(g => g.Gate.StartsWith("3e", StringComparison.Ordinal));
+
+        if (result is null)
+            return caveats;
+
+        var detail = result.Status switch
+        {
+            GateStatus.Checked when result.Passed =>
+                "F-3's AUTHORITY IS CLOSED FOR THIS SUBMISSION. Gate 3e compared every citation's declared form against "
+                + "the form the ENUMERATION states for that assertion, and they agree — so F-3's refusal of a SAMPLED NEVER "
+                + "was enforced against what the assertion IS, not against what a vector claimed, and the observability "
+                + "verdict was evaluated on the enumeration's form. *** WHAT IS NOT CLOSED: *** whether the DECOMPOSITION "
+                + "behind that form is a faithful reading of the clause is judgement (gate 3c), and whether the enumeration "
+                + "was produced independently of the block is gate 3d's — a form is only as good as the party that stated it.",
+
+            GateStatus.Checked =>
+                "F-3's AUTHORITY GATE RAN AND REFUSED. Gate 3e found a citation whose declared form is not the form the "
+                + "enumeration states for that assertion. Where the disagreement is a NEVER declared as a WHEN, that is "
+                + "F-3's refusal being walked around. The gate's finding: " + result.Detail,
+
+            _ =>
+                "THE ASSERTION FORM HAS NOT BEEN COMPARED AGAINST THE ENUMERATION. Gate 3e could not run, so F-3's refusal "
+                + "of a SAMPLED NEVER is enforced against WHAT THE VECTOR CLAIMS: cite a NEVER, declare WHEN, take the "
+                + "permissive path. Why it could not run: " + result.Detail,
+        };
+
+        return caveats
+            .Select(c => c.Id == "F-3-authority" ? new LoopCaveat(c.Id, detail) : c)
+            .ToArray();
     }
 
     /// <summary>

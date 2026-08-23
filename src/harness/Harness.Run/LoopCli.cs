@@ -885,6 +885,12 @@ public static class LoopCli
         output.WriteLine($"SUBMISSION GATE: {gate?.Verdict.ToString() ?? $"<not evaluated — the run stopped at {stopped?.ToString() ?? "an unreported stage"}, which is BEFORE the gate>"}"
                          + (gate is null ? string.Empty : $"  ({gate.Gates.Count} gate(s) run, {gate.Refused.Count} refused, {gate.NotChecked.Count} could not run)"));
 
+        // *** WHAT THE RUN IS WORTH, NOT ONLY WHETHER IT IS ALLOWED. *** The same block the gate report
+        // prints: distinct assertions cited over the enumeration's size, per subject. A wave that passes
+        // every gate can still buy no coverage at all, and that is precisely what five rig events did.
+        foreach (var line in (gate?.Coverage ?? AssertionCoverage.NotComputed).Lines())
+            output.WriteLine($"  {line}");
+
         foreach (var refused in gate?.Refused ?? Array.Empty<GateResult>())
             output.WriteLine($"  REFUSED     {refused.Gate}: {refused.Detail}");
 

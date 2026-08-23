@@ -124,6 +124,21 @@ public enum SubmissionVerdict
 /// <summary>The whole report for one submission.</summary>
 public sealed record SubmissionReport(IReadOnlyList<GateResult> Gates, int VectorsExamined)
 {
+    /// <summary>
+    /// 🔴 <b>WHAT THIS SUBMISSION COVERS OF ITS ENUMERATION — A REPORT, NOT A GATE.</b>
+    ///
+    /// <para><b>An INIT-ONLY PROPERTY WITH A DEFAULT rather than a positional member</b>, following
+    /// <c>AssertionEnumeration.Subject</c> and <c>MirrorObservability.Provenance</c>: no existing
+    /// construction site changes, and a report nobody computed one for carries
+    /// <see cref="CoverageState.NotComputed"/> rather than a zero fraction that would read as a
+    /// measurement.</para>
+    ///
+    /// <para>It is on the REPORT rather than in the gate list because low coverage is a true fact about a
+    /// young campaign and not an inadmissible submission — and because every consumer of a report (the
+    /// CLI, the loop, the batch) then has the figure without any of them computing it a second way.</para>
+    /// </summary>
+    public AssertionCoverage Coverage { get; init; } = AssertionCoverage.NotComputed;
+
     public SubmissionVerdict Verdict =>
         VectorsExamined == 0 || Gates.Count == 0 ? SubmissionVerdict.NothingExamined
         : Gates.Any(g => g.Status == GateStatus.NotChecked) ? SubmissionVerdict.NotAdmissible
@@ -254,7 +269,11 @@ public static class SubmissionGate
         {
             gates.Add(new GateResult("0 submission", GateStatus.Checked, false, nameof(SubmissionGate),
                 "the submission contains no vectors. Empty is not clean: a submission with nothing in it cannot be admitted, and reporting it as admissible would be the purest form of a gate that passed without examining anything."));
-            return new SubmissionReport(gates, 0);
+
+            // *** COVERAGE IS COMPUTED ON THE EMPTY SUBMISSION TOO. *** A submission with no vectors covers
+            // nothing OF a denominator that still exists, and returning NotComputed here would print the
+            // absence of a measurement where there is a real one: 0 of N.
+            return new SubmissionReport(gates, 0) { Coverage = AssertionCoverage.Compute(vectors, enumerations) };
         }
 
         gates.Add(UnknownFields(unknownFields, annotationFields));
@@ -290,7 +309,13 @@ public static class SubmissionGate
         gates.Add(CompressionBoundsNotInTheSubmission(vectors, runtimeCompression, floorScans, compressionInputs));
         gates.Add(MemoryLayout(deployment, tagMapReach));
 
-        return new SubmissionReport(gates, vectors.Count);
+        // 🔴 *** COVERAGE IS COMPUTED HERE AND IS NOT IN THE GATE LIST, DELIBERATELY. *** Low coverage is a
+        // true fact about a young campaign and not an inadmissible submission, so a gate would either be
+        // permanently red or carry a threshold — and a threshold is met by writing vectors against whatever
+        // is cheapest to cite, which is the self-referential unit this whole enumeration exists to avoid.
+        // What was missing was never a refusal: five rig events over five days cited the same assertions
+        // and every gate was correctly green, because NOTHING COUNTED THE NUMERATOR.
+        return new SubmissionReport(gates, vectors.Count) { Coverage = AssertionCoverage.Compute(vectors, enumerations) };
     }
 
     // -------------------------------------------------------------------------------------------------

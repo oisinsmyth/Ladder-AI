@@ -647,6 +647,20 @@ public static class GateCli
         output.WriteLine("  There is deliberately no plain ADMISSIBLE: judgement gates can never be verified.");
         output.WriteLine();
 
+        // 🔴 *** THE COVERAGE BLOCK, ON EVERY RUN AND ABOVE THE GATE LIST. ***
+        //
+        // A submission can be admissible, pass every gate, run on the rig and buy NOTHING — three vectors
+        // citing two assertions is two units of coverage and three waves. Measured: five rig events over
+        // five days, and the set of assertions ever asserted against a block did not change once. Not one
+        // gate was wrong about that; there was simply no number, so nobody added it up.
+        //
+        // It is printed BEFORE the gates because it is the only line here that says what the submission is
+        // WORTH rather than whether it is allowed, and a reader who stops at VERDICT should still meet it.
+        foreach (var line in report.Coverage.Lines())
+            output.WriteLine(line);
+
+        output.WriteLine();
+
         // *** AN UNASKED QUESTION AND AN ANSWERED ONE MUST NOT PRINT ALIKE. ***
         //
         // Found live: a Never expectation was flipped to Sampled in a scratch copy AND THE GATE OUTPUT
