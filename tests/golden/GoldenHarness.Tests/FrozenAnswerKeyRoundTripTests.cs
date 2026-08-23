@@ -5,14 +5,31 @@ namespace GoldenHarness;
 
 /// <summary>
 /// Phase-4 own-sidecar oracle (ADR-0006 / ADR-0005). The blocks that fan-out made derivable — MotorStarter
-/// and the three test-project001 FBs — are committed readable-only, guarded against a FROZEN answer key:
-/// `to-xml` of each block's own stored sidecar at drop time, captured under `tests/golden/answer-keys/`.
+/// and the three test-project001 FBs — are committed readable-only, guarded against a FROZEN answer key
+/// captured under `tests/golden/answer-keys/`.
 ///
-/// Why not the `simatic-ml/` export (like <see cref="CommittedBlocksRoundTripTests"/>): those exports have
-/// drifted from the committed `.ir` (fixes never re-exported — e.g. FB_ShredderSequencer N3, FB_PusherControl
-/// missing a whole network), and MotorStarter has no export at all. The frozen own-sidecar key is
-/// staleness-immune and needs no live TIA — it proves synthesis reproduces the block's own correct wiring,
-/// which is exactly the ADR-0005 condition for storing a block readable-only.
+/// Why not the `simatic-ml/` export (like <see cref="CommittedBlocksRoundTripTests"/>): those exports had
+/// drifted from the committed `.ir` (fixes never re-exported), and MotorStarter has no export at all. The
+/// frozen key needs no live TIA — it proves synthesis reproduces the block's own correct wiring, which is
+/// exactly the ADR-0005 condition for storing a block readable-only.
+///
+/// 🔴 <b>THE KEYS DO NOT ALL HAVE THE SAME AUTHORITY ANY MORE, AND THE DIFFERENCE MATTERS.</b>
+/// <para><b>MotorStarter, FB_PusherControl, FB_MotorFwdRevSystem</b> keep the original oracle: `to-xml` of
+/// each block's own stored sidecar at drop time. <b>FB_ShredderSequencer's key is a TIA EXPORT</b>, re-frozen
+/// 2026-08-23 after its `.ir` moved four times (including the real N14/N15 span→enumeration rewrite) and
+/// left the key genuinely stale.</para>
+/// <para><b>It could not be re-frozen the original way: that block's sidecar was dropped at `27bc689` and no
+/// longer exists.</b> Re-generating the key with today's `to-xml --synthesize` would have made this test
+/// compare the synthesizer against itself — permanently green and permanently unable to catch a synthesis
+/// regression on the one block whose wiring had just changed. A TIA export is the same shape the loader
+/// wants and `SynthesisParityRunner` already calls the real export <i>"the answer key"</i>, so it is not a
+/// weaker oracle — it is a stronger one, and unlike converter output it carries `&lt;DocumentInfo&gt;`, so
+/// the file is <b>independently identifiable as a genuine TIA artifact</b>.</para>
+/// <para>⚠️ Consequence to know before touching this: `FB_ShredderSequencer`'s key is now a duplicate of
+/// `simatic-ml/test-project001/FB_ShredderSequencer.xml`, and <see cref="CommittedBlocksRoundTripTests"/>
+/// skips any block with a frozen key — so it is guarded once, not twice. Delisting it here and letting that
+/// suite take it would be equivalent coverage without the copy. Left as-is deliberately: the two suites
+/// load differently, and collapsing them is a decision, not a tidy-up.</para>
 /// </summary>
 public class FrozenAnswerKeyRoundTripTests
 {
