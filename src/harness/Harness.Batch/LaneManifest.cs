@@ -7,7 +7,33 @@ namespace Harness.Batch;
 /// <param name="Name">The object's name in the project — what TIA matches an import on.</param>
 /// <param name="Path">The <c>.ir</c> file (or directory) it comes from.</param>
 /// <param name="Origin">Who produced it: a generator, or a person. See <see cref="ObjectOrigin"/>.</param>
-public sealed record ManifestObject(string Name, string Path, ObjectOrigin Origin);
+/// <param name="Role">
+/// What this object IS in the lane. 🔴 <b>Present so a check can NAME the subject.</b>
+/// <c>undriven-scan --fb &lt;name&gt;</c> needs the block under test, and a manifest that lists objects
+/// without saying which one is the subject makes that check uncomposable — which is exactly why it had
+/// not been composed. <b>Derived, never authored:</b> <c>SlotFcGenerator</c> is handed both the head and
+/// the block under test and used to discard them (§3.1 — a field that can be derived must never be typed).
+/// </param>
+public sealed record ManifestObject(string Name, string Path, ObjectOrigin Origin, ObjectRole Role = ObjectRole.Unstated);
+
+/// <summary>What an object is FOR in a conformance lane.</summary>
+public enum ObjectRole
+{
+    /// <summary>Not recorded. Legitimate for a supporting object, and it means no check can key on it.</summary>
+    Unstated = 0,
+
+    /// <summary>The generated mirror copy layer.</summary>
+    CopyLayer = 1,
+
+    /// <summary>The two-CALL slot FC.</summary>
+    SlotFc = 2,
+
+    /// <summary>The stimulus head that drives the plant model.</summary>
+    StimulusHead = 3,
+
+    /// <summary>🔴 <b>The block being tested — the subject every per-block check has to be pointed at.</b></summary>
+    BlockUnderTest = 4,
+}
 
 /// <summary>
 /// 🔴 <b>Recorded because the two have different failure modes and different remedies.</b> A generated
@@ -62,6 +88,21 @@ public sealed record LaneManifest(
     /// <summary>Distinct program paths, in manifest order — what a lane's <c>ProgramPaths</c> becomes.</summary>
     public IReadOnlyList<string> ProgramPaths =>
         Objects.Select(o => o.Path).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+
+    /// <summary>
+    /// 🔴 <b>The block under test, or null.</b> Null is a real answer — an older manifest states no roles
+    /// — and it means a per-block check <b>cannot be pointed at anything</b> and must say so rather than
+    /// picking an object. <b>Two objects claiming the role is null too</b>: a lane tests one block, and
+    /// guessing which would be worse than declining.
+    /// </summary>
+    public string? BlockUnderTest
+    {
+        get
+        {
+            var named = Objects.Where(o => o.Role == ObjectRole.BlockUnderTest).ToArray();
+            return named.Length == 1 ? named[0].Name : null;
+        }
+    }
 
     public string ToJson() => JsonSerializer.Serialize(this, Json);
 

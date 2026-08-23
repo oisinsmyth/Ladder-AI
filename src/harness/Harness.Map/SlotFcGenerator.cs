@@ -31,7 +31,21 @@ public sealed record SlotFcNaming(string BlockName, int BlockNumber);
 /// 🔴 <b>The sentence a caller must act on, emitted WITH the block rather than left to be remembered.</b>
 /// A generated FC that nothing calls is deployed, loaded, reported healthy, and never runs.
 /// </param>
-public sealed record SlotFcResult(string Ir, string BlockName, string CallSiteObligation);
+/// <param name="StimulusHeadBlock">
+/// The head this slot calls first. Echoed so a lane manifest can record each object's ROLE without
+/// anybody typing it — the generator already knows, and §3.1 forbids authoring a derivable field.
+/// </param>
+/// <param name="BlockUnderTestBlock">
+/// 🔴 <b>The object being tested, and the one checks have to be able to NAME.</b>
+/// <c>undriven-scan --fb &lt;name&gt;</c> cannot be composed without it, and a manifest that lists objects
+/// without saying which is the subject makes that check unreachable — which is how it went uncomposed.
+/// </param>
+public sealed record SlotFcResult(
+    string Ir,
+    string BlockName,
+    string CallSiteObligation,
+    string StimulusHeadBlock,
+    string BlockUnderTestBlock);
 
 /// <summary>
 /// 🔴 <b>The slot FC: two calls, and the ORDER IS THE WHOLE CONTENT.</b>
@@ -104,7 +118,9 @@ public static class SlotFcGenerator
             $"'{naming.BlockName}' MUST be called from the cyclic OB, ahead of the copy layer. "
             + "A slot FC that nothing calls is deployed, loaded, reported healthy by every artifact, and "
             + "never executes — and the start echo cannot detect it, because both halves of the echo live "
-            + "in the copy layer, which is called. Verify the call site; do not infer it from a green deploy.");
+            + "in the copy layer, which is called. Verify the call site; do not infer it from a green deploy.",
+            stimulusHead.BlockName,
+            blockUnderTest.BlockName);
     }
 
     /// <summary>

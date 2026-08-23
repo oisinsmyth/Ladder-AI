@@ -149,6 +149,53 @@ public sealed class LaneManifestTests : IDisposable
     }
 
     // ---------------------------------------------------------------------------------------------
+    // THE ROLE. A manifest that lists objects without saying which is the SUBJECT makes every per-block
+    // check uncomposable — which is why `undriven-scan` had never been composed over the union.
+    // ---------------------------------------------------------------------------------------------
+
+    private static LaneManifest WithRoles(params ObjectRole[] roles) => new(
+        "valve",
+        roles.Select((r, i) => new ManifestObject($"Obj{i}", $"obj{i}.ir", ObjectOrigin.Generated, r)).ToArray(),
+        Array.Empty<string>());
+
+    [Fact]
+    public void Exactly_one_block_under_test_is_named()
+    {
+        var manifest = WithRoles(ObjectRole.CopyLayer, ObjectRole.SlotFc, ObjectRole.StimulusHead, ObjectRole.BlockUnderTest);
+
+        Assert.Equal("Obj3", manifest.BlockUnderTest);
+    }
+
+    /// <summary>
+    /// 🔴 <b>No role stated is NULL, not a guess.</b> An older manifest carries no roles at all, and a
+    /// per-block check pointed at an object nobody nominated is a confident answer about the wrong thing.
+    /// </summary>
+    [Fact]
+    public void A_manifest_that_states_no_roles_names_no_block_under_test()
+    {
+        Assert.Null(Sample().BlockUnderTest);
+    }
+
+    /// <summary>
+    /// 🔴 <b>TWO claimants is also null.</b> A lane tests one block; two is a defect in the manifest, and
+    /// picking one would hide it behind a check that appeared to run.
+    /// </summary>
+    [Fact]
+    public void TWO_objects_claiming_the_role_names_neither()
+    {
+        Assert.Null(WithRoles(ObjectRole.BlockUnderTest, ObjectRole.BlockUnderTest).BlockUnderTest);
+    }
+
+    /// <summary>The role survives the JSON round trip, or it would be derived once and lost immediately.</summary>
+    [Fact]
+    public void The_role_survives_a_JSON_round_trip()
+    {
+        var path = Write("roles.json", WithRoles(ObjectRole.SlotFc, ObjectRole.BlockUnderTest).ToJson());
+
+        Assert.Equal("Obj1", LaneManifest.Read(path, File.ReadAllText).BlockUnderTest);
+    }
+
+    // ---------------------------------------------------------------------------------------------
     // THROUGH THE CLI. The point of the feature is which of the two paths a run took, and that has to be
     // legible in the report rather than inferable from the absence of a flag.
     // ---------------------------------------------------------------------------------------------

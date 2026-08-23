@@ -161,4 +161,91 @@ public sealed class UnionPreflightTests
     {
         Assert.Null(UnionPreflight.Run("converter.exe", "union", new Canned("not json")).CrossCheckJson);
     }
+
+    // ---------------------------------------------------------------------------------------------
+    // undriven-scan over the union. It can ONLY be asked here: run against the deliverable alone, every
+    // stimulus-driven input reports undriven, because what drives them lives in another file.
+    // ---------------------------------------------------------------------------------------------
+
+    private sealed class ExitingRunner : IProcessRunner
+    {
+        private readonly int _exit;
+        private readonly string _stdout;
+
+        internal IReadOnlyList<string>? LastArgs { get; private set; }
+
+        internal ExitingRunner(int exit, string stdout = "") { _exit = exit; _stdout = stdout; }
+
+        public ProcessResult Run(string executable, IReadOnlyList<string> arguments, TimeSpan timeout)
+        {
+            LastArgs = arguments;
+            return new ProcessResult(true, false, _exit, _stdout, string.Empty, "canned");
+        }
+    }
+
+    /// <summary>Exit 0 is a clean scan and produces no finding.</summary>
+    [Fact]
+    public void A_clean_undriven_scan_produces_no_finding()
+    {
+        Assert.Null(UnionPreflight.UndrivenScan("converter.exe", "union", "FB_Widget", new ExitingRunner(0)));
+    }
+
+    /// <summary>Exit 1 is a real finding about the block, and it names the block.</summary>
+    [Fact]
+    public void Undriven_members_are_reported_and_name_the_block()
+    {
+        var finding = UnionPreflight.UndrivenScan(
+            "converter.exe", "union", "FB_Widget", new ExitingRunner(1, "banner\nSUMMARY: 3 undriven"));
+
+        Assert.NotNull(finding);
+        Assert.Equal("UNDRIVEN", finding!.Kind);
+        Assert.Contains("FB_Widget", finding.Detail);
+        // The LAST line, not the first — every tool here prints a banner first.
+        Assert.Contains("SUMMARY: 3 undriven", finding.Detail);
+    }
+
+    /// <summary>
+    /// 🔴 <b>Exit 2 is NOTHING EXAMINED, and it must not read as a clean scan.</b> The converter reports
+    /// it explicitly for an FB that names no block in the corpus or has no instances — FI-44's shape, and
+    /// the reason `undriven-scan` grew that exit code in the first place.
+    /// </summary>
+    [Fact]
+    public void An_undriven_scan_that_examined_NOTHING_says_so_rather_than_passing()
+    {
+        var finding = UnionPreflight.UndrivenScan("converter.exe", "union", "FB_Absent", new ExitingRunner(2));
+
+        Assert.NotNull(finding);
+        Assert.Contains("NOTHING EXAMINED", finding!.Detail);
+        Assert.Contains("not a pass", finding.Detail);
+    }
+
+    /// <summary>
+    /// 🔴 <b>With no named subject the scan is NOT RUN — and that is reported as an unasked question,
+    /// never as a clean one.</b> Guessing which object is under test would be worse than declining: a
+    /// per-block check pointed at the wrong block is a confident answer about the wrong thing.
+    /// </summary>
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    public void With_no_named_block_under_test_the_scan_is_NOT_RUN_and_nothing_is_guessed(string? subject)
+    {
+        var runner = new ExitingRunner(0);
+
+        var finding = UnionPreflight.UndrivenScan("converter.exe", "union", subject, runner);
+
+        Assert.NotNull(finding);
+        Assert.Contains("NOT RUN", finding!.Detail);
+        Assert.Contains("unasked question", finding.Detail);
+        Assert.Null(runner.LastArgs);   // and it did not run the converter to find that out
+    }
+
+    /// <summary>The subject reaches the command line as `--fb`, over the UNION and not one lane.</summary>
+    [Fact]
+    public void The_scan_is_pointed_at_the_union_and_at_the_named_block()
+    {
+        var runner = new ExitingRunner(0);
+        UnionPreflight.UndrivenScan("converter.exe", "union-dir", "FB_Widget", runner);
+
+        Assert.Equal(new[] { "undriven-scan", "--project", "union-dir", "--fb", "FB_Widget" }, runner.LastArgs);
+    }
 }

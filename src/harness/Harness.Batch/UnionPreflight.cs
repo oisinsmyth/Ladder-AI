@@ -132,6 +132,61 @@ public static class UnionPreflight
         }
     }
 
+    /// <summary>
+    /// 🔴 <b><c>undriven-scan</c> for the block under test — and it can only be asked OVER THE UNION.</b>
+    ///
+    /// <para>Run it on the deliverable alone and every stimulus-driven input reports undriven, because the
+    /// thing that drives them is the stimulus head in another file. The union is what makes the question
+    /// answerable at all — a second, independent argument for the same corpus.</para>
+    ///
+    /// <para><b>Exit 1 means findings; exit 2 means NOTHING WAS EXAMINED</b> (the FB is not in the corpus,
+    /// or has no instances) and is reported as such rather than as a clean scan. Reported, never gating:
+    /// same reason as the rest of this pre-flight.</para>
+    /// </summary>
+    public static UnionFinding? UndrivenScan(
+        string converterExe, string unionIrDirectory, string? blockUnderTest,
+        IProcessRunner runner, TimeSpan? timeout = null)
+    {
+        ArgumentNullException.ThrowIfNull(runner);
+
+        // Null is a real state, not an oversight: an older manifest states no roles, and two objects
+        // claiming the role is also null. Declining to guess is the whole point — a per-block check
+        // pointed at the wrong block is worse than one not run.
+        if (string.IsNullOrWhiteSpace(blockUnderTest))
+        {
+            return new UnionFinding("UNDRIVEN-SCAN",
+                "NOT RUN — the manifest does not name exactly one block under test, so there is nothing to point "
+                + "`--fb` at. This is not a clean scan; it is an unasked question.");
+        }
+
+        var result = runner.Run(
+            converterExe,
+            new[] { "undriven-scan", "--project", unionIrDirectory, "--fb", blockUnderTest! },
+            timeout ?? TimeSpan.FromMinutes(2));
+
+        if (!result.Started || result.TimedOut)
+            return new UnionFinding("UNDRIVEN-SCAN", "NOT RUN — the converter did not complete: " + result.Detail);
+
+        return result.ExitCode switch
+        {
+            0 => null,
+            1 => new UnionFinding("UNDRIVEN",
+                $"'{blockUnderTest}' has undriven or disarmed interface members over the union: "
+                + LastLine(result.StandardOutput)),
+            // FI-44's shape, and the converter reports it explicitly: a scope that matched nothing is
+            // unjudgeable, not clean.
+            2 => new UnionFinding("UNDRIVEN-SCAN",
+                $"NOTHING EXAMINED — '{blockUnderTest}' names no block in the union, or one with no instances. "
+                + "An empty scan is not a pass."),
+            _ => new UnionFinding("UNDRIVEN-SCAN", $"exit {result.ExitCode}: " + LastLine(result.StandardOutput)),
+        };
+    }
+
+    private static string LastLine(string text) =>
+        text.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries) is { Length: > 0 } lines
+            ? lines[^1]
+            : "(no output)";
+
     private static UnionPreflightResult NotRun(string why) =>
         new(false, why, 0, Array.Empty<UnionFinding>(), null);
 }
