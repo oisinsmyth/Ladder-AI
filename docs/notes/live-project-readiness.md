@@ -99,12 +99,45 @@ it parsed as **nothing at all** before the fix, so it is an unambiguous currency
 
 | | what it is proven to do |
 |---|---|
-| **Deploy** (`Harness.Device`: stage → `to-xml` → `import-all` → layout re-assert → `compile-all` → `sanity-check`) | **45 objects loaded by name**, CPU read back `Running (8)` **from the device** |
+| ~~**Deploy** (`Harness.Device`…)~~ 🔴 **CORRECTED 2026-08-24 — next row, and the note under this table** | **45 objects loaded by name** and CPU `Running (8)` are real, but **`Harness.Device` did neither** |
+| **`download-probe`, then `openness-cli`, driven separately** — what actually ran | `download-probe` loaded **45 objects by name**, exit 0, 2026-08-14 00:52 (`docs/notes/test-log.tsv:2`); `rig-read` read CPU `Running(8)` off the device at 00:58 (`:3`); `openness-cli` did the Portal work at 02:40 — `import-all` of **nine** objects, `compile-all`, `sanity-check` (`:5`) — **after** the download |
 | **`rig-read`** | Run state, device identity, DB read, and **`--marker <byte> --length <n>`: MARKER memory** (2026-08-14) — the mirror lives in `%M`, so no DB read reaches it. Mutually exclusive with `--db`. **Needs a device allowlist or it opens no socket at all** |
 | **The mirror + copy layer** | Deployed and **read back over the wire**. `Bool`→bit/1 reg, `Int`→word/1, `Time`→double word/**2** |
 | **`download-probe`** | The only binary that can transfer a program. **Fenced; exit 3 before Portal is contacted** on a refusal |
 | **The converter's analysis set** | `preflight`, `drift-check`, `compare`, `review`, `tagstatus`, `cross-check` — the daily working tools |
 | **The claims registry** | **Verified connected by observing a refusal**, not by assuming one. See the trap below |
+
+> 🔴 **THE DEPLOYMENT GATEWAY HAS NEVER RUN, AND THIS ROW SAID IT HAD — CORRECTED 2026-08-24.**
+> As written 2026-08-14 03:25, the row named `Harness.Device` and a sequence *ending at
+> `sanity-check`* — **a sequence with no download in it** — while citing the 45-object figure that
+> only a download can produce. `docs/18-project-workbench.md` then widened it on 08-21, seven days
+> after the event, into *"run live"* against the gateway file by name.
+>
+> **The defect, precisely: a capability proven only by its CONSTITUENT BINARIES, each driven
+> separately, attributed to the ORCHESTRATOR that would drive them together.** `download-probe`
+> loaded the objects; `openness-cli` did the Portal work, in a different order and over a different
+> set; `rig-read` read the CPU state. **`Harness.Device` appears zero times in
+> `docs/notes/test-log.tsv`**, and no tracked row names it. ***`OpennessDeviceGateway` remains
+> unexercised: built, its ordering and argument vectors tested, never executed against Portal or a
+> controller.*** Its own code says so — `src/harness/Harness.Loop/LoopResult.cs:431` — and that
+> constant is **right**; these two documents were the wrong ones.
+>
+> ⚠️ **`test-environment-build-plan.md:4137`'s first-hand `DownloadResultAdapter` manifest is evidence
+> AGAINST the gateway, not for it.** `Harness.Device.csproj`'s own comment records that the assembly
+> **shells out** to `openness-cli` and `download-probe` because Siemens.Engineering pins them to
+> net48 while the harness is net8.0 — *"a ProjectReference is therefore impossible in the direction
+> that matters"*. `DownloadResultAdapter` is linked in-process by `download-probe`
+> (`src/openness-cli/DownloadProbe/ProbeSession.cs`). A first-hand manifest is therefore proof the
+> **probe** ran. That shell-out is the gap, not its discharge.
+>
+> 🔴 **AND THIS ONE WAS WRONG IN THE OPTIMISTIC DIRECTION, WHICH THE REST OF THIS PAGE IS NOT.** The
+> stale lines corrected above understated what had shipped; this one claimed hardware exercise that
+> never happened, on the page a session reads before deciding whether something is safe to run. **A
+> document wrongly saying "not yet proven" costs a re-check. A document wrongly saying "run live"
+> costs the check itself.** So: **a caveat asserting a capability is unproven is not evidence that
+> the caveat is stale.** Before deleting one, grep the log for a row naming the thing it names —
+> here that grep returns nothing, and the caveat survives. `src/harness/Harness.Device/RIG-SESSION.md`
+> carries the same banner and is likewise correct.
 
 ## DO NOT RELY ON THESE TODAY
 
