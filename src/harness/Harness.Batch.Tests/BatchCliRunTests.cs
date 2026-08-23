@@ -175,13 +175,17 @@ public sealed class BatchCliRunTests : IDisposable
 
         Assert.Equal(BatchExit.Ok, exit);
 
-        // 2 acquire + export-all + drift-check + generate + 1 wave + 2 release. The deployment goes
-        // through the gateway, not the runner, so it is not in this count.
+        // 1 parity + 2 acquire + export-all + drift-check + generate + 1 wave + 2 release. The deployment
+        // goes through the gateway, not the runner, so it is not in this count.
         //
         // The drift pair is here because --staging is set: the run stages the program union and compares
         // it against the project, since the build stamp claims the supplied program is what executes and
         // nothing used to verify that.
-        Assert.Equal(8, calls);
+        //
+        // The parity call is the reachability cross-check, and it comes FIRST — before any gate. It runs
+        // only under --yes, deliberately: it would be useful in a dry run too, but the dry run's contract
+        // is that it starts no process at all, and that invariant is worth more than the convenience.
+        Assert.Equal(9, calls);
     }
 
     // ---------------------------------------------------------------------------------------------

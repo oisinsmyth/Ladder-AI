@@ -121,6 +121,36 @@ public sealed record SoleWriterFact(
     IReadOnlyList<ReaderRef> Readers,
     string? Owner = null);
 
+// 🔴 WHICH CODE BLOCKS ACTUALLY EXECUTE — the graph already knew, and nothing could ask it.
+//
+// The reachability walk existed inside ProjectUsageGraph and reached the report only as a footnote on
+// multi-writer lines ("this path is written by a block no OB reaches"). There was no way to ask the
+// whole question, so `Harness.Batch` grew a SECOND derivation of it — a regex over raw IR text — with no
+// test holding the two together. That is the shape GateParityTests exists for: two derivations of one
+// rule once disagreed on twelve gate inputs, and a batch planner then re-derived slot width and was short
+// by the latch registers.
+//
+// Exposing it here does not make the harness's copy correct; it makes it REPLACEABLE, and gives the
+// parity test something to compare against.
+public sealed record ReachabilityFacts(
+    // Every OB/FB/FC the corpus contains. FI-44's denominator: read this before believing a clean scan.
+    IReadOnlyList<string> CodeBlocks,
+
+    // The roots. An OB is called by the operating system and nothing else is — never inferred from a
+    // name prefix (anything can be renamed into one) and never from "nothing calls it", which would make
+    // every uncalled block its own root, i.e. exactly the state being detected.
+    IReadOnlyList<string> OrganizationBlocks,
+
+    IReadOnlyList<string> ReachableFromAnOb,
+
+    // CodeBlocks minus ReachableFromAnOb — but ONLY meaningful when Known is true.
+    IReadOnlyList<string> Unreachable,
+
+    // 🔴 FALSE MEANS UNKNOWN, NOT "ALL REACHABLE". A corpus with no OB has no roots, so nothing can be
+    // shown to execute and nothing can be shown not to. An absent root set cannot distinguish the two,
+    // and a caller that read the empty Unreachable list as a pass would be believing the wrong one.
+    bool Known);
+
 public sealed record CrossCheckReport(
     IReadOnlyList<MultiWriterFact> MultiWriters,
     IReadOnlyList<DeadMemberFact> DeadMembers,
@@ -129,7 +159,10 @@ public sealed record CrossCheckReport(
     IReadOnlyList<string> Warnings,
     // FI-67. Appended last so every existing positional construction keeps compiling; defaulted so a
     // caller that does not care about back-out surface is unaffected.
-    IReadOnlyList<SoleWriterFact>? SoleWriters = null)
+    IReadOnlyList<SoleWriterFact>? SoleWriters = null,
+    // Same reason, same shape: appended and defaulted. Null means the report was built by something that
+    // did not compute it — which is different from a corpus with nothing in it, and says so.
+    ReachabilityFacts? Reachability = null)
 {
     public IReadOnlyList<SoleWriterFact> SoleWriters { get; init; } = SoleWriters ?? Array.Empty<SoleWriterFact>();
 }

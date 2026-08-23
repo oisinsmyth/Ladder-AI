@@ -84,6 +84,31 @@ public static class CrossCheckOutputFormatter
             sb.Append("INDEX WARNING: ").Append(w).Append('\n');
         }
 
+        // 🔴 REACHABILITY, ON EVERY RUN, WITH ITS DENOMINATOR — and saying outright when it could not be
+        // decided. This is a FACT line, not a verdict: cross-check exits 0 always, and whether an
+        // unreachable block is acceptable is the caller's question. It is usually a block somebody means
+        // to call, which is why it is reported rather than subtracted from anything.
+        if (report.Reachability is { } reach)
+        {
+            if (!reach.Known)
+            {
+                sb.Append("REACHABILITY: NOT DECIDED — ").Append(reach.CodeBlocks.Count)
+                  .Append(" code block(s) and NO OB, so nothing roots the call graph. This is UNKNOWN, not \"all reachable\".\n");
+            }
+            else
+            {
+                sb.Append("REACHABILITY: ").Append(reach.ReachableFromAnOb.Count).Append(" of ")
+                  .Append(reach.CodeBlocks.Count).Append(" code block(s) reachable from ")
+                  .Append(reach.OrganizationBlocks.Count).Append(" OB(s)\n");
+
+                if (reach.Unreachable.Count > 0)
+                {
+                    sb.Append("  NOT IN THE SCAN: ").Append(string.Join(", ", reach.Unreachable))
+                      .Append(" — deployed, loaded, and never executed.\n");
+                }
+            }
+        }
+
         sb.Append("SUMMARY: ").Append(report.MultiWriters.Count).Append(" multi-writer, ")
             .Append(report.DeadMembers.Count).Append(" dead-member, ")
             .Append(report.IoBoundary.Count).Append(" io-ref, ")
@@ -120,6 +145,18 @@ public static class CrossCheckOutputFormatter
             ioBoundary = report.IoBoundary.Select(io => new { block = io.Block, path = io.Path, direction = io.Direction }),
             siblingRefs = report.SiblingRefs.Select(s => new { block = s.Block, calls = s.Calls, instanceDbRoots = s.InstanceDbRoots }),
             warnings = report.Warnings,
+            // 🔴 WHICH CODE BLOCKS ACTUALLY EXECUTE. Emitted always, including when it could not be
+            // decided, and `known` is the field a consumer must read FIRST: `known: false` means the
+            // corpus has no OB, so `unreachable` is empty BECAUSE NOTHING COULD BE DECIDED, not because
+            // everything is fine. A reader that keyed on the empty list would have it exactly backwards.
+            reachability = report.Reachability is null ? null : new
+            {
+                codeBlocks = report.Reachability.CodeBlocks,
+                organizationBlocks = report.Reachability.OrganizationBlocks,
+                reachableFromAnOb = report.Reachability.ReachableFromAnOb,
+                unreachable = report.Reachability.Unreachable,
+                known = report.Reachability.Known,
+            },
             // FI-67: JSON ONLY, DELIBERATELY. Most members have exactly one writer, so this is the
             // largest table in the report by a wide margin — printing it in the human view would
             // drown the four fact tables a reader actually scans. It exists to be queried (which

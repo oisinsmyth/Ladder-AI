@@ -148,4 +148,61 @@ public sealed class ReachabilityTests : IDisposable
 
         Assert.False(string.IsNullOrWhiteSpace(Of().Summary));
     }
+
+    // ---------------------------------------------------------------------------------------------
+    // THE THIRD OUTCOME. A file that declares nothing this walk can identify used to be `continue`d
+    // silently under a comment saying "a DB, a UDT or a tag table" — true of the intended case and not
+    // of the whole set.
+    // ---------------------------------------------------------------------------------------------
+
+    /// <summary>
+    /// 🔴 <b>A file declaring NOTHING gates, because it is a hole in the denominator.</b> A truncated or
+    /// half-written code block lands in exactly this branch: it drops out of the block set, out of the
+    /// <c>n of m</c> count and out of every refusal, while the summary still reads VERIFIED.
+    /// </summary>
+    [Fact]
+    public void A_file_that_declares_NOTHING_is_named_and_gates()
+    {
+        Block("OB", "Main", "FC_Slot");
+        Block("FC", "FC_Slot");
+        File.WriteAllText(Path.Combine(_dir, "Truncated.ir"), "BLOCK F");   // a write that died mid-header
+
+        var report = Of();
+
+        Assert.Contains(report.Refusals, r => r.Contains("Truncated.ir", StringComparison.Ordinal));
+        Assert.Contains(report.Refusals, r => r.Contains("NOT in the denominator", StringComparison.OrdinalIgnoreCase)
+                                           || r.Contains("SMALLER than the one supplied", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// 🔴 <b>THE NEGATIVE CONTROL, and the reason the third outcome needed a positive match rather than a
+    /// negative one.</b> DBs, UDTs and tag tables legitimately have no <c>BLOCK</c> header and legitimately
+    /// are not scan participants. They declare themselves, so they are recognised rather than assumed —
+    /// and a check that gated on all three would refuse every real corpus.
+    /// </summary>
+    [Theory]
+    [InlineData("DB DB_Thing\n  MEMBERS\n    A : Bool\n")]
+    [InlineData("TYPE UDT_Thing\n  MEMBERS\n    A : Bool\n")]
+    [InlineData("TAGTABLE HarnessMirror\n  TAG HX_A : Bool %M1000.0\n")]
+    public void A_DB_a_UDT_and_a_tag_table_are_recognised_and_do_NOT_gate(string content)
+    {
+        Block("OB", "Main", "FC_Slot");
+        Block("FC", "FC_Slot");
+        File.WriteAllText(Path.Combine(_dir, "NotCode.ir"), content);
+
+        Assert.Empty(Of().Refusals);
+    }
+
+    /// <summary>
+    /// The verdict states which derivation produced it. Two exist by necessity — the harness is
+    /// dependency-free by design — so a reader has to be able to tell which one they are reading.
+    /// </summary>
+    [Fact]
+    public void The_summary_names_itself_as_the_weaker_derivation()
+    {
+        Block("OB", "Main", "FC_Slot");
+        Block("FC", "FC_Slot");
+
+        Assert.Contains("weaker", Of().Summary);
+    }
 }

@@ -50,6 +50,14 @@ public static class Reachability
     private static readonly Regex CallTarget = new(
         @"\bCALL\s+(?<name>[A-Za-z_][A-Za-z0-9_]*)", RegexOptions.Compiled);
 
+    /// <summary>
+    /// The non-code objects that legitimately have no <c>BLOCK</c> header and are legitimately not scan
+    /// participants. <b>Matched positively</b>, so that "this is a DB" and "this file declares nothing at
+    /// all" stop being the same observation.
+    /// </summary>
+    private static readonly Regex NonCodeHeader = new(
+        @"^\s*(DB|TYPE|TAGTABLE)\s+", RegexOptions.Multiline | RegexOptions.Compiled);
+
     public static ReachabilityReport Of(IReadOnlyList<string> programPaths)
     {
         ArgumentNullException.ThrowIfNull(programPaths);
@@ -57,6 +65,7 @@ public static class Reachability
         var kinds = new Dictionary<string, string>(StringComparer.Ordinal);
         var calls = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
         var unreadable = new List<string>();
+        var unidentifiable = new List<string>();
 
         foreach (var file in programPaths.SelectMany(FilesUnder).Distinct(StringComparer.OrdinalIgnoreCase))
         {
@@ -73,7 +82,20 @@ public static class Reachability
 
             var header = BlockHeader.Match(text);
             if (!header.Success)
-                continue;   // a DB, a UDT or a tag table: no calls, not a scan participant
+            {
+                // 🔴 THE THIRD OUTCOME, AND IT USED TO BE INVISIBLE. This branch's comment said "a DB, a
+                // UDT or a tag table" — true of the intended case, and NOT of the whole set. A truncated,
+                // half-written or malformed CODE block lands here too: it drops out of `kinds`, out of the
+                // `n of m` denominator, and out of every refusal, while the summary still reads
+                // "reachability VERIFIED". FI-44 one level in — not a check that examined nothing, but a
+                // check whose denominator quietly shrank.
+                //
+                // The legitimate kinds declare themselves, so they can be told apart rather than assumed.
+                if (!NonCodeHeader.IsMatch(text))
+                    unidentifiable.Add(Path.GetFileName(file));
+
+                continue;
+            }
 
             var name = header.Groups["name"].Value;
             kinds[name] = header.Groups["kind"].Value;
@@ -137,18 +159,25 @@ public static class Reachability
                 + "its verdict would be over an unstated denominator: " + string.Join(", ", unreadable));
         }
 
+        // 🔴 A file that declared NOTHING is a hole in the denominator, and it gates. It is not a DB, a
+        // UDT or a tag table — those declare themselves and are matched positively above — so it is a
+        // file this walk could not classify at all. Counting it as "not a scan participant" is how a
+        // truncated code block disappears from a check that then reports VERIFIED over a short corpus.
+        if (unidentifiable.Count > 0)
+        {
+            refusals.Add(
+                $"{unidentifiable.Count} file(s) in the union program declare NO object this walk can identify — not a "
+                + "BLOCK, not a DB, not a TYPE, not a TAGTABLE: " + string.Join(", ", unidentifiable)
+                + ". They are absent from the denominator below, so the reachability verdict would be over a corpus "
+                + "SMALLER than the one supplied, and a truncated code block is exactly what hides here.");
+        }
+
         return new ReachabilityReport(
             true, roots, reached.OrderBy(n => n, StringComparer.Ordinal).ToArray(), unreachable, refusals,
-            $"reachability VERIFIED from {roots.Length} OB(s): {reached.Count} of {kinds.Count} code block(s) are in the scan.");
+            $"reachability VERIFIED from {roots.Length} OB(s): {reached.Count} of {kinds.Count} code block(s) are in the scan."
+            + (unidentifiable.Count > 0 ? $" ⚠️ {unidentifiable.Count} supplied file(s) are NOT in that denominator." : string.Empty)
+            + " (Derived from a text walk, not from the converter's own call graph — the weaker of the two.)");
     }
 
-    private static IEnumerable<string> FilesUnder(string path)
-    {
-        if (File.Exists(path))
-            return new[] { path };
-
-        return Directory.Exists(path)
-            ? Directory.EnumerateFiles(path, "*.ir", SearchOption.TopDirectoryOnly)
-            : Array.Empty<string>();
-    }
+    private static IEnumerable<string> FilesUnder(string path) => ProgramFiles.Under(new[] { path });
 }

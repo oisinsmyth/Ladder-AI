@@ -92,7 +92,32 @@ public static class CrossCheckRunner
 
         var siblingRefs = BuildSiblingRefs(graph);
 
-        return new CrossCheckReport(multiWriters, deadMembers, ioBoundary, siblingRefs, graph.Warnings, soleWriters);
+        return new CrossCheckReport(multiWriters, deadMembers, ioBoundary, siblingRefs, graph.Warnings, soleWriters,
+            Reachability(graph));
+    }
+
+    // 🔴 The whole reachability question, answerable at last. The walk already existed on the graph and
+    // reached the report only as a footnote on multi-writer lines, so nothing could ask "which blocks do
+    // not execute?" — and Harness.Batch grew its own regex derivation of it instead.
+    //
+    // `Known` is false when the corpus has no OB, and then `Unreachable` is EMPTY BY CONSTRUCTION rather
+    // than computed: with no roots, nothing can be shown to execute and nothing can be shown not to.
+    // Returning a populated list there would be the more useful-looking answer and the wrong one.
+    private static ReachabilityFacts Reachability(ProjectUsageGraph graph)
+    {
+        var code = graph.BlockNames.OrderBy(n => n, StringComparer.Ordinal).ToArray();
+        var obs = graph.OrganizationBlocks.OrderBy(n => n, StringComparer.Ordinal).ToArray();
+        var known = obs.Length > 0;
+        var reachable = graph.ReachableFromAnOb.OrderBy(n => n, StringComparer.Ordinal).ToArray();
+
+        return new ReachabilityFacts(
+            code,
+            obs,
+            reachable,
+            known
+                ? code.Where(b => !reachable.Contains(b, StringComparer.Ordinal)).ToArray()
+                : Array.Empty<string>(),
+            known);
     }
 
     // Interface-UDT dead members. Each FB interface member aliases between the FB-internal bare form

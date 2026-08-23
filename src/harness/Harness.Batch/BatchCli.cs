@@ -213,9 +213,52 @@ public static class BatchCli
             LeaseTtlMinutes: args.TtlMinutes,
             PortalAttestation: args.PortalAttestation);
 
+        var unionIr = MaterialiseUnionIr(batch.ProgramPaths, args.Staging, output);
+
+        // 🔴 REFUSED BEFORE ANY PROCESS STARTS, because it is a pure argument check and everything below
+        // costs something. It used to sit after planning; moving it up is what keeps "--yes with nothing
+        // to deploy with starts NOTHING" true now that a check runs down there.
+        if (args.Confirmed && deploy is null)
+        {
+            output.WriteLine("REFUSED  --yes needs --deploy-config <file.json>, which supplies the Portal project, the group path, the "
+                + "binaries and the download target (DeviceGatewayOptions). Without it there is nothing to deploy with, and taking the "
+                + "gates first would lock another agent out of a run that cannot happen. NO GATE WAS TAKEN.");
+            return BatchExit.Unusable;
+        }
+
+        // 🔴 *** THE PARITY CHECK, RUN ON THE CORPUS ACTUALLY IN FRONT OF IT. ***
+        //
+        // Reachability is derived TWICE — once here by a text walk, once by the converter's real parser —
+        // and it must be, because the harness is deliberately dependency-free and referencing the
+        // converter would give away a property this project paid for. So the two are compared instead,
+        // over real input, every time a batch actually runs. A disagreement REFUSES: when two derivations
+        // differ at least one is wrong and neither knows which, and continuing would pick a winner by
+        // accident of code path. Being unable to consult the second one is reported, never refused.
+        //
+        // 🔴 UNDER --yes ONLY, AND THAT IS A DELIBERATE TRADE. It would be useful in a dry run, but the
+        // dry run's contract is that it starts NO PROCESS AT ALL — a promise with its own test and its own
+        // reason — and eroding a clean invariant to gain a convenience is how invariants stop being
+        // checkable. The dry run says the check was not performed instead of implying it passed.
+        if (!args.Confirmed)
+        {
+            output.WriteLine("  parity    NOT PERFORMED in a dry run — it would start a converter process, and a dry run starts none.");
+        }
+        else if (unionIr is not null && batch.Reachability is { } mine && runner is not null)
+        {
+            var parity = ReachabilityParity.Check(mine, options.ConverterExe, unionIr, runner);
+            output.WriteLine($"  parity    {parity.Outcome}: {parity.Detail}");
+
+            if (parity.Outcome == ParityOutcome.Disagreed)
+            {
+                output.WriteLine();
+                output.WriteLine("REFUSED, and NO GATE WAS TAKEN.");
+                return BatchExit.Unusable;
+            }
+        }
+
         var plan = BatchRunPlan.For(batch, lanes, options with
         {
-            UnionIrDirectory = MaterialiseUnionIr(batch.ProgramPaths, args.Staging, output),
+            UnionIrDirectory = unionIr,
             ProjectExportDirectory = string.IsNullOrWhiteSpace(args.Staging) ? null : Path.Combine(args.Staging!, "project-xml"),
         });
 
@@ -232,18 +275,6 @@ public static class BatchCli
 
         if (!plan.Planned)
             return BatchExit.Unusable;
-
-        // 🔴 CHECKED BEFORE THE GATES, NOT AT THE DEPLOY STEP. BatchRunner would stop there and release
-        // correctly, but it would have taken and handed back two gates to discover a missing argument —
-        // locking another agent out of Portal and the rig for the duration of a run that could never
-        // have deployed.
-        if (args.Confirmed && deploy is null)
-        {
-            output.WriteLine("REFUSED  --yes needs --deploy-config <file.json>, which supplies the Portal project, the group path, the "
-                + "binaries and the download target (DeviceGatewayOptions). Without it there is nothing to deploy with, and taking the "
-                + "gates first would lock another agent out of a run that cannot happen. NO GATE WAS TAKEN.");
-            return BatchExit.Unusable;
-        }
 
         if (!args.Confirmed)
         {
