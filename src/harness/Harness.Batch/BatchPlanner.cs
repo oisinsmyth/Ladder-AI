@@ -2,6 +2,7 @@
 using System.Text.Json;
 using Harness.Gate;
 using Harness.Map;
+using Harness.Run;
 
 namespace Harness.Batch;
 
@@ -288,14 +289,20 @@ public static class BatchPlanner
         // Identical declarations collapse; two lanes declaring OVERLAPPING-BUT-DIFFERENT regions do not,
         // and the geometry refuses them. That is correct rather than awkward: it means two lanes disagree
         // about what else lives in the area, and guessing which is right would be inventing the answer.
-        var reserved = documents
-            .SelectMany(d => d.Binding.ReservedRegions ?? new List<ReservedRegionDocument>())
-            .Select(r => new ReservedRegion(r.Register ?? -1, r.Length ?? 0, r.Owner ?? string.Empty))
-            .Distinct()
-            .ToArray();
+        // 🔴 ONE DERIVATION, 2026-08-23. This block used to open-code the union that
+        // `DeclaredReservations` now owns — and while it did, `LoopCli.Compose` built its geometry with
+        // no reservations at all, so the guard bound on the batch path and was INERT on every path that
+        // went through Compose: `harness-run`, `Harness.Verify`, and `harness-batch --merged`, the deploy
+        // path itself. The merged binding carried the reservation and the consumer dropped it.
+        //
+        // The rule is not the three lines it looks like. Absent `register`/`length` map to -1/0 SO THE
+        // REGION REFUSES ITSELF, never to 0/1, which would read as a real band nobody typed; identical
+        // declarations collapse while overlapping-but-different ones do not; and an empty set must never
+        // reach `Reserving`, which throws. Each of those is invisible at a call site, which is exactly
+        // why a second copy of them was a defect waiting rather than a duplication to tidy.
+        var reserved = DeclaredReservations.Of(documents.Select(d => d.Binding));
 
-        if (reserved.Length > 0)
-            geometry = geometry.Reserving(reserved);
+        geometry = DeclaredReservations.AppliedTo(geometry, documents.Select(d => d.Binding));
 
         var map = MapAllocator.Allocate(new WaveSetRequest(geometry, slots));
 

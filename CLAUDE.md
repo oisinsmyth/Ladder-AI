@@ -95,6 +95,7 @@ When in doubt: `docs/04-design-philosophy.md` for principles, `docs/02-roadmap.m
 | `diff` | network-level IR invariance. `--only`, `--allow-header`; see the routing rule |
 | `compare` | Normalizer-compare two SimaticML exports — the confirm loop's judgement half |
 | `drift-check` | ir ↔ simatic-ml export drift. `--complete` declares the exports dir the whole picture |
+| `served-area` | the Modbus window read off `MB_SERVER` **and** its sidecar. Exit 2 = NOT DERIVED, never a pass |
 | `cross-check`, `trace`, `reuse-scan`, `target-scan` | whole-project reference facts, REQ traces, reuse-first and new-block gap hunting. `reuse-scan` is query-shaped: `--project` alone exits 1, it needs a `--tag`/`--kind` |
 | `candidate-scan`, `undriven-scan`, `relation-reconcile`, `signal-sweep`, `interface-check` | the mechanical floor — checks that survive an agent choosing not to look |
 | `reachable-state`, `ir-hash`, `sanitize`, `claim` / `claims` | computed slot disjointness, content hashing, de-identification, and the multi-agent reservation registry |
