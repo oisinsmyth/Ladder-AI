@@ -23,11 +23,13 @@ public class PortalCloseTests
     private static readonly DateTime Now = new DateTime(2026, 8, 23, 12, 0, 0);
 
     private static PortalProcessInfo Proc(
-        int pid, string? projectPath = null, bool marked = false, bool visible = true, int ageMinutes = 60) =>
+        int pid, string? projectPath = null, bool marked = false, bool visible = true, int ageMinutes = 60,
+        int? attached = null, string? holders = null) =>
         new PortalProcessInfo(
             pid, projectPath, new DateTime(2026, 8, 23, 11, 0, 0), HasUserInterface: true,
             MarkedByThisTool: marked, StartedAt: Now.AddMinutes(-ageMinutes),
-            LaunchedByThisTool: marked, OpennessVisible: visible);
+            LaunchedByThisTool: marked, OpennessVisible: visible,
+            AttachedSessionCount: attached, AttachedSessionHolders: holders);
 
     private static IReadOnlyList<PortalClosePlan> Plan(IEnumerable<PortalProcessInfo> processes, params int[] pids) =>
         PortalClosePlanner.Plan(processes.ToList(), pids, Now);
@@ -78,6 +80,112 @@ public class PortalCloseTests
 
         Assert.Equal(PortalCloseMethod.TerminateEmpty, plan.Method);
         Assert.Contains("will be noticed", plan.Reason);
+    }
+
+    // ---- somebody is ATTACHED to the empty one (measured 2026-08-23) -----------------------------
+    //
+    // Until this section existed, "an agent is working in an empty Portal right now" and "abandoned
+    // pileup" were the SAME INPUT to this planner, and the sweep took both. The distinguishing fact was
+    // measured, not assumed: TiaPortalProcess.AttachedSessions, read from a DIFFERENT process than the
+    // one holding the handle, reported the holder's own pid and exe path while it held and 0 items
+    // before and after (docs/notes/openness-api-surface-v20.md).
+
+    /// <summary>
+    /// 🔴 <b>THE DEFECT THIS SECTION EXISTS FOR.</b> An empty Portal somebody is attached to is a live
+    /// session, not pileup, and a sweep must not take it — the same NAMED-OR-NOT-AT-ALL protection an
+    /// in-use Portal already had. The old planner returned <c>TerminateEmpty</c> here.
+    /// </summary>
+    [Fact]
+    public void An_ATTACHED_stray_empty_is_NOT_selected_by_a_sweep()
+    {
+        var plan = Only(new[] { Proc(110, attached: 1, holders: "pid 19536 openness-cli.exe") });
+
+        Assert.Equal(PortalCloseMethod.Leave, plan.Method);
+        Assert.Contains("ATTACHED", plan.Reason);
+        Assert.Contains("--pid", plan.Reason);
+    }
+
+    /// <summary>The reason names WHO holds it — a pid the reader can go and look at is the difference
+    /// between a refusal they can act on and one they can only override blindly.</summary>
+    [Fact]
+    public void The_reason_names_the_process_holding_the_session()
+    {
+        var plan = Only(new[] { Proc(110, attached: 1, holders: "pid 19536 openness-cli.exe") });
+
+        Assert.Contains("pid 19536", plan.Reason);
+    }
+
+    /// <summary>Named by --pid it is still closable, exactly like an in-use one: the guard blocks the
+    /// SWEEP, it does not remove the operator's ability to act deliberately.</summary>
+    [Fact]
+    public void An_attached_stray_empty_named_by_pid_is_still_closed()
+    {
+        var plan = Only(new[] { Proc(110, attached: 1, holders: "pid 19536 openness-cli.exe") }, 110);
+
+        Assert.Equal(PortalCloseMethod.TerminateEmpty, plan.Method);
+        Assert.Contains("ATTACHED", plan.Reason);
+    }
+
+    /// <summary>
+    /// A self-launched orphan with a live session is another agent's openness-cli mid-run — the registry
+    /// mark is machine-wide, not per-invocation, so "this tool launched it" does not mean "nobody is using
+    /// it". Same guard, and it is a strict widening of the ask: the defect report named only the stray.
+    /// </summary>
+    [Fact]
+    public void An_ATTACHED_self_launched_orphan_is_NOT_selected_by_a_sweep()
+    {
+        var plan = Only(new[] { Proc(111, marked: true, attached: 1, holders: "pid 2752 openness-cli.exe") });
+
+        Assert.Equal(PortalCloseMethod.Leave, plan.Method);
+        Assert.Contains("ATTACHED", plan.Reason);
+    }
+
+    /// <summary>
+    /// 🔴 <b>THE NEGATIVE CONTROL FOR THE NEW GUARD, and the reason it is a guard rather than a blanket.</b>
+    /// A genuinely abandoned empty Portal — measured, zero sessions — is STILL SWEPT. A guard that protects
+    /// everything protects nothing, and this command's whole purpose is to clear pileup.
+    /// </summary>
+    [Fact]
+    public void An_UNATTACHED_empty_portal_is_STILL_SWEPT()
+    {
+        Assert.Equal(PortalCloseMethod.TerminateEmpty, Only(new[] { Proc(112, attached: 0) }).Method);
+        Assert.Equal(PortalCloseMethod.TerminateEmpty, Only(new[] { Proc(113, marked: true, attached: 0) }).Method);
+    }
+
+    /// <summary>
+    /// 🔴 <b>WHAT THE NEW CHECK STILL CANNOT SEE.</b> An Openness-invisible process is not in
+    /// <c>GetProcesses()</c> at all, so it can never report an attached session — <c>null</c>, meaning NOT
+    /// READ, never "measured zero". It is swept exactly as blindly as before, and that is recorded here so
+    /// the gap is a pinned fact rather than a thing somebody assumes the guard covers.
+    /// </summary>
+    [Fact]
+    public void An_openness_invisible_process_can_never_report_attachment_and_is_swept_as_blindly_as_before()
+    {
+        var invisible = Proc(114, visible: false, ageMinutes: 90);
+
+        Assert.Null(invisible.AttachedSessionCount);
+        Assert.False(invisible.HasAttachedSession);
+        Assert.Equal(PortalCloseMethod.TerminateUnsaveable, Only(new[] { invisible }).Method);
+    }
+
+    /// <summary>
+    /// An UNREADABLE session count is not a protection. <c>null</c> means the question was not answered,
+    /// and answering it "attached" would make every process this tool cannot interrogate permanently
+    /// unsweepable — the pileup this command exists to clear. The blindness is left exactly where it was.
+    /// </summary>
+    [Fact]
+    public void An_unread_session_count_leaves_the_old_behaviour_untouched()
+    {
+        Assert.Equal(PortalCloseMethod.TerminateEmpty, Only(new[] { Proc(115, attached: null) }).Method);
+    }
+
+    /// <summary>The denominator counts the attached one as looked-at-and-left, not as absent.</summary>
+    [Fact]
+    public void An_attached_empty_portal_is_in_the_denominator_but_not_the_numerator()
+    {
+        var plans = Plan(new[] { Proc(116, attached: 1, holders: "pid 1 x.exe"), Proc(117, attached: 0) });
+
+        Assert.Contains("1 of 2 Portal process(es) selected", PortalClosePlanner.Summarise(plans));
     }
 
     // ---- the Openness-invisible case, which is why this command exists ---------------------------

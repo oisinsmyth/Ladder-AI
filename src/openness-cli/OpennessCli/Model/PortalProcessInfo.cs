@@ -38,6 +38,34 @@ namespace OpennessCli.Model;
 /// read-only diagnostic this project reaches for when Portal misbehaves **disagreed with the
 /// operating system, silently**, because it only ever enumerated what Openness would admit to.
 /// </param>
+/// <param name="AttachedSessionCount">
+/// How many Openness sessions are attached to this process right now, or <c>null</c> when the
+/// question was NOT ANSWERED — an Openness-invisible process, or a getter that threw.
+///
+/// <para><b>Measured 2026-08-23, not assumed.</b> <c>TiaPortalProcess.AttachedSessions</c> sat marked
+/// <i>"unexplored"</i> in <c>docs/notes/openness-api-surface-v20.md</c> for weeks while
+/// <c>portal-close</c> swept empty Portals blind. Probed against a live V20: an empty Portal nobody
+/// was attached to returned <b>0 items</b>; while a second process held an <c>Attach()</c>ed handle
+/// to it, a <b>DIFFERENT</b> process reading the same property returned <b>1 item</b> naming the
+/// holder's own pid and exe path; after <c>Dispose()</c>, 0 again. Hard-killing the holder also
+/// returned it to 0 — <b>a dead holder leaves no stale session</b>, so a guard built on this cannot
+/// be jammed permanently by a crash.</para>
+///
+/// <para>The element is <c>Siemens.Engineering.TiaPortalSession</c>, and the fields that carry the
+/// answer are <c>ProcessId</c> and <c>ProcessPath</c> — the ATTACHING CLIENT's, not the Portal's.
+/// <c>IsActive</c> read <c>False</c> throughout a live attach, so it means something other than
+/// "somebody is attached" and nothing here reads it.</para>
+///
+/// <para>🔴 <b><c>null</c> IS NOT ZERO.</b> Zero is a measurement — nobody is attached. Null is the
+/// absence of one, and this project has already shipped one defect from reading a modelled absence
+/// as a measurement (see <see cref="AcquiredPrecedesStart"/>). Nothing may treat them alike.</para>
+/// </param>
+/// <param name="AttachedSessionHolders">
+/// Who holds those sessions — a pre-formatted <c>"pid 19536 openness-cli.exe"</c> list, or
+/// <c>null</c> when there are none or it could not be read. A string rather than a collection so this
+/// record keeps value equality. It exists so that a refusal names a pid the reader can go and look
+/// at, rather than one they can only override blindly.
+/// </param>
 public sealed record PortalProcessInfo(
     int Pid,
     string? ProjectPath,
@@ -46,8 +74,18 @@ public sealed record PortalProcessInfo(
     bool MarkedByThisTool,
     DateTime? StartedAt = null,
     bool LaunchedByThisTool = false,
-    bool OpennessVisible = true)
+    bool OpennessVisible = true,
+    int? AttachedSessionCount = null,
+    string? AttachedSessionHolders = null)
 {
+    /// <summary>
+    /// True only when an attached session was POSITIVELY MEASURED. An unread count (<c>null</c>) is
+    /// false here on purpose: answering "attached" for every process this tool cannot interrogate
+    /// would make them all permanently unsweepable, which is the pileup <c>portal-close</c> exists to
+    /// clear. The blindness stays where it was rather than being converted into a guard.
+    /// </summary>
+    public bool HasAttachedSession => AttachedSessionCount > 0;
+
     /// <summary>
     /// *** A PROCESS CANNOT BE ACQUIRED BEFORE IT EXISTS. ***
     ///

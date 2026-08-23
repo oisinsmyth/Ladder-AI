@@ -264,4 +264,52 @@ public class PortalStatusTests
         using var doc = JsonDocument.Parse(json);
         Assert.Equal(0, doc.RootElement.GetProperty("processes").GetArrayLength());
     }
+
+    // ---- ATTACHED: who is holding an Openness session on this process (measured 2026-08-23) -------
+
+    /// <summary>
+    /// The three states are printed as three DIFFERENT things, because they are: a holder to go and look
+    /// at, a measured zero, and a question that was never answered. Collapsing the last two into "no"
+    /// is the shape of defect this table has already been fixed for once (the ACQUIRED default).
+    /// </summary>
+    [Fact]
+    public void FormatTable_ShowsTheHolder_TheMeasuredZero_AndTheUnreadable()
+    {
+        var report = PortalStatusClassifier.Classify(new[]
+        {
+            new PortalProcessInfo(
+                4444, null, new DateTime(2026, 7, 20, 9, 30, 0), true, false,
+                AttachedSessionCount: 1, AttachedSessionHolders: "pid 19536 openness-cli.exe"),
+            new PortalProcessInfo(
+                5555, null, new DateTime(2026, 7, 20, 9, 31, 0), true, false,
+                AttachedSessionCount: 0),
+            new PortalProcessInfo(
+                6666, null, default(DateTime), false, false,
+                OpennessVisible: false),
+        });
+
+        var table = OutputFormatter.FormatPortalStatusTable(report);
+
+        Assert.Contains("ATTACHED", table);
+        Assert.Contains("pid 19536", table);
+        Assert.Contains("none", table);
+        Assert.Contains("(not visible to Openness)", table);
+    }
+
+    [Fact]
+    public void FormatJson_CarriesTheSessionCountAndTheHolders()
+    {
+        var report = PortalStatusClassifier.Classify(new[]
+        {
+            new PortalProcessInfo(
+                4444, null, new DateTime(2026, 7, 20, 9, 30, 0), true, false,
+                AttachedSessionCount: 2, AttachedSessionHolders: "pid 1 a.exe, pid 2 b.exe"),
+        });
+
+        using var doc = JsonDocument.Parse(OutputFormatter.FormatPortalStatusJson(report));
+        var process = doc.RootElement.GetProperty("processes")[0];
+
+        Assert.Equal(2, process.GetProperty("attachedSessionCount").GetInt32());
+        Assert.Contains("pid 2 b.exe", process.GetProperty("attachedSessionHolders").GetString());
+    }
 }

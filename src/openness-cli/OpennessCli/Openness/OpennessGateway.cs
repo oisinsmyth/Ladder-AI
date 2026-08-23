@@ -177,6 +177,7 @@ public sealed class OpennessGateway : IOpennessGateway
         {
             var projectPath = TryRead(() => process.ProjectPath?.FullName);
             var pid = process.Id;
+            var attached = ReadAttachedSessions(process);
             seen.Add(pid);
             results.Add(new PortalProcessInfo(
                 pid,
@@ -186,7 +187,9 @@ public sealed class OpennessGateway : IOpennessGateway
                 LaunchedInstanceRegistry.IsMarkedAsLaunchedByThisTool(pid),
                 StartedAt: ReadProcessStart(pid),
                 LaunchedByThisTool: LaunchedInstanceRegistry.WasLaunchedByThisTool(pid),
-                OpennessVisible: true));
+                OpennessVisible: true,
+                AttachedSessionCount: attached.Count,
+                AttachedSessionHolders: attached.Holders));
         }
 
         foreach (var pid in EnumerateOsPortalPids())
@@ -210,6 +213,46 @@ public sealed class OpennessGateway : IOpennessGateway
         }
 
         return results;
+    }
+
+    /// <summary>
+    /// Who is attached to this Portal right now, from <c>TiaPortalProcess.AttachedSessions</c>.
+    ///
+    /// <para>🔴 <b>The answer to "is this empty Portal abandoned, or is somebody working in it?"</b>, and
+    /// the only thing that lets <c>portal-close</c> tell those apart. Probed live 2026-08-23 (0 items when
+    /// nobody is attached; 1 item naming the holder's pid and exe while a SEPARATE process holds a handle;
+    /// 0 again after the holder disposes, and also after the holder is hard-killed). It is read WITHOUT
+    /// attaching, exactly like <c>ProjectPath</c>.</para>
+    ///
+    /// <para><b>A failed read returns null, never 0.</b> Zero means "measured, nobody attached" and is a
+    /// licence to terminate; null means the question was not answered. Collapsing them would turn a
+    /// diagnostic gap into a destructive act.</para>
+    /// </summary>
+    private static (int? Count, string? Holders) ReadAttachedSessions(TiaPortalProcess process)
+    {
+        try
+        {
+            var sessions = process.AttachedSessions;
+            if (sessions == null)
+            {
+                return (null, null);
+            }
+
+            // Identify by the ATTACHING CLIENT's pid and exe - a Portal pid here would name the process
+            // we already have in hand and answer nothing. Session.IsActive is deliberately not read: it
+            // was False throughout a live measured attach, so it does not mean "somebody is attached".
+            var holders = sessions
+                .Select(s => "pid " + (TryRead(() => s.ProcessId.ToString()) ?? "?")
+                                  + " " + (TryRead(() => Path.GetFileName(s.ProcessPath?.FullName)) ?? "(path unreadable)"))
+                .ToList();
+
+            return (holders.Count, holders.Count == 0 ? null : string.Join(", ", holders));
+        }
+        catch (Exception)
+        {
+            // Unreadable is NOT "nobody attached" - see the summary. The process is still reported.
+            return (null, null);
+        }
     }
 
     // The OS-side half. Best-effort by design: this exists to make a DISAGREEMENT visible, so an

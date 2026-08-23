@@ -30,7 +30,7 @@ openness-cli sanity-check  <project>                                           #
                                     # `Success (errors=0, warnings=0)` over a program that did not compile. Its verdict now keys on ERRORS, never on State, or the station scope's real warnings
                                     # would mark every healthy project unhealthy
 openness-cli portal-status                                                     # read-only Portal-process diagnostic (no project); never attaches/launches/kills — see below
-openness-cli portal-close  [--pid <n>]... [--json] --yes                       # 🔴 DESTRUCTIVE: TERMINATES Portal OS processes (no project). Without --yes it prints the plan and exits 10. A sweep takes empty and Openness-invisible processes; a Portal WITH A PROJECT OPEN is reachable only by --pid, and is saved first. NEVER RUN LIVE — see below
+openness-cli portal-close  [--pid <n>]... [--json] --yes                       # 🔴 DESTRUCTIVE: TERMINATES Portal OS processes (no project). Without --yes it prints the plan and exits 10. A sweep takes empty and Openness-invisible processes; a Portal WITH A PROJECT OPEN, or an empty one SOMEBODY IS ATTACHED TO, is reachable only by --pid. NEVER RUN LIVE beyond the plan form — see below
 openness-cli hmi           <project> [--screen <name>|*] [--max-items <n>]     # READ-ONLY HMI walk: screens, screen items, per-property dynamizations — see below
 openness-cli graphics      <project> [--list] [--inspect <name>] [--export <name> --out <path>] [--import <file>]... [--overwrite]   # the PROJECT-level picture store — see below
 openness-cli graphics      <project> --delete <name>... --yes                  # deletes graphics BY LITERAL NAME (no wildcard form exists); unknown name = hard error, nothing deleted — see below
@@ -313,6 +313,16 @@ classified into one of three buckets:
   waiting on the first-connect approval dialog, or genuine stale pileup — never this tool's to close
   automatically, which is why `portal-status` only reports it.
 
+**The `ATTACHED` column (2026-08-23)** says whether anyone currently holds an Openness session on each
+process, read from `TiaPortalProcess.AttachedSessions` — also without attaching. It prints **three**
+states, not two, and the difference is load-bearing: a **holder** (`1: pid 19536 openness-cli.exe` — the
+attaching client's pid and exe, so you can go and look at it), a measured **`none`**, and
+**`(not visible to Openness)`** for a process that is not in `GetProcesses()` at all and therefore was
+never asked. `--json` carries `attachedSessionCount` (`null` = not read, never "zero") and
+`attachedSessionHolders`. What was measured to establish all this is in
+`docs/notes/openness-api-surface-v20.md`; it is what lets `portal-close` refuse to sweep an empty Portal
+somebody is working in.
+
 Output includes a short human note inferring the likely cause from the counts (one stray reads as a
 probable first-connect-dialog wait or human window; several strays match the pileup symptom). This
 is the read-only, safe subset of the parked FI-07 janitor — **killing stays out of scope *for this
@@ -339,11 +349,13 @@ It is `portal-status`'s destructive sibling: the same read-only two-source enume
 acts on what it read. No `<project>` positional — it targets Portal *processes*, not a project — and a
 positional argument is a usage error.
 
-🔴 **IT HAS NEVER BEEN RUN.** Built 2026-08-23 (`f9abeb1`), unit-tested offline
-(`PortalCloseTests`, `PortalCloseCommandTests`), and **not once executed against a live Portal, not
-even in its `--yes`-less plan form.** Everything below is derived from the source and from unit tests
-over hand-built process lists; nothing below is a measurement. Treat the first live run as an
-experiment — read the plan output before passing `--yes`, and record what happened.
+🔴 **IT HAS NEVER BEEN RUN WITH `--yes`.** Built 2026-08-23 (`f9abeb1`), unit-tested offline
+(`PortalCloseTests`, `PortalCloseCommandTests`). Its **plan form was run live for the first time on
+2026-08-23**, against a five-process machine, while proving the attachment guard below — two runs,
+exit 10 both times, nothing attached to, saved or terminated. **Nothing has ever been terminated by
+this command.** Everything below other than the attachment measurements is still derived from the
+source and from unit tests over hand-built process lists. Treat the first `--yes` run as an
+experiment — read the plan output first, and record what happened.
 
 **Owner ruling, 2026-08-23**, quoted verbatim where the code that implements it lives
 (`OpennessCli/Openness/PortalClosePlanner.cs:62-63`):
@@ -369,15 +381,17 @@ values comes out per process:
 |---|---|---|
 | `Leave` | anything not selected | Nothing is attached to, saved or terminated. The `Reason` says why |
 | `SaveThenTerminate` | **in-use** (a project open) **and named by `--pid`** | Attach to that one pid, **`Project.Save()` every open project**, release the handle, then terminate |
-| `TerminateEmpty` | **self-launched-orphan**, and **stray-empty** | Terminate. Openness can see it and nothing is open, so there is nothing to save |
+| `TerminateEmpty` | **self-launched-orphan**, and **stray-empty** — in both cases only when **nothing is attached to it** (or when named by `--pid`) | Terminate. Openness can see it, nothing is open and nobody is attached, so there is nothing to save |
 | `TerminateUnsaveable` | **Openness-invisible**, once past the age floor or when named | 🔴 **Terminate WITHOUT saving.** Openness cannot see the process, so there is nothing to attach to and nothing to ask. Anything unsaved in it is gone |
 
-🔴 **`StrayEmpty` IS TERMINATED BY DEFAULT — a bare `portal-close --yes` takes it, with no `--pid`.**
-That bucket is *"an empty instance this tool did not launch"*, and the planner's own reason text says
-what that can be: **a human's window, a Portal sitting on the first-connect approval dialog, or
-genuine stale pileup** (`PortalClosePlanner.cs:125-129`). It cannot tell them apart. This is the
-sharpest difference from `portal-status`, which classifies a stray identically and then does nothing
-about it precisely because it *"could be a human's own empty window"*.
+🔴 **AN UNATTACHED `StrayEmpty` IS TERMINATED BY DEFAULT — a bare `portal-close --yes` takes it, with
+no `--pid`.** That bucket is *"an empty instance this tool did not launch"*, and the planner's own
+reason text says what that can be: **a human's window, a Portal sitting on the first-connect approval
+dialog, or genuine stale pileup**. It still cannot tell those three apart. What it *can* now tell apart,
+since 2026-08-23, is whether **anybody is attached to it** — and if somebody is, it is `Leave` unless
+named by `--pid` (see the attachment section below). That is the one case where it used to disagree
+with `portal-status`, which classifies a stray identically and then does nothing about it precisely
+because it *"could be a human's own empty window"*.
 
 🔴 **The dangerous target is the one with a project open, and it is NEVER in the default set.** An
 in-use Portal may be a person's session or another agent's; closing it costs someone their afternoon
@@ -391,6 +405,9 @@ take one by accident.
   to, saved or terminated"*, and exits **10 (`NotConfirmed`)**. Note the wording is deliberately
   weaker than the usual *"Portal was not contacted"*: the process list **was** read, because that read
   is the only way to know what the plan is (`Program.cs:1612-1621`).
+- **An empty Portal somebody is ATTACHED to is `Leave`, not `TerminateEmpty`** — named or not at all,
+  the same protection an in-use Portal has. Applies to **both** empty buckets. The refusal names the
+  holding pid. Measured, both directions; see the attachment section below.
 - **A minimum age floor of 5 minutes** (`PortalClosePlanner.DefaultMinimumAgeMinutes`) on
   Openness-invisible processes. *"Still starting"* is a documented cause of invisibility — as is *"has
   just died"* — and killing a Portal three seconds into launching would be this command creating the
@@ -445,18 +462,52 @@ unlike the compile gate. This command's whole purpose is that there be no stray 
 *"there are none"* is the desired end state rather than an unanswered question. The summary still says
 outright that nothing was examined.
 
-### 🔴 The known blind spot: it cannot ask who is attached
+### It CAN ask who is attached — closed 2026-08-23, and here is what it can still not see
 
-`TiaPortalProcess` exposes an **`AttachedSessions`** member, and this command does not consult it. The
-name appears in exactly **one line of the entire repository** —
-`docs/notes/openness-api-surface-v20.md:69`, marked **"unexplored"** — so nothing here knows what it
-returns or costs.
+This section used to read *"the known blind spot: it cannot ask who is attached"*. It was a **prose
+warning where a mechanism belonged**: the planner's own `StrayEmpty` reason text said the process *"may
+be somebody's window and closing it will be noticed"*, and then the default sweep took it anyway. In a
+repo that runs many agents concurrently, an agent attached to an empty Portal was **indistinguishable
+from abandoned pileup**.
 
-**It matters most for the bucket that is terminated by default.** An agent or a person attached to an
-**empty** Portal is, to this command, indistinguishable from abandoned pileup: both are `StrayEmpty`,
-both are swept. Probing the member needs a live Portal, which is why the field is still unexplored,
-and closing this gap is explicitly *not* in the Phase 6 scope
-(`docs/notes/workbench-phase6-plan.md`).
+`TiaPortalProcess.AttachedSessions` was **probed live** rather than reasoned about. Full measurements —
+every state, verbatim — are in `docs/notes/openness-api-surface-v20.md`; the short version:
+
+- An empty Portal nobody is attached to returns **0 items**.
+- While another process holds an `Attach()`ed handle, **a third process** reading the same property gets
+  **1 item** naming the holder's own **`ProcessId` and `ProcessPath`**. Cross-process visibility is the
+  whole point, and it is measured, not inferred.
+- After the holder disposes — or is **hard-killed without disposing** — it is **0** again. No stale
+  session outlives a crashed client, so this guard cannot be jammed shut.
+- `IsActive` was **`False` throughout a live attachment**. It does not mean "attached"; nothing reads it.
+
+**What changed.** `PortalProcessInfo` gained `AttachedSessionCount` (`int?`) and
+`AttachedSessionHolders`; `portal-status` gained an **`ATTACHED`** column; and in the planner, an **empty
+Portal with a live session is `Leave` unless named by `--pid`** — the same *named-or-not-at-all*
+protection an in-use Portal already had. The reason text names the holding pid, so an operator who
+overrides it does so with the pid in front of them.
+
+Both empty buckets are guarded, not just `StrayEmpty`. The registry mark behind `SelfLaunchedOrphan` is
+machine-wide, so *"this tool launched it"* does not mean *"nobody is using it"* — another agent's
+`openness-cli`, mid-run and not yet into a project, lands in that bucket.
+
+**Measured live, both directions, 2026-08-23** (plan-only form — and this was `portal-close`'s first
+live run of any kind):
+
+| state of pid 19388 (empty, self-launched orphan) | plan |
+|---|---|
+| nothing attached | `SELECTED: 3 of 5` — `TERMINATE (nothing to save)` |
+| one `openness-cli` holding a session | `SELECTED: 2 of 5` — `LEAVE ALONE … Held by: pid 17436 openness-cli.exe` |
+
+🔴 **What the guard still cannot see.** An **Openness-invisible** process is not in `GetProcesses()` at
+all, so it can never report an attached session — its count is `null`, meaning **not read**, which is
+never treated as zero but is also not treated as attached. That bucket is swept **exactly as blindly as
+before**, protected only by the 5-minute age floor. Making "unreadable" mean "attached" would render
+every uninterrogable process permanently unsweepable, which is the pileup this command exists to clear.
+A guard that protects everything protects nothing.
+
+The same `null`-is-not-zero rule binds `--json` consumers: `attachedSessionCount` is absent/null when
+the question was not answered, and `0` only when it was.
 
 ## `hmi` — the read-only HMI walk
 

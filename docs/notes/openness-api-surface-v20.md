@@ -66,9 +66,45 @@ Siemens.Engineering.TiaPortalProcess
                                          in it), noted here, not acted on yet.
   Mode : TiaPortalMode
   AcquisitionTime : DateTime
-  AttachedSessions : IList<...>        — unexplored
+  AttachedSessions : IList<TiaPortalSession>
+                                       — MEASURED 2026-08-23, and it answers "is anyone using this
+                                         Portal right now". Readable WITHOUT Attach(), like
+                                         ProjectPath. Cross-process: a DIFFERENT process reading it
+                                         sees a handle held by another one. Now consumed by
+                                         portal-status (ATTACHED column) and portal-close (an
+                                         attached empty Portal is no longer swept).
   InstalledSoftware : IList<...>        — unexplored
 ```
+
+### `AttachedSessions` — what it actually returns (measured 2026-08-23)
+
+Probed against live V20 with a throwaway `openness-cli` sub-command (added, run, removed), against the
+five Portal processes then on the machine. Verbatim, from the runs:
+
+| state | `AttachedSessions` |
+|---|---|
+| empty Portal (pid 19388), **nobody attached** | `0 item(s)`, `ReadOnlyCollection<TiaPortalSession>` |
+| the same Portal while **another process holds an `Attach()`ed handle** | `1 item(s)` — `Id = 93`, `ProcessId = 19536`, `ProcessPath = …\openness-cli.exe`, `AttachTime = 23/08/2026 15:55:01`, `AccessLevel = Modify, Published`, `Version = V20`, `IsActive = False`, `UtilizationTime = 00:00:00`, `TrustAuthority = None` |
+| the same, **read from a third process** (not the holder) | identical `1 item(s)` block — **this is the result that matters** |
+| after the holder `Dispose()`s | `0 item(s)` |
+| after the holder is **hard-killed** (`Stop-Process -Force`, no dispose) | `0 item(s)` — no stale session survives a crashed client |
+| two Portals **with a project open** (pids 16740, 18184) | `0 item(s)` — a project being open is unrelated to anyone being attached |
+| the two **OS-only** processes (17564, 17264) | **not present at all** — they are not in `GetProcesses()`, so there is no object to ask |
+
+**Verdict: it distinguishes attached from abandoned, and it is the ATTACHING CLIENT it names.**
+`ProcessId`/`ProcessPath` are the client's, not the Portal's — which is precisely what makes it usable
+from a sweeping process that is not the holder.
+
+Three traps worth carrying forward:
+
+- 🔴 **`IsActive` was `False` for the whole of a live, held attachment.** It does not mean "somebody is
+  attached"; nothing should branch on it. `UtilizationTime` stayed `00:00:00` too. The count is the
+  signal.
+- 🔴 **A dead holder leaves nothing behind.** Measured by hard-killing the holder — the count went
+  straight back to `0`. So a guard built on this cannot be jammed permanently by a crashed agent.
+- 🔴 **An Openness-invisible process can never report attachment.** It is absent from `GetProcesses()`,
+  so the answer is *not read*, which is not the same as *zero*. `PortalProcessInfo.AttachedSessionCount`
+  is `int?` for exactly this reason.
 
 `openness-cli`'s `Connect()`: `GetProcesses()` → attach to `[0]` if any exist, else
 `new TiaPortal(TiaPortalMode.WithUserInterface)`. Confirmed live: attaching to an

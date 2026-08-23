@@ -66,6 +66,20 @@ public sealed record PortalClosePlan(
 /// set.</b> An in-use Portal may be a person's session or another agent's; closing it costs someone
 /// their afternoon even when the save succeeds. It is closable, but only when named by <c>--pid</c>, so
 /// that no sweep can ever take one by accident.</para>
+///
+/// <para>🔴 <b>AN EMPTY PORTAL SOMEBODY IS ATTACHED TO GETS THAT SAME PROTECTION (2026-08-23).</b> It
+/// did not until this date: the <c>StrayEmpty</c> branch <i>said in prose</i> that the process "may be
+/// somebody's window and closing it will be noticed", and the default sweep terminated it regardless.
+/// A repo that runs many agents concurrently makes that a live risk, not a theoretical one. The
+/// distinguishing fact — <c>TiaPortalProcess.AttachedSessions</c>, cross-process visible, holder pid and
+/// all — was measured rather than assumed; see <see cref="PortalProcessInfo.AttachedSessionCount"/>.</para>
+///
+/// <para>⚠️ <b>WHAT THE GUARD STILL CANNOT SEE.</b> An <see cref="PortalProcessClass.OpennessInvisible"/>
+/// process is not in <c>GetProcesses()</c> at all, so it can never report an attached session — its count
+/// is <c>null</c>, meaning NOT READ, and <see cref="PortalProcessInfo.HasAttachedSession"/> is false. That
+/// bucket is swept <b>exactly as blindly as before</b>, protected only by the age floor. Nothing here
+/// improves it, and treating "unreadable" as "attached" would make every uninterrogable process
+/// permanently unsweepable — the pileup this command exists to clear.</para>
 /// </summary>
 public static class PortalClosePlanner
 {
@@ -118,15 +132,41 @@ public static class PortalClosePlanner
                         "Name it with --pid if you really mean it; no sweep will ever select it.");
 
             case PortalProcessClass.SelfLaunchedOrphan:
+                // The registry mark is machine-wide, not per-invocation: "this tool launched it" does not
+                // mean "nobody is using it". Another agent's openness-cli, mid-run and not yet into a
+                // project, lands in exactly this bucket - so the attachment guard applies here too.
+                if (process.HasAttachedSession)
+                {
+                    return AttachedEmptyPlan(
+                        process, named, Plan,
+                        "an empty instance this tool launched, and ANOTHER PROCESS IS ATTACHED TO IT - so it is " +
+                        "not an abandoned orphan, it is somebody's live session.");
+                }
+
                 return Plan(PortalCloseMethod.TerminateEmpty,
                     "an empty instance this tool launched and did not clean up. Nothing is open, so there is " +
                     "nothing to save.");
 
             case PortalProcessClass.StrayEmpty:
+                // 🔴 NAMED OR NOT AT ALL, for the same reason as InUse above - and this branch used to be
+                // a WARNING IN PROSE where a mechanism belonged. Its reason text said the process "may be
+                // somebody's window and closing it will be noticed", and then the default sweep took it
+                // anyway. An agent working in an empty Portal was, to this planner, the same input as
+                // abandoned pileup. AttachedSessions is the fact that separates them (measured 2026-08-23;
+                // see PortalProcessInfo.AttachedSessionCount for what was probed and what came back).
+                if (process.HasAttachedSession)
+                {
+                    return AttachedEmptyPlan(
+                        process, named, Plan,
+                        "an empty instance this tool did not launch, and ANOTHER PROCESS IS ATTACHED TO IT - so it " +
+                        "is a live session, not stale pileup.");
+                }
+
                 return Plan(PortalCloseMethod.TerminateEmpty,
                     "an empty instance this tool did not launch - a human's window, a first-connect-dialog wait, " +
-                    "or stale pileup. Nothing is open, so there is nothing to save; but note it may be somebody's " +
-                    "window and closing it will be noticed.");
+                    "or stale pileup. NOTHING IS ATTACHED TO IT (measured, not assumed - see the ATTACHED column " +
+                    "of portal-status), and nothing is open, so there is nothing to save; but note it may still be " +
+                    "somebody's window and closing it will be noticed.");
 
             case PortalProcessClass.OpennessInvisible:
                 // 🔴 The whole reason this command exists, and the branch where "save first" is impossible:
@@ -165,6 +205,37 @@ public static class PortalClosePlanner
             default:
                 return Plan(PortalCloseMethod.Leave, "unclassified, so left alone.");
         }
+    }
+
+    /// <summary>
+    /// The shared verdict for an EMPTY Portal that somebody is attached to: <b>named or not at all</b>,
+    /// the same protection an in-use session already had, and for the same reason — the sweep cannot tell
+    /// whose session it is, and closing it costs that agent or person their run.
+    ///
+    /// <para>Both empty buckets route here, so the two reasons cannot drift apart; only the sentence
+    /// describing WHICH bucket differs, and it is passed in.</para>
+    ///
+    /// <para>🔴 <b>It blocks the SWEEP, not the operator.</b> <c>--pid</c> still closes it — an operator
+    /// who can see the screen knows something this tool cannot, and a guard with no override is a guard
+    /// people work around. The holder is named either way, so the override is made with the pid in
+    /// front of the reader rather than blind.</para>
+    /// </summary>
+    private static PortalClosePlan AttachedEmptyPlan(
+        PortalProcessInfo process,
+        bool named,
+        Func<PortalCloseMethod, string, PortalClosePlan> plan,
+        string bucketSentence)
+    {
+        var holders = string.IsNullOrEmpty(process.AttachedSessionHolders)
+            ? string.Empty
+            : " Held by: " + process.AttachedSessionHolders + ".";
+
+        return named
+            ? plan(PortalCloseMethod.TerminateEmpty,
+                bucketSentence + " Named explicitly by --pid, so it will be terminated anyway - nothing is open, " +
+                "so there is nothing to save, but WHOEVER IS ATTACHED LOSES THEIR SESSION." + holders)
+            : plan(PortalCloseMethod.Leave,
+                bucketSentence + " A sweep will never take it; name it with --pid if you really mean it." + holders);
     }
 
     private static TimeSpan? Age(PortalProcessInfo process, DateTime now) =>

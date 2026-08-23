@@ -92,13 +92,20 @@ other.
   that branch is reported by name (`TerminateUnsaveable`) rather than folded into a rolled-up "closed"
   count. What the ruling *forbids* is the converse: a save that was possible and **failed** stops the
   terminate, and the process is left running (`PortalCloseExecution.cs:167-173`).
-  🔴 **It has never been run against a live Portal** — the planning half is pure and unit-tested, the
-  execution half has no live evidence. Documented in `src/openness-cli/README.md`
-  (*"`portal-close` — closing a stray Portal"*) and CLAUDE.md's command index.
-  ⚠️ **One thing you may want to look at, not a question being asked:** a bare sweep terminates
-  `StrayEmpty` by default, and the planner cannot consult `AttachedSessions`, so **an agent attached to
-  an empty Portal is indistinguishable from abandoned pileup**. Probing that API needs Portal;
-  `docs/notes/workbench-phase6-plan.md` excludes it from Phase 6 for that reason.
+  ⚠️ **Its `--yes` path has never been run against a live Portal** — the planning half is pure and
+  unit-tested, and the **plan form has now run live twice** (2026-08-23, exit 10 both times, nothing
+  terminated). The terminating half still has no live evidence. Documented in
+  `src/openness-cli/README.md` (*"`portal-close` — closing a stray Portal"*) and CLAUDE.md's index.
+  ✅ **CLOSED 2026-08-23 — the attached-session hole this entry warned about is fixed.** It read: *"the
+  planner cannot consult `AttachedSessions`, so an agent attached to an empty Portal is
+  indistinguishable from abandoned pileup."* `AttachedSessions` was probed and **it distinguishes them
+  decisively, across processes** — a sweeper that is not the holder can see the holder's pid. An empty
+  Portal with a live session is now `Leave` unless named by `--pid`, the same protection an in-use
+  Portal already had, and the refusal names the holding pid.
+  🔴 **The residual, which is narrower but real:** an `OpennessInvisible` process is not in
+  `GetProcesses()` at all, so it can never report attachment and **is swept exactly as blindly as
+  before**, protected only by the 5-minute age floor. Treating "unreadable" as "attached" would make
+  every uninterrogable process permanently unsweepable, so it was deliberately not done.
 
 ## Not blocking, but it decides a scope
 

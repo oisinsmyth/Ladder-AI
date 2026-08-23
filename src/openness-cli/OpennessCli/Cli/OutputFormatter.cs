@@ -1708,7 +1708,11 @@ public static class OutputFormatter
     // printed plausibly. LAUNCHED is the report-only launch history, which — unlike the reuse
     // registry behind CLASS — survives a project being opened, and is what makes a silent relaunch
     // visible at all.
-    private static readonly string[] PortalStatusHeaders = { "PID", "CLASS", "PROJECT", "UI", "STARTED", "ACQUIRED", "LAUNCHED" };
+    // ATTACHED is last because it is the newest and the widest, and because a reader scanning for the
+    // pileup answer wants CLASS first. It carries THREE states, not two — a holder, a measured "none",
+    // and "the question was never answered" — for the same reason ACQUIRED does: this table has already
+    // been fixed once for printing an unmeasured default as though it were a reading.
+    private static readonly string[] PortalStatusHeaders = { "PID", "CLASS", "PROJECT", "UI", "STARTED", "ACQUIRED", "LAUNCHED", "ATTACHED" };
 
     public static string FormatPortalStatusTable(PortalStatusReport report)
     {
@@ -1757,6 +1761,11 @@ public static class OutputFormatter
                 launchedByThisTool = p.Process.LaunchedByThisTool,
                 opennessVisible = p.Process.OpennessVisible,
                 markedByThisTool = p.Process.MarkedByThisTool,
+
+                // null here means NOT READ, never "zero attached" - a consumer that treats the two
+                // alike re-creates the defect this field was added to close.
+                attachedSessionCount = p.Process.AttachedSessionCount,
+                attachedSessionHolders = p.Process.AttachedSessionHolders,
             }),
             counts = new
             {
@@ -1938,7 +1947,28 @@ public static class OutputFormatter
             : p.Process.Acquired.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture)
               + (p.Process.AcquiredPrecedesStart ? "  ! BEFORE START" : string.Empty),
         p.Process.LaunchedByThisTool ? "by us" : "not by us",
+        AttachedCell(p.Process),
     };
+
+    // Three states, three renderings. "(not visible to Openness)" is NOT "none": the process is not in
+    // GetProcesses() at all, so nothing was read — the same distinction the ACQUIRED cell makes, and for
+    // the same reason. A holder is printed by pid so the reader can go and look at it.
+    private static string AttachedCell(PortalProcessInfo process)
+    {
+        if (process.AttachedSessionCount is not int count)
+        {
+            return process.OpennessVisible ? "(unreadable)" : "(not visible to Openness)";
+        }
+
+        if (count == 0)
+        {
+            return "none";
+        }
+
+        return string.IsNullOrEmpty(process.AttachedSessionHolders)
+            ? count.ToString(CultureInfo.InvariantCulture)
+            : $"{count}: {process.AttachedSessionHolders}";
+    }
 
     private static string[] ToRow(BlockInfo b) => new[]
     {
