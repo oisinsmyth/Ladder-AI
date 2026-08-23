@@ -4,7 +4,6 @@
 tooling ready to use in the morning on a live project.* This is the answer, and it is written to be
 **read once, quickly, before you start** — not to be complete.
 
-<<<<<<< HEAD
 > ✅ **THE ONE-LINE ANSWER, CORRECTED 2026-08-23.** **Deployment, read-back, analysis AND the
 > closed-loop test path have all run against a real controller.** A conformance wave has executed end
 > to end four times — 2026-08-18, 08-20, and twice on 08-22 — the last of those **two lanes off one
