@@ -1,5 +1,28 @@
 # Workbench Phase 6 — the area, derived
 
+**STATUS 2026-08-23: DELIVERED — Y0, Y1, Y2, Y3.** `3026dbe` · `8bf2716` · `ea362c6` · `40dc0d9` ·
+`466185a` · `66a0ab8`, plus `777fac0` and `182b3f9`, which were not planned items but are the same
+subject: the reservation guard was **inert on three of the four paths that build a map**, and the rule
+had two derivations. Converter **1,569 → 1,643** · harness **2,501 → 2,625** · openness-cli **871** ·
+golden **194 of 194** · 0 warnings · no existing test edited.
+
+**What the phase actually bought:** the mirror no longer takes anybody's word for where it lives.
+`served-area` reads the served width off the block that serves it — **both homes, or neither**;
+`neighbours` derives who else is in the area **and who declares them**; the build stamp says **n of m**
+and names what it skipped. All three print a denominator on every run including the zero case, and all
+three state in their own output what they cannot see.
+
+🔴 **Two limits that survive the phase and must not be forgotten.** Every one of these reads the
+**staged corpus, never the CPU** — the committed block says 37 while the rig runs 1024, and this
+toolchain passes that pair by construction. And the **foreign-occupant fixture is invented**: all 26
+real `%M` claims in the reference area are the mirror's own, so a green suite is not evidence the
+derivation reproduces the measured 256–323 / 53-tag collision.
+
+⚠️ **No wave has run against a controller with any of this attached.** The demonstrations are
+generate-only. That is a rig event and it has not happened.
+
+---
+
 **Planned 2026-08-23, offline, while Phase 5's redeploy was blocked.** Every claim below was verified
 by reading the code or the artifact cited, not by quoting another document.
 
