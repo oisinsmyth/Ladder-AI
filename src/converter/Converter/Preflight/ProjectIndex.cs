@@ -46,12 +46,40 @@ public sealed class ProjectIndex
     public bool IndexedAnything =>
         _blockNames.Count + _dbNames.Count + _typeNames.Count + _tagNames.Count > 0;
 
+    // THE DENOMINATOR, per name-set (2026-08-23). `IndexedAnything` above has said "the corpus was
+    // not empty" since FI-44 and answers only the boolean; a caller that prints a finding worded
+    // "does not resolve to any block in the project" needs the SIZE of the set that sentence is
+    // falsifiable against, and the four name-sets are four different sizes deciding four different
+    // finding classes. They were private with no accessors from the day this class was written.
+    //
+    // Each is the MERGED count — project ∪ batch — because that is what the resolution actually
+    // consulted. The project/batch split is carried separately, by the two file counts below.
+
+    /// <summary>Names <see cref="ResolvesAsBlock"/> can say yes to — the denominator of a `call` or
+    /// `instanceof` finding, and of nothing else.</summary>
+    public int BlockNameCount => _blockNames.Count;
+
+    /// <summary>Names <see cref="ResolvesAsTagRoot"/> can say yes to (tags ∪ DBs) — the denominator
+    /// of a `tag` ROOT finding. Not the member-path findings: those never touch this class.</summary>
+    public int TagRootNameCount => _tagNames.Count + _dbNames.Count;
+
+    /// <summary>Names <see cref="ResolvesAsType"/> can say yes to.</summary>
+    public int TypeNameCount => _typeNames.Count;
+
+    /// <summary>.ir files enumerated from <c>--project</c>, parseable or not: a file that failed to
+    /// index still got walked, and is separately surfaced as an INDEX WARNING.</summary>
+    public int ProjectFileCount { get; private set; }
+
+    /// <summary>.ir files supplied as the batch under pre-flight.</summary>
+    public int BatchFileCount { get; private set; }
+
     public static ProjectIndex Build(string projectDir, IReadOnlyList<string> batchPaths)
     {
         var index = new ProjectIndex();
 
         foreach (var path in Directory.EnumerateFiles(projectDir, "*.ir", SearchOption.TopDirectoryOnly))
         {
+            index.ProjectFileCount++;
             index.AddFile(path);
         }
 
@@ -59,6 +87,7 @@ public sealed class ProjectIndex
         // set, the same way they'd be imported as a set.
         foreach (var path in batchPaths)
         {
+            index.BatchFileCount++;
             index.AddFile(path);
         }
 

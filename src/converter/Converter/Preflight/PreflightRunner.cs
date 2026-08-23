@@ -37,7 +37,23 @@ public static class PreflightRunner
         var harnessScope = HarnessScope.Build(paths.Concat(Directory.EnumerateFiles(projectDir, "*.ir")));
 
         var files = paths.Select(path => PreflightFile(path, index, callees, tagTypes, harnessScope)).ToList();
-        return new PreflightReport(files, index.Warnings);
+
+        // THE DENOMINATOR (2026-08-23). Every one of the four walks above independently enumerates
+        // projectDir, and every one of them decides a different class of finding, so each is asked
+        // here for the size of the set ITS findings are falsifiable against — see PreflightCorpus.
+        // Computed once, in the runner, because the formatters are two renderers of one record.
+        var corpus = new PreflightCorpus(
+            ProjectDir: projectDir,
+            ProjectFileCount: index.ProjectFileCount,
+            BatchFileCount: index.BatchFileCount,
+            BlockNameCount: index.BlockNameCount,
+            TagRootNameCount: index.TagRootNameCount,
+            TypeNameCount: index.TypeNameCount,
+            MemberBodyCount: tagTypes.IndexedBodyCount,
+            CalleeInterfaceCount: callees.KnownCalleeCount,
+            HarnessCorpusFileCount: harnessScope.CorpusFileCount);
+
+        return new PreflightReport(files, index.Warnings, corpus);
     }
 
     private static FilePreflight PreflightFile(

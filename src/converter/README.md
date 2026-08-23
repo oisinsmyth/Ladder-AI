@@ -1738,6 +1738,88 @@ findings, 17 genuine review findings; `ir/reference` blocks reproduce the S4 pil
 findings (C-003 naming, the `NodeStatusAlarms` C-301/C-501 alarm-word pair, C-406 TONR/TOF) with
 zero false unresolved-tag findings.
 
+### The denominator, and why there are five of them (2026-08-23)
+
+**Narrow is not dirty** — the inverse of the EMPTY IS NOT CLEAN principle the mechanical floor is
+built on, and the same defect `reuse-scan` was fixed for (above). Until 2026-08-23 preflight printed
+a numerator with no denominator, so the answer silently depended on `--project` and a reader could
+not tell. Measured, same file, same instant:
+
+```
+$ converter preflight ir/test-project001/FB_PusherControl.ir --project ir/test-project001
+SUMMARY: 1 file(s), 2 finding(s), 0 reported but not gating (harness-scope)
+
+$ converter preflight ir/test-project001/FB_PusherControl.ir --project ir/reference
+SUMMARY: 1 file(s), 5 finding(s), 0 reported but not gating (harness-scope)
+```
+
+43 `.ir` files against 15, and **neither number appeared anywhere**. `1 file(s)` is the BATCH SIZE —
+the numerator's subject, not its index — so it stays 1 whatever the corpus is. The three extra
+findings are worded *"does not resolve to any block in the project or batch"* / *"is neither a
+UDT-typed interface member nor a DB known to the --project index"*, and were indistinguishable from
+genuine unresolved names.
+
+Now, appended after `SUMMARY:` and before the `PRE-FLIGHT ONLY:` footer, on every run:
+
+```
+CORPUS: 43 project file(s) + 1 batch file(s)  (project=ir/test-project001)
+RESOLVED AGAINST: 18 block name(s) [call, instanceof]; 145 tag/DB root name(s) [tag root]; 23 DB/UDT body(ies) [member path, literal-fit]; 18 callee interface(s) [convert: wired CALL]; 43 file(s) classified [review:harness-scope]
+```
+
+against the narrow scope, the same file:
+
+```
+CORPUS: 15 project file(s) + 1 batch file(s)  (project=ir/reference)
+RESOLVED AGAINST: 11 block name(s) [call, instanceof]; 5 tag/DB root name(s) [tag root]; 5 DB/UDT body(ies) [member path, literal-fit]; 11 callee interface(s) [convert: wired CALL]; 16 file(s) classified [review:harness-scope]
+```
+
+🔴 **FIVE counts because there are FOUR corpus walks, and the number must match the finding it sits
+under.** `PreflightRunner` independently enumerates `--project` four times — `ProjectIndex.Build`,
+`Program.BuildCalleeRegistry`, `Program.BuildTagTypeRegistry`, `HarnessScope.Build` — and they index
+different things. *"Does not resolve to any BLOCK"* is falsifiable against the **block-name count**
+and nothing else; the member-path findings (`member path '…' does not resolve`) **never touch
+`ProjectIndex` at all** — they walk `TagTypeRegistry` via `MemberPathResolver`. A single "43 files"
+number under either would be a category slip, so each name-set states its own size and is tagged
+with the finding class it decides. `ProjectIndex` had answered only the boolean
+(`IndexedAnything`, FI-44) and its four name-sets were private with no accessors.
+
+**The counts are merged, project ∪ batch** — that is what the resolution actually consulted — and
+the `CORPUS:` line carries the split. Paths ride beside the counts on `drift-check`'s
+`COMPARED: … (project=…)` precedent, because the whole defect is that the answer depends on
+`--project`. `HarnessCorpusFileCount` is deduplicated and path-canonicalised by `HarnessScope.Build`,
+so it is legitimately 43 (not 44) when the batch file already lives in the project dir.
+
+The zeroes print, for the reason the harness-scope clause beside them already does: an absent count
+cannot distinguish "the corpus held none" from "the walk never ran". An **empty** `--project` — a
+directory that exists (the CLI refuses a missing one) but holds no `.ir` — additionally prints
+
+```
+PROJECT CORPUS EMPTY: --project contributed 0 .ir file(s), so every name above was resolved against the batch alone — neither a finding nor a CLEAN verdict here is evidence about the project.
+```
+
+**No exit-2 case, and the asymmetry with `reuse-scan` is deliberate.** There, exit 0 *licenses*
+"nothing to reuse, write a new block", so a scan that examined nothing had to stop being a pass.
+Here a narrow or empty corpus makes preflight **noisier, not quieter**: its false answer is a false
+accusation delivered on exit 1, and no exit code repairs a false accusation — only the denominator
+printed under it does. A self-contained batch (a new block plus its new DB, pre-flighted before
+either exists in the project) is a legitimate run and must not be failed for it. The existing
+`SUMMARY:` line is likewise untouched: `1 file(s) of 43` would assert that one of 43 project files
+was pre-flighted, which is the category slip this change removes, and skills grep that line.
+
+`--json` gained its **first summary object of any kind** — a `corpus` sibling of `files` and
+`indexWarnings` carrying the same nine values. Before this a JSON consumer counted array elements
+and could reach no denominator at all.
+
+**What the denominator still cannot tell you.** It is a count of *names indexed*, not of *names
+relevant*: 145 tag roots does not mean the one your block needs is among them, and a corpus of the
+right size can still be the wrong project. It says nothing about **recursion** — `--project` is
+scanned top-directory-only, so a subdirectory full of `.ir` contributes 0 and reads exactly like an
+empty export. It cannot distinguish a **stale** export from a current one (`drift-check` is that
+question). It does not cover the review pass's own corpus reach beyond the `TagTypeRegistry` /
+`HarnessScope` counts shown. And the per-class counts are *set sizes, not per-finding provenance*:
+they tell you how large the haystack was, never which of the four walks a particular
+`review:C-xxx` finding consulted.
+
 ## `tagstatus` — classify tag names exists/proposed (2026-07-18, FI-24)
 
 `converter tagstatus <name> [<name> ...] --project <ir-dir> [--json] [--roots-only]`

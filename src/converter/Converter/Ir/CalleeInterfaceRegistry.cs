@@ -22,6 +22,15 @@ public sealed class CalleeInterfaceRegistry
     public static readonly CalleeInterfaceRegistry Empty =
         new(new Dictionary<string, IReadOnlyDictionary<string, Param>>(StringComparer.Ordinal));
 
+    /// <summary>
+    /// How many callee interfaces are registered — the denominator of the synthesis finding
+    /// "cannot synthesize the wired CALL to '&lt;X&gt;' — the callee's interface is not available"
+    /// (2026-08-23). FI-60 was that message firing on a run where <c>--project</c> WAS passed;
+    /// printing the size of the set the lookup missed in is what makes the next instance of that
+    /// shape visible without a second run at a different scope.
+    /// </summary>
+    public int KnownCalleeCount => _byBlock.Count;
+
     // Builds the registry from already-parsed callee blocks. A block with no In/Out params still
     // registers (an empty param map), so a zero-argument CALL to it resolves as "known callee, no
     // params" rather than "unknown callee". Duplicate block names in the batch: last wins.

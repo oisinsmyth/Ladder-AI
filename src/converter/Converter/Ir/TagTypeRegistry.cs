@@ -57,6 +57,18 @@ public sealed class TagTypeRegistry
     // lives in a Controls/Settings DB rather than the interface UDT.
     public bool IsKnownDb(string name) => _dbs.ContainsKey(StripQuotes(name));
 
+    /// <summary>
+    /// How many DB and UDT BODIES this registry can descend into — the denominator of a
+    /// "member path '…' does not resolve" finding (2026-08-23).
+    ///
+    /// <para>Deliberately separate from any ProjectIndex count. Member-path resolution walks THIS
+    /// registry via <c>MemberPathResolver</c> and never touches <c>ProjectIndex</c>, so a
+    /// block-name or file count printed under a member-path finding would be a category slip: the
+    /// two walks read the same directory but index different things, and a DB present by NAME in
+    /// ProjectIndex can be a body-less stub here (see <see cref="TryGetDb"/>).</para>
+    /// </summary>
+    public int IndexedBodyCount => _dbs.Count + _udts.Count;
+
     // The DB body behind a name (quotes tolerated), so a caller can tell "this DB has no such
     // member" from "this DB's members aren't in the export at all" — an instance-DB stub created by
     // `create-instance-db` and not yet re-exported carries no member tree, and treating that as
