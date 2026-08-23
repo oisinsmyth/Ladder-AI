@@ -21,6 +21,7 @@ public static class DiffOutputFormatter
           .Append(report.ChangedCount).Append(" changed, ")
           .Append(report.AddedCount).Append(" added, ")
           .Append(report.RemovedCount).Append(" removed, ")
+          .Append(report.MovedCount).Append(" moved, ")
           .Append(report.IdenticalCount).Append(" identical\n");
 
         if (report.Header.Changed)
@@ -51,6 +52,15 @@ public static class DiffOutputFormatter
             if (!string.IsNullOrEmpty(network.Title))
             {
                 sb.Append(" \"").Append(network.Title).Append('"');
+            }
+
+            // A move's before and after are the SAME text — printing it twice under -/+ would suggest a
+            // delta that does not exist. The change is the position, so that is what is printed.
+            if (network.Kind == NetworkChangeKind.Moved)
+            {
+                sb.Append(" — was network ").Append(network.MovedFrom)
+                  .Append(", content unchanged. LAD executes in network order, so this alters what the PLC does.\n");
+                continue;
             }
 
             sb.Append('\n');
@@ -101,6 +111,19 @@ public static class DiffOutputFormatter
                   .Append(string.Join(", ", report.AllowedNetworks.OrderBy(n => n)))
                   .Append(HeaderClause(report))
                   .Append('\n');
+            }
+
+            // Same rule as the comment carve-out: non-gating is not invisible. A declared insertion is
+            // still a renumbering of everything after it, and the reader is told exactly which networks
+            // were let through on the declaration and on what arithmetic.
+            if (report.MovesAreDeclared && report.MovedCount > 0)
+            {
+                sb.Append("DECLARED INSERTION at network ").Append(report.DeclaredInsertAt)
+                  .Append(" (--insert): ").Append(report.MovedCount)
+                  .Append(" network(s) shifted by ").Append(report.AddedCount - report.RemovedCount)
+                  .Append(" and do not gate.\n")
+                  .Append("       Their CONTENT is unchanged and their POSITION is not. The shift was checked against\n")
+                  .Append("       the declaration, not taken from it — a move that did not fit would still have gated.\n");
             }
 
             // Reported whether the run passed or failed, on its own line, naming what changed — a
@@ -158,6 +181,7 @@ public static class DiffOutputFormatter
                 changed = report.ChangedCount,
                 added = report.AddedCount,
                 removed = report.RemovedCount,
+                moved = report.MovedCount,
                 identical = report.IdenticalCount,
             },
             networks = report.Networks.Select(n => new
@@ -167,6 +191,7 @@ public static class DiffOutputFormatter
                 title = n.Title,
                 beforeText = n.BeforeText,
                 afterText = n.AfterText,
+                movedFrom = n.MovedFrom,
             }),
             allowedNetworks = report.AllowedNetworks,
             invarianceViolations = report.InvarianceViolations.Select(n => n.Number),
@@ -179,6 +204,10 @@ public static class DiffOutputFormatter
             // outside --only to change" — the header block above already carried commentChanged and
             // interfaceChanged separately, and the old verdict simply threw that distinction away.
             hasNonGatingCommentChange = report.HasNonGatingCommentChange,
+            // The insertion declaration and whether it was HONOURED. Separate keys: a caller can pass
+            // --insert and still gate, because the shift is checked rather than believed.
+            declaredInsertAt = report.DeclaredInsertAt,
+            movesAreDeclared = report.MovesAreDeclared,
             unchangedRemainder = report.IdenticalCount,
             hasInvarianceViolation = report.HasInvarianceViolation,
         };
@@ -239,6 +268,7 @@ public static class DiffOutputFormatter
         NetworkChangeKind.Added => "ADDED",
         NetworkChangeKind.Removed => "REMOVED",
         NetworkChangeKind.Identical => "IDENTICAL",
+        NetworkChangeKind.Moved => "MOVED",
         _ => kind.ToString().ToUpperInvariant(),
     };
 

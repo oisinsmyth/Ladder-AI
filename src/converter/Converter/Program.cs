@@ -1177,12 +1177,13 @@ internal static class Program
         return report.HasBlocking ? 1 : 0;
     }
 
-    private static int RunDiff(string[] args)
+    internal static int RunDiff(string[] args)
     {
         var paths = new List<string>();
         var onlyNetworks = new List<int>();
         var json = false;
         var allowHeader = false;
+        int? insertAt = null;
 
         for (var i = 0; i < args.Length; i++)
         {
@@ -1220,6 +1221,22 @@ internal static class Program
                 case "--allow-header":
                     allowHeader = true;
                     break;
+                // 2026-08-23. Networks are now matched on CONTENT first, so an insertion reports as
+                // "1 added, k moved" instead of "k changed, 1 added". A move GATES — LAD executes in
+                // network order — and this is how a deliberate insertion is declared. The declaration is
+                // CHECKED against the observed shift, never believed.
+                case "--insert":
+                {
+                    if (i + 1 >= args.Length || !int.TryParse(args[i + 1], out var at) || at < 1)
+                    {
+                        Console.Error.WriteLine("--insert requires the network number the insertion was made AT (e.g. --insert 11).");
+                        return 1;
+                    }
+
+                    insertAt = at;
+                    i++;
+                    break;
+                }
                 default:
                     paths.Add(args[i]);
                     break;
@@ -1228,8 +1245,20 @@ internal static class Program
 
         if (paths.Count != 2)
         {
-            Console.Error.WriteLine("Usage: converter diff <old.ir> <new.ir> [--only <network> ...] [--allow-header] [--json]");
+            Console.Error.WriteLine("Usage: converter diff <old.ir> <new.ir> [--only <network> ...] [--allow-header] [--insert <n>] [--json]");
             return 1;
+        }
+
+        // --insert modifies --only, and without one there is no gate for it to modify: the report is
+        // informational and exits 0 regardless. Accepting the flag there would let it be pasted into a
+        // command line where it does nothing, which is how a named escape quietly becomes a default.
+        // Exit 2, not 1: nothing was judged.
+        if (insertAt is not null && onlyNetworks.Count == 0)
+        {
+            Console.Error.WriteLine(
+                "--insert declares that a gated invariance check should tolerate the renumbering an insertion caused, "
+                + "so it is meaningless without --only, which is what makes this a gate. NOTHING WAS JUDGED.");
+            return 2;
         }
 
         foreach (var path in paths)
@@ -1244,7 +1273,7 @@ internal static class Program
         DiffReport report;
         try
         {
-            report = DiffRunner.Run(paths[0], paths[1], onlyNetworks, allowHeader);
+            report = DiffRunner.Run(paths[0], paths[1], onlyNetworks, allowHeader, insertAt);
         }
         catch (Exception ex) when (ex is IrFormatException or SimaticMlFormatException)
         {

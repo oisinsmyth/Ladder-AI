@@ -16,6 +16,13 @@ public enum NetworkChangeKind
     Changed,
     Added,
     Removed,
+
+    // 🔴 IDENTICAL CONTENT, DIFFERENT POSITION — and it GATES. LAD executes in network order, so moving
+    // a rung changes what the PLC does even though not one character of it changed. This kind exists
+    // because the alternative was worse, not because a move is harmless: matching purely by NUMBER
+    // reported an insertion as "n changed, 1 added" and pointed at n networks nobody had touched. Naming
+    // the move is the fix; forgiving it is not. See DiffReport.MovesAreDeclared for the one escape.
+    Moved,
 }
 
 // One network's before/after verdict. Before/After carry the SerializeNetworkOnly text so the text
@@ -26,7 +33,12 @@ public sealed record NetworkDiff(
     NetworkChangeKind Kind,
     string? Title,
     string? BeforeText,
-    string? AfterText);
+    string? AfterText,
+
+    // Where this network used to be, when it MOVED. Null for every other kind. `Number` is always where
+    // the network is NOW (or, for Removed, where it was) — so a reader looking up a reported number in
+    // the new file always finds it.
+    int? MovedFrom = null);
 
 // Block-level (non-network) changes — matters for gen-block-modify-purpose, which changes the
 // interface. Title/Comment compared as fields; Interface compared via its sidecar-free canonical
@@ -71,9 +83,17 @@ public sealed record DiffReport(
     // rename is INTENDED - `--allow-header`. Absent, an unclaimed header change is an invariance
     // violation like any other change outside --only. FI-71's shape: the escape is NAMED, so the
     // default cannot be a false assurance.
-    bool HeaderChangeAllowed = false)
+    bool HeaderChangeAllowed = false,
+
+    // `--insert <n>`: the caller's declaration that networks were inserted and/or removed AT position n,
+    // so everything from n onward shifted. FI-71's shape again — the escape is NAMED, and it is CHECKED
+    // rather than believed: see MovesAreDeclared, which verifies the moves are exactly the shift the
+    // declaration implies and gates on anything else.
+    int? DeclaredInsertAt = null)
 {
     public int ChangedCount => Networks.Count(n => n.Kind == NetworkChangeKind.Changed);
+
+    public int MovedCount => Networks.Count(n => n.Kind == NetworkChangeKind.Moved);
 
     public int AddedCount => Networks.Count(n => n.Kind == NetworkChangeKind.Added);
 
@@ -91,7 +111,35 @@ public sealed record DiffReport(
             ? Array.Empty<NetworkDiff>()
             : Networks
                 .Where(n => n.Kind != NetworkChangeKind.Identical && !AllowedNetworks.Contains(n.Number))
+                .Where(n => n.Kind != NetworkChangeKind.Moved || !MovesAreDeclared)
                 .ToList();
+
+    // 🔴 THE MOVES ARE EXACTLY THE ONES `--insert <n>` IMPLIES — CHECKED, NEVER TAKEN ON TRUST.
+    //
+    // Declaring an insertion at n says: everything from n onward shifted by (added - removed), and
+    // nothing before n moved at all. Both halves are verified here. A declaration that does not match
+    // the observed moves buys the caller NOTHING — the moves gate as before — because a flag that
+    // silences whatever it is pointed at is not an escape, it is an off switch.
+    //
+    // Requires a non-zero shift: `--insert` over a diff that inserted nothing is a claim about a change
+    // that did not happen, and quietly accepting it would let the flag be pasted into a command line
+    // permanently, which is how a named escape becomes a default.
+    public bool MovesAreDeclared
+    {
+        get
+        {
+            if (DeclaredInsertAt is not int at)
+                return false;
+
+            var shift = AddedCount - RemovedCount;
+            if (shift == 0)
+                return false;
+
+            return Networks
+                .Where(n => n.Kind == NetworkChangeKind.Moved)
+                .All(n => n.MovedFrom >= at && n.Number - n.MovedFrom == shift);
+        }
+    }
 
     // 2026-08-14, ruled a VIOLATION. The removed comment above explained why the CHECK was absent —
     // "header intent isn't expressible via --only, so header changes are surfaced but never counted

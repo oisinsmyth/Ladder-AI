@@ -12,7 +12,8 @@ namespace Converter.Diff;
 public static class DiffRunner
 {
     public static DiffReport Run(
-        string oldPath, string newPath, IReadOnlyList<int> onlyNetworks, bool allowHeaderChange = false)
+        string oldPath, string newPath, IReadOnlyList<int> onlyNetworks, bool allowHeaderChange = false,
+        int? declaredInsertAt = null)
     {
         var (oldBlock, oldSidecars) = ParseEither(File.ReadAllText(oldPath));
         var (newBlock, newSidecars) = ParseEither(File.ReadAllText(newPath));
@@ -27,7 +28,8 @@ public static class DiffRunner
             Header: header,
             Networks: networks,
             AllowedNetworks: onlyNetworks,
-            HeaderChangeAllowed: allowHeaderChange);
+            HeaderChangeAllowed: allowHeaderChange,
+            DeclaredInsertAt: declaredInsertAt);
     }
 
     // Parse whether or not the input carries a SIDECAR (same branch review/preflight use). A sidecar-less
@@ -38,46 +40,120 @@ public static class DiffRunner
             ? IrParser.ParseBlock(text)
             : (IrParser.ParseBlockWithoutSidecar(text), Array.Empty<NetworkSidecar>());
 
+    // 🔴 *** MATCHED ON CONTENT FIRST, THEN ON NUMBER — AND MATCHING ONLY ON NUMBER WAS A CLOSED CHECK.
+    // ***
+    //
+    // This used to pair networks purely by Number, with a comment calling wholesale renumbering "a known,
+    // documented limitation". The limitation is not exotic: INSERT ONE NETWORK at 11 in a 20-network block
+    // and 11..20 all shift, so the report reads "10 changed, 1 added" and `--only {11}` exits 1 naming
+    // NINE NETWORKS NOBODY TOUCHED. This is the S7 modification gate, whose entire job is "prove the rest
+    // is identical", and it was answering a question about numbers while claiming to answer one about
+    // content. CLAUDE.md lists it as one of four measured instances of a check that is CLOSED — it examines
+    // something real that is not the thing it claims, so it is never empty and never silent.
+    //
+    // *** THE ANCHOR IS UNIQUENESS, AND THE AMBIGUITY RULE IS THE WHOLE SAFETY ARGUMENT. *** Only content
+    // appearing EXACTLY ONCE on each side is paired across numbers. Two networks with identical bodies —
+    // which real ladder has, e.g. repeated per-device rungs — anchor to nothing and fall back to number
+    // matching, because pairing them would be a guess. A content anchor that mis-paired duplicates would
+    // be a NEW false green in a gate whose job is proving identity, which is a worse failure than the one
+    // being fixed.
+    //
+    // Everything the old code did survives for the unchanged case: a network with the same content at the
+    // same number anchors to itself and reports Identical, exactly as before.
     private static IReadOnlyList<NetworkDiff> DiffNetworks(IrBlock oldBlock, IrBlock newBlock)
     {
-        // Networks are matched by Number — S7 edits in place, so numbering is stable. A wholesale
-        // renumbering would misreport (a known, documented limitation, not handled here).
         var oldByNumber = oldBlock.Networks.ToDictionary(n => n.Number);
         var newByNumber = newBlock.Networks.ToDictionary(n => n.Number);
 
+        // 🔴 TWO TEXTS PER NETWORK, AND THE DISTINCTION IS LOAD-BEARING.
+        //
+        // SerializeNetworkOnly's first line is `NETWORK <number> "<title>"`, so THE NUMBER IS PART OF THE
+        // TEXT. Comparing that form across positions can never match — a moved network would always look
+        // changed, which is precisely the old behaviour. So identity is compared on a number-free form,
+        // and the real text is kept for display, where the reader wants the actual numbers.
+        //
+        // This changes nothing about the same-number case the old code handled: normalising a number that
+        // is equal on both sides is a no-op, so an in-place edit still reports Changed and an untouched
+        // network still reports Identical, byte for byte as before.
+        var oldText = oldByNumber.ToDictionary(kv => kv.Key, kv => IrSerializer.SerializeNetworkOnly(kv.Value));
+        var newText = newByNumber.ToDictionary(kv => kv.Key, kv => IrSerializer.SerializeNetworkOnly(kv.Value));
+
+        var oldIdentity = oldByNumber.ToDictionary(kv => kv.Key, kv => Identity(kv.Value));
+        var newIdentity = newByNumber.ToDictionary(kv => kv.Key, kv => Identity(kv.Value));
+
+        // Content -> the single number holding it, for content held by exactly one network on that side.
+        var oldUnique = Unique(oldIdentity);
+        var newUnique = Unique(newIdentity);
+
         var results = new List<NetworkDiff>();
-        foreach (var number in oldByNumber.Keys.Union(newByNumber.Keys).OrderBy(k => k))
+        var pairedOld = new HashSet<int>();
+        var pairedNew = new HashSet<int>();
+
+        foreach (var (content, oldNumber) in oldUnique)
         {
-            var hasOld = oldByNumber.TryGetValue(number, out var oldNet);
-            var hasNew = newByNumber.TryGetValue(number, out var newNet);
+            if (!newUnique.TryGetValue(content, out var newNumber))
+                continue;
+
+            pairedOld.Add(oldNumber);
+            pairedNew.Add(newNumber);
+
+            results.Add(oldNumber == newNumber
+                ? new NetworkDiff(newNumber, NetworkChangeKind.Identical, newByNumber[newNumber].Title, null, null)
+                : new NetworkDiff(newNumber, NetworkChangeKind.Moved, newByNumber[newNumber].Title,
+                    oldText[oldNumber], newText[newNumber], MovedFrom: oldNumber));
+        }
+
+        // Whatever did not anchor is matched by number, among the unpaired only — the old behaviour,
+        // now applied to the residue instead of to everything.
+        var residualOld = oldByNumber.Keys.Where(n => !pairedOld.Contains(n)).ToHashSet();
+        var residualNew = newByNumber.Keys.Where(n => !pairedNew.Contains(n)).ToHashSet();
+
+        foreach (var number in residualOld.Union(residualNew).OrderBy(k => k))
+        {
+            var hasOld = residualOld.Contains(number);
+            var hasNew = residualNew.Contains(number);
 
             if (hasOld && hasNew)
             {
-                var oldText = IrSerializer.SerializeNetworkOnly(oldNet!);
-                var newText = IrSerializer.SerializeNetworkOnly(newNet!);
-                if (string.Equals(oldText, newText, StringComparison.Ordinal))
-                {
-                    results.Add(new NetworkDiff(number, NetworkChangeKind.Identical, newNet!.Title, null, null));
-                }
-                else
-                {
-                    results.Add(new NetworkDiff(number, NetworkChangeKind.Changed, newNet!.Title, oldText, newText));
-                }
+                // Still compared on CONTENT, not assumed different: two networks can share a body and
+                // therefore fail to anchor while being perfectly identical in place.
+                results.Add(string.Equals(oldIdentity[number], newIdentity[number], StringComparison.Ordinal)
+                    ? new NetworkDiff(number, NetworkChangeKind.Identical, newByNumber[number].Title, null, null)
+                    : new NetworkDiff(number, NetworkChangeKind.Changed, newByNumber[number].Title,
+                        oldText[number], newText[number]));
             }
             else if (hasOld)
             {
-                results.Add(new NetworkDiff(number, NetworkChangeKind.Removed, oldNet!.Title,
-                    IrSerializer.SerializeNetworkOnly(oldNet!), null));
+                results.Add(new NetworkDiff(number, NetworkChangeKind.Removed, oldByNumber[number].Title,
+                    oldText[number], null));
             }
             else
             {
-                results.Add(new NetworkDiff(number, NetworkChangeKind.Added, newNet!.Title,
-                    null, IrSerializer.SerializeNetworkOnly(newNet!)));
+                results.Add(new NetworkDiff(number, NetworkChangeKind.Added, newByNumber[number].Title,
+                    null, newText[number]));
             }
         }
 
-        return results;
+        return results.OrderBy(r => r.Number).ThenBy(r => r.Kind).ToList();
     }
+
+    /// <summary>
+    /// 🔴 <b>A network's content WITHOUT its position</b> — the thing two networks can share across a
+    /// renumbering. Everything else about the network is kept, the TITLE included: a title is part of what
+    /// a network is, and two rungs that differ only by title are different rungs.
+    ///
+    /// <para>Done by normalising the number on the model rather than by editing the serialized string,
+    /// so it cannot be broken by a future change to the serializer's first line.</para>
+    /// </summary>
+    private static string Identity(IrNetwork network) =>
+        IrSerializer.SerializeNetworkOnly(network with { Number = 0 });
+
+    /// <summary>Content held by exactly ONE network on this side. Anything shared is not an anchor.</summary>
+    private static Dictionary<string, int> Unique(Dictionary<int, string> byNumber) =>
+        byNumber
+            .GroupBy(kv => kv.Value, StringComparer.Ordinal)
+            .Where(g => g.Count() == 1)
+            .ToDictionary(g => g.Key, g => g.Single().Key, StringComparer.Ordinal);
 
     private static HeaderDiff DiffHeader(
         IrBlock oldBlock, IReadOnlyList<NetworkSidecar> oldSidecars,

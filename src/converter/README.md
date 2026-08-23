@@ -1770,22 +1770,77 @@ not compared, being a volatile block ID).
 Either input may carry a real `SIDECAR` (a TIA export — the S7 shape: before = exported block, after =
 the same block edited then reconverted) **or be sidecar-less** (a freshly-authored / validation-corpus
 block); the comparison is sidecar-free either way. `--only` accepts space- or comma-separated numbers,
-or repeated flags (`--only 1 2` / `--only 1,2` / `--only 1 --only 2`). Networks are matched **by
-number** (S7 edits in place; a wholesale renumber would misreport — a stated limitation).
+or repeated flags (`--only 1 2` / `--only 1,2` / `--only 1 --only 2`).
+
+🔴 **NETWORKS ARE MATCHED ON CONTENT FIRST, THEN ON NUMBER — AND MATCHING ONLY ON NUMBER WAS A
+CLOSED CHECK (2026-08-23).** The old matcher paired networks purely by `Number`, with a comment
+calling wholesale renumbering *"a known, documented limitation"*. That limitation is not exotic:
+**insert one network at 11 in a 20-network block and 11..20 all shift**, so the report read
+`10 changed, 1 added` and `--only 11` **exited 1 naming nine networks nobody had touched** — from
+the gate whose entire job is *"prove the rest is identical"*. It was answering a question about
+numbers while claiming to answer one about content, which is why it looked healthy: never empty,
+never silent. Now content that appears **exactly once on each side** is paired regardless of number,
+and the residue falls back to number matching as before.
+
+**`Moved` is its own kind and it GATES.** LAD executes in network order, so a rung that runs later
+than it used to changes what the PLC does. The fix is that a move is *named* — with the number it
+came from — not that it is forgiven. A pure reorder is `2 moved` and exit 1.
+
+⚠️ **The ambiguity rule is the safety argument.** Only content unique on **both** sides anchors. Two
+networks with identical bodies — which real ladder has — anchor to nothing and fall back to number,
+because pairing them would be a guess, and a content anchor that mis-paired duplicates would be a
+*new* false green inside a gate whose job is proving identity.
+
+⚠️ **Known, asserted limitation: a network that is BOTH edited AND moved reports as a REMOVE plus an
+ADD**, not as one `Changed`. Nothing can pair it — the content differs so the anchor declines, the
+number differs so the fallback declines — and inventing a pairing would be a guess about which
+network the author meant. The gate is unharmed (it fires, and names both numbers); it is just less
+tidy than one row.
+
+**`--insert <n>` is the named escape** (`--allow-header`'s shape, FI-71's): it declares *"networks
+were inserted and/or removed at position n"*, and the resulting shift does not gate. **It is CHECKED,
+never believed** — every moved network must satisfy `MovedFrom >= n` and `newNumber - MovedFrom ==
+(added - removed)`, and the shift must be non-zero. A declaration that does not match buys nothing,
+because a flag that silences whatever it is pointed at is an off switch, not an escape. It is
+**refused with exit 2 when `--only` is absent** (nothing was judged: without `--only` there is no
+gate for it to modify, and a flag that can sit harmlessly in a script becomes a default nobody
+notices). `gen-block-modify-purpose` may pass it and must declare the insertion in its hand-back;
+**`gen-block-modify-fix` must never** — a fix that needs a new network is a purpose change, so the
+answer is to route, not to declare.
 
 **Exit code:** with `--only`, exit 1 if any network *outside* the declared set changed/appeared/
-disappeared — the invariance assertion the S7 skill gates on. Without `--only`, it's an
-informational report (exit 0); a malformed IR file or a missing path exits 1.
+disappeared/moved — the invariance assertion the S7 skill gates on. Without `--only`, it's an
+informational report (exit 0); a malformed IR file or a missing path exits 1; `--insert` without
+`--only` exits 2.
 
 ```
 $ converter diff before.ir after.ir --only 1
-SUMMARY: 2 network(s): 1 changed, 0 added, 0 removed, 1 identical
+SUMMARY: 2 network(s): 1 changed, 0 added, 0 removed, 0 moved, 1 identical
 
 CHANGED network 1 "Perimeter Safety Alarm Bit Mapping"
   - ... old readable form ...
   + ... new readable form ...
 
 INVARIANCE OK: all changes confined to --only {1}          # exit 0
+UNCHANGED REMAINDER: 1 network(s) proven identical outside --only
+```
+
+An insertion, declared:
+
+```
+$ converter diff before.ir after.ir --only 11 --insert 11
+SUMMARY: 21 network(s): 0 changed, 1 added, 0 removed, 10 moved, 10 identical
+
+ADDED network 11 "Call The Slot FC"
+  + ... new readable form ...
+
+MOVED network 12 "Index Latch" — was network 11, content unchanged. LAD executes in network
+order, so this alters what the PLC does.
+... (nine more)
+
+INVARIANCE OK: all changes confined to --only {11}, header unchanged        # exit 0
+DECLARED INSERTION at network 11 (--insert): 10 network(s) shifted by 1 and do not gate.
+UNCHANGED REMAINDER: 10 network(s) proven identical outside --only
 ```
 
 ## `reuse-scan` — reuse-first duplicate-logic finder (2026-07-20, FI-29)

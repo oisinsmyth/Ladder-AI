@@ -74,6 +74,12 @@ compound-operand-must-lead synthesis rule). Follow it. **For a fix specifically:
   passed a gate whose whole job is *"prove the rest is identical"*. **`--allow-header` exists and is
   `gen-block-modify-purpose`'s, not yours** — if you reach for it, you are on the wrong path and the
   answer is to route, not to declare.
+  🔴 **AND `--insert <n>` IS THE SAME (2026-08-23): IT IS NOT YOURS EITHER.** Networks are now matched
+  on CONTENT before number, so inserting a network reports the ones after it as `MOVED` rather than as
+  `changed`, and a move **gates** — LAD executes in network order. `--insert` declares that shift. But a
+  fix that needs a *new network* is a purpose change by the rule three lines above, exactly as a fix
+  needing a new interface member is. **If the moves are gating you, the answer is to route, not to
+  declare.** Reaching for `--insert` here is the same wrong turn wearing different letters.
   ✅ **BUT REPAIRING A STALE BLOCK COMMENT IS YOURS, AND IT NO LONGER GATES (narrowed 2026-08-14, on the
   gate's first contact with real work).** A fix-wave run widened a Modbus area, repaired two block
   comments that were *already false* — one said the area covered "8 words" when it covered 35 — and hit

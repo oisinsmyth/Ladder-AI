@@ -82,6 +82,17 @@ rule, and the compound-operand-must-lead synthesis rule). Follow it. **For a pur
   by VSD speed control). Added/removed networks appear in `diff` as `Added`/`Removed` and belong in the
   `--only` changed set; **the untouched skeleton networks (start/stop, permissives, faults, hours, alarms)
   still prove identical** — that invariance is the whole point.
+  🔴 **AN INSERTION IN THE MIDDLE RENUMBERS EVERYTHING AFTER IT, AND `converter diff` NOW SAYS SO
+  (2026-08-23).** It used to match networks purely by number, so inserting at 11 in a 20-network block
+  reported `10 changed, 1 added` and named nine networks you never touched — the "untouched skeleton
+  proves identical" claim above was simply unavailable to you. Networks are matched on CONTENT first now,
+  so those nine report as **`MOVED`**, carrying the number each came from. **A move GATES**, because LAD
+  executes in network order and a rung that runs later than it used to changes what the PLC does.
+  ✅ **`--insert <n>` is yours to pass, on the same terms as `--allow-header`: it is a DECLARATION.** It
+  says the insertion was made at `n` and everything from there shifted; the tool then **checks** that
+  against the moves it actually found and still gates on anything that does not fit. **Declare the
+  insertion point and the shift in your hand-back**, the way you already declare the interface delta —
+  and note that appending at the END renumbers nothing and needs no declaration at all.
 - **The new networks + interface answer to conventions and must deliver the new REQ(s)** — C-115/C-126, the
   stricter bar; a change that compiles but doesn't actually realize the new purpose is a miss.
 
@@ -93,7 +104,9 @@ Hand back (per `lad-coder`'s contract — your summary is not proof):
   **`diff --only … --allow-header` invariance result (exit 0)** proving the kept skeleton is untouched —
   that pairing is the S7 deliverable. **Quote the interface delta explicitly in the hand-back**: with
   `--allow-header` the gate stops arguing about it, so the reader is the only remaining check on whether
-  the members that changed are the ones the manifest named.
+  the members that changed are the ones the manifest named. **If you inserted networks mid-block, the same
+  applies to `--insert <n>`**: quote the `DECLARED INSERTION` line and say which networks shifted, because
+  the gate has stopped arguing about those too.
 - A **one-paragraph intent**: what purpose change, which REQ(s) it delivers, why it's correct.
 - **preflight** (zero findings) + **compile** evidence: `sanity-check`'s `INCONSISTENT: 0` on **both**
   the `BLOCKS:` and `TYPES:` lines, plus the **error count**. *(Corrected 2026-08-13: this read
