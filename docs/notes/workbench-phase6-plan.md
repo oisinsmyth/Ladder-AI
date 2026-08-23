@@ -101,6 +101,16 @@ out — a converter build-layout change while every skill invokes `bin/Release/c
 referencing an Exe and pulling `WaveControl` in behind it. **That belongs in `docs/18` §3.6 whatever
 Phase 6 turns out to be.**
 
+🔴 **CORRECTED 2026-08-23, and it cuts against the objection above.** *"Referencing an Exe"* was
+written as though it were the awkward option. It is not: **`DeviceGuard.csproj` is itself
+`OutputType=Exe`** (`AssemblyName=device-guard`, net8.0) and six harness projects already reference
+it. Referencing an Exe is **established practice in this harness**, so that half of the objection is
+weaker than stated. **The real cost is different and is stated nowhere else:** `WaveControl` is
+netstandard2.0 and references nothing, so the *build* cost is near zero — but the reference would pull
+`WaveControl` into the harness's build graph **transitively**, making `docs/18` §5 row 1.3's *"verified
+zero project references between `src/harness` and `src/wave-control`"* false **by a route nobody
+chose.** That is the sharp edge, and it is a contract question rather than a build one.
+
 ### Vector supply — real, and mostly not mechanisable
 
 It is the measured bottleneck and it was considered as the phase. It is not, because §3.1 puts the
@@ -345,7 +355,7 @@ failure class this whole phase is about.
 | what | needed by | state |
 |---|---|---|
 | `converter`, net8.0, Portal-free | Y1, Y2 | ✅ Rebuilding is free and safe; `converter.sln` is not an openness-cli rebuild. **`dotnet build -c Release` after any change (FI-73)** — Y1 and Y2 both touch it. |
-| harness solution, dependency-free | Y1–Y3 | ✅ **No project reference from `src/harness` to `src/converter` exists today** (grep over all harness `.csproj` — zero hits). This plan adds none. |
+| harness solution, no converter reference | Y1–Y3 | ✅ **No project reference from `src/harness` to `src/converter` exists today** (grep over all 35 harness `.csproj` — zero hits). This plan adds none. 🔴 **CORRECTED 2026-08-23: this row first read "dependency-free", and the harness is NOT.** Seven cross-solution project references exist — `src/device-guard` from six projects (`Harness.CmdInject`, `Harness.MirrorRead`, `Harness.MirrorView`, `Harness.Run`, `Harness.S7`, `Harness.Verify`) and `src/download-feedback` from `Harness.Device`. What is verified is the narrower claim, and only that. |
 | `MirrorGeometry.ReservingBytes` | Y1 | ✅ Built, tested, rounds outward, refuses a span below base. |
 | `ReservedRegion` + binding wiring | Y1 | ✅ Built (`5f6b39b`), wired and unioned across lanes (`e717dfe`). **Zero real declarations exist anywhere** — Y1 is its first real input. |
 | `P#` area-pointer parsing | Y2 | ✅ `IrParser.cs:1311-1322`, `:2498-2504`; `ir/SPEC.md:989-996`. |

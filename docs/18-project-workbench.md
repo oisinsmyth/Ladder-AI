@@ -537,15 +537,37 @@ the denominator.
 
 ---
 
-### Phase 3 — The gate queue · **P1** · *biggest single lever on the budget*
+### Phase 3 — The gate queue · **P1** · ✅ **DELIVERED AND RUN ON THE RIG 2026-08-22**
 
-🔨 Tool-owned, batching, replacing the hand-edited claim board — which has **already been raced
+> **Built, and executed against Portal and a controller.** `converter lease` is a real lock, raced by
+> two processes (`9b4a863`, `e7b2af9`); `harness-batch` plans and runs N lanes off one deployment
+> (`2cc474b`, `c583aa0`). **First live end-to-end run: one lane, leases → generate → convert →
+> import-all → compile-all → sanity-check → download → wave, 111 s, 3 of 3 vectors PASS**, device
+> stamp moved to match the staged build (`ed27465`). **Then two lanes off one deployment** — the
+> second lane cost about 18 s on top of the first, *"the whole thesis of batching, and it is now a
+> measurement rather than an argument"* (`d289a27`).
+>
+> ⚠️ **This heading carried 🔨 *"specified, not built"* until 2026-08-23**, while §0 of this same
+> document listed Phase 3 as delivered. Four defects were found by that first live run and none was
+> findable otherwise (`ed27465`) — a status marker that says a delivered phase is unbuilt discourages
+> exactly the reading that would have found them.
+
+Tool-owned, batching, replacing the hand-edited claim board — which had **already been raced
 once**. Download granularity is device-level (34–92 s measured), so batching is the whole reason
 §4.2's batched column beats the serial one.
 
 ---
 
-### Phase 4 — ~~The workbench spine~~ → **the lane, generated** · *redefined 2026-08-23, in progress*
+### Phase 4 — ~~The workbench spine~~ → **the lane, generated** · ✅ **DELIVERED 2026-08-23** · *redefined the same day*
+
+> **`802327f`..`dd274fe`** — W1 four silent omissions (`802327f`) · W2 `converter diff` matches
+> networks on content (`2c5eab9`) · W3 `SlotFcGenerator` + the emitted lane manifest (`d3d5ab1`) ·
+> W4 `StimShellGenerator` · W5 reachability parity against the converter (`f126ffc`) · W6 the stale
+> status lines (`dd274fe`).
+>
+> ⚠️ **This heading read *"in progress"* until 2026-08-23** — the same shape W6 was itself opened to
+> repair: the status was written when the work started and nothing made closing it part of closing
+> the work.
 
 🔴 **THE SPINE AS WRITTEN BELOW IS NOT BEING BUILT, AND 4.4 IS STRUCK RATHER THAN DEFERRED.** The
 argument, in this document's own terms:
@@ -556,8 +578,13 @@ argument, in this document's own terms:
   that *every consumer already existed and nothing computed the sets*. Adding an authored one
   re-opens the hole FI-65 #1 and D9 both closed. **Struck.**
 - **4.2 is already unit-tested at N=8** (`BatchPlannerTests.Eight_lanes_that_fit_are_batched`) and
-  unused at N=3. What bounds the wavefront is the mirror's 576-register area and the number of lanes
-  that EXIST — not a dependency graph nobody has drawn.
+  unused at N=3. What bounds the wavefront is the mirror's declared area and the number of lanes
+  that EXIST — not a dependency graph nobody has drawn. ⚠️ **This line said "576-register" until
+  2026-08-23.** The area was widened **576 → 1024 and proven on the controller** that day, pinned
+  from both sides exactly as 576 had been: 1022 and 1023 answer, **1024 and 1025 are refused by the
+  server with a Modbus exception** — a refusal, not a silence (`99396b9`;
+  `docs/notes/total-plant-run-feasibility.md:204-219`). The argument is unaffected — it is about what
+  *kind* of thing bounds the wavefront — which is exactly why the number sat here unnoticed.
 - **4.1 has no consumer** left once 4.2 and 4.4 go.
 - **4.3 (carve-out as a partition with a residual) is genuinely valuable and genuinely missing** —
   and belongs with its producer in the assertion pipeline (`enumerate-assertions`, `signal-sweep`),

@@ -30,6 +30,7 @@ openness-cli sanity-check  <project>                                           #
                                     # `Success (errors=0, warnings=0)` over a program that did not compile. Its verdict now keys on ERRORS, never on State, or the station scope's real warnings
                                     # would mark every healthy project unhealthy
 openness-cli portal-status                                                     # read-only Portal-process diagnostic (no project); never attaches/launches/kills — see below
+openness-cli portal-close  [--pid <n>]... [--json] --yes                       # 🔴 DESTRUCTIVE: TERMINATES Portal OS processes (no project). Without --yes it prints the plan and exits 10. A sweep takes empty and Openness-invisible processes; a Portal WITH A PROJECT OPEN is reachable only by --pid, and is saved first. NEVER RUN LIVE — see below
 openness-cli hmi           <project> [--screen <name>|*] [--max-items <n>]     # READ-ONLY HMI walk: screens, screen items, per-property dynamizations — see below
 openness-cli graphics      <project> [--list] [--inspect <name>] [--export <name> --out <path>] [--import <file>]... [--overwrite]   # the PROJECT-level picture store — see below
 openness-cli graphics      <project> --delete <name>... --yes                  # deletes graphics BY LITERAL NAME (no wildcard form exists); unknown name = hard error, nothing deleted — see below
@@ -62,6 +63,7 @@ each command is *documented*, including the ones the fence does not list.
 | `download-probe` | the only binary that can transfer a program, allowlist-fenced | the `download-probe` sections under `## Exit codes` |
 | `library` | project-library walk; `--export-version`, `--probe-documents` | `library` — the project-library walk |
 | `delete`, `create-instance-db`, `portal-status` | delete a block (refuses safety, `--yes`); scaffold an iDB; Portal-process health | synopsis above |
+| `portal-close` | **`portal-status`'s destructive sibling — it terminates OS processes.** `--yes`-gated, **never run live** | `portal-close` — closing a stray Portal |
 | `hmi` | read-only HMI walk; `--scripts`, `--schema` | `hmi` — the read-only HMI walk |
 | `hmi-create-screen` / `hmi-edit-screen` | the two HMI write probes; dynamization, events | `hmi-create-screen` / `hmi-edit-screen` |
 | `--map` / `--map-clear` | mapping tables — the second route to flashing | `--map` / `--map-clear` — mapping tables |
@@ -313,14 +315,148 @@ classified into one of three buckets:
 
 Output includes a short human note inferring the likely cause from the counts (one stray reads as a
 probable first-connect-dialog wait or human window; several strays match the pileup symptom). This
-is the read-only, safe subset of the parked FI-07 janitor — **killing stays out of scope** (FI-07
-needs a `--yes`/dry-run pattern and a safe "idle" definition so a mid-compile Portal is never
-touched; there is no is-compiling flag on the Openness side, so the tool cannot tell). Because a
+is the read-only, safe subset of the parked FI-07 janitor — **killing stays out of scope *for this
+command*** (FI-07 needs a `--yes`/dry-run pattern and a safe "idle" definition so a mid-compile
+Portal is never touched; there is no is-compiling flag on the Openness side, so the tool cannot
+tell). ⚠️ **This paragraph read "killing stays out of scope" without qualification until 2026-08-23**,
+by which date the owner had ruled and `portal-close` existed (`f9abeb1`) — the killing half now has
+its own command, with its own `--yes` gate and its own section below. `portal-status` itself is
+unchanged and still never kills anything. Because a
 stray is frequently a legitimate human window, this is **not a gate**: it is purely informational
 and **always exits 0**, in both table and `--json` form.
 
 The classification and formatting are pure and unit-tested (`PortalStatusTests`); the
 `GetProcesses()` enumeration itself is integration-only (needs a live Portal).
+
+## `portal-close` — closing a stray Portal (2026-08-23)
+
+```
+openness-cli portal-close [--pid <n>]... [--json] [--tia-install <dir>] [--timeout-connect <s>] [--timeout-open <s>] --yes
+```
+
+🔴 **THIS COMMAND TERMINATES OPERATING-SYSTEM PROCESSES. It is the only thing in this CLI that does.**
+It is `portal-status`'s destructive sibling: the same read-only two-source enumeration, and then it
+acts on what it read. No `<project>` positional — it targets Portal *processes*, not a project — and a
+positional argument is a usage error.
+
+🔴 **IT HAS NEVER BEEN RUN.** Built 2026-08-23 (`f9abeb1`), unit-tested offline
+(`PortalCloseTests`, `PortalCloseCommandTests`), and **not once executed against a live Portal, not
+even in its `--yes`-less plan form.** Everything below is derived from the source and from unit tests
+over hand-built process lists; nothing below is a measurement. Treat the first live run as an
+experiment — read the plan output before passing `--yes`, and record what happened.
+
+**Owner ruling, 2026-08-23**, quoted verbatim where the code that implements it lives
+(`OpennessCli/Openness/PortalClosePlanner.cs:62-63`):
+
+> **"save where you can, then close"**
+
+**Every close is a terminate, and that is not a design choice.** `TiaPortal` exposes no `Close`,
+`Exit` or `Quit` — verified against `Siemens.Engineering.dll` V20, whose only teardown member is
+`Dispose()`, and `Dispose()` on an `Attach()`ed handle releases *this tool's own reference and nothing
+else* (`OpennessGateway.DisposeAllExcept` depends on exactly that). So for any process this tool did
+not launch, "close" means killing the OS process, and **the only variable is whether a save happened
+first.** An earlier draft of the enum modelled a "graceful close through Openness" for empty
+instances; there is no such operation, and it is recorded in
+`PortalClosePlanner.cs:19-21` rather than quietly corrected.
+
+### What it does to each process
+
+The planner (`PortalClosePlanner.Plan`) is pure — no Siemens types, no COM — and classifies through
+`PortalStatusClassifier`, so the four buckets are `portal-status`'s. One of four `PortalCloseMethod`
+values comes out per process:
+
+| method | applies to | what happens |
+|---|---|---|
+| `Leave` | anything not selected | Nothing is attached to, saved or terminated. The `Reason` says why |
+| `SaveThenTerminate` | **in-use** (a project open) **and named by `--pid`** | Attach to that one pid, **`Project.Save()` every open project**, release the handle, then terminate |
+| `TerminateEmpty` | **self-launched-orphan**, and **stray-empty** | Terminate. Openness can see it and nothing is open, so there is nothing to save |
+| `TerminateUnsaveable` | **Openness-invisible**, once past the age floor or when named | 🔴 **Terminate WITHOUT saving.** Openness cannot see the process, so there is nothing to attach to and nothing to ask. Anything unsaved in it is gone |
+
+🔴 **`StrayEmpty` IS TERMINATED BY DEFAULT — a bare `portal-close --yes` takes it, with no `--pid`.**
+That bucket is *"an empty instance this tool did not launch"*, and the planner's own reason text says
+what that can be: **a human's window, a Portal sitting on the first-connect approval dialog, or
+genuine stale pileup** (`PortalClosePlanner.cs:125-129`). It cannot tell them apart. This is the
+sharpest difference from `portal-status`, which classifies a stray identically and then does nothing
+about it precisely because it *"could be a human's own empty window"*.
+
+🔴 **The dangerous target is the one with a project open, and it is NEVER in the default set.** An
+in-use Portal may be a person's session or another agent's; closing it costs someone their afternoon
+even when the save succeeds. It is closable, but **only when named by `--pid`**, so that no sweep can
+take one by accident.
+
+### The guards, and what each is for
+
+- **`--yes` or nothing happens.** Without it the command prints the full plan (`PORTAL-CLOSE PLAN`,
+  one entry per process with class, method and reason), writes to stderr that *"nothing was attached
+  to, saved or terminated"*, and exits **10 (`NotConfirmed`)**. Note the wording is deliberately
+  weaker than the usual *"Portal was not contacted"*: the process list **was** read, because that read
+  is the only way to know what the plan is (`Program.cs:1612-1621`).
+- **A minimum age floor of 5 minutes** (`PortalClosePlanner.DefaultMinimumAgeMinutes`) on
+  Openness-invisible processes. *"Still starting"* is a documented cause of invisibility — as is *"has
+  just died"* — and killing a Portal three seconds into launching would be this command creating the
+  pileup it exists to clear. An invisible process whose **start time cannot be read at all** is left
+  alone for the same reason. `--pid` is the only route past the floor.
+- **A failed save is a FULL STOP, not a step to push past.** If a save was possible and did not
+  succeed, the process is **left running** and reported as `SaveFailedNotTerminated`
+  (`PortalCloseExecution.cs:167-173`). Terminating then would destroy exactly the work the ruling
+  exists to protect. A timed-out attach counts as a failed save, so it does not terminate either —
+  `--timeout-connect` (default 180 s) bounds that attach, and unlike `portal-status` this command
+  genuinely uses the value. (`--timeout-open` is accepted and **inert** — nothing here opens a
+  project. Same shape-consistency reason `portal-status` carries both, documented rather than
+  removed.)
+- **The pid is re-checked immediately before the kill.** Pids are reused, and this command by
+  definition runs on a machine where Portal processes are dying. `PortalCloseIdentity.Mismatch`
+  compares the process's **current name against `OpennessGateway.PortalProcessNames`** (one shared
+  list, not a copy) **and its current start time against the one the plan was made about**, with a
+  1-second tolerance for clock granularity. It fails **closed** in every direction — an unreadable
+  name, a non-Portal name, a start time that disagrees or cannot be read all mean *do not terminate*,
+  reported as `IdentityChangedNotTerminated`.
+- **A `Leave` can never reach the code that kills.** `Program` builds the `LeftAlone` outcome itself
+  and never calls the gateway for one; `PortalCloseSequence.Execute` **throws** on a `Leave` rather
+  than no-op'ing, and `IOpennessGateway.ClosePortalProcess` refuses one outright.
+- **The save branch attaches to ONE NAMED PID**, never to `GetProcesses()[0]`, and never launches a
+  Portal.
+
+### Output
+
+Both forms carry **two** summaries, because they answer different questions and a run where they
+disagree is the run worth reading: `SELECTED:` is the planner's denominator (*"2 of 5 Portal
+process(es) selected; 1 will be SAVED first; 1 CANNOT be saved …"*, printed on every run including
+`NOTHING EXAMINED - no TIA Portal processes are running`), and `RESULT:` is what actually happened,
+counted **per outcome kind and never rolled up into one word "closed"**. A run that terminated three
+processes one of which could not be saved is not the same event as a run that saved all three, and
+that difference is invisible in any total that adds them.
+
+A loud `*** … ***` footer is printed when there is something to be loud about, and the two cases are
+kept apart because they send the reader to different places: **terminated without being saved** (work
+destroyed, pids listed) versus **could not be saved and was therefore left running** (work survived,
+a process is still there). `--json` carries `executed`, `selected`, `summary`, `warnings`,
+`anyFailed` and a per-process `outcomes` array.
+
+### Exit codes
+
+**0** when every selected process reached a terminal outcome (including a run that found nothing to
+close — see the note below), and **7 (`CommandError`)** when any outcome is a failure:
+`SaveFailedNotTerminated`, `TerminateFailed`, or `IdentityChangedNotTerminated`. **10
+(`NotConfirmed`)** for the plan-only form. Argument errors are **1** as everywhere else.
+
+**A run that found nothing to close is a SUCCESS, not an empty-is-not-clean case** — deliberately
+unlike the compile gate. This command's whole purpose is that there be no stray Portal processes, so
+*"there are none"* is the desired end state rather than an unanswered question. The summary still says
+outright that nothing was examined.
+
+### 🔴 The known blind spot: it cannot ask who is attached
+
+`TiaPortalProcess` exposes an **`AttachedSessions`** member, and this command does not consult it. The
+name appears in exactly **one line of the entire repository** —
+`docs/notes/openness-api-surface-v20.md:69`, marked **"unexplored"** — so nothing here knows what it
+returns or costs.
+
+**It matters most for the bucket that is terminated by default.** An agent or a person attached to an
+**empty** Portal is, to this command, indistinguishable from abandoned pileup: both are `StrayEmpty`,
+both are swept. Probing the member needs a live Portal, which is why the field is still unexplored,
+and closing this gap is explicitly *not* in the Phase 6 scope
+(`docs/notes/workbench-phase6-plan.md`).
 
 ## `hmi` — the read-only HMI walk
 
@@ -1603,10 +1739,10 @@ shell should branch on these rather than on stderr text.
 | 4 | `ProjectOpenTimeout` | The project-open step exceeded `--timeout-open` (default 1800s). A large project legitimately takes minutes; raise the timeout before assuming a hang |
 | 5 | `UnexpectedError` | Catch-all for any exception not classified below. Prints the full inner-exception chain. Treat as "a bug or an unmodelled Openness failure", not as user error — but see the caveat below |
 | 6 | `SafetyRefused` | `SafetyContentRefusedException` — the command touched safety-classified content and was refused (hard rule 2). Not retryable, by design |
-| 7 | `CommandError` | A recognised domain failure with a clear user-facing cause: `BlockNotFoundException`, `AmbiguousBlockException` (name/number under more than one device — pass `--device`), `DeviceNotFoundException`, `ExportProducedNoFileException`, `BlockMemoryLayoutUnavailableException` (the block resolved but exposes no access mode — name a DB or an FB) |
+| 7 | `CommandError` | A recognised domain failure with a clear user-facing cause: `BlockNotFoundException`, `AmbiguousBlockException` (name/number under more than one device — pass `--device`), `DeviceNotFoundException`, `ExportProducedNoFileException`, `BlockMemoryLayoutUnavailableException` (the block resolved but exposes no access mode — name a DB or an FB). **`portal-close` also earns it without any exception**: at least one selected process ended in a failure outcome — a save that did not succeed (so it was left running), a terminate that failed, or a pid that no longer names the process the plan was made about |
 | 8 | `CompileFailed` | `compile`, `compile-all` or `hmi-compile` ran to completion and reported **at least one error** — the larger of its own `ErrorCount` and the `Error` messages in its message tree, whichever is bigger (one shared `Program.EffectiveErrorCount`, so all three judge identically). **Warnings alone never earn this**, nor does a non-`Success` `State` on its own (2026-08-12): a pre-existing hardware warning returns a non-`Success` state on a clean block, and keying on it made every per-block compile on such a project exit 8 with `errors: 0`. `hmi-compile` carried the same `State`-keyed defect and was fixed with it, on the ruling that a known defect left because it has not bitten yet is how it bites later. The diagnostics are on stdout (`--json` for structured form). Also earned by `hmi-create-screen`/`hmi-edit-screen` on a `Validate()` error |
 | 9 | `SanityCheckFailed` | `sanity-check` ran to completion and the project is not healthy — at least one inconsistent block or type, or at least one device compile reporting **errors**. Both lists are printed. **Two things changed on 2026-08-13.** The compile it runs is now the **station** scope (hardware *and* program) rather than the DeviceItem scope, which compiled the hardware only and printed `Success (errors=0, warnings=0)` over a program containing a hard compile error — the report now names the scope on every line and prints each `[Error]` beneath it. And the health verdict now keys on the **effective error count**, not on `CompileState.Success`: the station scope surfaces a real project's standing warnings (an OB40 with no trigger, IO absent from the configured hardware), so a `State`-keyed verdict would mark every healthy project unhealthy forever. `errors=0` with a non-`Success` state is a **pass**, and the output says so |
-| 10 | `NotConfirmed` | A destructive command printed what it *would* do and `--yes` was absent, so **nothing was changed and Portal was never contacted** — the refusal is decided from the arguments alone, before `Connect`. Earned by `delete`, `block-layout --set`, and the HMI writers |
+| 10 | `NotConfirmed` | A destructive command printed what it *would* do and `--yes` was absent, so **nothing was changed and Portal was never contacted** — the refusal is decided from the arguments alone, before `Connect`. Earned by `delete`, `block-layout --set`, and the HMI writers. ⚠️ **`portal-close` earns it too, and the "Portal was never contacted" half is NOT true there** — it prints its plan, which it can only build by reading the running process list first (the same read-only enumeration `portal-status` performs). Nothing was attached to, saved or terminated; that is the whole guarantee, and the command's own stderr says exactly that rather than the stronger sentence |
 | 11 | `CompileIncomplete` | A compile reported **no errors** and left something it should have verified unverified. Two ways to earn it, the same fact from either end: **(a)** a **whole-scope** `compile` (station, software or hardware) over blocks that remain flagged `IsConsistent=false` — it did not compile them, and the unverified ones are listed on stderr (FI-52). The backstop runs after all three scopes, and it is *not* made redundant by the station default: a compile can report no errors and still leave an item unexamined; **(b)** a **per-block/per-type** compile whose own item reads back `IsConsistent=false` afterwards, or whose read-back could not be performed at all (2026-08-12 — the converse of FI-52; TIA will refuse to *export* that item, and nothing in the compile output used to say so). Distinct from `CompileFailed`: nothing reported an error, the gate simply did not prove what it appears to have proved. One code for both because the caller's response is identical — this is not the hard-rule-4 gate passing. **`hmi-compile` can never return this**, and that is not reassurance: `IsConsistent` is PLC-only across the whole V20 API, so the HMI path has nothing to detect the condition with (see `hmi-compile` above) |
 | 12 | `ExportIncomplete` | `export-all` exported everything it attempted, but the directory is **not** the whole project — something was refused (safety content, or a basename collision). Nothing went wrong; the dump is simply not whole, and comparing against it with `drift-check --complete` would produce findings about the dump that read as findings about the controller (FI-70). Same shape as 11 |
 | 13 | `ImportIncomplete` | `import-all` ran, but the project does **not** now contain everything handed to it — a file that never resolved its dependencies, or one never attempted (unreadable, unclassifiable, duplicate basename). Its own code because a project missing a block looks exactly like one that is not: it opens, it lists, and a device compile can pass on it. Same shape as 11 and 12 |

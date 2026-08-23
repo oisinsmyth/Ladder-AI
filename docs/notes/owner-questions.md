@@ -25,6 +25,9 @@ needs a dedicated conversation) gets its own task file in `agent-tasks/` — see
 `README.md` for the format and the concurrency/Portal-queue rules. This doc is where questions get
 answered; `agent-tasks/` is where the resulting work gets dispatched.
 
+**TWO BATCHES ARE OPEN BELOW** (2026-08-23 workbench, then the 2026-08-05 audit's 13 `decide` items).
+Read both before concluding nothing is waiting on you.
+
 **Last cleared:** 2026-07-17. The 2026-07-17 batch (~50 items, sections A–F, three rounds of
 owner answers) is fully resolved. Where things landed:
 - Closed items: `docs/06-lad-conventions.md` (naming/structure/data/alarm/simplicity rules, new
@@ -46,6 +49,70 @@ owner answers) is fully resolved. Where things landed:
   home); the C-003 tooling-enforcement backlog item stays in `AITODO.md`'s small/tooling queue.
 - Full dated history of every ruling in this batch: `docs/evidence/stage-S6.md`'s "owner-questions
   batch pass" / "round 2" / "round 3" entries (2026-07-17).
+
+---
+
+# OPEN BATCH — the workbench questions (2026-08-23)
+
+🔴 **A PROCESS FINDING FIRST, because it is worth more than either question below.** Until
+2026-08-23 this file — *the file that exists to hold open owner questions* — **contained neither of
+the two questions that were actually open.** Both lived in `AITODO.md`'s in-flight section only, and
+one of them (B4) had already been **answered and built** while still listed there as open. A session
+looking for open owner questions looks here first, finds a batch cleared in July, and concludes there
+are none.
+
+⚠️ **LABEL COLLISION, stated so nobody merges the two.** The 2026-08-05 audit batch below already uses
+`B-4` and `B-5` for entirely unrelated items (S0's gate; design-philosophy §10). The workbench
+questions are written **`B4` / `B5`, unhyphenated**, exactly as `AITODO.md` and
+`docs/notes/workbench-phase6-plan.md` write them. They are not the same items and neither answers the
+other.
+
+## The one that is open
+
+- 🔴 **B5 · Which block becomes the third conformance lane?** *Blocked on this and nothing else.*
+  Two lanes have run — valve and vessel, off one deployment, on the rig (`d289a27`). **Two is not N**,
+  and every claim the batching design makes is a claim about N. **Phase 4 was built specifically to
+  make a third lane cheap**: the slot FC and the 18-network stimulus shell are now generated rather
+  than hand-written (`SlotFcGenerator`, `StimShellGenerator` — `d3d5ab1`), and a lane's program set is
+  an emitted manifest rather than a typed flag. It has still never happened.
+  → **Needed:** name the block. It is the right next rig event — it needs Portal, a deployment and rig
+  time, so it is not something a session can start without you. Note the mirror's band D ends at 1023
+  with the panel above it, so a third lane also exercises the space the Phase 6 guards are being built
+  for.
+
+## The one that is answered, recorded here so the file holds the answer too
+
+- ✅ **B4 · May `openness-cli` ever close a stray Portal?** — **RULED 2026-08-23: *"save where you can,
+  then close."*** Quoted verbatim where the implementing code lives,
+  `src/openness-cli/OpennessCli/Openness/PortalClosePlanner.cs:62-63`; built the same day as
+  `openness-cli portal-close` (`f9abeb1`).
+  **The ruling is MORE permissive than the assumption it replaced.** The prior working assumption was
+  that a process which cannot be saved must not be closed; the ruling carves that case out with *"where
+  you can"* instead — an Openness-invisible Portal cannot be asked to save and is closable anyway, and
+  that branch is reported by name (`TerminateUnsaveable`) rather than folded into a rolled-up "closed"
+  count. What the ruling *forbids* is the converse: a save that was possible and **failed** stops the
+  terminate, and the process is left running (`PortalCloseExecution.cs:167-173`).
+  🔴 **It has never been run against a live Portal** — the planning half is pure and unit-tested, the
+  execution half has no live evidence. Documented in `src/openness-cli/README.md`
+  (*"`portal-close` — closing a stray Portal"*) and CLAUDE.md's command index.
+  ⚠️ **One thing you may want to look at, not a question being asked:** a bare sweep terminates
+  `StrayEmpty` by default, and the planner cannot consult `AttachedSessions`, so **an agent attached to
+  an empty Portal is indistinguishable from abandoned pileup**. Probing that API needs Portal;
+  `docs/notes/workbench-phase6-plan.md` excludes it from Phase 6 for that reason.
+
+## Not blocking, but it decides a scope
+
+- **Q2 · Element-table width** (`docs/18-project-workbench.md` §7, *"Q2 — Element-table width"*).
+  Which mirror element types must be observable for real blocks? `MirrorValueType` has exactly four
+  members today — `Unstated`, `Bool`, `Int`, `Time`
+  (`src/harness/Harness.Map/CopyLayer.cs:18-52`) — so an unsupported
+  type is **inexpressible rather than mishandled**: it surfaces as an unparseable binding, which is the
+  safe failure. `Real` and `DInt` look unavoidable; UDT members and array elements are a much bigger
+  question.
+  → **Needed:** nothing is blocked. Answering it converts "widen on demand, the day a real block needs
+  a type, with that block's actual type in hand" into a scoped item with a decided type list. Left
+  unanswered, the element table should **not** be built speculatively — building it now answers the
+  cheap half by fiat and leaves the expensive half where it is.
 
 ---
 

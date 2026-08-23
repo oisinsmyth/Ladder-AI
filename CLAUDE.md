@@ -78,6 +78,7 @@ When in doubt: `docs/04-design-philosophy.md` for principles, `docs/02-roadmap.m
 | `block-layout` | read or `--set` a block's memory layout. **Destructive; see the routing rule above** |
 | `download-plan` | read-only, dry-run only. Cannot perform a download; device-level granularity |
 | `delete`, `create-instance-db`, `portal-status`, `library` | delete a block (refuses safety, `--yes`); scaffold an iDB; read-only Portal-process health; project-library walk |
+| `portal-close` | 🔴 **TERMINATES Portal processes**; `--yes`-gated, sweeps empty ones by default. **Never run live** |
 | `hmi`, `hmi-create-screen`, `hmi-edit-screen`, `hmi-compile` | HMI observation and the two write probes. HMI *engineering* is still a non-goal (`docs/10-non-goals.md`) |
 
 `download-probe` (`src/openness-cli/DownloadProbe/`) is the only binary that can transfer a program, fenced by `tools/download-probe.allowlist`.

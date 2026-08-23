@@ -34,9 +34,12 @@ documented/committed, delete it from this file rather than letting it accumulate
 work is **not part of the suspended staged plan** (`docs/03-development-plan.md`) — it is tooling for
 real jobs, which the suspension notice explicitly leaves running.
 
-- **Phase 3 — DELIVERED and run on the rig.** `converter lease` (a real lock, raced), the mirror's true
-  576-register ceiling, `harness-batch`, link-loss survival. **Two lanes off one download, 3-of-3 PASS
-  each, 402 s.**
+- **Phase 3 — DELIVERED and run on the rig.** `converter lease` (a real lock, raced), the mirror's
+  ceiling probed from both sides, `harness-batch`, link-loss survival. **Two lanes off one download,
+  3-of-3 PASS each, 402 s.** ⚠️ **This line said "the mirror's true 576-register ceiling" until
+  2026-08-23.** The area was widened **576 → 1024** and proven on the controller the same day — 1023
+  answers, 1024 and 1025 are refused with a Modbus exception (`99396b9`,
+  `docs/notes/total-plant-run-feasibility.md:204-219`). 576 is history, not the ceiling.
 - **Phase 4 — DELIVERED 2026-08-23**, `802327f`..`dd274fe`. W1 four silent omissions · W2 `converter diff`
   matches networks on content · W3 `SlotFcGenerator` + lane manifest · W4 `StimShellGenerator` · W5
   reachability parity · W6 stale status lines. Plan: `.claude/plans/lets-the-crunch-this-linear-gosling.md`.
@@ -72,8 +75,21 @@ real jobs, which the suspension notice explicitly leaves running.
   rule 8; `Main`'s write-path deferral is LIFTED; the stimulus-shell generator may be ported,
   mechanism-only. Plus **FI-65: reading (b) — the integration/union compile is the gate — and the
   SHARED-QUEUE model over per-agent copies**, so FI-65 component 2 is parked.
-- **Still open for the owner:** may `openness-cli` ever close a stray Portal (B4), and which block
-  becomes the third conformance lane (B5).
+- ✅ **B4 — RULED 2026-08-23, and the command was built the same day. This line said "still open" after
+  both.** The ruling, quoted verbatim where the code that implements it lives
+  (`src/openness-cli/OpennessCli/Openness/PortalClosePlanner.cs:62-63`): **"save where you can, then
+  close"**. Built as `openness-cli portal-close` in `f9abeb1`. 🔴 **The ruling is MORE permissive than
+  the assumption it replaced** — an Openness-invisible process cannot be asked to save, and it is
+  closable anyway; that branch (`TerminateUnsaveable`) is reported by name on every run rather than
+  folded into a rolled-up "closed" count. The one thing it forbids is the opposite: a save that was
+  possible and **failed** stops the terminate (`PortalCloseExecution.cs:167-173`). 🔴 **Never run
+  against a live Portal.** The decision half is pure and unit-tested; the execution half has no live
+  evidence. Documented in `src/openness-cli/README.md` (`portal-close` section) and CLAUDE.md's index.
+- **Still open for the owner: B5 — which block becomes the third conformance lane.** Phase 4 built
+  `SlotFcGenerator` and `StimShellGenerator` precisely to make a third lane cheap, and it has never
+  happened — **two is not N**, and it is the right next rig event. Blocked on this and nothing else.
+  Also now recorded in `docs/notes/owner-questions.md`, which is where a session looking for open
+  owner questions will look first.
 
 > 🛑 **SUSPENDED 2026-08-17 — this applies to the STAGED PLAN below, not to the workbench work above.**
 > Everything in this section and in *Outstanding works* below is **held,
