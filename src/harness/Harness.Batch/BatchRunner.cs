@@ -103,7 +103,12 @@ public static class BatchRunner
         Func<DeploymentOutcome>? deploy = null,
         TimeSpan? stepTimeout = null,
         TimeSpan? settleAfterDownload = null,
-        Action<TimeSpan>? sleep = null)
+        Action<TimeSpan>? sleep = null,
+
+        // Reads a finished lane's result file, so the settling MEASUREMENT can reach the headline. Null
+        // is honest rather than silent: the headline then says the samples are in the lane packages
+        // instead of implying none were taken.
+        Func<string, string>? readFile = null)
     {
         ArgumentNullException.ThrowIfNull(plan);
         ArgumentNullException.ThrowIfNull(runner);
@@ -124,6 +129,7 @@ public static class BatchRunner
         var stopReason = string.Empty;
         var gatesTaken = new List<BatchStep>();
         var settled = TimeSpan.Zero;
+        var waveOutputs = new List<(string Lane, string? OutPath)>();
 
         foreach (var step in plan.Steps)
         {
@@ -198,6 +204,7 @@ public static class BatchRunner
                 {
                     lanesRun.Add(step.Lane!);
                     lanesNotRun.Remove(step.Lane!);
+                    waveOutputs.Add((step.Lane!, OutPath(step)));
                 }
 
                 continue;
@@ -211,6 +218,11 @@ public static class BatchRunner
             {
                 lanesRun.Add(step.Lane!);
                 lanesNotRun.Remove(step.Lane!);
+
+                // A lane whose wave FAILED still measured the settling if it got as far as index 0, and
+                // that measurement is about the DEPLOYMENT rather than about the lane. Dropping it here
+                // would discard the sample from the run most likely to want it.
+                waveOutputs.Add((step.Lane!, OutPath(step)));
                 continue;
             }
 
@@ -240,7 +252,71 @@ public static class BatchRunner
         }
 
         return new BatchRunResult(outcome, executed, lanesRun, lanesNotRun, released,
-            Headline(outcome, plan, lanesRun, lanesNotRun, released, stopReason, settled), settled);
+            Headline(outcome, plan, lanesRun, lanesNotRun, released, stopReason, settled)
+                + Settling(waveOutputs, readFile), settled);
+    }
+
+    /// <summary>Where a wave step was told to write its result, so the settling sample can be read back.</summary>
+    private static string? OutPath(BatchStep step)
+    {
+        var index = step.Arguments.ToList().IndexOf("--out");
+        return index >= 0 && index + 1 < step.Arguments.Count ? step.Arguments[index + 1] : null;
+    }
+
+    /// <summary>
+    /// 🔴 <b>The post-download settling, per lane — N samples of ONE transient from ONE download.</b>
+    ///
+    /// <para>This is the whole reason the measurement is worth surfacing at the batch level rather than
+    /// leaving in each package: the lanes share a deployment, so they are repeated observations of the
+    /// same event, and disagreement between them is itself information. One lane needing four attempts
+    /// while another needed one is not two settling times — it is a sign the lanes are not observing the
+    /// same thing.</para>
+    ///
+    /// <para><b>Every branch says which nothing it is.</b> No reader supplied, no <c>--out</c>, an
+    /// unreadable file and a file that recorded no measurement are four different states, and reporting
+    /// them all as silence is how "nobody asked" became indistinguishable from "the answer was zero" in
+    /// the first place.</para>
+    /// </summary>
+    private static string Settling(IReadOnlyList<(string Lane, string? OutPath)> waves, Func<string, string>? readFile)
+    {
+        if (waves.Count == 0)
+            return string.Empty;
+
+        if (readFile is null)
+            return " Post-download settling was measured per lane and is in each lane's result package "
+                 + "(`postDownloadSettling`); this run was given no reader to summarise it here.";
+
+        var parts = new List<string>();
+        foreach (var (lane, path) in waves)
+        {
+            if (path is null)
+            {
+                parts.Add($"{lane}: no --out, so nothing was read back");
+                continue;
+            }
+
+            try
+            {
+                var node = System.Text.Json.Nodes.JsonNode.Parse(readFile(path));
+                var settling = node?["postDownloadSettling"];
+
+                if (settling is null)
+                    parts.Add($"{lane}: the result file records no settling measurement");
+                else if (settling["measured"]?.GetValue<bool>() != true)
+                    parts.Add($"{lane}: NOT MEASURED ({settling["reason"]?.GetValue<string>() ?? "no reason given"})");
+                else
+                    parts.Add($"{lane}: {settling["attempts"]?.GetValue<int>()} attempt(s), "
+                            + $"{settling["waitedSeconds"]?.GetValue<double>():0.#}s waited"
+                            + (settling["quiescent"]?.GetValue<bool>() == true ? string.Empty : ", STILL NOT QUIESCENT"));
+            }
+            catch (Exception error) when (error is IOException or UnauthorizedAccessException or System.Text.Json.JsonException)
+            {
+                // Named, not swallowed. An unreadable result file is a fact about this run.
+                parts.Add($"{lane}: its result file could not be read ({error.GetType().Name})");
+            }
+        }
+
+        return " POST-DOWNLOAD SETTLING, one sample per lane off the same download — " + string.Join("; ", parts) + ".";
     }
 
     /// <summary>The <c>--resource</c> value, so an acquire and its release can be paired.</summary>

@@ -1105,11 +1105,40 @@ public static class LoopCli
             };
         }
 
+        // 🔴 *** THE POST-DOWNLOAD SETTLING TIME, AS A NUMBER THAT OUTLIVES THE TERMINAL. ***
+        //
+        // The wave already measured it and only ever rendered it as prose on the headline — and the prose
+        // was written ONLY when the retry loop had to work, so the run that settled instantly reported
+        // exactly like the run where no retry was licensed. Both were silence.
+        //
+        // EMITTED ON EVERY RUN, INCLUDING WHEN THERE IS NOTHING TO REPORT, and it says which of the two
+        // nothings it is. A key that simply disappears when unmeasured is how "nobody asked" and "the
+        // answer was zero" became the same document.
+        var settling = result.Wave?.InertSettle is { } measured
+            ? new JsonObject
+            {
+                ["measured"] = true,
+                ["attempts"] = measured.Attempts,
+                ["waitedSeconds"] = Math.Round(measured.Waited.TotalSeconds, 3),
+
+                // False is a RESULT — the transient outlasted the licence — not a missing measurement.
+                ["quiescent"] = measured.Quiescent,
+            }
+            : new JsonObject
+            {
+                ["measured"] = false,
+                ["reason"] = result.Wave is null
+                    ? "no wave ran, so the plant was never observed settling."
+                    : "no inert retry was licensed — this run did not follow a download, so there was no "
+                      + "transient to measure. NOT a measurement of zero.",
+            };
+
         var document = new JsonObject
         {
             ["outcome"] = result.Outcome.ToString(),
             ["detail"] = result.Detail,
             ["programUnderTest"] = programUnderTest,
+            ["postDownloadSettling"] = settling,
 
             // The coverage arithmetic, stated rather than left to be derived — and derivable anyway from
             // `dispositions`, which is what makes these three numbers checkable against the rows below.

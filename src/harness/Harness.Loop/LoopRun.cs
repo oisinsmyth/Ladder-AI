@@ -409,7 +409,16 @@ public static class LoopRun
             // waited three minutes for the plant to go quiet and a wave that started immediately are
             // different evidence, and the first is the only source anyone has for how long the
             // post-download transient actually lasts.
-            + (wave.SettleReport is { } settleReport ? " SETTLING: " + settleReport : string.Empty)
+            //
+            // 🔴 READ FROM THE MEASUREMENT, NOT THE PROSE — the prose is written only when the retry loop
+            // had to work, so this line was ABSENT on the very run that measures the transient at zero.
+            // "Quiescent immediately" and "no retry was licensed" rendered identically: as nothing. The
+            // measurement is present whenever a retry was licensed, so the zero case now says so out loud.
+            + (wave.InertSettle is { } settle
+                ? " SETTLING: " + (wave.SettleReport
+                    ?? $"the first index was quiescent on its first inert attempt, {settle.Waited.TotalSeconds:0.#}s waited — "
+                       + "the post-download transient was over before the wave asked.")
+                : string.Empty)
             + released,
             account,
             inertRest,

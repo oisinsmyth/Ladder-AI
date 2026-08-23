@@ -145,4 +145,94 @@ public class InertSettleTests
     {
         Assert.Throws<ArgumentOutOfRangeException>(() => InertSettle.Retry(0, TimeSpan.FromSeconds(1)));
     }
+
+    // ---------------------------------------------------------------------------------------------
+    // THE SETTLING TIME AS A NUMBER. Everything above tests the prose, and the prose is written only
+    // when the retry loop had to work — so the run that measures the transient at zero was reported
+    // exactly like the run that never measured it.
+    // ---------------------------------------------------------------------------------------------
+
+    /// <summary>
+    /// 🔴 <b>The defect, pinned: a plant quiescent on the FIRST attempt is a measurement, and the prose
+    /// says nothing about it.</b> Both assertions matter together — <c>SettleReport</c> null is the OLD
+    /// behaviour preserved deliberately, and <c>InertSettle</c> non-null is the whole point. Before this
+    /// existed, the pair here was (null, nothing), identical to a run where no retry was ever licensed.
+    /// </summary>
+    [Fact]
+    public void Licensed_and_quiescent_at_once_is_a_MEASUREMENT_even_though_the_prose_stays_silent()
+    {
+        var (client, _) = Settling(movingForTransactions: 0);
+        var waits = new List<TimeSpan>();
+
+        var wave = WaveRun.Run(client, RuntimeCompression.Uncompressed, new[] { Tensor(2) },
+            inertSettle: InertSettle.Retry(6, TimeSpan.FromSeconds(5)), pauseFor: waits.Add);
+
+        Assert.Empty(waits);
+        Assert.Null(wave.SettleReport);
+
+        Assert.NotNull(wave.InertSettle);
+        Assert.Equal(1, wave.InertSettle!.Attempts);
+        Assert.Equal(TimeSpan.Zero, wave.InertSettle.Waited);
+        Assert.True(wave.InertSettle.Quiescent);
+    }
+
+    /// <summary>
+    /// 🔴 <b>THE NEGATIVE CONTROL, AND IT IS THE REASON THE FIELD IS NULLABLE AT ALL.</b> Without a
+    /// licence there is no measurement — and if this ever returned a zero-valued one instead of null,
+    /// the type would be claiming the plant was quiescent when nobody asked it anything. That is the
+    /// same substitution the whole change exists to undo, pointing the other way.
+    /// </summary>
+    [Fact]
+    public void With_NO_retry_licensed_there_is_no_measurement_at_all()
+    {
+        var (client, _) = Settling(movingForTransactions: 0);
+
+        var wave = WaveRun.Run(client, RuntimeCompression.Uncompressed, new[] { Tensor(2) });
+
+        Assert.Null(wave.SettleReport);
+        Assert.Null(wave.InertSettle);
+    }
+
+    /// <summary>
+    /// A plant that takes more than one attempt reports the count AND the wall time waited, and the two
+    /// agree with each other: the wait happens BETWEEN attempts, so N attempts waited N-1 intervals.
+    /// </summary>
+    [Fact]
+    public void A_plant_that_needs_several_attempts_reports_the_count_and_the_time_waited()
+    {
+        var (client, _) = Settling(movingForTransactions: 14);
+        var waits = new List<TimeSpan>();
+        var interval = TimeSpan.FromSeconds(5);
+
+        var wave = WaveRun.Run(client, RuntimeCompression.Uncompressed, new[] { Tensor(2) },
+            inertSettle: InertSettle.Retry(6, interval), pauseFor: waits.Add);
+
+        Assert.NotNull(wave.InertSettle);
+        Assert.True(wave.InertSettle!.Quiescent);
+        Assert.True(wave.InertSettle.Attempts > 1, "this fixture is chosen to need a retry.");
+
+        // Derived from the attempt count, and cross-checked against what the runner ACTUALLY paused for
+        // — the arithmetic and the behaviour have to agree or one of them is decoration.
+        Assert.Equal(wave.InertSettle.Attempts - 1, waits.Count);
+        Assert.Equal(interval * waits.Count, wave.InertSettle.Waited);
+    }
+
+    /// <summary>
+    /// 🔴 <b>Exhausting the licence is a MEASUREMENT, not a missing one.</b> <c>Quiescent = false</c> says
+    /// the transient outlasted the budget, which is a finding about the plant. Reporting it as an absent
+    /// measurement would hide the most interesting result this field can carry.
+    /// </summary>
+    [Fact]
+    public void A_plant_that_never_settles_still_produces_a_measurement()
+    {
+        var (client, _) = Settling(movingForTransactions: 10_000);
+
+        var wave = WaveRun.Run(client, RuntimeCompression.Uncompressed, new[] { Tensor(2) },
+            inertSettle: InertSettle.Retry(3, TimeSpan.FromSeconds(1)), pauseFor: _ => { });
+
+        Assert.NotNull(wave.InertSettle);
+        Assert.Equal(3, wave.InertSettle!.Attempts);
+        Assert.False(wave.InertSettle.Quiescent);
+        Assert.Contains("STILL not quiescent", wave.InertSettle.ToString());
+    }
 }

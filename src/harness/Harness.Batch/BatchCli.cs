@@ -265,7 +265,11 @@ public static class BatchCli
             // MEASURES readiness rather than guessing at it — and the fixed 15 s was measured to be too
             // short anyway, so keeping it as the default would be paying for a wait that does not work.
             // --settle-seconds survives for a caller who wants a wait as well.
-            settleAfterDownload: TimeSpan.FromSeconds(args.SettleSeconds >= 0 ? args.SettleSeconds : 0));
+            settleAfterDownload: TimeSpan.FromSeconds(args.SettleSeconds >= 0 ? args.SettleSeconds : 0),
+
+            // So the settling MEASUREMENT reaches the headline. The lanes share one download, so their
+            // samples are repeated observations of one transient — the number nobody has ever read back.
+            readFile: readFile);
 
         output.WriteLine(result.Headline);
         output.WriteLine();
@@ -289,8 +293,17 @@ public static class BatchCli
     /// </summary>
     private static string? MaterialiseUnionIr(IReadOnlyList<string> programPaths, string? staging, TextWriter output)
     {
+        // 🔴 *** SAID, NOT SKIPPED. *** Without a staging directory there is nowhere to put the union, so
+        // the drift check cannot run — and until now that produced NO LINE AT ALL. The steps were simply
+        // absent from the plan, while the comment at their construction site claimed "the run SAYS so
+        // rather than passing quietly". It did not. The most important gate this batch has could be
+        // dropped by omitting one flag, and the report read exactly like a run that had passed it.
         if (string.IsNullOrWhiteSpace(staging))
+        {
+            output.WriteLine("  union     NOT STAGED — no --staging, so THE SUPPLIED PROGRAM WAS NOT COMPARED AGAINST THE PROJECT.");
+            output.WriteLine("            The build stamp still claims the supplied program is what executes; nothing here checked it.");
             return null;
+        }
 
         var union = Path.Combine(staging, "union-ir");
 
@@ -301,14 +314,25 @@ public static class BatchCli
 
             Directory.CreateDirectory(union);
 
+            // One enumeration, shared with the planner — see ProgramFiles. A basename collision between
+            // two lanes has already been refused at plan time (BatchPlanner's union-corpus check), so the
+            // overwrite:false below is a backstop against a case that should be unreachable, not the
+            // place that finding is made.
+            var contributions = ProgramFiles.Resolve(programPaths);
             var copied = 0;
-            foreach (var file in programPaths.SelectMany(UnionFiles).Distinct(StringComparer.OrdinalIgnoreCase))
+            foreach (var file in contributions.SelectMany(c => c.Files).Distinct(StringComparer.OrdinalIgnoreCase))
             {
                 File.Copy(file, Path.Combine(union, Path.GetFileName(file)), overwrite: false);
                 copied++;
             }
 
-            output.WriteLine($"  union     {copied} program file(s) staged at {union} for the drift check");
+            // THE DENOMINATOR. "12 files staged" cannot be told from "12 of 15"; only the second says
+            // whether the comparison about to run covers what was asked for.
+            output.WriteLine($"  union     {copied} staged at {union} for the drift check — {ProgramFiles.Summary(contributions)}");
+
+            foreach (var empty in contributions.Where(c => c.ContributedNothing))
+                output.WriteLine($"            CONTRIBUTED NOTHING: {empty.Requested} ({empty.Kind})");
+
             return union;
         }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException)
@@ -319,11 +343,6 @@ public static class BatchCli
             return null;
         }
     }
-
-    private static IEnumerable<string> UnionFiles(string path) =>
-        File.Exists(path) ? new[] { path }
-        : Directory.Exists(path) ? Directory.EnumerateFiles(path, "*.ir", SearchOption.TopDirectoryOnly)
-        : Array.Empty<string>();
 
     private static bool Number(string[] args, ref int i, string flag, TextWriter output, out int value, bool allowZero = false)
     {

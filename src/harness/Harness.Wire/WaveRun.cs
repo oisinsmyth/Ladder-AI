@@ -105,6 +105,43 @@ public sealed record InertSettle(int Attempts, TimeSpan Between)
 }
 
 /// <summary>
+/// 🔴 <b>What the post-download transient actually cost — the measurement, not the prose about it.</b>
+///
+/// <para><b>Why this is a record and not two fields on <see cref="WaveResult"/>.</b> The pair only ever
+/// means anything together: an attempt count with no elapsed time, or an elapsed time with no attempt
+/// count, is a half-answer that a reader has to guess at. One nullable object has exactly two states —
+/// measured, or not licensed — and no way to be in a third.</para>
+///
+/// <para>🔴 <b><c>Attempts == 1</c> and <c>Waited == 0</c> is a REAL MEASUREMENT, and it is the one this
+/// type exists for.</b> It says the plant was quiescent the first time it was asked, immediately after a
+/// download. Before this existed the only signal was a prose string set <i>only</i> when the retry loop
+/// had to work, so "settled instantly" and "nobody ever asked" were the same observation — a null — and
+/// the run that finally measured the transient at zero was indistinguishable from the run that never
+/// measured it at all. <b>Absent is not empty</b> (FI-44), one level in from where that rule is usually
+/// applied: the check was not empty, it was silent about its success.</para>
+/// </summary>
+/// <param name="Attempts">
+/// Inert attempts the first index needed. <b>At least 1</b> — the phase is always attempted once, so a
+/// zero here would describe something that did not happen.
+/// </param>
+/// <param name="Waited">
+/// Wall time spent waiting BETWEEN attempts, so <c>Attempts == 1</c> implies <c>Zero</c>. This is the
+/// settling time, and it is deliberately not the duration of the attempts themselves — those cost
+/// round trips whether the plant is quiescent or not.
+/// </param>
+/// <param name="Quiescent">
+/// Whether the plant ever went quiet. <b>False is still a measurement</b> and must not be read as a
+/// missing one: it says the transient outlasted the licence, which is a finding about the plant.
+/// </param>
+public sealed record InertSettleMeasurement(int Attempts, TimeSpan Waited, bool Quiescent)
+{
+    public override string ToString() =>
+        Quiescent
+            ? $"quiescent after {Attempts} inert attempt(s), {Waited.TotalSeconds:0.#}s waited"
+            : $"STILL not quiescent after {Attempts} inert attempt(s), {Waited.TotalSeconds:0.#}s waited";
+}
+
+/// <summary>
 /// 🔴 <b>Why a wave stopped before its last index, when something stopped it.</b>
 ///
 /// <para><b>Absent means it ran to the end.</b> Not "probably fine" — the wave either reached its
@@ -138,10 +175,19 @@ public sealed record WaveResult(
     WaveInterruption? Interruption = null,
 
     /// <summary>
-    /// How many inert attempts the FIRST index needed, when a retry was licensed. <b>The measurement the
-    /// fixed wait never produced</b> — null when no retry was asked for or none was needed.
+    /// Prose about the settling, written ONLY when the retry loop had to work more than once. Kept
+    /// because callers render it, but it is <b>not</b> the measurement — see <see cref="InertSettle"/>
+    /// below, which is null in exactly one situation instead of two.
     /// </summary>
-    string? SettleReport = null)
+    string? SettleReport = null,
+
+    /// <summary>
+    /// 🔴 <b>The measurement, and its ONLY absent meaning is "no retry was licensed".</b> Present
+    /// whenever the caller asked for one — including <c>Attempts == 1, Waited == 0</c>, which is the
+    /// plant having been quiescent immediately and is the result this field was added to make visible.
+    /// <see cref="SettleReport"/> stays null in that case and always did, which is the defect.
+    /// </summary>
+    InertSettleMeasurement? InertSettle = null)
 {
     public SlotDistribution For(int slotIndex) => Distributions.Single(d => d.SlotIndex == slotIndex);
 
@@ -205,6 +251,7 @@ public static class WaveRun
         var settle = inertSettle ?? InertSettle.None;
         var pause = pauseFor ?? Thread.Sleep;
         string? settleReport = null;
+        InertSettleMeasurement? settleMeasurement = null;
 
         if (tensors.Count == 0)
             throw new ArgumentException("a wave over no slots runs nothing. Empty is not clean.", nameof(tensors));
@@ -273,6 +320,19 @@ public static class WaveRun
                         inertAttempts++;
                         inert = InertPhase.Establish(client, slotInerts);
                     }
+
+                    // 🔴 SET UNCONDITIONALLY, INSIDE THE "RETRY WAS LICENSED" BRANCH — that placement IS
+                    // the fix. The prose below is written only when the loop had to work, so on the run
+                    // where the plant is quiescent immediately it stays null and the measurement is lost.
+                    // Those are the two runs a reader most needs to tell apart: "settled instantly" and
+                    // "nobody asked" reported identically, and the second is what everyone assumed.
+                    //
+                    // Waited is (attempts - 1) intervals: the wait happens BETWEEN attempts, so a single
+                    // attempt waited for nothing. Same arithmetic the prose uses, so the two cannot drift.
+                    settleMeasurement = new InertSettleMeasurement(
+                        inertAttempts,
+                        TimeSpan.FromTicks(settle.Between.Ticks * (inertAttempts - 1)),
+                        inert.Established);
 
                     if (inertAttempts > 1)
                     {
@@ -443,7 +503,7 @@ public static class WaveRun
                 collected[tensor.SlotIndex], log.SliceFor(tensor.SlotIndex)));
         }
 
-        return new WaveResult(length, distributions, log, client.RoundTrips - roundTripsBefore, interruption, settleReport);
+        return new WaveResult(length, distributions, log, client.RoundTrips - roundTripsBefore, interruption, settleReport, settleMeasurement);
     }
 
     /// <summary>

@@ -153,6 +153,15 @@ public static class BatchPlanner
             }
         }
 
+        // ---- DID EVERY REQUESTED PATH ACTUALLY CONTRIBUTE ANYTHING? ------------------------------
+        //
+        // 🔴 A path naming nothing used to resolve to an empty sequence and vanish. The union was then
+        // short, and the SAME short set feeds the build stamp, the reachability check and the drift
+        // check — so one typo'd --program weakened three things at once, in the same direction, with no
+        // line anywhere. Refused rather than warned: the stamp means "what is executing", and a stamp
+        // computed over a set that is missing a block is not a weaker claim, it is a false one.
+        refusals.AddRange(ProgramFiles.Refusals(ProgramFiles.Resolve(programPaths)));
+
         // ---- IS EVERY DEPLOYED BLOCK ACTUALLY IN THE SCAN? ---------------------------------------
         var reachability = Reachability.Of(programPaths);
         refusals.AddRange(reachability.Refusals);
@@ -274,15 +283,12 @@ public static class BatchPlanner
     private static int RegistersFor(MirroredSignalDocument signal) =>
         signal.Type == MirrorValueType.Time ? 2 : 1;
 
-    private static IEnumerable<string> FilesUnder(string path)
-    {
-        if (File.Exists(path))
-            return new[] { path };
-
-        return Directory.Exists(path)
-            ? Directory.EnumerateFiles(path, "*.ir", SearchOption.TopDirectoryOnly)
-            : Array.Empty<string>();
-    }
+    /// <summary>
+    /// 🔴 <b>Delegates to <see cref="ProgramFiles"/> — this used to be a second copy of that rule.</b> Kept
+    /// as a named method only because the call sites read better with it; it must never grow a behaviour of
+    /// its own again. <c>ProgramFilesParityTests</c> holds the two together.
+    /// </summary>
+    private static IEnumerable<string> FilesUnder(string path) => ProgramFiles.Under(new[] { path });
 
     /// <summary>The report, with its denominators.</summary>
     public static string Describe(BatchPlanResult result)

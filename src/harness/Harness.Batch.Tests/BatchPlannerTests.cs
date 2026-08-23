@@ -11,8 +11,43 @@ namespace Harness.Batch.Tests;
 /// is the only place that check is possible at all. So most of these tests are about COLLISIONS the
 /// merge is supposed to surface, not about the merge succeeding.</para>
 /// </summary>
-public class BatchPlannerTests
+public class BatchPlannerTests : IDisposable
 {
+    /// <summary>
+    /// 🔴 <b>Real files on disk, because two of the planner's gates READ THEM — and until 2026-08-23 no
+    /// test in this file created any.</b>
+    ///
+    /// <para>Every lane here used to declare a program path of <c>"&lt;name&gt;/ir"</c>, relative and
+    /// nonexistent. The consequences were invisible and there were two. <b>The union-corpus basename
+    /// collision check had no test at all</b> — it cannot fire when the enumeration finds no files, so
+    /// the refusal that catches two lanes shipping one object name was never once executed here. And
+    /// <b>every <c>Reachability.Of</c> call ran over an empty corpus</b>, which reports UNKNOWN and
+    /// refuses nothing, so a suite full of green plans had verified nothing about the scan.</para>
+    ///
+    /// <para>This is the shape CLAUDE.md calls a CLOSED check: not a check that examined nothing and said
+    /// so, but a test that looked healthy while the thing it covered could not possibly have run.</para>
+    /// </summary>
+    private readonly string _root = Path.Combine(Path.GetTempPath(), "batch-planner-" + Guid.NewGuid().ToString("N"));
+
+    public void Dispose()
+    {
+        try { if (Directory.Exists(_root)) Directory.Delete(_root, recursive: true); } catch (IOException) { }
+        GC.SuppressFinalize(this);
+    }
+
+    /// <summary>
+    /// One real <c>.ir</c> under a per-lane directory. An FC and no OB, deliberately: reachability then
+    /// reports UNKNOWN rather than refusing, which keeps these tests about the MERGE while still giving
+    /// the file-reading gates something real to read.
+    /// </summary>
+    private string ProgramDir(string lane, string blockName)
+    {
+        var dir = Path.Combine(_root, lane, "ir");
+        Directory.CreateDirectory(dir);
+        File.WriteAllText(Path.Combine(dir, blockName + ".ir"), $"BLOCK FC {blockName}\nEND_BLOCK\n");
+        return dir;
+    }
+
     private const string Geometry =
         "\"blockName\": \"FC_HarnessCopyLayer\", \"blockNumber\": 9001, \"tagTableName\": \"HarnessMirror\", "
         + "\"tagPrefix\": \"HX_\", \"baseByte\": 1000, \"retentiveBytes\": 256, \"declaredRegisters\": 576";
@@ -26,8 +61,9 @@ public class BatchPlannerTests
             $"{{ \"tag\": \"Demo_Out{i}\", \"specName\": \"Out{i}\", \"type\": \"Int\" }}"))
         + "] }] }";
 
-    private static Lane LaneNamed(string name, string bindingKey, params string[] programs) =>
-        new(name, bindingKey, name + ".submission.json", programs.Length == 0 ? new[] { name + "/ir" } : programs);
+    private Lane LaneNamed(string name, string bindingKey, params string[] programs) =>
+        new(name, bindingKey, name + ".submission.json",
+            programs.Length == 0 ? new[] { ProgramDir(name, "FC_" + name) } : programs);
 
     /// <summary>Reads bindings out of a dictionary rather than off disk — the planner takes its reader.</summary>
     private static Func<string, string> Reader(Dictionary<string, string> bindings) =>
@@ -283,5 +319,79 @@ public class BatchPlannerTests
         Assert.True(ints.Planned && times.Planned);
         Assert.True(times.Map!.ResultBlock.End > ints.Map!.ResultBlock.End,
             "a Time result must widen the map relative to an Int one.");
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // THE TWO FILE-READING GATES. Both existed before these tests and NEITHER had ever executed here,
+    // because every lane in this file named a program path that did not exist.
+    // ---------------------------------------------------------------------------------------------
+
+    /// <summary>
+    /// 🔴 <b>Two lanes shipping ONE object name is refused, naming both — and this is the first test that
+    /// has ever reached that refusal.</b>
+    ///
+    /// <para>It is not a new rule: <c>BatchPlanner</c> has carried it since the union-corpus check was
+    /// written, and it fired for real on 2026-08-22 when two lanes shipped one name with different
+    /// content. But it reads the FILESYSTEM, and no test in this file created a file, so the check could
+    /// not possibly have run. A refusal nothing exercises is a refusal nobody knows still works.</para>
+    ///
+    /// <para>Why it must gate: TIA's import matches by NAME, so the second object would REPLACE the first
+    /// rather than join it — the union would silently be one object short of what both lanes believe.</para>
+    /// </summary>
+    [Fact]
+    public void Two_lanes_contributing_the_SAME_basename_is_refused_and_names_both()
+    {
+        var bindings = new Dictionary<string, string>
+        {
+            ["a.json"] = Binding("Valve_S0"),
+            ["b.json"] = Binding("Vessel_S0"),
+        };
+
+        // Same file NAME, two different directories — which is exactly how it happened on the rig.
+        var one = ProgramDir("lane-one", "FC_Shared");
+        var two = ProgramDir("lane-two", "FC_Shared");
+
+        var result = BatchPlanner.Plan(
+            new[] { LaneNamed("valve", "a.json", one), LaneNamed("vessel", "b.json", two) },
+            Reader(bindings));
+
+        Assert.False(result.Planned);
+        Assert.Contains(result.Refusals, r => r.Contains("FC_Shared.ir", StringComparison.Ordinal)
+                                           && r.Contains(one, StringComparison.OrdinalIgnoreCase)
+                                           && r.Contains(two, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// 🔴 <b>A program path naming nothing is refused, not silently dropped.</b> The union feeds the build
+    /// stamp — which means "what is executing" — plus reachability and the drift check, so a set that is
+    /// quietly short weakens three things at once and reports confidently over all of them.
+    /// </summary>
+    [Fact]
+    public void A_program_path_that_contributes_NOTHING_is_refused()
+    {
+        var missing = Path.Combine(_root, "typo", "ir");
+
+        var result = BatchPlanner.Plan(
+            new[] { LaneNamed("valve", "a.json", missing) },
+            _ => Binding("Valve_S0"));
+
+        Assert.False(result.Planned);
+        Assert.Contains(result.Refusals, r => r.Contains(missing, StringComparison.Ordinal)
+                                           && r.Contains("contributed NOTHING", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// 🔴 <b>THE NEGATIVE CONTROL for both gates above.</b> A planner that refused every corpus would pass
+    /// both of them. One lane, one real file, distinct name: planned, and refused for nothing.
+    /// </summary>
+    [Fact]
+    public void A_lane_whose_program_is_really_there_is_planned()
+    {
+        var result = BatchPlanner.Plan(
+            new[] { LaneNamed("valve", "a.json", ProgramDir("present", "FC_Present")) },
+            _ => Binding("Valve_S0"));
+
+        Assert.True(result.Planned, string.Join(" | ", result.Refusals));
+        Assert.Empty(result.Refusals);
     }
 }

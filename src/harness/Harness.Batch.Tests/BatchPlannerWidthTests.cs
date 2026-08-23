@@ -19,8 +19,27 @@ namespace Harness.Batch.Tests;
 /// the JSON documents rather than over the domain type, so these tests hold the two against each other:
 /// the copy is allowed to exist, and not allowed to drift in silence.</para>
 /// </summary>
-public class BatchPlannerWidthTests
+public class BatchPlannerWidthTests : IDisposable
 {
+    /// <summary>
+    /// A real program directory, because the planner refuses a path that contributes nothing — the union
+    /// feeds the build stamp, so a set that is quietly short stamps a program nobody deployed. These tests
+    /// are about register arithmetic and want the cheapest corpus that is genuinely there.
+    /// </summary>
+    private readonly string _root = Path.Combine(Path.GetTempPath(), "batch-width-" + Guid.NewGuid().ToString("N"));
+
+    public BatchPlannerWidthTests()
+    {
+        Directory.CreateDirectory(_root);
+        File.WriteAllText(Path.Combine(_root, "FC_WidthFixture.ir"), "BLOCK FC FC_WidthFixture\nEND_BLOCK\n");
+    }
+
+    public void Dispose()
+    {
+        try { if (Directory.Exists(_root)) Directory.Delete(_root, recursive: true); } catch (IOException) { }
+        GC.SuppressFinalize(this);
+    }
+
     private const string Geometry =
         "\"blockName\": \"FC_HarnessCopyLayer\", \"blockNumber\": 9001, \"tagTableName\": \"HarnessMirror\", "
         + "\"tagPrefix\": \"HX_\", \"baseByte\": 1000, \"retentiveBytes\": 256, \"declaredRegisters\": 576";
@@ -36,10 +55,10 @@ public class BatchPlannerWidthTests
             + " }"))
         + "] }] }";
 
-    private static int MappedResultRegisters(params (string Type, bool Transient)[] results)
+    private int MappedResultRegisters(params (string Type, bool Transient)[] results)
     {
         var plan = BatchPlanner.Plan(
-            new[] { new Lane("a", "b.json", "s.json", new[] { "ir" }) },
+            new[] { new Lane("a", "b.json", "s.json", new[] { _root }) },
             _ => Binding(results));
 
         Assert.True(plan.Planned, string.Join(" | ", plan.Refusals));
