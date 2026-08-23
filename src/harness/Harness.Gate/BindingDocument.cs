@@ -40,10 +40,35 @@ public sealed class BindingDocument
     /// <c>harness-mirror-read</c>'s <c>--declared-registers</c> already enforces: <i>"defaulting it would
     /// let a run conclude against a width nobody stated."</i></para>
     ///
-    /// <para>It is the <c>n</c> in the comms block's area pointer, <c>P#M&lt;base&gt;.0 WORD n</c>. On the
-    /// rig that is 576.</para>
+    /// <para>It is the <c>n</c> in the comms block's area pointer, <c>P#M&lt;base&gt;.0 WORD n</c>. ⚠️ <b>Do
+    /// not memorise a figure for it.</b> A number written here would be a fact about one deployment
+    /// inside a schema comment, which is how this repository has twice recorded one program's scan
+    /// period as a rig fact — read the comms block.</para>
     /// </summary>
     public int? DeclaredRegisters { get; set; }
+
+    /// <summary>
+    /// 🔴 <b>Runs of the declared area that something ELSE in the deployed program already owns.</b>
+    ///
+    /// <para><b>Why this field exists, measured on a bench rig 2026-08-23.</b> A generated mirror and a
+    /// hand-authored virtual panel both claimed registers 256–323 of one <c>%M</c> area. 53 tags collided
+    /// bit-for-bit, including the panel's master enable and a safety-healthy substitution, both
+    /// overwritten every scan by the copy layer. Nothing caught it: the mirror is bounded against the
+    /// DECLARED AREA and proved disjoint from ITSELF, and neither check knows a neighbour exists. The
+    /// mirror's extent is computed — about 165 registers per lane — so it grew into a reservation nobody
+    /// had encoded, as the batch went from one lane to two.</para>
+    ///
+    /// <para><b>Empty means no neighbour was declared, NOT that the area is otherwise empty.</b> That
+    /// distinction is the whole honesty of the field: the guard can only see what somebody wrote down,
+    /// and the panel would have collided just the same if this had been left blank. Until something
+    /// DERIVES the neighbour list from the deployed program, this is a place to put the knowledge rather
+    /// than a way to obtain it.</para>
+    ///
+    /// <para>Registers, numbered from the area base — the same numbering as <see cref="DeclaredRegisters"/>,
+    /// never <c>%M</c> byte addresses. Each needs an owner label, because a refusal that cannot say whose
+    /// space was hit sends the reader to the mirror, which is the one place the problem is not.</para>
+    /// </summary>
+    public List<ReservedRegionDocument>? ReservedRegions { get; set; }
 
     /// <summary>
     /// 🔴 <b>THE BINDING DOCUMENT WAS OUTSIDE GATE 0b, AND IT IS THE DOCUMENT WHERE A DROPPED FIELD HAS
@@ -115,6 +140,25 @@ public sealed class BindingDocument
         AllowTrailingCommas = true,
         Converters = { new JsonStringEnumConverter() },
     };
+}
+
+/// <summary>
+/// One neighbour's claim on the declared area. See <see cref="BindingDocument.ReservedRegions"/> for why
+/// this exists and for the limit on what it can prove.
+/// </summary>
+public sealed class ReservedRegionDocument
+{
+    /// <summary>First register, numbered from the area base. Never a <c>%M</c> byte address.</summary>
+    public int? Register { get; set; }
+
+    /// <summary>How many registers. A reservation of nothing protects nothing and is refused.</summary>
+    public int? Length { get; set; }
+
+    /// <summary>
+    /// Who owns it, in words. <b>Required</b>: a refusal naming only a register range sends the reader to
+    /// the mirror, which is the one place the problem is not.
+    /// </summary>
+    public string? Owner { get; set; }
 }
 
 /// <summary>One slot's binding.</summary>

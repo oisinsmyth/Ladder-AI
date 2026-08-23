@@ -183,6 +183,34 @@ public static class BatchPlanner
         }
 
         var geometry = MirrorGeometry.ForCpu1214C(first.RetentiveBytes ?? 256, first.BaseByte ?? 1000, declared);
+
+        // 🔴 THE NEIGHBOURS, IF THE LANE DECLARED ANY — and this is the wiring that makes the guard bite.
+        //
+        // Measured 2026-08-23: the merged mirror grew from one lane to two and walked into a hand-authored
+        // virtual panel's command band, 53 tags colliding bit-for-bit including its master enable. The
+        // allocator bounds the mirror against the DECLARED AREA and the map proves its regions disjoint
+        // from EACH OTHER; neither knows a neighbour exists. Without this line ReservedRegion is a guard
+        // nothing can trigger.
+        //
+        // Malformed reservations are refused BY THE GEOMETRY rather than dropped here: a lane that
+        // declared a neighbour believes part of the area is off limits, and silently ignoring a
+        // typo'd one would restore exactly the silence this closes.
+        // 🔴 UNIONED ACROSS LANES, NOT TAKEN FROM THE FIRST. The area is SHARED, so a neighbour any lane
+        // knows about is a neighbour of the merged map — and reading only `first` would silently drop one
+        // that only a later lane declared, which is the same class of silence this whole guard closes.
+        //
+        // Identical declarations collapse; two lanes declaring OVERLAPPING-BUT-DIFFERENT regions do not,
+        // and the geometry refuses them. That is correct rather than awkward: it means two lanes disagree
+        // about what else lives in the area, and guessing which is right would be inventing the answer.
+        var reserved = documents
+            .SelectMany(d => d.Binding.ReservedRegions ?? new List<ReservedRegionDocument>())
+            .Select(r => new ReservedRegion(r.Register ?? -1, r.Length ?? 0, r.Owner ?? string.Empty))
+            .Distinct()
+            .ToArray();
+
+        if (reserved.Length > 0)
+            geometry = geometry.Reserving(reserved);
+
         var map = MapAllocator.Allocate(new WaveSetRequest(geometry, slots));
 
         if (!map.Allocated)
