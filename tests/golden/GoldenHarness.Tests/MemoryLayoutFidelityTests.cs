@@ -10,11 +10,15 @@ namespace GoldenHarness;
 ///
 /// <para><c>Normalizer.AreSemanticallyEquivalent</c> compares the element only when BOTH documents
 /// declare one ("a document that declares none is stating no opinion"), which is the right rule for a
-/// committed corpus that predates the emit side. The consequence, MEASURED 2026-08-13: <b>0 of the 26
-/// committed <c>.ir</c> files declare a layout</b>, while 27 of 38 committed exports do — so every
-/// <c>AreSemanticallyEquivalent</c> call reachable from this suite runs with
+/// committed corpus that predates the emit side. The consequence, RE-MEASURED 2026-08-23: <b>1 of the
+/// 58 committed <c>.ir</c> files declares a layout</b>, while 28 of 41 committed exports do — so all
+/// but one of the <c>AreSemanticallyEquivalent</c> calls reachable from this suite still runs with
 /// <c>compareMemoryLayout: false</c>. <c>converter compare</c> says so out loud on any document
-/// derived from the corpus: <c>MEMORYLAYOUT: Optimized -&gt; (none declared) (NOT compared)</c>.</para>
+/// derived from the corpus: <c>MEMORYLAYOUT: Optimized -&gt; (none declared) (NOT compared)</c>.
+/// (The figures first written here, 2026-08-13, were <b>0 of 26</b> <c>.ir</c> and 27 of 38 exports.
+/// The corpus more than doubled without the sentence moving, which is the ordinary way a measured
+/// statement in a comment goes stale — the <c>[Fact]</c> at the bottom is what actually holds the
+/// number, and it is the reason the change was noticed at all.)</para>
 ///
 /// <para>That matters because the layout is not cosmetic. A block's layout decides whether classic
 /// S7comm can see it at all (an Optimized block is ABSENT on the wire, not an error), and it is not
@@ -141,20 +145,32 @@ public class MemoryLayoutFidelityTests
     }
 
     /// <summary>
-    /// The gap this file exists to cover, recorded as a number so it cannot drift unnoticed. While it
-    /// is 0, no <see cref="Normalizer.AreSemanticallyEquivalent"/> call reachable from this suite —
-    /// the parity oracle, the committed round-trip, the frozen answer keys, <c>drift-check</c> —
-    /// compares a layout at all, and the Theory above is the only thing in the harness that does.
+    /// The gap this file exists to cover, recorded as a number so it cannot drift unnoticed. For every
+    /// <c>.ir</c> that does NOT declare a layout, no <see cref="Normalizer.AreSemanticallyEquivalent"/>
+    /// call reachable from this suite — the parity oracle, the committed round-trip, the frozen answer
+    /// keys, <c>drift-check</c> — compares a layout at all, and the Theory above is the only thing in
+    /// the harness that does.
     ///
     /// <para>Going red here is GOOD NEWS: it means committed IR has been re-derived from its export
     /// and now declares a layout, so the Normalizer's comparison has armed itself for those blocks.
     /// Raise the baseline and say which blocks. (Editing <c>ir/</c> is the lad-coder sub-agent's job,
     /// CLAUDE.md hard rule 8 — this test only measures.)</para>
+    ///
+    /// <para>*** IT WENT RED, AND IT WAS GOOD NEWS, EXACTLY AS ADVERTISED (2026-08-23). *** The
+    /// baseline moved 0 → 1. Worth noting HOW: not by the re-derivation route this comment predicted,
+    /// but by a block AUTHORED as IR with the layout stated deliberately — the counter caught a
+    /// direction it was not written for, which is the argument for counting the population rather than
+    /// enumerating the ways it can change.</para>
     /// </summary>
     [Fact]
     public void NoCommittedIr_DeclaresALayout_SoTheNormalizerComparisonIsDisarmed()
     {
-        const int ArmedBaseline = 0;
+        // 1, and the one is FB_Comms_ModbusServer (`ir/test-project001/FB_Comms_ModbusServer.ir:5`,
+        // MEMORYLAYOUT Optimized, authored in `763cdf6`). Its layout is not decoration: the block is a
+        // Modbus TCP server read over classic S7, and Optimized-vs-Standard is what decides whether a
+        // block is on the wire at all — so it is the first block in the corpus for which the
+        // Normalizer's layout comparison is armed. Everything else still states no opinion.
+        const int ArmedBaseline = 1;
 
         var repo = ToolPaths.RepoRoot();
         var irFiles = new[] { "reference", "test-project001" }
@@ -174,7 +190,9 @@ public class MemoryLayoutFidelityTests
         Assert.True(armed.Count == ArmedBaseline,
             $"{armed.Count} of {irFiles.Count} committed .ir files declare a MEMORYLAYOUT, baseline is " +
             $"{ArmedBaseline}: [{string.Join(", ", armed)}]. If this went UP, those blocks were re-derived " +
-            "from their exports and AreSemanticallyEquivalent now compares layout for them — raise the " +
-            "baseline. If it went DOWN below 0 something is very wrong.");
+            "from their exports — or authored declaring a layout, which is how the count first moved — " +
+            "and AreSemanticallyEquivalent now compares layout for them: raise the baseline and name " +
+            "them. If it went DOWN, a block that DID declare one has stopped, which is a comparison " +
+            "disarming itself and must be explained rather than absorbed.");
     }
 }

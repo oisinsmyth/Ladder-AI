@@ -271,10 +271,13 @@ these are the second and third.
   (an unlisted block must match; a listed one must still differ).
 - **`MemoryLayoutFidelityTests`** — `<MemoryLayout>` compared raw, real export → `to-ir` → `to-xml`.
   The Normalizer compares this element only when *both* documents declare one, which is right for a
-  corpus that predates the emit side and means, measured, that **0 of the 26 committed `.ir` declare a
-  layout while 27 of 38 exports do** — so every `AreSemanticallyEquivalent` call reachable from this
-  suite runs with the assertion opted out. `NoCommittedIr_DeclaresALayout_...` records that as a number
-  so re-deriving the corpus (which would arm the Normalizer's own comparison) cannot pass unnoticed.
+  corpus that predates the emit side and means, re-measured 2026-08-23, that **1 of the 58 committed
+  `.ir` declares a layout while 28 of 41 exports do** (it was 0 of 26 / 27 of 38 when this was written)
+  — so all but one `AreSemanticallyEquivalent` call reachable from this suite still runs with the
+  assertion opted out. `NoCommittedIr_DeclaresALayout_...` records that as a number so re-deriving the
+  corpus (which would arm the Normalizer's own comparison) cannot pass unnoticed — and it worked: the
+  count moved to 1 when `FB_Comms_ModbusServer` was authored declaring `MEMORYLAYOUT Optimized`
+  (`763cdf6`), a direction the comment had not predicted.
 
 Both were negative-tested against a converter built from `HEAD` with the defect surgically reintroduced.
 Dropping the two `BlockMemoryLayout.AppendIfPresent` calls — the exact historical hole, where the export
@@ -287,6 +290,38 @@ failures, every one of them in `MemoryLayoutFidelityTests`**: the other 46 tests
 real export's single layout value to `Standard` and round-tripping it — the structure and position stay
 TIA's and only that value is synthetic, but it is not a substitute for a real `Standard` export in the
 corpus (`openness-cli block-layout --set Standard --yes`, then export).
+
+## The SECOND opt-out, and its counter (2026-08-23)
+
+`Normalizer.AreSemanticallyEquivalent` gained a second cross-document opt-out beside
+`compareMemoryLayout` on 2026-08-23: `DerivedInterfacePlan.For(...)` (converter `2f7abba`), four rules
+covering TIA-side expansions the converter does not author — R1 a typed member's `<Sections>`, R2 its
+system-maintained `<AttributeList>`, R3 an instance DB's regenerated member list, R4 Real-literal
+re-rendering. It arrived with **no counter anywhere in this harness**, and its only tests were
+`Converter.Tests/DerivedInterfaceExpansionTests.cs` — *the same lane whose blind spot the rules create*,
+which is the exact failure this whole section exists over.
+
+**`DerivedInterfaceBlindSideTests`** is the census. For every committed `.ir`↔export pair it builds the
+plan the gate builds, strips the export twice (once with `DerivedInterfacePlan.Nothing`, once with the
+plan) and counts what vanished — the EFFECT, not the plan's private intent. One counter per dropping
+rule, **counted in SITES not blocks**: a layout is a per-object boolean, but an expansion opt-out is a
+per-site quantity, and a rule widened from "typed members" to "all members" would fire many more times
+inside the *same* blocks without moving a block count.
+
+**R4 deliberately gets no counter.** It is a value-preserving canonicalisation, not an ignore — `0.10`
+and `0.1` are the same number, `0.1` and `0.2` stay different — so its blind side is empty by
+construction and a count would measure activity rather than exposure. It gets the *demonstration* of
+that property against a real TIA export instead.
+
+🔴 **All three counters read ZERO, and that is a finding about the CORPUS, not a clean bill of health.**
+Everything the rules were built for is unreachable from here: `FB_Comms_ModbusServer.ir` declares
+`MB_SERVER 5.3` and `TCON_IP_v4 1.0` bare — the exact R1/R2 shape — and **has no committed export**;
+every *paired* instance DB declares its members in full, so R3's precondition is never met, while the
+member-less ones (`iDB_Hx*`) have no export either. The whole measurable blind side sits on blocks named
+in `CommittedBlocksRoundTripTests.KnownMissingExports`. Because a zero from "nothing fires" and a zero
+from "the probe is broken" look identical in a run log, each rule is handed a real export with the one
+thing it keys on removed, and the census must both see the drop and file it under the right rule
+(`TheCensus_SeesADrop_WhenTheRuleIsGivenOneToPlan`) — the zeros are only worth reading because of it.
 
 ## The ignore-list audit (2026-08-13) — MemoryLayout was the first of fifteen
 
@@ -346,13 +381,26 @@ becomes furniture. Entries now carry a `DriftDisposition`:
 | disposition | meaning | gates? |
 |---|---|---|
 | `Deferred` | looked at, consciously accepted; clears on a re-export (the D-7 six) | no |
+| `Unruled` | a real divergence **nobody has ruled on** — a question, not a tolerance | **YES** |
 | `IncompleteExport` | the committed **export** is not a faithful TIA artifact, so the answer key is wrong and our output is right (`NodeStatusAlarms`) | no |
 | `RepairInProgress` | an owner ruling **exists** and the repair is **not finished** | **YES** |
 
-`RepairInProgress` is the state the flat list could not express, and it is a hard gate
-(`NoKnownDrift_IsAnUnfinishedRepair`) because a decided-but-unfinished repair is exactly what quietly
-becomes a permanent baseline entry. Its passing branch is demonstrated, not assumed — re-filing the
+There are **four**, and this table listed three until 2026-08-23 — `Unruled` was added on the same day
+the table was written and the table never caught up.
+
+`RepairInProgress` is the state the flat list could not express, and it is a hard gate because a
+decided-but-unfinished repair is exactly what quietly becomes a permanent baseline entry. `Unruled` is
+a hard gate for the mirrored reason: an undecided thing written in the shape of a decided one is the
+whole failure the enum exists to prevent. Both are checked by **`NoDriftEntry_IsAnOpenQuestion`** — the
+old name `NoKnownDrift_IsAnUnfinishedRepair` was retired when `Unruled` joined, and stood in this file
+pointing at nothing for ten days. Its passing branch is demonstrated, not assumed — re-filing the
 entries as `Deferred` turns the suite green, so the gate is not red by construction.
+
+🔴 **And a gate nobody clears is a gate that costs.** The one `Unruled` entry, `DB_Settings`, was
+answered by a repair in a different lane **eight minutes after it was written** (`984e5af`, which
+deliberately left `tests/golden/` alone: *"the golden lane owns the baseline and delists the entry"*).
+The golden lane did not come back, so the suite stood red for ten days over a closed question. Delisted
+2026-08-23; the record of how is in the baseline where the entry used to be.
 
 The same distinction was added to `CommittedBlocksRoundTripTests.KnownIncompleteAnswerKeys` and
 `SynthesisParityTests.KnownIncompleteAnswerKey`: a block that fails parity because **its export is

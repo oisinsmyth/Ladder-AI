@@ -29,22 +29,118 @@ public class CommittedBlocksRoundTripTests
     /// `BLOCK` .ir files knowingly committed with no paired `simatic-ml/` export, so this suite cannot
     /// check them. Until 2026-08-05 such a block was dropped by a bare `if (File.Exists(...))` that
     /// yielded nothing — a *silent* exclusion, indistinguishable in the run output from a block that
-    /// was never committed at all (audit F-20). Naming them here keeps the gap visible without turning
-    /// the suite red over a corpus decision the owner has not made yet (audit F-19: whether these get
-    /// exported, or the corpus grows differently, is open).
+    /// was never committed at all (audit F-20). Naming them here keeps the gap visible.
+    ///
+    /// <para><b>AUDIT F-19 IS CLOSED, 2026-08-23, AND THE DECISION IS "DO NOT EXPORT THESE SEVEN".</b>
+    /// F-19 had left it open whether the harness blocks get exported or the corpus grows differently.
+    /// The settling argument is <c>FC_HarnessCopyLayer</c>: it is REGENERATED from the harness binding
+    /// on every deployment, so committing an export of it would freeze one binding's output as the
+    /// answer key and guarantee **perpetual drift in the very baseline this suite exists to keep
+    /// honest**. The other six are harness scaffolding in the reserved 9000-9999 block-number band
+    /// (`CLAUDE.md`), and this corpus is reviewer-skill validation data for blocks a reviewer reads as
+    /// part of a delivery. Each entry below carries its OWN reason, because they are not the same
+    /// block seven times — one is generated, one simulates the plant, one observes it, and four are
+    /// tooling test material for four different tooling questions.</para>
+    ///
+    /// <para>*** SAY WHAT THIS COSTS: IT CONVERTS A RED INTO A DOCUMENTED HOLE. *** Seven readable-only
+    /// blocks are now permanently unverified by this suite, and naming them does not verify them. What
+    /// it buys is that the hole is enumerated and asserted in both directions rather than being a
+    /// silent `File.Exists` false — and that a NEW unexported block still turns the suite red, which is
+    /// the property the naming exists to preserve.</para>
+    ///
+    /// <para>🔴 A qualification carried deliberately rather than smoothed away (2026-08-23 IR read):
+    /// "not project content" is NOT the same as "harmless in the project" — see the
+    /// <c>FB_HopperBlockageStim</c> entry. And do NOT restate the four Hx blocks' own claim that they
+    /// are "never called by the plant program": <c>Main.ir</c> networks 9-12 DO call them from OB1. The
+    /// defensible claim is ISOLATION — they reference no PLC tag, no global DB, no UDT and no other
+    /// block — not a claim about not being called.</para>
+    ///
+    /// <para>Not listed here and not an omission: <c>FB_Comms_ModbusServer</c> (FB 9000) is also
+    /// unexported, but it carries a stored `SIDECAR` and is excluded from this population one method
+    /// down, by the rule that a sidecar-carrying block is allowed to be non-derivable. It is not a gap
+    /// this list is meant to hold. <c>HarnessMirror</c> (a tag table), <c>UDT_HopperBlockageStim</c>
+    /// and the harness instance DBs are likewise out of scope — this list is `BLOCK` documents only.</para>
+    ///
+    /// <para>*** WAS A `string[]` UNTIL 2026-08-23, AND THE COMMENT BELOW ALREADY ASKED FOR SOMETHING
+    /// IT COULD NOT HOLD *** — <see cref="EveryReadableOnlyBlock_IsEitherCovered_OrAKnownGap"/> told
+    /// you to add a block "with the reason" and the type had nowhere to put one. Same lesson, and the
+    /// same shape, as the drift baseline's move off a flat `string[]`
+    /// (<see cref="ExportDriftDetectorTests"/>): a list of tolerated names that cannot say WHY a name
+    /// is on it stops being a decision and becomes furniture. Filling it with seven names under one
+    /// shared reason would have reproduced the defect in a dictionary.</para>
     ///
     /// This list is asserted in both directions:
     ///   - a NEW unpaired block that is not listed fails <see cref="EveryReadableOnlyBlock_IsEitherCovered_OrAKnownGap"/>;
     ///   - an entry that HAS gained an export fails <see cref="KnownMissingExport_IsStillMissing"/>,
     ///     so a closed gap cannot linger here pretending to still be one.
     /// </summary>
-    private static readonly string[] KnownMissingExports =
+    private static readonly Dictionary<string, string> KnownMissingExports = new(StringComparer.Ordinal)
     {
-        // EMPTY, 2026-08-13 — and empty is the GOOD state here, not a broken enumeration. The single
-        // entry was `FB_HopperBlockageMonitor` ("generated 2026-07-xx and never taken through a live
-        // TIA export"); commit `c49f5e9` added the three hopper-blockage exports, so it and its UDT and
-        // instance DB are all covered now. `KnownMissingExport_IsStillMissing` is what noticed, exactly
-        // as it was built to.
+        // It was EMPTY from 2026-08-13, and empty was the GOOD state: the single prior entry,
+        // `FB_HopperBlockageMonitor`, gained its export in `c49f5e9` and
+        // `KnownMissingExport_IsStillMissing` is what noticed. What refilled it is not that gap
+        // reopening — it is the test-environment harness landing in `ir/test-project001/` between
+        // 2026-08-13 and 2026-08-14 and never being ruled on.
+
+        // ---- GENERATED, AND THAT IS THE WHOLE ARGUMENT --------------------------------------------
+        // FC 9001. Emitted by `src/harness/Harness.Map/CopyLayerGenerator.cs` from the harness binding
+        // — `Harness.Run/LoopCli.cs:722` passes `binding.BlockName ?? "FC_HarnessCopyLayer"`, and the
+        // generator's network titles ("Program version", "Free-running scan counter",
+        // "Vector in - slot {SlotId} - {Type}", ...) match the committed IR. It is pure plumbing: every
+        // network is a MOVE or a COIL between an `HX_*` mirror tag and an instance-DB member, and it
+        // decides nothing.
+        //
+        // 🔴 THE DRIFT IS DEMONSTRABLE, NOT PREDICTED. TWO committed bindings target this same block
+        // name and number and would generate DIFFERENT bodies:
+        // `gen/test-project001/hopper-blockage-alarm/harness-binding.json` (slot HBA) and
+        // `gen/test-project001/hx-corpus/harness-binding.json` (blockNumber 9001, slots HXE/HXD/HXS/HXL).
+        // The committed .ir carries only the HBA slot — so it is already one binding's output frozen,
+        // and already wrong for the other binding in the same repo. An export of it would be an answer
+        // key that is stale the next time anyone deploys.
+        ["FC_HarnessCopyLayer"] = "FC 9001, GENERATED per deployment by Harness.Map/CopyLayerGenerator from the harness binding; two committed bindings target the same block and emit different bodies, so a committed export would be a permanently-drifting answer key.",
+
+        // ---- HAND-AUTHORED SCAFFOLDING, ONE ROLE EACH ---------------------------------------------
+        // FB 9002 (NOT the 9010+ corpus band). Hand-authored, `45e972c`; no harness source emits it.
+        // The plant SIMULATOR for the hopper-blockage runs: it synthesises a commanded timeline of
+        // three sensor signals from a Profile code and four durations. It makes no claim about the
+        // plant — the logic is a run latch, one TON, a decode of the profile's tens digit into one of
+        // six timeline shapes, and phase flags; a sensor state falls out of `Shape = 3`, not out of
+        // when a hopper actually blocks. It publishes its OWN commanded threshold belief rather than
+        // reading the monitor's, deliberately, so that a reset placed at the crossing stays a stimulus
+        // decision. The plant claim lives in `FB_HopperBlockageMonitor`, which IS exported.
+        //
+        // 🔴 AND IT IS THE ONE OF THE SEVEN THAT CAN OVERRIDE THE FIELD. It writes `DB_Input.Test[..]`
+        // and `DB_Controls.FaultReset`, gated on `Running`, and `Main` calls it at network 1 AHEAD of
+        // the input map at network 2 — so while a run is under way it IS the field for three real DI
+        // lines. That is the test-injection facility the exported input map already provides, so it
+        // does not make the block project content; it does mean a delivery review would want to
+        // confirm the block is ABSENT from the delivered program. "Not project content" is not the same
+        // as "harmless in the project", and this list should not be read as saying it is.
+        ["FB_HopperBlockageStim"] = "FB 9002, hand-authored (45e972c) plant SIMULATOR: a commanded timeline of three sensor signals from a Profile code and four durations, publishing its own threshold belief so the stimulus stays a stimulus decision. Test material, not equipment logic — but it writes DB_Input.Test[..]/DB_Controls.FaultReset ahead of the input map, so it must be absent from a delivery, not merely unreviewed.",
+
+        // FB 9003. Hand-authored, `92fa300`; the harness source names it as external in prose
+        // (`Harness.Map/CopyLayer.cs:252`, `CopyLayerGenerator.cs:210` both say "the hand-authored
+        // FB_HarnessViolationLatch"). A read-only OBSERVER: it latches four "this never happens"
+        // states so a violation lasting one scan survives to be read — its own reason being that a
+        // sampler looking a hundred times still looks between scans, and a miss reports as a pass.
+        // It reads two instance DBs and writes only its own six statics; no coil of its leaves the
+        // instance DB, so it cannot influence plant behaviour. Coupled to the requirement register for
+        // MAINTENANCE (change what the register forbids and this must change), which is a reason to
+        // keep it visible, not a reason to call it deliverable logic.
+        ["FB_HarnessViolationLatch"] = "FB 9003, hand-authored (92fa300) read-only OBSERVER: latches four forbidden states so a one-scan violation survives sampling. Writes only its own statics — nothing downstream reads its output. Tracks the requirement register for maintenance, but carries no plant claim.",
+
+        // ---- THE Hx CORPUS: FOUR TOOLING QUESTIONS, NOT FOUR COPIES OF ONE BLOCK ------------------
+        // All four hand-authored together, `b3f6736`, 2026-08-14; grep across `src/harness` for their
+        // names returns nothing, so no generator knows they exist. `gen/test-project001/hx-corpus/
+        // requirements.md` states the provenance and the status outright: authored manually as
+        // artificial test material, and "no clause here is a plant requirement". Their isolation is
+        // the load-bearing property — each references no PLC tag, no global DB, no UDT and no other
+        // block; every signal is a member of its own instance DB. (They ARE called, from Main networks
+        // 9-12; the block comments' "never called by the plant program" is not the claim to rely on.)
+        ["FB_HxBoolEcho"] = "FB 9010, hand-authored (b3f6736) Hx corpus — the ZERO-STATE case: two combinational coils, no memory, so a run needs no clear-down or arming window. The complement output exists so a stuck-low result register cannot read as correct in both states.",
+        ["FB_HxDwellTimer"] = "FB 9011, hand-authored (b3f6736) Hx corpus — the TIMING and 32-BIT-WIDTH case: the only corpus block carrying Time values and a timer instance. The preset echo pins the mirror's word order, so a word swap shows as a wrong value instead of a plausible duration.",
+        ["FB_HxIntStep"] = "FB 9012, hand-authored (b3f6736) Hx corpus — the 16-BIT ARITHMETIC and DISJOINT MULTI-WRITER case: StepSum is written by exactly two statements with provably disjoint enables, which is the shape `converter reachable-state` exists to adjudicate.",
+        ["FB_HxSealLatch"] = "FB 9013, hand-authored (b3f6736) Hx corpus — the MEMORY / DOMINANCE case: two self-holding seals differing only in clear-dominant vs set-dominant. The pair discriminates wrong dominance, which a single latch cannot report.",
     };
 
     /// <summary>
@@ -169,7 +265,7 @@ public class CommittedBlocksRoundTripTests
             "population would let every assertion below pass vacuously. Empty is not clean.");
 
         var uncoveredAndUnnamed = candidates
-            .Where(c => !c.HasExport && !KnownMissingExports.Contains(c.Name))
+            .Where(c => !c.HasExport && !KnownMissingExports.ContainsKey(c.Name))
             .Select(c => $"{c.Name} (expected {Path.Combine(c.XmlDir, c.Name + ".xml")})")
             .OrderBy(s => s, StringComparer.Ordinal)
             .ToList();
@@ -199,7 +295,7 @@ public class CommittedBlocksRoundTripTests
         var candidates = ReadableOnlyBlockCandidates().ToList();
         var stale = new List<string>();
 
-        foreach (var block in KnownMissingExports)
+        foreach (var block in KnownMissingExports.Keys)
         {
             var covered = candidates.Where(c => c.Name == block).ToList();
             if (covered.Count == 0)

@@ -93,8 +93,9 @@ public class ExportDriftDetectorTests
         // re-export committed in `f0fb0cb`. MEASURED after that landed: test-project001 drops to
         // 1 drifted / 25 match / 0 skipped.
         //
-        // The sixth, `DB_Settings`, SURVIVED ITS OWN RE-EXPORT - so "deferred re-export" is disproven
-        // for it and re-filing is not optional. See its entry.
+        // The sixth, `DB_Settings`, SURVIVED ITS OWN RE-EXPORT - so "deferred re-export" was disproven
+        // for it and it was re-filed rather than left under a dead reason. It is in sync now too, and
+        // is gone from here as of 2026-08-23; the record of how sits below.
 
         // ---- 🔴 THREE ENTRIES REMOVED HERE, 2026-08-13, AND THE REASON THEY CARRIED WAS FALSE ----
         //
@@ -111,37 +112,38 @@ public class ExportDriftDetectorTests
         // promises would happen. Kept as the worked example of why `Deferred` is a claim with an
         // expiry date. (Diagnosis and fix: converter lane, `f2a548a`.)
 
-        // ---- test-project001: REAL, MEASURED, AND NOBODY HAS RULED ON IT ------------------------
+        // ---- 🔴 `DB_Settings` REMOVED HERE, 2026-08-23 - THE QUESTION WAS ANSWERED BY REPAIR -----
         //
-        // `DB_Settings` is the one block still drifting after the live re-export, and it is NOT the
-        // deferred re-export its old reason claimed - that claim died when `f0fb0cb` refreshed the
-        // corpus from a live dump and this block stayed red. Re-filed rather than left sitting under a
-        // disposition that had been disproven, which is the exact mistake the instance DBs above
-        // record.
-        //
-        // MEASURED with `converter compare` (2026-08-13), .ir -> to-xml against the fresh export:
-        // EXACTLY ONE difference, VALUE-DIFFERS at
+        // It sat here as the one `Unruled` entry: EXACTLY ONE difference, VALUE-DIFFERS at
         //   /Document/SW.Blocks.GlobalDB/ObjectList/MultilingualText/ObjectList/MultilingualTextItem/AttributeList/Text
-        // i.e. the DB's own block comment. The two texts disagree about whether a decision happened:
-        //   export (live controller): "...Fix-wave-1 (2026-07-16) proposed defaults ... PENDING THE
-        //                              OWNER'S SETTINGS SIGN-OFF (gen/GenProject1/fix-wave-1.md is the
-        //                              signature page)."
-        //   .ir                     : "...were given site-practice defaults and SIGNED OFF 2026-07-16."
+        // i.e. the DB's own block comment, the .ir saying fix-wave-1 was SIGNED OFF 2026-07-16 and the
+        // live controller still saying PENDING THE OWNER'S SIGN-OFF. It was filed Unruled because the
+        // two texts disagreed about whether a DECISION had happened, and this lane could not settle
+        // that.
         //
-        // *** THAT IS A CONTENT DIFFERENCE, SO IT IS NOT IncompleteExport *** (bar condition 4 - and
-        // the export carries a <DocumentInfo>, so it fails condition 1 too). And it is structurally the
-        // SAME CLASS as the C-115/task-09 case that was just repaired under ruling (b): an IR that
-        // records a decision the controller has never been told about. That parallel is why this is
-        // Unruled and not quietly tolerated - but it is a PARALLEL, not a ruling, and the same question
-        // got two different answers last time.
+        // *** IT NEVER NEEDED AN OWNER RULING, AND THE ANSWER LANDED EIGHT MINUTES AFTER THE ENTRY WAS
+        // WRITTEN. *** `4593a87` (2026-08-13 17:09) added the entry; `984e5af` (17:17), in a different
+        // lane, closed it. That commit did the provenance work rather than guessing: `git log -S` puts
+        // the sign-off text in `f12bf1a`, "Q-02 resolved: 5 of 9 settings were already signed off,
+        // register was stale" - a recorded owner resolution dated 2026-07-17 confirming the sign-off
+        // happened on 2026-07-16 and that the register and the .ir header had simply never caught up.
+        // So the .ir was the CORRECTED text all along and the controller carried the PRE-CORRECTION
+        // one; the direction that was wrong was the controller's, and it was the controller that got
+        // fixed - imported to the SCRATCH project, compiled, re-exported, `.ir` untouched.
         //
-        // NOT VERIFIED BY THIS LANE: the third leg. This measures .ir vs the committed export. Whether
-        // the LIVE project agrees with its own export needs Portal, which this lane does not have.
+        // VERIFIED HERE BEFORE DELETING, not taken from the commit message: `converter drift-check
+        // --project ir/test-project001 --exports simatic-ml/test-project001` reports
+        // *** MATCH: DB_Settings *** (2 drifted / 24 match, the two being FB_ShredderSequencer and Main,
+        // which are a separate Portal re-export and NOT this entry).
         //
-        // The decision needed is one line: which text is true - has fix-wave-1 been signed off? If yes,
-        // the controller comment is stale and this is ruling (b) again. If no, the .ir overstates it.
-        new("DB_Settings", DriftDisposition.Unruled,
-            "One VALUE-DIFFERS, the DB's block comment: the .ir says fix-wave-1 was SIGNED OFF 2026-07-16, the live controller still says PENDING THE OWNER'S SIGN-OFF. Survived the f0fb0cb re-export, so the old 'D-7 deferred re-export' reason is disproven. Needs an owner ruling on which is true; same shape as the C-115 case ruled (b). Third leg (live project vs its export) not checked - no Portal in this lane."),
+        // The entry was never delisted because `984e5af` deliberately left `tests/golden/` alone - "the
+        // golden lane owns the baseline and delists the entry" - and the golden lane did not come back.
+        // Kept as the worked example of the OTHER way a baseline goes stale: not a reason that expires,
+        // but a question somebody answered somewhere else. `NoDriftEntry_IsAnOpenQuestion` held the
+        // suite red for ten days over a closed question, which is the cost of a gate nobody clears.
+        //
+        // Still NOT verified by this lane: the third leg. Everything above compares the .ir against the
+        // committed export. Whether the LIVE project agrees with its own export needs Portal.
     };
 
     public static IEnumerable<object[]> Projects()
