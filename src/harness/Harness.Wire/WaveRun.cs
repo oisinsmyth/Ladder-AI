@@ -187,7 +187,20 @@ public sealed record WaveResult(
     /// plant having been quiescent immediately and is the result this field was added to make visible.
     /// <see cref="SettleReport"/> stays null in that case and always did, which is the defect.
     /// </summary>
-    InertSettleMeasurement? InertSettle = null)
+    InertSettleMeasurement? InertSettle = null,
+
+    /// <summary>
+    /// 🔴 <b>What this run's program ACTUALLY scanned at.</b> Null means NOT MEASURED — the window was too
+    /// short, the counter did not advance, or no control read happened — and never a value taken on too
+    /// little evidence. <b>It is reported and compared, never substituted for
+    /// <see cref="WireTiming.ScanPeriodMs"/></b>: a measured number silently overriding the constant would
+    /// be the worse failure, because it would look measured while being just as capable of having been
+    /// taken in the wrong condition.
+    /// </summary>
+    ScanPeriodMeasurement? ScanPeriod = null,
+
+    /// <summary>Why there is no <see cref="ScanPeriod"/>, when there is none. Never null when it is.</summary>
+    string? ScanPeriodNotMeasured = null)
 {
     public SlotDistribution For(int slotIndex) => Distributions.Single(d => d.SlotIndex == slotIndex);
 
@@ -252,6 +265,11 @@ public static class WaveRun
         var pause = pauseFor ?? Thread.Sleep;
         string? settleReport = null;
         InertSettleMeasurement? settleMeasurement = null;
+
+        // Measures this program's actual scan period from the poll loop's own control reads. The stamp
+        // travels with the number, because a scan period belongs to a PROGRAM and this repository has
+        // twice recorded one program's figure as a rig fact.
+        var meter = new ScanPeriodMeter(client.Expected.Value, "a wave under poll load");
 
         if (tensors.Count == 0)
             throw new ArgumentException("a wave over no slots runs nothing. Empty is not clean.", nameof(tensors));
@@ -395,7 +413,7 @@ public static class WaveRun
                 var commanded = planned;
                 var startScan = InertPhase.Commit(client, inert, commanded);
 
-                var perIndex = Observe(client, compression, active, index, startScan, inert, nowMs);
+                var perIndex = Observe(client, compression, active, index, startScan, inert, nowMs, meter);
                 foreach (var (slotIndex, result) in perIndex)
                 {
                     collected[slotIndex].Add(result);
@@ -503,7 +521,14 @@ public static class WaveRun
                 collected[tensor.SlotIndex], log.SliceFor(tensor.SlotIndex)));
         }
 
-        return new WaveResult(length, distributions, log, client.RoundTrips - roundTripsBefore, interruption, settleReport, settleMeasurement);
+        var scanPeriod = meter.Result();
+
+        return new WaveResult(length, distributions, log, client.RoundTrips - roundTripsBefore, interruption,
+            settleReport, settleMeasurement,
+            scanPeriod,
+            // Always populated when the measurement is absent, so a reader can tell a stopped program from
+            // a short window from a run that never sampled. A bare null tells them none of the three.
+            scanPeriod is null ? meter.NotMeasuredBecause() : null);
     }
 
     /// <summary>
@@ -523,7 +548,8 @@ public static class WaveRun
         int index,
         ScanCount startScan,
         InertReport inert,
-        Func<long> nowMs)
+        Func<long> nowMs,
+        ScanPeriodMeter? meter)
     {
         var outstanding = active.ToDictionary(t => t.SlotIndex, t => t.Vectors[index]);
         var done = new List<(int SlotIndex, SlotRunResult Result)>();
@@ -563,6 +589,14 @@ public static class WaveRun
         {
             var control = client.ReadControl();
             polls++;
+
+            // 🔴 THE SCAN PERIOD, MEASURED FROM TRAFFIC ALREADY PAID FOR. This is the highest-frequency
+            // read the wave makes and it already carries the mirror's own scan counter, so the rate costs
+            // nothing extra. WireTiming.ScanPeriodMs is ONE PROGRAM'S number and thirty-odd sites convert
+            // scans to milliseconds with it; its own comment says re-measure whenever the program changes,
+            // and Phase 4 made a lane something the tool GENERATES. Deltas are all that matter here, so any
+            // consistent monotonic source does — this is the wave's own stopwatch, not a wall clock.
+            meter?.Observe(control.ScanCounter, DateTimeOffset.UnixEpoch.AddMilliseconds(nowMs()));
 
             // One read per group of whole slots — the map decides the grouping, and there is no register
             // in the request. A completed slot inside a group is read too and simply ignored.

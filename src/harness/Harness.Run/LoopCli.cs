@@ -1133,12 +1133,48 @@ public static class LoopCli
                       + "transient to measure. NOT a measurement of zero.",
             };
 
+        // 🔴 *** THIS PROGRAM'S ACTUAL SCAN PERIOD, WITH ITS DENOMINATOR AND ITS SUBJECT. ***
+        //
+        // WireTiming.ScanPeriodMs is a compiled constant measured against ONE program, and thirty-odd
+        // sites convert scans to milliseconds with it — the timeout backstop, the timer floor, the
+        // observability floor. Its own doc comment says to re-measure whenever the program changes
+        // materially, and nothing enforced that. Phase 4 made a lane something the tool GENERATES, so a
+        // new lane is a new program inheriting the old figure silently.
+        //
+        // REPORTED AND COMPARED, NEVER SUBSTITUTED. Replacing the constant from a live sample would be
+        // the worse failure: it would look measured while being just as capable of having been taken in
+        // the wrong condition, which is how a 113-frame stationarity claim was once beautifully stable
+        // and wrong. Emitted on EVERY run, including when it could not be measured, and saying which.
+        var scan = result.Wave?.ScanPeriod is { } rate
+            ? new JsonObject
+            {
+                ["measured"] = true,
+                ["millisecondsPerScan"] = Math.Round(rate.MillisecondsPerScan, 4),
+                ["scans"] = rate.Scans,
+                ["windowSeconds"] = Math.Round(rate.Window.TotalSeconds, 3),
+                ["buildStamp"] = $"16#{rate.BuildStamp:X8}",
+                ["precondition"] = rate.Precondition,
+                ["compiledConstantMs"] = WireTiming.ScanPeriodMs,
+                ["deltaFraction"] = Math.Round(rate.DeltaFraction, 4),
+                // The whole point of the comparison. A run that agrees says so; a run that does not is
+                // the signal to re-measure the constant deliberately.
+                ["disagreesWithConstant"] = rate.DisagreesWithConstant,
+            }
+            : new JsonObject
+            {
+                ["measured"] = false,
+                ["reason"] = result.Wave?.ScanPeriodNotMeasured
+                    ?? "no wave ran, so the scan counter was never sampled.",
+                ["compiledConstantMs"] = WireTiming.ScanPeriodMs,
+            };
+
         var document = new JsonObject
         {
             ["outcome"] = result.Outcome.ToString(),
             ["detail"] = result.Detail,
             ["programUnderTest"] = programUnderTest,
             ["postDownloadSettling"] = settling,
+            ["scanPeriod"] = scan,
 
             // The coverage arithmetic, stated rather than left to be derived — and derivable anyway from
             // `dispositions`, which is what makes these three numbers checkable against the rows below.
