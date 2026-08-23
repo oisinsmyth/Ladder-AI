@@ -184,6 +184,107 @@ def deleted_budgeted_file_fails(tmp):
     assert_in("GONE  ghost.md", out, "the missing file is named")
 
 
+# --- the slack floor: reported, never enforced ------------------------------------
+#
+# The floor is the one rule in this script that must NOT gate. A file under it is
+# inside its budget; refusing it would be the gate refusing work that complies, which
+# is the cry-wolf behaviour the floor exists to prevent. So every case here asserts the
+# exit code as hard as it asserts the text - a floor that started failing would still
+# print the right words.
+
+@tmpcase
+def under_floor_is_reported_and_still_passes(tmp):
+    """The whole point: reported, exit 0. Found by eye three times in one day before
+    this existed, which is what a budget table exists to stop."""
+    s = build(tmp, [("a.md", 1024)], {"a.md": sized(924)})
+    code, out, _ = run(s)
+    assert_eq(code, EXIT_OK, "under the floor is WITHIN budget and must not gate")
+    assert_in("GATE PASSED", out, "the verdict is still a pass")
+    assert_in("UNDER SLACK FLOOR (not a fail) : 1", out, "the count line")
+    assert_in("TIGHT   a.md", out, "the tight file is named")
+    assert_in("100 bytes headroom", out, "its actual headroom")
+
+
+@tmpcase
+def exactly_at_the_floor_is_not_reported(tmp):
+    """The rule is AT LEAST 256 bytes of slack, so 256 complies. An off-by-one here
+    would put a compliant file on a list headed 'under the floor'."""
+    s = build(tmp, [("a.md", 1024)], {"a.md": sized(768)})
+    code, out, _ = run(s)
+    assert_eq(code, EXIT_OK, "exit code")
+    assert_in("UNDER SLACK FLOOR (not a fail) : 0", out, "256 bytes of slack complies")
+    assert "TIGHT" not in out, "a compliant file must not be listed as tight"
+
+
+@tmpcase
+def one_byte_under_the_floor_is_reported(tmp):
+    """The other side of the boundary."""
+    s = build(tmp, [("a.md", 1024)], {"a.md": sized(769)})
+    code, out, _ = run(s)
+    assert_eq(code, EXIT_OK, "exit code")
+    assert_in("255 bytes headroom", out, "one byte under the floor is caught")
+
+
+@tmpcase
+def a_comfortable_file_prints_no_tight_stanza(tmp):
+    """A report that prints on every run whether or not it has anything to say is a
+    report people stop reading."""
+    s = build(tmp, [("a.md", 4096)], {"a.md": sized(100)})
+    code, out, _ = run(s)
+    assert_eq(code, EXIT_OK, "exit code")
+    assert_in("UNDER SLACK FLOOR (not a fail) : 0", out, "the zero case still states itself")
+    assert "NOT A FAILURE" not in out, "no stanza when there is nothing to report"
+
+
+@tmpcase
+def over_ceiling_is_never_also_listed_as_tight(tmp):
+    """A file over its ceiling has negative headroom, so naive arithmetic would put it
+    on BOTH lists. They are opposite conditions - one is 'you have complied and the
+    gate is too tight', the other is 'you have not complied' - and a reader skimming
+    must not be able to conflate them."""
+    s = build(tmp, [("a.md", 512)], {"a.md": sized(2000)})
+    code, out, _ = run(s)
+    assert_eq(code, EXIT_OVER, "exit code")
+    assert_in("OVER  a.md", out, "it is over")
+    assert "TIGHT" not in out, "an over-budget file is not a tight one"
+    assert_in("UNDER SLACK FLOOR (not a fail) : 0", out, "and it is not counted as tight")
+
+
+@tmpcase
+def the_floor_is_reported_on_the_failure_path_too(tmp):
+    """A tight file must not become invisible just because some OTHER file is over."""
+    s = build(tmp, [("a.md", 512), ("b.md", 1024)],
+              {"a.md": sized(2000), "b.md": sized(924)})
+    code, out, _ = run(s)
+    assert_eq(code, EXIT_OVER, "the over-budget file still gates")
+    assert_in("GATE FAILED", out, "the failure is the headline")
+    assert_in("OVER  a.md", out, "the over-budget file is named")
+    assert_in("TIGHT   b.md", out, "the tight file is named too")
+    assert_in("NOT A FAILURE", out, "and is explicitly marked as not the reason")
+    assert out.index("GATE FAILED") < out.index("TIGHT   b.md"), \
+        "the failure must be read before the advisory, not after it"
+
+
+@tmpcase
+def the_tight_stanza_says_it_is_not_a_refusal(tmp):
+    """The reasoning has to travel with the report. Somebody will otherwise 'fix' this
+    by making it fail."""
+    s = build(tmp, [("a.md", 1024)], {"a.md": sized(924)})
+    _, out, _ = run(s)
+    assert_in("COMPLY", out, "it says these files comply")
+    assert_in("next 512 boundary in its own commit", out, "the remedy is named")
+    assert "shrink" in out, "and the non-remedy is named"
+
+
+@tmpcase
+def staged_mode_reports_the_floor(tmp):
+    """The hook path is the one that actually runs on every commit."""
+    s = build(tmp, [("a.md", 4096)], {"a.md": sized(3900)}, git=True)
+    code, out, _ = run(s, "--staged")
+    assert_eq(code, EXIT_OK, "still not a failure in staged mode")
+    assert_in("TIGHT   a.md", out, "the tight file is named from the staged blob")
+
+
 # --- staged mode and the CRLF arithmetic ------------------------------------------
 
 @tmpcase
@@ -244,6 +345,14 @@ for name, body in [
     ("the offending file is named, innocents are not", the_offending_file_is_named),
     ("failure names the rule and the legitimate escape", failure_names_the_rule_and_the_escape),
     ("a deleted budgeted file is refused, not skipped", deleted_budgeted_file_fails),
+    ("under the slack floor is reported and still passes", under_floor_is_reported_and_still_passes),
+    ("exactly at the slack floor is not reported", exactly_at_the_floor_is_not_reported),
+    ("one byte under the slack floor is reported", one_byte_under_the_floor_is_reported),
+    ("a comfortable file prints no tight stanza", a_comfortable_file_prints_no_tight_stanza),
+    ("an over-budget file is never also listed as tight", over_ceiling_is_never_also_listed_as_tight),
+    ("the floor is reported on the failure path too", the_floor_is_reported_on_the_failure_path_too),
+    ("the tight stanza says it is not a refusal", the_tight_stanza_says_it_is_not_a_refusal),
+    ("staged mode reports the floor", staged_mode_reports_the_floor),
     ("staged LF blob reports CRLF-equivalent bytes", staged_blob_reports_worktree_bytes),
     ("staged mode ignores unstaged budgeted files", staged_mode_ignores_unstaged_budgeted_files),
     ("staged over-budget still fails", staged_over_budget_still_fails),

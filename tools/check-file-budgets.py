@@ -16,6 +16,9 @@ Exit 0 = every budgeted file within its ceiling. Exit 1 = at least one is over, 
 table names a file that no longer exists. Exit 2 = the gate could not run.
 EXIT 2 IS NOT A PASS.
 
+The run ALSO reports every budgeted file with less than SLACK_FLOOR_BYTES of headroom.
+That report NEVER changes the exit code - see the constant for why.
+
 CEILINGS ARE SEEDED AT EACH FILE'S SIZE WHEN IT WAS ADDED, ROUNDED UP TO THE NEXT 512
 BYTES. They are not a judgement about the right size - they are a ratchet. That is
 deliberate: nobody can say what the right size for a skill is, but everybody can say
@@ -32,11 +35,29 @@ and a deletion quietly removes a budget nobody notices is gone.
 """
 import io, os, subprocess, sys
 
+# The seeding rule's slack floor, as a number the script can actually read.
+#
+# It was prose in four comments here and in ZERO lines of code from the day the table was
+# seeded, so nothing ever checked it: the script compared files against their ceilings and
+# never against its own seeding rule. Three violations were found by eye in a single day
+# (two skills at 5 and 42 bytes of headroom, CLAUDE.md at 152). Noticing by eye is exactly
+# what a budget table exists to stop - a rule that depends on somebody squinting at the
+# "tightest headroom" list is a convention, not a gate.
+#
+# 🔴 IT REPORTS. IT MUST NEVER FAIL. That distinction is the whole design, and "improving"
+# it into a refusal would invert it. A file under the floor is INSIDE ITS BUDGET; refusing
+# the commit would be the gate refusing work that complies with it - precisely the cry-wolf
+# behaviour the floor was invented to prevent. Curing a warning with a louder warning is
+# not an improvement. The exit code contract is unchanged (0 within ceilings, 1 over or a
+# table entry missing, 2 could not run); only the reader is better informed.
+SLACK_FLOOR_BYTES = 256
+
 # (path, ceiling). Seeded 2026-08-21: each file's size that day rounded up to a 512-byte
-# boundary with AT LEAST 256 bytes of slack - EXCEPT CLAUDE.md, which keeps the 20,480
-# ceiling held through its own cut. The slack floor matters: a first pass rounded to the
-# next 512 alone and left one file 20 bytes under its ceiling, where a typo fix would have
-# failed the gate. A gate that cries wolf on trivial edits is one people learn to bypass.
+# boundary with AT LEAST SLACK_FLOOR_BYTES of slack - EXCEPT CLAUDE.md, which keeps the
+# 20,480 ceiling held through its own cut. The slack floor matters: a first pass rounded to
+# the next 512 alone and left one file 20 bytes under its ceiling, where a typo fix would
+# have failed the gate. A gate that cries wolf on trivial edits is one people learn to
+# bypass. The floor is enforced-as-a-report above, not left to the reader as it was here.
 # To raise one of these: do it in its own commit, and say in the message what earned it.
 BUDGETS = [
     # Raised 20480 -> 20992 on 2026-08-23. Earned by ONE table row: `portal-close`, which
@@ -50,7 +71,20 @@ BUDGETS = [
     # Three previous additions this week were trimmed away rather than raising this; that was
     # right for those, and repeating it here would mean keeping a destructive command hidden
     # to protect a number. 423 bytes of slack, above the documented 256-byte floor.
-    ("CLAUDE.md", 20992),
+    #
+    # Raised 20992 -> 21504 on 2026-08-23. NOT earned by new content - this is the second
+    # kind of raise, the one that pays for growth already landed rather than buying room for
+    # growth to come, and it is the FIRST raise the floor report found instead of a person's
+    # eye. Those 423 bytes were spent the same week by two converter rows: `served-area`
+    # (182b3f9) cost 116 bytes and left 307, `neighbours` (466185a) cost a further 155 and
+    # left 152. Both rows are load-bearing in the way the index is meant to be - each states
+    # that EXIT 2 IS NOT A PASS for its command, which is the project's standing "empty is
+    # not clean" rule at the one place an agent reads before running the tool - so neither is
+    # a candidate for trimming back out. What is wrong is the headroom, not the rows: at 152
+    # bytes a typo fix in CLAUDE.md could fail the build, and the reflex that teaches is
+    # --no-verify. This restores the seeding rule's slack rather than buying anything: 664
+    # bytes, none of it spent, and no other budgeted file's ceiling moves with it.
+    ("CLAUDE.md", 21504),
 
     (".claude/agents/assertion-enumerator.md", 5120),
     (".claude/agents/hmi-designer.md", 7680),
@@ -140,7 +174,7 @@ def measure_worktree(path):
         return None
 
 
-rows, over, missing = [], [], []
+rows, over, missing, under_floor = [], [], [], []
 
 if STAGED:
     in_index = staged_paths()
@@ -161,12 +195,21 @@ for path, ceiling in checked:
     rows.append((path, size, ceiling))
     if size > ceiling:
         over.append((path, size, ceiling))
+    elif ceiling - size < SLACK_FLOOR_BYTES:
+        # elif, not if: a file over its ceiling has negative headroom, so the arithmetic
+        # alone would put it on BOTH lists. They are OPPOSITE conditions - "you have
+        # complied and the ceiling has drifted too tight" versus "you have not complied" -
+        # and a reader skimming two lists must never be able to conflate them.
+        under_floor.append((path, size, ceiling))
 
 out = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
 out.write("measured                       : %s\n" % source)
 out.write("files in budget table          : %d\n" % len(BUDGETS))
 out.write("files checked this run         : %d\n" % len(rows))
 out.write("OVER BUDGET                    : %d\n" % len(over))
+# Stated on EVERY run including the zero case, so a reader can tell "nothing is tight"
+# apart from "this run did not look".
+out.write("UNDER SLACK FLOOR (not a fail) : %d\n" % len(under_floor))
 
 if not rows and not missing:
     out.write("\nnothing to check: no budgeted file was staged.\n")
@@ -191,6 +234,28 @@ else:
         out.write("tightest headroom:\n")
         for path, size, ceiling in tight:
             out.write("  %5d bytes  %s\n" % (ceiling - size, path))
+
+# Printed LAST on both paths, and only when it has something to say. Last because on the
+# failure path the refusal is what the reader must act on and the advisory must not
+# compete with it; on both paths because a tight file that becomes invisible whenever some
+# OTHER file is over is a tight file nobody ever pays for.
+if under_floor:
+    out.write("\n--- TIGHT: WITHIN BUDGET, UNDER THE %d-BYTE SLACK FLOOR (NOT A FAILURE) ---\n"
+              % SLACK_FLOOR_BYTES)
+    for path, size, ceiling in sorted(under_floor, key=lambda r: r[2] - r[1]):
+        out.write("  TIGHT   %s\n        %d bytes headroom, floor %d, size %d, ceiling %d\n"
+                  % (path, ceiling - size, SLACK_FLOOR_BYTES, size, ceiling))
+    out.write("\nThese files COMPLY and the gate is NOT refusing them - this is a report,\n")
+    out.write("not a refusal, and the exit code above is unaffected by it. Failing here\n")
+    out.write("would refuse work that is inside its budget, which is the cry-wolf\n")
+    out.write("behaviour the slack floor was invented to prevent.\n")
+    out.write("They are listed because a ceiling this close to its file is one that a\n")
+    out.write("typo fix can trip, and the reflex that teaches is --no-verify.\n")
+    out.write("The fix is NOT to shrink the file. When one of these is next edited,\n")
+    out.write("raise its ceiling to the next 512 boundary in its own commit, saying what\n")
+    out.write("earned it - the same procedure as an over-budget raise, done before the\n")
+    out.write("gate has to refuse anything.\n")
+
 out.flush()
 
 raise SystemExit(1 if (over or missing) else 0)
