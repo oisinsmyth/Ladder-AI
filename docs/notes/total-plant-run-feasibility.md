@@ -230,6 +230,31 @@ now closes that, but only for neighbours somebody declares.
 headroom** — it clears four lanes of padded width up to 174 and no more. **Band D ends exactly at
 1023: there is zero slack above the panel.**
 
+### The 1024 redeploy, 2026-08-23 — three measurements taken for the first time
+
+A second deployment at 1024, this time with the panel **declared** as a reserved region at 704
+length 320 rather than merely avoided. Two lanes off one download, **3 of 3 PASS each**, build stamp
+`16#B85BE93C` — moved from `16#0DB116F6`, as it must, `declaredRegisters` being a map-hash input.
+The stamp was then read back **off the device** by an independent probe and agreed.
+
+- 🔴 **The whole-area check passed at 1024 on real hardware for the first time**, exit 0:
+  *"1024 register(s) read whole in 9 FC03 transaction(s), plus 5 single-register probe(s) across the
+  edge."* The paging that makes this possible had until now only ever run in-process; 1022/1023
+  answered and 1024/1025 were refused with a Modbus exception, so the area is pinned from both sides
+  again at the new width. ⚠️ **It prints its own blind spot and that limit is real:** nine
+  transactions are nine moments on a live mirror, so the verdict is a **reassembly, not a snapshot** —
+  per-register reachability survives that, coherence between registers in different pages does not.
+- **Scan period under poll load: 25.80 and 25.82 ms/scan**, over 5,953 and 5,068 scans. Against the
+  compiled constant of 24.931 that is a **+3.49% delta, reported and within tolerance** — the meter
+  compares and never substitutes, so `WireTiming.ScanPeriodMs` is unchanged. ⚠️ **Do not compare this
+  with the 24.65/24.72 figures above**: those were measured *without* a wave polling the mirror, and
+  this one states `precondition: a wave under poll load`. Different program, different load, and the
+  earlier pair is what the 576-vs-1024 comparison rests on.
+- **Post-download settling is a number instead of an absence.** Two independent samples off the same
+  download: one lane quiescent on the **first** attempt after 0 s, the other on the **second** after
+  5 s. The first of those is the case that used to be indistinguishable from *"no retry was licensed"*
+  and now reports `measured: true, attempts: 1, quiescent: true`.
+
 **The declared width lives in exactly two lines of one IR block** — the area-pointer argument and the
 sidecar constant backing it — and **nothing in `src/harness/` hardcodes it**. Widening is a two-line
 IR edit, a re-import, a re-compile and a re-download, plus relocating the panel band (its address
