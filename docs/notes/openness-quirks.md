@@ -6,6 +6,28 @@ Working notes on TIA Openness friction (risk R-06). Record here as encountered.
 Per Portal version/binary, the first Openness connect triggers a manual approval dialog inside TIA Portal. If a connect hangs, check Portal for the dialog.
 TODO: paste exact dialog text/screenshot on first connect (S0 exit item).
 
+🔴 **THE DIALOG POISONS THE WHOLE PORTAL PROCESS, NOT JUST THE CALLER THAT RAISED IT — measured
+2026-08-23, and it cost three deploy attempts.** An unapproved binary made a first connect. That
+raised the dialog, which sat there modal, and from that moment **every Openness ATTACH to that Portal
+process hung — including from binaries that were correctly approved.** `openness-cli list` against
+the project timed out after **nine minutes**. Approving the offending binary afterwards does not clear
+it: the approval fixes future connects, it cannot dismiss a dialog already open. A person has to
+dismiss it, after which attach succeeds immediately.
+
+⚠️ **And the symptom points away from the cause.** `portal-status` keeps returning **exit 0 and a
+healthy-looking table** throughout, because it never attaches — it reads the process list. So the one
+command you reach for to check Portal's health is the one command the fault cannot reach. Two things
+follow: a green `portal-status` is **not** evidence that Portal is usable, and a nine-minute attach
+timeout on a binary you have verified approved (`openness-approve-build.ps1 -Status` showing
+`1 match this file's hash`) means the dialog, not the whitelist.
+
+**The trap that produces it:** `DownloadProbe.csproj` deliberately has **no** self-approval target,
+and says so in a comment — self-approving the only binary that can transfer a program would let a
+`dotnet build` silently grant Portal access to a download-capable executable nobody looked at. That is
+correct. The consequence to plan for is that **running `download-probe` after any rebuild, without
+approving it first, does not merely fail — it wedges Portal for everything else.** Approve it in the
+same breath as the rebuild: `tools\openness-approve-build.ps1 -Exe <path to download-probe.exe>`.
+
 > **READ THIS BEFORE ACTING ON THE PARAGRAPH ABOVE (2026-08-08).** "If a connect hangs, check Portal
 > for the dialog" has now sent three separate investigations hunting a dialog that did not exist. The
 > measured cause of a silent connect hang on this machine is an **unapproved (rebuilt) binary**, which

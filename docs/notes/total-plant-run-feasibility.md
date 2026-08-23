@@ -230,6 +230,36 @@ now closes that, but only for neighbours somebody declares.
 headroom** — it clears four lanes of padded width up to 174 and no more. **Band D ends exactly at
 1023: there is zero slack above the panel.**
 
+### The Phase 6 deployment, 2026-08-23 — and a block the tooling did not know was running
+
+Both lanes **3 of 3 PASS**, build stamp **`16#B85BE93C` → `16#95D8731D`**, read back off the
+controller and matching both result packages. Area still exactly 1024, pinned from both sides. Scan
+counter reset (783k → 13.6k), as a download that stops the CPU requires.
+
+🔴 **Setting this run up found a real defect in the DEPLOYMENT DEFINITION, not in the tooling.**
+`Main` calls the virtual panel's FC, and **no lane declared it.** So the deployed program contained
+a block the tooling did not know about: reachability counted *"6 of 6"* over a set missing it, the
+neighbour derivation could not see the panel's 240 tags, and **every build stamp before this one
+hashed a program short of an object the controller runs.** Fixed by deriving both lanes' program sets
+from lane manifests, with the panel in the vessel lane's. The numbers moved accordingly:
+
+| | before | after |
+|---|---|---|
+| reachability | 6 of 6 | **7 of 7** |
+| neighbour corpus | 0 tag tables, 6 blocks | **1 tag table, 7 blocks** |
+| declared vs corroborated | 1 declared, **0** corroborated | 1 declared, **1 corroborated** |
+| stamp coverage | `NO STAGED CORPUS` | **15 of 15, no gaps** |
+
+**The derivation was proven against the real occupant list, which the committed suite structurally
+cannot do.** Run over the panel's own IR it derives **240 regions**, and among them, by name, the
+panel's master enable and the safety-healthy substitution — **the exact two tags overwritten
+bit-for-bit** in the collision this mechanism exists because of. In the merged plan it reports
+**0 derived**, and that is correct rather than a
+miss: all 240 fall *inside* the declared band, so the reconciler subtracts instead of double-adding.
+
+⚠️ **`served-area` derived 1024 off the live comms block and agreed with the binding — and that
+agreement is worth exactly what the tool says it is.** It reads the staged corpus, never the CPU.
+
 ### The 1024 redeploy, 2026-08-23 — three measurements taken for the first time
 
 A second deployment at 1024, this time with the panel **declared** as a reserved region at 704
