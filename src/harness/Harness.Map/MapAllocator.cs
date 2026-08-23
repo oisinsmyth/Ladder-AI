@@ -25,8 +25,9 @@ public sealed record MapResult(RegisterMap? Map, IReadOnlyList<string> Refusals,
 /// <para><b>Every failure here is a DESIGN-TIME refusal.</b> X-A is explicit that a slot exceeding one
 /// FC03 read is "refused at MAP-DERIVATION time — a design-time error, never a runtime one", and the
 /// same standard is applied to the rest: an empty wave set, a duplicate slot id, a start-bool commit
-/// that would not fit one transaction, a mirror that overflows bit memory. Nothing here warns; a check
-/// that only warns gets skimmed.</para>
+/// that would not fit one transaction, a mirror that overflows bit memory, and a mirror that lands in
+/// registers a declared neighbour already holds (<see cref="ReservedRegion"/>). Nothing here warns; a
+/// check that only warns gets skimmed.</para>
 ///
 /// <para><b>What this allocator deliberately does NOT do: optimise for registers.</b> It never narrows
 /// a region, never packs two values into a register, never merges two slots into one read. Registers
@@ -145,6 +146,22 @@ public static class MapAllocator
             vectorPerSlot,
             resultPerSlot,
             allocations);
+
+        // 🔴 THE NEIGHBOUR CHECK, AND EVERY CHECK ABOVE IT IS CLOSED WITH RESPECT TO IT. The map is
+        // bounded against the declared area — the WHOLE area — and RegisterMap has just proved its
+        // regions disjoint FROM EACH OTHER. Both examine something real; neither has ever been able to
+        // see that anything else lives in the same %M. On 2026-08-23 a mirror and a hand-authored
+        // virtual panel both held registers 256..323 and 53 panel tags were overwritten every scan,
+        // through both of those checks, green.
+        //
+        // Run AFTER construction and against map.Regions rather than against the locals above, so the
+        // comparison covers exactly what the map declares itself to occupy — a region added to the
+        // layout later is covered here with nobody remembering to come back. Constructing a map and then
+        // refusing it costs nothing: RegisterMap is a value and this is the last word on whether it may
+        // be handed out.
+        var intrusions = geometry.Intrusions(map.Regions);
+        if (intrusions.Count > 0)
+            return new MapResult(null, intrusions, sizeReport);
 
         return new MapResult(map, Array.Empty<string>(), sizeReport);
     }
