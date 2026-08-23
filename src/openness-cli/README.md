@@ -1266,12 +1266,24 @@ failure the old wording predicted did not occur.
 
 The default is left as it is — opt-in is still defensible for a corpus that genuinely lacks
 tag-table IR — but **know what it costs where the IR exists.** Two consecutive `drift-check` legs
-against `test-project001` reported `3 drifted / 38 match` with both tag tables `SKIPPED`; the first
-run passing `--tagtables` reported `5 drifted`, and the two it had been hiding were the register map
-(`HarnessMirror`) and `DefaultTagTable`. Neither earlier run was wrong — each correctly reported
-what it compared, which is what the `COMPARED:` line is for — but the denominator was smaller than
-the reader assumed. **Pass `--tagtables` whenever the corpus has tag-table IR to compare against.**
-(`docs/notes/test-environment-contract.md` §2.9.)
+against `test-project001` **on 2026-08-23** reported `3 drifted / 38 match` over 41 objects with both
+tag tables `SKIPPED`; the next run, with `--tagtables`, compared 43 and reported `5 drifted` — the
+two extra being the register map (`HarnessMirror`) and `DefaultTagTable`. Neither earlier leg was
+wrong — each correctly reported what it compared, which is what the `COMPARED:` line is for — but
+the denominator was smaller than the reader assumed. **Pass `--tagtables` whenever the corpus has
+tag-table IR to compare against.** (`docs/notes/test-environment-contract.md` §2.9.)
+
+> 🔴 **CORRECTION 2026-08-23.** This paragraph read *"the **first** run passing `--tagtables` reported
+> `5 drifted`, and the two it had been hiding…"*. **Both halves are false.** The first run passing
+> `--tagtables` was **2026-08-14 05:10**, and it reported **4 drifted / 38 match / 3 export-only**
+> (`docs/notes/test-log.tsv:68`) — `HarnessMirror` was compared there and **MATCHED**; the drift in it
+> was created later the same day by `084b778` (11:50:04) and has never been deployed. `DefaultTagTable`
+> was in that dump too but was **mis-paired** by the space-in-name defect, so it went uncompared —
+> mis-paired, not skipped for want of an export. **The mistake was inferring a lesson from a flag's
+> name without checking which command owns the flag:** `--tagtables` belongs to `export-all`;
+> **`drift-check` has no such flag**, and its `SKIPPED` means only *"no paired `.xml` in the exports
+> dir"* (`src/converter/Converter/DriftCheck/DriftCheckRunner.cs:50-54`). The `SKIPPED`-both-times
+> finding is real, and it is **exactly two runs wide** — the two 2026-08-23 third-leg legs above.
 
 Exit **0** only when the directory is the whole project; **12** (`ExportIncomplete`) when everything
 attempted succeeded but something was refused; **7** when an export failed.

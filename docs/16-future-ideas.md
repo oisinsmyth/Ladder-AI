@@ -588,11 +588,24 @@ gaps, it doesn't write logic. **This closes FI-24's tag-status half; the provena
   reason. Debt paid in `4ff6d80`.
   🔴 **That zero is over 26 of 43, and the detector says so.** 17 objects have no committed export and
   are **skipped, not judged**. A wider third-leg run on 2026-08-23, with the tag tables included
-  (opt-in, and `SKIPPED` in every prior run), compared **43** and found **5 drifted, 38 match, 0
-  skipped, 2 export-only** — `DB_PLC`, `DefaultTagTable`, `FC_HarnessCopyLayer`, `HarnessMirror`,
+  (`SKIPPED` in the two third-leg legs that preceded it — see the correction below), compared **43**
+  and found **5 drifted, 38 match, 0 skipped, 2 export-only** — `DB_PLC`, `DefaultTagTable`,
+  `FC_HarnessCopyLayer`, `HarnessMirror`,
   `iDB_HopperBlockageStim`. ⚠️ **The smaller earlier figures were INCOMPLETE, not wrong** — those runs
   compared exactly what they said they compared, over a smaller population, which is what `COMPARED:`
-  exists to make visible. **None of the five is a D-7 block**; they are a separate, later harness debt
+  exists to make visible.
+  🔴 **CORRECTION 2026-08-23 — this entry said the tag tables were opt-in "and `SKIPPED` in every
+  prior run". That is false.** `drift-check` has **no** `--tagtables` flag (it belongs to
+  `export-all`), and its `SKIPPED` means only *"no paired `.xml` in the exports dir"*
+  (`src/converter/Converter/DriftCheck/DriftCheckRunner.cs:50-54`). The **2026-08-14 05:10** run
+  against the controller **did** have both tag tables in its dump: `docs/notes/test-log.tsv:68`
+  records `4 drifted, 38 match, 3 export-only (MotorIOSet, MotorVSDIOSet, Default tag table)` —
+  `HarnessMirror` was compared there and **MATCHED**, and `DefaultTagTable` was **mis-paired** by the
+  space-in-name defect rather than skipped. `HarnessMirror`'s drift was created **after** that run, by
+  `084b778` at 11:50:04 the same day, and has never been deployed. The genuine `SKIPPED` case is
+  **exactly the two 2026-08-23 third-leg runs** (`dc8308d`), which compared 41. **The mistake was
+  inferring a lesson from a flag's name without checking which command owns the flag.**
+  **None of the five is a D-7 block**; they are a separate, later harness debt
   recorded in `docs/notes/deferred-items.md`'s D-7 header, and they do **not** inherit D-7's deferral
   or its owner ruling.
 - **Raised:** 2026-07-20 · **Source:** the 2026-07-20 housekeeping scan. The committed `simatic-ml/<project>/*.xml` exports can silently drift from their `ir/<project>/*.ir` after a fix that is never re-exported — hit this session: `FB_ShredderSequencer.ir` carried the B-5/REQ-028 re-arming fix while its `.xml` still had the pre-fix logic, which poisoned the synthesis-parity audit (diffs that looked like real synthesis gaps were partly stale-XML noise, e.g. `PusherControl 543→198`). The team worked around it by switching the oracle from synth-vs-external-XML to synth-vs-own-sidecar (`CommittedBlocksRoundTripTests`/`FrozenAnswerKeyRoundTripTests`) — i.e. *tolerated* the drift rather than detecting it.

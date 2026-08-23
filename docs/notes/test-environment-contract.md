@@ -959,6 +959,13 @@ because the declaration had come to demand the fault.***
 **Right now it assumes silently, and the assumption has been measured false.** The first whole-project
 `drift-check --complete` against a fresh controller dump reported **4 DRIFTED** and **3 EXPORT-ONLY**.
 
+> ✅ **THAT `3` IS THE RIGHT NUMBER, AND TWO OTHER DOCUMENTS SAY `2`.** The three are `MotorIOSet`,
+> `MotorVSDIOSet` **and a FALSE `Default tag table` row** — the run's own log,
+> `docs/notes/test-log.tsv:68`, names all three. `live-project-readiness.md` and
+> `hammer-campaign-results.md` each list only the two UDTs, having dropped the false row that the
+> space-in-name pairing defect produced. **Corrected there 2026-08-23**; the arithmetic that settles it
+> is in the retraction at the end of this section.
+
 > #### UPDATE 2026-08-23 — one of the four is paid, and it left an ordering landmine
 >
 > `FB_Comms_ModbusServer` is now **MATCH**. The third leg re-run went **4 drifted → 3**, verified by
@@ -986,11 +993,15 @@ because the declaration had come to demand the fault.***
 > ⚠️ **`3 drifted / 38 match` is NOT a complete answer.** Neither run passed `--tagtables`, so
 > `DefaultTagTable` and `HarnessMirror` were `SKIPPED` both times — and **`HarnessMirror` is where the
 > register map lives.** The third leg as run has never examined the one object most worth comparing.
+> *(**Scoped to those two 2026-08-23 legs and no further** — the 2026-08-14 05:10 whole-project run
+> DID pass `--tagtables` and DID compare `HarnessMirror`. See the retraction below.)*
 
-> #### UPDATE 2026-08-23 (later) — the tag tables were compared for the first time, and BOTH drift
+> #### UPDATE 2026-08-23 (later) — ~~the tag tables were compared for the first time~~, and BOTH drift
 >
-> The run the paragraph above says has never happened has now happened once, by hand: an
-> `export-all … --tagtables` dump, then `drift-check --complete` against it. Verbatim:
+> The **third leg's** own gap is now closed, by hand: an `export-all … --tagtables` dump, then
+> `drift-check --complete` against it. *(As committed, this sentence read **"The run the paragraph
+> above says has never happened has now happened once"** — retracted below. It was the first such run
+> **since 2026-08-14**, not the first ever.)* Verbatim:
 >
 > ```
 > SUMMARY: 5 drifted, 38 match, 0 skipped, 2 export-only, 0 error, 0 pairing-failure
@@ -1005,10 +1016,12 @@ because the declaration had come to demand the fault.***
 > document on the other side came from TIA.
 >
 > 🔴 **`3 drifted / 38 match` was INCOMPLETE, NOT WRONG — and the distinction is the whole lesson.**
-> Both earlier runs correctly reported what they compared; `--tagtables` is opt-in, so the two tag
-> tables were `SKIPPED` and never entered the population at all. The number was right over a smaller
-> denominator. ***That is precisely what the `COMPARED:` line exists to expose, and this is the first
-> case where it paid.*** Read what a green says it compared, never just what it says it found.
+> **Both 2026-08-23 third-leg runs** correctly reported what they compared; their `export-all` did not
+> pass `--tagtables`, so no tag-table `.xml` was in the exports dir and `drift-check` `SKIPPED` both
+> — they never entered the population at all. The number was right over a smaller denominator.
+> ***That is precisely what the `COMPARED:` line exists to expose.*** Read what a green says it
+> compared, never just what it says it found. ⚠️ **This applies to those two runs and to no other
+> run** — see the retraction below.
 > Pairing worked in both directions, including the cross-name pair `DefaultTagTable.ir` ↔
 > `Default tag table.xml` — matched on the declared name (`TAGTABLE Default tag table` in both
 > converted headers), not the filename.
@@ -1063,10 +1076,65 @@ because the declaration had come to demand the fault.***
 > Different object, same API family — **a reason for concern, explicitly NOT evidence about the PLC
 > case.**
 >
-> **What this changes about the method, not just the numbers.** `--tagtables` being opt-in is exactly
-> what hid two real drifts across two runs of the leg whose job is to find them. **Pass `--tagtables`
-> on every `drift-check` leg against this project** — the corpus carries both tag tables as `.ir`,
-> so there is nothing to be gained by omitting them and a register map to be lost.
+> **What this changes about the method, not just the numbers.** An `export-all` without `--tagtables`
+> is exactly what kept these two objects out of the population **across the two 2026-08-23 legs of the
+> check whose job is to find them**. **Pass `--tagtables` on every `drift-check` leg against this
+> project** — the corpus carries both tag tables as `.ir`, so there is nothing to be gained by
+> omitting them and a register map to be lost.
+
+> #### 🔴 RETRACTION 2026-08-23 (later still) — "FOR THE FIRST TIME" IS WRONG, AND SO IS THE LESSON DRAWN FROM IT
+>
+> Written by the same hand that wrote the heading above, hours after committing it (`2c19bf8`,
+> `4102a48`), and left visible because the retraction is worth more than a clean-looking file.
+>
+> **What was claimed** — here, and repeated in `src/openness-cli/README.md`, `docs/16-future-ideas.md`
+> and `docs/notes/deferred-items.md`: `--tagtables` being opt-in meant the two tag tables were
+> `SKIPPED` in **every** prior `drift-check` run, so both drifts had been invisible the whole time.
+>
+> **What is true, from the artifacts:**
+>
+> - **`drift-check` has no `--tagtables` flag.** The flag belongs to `export-all`; `drift-check` only
+>   reads a directory. Its `SKIPPED` means *"no paired `.xml` in the exports dir"* and nothing else —
+>   `src/converter/Converter/DriftCheck/DriftCheckRunner.cs:50-54`.
+> - **The 2026-08-14 05:10 whole-project run DID have both tag tables in its dump.** Its own log row,
+>   `docs/notes/test-log.tsv:68`, reads `4 drifted …, 38 match, 3 export-only (MotorIOSet,
+>   MotorVSDIOSet, Default tag table)` — and that third export-only row is only reachable if the
+>   tag-table XML was there. `gen/test-project001/telemetry.log:27` records the same run's
+>   `export-all 45 exported 0 refused 0 failed`.
+> - **`HarnessMirror` WAS compared that morning, and it MATCHED.** `ir/test-project001` held **43**
+>   `.ir` at `c2c3aa9` (2026-08-14 05:05); the space-in-name defect cost exactly one pairing
+>   (`DefaultTagTable`), leaving **42** paired — and `38 match + 4 drifted` **is** 42, with
+>   `42 paired + 3 unpaired = 45` closing the export side. `HarnessMirror` is not among the four named
+>   drifted, so it is one of the 38.
+> - ***SO THE DRIFT APPEARED AFTER THE ONLY RUN THAT LOOKED — it was not hidden all along.***
+>   `084b778` is **2026-08-14 11:50:04 +0100**, six hours forty minutes after that export, and it is
+>   the commit that added `HX_HBA_L008`/`L009` to `HarnessMirror.ir` (*"all 24 existing
+>   byte-identical"*, in its own message) and network 8 to `FC_HarnessCopyLayer.ir`. The live copy
+>   layer still carries build stamp `16#21D74D35` — the value `084b778` overwrote.
+> - **`DefaultTagTable` was MIS-PAIRED on 08-14, not absent.** One object, two contradictory absence
+>   rows (`test-log.tsv:69`). It was therefore **never compared**, so ***whether it was drifting then
+>   is unestablished*** — nobody asked.
+> - **Other prior runs compared a tag table too**, so *"every prior run"* fails several times over:
+>   `test-log.tsv:90` (08-14 05:10:06) and `:234` (08-17 09:05) each compared **26** against the
+>   committed `simatic-ml/test-project001` corpus, which contains `DefaultTagTable.xml`, as did the
+>   D-7 discharge run of 08-23 (`0 drifted, 26 match`); and `test-log.tsv:186` (08-14 11:32, the
+>   `TestEnviroment` project) reports `COMPARED 43` — all 43 `.ir`, **both** tag tables included.
+>
+> **What survives, scoped exactly:** the **two 2026-08-23 third-leg runs against `GenProject1`** were
+> exported without `--tagtables`, so both tag tables were genuinely `SKIPPED` there. 41 objects
+> compared, *"exactly one line changed across all 41"* (`dc8308d`); `0d0ebac` is the fix that makes
+> the step pass `--tagtables`. **Two runs, both on one day — not "every prior run".**
+>
+> 🔴 **THE MISTAKE, NAMED: a lesson inferred from a flag's NAME without checking which command owns
+> the flag.** `--tagtables` is an `export-all` flag; the conclusion drawn was about how `drift-check`
+> had behaved for a week.
+>
+> ⚠️ **And the correct lesson is a different one with a different date.** `HarnessMirror` and
+> `FC_HarnessCopyLayer` are **one unpaid import from 2026-08-14 11:50** — the same debt already named
+> two entries up — not a divergence that hid from the tooling. Only **four** `.ir` in
+> `ir/test-project001` have changed at all since the 05:10 run (`git diff --stat c2c3aa9 HEAD --
+> ir/test-project001/`: `FB_Comms_ModbusServer`, `FB_ShredderSequencer`, `FC_HarnessCopyLayer`,
+> `HarnessMirror`), and those four account for the entire 08-14 → 08-23 delta.
 
 #### A DRIFTED model is NOT admissible, and the verdict is `STALE`
 

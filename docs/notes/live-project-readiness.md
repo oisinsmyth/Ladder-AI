@@ -119,6 +119,33 @@ it parsed as **nothing at all** before the fix, so it is an unambiguous currency
 
 ## 🔴 THE SCRATCH PROJECT'S IR DOES NOT DESCRIBE WHAT IS IN THE CONTROLLER
 
+> 🛑 **THE RECONCILE LIST BELOW IS SUPERSEDED — 2026-08-23. DO NOT ACT ON THE 08-14 SET.** A run
+> with the tag tables included compares 43 and reports **5 DRIFTED**, a different set:
+>
+> | | |
+> |---|---|
+> | **DRIFTED — 5** | `DB_PLC` · `DefaultTagTable` · `FC_HarnessCopyLayer` · `HarnessMirror` · `iDB_HopperBlockageStim` |
+> | **IN THE CONTROLLER, NO `.ir` — 2** | `MotorIOSet` · `MotorVSDIOSet` (both UDTs) |
+>
+> `FB_Comms_ModbusServer` is now **MATCH** (its owed import was paid) and `iDB_Comms_ModbusServer` is
+> gone from the list. 🔴 **Reconciling off the stale set is worse than not reconciling**: it names two
+> blocks that are already clean and **omits the exact pair that carries the import-ordering hazard.**
+> ***Import `FB_Comms_ModbusServer` BEFORE — or together with — `FC_HarnessCopyLayer`.*** Taking the
+> copy layer alone writes the two latch registers that nothing then serves: no import error, no
+> compile error, no drift finding. Full record, with the verbatim summary:
+> `docs/notes/test-environment-contract.md` §2.9.
+>
+> **Neither of the two new names was hiding.** `FC_HarnessCopyLayer` and `HarnessMirror` both read
+> `MATCH` in the 08-14 run below; `084b778` (2026-08-14 11:50:04, six hours later) added the two latch
+> tags and copy-layer network 8, and **neither half has ever been deployed**. One unpaid import, two
+> rows.
+>
+> ⚠️ **AND NOTE WHICH GUARDRAIL DID NOT COVER THIS.** The header rule at the top of this page tells
+> you to check the artifacts before relying on any **negative** claim here. This was a **positive**
+> claim — a named list plus an instruction to act on it — so its own guardrail pointed the other way,
+> and it is the direction that bit. **Date-check the positive instructions too, especially the ones
+> that name objects.**
+
 **Measured 2026-08-14 05:10** — `export-all --tagtables` (45 objects, 0 refused, 0 failed) then
 `drift-check --complete`, which is the only comparison that puts the **IR on disk** against **what is
 actually in the controller**. Result: **38 match, `exit 1`.**
@@ -126,17 +153,29 @@ actually in the controller**. Result: **38 match, `exit 1`.**
 | | |
 |---|---|
 | **DRIFTED — 4** | `DB_PLC` · `FB_Comms_ModbusServer` · `iDB_Comms_ModbusServer` · `iDB_HopperBlockageStim` |
-| **IN THE CONTROLLER, NO `.ir` AT ALL — 2** | `MotorIOSet` · `MotorVSDIOSet` |
+| **IN THE CONTROLLER, NO `.ir` AT ALL — 3** | `MotorIOSet` · `MotorVSDIOSet` · **`Default tag table` — a FALSE row**, see the pairing defect below |
 
-***CONSEQUENCE: RE-IMPORTING FROM IR WOULD CHANGE THOSE FOUR BLOCKS IN THE CONTROLLER.*** The four are
-the comms and stimulus blocks touched during deployment, so this is most likely authored-vs-imported
-divergence rather than corruption — **but it has not been reconciled, and until it is, the `.ir` is
-not a description of what is running.** ***Reconcile before importing anything into `GenProject1`.***
+***CONSEQUENCE, AS WRITTEN ON 08-14: RE-IMPORTING FROM IR WOULD CHANGE THOSE FOUR BLOCKS IN THE
+CONTROLLER.*** The four are the comms and stimulus blocks touched during deployment, so this is most
+likely authored-vs-imported divergence rather than corruption. ⚠️ **The four are no longer the answer
+— see the banner above; two of them are now `MATCH`.** The general statement still holds: until the
+current set is reconciled, the `.ir` is not a description of what is running.
 
-⚠️ **And a `drift-check` defect found by the same run:** a tag table whose TIA name contains spaces
-fails to pair, and is then reported **both** as `EXPORT-ONLY` *and* as `SKIPPED` — **one object, two
-contradictory absence rows**, one of which reads as the serious finding *"in the controller and no
-`.ir` describes it"*. Being fixed. **Treat a tag-table absence row with suspicion until it is.**
+⚠️ **The `3` above was recorded as `2` here until 2026-08-23**, dropping the false `Default tag table`
+row. The run's own log names all three — `docs/notes/test-log.tsv:68` — and 3 is what closes the
+arithmetic: 43 `.ir`, one lost to the pairing defect, 42 paired = 38 match + 4 drifted, and
+42 paired + 3 unpaired = the 45 objects exported. `docs/notes/hammer-campaign-results.md` carried the
+same `2` and is corrected too.
+
+✅ **The `drift-check` defect found by the same run is FIXED — closed 2026-08-23.** A tag table whose
+TIA name contains spaces used to fail to pair and then be reported **both** as `EXPORT-ONLY` *and* as
+`SKIPPED` — **one object, two contradictory absence rows**, one of which read as the serious finding
+*"in the controller and no `.ir` describes it"*. Pairing is now on the identity each document
+declares in its own content (`src/converter/Converter/DriftCheck/DriftCheckRunner.cs:26-46`,
+`:114-145`), and the 2026-08-23 run reports **`0 pairing-failure`** with the cross-name pair
+`DefaultTagTable.ir` ↔ `Default tag table.xml` resolving. 🔴 **The old standing instruction here —
+*"treat a tag-table absence row with suspicion until it is [fixed]"* — is WITHDRAWN.** Distrusting an
+output that is now correct costs more than it saves.
 
 ## THE READ-ONLY `openness-cli` SURFACE — hammered 2026-08-14, four defects, all fixed
 
@@ -246,7 +285,10 @@ the block goes invisible on the wire while every check stays green. **It bites o
   that is a fact for a human, and the tool is no longer allowed to claim otherwise.
 - **A slot set that all drives one FB instance is ONE slot, not N.** If you submit N slots against one
   block and see `SERIALISED`, ***that is a correct result, not a failure.***
-- **The gate count is 25**, not the 23 quoted in the test plan.
+- **25 gate rows were EMITTED** on one real deliverable on 2026-08-14, not the 23 quoted in the test
+  plan. ⚠️ **That is an emitted-row count, not the number of gates that exist** — not every gate
+  emits on every run. `SubmissionGate.cs` **defined 26** gate names that day (`db9ef27`) and
+  **defines 30 today**. Quote whichever you mean, and say which.
 - 🔴 ***`tagstatus` WAS ACCUSING LEGITIMATE ALARM-BIT SLICES OF BEING INVENTED MEMBERS*** — `DB_X.Alarm0.%X0`
   returned `MEMBER-NOT-FOUND`, the **hard-rule-3 verdict**, on the one construct doc 06 documents an
   exception for. **154 false findings across the 92 committed `.ir` files.** *Fixed*, and slices are now

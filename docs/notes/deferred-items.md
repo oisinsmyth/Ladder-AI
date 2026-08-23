@@ -106,7 +106,8 @@ imported/compiled (still waiting on its own queue slot), but D-6 is not what's b
 > 🔴 **READ THE DENOMINATOR, NOT THE ZERO — AND THE ZERO ABOVE IS OVER 26 OF 43.** `ir/test-project001`
 > holds **43** objects; 17 have no committed export and were **skipped, not judged**. A wider run of the
 > same detector against a fuller export set (the third leg, run 2026-08-23 with the tag tables included
-> — they are opt-in and were `SKIPPED` in every prior run) compared **43** and reports:
+> — they were `SKIPPED` in the two third-leg runs before it; see the correction below) compared **43**
+> and reports:
 >
 > ```
 > SUMMARY: 5 drifted, 38 match, 0 skipped, 2 export-only, 0 error, 0 pairing-failure
@@ -125,6 +126,21 @@ imported/compiled (still waiting on its own queue slot), but D-6 is not what's b
 >   copy-layer drift, one commit `084b778`, **neither half deployed** — one finding, not two.
 > - **`DefaultTagTable` drifts the OTHER WAY**: live is the superset, 11 TIA-generated clock/system bits
 >   absent from the IR. Nothing references them and nothing is broken today.
+>
+> 🔴 **CORRECTION 2026-08-23 — this entry said the tag tables are "opt-in and were `SKIPPED` in every
+> prior run". False, and the correction changes the story.** `drift-check` has **no** `--tagtables`
+> flag — it belongs to `export-all` — and `drift-check`'s `SKIPPED` means only *"no paired `.xml` in
+> the exports dir"* (`src/converter/Converter/DriftCheck/DriftCheckRunner.cs:50-54`). The
+> **2026-08-14 05:10** controller run **did** carry both tag tables: `docs/notes/test-log.tsv:68`
+> records `4 drifted, 38 match, 3 export-only (MotorIOSet, MotorVSDIOSet, Default tag table)`.
+> `HarnessMirror` was compared there and **MATCHED** — its drift was created afterwards, by `084b778`
+> at 11:50:04 the same day, so it is *"the drift appeared after the only run that looked"*, not
+> *"hidden all along"*. `DefaultTagTable` was in that dump too but was **mis-paired** by the
+> space-in-name defect, so it was never compared and **whether it was drifting then is
+> unestablished**; against the committed `simatic-ml/` corpus it read `MATCH` on 08-14
+> (`test-log.tsv:90`), 08-17 (`:234`) and 08-23 (the run quoted above). The genuine `SKIPPED` case is
+> **exactly the two 2026-08-23 third-leg runs** (`dc8308d`, 41 compared). **The mistake was inferring
+> a lesson from a flag's name without checking which command owns it.**
 >
 > ➜ **D-7 is closed. The harness-object drift above is a different item and does not inherit D-7's
 > deferral, its owner ruling, or its revisit trigger.** The historical entry is kept below unedited,

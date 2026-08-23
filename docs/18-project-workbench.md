@@ -178,7 +178,10 @@ Modbus") is the half that is already done.
 
 `Harness.Gate/SubmissionDocument.cs` carries **a dozen sub-documents** — model, block compression,
 deployment, S7 objects, timer presets, enumeration, map, storage, vectors, expectations, conflict
-edges, blacklist — and **today the AI authors them**, with 25 gates checking what was typed.
+edges, blacklist — and **today the AI authors them**, with **30 gates** checking what was typed
+(distinct gate names defined in `Harness.Results/SubmissionGate.cs`, counted 2026-08-23). *This read
+**25** until 2026-08-23, which is a different metric: 25 rows **emitted** on one real deliverable on
+2026-08-14, when 26 were defined. Not every gate emits on every run.*
 
 That is the "testing takes longer than the design" feeling, and it is worth naming precisely: **it
 is not test thinking. It is transcription.** Nearly every one of those fields is already knowable

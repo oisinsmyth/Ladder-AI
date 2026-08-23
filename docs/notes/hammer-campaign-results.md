@@ -153,8 +153,8 @@ be pointed at itself.
 | **Store scaling** | Isolated rather than assumed: **87 / 104 / 101 ms** at stores of 1 / 64 / 256. **Flat.** *The lease is the only thing that scales* |
 | **Liveness** | `kill -9` on a holder → next acquirer **exit 0 immediately**. ***There is no stale-lease state to detect*** — the lock is the OS handle |
 | **Both directions pinned** | 4 disjoint blocks → `CONCURRENCY 4`; 4 slots on one block → ***`SERIALISED` — a correct result, not a failure*** |
-| **Controller state** | `export-all --tagtables` → 45 objects, then `drift-check --complete`: **38 match, 4 drifted, 2 in the controller with no `.ir`** |
-| **Gate count** | **25**, taken by running the built CLI over a real deliverable. The docs said 23, and both gate tables drift. *On an empty vector set, gate `0` is emitted instead of the other 24* |
+| **Controller state** | `export-all --tagtables` → 45 objects, then `drift-check --complete`: **38 match, 4 drifted, 3 in the controller with no `.ir`** — the third being a **false** `Default tag table` row from the pairing defect at row 31. *(This cell read `2` until 2026-08-23; the run's own log names all three — `docs/notes/test-log.tsv:68`.)* |
+| **Gate count** | **25 gate rows EMITTED**, taken by running the built CLI over one real deliverable on 2026-08-14. The docs said 23, and both gate tables drift. *On an empty vector set, gate `0` is emitted instead of the other 24.* ⚠️ **An emitted-row count, not a defined-gate count** — not every gate emits on every run. `SubmissionGate.cs` **defined 26** distinct gate names that day (`db9ef27`, 04:24) and **defines 30 today** |
 
 ---
 
@@ -239,7 +239,7 @@ the orchestrator is not a check** — and on both occasions the refusal was corr
 |---|---|
 | 🔄 **The phase-armed latch** | In progress. Needs no rig — *it should have been built overnight and was not* |
 | 🔴 **The 27 vectors** | Still never run. After the latch, the remaining blocker is the mirror at **35/35**, which needs a re-deploy |
-| 🔴 **`GenProject1`'s IR ≠ its controller** | 4 objects drifted, 2 with no `.ir`. ***Reconcile before importing anything*** |
+| 🔴 **`GenProject1`'s IR ≠ its controller** | 4 objects drifted, 3 with no `.ir` (one of the three false — see row 31). ***Reconcile before importing anything.*** ⚠️ **The 08-14 set is SUPERSEDED**: today it is **5 drifted**, a different set — `docs/notes/live-project-readiness.md` |
 | ⚠️ **The permit half of the fences** | `NOT CHECKED`. Needs a supervised session |
 | ⚠️ **`hmi --screen <no match>`** | **Unmeasurable here** — `GenProject1` has no HMI device, so a match-nothing run and a bare run are indistinguishable, both exit 0. Needs an HMI scratch project |
 | ⚠️ **Two binding questions** | State the slot partition explicitly; does the schema admit a multi-tag entry? Neither blocks anything |
