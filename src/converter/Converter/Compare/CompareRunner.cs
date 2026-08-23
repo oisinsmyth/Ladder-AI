@@ -83,8 +83,16 @@ public static class CompareRunner
         }
 
         var differences = new List<CompareDifference>();
-        var strippedFirst = Normalizer.Strip(firstRoot, compareLayout);
-        var strippedSecond = Normalizer.Strip(secondRoot, compareLayout);
+
+        // The derived-interface plan is built ONCE from both documents and handed to both Strip
+        // calls, exactly as Normalizer.AreSemanticallyEquivalent does it. Not an optimisation: the
+        // plan is a cross-document decision (which one-sided TIA expansions are absences rather
+        // than differences), so a per-side plan would be a second derivation of the same rule, and
+        // this walk is cross-checked against AreSemanticallyEquivalent a few lines below — the two
+        // must be looking at the same trees or that cross-check starts firing on itself.
+        var derived = DerivedInterfacePlan.For(firstRoot, secondRoot);
+        var strippedFirst = Normalizer.Strip(firstRoot, compareLayout, derived);
+        var strippedSecond = Normalizer.Strip(secondRoot, compareLayout, derived);
 
         if (strippedFirst.Name != strippedSecond.Name)
         {

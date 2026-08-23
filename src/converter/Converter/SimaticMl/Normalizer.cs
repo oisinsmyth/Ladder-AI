@@ -143,9 +143,10 @@ public static class Normalizer
         }
 
         var compareMemoryLayout = DeclaresMemoryLayout(original.Root) && DeclaresMemoryLayout(reExported.Root);
+        var derived = DerivedInterfacePlan.For(original.Root, reExported.Root);
         return XNode.DeepEquals(
-            Strip(original.Root, compareMemoryLayout),
-            Strip(reExported.Root, compareMemoryLayout));
+            Strip(original.Root, compareMemoryLayout, derived),
+            Strip(reExported.Root, compareMemoryLayout, derived));
     }
 
     private static bool DeclaresMemoryLayout(XElement root) =>
@@ -155,12 +156,18 @@ public static class Normalizer
     /// Single-document canonicalization (hashing, diffing, dumping a normalized form beside a
     /// failing comparison). Drops MemoryLayout, since with only one document in hand there is no
     /// other side to have declared one — <see cref="AreSemanticallyEquivalent"/> is the caller that
-    /// knows whether the attribute is being compared and opts in.
+    /// knows whether the attribute is being compared and opts in. Same for the derived-interface
+    /// plan: every one of its rules is a statement about what the OTHER document does or does not
+    /// declare, so with one document in hand there is nothing to plan and nothing is dropped.
     /// </summary>
     public static XElement Strip(XElement element) => Strip(element, compareMemoryLayout: false);
 
     public static XElement Strip(XElement element, bool compareMemoryLayout) =>
-        Strip(element, BuildAccessContentKeyMap(element), new Dictionary<string, string>(), compareMemoryLayout);
+        Strip(element, compareMemoryLayout, DerivedInterfacePlan.Nothing);
+
+    public static XElement Strip(XElement element, bool compareMemoryLayout, DerivedInterfacePlan derived) =>
+        Strip(element, BuildAccessContentKeyMap(element), new Dictionary<string, string>(),
+            compareMemoryLayout, derived, InterfacePath.Root);
 
     // An Access element's own UId is volatile too — confirmed real, 2026-07-11 (TON grounding,
     // FC TimerSample): TIA reassigns Access UIds on its own Import()/Compile()/Export() cycle,
@@ -192,8 +199,15 @@ public static class Normalizer
         var scope = (string?)access.Attribute("Scope") ?? string.Empty;
         if (scope == "TypedConstant")
         {
-            var value = access.Descendants().FirstOrDefault(e => e.Name.LocalName == "ConstantValue")?.Value ?? string.Empty;
-            return $"const:{value}";
+            // Canonicalized, not raw. An Access's content key becomes its UId in the stripped tree
+            // and is what every IdentCon pointing at it is rewritten to, so a key taken from the
+            // raw literal text puts the re-rendered form BACK into the comparison after
+            // NumericLiteral removed it — `0.10` and `0.1` would compare equal at the
+            // <ConstantValue> and unequal at three UIds. Found by a synthetic fixture, not by the
+            // real corpus: TIA writes a Real literal under Scope="LiteralConstant", which takes the
+            // `tag:` branch below, so the measured case never reached this line.
+            var value = access.Descendants().FirstOrDefault(e => e.Name.LocalName == "ConstantValue");
+            return $"const:{(value is null ? string.Empty : NumericLiteral.Canonicalize(value))}";
         }
 
         // The full <Symbol> (component names plus any slice/array modifiers) so two Access
@@ -341,7 +355,9 @@ public static class Normalizer
         XElement element,
         Dictionary<string, string> accessContentKeyByUId,
         Dictionary<string, string> partContentKeyByUId,
-        bool compareMemoryLayout)
+        bool compareMemoryLayout,
+        DerivedInterfacePlan derived,
+        string interfacePath)
     {
         // UId numbering restarts at the beginning of every network (each <FlgNet> is its own
         // numbering scope) — the content-key map must be rebuilt per network too, not flattened
@@ -379,8 +395,9 @@ public static class Normalizer
 
         var clone = new XElement(element.Name, attributes);
         var children = element.Elements()
-            .Where(c => !IsVolatile(c, compareMemoryLayout))
-            .Select(c => Strip(c, accessContentKeyByUId, partContentKeyByUId, compareMemoryLayout))
+            .Where(c => !IsVolatile(c, compareMemoryLayout) && !derived.Drops(element, interfacePath, c))
+            .Select(c => Strip(c, accessContentKeyByUId, partContentKeyByUId, compareMemoryLayout,
+                derived, InterfacePath.Extend(interfacePath, c)))
             .ToList();
 
         // <Wire> order within <Wires>, <Access>/<Part> order within <Parts>, and an individual
@@ -437,9 +454,19 @@ public static class Normalizer
             clone.Add(child);
         }
 
-        if (!element.HasElements)
+        // `.Length > 0` matters, and it is not a micro-optimization. XElement's Value setter appends
+        // an XText node even for the empty string, so `<Section Name="Static" />` became an element
+        // carrying one empty text node while a `<Section Name="Static">` whose only children were
+        // DROPPED became an element carrying nothing — and XNode.DeepEquals distinguishes those two.
+        // That is exactly the pair rule 3 creates, so with the guard absent the plan produced a
+        // difference of its own making: `AreSemanticallyEquivalent` said "not equivalent" while
+        // `compare`'s walk found nothing to name, which surfaced as NOT COMPARED rather than as a
+        // false green. Measured on two real instance DBs. Skipping the
+        // set when there is no text to carry makes an emptied element and a natively empty one the
+        // same shape, and changes nothing for any element that has text.
+        if (!element.HasElements && element.Value.Length > 0)
         {
-            clone.Value = element.Value;
+            clone.Value = NumericLiteral.Canonicalize(element);
         }
 
         return clone;
