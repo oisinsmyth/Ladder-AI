@@ -70,7 +70,17 @@ public static class MirrorReadRun
     /// never invoked has proved the fence held — as an observable consequence, not as an exit code a
     /// disconnected gate could also produce.
     /// </summary>
-    public static MirrorReadExit Execute(MirrorReadOptions options, IRegisterSourceFactory factory, TextWriter output)
+    public static MirrorReadExit Execute(MirrorReadOptions options, IRegisterSourceFactory factory, TextWriter output) =>
+        ExecuteAndReport(options, factory, output).Exit;
+
+    /// <summary>
+    /// The same run, handing back the document as well as the code.
+    ///
+    /// <para><b>Every path returns a report, including the ones that measured nothing</b> — see
+    /// <see cref="MirrorReadReport.NotMeasured"/>. A consumer that got no file on a refusal could not
+    /// tell it from a run nobody started, and those are the two states hardest to tell apart already.</para>
+    /// </summary>
+    public static MirrorReadOutcome ExecuteAndReport(MirrorReadOptions options, IRegisterSourceFactory factory, TextWriter output)
     {
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(factory);
@@ -96,7 +106,8 @@ public static class MirrorReadRun
             foreach (var refusal in refusals)
                 output.WriteLine($"  - {refusal}");
             output.WriteLine("  Nothing was contacted.");
-            return MirrorReadExit.Usage;
+            return new MirrorReadOutcome(MirrorReadExit.Usage,
+                MirrorReadReport.NotMeasured(options, MirrorReadExit.Usage, refusals));
         }
 
         // ---- 1. THE FENCE, ABOVE EVERY LINE THAT COULD OPEN A SOCKET ----
@@ -120,7 +131,12 @@ public static class MirrorReadRun
             output.WriteLine($"  verdict : REFUSED — the fence could not reach a decision: {ex.Message}");
             output.WriteLine("  REFUSED — no connection attempted. This is a FAULT IN THE FENCE and not a verdict");
             output.WriteLine("  about the device: nothing examined the target at all.");
-            return MirrorReadExit.FenceFault;
+            return new MirrorReadOutcome(MirrorReadExit.FenceFault,
+                MirrorReadReport.NotMeasured(options, MirrorReadExit.FenceFault, new[]
+                {
+                    $"the device fence could not reach a decision ({ex.GetType().Name}: {ex.Message}). That is a FAULT IN "
+                    + "THE FENCE and not a verdict about the device: nothing examined the target at all.",
+                }));
         }
 
         output.WriteLine("== device fence (DeviceAccessGuard — consulted BEFORE any socket) ==");
@@ -129,7 +145,12 @@ public static class MirrorReadRun
         if (!decision.Allowed)
         {
             output.WriteLine("  REFUSED — no connection attempted.");
-            return MirrorReadExit.Refused;
+            return new MirrorReadOutcome(MirrorReadExit.Refused,
+                MirrorReadReport.NotMeasured(options, MirrorReadExit.Refused, new[]
+                {
+                    $"the device fence REFUSED {options.Address} before any socket was opened ({decision.Reason}): "
+                    + decision.Message,
+                }));
         }
 
         output.WriteLine($"  entry   : {decision.MatchedEntry?.DisplayLabel ?? "<none>"}");
@@ -151,17 +172,56 @@ public static class MirrorReadRun
             output.WriteLine($"  open({options.Address}, {options.Port}, unit {options.UnitId}) -> FAILED");
             output.WriteLine($"  {ex.GetType().FullName}: {ex.Message}");
             output.WriteLine("  Nothing further attempted.");
-            return MirrorReadExit.ConnectFailed;
+            return new MirrorReadOutcome(MirrorReadExit.ConnectFailed,
+                MirrorReadReport.NotMeasured(options, MirrorReadExit.ConnectFailed, new[]
+                {
+                    $"the session would not open ({ex.GetType().Name}: {ex.Message}), so nothing was read. An "
+                    + "unreachable device is not a verified one.",
+                }));
         }
 
         using (source)
         {
             output.WriteLine();
-            return Measure(options, source, output);
+
+            // 🔴 THE ONE RETRY IN THIS TOOL, AND IT COVERS ONE CODE.
+            //
+            // A download stops the CPU, so a run placed after one meets a scan counter that has not
+            // started again yet. That is exit 8 — a liveness fact, not a width verdict — and it clears by
+            // itself. The wave answers the identical transient by ASKING AGAIN and reporting how many
+            // attempts it needed (the blind 15 s wait it replaced was measured to be too short), so this
+            // reuses that shape rather than inventing a second policy for one event.
+            //
+            // *** NOTHING ELSE IS RETRIED. *** A narrower or wider area is a CONCLUSION, and re-rolling a
+            // conclusion until it changes is how a check becomes a random number generator. The loop
+            // condition says so in one line, and the attempt count travels in the report either way.
+            MirrorReadOutcome outcome;
+            var attempt = 0;
+
+            while (true)
+            {
+                attempt++;
+                outcome = Measure(options, source, output, attempt);
+
+                if (outcome.Exit != MirrorReadExit.ScanCounterNotRising || attempt > options.ScanRetries)
+                    break;
+
+                output.WriteLine();
+                output.WriteLine($"== the scan counter has not moved — asking again, attempt {attempt + 1} of "
+                    + $"{options.ScanRetries + 1}, {options.ScanRetryIntervalMs} ms apart ==");
+                output.WriteLine("   A download stops the CPU, so a counter that has not started yet is EXPECTED here and");
+                output.WriteLine("   is not a width finding. Only this code is retried: a width verdict is a conclusion.");
+                output.WriteLine();
+
+                if (options.ScanRetryIntervalMs > 0)
+                    Thread.Sleep(options.ScanRetryIntervalMs);
+            }
+
+            return outcome;
         }
     }
 
-    private static MirrorReadExit Measure(MirrorReadOptions options, IRegisterSource source, TextWriter output)
+    private static MirrorReadOutcome Measure(MirrorReadOptions options, IRegisterSource source, TextWriter output, int attempt)
     {
         var findings = new List<string>();
 
@@ -294,8 +354,63 @@ public static class MirrorReadRun
         output.WriteLine();
         output.WriteLine("Operations performed on the device: TCP connect, FC03 read holding registers, disconnect.");
         output.WriteLine("No write function code was issued. No FC05, FC06, FC15 or FC16 appears in this binary.");
-        return exit;
+
+        // *** THE DOCUMENT IS A SECOND RENDERING OF THE SAME MEASUREMENT, NEVER A SECOND MEASUREMENT. ***
+        // Every value below is one the lines above already printed. Recomputing any of them here would be
+        // two derivations of one number, which is how the parity tests in this repository came to exist —
+        // and here the copy would decide what a reviewer reads while the original decided what happened.
+        var report = new MirrorReadReport(
+            new MirrorReadTarget(options.Address, options.Port, options.UnitId),
+            options.DeclaredRegisters,
+            options.LastDeclaredRegister,
+            (int)exit,
+            exit.ToString(),
+            WidthVerdictOf(exit),
+            Measured: true,
+            Attempts: attempt,
+            new MirrorReadExamined(
+                wide.Ok ? wide.Values.Length : 0, pages, probes.Count, options.BoundaryFrom, options.BoundaryTo),
+            probes.Select(p => new MirrorProbeRow(
+                p.Start, p.Start <= options.LastDeclaredRegister, p.Outcome.ToString(), p.SlaveExceptionCode)).ToArray(),
+            new MirrorControl(
+                Reading(controlA), Reading(controlB), betweenControls.ElapsedMilliseconds, Advance(controlA, controlB)),
+            findings,
+            MirrorReadReport.NotSeenBy(options, pages));
+
+        return new MirrorReadOutcome(exit, report);
     }
+
+    /// <summary>
+    /// The exit code as the width question's answer.
+    ///
+    /// <para><b>Everything that is not one of the three verdicts is
+    /// <see cref="MirrorWidthVerdict.NotEstablished"/></b>, including exit 8: a scan counter that did not
+    /// rise says the copy layer may not be executing, and a run that cannot establish liveness has not
+    /// established a width either. Mapping it to "as declared" because the reads happened to succeed
+    /// would be the tool concluding from a run it just said it could not trust.</para>
+    /// </summary>
+    private static MirrorWidthVerdict WidthVerdictOf(MirrorReadExit exit) => exit switch
+    {
+        MirrorReadExit.Ok => MirrorWidthVerdict.ExactlyAsDeclared,
+        MirrorReadExit.NarrowerThanDeclared => MirrorWidthVerdict.NarrowerThanDeclared,
+        MirrorReadExit.WiderThanDeclared => MirrorWidthVerdict.WiderThanDeclared,
+        _ => MirrorWidthVerdict.NotEstablished,
+    };
+
+    /// <summary>A control read, decoded exactly as <see cref="ReportControl"/> prints it — or the fact that it failed.</summary>
+    private static MirrorControlReading Reading(RegisterRead read) =>
+        read.Ok
+            ? new MirrorControlReading(true,
+                $"16#{RegisterWords.To32(read.Values[0], read.Values[1], RegisterWordOrder.HighWordFirst):X8}",
+                ScanCount.FromRegisters(read.Values[2], read.Values[3], RegisterWordOrder.HighWordFirst).Raw)
+            : new MirrorControlReading(false, null, null);
+
+    /// <summary>The advance between the two control reads, or null when there was no pair to subtract.</summary>
+    private static long? Advance(RegisterRead first, RegisterRead second) =>
+        first.Ok && second.Ok
+            ? ScanCount.FromRegisters(second.Values[2], second.Values[3], RegisterWordOrder.HighWordFirst)
+                .Since(ScanCount.FromRegisters(first.Values[2], first.Values[3], RegisterWordOrder.HighWordFirst))
+            : null;
 
     /// <summary>The build stamp and the scan counter, printed from the raw words they were built out of.</summary>
     private static void ReportControl(RegisterRead read, TextWriter output)

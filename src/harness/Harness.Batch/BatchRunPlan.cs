@@ -29,11 +29,73 @@ public enum BatchStepKind
     /// </summary>
     DriftCheck,
 
+    /// <summary>
+    /// <c>openness-cli export-all --tagtables</c> — the WHOLE project, for the third leg.
+    ///
+    /// <para>Its own export, and not the one <see cref="ExportAll"/> takes, for one reason:
+    /// <c>--tagtables</c> is opt-in there and the union pair does not want it (a tag table has no
+    /// <c>.ir</c> counterpart to pair with in a subset comparison). Without it <c>DefaultTagTable</c> and
+    /// <c>HarnessMirror</c> pair with nothing and come back SKIPPED — and <b><c>HarnessMirror</c> is the
+    /// object where the register map lives</b>, the one most worth comparing against the controller. That
+    /// is exactly what today's third-leg run missed.</para>
+    /// </summary>
+    WholeCorpusExport,
+
+    /// <summary>
+    /// 🔴 <c>converter drift-check --complete</c> over the WHOLE COMMITTED CORPUS — <b>the third leg: does
+    /// the live project still match its own committed description?</b>
+    ///
+    /// <para><b>Not a new capability — the same pair as <see cref="DriftCheck"/> asking a different
+    /// question, over a different population.</b> This repo has exactly one self-firing mechanism
+    /// (<c>hooks/pre-commit</c>) and no CI, so "run this periodically" has never had anywhere to live. A
+    /// step that runs whenever Portal is already held is the closest thing to a schedule available, and
+    /// inventing a scheduler to do better would be a larger and less honest change.</para>
+    ///
+    /// <para><c>--complete</c> declares the exports dir the whole picture, so an object in the project
+    /// that NO committed <c>.ir</c> describes is a finding rather than a silence. That is why it must not
+    /// be pointed at the lane union, which is a subset of a ~119-object project and would report a
+    /// hundred spurious findings — see <see cref="DriftCheck"/>'s note.</para>
+    ///
+    /// <para>⚠️ <b>MEANINGFUL FOR THE REFERENCE PROJECT AND NOT FOR A LIVE JOB.</b> A live job has no
+    /// committed corpus to point <c>--project</c> at, so this step cannot exist there — and a step that
+    /// cannot exist must never read like one that passed. Its absence is a NOTICE on the plan, in these
+    /// words, for the same reason <see cref="DriftCheck"/>'s scope line exists.</para>
+    /// </summary>
+    WholeCorpusDrift,
+
     /// <summary><c>harness-run --generate-only --emit</c>: the merged copy layer, from the merged binding.</summary>
     Generate,
 
     /// <summary>A Portal or download step, planned by <see cref="DeploymentPlan"/>.</summary>
     Deploy,
+
+    /// <summary>
+    /// 🔴 <c>harness-mirror-read --declared-registers &lt;DERIVED&gt;</c> — <b>the width the PROGRAM
+    /// declares, asked of the CONTROLLER.</b>
+    ///
+    /// <para><b>The comparison is not new; the wiring is.</b> <c>served-area</c> derives the Modbus window
+    /// from the program corpus and prints, on every run, that it cannot see whether the block it read is
+    /// the block on the controller. <c>harness-mirror-read</c>'s whole contract is the other half:
+    /// <c>--declared-registers</c> is required and deliberately not defaulted because <i>"it is the CLAIM
+    /// under test and it comes from the IR"</i>, and its exit codes are the verdict — 0 exactly as wide,
+    /// 6 NARROWER, 7 wider, 4 measured nothing. Feeding it the DERIVED number instead of a hand-typed one
+    /// makes those codes the derived-vs-probed verdict.</para>
+    ///
+    /// <para><b>THE DERIVED VALUE, NEVER THE AUTHORED ONE.</b> The authored <c>declaredRegisters</c> is
+    /// the field the derivation exists to check; feeding that back would have the run compare a number
+    /// against itself and pass. Emitted only on the <c>Derived == true</c> path for the same reason.</para>
+    ///
+    /// <para>🔴 <b>BETWEEN <see cref="Deploy"/> AND THE FIRST <see cref="Wave"/>, AND NOWHERE ELSE.</b>
+    /// <c>MB_SERVER</c> accepts ONE connection per instance — with a viewer attached, a conformance wave
+    /// once reported 0 of 22 vectors attempted — so this step is strictly sequential with the waves. And
+    /// it must follow the download, because the width it is asking about is the one just deployed.</para>
+    ///
+    /// <para>⚠️ <b>WHAT IT STILL CANNOT SEE.</b> Only the area the device can be ASKED about: a register
+    /// that answers is reachable, which is not the same as correct, and nothing here says the mirror's
+    /// CONTENTS are what the map intends. It also cannot see an occupant of the area — that is the
+    /// neighbour derivation's question, and it is answered against the corpus, not the CPU.</para>
+    /// </summary>
+    MirrorWidth,
 
     /// <summary><c>harness-run --verify</c> for ONE lane, against the shared map.</summary>
     Wave,
@@ -105,11 +167,53 @@ public sealed record BatchRunOptions(
     string? UnionIrDirectory = null,
 
     /// <summary>Where the project's own objects are exported to, for the drift check.</summary>
-    string? ProjectExportDirectory = null);
+    string? ProjectExportDirectory = null,
+
+    /// <summary>
+    /// 🔴 <c>harness-mirror-read</c>. <b>Null plans no width comparison, and the plan SAYS so</b> — the
+    /// absence of a check must not be reachable by omitting an argument, which is exactly how the drift
+    /// pair could once be dropped without a line in the report.
+    /// </summary>
+    string? MirrorReadExe = null,
+
+    /// <summary>
+    /// The WHOLE committed corpus (e.g. <c>ir/test-project001/</c>) for the third leg — not the lane
+    /// union. <b>Null on a live job by construction</b>: there is no committed corpus there, which is a
+    /// scope fact and not a configuration mistake, and the plan says which of the two it is.
+    /// </summary>
+    string? CommittedCorpusDirectory = null,
+
+    /// <summary>
+    /// Where the whole-project export (<c>--tagtables</c>) goes. <b>Its own directory</b>: see the
+    /// refusal in <see cref="BatchRunPlan.For"/> — a <c>--complete</c> comparison against a directory
+    /// another step also writes into cannot state what its denominator was.
+    /// </summary>
+    string? WholeCorpusExportDirectory = null);
 
 /// <summary>The ordered steps of one batch run, or every reason there are none.</summary>
-public sealed record BatchRunPlan(IReadOnlyList<BatchStep> Steps, IReadOnlyList<string> Refusals)
+/// <param name="Notices">
+/// 🔴 <b>THE CHECKS THIS PLAN DOES NOT CONTAIN, AND WHY — in their own words.</b>
+///
+/// <para>Not refusals: a refusal empties the plan, and none of these is a reason to refuse. They are the
+/// third state, and it is the one that looks most like a pass. A step that is simply absent is
+/// indistinguishable from one that ran and found nothing — measured here already, where the export/drift
+/// pair could be dropped by omitting <c>--staging</c> and the report was identical to a run that had
+/// passed it.</para>
+///
+/// <para>⚠️ <b>They are only worth anything if a caller PRINTS them.</b> A notice nobody renders is the
+/// silence it was written to replace.</para>
+/// </param>
+public sealed record BatchRunPlan(
+    IReadOnlyList<BatchStep> Steps,
+    IReadOnlyList<string> Refusals,
+    IReadOnlyList<string> Notices)
 {
+    /// <summary>A plan with nothing to declare. Kept so every existing construction site still reads.</summary>
+    public BatchRunPlan(IReadOnlyList<BatchStep> steps, IReadOnlyList<string> refusals)
+        : this(steps, refusals, Array.Empty<string>())
+    {
+    }
+
     public bool Planned => Refusals.Count == 0 && Steps.Count > 0;
 
     /// <summary>The steps that must run even after a failure above them.</summary>
@@ -158,10 +262,32 @@ public sealed record BatchRunPlan(IReadOnlyList<BatchStep> Steps, IReadOnlyList<
                 + "still looking evidence-based.");
         }
 
+        // 🔴 THE TWO EXPORT DIRECTORIES MUST BE DIFFERENT, AND SHARING ONE IS REFUSED RATHER THAN COPED
+        // WITH. The union export is taken deliberately WITHOUT --tagtables and the whole-corpus one WITH
+        // it, so one directory would hold two different pictures written by two steps — and `--complete`
+        // means "this directory IS the whole project". A comparison that cannot say what its denominator
+        // was is the exact failure `--complete` exists to remove, so it is refused at planning time
+        // instead of producing a report nobody can read.
+        if (!string.IsNullOrWhiteSpace(options.WholeCorpusExportDirectory)
+            && !string.IsNullOrWhiteSpace(options.ProjectExportDirectory)
+            && string.Equals(Path.TrimEndingDirectorySeparator(options.WholeCorpusExportDirectory!),
+                Path.TrimEndingDirectorySeparator(options.ProjectExportDirectory!), StringComparison.OrdinalIgnoreCase))
+        {
+            refusals.Add("--whole-corpus-exports and the union's export directory are the same path ("
+                + options.WholeCorpusExportDirectory + "). They hold different pictures — the union export omits "
+                + "--tagtables and the whole-corpus one requires it — and `drift-check --complete` declares its "
+                + "exports directory to BE the whole project. Sharing one makes the complete run's denominator "
+                + "unstatable, which is the only thing it is for. Point them at different directories.");
+        }
+
         if (refusals.Count > 0)
             return new BatchRunPlan(Array.Empty<BatchStep>(), refusals);
 
         var steps = new List<BatchStep>();
+
+        // What this plan does NOT check, and why. Populated beside each decision rather than collected at
+        // the end, so a check that stops being emitted cannot stop being explained in the same edit.
+        var notices = new List<string>();
 
         // ---- 1. THE GATES, BEFORE ANYTHING ELSE. ------------------------------------------------
         //
@@ -234,6 +360,53 @@ public sealed record BatchRunPlan(IReadOnlyList<BatchStep> Steps, IReadOnlyList<
                 "every object the lanes supplied must match the project - the stamp claims it is what executes"));
         }
 
+        // ---- 2b. THE THIRD LEG: DOES THE LIVE PROJECT STILL MATCH ITS OWN COMMITTED DESCRIPTION? ----
+        //
+        // Same two commands as the pair above, a different question, and a different population. The pair
+        // above asks about the objects THE LANES SUPPLIED and is the precondition for the build stamp
+        // meaning anything. This one asks about EVERY object in the project, against the whole committed
+        // corpus, with `--complete` — so an object in the project that no committed .ir describes is a
+        // finding rather than a silence.
+        //
+        // 🔴 IT RUNS HERE BECAUSE THIS IS WHERE PORTAL IS ALREADY HELD. There is no scheduler in this
+        // repo — one self-firing mechanism (hooks/pre-commit), no CI, no timed hooks — and inventing one
+        // would be a bigger change than the check. A step under an existing lease is the closest thing to
+        // a schedule available, and it costs no rig time: it is before the deployment, so it never sits
+        // between the download and the waves.
+        //
+        // ⚠️ AND IT IS SCOPED HONESTLY. A live job has no committed corpus, so on one this pair is absent
+        // — stated as a NOTICE, because a step that cannot exist must not read like one that passed.
+        if (!string.IsNullOrWhiteSpace(options.CommittedCorpusDirectory)
+            && !string.IsNullOrWhiteSpace(options.WholeCorpusExportDirectory))
+        {
+            steps.Add(new BatchStep(
+                BatchStepKind.WholeCorpusExport,
+                options.OpennessCliExe,
+                new[] { "export-all", options.PortalProject, "--out", options.WholeCorpusExportDirectory!, "--tagtables" },
+                "export the WHOLE project INCLUDING tag tables - HarnessMirror is where the register map lives, and "
+                + "without --tagtables it pairs with nothing and comes back SKIPPED"));
+
+            steps.Add(new BatchStep(
+                BatchStepKind.WholeCorpusDrift,
+                options.ConverterExe,
+                new[] { "drift-check", "--project", options.CommittedCorpusDirectory!, "--exports", options.WholeCorpusExportDirectory!, "--complete" },
+                "THE THIRD LEG: the whole committed corpus against the whole project, --complete, so an object in the "
+                + "project that no .ir describes is NAMED rather than passed over. Meaningful for the reference project "
+                + "only - a live job has no committed corpus"));
+        }
+        else
+        {
+            notices.Add("THE LIVE PROJECT WAS NOT COMPARED AGAINST THE WHOLE COMMITTED CORPUS (the third leg). "
+                + (string.IsNullOrWhiteSpace(options.CommittedCorpusDirectory)
+                    ? "No committed corpus was supplied to point --project at. On a live job that is CORRECT AND PERMANENT: "
+                      + "there is no committed corpus, so this leg cannot exist there and its absence is a scope fact, not a "
+                      + "configuration mistake. On the reference project it means somebody omitted an argument."
+                    : "No directory was supplied for the whole-project export, so there was nowhere to take the "
+                      + "--tagtables dump this comparison reads.")
+                + " The union pair above, where it ran, compared only what the lanes SUPPLIED - it says nothing about the "
+                + "rest of the project.");
+        }
+
         var generatorLane = lanes[0];
         var generateArgs = new List<string>
         {
@@ -264,6 +437,86 @@ public sealed record BatchRunPlan(IReadOnlyList<BatchStep> Steps, IReadOnlyList<
             "<deployment>",
             Array.Empty<string>(),
             "import-all, layout re-assert, compile-all, sanity-check and download — planned by DeploymentPlan over the staged IR"));
+
+        // ---- 3a. IS THE AREA ON THE DEVICE AS WIDE AS THE PROGRAM SAYS? -------------------------
+        //
+        // 🔴 THE DERIVED WIDTH, NEVER THE AUTHORED ONE. `served-area` reads the window off the program
+        // corpus and says, on every run, that it cannot see whether the block it read is the block on the
+        // controller. `harness-mirror-read --declared-registers` is the other half of exactly that
+        // sentence, and it has existed whole since phase 2 — what was missing was a caller feeding it the
+        // DERIVED number. Handing it the authored `declaredRegisters` would have the tool agree with the
+        // binding, which is the comparison the derivation exists to replace.
+        //
+        // 🔴 HERE AND NOWHERE ELSE. MB_SERVER accepts ONE connection per instance — with a second client
+        // attached, a conformance wave once reported 0 of 22 vectors attempted — so this is strictly
+        // sequential with the waves. And it must follow the download, because the width under test is the
+        // one just deployed.
+        //
+        // A download stops the CPU, so this step meets a just-restarted scan counter and exit 8 is
+        // reachable. It is NOT a width verdict, and the answer is the wave's own: ASK AGAIN, N times, and
+        // report how many attempts it took — a measurement of the settling rather than a guess at it. The
+        // same two numbers, so one transient is not described by two policies.
+        //
+        // No new transport, no second allowlist: "a second client with its own settings would be an
+        // uncalibrated one."
+        if (batch.ServedArea is { Derived: true } servedWidth && !string.IsNullOrWhiteSpace(options.MirrorReadExe))
+        {
+            var widthArguments = new List<string>
+            {
+                "--address", options.RigAddress,
+                "--port", options.RigPort.ToString(),
+                "--unit", options.RigUnit.ToString(),
+                "--declared-registers", servedWidth.Registers.ToString(),
+            };
+
+            if (!string.IsNullOrWhiteSpace(options.DeviceAllowlistPath))
+            {
+                widthArguments.Add("--allowlist");
+                widthArguments.Add(options.DeviceAllowlistPath);
+            }
+
+            // Seconds on the wave's flag, milliseconds on this one — converted here, once, rather than
+            // giving one transient two units to be wrong in.
+            widthArguments.Add("--scan-retry");
+            widthArguments.Add(options.InertRetries.ToString());
+            widthArguments.Add("--scan-retry-interval-ms");
+            widthArguments.Add((options.InertRetryIntervalSeconds * 1000).ToString());
+
+            // The verdict as an artifact, not as scrollback. A reviewer opens the staging directory weeks
+            // later; nobody opens a terminal that has closed.
+            //
+            // Only where there IS a staging directory: Path.Combine over an empty one yields the bare
+            // relative name, which would drop a mirror-width.json into whatever the working directory
+            // happened to be. A run with no artifact is worse than one with a misplaced file only if
+            // nobody says so, which is what the notice below is for.
+            if (!string.IsNullOrWhiteSpace(options.StagingDirectory))
+            {
+                widthArguments.Add("--out");
+                widthArguments.Add(Path.Combine(options.StagingDirectory, "mirror-width.json"));
+            }
+            else
+            {
+                notices.Add("THE WIDTH COMPARISON WILL LEAVE NO ARTIFACT: no staging directory was given, so the verdict "
+                    + "exists only as console output and an exit code. The comparison still runs and still gates.");
+            }
+
+            steps.Add(new BatchStep(
+                BatchStepKind.MirrorWidth,
+                options.MirrorReadExe!,
+                widthArguments,
+                $"the DERIVED width ({servedWidth.Registers} register(s)) asked of the CONTROLLER, from both sides - "
+                + "exit 6 is NARROWER than the program declares and stops the batch"));
+        }
+        else
+        {
+            notices.Add("THE DERIVED WIDTH WAS NOT COMPARED AGAINST THE DEVICE. "
+                + (batch.ServedArea is { Derived: true }
+                    ? "No harness-mirror-read binary was supplied, so there was nothing to ask the controller with."
+                    : "No width was derived from the program corpus, so there is no claim to test: "
+                      + (batch.ServedArea?.Denominator ?? "the planner was given no served-area fact at all."))
+                + " Every register figure this run rests on therefore comes from the STAGED CORPUS, which cannot see "
+                + "whether the block it was read from is the block on the controller.");
+        }
 
         // ---- 4. ONE WAVE PER LANE, against the shared map. --------------------------------------
         //
@@ -342,7 +595,7 @@ public sealed record BatchRunPlan(IReadOnlyList<BatchStep> Steps, IReadOnlyList<
         steps.Add(Lease(options, "release", "rig:" + options.RigAddress, withEvidence: false));
         steps.Add(Lease(options, "release", "portal:" + options.PortalProject, withEvidence: false));
 
-        return new BatchRunPlan(steps, Array.Empty<string>());
+        return new BatchRunPlan(steps, Array.Empty<string>(), notices);
     }
 
     /// <summary>

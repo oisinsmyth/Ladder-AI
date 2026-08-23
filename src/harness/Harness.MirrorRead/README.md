@@ -145,6 +145,67 @@ conclude, plausibly, against a width nobody stated.
 | `--boundary-from` | `n-3` |
 | `--boundary-to` | `n+1` |
 | `--interval-ms` | `3000` — the gap between the two control reads |
+| `--scan-retry` | `0` — extra whole measurements, **and only on exit 8** |
+| `--scan-retry-interval-ms` | `5000` |
+| `--out <path>` | none — write the JSON report there |
+| `--json` | off — report on stdout, prose transcript on stderr |
+
+## The JSON report (`--out`, `--json`)
+
+Until 2026-08-23 the only structured output of this tool was its **exit code**: the width, the
+denominator, the probe outcomes and every finding reached a reader as console prose and reached a
+*caller* not at all. That was survivable while a person typed the width in. It stopped being
+survivable when `harness-batch` began feeding it a **derived** width (`BatchStepKind.MirrorWidth`) —
+the verdict is then evidence about a deployment, and evidence that lives in scrollback is evidence
+nobody can cite.
+
+```jsonc
+{
+  "target": { "address": "10.10.10.10", "port": 503, "unit": 1 },
+  "declaredRegisters": 576, "lastDeclaredRegister": 575,
+  "exit": 0, "exitName": "Ok",
+  "widthVerdict": "ExactlyAsDeclared",   // | NarrowerThanDeclared | WiderThanDeclared | NotEstablished
+  "measured": true,                      // the run opened a session and took readings
+  "attempts": 1,                         // >1 only ever means the scan counter had not started yet
+  "examined": { "registersReadWhole": 576, "pages": 5, "boundaryProbes": 5,
+                "boundaryFrom": 573, "boundaryTo": 577 },
+  "probes":  [ { "register": 575, "declared": true,  "outcome": "Ok",              "exceptionCode": null },
+               { "register": 576, "declared": false, "outcome": "RefusedByServer", "exceptionCode": 2 } ],
+  "control": { "first":  { "ok": true, "buildStamp": "16#95D8731D", "scanCounter": 41221 },
+               "second": { "ok": true, "buildStamp": "16#95D8731D", "scanCounter": 41341 },
+               "measuredIntervalMs": 3012, "scanAdvance": 120 },
+  "findings": [],
+  "notSeen":  [ "REACHABILITY, NOT CORRECTNESS: …", "NOT WHETHER THE CLAIM IS THE RIGHT CLAIM: …", … ]
+}
+```
+
+**Three properties of the shape, each there for one reason.**
+
+- 🔴 **A run that measured nothing still writes a report**, with `"measured": false`, `"widthVerdict":
+  "NotEstablished"` and **zeroes in `examined`**. A consumer that found no file could not tell a
+  refusal from a run nobody started, and those are already the two states hardest to tell apart. The
+  only exception is a refusal raised *before* there is a target to describe (no `--address`), which
+  says so on stderr.
+- **`examined` is present on every run, including the zero case** — the same rule as `drift-check`'s
+  `COMPARED:` line. Every other number in the document is a conclusion; this is the one that says how
+  much was looked at.
+- **`notSeen` travels with the verdict.** A caveat kept in this README is a caveat the artifact does
+  not have.
+
+`--json` puts the document on **stdout** and the prose transcript on **stderr** — neither is
+discarded, because the transcript is what a person reads when a verdict is surprising.
+
+## The one retry, and the one code it covers
+
+A download **stops the CPU**, so a run placed straight after one meets a scan counter that has not
+started again yet: **exit 8**, which is a liveness fact and not a width verdict, and which clears by
+itself. `--scan-retry` takes the whole measurement again, up to *n* extra times, and **reports the
+attempt count** — the same shape as the wave's inert-retry, which replaced a blind 15 s wait that was
+measured to be too short. One transient, one policy.
+
+🔴 **Nothing else is retried.** A narrower or wider area is a **conclusion**, and re-rolling a
+conclusion until it changes turns a check into a random number generator. Default `0`: a tool run by
+hand should report a stall on its first reading, not after a minute of quietly asking again.
 
 ## Exit codes
 

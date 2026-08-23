@@ -84,6 +84,7 @@ public static class BatchCli
         string? merged = null, staging = null, leases = null, holder = null, portalProject = null;
         string? portalEvidence = null, rig = null, converterExe = null, harnessRunExe = null, allowlist = null;
         string? opennessCliExe = null, manifest = null, neighboursMode = null;
+        string? mirrorReadExe = null, committedCorpus = null;
         int holderPid = 0, rigPort = 503, rigUnit = 1, ttlMinutes = 60;
         var settleSeconds = -1;   // -1 = not stated, use the default
         string? attestation = null;
@@ -120,6 +121,13 @@ public static class BatchCli
                 case "--neighbours": neighboursMode = Next(args, ref i); break;
                 case "--harness-run": harnessRunExe = Next(args, ref i); break;
                 case "--openness-cli": opennessCliExe = Next(args, ref i); break;
+                case "--mirror-read": mirrorReadExe = Next(args, ref i); break;
+
+                // The COMMITTED corpus, for the whole-project third leg — deliberately not the lane
+                // union, which is a subset and would report every unsupplied object as export-only.
+                // Absent on a live job, where no committed corpus exists; the plan says so rather than
+                // letting the step's absence read as a pass.
+                case "--corpus": committedCorpus = Next(args, ref i); break;
                 case "--allowlist": allowlist = Next(args, ref i); break;
                 // Read by Program.cs, which builds the gateway and generates the copy layer in-process.
                 // They still have to be ACCEPTED here or the parser's unknown-argument arm rejects them —
@@ -213,7 +221,7 @@ public static class BatchCli
             _ => Run(store, output, readFile, runner, deploy, new RunArgs(
                 merged, staging, leases, holder, holderPid, portalProject, portalEvidence,
                 rig, rigPort, rigUnit, converterExe, harnessRunExe, allowlist, ttlMinutes, confirmed, attestation,
-                settleSeconds, opennessCliExe, neighbours)),
+                settleSeconds, opennessCliExe, neighbours, mirrorReadExe, committedCorpus)),
         };
     }
 
@@ -221,7 +229,8 @@ public static class BatchCli
         string? Merged, string? Staging, string? Leases, string? Holder, int HolderPid,
         string? PortalProject, string? PortalEvidence, string? Rig, int RigPort, int RigUnit,
         string? ConverterExe, string? HarnessRunExe, string? Allowlist, int TtlMinutes, bool Confirmed,
-        string? PortalAttestation, int SettleSeconds, string? OpennessCliExe, NeighbourMode Neighbours);
+        string? PortalAttestation, int SettleSeconds, string? OpennessCliExe, NeighbourMode Neighbours,
+        string? MirrorReadExe, string? CommittedCorpus);
 
     /// <summary>
     /// 🔴 <b>WHO ELSE IS IN THE AREA — derived, declined by the one named escape, or never asked.</b>
@@ -457,7 +466,13 @@ public static class BatchCli
             RigUnit: args.RigUnit,
             DeviceAllowlistPath: args.Allowlist,
             LeaseTtlMinutes: args.TtlMinutes,
-            PortalAttestation: args.PortalAttestation);
+            PortalAttestation: args.PortalAttestation,
+
+            // Defaulted like the other three invokes. Without a binary the width step is ABSENT, and
+            // its absence is a Notice rather than a silence - the derived width simply goes unchecked
+            // against the device, which is where every batch before this one already stood.
+            MirrorReadExe: args.MirrorReadExe ?? "harness-mirror-read",
+            CommittedCorpusDirectory: args.CommittedCorpus);
 
         var unionIr = MaterialiseUnionIr(batch.ProgramPaths, args.Staging, output);
 
@@ -573,6 +588,13 @@ public static class BatchCli
         {
             UnionIrDirectory = unionIr,
             ProjectExportDirectory = string.IsNullOrWhiteSpace(args.Staging) ? null : Path.Combine(args.Staging!, "project-xml"),
+
+            // 🔴 A DIFFERENT DIRECTORY FROM project-xml, AND THE PLANNER REFUSES IF THEY ARE THE SAME.
+            // The union export deliberately omits --tagtables and answers the PAIRED question; the
+            // whole-corpus export passes --tagtables and `--complete` declares its directory to BE the
+            // whole project. One directory serving both would make each answer a question about the
+            // other's contents.
+            WholeCorpusExportDirectory = string.IsNullOrWhiteSpace(args.Staging) ? null : Path.Combine(args.Staging!, "whole-project-xml"),
         });
 
         output.WriteLine($"lanes {lanes.Count}: {string.Join(", ", batch.LanesBatched)}");
@@ -583,6 +605,13 @@ public static class BatchCli
 
         foreach (var refusal in plan.Refusals)
             output.WriteLine($"  REFUSED  {refusal}");
+
+        // 🔴 A STEP THAT IS ABSENT MUST SAY SO. Without this loop the width comparison and the
+        // whole-corpus third leg simply do not appear in the plan, and a reader cannot tell a check
+        // that ran clean from one that was never emitted - which is the exact indistinguishability
+        // both steps exist to remove one level down.
+        foreach (var notice in plan.Notices)
+            output.WriteLine($"  NOT CHECKED  {notice}");
 
         output.WriteLine();
 

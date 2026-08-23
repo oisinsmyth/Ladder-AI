@@ -20,6 +20,22 @@ namespace Harness.MirrorRead;
 /// Gap between the two control reads. The scan counter is what proves the copy layer is executing
 /// rather than sitting in memory, and a difference is only evidence if time passed between the reads.
 /// </param>
+/// <param name="ScanRetries">
+/// 🔴 <b>How many EXTRA whole measurements to take when the scan counter has not moved — and nothing
+/// else.</b>
+///
+/// <para><b>Why it exists.</b> A download stops the CPU, so a run placed straight after one meets a
+/// counter that has not started again yet: exit 8, which is a liveness fact and not a width verdict.
+/// The wave already answers this exact transient by ASKING AGAIN rather than sleeping a guessed
+/// duration — the blind 15 s wait it replaced was measured to be too short — and it reports how many
+/// attempts it needed, which finally measures the settling instead of estimating it. This is the same
+/// mechanism so that one transient is not described by two policies.</para>
+///
+/// <para>🔴 <b>ONLY exit 8 is retried.</b> A narrower or wider area is a CONCLUSION, and re-rolling a
+/// conclusion until it changes turns a check into a random number generator. Zero by default: a tool
+/// run by hand should report a stall on its first reading, not after a minute of quietly asking again.</para>
+/// </param>
+/// <param name="ScanRetryIntervalMs">Gap between those attempts. Ignored when <paramref name="ScanRetries"/> is zero.</param>
 public sealed record MirrorReadOptions(
     string Address,
     int Port,
@@ -28,7 +44,9 @@ public sealed record MirrorReadOptions(
     int DeclaredRegisters,
     int BoundaryFrom,
     int BoundaryTo,
-    int IntervalMs)
+    int IntervalMs,
+    int ScanRetries = 0,
+    int ScanRetryIntervalMs = 5000)
 {
     /// <summary>Highest register the declared area contains.</summary>
     public int LastDeclaredRegister => DeclaredRegisters - 1;
@@ -81,6 +99,12 @@ public sealed record MirrorReadOptions(
 
             if (IntervalMs < 0)
                 refusals.Add($"--interval-ms {IntervalMs} is negative.");
+
+            if (ScanRetries < 0)
+                refusals.Add($"--scan-retry {ScanRetries} is negative. Zero means one attempt and no retry.");
+
+            if (ScanRetryIntervalMs < 0)
+                refusals.Add($"--scan-retry-interval-ms {ScanRetryIntervalMs} is negative.");
 
             return refusals;
         }

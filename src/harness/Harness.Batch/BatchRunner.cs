@@ -19,6 +19,17 @@ public enum BatchRunOutcome
     /// <summary>The deployment stopped before the download. No wave was attempted.</summary>
     NotDeployed,
 
+    /// <summary>
+    /// 🔴 <b>The deployment LOADED, and the area the device serves is NARROWER than the program
+    /// declares.</b> No wave was attempted.
+    ///
+    /// <para>Its own outcome rather than <see cref="NotDeployed"/>, which would be a false sentence: the
+    /// download happened and succeeded. Every one of these enum members ends up as the first words of the
+    /// headline, and "NOT DEPLOYED" would send a reader to re-download a device that is already carrying
+    /// the code.</para>
+    /// </summary>
+    WidthRefused,
+
     /// <summary>The plan itself was refused; no process was started.</summary>
     NotPlanned,
 }
@@ -131,6 +142,11 @@ public static class BatchRunner
         var settled = TimeSpan.Zero;
         var waveOutputs = new List<(string Lane, string? OutPath)>();
 
+        // Findings from steps that did NOT stop the run. They are on the headline because a non-Ok
+        // verdict a reader has to scroll to is one they will not meet at all — the same reasoning that
+        // put the settling summary there.
+        var caveats = new List<string>();
+
         foreach (var step in plan.Steps)
         {
             // Teardown is not part of the forward pass. It runs below, whatever happened here.
@@ -226,7 +242,60 @@ public static class BatchRunner
                 continue;
             }
 
-            outcome = step.Kind == BatchStepKind.LeaseAcquire ? BatchRunOutcome.GateRefused : BatchRunOutcome.NotDeployed;
+            // 🔴 THE ADVISORY STEPS: RECORDED LOUDLY, NEVER SILENT, AND THEY DO NOT SPEND THE RIG.
+            //
+            // *** THE RULE, AND IT IS THE WHOLE GATING DECISION IN ONE SENTENCE: the only thing that stops
+            // a batch here is a fact that makes the WAVES' READINGS WRONG. *** Everything else is
+            // reported and let through, because a gate that fires on facts outside its scope is one people
+            // learn to switch off, and switching this one off costs more than the findings it produces.
+            //
+            // Which side each lands on:
+            //
+            //   MirrorWidth exit 6, NARROWER than derived  -> NOT advisory. It is Failed, and it stops.
+            //     The map was allocated against the derived width, so a device serving fewer registers
+            //     makes every slot above the real edge invisible to the harness client — and the waves
+            //     would then report vector failures against the LOGIC when the cause is the window. That
+            //     is a confident wrong answer about the plant, and it is a SHARED precondition, which is
+            //     the class this loop already stops on.
+            //
+            //   MirrorWidth exit 7, WIDER than derived     -> advisory. Every register the harness reads
+            //     is INSIDE the derived area, so nothing a wave reads is invalidated. What it means is
+            //     that the occupancy analysis was done over a smaller area than the device exposes — a
+            //     real finding about the DERIVATION, worth three lines in a report and not three lanes of
+            //     rig time.
+            //
+            //   MirrorWidth exit 4, MEASURED NOTHING       -> advisory, and it may never be silent. A
+            //     measurement that did not happen must not read as one that passed: it is NotProven, it is
+            //     on the headline, and the width claim simply remains untested — which is exactly the
+            //     state every batch before this step was in.
+            //
+            //   MirrorWidth exit 8, counter not rising     -> advisory, and NOT a width verdict. The step
+            //     has already asked again (--scan-retry); a counter still flat after that is a liveness
+            //     fact, and the wave's own inert phase and version check judge liveness with far better
+            //     evidence than two control reads.
+            //
+            //   WholeCorpus*                               -> advisory in every outcome. Its population
+            //     includes objects NO LANE DEPLOYS, so a difference there says nothing about this
+            //     deployment's build stamp. The union pair above is the one that gates, and it still does.
+            var advisory = step.Kind is BatchStepKind.WholeCorpusExport or BatchStepKind.WholeCorpusDrift
+                || (step.Kind == BatchStepKind.MirrorWidth && verdict.Verdict != StepVerdict.Failed);
+
+            if (advisory)
+            {
+                caveats.Add($"[{step.Kind}] {verdict.Verdict.ToString().ToUpperInvariant()}: {verdict.Reason}");
+                continue;
+            }
+
+            outcome = step.Kind switch
+            {
+                BatchStepKind.LeaseAcquire => BatchRunOutcome.GateRefused,
+
+                // NOT NotDeployed: the download happened and succeeded, and a headline saying otherwise
+                // would send a reader to re-download a device that is already carrying the code.
+                BatchStepKind.MirrorWidth => BatchRunOutcome.WidthRefused,
+                _ => BatchRunOutcome.NotDeployed,
+            };
+
             stopReason = $"stopped at {step.Kind} ({verdict.Verdict}): {verdict.Reason}"
                 + Environment.NewLine + "  command: " + step.CommandLineText;
             break;
@@ -253,8 +322,24 @@ public static class BatchRunner
 
         return new BatchRunResult(outcome, executed, lanesRun, lanesNotRun, released,
             Headline(outcome, plan, lanesRun, lanesNotRun, released, stopReason, settled)
-                + Settling(waveOutputs, readFile), settled);
+                + Settling(waveOutputs, readFile)
+                + Caveats(caveats), settled);
     }
+
+    /// <summary>
+    /// 🔴 <b>The findings of steps that did not stop the run — on the headline, not buried in a list.</b>
+    ///
+    /// <para>Every one of these is a check that RAN and did not come back Ok. A batch whose headline says
+    /// "THE BATCH RAN" while a width comparison quietly measured nothing is the exact shape this
+    /// repository keeps having to retract: the reader met a green and the caveat was three screens away.
+    /// Nothing is summarised or counted here — the reasons are reproduced whole, because a count of
+    /// caveats is not a caveat.</para>
+    /// </summary>
+    private static string Caveats(IReadOnlyList<string> caveats) =>
+        caveats.Count == 0
+            ? string.Empty
+            : " ⚠️ " + caveats.Count + " CHECK(S) RAN AND DID NOT PASS, WITHOUT STOPPING THE RUN — "
+              + string.Join(" | ", caveats);
 
     /// <summary>Where a wave step was told to write its result, so the settling sample can be read back.</summary>
     private static string? OutPath(BatchStep step)
@@ -385,6 +470,78 @@ public static class BatchRunner
                     "the drift check could not run, so nothing was compared: " + LastLines(result.StandardError, result.StandardOutput)),
             },
 
+            // The whole-project export. Read exactly like ExportAll — same binary, same codes — but NO
+            // outcome of it stops the run: see the advisory block above. A third leg that could abort a
+            // rig batch would be a check people disable, and the union pair is the one that gates.
+            BatchStepKind.WholeCorpusExport => result.ExitCode switch
+            {
+                0 => new StepReading(StepVerdict.Ok, "the whole project, tag tables included, was exported."),
+                12 => new StepReading(StepVerdict.NotProven,
+                    "the whole-project export is INCOMPLETE, so the --complete comparison below would declare a partial "
+                    + "dump to BE the whole project and report every absent object as export-only: "
+                    + LastLines(result.StandardError, result.StandardOutput)),
+                _ => new StepReading(StepVerdict.NotProven,
+                    "the whole-project export failed, so the third leg compared nothing: "
+                    + LastLines(result.StandardError, result.StandardOutput)),
+            },
+
+            // 🔴 The third leg. Exit 1 is a REAL finding — a live object that has drifted from its
+            // committed .ir, or one the project has and no .ir describes — and it is reported in full and
+            // does not stop the batch. Its population includes objects no lane deploys, so it says
+            // nothing about THIS deployment's build stamp, which is the union pair's question.
+            BatchStepKind.WholeCorpusDrift => result.ExitCode switch
+            {
+                0 => new StepReading(StepVerdict.Ok, "every committed object matches the project, and the project holds nothing the corpus does not describe."),
+                1 => new StepReading(StepVerdict.NotProven,
+                    "THE LIVE PROJECT AND ITS COMMITTED DESCRIPTION DISAGREE (WHOLE-PROJECT, --complete). This does NOT "
+                    + "stop the batch - the disagreement may be in an object no lane deploys - and it is a real finding "
+                    + "about the repository that somebody owes an import or an export: "
+                    + LastLines(result.StandardError, result.StandardOutput)),
+                _ => new StepReading(StepVerdict.NotProven,
+                    "the whole-project comparison could not run, so the third leg examined nothing: "
+                    + LastLines(result.StandardError, result.StandardOutput)),
+            },
+
+            // 🔴 THE DERIVED WIDTH AGAINST THE CONTROLLER. Exit 6 is the ONE code here that stops the
+            // batch, and the argument for each of the others is in the advisory block above.
+            BatchStepKind.MirrorWidth => result.ExitCode switch
+            {
+                0 => new StepReading(StepVerdict.Ok,
+                    "the device serves EXACTLY the width the program declares - the declared registers answered and the "
+                    + "first register past the edge was refused BY THE SERVER, so the width is pinned from both sides."),
+
+                6 => new StepReading(StepVerdict.Failed,
+                    "*** THE AREA ON THE DEVICE IS NARROWER THAN THE PROGRAM DECLARES. *** The map was allocated against "
+                    + "the derived width, so every slot above the real edge is invisible to the harness client and the "
+                    + "waves would report vector failures against the LOGIC when the cause is the window. NO WAVE IS "
+                    + "RUN: " + LastLines(result.StandardError, result.StandardOutput)),
+
+                7 => new StepReading(StepVerdict.NotProven,
+                    "the device serves a WIDER area than the program declares. Nothing a wave reads is invalidated - "
+                    + "every register the harness touches is inside the derived area - but the occupancy analysis was "
+                    + "done over a smaller area than the device exposes, so an occupant could sit in the difference and "
+                    + "nothing looked there: " + LastLines(result.StandardError, result.StandardOutput)),
+
+                4 => new StepReading(StepVerdict.NotProven,
+                    "the width comparison MEASURED NOTHING, so the derived width is UNTESTED against the controller - "
+                    + "this run rests on the staged corpus exactly as every run before this step did. It is not a pass "
+                    + "and it is not a finding about the device: " + LastLines(result.StandardError, result.StandardOutput)),
+
+                8 => new StepReading(StepVerdict.NotProven,
+                    "the scan counter did not rise between the control reads, after the retries this step was given. "
+                    + "That is a liveness fact and NOT a width verdict: no conclusion about the area may rest on it, and "
+                    + "the wave's own inert phase and version check judge liveness on better evidence: "
+                    + LastLines(result.StandardError, result.StandardOutput)),
+
+                // 1 fence refused, 5 fence fault, 2 usage, 3 connect failed. Each is a different nothing
+                // and none is a verdict about the width, so each is reported as itself and none passes.
+                _ => new StepReading(StepVerdict.NotProven,
+                    $"the width comparison did not reach a verdict (exit {result.ExitCode}: 1 the fence refused the "
+                    + "target, 2 the arguments did not describe a measurement, 3 the session would not open, 5 the fence "
+                    + "itself threw). The derived width is UNTESTED against the controller: "
+                    + LastLines(result.StandardError, result.StandardOutput)),
+            },
+
             // harness-run: Generated == Ran == 0, deliberately.
             BatchStepKind.Generate or BatchStepKind.Wave => result.ExitCode == 0
                 ? new StepReading(StepVerdict.Ok, "ran.")
@@ -436,6 +593,9 @@ public static class BatchRunner
             BatchRunOutcome.Ran => "THE BATCH RAN",
             BatchRunOutcome.GateRefused => "THE GATE WAS REFUSED",
             BatchRunOutcome.NotDeployed => "NOT DEPLOYED",
+
+            // The download DID happen here, and saying otherwise would send a reader to repeat it.
+            BatchRunOutcome.WidthRefused => "DEPLOYED, AND THE SERVED AREA IS NARROWER THAN THE PROGRAM DECLARES",
             _ => "NOT PLANNED",
         });
 
