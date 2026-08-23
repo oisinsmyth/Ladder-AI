@@ -1,4 +1,5 @@
 using System.Text.Json.Nodes;
+using Harness.Map;
 
 namespace Harness.Results;
 
@@ -95,7 +96,115 @@ public static class ResultPackageJson
             // AMB-19. Null is "the question was never asked", which is a caveat rather than a pass, so it
             // is rendered as a state rather than left out.
             ["boundsCurrency"] = BoundsCurrency(package.BoundsCurrency),
+
+            // 🔴 WHAT THE STAMP WAS COMPUTED OVER, AND WHAT IT WAS NOT. `validityStamp.programVersion`
+            // above is a hash and cannot be inverted, so on its own it makes a claim nobody can reproduce
+            // or bound. This is both halves of the answer: the objects it hashed, and the staged corpus it
+            // is measured against.
+            ["programUnderTest"] = Program(package.Program),
         };
+    }
+
+    /// <summary>
+    /// 🔴 <b>THE STAMP'S INPUT SIDE AND ITS DENOMINATOR — measured twice, in two different ways.</b>
+    ///
+    /// <para><b>2026-08-21:</b> a wave that ran green could not be re-run, because nothing recorded which
+    /// program set its stamp came from. That put <c>objects</c> here.</para>
+    ///
+    /// <para><b><c>docs/18-project-workbench.md:821-829</c>:</b> the stamp was derived over 8 objects and
+    /// the parameter DB was not one of them, so <i>"compressing them changes the controller without
+    /// changing the stamp"</i> — two packages describing materially different programs, one stamp, and a
+    /// verifying gateway that would not notice. That puts <c>coverage</c> here.</para>
+    ///
+    /// <para><b>Three absences, three renderings, none of them an absent key.</b> <c>recorded: false</c> is
+    /// "no manifest was recorded for this result". <c>hashedNothing</c> with a null
+    /// <c>stagedCorpusSize</c> is "it hashed nothing and nothing said what it should have hashed".
+    /// <c>hashed: 0</c> against a stated <c>stagedCorpusSize</c> is the accusation: objects were staged and
+    /// the stamp covered NONE of them.</para>
+    /// </summary>
+    private static JsonObject Program(ProgramManifest? manifest)
+    {
+        if (manifest is null)
+        {
+            return new JsonObject
+            {
+                // NOT an absent key, and not an empty object list either: "nobody recorded it" and "it
+                // hashed nothing" are different facts and only the second says anything about a run.
+                ["recorded"] = false,
+                ["detail"] = "no program manifest was recorded for this result, so what the build stamp was computed over is unknown — this is NOT a claim that the stamp covered the deployment.",
+                ["coverage"] = null,
+            };
+        }
+
+        var objects = new JsonArray();
+        foreach (var o in manifest.Objects)
+            objects.Add(new JsonObject { ["kind"] = o.Kind, ["name"] = o.Name, ["sha256"] = o.Sha256 });
+
+        return new JsonObject
+        {
+            ["recorded"] = true,
+            ["stamp"] = $"16#{manifest.Stamp:X8}",
+            ["objectCount"] = manifest.Objects.Count,
+            ["hashedNothing"] = manifest.HashedNothing,
+            ["objects"] = objects,
+            ["excludedAsSelfReferential"] = Strings(manifest.ExcludedAsSelfReferential),
+            ["coverage"] = Coverage(manifest.Coverage),
+        };
+    }
+
+    /// <summary>
+    /// <b>Every count, on every run, including when it is zero.</b> <c>MirrorViewModel.RegistersStale</c>
+    /// makes the argument: a count that appears only when it is non-zero teaches a reader that its absence
+    /// means everything was covered — and then a run that counted nothing reads like a run that covered
+    /// everything.
+    /// </summary>
+    private static JsonNode? Coverage(StampCoverage? coverage)
+    {
+        if (coverage is null)
+            return null;
+
+        return new JsonObject
+        {
+            ["line"] = coverage.Line,
+            ["hashed"] = coverage.Hashed,
+
+            // Null is NO DENOMINATOR, never zero. An empty gap list underneath a null here is not a pass.
+            ["stagedCorpusSize"] = coverage.CorpusSize,
+            ["stagedCorpusStated"] = coverage.CorpusStated,
+            ["complete"] = coverage.Complete,
+
+            // Correct, and kept SEPARATE from the gap: hashing the block the stamp is rendered into would
+            // be circular, so these are not something anybody should go and close.
+            ["excludedAsSelfReferential"] = Strings(coverage.ExcludedAsSelfReferential),
+
+            // 🔴 The defect, named.
+            ["presentAndNotHashed"] = Strings(coverage.PresentAndNotHashed),
+
+            // The other direction: the stamp covers something no staged document names.
+            ["hashedNotInCorpus"] = Strings(coverage.HashedNotInCorpus),
+
+            // 🔴 In the artifact, not only in the source. A reader of the file is the person most likely to
+            // mistake this for coverage of the program.
+            ["residual"] = StampCoverage.DeviceResidual,
+        };
+    }
+
+    /// <summary>
+    /// A list of names as JSON strings.
+    ///
+    /// <para><c>JsonArray.Add(string)</c> binds to the GENERIC overload and boxes a
+    /// <c>JsonValueCustomized&lt;string&gt;</c>, which then throws on serialise for want of a
+    /// <c>TypeInfoResolver</c> — a renderer that builds a correct object and a serialiser that cannot
+    /// write it, which is exactly the split these tests go through a real serialise to catch.
+    /// <c>JsonValue.Create</c> produces the plain string node.</para>
+    /// </summary>
+    private static JsonArray Strings(IReadOnlyList<string> values)
+    {
+        var array = new JsonArray();
+        foreach (var value in values)
+            array.Add(JsonValue.Create(value));
+
+        return array;
     }
 
     private static JsonArray Assertions(IReadOnlyList<AssertionOutcome> assertions)

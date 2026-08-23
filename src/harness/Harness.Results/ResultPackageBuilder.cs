@@ -69,7 +69,14 @@ public static class ResultPackageBuilder
         IReadOnlyList<int>? coRunners,
         RegisterMap map,
         BuildStamp expectedBuild,
-        int slotsCoveredByOneRead)
+        int slotsCoveredByOneRead,
+
+        // 🔴 WHAT THE STAMP WAS COMPUTED OVER, AND WHAT IT WAS NOT. See ResultPackage.Program. Null is
+        // "no manifest was recorded", which is a different statement from a manifest reporting a gap, and
+        // it deliberately adds NO caveat: every package built before this parameter existed passes null,
+        // and a caveat that fires on all of them is a caveat nobody reads. The absence is stated in the
+        // artifact instead, as `programUnderTest.recorded: false`.
+        ProgramManifest? program = null)
     {
         ArgumentNullException.ThrowIfNull(declaration);
         ArgumentNullException.ThrowIfNull(enumerations);
@@ -108,13 +115,16 @@ public static class ResultPackageBuilder
             new ValidityStamp(
                 stimulus?.Version?.Observed ?? expectedBuild.Value,
                 map.MapHash,
-                Caveats(declaration, stimulus, slotsCoveredByOneRead)),
+                Caveats(declaration, stimulus, slotsCoveredByOneRead, program)),
             declaration.BoundsCurrency,
 
             // *** THE FLOOR COMES FROM THE REPORT THAT WAS ACTUALLY USED, never re-derived here. *** The
             // report is the only object that knows which floor its findings were taken against, so
             // reading it off anything else would reintroduce the second derivation this closes.
-            declaration.Observability?.FloorScans);
+            declaration.Observability?.FloorScans,
+
+            // The stamp's input side and its denominator, travelling with the outcome they qualify.
+            program);
     }
 
     /// <summary>
@@ -125,9 +135,30 @@ public static class ResultPackageBuilder
     /// PERFORMED. A result read one slot at a time does not rest on F-1's premise; one read out of a
     /// six-slot group does.</para>
     /// </summary>
-    private static IReadOnlyList<string> Caveats(VectorDeclaration declaration, StimulusEvidence? stimulus, int slotsCoveredByOneRead)
+    private static IReadOnlyList<string> Caveats(
+        VectorDeclaration declaration,
+        StimulusEvidence? stimulus,
+        int slotsCoveredByOneRead,
+        ProgramManifest? program)
     {
         var caveats = new List<string>();
+
+        // 🔴 *** A STAGED OBJECT THE STAMP DOES NOT COVER IS EXACTLY WHAT A CAVEAT IS: something this
+        // result's validity rests on that has NOT been measured. *** The validity stamp claims "a program
+        // hashing to this was executing"; an object outside the hash can change under it without moving
+        // it, which is how a changed controller kept an unchanged stamp (docs/18:821-829).
+        //
+        // Only when a manifest was supplied — see the `program` parameter. And the LINE is quoted rather
+        // than paraphrased, so the caveat carries the device residual with it and cannot be read as a
+        // statement about the whole program.
+        if (program?.Coverage is { } coverage && !coverage.Complete)
+        {
+            caveats.Add(
+                (coverage.CorpusStated
+                    ? "THE BUILD STAMP DOES NOT COVER EVERY STAGED OBJECT, so an object it omits can change the controller without moving the stamp. "
+                    : "NOTHING STATED WHAT SHOULD HAVE BEEN HASHED, so this result cannot say whether the stamp covered the deployment. ")
+                + coverage.Line);
+        }
 
         if (slotsCoveredByOneRead > 1)
         {

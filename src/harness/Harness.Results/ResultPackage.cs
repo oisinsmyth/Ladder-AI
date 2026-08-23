@@ -214,7 +214,29 @@ public sealed record ResultPackage(
     /// notice. Null means no observability report was supplied for this vector — which is a caveat, not a
     /// pass.</para>
     /// </summary>
-    double? ObservabilityFloorScans = null)
+    double? ObservabilityFloorScans = null,
+
+    /// <summary>
+    /// 🔴 <b>WHAT THE BUILD STAMP WAS COMPUTED OVER, <i>AND WHAT IT WAS NOT</i> — carried here because
+    /// this file is the artifact meant to OUTLIVE the run.</b>
+    ///
+    /// <para><see cref="ValidityStamp.ProgramVersion"/> says <i>a program hashing to this was executing</i>.
+    /// It cannot be inverted, so on its own it is unreproducible the moment the command line is gone —
+    /// measured 2026-08-21, when a wave that had run green could not be re-run. The manifest is the input
+    /// side of that same claim.</para>
+    ///
+    /// <para>*** AND THE MANIFEST ALONE WAS STILL SHORT OF THE POINT, MEASURED AGAIN AT
+    /// <c>docs/18-project-workbench.md:821-829</c>. *** It named the 8 objects hashed and never said how
+    /// many were STAGED — the parameter DB was staged and unhashed, so <i>"compressing them changes the
+    /// controller without changing the stamp"</i>, and two packages describing materially different
+    /// programs would carry the same one. <see cref="ProgramManifest.Coverage"/> is the denominator, and it
+    /// travels with the manifest rather than beside it so the two cannot be separated.</para>
+    ///
+    /// <para><b>Null is "no manifest was recorded for this result", which is not "the stamp covered
+    /// everything".</b> The artifact says which it is rather than leaving a consumer to read an absent key
+    /// as a clean sheet.</para>
+    /// </summary>
+    ProgramManifest? Program = null)
 {
     /// <summary>
     /// The verdict, in the one precedence that keeps each state meaning what it says.

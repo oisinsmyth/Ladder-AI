@@ -92,6 +92,45 @@ public readonly record struct BuildStamp(uint Value)
         CopyLayerNaming naming,
         IEnumerable<HarnessObject>? programUnderTest,
         out IReadOnlyList<string> excludedAsSelfReferential,
+        out ProgramManifest manifest) =>
+        Derive(map, bindings, naming, programUnderTest, null, out excludedAsSelfReferential, out manifest);
+
+    /// <summary>
+    /// 🔴 <b>THE DERIVATION, ALSO STATING WHAT IT DID <i>NOT</i> HASH.</b>
+    ///
+    /// <para>*** MEASURED, AND WRITTEN DOWN AT <c>docs/18-project-workbench.md:821-829</c>. *** The overload
+    /// above records the objects it hashed, and that was already the fix for one real failure. It never
+    /// stated the DENOMINATOR. The stamp on the last wave was derived over <b>8 objects</b> and the
+    /// parameter DB was not one of them, so <i>"compressing them changes the controller without changing
+    /// the stamp"</i> — two result packages describing materially different programs would carry the SAME
+    /// stamp, and the verifying gateway would not notice. <see cref="ProgramManifest.HashedNothing"/> told
+    /// the ZERO case apart; <b>nothing told the SHORT case apart</b>, and short is the case that happened.</para>
+    ///
+    /// <para>🔴 <b>THE CORPUS IS A DENOMINATOR, NOT AN INPUT — THE HASH IS BYTE-FOR-BYTE UNCHANGED BY IT.</b>
+    /// Nothing about which objects a lane STAGED is on the controller, so hashing it would move every stamp
+    /// already computed — including the literal compiled into the copy layer currently deployed — for no
+    /// fact on the device. <c>MirrorGeometry.cs:76-81</c> records the identical reasoning for why a
+    /// reservation is not a map-hash input. The canonical form below is not touched by this parameter and a
+    /// test asserts it.</para>
+    ///
+    /// <para><b>Where <paramref name="stagedCorpus"/> comes from.</b> The staged union and the lane
+    /// manifests — <c>Harness.Batch.LaneManifest</c>, which is DERIVED by whatever built the lane rather
+    /// than typed on a command line, and whose own docstring names this failure: <i>"a mistyped, stale or
+    /// short --program list produces a stamp describing a program nobody deployed"</i>. It arrives here as
+    /// plain names and source labels because <c>Harness.Map</c> holds no project references at all; the
+    /// caller does the projection.</para>
+    /// </summary>
+    /// <param name="stagedCorpus">
+    /// <i>m</i>. <b>Null means no corpus was supplied</b>, and that renders as NO DENOMINATOR — never as
+    /// zero, and never as a clean sheet. An EMPTY corpus is refused at construction for the same reason.
+    /// </param>
+    public static BuildStamp Derive(
+        RegisterMap map,
+        IReadOnlyList<SlotBinding> bindings,
+        CopyLayerNaming naming,
+        IEnumerable<HarnessObject>? programUnderTest,
+        StagedCorpus? stagedCorpus,
+        out IReadOnlyList<string> excludedAsSelfReferential,
         out ProgramManifest manifest)
     {
         ArgumentNullException.ThrowIfNull(map);
@@ -218,7 +257,20 @@ public readonly record struct BuildStamp(uint Value)
             if (word != 0)
             {
                 var stamp = new BuildStamp(word);
-                manifest = new ProgramManifest(hashed, selfReferential, stamp.Value);
+
+                // 🔴 Computed AFTER the loop and from the loop's own outputs, never from a second walk of
+                // `programUnderTest`: the coverage must be unable to disagree with the manifest beside it,
+                // which is the same argument the manifest itself is built in-loop for.
+                manifest = new ProgramManifest(
+                    hashed,
+                    selfReferential,
+                    stamp.Value,
+                    StampCoverage.Compute(
+                        hashed.Select(h => h.Name).ToArray(),
+                        selfReferential,
+                        naming,
+                        stagedCorpus));
+
                 return stamp;
             }
         }
@@ -263,7 +315,18 @@ public sealed record ProgramManifestEntry(string Kind, string Name, string Sha25
 public sealed record ProgramManifest(
     IReadOnlyList<ProgramManifestEntry> Objects,
     IReadOnlyList<string> ExcludedAsSelfReferential,
-    uint Stamp)
+    uint Stamp,
+
+    /// <summary>
+    /// 🔴 <b>WHAT IT DID <i>NOT</i> HASH — hashed <i>n</i> of <i>m</i>, with every unhashed staged object
+    /// named.</b> See <see cref="StampCoverage"/>: <see cref="HashedNothing"/> distinguished the ZERO case
+    /// and nothing distinguished the SHORT one, which is the case that was measured.
+    ///
+    /// <para><b>Null means an older manifest that predates the count</b> — not "coverage was complete".
+    /// Every manifest this class produces carries one, and where no corpus was supplied the coverage says
+    /// so in its own words rather than reporting a zero denominator.</para>
+    /// </summary>
+    StampCoverage? Coverage = null)
 {
     /// <summary>
     /// <b>An empty manifest is a real state and says so.</b> A run declaring no program under test
