@@ -39,7 +39,18 @@ import io, os, subprocess, sys
 # failed the gate. A gate that cries wolf on trivial edits is one people learn to bypass.
 # To raise one of these: do it in its own commit, and say in the message what earned it.
 BUDGETS = [
-    ("CLAUDE.md", 20480),
+    # Raised 20480 -> 20992 on 2026-08-23. Earned by ONE table row: `portal-close`, which
+    # TERMINATES Portal processes and was documented in no markdown file in the repository -
+    # `grep -rn "portal-close" --include=*.md .` returned zero hits on the day it shipped.
+    # This is the discovery case the gate's own text carves out. The index is where an agent
+    # learns a command EXISTS; one that does not appear there is one an agent cannot look up,
+    # and the failure mode is not ignorance but substitution - reaching for `taskkill` instead
+    # of a `--yes`-gated tool that refuses a process younger than five minutes. The row says
+    # it terminates, that it sweeps empty Portals BY DEFAULT, and that it has never been run.
+    # Three previous additions this week were trimmed away rather than raising this; that was
+    # right for those, and repeating it here would mean keeping a destructive command hidden
+    # to protect a number. 423 bytes of slack, above the documented 256-byte floor.
+    ("CLAUDE.md", 20992),
 
     (".claude/agents/assertion-enumerator.md", 5120),
     (".claude/agents/hmi-designer.md", 7680),
