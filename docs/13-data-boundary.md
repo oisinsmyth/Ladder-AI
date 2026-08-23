@@ -554,3 +554,20 @@ generic-looking and the benefit obvious.
   true — the permission was given in the main conversation and relayed. The finding was correct
   about what it could see and its underlying rule is the right one; this register entry is the
   durable record whose absence it was really objecting to.
+
+- **2026-08-23 — the stimulus-head shell generator, from job `JOB9004`. Permission granted for the
+  MECHANISM ONLY, and the owner's words were "keep it general".** A renderer in that job folder
+  turns a declared head spec into the fixed phase-shell networks of a stimulus FB. What is
+  permitted out is the **generator**: the shell's structure, its required refusals, and the shape
+  of a head spec. What stays in the job folder is **every input and every piece of evidence** —
+  the two existing head specs, the blocks they render, and the byte-for-byte verification that
+  measured the port. Those are job content and this permission does not reach them.
+  **The consequence is stated up front rather than discovered later:** the committed test corpus
+  is therefore an *invented* head, so a green committed suite is **not** evidence that the
+  generator reproduces a real one. That evidence exists only in the job folder and is re-run
+  there. A reader who forgets this will over-trust the suite, which is why the denominator is
+  written into the plan, the tests and the commit rather than left to be inferred.
+  🔴 **The failure mode this permission is most exposed to is not a copied block — it is
+  vocabulary.** A phase name, a cause-list member, an outcome bit or a watchdog comment carried
+  across as an "example" is a leak in exactly the shape the four recorded ones took: it arrives
+  inside something that feels like rigour. The generator must name nothing it did not invent.

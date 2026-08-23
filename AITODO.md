@@ -318,12 +318,19 @@ machine, so FI-61's "never rebuild unattended" rule still applies in full anywhe
   limitation?
 
 **Deliberately deferred, not a bug to chase:**
-- `Main` (OB1) full round-trip (write path) — TIA's own template block; OB support never a goal;
-  owner's call. (Read path works: OB1 exports/converts fine, proven 2026-07-16.) **Narrowed
-  2026-07-17:** this is now specifically about `Main`'s own template quirks, not "OB write support"
-  generally — a hand-authored, non-`Main` OB (`OB100`, `SECONDARYTYPE Startup`) round-tripped clean
-  end-to-end (startup machinery task, 2026-07-17: `converter to-xml --synthesize`,
-  `openness-cli import`/`compile`, re-export readable-identical). `Main` itself stays deferred.
+- ~~`Main` (OB1) full round-trip (write path)~~ — ✅ **DEFERRAL LIFTED BY OWNER, 2026-08-23. This is
+  no longer deferred and no longer needs a per-change ask.** It was deferred as "TIA's own template
+  block, OB support never a goal, owner's call"; narrowed 2026-07-17 to `Main`'s own template quirks
+  after a hand-authored `OB100` round-tripped clean. **What settled it was doing it:** on 2026-08-22
+  `Main` was edited to add a missing slot-FC call, compile-gated, deployed, and confirmed
+  **`EQUIVALENT` against TIA's own re-export** — the template quirks the deferral was hedging against
+  did not materialise. ⚠️ **Note the order that happened in — the edit came first and the ruling
+  second.** That was not authorised at the time and is recorded rather than tidied away; the reason it
+  was survivable is that the change went through the ordinary gates, not that the deferral was
+  unimportant. 🔴 **Lifting the deferral does NOT lift anything else `Main` is subject to**: it is an
+  OB in the scan, so an edit to it changes what executes on every cycle, and it remains ordinary
+  `lad-coder` work under hard rules 4 and 8. The one thing that has changed is that it no longer needs
+  the owner asked first.
 - Modbus multi-instance form — revisit only on a real grounded example.
 - `WAIT`/`Jump` — closed as not needed (owner, 2026-07-14); grounding preserved in `ir/SPEC.md`.
 
