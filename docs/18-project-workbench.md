@@ -307,6 +307,22 @@ line items** rather than as a promise — so that when it is missed, the table s
 
 ### 4.4 Pre-flight, and its honest limit
 
+🔴 **THIS SECTION IS ANNOTATED AS OF 2026-08-23 AND YOU SHOULD READ §5 PHASE 5 BEFORE ACTING ON IT.**
+Two things below are wrong, and one of them is the word *"roughly nothing"*.
+
+- **"Extending it" is not an extension.** `LadInterpreter.cs` implements MOVE, ADD and the coil family
+  only, resolves addresses in `%M` and nothing else, and has no notion of a DB, a UDT, an FB instance, a
+  timer or an interface parameter. A deliverable block uses all of those. Reaching it means an IR parser
+  plus LAD execution semantics written a **second** time — inside a solution that is dependency-free on
+  purpose.
+- **Three of the four catches listed are already covered**, by producers with names: unwired ports and
+  disarmed logic by `undriven-scan`, an unreachable step by `cross-check`'s `REACHABILITY:` line. Only
+  **a wrong comparison sense** is genuinely uncovered — and an interpreter catches that only *given a
+  vector and a plant model to run the block against*, which is not a pre-filter, it is an emulator.
+
+*The paragraph below is retained as written because the argument it makes about the LIMIT is still
+exactly right, and is the part worth keeping.*
+
 `Harness.Skeleton/LadInterpreter.cs` already executes generated IR text on the PC. Extending it to
 the block-under-test's IR subset would give a **seconds-long pass before the rig cycle**, catching
 the mechanical failures — unwired ports, a wrong comparison sense, an unreachable step — for
@@ -821,6 +837,21 @@ opinion.** That single sentence is why §3 is the most valuable part of this des
 
 ## 8. Change log
 
+- **v3 — 2026-08-23.** **PHASE 4 DELIVERED, AND REDEFINED FROM WHAT §5 ORIGINALLY SAID IT WAS.** The
+  "workbench spine" is argued down in this document's own terms and **4.4's `writes:` list is struck**
+  (§3.1 forbids a hand-authored derivable field, and `cross-check` / `reachable-state` already compute
+  it); 4.3 is re-homed with its producer in the assertion pipeline. What was built instead: **a lane is
+  now something the tool makes** — `SlotFcGenerator` and `StimShellGenerator` join the copy layer, a
+  lane's program set is an emitted manifest rather than a typed flag, `converter diff` matches networks
+  on content, and the batch compares its reachability walk against the converter's.
+  **Phase 5 redefined as "Pre-flight, measured"** — the original plan is annotated **not executable as
+  written** (§4.4, §5), because extending the harness's regex interpreter to real block IR means a
+  second IR parser in a deliberately dependency-free solution.
+  🔴 **Three status corrections, and the shape is the finding rather than any one of them:** the header
+  said *"Not adopted"* with four phases delivered inside it; §3.2's table said `Harness.Loop` was
+  *"built, never run"* while §5 of this same document recorded it running; and **this change log had
+  stopped at v2.5 while the header, §3.2, §4.4 and §5 were all materially rewritten** — a change log
+  that stops tracking its own document is §3.2's failure in miniature.
 - **v1 — 2026-08-21.** Owner's design recorded; eight problems raised; capability assessment.
 - **v2 — 2026-08-21.** All eight applied into the design itself. Added the ~20-minute budget (§4,
   measured lines marked) and the mechanised test stage (§3) — authored-vs-derived, `harness derive`,

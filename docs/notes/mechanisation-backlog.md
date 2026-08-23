@@ -22,6 +22,30 @@ not a list of things that feel tedious. Where a cost is quoted it was measured.
 
 ---
 
+## STATUS — added 2026-08-23, because this page had none and four items had already shipped
+
+🔴 **This backlog ran for six days with no status field at all.** Every one of its 21 items read as
+open, including the one marked **HIGHEST LEVERAGE**, which was built. Nobody was misled by a wrong
+status; they were misled by the *absence* of one — the page invited a reader to re-derive what was
+already done, and the item that genuinely was still open (**M-6**) sat in the same undifferentiated
+list as three that were not. **Leaving four closed items unmarked is what makes the fifth
+unfindable.**
+
+| item | status | evidence — a source line, not another document |
+|---|---|---|
+| **M-1** — one join report instead of four hand-backs | ✅ **DONE** | slot id → `Harness.Results/SlotJoin.cs`; vector targets → `Harness.Map/MirrorValueFit.cs` (`CheckAll`); `SignalJoin` took the settling role 2026-08-20 |
+| **M-6** — measure the scan time rather than assuming a band | ✅ **DONE 2026-08-23** | `Harness.Wire/ScanPeriodMeter.cs`, emitted as `scanPeriod` in the run JSON. ⚠️ It **measures and compares**; it does **not** replace `WireTiming.ScanPeriodMs`, and M-13 is why |
+| **M-8** — derive the assertion-bounds projection | ✅ **DONE** | `Harness.Results/BoundsCurrency.cs` |
+| **M-9** — settling per index, not only the wave's last | ✅ **DONE** | `Harness.Loop.Tests/SettlingEveryIndexTests.cs`; confirmed on the controller 2026-08-22, three vectors all `Settled` |
+| **M-11** — retentive `%M` extent | 🚫 **NOT MECHANISABLE** | no Openness path reads the PLC-tags retain setting; it needs a person in TIA. Recorded so it is not re-attempted |
+| everything else | **open** | — |
+
+⚠️ **The rule this establishes: an item here gets a status line in the same commit that closes it.**
+A backlog whose entries only ever get added is a backlog that stops being read — and this page's own
+trigger for an entry is *"this was found by luck"*, which is precisely what an unread page produces.
+
+---
+
 ## TIER 1 — the ones that paid for themselves the day they were found
 
 ### M-1. One join report instead of four hand-backs 🔴 HIGHEST LEVERAGE

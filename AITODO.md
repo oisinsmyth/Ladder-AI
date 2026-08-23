@@ -37,9 +37,21 @@ real jobs, which the suspension notice explicitly leaves running.
 - **Phase 3 — DELIVERED and run on the rig.** `converter lease` (a real lock, raced), the mirror's true
   576-register ceiling, `harness-batch`, link-loss survival. **Two lanes off one download, 3-of-3 PASS
   each, 402 s.**
-- **Phase 4 — IN PROGRESS.** W1 four silent omissions · W2 `converter diff` matches networks on content
-  · W3 `SlotFcGenerator` + lane manifest · W4 `StimShellGenerator` · W5 reachability parity · W6 stale
-  status lines (this edit). Plan: `.claude/plans/lets-the-crunch-this-linear-gosling.md`.
+- **Phase 4 — DELIVERED 2026-08-23**, `802327f`..`dd274fe`. W1 four silent omissions · W2 `converter diff`
+  matches networks on content · W3 `SlotFcGenerator` + lane manifest · W4 `StimShellGenerator` · W5
+  reachability parity · W6 stale status lines. Plan: `.claude/plans/lets-the-crunch-this-linear-gosling.md`.
+  ⚠️ **This line said "IN PROGRESS" for the length of one message after the last item was committed** —
+  which is the shape, not the duration, that matters here: the status was written when the work started
+  and nothing made closing it part of closing the work.
+- **THE BRANCH IS RECONCILED WITH `master`** (merge `4f9c428`, 0 behind). It had been 45 behind with
+  concurrent commits in **all three `Diff/*` and all three `CrossCheck/*` files** — the subsystems Phase 4
+  rewrote. Suites after: converter **1,539**, harness **2,438**, openness-cli **832**.
+- **Phase 5 — IN PROGRESS**, *"Pre-flight, measured"*. Done: **X3** the scan period (`c06aa05`), **X2**
+  the union check run over the union (`6777724`). Open: **X1** the five-bucket classification, **X2b** the
+  manifest's block-under-test role, **X4** the interpreter question, **X5** stale lines (this edit).
+  🔴 **Phase 5 redefined docs/18's own Phase 5**, which is not executable as written — extending the
+  harness's regex interpreter to real block IR means a second IR parser inside a deliberately
+  dependency-free solution. The measurement decides whether anything more is owed.
 - **Owner rulings recorded 2026-08-23** (commit `b7dc407`): `src/harness/` is PC-side tooling under hard
   rule 8; `Main`'s write-path deferral is LIFTED; the stimulus-shell generator may be ported,
   mechanism-only. Plus **FI-65: reading (b) — the integration/union compile is the gate — and the
@@ -70,6 +82,17 @@ subagents receive the cut file. The write path is where the READMEs are now load
 also what Phase 3's `evidence.json` contract was written for, so neither has been exercised in
 anger. That is the next validation worth doing; it needs Portal, a target defect and the compile
 gate.
+
+✅ **THE "NEEDS A PERSON AT THE MACHINE" HALF OF THIS ITEM IS NO LONGER TRUE — checked, not assumed,
+2026-08-23.** `openness-approve-build.ps1 -Status` shows the whitelist carries **136 entries** for
+`openness-cli.exe`, including auto-approved builds from other worktrees, and
+`OpennessCli.csproj:43–44` defaults `AutoApproveOpenness` to **true** with an `ApproveForOpenness`
+post-build target. **FI-74's setup has been run on this machine, so a rebuild self-approves and needs
+nobody.** A rebuild was performed unattended today and the binary connected.
+⚠️ **What remains true is the rest of the rule:** never rebuild the binary that *in-flight Portal work
+is running* — Debug and Release hold independent approvals, so the constraint is about which path is in
+use, not about rebuilding at all. **This decision no longer waits on scheduling a person; it waits only
+on somebody choosing to run the verification.**
 
 **OWNER DECISION WAITING (2026-08-10): five committed tooling fixes cannot be verified without a
 Release rebuild.** FI-63, FI-66, FI-68 and FI-70's `export-all` are built, unit-tested and committed,

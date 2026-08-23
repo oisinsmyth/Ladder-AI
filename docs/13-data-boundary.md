@@ -571,3 +571,25 @@ generic-looking and the benefit obvious.
   vocabulary.** A phase name, a cause-list member, an outcome bit or a watchdog comment carried
   across as an "example" is a leak in exactly the shape the four recorded ones took: it arrives
   inside something that feels like rigour. The generator must name nothing it did not invent.
+
+- **2026-08-23 — the pre-flight classification's COUNTS, from job `JOB9004`. Permission granted for
+  AGGREGATES ONLY.** Workbench Phase 5 asks a question that decides a phase: *would a PC-side
+  interpreter over the block-under-test's IR have caught the failures we actually had?* Answering it
+  means classifying two live-run corpora — the rig runs' result packages, and the job's numbered
+  problem register.
+  **What may be committed:** the **bucket counts**, the **names of the checks** a bucket-A row cites
+  (`preflight`, `undriven-scan`, C-410 and so on — repo vocabulary, not the job's), and the
+  **denominators** each count is out of.
+  **What stays in the job folder:** the per-defect row table. Every row's subject is rendered as an
+  **opaque id** wherever it is quoted outward, so a count can be checked against its denominator
+  without the subject travelling with it.
+  🔴 **The trap here is different from the generator's, and sharper: a bucket-B row has to say what
+  an interpreter would have NEEDED to catch it** — a vector, a plant model, timer semantics — and
+  that sentence is where a real signal name will try to get in, because naming it is the most
+  natural way to be precise. **Describe the SHAPE of what was needed, never the signal.** A
+  classification is a summary of a defect, and a summary specific enough to be useful is often
+  specific enough to identify.
+  ⚠️ **And the aggregate itself is a claim about the job's engineering, not just about our tooling.**
+  *"N defects in this plant's blocks would only have been caught on the rig"* is a sentence about a
+  site's equipment. It stays inside the tooling question it was asked for — whether to build an
+  interpreter — and is not repeated as a statement about the job.
