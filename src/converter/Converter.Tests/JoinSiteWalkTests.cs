@@ -263,6 +263,14 @@ public static class IlWalkScanner
     /// 2026-08-22: adding an unrelated feature made this test name two types as join sites, neither of
     /// which mentions the guarded type anywhere in its source.</para>
     ///
+    /// <para>🔴 <b>AND IT WAS MEASURED INDEPENDENTLY THE DAY BEFORE, ON A DIFFERENT EDIT, BY SOMEBODY WHO
+    /// DID NOT KNOW THIS WAS BEING WRITTEN.</b> 2026-08-21: an edit confined to <c>Converter.Diff</c>
+    /// turned the walk red naming <c>Converter.Digest.NetworkSignature</c> — a type whose source contains
+    /// no reference to the guarded type at all. Two people hit the same defect from two directions
+    /// within twenty-four hours and each wrote their own decoder; the branches were reconciled on
+    /// 2026-08-23 and this one was kept. <b>That is the strongest evidence in this comment</b>: the guard
+    /// was failing on metadata token layout — i.e. on luck — often enough to be found twice by accident.</para>
+    ///
     /// <para><b>Why that is worse than a nuisance.</b> The pressure a spurious red creates is to widen
     /// the allowlist, and the allowlist is the guard. An entry added for a coincidence would then mask a
     /// genuine join site written in that type later — the check would still be green and would no longer

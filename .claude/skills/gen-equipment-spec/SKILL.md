@@ -25,7 +25,7 @@ allowed-tools:
 
 Ladder-AI project. Third rung of the structured spec pipeline (A → B → C → D):
 A `gen-pid-analysis` → B `gen-functional-analysis` → **C this skill** → D `gen-code-structure`.
-Read `CLAUDE.md` first; its hard rules bind you.
+`CLAUDE.md` is already in your context — do not re-read it; its hard rules bind you.
 
 **Signals enter at this rung. Booleans and interface members do NOT.**
 

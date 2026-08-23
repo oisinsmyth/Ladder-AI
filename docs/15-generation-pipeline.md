@@ -33,6 +33,18 @@ The response: split generation into stages, each producing a small reviewable ar
 checked by an adversarial pass that cites written rules, with the engineer's sign-off at the two
 points where mistakes are cheapest to kill.
 
+## The 20% freeform threshold — what it is FOR (migrated from CLAUDE.md 2026-08-21)
+
+If more than ~20% of a request needs freeform (non-pattern) rungs, say so and get explicit go-ahead
+before writing them.
+
+**What the threshold is FOR (owner clarification, 2026-08-07):** it is a rough prompt to check you
+have not missed an already-solved problem *because a pattern's name did not match what you were
+looking for*. **It is not a cap on freeform.** Some projects genuinely need more, and that is fine;
+early-stage work on a thin library needs a lot.
+
+So the go-ahead is normally granted — **what is not optional is doing the check before asking.**
+
 ## The quality bar
 
 Generated LAD is prioritized, in order:

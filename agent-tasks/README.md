@@ -30,6 +30,33 @@ in-progress claim and picked a different task), and once on an *architecture dec
 interface-change sign-off got asked of the owner twice in two concurrent sessions and got two
 different answers, discovered only when the results were reconciled — see "Lessons learned" below).
 
+## The hand-back contract: `evidence.json`
+
+**A task that touched IR hands back `agent-tasks/<id>/evidence.json` alongside its prose report.**
+It carries the raw `--json` of `preflight`, `diff --only` and a compile gate, each with its exit
+code, plus a `converter ir-hash` for every file touched. Schema and field-by-field notes are in
+`.claude/agents/lad-coder.md`.
+
+The dispatcher verifies it with one command, which recomputes every hash itself:
+
+```
+python tools/check-agent-evidence.py agent-tasks/<id>/evidence.json
+```
+
+**Why this exists.** Hard rule 8 requires the dispatcher to verify the sub-agent's *actual* diff
+and compile evidence rather than its summary. Before this, that meant re-reading the work — the
+single largest source of the recheck-each-other cost, and the thing the 2026-08-21 context cut was
+about. An agent can write anything in a summary; it cannot write an `ir-hash` that survives being
+recomputed from the file on disk.
+
+**What a green from it does and does not license.** It says the gates ran, they passed, and the
+files are what the agent said they were. It says **nothing** about whether the logic is right —
+that is the reviewer's job and the engineer's, and an automated opinion there would be exactly the
+correlated check this project exists to avoid. Read it as "verified, now review", never as
+"reviewed".
+
+The evidence file is a hand-back artifact, not a permanent record: it goes when the task file goes.
+
 ## The shared-resource pattern: a Portal-backed scratch project
 
 Any TIA Portal scratch project is a genuine single-writer resource — CLAUDE.md's environment notes:
@@ -74,6 +101,26 @@ processes (CLAUDE.md's existing guidance) and check this table for a stale `in-p
 | Order | Task | Status | Claimed by | Portal? |
 |---|---|---|---|---|
 | 1 | S6 req#1 hopper-blockage-alarm — alarm-live integration (CALL in FC_ControlMain + annunciate in FC_AlarmsMain) | done | — | yes |
+| 2 | c603-n15 — C-603 fix, FB_ShredderSequencer NETWORK 15: import + compile gate against GenProject1 (test-project001) | done | — | yes |
+| 3 | c603-n14 — C-603 fix wave 2, FB_ShredderSequencer NETWORKs 14+15: import + compile gate against GenProject1 (test-project001) | done | — | yes |
+| 4 | c204-sweep - C-204 comment-only sweep, FB_ShredderSequencer NETWORKs 2/3/4/9/11/14/15 + block comment: import + compile gate against GenProject1 (test-project001) | done | — | yes |
+| 5 | c204-members - C-204 sweep completion, FB_ShredderSequencer INTERFACE MEMBER comments (lines 12/43/103): import + compile gate against GenProject1 (test-project001) | done | — | yes |
+<!-- Row 5: import + compile gate PASSED 2026-08-21. Three INTERFACE MEMBER comments repaired (IO, PusherModeForceOff, OvercurrentTripped); comment text only, zero logic lines and zero interface-shape change. THE BLOCKER FROM ROW 4 IS CONFIRMED GONE: with the Release converter carrying cd12753, `diff --only 1` gave HEADER changed: interface-comment / INVARIANCE OK / HEADER COMMENT CHANGED (does not gate) / UNCHANGED REMAINDER: 15 network(s), exit 0, interfaceChanged=false, interfaceCommentChanged=true, titleChanged=false, invarianceViolations=[]. --allow-header was NOT passed and was not needed. preflight CLEAN 0 findings; review UNCHECKED: 0, 0 findings. sanity-check run 2 healthy=true, BLOCKS 36 INCONSISTENT 0, TYPES 7 INCONSISTENT 0, station device compile Warning errors=0 warnings=1 (keyed on errors). Round trip re-export -> to-ir -> diff = 15/15 identical with NO header delta, and the three repaired member comments came back byte-identical, so TIA stored the comment text verbatim. block-layout READ before and after: Optimized both times, gated --expect Optimized exit 0 both; --set deliberately NOT run (unrequested, and this FB's IO member is RETAIN SETPOINT). Portal released; claim registry block-edit released. No download. simatic-ml/ deliberately not re-exported (ExportDriftDetectorTests pins this block). evidence.json GREEN (check-agent-evidence exit 0). Not committed. -->
+<!-- FOURTH OBSERVATION of the unexplained clearing, and this run narrows it: sanity-check run 1 exited 9 naming 4 dependents; the four per-block compiles that followed EACH reported "No block was compiled. All blocks are up-to-date." with errors=0 and consistentAfterCompile=true; sanity-check run 2 then reported INCONSISTENT: 0. Consistent with row 4's cheap hypothesis (sanity-check run 1 itself performs the station device compile, which clears them, so the per-block compiles that follow have nothing left to do). STILL NOT ASSERTED AS CAUSE - it has not been tested; the test is one sanity-check run with no per-block compile after it. -->
+<!-- Note on FB8's own per-block compile, which is NOT part of that pattern: it reported "Block was successfully compiled." (real work), while the four DEPENDENTS reported "No block was compiled." So the freshly-imported block does get compiled by its own --block call; it is only the cascade dependents that come back already up-to-date. -->
+<!-- Row 4: import + compile gate PASSED 2026-08-21. C-204 comment-only sweep, ZERO logic lines changed (every -/+ pair in converter diff shows the statements byte-identical). diff --only 2 3 4 9 11 14 15 exit 0, interfaceChanged false, titleChanged false, UNCHANGED REMAINDER 8 network(s) - non-empty, so not the NOTHING WAS PROVEN case; HEADER COMMENT CHANGED (does not gate) printed for the block comment; --allow-header never passed. sanity-check run 2 HEALTHY, BLOCKS 36 INCONSISTENT 0, TYPES 7 INCONSISTENT 0, station device compile Warning errors=0 warnings=1 (keyed on errors). Round trip re-export -> to-ir -> diff = 15/15 networks identical and no header delta, so TIA altered nothing. block-layout read BEFORE deciding: Optimized (third measurement today); --set Standard deliberately NOT run; gated --expect Optimized exit 0 after. Portal released. No download - the rig's deployed program diverges further. simatic-ml/ deliberately not re-exported (ExportDriftDetectorTests pins this block). evidence.json GREEN. Not committed. -->
+<!-- BLOCKER ROUTED, NOT WORKED AROUND: three C-204 breaches remain, ALL of them in INTERFACE MEMBER comments (line 12 C-115; line 43 C-601 + 'owner amendment 2026-07-16' + 'Deliberately NOT'; line 103 'rather than guessed at'). A member-comment edit is indistinguishable from a member RETYPE to converter diff: DiffRunner.InterfaceCanonical serializes the whole INTERFACE section including COMMENT text, so it sets interfaceChanged -> BehaviourBearingChange -> exit 1. Measured this run on a scratch copy: deleting '(C-115)' alone from line 12 gave INVARIANCE VIOLATION 'an INTERFACE member changed', exit 1, while the same edit to the BLOCK comment exited 0. This is the SAME taxonomy defect the 2026-08-14 narrowing fixed one level up, still open one level down. -->
+<!-- THIRD OBSERVATION of the unexplained clearing: sanity-check run 1 exited 9 naming 4 dependents; the four per-block compiles that followed EACH said 'No block was compiled. All blocks are up-to-date.'; run 2 reported INCONSISTENT 0. Mechanism still not asserted. Note for whoever owns it: sanity-check's own output carries a deviceCompiles[] entry, so run 1 enumerates consistency and THEN compiles - which would explain all three observations and is cheap to test. Not claimed as cause. -->
+<!-- Row 3: import + compile gate PASSED 2026-08-21 16:40. sanity-check OVERALL HEALTHY, BLOCKS 36 INCONSISTENT 0, TYPES 7 INCONSISTENT 0, station-scope device compile Warning errors=0 warnings=1 (keyed on errors). Round-trip proof added this run: re-export from TIA -> to-ir -> diff against the edited IR = 15/15 networks identical, so TIA altered nothing on import. block-layout read BEFORE the import: Optimized; --set Standard deliberately NOT run (unrequested change, and this FB's interface member is RETAIN SETPOINT); gated --expect Optimized exit 0 after. Portal released. No download - the rig's deployed program now diverges from the project. simatic-ml/ deliberately not re-exported (ExportDriftDetectorTests pins this block). Not committed. -->
+<!-- FINDING (second observation, same as row 2's): sanity-check run 1 exited 9 naming 5 inconsistent blocks and printed "a device compile does NOT clear these, and re-running sanity-check will not either." The five per-block compiles that followed EACH reported "No block was compiled. All blocks are up-to-date." with consistentAfterCompile=true, and sanity-check run 2 then reported INCONSISTENT: 0. So whatever cleared them, it was not those per-block compiles - the printed guidance line is now falsified twice by observation, on consecutive runs. Mechanism still unestablished; not asserting one. -->
+<!-- Portal-process note: 4 Siemens.Automation.Portal processes at claim time - 2 in-use (one holding GenProject1, launched by an earlier openness-cli run; one holding a DIFFERENT project, TestEnviroment, i.e. safe concurrently) and 2 OS-ONLY invisible to Openness. Every connect this run was prompt; nothing killed. -->
+<!-- openness-cli export UX note: `export --out <dir>` fails with exit 5 if the output directory ALREADY EXISTS ("Cannot export to the specified location because a directory with the name ... already exists"), and it writes the export as a FILE at that path, not a directory containing one. `mkdir -p` before exporting is exactly wrong. -->
+
+<!-- Row 2: import + compile gate PASSED 2026-08-21. sanity-check OVERALL HEALTHY, BLOCKS 36 INCONSISTENT 0, TYPES 7 INCONSISTENT 0, station-scope device compile Warning errors=0 warnings=1 (the healthy reading, keyed on errors). compile-all --force compiled 43 objects, 0 withErrors, 0 stillInconsistent. block-layout: block was Optimized BEFORE the import, so --set Standard was deliberately NOT run (it would introduce an unrequested change and destroys retained data on next download; this FB is RETAIN SETPOINT) - gated --expect Optimized exit 0 instead. Portal released. No download. simatic-ml/ deliberately not re-exported. Not committed. -->
+<!-- Portal-process note: the dispatch premise was five TIA Portal processes running with a ~15-minute connect-timeout risk. Measured at claim time: ZERO Siemens.Automation.Portal.exe processes. The seven Siemens processes present were background services (Help viewer, ETW tracing, telemetry connector, HMI runtime, SRM RDP utilities, TiaAdminNotifier), none of which holds the Openness token. Every connect in this run was prompt; no hang, no retry, nothing killed. -->
+<!-- FINDING for whoever owns openness-cli: sanity-check run 1 exited 9 naming 4 inconsistent blocks and printed "a device compile does NOT clear these, and re-running sanity-check will not either." compile-all immediately after examined NOTHING (exit 14, compiled 0, entries []). sanity-check run 2 then reported INCONSISTENT: 0. The mechanism is unestablished and deliberately not asserted, but that printed guidance line is falsified by observation. -->
+
+**Board is empty again — both rows above are closed. Delete rows and the `c603-n15` task folder once their outcomes are folded into the permanent docs, per this file's own "don't let finished tasks accumulate here."**
 <!-- Row 1: build + C-605 + F1/F2/S1 fix + alarm-live integration all DONE 2026-07-19/20. Integration: FC_ControlMain NW8/9 (wiring+CALL), FC_AlarmsMain NW10 (%X9 alarm); invariance diff --only exit 0 both; FC3+FC4 block compile 0 errors. Alarm live in scan. Stop demand unwired (owner scope, documented later step). Not committed (coordinator handles). -->
 
 **Parallel-safe (no Portal, no queue position — work anytime, alongside anything above):**

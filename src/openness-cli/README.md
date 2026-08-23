@@ -39,7 +39,41 @@ openness-cli xref          <project>                                           #
 ```
 
 Plain-text/JSON output, non-zero exit codes on failure — designed to be driven from a shell. The
-codes and what each means: "Exit codes" at the end of this file.
+codes and what each means: the file-wide **`## Exit codes`** table near the end. (Not `### Exit
+codes — graphics`, which covers that one command.)
+
+## What's in here
+
+**This file is two documents interleaved**: a command reference, and a log of findings and
+incidents recorded against each command — the dated 🔴/⚠️ headings, usually sitting under the
+command they were found in. The fence above is the invocation synopsis; the table below says where
+each command is *documented*, including the ones the fence does not list.
+
+| command | what you use it for | section |
+|---|---|---|
+| `list`, `export`, `import` | enumerate; one object out; one ordered same-kind set in | synopsis above, plus `## Usage` |
+| `export-all` | every block + type out — the disk-vs-controller check's export half | `export-all` — the disk-vs-controller check's missing half |
+| `import-all` | a whole mixed program back, dependency-order retry | `import-all` — putting a whole program back |
+| `compile` | per-item or scoped compile. **Default scope is `--station`** | `## Exit codes` → the three-compile-scopes section |
+| `compile-all` | the gate's bulk half | `compile-all` — the gate's bulk half |
+| `sanity-check` | block **and type** consistency + compile health. Run this first when export/import/compile misbehaves | synopsis above |
+| `block-layout` | read or `--set` a block's memory layout. **Destructive** | `block-layout` — optimized vs standard block access |
+| `download-plan` | read-only, dry-run only; device-level granularity | `download-plan` — what a download would comprise |
+| `download-probe` | the only binary that can transfer a program, allowlist-fenced | the `download-probe` sections under `## Exit codes` |
+| `library` | project-library walk; `--export-version`, `--probe-documents` | `library` — the project-library walk |
+| `delete`, `create-instance-db`, `portal-status` | delete a block (refuses safety, `--yes`); scaffold an iDB; Portal-process health | synopsis above |
+| `hmi` | read-only HMI walk; `--scripts`, `--schema` | `hmi` — the read-only HMI walk |
+| `hmi-create-screen` / `hmi-edit-screen` | the two HMI write probes; dynamization, events | `hmi-create-screen` / `hmi-edit-screen` |
+| `--map` / `--map-clear` | mapping tables — the second route to flashing | `--map` / `--map-clear` — mapping tables |
+| `hmi-compile` | compile the HMI device. **Weaker than `compile` success** | `hmi-compile` — compiling the HMI device |
+| `graphics` | project-level picture store | `graphics` — the project-level picture store |
+| classic HMI tags / text lists | import-only; `Override` **replaces**, never merges | Classic HMI tags and text lists |
+| deletion commands | graphics, classic screens, classic tag tables | Deleting graphics, classic screens and classic tag tables |
+
+**Exit codes that are not failures-as-usual**: `8` = compile errors, `11` = CompileIncomplete,
+`12` = ExportIncomplete, `13` = ImportIncomplete, `14` = nothing examined. **Key on errors, never
+on state** — the `--station` scope surfaces standing hardware warnings, so a healthy project
+legitimately returns `Warning, errors=0`.
 `export`/`import`/`compile` live-verified end-to-end against real project data, 2026-07-10 —
 see `docs/notes/stage-gates.md` S1.
 
@@ -69,6 +103,8 @@ openness-cli export <project> --block <name> [--device <device>] --out <path> [c
 ```
 
 Refuses (before calling `Export()` at all) if the block classifies as safety. `--device` disambiguates when the same block name/number exists under more than one device (common — this project's own scratch copy has two linked PLC stations). Deletes a pre-existing file at `--out` itself rather than surfacing Siemens's "file already exists" exception; retries once if `Export()` returns without producing a file (a real, observed quirk — `docs/notes/openness-quirks.md`).
+
+🔴 **`--out` IS A FILE PATH, AND A PRE-EXISTING DIRECTORY THERE IS EXIT 5 — so `mkdir -p` first is exactly wrong.** Measured 2026-08-21: `export … --out <an existing dir>` throws *"Cannot export to the specified location because a directory with the name '…' already exists"*, which surfaces as the **catch-all `UnexpectedError` (5)** and therefore reads like a bug rather than a usage error. The trap is that the paragraph above is true of a pre-existing **file** — that one is deleted for you — so the natural inference is that `--out` is somewhere to put things, and the natural habit of creating the directory first is the one thing that guarantees failure. Point `--out` at the **file you want written**, and let its parent exist. (`export-all` and `library --export-version` are the opposite: those take a **directory**.)
 
 `--type <name>` exports a PLC data type (UDT) instead of a block — mutually exclusive with `--block`. Backed by `PlcType.Export()`, the real `SW.Types.PlcType`/`PlcTypeComposition`/`PlcTypeGroup` API (confirmed via `Siemens.Engineering.xml` doc comments to mirror `PlcBlock`/etc. almost exactly). **No safety refusal for types** — `PlcType` genuinely has no `ProgrammingLanguage` property at all (confirmed by its absence from the full reflected property list), so there's nothing for the safety classifier to check. Same `--device` disambiguation as `--block`.
 
@@ -288,6 +324,27 @@ The classification and formatting are pure and unit-tested (`PortalStatusTests`)
 
 ## `hmi` — the read-only HMI walk
 
+### `--scripts`: the behaviour is in the handlers (migrated from CLAUDE.md 2026-08-21)
+
+`--scripts` dumps the FULL body of every event handler, not the one-line preview. **Not cosmetic:**
+on a real Unified project the behaviour is almost ENTIRELY in these handlers — 274 of them in the
+reference project, against ZERO script modules — including how faceplates are actually used, which
+is `UI.OpenFaceplateInPopup("<Type>_V_0_0_11", title, {IO:{Tag:"<tag>"}})` from a hot-zone polygon,
+**NOT** a container on a screen (the reference project has zero faceplate containers across 49
+screens / 1,404 items).
+
+Until this flag existed the preview took the first LINE rather than the first NON-BLANK line, so all
+274 reported "there is a script" and displayed nothing — the walker described the skeleton and
+omitted the animal, in every read this project had ever done.
+
+**`--schema` is the substitute for a screen XML: WinCC Unified has NO screen export at all**
+(verified four ways — API sweep, project folder, compiled runtime, third-party docs;
+`docs/notes/openness-hmi-api-survey.md` §8), so there is no document to decode. Instead Openness
+self-describes via `GetAttributeInfos`/`GetCreationInfos`, and `--schema` dumps the creatable item
+types plus every attribute's access mode and **create-relevance** (`Mandatory`/`Relevant`/`None`) —
+which an exported example could never tell you. Classic screens DO export as SimaticML; Unified
+screens do not exist as any file.
+
 Every other subcommand is PLC-only *by construction*: each device walk filters
 `SoftwareContainer.Software is PlcSoftware`, so an HMI device was previously invisible to this tool
 rather than merely unsupported. `hmi` is the one command that matches the other two software types.
@@ -386,6 +443,34 @@ This exists as a capability *probe* — the cheapest way to answer the survey's 
 whether `Validate()` does anything — not as an HMI authoring capability.
 
 ## `hmi-edit-screen` — modify an existing screen, and attach events
+
+### Dynamization kinds, nested paths, and one forbidden entry type (migrated from CLAUDE.md 2026-08-21)
+
+`hmi-edit-screen <project> --name <name> [--set <Target>.<Attr>=<Value>]... [--event <Target>:<EventType>[=<script>]]... --yes`
+
+`Target` is an item name or the literal `Screen`. Values are coerced from the target's own
+`GetAttributeInfos` (a `UInt32` won't take a string) and the applied value is reported WITH its
+converted type so a silent coercion is visible. Read-only attributes are refused; unknown targets,
+attributes and events are hard errors, never no-ops.
+
+**Events are enum-keyed per item type and touch-first — there is NO `Click`:** `Tapped`,
+`ContextTapped`, `KeyDown`, `KeyUp` (+ `Down`/`Up` on buttons); screens use `Loaded`/`Unloaded`;
+controls use `Initialized`/`CommandFired`.
+
+**A dynamization kind is gated on the TARGET PROPERTY'S TYPE, not on the kind** (P7, 2026-08-09):
+`Tag`/`Script`/`Expression` bind to anything; **`Flashing` only to colour properties**;
+**`ResourceList` only to text properties**; `TagParameter` refuses outside a faceplate. A refusal
+names no reason, so **vary the target before concluding a kind is unsupported** — this project read
+three such refusals as an API limit and was wrong.
+
+`--set` takes nested paths (`Item.Prop.ValueConverter.MappingTable.Entries[0].Flashing`) and `--map`
+builds mapping-table entries. **Flashing is NOT limited to colour properties** — that limit belongs
+to `FlashingDynamization`; a `TagDynamization` mapping-table entry carries its own `Flashing` flag
+and works anywhere a tag binds, including a Boolean (P8).
+
+🔴 **`MappingTableEntrySimple` CRASHES TIA PORTAL** — three isolated occurrences with controls.
+Treat it as forbidden; use **`MappingTableEntryRange`**. Bitmask entries come only from
+`Create(BitDynamizationType)` and cannot be deleted.
 
 ```
 openness-cli hmi-edit-screen <project> --name <screen> [--set <Target>.<Attr>=<Value>]... [--event <Target>:<EventType>[=<script>]]... --yes
@@ -585,7 +670,12 @@ a `GraphicView` naming a picture that does not exist fails the HMI compile by na
 
 — which is the negative control that makes a clean compile of the same screen mean something.
 
-### Exit codes
+### Exit codes — `graphics` only
+
+*(Renamed 2026-08-21. This heading was `### Exit codes`, colliding with the file-wide `## Exit
+codes` table near the end — the same slug, and the file's own synopsis says "see 'Exit codes' at
+the end of this file", which a by-name search resolved to whichever it hit first. The two are not
+the same list.)*
 
 `--import` failures surface as `CommandError` (7) carrying the **whole** exception chain verbatim,
 because on a capability question the refusal text *is* the result. A `--import` that reports zero
@@ -941,6 +1031,21 @@ attached, never *whether* one is, and falls back to the old behaviour when absen
 
 ## `export-all` — the disk-vs-controller check's missing half (2026-08-10, FI-70)
 
+### Safety is named, not omitted (migrated from CLAUDE.md 2026-08-21)
+
+`export-all <project> --out <dir> [--device <name>] [--tagtables] [--json]`
+
+Every block + PLC data type to one dir, so that
+`converter drift-check --exports <dir> --complete` can compare **the IR ON DISK against WHAT IS
+ACTUALLY IN THE CONTROLLER** — the comparison neither `drift-check` alone nor a re-export proof
+could make.
+
+**Safety content is REFUSED AND NAMED, never silently omitted** — an absent file reads downstream as
+"not in the controller", which would turn a refusal into a false finding. A basename collision is
+refused too.
+
+**Exit 12 = ExportIncomplete:** everything attempted worked, the dump is not whole.
+
 `openness-cli export-all <project> --out <dir> [--device <name>] [--tagtables] [--json]`
 
 `converter drift-check` compares `ir/*.ir` against `simatic-ml/*.xml` and **neither side is the
@@ -983,6 +1088,29 @@ INCOMPLETE: this directory is NOT the whole project. Do not pass it to drift-che
 ```
 
 ## `import-all` — putting a whole program back (2026-08-11)
+
+### Why the ordering is a fixpoint, not a sort (migrated from CLAUDE.md 2026-08-21)
+
+`import` takes files as ONE kind, in the order given, and stops at the first failure — right for the
+2–3 files a change touches, useless for putting a whole program back. **A program is a MIXED set in
+a DEPENDENCY ORDER NOT DERIVABLE FROM FILENAMES**, and getting it wrong yields
+`Data type "X" is unknown` on a file that was fine and would have imported ten seconds later.
+
+So:
+
+- **Kind is READ FROM each file's SimaticML root element** — no `--type`/`--tagtable`, no three
+  invocations.
+- Order is tag tables → types → blocks (iDBs last).
+- Then it **RETRIES failures until a pass imports nothing new.** Any workable order converges, so
+  the sort is an optimisation and **the fixpoint is the correctness argument.**
+- Unreadable, unclassifiable, or duplicate-basename files are **REJECTIONS WITH REASONS, never
+  skips.**
+- Saves ONCE at the end (`Save()` per file × retries would dominate).
+- `--dry-run` prints the plan without contacting Portal.
+
+**Exit 13 = ImportIncomplete:** the project does NOT contain everything supplied — including a file
+never attempted. **NOT a compile gate and doesn't pretend to be:** everything imported is flagged
+inconsistent, so `sanity-check` still follows (hard rule 4).
 
 ### 🔴 IT COULD NOT READ A SINGLE FILE TIA PRODUCED, FROM THE DAY IT WAS WRITTEN UNTIL 2026-08-13
 
@@ -1099,6 +1227,27 @@ COMPLETE: every file supplied is now in the project. This is NOT a compile gate 
 
 ## `compile-all` — the gate's bulk half (2026-08-11)
 
+### Empty is not clean, and errors are retried within a run (migrated from CLAUDE.md 2026-08-21)
+
+**An item that compiled WITH ERRORS is still flagged CONSISTENT, and errors do not survive the
+process** — so the run right after a failed one finds an EMPTY work set, compiles nothing, and is
+the run most likely to be believed. It reports **`NOTHING EXAMINED` and exits 14** rather than
+claiming a pass.
+
+**`--force` compiles EVERY type and block** instead of only the inconsistent ones — the
+re-verification path after a restore, and the only way to re-examine an item whose errors have been
+forgotten.
+
+**Errors are retried within a run.** `Block "X" that is accessed has not been compiled` is an
+ORDERING artefact that clears on a re-run, and a loop watching only consistency stopped one pass
+short and reported 15 non-failures on the first live restore.
+
+Reports ERRORS and STILL-INCONSISTENT as **SEPARATE counts** (compiled-and-wrong vs never-examined;
+the second is the one that looks like a pass), and keys its verdict on **ErrorCount, NEVER on
+State** — a project with pre-existing hardware warnings returns non-Success on a clean block.
+
+Exit **8** = errors, **11** = something left inconsistent, **14** = nothing examined.
+
 `openness-cli compile-all <project> [--device <name>] [--json] [--force]`
 
 FI-52 established that a whole-device compile **does not clear** the `IsConsistent=false` flag a
@@ -1133,6 +1282,44 @@ Exit **8** if any item compiled with errors, **11** if any remain inconsistent, 
 examined, **0** only when items were examined and none of the above is true.
 
 ## `block-layout` — optimized vs standard block access (2026-08-11)
+
+### The read-back gate, and why the setting is NOT durable (migrated from CLAUDE.md 2026-08-21)
+
+Read form: `block-layout <project> --block <name> [--expect Standard|Optimized] [--device <name>] [--json]`
+Write form: `... --set Standard|Optimized ... --yes`
+
+Why it matters: **CLASSIC S7comm CANNOT SEE AN OPTIMIZED BLOCK AT ALL** — not an error, the block is
+simply ABSENT, and it fails at the first DATA read rather than at connect. A PC-side harness reading
+a DB over Sharp7 needs that DB to be STANDARD. The S7-1200 default is Optimized and **the IR path
+silently yields Optimized**: `MemoryLayout` is absent from `ir/SPEC.md`, never written by
+`DbSourceWriter`, never read by `DbSourceParser`, and on `Normalizer`'s ignore list — so an
+IR-authored DB imports optimized with NO error at import, NO error at compile and NO drift-check
+finding.
+
+🔴 **DESTRUCTIVE: changing a block's layout DESTROYS ITS RETAINED DATA on the next download** — no
+migration, no warning at download, and nothing visibly missing afterwards. Aimed at ONE new
+purpose-built block, never at one in service. `--yes` required; without it the plan prints and
+Portal is NEVER contacted (exit 10).
+
+The write form sets, saves, **RE-RESOLVES the block and READS THE LAYOUT BACK**. A read-back that
+does not match the request is **exit 15, never a success with a note** — a silent no-op is the whole
+failure mode — and there is deliberately no flag that skips the check.
+
+🔴 **NOT DURABLE, MEASURED 2026-08-11: A RE-IMPORT OF THE BLOCK REVERTS IT TO `Optimized`.**
+Confirmed by TIA exports either side of one import, and the revert happens **AT IMPORT**, observed
+BEFORE any compile (compile is not implicated). Mechanism: the exported `.xml` carries NO
+`MemoryLayout` element at all, so the import states no opinion and TIA applies the S7-1200 default.
+`Normalizer` ignores the attribute, so **`drift-check` is structurally BLIND to a change in either
+direction** — the block goes silently back to invisible on the wire while every check stays green.
+It bites on the SECOND import.
+
+➜ **RE-ASSERT `--set Standard --yes` AFTER EVERY IMPORT OF THE BLOCK, then gate with
+`--expect Standard`. REQUIRED, not precautionary** — `--expect` only tells you it broke; `--set` is
+what repairs it.
+
+Do NOT "fix" this by un-ignoring `MemoryLayout` in `Normalizer`: converter output never emits it, so
+that breaks every export-vs-output comparison wholesale. It only becomes correct once the converter
+can EMIT the attribute.
 
 ```
 openness-cli block-layout <project> --block <name> [--device <name>] [--expect Standard|Optimized] [--json]
@@ -1221,7 +1408,69 @@ output is not a TIA export** — it renders five block-level attributes and `Mem
 them, so grepping converter output for it finds nothing, and *nothing is evidence about the converter,
 not about the block*. An absent attribute is "unanswered", never "false".
 
+## `library` — the project-library walk (migrated from CLAUDE.md 2026-08-21)
+
+This command had no section here; what follows was its only documentation.
+
+### Walk
+
+`library <project> [--master-copies] [--json]`
+
+READ-ONLY. Every type with its CLR class, consistency status, `GetSupportedExportFormats()` and
+versions.
+
+### `--export-version` — a second, format-free export
+
+`library <project> --export-version <TypeName> [--version <v>] --out <dir>`
+
+Calls `LibraryTypeVersion.Export` — distinct from type-level `ExportAsDocuments`. **PLC types emit a
+`ContentObject` with the full definition; EVERY plain `LibraryType` — faceplates AND images — emits
+none.**
+
+So HMI library content is **not withheld, it is simply NOT IN the library object**: it lives in the
+project's binary `.rdf` store (`docs/notes/hmi-rdf-store.md`), which is also why Unified has no
+screen export — there is no document because the project never keeps one.
+
+**Exits 7 if nothing was written.**
+
+### `--probe-documents` — BUILT, NEVER RUN
+
+`library <project> --probe-documents <TypeName> --out <dir>`
+
+Invokes EVERY `Export*` overload including `ExportAsDocuments` **when the format list is EMPTY**,
+reporting each binding and outcome. That emptiness has been treated as a gate since P10 and never
+TESTED as one — **an empty ADVERTISEMENT is not a REFUSAL.** A throw here is a RESULT, not a bug.
+
 ## `download-plan` — what a download would comprise, and why it cannot perform one (2026-08-11)
+
+### Granularity, the provider acquisition path, and what the connection is NOT (migrated from CLAUDE.md 2026-08-21)
+
+READ-ONLY, DRY-RUN ONLY. No `--yes`, no `--force` (both refused BY NAME), no confirmed form; nothing
+in the binary reaches `DownloadProvider.Download`, and a test walks the compiled IL of EVERY method
+in the assembly asserting so (negative-tested by retargeting it at `ICompilable.Compile`, which it
+correctly caught).
+
+**GRANULARITY IS DEVICE-LEVEL AND THAT IS THE POINT.** `Download()`'s three overloads each take a
+connection, two callbacks and a `DownloadOptions` — **NO block, group, selection or exclusion** — so
+"download my one new DB" IS NOT A THING THIS API DOES; the smallest real unit is THE WHOLE PLC
+SOFTWARE. `SoftwareOnlyChanges` means "the parts TIA finds different from the controller", decided
+by TIA at download time, **NOT** "the blocks you edited" — which is why the default is the
+unambiguous `Software`.
+
+**Reports the PROVIDER ACQUISITION PATH.** `DownloadProvider`'s only ctor is internal and it
+implements `IEngineeringService`, so **`IEngineeringServiceProvider.GetService<DownloadProvider>()`
+is the ONLY route there is.** Which object answers is unstated by the API, so it asks outward from
+the software-bearing item and reports EVERY object tried with its `GetServiceInfos()`.
+
+**Reports the CONNECTION from `DownloadProvider.Configuration`**
+(Modes→PcInterfaces→TargetInterfaces→Addresses) — a **PROJECT-MODEL read, never a connect.**
+`GetAccessibleDevices()` (a live scan) and `ApplyConfiguration()` are **never called**, so these are
+CONFIGURED addresses that say nothing about what answers.
+
+REFUSES safety (exit 6): device-level granularity means no download of an F-capable PLC excludes its
+safety program, so planning one is planning to write it. **Exit 16 = no provider obtainable** — the
+plan ran and describes nothing (empty is not clean). Says NOTHING about whether a download would be
+PERMITTED — that is the write fence's question (ADR-0009).
 
 ```
 openness-cli download-plan <project> [--device <name>] [--options Software|SoftwareOnlyChanges|Hardware] [--json]

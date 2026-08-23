@@ -1415,6 +1415,249 @@ public static class Rules
         }
     }
 
+    // C-603 (warn) — SINGLE-FILE. "Step membership is enumerated, not ranged." A condition over a
+    // stepped sequence's phase enumerates the steps it means (`Step = 30 OR Step = 40 OR Step = 50`);
+    // an ordered-range predicate (`>=`, `<=`, `>`, `<`, and the two-sided spans built from them) is
+    // allowed "only where 'every future step inserted in this span belongs here too' is the stated
+    // intent (comment)". `Step = n` and `Step <> n` are always fine — neither is ordered, so neither
+    // silently absorbs an inserted step.
+    //
+    // *** WHERE THE MECHANICAL LINE IS DRAWN, AND WHY IT IS DRAWN THERE. ***
+    // The rule's exemption is "the intent is STATED in the comment". Deciding whether a paragraph of
+    // English states that intent is taste, and this runner does not do taste. Deciding whether the
+    // network merely HAS a comment is worthless — the measured case (FB_ShredderSequencer network 14
+    // before 2026-08-21) had one comment covering FOUR step-conditioned coils, stated the range
+    // intent for exactly ONE of them, and carried two unstated ranges alongside it. A
+    // has-any-comment exemption passes all four; the rule must fail three.
+    //
+    // So the mechanized test is per-SUBJECT, not per-network: *** THE NETWORK COMMENT MUST NAME THE
+    // WRITE TARGET WHOSE CONDITION CARRIES THE RANGE ***, matched on a word boundary against the
+    // target's leaf name (`IO.PusherParkCmd` -> `PusherParkCmd`) or its full dotted path. A comment
+    // that never mentions the coil cannot have stated an intent for it; a comment that does mention
+    // it by name is where a reader would go to find the intent, and whether the sentence there
+    // actually says it stays with the human/AI simplicity reviewer. This check is deliberately
+    // ONE-SIDED: it can prove the intent was NOT stated (nobody wrote the name down), never that it
+    // WAS. That is the same shape as C-121's "named bit may be a genuine equivalent" deferral, and
+    // it is why the finding text says what the reviewer still has to confirm.
+    //
+    // *** ONE EXCEPTION TO THE NAME ANCHOR: A WRITE TO THE STEP REGISTER ITSELF. *** The anchor works
+    // because a coil name is distinctive prose. "Step" is not — every sequencer's network comments
+    // are full of the word, so anchoring a Step-write's range on it would exempt essentially every
+    // transition automatically. A ranged predicate guarding a MOVE to Step is therefore always a
+    // finding; the repair is C-601's (name the condition to a bit, then the bit's name is an anchor),
+    // or enumeration, which is what C-121's `Step = <from>` transitions want anyway.
+    //
+    // ATTRIBUTION AND ITS RESIDUAL (EMPTY IS NOT CLEAN). Subjects come from
+    // TagReferences.AllDirectedUsages — every WRITE carries its guarding condition (coil condition /
+    // instruction EN), which is where a step-membership condition lives. A ranged step predicate can
+    // in principle sit somewhere that is not a write guard (a CALL input argument, a MOVE's IN
+    // value). Those are NOT quietly dropped and NOT quietly passed: they are returned separately in
+    // UnattributedRanges, and ReviewRunner records C-603 Skipped for the file — exit 2, REVIEW
+    // INCOMPLETE — because the rule had a subject there and could not judge it.
+    public static C603Result CheckC603StepMembershipEnumerated(IrBlock block)
+    {
+        var findings = new List<Finding>();
+        var unattributed = new List<string>();
+
+        foreach (var network in block.Networks)
+        {
+            // Reference identity, not value equality: two structurally identical `Step >= 20` nodes
+            // in one network are two occurrences, and a guard reached twice (the same Expr instance
+            // reported for two writes) must not be counted twice.
+            var attributed = new HashSet<Expr>(ReferenceEqualityComparer.Instance);
+
+            foreach (var usage in TagReferences.AllDirectedUsages(network))
+            {
+                if (usage.Direction != TagDirection.Write || usage.Guard is null)
+                {
+                    continue;
+                }
+
+                var ranges = RangedStepComparisons(usage.Guard).ToList();
+                if (ranges.Count == 0)
+                {
+                    continue;
+                }
+
+                foreach (var range in ranges)
+                {
+                    attributed.Add(range);
+                }
+
+                var rendered = string.Join(", ", ranges.Select(RenderComparison).Distinct(StringComparer.Ordinal));
+
+                if (HasStepLeaf(usage.Path))
+                {
+                    findings.Add(new Finding(
+                        "C-603",
+                        FindingSeverity.Warn,
+                        block.Name,
+                        network.Number,
+                        $"Network {network.Number}'s write to the Step register '{usage.Path}' is guarded by an ordered-range step predicate ({rendered}) — C-603 wants step membership enumerated (`Step = 30 OR Step = 40 …`). A range guarding a Step write cannot be exempted by a stated intent in the network comment the way a named coil can: the word \"Step\" appears throughout a sequencer's comments, so it identifies no particular condition.",
+                        "Enumerate the steps this transition applies to, or name the condition to its own bit (C-601) and state the range intent against that name in the network comment."));
+                    continue;
+                }
+
+                if (CommentNamesSubject(network.Comment, usage.Path))
+                {
+                    // Named in the comment — the intent MAY be stated there. Not mechanically
+                    // confirmable, so this is where the tool stops and the reviewer starts.
+                    continue;
+                }
+
+                findings.Add(new Finding(
+                    "C-603",
+                    FindingSeverity.Warn,
+                    block.Name,
+                    network.Number,
+                    $"Network {network.Number} drives '{usage.Path}' from an ordered-range step predicate ({rendered}), and the network comment never names '{usage.Path}' — so the \"every future step inserted in this span belongs here too\" intent C-603 requires is not stated for this condition. (C-120 lets a later revision insert step 45; a range absorbs it with no visible decision.)",
+                    $"Enumerate the steps this condition means (`Step = 30 OR Step = 40 OR Step = 50`), or — if the span really is the intent — say so in the network comment, naming '{LeafName(usage.Path)}' so a reader can tell which condition the sentence is about."));
+            }
+
+            foreach (var expr in TagReferences.AllExpressions(network))
+            {
+                foreach (var range in RangedStepComparisons(expr))
+                {
+                    if (!attributed.Contains(range))
+                    {
+                        unattributed.Add($"network {network.Number}: {RenderComparison(range)}");
+                    }
+                }
+            }
+        }
+
+        return new C603Result(findings, unattributed);
+    }
+
+    // Every ordered-range comparison over a Step register in an Expr tree. `=` and `<>` are excluded
+    // by C-603's own text ("`Step <> 0` and `Step = n` are always fine"): neither is ordered, so
+    // neither can silently absorb a step inserted between two existing numbers. Traversal mirrors
+    // ExprHasStepGuard/StepComparisonLiterals so a rule cannot see a different tree than its
+    // neighbours do. The compared-against side need not be a literal — `Step >= FirstRunStep` is
+    // just as ordered, and just as absorbing, as `Step >= 30`.
+    private static IEnumerable<Expr.Compare> RangedStepComparisons(Expr expr)
+    {
+        switch (expr)
+        {
+            case Expr.Compare compare:
+                if (OrderedRangeOperators.Contains(compare.Operator)
+                    && (IsStepTagRef(compare.Left) || IsStepTagRef(compare.Right)))
+                {
+                    yield return compare;
+                }
+
+                foreach (var c in RangedStepComparisons(compare.Left))
+                {
+                    yield return c;
+                }
+
+                foreach (var c in RangedStepComparisons(compare.Right))
+                {
+                    yield return c;
+                }
+
+                break;
+            case Expr.And and:
+                foreach (var operand in and.Operands)
+                {
+                    foreach (var c in RangedStepComparisons(operand))
+                    {
+                        yield return c;
+                    }
+                }
+
+                break;
+            case Expr.Or or:
+                foreach (var operand in or.Operands)
+                {
+                    foreach (var c in RangedStepComparisons(operand))
+                    {
+                        yield return c;
+                    }
+                }
+
+                break;
+            case Expr.Not not:
+                foreach (var c in RangedStepComparisons(not.Operand))
+                {
+                    yield return c;
+                }
+
+                break;
+        }
+    }
+
+    private static readonly HashSet<string> OrderedRangeOperators = new(StringComparer.Ordinal) { ">=", "<=", ">", "<" };
+
+    // Word-boundary containment, so a subject named `Run` is not "named" by the word `Running` and a
+    // subject named `IO.PusherParkCmd` is found from the comment's own `PusherParkCmd`. Case-
+    // insensitive: S7 identifiers are, and a comment that writes `pusherParkCmd` has still named the
+    // coil. Both the leaf and the full dotted path count as the name.
+    private static bool CommentNamesSubject(string? comment, string tagPath)
+    {
+        if (string.IsNullOrWhiteSpace(comment))
+        {
+            return false;
+        }
+
+        return ContainsWord(comment!, tagPath) || ContainsWord(comment!, LeafName(tagPath));
+    }
+
+    private static bool ContainsWord(string haystack, string needle)
+    {
+        if (needle.Length == 0)
+        {
+            return false;
+        }
+
+        var index = haystack.IndexOf(needle, StringComparison.OrdinalIgnoreCase);
+        while (index >= 0)
+        {
+            var beforeOk = index == 0 || !IsIdentChar(haystack[index - 1]);
+            var end = index + needle.Length;
+            var afterOk = end >= haystack.Length || !IsIdentChar(haystack[end]);
+            if (beforeOk && afterOk)
+            {
+                return true;
+            }
+
+            index = haystack.IndexOf(needle, index + 1, StringComparison.OrdinalIgnoreCase);
+        }
+
+        return false;
+    }
+
+    // A dotted path's own separator is NOT an identifier character here on purpose: matching the leaf
+    // `PusherParkCmd` inside the path `IO.PusherParkCmd` is exactly the match this wants.
+    //
+    // A HYPHEN IS. C-005's charset gives no S7 identifier a hyphen, so a hyphen next to the name is
+    // always English compounding, not the tag: a comment reading "from the reverse-run step onward"
+    // has not named a coil called `Run`. Counting it as a boundary would exempt short generic names
+    // on ordinary prose, and the wrong direction to be wrong in is the one that grants an exemption.
+    // The cost is a comment written as `PusherParkCmd-driven`, which fails to exempt and reports a
+    // finding — fail-closed, which is the direction this project's checks are supposed to fail in.
+    private static bool IsIdentChar(char c) => char.IsLetterOrDigit(c) || c == '_' || c == '-';
+
+    private static string LeafName(string tagPath)
+    {
+        var idx = tagPath.LastIndexOf('.');
+        return StripSubscriptComponent(idx < 0 ? tagPath : tagPath[(idx + 1)..]);
+    }
+
+    // Enough of an Expr renderer to quote the offending predicate back at the reader. IrSerializer's
+    // own is private and serializes a whole statement; a finding only ever needs `<operand> <op>
+    // <operand>`, and anything more structured than a tag or a literal is named rather than
+    // reproduced (it is never the interesting half of a step comparison).
+    private static string RenderComparison(Expr.Compare compare) =>
+        $"{RenderOperand(compare.Left)} {compare.Operator} {RenderOperand(compare.Right)}";
+
+    private static string RenderOperand(Expr expr) => expr switch
+    {
+        Expr.TagRef tagRef => tagRef.Path,
+        Expr.Literal literal => literal.Value,
+        _ => "<expression>",
+    };
+
     // C-122 (error) — CROSS-FILE (FI-09). A step's own maximum-dwell timer has a specific shape
     // (docs/06 C-122): (a) IN gated by `Step = <n>` so it self-resets the instant the step changes;
     // (b) it lives multi-instance in the owning block's own Static (per C-407), never in DB_Timers;

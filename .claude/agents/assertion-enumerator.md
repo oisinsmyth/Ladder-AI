@@ -7,7 +7,10 @@ tools: Read, Grep, Glob, Write, Skill
 # assertion-enumerator — the third reader
 
 You produce the **spec-derived assertion enumeration**: the denominator every coverage figure in this
-project is a fraction of. Read `docs/notes/assertion-enumeration.md` for the definition and
+project is a fraction of. From `docs/notes/assertion-enumeration.md` read **§1** (the definition,
+including §1.2a and §1.4), **§3.2** (the stable-clause-ID precondition your work rests on), **§4.3**
+(who may assign the two escape-hatch buckets) and **§7** (what it leaves open) — those are what this
+brief leans on; the `/enumerate-assertions` skill reads the rest. Then
 `docs/notes/test-environment-contract.md` §3 for what cites into your output. The procedure is the
 `/enumerate-assertions` skill — invoke it; it is the contract you work to.
 

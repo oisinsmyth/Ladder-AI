@@ -20,7 +20,7 @@ Ladder-AI project. This is docs/15's `gen-block-modify-purpose` stage (pipeline 
 **gate-1-signed architecture decision that changes an existing block's purpose** — new/changed interface
 members, new/changed/removed networks — **touching only what the manifest names and proving the rest
 identical in IR**. It is highest-risk (changing working logic at a larger scope than a fix), so its whole
-discipline is *authorized, scoped, and proven*. Read `CLAUDE.md` in full first — hard rules bind you, and
+discipline is *authorized, scoped, and proven*. `CLAUDE.md` is already in your context — do not re-read it. Hard rules bind you, and
 CLAUDE.md's "Workflow for modifying existing logic (Stage S7+)" is the contract this mechanizes.
 
 **You run inside `lad-coder`** (hard rule 8). If reached otherwise, stop — a human-facing agent must
@@ -52,9 +52,13 @@ dispatch this to `lad-coder`.
   nearly the whole block → route to `gen-block-new`.
 - **The as-built block's IR** — full IR; know which networks the manifest keeps (they must prove invariant)
   vs changes.
-- **The requirements register** — the new/changed REQs the purpose delivers; **`docs/06`** (read fresh —
-  esp. C-115 handshake vocabulary for the new interface, C-118/C-125 if the new purpose is a sequence,
-  C-126, the stricter bar); **`docs/notes/compile-error-playbook.md`**.
+- **The requirements register** — the new/changed REQs the purpose delivers; **`docs/06`** (read fresh,
+  **by rule ID and never by section heading** — C-204 is a Commenting rule physically sitting under
+  `## Data`): C-115 handshake vocabulary for the new interface, **C-132** (the interface is one STATIC
+  UDT member) and **C-605** (interface members carry comments) — both directly in play the moment you
+  add a member — C-118/C-125 if the new purpose is a sequence, C-126, **C-201–C-204**, the stricter
+  bar, **plus the rule family any changed network belongs to**.
+  Also **`docs/notes/compile-error-playbook.md`**.
 
 ## Method — follow the shared modification choreography
 
@@ -82,17 +86,9 @@ rule, and the compound-operand-must-lead synthesis rule). Follow it. **For a pur
   by VSD speed control). Added/removed networks appear in `diff` as `Added`/`Removed` and belong in the
   `--only` changed set; **the untouched skeleton networks (start/stop, permissives, faults, hours, alarms)
   still prove identical** — that invariance is the whole point.
-  🔴 **AN INSERTION IN THE MIDDLE RENUMBERS EVERYTHING AFTER IT, AND `converter diff` NOW SAYS SO
-  (2026-08-23).** It used to match networks purely by number, so inserting at 11 in a 20-network block
-  reported `10 changed, 1 added` and named nine networks you never touched — the "untouched skeleton
-  proves identical" claim above was simply unavailable to you. Networks are matched on CONTENT first now,
-  so those nine report as **`MOVED`**, carrying the number each came from. **A move GATES**, because LAD
-  executes in network order and a rung that runs later than it used to changes what the PLC does.
-  ✅ **`--insert <n>` is yours to pass, on the same terms as `--allow-header`: it is a DECLARATION.** It
-  says the insertion was made at `n` and everything from there shifted; the tool then **checks** that
-  against the moves it actually found and still gates on anything that does not fit. **Declare the
-  insertion point and the shift in your hand-back**, the way you already declare the interface delta —
-  and note that appending at the END renumbers nothing and needs no declaration at all.
+  🔴 **AN INSERTION MID-BLOCK RENUMBERS EVERYTHING AFTER IT (2026-08-23).** `diff` matches on CONTENT
+  now, so those report **`MOVED`** and **a move GATES**. ✅ **`--insert <n>` is yours, on
+  `--allow-header`'s terms: a DECLARATION, checked.** Appending at the END renumbers nothing.
 - **The new networks + interface answer to conventions and must deliver the new REQ(s)** — C-115/C-126, the
   stricter bar; a change that compiles but doesn't actually realize the new purpose is a miss.
 
@@ -104,9 +100,7 @@ Hand back (per `lad-coder`'s contract — your summary is not proof):
   **`diff --only … --allow-header` invariance result (exit 0)** proving the kept skeleton is untouched —
   that pairing is the S7 deliverable. **Quote the interface delta explicitly in the hand-back**: with
   `--allow-header` the gate stops arguing about it, so the reader is the only remaining check on whether
-  the members that changed are the ones the manifest named. **If you inserted networks mid-block, the same
-  applies to `--insert <n>`**: quote the `DECLARED INSERTION` line and say which networks shifted, because
-  the gate has stopped arguing about those too.
+  the members that changed are the ones the manifest named. **Same for `--insert`.**
 - A **one-paragraph intent**: what purpose change, which REQ(s) it delivers, why it's correct.
 - **preflight** (zero findings) + **compile** evidence: `sanity-check`'s `INCONSISTENT: 0` on **both**
   the `BLOCKS:` and `TYPES:` lines, plus the **error count**. *(Corrected 2026-08-13: this read
@@ -114,6 +108,13 @@ Hand back (per `lad-coder`'s contract — your summary is not proof):
   hardware warning it is non-Success on a perfectly clean block, which is why `compile` stopped
   keying on it on 2026-08-12. Key on errors; report warnings without gating on them. And a bare
   whole-device compile is not the gate at all — hard rule 4 / FI-52.)*
+
+- **`evidence.json`** (`"kind": "modify"`) — the raw `--json` and exit code of each gate above, plus a
+  `converter ir-hash` per file touched. Schema in `.claude/agents/lad-coder.md`. The prose above still
+  stands; this is what the dispatcher actually verifies, with
+  `python tools/check-agent-evidence.py <path>`, which recomputes every hash itself. Note that the
+  evidence file records the `diff --only` **exit code**, which `--allow-header` can only make greener —
+  so it does not relieve you of quoting the interface delta in prose, for exactly the reason above.
 
 Append a `gen/<project>/telemetry.log` line (`gen-block-modify-purpose`) when the project has one (a
 validation corpus has none — note the run in your report instead). Then **stop** — the fresh-context Check

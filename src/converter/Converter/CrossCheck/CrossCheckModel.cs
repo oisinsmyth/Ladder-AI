@@ -39,9 +39,16 @@ public sealed record MultiWriterFact(
     // Empty ALSO when the corpus contains no OB at all, which is "unknown", not "all reachable" —
     // hence UnreachableKnown, which says whether the question could be asked.
     IReadOnlyList<string>? UnreachableWriterBlocks = null,
-    bool UnreachableKnown = false)
+    bool UnreachableKnown = false,
+    // 2026-08-21. Writers reaching this block-local storage through its `iDB_…` alias from OUTSIDE the
+    // owning block. See StorageGroup.AliasWriters for why the key spaces stay separate and this is
+    // carried instead. Non-empty means the "block-local — not a cross-block conflict" annotation is
+    // FALSE for this row, which is exactly how four rows in the reference project read for weeks.
+    IReadOnlyList<WriterRef>? AliasWriters = null)
 {
     public IReadOnlyList<string> InstanceAliases { get; init; } = InstanceAliases ?? Array.Empty<string>();
+
+    public IReadOnlyList<WriterRef> AliasWriters { get; init; } = AliasWriters ?? Array.Empty<WriterRef>();
 
     public IReadOnlyList<string> UnreachableWriterBlocks { get; init; } =
         UnreachableWriterBlocks ?? Array.Empty<string>();
@@ -119,7 +126,15 @@ public sealed record SoleWriterFact(
     string Path,
     WriterRef Writer,
     IReadOnlyList<ReaderRef> Readers,
-    string? Owner = null);
+    string? Owner = null,
+    // 🔴 THE MORE DANGEROUS HALF, and it had the same alias blindness. This table's whole purpose is
+    // "what loses its only writer if I delete this?" — and a member written once internally AND once
+    // through its iDB from an OB is not sole-written at all. Reporting it as sole-written tells a
+    // back-out the wrong thing in the direction that costs an online write to undo.
+    IReadOnlyList<WriterRef>? AliasWriters = null)
+{
+    public IReadOnlyList<WriterRef> AliasWriters { get; init; } = AliasWriters ?? Array.Empty<WriterRef>();
+}
 
 // 🔴 WHICH CODE BLOCKS ACTUALLY EXECUTE — the graph already knew, and nothing could ask it.
 //

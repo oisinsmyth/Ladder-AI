@@ -17,6 +17,48 @@ converter diff <old.ir> <new.ir> [--only <network> ...] [--json]  # which networ
 `to-ir`/`to-xml`/`sanitize` all auto-detect DB vs code-block content (root element name for XML
 input, first line for IR/text input) and route accordingly — no separate flag needed.
 
+## What's in here
+
+**This file is two documents interleaved**: a command reference, and a log of findings and
+incidents recorded against each command. The table below is the reference half. Roughly half the
+headings in the file are the other half — dated war stories, usually marked 🔴 or ⚠️, sitting under
+the command they were found in. Both are worth reading; only one answers "how do I run this".
+
+`converter --help` prints the authoritative flags and exit codes for every command. This table
+says **where each one is documented and why you would reach for it**.
+
+| command | what you use it for | section |
+|---|---|---|
+| `to-ir` / `to-xml` | SimaticML ↔ IR, both directions | `to-ir` / `to-xml` — output path and unresolved member types |
+| `to-ir --no-sidecar` | readable-only IR, sidecar omitted after verifying derivability | `to-ir --no-sidecar` — store readable-only IR |
+| `to-xml --synthesize` | IR → SimaticML with no donor XML | Sidecar synthesis — `--synthesize` |
+| `sanitize` | de-identify a SimaticML export against a mapping | synopsis above |
+| `preflight` | static checks **before** a Portal round trip — a filter, not the compile gate | `preflight` — static checks before any Portal round trip |
+| `review` | mechanical convention checks (C-0xx–C-6xx) | `review` — harness scope / C-410 / C-603 / tag-table sections |
+| `digest` | compact structural orientation; never review input | `digest` — compact structural summary |
+| `digest --fingerprint` | collapse copy-pasted networks to structural signatures | `--fingerprint` — per-network structural signatures |
+| `tagstatus` | classify names against the export — the hard-rule-3 anti-laundering gate | `tagstatus` — classify tag names exists/proposed |
+| `diff` | network-level IR invariance; `--only` proves the rest untouched | `diff` — network-level IR invariance |
+| `compare` | Normalizer-compare two SimaticML exports — the confirm loop's judgement half | `compare` — the confirm loop's judgement half |
+| `drift-check` | ir ↔ simatic-ml export drift | `drift-check` — ir↔simatic-ml export-drift detector |
+| `cross-check` | whole-project cross-block reference facts (never verdicts) | `cross-check` — whole-project cross-block facts |
+| `trace` | forward-pass REQ trace over the reader/writer graph | `trace` — forward-pass REQ verdict tracer |
+| `reuse-scan` | reuse-first: who already references this tag / implements this kind | `reuse-scan` — reuse-first duplicate-logic finder |
+| `target-scan` | new-block gap hunting: REQ × tag-status × as-built | `target-scan` — S6 new-block target gap-hunter |
+| `candidate-scan` | every signal that could satisfy a requirement | `candidate-scan` — compute the candidate set for a requirement |
+| `undriven-scan` | per-instance interface drive states — what nothing writes | `undriven-scan` — per-instance interface drive states |
+| `relation-reconcile` | reconcile (instance, relation-id) sets across the spec artifacts | `relation-reconcile` — relation-set reconciliation |
+| `signal-sweep` | project-level residual signal coverage | `signal-sweep` — project-level residual signal coverage |
+| `interface-check` | does the block carry the signals the spec names | `interface-check` — the static comparison D6's green rests on |
+| `reachable-state` | computed slot disjointness — storage a block's CALL tree touches | `reachable-state` — D9's producer |
+| `conflict-graph` | submission-scoped conflict edges for the harness gates | `conflict-graph` — the submission-scoped emission |
+| `ir-hash` | stable readable-IR content hash, immune to SIDECAR/UId churn | `ir-hash` — stable readable-IR content hash |
+| `claim` / `claims` | reserve a shared resource before writing IR | `claim` / `claims` — reserve a shared resource |
+
+**EMPTY IS NOT CLEAN.** Across the mechanical floor — `candidate-scan`, `undriven-scan`,
+`reuse-scan`, `relation-reconcile`, `signal-sweep` — **exit 1 = found something; exit 2 = EXAMINED
+NOTHING**. Exit 2 is never a pass. When you read a green, read what it says it *compared*.
+
 ## Current scope
 
 *(Corrected 2026-08-05. This section read "walking skeleton" and denied arithmetic and FC/FB
@@ -1527,6 +1569,20 @@ confirmed by full-file audit that `FlgNetBuilder.Build` never computes a UId any
 replays whatever a sidecar already contains, so a synthesized one satisfies it exactly like a real
 one would.
 
+## `to-ir` / `to-xml` — output path and unresolved member types (migrated from CLAUDE.md 2026-08-21)
+
+`converter to-ir|to-xml <file> [--out <dir>]`
+
+**FI-72 — `--out <dir>` writes the result THERE instead of BESIDE THE INPUT.** Beside-the-input
+remains the default (right for the export-and-read-back loop), but it silently overwrote
+hand-authored `.ir` for two agents in one day, so **an overwrite is now REPORTED when it happens.**
+Convert a copy in a scratch dir when the `.ir` beside the input is authored rather than generated.
+
+**FI-71 — `to-xml` REFUSES (exit 1, nothing written) when a member type could not be resolved.**
+Pass `--project <ir-dir>`, or `--allow-blind-types` if the roots really are external. That guess is
+what TIA rejects at compile on an unsigned member, and it had cost three full round trips as a
+warning nobody saw.
+
 ### `to-ir --no-sidecar` — store readable-only IR (2026-07-19, ADR-0005 follow-on)
 
 The write side of derive-always, and the only way a block legitimately enters the repo without a
@@ -1752,6 +1808,54 @@ so an operand inside an array of UDT now types correctly for `to-xml --synthesiz
 
 ## `diff` — network-level IR invariance (2026-07-18, S7 entry requirement)
 
+### What gates, and what the verdict states (migrated from CLAUDE.md 2026-08-21)
+
+`converter diff <old.ir> <new.ir> [--only <network>...] [--allow-header] [--json]`
+
+`--only` asks one question: *did anything change outside the named networks that could alter what
+the PLC does?*
+
+- **A HEADER change gates** — exit 1. An **interface** member answers yes (a `Bool` → `Int` retype
+  with no network touched compiles, imports, and misbehaves on the controller). A **rename or
+  renumber** answers yes on identity grounds: TIA's import matches by NAME, so a rename creates a
+  DUPLICATE block rather than updating one.
+- **A block COMMENT cannot** — comment-only ⇒ **exit 0**, with `HEADER COMMENT CHANGED (does not
+  gate)` on its own line. Non-gating is not invisible: that line is where a stale comment gets
+  repaired, and equally where a correct one gets silently discarded.
+- **NOR CAN AN INTERFACE MEMBER'S COMMENT** (2026-08-21). The interface used to be compared as one
+  serialized blob, so member comment text sat inside `interfaceChanged` and repairing one was
+  indistinguishable from a retype. Measured: deleting the seven characters `(C-115)` from a member
+  comment produced `INVARIANCE VIOLATION: an INTERFACE member changed`, exit 1, while the identical
+  edit to the BLOCK comment exited 0 — the same defect as the 2026-08-14 narrowing, one level down,
+  and it left a C-204 sweep with no route to the breaches living in member comments.
+- **The carve-out is ONE field.** `Retain`, `SetPoint`, datatype, start value, the `External*` flags,
+  nesting and the member NAME all still gate. The comparison is done twice — once with member
+  comments blanked (that is `interfaceChanged`), once whole — and `interfaceCommentChanged` is set
+  only when the structure compared **equal** and the text did not. The two are mutually exclusive by
+  construction, so a retype can never be reported as a comment edit.
+- **A comment edit is never cover for a behaviour-bearing one** — both together still exit 1,
+  naming the INTERFACE, not the comment.
+- The JSON carries `commentChanged`, `interfaceChanged` and `interfaceCommentChanged` as separate
+  fields. A consumer gating on `interfaceChanged` alone is unaffected: the new field is a strictly
+  narrower signal, never a reclassification of something that used to gate.
+- The human-readable form prints `HEADER changed: interface` (or `: comment`, `: interface-comment`)
+  naming which half moved, so the verdict and the exit code can be read against each other. The
+  non-gating line NAMES its subject — `the block comment`, `one or more INTERFACE member comments`,
+  or both — because a reader told the wrong subject inspects the wrong text.
+
+`--allow-header` is the named escape (FI-71's shape), and it means ROUTE, not DECLARE:
+
+- `gen-block-modify-purpose` **passes it** and declares the interface delta in its hand-back.
+- `gen-block-modify-fix` **must NEVER pass it** — a fix needing an interface member *is* a purpose
+  change, so the answer is to route to the purpose skill, not to declare.
+
+**The verdict states its own denominator:** `UNCHANGED REMAINDER: <n> network(s) proven identical
+outside --only`. Where every network is inside the `--only` set the remainder is EMPTY and
+`INVARIANCE OK` proves nothing — it says `NOTHING WAS PROVEN` instead. Same shape as
+`drift-check`'s `COMPARED: <n>`: an invariance claim over an empty remainder is another
+empty-is-not-clean. A clean verdict states what it EXAMINED (`…, header unchanged`), not merely
+that it passed.
+
 `converter diff <old.ir> <new.ir> [--only <network> ...] [--json]`
 
 Mechanizes the S7 "untouched-network invariance check" (roadmap `docs/02-roadmap.md` line 57;
@@ -1845,6 +1949,27 @@ UNCHANGED REMAINDER: 10 network(s) proven identical outside --only
 
 ## `reuse-scan` — reuse-first duplicate-logic finder (2026-07-20, FI-29)
 
+### The denominator, and when the question landed on nothing (migrated from CLAUDE.md 2026-08-21)
+
+**Exit 0 here licenses "nothing to reuse, write a new block"** — so an exit 0 that examined nothing
+is a licence issued in error. Until 2026-08-14 a `--tag` naming nothing in the corpus produced
+`SUMMARY: 0 block(s) matched`, exit 0, **and no denominator at all**, so a typo'd tag or a wrong
+`--project` read exactly like a thorough scan of 43 files. Note the asymmetry it already had:
+`--kind` IS validated against a known set and refuses an unknown value by name; `--tag` was
+validated against nothing.
+
+Now: **`SUMMARY: … of <n> file(s) scanned` on every run**, an **`ABSENT:`** line naming roots that
+appear in no block, and **exit 2 when EVERY queried root is absent** (the question landed on
+nothing).
+
+Deliberately keyed on **ALL** roots, not any — a Design-stage query legitimately mixes existing tags
+with proposed ones (`gen-architecture` designs AGAINST gaps), and refusing that would be a gate
+firing outside its scope.
+
+`--tag` matching is **ROOT-level by design** (digest aggregates tag roots per block), so
+`--tag DB_X.Member` matches every block touching `DB_X`; the MATCH line shows the root it actually
+matched.
+
 `converter reuse-scan --project <ir-dir> [--tag <tag> ...] [--kind <kind> ...] [--json]`
 
 A digest-backed corpus query for the reuse-first carving pass (`gen-architecture` /
@@ -1916,6 +2041,44 @@ SUMMARY: 19 candidate(s), 35 likely-implemented, 15 disqualified, 0 withdrawn   
 ```
 
 ## `drift-check` — ir↔simatic-ml export-drift detector (2026-07-20, FI-26)
+
+### Scope, the denominator, and pairing (migrated from CLAUDE.md 2026-08-21)
+
+`converter drift-check --project <ir-dir> --exports <simatic-ml-dir> [--complete] [--json]`
+
+`--complete` (FI-70) declares the exports dir the WHOLE picture — a fresh controller dump, not a
+possibly-lagging committed corpus — so an absence FAILS in either direction: a missing `.xml`
+(block not in the controller) or an `.xml` with no `.ir` (block in the controller that no `.ir`
+describes). Without it, a green SUMMARY only means "everything paired matched"; the `SCOPE:` line
+says which question was answered.
+
+**`COMPARED: <n> object(s) put through the Normalizer` is printed on EVERY run.** Every other
+number in the summary is a reason a comparison did NOT happen; that one is the denominator.
+
+**Empty is not clean — three measured routes to a green over zero comparisons, all now exit 1 and
+print `NOTHING COMPARED - this is not a pass`:**
+
+1. Both dirs exist but are EMPTY → previously `0 drifted, 0 match`, exit 0.
+2. EVERY `.ir` unparseable (a zero-byte file, a truncated write) → previously `1 error`, exit 0,
+   because `DriftStatus.Error` never gated. `--complete` covered a missing FILE and said nothing
+   about a comparison that could not RUN — the same absence one level in.
+3. Either path pointed ONE LEVEL ABOVE the files — both walks are `TopDirectoryOnly`. The likeliest
+   real mistake of the three.
+
+**Pairing is by the object's DECLARED NAME, not its filename.** TIA's own name for the default tag
+table contains spaces (`Default tag table`) while the `.ir` filename does not
+(`DefaultTagTable.ir`), and both documents declare the real name in their own content. Pairing on
+the filename made one object fail to pair and then counted it twice — `EXPORT-ONLY: Default tag
+table` **plus** `SKIPPED: DefaultTagTable` — a spurious finding and a silently skipped comparison
+from one naming mismatch. Identity is now read from each side's own content (`BLOCK/DB/TYPE/
+TAGTABLE <name>` and the outermost `SW.*` object's `AttributeList/Name`), whitespace-normalised,
+with basename as fallback. Two files claiming one identity is **`PAIRING-FAILURE`** — a THIRD
+outcome, not an absence in either direction, and it always gates.
+
+**A `MATCH` here is silent about `MemoryLayout`, and says so on every run.** `compare` refuses
+(exit 2, NOT COMPARED) the very pair this reports as a MATCH. Do not "fix" this by un-ignoring the
+attribute in `Normalizer` — converter output never emits it, so that breaks every
+export-vs-output comparison wholesale until the converter can EMIT it.
 
 `converter drift-check --project <ir-dir> --exports <simatic-ml-dir> [--complete] [--json]`
 
@@ -2020,6 +2183,44 @@ total. `--json` carries `tiaExportCount`, `nonTiaExportCount`, `comparedNothingF
 "export" side by calling a converter writer and saving it — precisely the state being gated.
 
 ## `compare` — the confirm loop's judgement half (2026-08-12)
+
+### Exit codes, the layout premise, and the fenced loop script (migrated from CLAUDE.md 2026-08-21)
+
+`converter compare <first.xml> <second.xml> [--json] [--max-differences <n>] [--allow-silent-layout]`
+
+Normalizer-compares two SimaticML exports and reports WHAT differs — the path and both values —
+not merely THAT something did. **Strictly stronger than `drift-check`**, which never leaves the PC:
+this pair has been THROUGH TIA, so it also catches what TIA does on import and compile.
+
+**The `MemoryLayout` premise is enforced, not assumed.** The Normalizer holds neither side to the
+other's layout when one is silent — right for the committed corpus, wrong here, because two TIA
+exports both declare one. A SILENT SIDE means an input is not what the loop assumes and the
+comparison is quietly weaker than it looks: that is **exit 2 with the reason**, never a warning.
+`--allow-silent-layout` is the named escape (FI-71's shape).
+
+Exit **0** equivalent / **1** differs / **2 NOT COMPARED**. Exit 2 covers a missing or unparseable
+file, XML carrying no `SW.*` object, the same path twice, or a walk that localizes nothing while
+the Normalizer says they differ. **Empty is not clean: none of those may exit 0.**
+
+**`tools/confirm-roundtrip.ps1` is armed and fenced (ADR-0011).** It runs
+export → to-ir → to-xml → import → compile → export and calls `compare` on the first and last.
+It MUTATES, so:
+
+- **`-Arm` REFUSES any project not named in `tools/confirm-roundtrip.allowlist`** — exit 4, checked
+  before the binary checks and before any directory is created, so Portal is never contacted on a
+  refusal.
+- Entries are absolute or **`repo:`-prefixed** so the committed file is portable across worktrees.
+- **A bare project name does not work with `-Arm`** — it cannot be canonicalised, and it resolves
+  to the project FOLDER.
+- **Junctions are DETECTED AND REFUSED**, not half-resolved (PS 5.1 cannot resolve them), so a
+  scratch project behind a junction needs its real path allowlisted.
+- `-IsScratchProject` is refused BY NAME (`download-plan`'s shape). A dry run is unfenced.
+- Allowlist not denylist: this machine carries ~19 real production `.ap20` projects beside the
+  scratch ones, and a denylist would have to be complete and would stop being complete the next
+  time a job folder arrived.
+
+`.ps1` here is **ASCII-ONLY + CRLF**: PS 5.1 reads a BOM-less script as ANSI, a UTF-8 em dash
+decodes to a quote delimiter, and the parse error points a hundred lines away from the real one.
 
 `converter compare <first.xml> <second.xml> [--json] [--max-differences <n>] [--allow-silent-layout]`
 
@@ -2135,6 +2336,22 @@ judgement lives here. Same split as `drift-check --complete` + `openness-cli exp
 
 ## `cross-check` — whole-project cross-block facts (2026-07-20, FI-22)
 
+### Multi-writer lines count writes from blocks that may never execute (migrated from CLAUDE.md 2026-08-21)
+
+A path written by two blocks, one of which no OB can reach, was reported as a C-308 multi-writer
+with **exactly one runtime writer** — and the call graph that settles it was already in the same
+report, under SIBLING REFERENCES, unused. Lines now carry
+`[NOT REACHABLE from any OB: <blocks> — <n> writing block(s) actually execute]`.
+
+**REPORTED, NEVER SUBTRACTED:** an unreachable block is usually one somebody means to call, and
+dropping its write would hide the conflict that appears the moment it is wired up.
+
+Reachability is derived from each block's **KIND** — an OB is called by the operating system and
+nothing else is. Never from a name prefix (anything can be renamed into one), and never from
+"nothing calls it", which would make every uncalled block its own root, i.e. exactly the state being
+detected. **A corpus with NO OB reports `unreachableKnown: false` — that is UNKNOWN, not "all
+reachable".**
+
 `converter cross-check --project <ir-dir> [--json]`
 
 `converter review` is per-file; the review skills build cross-block tables by hand. `cross-check`
@@ -2248,6 +2465,21 @@ against nothing (that question is unanswerable, not clean). On the fixture: 174/
 `render ABSENT`, exit 0; delete one ledger row and it names `FilterUnitInst2.C5`, exit 1.
 
 ## `undriven-scan` — per-instance interface drive states (2026-08-05, FI-39 check 4)
+
+### What counts as an instance, and exit 2 (migrated from CLAUDE.md 2026-08-21)
+
+Per-instance is the point — `cross-check` pools across instances, so one driven instance masks an
+undriven sibling. Exit 1 on undriven/disarmed; dead-interface reports, never gates.
+
+**EXIT 2 = nothing was examined** — `--fb` names no block in the corpus, or names one with no
+instances. Under FI-44 both used to exit 0, so a block that had never been written passed the check.
+
+**An INSTANCE means an instance DB *or* a MULTI-INSTANCE** (an FB placed as a STATIC of another FB,
+`ValveWater : "FB_Valve"`) — FI-50. It used to mean instance DBs only, so on a corpus following
+C-132's single-STATIC-UDT house style *every* block reported "no instances" and the check examined
+nothing. IEC timer/counter statics are excluded (a TON's `Q` is written by the instruction, not a
+caller); **an owner with no instance DB yet reports its placements under a declaration-site path
+`FB_X/Member`.**
 
 ```
 converter undriven-scan --project <ir-dir> --fb <FBName>
@@ -2376,6 +2608,18 @@ weeks after the first two were called complete. `Members.Count == 0` is the fact
 catalogue of its causes, so a fifth shape gates on arrival instead of on being noticed.
 
 ## `candidate-scan` — compute the candidate set for a requirement (2026-08-05, FI-39 check 1)
+
+### What `--scope` matches, and exit 2 (migrated from CLAUDE.md 2026-08-21)
+
+**`--scope` matches a path prefix OR a C-001 physical-IO equipment token.** `--scope UnitA` reaches
+`DQ3_UnitA_...`, whose equipment field is in the MIDDLE and which no prefix could address.
+
+**EXIT 2 = a scope was given and matched NOTHING** — unjudgeable, not clean. Under FI-44 it used to
+exit 0, so scoping to a piece of equipment silently cleared a genuinely contested binding.
+
+`--instance` is **PROVENANCE ONLY**: it labels the report and never narrows the set, because a
+candidate set is a property of the FB class, not an instance. (Unlike `undriven-scan`, where
+per-instance is the whole point.) `--phrase` is advisory only and never narrows.
 
 ```
 converter candidate-scan --project <ir-dir> --fb <FBName> [--instance <name>]
@@ -2731,6 +2975,46 @@ regenerated XML still says `Standard`. All 908 converter tests pass (up from 890
 golden-harness suites (39, including `ExportDriftDetectorTests`) stay green.
 
 ## Fixed-shape instruction registry, unconnected ports, and two one-way-IR fixes (2026-08-12)
+
+### `MB_SERVER` 5.3 — registered, and proven end to end (migrated from CLAUDE.md 2026-08-21)
+
+**Instruction names are keyed on `(NAME, VERSION)`, and an unknown version is REFUSED.** TIA emits
+three different spellings of the Modbus family; version is exactly what changes a port list, and the
+port list is what the converter SUPPLIES, so accepting an unknown version means applying the WRONG
+TEMPLATE — it converts, imports, and misbehaves on the controller. New instructions of this shape
+are a TABLE ENTRY in `SimaticMl/FixedShapeInstructions.cs`, not five files edited in lockstep.
+
+✅ **`MB_SERVER` 5.3 is REGISTERED and the IR path works** — `MbServer53` was added to
+`FixedShapeInstructions.cs` on 2026-08-12.
+
+Both the legacy `Modbus_*` entries and the real `MB_MASTER` / `MB_COMM_LOAD` names are kept
+deliberately; migrating the legacy ones onto the registry is ruled **NOT NOW**
+(`docs/notes/deferred-items.md` D-8). Revisit only on a real export that CONTRADICTS the retained
+names — tidiness is not a trigger.
+
+***And the `Array[..] of Struct` never applied to us at all:*** it belongs to the Siemens **sample**
+block used to characterise the port list, not to anything we author. `MB_HOLD_REG` is an **area
+pointer over marker memory** (`P#M1000.0 WORD n`), not a reference to an `Array[..] of Int` static,
+so the structured interface simply never arises. Two statics suffice: an `MB_SERVER` instance and a
+`TCON_IP_v4`.
+
+Proven in `GenProject1` 2026-08-13 — imported, compiled (`errors=0`), and confirmed from **TIA's own
+re-export** (`Part Name="MB_SERVER" Version="5.3"`, the pointer, `LocalPort 503`), never from an
+exit code. The converter half was verified behaviourally too: the Release binary takes a real
+`MB_SERVER` IR block to SimaticML, exit 0, part emitted.
+
+🔴 **A converter limitation is NEVER by itself a reason a block cannot reach a project.** The
+converter's registry governs **IR → SimaticML only**. `openness-cli export` / `import` produce and
+consume SimaticML **straight from TIA and never touch the converter**. A stale note claiming
+`MB_SERVER` was deliberately unregistered was once read as "it cannot be moved into a project", and
+that stopped a rig deployment a step early. `MB_SERVER` is a `<Part>`, measured: an InOut port wires
+as an ORDINARY SYMBOLIC `<Access>` in normal input order, so the `<Call>` / `Section="InOut"`
+whitelist is IRRELEVANT to it.
+
+**Unconnected ports, concretely:** `REQ := OPEN` for a deliberately unwired input, `DONE => OPEN`
+for an output — versus **no argument at all** when the port is absent from `<Wires>` entirely.
+`OPEN` is a reserved bare word (precedent: `TRUE` / `ENO`); a tag genuinely named `OPEN` on such a
+port is a hard error naming the collision, never a silent mangle.
 
 Four defects, found together on ONE real exported block — a genuine TIA V20 export of a live
 S7-1200 (classic 1214C) Modbus TCP FC — each of which alone stopped it round-tripping. The fixture
@@ -3248,6 +3532,30 @@ bug did. The aliases are **reported** on the fact (`instanceAliases`) so a consu
 knowingly. Every FB in `test-project001` has exactly one instance DB — *which is precisely why
 designing only for that would be designing for the case that happens to exist.*
 
+🔴 **2026-08-21 — reporting the alias was not enough, because the line beside it asserted a verdict
+that contradicted it.** A block-local row printed `[block-local to FB_X — not a cross-block conflict;
+also addressable as iDB_X.member]` **while another block wrote that very alias.** **8 of the 27**
+block-local multi-writer rows in `ir/test-project001` read that way, with `OB100` and
+`FC_ControlMain` writing the aliases through the instance DBs.
+
+The key spaces are **still not pooled** — the reasoning above is unchanged and still right. What is
+new is that each group now carries `aliasWriters`: the writers of its `iDB_…` aliases that live
+**outside** the owning block (the owner's own writes are excluded, or every FB would self-conflict).
+Consequences:
+
+- The `— not a cross-block conflict` half is asserted **only when `aliasWriters` is empty**. Where it
+  is not, the row instead names the outside writers and says plainly that this IS cross-block
+  contention. On the reference corpus **19 rows keep the annotation and 8 lose it** — counted off the
+  tool's own JSON, after a first pass eyeballed three name patterns and undercounted it as 4.
+- **`soleWriters` had the same blindness on EIGHT rows, and that is the more dangerous half.** One
+  internal writer plus an outside alias writer gives `Writers.Count == 1`, so such a row appears
+  **only** in the sole-writer table and never in the multi-writer one — and that table exists to
+  answer *"what loses its only writer if I delete this?"*. `FB_MotorFwdRevSystem.IO.FaultFB` is
+  written by `FC_ControlMain` **and** `OB100` through the iDB, and read as sole-written.
+- **Reported, never subtracted** — the same discipline `unreachableWriterBlocks` follows. Such rows
+  stay in `soleWriters` carrying `aliasWriters`, because dropping them would hide them entirely.
+- A consumer that dismissed a row on `owner is not null` **must now also check `aliasWriters`.**
+
 **Sibling analyses checked.** `deadMembers`' interface half already restricted the bare form to the
 owning FB; `ioBoundary` and `siblingRefs` carry the block on every row. All three are
 **byte-identical across the fix** on the committed corpus, so `multiWriters`/`soleWriters` were the
@@ -3267,6 +3575,37 @@ two tests written for it). *The pre-existing suite stayed green through both the
 and could not tell them apart.*
 
 ## `reachable-state` — D9's producer: slot disjointness COMPUTED, not declared (2026-08-14)
+
+### Consumers, closure direction, and canonicalisation (migrated from CLAUDE.md 2026-08-21)
+
+`converter reachable-state --project <ir-dir> [--block <name>]... [--json]`
+
+Per block: the transitive closure through its CALL tree of every storage location it touches, keyed
+on STORAGE IDENTITY, with a corpus-stamped provenance. Feeds
+`wave-cli submit --reachable-state <file> --reachable-block <name>`, after which
+`SlotConflictDerivation.OverlappingReachableState` makes the edges by set intersection.
+`--reaches`/`--reaches-from` survive as the DECLARED path and are **REFUSED in combination** with
+the computed one.
+
+- **READS COUNT AS WELL AS WRITES** — two slots cannot share a signal one drives and the other
+  observes.
+- **CLOSES DOWNWARD ONLY.** Closing upward through callers reaches OB1 from any leaf and would make
+  every pair conflict; coupling that exists only in a common caller is the author's add-only
+  blacklist.
+- **An `iDB.<suffix>` reference is canonicalised onto `<FB>|<suffix>` before intersecting.** Without
+  it, a slot testing an FB and one testing its caller read as DISJOINT while driving one location.
+  This deliberately POOLS WHERE `QualifiedPath` DOES NOT, because the error points the other way:
+  there, pooling invents a multi-writer (a false accusation); here it can only ADD an overlap, i.e.
+  separate two slots that might have run together. Computed disjointness is the FLOOR, so more of it
+  is the safe direction — and every rewrite is REPORTED, never silent.
+- Array subscripts are stripped (`DB_Input.Test[0]` disconnects every terminal for both tests).
+- **ABSENT IS NOT EMPTY, AT BOTH LEVELS:** `reachableState: []` is the positive claim "computed,
+  reaches nothing"; a closure nobody could compute OMITS the key AND its provenance, so admission
+  raises `ReachableStateNotComputed` and refuses rather than admitting the most independent-looking
+  slot in the set.
+
+Exit **0** computed / **2** NOT COMPUTED, key withheld / **3** emitted with at least one block
+withheld BY NAME.
 
 ```
 converter reachable-state --project <ir-dir> [--block <name>]... [--json]
@@ -3612,6 +3951,28 @@ the **candidate set**, from a floor high enough that the walk must cross or stop
 
 ## `interface-check` — the static comparison D6's green rests on (2026-08-14, NB-30)
 
+### Its exit 1 is a new kind, and two traps (migrated from CLAUDE.md 2026-08-21)
+
+`converter interface-check --project <ir-dir> --block <name> --enumeration <file> [--json]`
+
+Reads the enumeration's own `response_signal:` values as the REQUIRED set — so the requirement has a
+PRODUCER rather than a hand-typed list — walks the block's INPUT/OUTPUT/STATIC (TEMP excluded) and
+reports each required signal PRESENT or MISSING.
+
+**Its outcome is a new kind: `exit 1` is a FAIL AGAINST THE BLOCK, not a refusal of the
+submission.** Every other gate in this system blames the submission; a missing response signal is
+the BLOCK's defect. Measured on the deliverable: `INPUT 0, OUTPUT 0, STATIC 25` →
+`PRESENT HopperBlockedAlarm`, `MISSING HopperBlockedInhibit`, exit 1.
+
+⚠️ **Design trap:** the block's INPUT and OUTPUT sections are BOTH EMPTY (it uses a single STATIC
+interface UDT, C-132 house style), so a naive check that reads only INPUT/OUTPUT reports *every*
+signal missing and looks like a catastrophic finding.
+
+⚠️ **Its cross-file UDT descent is UNPROVEN BY ITS OWN TESTS** — every UDT member in this corpus is
+INLINED, so that branch has never run; disabling it left all 20 tests green. A test now ASSERTS that
+corpus-wide absence, so the first genuinely non-inlined member forces a re-proof instead of silently
+exercising untested code.
+
 ```
 converter interface-check --project <ir-dir> --block <name> (--requires <n1,n2,...> | --requires-file <path>) [--json]
 ```
@@ -3818,6 +4179,68 @@ by nothing, while `ReviewRunnerTests` carried a hand-copied duplicate that had *
 18** — so the "every rule gets exactly one status on every content kind" invariant was being asserted
 against a stale subset, and a rule could be registered, never wired into the DB/TYPE/TAGTABLE
 branches, and still pass.
+
+## 🔴 `review` — C-603, and the exemption that had to be per-subject (2026-08-21)
+
+A C-603 breach sat in `FB_ShredderSequencer` for weeks. `converter review` returned `0 finding(s)`
+on the block every time it was run, because **C-603 was not one of the 19 mechanized rules**. It was
+found by a human-directed read and cost two fix dispatches and two review dispatches. *A rule the
+runner can see costs an exit code; a rule it cannot costs a review round.*
+
+**C-603 (warn), registered in `ReviewRunner.AllRuleIds` (now 20)** — doc 06: *"Step membership is
+enumerated, not ranged."* An ordered-range predicate over the C-118 phase register (`>=`, `<=`, `>`,
+`<`, and the two-sided spans built from them) is a finding; `Step = n` and `Step <> n` never are —
+neither is ordered, so neither can absorb the step C-120 exists to let a later revision insert.
+"A step register" is **not** re-derived here: it is `HasStepLeaf`, the same leaf-named-`Step` test
+C-118/C-121/C-122 already key off, so the rule cannot see a different sequence than its neighbours.
+
+*** THE WHOLE DESIGN IS IN THE EXEMPTION, AND THE OBVIOUS EXEMPTION IS WRONG. *** Doc 06 allows a
+range "where 'every future step inserted in this span belongs here too' is the stated intent
+(comment)". Judging whether a paragraph of English states that intent is taste, and this runner does
+not do taste. Judging whether the network *has* a comment is worthless — and measurably so:
+`FB_ShredderSequencer` network 14 before the fix had **one comment covering three ranged coils**,
+stated the range intent for exactly one of them (`PusherParkCmd`, still legitimately a range today),
+and carried two unstated ranges beside it. **A has-a-comment exemption passes all three.**
+
+So the mechanized test is per **subject**: *the network comment must name the write target whose
+guarding condition carries the range*, matched on a word boundary against the target's leaf name
+(`IO.PusherParkCmd` → `PusherParkCmd`) or its full dotted path. A comment that never mentions the
+coil cannot have stated an intent for it; a comment that does is where a reader would go to find it.
+The check is deliberately **one-sided** — it can prove the intent was *not* stated, never that it
+was, and the finding text says what the reviewer still has to confirm. Same deferral shape as
+C-121's "a named bit may be a genuine equivalent of `Step = <from>`".
+
+- **A hyphen counts as part of the word.** No S7 identifier has one (C-005), so `reverse-run` is
+  English compounding, not the coil `Run`. Wrong direction to be wrong in: an exemption granted on
+  ordinary prose is worse than a finding raised on `PusherParkCmd-driven`.
+- **One exception to the name anchor: a range guarding a write to the Step register itself.** `Step`
+  is not distinctive prose in a sequencer — every network comment in the block contains the word, so
+  anchoring there would auto-exempt every transition. Those are always findings; the repair is
+  C-601's (name the condition to a bit, and the bit's name becomes the anchor) or enumeration, which
+  is what C-121's `Step = <from>` transitions want anyway.
+
+**EMPTY IS NOT CLEAN, expressed in the return type.** `CheckC603StepMembershipEnumerated` returns a
+`C603Result`, not the plain `IEnumerable<Finding>` every other rule returns, because it has two
+answers. `Findings` are the ranges it judged. `UnattributedRanges` are ranges it **found** somewhere
+that is not a write's guarding condition (a `CALL` input argument, a `MOVE`'s `IN`), where it cannot
+identify the subject to ask the comment about — so it did not judge them. `ReviewRunner` reads both:
+a non-empty second list records C-603 **Skipped**, which is **exit 2, REVIEW INCOMPLETE**, the same
+fail-closed treatment C-118/C-122/C-125 get when their subject exists and goes unjudged. A caller
+reading only `Findings` would have seen an empty list and reported a pass — the return type is what
+makes that impossible to write by accident. A block with no Step register at all is `NotApplicable`
+with its own reason, never `Checked`-and-zero.
+
+**Corpus impact, stated rather than discovered later.** Every `.ir` under `ir/` and `patterns/`:
+C-603 reports `NotApplicable` or `Checked` with **zero** findings. No new exit-2 anywhere. The one
+retained range in the corpus — `FB_ShredderSequencer`'s `PusherParkCmd`, `IO.Step >= 20 AND IO.Step
+<= 40` — passes on its network comment naming it. Reconstructed from commit `27bc689` (the pre-fix
+state), the same rule raises 3 findings and still passes `PusherParkCmd`, which is the discriminating
+test (`ReviewC603Tests`, 17 tests, both directions on every claim).
+
+⚠️ **C-603 is `warn`, and `ReviewOutcome.ExitCode` only gates on `Error` findings** — so a C-603
+finding prints and counts but exits 0, exactly like C-120's and C-601-family severities generally.
+The rule now *appears in the report*, which is the round it saves; making it *gate* is a severity
+decision in doc 06, not a converter one.
 
 ## Rules (docs/05-architecture.md, 04 §8/§10)
 

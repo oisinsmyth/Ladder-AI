@@ -1,0 +1,20 @@
+# Audited false positives from the 2026-08-21 CLAUDE.md context cut.
+#
+# Each is a markdown/punctuation run the marker regex caught, NOT a fact. Each was
+# checked by hand on 2026-08-21 and the comment names where the real fact now lives.
+#
+# DO NOT ADD TO THIS FILE TO SILENCE A REAL DROP. Migrate the fact instead, then confirm
+# it greps positive in its new home. An allowlist that grows every time the gate
+# complains is a gate that has been turned off slowly.
+
+# markdown bold/backtick run, mid-sentence - the empty-remainder rule itself is in
+# src/converter/README.md under `diff`.
+.** Where every network is inside the
+
+# event-list fragment - the full touch-first event list is in
+# src/openness-cli/README.md under `hmi-edit-screen`.
+on buttons), screens use
+
+# trailing arrow/em-dash run - the zero-byte/truncated-write route is in
+# src/converter/README.md under `drift-check`.
+unparseable — a zero-byte file, a truncated write — →

@@ -16,7 +16,7 @@ allowed-tools:
 
 Ladder-AI project. This skill enforces tier 1 of the LAD priority order (**function** →
 readability & simplicity → efficiency) — `docs/06-lad-conventions.md`, preamble: *it does what the
-requirement says*. Read `CLAUDE.md` at the repo root first if you haven't — its hard rules apply
+requirement says*. `CLAUDE.md` is already in your context — do not re-read it. Its hard rules apply
 (you review LAD only; if anything looks like an F-/safety block, stop and report it; never modify
 what you review).
 

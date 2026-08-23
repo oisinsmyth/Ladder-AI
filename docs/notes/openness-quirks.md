@@ -31,6 +31,26 @@ already-open project name) requires an absolute path — a relative one throws
 - JOB9002 scratch copy: `C:\Users\User\Desktop\AI Ladder Project\JOB9002 - Tom White Waste - Scratch
   Copy\JOB9002 - Tom White Waste\JOB9002 - Tom White Waste_V20\JOB9002 - Tom White Waste_V20.ap20`
 
+## Which S7-1200? Classic and G2 are different articles (migrated from CLAUDE.md 2026-08-21)
+
+**Check WHICH S7-1200 before relying on a G2-only or classic-only fact.** CLAUDE.md read
+"S7-1200 G2 target" until 2026-08-11 and that was wrong for the hardware actually in use.
+
+- The live job and its bench rig are the **CLASSIC 1214C, `6ES7 214-1AG40-0XB0`** — verified against
+  the device by order-code read, and corroborated by a successful download, which requires the
+  configured CPU to match the physical one.
+- **G2 is a different article number** (`6ES7 214-1AH50-0XB0`) with different firmware and
+  capabilities, so a claim sourced from G2 documentation may not hold here, and vice versa.
+
+Classic enters phase-out from 2026-11-01, so new work may well target G2 — but that is a per-project
+fact to establish, not a default to assume.
+
+## `openness-cli` output must be redirected, never piped (migrated from CLAUDE.md 2026-08-21)
+
+`openness-cli` launches Portal as a **child process inheriting stdout**, so **piping its output
+hangs forever** — the pipe outlives the command. Redirect with `>` / `Out-File` on the outer
+invocation; do not pipe.
+
 ## Known constraints
 - User must be in the "Siemens TIA Openness" Windows group (log off/on to take effect).
 - Concurrent Portal instances on *different* projects are safe (fixed 2026-07-13 — see the

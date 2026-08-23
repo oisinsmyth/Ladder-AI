@@ -22,13 +22,29 @@ public static class CrossCheckOutputFormatter
             // a cross-block conflict, and reading it as one is the defect this annotation ends.
             if (m.Owner is not null)
             {
-                sb.Append("  [block-local to ").Append(m.Owner).Append(" — not a cross-block conflict");
+                // 🔴 The "not a cross-block conflict" half is asserted ONLY when nothing outside the
+                // owner writes the alias. It used to be unconditional, and on four rows of the
+                // reference project it contradicted the alias printed beside it on the same line.
+                sb.Append("  [block-local to ").Append(m.Owner);
+                if (m.AliasWriters.Count == 0)
+                {
+                    sb.Append(" — not a cross-block conflict");
+                }
+
                 if (m.InstanceAliases.Count > 0)
                 {
                     sb.Append("; also addressable as ").Append(string.Join(", ", m.InstanceAliases));
                 }
 
                 sb.Append(']');
+
+                if (m.AliasWriters.Count > 0)
+                {
+                    sb.Append("  [*** ALSO WRITTEN FROM OUTSIDE ").Append(m.Owner)
+                      .Append(", THROUGH THE INSTANCE DB: ")
+                      .Append(string.Join(", ", m.AliasWriters.Select(w => $"{w.Block} N{w.Network} ({w.Kind})")))
+                      .Append(" — same storage, different spelling, so this IS cross-block contention]");
+                }
             }
 
             // Reported, never subtracted (2026-08-14). A writer in a block no OB can reach does not
@@ -134,6 +150,9 @@ public static class CrossCheckOutputFormatter
                 unreachableWriterBlocks = m.UnreachableWriterBlocks,
                 unreachableKnown = m.UnreachableKnown,
                 reachableWriterCount = m.ReachableWriterCount,
+                // Non-empty means owner + "not a cross-block conflict" is FALSE for this row. A
+                // consumer that keyed on `owner is not null` to dismiss a row must key on this too.
+                aliasWriters = m.AliasWriters.Select(w => new { block = w.Block, network = w.Network, kind = w.Kind }),
             }),
             deadMembers = report.DeadMembers.Select(d => new
             {
@@ -167,6 +186,10 @@ public static class CrossCheckOutputFormatter
                 owner = s.Owner,
                 writer = new { block = s.Writer.Block, network = s.Writer.Network, kind = s.Writer.Kind },
                 readers = s.Readers.Select(r => new { block = r.Block, network = r.Network }),
+                // 🔴 NON-EMPTY MEANS THIS ROW IS NOT SOLE-WRITTEN. The back-out question this table
+                // answers ("what loses its only writer?") gets the wrong answer without it: an outside
+                // write through the instance DB keeps the member driven after the "only" writer goes.
+                aliasWriters = s.AliasWriters.Select(w => new { block = w.Block, network = w.Network, kind = w.Kind }),
             }),
         };
 

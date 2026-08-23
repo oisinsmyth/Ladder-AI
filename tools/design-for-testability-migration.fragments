@@ -1,0 +1,27 @@
+# Audited false positives from the 2026-08-21 design-for-testability cut.
+#
+# All three are the same regex artefact: the marker pattern pairs the CLOSING backtick of
+# one code span with the OPENING backtick of the next, capturing the prose between them.
+# None is a fact. Each was checked by hand against the contract on 2026-08-21 and the
+# comment names the line the real content sits on.
+#
+# DO NOT ADD TO THIS FILE TO SILENCE A REAL DROP. Migrate the fact instead, then confirm
+# it greps positive in its new home. An allowlist that grows every time the gate
+# complains is a gate that has been turned off slowly.
+
+# Prose between `tag` and `specName` in the old Gate 5 blockquote. The fact - a mirrored
+# signal carries both a controller tag and a specification name - is contract §2.8
+# (`specName` appears 8 times in the contract), and is restated in this skill's
+# "Gates 8 and 8c" section.
+(on the controller) and
+
+# Prose between `[M]` and `BitAddressOf` in the old Gate 7 section. The fact - the
+# simulator and BitAddressOf agree FROM THE SAME PREMISE, so their agreement is worth
+# nothing - is contract §6 at line 1306, verbatim.
+, and the simulator and
+
+# The map.storage schema, which the contract writes with spaces inside the braces
+# (`signal -> { owner?, path }`, lines 99 and 647) where the skill wrote it without.
+# Whitespace normalisation collapses runs but does not insert them, so the two forms do
+# not match. Same fact, different spacing.
+{owner?, path}

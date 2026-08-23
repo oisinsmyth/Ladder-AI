@@ -4,6 +4,7 @@
 tooling ready to use in the morning on a live project.* This is the answer, and it is written to be
 **read once, quickly, before you start** — not to be complete.
 
+<<<<<<< HEAD
 > ✅ **THE ONE-LINE ANSWER, CORRECTED 2026-08-23.** **Deployment, read-back, analysis AND the
 > closed-loop test path have all run against a real controller.** A conformance wave has executed end
 > to end four times — 2026-08-18, 08-20, and twice on 08-22 — the last of those **two lanes off one
@@ -17,6 +18,18 @@ tooling ready to use in the morning on a live project.* This is the answer, and 
 > expensive kind this repo has: it is read before anything else and it tells people not to plan on a
 > capability they have. It was quoted onward into a design doc and a work plan before anybody opened
 > the artifacts. **If you are about to edit this file, that is the failure mode to check for.**
+>
+> 🔴 **AND IT WAS CAUGHT TWICE, INDEPENDENTLY, WHICH IS THE PART WORTH KEEPING.** A correction landed
+> on `master` on 2026-08-21 recording the first two runs and noting the original had *"been quoted
+> onward for a week"*; this branch replaced the line outright on 08-23 after four runs. **Two people
+> found the same stale sentence from different directions and neither knew the other had.** The
+> branches were reconciled on 2026-08-23 and the fuller answer kept.
+>
+> ⚠️ **THE GENERALISATION, FROM THAT CORRECTION, AND IT OUTLIVES THIS PARAGRAPH: this page is dated.
+> CHECK THE ARTIFACTS BEFORE RELYING ON ANY NEGATIVE CLAIM IN IT.** The same failure mode produced
+> the ~2.1 ms scan row below, which said *"now deployed"* and was quoted onward for six days. A
+> negative claim in a readiness document is the one most likely to be believed without checking,
+> because checking it means proving a capability exists and nobody does that on spec.
 
 > ✅ **THE RELEASE BINARY IS NOW CURRENT — rebuilt and verified, nothing owed.** It was stale and it is
 > not any more. See *THE RELEASE BINARY WAS STALE* below for how that was proved.
@@ -98,7 +111,7 @@ it parsed as **nothing at all** before the fix, so it is an unambiguous currency
 
 | | why |
 |---|---|
-| **The conformance loop end to end** | ***A WAVE HAS NEVER RUN.*** The 27 vectors were authored, admitted as far as the gates, and never executed. There is no result package in existence. **This was a DECISION, not a drift** — see below |
+| **The conformance loop end to end** | ⚠️ **SUPERSEDED 2026-08-21 — a wave HAS now run, twice (08-18 and 08-20).** Result packages exist; the 08-20 run reports `"outcome": "Ran"`, 3 of 3 vectors attempted, 1,939 round trips, rig released. What is NOT established is that the loop *answers*: those verdicts were `Unsettled`, and `conclusiveAboutTheBlock` was 1. So read this row as "the loop executes; its output has not yet been shown to settle a question about a block". *(As written 2026-08-14: **A WAVE HAS NEVER RUN** — the 27 vectors authored, admitted as far as the gates, never executed, no result package in existence. **A DECISION, not a drift** — see below.)* |
 | ~~**The phase-armed latch**~~ | ✅ ***BUILT 2026-08-14*** (`4738e21`, `b9bc470`) — this row is retained struck-through because **it was stale for several hours and was quoted onward while stale.** The generator emits `SCOIL <latch> := <start bool> AND [<arm>] AND <signal>` / `RCOIL := NOT <start bool>` — clear on a **level, never an edge** — and it **cost ZERO arm registers**, because `InertPhase.Establish` already lowers every start bool before each index. ⚠️ **Reachability caveat: the COMMITTED binding does not yet declare `transient`/`rearmsEachIndex`/`armedBy`, so it will not generate the latches until it does.** The refusal survives only for a slot with **no start condition**, where the sole expressible latch is the unconditional one |
 | **Wave duration as a planning figure** | Measured on one rig over one tunnel. **Reference only.** Nothing is scheduled against it |
 | **The permit half of the write fences** | Tonight's fence work attacked **refusals**. The permit path is `NOT CHECKED` |

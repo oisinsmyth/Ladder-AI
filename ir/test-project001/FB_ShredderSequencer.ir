@@ -3,13 +3,13 @@ ROOTID 0
 NUMBER 8
 LANGUAGE LAD
 TITLE "Shredder Plant Sequencer"
-COMMENT "Shredder plant sequencer (C-118-C-125): commands the shredder motor (via FB_MotorFwdRevSystem, wired at FC_ControlMain) and gates infeed/discharge conveyors and upstream enable, through a stepped cycle. Step legend (C-120): 0=Idle (stopped, waiting for a start condition) - 10=PreStart (siren warning before motion; arms the motor via MotorStartArm) - 20=DischargeStart (discharge conveyor starting, timed) - 30=ReverseRun (reverse commanded; the motor FB's own ReverseDelay entry pause elapses inside this step, then ReverseRunTimer counts ShredderReverseRunTime of CONFIRMED reverse feedback) - 40=WaitForwardRun (waiting for forward-run feedback) - 50=Running (normal production; infeed/upstream-enable timers and overcurrent detection are live) - 60=OvercurrentAbort (tripped - pause, then retry into ReverseRun, or stay out if too many reversals). Stop-all (REQ-012/013/062): StopCmd = stop button OR downstream lost OR control circuit unhealthy - aborts every step to Idle. Pusher handling is split (owner amendment 2026-07-16): stop button/unhealthy force pusher mode 0 (parks AND blocks jog), while any live stop reason - downstream loss included - raises PusherCycleInhibitCmd (no cycle launches or continues into a stopped plant, hand-jog stays available)."
+COMMENT "Shredder plant sequencer: commands the shredder motor (via FB_MotorFwdRevSystem, wired at FC_ControlMain) and gates infeed/discharge conveyors and upstream enable, through a stepped cycle. Step legend: 0=Idle (stopped, waiting for a start condition) - 10=PreStart (siren warning before motion; arms the motor via MotorStartArm) - 20=DischargeStart (discharge conveyor starting, timed) - 30=ReverseRun (reverse commanded; the motor FB's own ReverseDelay entry pause elapses inside this step, then ReverseRunTimer counts ShredderReverseRunTime of CONFIRMED reverse feedback) - 40=WaitForwardRun (waiting for forward-run feedback) - 50=Running (normal production; infeed/upstream-enable timers and overcurrent detection are live) - 60=OvercurrentAbort (tripped - pause, then retry into ReverseRun, or stay out if too many reversals). Stop-all (REQ-012/013/062): StopCmd = stop button OR downstream lost OR control circuit unhealthy - aborts every step to Idle. Pusher handling is split: stop button/unhealthy force pusher mode 0 (parks AND blocks jog), while any live stop reason - downstream loss included - raises PusherCycleInhibitCmd (no cycle launches or continues into a stopped plant, hand-jog stays available)."
 
 INTERFACE
   INPUT
   OUTPUT
   STATIC
-    IO : "UDT_ShredderSequencerIO" RETAIN SETPOINT COMMENT "Caller-visible interface (C-115) - FC_ControlMain writes CycleStart/CycleStop/feedback/tunables in, reads Run*/EnableUpstream/PreStartSounder/motor-command bits out. See the block header for the Step value legend."
+    IO : "UDT_ShredderSequencerIO" RETAIN SETPOINT COMMENT "Caller-visible interface - every signal into or out of this block crosses here, nothing bypasses it: FC_ControlMain writes CycleStart/CycleStop/feedback/tunables in, reads Run*/EnableUpstream/PreStartSounder/motor-command bits out. See the block header for the Step value legend."
       CycleStart : Bool
       AutoStartSignal : Bool
       CycleStop : Bool
@@ -40,7 +40,7 @@ INTERFACE
       PusherParkCmd : Bool
       PusherCycleInhibitCmd : Bool
     StopCmd : Bool COMMENT "Stop-all: operator CycleStop, loss of DownstreamRunning (nowhere for shredded material to go), or loss of SystemHealthy (control circuit/E-stop - REQ-062: recovery must demand a fresh start press, so the sequence may not sit in a run step through an E-stop). Read by every step's own stop transition below and mirrored to the pusher as PusherCycleInhibitCmd."
-    PusherModeForceOff : Bool COMMENT "Named once (C-601): the hard pusher force - operator stop or circuit-unhealthy, plus the overcurrent-abort step. Forces PusherModeCmd to 0, which parks the pusher AND blocks jogging. Deliberately NOT the full StopCmd (owner amendment 2026-07-16): downstream absence must leave hand-jog available (REQ-040), so it reaches the pusher only as PusherCycleInhibitCmd."
+    PusherModeForceOff : Bool COMMENT "The hard pusher force - operator stop or circuit-unhealthy, plus the overcurrent-abort step. Forces PusherModeCmd to 0, which parks the pusher AND blocks jogging. Deliberately narrower than the full StopCmd: downstream absence must leave hand-jog available (REQ-040), so it reaches the pusher only as PusherCycleInhibitCmd."
     ReversalWindowTimeMS : DInt
     PreStartSounderTimeMS : DInt
     DischargeConveyorTimeoutMS : DInt
@@ -100,7 +100,7 @@ INTERFACE
       ET : Time
       IN : Bool
       Q : Bool
-    OvercurrentTripped : Bool COMMENT "KNOWN GAP, not wired to real current yet: both timers below are gated 'AND NOT AlwaysTrue' (permanently false placeholders) because DB_AnalogInput.ShredderMotorCurrent > DB_Settings.OvercurrentSetpointMedium/High is a genuine Real-vs-Real comparison this converter's synthesizer can't type correctly yet (hardcodes Int) - flagged and deferred rather than guessed at. This bit, and Step 50's own overcurrent-abort transition, are dead code until that's built."
+    OvercurrentTripped : Bool COMMENT "KNOWN GAP, not wired to real current yet: both timers below are gated 'AND NOT AlwaysTrue' (permanently false placeholders) because DB_AnalogInput.ShredderMotorCurrent > DB_Settings.OvercurrentSetpointMedium/High is a genuine Real-vs-Real comparison this converter's synthesizer can't type correctly yet (hardcodes Int). This bit, and Step 50's own overcurrent-abort transition, are dead code until that's built."
     OvercurrentAbortPauseTimer : TON_TIME VERSION 1.0 SETPOINT
       PT : Time
       ET : Time
@@ -114,7 +114,7 @@ NETWORK 1 "Stop Command"
   COIL StopCmd := IO.CycleStop OR NOT IO.DownstreamRunning OR NOT IO.SystemHealthy
 
 NETWORK 2 "HMI Time Conversions"
-  COMMENT "HMI/DB_Settings times are Real seconds for operator legibility; every TON below needs its PT in DInt ms - one MUL+CONVERT pair per timer, matching the MotorDOL FTTime/EnableUPSTime idiom. Kept as one block up front rather than repeated at each timer, so the x1000 idiom is visibly consistent and only ever done once."
+  COMMENT "HMI/DB_Settings times are Real seconds for operator legibility; every TON below needs its PT in DInt ms - one MUL+CONVERT pair per timer, matching the MotorDOL FTTime/EnableUPSTime idiom. All ten pairs sit together up front, so the x1000 conversion is done once per timer and reads the same way for every one of them."
   MUL(EN := TRUE, IN1 := DB_Settings.ReversalWindowTime, IN2 := 1000.0) => Time
   MUL(EN := TRUE, IN1 := DB_Settings.PreStartSounderTime, IN2 := 1000.0) => Time
   MUL(EN := TRUE, IN1 := DB_Settings.DischargeConveyorTimeout, IN2 := 1000.0) => Time
@@ -137,11 +137,11 @@ NETWORK 2 "HMI Time Conversions"
   CONVERT(EN := ENO, IN := Time) => ReversalRetryPauseTimeMS
 
 NETWORK 3 "Reversal Re-Arm Window Timer"
-  COMMENT "Retriggerable on-delay built from TON+edge (C-406/C-404 - no TONR/TOF exists to do this natively). IN drops false the instant a NEW reversal is detected - Step transitioning into 60, tested against ReversalStepEdgeMem's own previous-scan value (correct read-before-write ordering: this network reads the memory bit before Network 4 updates it later the same scan, so no cross-network staleness) - which resets ET/Q to 0 that scan; the timer then re-arms and must run a full ReversalWindowTime with no further reversal before Q goes true. Fixed 2026-07-17 (owner ruling, B-5/REQ-028): the prior rung read IN := ReversalCount > 0 alone, a level condition that only ever ran once from the first reversal - a fixed window, not the re-arming one this network's own title always claimed (C-608)."
+  COMMENT "Retriggerable on-delay built from TON+edge. IN drops false the instant a NEW reversal is detected - Step transitioning into 60, tested against ReversalStepEdgeMem's own previous-scan value (correct read-before-write ordering: this network reads the memory bit before Network 4 updates it later the same scan, so no cross-network staleness) - which resets ET/Q to 0 that scan; the timer then re-arms and must run a full ReversalWindowTime with no further reversal before Q goes true."
   TON(ReversalWindowTimer, IN := NOT (IO.Step = 60 AND NOT ReversalStepEdgeMem) AND ReversalCount > 0, PT := ReversalWindowTimeMS)
 
 NETWORK 4 "Reversal Counter"
-  COMMENT "Edge-counts entries into Step 60 (C-404 - constructed edge, not the built-in -|P|-; ReversalStepEdgeMem also gates Network 3's own timer-reset detection, same edge shape, read one scan earlier there by construction). Resets on ReversalWindowTimer.Q - 180s ran clean with no new reversal, re-armed every time Network 3 sees a new edge, so ReversalCountThreshold reversals must each land within ReversalWindowTime of the previous one, not just occur ReversalCountThreshold times ever - or a fault reset."
+  COMMENT "Edge-counts entries into Step 60 through an explicit memory bit: ReversalStepEdgeMem also gates Network 3's own timer-reset detection, same edge shape, read one scan earlier there by construction. Resets on ReversalWindowTimer.Q - 180s ran clean with no new reversal, re-armed every time Network 3 sees a new edge, so ReversalCountThreshold reversals must each land within ReversalWindowTime of the previous one, not just occur ReversalCountThreshold times ever - or a fault reset."
   COIL ReversalStepEdge := IO.Step = 60 AND NOT ReversalStepEdgeMem
   COIL ReversalStepEdgeMem := IO.Step = 60
   MOVE(EN := ReversalWindowTimer.Q OR IO.FaultReset, IN := 0) => ReversalCount
@@ -166,7 +166,7 @@ NETWORK 8 "Step 20 (DischargeStart) - Timer, Timeout Fault, And Transitions"
   MOVE(EN := NOT StopCmd AND NOT DischargeStartTimer.Q AND IO.DischargeConvRunning AND IO.Step = 20, IN := 30) => IO.Step
 
 NETWORK 9 "Step 30 (ReverseRun) - Timer And Transitions"
-  COMMENT "ReverseRunTimer counts only while reverse is CONFIRMED running (ShredderRunRevFB), so the spec's 6 s (REQ-005) buys 6 s of actual rotation - the motor FB's 8 s ReverseDelay entry pause no longer eats the window, and a feedback dropout restarts the count. The commanded-but-no-feedback dwell is deliberately NOT re-timed here (C-409, one interval one place; step 40 already relies on the same mechanism): the motor FB's own fail-to-run window (FTTime, after its ReverseIgnoreFT masking) latches FTR, and the MotorFaultActive exit below aborts the step - bounded dwell, latched fault, C-122's substance without a duplicate timer."
+  COMMENT "ReverseRunTimer counts only while reverse is CONFIRMED running (ShredderRunRevFB), so the spec's 6 s (REQ-005) buys 6 s of actual rotation - the motor FB's 8 s ReverseDelay entry pause does not eat the window, and a feedback dropout restarts the count. The commanded-but-no-feedback dwell is timed by the motor FB, not again here (step 40 relies on the same mechanism): its own fail-to-run window (FTTime, after its ReverseIgnoreFT masking) latches FTR, and the MotorFaultActive exit below aborts the step, so the dwell stays bounded and the fault latched."
   TON(ReverseRunTimer, IN := IO.Step = 30 AND IO.ShredderRunRevFB, PT := ShredderReverseRunTimeMS)
   MOVE(EN := StopCmd AND IO.Step = 30, IN := 0) => IO.Step
   MOVE(EN := NOT StopCmd AND IO.MotorFaultActive AND IO.Step = 30, IN := 0) => IO.Step
@@ -178,7 +178,7 @@ NETWORK 10 "Step 40 (WaitForwardRun) - Transitions"
   MOVE(EN := NOT StopCmd AND NOT IO.MotorFaultActive AND IO.ShredderRunFwdFB AND IO.Step = 40, IN := 50) => IO.Step
 
 NETWORK 11 "Step 50 (Running) - Infeed Restart, Upstream Enable, And Outputs"
-  COMMENT "UpstreamEnableTimer's own IN reads InfeedRunning one scan behind this network's own InfeedRunning update below (it's kind-ordered before the coil that writes it) - harmless for a multi-second delay, and matches this design's original timing exactly. EnableUpstream lives here, next to its own timer, rather than in the general Output Commands network - this is the output the MotorFwdRevSystem CALL-site correction was specifically about: it must only ever come from Step=50 dwell time, never from motor-running telemetry."
+  COMMENT "UpstreamEnableTimer's own IN reads InfeedRunning one scan behind this network's own InfeedRunning update below (it's kind-ordered before the coil that writes it) - harmless for a multi-second delay. EnableUpstream lives here, next to its own timer, because it must only ever come from Step=50 dwell time, never from motor-running telemetry."
   TON(InfeedRestartTimer, IN := IO.Step = 50 AND NOT IO.HopperLevelHigh, PT := InfeedRestartDelayMS)
   TON(UpstreamEnableTimer, IN := InfeedRunning, PT := InfeedToUpstreamEnableDelayMS)
   COIL InfeedRunning := InfeedRestartTimer.Q
@@ -202,10 +202,10 @@ NETWORK 13 "Step 60 (OvercurrentAbort) - Timer And Transitions"
   MOVE(EN := NOT StopCmd AND OvercurrentAbortPauseTimer.Q AND NOT IO.ShredderBlockedFault AND IO.Step = 60, IN := 30) => IO.Step
 
 NETWORK 14 "Motor And Pusher Mode Commands"
-  COMMENT "MotorStartArm asserts only through PreStart: one operator start press = one motor arming (FC_ControlMain hands it to the motor FB's self-clearing RecentStart - REQ-062). PusherParkCmd holds through the machine-start steps 20-40 (range intent, C-603: any step inserted inside the start ramp still wants the pusher home) - long enough for the pusher's warned repark to fire even when the discharge confirm is quick (REQ-045); from Running onward the pusher's own cycle-entry repark takes over. Pusher stop handling is two-tier (REQ-012/013 + owner amendment 2026-07-16): PusherModeForceOff (stop button/unhealthy/step-60, mirroring the step-60 overcurrent force) drives mode 0 - parks the pusher and blocks jog - while PusherCycleInhibitCmd mirrors the full StopCmd so downstream loss still stops cycle behavior without taking hand-jog away (REQ-040)."
+  COMMENT "MotorStartArm asserts only through PreStart: one operator start press = one motor arming (FC_ControlMain hands it to the motor FB's self-clearing RecentStart - REQ-062). MotorReverseCmd is on for ReverseRun alone - Step 30 is the only step that runs the shredder backwards. MotorAutoStartCmd lists the steps that command the shredder motor to run - ReverseRun, WaitForwardRun and Running - and MotorPreStartDoneCmd lists the steps in which the pre-start warning already given still counts as in force - DischargeStart, ReverseRun, WaitForwardRun, Running and OvercurrentAbort; both list their steps individually, so a step added inside the cycle later has to decide for itself whether the motor is commanded during it and whether the warning still stands. OvercurrentAbort is one of the steps where it still stands: the abort pauses the cycle and resumes at ReverseRun without sounding the siren again (REQ-027), so the warning given at PreStart is still the warning in force through the pause, and the motor FB's pre-start memory stays latched across it. PusherParkCmd holds through the machine-start steps 20-40 as a range - any step inserted inside the start ramp still wants the pusher home - long enough for the pusher's warned repark to fire even when the discharge confirm is quick (REQ-045); from Running onward the pusher's own cycle-entry repark takes over. Pusher stop handling is two-tier (REQ-012/013): PusherModeForceOff (stop button/unhealthy/step-60, mirroring the step-60 overcurrent force) drives mode 0 - parks the pusher and blocks jog - while PusherCycleInhibitCmd mirrors the full StopCmd so downstream loss still stops cycle behavior without taking hand-jog away (REQ-040)."
   COIL IO.MotorReverseCmd := IO.Step = 30
-  COIL IO.MotorAutoStartCmd := IO.Step >= 30 AND IO.Step <= 50
-  COIL IO.MotorPreStartDoneCmd := IO.Step >= 20
+  COIL IO.MotorAutoStartCmd := IO.Step = 30 OR IO.Step = 40 OR IO.Step = 50
+  COIL IO.MotorPreStartDoneCmd := IO.Step = 20 OR IO.Step = 30 OR IO.Step = 40 OR IO.Step = 50 OR IO.Step = 60
   COIL IO.MotorStartArm := IO.Step = 10
   COIL IO.PusherParkCmd := IO.Step >= 20 AND IO.Step <= 40
   COIL PusherModeForceOff := IO.CycleStop OR NOT IO.SystemHealthy OR IO.Step = 60
@@ -214,6 +214,7 @@ NETWORK 14 "Motor And Pusher Mode Commands"
   MOVE(EN := NOT PusherModeForceOff, IN := IO.OperatorPusherMode) => IO.PusherModeCmd
 
 NETWORK 15 "Output Commands"
-  COIL IO.RunDischargeConv := IO.Step >= 20
+  COMMENT "Cycle output commands: the discharge conveyor runs during DischargeStart, ReverseRun, WaitForwardRun, Running and OvercurrentAbort, each step on its own branch, so a step added inside the cycle later has to decide for itself whether the conveyor runs during it; the pre-start siren sounds during PreStart or whenever the pusher asks for its own jog warning; and InCycle reports any step other than Idle."
+  COIL IO.RunDischargeConv := IO.Step = 20 OR IO.Step = 30 OR IO.Step = 40 OR IO.Step = 50 OR IO.Step = 60
   COIL IO.PreStartSounder := IO.Step = 10 OR IO.PusherJogPreStartSounder
   COIL IO.InCycle := IO.Step <> 0

@@ -51,9 +51,13 @@ public sealed record HeaderDiff(
     bool CommentChanged,
     string? CommentBefore,
     string? CommentAfter,
-    bool InterfaceChanged)
+    bool InterfaceChanged,
+    // Interface STRUCTURE identical, member COMMENT text different — documentation and nothing else.
+    // Mutually exclusive with InterfaceChanged by construction (DiffRunner sets it only when the
+    // structure compared equal), so the two can never both claim the same edit.
+    bool InterfaceCommentChanged = false)
 {
-    public bool Changed => TitleChanged || CommentChanged || InterfaceChanged;
+    public bool Changed => TitleChanged || CommentChanged || InterfaceChanged || InterfaceCommentChanged;
 
     // The split the invariance gate turns on (2026-08-14, second ruling). `--only` answers exactly one
     // question: DID ANYTHING CHANGE OUTSIDE THE NAMED NETWORKS THAT COULD ALTER WHAT THE PLC DOES?
@@ -62,13 +66,29 @@ public sealed record HeaderDiff(
     //   * A TITLE or a NAME change answers yes in its own way: both are identity, and TIA's import
     //     matches by name, so a rename creates a DUPLICATE block rather than updating one.
     //   * A BLOCK COMMENT CANNOT. It is not downloaded as behaviour and nothing resolves against it.
+    //   * NOR CAN AN INTERFACE MEMBER'S COMMENT, for exactly the same reason (2026-08-21). The
+    //     comparison used to serialize the INTERFACE section whole, so member comment text sat
+    //     inside InterfaceChanged and a documentation repair was indistinguishable from a
+    //     Bool -> Int retype. Measured: deleting the seven characters "(C-115)" from one member's
+    //     comment produced `INVARIANCE VIOLATION: an INTERFACE member changed`, exit 1, while the
+    //     identical edit to the BLOCK comment exited 0. Same defect as the one narrowed on
+    //     2026-08-14, one level down, and it stopped the same class of work: a C-204 sweep could
+    //     clean the block and network comments and had no route to the three breaches in member
+    //     comments. --allow-header is not that route; it means ROUTE to gen-block-modify-purpose,
+    //     not DECLARE, and a comment is not a purpose change.
     //
-    // Kept as two named properties rather than one because the gate must never be able to drift into
+    // Kept as named properties rather than one because the gate must never be able to drift into
     // "the header no longer gates" — the failure direction that matters here is one careless
-    // generalisation away, and a comment edit must not become cover for an interface edit.
+    // generalisation away, and a comment edit must not become cover for an interface edit. Note
+    // what is NOT carved out: everything else about a member. Retain, SetPoint, datatype, start
+    // value, external-access flags and nesting all still gate, so the retype this rule exists to
+    // catch still answers --only's question yes.
     public bool BehaviourBearingChange => TitleChanged || InterfaceChanged;
 
-    public bool CommentOnlyChange => CommentChanged && !BehaviourBearingChange;
+    // Either flavour of documentation — the block's own comment, a member's, or both — with nothing
+    // behaviour-bearing alongside it.
+    public bool CommentOnlyChange =>
+        (CommentChanged || InterfaceCommentChanged) && !BehaviourBearingChange;
 }
 
 // The whole comparison. AllowedNetworks is the --only set (empty when --only wasn't supplied).

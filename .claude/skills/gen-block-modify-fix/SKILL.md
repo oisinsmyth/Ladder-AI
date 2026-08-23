@@ -20,7 +20,7 @@ Ladder-AI project. This is docs/15's `gen-block-modify-fix` stage (pipeline skil
 S7 capability: take **one named defect** in an **existing** block and produce a **fixed block whose only
 changed networks are the ones the defect names** — every other network provably identical in IR. It is
 the highest-risk capability the project builds (changing working logic), so its whole discipline is
-*minimal, scoped, and proven*. Read `CLAUDE.md` in full first — hard rules bind you, and CLAUDE.md's
+*minimal, scoped, and proven*. `CLAUDE.md` is already in your context — do not re-read it. Hard rules bind you, and CLAUDE.md's
 "Workflow for modifying existing logic (Stage S7+)" is the contract this skill mechanizes.
 
 **You run inside `lad-coder`** (hard rule 8). If reached otherwise, stop — a human-facing agent must
@@ -53,8 +53,13 @@ dispatch this to `lad-coder`.
   would disturb elsewhere).
 - **The requirements register** (`gen/<project>/requirements.md` or the corpus spec) — for the REQ the
   fix restores; a fix that compiles but doesn't actually satisfy the REQ is a miss.
-- **`docs/06-lad-conventions.md`** (read fresh) — the touched networks still answer to conventions (C-126
-  grouping, titles/comments, the stricter generated-code bar); **`docs/notes/compile-error-playbook.md`**.
+- **`docs/06-lad-conventions.md`** (read fresh, **by rule ID and never by section heading** — C-204 is a
+  Commenting rule physically sitting under `## Data`) — the touched networks still answer to conventions:
+  C-126 grouping, **C-201–C-204** (titles and comments), the stricter generated-code bar, **plus the rule
+  family the touched network belongs to** — a polarity fix lands on C-403/C-404, a fault-reset fix on
+  C-123/C-130/C-507/C-508. That last clause is deliberately open-ended: a fix touches a network of
+  unknown family, so a closed list would be wrong for most fixes.
+  Also **`docs/notes/compile-error-playbook.md`**.
 
 ## Method — follow the shared modification choreography
 
@@ -74,12 +79,9 @@ compound-operand-must-lead synthesis rule). Follow it. **For a fix specifically:
   passed a gate whose whole job is *"prove the rest is identical"*. **`--allow-header` exists and is
   `gen-block-modify-purpose`'s, not yours** — if you reach for it, you are on the wrong path and the
   answer is to route, not to declare.
-  🔴 **AND `--insert <n>` IS THE SAME (2026-08-23): IT IS NOT YOURS EITHER.** Networks are now matched
-  on CONTENT before number, so inserting a network reports the ones after it as `MOVED` rather than as
-  `changed`, and a move **gates** — LAD executes in network order. `--insert` declares that shift. But a
-  fix that needs a *new network* is a purpose change by the rule three lines above, exactly as a fix
-  needing a new interface member is. **If the moves are gating you, the answer is to route, not to
-  declare.** Reaching for `--insert` here is the same wrong turn wearing different letters.
+  🔴 **AND `--insert <n>` IS NOT YOURS EITHER (2026-08-23).** `diff` matches on CONTENT now, so an
+  inserted network makes the ones after it `MOVED`, and a move **gates**. But a fix needing a *new
+  network* is a purpose change by the rule above. **If moves are gating you, route — do not declare.**
   ✅ **BUT REPAIRING A STALE BLOCK COMMENT IS YOURS, AND IT NO LONGER GATES (narrowed 2026-08-14, on the
   gate's first contact with real work).** A fix-wave run widened a Modbus area, repaired two block
   comments that were *already false* — one said the area covered "8 words" when it covered 35 — and hit
@@ -111,6 +113,12 @@ Hand back (per `lad-coder`'s "what you hand back" contract — your summary is n
   hardware warning it is non-Success on a perfectly clean block, which is why `compile` stopped
   keying on it on 2026-08-12. Key on errors; report warnings without gating on them. And a bare
   whole-device compile is not the gate at all — hard rule 4 / FI-52.)*
+
+- **`evidence.json`** (`"kind": "modify"`) — the raw `--json` and exit code of each gate above, plus a
+  `converter ir-hash` per file touched. Schema in `.claude/agents/lad-coder.md`. The prose above still
+  stands; this is what the dispatcher actually verifies, with
+  `python tools/check-agent-evidence.py <path>`, which recomputes every hash itself. The `diff --only`
+  gate is **required** here — on a fix, the invariance proof is the deliverable.
 
 Append one telemetry line to `gen/<project>/telemetry.log` (`gen-block-modify-fix`; include blocked/routed
 runs) **when the project has one** — a validation corpus (`gen/_validation/*`) has no telemetry log, so

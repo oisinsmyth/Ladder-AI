@@ -12,7 +12,7 @@ allowed-tools:
 
 Ladder-AI project. This skill enforces tier 2 of the LAD priority order (function → **readability
 & simplicity** → efficiency) — `docs/06-lad-conventions.md`, preamble and the "Simplicity &
-readability" section (C-601–C-607). Read `CLAUDE.md` at the repo root first if you haven't — its
+readability" section (C-601–C-607). `CLAUDE.md` is already in your context — do not re-read it. Its
 hard rules apply (you review LAD only; if anything looks like an F-/safety block, stop and report
 it; never modify what you review).
 
@@ -61,8 +61,13 @@ From doc 06's preamble — quote it in spirit, apply it literally:
 - The block's interface UDT files too — several rules live there, and the iDB is *not* where
   interface comments belong (member comments on a UDT-typed member's inner fields come from the
   UDT's own definition).
-- `docs/06-lad-conventions.md` — read the preamble, Commenting, and Simplicity & readability
-  sections before your first finding so you cite current rule text, not memory of it.
+- `docs/06-lad-conventions.md` — read the preamble, Commenting, Simplicity & readability, **and
+  C-204** before your first finding, so you cite current rule text and not memory of it.
+  🔴 **C-204 is a Commenting rule filed under `## Data`** (doc 06 line ~436, between the
+  `## Data` heading and C-301). Reading the three named sections and stopping **misses it**, and
+  it is the rule that decides whether a comment may cite a convention at all — measured
+  2026-08-21, on a review whose whole question was that. **Scope doc 06 by rule ID, never by
+  heading.**
 
 ## Method
 
@@ -89,9 +94,12 @@ the worst readability defects had no citable rule until a human read the block c
   or more than ~6 contacts → needs justification (network comment) or a split into named bits.
   Respect the documented exception (multi-coil fan-out in one network) and expect other
   exceptions to state their reason in the comment — an uncommented breach is a finding.
-- **C-603 (warn) — ranged step predicates.** Grep: `Step >=`, `Step <=`, `Step >`, `Step <`
-  (excluding `<>`). Every hit needs a comment stating that future inserted steps are *meant* to
-  join the span. `Step = n` and `Step <> 0` are always fine.
+- **C-603 (warn) — ranged step predicates. Mechanized: `converter review` finds these.** It flags
+  every ordered step range whose network comment does not *name the coil it drives*. Start from its
+  list, don't grep. **Yours is what it cannot judge:** naming the coil exempts it mechanically, but
+  only you can say whether that sentence states "every future step in this span belongs here too" —
+  a named coil whose comment does not is still a finding the tool will never raise. A `C-603 …
+  skipped` line is a range it could not attribute to any coil (exit 2): read the reason and judge it.
 - **C-604 (error) — constants vs placeholders.** Grep `AlwaysTrue`. Classify every hit:
   (a) the mapping-FC rail idiom (`input-mapping`/`output-mapping` pattern shape) — sanctioned,
   skip; (b) known-gap placeholder — must have a comment naming the gap; (c) deliberate constant
@@ -169,10 +177,6 @@ Order findings most-severe first within each block. Every finding cites a rule I
 names the defect but the one-reading test fails, cite the preamble ("one-reading test") — and
 note it as a candidate rule gap, because that's how C-601–C-607 themselves were born.
 
-**Persisting this report.** Returned live in conversation, keep it whole. When it is saved as a
-committed doc (a skill-validation record, a kept gate review), split it at write time: any large
-verbatim block — e.g. a full blind-run transcript from validating this skill — goes in
-`docs/evidence/<name>.md`; the saved note keeps the findings summary, verdict, and a link. Large
-raw dumps live in `docs/evidence/`, never inline in `docs/notes/` or `docs/notes/stage-gates.md` —
-the split convention, stated in `docs/15-generation-pipeline.md` ("Artifacts"), origin FI-19/FI-20
-in `docs/16-future-ideas.md`. Born in the right shape, not split by hand later.
+**Persisting this report.** Return it whole; **saving it is the dispatcher's job, not yours** — a
+reviewer dispatched into `lad-reader` holds no `Write` and cannot do it. (If you are saving one:
+large verbatim blocks go to `docs/evidence/<name>.md`, the note keeps summary and verdict.)

@@ -1,0 +1,40 @@
+#!/bin/sh
+#
+# Refuses a commit that puts any context-injected file over its size budget.
+#
+# This exists because CLAUDE.md grew 45,130 -> 96,245 bytes in eleven days and not one
+# commit in that span reduced it. Every byte of CLAUDE.md, the agent briefs and the skills
+# is loaded before an agent does any work, so they are a tax on every dispatch. Prose
+# asking people to keep them small was in place for that entire span and did not hold.
+#
+# Install (once per clone - git will not do this for you):
+#
+#     git config core.hooksPath hooks
+#
+# Confirm it is live with:  git config core.hooksPath   ->  hooks
+#
+# All the logic lives in the Python, including working out which budgeted files are
+# actually staged, so it is covered by tools/check-file-budgets.tests.py rather than
+# living untested in shell. This hook deliberately stays a three-line invocation: a hook
+# that grows a loop per budgeted path is a hook nobody tests.
+#
+# It does NOT check whether facts were dropped - that is tools/check-doc-migration.py,
+# which you should run before any trim.
+#
+# Fails closed on purpose. If python is missing or the script is unreadable, the non-zero
+# exit refuses the commit rather than waving it through: a gate that disappears when its
+# dependencies do is not a gate.
+#
+# `git commit --no-verify` bypasses this. Bypassing it is the exact behaviour the gate
+# exists to prevent - if a budget is genuinely wrong, raise that file's ceiling in
+# tools/check-file-budgets.py in its own commit, with a reason.
+
+if ! python tools/check-file-budgets.py --staged; then
+    echo ""
+    echo "COMMIT REFUSED: a context-injected file is over its size budget."
+    echo "Move the content to its owning doc (README or docs/notes), or raise that"
+    echo "file's ceiling deliberately in its own commit. --no-verify is not the answer."
+    exit 1
+fi
+
+exit 0

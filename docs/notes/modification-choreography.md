@@ -24,7 +24,8 @@ reference is worth splitting out" point.)
    is committed sidecar-*less* — `to-ir` omits the sidecar and `to-xml` re-derives it on the way back to
    XML (ADR-0005, Accepted, which **retired** the old D-6 "can't add a statement to a stored sidecar"
    problem, `docs/notes/deferred-items.md` D-6). So for the common case the loop is just: keep your readable
-   edit → `converter to-xml` (derive is the default; `--synthesize` forces it) → import → compile →
+   edit → `converter to-xml --project <ir-dir> --out <staging>` (derive is the default; `--synthesize`
+   forces it) → import → compile →
    re-export → `to-ir`. There is no stored sidecar to strip.
    - **PRE-CHECK — the residual limit is the still-unsynthesizable construct set, not the old gap list.**
      Re-deriving requires the ENTIRE block to be within the synthesizable subset (it re-derives every
@@ -33,7 +34,16 @@ reference is worth splitting out" point.)
      synthesize fine; all three test-project001 FBs synthesize byte-exact and are committed readable-only.
      What genuinely remains out of subset is **`Limit`/`Wait`/`FillBlockI`/`Modbus*`**: a block using one of
      those still carries a **stored** sidecar and can't be re-derived, so its compile gate can't be reached.
-     Check `converter preflight`'s `[convert]` line up front; if the block hits one, report it as the
+     Check for that set up front by grepping the IR for `Limit`/`Wait`/`FillBlockI`/`Modbus*` and, if it
+     is clean, by running `converter to-xml --project <ir-dir> --out <staging>` and reading the exit code.
+     ⚠️ **Match at STATEMENT position, not anywhere in the file.** Measured 2026-08-21: this grep
+     hits `NETWORK 10 "Step 40 (WaitForwardRun)"` — a network TITLE, not an instruction — and a block
+     with a `Limit` tag or a "Waiting" step name would read as blocked when it is not. **`to-xml`'s exit
+     code is the definitive answer**; the grep is only a cheap pre-filter, so read every hit before
+     believing it.
+     *(Corrected 2026-08-21: this said to check "`converter preflight`'s `[convert]` line". **There is no
+     `[convert]` line** - preflight emits `FILE`/`NAME`/`CLEAN`/`SUMMARY` and nothing else, so the
+     instruction could not be followed as written.)* If the block hits one, report it as the
      converter gap it is — the fix is **adding that construct to synthesis** (guarded by the parity harness),
      **not** the retired D-6 scoped merge — don't force it.
    - Re-deriving regenerates every network's sidecar UIds, which is fine for the *invariance check* (it reads
@@ -79,10 +89,23 @@ reference is worth splitting out" point.)
    remainder is **empty**, and `INVARIANCE OK` proves nothing at all — it says so
    (`NOTHING WAS PROVEN`). Same shape as `drift-check`'s `COMPARED: <n>`: *an invariance claim over an
    empty remainder is another empty-is-not-clean.* **Read that line before quoting an exit 0 as proof.**
-6. **Compile gate** (hard rule 4): `converter preflight` (zero findings) → import to the **scratch** project
+6. 🔴 **If you run `converter review` as a cross-check, it needs `--project` too.** Bare, it exits
+   **2 = REVIEW INCOMPLETE** with C-118/C-122/C-125 unjudged — but it prints `SUMMARY: … 0 finding(s)`
+   **first** and the incomplete line **last**, so a reader who stops at the summary quotes a clean review
+   that examined nothing. Measured on a stepper block, 2026-08-21. Fuller account: `review-conventions`'
+   Step 0, which is the only place that carried this.
+7. **Compile gate** (hard rule 4): `converter preflight <file> --project <ir-dir>` (zero findings) → import to the **scratch** project
    → `openness-cli compile` clean. An **FB with multi-instance timers compiles only after its instance DB
    exists** — `openness-cli create-instance-db` first if there isn't one. Playbook first on any failure;
    claim the `agent-tasks/README.md` Portal queue before import/compile.
+8. **The round trip — RECOMMENDED, not required, and the strongest proof this loop can produce.**
+   After the compile gate: re-export the block from TIA, `converter to-ir` it, and diff that against the
+   IR you edited. `diff --only` proves *you* changed nothing else; the round trip proves **TIA** changed
+   nothing either. It costs one read-only export, and it turns "it compiled" into "what is in the project
+   is what I wrote". A 2026-08-21 fix run did this unprompted and got 15 of 15 networks identical.
+   🔴 **Export to a STAGING dir, never into `simatic-ml/`.** Six blocks are pinned by
+   `tests/golden/GoldenHarness.Tests/ExportDriftDetectorTests.cs`, and re-exporting one of those over its
+   committed baseline turns that test red. The proof is worth having; it is not worth a red baseline.
 
 ## Exit (both skills)
 

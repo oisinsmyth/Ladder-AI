@@ -1,0 +1,481 @@
+{
+  "schema": "ladder-ai/agent-evidence/1",
+  "task": "C-204 comment-only sweep on FB_ShredderSequencer - remove convention citations, dated rulings/changelog passages and departs-from argument from the block comment and seven network comments, keeping the substance; add the missing MotorReverseCmd statement to NETWORK 14's comment (C-202). No logic changed.",
+  "kind": "modify",
+  "skill": "gen-block-modify-fix",
+  "files": [
+    {
+      "path": "ir/test-project001/FB_ShredderSequencer.ir",
+      "ir_hash": "E62F1E44119B5071A735996A39215B25DE7BB92C07F855C8670CCDE075848849"
+    }
+  ],
+  "checks": [
+    {
+      "tool": "converter preflight",
+      "exit": 0,
+      "json": {
+        "files": [
+          {
+            "filePath": "ir/test-project001/FB_ShredderSequencer.ir",
+            "name": "FB_ShredderSequencer",
+            "findings": []
+          }
+        ],
+        "indexWarnings": []
+      }
+    },
+    {
+      "tool": "converter diff --only 2 3 4 9 11 14 15 (invariance proof)",
+      "exit": 0,
+      "json": {
+        "blockName": "FB_ShredderSequencer",
+        "blockNameMismatch": false,
+        "otherBlockName": "FB_ShredderSequencer",
+        "hasAnyChange": true,
+        "header": {
+          "changed": true,
+          "titleChanged": false,
+          "titleBefore": "Shredder Plant Sequencer",
+          "titleAfter": "Shredder Plant Sequencer",
+          "commentChanged": true,
+          "commentBefore": "Shredder plant sequencer (C-118-C-125): commands the shredder motor (via FB_MotorFwdRevSystem, wired at FC_ControlMain) and gates infeed/discharge conveyors and upstream enable, through a stepped cycle. Step legend (C-120): 0=Idle (stopped, waiting for a start condition) - 10=PreStart (siren warning before motion; arms the motor via MotorStartArm) - 20=DischargeStart (discharge conveyor starting, timed) - 30=ReverseRun (reverse commanded; the motor FB's own ReverseDelay entry pause elapses inside this step, then ReverseRunTimer counts ShredderReverseRunTime of CONFIRMED reverse feedback) - 40=WaitForwardRun (waiting for forward-run feedback) - 50=Running (normal production; infeed/upstream-enable timers and overcurrent detection are live) - 60=OvercurrentAbort (tripped - pause, then retry into ReverseRun, or stay out if too many reversals). Stop-all (REQ-012/013/062): StopCmd = stop button OR downstream lost OR control circuit unhealthy - aborts every step to Idle. Pusher handling is split (owner amendment 2026-07-16): stop button/unhealthy force pusher mode 0 (parks AND blocks jog), while any live stop reason - downstream loss included - raises PusherCycleInhibitCmd (no cycle launches or continues into a stopped plant, hand-jog stays available).",
+          "commentAfter": "Shredder plant sequencer: commands the shredder motor (via FB_MotorFwdRevSystem, wired at FC_ControlMain) and gates infeed/discharge conveyors and upstream enable, through a stepped cycle. Step legend: 0=Idle (stopped, waiting for a start condition) - 10=PreStart (siren warning before motion; arms the motor via MotorStartArm) - 20=DischargeStart (discharge conveyor starting, timed) - 30=ReverseRun (reverse commanded; the motor FB's own ReverseDelay entry pause elapses inside this step, then ReverseRunTimer counts ShredderReverseRunTime of CONFIRMED reverse feedback) - 40=WaitForwardRun (waiting for forward-run feedback) - 50=Running (normal production; infeed/upstream-enable timers and overcurrent detection are live) - 60=OvercurrentAbort (tripped - pause, then retry into ReverseRun, or stay out if too many reversals). Stop-all (REQ-012/013/062): StopCmd = stop button OR downstream lost OR control circuit unhealthy - aborts every step to Idle. Pusher handling is split: stop button/unhealthy force pusher mode 0 (parks AND blocks jog), while any live stop reason - downstream loss included - raises PusherCycleInhibitCmd (no cycle launches or continues into a stopped plant, hand-jog stays available).",
+          "interfaceChanged": false
+        },
+        "summary": {
+          "total": 15,
+          "changed": 7,
+          "added": 0,
+          "removed": 0,
+          "identical": 8
+        },
+        "networks": [
+          {
+            "number": 1,
+            "kind": "Identical",
+            "title": "Stop Command",
+            "beforeText": null,
+            "afterText": null
+          },
+          {
+            "number": 2,
+            "kind": "Changed",
+            "title": "HMI Time Conversions",
+            "beforeText": "NETWORK 2 \"HMI Time Conversions\"\n  COMMENT \"HMI/DB_Settings times are Real seconds for operator legibility; every TON below needs its PT in DInt ms - one MUL+CONVERT pair per timer, matching the MotorDOL FTTime/EnableUPSTime idiom. Kept as one block up front rather than repeated at each timer, so the x1000 idiom is visibly consistent and only ever done once.\"\n  MUL(EN := TRUE, IN1 := DB_Settings.ReversalWindowTime, IN2 := 1000.0) => Time\n  MUL(EN := TRUE, IN1 := DB_Settings.PreStartSounderTime, IN2 := 1000.0) => Time\n  MUL(EN := TRUE, IN1 := DB_Settings.DischargeConveyorTimeout, IN2 := 1000.0) => Time\n  MUL(EN := TRUE, IN1 := DB_Settings.ShredderReverseRunTime, IN2 := 1000.0) => Time\n  MUL(EN := TRUE, IN1 := DB_Settings.InfeedRestartDelay, IN2 := 1000.0) => Time\n  MUL(EN := TRUE, IN1 := DB_Settings.InfeedToUpstreamEnableDelay, IN2 := 1000.0) => Time\n  MUL(EN := TRUE, IN1 := DB_Settings.OvercurrentSpinUpAllowance, IN2 := 1000.0) => Time\n  MUL(EN := TRUE, IN1 := DB_Settings.OvercurrentMediumDelay, IN2 := 1000.0) => Time\n  MUL(EN := TRUE, IN1 := DB_Settings.OvercurrentHighDelay, IN2 := 1000.0) => Time\n  MUL(EN := TRUE, IN1 := DB_Settings.ReversalRetryPauseTime, IN2 := 1000.0) => Time\n  CONVERT(EN := ENO, IN := Time) => ReversalWindowTimeMS\n  CONVERT(EN := ENO, IN := Time) => PreStartSounderTimeMS\n  CONVERT(EN := ENO, IN := Time) => DischargeConveyorTimeoutMS\n  CONVERT(EN := ENO, IN := Time) => ShredderReverseRunTimeMS\n  CONVERT(EN := ENO, IN := Time) => InfeedRestartDelayMS\n  CONVERT(EN := ENO, IN := Time) => InfeedToUpstreamEnableDelayMS\n  CONVERT(EN := ENO, IN := Time) => OvercurrentSpinUpAllowanceMS\n  CONVERT(EN := ENO, IN := Time) => OvercurrentMediumDelayMS\n  CONVERT(EN := ENO, IN := Time) => OvercurrentHighDelayMS\n  CONVERT(EN := ENO, IN := Time) => ReversalRetryPauseTimeMS\n",
+            "afterText": "NETWORK 2 \"HMI Time Conversions\"\n  COMMENT \"HMI/DB_Settings times are Real seconds for operator legibility; every TON below needs its PT in DInt ms - one MUL+CONVERT pair per timer, matching the MotorDOL FTTime/EnableUPSTime idiom. All ten pairs sit together up front, so the x1000 conversion is done once per timer and reads the same way for every one of them.\"\n  MUL(EN := TRUE, IN1 := DB_Settings.ReversalWindowTime, IN2 := 1000.0) => Time\n  MUL(EN := TRUE, IN1 := DB_Settings.PreStartSounderTime, IN2 := 1000.0) => Time\n  MUL(EN := TRUE, IN1 := DB_Settings.DischargeConveyorTimeout, IN2 := 1000.0) => Time\n  MUL(EN := TRUE, IN1 := DB_Settings.ShredderReverseRunTime, IN2 := 1000.0) => Time\n  MUL(EN := TRUE, IN1 := DB_Settings.InfeedRestartDelay, IN2 := 1000.0) => Time\n  MUL(EN := TRUE, IN1 := DB_Settings.InfeedToUpstreamEnableDelay, IN2 := 1000.0) => Time\n  MUL(EN := TRUE, IN1 := DB_Settings.OvercurrentSpinUpAllowance, IN2 := 1000.0) => Time\n  MUL(EN := TRUE, IN1 := DB_Settings.OvercurrentMediumDelay, IN2 := 1000.0) => Time\n  MUL(EN := TRUE, IN1 := DB_Settings.OvercurrentHighDelay, IN2 := 1000.0) => Time\n  MUL(EN := TRUE, IN1 := DB_Settings.ReversalRetryPauseTime, IN2 := 1000.0) => Time\n  CONVERT(EN := ENO, IN := Time) => ReversalWindowTimeMS\n  CONVERT(EN := ENO, IN := Time) => PreStartSounderTimeMS\n  CONVERT(EN := ENO, IN := Time) => DischargeConveyorTimeoutMS\n  CONVERT(EN := ENO, IN := Time) => ShredderReverseRunTimeMS\n  CONVERT(EN := ENO, IN := Time) => InfeedRestartDelayMS\n  CONVERT(EN := ENO, IN := Time) => InfeedToUpstreamEnableDelayMS\n  CONVERT(EN := ENO, IN := Time) => OvercurrentSpinUpAllowanceMS\n  CONVERT(EN := ENO, IN := Time) => OvercurrentMediumDelayMS\n  CONVERT(EN := ENO, IN := Time) => OvercurrentHighDelayMS\n  CONVERT(EN := ENO, IN := Time) => ReversalRetryPauseTimeMS\n"
+          },
+          {
+            "number": 3,
+            "kind": "Changed",
+            "title": "Reversal Re-Arm Window Timer",
+            "beforeText": "NETWORK 3 \"Reversal Re-Arm Window Timer\"\n  COMMENT \"Retriggerable on-delay built from TON+edge (C-406/C-404 - no TONR/TOF exists to do this natively). IN drops false the instant a NEW reversal is detected - Step transitioning into 60, tested against ReversalStepEdgeMem's own previous-scan value (correct read-before-write ordering: this network reads the memory bit before Network 4 updates it later the same scan, so no cross-network staleness) - which resets ET/Q to 0 that scan; the timer then re-arms and must run a full ReversalWindowTime with no further reversal before Q goes true. Fixed 2026-07-17 (owner ruling, B-5/REQ-028): the prior rung read IN := ReversalCount > 0 alone, a level condition that only ever ran once from the first reversal - a fixed window, not the re-arming one this network's own title always claimed (C-608).\"\n  TON(ReversalWindowTimer, IN := NOT (IO.Step = 60 AND NOT ReversalStepEdgeMem) AND ReversalCount > 0, PT := ReversalWindowTimeMS)\n",
+            "afterText": "NETWORK 3 \"Reversal Re-Arm Window Timer\"\n  COMMENT \"Retriggerable on-delay built from TON+edge. IN drops false the instant a NEW reversal is detected - Step transitioning into 60, tested against ReversalStepEdgeMem's own previous-scan value (correct read-before-write ordering: this network reads the memory bit before Network 4 updates it later the same scan, so no cross-network staleness) - which resets ET/Q to 0 that scan; the timer then re-arms and must run a full ReversalWindowTime with no further reversal before Q goes true.\"\n  TON(ReversalWindowTimer, IN := NOT (IO.Step = 60 AND NOT ReversalStepEdgeMem) AND ReversalCount > 0, PT := ReversalWindowTimeMS)\n"
+          },
+          {
+            "number": 4,
+            "kind": "Changed",
+            "title": "Reversal Counter",
+            "beforeText": "NETWORK 4 \"Reversal Counter\"\n  COMMENT \"Edge-counts entries into Step 60 (C-404 - constructed edge, not the built-in -|P|-; ReversalStepEdgeMem also gates Network 3's own timer-reset detection, same edge shape, read one scan earlier there by construction). Resets on ReversalWindowTimer.Q - 180s ran clean with no new reversal, re-armed every time Network 3 sees a new edge, so ReversalCountThreshold reversals must each land within ReversalWindowTime of the previous one, not just occur ReversalCountThreshold times ever - or a fault reset.\"\n  COIL ReversalStepEdge := IO.Step = 60 AND NOT ReversalStepEdgeMem\n  COIL ReversalStepEdgeMem := IO.Step = 60\n  MOVE(EN := ReversalWindowTimer.Q OR IO.FaultReset, IN := 0) => ReversalCount\n  ADD(EN := ReversalStepEdge, IN1 := 1, IN2 := ReversalCount) => ReversalCount\n",
+            "afterText": "NETWORK 4 \"Reversal Counter\"\n  COMMENT \"Edge-counts entries into Step 60 through an explicit memory bit: ReversalStepEdgeMem also gates Network 3's own timer-reset detection, same edge shape, read one scan earlier there by construction. Resets on ReversalWindowTimer.Q - 180s ran clean with no new reversal, re-armed every time Network 3 sees a new edge, so ReversalCountThreshold reversals must each land within ReversalWindowTime of the previous one, not just occur ReversalCountThreshold times ever - or a fault reset.\"\n  COIL ReversalStepEdge := IO.Step = 60 AND NOT ReversalStepEdgeMem\n  COIL ReversalStepEdgeMem := IO.Step = 60\n  MOVE(EN := ReversalWindowTimer.Q OR IO.FaultReset, IN := 0) => ReversalCount\n  ADD(EN := ReversalStepEdge, IN1 := 1, IN2 := ReversalCount) => ReversalCount\n"
+          },
+          {
+            "number": 5,
+            "kind": "Identical",
+            "title": "Shredder Blocked Fault (Too Many Reversals)",
+            "beforeText": null,
+            "afterText": null
+          },
+          {
+            "number": 6,
+            "kind": "Identical",
+            "title": "Step 0 (Idle) - Transition",
+            "beforeText": null,
+            "afterText": null
+          },
+          {
+            "number": 7,
+            "kind": "Identical",
+            "title": "Step 10 (PreStart) - Timer And Transitions",
+            "beforeText": null,
+            "afterText": null
+          },
+          {
+            "number": 8,
+            "kind": "Identical",
+            "title": "Step 20 (DischargeStart) - Timer, Timeout Fault, And Transitions",
+            "beforeText": null,
+            "afterText": null
+          },
+          {
+            "number": 9,
+            "kind": "Changed",
+            "title": "Step 30 (ReverseRun) - Timer And Transitions",
+            "beforeText": "NETWORK 9 \"Step 30 (ReverseRun) - Timer And Transitions\"\n  COMMENT \"ReverseRunTimer counts only while reverse is CONFIRMED running (ShredderRunRevFB), so the spec's 6 s (REQ-005) buys 6 s of actual rotation - the motor FB's 8 s ReverseDelay entry pause no longer eats the window, and a feedback dropout restarts the count. The commanded-but-no-feedback dwell is deliberately NOT re-timed here (C-409, one interval one place; step 40 already relies on the same mechanism): the motor FB's own fail-to-run window (FTTime, after its ReverseIgnoreFT masking) latches FTR, and the MotorFaultActive exit below aborts the step - bounded dwell, latched fault, C-122's substance without a duplicate timer.\"\n  TON(ReverseRunTimer, IN := IO.Step = 30 AND IO.ShredderRunRevFB, PT := ShredderReverseRunTimeMS)\n  MOVE(EN := StopCmd AND IO.Step = 30, IN := 0) => IO.Step\n  MOVE(EN := NOT StopCmd AND IO.MotorFaultActive AND IO.Step = 30, IN := 0) => IO.Step\n  MOVE(EN := NOT StopCmd AND NOT IO.MotorFaultActive AND ReverseRunTimer.Q AND IO.Step = 30, IN := 40) => IO.Step\n",
+            "afterText": "NETWORK 9 \"Step 30 (ReverseRun) - Timer And Transitions\"\n  COMMENT \"ReverseRunTimer counts only while reverse is CONFIRMED running (ShredderRunRevFB), so the spec's 6 s (REQ-005) buys 6 s of actual rotation - the motor FB's 8 s ReverseDelay entry pause does not eat the window, and a feedback dropout restarts the count. The commanded-but-no-feedback dwell is timed by the motor FB, not again here (step 40 relies on the same mechanism): its own fail-to-run window (FTTime, after its ReverseIgnoreFT masking) latches FTR, and the MotorFaultActive exit below aborts the step, so the dwell stays bounded and the fault latched.\"\n  TON(ReverseRunTimer, IN := IO.Step = 30 AND IO.ShredderRunRevFB, PT := ShredderReverseRunTimeMS)\n  MOVE(EN := StopCmd AND IO.Step = 30, IN := 0) => IO.Step\n  MOVE(EN := NOT StopCmd AND IO.MotorFaultActive AND IO.Step = 30, IN := 0) => IO.Step\n  MOVE(EN := NOT StopCmd AND NOT IO.MotorFaultActive AND ReverseRunTimer.Q AND IO.Step = 30, IN := 40) => IO.Step\n"
+          },
+          {
+            "number": 10,
+            "kind": "Identical",
+            "title": "Step 40 (WaitForwardRun) - Transitions",
+            "beforeText": null,
+            "afterText": null
+          },
+          {
+            "number": 11,
+            "kind": "Changed",
+            "title": "Step 50 (Running) - Infeed Restart, Upstream Enable, And Outputs",
+            "beforeText": "NETWORK 11 \"Step 50 (Running) - Infeed Restart, Upstream Enable, And Outputs\"\n  COMMENT \"UpstreamEnableTimer's own IN reads InfeedRunning one scan behind this network's own InfeedRunning update below (it's kind-ordered before the coil that writes it) - harmless for a multi-second delay, and matches this design's original timing exactly. EnableUpstream lives here, next to its own timer, rather than in the general Output Commands network - this is the output the MotorFwdRevSystem CALL-site correction was specifically about: it must only ever come from Step=50 dwell time, never from motor-running telemetry.\"\n  TON(InfeedRestartTimer, IN := IO.Step = 50 AND NOT IO.HopperLevelHigh, PT := InfeedRestartDelayMS)\n  TON(UpstreamEnableTimer, IN := InfeedRunning, PT := InfeedToUpstreamEnableDelayMS)\n  COIL InfeedRunning := InfeedRestartTimer.Q\n  COIL IO.EnableUpstream := UpstreamEnableTimer.Q\n  COIL IO.RunInfeedConv := InfeedRunning\n",
+            "afterText": "NETWORK 11 \"Step 50 (Running) - Infeed Restart, Upstream Enable, And Outputs\"\n  COMMENT \"UpstreamEnableTimer's own IN reads InfeedRunning one scan behind this network's own InfeedRunning update below (it's kind-ordered before the coil that writes it) - harmless for a multi-second delay. EnableUpstream lives here, next to its own timer, because it must only ever come from Step=50 dwell time, never from motor-running telemetry.\"\n  TON(InfeedRestartTimer, IN := IO.Step = 50 AND NOT IO.HopperLevelHigh, PT := InfeedRestartDelayMS)\n  TON(UpstreamEnableTimer, IN := InfeedRunning, PT := InfeedToUpstreamEnableDelayMS)\n  COIL InfeedRunning := InfeedRestartTimer.Q\n  COIL IO.EnableUpstream := UpstreamEnableTimer.Q\n  COIL IO.RunInfeedConv := InfeedRunning\n"
+          },
+          {
+            "number": 12,
+            "kind": "Identical",
+            "title": "Step 50 - Overcurrent Detection, Trip, And Transitions",
+            "beforeText": null,
+            "afterText": null
+          },
+          {
+            "number": 13,
+            "kind": "Identical",
+            "title": "Step 60 (OvercurrentAbort) - Timer And Transitions",
+            "beforeText": null,
+            "afterText": null
+          },
+          {
+            "number": 14,
+            "kind": "Changed",
+            "title": "Motor And Pusher Mode Commands",
+            "beforeText": "NETWORK 14 \"Motor And Pusher Mode Commands\"\n  COMMENT \"MotorStartArm asserts only through PreStart: one operator start press = one motor arming (FC_ControlMain hands it to the motor FB's self-clearing RecentStart - REQ-062). MotorAutoStartCmd lists the steps that command the shredder motor to run - ReverseRun, WaitForwardRun and Running - and MotorPreStartDoneCmd lists the steps in which the pre-start warning already given still counts as in force - DischargeStart, ReverseRun, WaitForwardRun, Running and OvercurrentAbort; both are listed step by step rather than written as a span, so a step added inside the cycle later has to decide for itself whether the motor is commanded during it and whether the warning still stands. OvercurrentAbort is deliberately one of the steps where it still stands: the abort pauses the cycle and resumes at ReverseRun without sounding the siren again (REQ-027), so the warning given at PreStart is still the warning in force through the pause, and the motor FB's pre-start memory stays latched across it. PusherParkCmd holds through the machine-start steps 20-40 as a deliberate range - any step inserted inside the start ramp still wants the pusher home - long enough for the pusher's warned repark to fire even when the discharge confirm is quick (REQ-045); from Running onward the pusher's own cycle-entry repark takes over. Pusher stop handling is two-tier (REQ-012/013 + owner amendment 2026-07-16): PusherModeForceOff (stop button/unhealthy/step-60, mirroring the step-60 overcurrent force) drives mode 0 - parks the pusher and blocks jog - while PusherCycleInhibitCmd mirrors the full StopCmd so downstream loss still stops cycle behavior without taking hand-jog away (REQ-040).\"\n  COIL IO.MotorReverseCmd := IO.Step = 30\n  COIL IO.MotorAutoStartCmd := IO.Step = 30 OR IO.Step = 40 OR IO.Step = 50\n  COIL IO.MotorPreStartDoneCmd := IO.Step = 20 OR IO.Step = 30 OR IO.Step = 40 OR IO.Step = 50 OR IO.Step = 60\n  COIL IO.MotorStartArm := IO.Step = 10\n  COIL IO.PusherParkCmd := IO.Step >= 20 AND IO.Step <= 40\n  COIL PusherModeForceOff := IO.CycleStop OR NOT IO.SystemHealthy OR IO.Step = 60\n  COIL IO.PusherCycleInhibitCmd := StopCmd\n  MOVE(EN := PusherModeForceOff, IN := 0) => IO.PusherModeCmd\n  MOVE(EN := NOT PusherModeForceOff, IN := IO.OperatorPusherMode) => IO.PusherModeCmd\n",
+            "afterText": "NETWORK 14 \"Motor And Pusher Mode Commands\"\n  COMMENT \"MotorStartArm asserts only through PreStart: one operator start press = one motor arming (FC_ControlMain hands it to the motor FB's self-clearing RecentStart - REQ-062). MotorReverseCmd is on for ReverseRun alone - Step 30 is the only step that runs the shredder backwards. MotorAutoStartCmd lists the steps that command the shredder motor to run - ReverseRun, WaitForwardRun and Running - and MotorPreStartDoneCmd lists the steps in which the pre-start warning already given still counts as in force - DischargeStart, ReverseRun, WaitForwardRun, Running and OvercurrentAbort; both list their steps individually, so a step added inside the cycle later has to decide for itself whether the motor is commanded during it and whether the warning still stands. OvercurrentAbort is one of the steps where it still stands: the abort pauses the cycle and resumes at ReverseRun without sounding the siren again (REQ-027), so the warning given at PreStart is still the warning in force through the pause, and the motor FB's pre-start memory stays latched across it. PusherParkCmd holds through the machine-start steps 20-40 as a range - any step inserted inside the start ramp still wants the pusher home - long enough for the pusher's warned repark to fire even when the discharge confirm is quick (REQ-045); from Running onward the pusher's own cycle-entry repark takes over. Pusher stop handling is two-tier (REQ-012/013): PusherModeForceOff (stop button/unhealthy/step-60, mirroring the step-60 overcurrent force) drives mode 0 - parks the pusher and blocks jog - while PusherCycleInhibitCmd mirrors the full StopCmd so downstream loss still stops cycle behavior without taking hand-jog away (REQ-040).\"\n  COIL IO.MotorReverseCmd := IO.Step = 30\n  COIL IO.MotorAutoStartCmd := IO.Step = 30 OR IO.Step = 40 OR IO.Step = 50\n  COIL IO.MotorPreStartDoneCmd := IO.Step = 20 OR IO.Step = 30 OR IO.Step = 40 OR IO.Step = 50 OR IO.Step = 60\n  COIL IO.MotorStartArm := IO.Step = 10\n  COIL IO.PusherParkCmd := IO.Step >= 20 AND IO.Step <= 40\n  COIL PusherModeForceOff := IO.CycleStop OR NOT IO.SystemHealthy OR IO.Step = 60\n  COIL IO.PusherCycleInhibitCmd := StopCmd\n  MOVE(EN := PusherModeForceOff, IN := 0) => IO.PusherModeCmd\n  MOVE(EN := NOT PusherModeForceOff, IN := IO.OperatorPusherMode) => IO.PusherModeCmd\n"
+          },
+          {
+            "number": 15,
+            "kind": "Changed",
+            "title": "Output Commands",
+            "beforeText": "NETWORK 15 \"Output Commands\"\n  COMMENT \"Cycle output commands: the discharge conveyor runs during DischargeStart, ReverseRun, WaitForwardRun, Running and OvercurrentAbort, each on its own branch; the pre-start siren sounds during PreStart or whenever the pusher asks for its own jog warning; and InCycle reports any step other than Idle. The discharge steps are listed one by one rather than written as a span, so that a step added inside the cycle later has to make a visible decision about whether the conveyor runs during it instead of being swept in silently.\"\n  COIL IO.RunDischargeConv := IO.Step = 20 OR IO.Step = 30 OR IO.Step = 40 OR IO.Step = 50 OR IO.Step = 60\n  COIL IO.PreStartSounder := IO.Step = 10 OR IO.PusherJogPreStartSounder\n  COIL IO.InCycle := IO.Step <> 0\n",
+            "afterText": "NETWORK 15 \"Output Commands\"\n  COMMENT \"Cycle output commands: the discharge conveyor runs during DischargeStart, ReverseRun, WaitForwardRun, Running and OvercurrentAbort, each step on its own branch, so a step added inside the cycle later has to decide for itself whether the conveyor runs during it; the pre-start siren sounds during PreStart or whenever the pusher asks for its own jog warning; and InCycle reports any step other than Idle.\"\n  COIL IO.RunDischargeConv := IO.Step = 20 OR IO.Step = 30 OR IO.Step = 40 OR IO.Step = 50 OR IO.Step = 60\n  COIL IO.PreStartSounder := IO.Step = 10 OR IO.PusherJogPreStartSounder\n  COIL IO.InCycle := IO.Step <> 0\n"
+          }
+        ],
+        "allowedNetworks": [
+          2,
+          3,
+          4,
+          9,
+          11,
+          14,
+          15
+        ],
+        "invarianceViolations": [],
+        "headerChangeAllowed": false,
+        "hasUnclaimedHeaderChange": false,
+        "hasNonGatingCommentChange": true,
+        "unchangedRemainder": 8,
+        "hasInvarianceViolation": false
+      }
+    },
+    {
+      "tool": "openness-cli import (GenProject1, group 'S7-1200 station_1/PLC1 6ES7 214-1AG40-0XB0')",
+      "exit": 0,
+      "detail": "text-only command, no --json flag; printed FB 8 FB_ShredderSequencer INCONSISTENT, which is the expected pre-compile state after an import"
+    },
+    {
+      "tool": "openness-cli compile --block FB_ShredderSequencer",
+      "exit": 0,
+      "json": {
+        "state": "Warning",
+        "errors": 0,
+        "warnings": 1,
+        "consistentAfterCompile": true,
+        "messages": [
+          {
+            "state": "Warning",
+            "description": "",
+            "path": "PLC1 6ES7 214-1AG40-0XB0"
+          },
+          {
+            "state": "Success",
+            "description": "",
+            "path": "Program blocks"
+          },
+          {
+            "state": "Success",
+            "description": "Block was successfully compiled.",
+            "path": "FB_ShredderSequencer (FB8)"
+          },
+          {
+            "state": "Warning",
+            "description": "",
+            "path": "General warnings"
+          },
+          {
+            "state": "Warning",
+            "description": "Inputs or outputs are used that do not exist in the configured hardware.",
+            "path": null
+          },
+          {
+            "state": "Warning",
+            "description": "Compiling finished (errors: 0; warnings: 1)",
+            "path": null
+          }
+        ]
+      }
+    },
+    {
+      "tool": "openness-cli sanity-check (run 1, pre-recompile)",
+      "exit": 9,
+      "transient": "ordinary post-import dependent cascade - importing FB8 marked its instance DB and its three callers (iDB_ShredderSequencer, OB100, FC_ControlMain, FC_AlarmsMain) inconsistent. Superseded by run 2 below, which is the gate.",
+      "json": {
+        "healthy": false,
+        "nothingExamined": false,
+        "totalBlocks": 36,
+        "inconsistentBlocks": [
+          {
+            "name": "iDB_ShredderSequencer",
+            "path": "S7-1200 station_1/PLC1 6ES7 214-1AG40-0XB0",
+            "language": "DB"
+          },
+          {
+            "name": "OB100",
+            "path": "S7-1200 station_1/PLC1 6ES7 214-1AG40-0XB0",
+            "language": "LAD"
+          },
+          {
+            "name": "FC_ControlMain",
+            "path": "S7-1200 station_1/PLC1 6ES7 214-1AG40-0XB0",
+            "language": "LAD"
+          },
+          {
+            "name": "FC_AlarmsMain",
+            "path": "S7-1200 station_1/PLC1 6ES7 214-1AG40-0XB0",
+            "language": "LAD"
+          }
+        ],
+        "totalTypes": 7,
+        "inconsistentTypes": [],
+        "duplicateBlockNumbers": [],
+        "deviceCompiles": [
+          {
+            "device": "S7-1200 station_1/PLC1 6ES7 214-1AG40-0XB0",
+            "state": "Warning",
+            "errors": 0,
+            "warnings": 1
+          }
+        ]
+      }
+    },
+    {
+      "tool": "openness-cli compile --block iDB_ShredderSequencer",
+      "exit": 0,
+      "json": {
+        "state": "Warning",
+        "errors": 0,
+        "warnings": 1,
+        "consistentAfterCompile": true,
+        "messages": [
+          {
+            "state": "Warning",
+            "description": "",
+            "path": "PLC1 6ES7 214-1AG40-0XB0"
+          },
+          {
+            "state": "Warning",
+            "description": "",
+            "path": "General warnings"
+          },
+          {
+            "state": "Warning",
+            "description": "Inputs or outputs are used that do not exist in the configured hardware.",
+            "path": null
+          },
+          {
+            "state": "Information",
+            "description": "",
+            "path": "Program blocks"
+          },
+          {
+            "state": "Information",
+            "description": "No block was compiled. All blocks are up-to-date.",
+            "path": null
+          },
+          {
+            "state": "Warning",
+            "description": "Compiling finished (errors: 0; warnings: 1)",
+            "path": null
+          }
+        ]
+      }
+    },
+    {
+      "tool": "openness-cli compile --block FC_ControlMain",
+      "exit": 0,
+      "json": {
+        "state": "Warning",
+        "errors": 0,
+        "warnings": 1,
+        "consistentAfterCompile": true,
+        "messages": [
+          {
+            "state": "Warning",
+            "description": "",
+            "path": "PLC1 6ES7 214-1AG40-0XB0"
+          },
+          {
+            "state": "Warning",
+            "description": "",
+            "path": "General warnings"
+          },
+          {
+            "state": "Warning",
+            "description": "Inputs or outputs are used that do not exist in the configured hardware.",
+            "path": null
+          },
+          {
+            "state": "Information",
+            "description": "",
+            "path": "Program blocks"
+          },
+          {
+            "state": "Information",
+            "description": "No block was compiled. All blocks are up-to-date.",
+            "path": null
+          },
+          {
+            "state": "Warning",
+            "description": "Compiling finished (errors: 0; warnings: 1)",
+            "path": null
+          }
+        ]
+      }
+    },
+    {
+      "tool": "openness-cli compile --block FC_AlarmsMain",
+      "exit": 0,
+      "json": {
+        "state": "Warning",
+        "errors": 0,
+        "warnings": 1,
+        "consistentAfterCompile": true,
+        "messages": [
+          {
+            "state": "Warning",
+            "description": "",
+            "path": "PLC1 6ES7 214-1AG40-0XB0"
+          },
+          {
+            "state": "Warning",
+            "description": "",
+            "path": "General warnings"
+          },
+          {
+            "state": "Warning",
+            "description": "Inputs or outputs are used that do not exist in the configured hardware.",
+            "path": null
+          },
+          {
+            "state": "Information",
+            "description": "",
+            "path": "Program blocks"
+          },
+          {
+            "state": "Information",
+            "description": "No block was compiled. All blocks are up-to-date.",
+            "path": null
+          },
+          {
+            "state": "Warning",
+            "description": "Compiling finished (errors: 0; warnings: 1)",
+            "path": null
+          }
+        ]
+      }
+    },
+    {
+      "tool": "openness-cli compile --block OB100",
+      "exit": 0,
+      "json": {
+        "state": "Warning",
+        "errors": 0,
+        "warnings": 1,
+        "consistentAfterCompile": true,
+        "messages": [
+          {
+            "state": "Warning",
+            "description": "",
+            "path": "PLC1 6ES7 214-1AG40-0XB0"
+          },
+          {
+            "state": "Warning",
+            "description": "",
+            "path": "General warnings"
+          },
+          {
+            "state": "Warning",
+            "description": "Inputs or outputs are used that do not exist in the configured hardware.",
+            "path": null
+          },
+          {
+            "state": "Information",
+            "description": "",
+            "path": "Program blocks"
+          },
+          {
+            "state": "Information",
+            "description": "No block was compiled. All blocks are up-to-date.",
+            "path": null
+          },
+          {
+            "state": "Warning",
+            "description": "Compiling finished (errors: 0; warnings: 1)",
+            "path": null
+          }
+        ]
+      }
+    },
+    {
+      "tool": "openness-cli sanity-check (run 2, THE COMPILE GATE)",
+      "exit": 0,
+      "json": {
+        "healthy": true,
+        "nothingExamined": false,
+        "totalBlocks": 36,
+        "inconsistentBlocks": [],
+        "totalTypes": 7,
+        "inconsistentTypes": [],
+        "duplicateBlockNumbers": [],
+        "deviceCompiles": [
+          {
+            "device": "S7-1200 station_1/PLC1 6ES7 214-1AG40-0XB0",
+            "state": "Warning",
+            "errors": 0,
+            "warnings": 1
+          }
+        ]
+      }
+    },
+    {
+      "tool": "openness-cli block-layout --expect Optimized (no --set run; unrequested change refused)",
+      "exit": 0,
+      "json": {
+        "name": "FB_ShredderSequencer",
+        "path": "S7-1200 station_1/PLC1 6ES7 214-1AG40-0XB0",
+        "type": "FB",
+        "layout": "Optimized",
+        "previousLayout": null,
+        "requestedLayout": null,
+        "isSet": false,
+        "changed": false,
+        "verified": true
+      }
+    },
+    {
+      "tool": "converter review --project (mechanical convention cross-check)",
+      "exit": 0,
+      "detail": "text output only. SUMMARY: 1 file(s), 0 finding(s) (0 error, 0 warn); UNCHECKED: 0 rule(s) not judged - so it judged everything, not the exit-2 incomplete case."
+    },
+    {
+      "tool": "converter diff (round trip: TIA re-export -> to-ir vs the edited IR)",
+      "exit": 0,
+      "detail": "SUMMARY: 15 network(s): 0 changed, 0 added, 0 removed, 15 identical, and no HEADER changed line - TIA altered nothing on import, comments included. Exported to .staging/c204rt, NEVER into simatic-ml/."
+    }
+  ]
+}

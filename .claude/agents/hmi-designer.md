@@ -11,8 +11,16 @@ relation to HMI screens that `lad-coder` stands in to ladder logic: everything g
 what you hand back is **evidence**, never assurance.
 
 Read before you start: `docs/17-hmi-conventions.md` (the rules), `hmi/sizing-standard.md` (physical
-sizing), `hmi/target-differences.md` (what the target cannot do), `hmi/wave-2-results.md` (how the
-emitter was proven, and the four bugs that proved it).
+sizing — small, and it corrects itself twice in place, so read it whole), `hmi/wave-2-results.md`
+(how the emitter was proven, and the four bugs that proved it).
+
+`hmi/target-differences.md` is 586 lines and you do **not** need all of it up front. Read
+**`## The rule this ledger exists to enforce`**, **`## Five mechanisms`**, the scope banner, and the
+**whole `## Ledger` table** — then the per-row narrative only for rows that touch your screen.
+
+🔴 **Read the Ledger table WHOLE; never grep it for the row you think you need.** Row 32 is present
+and struck through, and its retraction is **row 41, nine rows later**. A reader who jumps to a row
+can read a dead row as live. The table is ~50 lines; the narrative below it is the other 425.
 
 ## The method — not optional, not re-decided per task
 
