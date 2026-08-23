@@ -201,8 +201,34 @@ figure is **322**.
 | result region **per slot** | **125 registers** | FC03 max read; a design-time refusal, explicitly "not something to split at runtime" | 🔴 **HARD** |
 | start-bool commit | 123 ⇒ K ≤ 1,968 slots | FC16 max write; the commit must be one transaction | never binds |
 | addressable registers | **3,596** at the current base | `(8192 − base) / 2`; 8,192 bytes of bit memory on this CPU class | soft |
-| current declared mirror | **576** (register 576 refused with exception 2, **measured on the rig**) | the area-pointer width | **a choice** |
-| conformance partition | 256 | where the panel band starts | **a choice** |
+| current declared area | **1024** — register 1023 reads, **1024 and 1025 refused with exception 2, measured on the controller 2026-08-23** | the area-pointer width | **a choice** |
+| conformance partition | **704** | where the panel band starts | **a choice** |
+
+✅ **THE AREA WAS WIDENED 576 → 1024 AND PROVEN ON THE CONTROLLER, 2026-08-23.** Pinned from both
+sides exactly as 576 was: 1022 and 1023 answer, 1024 and 1025 are refused by the server with a Modbus
+exception — a refusal, not a silence. **576 is no longer "the largest width ever proven here."**
+
+Three things that were open before the probe and are now measured:
+
+- **No cap.** Nothing in `MB_SERVER` or the CPU refused 1024. The step was 1.78× past anything
+  previously run, and the worry was not that it would fail but that it would **silently serve fewer** —
+  which is why the probe reads the edge from both directions rather than trusting the download.
+- **Scan time is unchanged**: 24.65 ms/scan at 1024 against 24.72 ms/scan at 576, measured minutes
+  apart on the same program. `MB_SERVER` services one request per call, so area width does not reach
+  the scan — now measured rather than reasoned.
+- **The panel is live at its new base**: registers 1022–1023 are band-D panel registers and they answer.
+
+🔴 **AND THE REASON THE WIDENING WAS NEEDED IS WORTH MORE THAN THE NUMBER.** The mirror and the panel
+had been sharing registers 256–323 in the deployed program — 53 tags colliding **bit-for-bit**,
+including the panel's master enable and a safety-healthy substitution, both overwritten every scan by
+the copy layer. The panel's own comment said it was inert until enabled; that was false on the running
+controller, and safe only because the rig cannot actuate. **Nothing compared the two**: the mirror is
+bounded against the declared area and proved disjoint from *itself*. `Harness.Map/ReservedRegion.cs`
+now closes that, but only for neighbours somebody declares.
+
+⚠️ **The mirror's extent is a function of lane count (~165 registers/lane), so 704 is not permanent
+headroom** — it clears four lanes of padded width up to 174 and no more. **Band D ends exactly at
+1023: there is zero slack above the panel.**
 
 **The declared width lives in exactly two lines of one IR block** — the area-pointer argument and the
 sidecar constant backing it — and **nothing in `src/harness/` hardcodes it**. Widening is a two-line
