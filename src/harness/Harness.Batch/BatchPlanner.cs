@@ -27,7 +27,19 @@ public sealed record BatchPlanResult(
     /// was checked — or the reason nothing was derived. Never null on a returned result: "not asked" is
     /// itself a state, and one the report has to print.
     /// </summary>
-    ServedAreaFact? ServedArea = null)
+    ServedAreaFact? ServedArea = null,
+
+    /// <summary>
+    /// 🔴 What the PROGRAM says already occupies the served area — or which of the several nothings it
+    /// was. Never null on a returned result, for <see cref="ServedArea"/>'s reason.
+    /// </summary>
+    NeighbourFact? Neighbours = null,
+
+    /// <summary>
+    /// The derived set measured against the declared one: what was used, what was excluded as the
+    /// mirror's own, and which declarations nothing corroborated.
+    /// </summary>
+    NeighbourReconciliation? NeighbourReconciliation = null)
 {
     public bool Planned => Refusals.Count == 0 && MergedBindingJson is not null;
 }
@@ -62,7 +74,10 @@ public static class BatchPlanner
     };
 
     public static BatchPlanResult Plan(
-        IReadOnlyList<Lane> lanes, Func<string, string> readFile, ServedAreaFact? servedArea = null)
+        IReadOnlyList<Lane> lanes,
+        Func<string, string> readFile,
+        ServedAreaFact? servedArea = null,
+        NeighbourFact? neighbours = null)
     {
         ArgumentNullException.ThrowIfNull(lanes);
         ArgumentNullException.ThrowIfNull(readFile);
@@ -70,6 +85,10 @@ public static class BatchPlanner
         // "Nobody asked" is a state and it is carried, not defaulted away. A result whose ServedArea is
         // silently null reads, on every surface that prints it, exactly like one where the check ran.
         var served = servedArea ?? ServedAreaFact.NotAsked;
+
+        // Same rule, same reason (workbench Y1). NotAsked is the state every plan was in before the
+        // derivation existed; it does not gate, and it does not print as a green either.
+        var neighbourFact = neighbours ?? NeighbourFact.NotAsked;
 
         var refusals = new List<string>();
 
@@ -79,7 +98,7 @@ public static class BatchPlanner
         {
             return new BatchPlanResult(0, Array.Empty<string>(),
                 new[] { "NOTHING BATCHED: the queue is empty. That is not a clean batch, it is a batch of nothing — and a deployment built from it would test nothing while reporting a success." },
-                null, null, Array.Empty<string>(), null, served);
+                null, null, Array.Empty<string>(), null, served, neighbourFact);
         }
 
         var documents = new List<(Lane Lane, BindingDocument Binding)>();
@@ -98,7 +117,7 @@ public static class BatchPlanner
         }
 
         if (refusals.Count > 0)
-            return new BatchPlanResult(lanes.Count, Array.Empty<string>(), refusals, null, null, Array.Empty<string>(), null, served);
+            return new BatchPlanResult(lanes.Count, Array.Empty<string>(), refusals, null, null, Array.Empty<string>(), null, served, neighbourFact);
 
         // ---- The geometry every lane has to agree on. -------------------------------------------
         //
@@ -180,7 +199,7 @@ public static class BatchPlanner
         refusals.AddRange(reachability.Refusals);
 
         if (refusals.Count > 0)
-            return new BatchPlanResult(lanes.Count, Array.Empty<string>(), refusals, null, null, programPaths, null, served);
+            return new BatchPlanResult(lanes.Count, Array.Empty<string>(), refusals, null, null, programPaths, null, served, neighbourFact);
 
         // ---- Does the merged map fit what Modbus can reach? -------------------------------------
         var first = documents[0].Binding;
@@ -257,14 +276,14 @@ public static class BatchPlanner
             {
                 refusals.Add("no lane states `declaredRegisters`, so the merged map cannot be checked against what a Modbus client can reach. It is required per lane."
                     + " Nor could it be derived from the program: " + served.Denominator);
-                return new BatchPlanResult(lanes.Count, Array.Empty<string>(), refusals, null, null, programPaths, null, served);
+                return new BatchPlanResult(lanes.Count, Array.Empty<string>(), refusals, null, null, programPaths, null, served, neighbourFact);
             }
 
             declared = served.Registers;
         }
 
         if (refusals.Count > 0)
-            return new BatchPlanResult(lanes.Count, Array.Empty<string>(), refusals, null, null, programPaths, null, served);
+            return new BatchPlanResult(lanes.Count, Array.Empty<string>(), refusals, null, null, programPaths, null, served, neighbourFact);
 
         // The 1000 fallback is unchanged and deliberately kept: a derived base of 0 means NOT DERIVED,
         // and letting that stand in for an unstated one would move the whole mirror to %M0.
@@ -300,9 +319,71 @@ public static class BatchPlanner
         // declarations collapse while overlapping-but-different ones do not; and an empty set must never
         // reach `Reserving`, which throws. Each of those is invisible at a call site, which is exactly
         // why a second copy of them was a defect waiting rather than a duplication to tidy.
-        var reserved = DeclaredReservations.Of(documents.Select(d => d.Binding));
+        var declaredRegions = DeclaredReservations.Of(documents.Select(d => d.Binding));
 
-        geometry = DeclaredReservations.AppliedTo(geometry, documents.Select(d => d.Binding));
+        // =========================================================================================
+        // 🔴 AND THE NEIGHBOURS NOBODY DECLARED — DERIVED FROM THE PROGRAM (workbench Y1, 2026-08-23)
+        // =========================================================================================
+        //
+        // Everything above this line is somebody's knowledge of the neighbourhood. `ReservedRegion`'s own
+        // documentation admits the reach: "it can only ever see neighbours somebody wrote down", and the
+        // panel that overwrote 53 tags would have collided just the same had the field been left blank —
+        // WHICH IT WAS. `converter neighbours` reads every %M tag and every P#M area pointer in the
+        // corpus and says who declares each one; this consumes that.
+        //
+        // The naming comes off the merged binding, and it is what the mirror's OWN objects are excluded
+        // on — a CLOSED SET of two names from CopyLayerNaming, the shape BuildStamp.cs:192-199 already
+        // uses. On the committed reference corpus that is not a nicety: all 26 %M claims inside
+        // %M1000..%M1073 belong to the mirror's own tag table, and left in, every map would refuse
+        // against its own tags.
+        var namingDefaults = new CopyLayerNaming();
+        var naming = new CopyLayerNaming(
+            first.BlockName ?? namingDefaults.BlockName,
+            first.BlockNumber ?? namingDefaults.BlockNumber,
+            first.TagTableName ?? namingDefaults.TagTableName,
+            first.TagPrefix ?? namingDefaults.TagPrefix);
+
+        var reconciliation = NeighbourReconciler.Of(neighbourFact, geometry, naming, declaredRegions);
+
+        // 🔴 *** A REFUSAL INPUT THAT WENT MISSING REFUSES. W5's FALLBACK SHAPE IS NOT COPIED HERE. ***
+        //
+        // `UnionPreflight` treats "could not consult the converter" as a REPORT, and for a reachability
+        // report that is right. A neighbour list is not a report: it is the only thing standing between a
+        // COMPUTED mirror extent and somebody else's registers, and a run that proceeds without one is
+        // exactly the state that overwrote 53 tags on a running controller. So every way the derivation
+        // can fail to arrive gates here — with ONE named escape, which is counted.
+        if (neighbourFact.Gates)
+        {
+            refusals.Add(
+                "THE NEIGHBOUR LIST COULD NOT BE DERIVED FROM THE PROGRAM CORPUS, and a mirror allocated against a "
+                + "neighbour list nothing derived is the state that overwrote 53 tags on a running controller: "
+                + neighbourFact.Why
+                + " This is REFUSED rather than reported, because unlike a reachability finding it is an input to a "
+                + "refusal: falling back to 'whatever the bindings declared' would restore the silence exactly. "
+                + "Fix the corpus, or state the escape `--neighbours declared-only` — WHICH IS COUNTED.");
+
+            foreach (var refusal in neighbourFact.Refusals)
+                refusals.Add("the neighbour producer refused a construct in the corpus: " + refusal);
+
+            return new BatchPlanResult(lanes.Count, Array.Empty<string>(), refusals, null, null, programPaths,
+                null, served, neighbourFact, reconciliation);
+        }
+
+        // 🔴 DERIVED REGIONS ARE UNIONED WITH DECLARED ONES AND BOTH REACH THE MERGED BINDING. A derived
+        // neighbour applied only to THIS geometry would be enforced once, at plan time, and thrown away —
+        // and `run --merged <file>` re-allocates from the document, so it would allocate with no knowledge
+        // of the occupant at all. That is the failure `MergeBindings` already carries a paragraph about,
+        // and a derived reservation is no more durable than a declared one unless it is written down.
+        //
+        // The reconciler has already removed the parts a declaration covers, so the two sets cannot
+        // overlap each other and the geometry's "two owners cannot hold the same registers" refusal keeps
+        // meaning what it says: two AUTHORS disagree.
+        var reserved = declaredRegions.Concat(reconciliation.Derived).ToArray();
+
+        // The empty case must not reach Reserving, which throws on one — see DeclaredReservations, whose
+        // whole reason for existing is that this rule is invisible at a call site.
+        if (reserved.Length > 0)
+            geometry = geometry.Reserving(reserved);
 
         var map = MapAllocator.Allocate(new WaveSetRequest(geometry, slots));
 
@@ -311,7 +392,8 @@ public static class BatchPlanner
             // Refused, never truncated. Dropping the lanes that do not fit would produce a batch that
             // runs and a set of lanes that silently did not.
             refusals.AddRange(map.Refusals.Select(r => "the merged map does not fit: " + r));
-            return new BatchPlanResult(lanes.Count, Array.Empty<string>(), refusals, null, null, programPaths, null, served);
+            return new BatchPlanResult(lanes.Count, Array.Empty<string>(), refusals, null, null, programPaths,
+                null, served, neighbourFact, reconciliation);
         }
 
         var merged = MergeBindings(documents.Select(d => d.Binding).ToList(), reserved);
@@ -324,7 +406,9 @@ public static class BatchPlanner
             map.Map,
             programPaths,
             reachability,
-            served);
+            served,
+            neighbourFact,
+            reconciliation);
     }
 
     /// <summary>
@@ -487,6 +571,25 @@ public static class BatchPlanner
                 sb.Append("              block it read is the block running on the CPU. Agreement with the STAGED program\n");
                 sb.Append("              is the whole of the claim.\n");
             }
+        }
+
+        // 🔴 WHO ELSE IS IN THE AREA, ON EVERY PLAN — INCLUDING THE ZERO, WHICH IS THE ONE THAT MATTERS.
+        // A neighbour line that appears only when something was found teaches a reader that its absence
+        // means "clean", and the absence would in fact mean "nobody looked". That is the exact reading
+        // that let a mirror grow into a virtual panel's command band.
+        if (result.NeighbourReconciliation is { } neighbours)
+        {
+            sb.Append("  area      ").Append(neighbours.Denominator).Append('\n');
+
+            foreach (var report in neighbours.Reports)
+                sb.Append("            REPORTED  ").Append(report).Append('\n');
+
+            // Printed under EVERY outcome, and deliberately loudest under the derived one — that is the
+            // run whose reader is likeliest to widen it into "the area is free".
+            sb.Append("            ^ WHAT THIS CANNOT SEE: an occupant reaching %M WITHOUT DECLARING a tag or an\n");
+            sb.Append("              area pointer (indirect or pointer-computed access); anything outside the corpus it\n");
+            sb.Append("              was handed; and whether that corpus is the program on the controller — it reads\n");
+            sb.Append("              files, not the CPU. A zero means 'nothing in the corpus DECLARED a claim'.\n");
         }
 
         foreach (var refusal in result.Refusals)

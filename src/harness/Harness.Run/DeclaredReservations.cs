@@ -32,14 +32,24 @@ namespace Harness.Run;
 /// field been left blank. An empty list is the ABSENCE of a claim, not the claim that the area is
 /// otherwise empty, and the remedy for an undeclared neighbour is to declare it.</para>
 ///
-/// <para>🔴 <b>ONE CALL SITE HAS NOT BEEN MOVED ONTO THIS YET, AND IT IS NAMED HERE RATHER THAN LEFT TO
-/// BE FOUND: <c>Harness.Batch.BatchPlanner.Plan</c>.</b> It still open-codes the identical union at its
-/// own lines around 205–212 — the file was held by concurrent work when this was extracted, so the swap
-/// (<c>DeclaredReservations.AppliedTo(geometry, documents.Select(d =&gt; d.Binding))</c>, replacing both the
-/// <c>SelectMany/Select/Distinct</c> and the <c>if (reserved.Length &gt; 0)</c> guard) is outstanding. The
-/// three helper tests in <c>ReservedRegionRunPathTests</c> pin this type's semantics to exactly what that
-/// code does today, so the swap is behaviour-preserving; until it happens <b>this rule has two
-/// derivations, which is the thing this repository refuses.</b></para>
+/// <para>✅ <b>ONE DERIVATION, since <c>182b3f9</c>.</b> This paragraph used to name
+/// <c>Harness.Batch.BatchPlanner.Plan</c> as an outstanding second copy — it was held by concurrent work
+/// when this type was extracted, and has since been swapped onto <see cref="Of"/> and
+/// <see cref="AppliedTo(MirrorGeometry, IEnumerable{BindingDocument})"/>. The three helper tests in
+/// <c>ReservedRegionRunPathTests</c> pinned this type's semantics to exactly what that code did, and the
+/// harness suite held at the same count across the swap, which is the evidence a behaviour-preserving
+/// change owes.</para>
+///
+/// <para>⚠️ <b>Keep it that way, and the reason is measured rather than stylistic.</b> While the second
+/// copy existed, <c>LoopCli.Compose</c> applied no reservations at all — so the guard bound on the batch
+/// path and was <b>inert on every path through Compose</b>: <c>harness-run</c>, <c>Harness.Verify</c>, and
+/// <c>harness-batch --merged</c>, the deploy path itself, which read a merged binding that carried the
+/// reservation and dropped it. The rule is not the three lines it looks like: absent
+/// <c>register</c>/<c>length</c> map to <c>-1</c>/<c>0</c> <b>so the region refuses itself</b> rather than
+/// to <c>0</c>/<c>1</c>, which would read as a real band nobody typed; identical declarations collapse
+/// while overlapping-but-different ones do not; and an empty set must never reach <c>Reserving</c>, which
+/// throws. Each is invisible at a call site, which is why a copy of them was a defect waiting rather than
+/// a duplication to tidy.</para>
 /// </summary>
 public static class DeclaredReservations
 {

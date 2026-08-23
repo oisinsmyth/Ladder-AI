@@ -311,6 +311,22 @@ public sealed record BatchRunPlan(IReadOnlyList<BatchStep> Steps, IReadOnlyList<
             arguments.Add("--inert-retry-interval");
             arguments.Add(options.InertRetryIntervalSeconds.ToString());
 
+            // 🔴 *** THE NEIGHBOUR LIST'S STATE TRAVELS INTO THE RESULT PACKAGE (workbench Y1). ***
+            //
+            // The plan's line is printed to a terminal and gone with it; the package is what a reviewer
+            // opens weeks later, and it is where "nothing else in this area was written to" would
+            // otherwise be assumed silently. A run whose mirror was allocated against a neighbour list
+            // NOBODY DERIVED rests on an unmeasured premise, which is ValidityStamp.Caveats' own
+            // definition of what belongs in it.
+            //
+            // Only on the NOT DERIVED path, and that is the same rule the program manifest already
+            // follows: a caveat that fires on every package is a caveat nobody reads.
+            if (batch.Neighbours is { Derived: false } neighbours)
+            {
+                arguments.Add("--neighbours-not-derived");
+                arguments.Add("NEIGHBOURS: NOT DERIVED — " + neighbours.Why);
+            }
+
             arguments.Add("--out");
             arguments.Add(Path.Combine(options.StagingDirectory, $"{lane.Name}-result.json"));
 

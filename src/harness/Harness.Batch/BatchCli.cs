@@ -35,8 +35,11 @@ public static class BatchCli
         + "                             (--manifest <file> | --program <path>...) [--purpose <text>]\n"
         + "                             # --manifest DERIVES the program set from what the lane emitted; --program is DECLARED by you\n"
         + "       harness-batch plan    --queue <dir> [--out <merged-binding.json>] [--converter <exe>]\n"
+        + "                             [--neighbours derive|declared-only]\n"
         + "                             # --converter DERIVES the served register width from the MB_SERVER call that serves it\n"
         + "                             # and refuses a binding that disagrees; without it the width is DECLARED and unchecked\n"
+        + "                             # --neighbours derive DERIVES every %M occupant of that area from the corpus and refuses\n"
+        + "                             # a mirror that would enter one. `declared-only` is the ONE named escape, and IT IS COUNTED\n"
         + "       harness-batch list    --queue <dir>\n"
         + "       harness-batch dequeue --queue <dir> --lane <name>\n"
         + "       harness-batch run     --queue <dir> --merged <file> --staging <dir> --leases <dir> --holder <id> --holder-pid <n>\n"
@@ -68,7 +71,7 @@ public static class BatchCli
         string? queue = null, lane = null, binding = null, submission = null, outPath = null, purpose = null;
         string? merged = null, staging = null, leases = null, holder = null, portalProject = null;
         string? portalEvidence = null, rig = null, converterExe = null, harnessRunExe = null, allowlist = null;
-        string? opennessCliExe = null, manifest = null;
+        string? opennessCliExe = null, manifest = null, neighboursMode = null;
         int holderPid = 0, rigPort = 503, rigUnit = 1, ttlMinutes = 60;
         var settleSeconds = -1;   // -1 = not stated, use the default
         string? attestation = null;
@@ -102,6 +105,7 @@ public static class BatchCli
                 case "--portal-evidence": portalEvidence = Next(args, ref i); break;
                 case "--rig": rig = Next(args, ref i); break;
                 case "--converter": converterExe = Next(args, ref i); break;
+                case "--neighbours": neighboursMode = Next(args, ref i); break;
                 case "--harness-run": harnessRunExe = Next(args, ref i); break;
                 case "--openness-cli": opennessCliExe = Next(args, ref i); break;
                 case "--allowlist": allowlist = Next(args, ref i); break;
@@ -134,6 +138,41 @@ public static class BatchCli
             return BatchExit.Unusable;
         }
 
+        // 🔴 A PURE ARGUMENT CHECK, TAKEN BEFORE ANYTHING COSTS ANYTHING — and `derive` without a
+        // converter is REFUSED rather than quietly downgraded, because the quiet downgrade IS the
+        // fallback shape this guard exists to avoid.
+        NeighbourMode neighbours;
+        switch (neighboursMode)
+        {
+            case null:
+                neighbours = NeighbourMode.NotAsked;
+                break;
+
+            case "derive":
+                if (string.IsNullOrWhiteSpace(converterExe))
+                {
+                    output.WriteLine("--neighbours derive needs --converter <exe>: the %M occupants of the served area are derived by "
+                        + "`converter neighbours`, and there is no second way to obtain them. REFUSED rather than downgraded to "
+                        + "declared-only — a derivation that silently becomes a weaker check is the exact shape this guard exists to "
+                        + "prevent. Pass --converter, or say `--neighbours declared-only`, which is counted.");
+                    return BatchExit.Unusable;
+                }
+
+                neighbours = NeighbourMode.Derive;
+                break;
+
+            case "declared-only":
+                neighbours = NeighbourMode.DeclaredOnly;
+                break;
+
+            default:
+                output.WriteLine($"--neighbours '{neighboursMode}' is not a mode. It takes `derive` (read the corpus and refuse a mirror "
+                    + "that would enter somebody else's registers) or `declared-only` (the ONE named escape, which is counted). An "
+                    + "unrecognised value is refused rather than treated as the safe default: the safe default here is the one that "
+                    + "costs a subprocess, and guessing it for you would be a subprocess nobody asked for.");
+                return BatchExit.Unusable;
+        }
+
         var store = new LaneQueue(queue);
 
         // Echoed on every act. Two agents passing two different roots fork the queue, and no process can
@@ -143,13 +182,13 @@ public static class BatchCli
         return verb switch
         {
             "enqueue" => Enqueue(store, output, readFile, lane, binding, submission, programs, purpose, manifest),
-            "plan" => Plan(store, output, readFile, writeFile, outPath, converterExe, runner),
+            "plan" => Plan(store, output, readFile, writeFile, outPath, converterExe, runner, neighbours),
             "list" => List(store, output),
             "dequeue" => Dequeue(store, output, lane),
             _ => Run(store, output, readFile, runner, deploy, new RunArgs(
                 merged, staging, leases, holder, holderPid, portalProject, portalEvidence,
                 rig, rigPort, rigUnit, converterExe, harnessRunExe, allowlist, ttlMinutes, confirmed, attestation,
-                settleSeconds, opennessCliExe)),
+                settleSeconds, opennessCliExe, neighbours)),
         };
     }
 
@@ -157,7 +196,58 @@ public static class BatchCli
         string? Merged, string? Staging, string? Leases, string? Holder, int HolderPid,
         string? PortalProject, string? PortalEvidence, string? Rig, int RigPort, int RigUnit,
         string? ConverterExe, string? HarnessRunExe, string? Allowlist, int TtlMinutes, bool Confirmed,
-        string? PortalAttestation, int SettleSeconds, string? OpennessCliExe);
+        string? PortalAttestation, int SettleSeconds, string? OpennessCliExe, NeighbourMode Neighbours);
+
+    /// <summary>
+    /// 🔴 <b>WHO ELSE IS IN THE AREA — derived, declined by the one named escape, or never asked.</b>
+    ///
+    /// <para>The area comes from <see cref="ServedAreaFact"/> and never from the binding: two
+    /// derivations describing two different windows would let this clear registers the mirror does not
+    /// live in, which is a closed check wearing a green.</para>
+    ///
+    /// <para><b>Every failure to obtain it is a <see cref="NeighbourState.NotDerived"/>, which gates in
+    /// the planner.</b> That is the one place this deliberately differs from <see cref="UnionPreflight"/>
+    /// and <see cref="ServedAreaProbe"/>: they report what they could not consult, because their findings
+    /// are reports. This one is an input to a refusal.</para>
+    /// </summary>
+    private static NeighbourFact Neighbours(
+        NeighbourMode mode, LaneQueue store, TextWriter output, string? converterExe,
+        IReadOnlyList<Lane> lanes, ServedAreaFact served, IProcessRunner? runner, string verb)
+    {
+        switch (mode)
+        {
+            case NeighbourMode.DeclaredOnly:
+                // Recorded BEFORE the plan, so a batch that then refuses for an unrelated reason still
+                // counted the decline. The tally is about how often the guard is switched off, not about
+                // how often doing so was followed by a successful deployment.
+                output.WriteLine("  " + NeighbourEscapeLog.Record(store.Root, verb).Line);
+                return NeighbourFact.DeclaredOnly;
+
+            case NeighbourMode.Derive:
+                if (runner is null)
+                {
+                    return NeighbourFact.NotDerivedBecause(
+                        "this build has no process runner wired in, so `converter neighbours` could not be consulted at all.");
+                }
+
+                if (!served.Derived)
+                {
+                    return NeighbourFact.NotDerivedBecause(
+                        "the served AREA itself was not derived, so there is no window to look for occupants inside — and asking "
+                        + "about an AUTHORED area would check registers the mirror may not even live in. " + served.Denominator);
+                }
+
+                return NeighbourProbe.Derive(
+                    converterExe!,
+                    lanes.SelectMany(l => l.ProgramPaths).Distinct(StringComparer.OrdinalIgnoreCase).ToList(),
+                    served.BaseByte,
+                    served.Registers,
+                    runner);
+
+            default:
+                return NeighbourFact.NotAsked;
+        }
+    }
 
     /// <summary>
     /// 🔴 <b><c>--yes</c> is required, and without it Portal is NEVER CONTACTED.</b>
@@ -204,7 +294,22 @@ public static class BatchCli
                 + "the program corpus was not read. The width is DECLARED, not derived: pass --yes with "
                 + "--converter to check it against the MB_SERVER call that serves it.");
 
-        var batch = BatchPlanner.Plan(lanes, readFile, served);
+        // 🔴 THE DRY RUN CANNOT DERIVE, AND IT SAYS SO AS A USAGE ERROR RATHER THAN DERIVING NOTHING.
+        // The dry run's contract is that it starts NO process at all — a promise with its own test — so
+        // `--neighbours derive` under it is a contradiction. Refused by name, because the alternative
+        // (silently behaving as declared-only) is the downgrade this whole item exists to prevent, and it
+        // would be invisible in the report.
+        if (args.Neighbours == NeighbourMode.Derive && !args.Confirmed)
+        {
+            output.WriteLine("REFUSED  --neighbours derive needs --yes. A dry run starts NO PROCESS AT ALL, so it cannot consult "
+                + "`converter neighbours`, and quietly proceeding as though it had is the silent downgrade this check exists to "
+                + "prevent. Drop the flag, or say `--neighbours declared-only` — which is counted. NOTHING WAS RUN.");
+            return BatchExit.Unusable;
+        }
+
+        var neighbours = Neighbours(args.Neighbours, store, output, args.ConverterExe, lanes, served, runner, "run");
+
+        var batch = BatchPlanner.Plan(lanes, readFile, served, neighbours);
 
         if (!batch.Planned)
         {
@@ -282,6 +387,17 @@ public static class BatchCli
                 output.WriteLine("              it read is the block running on the CPU — agreement with the STAGED program is the");
                 output.WriteLine("              whole of the claim, and the 1024-register widening was proven by probing the device.");
             }
+        }
+
+        // 🔴 WHO ELSE IS IN THE AREA, ON THE PATH THAT ACTUALLY DEPLOYS. `BatchPlanner.Describe` carries
+        // this line too, and `run` only prints that report when the plan FAILED — so on a successful
+        // deploy the provenance of the neighbour list would otherwise appear nowhere at all.
+        if (batch.NeighbourReconciliation is { } area)
+        {
+            output.WriteLine("  area      " + area.Denominator);
+
+            foreach (var report in area.Reports)
+                output.WriteLine("            REPORTED  " + report);
         }
 
         // 🔴 *** THE PARITY CHECK, RUN ON THE CORPUS ACTUALLY IN FRONT OF IT. ***
@@ -572,7 +688,7 @@ public static class BatchCli
     /// </summary>
     private static int Plan(
         LaneQueue store, TextWriter output, Func<string, string> readFile, Action<string, string> writeFile,
-        string? outPath, string? converterExe, IProcessRunner? runner)
+        string? outPath, string? converterExe, IProcessRunner? runner, NeighbourMode neighbourMode)
     {
         var lanes = store.All();
 
@@ -586,7 +702,9 @@ public static class BatchCli
                 + "was not established. The width below is DECLARED, not derived. Pass --converter to check it "
                 + "against the MB_SERVER call that serves it.");
 
-        var result = BatchPlanner.Plan(lanes, readFile, served);
+        var neighbours = Neighbours(neighbourMode, store, output, converterExe, lanes, served, runner, "plan");
+
+        var result = BatchPlanner.Plan(lanes, readFile, served, neighbours);
 
         output.Write(BatchPlanner.Describe(result));
 

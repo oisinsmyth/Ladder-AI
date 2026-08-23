@@ -147,6 +147,16 @@ public static class LoopCli
             return LoopExit.NothingExamined;
         }
 
+        // 🔴 *** WHETHER ANYTHING DERIVED WHO ELSE LIVES IN THE MIRROR'S %M AREA (workbench Y1). ***
+        //
+        // Supplied by `harness-batch`, which is the only party that can answer it: the neighbour list is
+        // derived from the whole deployed corpus, and a lane's own two documents cannot testify about it.
+        // Present means NOT DERIVED, and the sentence travels into every package this run writes — the
+        // plan that said it is a terminal line, and the package is what a reviewer opens weeks later.
+        //
+        // Absent means DERIVED, or a caller that predates the question. It does NOT mean "no neighbours".
+        var neighboursNotDerived = Option(args, "--neighbours-not-derived");
+
         // 🔴 *** OPT-IN, NEVER ON BY DEFAULT. *** A run that silently wrote a file somewhere is a surprise,
         // and the feed is a real artifact on disk with a real (small) cost per read. Stating the path is
         // also what keeps two concurrent runs from publishing over each other.
@@ -263,7 +273,7 @@ public static class LoopCli
         // no host is read. It sits here rather than after the fence so that the absence is structural
         // rather than a flag somebody could reorder past.
         if (generateOnly)
-            return GenerateOnly(submissionPath, bindingPath, submission, binding, program, readFile, emitDir, output, writeFile, readBytes, stagedCorpus);
+            return GenerateOnly(submissionPath, bindingPath, submission, binding, program, readFile, emitDir, output, writeFile, readBytes, stagedCorpus, neighboursNotDerived);
 
         // ---- THE FENCE, BEFORE ANYTHING OPENS A SOCKET ----------------------------------------------
         var port = 0;
@@ -321,7 +331,7 @@ public static class LoopCli
         LoopRequest request;
         try
         {
-            request = Compose(submission, binding, program, readFile, readBytes, settleFromArgs, stagedCorpus);
+            request = Compose(submission, binding, program, readFile, readBytes, settleFromArgs, stagedCorpus, neighboursNotDerived);
         }
         catch (Exception ex)
         {
@@ -432,12 +442,18 @@ public static class LoopCli
         // The denominator, on this path too. A generate-only run computes the same stamp a deploying run
         // will, so it must report the same coverage — this is the cheapest place to discover that a lane
         // stages an object the program list does not name, and it costs no device.
-        StagedCorpus? stagedCorpus = null)
+        StagedCorpus? stagedCorpus = null,
+
+        // Echoed on this path too. A generate-only run writes no package, so the report is the only
+        // surface the sentence has here — and an absent line would read as a derivation that found
+        // nothing, which is the whole failure class.
+        string? neighboursNotDerived = null)
     {
         LoopRequest request;
         try
         {
-            request = Compose(submission, binding, program, readFile, readBytes, stagedCorpus: stagedCorpus);
+            request = Compose(submission, binding, program, readFile, readBytes,
+                stagedCorpus: stagedCorpus, neighboursNotDerived: neighboursNotDerived);
         }
         catch (Exception ex)
         {
@@ -450,6 +466,13 @@ public static class LoopCli
         output.WriteLine("mode        : GENERATE ONLY — derive, gate, width, generate, 0.1b. NO GATEWAY IS CONSTRUCTED, no host is read,");
         output.WriteLine("              nothing is imported, compiled or downloaded. The exit code says the IR was PRODUCED, never that");
         output.WriteLine("              anything ran.");
+
+        // 🔴 PRINTED WHEREVER IT IS KNOWN, INCLUDING THE PATH THAT WRITES NO PACKAGE. A run whose mirror
+        // was placed against a neighbour list nobody derived must not be readable as one that was
+        // checked — and a generate-only run is precisely where a person eyeballs the layout.
+        if (!string.IsNullOrWhiteSpace(request.NeighboursNotDerived))
+            output.WriteLine("neighbours  : " + request.NeighboursNotDerived);
+
         output.WriteLine();
 
         // *** THE GATE STILL RUNS AND ITS VERDICT IS STILL REPORTED; WHAT IT DOES NOT DO IS STOP THIS. ***
@@ -688,7 +711,12 @@ public static class LoopCli
         // does NOT come from either of the two documents above, deliberately: a submission and a binding
         // describe the test, not the deployment, and a denominator taken from the same place as the
         // numerator can never report a gap. Null is "nobody supplied one" and stays loud.
-        StagedCorpus? stagedCorpus = null)
+        StagedCorpus? stagedCorpus = null,
+
+        // 🔴 Whether anything DERIVED the mirror's neighbours — see LoopRequest.NeighboursNotDerived. It
+        // is not read out of either document, deliberately: a binding's `reservedRegions` is the DECLARED
+        // half, and no document can testify that something derived it.
+        string? neighboursNotDerived = null)
     {
         ArgumentNullException.ThrowIfNull(submission);
         ArgumentNullException.ThrowIfNull(binding);
@@ -831,7 +859,8 @@ public static class LoopCli
             MaxIndexScans: inputs.MaxIndexScans,
             ScenarioTimeInputs: inputs.ScenarioTimeInputs,
             InertSettle: inertSettle,
-            StagedCorpus: stagedCorpus);
+            StagedCorpus: stagedCorpus,
+            NeighboursNotDerived: neighboursNotDerived);
     }
 
     private static IReadOnlyList<MirroredSignal> Signals(List<MirroredSignalDocument>? rows) =>
@@ -1387,6 +1416,9 @@ public static class LoopCli
         output.WriteLine("         is no default; --no-program-under-test is the positive claim that there is none, and it is checked");
         output.WriteLine("         rather than assumed. An .ir this loader cannot classify is a REFUSAL naming the file, never a skip.");
         output.WriteLine();
+        output.WriteLine("--neighbours-not-derived <sentence> records that NOTHING DERIVED who else occupies the mirror's %M area.");
+        output.WriteLine("         Emitted by `harness-batch` when its derivation was declined or could not be obtained; it becomes a");
+        output.WriteLine("         CAVEAT on every result package this run writes. ABSENT MEANS DERIVED — never 'no neighbours'.");
         output.WriteLine("--staged names WHAT THE DEPLOYMENT STAGED — the DENOMINATOR the build stamp's coverage is reported against,");
         output.WriteLine("         one `Name=source` row per object, e.g. --staged \"DB_Params=lane 'vessel'\". It is NOT --program:");
         output.WriteLine("         --program is what gets HASHED, and a short --program list is indistinguishable from a complete one");

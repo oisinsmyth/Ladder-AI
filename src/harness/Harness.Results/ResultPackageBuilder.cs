@@ -76,7 +76,16 @@ public static class ResultPackageBuilder
         // it deliberately adds NO caveat: every package built before this parameter existed passes null,
         // and a caveat that fires on all of them is a caveat nobody reads. The absence is stated in the
         // artifact instead, as `programUnderTest.recorded: false`.
-        ProgramManifest? program = null)
+        ProgramManifest? program = null,
+
+        // 🔴 WHETHER ANYTHING DERIVED WHO ELSE LIVES IN THE MIRROR'S %M AREA (workbench Y1). Null is
+        // "the neighbour list WAS derived, or this caller predates the question"; a non-null value is the
+        // NOT DERIVED sentence, carried verbatim from whoever declined or failed to obtain it.
+        //
+        // It is a caveat and not a refusal HERE because the refusal already happened, or was deliberately
+        // escaped, upstream at plan time. What this adds is durability: the plan is printed to a terminal
+        // and gone with it, and the package is what a reviewer opens weeks later.
+        string? neighboursNotDerived = null)
     {
         ArgumentNullException.ThrowIfNull(declaration);
         ArgumentNullException.ThrowIfNull(enumerations);
@@ -115,7 +124,7 @@ public static class ResultPackageBuilder
             new ValidityStamp(
                 stimulus?.Version?.Observed ?? expectedBuild.Value,
                 map.MapHash,
-                Caveats(declaration, stimulus, slotsCoveredByOneRead, program)),
+                Caveats(declaration, stimulus, slotsCoveredByOneRead, program, neighboursNotDerived)),
             declaration.BoundsCurrency,
 
             // *** THE FLOOR COMES FROM THE REPORT THAT WAS ACTUALLY USED, never re-derived here. *** The
@@ -139,9 +148,26 @@ public static class ResultPackageBuilder
         VectorDeclaration declaration,
         StimulusEvidence? stimulus,
         int slotsCoveredByOneRead,
-        ProgramManifest? program)
+        ProgramManifest? program,
+        string? neighboursNotDerived)
     {
         var caveats = new List<string>();
+
+        // 🔴 *** A MIRROR ALLOCATED AGAINST A NEIGHBOUR LIST NOBODY DERIVED RESTS ON AN UNMEASURED
+        // PREMISE, WHICH IS THIS FIELD'S OWN DEFINITION OF WHAT BELONGS IN IT. *** Measured 2026-08-23:
+        // a generated mirror and a hand-authored virtual panel both claimed registers 256-323 of one %M
+        // area and 53 tags were overwritten bit for bit, the panel's master enable among them. Nothing
+        // refused, because nothing had ever been told that anything else lived in the area.
+        //
+        // Only when the derivation did NOT happen — the same rule the manifest above follows, and for the
+        // same reason: a caveat that fires on every package is a caveat nobody reads.
+        if (!string.IsNullOrWhiteSpace(neighboursNotDerived))
+        {
+            caveats.Add(
+                neighboursNotDerived!.Trim()
+                + " So this result's mirror was placed using only what somebody wrote down, and an UNDECLARED occupant of the "
+                + "same area would have been overwritten every scan without anything here noticing.");
+        }
 
         // 🔴 *** A STAGED OBJECT THE STAMP DOES NOT COVER IS EXACTLY WHAT A CAVEAT IS: something this
         // result's validity rests on that has NOT been measured. *** The validity stamp claims "a program

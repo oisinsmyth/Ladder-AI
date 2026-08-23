@@ -131,7 +131,17 @@ public sealed record LoopRequest(
     // hashing it would move every stamp already computed - including the literal compiled into the copy
     // layer currently deployed - for no fact on the device. BuildStamp.Derive keeps it out of the
     // canonical form and a test asserts the stamp is byte-for-byte unmoved by it.
-    StagedCorpus? StagedCorpus = null)
+    StagedCorpus? StagedCorpus = null,
+
+    // 🔴 *** WHETHER ANYTHING DERIVED WHO ELSE LIVES IN THE MIRROR'S %M AREA (workbench Y1). ***
+    //
+    // Null means the neighbour list WAS derived — or that this caller predates the question. A non-null
+    // value is the NOT DERIVED sentence, supplied by whoever declined or failed to obtain it, and it
+    // becomes a caveat on every package this run produces.
+    //
+    // It comes from OUTSIDE the two documents, deliberately, exactly as StagedCorpus does: a binding's
+    // `reservedRegions` is the DECLARED half, and a document cannot testify that something derived it.
+    string? NeighboursNotDerived = null)
 {
     /// <summary>The factor, defaulting to uncompressed only where the caller passed nothing at all.</summary>
     public RuntimeCompression Compression => RuntimeCompression ?? Harness.Wire.RuntimeCompression.Uncompressed;
@@ -970,7 +980,10 @@ public static class LoopRun
                 slotsCoveredByOneRead,
 
                 // The manifest and its coverage, travelling with the outcome they qualify.
-                manifest));
+                manifest,
+
+                // 🔴 And whether anything derived who else lives in the mirror's area. See LoopRequest.
+                request.NeighboursNotDerived));
         }
 
         return packages;
