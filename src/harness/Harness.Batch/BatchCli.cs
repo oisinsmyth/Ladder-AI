@@ -248,6 +248,15 @@ public static class BatchCli
 
         var unionIr = MaterialiseUnionIr(batch.ProgramPaths, args.Staging, output);
 
+        // 🔴 *** WHAT THE BUILD STAMP WILL BE MEASURED AGAINST, ON EVERY RUN INCLUDING THE ONE WITH NO
+        // ANSWER. *** The union above is what gets HASHED; this is what SHOULD have been. Until they were
+        // both stated, a short program set produced a stamp indistinguishable from a complete one —
+        // measured at docs/18-project-workbench.md:821-829, where the parameter DB was staged, unhashed,
+        // and "compressing them changes the controller without changing the stamp".
+        //
+        // Derived by the SAME call the plan uses, so the line and the command lines cannot disagree.
+        output.WriteLine("  corpus    " + LaneCorpus.Of(lanes).Detail);
+
         // 🔴 REFUSED BEFORE ANY PROCESS STARTS, because it is a pure argument check and everything below
         // costs something. It used to sit after planning; moving it up is what keeps "--yes with nothing
         // to deploy with starts NOTHING" true now that a check runs down there.
@@ -486,6 +495,11 @@ public static class BatchCli
         // set and means "what is executing", and a hand-typed list is how a lane once got pointed at a
         // pre-fix Main with the stamp following it. Saying which of the two happened costs one line and
         // is the difference between a reader knowing and a reader assuming.
+        // 🔴 THE DENOMINATOR THE BUILD STAMP WILL BE MEASURED AGAINST, or the honest absence of one.
+        // Derived from the manifest below; empty where there is no manifest, which is what makes the run
+        // say NO STAGED CORPUS WAS SUPPLIED rather than measure itself against a set nobody stated.
+        var staged = Array.Empty<string>().ToList();
+
         if (!string.IsNullOrWhiteSpace(manifestPath))
         {
             LaneManifest manifest;
@@ -509,10 +523,19 @@ public static class BatchCli
 
             programs = manifest.ProgramPaths.ToList();
 
+            // 🔴 *** THE NAMES, NOT ONLY THE PATHS — AND THE NAMES WERE READ AND THROWN AWAY. *** The
+            // paths become `--program`, which the build stamp HASHES; the names become the corpus it is
+            // MEASURED AGAINST. Deriving the second from the first cannot work: a path is a file and the
+            // stamp matches on the object name, and a denominator taken from the same list as the
+            // numerator can never report a gap. Measured consequence at docs/18-project-workbench.md:821-829.
+            staged = manifest.Objects.Select(o => o.Name).ToList();
+
             var generated = manifest.Objects.Count(o => o.Origin == ObjectOrigin.Generated);
             output.WriteLine($"  program set DERIVED from the manifest: {manifest.Objects.Count} object(s) "
                            + $"({generated} generated, {manifest.Objects.Count - generated} authored) "
                            + $"across {programs.Count} path(s).");
+            output.WriteLine($"  staged corpus DERIVED from the manifest: {staged.Count} object name(s) — the DENOMINATOR "
+                           + "every wave's build stamp will be reported against.");
 
             // Printed, never enforced: this tool cannot create a call site, and a generated FC nothing
             // calls is deployed, loaded, healthy in every artifact, and never runs.
@@ -523,9 +546,12 @@ public static class BatchCli
         {
             output.WriteLine($"  program set DECLARED by the caller: {programs.Count} path(s), from --program. "
                            + "Nothing emitted this list, so nothing checks it against what the lane actually built.");
+            output.WriteLine("  staged corpus NONE — with no manifest there is no list of what this lane staged, so its waves "
+                           + "will report the build stamp with NO DENOMINATOR. That is said rather than guessed: a corpus "
+                           + "derived from --program would be the numerator measuring itself and could never report a gap.");
         }
 
-        var outcome = store.Enqueue(new Lane(lane, binding, submission, programs, purpose ?? string.Empty));
+        var outcome = store.Enqueue(new Lane(lane, binding, submission, programs, purpose ?? string.Empty, staged));
         output.WriteLine((outcome.Ok ? "QUEUED   " : "REFUSED  ") + outcome.Detail);
 
         return outcome.Result switch

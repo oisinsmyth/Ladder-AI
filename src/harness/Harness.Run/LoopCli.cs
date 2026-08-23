@@ -129,6 +129,24 @@ public static class LoopCli
         var programPaths = Values(args, "--program");
         var noProgram = args.Contains("--no-program-under-test");
 
+        // 🔴 *** THE DENOMINATOR — WHAT THE DEPLOYMENT STAGED, AS OPPOSED TO WHAT --program HANDS THE
+        // STAMP TO HASH. *** Emitted by `harness-batch` from the lane manifests, never typed by a person:
+        // a corpus derived from --program would be the numerator measuring itself and could never report a
+        // gap. Absent is a real and common state — a hand-driven run has no manifest behind it — and it
+        // renders as NO DENOMINATOR, in words, rather than as a clean sheet.
+        StagedCorpus? stagedCorpus;
+        try
+        {
+            stagedCorpus = StagedRows(Values(args, "--staged"));
+        }
+        catch (FormatException ex)
+        {
+            output.WriteLine("NOTHING EXAMINED — " + ex.Message);
+            output.WriteLine("*** REFUSED RATHER THAN SKIPPED: *** a row this tool cannot read is a row missing from the DENOMINATOR,");
+            output.WriteLine("and a denominator that quietly shrinks is exactly how a stamp covering 8 of 9 objects reads as complete.");
+            return LoopExit.NothingExamined;
+        }
+
         // 🔴 *** OPT-IN, NEVER ON BY DEFAULT. *** A run that silently wrote a file somewhere is a surprise,
         // and the feed is a real artifact on disk with a real (small) cost per read. Stating the path is
         // also what keeps two concurrent runs from publishing over each other.
@@ -245,7 +263,7 @@ public static class LoopCli
         // no host is read. It sits here rather than after the fence so that the absence is structural
         // rather than a flag somebody could reorder past.
         if (generateOnly)
-            return GenerateOnly(submissionPath, bindingPath, submission, binding, program, readFile, emitDir, output, writeFile, readBytes);
+            return GenerateOnly(submissionPath, bindingPath, submission, binding, program, readFile, emitDir, output, writeFile, readBytes, stagedCorpus);
 
         // ---- THE FENCE, BEFORE ANYTHING OPENS A SOCKET ----------------------------------------------
         var port = 0;
@@ -303,7 +321,7 @@ public static class LoopCli
         LoopRequest request;
         try
         {
-            request = Compose(submission, binding, program, readFile, readBytes, settleFromArgs);
+            request = Compose(submission, binding, program, readFile, readBytes, settleFromArgs, stagedCorpus);
         }
         catch (Exception ex)
         {
@@ -409,12 +427,17 @@ public static class LoopCli
 
         // Carried through here too: this path runs the same gate, so it must be able to verify a
         // byte-stamped provenance record rather than reporting it NOT CHECKED.
-        Func<string, byte[]>? readBytes)
+        Func<string, byte[]>? readBytes,
+
+        // The denominator, on this path too. A generate-only run computes the same stamp a deploying run
+        // will, so it must report the same coverage — this is the cheapest place to discover that a lane
+        // stages an object the program list does not name, and it costs no device.
+        StagedCorpus? stagedCorpus = null)
     {
         LoopRequest request;
         try
         {
-            request = Compose(submission, binding, program, readFile, readBytes);
+            request = Compose(submission, binding, program, readFile, readBytes, stagedCorpus: stagedCorpus);
         }
         catch (Exception ex)
         {
@@ -500,6 +523,7 @@ public static class LoopCli
         output.WriteLine($"MIRROR WIDTH: {map.TotalRegisters} register(s) at %M{map.Geometry.BaseByte}"
                          + $"  [control {map.Control.Length}, vectors {map.VectorBlock.Length}, results {map.ResultBlock.Length}]");
         output.WriteLine($"BUILD STAMP : {generation.Stamp.Literal}");
+        WriteCoverage(generation.Manifest, output);
         output.WriteLine($"MAP HASH    : {map.MapHash}");
 
         // 🔴 *** THE HASH RESTS ON A NUMBER NOBODY MEASURED, AND A READER OF THE HASH HAS TO KNOW THAT. ***
@@ -658,7 +682,13 @@ public static class LoopCli
         Func<string, byte[]>? readBytes = null,
 
         // Retry the inert phase at index 0. Supplied by a caller that has just deployed - see InertSettle.
-        Harness.Wire.InertSettle? inertSettle = null)
+        Harness.Wire.InertSettle? inertSettle = null,
+
+        // 🔴 WHAT THE DEPLOYMENT STAGED - the denominator the stamp's coverage is reported against. It
+        // does NOT come from either of the two documents above, deliberately: a submission and a binding
+        // describe the test, not the deployment, and a denominator taken from the same place as the
+        // numerator can never report a gap. Null is "nobody supplied one" and stays loud.
+        StagedCorpus? stagedCorpus = null)
     {
         ArgumentNullException.ThrowIfNull(submission);
         ArgumentNullException.ThrowIfNull(binding);
@@ -800,7 +830,8 @@ public static class LoopCli
             ScenarioEndInput: inputs.ScenarioEndInput,
             MaxIndexScans: inputs.MaxIndexScans,
             ScenarioTimeInputs: inputs.ScenarioTimeInputs,
-            InertSettle: inertSettle);
+            InertSettle: inertSettle,
+            StagedCorpus: stagedCorpus);
     }
 
     private static IReadOnlyList<MirroredSignal> Signals(List<MirroredSignalDocument>? rows) =>
@@ -901,6 +932,70 @@ public static class LoopCli
         output.WriteLine();
     }
 
+    /// <summary>
+    /// 🔴 <b>HASHED <i>n</i> OF <i>m</i>, AND WHICH STAGED OBJECTS THE STAMP DID NOT COVER.</b>
+    ///
+    /// <para>*** MEASURED AT <c>docs/18-project-workbench.md:821-829</c>: *** the stamp on the last wave
+    /// was derived over 8 objects and the parameter DB was not one of them, so <i>"compressing them changes
+    /// the controller without changing the stamp"</i> — two result packages describing materially different
+    /// programs, one stamp, and a verifying gateway that would not notice.</para>
+    ///
+    /// <para><b>Printed on every run, including the complete one and the one with no denominator.</b> Both
+    /// of the other sentences are written by <see cref="StampCoverage.Line"/> itself, so this method never
+    /// decides which case it is looking at — the only branch here is "no manifest was recorded at all",
+    /// which is a run that stopped before the stamp was computed.</para>
+    /// </summary>
+    private static void WriteCoverage(ProgramManifest? manifest, TextWriter output)
+    {
+        if (manifest?.Coverage is not { } coverage)
+        {
+            output.WriteLine("COVERAGE    : <not computed — this run stopped before the build stamp was derived, so it made no claim");
+            output.WriteLine("              about what was hashed. That is NOT a stamp that covered everything.>");
+            return;
+        }
+
+        output.WriteLine("COVERAGE    : " + coverage.Line);
+    }
+
+    /// <summary>
+    /// 🔴 <b><c>--staged <c>Name=source</c></c> rows into the corpus the build stamp is measured against.</b>
+    ///
+    /// <para><b>The source travels with the name, and that is not decoration.</b> A gap reported as
+    /// <c>DB_Params</c> says something is missing; <c>DB_Params [lane 'vessel']</c> says which document to
+    /// go and fix. <see cref="StagedCorpus.Union"/> keeps both sources when two lanes stage one object,
+    /// for the same reason.</para>
+    ///
+    /// <para><b>No rows is NULL, never an empty corpus.</b> An empty one renders every run as
+    /// <i>"hashed n of 0"</i> over an empty gap list — the shape of a check that examined nothing — and
+    /// <see cref="StagedCorpus.Of"/> refuses it at construction.</para>
+    /// </summary>
+    private static StagedCorpus? StagedRows(IReadOnlyList<string> values)
+    {
+        if (values.Count == 0)
+            return null;
+
+        var rows = new List<StagedCorpusEntry>();
+
+        foreach (var value in values)
+        {
+            var split = value.IndexOf('=', StringComparison.Ordinal);
+
+            // A bare name would have to be filed under an invented source, and an invented source sends
+            // the reader of a gap to a document that never mentioned the object.
+            if (split <= 0 || split == value.Length - 1)
+            {
+                throw new FormatException(
+                    $"--staged '{value}' is not a `Name=source` row. The NAME is what TIA matches an import on and what the "
+                    + "build stamp's manifest records; the SOURCE names the document that staged it, e.g. "
+                    + "--staged \"DB_Params=lane 'vessel'\". A row with no source produces a gap nobody can trace to a manifest.");
+            }
+
+            rows.Add(new StagedCorpusEntry(value[..split], value[(split + 1)..]));
+        }
+
+        return StagedCorpus.Of(rows);
+    }
+
     /// <summary>Every value after <paramref name="name"/>, for a flag that may repeat or take a list.</summary>
     private static IReadOnlyList<string> Values(IReadOnlyList<string> args, string name)
     {
@@ -993,6 +1088,12 @@ public static class LoopCli
 
         output.WriteLine($"OUTCOME: {result.Outcome}");
         output.WriteLine($"  {result.Detail}");
+        output.WriteLine();
+
+        // 🔴 WHAT THE STAMP DID *NOT* HASH, ON THE CONSOLE OF EVERY RUN INCLUDING THE COMPLETE ONE. A line
+        // that appears only when something is missing teaches a reader that its absence means everything
+        // was covered — and a run with no denominator at all would then read like the cleanest of them.
+        WriteCoverage(result.ProgramManifest, output);
         output.WriteLine();
 
         WriteInertRest(result.InertRest, result.Outcome.ToString(), output);
@@ -1162,6 +1263,14 @@ public static class LoopCli
                 // Named, never dropped: a caller who passed a whole IR directory has no way to know it
                 // also handed over the copy layer.
                 ["excludedAsSelfReferential"] = excluded,
+
+                // 🔴 *** AND WHAT IT DID NOT HASH. *** The objects above answer "what was this stamp
+                // computed over"; they cannot answer "was that all of it", and that is the question a
+                // verifying gateway silently got wrong — a stamp over 8 of 9 staged objects reads
+                // identically to a complete one (docs/18-project-workbench.md:821-829). Rendered by the
+                // SAME helper the per-package artifact uses, so the run document and the package
+                // documents cannot come to say different things about one derivation.
+                ["coverage"] = ResultPackageJson.CoverageOf(manifest.Coverage),
             };
         }
 
@@ -1264,6 +1373,7 @@ public static class LoopCli
     {
         output.WriteLine("usage: harness-run --submission <submission.json> --binding <binding.json>");
         output.WriteLine("                   (--program <file-or-dir>... | --no-program-under-test)");
+        output.WriteLine("                   [--staged \"<Name>=<source>\"...]");
         output.WriteLine("                   [--generate-only [--emit <dir>]]");
         output.WriteLine("                   [--verify --host <ip> --port <n> [--unit 1] [--allowlist <path>]]");
         output.WriteLine("                   [--publish <feed.mirrorfeed>]");
@@ -1276,6 +1386,16 @@ public static class LoopCli
         output.WriteLine("         what is EXECUTING — so a stamp taken over an empty set cannot match a rig carrying the block. There");
         output.WriteLine("         is no default; --no-program-under-test is the positive claim that there is none, and it is checked");
         output.WriteLine("         rather than assumed. An .ir this loader cannot classify is a REFUSAL naming the file, never a skip.");
+        output.WriteLine();
+        output.WriteLine("--staged names WHAT THE DEPLOYMENT STAGED — the DENOMINATOR the build stamp's coverage is reported against,");
+        output.WriteLine("         one `Name=source` row per object, e.g. --staged \"DB_Params=lane 'vessel'\". It is NOT --program:");
+        output.WriteLine("         --program is what gets HASHED, and a short --program list is indistinguishable from a complete one");
+        output.WriteLine("         unless something else states what should have been in it. MEASURED: a stamp over 8 objects omitted");
+        output.WriteLine("         the parameter DB, so compressing it changed the controller and not the stamp. `harness-batch` emits");
+        output.WriteLine("         these rows from the lane manifests; nothing derives them from --program, which would be the numerator");
+        output.WriteLine("         measuring itself. WITH NONE, the run reports NO DENOMINATOR in as many words — an empty gap list is");
+        output.WriteLine("         not a clean sheet. THE CORPUS IS NOT A STAMP INPUT: the same objects give the same stamp with or");
+        output.WriteLine("         without it, because nothing about what a lane staged is on the controller.");
         output.WriteLine();
         output.WriteLine("--port has NO DEFAULT and is required with --verify. It defaulted to 502; this rig serves 503 and refuses 502");
         output.WriteLine("         (measured). 502 is also the port every other Modbus device answers on, so the failure that is NOT");

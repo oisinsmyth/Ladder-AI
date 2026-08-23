@@ -1,4 +1,5 @@
 ﻿using Harness.Device;
+using Harness.Map;
 
 namespace Harness.Batch;
 
@@ -191,6 +192,27 @@ public sealed record BatchRunPlan(IReadOnlyList<BatchStep> Steps, IReadOnlyList<
         // must not change a lane's verdict, and this is what that costs.
         var programUnion = lanes.SelectMany(l => l.ProgramPaths).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
 
+        // 🔴 *** AND THE DENOMINATOR THAT UNION IS MEASURED AGAINST — the other half of the same claim. ***
+        //
+        // The union above is what the stamp HASHES. Nothing stated what it SHOULD have hashed, so a short
+        // union produced a stamp indistinguishable from a complete one: measured at
+        // docs/18-project-workbench.md:821-829, where a stamp over 8 objects omitted the parameter DB and
+        // "compressing them changes the controller without changing the stamp".
+        //
+        // It goes to the GENERATE step and to every WAVE for the identical reason the union does — a step
+        // measured against a different denominator would report a different gap from the deployment it
+        // belongs to.
+        //
+        // 🔴 NULL WHEN NO LANE STAGED ANYTHING NAMEABLE, and then NOTHING is passed. `harness-run` then
+        // says NO STAGED CORPUS WAS SUPPLIED, which is the true statement about a batch of lanes enqueued
+        // from bare --program lists. Inventing a denominator here would turn that loud absence into a
+        // silent assumption, which is the failure the whole mechanism exists to prevent.
+        //
+        // 🔴 AND A PARTIAL ONE IS REFUSED THE SAME WAY — see LaneCorpus. The lanes share one deployment, so
+        // a union over only the lanes that happen to declare a manifest is a denominator SHORTER than what
+        // is downloaded, which is the defect being measured rather than a smaller version of the fix.
+        var stagedCorpus = LaneCorpus.Of(lanes).Corpus;
+
         // ---- 2a. DOES THE SUPPLIED PROGRAM STILL MATCH THE PROJECT? -----------------------------
         //
         // After the gates (this reads Portal) and before generation, because a stamp computed over a
@@ -221,6 +243,7 @@ public sealed record BatchRunPlan(IReadOnlyList<BatchStep> Steps, IReadOnlyList<
             "--emit", options.StagingDirectory,
         };
         AddPrograms(generateArgs, programUnion);
+        AddStaged(generateArgs, stagedCorpus);
 
         steps.Add(new BatchStep(
             BatchStepKind.Generate,
@@ -262,6 +285,10 @@ public sealed record BatchRunPlan(IReadOnlyList<BatchStep> Steps, IReadOnlyList<
             // The UNION, not this lane's own — see the note above the Generate step. A lane that hashed
             // only its own program would compute a stamp the device does not carry and report Stale.
             AddPrograms(arguments, programUnion);
+
+            // The UNION again, for the same reason: every lane's wave reports its coverage against the
+            // objects the SHARED deployment staged, not against its own lane's slice of them.
+            AddStaged(arguments, stagedCorpus);
 
             if (!string.IsNullOrWhiteSpace(options.DeviceAllowlistPath))
             {
@@ -313,6 +340,28 @@ public sealed record BatchRunPlan(IReadOnlyList<BatchStep> Steps, IReadOnlyList<
         {
             arguments.Add("--program");
             arguments.Add(program);
+        }
+    }
+
+    /// <summary>
+    /// 🔴 <b>One <c>--staged <c>name=source</c></c> per corpus row, and NOTHING AT ALL when there is no
+    /// corpus.</b>
+    ///
+    /// <para>The source travels with the name because <b>a gap nobody can trace to a document is a gap
+    /// nobody can close</b>: <c>DB_Params</c> alone says something is missing, <c>DB_Params [lane 'vessel']</c>
+    /// says which manifest to go and fix. It is one token per row — the label contains a space — which is
+    /// also why the flag repeats rather than taking a list.</para>
+    ///
+    /// <para>Emitting an empty <c>--staged</c> for an absent corpus would be the worst of the three
+    /// options: <c>harness-run</c> would read a corpus of nothing, and "hashed n of 0" over an empty gap
+    /// list is the shape of a check that examined nothing.</para>
+    /// </summary>
+    private static void AddStaged(List<string> arguments, StagedCorpus? corpus)
+    {
+        foreach (var row in corpus?.Entries ?? Array.Empty<StagedCorpusEntry>())
+        {
+            arguments.Add("--staged");
+            arguments.Add($"{row.Name}={row.Source}");
         }
     }
 

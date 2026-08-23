@@ -148,7 +148,7 @@ public static class ResultPackageJson
             ["hashedNothing"] = manifest.HashedNothing,
             ["objects"] = objects,
             ["excludedAsSelfReferential"] = Strings(manifest.ExcludedAsSelfReferential),
-            ["coverage"] = Coverage(manifest.Coverage),
+            ["coverage"] = CoverageOf(manifest.Coverage),
         };
     }
 
@@ -157,8 +157,13 @@ public static class ResultPackageJson
     /// makes the argument: a count that appears only when it is non-zero teaches a reader that its absence
     /// means everything was covered — and then a run that counted nothing reads like a run that covered
     /// everything.
+    ///
+    /// <para><b>Public because the RUN document renders the same object.</b> <c>LoopCli.Render</c> emits a
+    /// <c>programUnderTest</c> block of its own, and a second hand-rolled copy of these keys is how two
+    /// artifacts describing ONE derivation come to disagree — the exact split this file's own
+    /// <see cref="Strings"/> note records at the serialiser level.</para>
     /// </summary>
-    private static JsonNode? Coverage(StampCoverage? coverage)
+    public static JsonNode? CoverageOf(StampCoverage? coverage)
     {
         if (coverage is null)
             return null;

@@ -109,7 +109,29 @@ public sealed record LoopRequest(
     // 🔴 Retry the INERT phase at index 0. Passed by whoever knows a download just happened; the wave
     // does not decide to be lenient on its own. Null means no retry, which is right everywhere that
     // has not just deployed.
-    Harness.Wire.InertSettle? InertSettle = null)
+    Harness.Wire.InertSettle? InertSettle = null,
+
+    // 🔴 *** WHAT THE DEPLOYMENT STAGED — THE DENOMINATOR THE BUILD STAMP IS REPORTED AGAINST. ***
+    //
+    // `ProgramUnderTest` above is the NUMERATOR: the objects this run hands the stamp to hash. Nothing
+    // stated what it SHOULD have hashed, so a SHORT list was indistinguishable from a complete one -
+    // measured at docs/18-project-workbench.md:821-829, where a stamp derived over 8 objects omitted the
+    // parameter DB, "so compressing them changes the controller without changing the stamp". Two result
+    // packages describing materially different programs carried the same stamp.
+    //
+    // It comes from somewhere ELSE than --program, deliberately: the lane manifests, which are emitted by
+    // whatever built the lane. `Harness.Batch.LaneCorpus` does that projection and `harness-run --staged`
+    // carries it here; a corpus derived from --program would be the numerator measuring itself.
+    //
+    // 🔴 NULL IS "NOBODY SUPPLIED ONE", AND IT RENDERS AS NO DENOMINATOR RATHER THAN AS A CLEAN SHEET. A
+    // hand-driven run with a bare --program list legitimately has no manifest behind it, and it must go on
+    // saying so. An EMPTY corpus is refused at construction for the same reason.
+    //
+    // 🔴 AND IT IS NOT A STAMP INPUT. Nothing about which objects a lane staged is on the controller, so
+    // hashing it would move every stamp already computed - including the literal compiled into the copy
+    // layer currently deployed - for no fact on the device. BuildStamp.Derive keeps it out of the
+    // canonical form and a test asserts the stamp is byte-for-byte unmoved by it.
+    StagedCorpus? StagedCorpus = null)
 {
     /// <summary>The factor, defaulting to uncompressed only where the caller passed nothing at all.</summary>
     public RuntimeCompression Compression => RuntimeCompression ?? Harness.Wire.RuntimeCompression.Uncompressed;
@@ -351,7 +373,13 @@ public static class LoopRun
         // ---- 8. PACKAGE -----------------------------------------------------------------------------
         // *** THE GATE'S OWN FLOOR IS HANDED IN, NEVER RE-DERIVED. *** See LoopGeneration.ObservabilityFloorScans.
         var packages = Package(request, map, stamp, client, wave, deployment, version, roundTripsBefore, ordinalOf, account,
-            generation.ObservabilityFloorScans);
+            generation.ObservabilityFloorScans,
+
+            // 🔴 *** WHAT THE STAMP WAS COMPUTED OVER, AND WHAT IT WAS NOT — INTO THE ARTIFACT THAT
+            // OUTLIVES THE RUN. *** It reached LoopResult and stopped one argument short of the packages,
+            // so a consumer reading a package alone could not tell a complete stamp from a short one.
+            // Handed down from the SAME generation the stamp came from, never re-derived.
+            generation.Manifest);
 
         // ---- 8b. RELEASE THE RIG — AFTER PACKAGING, NEVER BEFORE ------------------------------------
         //
@@ -733,7 +761,14 @@ public static class LoopRun
         // ---- 3. GENERATE ----------------------------------------------------------------------------
         // The manifest comes out of the SAME derivation as the stamp. A run that cannot say what its
         // stamp was computed over cannot be re-run - measured, on a wave that had gone green.
-        var stamp = BuildStamp.Derive(map, request.Bindings, request.Naming, request.ProgramUnderTest, out _, out var manifest);
+        //
+        // 🔴 AND THE DENOMINATOR GOES IN WITH IT. Until the corpus was threaded through here, every real
+        // run reported "NO STAGED CORPUS WAS SUPPLIED" - honest, and the reason Y3 was not closed. The
+        // coverage is computed inside this derivation, from the loop that feeds the hash, so it cannot
+        // disagree with the manifest beside it. Null stays null and stays loud.
+        var stamp = BuildStamp.Derive(
+            map, request.Bindings, request.Naming, request.ProgramUnderTest, request.StagedCorpus,
+            out _, out var manifest);
         var copyLayer = CopyLayerGenerator.Generate(map, request.Bindings, request.Naming, stamp);
 
         if (!copyLayer.Generated)
@@ -861,7 +896,13 @@ public static class LoopRun
         // `WireTiming.ObservabilityFloorScans(1)` inline while the gate computed the real one from the
         // map — see LoopGeneration.ObservabilityFloorScans for the measured consequence. It is a
         // parameter rather than a re-derivation so the two cannot be different numbers again.
-        double observabilityFloorScans)
+        double observabilityFloorScans,
+
+        // 🔴 The stamp's input side AND its denominator. See ResultPackage.Program: the package is the
+        // artifact meant to outlive the run, and a stamp nobody can say the inputs of cannot be re-run.
+        // Null is "no manifest was recorded", which the artifact states rather than leaving to be read as
+        // a clean sheet.
+        ProgramManifest? manifest = null)
     {
         var packages = new List<ResultPackage>();
         var slotsCoveredByOneRead = map.ReadPlan(Enumerable.Range(0, map.Slots.Count)).Max(r => r.SlotCount);
@@ -926,7 +967,10 @@ public static class LoopRun
                 CoRunnersOf(distribution, waveIndex),
                 map,
                 stamp,
-                slotsCoveredByOneRead));
+                slotsCoveredByOneRead,
+
+                // The manifest and its coverage, travelling with the outcome they qualify.
+                manifest));
         }
 
         return packages;
