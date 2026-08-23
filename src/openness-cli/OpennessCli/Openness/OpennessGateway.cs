@@ -241,7 +241,208 @@ public sealed class OpennessGateway : IOpennessGateway
     // Process NAME, without extension, as Process.GetProcessesByName wants it. Both spellings are
     // kept because the executable has been observed under the long name and the short one, and a
     // name that matches nothing costs one empty query.
-    private static readonly string[] PortalProcessNames = { "Siemens.Automation.Portal", "TIAPortal" };
+    //
+    // `internal` since 2026-08-23 rather than private: `portal-close` re-reads a pid's own name
+    // immediately before killing it, and that check has to be against THIS list. A second copy of
+    // these strings would be a list that could drift from the one the enumeration uses, which is the
+    // shape of "two derivations once disagreed" — one source, one list.
+    internal static readonly string[] PortalProcessNames = { "Siemens.Automation.Portal", "TIAPortal" };
+
+    // ---- portal-close: the destructive half ------------------------------------------------------
+    //
+    // Everything below executes a plan that PortalClosePlanner already made. Nothing here decides WHAT
+    // to close - that split is deliberate and is what lets a destructive command have every branch of
+    // its judgement exercised offline.
+
+    /// <summary>How long a Kill() is given to actually take effect before it is called a failure.</summary>
+    private const int TerminateWaitMilliseconds = 10_000;
+
+    /// <inheritdoc />
+    public PortalCloseOutcome ClosePortalProcess(PortalClosePlan plan, TimeSpan attachTimeout)
+    {
+        if (plan is null)
+        {
+            throw new ArgumentNullException(nameof(plan));
+        }
+
+        // The ORDER of the two destructive steps - and the case where the second must not happen at all
+        // - lives in PortalCloseSequence, which is pure and tested. This method supplies only the
+        // mechanics: what an attach-and-save is, and what a terminate is. That split is why "a failed
+        // save is never followed by a terminate" is a test rather than a comment.
+        return PortalCloseSequence.Execute(
+            plan,
+            () => TrySaveOpenProjects(plan.Process.Pid, attachTimeout),
+            (kind, detail) => Terminate(plan, kind, detail));
+    }
+
+    /// <summary>
+    /// Attach to one named pid and save whatever is open in it.
+    ///
+    /// <para>Bounded, because an attach is the operation that hangs: an unapproved binary is refused
+    /// SILENTLY (FI-61), and a Portal sitting on a modal dialog does not answer either. A timeout here is
+    /// a FAILED save, not an unknown one — which means the process is left alone, which is right twice
+    /// over, since an abandoned save could still be in flight on the timed-out thread.</para>
+    /// </summary>
+    private static PortalSaveAttempt TrySaveOpenProjects(int pid, TimeSpan attachTimeout)
+    {
+        // Initialised to a failure, so that any path which somehow leaves it unset reports the safe
+        // answer rather than an unearned save.
+        var attempt = new PortalSaveAttempt(PortalSaveOutcome.Failed, "the save was never attempted.");
+
+        try
+        {
+            RunWithTimeout(
+                () => attempt = SaveOpenProjectsCore(pid),
+                attachTimeout,
+                () => new TimeoutException(
+                    $"attaching to pid {pid} to save it did not complete within " +
+                    $"{attachTimeout.TotalSeconds:0} second(s). Two known causes: this binary is not approved " +
+                    "for Openness (refused silently, no dialog), or Portal is waiting on a modal dialog."));
+        }
+        catch (Exception ex)
+        {
+            return new PortalSaveAttempt(
+                PortalSaveOutcome.Failed,
+                $"the save FAILED before it could complete - {ex.GetType().Name}: {ex.Message}");
+        }
+
+        return attempt;
+    }
+
+    private static PortalSaveAttempt SaveOpenProjectsCore(int pid)
+    {
+        TiaPortalProcess? target = null;
+        foreach (TiaPortalProcess candidate in TiaPortal.GetProcesses())
+        {
+            if (candidate.Id == pid)
+            {
+                target = candidate;
+                break;
+            }
+        }
+
+        // The plan was made from a snapshot that INCLUDED an Openness-visible process with a project
+        // open. If Openness will not list it now, the thing that made a save possible is gone, and this
+        // is a failed save rather than an empty one - so nothing is terminated.
+        if (target is null)
+        {
+            return new PortalSaveAttempt(
+                PortalSaveOutcome.Failed,
+                "Openness no longer lists this process, so there was nothing to attach to and the project " +
+                "could not be saved.");
+        }
+
+        TiaPortal? portal = null;
+        try
+        {
+            portal = target.Attach();
+
+            var projects = portal.Projects.Cast<Project>().ToList();
+            if (projects.Count == 0)
+            {
+                return new PortalSaveAttempt(
+                    PortalSaveOutcome.NothingOpen,
+                    "the plan expected an open project and the process has none now - it was closed between " +
+                    "the plan and the save, so there was nothing to save.");
+            }
+
+            var saved = new List<string>();
+            foreach (var project in projects)
+            {
+                // Save(), never Close(). Close() would add a second way to fail moments before the process
+                // is terminated anyway, and it buys nothing: the save is the whole of what the ruling asks
+                // for, and the terminate is what ends the process.
+                project.Save();
+                saved.Add(project.Name);
+            }
+
+            return new PortalSaveAttempt(PortalSaveOutcome.Saved, $"saved: {string.Join(", ", saved)}.");
+        }
+        catch (Exception ex)
+        {
+            return new PortalSaveAttempt(
+                PortalSaveOutcome.Failed,
+                $"the save FAILED - {ex.GetType().Name}: {ex.Message}");
+        }
+        finally
+        {
+            // Releases only THIS tool's reference. It does not close the process and does not close what
+            // is open in it - which is the whole reason a terminate has to follow. See
+            // PortalCloseMethod's own comment, and DisposeAllExcept, which depends on the same fact.
+            portal?.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// Terminate one process, after confirming the pid still names the process the plan was made about.
+    /// </summary>
+    private static PortalCloseOutcome Terminate(
+        PortalClosePlan plan, PortalCloseOutcomeKind onSuccess, string detailSoFar)
+    {
+        var pid = plan.Process.Pid;
+
+        System.Diagnostics.Process process;
+        try
+        {
+            process = System.Diagnostics.Process.GetProcessById(pid);
+        }
+        catch (Exception ex)
+        {
+            return PortalCloseOutcome.For(
+                plan,
+                PortalCloseOutcomeKind.TerminateFailed,
+                $"{detailSoFar} Then: pid {pid} could not be opened ({ex.GetType().Name}) - it may already be gone.");
+        }
+
+        using (process)
+        {
+            string? name;
+            DateTime? started;
+            try
+            {
+                name = process.ProcessName;
+                started = process.StartTime;
+            }
+            catch (Exception)
+            {
+                name = null;
+                started = null;
+            }
+
+            var mismatch = PortalCloseIdentity.Mismatch(PortalProcessNames, name, started, plan.Process);
+            if (mismatch is not null)
+            {
+                return PortalCloseOutcome.For(
+                    plan, PortalCloseOutcomeKind.IdentityChangedNotTerminated, $"{detailSoFar} Then: {mismatch}");
+            }
+
+            try
+            {
+                process.Kill();
+                process.WaitForExit(TerminateWaitMilliseconds);
+            }
+            catch (Exception ex)
+            {
+                return PortalCloseOutcome.For(
+                    plan,
+                    PortalCloseOutcomeKind.TerminateFailed,
+                    $"{detailSoFar} Then: Kill() failed - {ex.GetType().Name}: {ex.Message}");
+            }
+
+            // Kill() is asynchronous. Reporting a termination that has not happened is the same class of
+            // error as every other unearned green in this project, so it is READ BACK rather than assumed.
+            if (!process.HasExited)
+            {
+                return PortalCloseOutcome.For(
+                    plan,
+                    PortalCloseOutcomeKind.TerminateFailed,
+                    $"{detailSoFar} Then: Kill() was issued and the process had still not exited after " +
+                    $"{TerminateWaitMilliseconds} ms.");
+            }
+        }
+
+        return PortalCloseOutcome.For(plan, onSuccess, $"{detailSoFar} Terminated (pid {pid} confirmed exited).");
+    }
 
     /// <summary>
     /// The OS process start time — <b>the age signal</b>, and the value

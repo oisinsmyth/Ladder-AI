@@ -26,6 +26,38 @@ public interface IOpennessGateway : IDisposable
     /// </summary>
     IReadOnlyList<PortalProcessInfo> EnumeratePortalProcesses();
 
+    /// <summary>
+    /// 🔴 <b>DESTRUCTIVE. Executes ONE <see cref="PortalClosePlan"/> — the only method in this interface
+    /// that ends an operating-system process.</b>
+    ///
+    /// <para><b>For <see cref="PortalCloseMethod.SaveThenTerminate"/>:</b> attach to that pid, save every
+    /// project open in it, release this tool's handle, then terminate. <b>If the save does not succeed
+    /// the process is LEFT RUNNING</b> — a failed save followed by a terminate destroys exactly the work
+    /// the owner's ruling (<i>"save where you can, then close"</i>) exists to protect, so it is a full
+    /// stop rather than a step to push past.</para>
+    ///
+    /// <para><b>For the two terminate methods:</b> terminate, no attach. <b>There is no third option.</b>
+    /// <c>TiaPortal</c> exposes no <c>Close</c>, <c>Exit</c> or <c>Quit</c> — verified against
+    /// <c>Siemens.Engineering.dll</c> V20, whose only teardown member is <c>Dispose()</c>, and
+    /// <c>Dispose()</c> on an <c>Attach()</c>ed handle releases this tool's own reference and NOTHING
+    /// ELSE (<c>OpennessGateway.DisposeAllExcept</c> depends on exactly that). So for a process this tool
+    /// did not launch, "close" means terminating the OS process, and the only variable is whether a save
+    /// happened first.</para>
+    ///
+    /// <para><b>It refuses a <see cref="PortalCloseMethod.Leave"/> plan outright</b> rather than
+    /// no-op'ing on it. A <c>Leave</c> arriving at the code that can kill things is the one bug in this
+    /// command that costs somebody their afternoon, and a silent no-op would make it unfindable.</para>
+    ///
+    /// <para>Note the asymmetry with <see cref="Connect"/>: the save branch DOES attach, because there is
+    /// no way to save without attaching — but to ONE NAMED pid, never to <c>GetProcesses()[0]</c>, and it
+    /// never launches a Portal. <paramref name="attachTimeout"/> bounds it, because an unapproved binary
+    /// is refused silently and would otherwise hang (FI-61). A timed-out attach counts as a FAILED SAVE,
+    /// so it does not terminate either.</para>
+    /// </summary>
+    /// <param name="plan">One non-<c>Leave</c> plan from <see cref="PortalClosePlanner"/>.</param>
+    /// <param name="attachTimeout">Bound on the attach-and-save half. Ignored by the terminate-only methods.</param>
+    PortalCloseOutcome ClosePortalProcess(PortalClosePlan plan, TimeSpan attachTimeout);
+
     void OpenProject(string projectIdentifier, TimeSpan timeout);
 
     IReadOnlyList<BlockInfo> EnumerateBlocks();

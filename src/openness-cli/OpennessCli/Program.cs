@@ -68,6 +68,23 @@ internal static class Program
                 return RunPortalStatus(gateway, portalStatus.Options);
             }
 
+            // portal-close sits on the SAME seam, and for a stronger version of the same reason. It is
+            // portal-status's destructive sibling: it reads the identical process list, and Connect()
+            // would (a) risk the first-connect dialog and (b) LAUNCH A FRESH PORTAL when none is running
+            // — which is the exact opposite of a pileup cleanup, and would have this command create a
+            // process for itself to find next time.
+            //
+            // Both the confirmed and the unconfirmed form route here, because unlike every other
+            // pre-Connect refusal above, the plan CANNOT be answered from the arguments alone: what is
+            // running is the input. The --yes gate is inside RunPortalClose, still strictly before
+            // anything is attached to, saved or terminated — and PortalCloseTests asserts on the seam,
+            // not on the exit code, because an exit code proves how a command ended and not what it did
+            // on the way.
+            if (parseResult is ParseResult.PortalCloseSuccess portalClose)
+            {
+                return RunPortalClose(gateway, portalClose.Options);
+            }
+
             // The unconfirmed dry run answers from the arguments alone, so it must not pay for a
             // Portal connect first — and it certainly must not FAIL on one. Checked here, before
             // Connect, for the same reason portal-status is: refusing to act needs no session.
@@ -1568,6 +1585,65 @@ internal static class Program
         return ExitCodes.Success;
     }
 
+    /// <summary>
+    /// 🔴 <b>The destructive sibling of <see cref="RunPortalStatus"/>.</b> Same read, same seam, and then
+    /// it acts on what it read.
+    ///
+    /// <para>Owner ruling, 2026-08-23: <i>"save where you can, then close"</i>. The decision half is
+    /// <see cref="PortalClosePlanner"/> and is fully unit-tested offline; this is the execution half.</para>
+    /// </summary>
+    internal static int RunPortalClose(IOpennessGateway gateway, PortalCloseOptions options)
+    {
+        // No Connect()/OpenProject() — see the seam comment in Main. This is the same read-only
+        // enumeration portal-status performs.
+        var processes = gateway.EnumeratePortalProcesses();
+
+        // DateTime.Now, not UtcNow: PortalProcessInfo.StartedAt comes from Process.StartTime, which is
+        // local. Comparing it against a UTC "now" would age every process by the timezone offset and,
+        // west of UTC, make the minimum-age floor let a brand-new Portal through.
+        var plans = PortalClosePlanner.Plan(processes, options.Pids, DateTime.Now);
+
+        if (!options.Confirm)
+        {
+            Console.WriteLine(options.Json
+                ? OutputFormatter.FormatPortalClosePlanJson(plans)
+                : OutputFormatter.FormatPortalClosePlanTable(plans));
+
+            // Deliberately NOT the usual "Portal was not contacted". It would be false: the process list
+            // WAS read, because that read is the only way to know what the plan is. Stating the weaker,
+            // true thing is the point — the guarantee being made is that nothing was attached to, saved
+            // or terminated, and claiming a stronger one would be the kind of over-claim this project
+            // spends its time removing.
+            Console.Error.WriteLine(
+                "Nothing was attached to, saved or terminated - the running process list was READ (the same " +
+                "read-only enumeration portal-status performs) and nothing else was touched. " +
+                "Re-run with --yes to proceed.");
+            return ExitCodes.NotConfirmed;
+        }
+
+        var attachTimeout = TimeSpan.FromSeconds(options.TimeoutConnectSeconds);
+        var outcomes = new List<PortalCloseOutcome>();
+        foreach (var plan in plans)
+        {
+            // A Leave never reaches the gateway. The outcome is built here, so the code that can
+            // terminate a process is not even asked about a process that must not be terminated — and
+            // "the gateway was called exactly N times, for exactly the N non-Leave plans" is then an
+            // assertable property rather than an argument from reading the source.
+            outcomes.Add(plan.Method == PortalCloseMethod.Leave
+                ? PortalCloseOutcome.LeftAlone(plan)
+                : gateway.ClosePortalProcess(plan, attachTimeout));
+        }
+
+        Console.WriteLine(options.Json
+            ? OutputFormatter.FormatPortalCloseJson(plans, outcomes)
+            : OutputFormatter.FormatPortalCloseTable(plans, outcomes));
+
+        // A run that found nothing to close is a SUCCESS, not an empty-is-not-clean case: unlike a
+        // compile gate, this command's whole purpose is that there be no stray Portal processes, and
+        // "there are none" is the desired end state rather than an unanswered question. The summary
+        // still says outright that nothing was examined.
+        return PortalCloseReport.AnyFailed(outcomes) ? ExitCodes.CommandError : ExitCodes.Success;
+    }
 }
 
 /// <summary>

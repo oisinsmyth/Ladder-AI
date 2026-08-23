@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Text.Json;
 using OpennessCli.Model;
+using OpennessCli.Openness;
 
 namespace OpennessCli.Cli;
 
@@ -1769,6 +1770,150 @@ public static class OutputFormatter
 
         return JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true });
     }
+
+    // ---- portal-close ---------------------------------------------------------------------------
+    //
+    // A per-process BLOCK rather than a fixed-width table, unlike portal-status. The reasons and the
+    // details are the whole content here — a paragraph each, saying why a destructive act is or is not
+    // going to happen to somebody's Portal — and a table column would truncate exactly that.
+
+    /// <summary>
+    /// The dry run: what WOULD happen, with the reason for every process including the ones that are
+    /// being left alone. The denominator line is printed first and on every run — "3 closed" cannot be
+    /// told from "3 of 9 closed", and only the second says what was looked at.
+    /// </summary>
+    public static string FormatPortalClosePlanTable(IReadOnlyList<PortalClosePlan> plans)
+    {
+        var sb = new StringBuilder();
+        sb.Append("PORTAL-CLOSE PLAN - nothing has been attached to, saved or terminated.\n");
+        sb.Append("SELECTED: ").Append(PortalClosePlanner.Summarise(plans)).Append('\n');
+
+        foreach (var plan in plans)
+        {
+            sb.Append('\n');
+            sb.Append("  pid ").Append(plan.Process.Pid.ToString(CultureInfo.InvariantCulture))
+                .Append("  [").Append(ClassLabel(plan.Class)).Append("]  ")
+                .Append(MethodLabel(plan.Method)).Append('\n');
+            sb.Append("    project: ").Append(ProjectLabel(plan.Process)).Append('\n');
+            sb.Append("    reason:  ").Append(plan.Reason).Append('\n');
+        }
+
+        return sb.ToString().TrimEnd('\n', '\r');
+    }
+
+    public static string FormatPortalClosePlanJson(IReadOnlyList<PortalClosePlan> plans) =>
+        JsonSerializer.Serialize(
+            new
+            {
+                executed = false,
+                summary = PortalClosePlanner.Summarise(plans),
+                plans = plans.Select(p => new
+                {
+                    pid = p.Process.Pid,
+                    @class = ClassLabel(p.Class),
+                    method = p.Method.ToString(),
+                    methodLabel = MethodLabel(p.Method),
+                    projectPath = p.Process.ProjectPath,
+                    opennessVisible = p.Process.OpennessVisible,
+                    startedAt = p.Process.StartedAt,
+                    reason = p.Reason,
+                }),
+            },
+            new JsonSerializerOptions { WriteIndented = true });
+
+    /// <summary>
+    /// The executed run. Carries BOTH the planner's denominator (what was looked at and selected) and
+    /// the outcome summary (what actually happened) — they answer different questions and a run where
+    /// they disagree is exactly the run worth reading.
+    /// </summary>
+    public static string FormatPortalCloseTable(
+        IReadOnlyList<PortalClosePlan> plans, IReadOnlyList<PortalCloseOutcome> outcomes)
+    {
+        var sb = new StringBuilder();
+        sb.Append("PORTAL-CLOSE\n");
+        sb.Append("SELECTED: ").Append(PortalClosePlanner.Summarise(plans)).Append('\n');
+        sb.Append(PortalCloseReport.SummariseOutcomes(outcomes)).Append('\n');
+
+        foreach (var outcome in outcomes)
+        {
+            sb.Append('\n');
+            sb.Append("  pid ").Append(outcome.Pid.ToString(CultureInfo.InvariantCulture))
+                .Append("  [").Append(ClassLabel(outcome.Class)).Append("]  ")
+                .Append(OutcomeLabel(outcome.Kind)).Append('\n');
+            sb.Append("    planned: ").Append(MethodLabel(outcome.Planned)).Append('\n');
+            sb.Append("    project: ").Append(ProjectLabel(outcome.ProjectPath, outcome.Class)).Append('\n');
+            sb.Append("    detail:  ").Append(outcome.Detail).Append('\n');
+        }
+
+        foreach (var warning in PortalCloseReport.Warnings(outcomes))
+        {
+            sb.Append('\n').Append(warning).Append('\n');
+        }
+
+        return sb.ToString().TrimEnd('\n', '\r');
+    }
+
+    public static string FormatPortalCloseJson(
+        IReadOnlyList<PortalClosePlan> plans, IReadOnlyList<PortalCloseOutcome> outcomes) =>
+        JsonSerializer.Serialize(
+            new
+            {
+                executed = true,
+                selected = PortalClosePlanner.Summarise(plans),
+                summary = PortalCloseReport.SummariseOutcomes(outcomes),
+                warnings = PortalCloseReport.Warnings(outcomes),
+                anyFailed = PortalCloseReport.AnyFailed(outcomes),
+                outcomes = outcomes.Select(o => new
+                {
+                    pid = o.Pid,
+                    @class = ClassLabel(o.Class),
+                    planned = o.Planned.ToString(),
+                    outcome = o.Kind.ToString(),
+                    outcomeLabel = OutcomeLabel(o.Kind),
+                    projectPath = o.ProjectPath,
+                    detail = o.Detail,
+                }),
+            },
+            new JsonSerializerOptions { WriteIndented = true });
+
+    private static string ProjectLabel(PortalProcessInfo p) =>
+        ProjectLabel(p.ProjectPath, p.OpennessVisible ? PortalProcessClass.StrayEmpty : PortalProcessClass.OpennessInvisible);
+
+    /// <summary>
+    /// 🔴 <b>An absent <c>ProjectPath</c> means two completely different things and must not print one
+    /// word for both.</b> On a process Openness can see it means "nothing is open". On one it CANNOT see
+    /// it means the API declined to say — and printing "(none)" there invents the fact
+    /// <c>PortalProcessInfo</c> deliberately refuses to invent one layer down. This is the same defect as
+    /// the <c>AcquiredPrecedesStart</c> one: an honest absence re-consumed as a measurement.
+    /// </summary>
+    private static string ProjectLabel(string? projectPath, PortalProcessClass klass) =>
+        !string.IsNullOrEmpty(projectPath) ? projectPath!
+            : klass == PortalProcessClass.OpennessInvisible ? "(unknown - not visible to Openness)"
+            : "(none)";
+
+    private static string MethodLabel(PortalCloseMethod m) => m switch
+    {
+        PortalCloseMethod.Leave => "LEAVE ALONE",
+        PortalCloseMethod.SaveThenTerminate => "SAVE then TERMINATE",
+        PortalCloseMethod.TerminateEmpty => "TERMINATE (nothing to save)",
+        PortalCloseMethod.TerminateUnsaveable => "TERMINATE WITHOUT SAVING",
+        _ => m.ToString(),
+    };
+
+    // The three terminating outcomes never share a word. Folding them into "closed" is precisely the
+    // reporting defect the owner's "save where you CAN" ruling makes possible.
+    private static string OutcomeLabel(PortalCloseOutcomeKind k) => k switch
+    {
+        PortalCloseOutcomeKind.LeftAlone => "LEFT ALONE",
+        PortalCloseOutcomeKind.SavedThenTerminated => "SAVED then TERMINATED",
+        PortalCloseOutcomeKind.TerminatedNothingToSave => "TERMINATED (nothing to save)",
+        PortalCloseOutcomeKind.TerminatedWithoutSaving => "TERMINATED WITHOUT SAVING",
+        PortalCloseOutcomeKind.SaveFailedNotTerminated => "SAVE FAILED - NOT TERMINATED (still running)",
+        PortalCloseOutcomeKind.TerminateFailed => "TERMINATE FAILED (still running)",
+        PortalCloseOutcomeKind.IdentityChangedNotTerminated =>
+            "NOT TERMINATED - pid no longer names that process",
+        _ => k.ToString(),
+    };
 
     private static string ClassLabel(PortalProcessClass c) => c switch
     {

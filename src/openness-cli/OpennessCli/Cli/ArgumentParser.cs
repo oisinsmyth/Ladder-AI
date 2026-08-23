@@ -196,6 +196,21 @@ public sealed record PortalStatusOptions(
     int TimeoutConnectSeconds,
     int TimeoutOpenSeconds);
 
+// portal-close: portal-status's destructive sibling, and the same shape — no <project> positional,
+// because it targets Portal PROCESSES and not a project.
+//
+// 🔴 Pids is the ONLY route to a Portal that has a project open, and the only route past the planner's
+// minimum-age floor. A sweep never selects either, so naming one is a deliberate act that cannot be
+// arrived at by accident. TimeoutConnectSeconds is genuinely used here (unlike portal-status, which
+// carries it for uniformity): it bounds the attach in the save-then-terminate branch.
+public sealed record PortalCloseOptions(
+    IReadOnlyList<int> Pids,
+    bool Confirm,
+    bool Json,
+    string? TiaInstallOverride,
+    int TimeoutConnectSeconds,
+    int TimeoutOpenSeconds);
+
 // Screen defaults to null rather than "*": summarising every screen is cheap, reading every item on
 // every screen is not, so the expensive mode is opt-in. MaxItems bounds a single screen's read.
 // The IMasterCopySource probe (2026-08-17). A classic screen implements IMasterCopySource, so it can
@@ -389,6 +404,8 @@ public abstract record ParseResult
 
     public sealed record PortalStatusSuccess(PortalStatusOptions Options) : ParseResult;
 
+    public sealed record PortalCloseSuccess(PortalCloseOptions Options) : ParseResult;
+
     public sealed record HmiSuccess(HmiOptions Options) : ParseResult;
 
     public sealed record HmiCloneScreenSuccess(HmiCloneScreenOptions Options) : ParseResult;
@@ -522,6 +539,13 @@ public static class ArgumentParser
         "  openness-cli compile-scopes <project> [--json] [--tia-install <path>] [--timeout-connect <s>] [--timeout-open <s>]\n" +
         "    READ-ONLY. Every object that answers GetService<ICompilable>(), and which of them are the SAME compiler. Compiles nothing.\n" +
         "  openness-cli portal-status [--json] [--tia-install <path>]\n" +
+        "  openness-cli portal-close  [--pid <n>]... [--json] [--tia-install <path>] [--timeout-connect <s>] --yes\n" +
+        "    DESTRUCTIVE. Closes stray TIA Portal processes: 'save where you can, then close'. A process with a project open is SAVED first, then terminated; an empty one is terminated;\n" +
+        "    a process the Openness API cannot see CANNOT BE SAVED and is TERMINATED WITHOUT SAVING - reported by name, never folded in with the others. If a save FAILS the process is\n" +
+        "    LEFT RUNNING, because terminating then would destroy the work the save was for.\n" +
+        "    EVERY close is a terminate: TiaPortal exposes no Close/Exit/Quit, and Dispose() on an attached handle releases only this tool's reference. The only variable is whether a save happened first.\n" +
+        "    A sweep NEVER selects a Portal with a project open, and never one the API cannot see that is under 5 minutes old (still starting). --pid is the only route to either, and is repeatable.\n" +
+        "    --yes is required; without it the full plan is printed with a reason per process, nothing is attached to, saved or terminated, and it exits 10. Exits 7 if anything selected was not closed.\n" +
         "  openness-cli hmi           <project> [--inspect] [--screen <name>|*] [--schema] [--max-items <n>] [--json] [--tia-install <path>] [--timeout-connect <s>] [--timeout-open <s>]\n" +
         "  <project> is either the name of a project already open in TIA Portal, or a path to a .apNN file.\n" +
         "  --type selects a PLC data type (UDT) instead of a block; on import it's a switch (no value) applying to all files.\n" +
@@ -614,6 +638,7 @@ public static class ArgumentParser
         ParseResult.SanityCheckSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
         ParseResult.CompileScopesSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
         ParseResult.PortalStatusSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
+        ParseResult.PortalCloseSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
         ParseResult.HmiSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
         ParseResult.HmiCloneScreenSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
         ParseResult.HmiCreateScreenSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
@@ -652,6 +677,10 @@ public static class ArgumentParser
         ParseResult.SanityCheckSuccess s => s.Options.ProjectIdentifier,
         ParseResult.CompileScopesSuccess s => s.Options.ProjectIdentifier,
         ParseResult.PortalStatusSuccess => null,
+
+        // Same as portal-status: it targets Portal processes, not a project. It also never reaches
+        // Connect(), so nothing consumes this anyway.
+        ParseResult.PortalCloseSuccess => null,
         ParseResult.HmiSuccess s => s.Options.ProjectIdentifier,
         ParseResult.HmiCloneScreenSuccess s => s.Options.ProjectIdentifier,
         ParseResult.HmiCreateScreenSuccess s => s.Options.ProjectIdentifier,
@@ -692,6 +721,7 @@ public static class ArgumentParser
             "sanity-check" => ParseSanityCheck(args),
             "compile-scopes" => ParseCompileScopes(args),
             "portal-status" => ParsePortalStatus(args),
+            "portal-close" => ParsePortalClose(args),
             "hmi" => ParseHmi(args),
             "hmi-clone-screen" => ParseHmiCloneScreen(args),
             "hmi-create-screen" => ParseHmiCreateScreen(args),
@@ -713,7 +743,7 @@ public static class ArgumentParser
                 var other => other,
             },
             var other => new ParseResult.Failure(
-                $"Unknown subcommand '{other}'. Supported subcommands: list, export, import, compile, delete, block-layout, download-plan, create-instance-db, sanity-check, compile-scopes, portal-status, library, graphics, hmi, hmi-compile, hmi-delete-screen, hmi-delete-tagtable, hmi-create-screen, hmi-edit-screen, hmi-create-tag, hmi-inventory, hmi-new, hmi-delete, hmi-set.{Environment.NewLine}{Usage}"),
+                $"Unknown subcommand '{other}'. Supported subcommands: list, export, import, compile, delete, block-layout, download-plan, create-instance-db, sanity-check, compile-scopes, portal-status, portal-close, library, graphics, hmi, hmi-compile, hmi-delete-screen, hmi-delete-tagtable, hmi-create-screen, hmi-edit-screen, hmi-create-tag, hmi-inventory, hmi-new, hmi-delete, hmi-set.{Environment.NewLine}{Usage}"),
         };
     }
 
@@ -836,6 +866,70 @@ public static class ArgumentParser
         }
 
         return new ParseResult.PortalStatusSuccess(new PortalStatusOptions(json, tiaInstall, timeoutConnect, timeoutOpen));
+    }
+
+    private static ParseResult ParsePortalClose(string[] args)
+    {
+        var pids = new List<int>();
+        var confirm = false;
+        var json = false;
+        string? tiaInstall = null;
+        var timeoutConnect = DefaultTimeoutConnectSeconds;
+        var timeoutOpen = DefaultTimeoutOpenSeconds;
+
+        for (var i = 1; i < args.Length; i++)
+        {
+            switch (args[i])
+            {
+                case "--pid":
+                    // TryTakeIntValue already refuses anything non-positive, which is what is wanted here
+                    // — a pid of 0 or below names no process, and swallowing it would land silently in
+                    // the "named nothing" case, which reads exactly like a thorough sweep that found
+                    // nothing to do. No second check: a duplicated guard is one that can drift.
+                    if (!TryTakeIntValue(args, ref i, "--pid", out var pid, out var pidErr))
+                    {
+                        return new ParseResult.Failure(pidErr);
+                    }
+
+                    pids.Add(pid);
+                    break;
+                case "--yes":
+                    confirm = true;
+                    break;
+                case "--json":
+                    json = true;
+                    break;
+                case "--tia-install":
+                    if (!TryTakeValue(args, ref i, "--tia-install", out tiaInstall, out var installErr))
+                    {
+                        return new ParseResult.Failure(installErr);
+                    }
+
+                    break;
+                case "--timeout-connect":
+                    if (!TryTakeIntValue(args, ref i, "--timeout-connect", out timeoutConnect, out var connectErr))
+                    {
+                        return new ParseResult.Failure(connectErr);
+                    }
+
+                    break;
+                case "--timeout-open":
+                    if (!TryTakeIntValue(args, ref i, "--timeout-open", out timeoutOpen, out var openErr))
+                    {
+                        return new ParseResult.Failure(openErr);
+                    }
+
+                    break;
+                default:
+                    // Same as portal-status: no <project> positional, and an unrecognised argument on a
+                    // DESTRUCTIVE command is refused rather than swallowed.
+                    return new ParseResult.Failure(
+                        $"Unexpected argument '{args[i]}'. `portal-close` takes no <project> and no positional arguments — it closes running Portal processes.{Environment.NewLine}{Usage}");
+            }
+        }
+
+        return new ParseResult.PortalCloseSuccess(
+            new PortalCloseOptions(pids, confirm, json, tiaInstall, timeoutConnect, timeoutOpen));
     }
 
     private static ParseResult ParseExport(string[] args)

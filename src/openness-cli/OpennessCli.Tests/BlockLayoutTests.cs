@@ -592,9 +592,73 @@ internal sealed class FakeGateway : IOpennessGateway
 
     public void Connect(TimeSpan timeout, string? preferProjectIdentifier = null) => ConnectCalls++;
 
-    // Everything below is out of scope for this command and must never be reached from it.
+    // ---- portal-status / portal-close -----------------------------------------------------------
 
-    public IReadOnlyList<PortalProcessInfo> EnumeratePortalProcesses() => throw new NotSupportedException();
+    /// <summary>
+    /// The process snapshot <c>portal-status</c> and <c>portal-close</c> read. Null = not configured, and
+    /// so it throws — for this file's usual reason: a stub handing back an empty list would let a
+    /// portal-close test pass having planned over no processes at all.
+    /// </summary>
+    public IReadOnlyList<PortalProcessInfo>? PortalProcesses { get; set; }
+
+    public int EnumeratePortalProcessesCalls { get; private set; }
+
+    public IReadOnlyList<PortalProcessInfo> EnumeratePortalProcesses()
+    {
+        EnumeratePortalProcessesCalls++;
+        return PortalProcesses
+            ?? throw new NotSupportedException("Test did not configure a Portal process snapshot.");
+    }
+
+    /// <summary>
+    /// 🔴 <b>THE SENTINEL FOR THE DESTRUCTIVE HALF.</b> Every plan this was asked to execute, in order.
+    ///
+    /// <para>RECORDED, NOT THROWN, and for the same reason <see cref="Connect"/> is: a throw also
+    /// produces a non-zero exit, so "the --yes gate held" and "the gate broke and the gateway blew up"
+    /// would be told apart only by reading a message. A list is a positive observation of the thing that
+    /// must not happen — and it records WHICH processes, so "it terminated nothing" can be told from
+    /// "it terminated the wrong one".</para>
+    /// </summary>
+    public List<PortalClosePlan> ClosedPlans { get; } = new();
+
+    /// <summary>The attach timeout the CLI actually passed through, so the plumbing is assertable.</summary>
+    public TimeSpan? LastCloseAttachTimeout { get; private set; }
+
+    /// <summary>
+    /// What to hand back per pid. A pid with no entry gets the outcome that matches its plan — the
+    /// everything-worked case — so a test only configures the pids whose execution it wants to bend.
+    /// </summary>
+    public Dictionary<int, PortalCloseOutcome> CloseOutcomes { get; } = new();
+
+    public PortalCloseOutcome ClosePortalProcess(PortalClosePlan plan, TimeSpan attachTimeout)
+    {
+        // The real gateway refuses a Leave rather than no-op'ing on it, and so does this: if the fake
+        // were more permissive than the thing it stands in for, a routing bug that sent a Leave to the
+        // killer would pass here and fail on the machine.
+        if (plan.Method == PortalCloseMethod.Leave)
+        {
+            throw new ArgumentException("A Leave plan must never reach ClosePortalProcess.", nameof(plan));
+        }
+
+        ClosedPlans.Add(plan);
+        LastCloseAttachTimeout = attachTimeout;
+
+        if (CloseOutcomes.TryGetValue(plan.Process.Pid, out var configured))
+        {
+            return configured;
+        }
+
+        var kind = plan.Method switch
+        {
+            PortalCloseMethod.SaveThenTerminate => PortalCloseOutcomeKind.SavedThenTerminated,
+            PortalCloseMethod.TerminateUnsaveable => PortalCloseOutcomeKind.TerminatedWithoutSaving,
+            _ => PortalCloseOutcomeKind.TerminatedNothingToSave,
+        };
+
+        return PortalCloseOutcome.For(plan, kind, "fake gateway: executed as planned.");
+    }
+
+    // Everything below is out of scope for this command and must never be reached from it.
 
     public IReadOnlyList<BlockInfo> EnumerateBlocks()
     {
