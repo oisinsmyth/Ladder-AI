@@ -37,20 +37,26 @@ public sealed class ReachabilityTests : IDisposable
 
     // ---------------------------------------------------------------------------------------------
 
-    /// <summary>The shape that actually happened: one slot called, its sibling not.</summary>
+    /// <summary>
+    /// The shape that actually happened: one slot called, its sibling not.
+    ///
+    /// <para>Names are INVENTED. They were the real ones until 2026-08-23 — a data-boundary leak in the
+    /// documented shape, arriving inside something that felt like rigour (a precise reproduction of a
+    /// measured defect). The shape is the lesson; the job's vocabulary was never part of it.</para>
+    /// </summary>
     [Fact]
     public void An_FC_that_NOTHING_calls_is_refused_and_named()
     {
-        Block("OB", "Main", "FC_HarnessVesselSlot", "FC_HarnessCopyLayer");
-        Block("FC", "FC_HarnessVesselSlot");
-        Block("FC", "FC_HarnessValveSlot");          // the orphan
+        Block("OB", "Main", "FC_HarnessSlotA", "FC_HarnessCopyLayer");
+        Block("FC", "FC_HarnessSlotA");
+        Block("FC", "FC_HarnessSlotB");          // the orphan
         Block("FC", "FC_HarnessCopyLayer");
 
         var report = Of();
 
         Assert.True(report.Verified);
-        Assert.Equal(new[] { "FC_HarnessValveSlot" }, report.Unreachable);
-        Assert.Contains(report.Refusals, r => r.Contains("FC_HarnessValveSlot") && r.Contains("NOT REACHABLE from any OB"));
+        Assert.Equal(new[] { "FC_HarnessSlotB" }, report.Unreachable);
+        Assert.Contains(report.Refusals, r => r.Contains("FC_HarnessSlotB") && r.Contains("NOT REACHABLE from any OB"));
     }
 
     /// <summary>The refusal explains why runtime could not have told you — or it reads as pedantry.</summary>

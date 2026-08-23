@@ -137,10 +137,23 @@ of the measured ones alone.
 **And the thing the registry actually protects is unaffected either way:** an **unknown version is
 refused**, because version is exactly what changes a port list, and the port list is what the
 converter *supplies* — accepting an unknown version means applying the wrong template, which converts,
-imports, and then misbehaves on the controller. (This is why `MB_SERVER` 5.3 is characterised and
-deliberately **not registered**: the block carrying it needs `Array[..] of Struct` and doubly-nested
-structured interface members the converter cannot yet model, so its template could never be exercised
-end to end — and an unexercised port list is precisely what the registry exists to prevent.)
+imports, and then misbehaves on the controller.
+
+✅ **CORRECTED 2026-08-23. The parenthesis that stood here said `MB_SERVER` 5.3 was *"characterised and
+deliberately not registered"*, and it had been wrong since 2026-08-12** — `MbServer53` is in
+`SimaticMl/FixedShapeInstructions.cs:142`, added on exactly the condition the old note set for it.
+CLAUDE.md was corrected on 2026-08-13 **and flagged at the time that the stale version had already cost
+a wrong plan** (it was read as *"MB_SERVER cannot be moved into a project"*, which stopped a rig
+deployment a step early); this copy was not corrected with it, so the retracted claim stayed readable
+here for ten days. ***And the stated reason never applied to us at all:*** the `Array[..] of Struct`
+belongs to the Siemens **sample** block used to characterise the port list, not to anything we author —
+`MB_HOLD_REG` is an **area pointer over marker memory** (`P#M1000.0 WORD n`), so the structured
+interface simply never arises. Proven end to end in `GenProject1` on 2026-08-13: imported, compiled
+`errors=0`, and confirmed from **TIA's own re-export** (`Part Name="MB_SERVER" Version="5.3"`).
+
+🔴 **The lesson is the one this file keeps recording: a correction applied in one place and not the
+other is worse than no correction, because the two copies now disagree and nothing says which is
+current.** When you retract a claim, grep for it.
 
 **Revisit trigger — one, and it is narrow: a real export that CONTRADICTS the retained names.** An
 export emitting `Modbus_Master`/`Modbus_Comm_Load` with a port list that differs from what the

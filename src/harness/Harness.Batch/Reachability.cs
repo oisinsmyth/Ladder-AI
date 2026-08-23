@@ -21,7 +21,7 @@ public sealed record ReachabilityReport(
 /// <summary>
 /// 🔴 <b>THE CHECK THAT WOULD HAVE CAUGHT THE ORPHAN, AND THE REASON IT IS HERE RATHER THAN AT RUNTIME.</b>
 ///
-/// <para><b>Measured 2026-08-22.</b> <c>FC_HarnessValveSlot</c> was in the controller and called by
+/// <para><b>Measured 2026-08-22.</b> A lane's slot FC was in the controller and called by
 /// nothing. Its stimulus model therefore never executed, every valve vector timed out, and it took an
 /// IR read to find — three hours after the deploy that could have refused it.</para>
 ///

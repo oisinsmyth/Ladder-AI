@@ -186,10 +186,14 @@ public class DeriveComputationTests
     public void A_CLOSURE_THAT_ONLY_SHARES_A_SUFFIX_DOES_NOT_COUNT_AS_A_MATCH()
     {
         // 🔴 *** THE FALSE POSITIVE THIS REPLACED, MEASURED ON A REAL JOB. *** A first cut also indexed
-        // every path with its root dropped, so `iDB_ValveUnderTest.IO.FTC` "matched"
-        // `FB_SiloVessel|ValveDischarge.IO.FTC` - a different location, in a closure covering none of the
+        // every path with its root dropped, so `iDB_UnderTest.IO.Fault` "matched"
+        // `FB_Owner|MemberBlock.IO.Fault` - a different location, in a closure covering none of the
         // block under test. Three of four declarations matched that way against an artifact that mentions
         // none of them. A suffix is not an identity.
+        //
+        // (Names invented 2026-08-23. They were the job's own until then - a leak in the documented
+        // shape: an identifier arriving inside an explanatory comment, which does not feel like job
+        // content, it feels like rigour. The shape is the lesson; the vocabulary never was.)
         //
         // The submission declares `DemoUnit.Demo_Count`; this closure carries only `SomethingElse.Demo_Count`.
         var (exit, output, _) = Derive(

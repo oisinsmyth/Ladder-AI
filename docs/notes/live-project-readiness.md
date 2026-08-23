@@ -4,9 +4,19 @@
 tooling ready to use in the morning on a live project.* This is the answer, and it is written to be
 **read once, quickly, before you start** — not to be complete.
 
-> 🔴 **THE ONE-LINE ANSWER.** The **deployment, read-back and analysis** path is ready and has been
-> run against a real controller. The **closed-loop test path is NOT** — no conformance wave has ever
-> executed end to end. Use the first. Do not build a plan on the second today.
+> ✅ **THE ONE-LINE ANSWER, CORRECTED 2026-08-23.** **Deployment, read-back, analysis AND the
+> closed-loop test path have all run against a real controller.** A conformance wave has executed end
+> to end four times — 2026-08-18, 08-20, and twice on 08-22 — the last of those **two lanes off one
+> download, 3-of-3 PASS each, 402 s**, with all three vectors on a slot reading `Pass` and `Settled`.
+> Evidence is the result packages themselves and commits `e7b2af9`..`c96d7ef`, not another document.
+>
+> 🔴 **THIS LINE READ "the closed-loop test path is NOT [ready] — no conformance wave has ever
+> executed end to end. Do not build a plan on the second today." UNTIL 2026-08-23, AND IT WAS THREE
+> DAYS STALE WHEN PHASE 3 STARTED AND FIVE WHEN IT ENDED.** CLAUDE.md quotes this paragraph as *"the
+> one-line answer"* and sends every reader here **first**, so a stale sentence here is the most
+> expensive kind this repo has: it is read before anything else and it tells people not to plan on a
+> capability they have. It was quoted onward into a design doc and a work plan before anybody opened
+> the artifacts. **If you are about to edit this file, that is the failure mode to check for.**
 
 > ✅ **THE RELEASE BINARY IS NOW CURRENT — rebuilt and verified, nothing owed.** It was stale and it is
 > not any more. See *THE RELEASE BINARY WAS STALE* below for how that was proved.

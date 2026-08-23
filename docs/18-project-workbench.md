@@ -1,6 +1,13 @@
 # 18 — The Project Workbench: a block-centric workflow (v2)
 
-**Status: PROPOSAL, v2. Owner-authored design; recorded and iterated 2026-08-21. Not adopted.**
+**Status (2026-08-23): PARTLY ADOPTED AND BEING BUILT — no longer a whole-cloth proposal.** Phases 1,
+2, 3 and 10 are delivered against a real rig; Phase 4 has been **redefined** (see §5) and Phase 5 is
+**not executable as written** (see §5). The rest is still proposal.
+
+🔴 **This line read "Not adopted" until 2026-08-23, with four phases marked delivered inside the same
+document.** A reader who trusted the header would have discounted the whole page, including the parts
+that are running on a controller. Recorded rather than quietly overwritten, because the same shape —
+a status line that stopped tracking its own body — is what §3.2's table also did.
 
 **What changed from v1:** v1 recorded the owner's design and listed eight problems with it. v2
 applies those eight, and adds the owner's two new directives — **a ~20-minute per-block budget
@@ -152,7 +159,7 @@ build stamp.
 | Deploy: stage → `to-xml` → `import-all` → layout re-assert → `compile-all` → `sanity-check` → `download-probe` | `Harness.Device/OpennessDeviceGateway.cs` | **run live** — 45 objects, CPU `Running` |
 | Read back over Modbus / S7, and measure the declared boundary | `Harness.MirrorRead/`, `Harness.RigRead/` | **run live** |
 | PC-side interpreter for the generated LAD subset | `Harness.Skeleton/LadInterpreter.cs` | built |
-| The loop that joins them | `Harness.Loop/` | **built, never run** |
+| The loop that joins them | `Harness.Loop/` | ✅ **RUN END TO END FOUR TIMES** (2026-08-18, 08-20, twice on 08-22). 🔴 This cell read **"built, never run"** until 2026-08-23 while §5 Phase 2 of THIS DOCUMENT already recorded the opposite — §5 was corrected and §3.2 was not, so one document held two answers and the wrong one was the one a reader met first. |
 
 **Nobody hand-writes the copy-layer ladder today — it is generated.** The half of the owner's
 directive that sounds hardest ("everything down to the ladder on the PLC to read values into the
@@ -471,25 +478,63 @@ once**. Download granularity is device-level (34–92 s measured), so batching i
 
 ---
 
-### Phase 4 — The workbench spine · **P1**
+### Phase 4 — ~~The workbench spine~~ → **the lane, generated** · *redefined 2026-08-23, in progress*
 
-Four items that only pay off together; each is cheap and none is useful alone.
+🔴 **THE SPINE AS WRITTEN BELOW IS NOT BEING BUILT, AND 4.4 IS STRUCK RATHER THAN DEFERRED.** The
+argument, in this document's own terms:
 
-- 4.1 **State in files** — `project.yaml`, `blocks/<name>.md`, explicit state field. Everything else
-  in this phase reads and writes it.
-- 4.2 **The dependency DAG** — `depends-on:` captured at creation; the parallel wave is a DAG level.
-- 4.3 **Carve-out as a partition with a residual** — *the one place a silent gap stays invisible
-  until commissioning.* Reuse `signal-sweep`'s denominator-plus-residue pattern.
-- 4.4 **Per-block `writes:` list** — turns external-conflict detection into a set intersection.
+- **4.4 violates §3.1** — *"a field that can be derived must never be authored; a hand-typed derivable
+  field is only an opportunity to disagree with reality."* A `writes:` list is exactly that, and the
+  producers already exist: `cross-check`'s writer graph and `reachable-state`, whose whole point is
+  that *every consumer already existed and nothing computed the sets*. Adding an authored one
+  re-opens the hole FI-65 #1 and D9 both closed. **Struck.**
+- **4.2 is already unit-tested at N=8** (`BatchPlannerTests.Eight_lanes_that_fit_are_batched`) and
+  unused at N=3. What bounds the wavefront is the mirror's 576-register area and the number of lanes
+  that EXIST — not a dependency graph nobody has drawn.
+- **4.1 has no consumer** left once 4.2 and 4.4 go.
+- **4.3 (carve-out as a partition with a residual) is genuinely valuable and genuinely missing** —
+  and belongs with its producer in the assertion pipeline (`enumerate-assertions`, `signal-sweep`),
+  not in a new file format. **Re-homed, not dropped.**
+- And none of it moves the budget in §5's own table: the batched deploy-and-wave path is ~2–4 min per
+  lane, so the remaining ~12 of the 14-min total is all `[E]`, on the AUTHORING side.
+
+**What Phase 4 is instead:** *a lane is a thing the tool makes.* A conformance lane needs three
+blocks; only the copy layer was generated. The slot FC and the 18-network stimulus shell are now
+generated too (`Harness.Map/SlotFcGenerator.cs`, `Harness.Map/StimShellGenerator.cs`), a lane's
+program set is **emitted as a manifest rather than typed**, and `converter diff` no longer reads an
+insertion as *"n changed, 1 added"*. That last one is a precondition, not a bonus: a regenerable
+shell renumbers networks, and until 2026-08-23 that made every re-render unprovable.
+
+**Why this and not the spine:** it is the reason *"three lanes has never been run"*. A third lane
+directory exists and carries only an injection binding, because a third **conformance** lane cost a
+hand-built shell plus a hand-built slot FC. Three lanes is an OUTCOME of this phase, not an input to it.
 
 ---
 
 ### Phase 5 — Pre-flight interpreter · **P1** · *biggest lever on iteration count*
 
-🔨 Extend `Harness.Skeleton/LadInterpreter.cs` to the block-under-test's IR subset (§4.4). The
-20-minute target rests on iteration count, and this is the only item that attacks it directly.
-**Its limit is not negotiable and is restated wherever it is offered:** not a CPU model, green there
-is never evidence about a 1214C, and it is a pre-filter — never a substitute for the rig.
+🔴 **NOT EXECUTABLE AS WRITTEN — established 2026-08-23 by reading the code, and the one-line plan
+below hides a large decision.** `Harness.Skeleton/LadInterpreter.cs` is a **regex interpreter over the
+text the harness's own generators emit**, and `Harness.Skeleton.csproj` references only `Harness.Map`
+and `Harness.Wire`; `src/harness/Directory.Build.props` keeps the whole solution converter-free ON
+PURPOSE. So *"extend it to the block-under-test's IR subset"* means either **a second IR parser inside
+the harness** — the parallel implementation this project rejects on sight — or crossing a solution
+boundary nobody has ruled on.
+
+⚠️ **And the cheap decisive measurement has never been taken.** Much of §4.4's claimed catch-list
+(unwired ports, disarmed logic, an unreachable step) is already covered by `converter preflight`,
+`undriven-scan`, `candidate-scan` and review rule C-410. **Do the measurement before the build:** take
+the failures from the last N rig cycles (`docs/notes/hammer-campaign-results.md`'s 42 defects, the
+fix-wave record, `docs/notes/mechanisation-backlog.md`) and classify each as *an existing PC-side
+check would have caught this* / *only an interpreter would* / *only the rig would*. **If the middle
+bucket is small, Phase 5 is not worth a second IR parser.** That is one session's work and it decides
+a large one.
+
+The original plan, retained: 🔨 Extend `Harness.Skeleton/LadInterpreter.cs` to the block-under-test's
+IR subset (§4.4). The 20-minute target rests on iteration count, and this is the only item that
+attacks it directly. **Its limit is not negotiable and is restated wherever it is offered:** not a CPU
+model, green there is never evidence about a 1214C, and it is a pre-filter — never a substitute for
+the rig.
 
 ---
 

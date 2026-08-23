@@ -1700,9 +1700,37 @@ project: one agent's compile force-persists another agent's half-finished work.
 **Dependencies:** FI-28 (built, read-only half), FI-07 (parked write half — this idea is its natural
 reopening trigger), FI-12 (shares its measurement gate), FI-43 (no undo for bulk import), FI-26
 (supersedes the ledger's content question), `docs/13-data-boundary.md` (ledger retention).
-**Verdict / revisit trigger:** Under debate — owner's call on the FI-65b build order, on the hard-rule-4
-reading above, and on FI-65c's copies-vs-shared-queue question (decided by expected concurrent-agent
-count, which nobody has measured). Note that component 1 is the same either way — claims are required
+**Verdict / revisit trigger:** ✅ **RULED 2026-08-23 — both open questions answered, and two components
+are already built.**
+
+- **Hard rule 4 reads PER-INTEGRATION (reading (b)).** The integration/union compile is **the gate**; a
+  per-agent compile is a **filter**, like `preflight`. The reasoning the owner accepted: a clone compile
+  examines something real — the clone — that is not the thing it claims, which is exactly the **closed
+  check** class CLAUDE.md names. Calling it the gate would license a green obtained over the wrong
+  project state. **The cost is explicit: nothing is "done" until integration runs**, which makes
+  integration the serialization point, and if integration costs 30 minutes then three agents saving 20
+  each have bought nothing.
+- **SHARED QUEUE, not per-agent copies — for now**, with extra Portal sessions added later if contention
+  actually appears. **So component 2 (per-agent workspaces) is PARKED, not pending.**
+- ⚠️ **Two consequences worth writing down before anyone re-opens this.** (1) Under a shared queue there
+  is only one project, so a compile is already against canonical and reading (b) is *cheaper* to satisfy
+  than it was under clones — its motivation shifts from clone-staleness to the thing that survives either
+  model: **two blocks can each compile clean and still conflict, and only a union check sees it.** (2)
+  The queue ruling **removes the stated reason `--wait` on the lease was deferred** ("you cannot queue
+  behind a person, and nothing contends on the rig"). A queue in which nobody can wait is not a queue. It
+  is still not *needed* — nothing contends yet — but it is no longer deferred on principle.
+
+🔴 **AND THIS ENTRY IS PARTLY STALE ABOUT ITS OWN BUILD.** Component 1 (claims) is **built**. Component 3
+is **built and raced live** — as **`converter lease`, not `openness-cli lease`** as proposed above, which
+also silently settled the "placement is an open call" question in component 1. Component 5's scope is
+half-answered by `lease status` + `claims --check`. So the ranked build order 1→2→3→4→5 has already run
+1→3, and what remains under debate is component 4 alone.
+
+⚠️ **A third model exists that this entry does not have**, and it has run green twice: `harness-batch` is
+neither N agents with N Portals nor N agents queueing at one Portal, but **N lanes merged into ONE
+transaction held by one holder** — two lanes off one download for ~18 s of marginal cost. For anything
+ending at the rig that sidesteps the copies-vs-queue question entirely. It does not cover general block
+authoring, but it does mean the contention this entry was designed against may not be the binding one. Note that component 1 is the same either way — claims are required
 under both models, because Correction 2 holds regardless of how round trips are served. Components 1–3
 are buildable now and are justified by recorded evidence
 (author-allocated `NUMBER`, the `%X9` alarm-bit claim, the stale-process compile block) rather than by an

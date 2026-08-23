@@ -21,9 +21,34 @@ documented/committed, delete it from this file rather than letting it accumulate
 4. Cross-check: does the code in the diff match what this doc claims is done? If not, trust the
    code/diff and fix this doc.
 
-## Current task / in flight — nothing mid-execution; one owner decision waiting, four items left open by the S6-Killer-Plan wave
+## Current task / in flight — the workbench phases, OUTSIDE the suspended staged plan
 
-> 🛑 **SUSPENDED 2026-08-17.** Everything in this section and in *Outstanding works* below is **held,
+> ✅ **UPDATED 2026-08-23, AND IT WAS A WEEK STALE.** This section read *"nothing mid-execution"* while
+> the harness, the rig loop, the lease, the batch and workbench Phases 1/2/3/10 were all being built and
+> run. **The recovery procedure eight lines above tells the next session to trust this section**, so a
+> stale "nothing in flight" is the single most misleading line this file can carry — it invites the
+> reader to skip the cross-check step that would have caught it. Fixed, and recorded rather than
+> silently overwritten.
+
+**IN FLIGHT: `docs/18-project-workbench.md` Phase 4, on branch `worktree-workbench-design-v1`.** This
+work is **not part of the suspended staged plan** (`docs/03-development-plan.md`) — it is tooling for
+real jobs, which the suspension notice explicitly leaves running.
+
+- **Phase 3 — DELIVERED and run on the rig.** `converter lease` (a real lock, raced), the mirror's true
+  576-register ceiling, `harness-batch`, link-loss survival. **Two lanes off one download, 3-of-3 PASS
+  each, 402 s.**
+- **Phase 4 — IN PROGRESS.** W1 four silent omissions · W2 `converter diff` matches networks on content
+  · W3 `SlotFcGenerator` + lane manifest · W4 `StimShellGenerator` · W5 reachability parity · W6 stale
+  status lines (this edit). Plan: `.claude/plans/lets-the-crunch-this-linear-gosling.md`.
+- **Owner rulings recorded 2026-08-23** (commit `b7dc407`): `src/harness/` is PC-side tooling under hard
+  rule 8; `Main`'s write-path deferral is LIFTED; the stimulus-shell generator may be ported,
+  mechanism-only. Plus **FI-65: reading (b) — the integration/union compile is the gate — and the
+  SHARED-QUEUE model over per-agent copies**, so FI-65 component 2 is parked.
+- **Still open for the owner:** may `openness-cli` ever close a stray Portal (B4), and which block
+  becomes the third conformance lane (B5).
+
+> 🛑 **SUSPENDED 2026-08-17 — this applies to the STAGED PLAN below, not to the workbench work above.**
+> Everything in this section and in *Outstanding works* below is **held,
 > not cancelled** — the staged plan is suspended (`docs/03-development-plan.md`). Nothing was
 > abandoned mid-execution: this section already recorded nothing in flight, and `agent-tasks/` was
 > empty. The owner decisions listed here **stay open and stay waiting**; they are not resolved by the
