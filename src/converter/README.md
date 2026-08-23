@@ -51,6 +51,7 @@ says **where each one is documented and why you would reach for it**.
 | `signal-sweep` | project-level residual signal coverage | `signal-sweep` — project-level residual signal coverage |
 | `interface-check` | does the block carry the signals the spec names | `interface-check` — the static comparison D6's green rests on |
 | `reachable-state` | computed slot disjointness — storage a block's CALL tree touches | `reachable-state` — D9's producer |
+| `served-area` | the Modbus holding-register window, read off the `MB_SERVER` call **and** its sidecar constant | `served-area` — the Modbus window, derived from the block that serves it |
 | `conflict-graph` | submission-scoped conflict edges for the harness gates | `conflict-graph` — the submission-scoped emission |
 | `ir-hash` | stable readable-IR content hash, immune to SIDECAR/UId churn | `ir-hash` — stable readable-IR content hash |
 | `claim` / `claims` | reserve a shared resource before writing IR | `claim` / `claims` — reserve a shared resource |
@@ -4323,6 +4324,68 @@ test (`ReviewC603Tests`, 17 tests, both directions on every claim).
 finding prints and counts but exits 0, exactly like C-120's and C-601-family severities generally.
 The rule now *appears in the report*, which is the round it saves; making it *gate* is a severity
 decision in doc 06, not a converter one.
+
+## `served-area` — the Modbus window, derived from the block that serves it (2026-08-23, workbench Y2)
+
+```
+converter served-area --project <ir-dir-or-file>... [--json]
+```
+
+**The defect.** A harness binding's `declaredRegisters` was **authored by hand, per lane, and
+required**. It flows into `MirrorGeometry.ForCpu1214C`, into `MapAllocator`, into
+`RegisterMap.MapHash`'s canonical form (`declared=`) and therefore into the build stamp — so the
+stamp *does* hash a declared width. **The gap is narrower than it first looks, and that is what makes
+it worth closing:** what the stamp is blind to is not the number, it is **whether the number is true
+of the program**. `gen/test-project001/hopper-blockage-alarm/harness-binding.json` carries a
+`_declaredRegistersNote` saying in its own words that 37 was *read from* the comms block — by a
+person, once.
+
+**The truth lives in the program, in two places that can silently disagree.**
+
+```
+ir/test-project001/FB_Comms_ModbusServer.ir:31
+  MB_SERVER(MbServer, EN := TRUE, ..., MB_HOLD_REG := P#M1000.0 WORD 37, ...)
+ir/test-project001/FB_Comms_ModbusServer.ir:39   (SIDECAR)
+  constant P#M1000.0 WORD 37 = 22 Any
+```
+
+`to-xml` rebuilds the operand **from the sidecar**, so a readable line that drifted is invisible to
+every other check and surfaces only when the controller serves a different area than the map was
+allocated against. Both are read here, joined by the UId the fixed-shape port cites, and a
+disagreement is a refusal **naming both lines**.
+
+**Every uncertainty refuses rather than approximates**, because the direction of error is not
+symmetric: a width derived NARROW costs a refusal on a map that would have fitted, while a width
+derived WIDE lets a map that overflows the real Modbus window allocate cleanly and fail on the wire
+as a device fault. Refused by name: a unit that is not `WORD`, an area outside marker memory, a bit
+offset inside the byte, a missing sidecar, a file that would not parse, and a corpus with a **second**
+`MB_SERVER` call — guessing which one serves the mirror would invent the answer.
+
+**Exit codes.** `0` derived · `1` refused · `2` **NOT DERIVED**, and 2 is never a pass.
+
+**The denominator, printed on every run** — derived, refused or not:
+
+```
+served area: base 1000, 37 register(s), derived from ir/test-project001\FB_Comms_ModbusServer.ir:31
+                                              + sidecar ir/test-project001\FB_Comms_ModbusServer.ir:39
+NOT DERIVED — 10 block(s) in 15 file(s) scanned, no MB_SERVER call
+```
+
+`--project` is **repeatable** and takes a directory or a single `.ir` file, because a batch's corpus
+is the union of several lanes' program paths and `harness-batch plan` cannot materialise that union
+before it needs the answer.
+
+**Consumer.** `harness-batch plan --converter <exe>` and `harness-batch run --yes --converter <exe>`
+run this over the lanes' program paths and refuse a `declaredRegisters` / `baseByte` the program does
+not serve, naming both numbers and both sources. Absent `--converter` the plan still runs and states
+that the width was **DECLARED, not derived**.
+
+🔴 **What it cannot possibly see: whether the block it read is the block on the controller.** It
+reads the program corpus, never the CPU. The mirror's widening to 1024 registers was established by
+probing the device from both sides and nothing here substitutes for that. A corpus stale with respect
+to the rig derives a confident, agreed, *wrong* number and is indistinguishable from a fresh one. The
+claim bought is strictly smaller and the tool prints it on every run: **a binding can no longer
+disagree with the program that was staged.**
 
 ## Rules (docs/05-architecture.md, 04 §8/§10)
 

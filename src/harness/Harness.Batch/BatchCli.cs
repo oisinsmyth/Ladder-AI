@@ -34,7 +34,9 @@ public static class BatchCli
         "Usage: harness-batch enqueue --queue <dir> --lane <name> --binding <file> --submission <file>\n"
         + "                             (--manifest <file> | --program <path>...) [--purpose <text>]\n"
         + "                             # --manifest DERIVES the program set from what the lane emitted; --program is DECLARED by you\n"
-        + "       harness-batch plan    --queue <dir> [--out <merged-binding.json>]\n"
+        + "       harness-batch plan    --queue <dir> [--out <merged-binding.json>] [--converter <exe>]\n"
+        + "                             # --converter DERIVES the served register width from the MB_SERVER call that serves it\n"
+        + "                             # and refuses a binding that disagrees; without it the width is DECLARED and unchecked\n"
         + "       harness-batch list    --queue <dir>\n"
         + "       harness-batch dequeue --queue <dir> --lane <name>\n"
         + "       harness-batch run     --queue <dir> --merged <file> --staging <dir> --leases <dir> --holder <id> --holder-pid <n>\n"
@@ -141,7 +143,7 @@ public static class BatchCli
         return verb switch
         {
             "enqueue" => Enqueue(store, output, readFile, lane, binding, submission, programs, purpose, manifest),
-            "plan" => Plan(store, output, readFile, writeFile, outPath),
+            "plan" => Plan(store, output, readFile, writeFile, outPath, converterExe, runner),
             "list" => List(store, output),
             "dequeue" => Dequeue(store, output, lane),
             _ => Run(store, output, readFile, runner, deploy, new RunArgs(
@@ -171,7 +173,38 @@ public static class BatchCli
         IProcessRunner? runner, Func<IReadOnlyList<string>, DeploymentOutcome>? deploy, RunArgs args)
     {
         var lanes = store.All();
-        var batch = BatchPlanner.Plan(lanes, readFile);
+
+        // 🔴 THE SERVED WIDTH, DERIVED BEFORE THE MAP IS BUILT — and every precondition on it is one of
+        // this command's existing contracts rather than a new caution.
+        //
+        //   --yes            the dry run's contract is that it starts NO PROCESS AT ALL. Same trade the
+        //                    reachability parity check already makes: eroding a clean invariant to gain a
+        //                    convenience is how invariants stop being checkable. The dry run SAYS the
+        //                    width was declared rather than implying it was checked.
+        //   a deploy gateway "--yes with nothing to deploy with starts NOTHING" is a stated promise with
+        //                    its own test, and the refusal for it sits below the planner. Deriving here
+        //                    unconditionally would start a process before that refusal.
+        //   --converter      NAMED, never defaulted to "converter" the way the cross-check is. This check
+        //                    is new; a run that does not name a converter reports the width as DECLARED
+        //                    and unchecked, in as many words, rather than acquiring a subprocess nobody
+        //                    asked for. ⚠️ Consequence to know: the DEFAULT deployment path does not
+        //                    derive. Flipping that is one line here plus the subprocess count in
+        //                    BatchCliRunTests, which is a deliberate, separately-evidenced act.
+        //
+        // The corpus is the lanes' own program paths, which need no staging directory — so the check
+        // lands before anything is materialised, imported or downloaded.
+        var served = args.Confirmed && runner is not null && deploy is not null && args.ConverterExe is not null
+            ? ServedAreaProbe.Derive(
+                args.ConverterExe,
+                lanes.SelectMany(l => l.ProgramPaths).Distinct(StringComparer.OrdinalIgnoreCase).ToList(),
+                runner)
+            : ServedAreaFact.NotDerived(
+                (args.Confirmed ? string.Empty : "a dry run starts NO process, and ")
+                + (args.ConverterExe is null ? "no --converter <exe> was named, so " : "")
+                + "the program corpus was not read. The width is DECLARED, not derived: pass --yes with "
+                + "--converter to check it against the MB_SERVER call that serves it.");
+
+        var batch = BatchPlanner.Plan(lanes, readFile, served);
 
         if (!batch.Planned)
         {
@@ -224,6 +257,22 @@ public static class BatchCli
                 + "binaries and the download target (DeviceGatewayOptions). Without it there is nothing to deploy with, and taking the "
                 + "gates first would lock another agent out of a run that cannot happen. NO GATE WAS TAKEN.");
             return BatchExit.Unusable;
+        }
+
+        // 🔴 WHERE THE MIRROR'S WIDTH CAME FROM, ON EVERY RUN. `BatchPlanner.Describe` carries this line
+        // too, but `run` only prints that report when the plan FAILED — so on the path that actually
+        // deploys, the provenance of the number the map was allocated against would otherwise appear
+        // nowhere at all. That is precisely the state this item exists to end.
+        if (batch.ServedArea is { } servedArea)
+        {
+            output.WriteLine("  width     " + servedArea.Denominator);
+
+            if (servedArea.Derived)
+            {
+                output.WriteLine("            ^ read from the program CORPUS, not the controller. It cannot see whether the block");
+                output.WriteLine("              it read is the block running on the CPU — agreement with the STAGED program is the");
+                output.WriteLine("              whole of the claim, and the 1024-register widening was proven by probing the device.");
+            }
         }
 
         // 🔴 *** THE PARITY CHECK, RUN ON THE CORPUS ACTUALLY IN FRONT OF IT. ***
@@ -487,10 +536,31 @@ public static class BatchCli
         };
     }
 
-    private static int Plan(LaneQueue store, TextWriter output, Func<string, string> readFile, Action<string, string> writeFile, string? outPath)
+    /// <summary>
+    /// 🔴 <b><c>--converter</c> is what turns the width from AUTHORED into DERIVED here.</b> Without it
+    /// the plan still runs and still says, on its own report, that the width was declared and nothing
+    /// corroborated it — which is the state every plan was in before 2026-08-23. It is not defaulted to
+    /// <c>"converter"</c> the way <c>run</c> does, because <c>plan</c> starts no process today and
+    /// acquiring that behaviour by default would surprise every existing caller; asking for it is one
+    /// flag, and the report names the flag by naming what was not done.
+    /// </summary>
+    private static int Plan(
+        LaneQueue store, TextWriter output, Func<string, string> readFile, Action<string, string> writeFile,
+        string? outPath, string? converterExe, IProcessRunner? runner)
     {
         var lanes = store.All();
-        var result = BatchPlanner.Plan(lanes, readFile);
+
+        var served = converterExe is not null && runner is not null
+            ? ServedAreaProbe.Derive(
+                converterExe,
+                lanes.SelectMany(l => l.ProgramPaths).Distinct(StringComparer.OrdinalIgnoreCase).ToList(),
+                runner)
+            : ServedAreaFact.NotDerived(
+                "`plan` was given no --converter <exe>, so the program corpus was not read and the served width "
+                + "was not established. The width below is DECLARED, not derived. Pass --converter to check it "
+                + "against the MB_SERVER call that serves it.");
+
+        var result = BatchPlanner.Plan(lanes, readFile, served);
 
         output.Write(BatchPlanner.Describe(result));
 

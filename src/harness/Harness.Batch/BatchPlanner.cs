@@ -19,7 +19,14 @@ public sealed record BatchPlanResult(
     IReadOnlyList<string> ProgramPaths,
 
     /// <summary>Whether every deployed code block is in the scan - or that it could not be determined.</summary>
-    ReachabilityReport? Reachability = null)
+    ReachabilityReport? Reachability = null,
+
+    /// <summary>
+    /// What the PROGRAM says the Modbus server serves, against which the authored <c>declaredRegisters</c>
+    /// was checked — or the reason nothing was derived. Never null on a returned result: "not asked" is
+    /// itself a state, and one the report has to print.
+    /// </summary>
+    ServedAreaFact? ServedArea = null)
 {
     public bool Planned => Refusals.Count == 0 && MergedBindingJson is not null;
 }
@@ -53,10 +60,15 @@ public static class BatchPlanner
         DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
     };
 
-    public static BatchPlanResult Plan(IReadOnlyList<Lane> lanes, Func<string, string> readFile)
+    public static BatchPlanResult Plan(
+        IReadOnlyList<Lane> lanes, Func<string, string> readFile, ServedAreaFact? servedArea = null)
     {
         ArgumentNullException.ThrowIfNull(lanes);
         ArgumentNullException.ThrowIfNull(readFile);
+
+        // "Nobody asked" is a state and it is carried, not defaulted away. A result whose ServedArea is
+        // silently null reads, on every surface that prints it, exactly like one where the check ran.
+        var served = servedArea ?? ServedAreaFact.NotAsked;
 
         var refusals = new List<string>();
 
@@ -66,7 +78,7 @@ public static class BatchPlanner
         {
             return new BatchPlanResult(0, Array.Empty<string>(),
                 new[] { "NOTHING BATCHED: the queue is empty. That is not a clean batch, it is a batch of nothing — and a deployment built from it would test nothing while reporting a success." },
-                null, null, Array.Empty<string>());
+                null, null, Array.Empty<string>(), null, served);
         }
 
         var documents = new List<(Lane Lane, BindingDocument Binding)>();
@@ -85,7 +97,7 @@ public static class BatchPlanner
         }
 
         if (refusals.Count > 0)
-            return new BatchPlanResult(lanes.Count, Array.Empty<string>(), refusals, null, null, Array.Empty<string>());
+            return new BatchPlanResult(lanes.Count, Array.Empty<string>(), refusals, null, null, Array.Empty<string>(), null, served);
 
         // ---- The geometry every lane has to agree on. -------------------------------------------
         //
@@ -167,7 +179,7 @@ public static class BatchPlanner
         refusals.AddRange(reachability.Refusals);
 
         if (refusals.Count > 0)
-            return new BatchPlanResult(lanes.Count, Array.Empty<string>(), refusals, null, null, programPaths);
+            return new BatchPlanResult(lanes.Count, Array.Empty<string>(), refusals, null, null, programPaths, null, served);
 
         // ---- Does the merged map fit what Modbus can reach? -------------------------------------
         var first = documents[0].Binding;
@@ -176,13 +188,87 @@ public static class BatchPlanner
                 .Select(s => new SlotRequest(s.SlotId!, Math.Max(1, VectorRegistersOf(s)), Math.Max(1, ResultRegistersOf(s)))))
             .ToArray();
 
-        if (first.DeclaredRegisters is not int declared)
+        // =========================================================================================
+        // 🔴 IS THE DECLARED WIDTH TRUE OF THE PROGRAM? (workbench Y2, 2026-08-23)
+        // =========================================================================================
+        //
+        // `declaredRegisters` was AUTHORED BY HAND, per lane, and required. It reaches
+        // MirrorGeometry, MapAllocator, RegisterMap.MapHash's canonical form (`declared=`) and
+        // therefore the build stamp — so the stamp DOES hash a declared width, and the gap is
+        // narrower than it looks. What nothing checked is whether the number is TRUE OF THE PROGRAM.
+        //
+        // The truth lives in the comms block, in two lines that can silently disagree: the readable
+        // `MB_HOLD_REG := P#M1000.0 WORD 37` and the sidecar constant backing it. `converter
+        // served-area` reads BOTH and refuses when they differ; here the result is compared against
+        // what the lanes declared.
+        //
+        // *** THE DERIVED VALUE NEVER SILENTLY REPLACES AN AUTHORED ONE. *** Where both exist and
+        // differ, this REFUSES naming both numbers and both sources. Substituting the derived one
+        // would make the authored field decorative and hide a real disagreement between the binding
+        // and the block; substituting the authored one would defeat the check outright. The authored
+        // field becomes OPTIONAL-AND-CHECKED — absent, the derived number stands; present, it must
+        // agree.
+        //
+        // 🔴 WHAT THIS CANNOT SEE: WHETHER THE BLOCK IT READ IS THE BLOCK ON THE CONTROLLER. The
+        // derivation reads the staged corpus, never the CPU. The mirror's widening to 1024 registers
+        // was established by probing the device from both sides, and nothing here substitutes for
+        // that. A corpus stale with respect to the rig derives a confident, agreed, WRONG number and
+        // is indistinguishable from a fresh one. The claim bought is strictly smaller and is printed
+        // as such: A BINDING CAN NO LONGER DISAGREE WITH THE PROGRAM THAT WAS STAGED.
+        //
+        // A producer REFUSAL gates — that is a defect in the thing about to be deployed. Being unable
+        // to CONSULT the producer does not: the same trade ReachabilityParity already makes, said out
+        // loud on the report rather than swallowed.
+        refusals.AddRange(served.Refusals.Select(r =>
+            "the served area could not be derived from the program corpus, and a width nothing corroborates is exactly "
+            + "what this check exists to stop: " + r));
+
+        var authored = first.DeclaredRegisters;
+        var declaringLanes = string.Join(", ", documents
+            .Where(d => d.Binding.DeclaredRegisters is not null)
+            .Select(d => $"'{d.Lane.Name}' ({d.Lane.BindingPath})"));
+
+        if (served.Derived && authored is int stated && stated != served.Registers)
         {
-            refusals.Add("no lane states `declaredRegisters`, so the merged map cannot be checked against what a Modbus client can reach. It is required per lane.");
-            return new BatchPlanResult(lanes.Count, Array.Empty<string>(), refusals, null, null, programPaths);
+            refusals.Add(
+                $"the batch declares `declaredRegisters` {stated} but the program serves {served.Registers}. "
+                + $"The {stated} is AUTHORED, in the binding(s) of {declaringLanes}; the {served.Registers} is "
+                + $"DERIVED — {served.Denominator}. Neither is substituted for the other: a map allocated against a "
+                + "width the MB_SERVER call does not serve fits on paper and faults on the wire, and a map allocated "
+                + "against a corpus the binding disagrees with hides which of the two is stale. Reconcile them.");
         }
 
-        var geometry = MirrorGeometry.ForCpu1214C(first.RetentiveBytes ?? 256, first.BaseByte ?? 1000, declared);
+        if (served.Derived && first.BaseByte is int statedBase && statedBase != served.BaseByte)
+        {
+            refusals.Add(
+                $"the batch declares `baseByte` {statedBase} but the program serves its holding registers from "
+                + $"%M{served.BaseByte} — {served.Denominator}. The mirror would be written at one address and served "
+                + "from another, and every register a client read would be off by the difference.");
+        }
+
+        // Optional-and-checked. Absent, the derived number stands — it is the only one in the
+        // transaction that came from the program. Absent AND underived is still a refusal: the
+        // derivation is a check on the authored value, never a licence to stop stating one when
+        // nobody looked.
+        if (authored is not int declared)
+        {
+            if (!served.Derived)
+            {
+                refusals.Add("no lane states `declaredRegisters`, so the merged map cannot be checked against what a Modbus client can reach. It is required per lane."
+                    + " Nor could it be derived from the program: " + served.Denominator);
+                return new BatchPlanResult(lanes.Count, Array.Empty<string>(), refusals, null, null, programPaths, null, served);
+            }
+
+            declared = served.Registers;
+        }
+
+        if (refusals.Count > 0)
+            return new BatchPlanResult(lanes.Count, Array.Empty<string>(), refusals, null, null, programPaths, null, served);
+
+        // The 1000 fallback is unchanged and deliberately kept: a derived base of 0 means NOT DERIVED,
+        // and letting that stand in for an unstated one would move the whole mirror to %M0.
+        var geometry = MirrorGeometry.ForCpu1214C(
+            first.RetentiveBytes ?? 256, first.BaseByte ?? (served.Derived ? served.BaseByte : 1000), declared);
 
         // 🔴 THE NEIGHBOURS, IF THE LANE DECLARED ANY — and this is the wiring that makes the guard bite.
         //
@@ -218,7 +304,7 @@ public static class BatchPlanner
             // Refused, never truncated. Dropping the lanes that do not fit would produce a batch that
             // runs and a set of lanes that silently did not.
             refusals.AddRange(map.Refusals.Select(r => "the merged map does not fit: " + r));
-            return new BatchPlanResult(lanes.Count, Array.Empty<string>(), refusals, null, null, programPaths);
+            return new BatchPlanResult(lanes.Count, Array.Empty<string>(), refusals, null, null, programPaths, null, served);
         }
 
         var merged = MergeBindings(documents.Select(d => d.Binding).ToList(), reserved);
@@ -230,7 +316,8 @@ public static class BatchPlanner
             merged,
             map.Map,
             programPaths,
-            reachability);
+            reachability,
+            served);
     }
 
     /// <summary>
@@ -376,6 +463,24 @@ public static class BatchPlanner
         // as "checked and fine" — which is exactly how an uncalled slot FC reached a controller.
         if (result.Reachability is { } reach)
             sb.Append("  scan      ").Append(reach.Summary).Append('\n');
+
+        // 🔴 THE WIDTH'S PROVENANCE, ON EVERY PLAN. Either it was read off the block that serves it —
+        // both homes of the number, named by line — or it was DECLARED and nothing corroborated it. The
+        // second is the state the pipeline was in until 2026-08-23, and it must not print as a green.
+        if (result.ServedArea is { } served)
+        {
+            sb.Append("  width     ").Append(served.Denominator).Append('\n');
+
+            // The claim, bounded where the reader meets it. A derived width says the binding agrees with
+            // the program that was STAGED; it says nothing about the CPU, which is a different question
+            // answered only by probing the device.
+            if (served.Derived)
+            {
+                sb.Append("            ^ read from the program CORPUS, not the controller — it cannot see whether the\n");
+                sb.Append("              block it read is the block running on the CPU. Agreement with the STAGED program\n");
+                sb.Append("              is the whole of the claim.\n");
+            }
+        }
 
         foreach (var refusal in result.Refusals)
             sb.Append("  REFUSED  ").Append(refusal).Append('\n');
