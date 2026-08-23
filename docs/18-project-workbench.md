@@ -1,8 +1,10 @@
 # 18 — The Project Workbench: a block-centric workflow (v2)
 
 **Status (2026-08-23): PARTLY ADOPTED AND BEING BUILT — no longer a whole-cloth proposal.** Phases 1,
-2, 3 and 10 are delivered against a real rig; Phase 4 has been **redefined** (see §5) and Phase 5 is
-**not executable as written** (see §5). The rest is still proposal.
+2, 3 and 10 are delivered against a real rig; Phase 4 has been **redefined** (see §5) and Phase 5 has
+been **measured and redirected** — kept, but as a design-loop instrument rather than a pre-filter
+before the rig (see §5, and `docs/notes/preflight-interpreter-classification.md` for the counts). The
+rest is still proposal.
 
 🔴 **This line read "Not adopted" until 2026-08-23, with four phases marked delivered inside the same
 document.** A reader who trusted the header would have discounted the whole page, including the parts
@@ -247,6 +249,42 @@ cannot — and a single NOT CHECKED already makes the submission NOT ADMISSIBLE.
 outcome by a different door, not an escape route**, and that claim is asserted by a test rather than
 left as prose.
 
+### 3.6 The solution boundary — ✅ **RULED 2026-08-23: `src/harness` MAY reference `src/converter`**
+
+**Owner ruling, 2026-08-23.** `src/harness` may take a project reference on `src/converter`. This is
+recorded here because **this is where a future reader meets the constraint** — the property itself
+lives in `src/harness/Directory.Build.props`, whose comment presents dependency-freedom as deliberate
+and gives no hint that any part of it has been relaxed.
+
+🔴 **THE RULING COVERS THE CONVERTER ONLY. IT DOES NOT GENERALISE, AND THE ADJACENT PRECEDENT STILL
+STANDS.** §5 Phase 1's row 1.3 records a **verified zero project references between `src/harness` and
+`src/wave-control`**, settled as **a file contract, not a project reference** — parse
+`reachable-state.json` and the conflict-graph document in-harness. **That decision is untouched.**
+Two different boundaries, two different answers, and the reason they differ is not arbitrary: the
+converter is the **single** IR parser this project has, and referencing it *removes* a parallel
+implementation; `wave-control`'s composers are producers whose outputs are already documents, and
+referencing them would *add* coupling to buy nothing. **Do not read the converter ruling as a general
+licence for the harness to reference whatever it likes.**
+
+**What the ruling unblocks.** Phase 5's stated blocker — *"extend the interpreter to real block IR
+means a second IR parser inside a deliberately dependency-free solution"* — was a choice between two
+things this project rejects on sight. It is now a choice between one of them and a project reference.
+That does not decide Phase 5; it removes the reason Phase 5 was *not executable as written*.
+
+**The cost the ruling accepts, stated up front rather than discovered later:**
+
+- **It couples harness builds to the converter's**, so **FI-73's Release-staleness class gets a new
+  home**. FI-73 is the day of converter fixes that reached no agent because only Debug was rebuilt; the
+  same shape now becomes available to the harness, which until this ruling could not have it.
+  `dotnet build -c Release src/converter/converter.sln` after any converter change was already the
+  rule; it now has a second reason.
+- **It does NOT touch the TIA Openness `(Path, FileHash)` re-approval cycle.** `Directory.Build.props`'s
+  comment names that cycle as a benefit of dependency-freedom, and on that specific point the comment's
+  conclusion survives its premise: **the converter has no TIA whitelist and never contacts Portal**, so
+  a harness that references it still triggers no approval. Only a `Siemens.Engineering` dependency
+  would, and none is being added.
+- **It does not change the harness's `net8.0` target**, which the converter shares.
+
 ---
 
 ## 4. Getting to ~20 minutes
@@ -314,11 +352,24 @@ Two things below are wrong, and one of them is the word *"roughly nothing"*.
   only, resolves addresses in `%M` and nothing else, and has no notion of a DB, a UDT, an FB instance, a
   timer or an interface parameter. A deliverable block uses all of those. Reaching it means an IR parser
   plus LAD execution semantics written a **second** time — inside a solution that is dependency-free on
-  purpose.
+  purpose. *(⚠️ The "second time" half is now avoidable: the owner ruled 2026-08-23 that `src/harness`
+  may reference `src/converter` — §3.6. The **cost** half of the sentence stands; the **impossibility**
+  half does not.)*
 - **Three of the four catches listed are already covered**, by producers with names: unwired ports and
   disarmed logic by `undriven-scan`, an unreachable step by `cross-check`'s `REACHABILITY:` line. Only
   **a wrong comparison sense** is genuinely uncovered — and an interpreter catches that only *given a
   vector and a plant model to run the block against*, which is not a pre-filter, it is an emulator.
+
+🔴 **AND THE THIRD THING WRONG IS THE FRAME, WHICH THE MEASUREMENT FOUND AND THESE TWO BULLETS DID
+NOT: this section places the interpreter BEFORE THE RIG CYCLE, and that is the placement the evidence
+does not support.** Of 37 non-Pass rig verdicts, **2 were defects in the block** and both are already
+caught by C-410; the other 35 were instrument, declaration, model or deployment faults, which no
+reading of the block's IR can see. The 17-row bucket that *does* justify an interpreter sits in the
+**design and review loop**, before a harness or a binding exists. Counts, rubric, controls and the
+three limits that travel with them:
+`docs/notes/preflight-interpreter-classification.md`. The redirect is recorded in §5 Phase 5.
+**The last bullet above was closer to right than it knew** — *"not a pre-filter, it is an emulator"*
+is the same finding arriving from the other side.
 
 *The paragraph below is retained as written because the argument it makes about the LIMIT is still
 exactly right, and is the part worth keeping.*
@@ -372,7 +423,7 @@ refusals only become load-bearing once the values are actually recomputed.
 |---|---|---|---|
 | 1.1 | `map` is attributed, not computed | recompute from the binding, **compare**, refuse on mismatch | `MirrorObservability.FromBindings` already exists and is what the loop uses |
 | 1.2 | `runtimeCompression` has **no producer artifact anywhere** | compute via `TimeCompression.Plan` from the attributed `blockCompression`; factor 1 with no declared bounds is trivially computed; **> 1 with no bounds is a refusal** | measured on a real job — 4 of 5 fields attributed, this one had nothing on disk |
-| 1.3 | the storage and conflict composers are across a solution boundary | **file contract, not a project reference** — parse `reachable-state.json` and the conflict-graph document in-harness | verified: **zero** project references between `src/harness` and `src/wave-control`, and the harness is deliberately dependency-free |
+| 1.3 | the storage and conflict composers are across a solution boundary | **file contract, not a project reference** — parse `reachable-state.json` and the conflict-graph document in-harness | verified: **zero** project references between `src/harness` and `src/wave-control`, and the harness is deliberately dependency-free. ⚠️ **STILL TRUE OF `wave-control` after the 2026-08-23 ruling** — that ruling covers **`src/converter` only** (§3.6); this row is not superseded by it |
 | 1.4 | the artifact hash is over text-as-read | hash **bytes**, via an optional byte reader; the text path stays as a documented fallback | current limit is recorded in `DerivationHash` |
 | 1.5 | pointing the tool at the **wrong artifact** is possible | **kind validation** — each producer declares what its artifact must parse as, and an artifact that is itself a *"not computed"* report is refused | 🔴 measured on a real job: the conflict-graph artifact **was** a `notComputed` report while the submission carried `conflictEdges` anyway |
 
@@ -527,30 +578,56 @@ hand-built shell plus a hand-built slot FC. Three lanes is an OUTCOME of this ph
 
 ---
 
-### Phase 5 — Pre-flight interpreter · **P1** · *biggest lever on iteration count*
+### Phase 5 — ~~Pre-flight interpreter~~ → **the interpreter, REDIRECTED** · **P1** · *measured 2026-08-23*
 
-🔴 **NOT EXECUTABLE AS WRITTEN — established 2026-08-23 by reading the code, and the one-line plan
-below hides a large decision.** `Harness.Skeleton/LadInterpreter.cs` is a **regex interpreter over the
-text the harness's own generators emit**, and `Harness.Skeleton.csproj` references only `Harness.Map`
-and `Harness.Wire`; `src/harness/Directory.Build.props` keeps the whole solution converter-free ON
-PURPOSE. So *"extend it to the block-under-test's IR subset"* means either **a second IR parser inside
-the harness** — the parallel implementation this project rejects on sight — or crossing a solution
-boundary nobody has ruled on.
+🔴 **THE PHASE IS NOT STRUCK. ITS STATED PURPOSE IS.** The measurement this phase demanded before any
+build has now been taken — full record, rubric, controls and limits in
+`docs/notes/preflight-interpreter-classification.md`. **93 rows classified of 115 recorded: A = 10
+(11%), B = 17 (18%), C = 0, D = 56 (60%), U = 10 (11%).** Bucket B — *only an interpreter would catch
+this* — is **not** small, so the "then it is not worth a second IR parser" branch does not fire.
 
-⚠️ **And the cheap decisive measurement has never been taken.** Much of §4.4's claimed catch-list
-(unwired ports, disarmed logic, an unreachable step) is already covered by `converter preflight`,
-`undriven-scan`, `candidate-scan` and review rule C-410. **Do the measurement before the build:** take
-the failures from the last N rig cycles (`docs/notes/hammer-campaign-results.md`'s 42 defects, the
-fix-wave record, `docs/notes/mechanisation-backlog.md`) and classify each as *an existing PC-side
-check would have caught this* / *only an interpreter would* / *only the rig would*. **If the middle
-bucket is small, Phase 5 is not worth a second IR parser.** That is one session's work and it decides
-a large one.
+**But the evidence splits by WHERE the interpreter is placed, and it splits hard.**
 
-The original plan, retained: 🔨 Extend `Harness.Skeleton/LadInterpreter.cs` to the block-under-test's
-IR subset (§4.4). The 20-minute target rests on iteration count, and this is the only item that
-attacks it directly. **Its limit is not negotiable and is restated wherever it is offered:** not a CPU
-model, green there is never evidence about a 1214C, and it is a pre-filter — never a substitute for
-the rig.
+- **As a pre-filter before a rig cycle — what §4.4 and the struck plan below describe — the evidence
+  is WEAK.** Of the rig corpus's **37 non-Pass verdicts** (59 verdicts across 27 result packages; the
+  22 Passes are the remainder, so 37 is the whole non-Pass set, not a sample), **only 2 were defects in
+  the block under test — and both are already caught by `converter review` C-410**
+  (`docs/06-lad-conventions.md:515`). The other 35 were instrument, declaration, model or deployment
+  problems. An interpreter sitting in front of the rig filters almost nothing, **because almost nothing
+  that fails on the rig is the block.**
+- **As an instrument in the DESIGN AND REVIEW loop — evaluating a block against the specification's
+  assertions before any harness, binding, slot or download exists — the evidence is STRONG.** **17 of
+  the 56 block-defect rows**, today caught only by fresh-context adversarial review: expensive,
+  correlated with the coder that produced the block, human, and demonstrably incomplete.
+
+**So the redirect is: build it for the design loop, not for the rig queue.** Its output there is one
+verdict per assertion, not the 601 facts `cross-check` emits on this corpus — which is the second
+reason the design loop is the right home.
+
+🔴 **Three limits that travel with the number, and must not be dropped when it is quoted:**
+
+- **C = 0 is STRUCTURAL, not evidential.** The delivered plant program has never been executed, so the
+  register *cannot* contain a "only the controller would have caught this" row. **Some B rows will turn
+  out to be C rows**, so 17 is an upper bound on what an interpreter catches.
+- **Every B row needs a vector, and vector supply is the measured bottleneck** — 2 of 96 and 3 of 96
+  assertions covered on the two blocks that have run a wave. **An interpreter with no vectors catches
+  nothing.** Funding this without funding the enumeration→vector path buys an instrument nothing feeds.
+- **The load-bearing element is a JUDGEMENT, and it is recorded as one.** 8 of the 10 bucket-A rows
+  follow the cheap proven pattern *found once expensively → mechanised as a converter or review rule*.
+  The assessment is that the 17 B rows do **not** cluster into two or three such rules — **an
+  assessment, not a fact.** If they do, write the rules and do not build the interpreter. Reverse this
+  by producing the rule specifications, not by re-reading the note.
+
+**The solution-boundary blocker is CLEARED (owner ruling, 2026-08-23) — see §3.6.** `src/harness` may
+take a project reference on `src/converter`, so *"a second IR parser inside the harness"* is no longer
+the only route and is no longer the plan.
+
+The original plan, struck as a pre-filter and retained for its limit clause: ~~🔨 Extend
+`Harness.Skeleton/LadInterpreter.cs` to the block-under-test's IR subset (§4.4) as a seconds-long pass
+before the rig cycle.~~ **Its limit is not negotiable and is restated wherever it is offered:** not a
+CPU model, green there is never evidence about a 1214C, and it is a pre-filter — never a substitute for
+the rig. That clause survives the redirect unchanged, and matters *more* in the design loop, where
+there is no rig immediately downstream to contradict a wrong green.
 
 ---
 
@@ -837,6 +914,23 @@ opinion.** That single sentence is why §3 is the most valuable part of this des
 
 ## 8. Change log
 
+- **v3.1 — 2026-08-23.** **PHASE 5's DECIDING MEASUREMENT TAKEN, AND THE PHASE REDIRECTED RATHER THAN
+  STRUCK.** 93 rows classified of 115 recorded — **A 10 / B 17 / C 0 / D 56 / U 10** — full record in
+  `docs/notes/preflight-interpreter-classification.md`. 🔴 **The rubric turned out to be the finding:**
+  the three buckets this document commissioned have no bucket for *"not a defect in the block at all"*,
+  so all **56** such rows would have been forced into *only the rig would* and the study would have
+  argued for more rig time on the strength of our own instruments' bugs. **2 of 37 non-Pass rig
+  verdicts were block defects and both are already caught by C-410**, which kills the pre-filter
+  placement §4.4 describes; **17 of 56 register rows** justify the interpreter in the **design and
+  review loop** instead. Three limits recorded beside the number and not detachable from it: **C = 0 is
+  structural** (the plant program has never run, so a C row could not exist); **an interpreter with no
+  vectors catches nothing** (2 of 96 and 3 of 96 assertions covered on the two blocks that ran); and
+  **whether the 17 mechanise into two or three converter rules is a JUDGEMENT**, which is the
+  load-bearing element of the whole recommendation and is labelled as one. Also **§3.6 added**: the
+  owner ruled `src/harness` MAY reference `src/converter` — **converter only**, with §5 Phase 1's
+  `wave-control` file-contract precedent explicitly not generalised, and the accepted cost (FI-73's
+  Release-staleness class gains a new home; the TIA `(Path, FileHash)` cycle is untouched) stated in
+  the ruling rather than left to be met later.
 - **v3 — 2026-08-23.** **PHASE 4 DELIVERED, AND REDEFINED FROM WHAT §5 ORIGINALLY SAID IT WAS.** The
   "workbench spine" is argued down in this document's own terms and **4.4's `writes:` list is struck**
   (§3.1 forbids a hand-authored derivable field, and `cross-check` / `reachable-state` already compute

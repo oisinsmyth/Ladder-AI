@@ -46,12 +46,28 @@ real jobs, which the suspension notice explicitly leaves running.
 - **THE BRANCH IS RECONCILED WITH `master`** (merge `4f9c428`, 0 behind). It had been 45 behind with
   concurrent commits in **all three `Diff/*` and all three `CrossCheck/*` files** — the subsystems Phase 4
   rewrote. Suites after: converter **1,539**, harness **2,438**, openness-cli **832**.
-- **Phase 5 — IN PROGRESS**, *"Pre-flight, measured"*. Done: **X3** the scan period (`c06aa05`), **X2**
-  the union check run over the union (`6777724`). Open: **X1** the five-bucket classification, **X2b** the
-  manifest's block-under-test role, **X4** the interpreter question, **X5** stale lines (this edit).
-  🔴 **Phase 5 redefined docs/18's own Phase 5**, which is not executable as written — extending the
-  harness's regex interpreter to real block IR means a second IR parser inside a deliberately
-  dependency-free solution. The measurement decides whether anything more is owed.
+- **Phase 5 — ALL ITEMS DONE**, *"Pre-flight, measured"*. **X3** the scan period (`c06aa05`) · **X2** the
+  union check run over the union (`6777724`) · **X5** stale lines + the C1 permission (`0a7ce43`) ·
+  **X2b** the manifest names the block under test (`cdb37f7`) · **X1** the five-bucket classification and
+  **X4** the interpreter question (this edit — `docs/notes/preflight-interpreter-classification.md`,
+  `docs/18` §4.4 + §5 Phase 5). **Both owner questions ruled: C1** — the classification's counts may be
+  committed, **aggregates only**, the per-row table stays in the job folder (`docs/13-data-boundary.md`,
+  2026-08-23 entry); **C2** — `src/harness` **may** take a project reference on `src/converter`
+  (`docs/18` §3.6), which clears the "second IR parser" blocker the phase was named after.
+  **X1's result: 93 classified of 115 — A 10 / B 17 / C 0 / D 56 / U 10.** 🔴 **The rubric was the
+  finding:** the three buckets docs/18 asked for have no bucket for *"not a defect in the block"*, so
+  **56** rows would have been forced into *only the rig would* and the study would have argued for more
+  rig time on the strength of our own instruments' bugs. **X4's ruling: Phase 5 is REDIRECTED, not
+  struck** — weak as a pre-filter before the rig (2 of 37 non-Pass verdicts were block defects, both
+  already caught by C-410), strong in the design and review loop (17 of 56).
+  **What remains — and none of it is a Phase 5 item:** the interpreter itself is **not built**, and
+  three things bound whether it should be. (a) **C = 0 is structural** — the plant program has never
+  run, so some B rows are C rows in disguise and 17 is an upper bound. (b) **Vector supply gates the
+  whole benefit** — 2 of 96 and 3 of 96 assertions covered on the two blocks that have run a wave; an
+  interpreter with no vectors catches nothing, so this competes with, and does not substitute for, the
+  enumeration→vector path. (c) 🔴 **The load-bearing element is a JUDGEMENT** — that the 17 B rows do
+  **not** collapse into two or three converter rules the way 8 of the 10 A rows did. **Nobody has tried
+  to write those rules.** That attempt, not more classification, is what would reverse the decision.
 - **Owner rulings recorded 2026-08-23** (commit `b7dc407`): `src/harness/` is PC-side tooling under hard
   rule 8; `Main`'s write-path deferral is LIFTED; the stimulus-shell generator may be ported,
   mechanism-only. Plus **FI-65: reading (b) — the integration/union compile is the gate — and the
