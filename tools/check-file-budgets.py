@@ -69,8 +69,17 @@ BUDGETS = [
     (".claude/skills/enumerate-assertions/SKILL.md", 19968),
     (".claude/skills/explain-plc-block/SKILL.md", 6656),
     (".claude/skills/gen-architecture/SKILL.md", 24064),
-    (".claude/skills/gen-block-modify-fix/SKILL.md", 11264),
-    (".claude/skills/gen-block-modify-purpose/SKILL.md", 10752),
+    # Raised 11264 -> 11776 and 10752 -> 11264 on 2026-08-23. NOT earned by new content — earned by
+    # the gate having drifted into the state this table's own header warns about. The two files sat at
+    # 42 and *** FIVE *** bytes of headroom after the `converter diff --insert` routing rules landed in
+    # each of them (W2, `2c5eab9`). The header says a first pass left one file 20 bytes under its
+    # ceiling "where a typo fix would have failed the gate", and that "a gate that cries wolf on trivial
+    # edits is one people learn to bypass". Five bytes is well past that line: correcting a typo in
+    # either skill would have failed the build, and the reflex that teaches is `--no-verify`.
+    # This is the ONE case where raising a ceiling protects the gate instead of eroding it. Both now
+    # sit at the documented 256-byte slack floor or better (~517 and ~554 bytes).
+    (".claude/skills/gen-block-modify-fix/SKILL.md", 11776),
+    (".claude/skills/gen-block-modify-purpose/SKILL.md", 11264),
     (".claude/skills/gen-block-new/SKILL.md", 19968),
     (".claude/skills/gen-code-structure/SKILL.md", 16896),
     (".claude/skills/gen-equipment-spec/SKILL.md", 19456),
