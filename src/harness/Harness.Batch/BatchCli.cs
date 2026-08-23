@@ -64,6 +64,7 @@ public static class BatchCli
         string? queue = null, lane = null, binding = null, submission = null, outPath = null, purpose = null;
         string? merged = null, staging = null, leases = null, holder = null, portalProject = null;
         string? portalEvidence = null, rig = null, converterExe = null, harnessRunExe = null, allowlist = null;
+        string? opennessCliExe = null;
         int holderPid = 0, rigPort = 503, rigUnit = 1, ttlMinutes = 60;
         var settleSeconds = -1;   // -1 = not stated, use the default
         string? attestation = null;
@@ -94,6 +95,7 @@ public static class BatchCli
                 case "--rig": rig = Next(args, ref i); break;
                 case "--converter": converterExe = Next(args, ref i); break;
                 case "--harness-run": harnessRunExe = Next(args, ref i); break;
+                case "--openness-cli": opennessCliExe = Next(args, ref i); break;
                 case "--allowlist": allowlist = Next(args, ref i); break;
                 // Read by Program.cs, which builds the gateway and generates the copy layer in-process.
                 // They still have to be ACCEPTED here or the parser's unknown-argument arm rejects them —
@@ -139,7 +141,7 @@ public static class BatchCli
             _ => Run(store, output, readFile, runner, deploy, new RunArgs(
                 merged, staging, leases, holder, holderPid, portalProject, portalEvidence,
                 rig, rigPort, rigUnit, converterExe, harnessRunExe, allowlist, ttlMinutes, confirmed, attestation,
-                settleSeconds)),
+                settleSeconds, opennessCliExe)),
         };
     }
 
@@ -147,7 +149,7 @@ public static class BatchCli
         string? Merged, string? Staging, string? Leases, string? Holder, int HolderPid,
         string? PortalProject, string? PortalEvidence, string? Rig, int RigPort, int RigUnit,
         string? ConverterExe, string? HarnessRunExe, string? Allowlist, int TtlMinutes, bool Confirmed,
-        string? PortalAttestation, int SettleSeconds);
+        string? PortalAttestation, int SettleSeconds, string? OpennessCliExe);
 
     /// <summary>
     /// 🔴 <b><c>--yes</c> is required, and without it Portal is NEVER CONTACTED.</b>
@@ -190,6 +192,7 @@ public static class BatchCli
         var options = new BatchRunOptions(
             ConverterExe: args.ConverterExe ?? "converter",
             HarnessRunExe: args.HarnessRunExe ?? "harness-run",
+            OpennessCliExe: args.OpennessCliExe ?? "openness-cli",
             LeasesDirectory: args.Leases ?? string.Empty,
             PortalProject: args.PortalProject ?? string.Empty,
             RigAddress: args.Rig ?? string.Empty,
@@ -204,7 +207,11 @@ public static class BatchCli
             LeaseTtlMinutes: args.TtlMinutes,
             PortalAttestation: args.PortalAttestation);
 
-        var plan = BatchRunPlan.For(batch, lanes, options);
+        var plan = BatchRunPlan.For(batch, lanes, options with
+        {
+            UnionIrDirectory = MaterialiseUnionIr(batch.ProgramPaths, args.Staging, output),
+            ProjectExportDirectory = string.IsNullOrWhiteSpace(args.Staging) ? null : Path.Combine(args.Staging!, "project-xml"),
+        });
 
         output.WriteLine($"lanes {lanes.Count}: {string.Join(", ", batch.LanesBatched)}");
         output.WriteLine();
@@ -273,6 +280,51 @@ public static class BatchCli
     /// Zero is meaningful for <c>--settle-seconds</c> — it disables the wait — and meaningless for a
     /// port or a TTL, so it is opted into rather than allowed everywhere.
     /// </param>
+    /// <summary>
+    /// Copy the lanes' program IR into one directory so <c>drift-check</c> has a <c>--project</c> to
+    /// point at. Basename collisions were already refused at plan time, so a clash here would be a bug.
+    ///
+    /// <para>Returns null when there is nowhere to put it — and the plan then omits the drift steps and
+    /// says so, rather than proceeding as though the comparison had passed.</para>
+    /// </summary>
+    private static string? MaterialiseUnionIr(IReadOnlyList<string> programPaths, string? staging, TextWriter output)
+    {
+        if (string.IsNullOrWhiteSpace(staging))
+            return null;
+
+        var union = Path.Combine(staging, "union-ir");
+
+        try
+        {
+            if (Directory.Exists(union))
+                Directory.Delete(union, recursive: true);
+
+            Directory.CreateDirectory(union);
+
+            var copied = 0;
+            foreach (var file in programPaths.SelectMany(UnionFiles).Distinct(StringComparer.OrdinalIgnoreCase))
+            {
+                File.Copy(file, Path.Combine(union, Path.GetFileName(file)), overwrite: false);
+                copied++;
+            }
+
+            output.WriteLine($"  union     {copied} program file(s) staged at {union} for the drift check");
+            return union;
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        {
+            // Reported, and the drift steps are then omitted. A batch that silently skipped the check
+            // because a copy failed would be claiming a comparison it never made.
+            output.WriteLine($"  union     COULD NOT STAGE the program union, so the drift check will NOT run: {error.Message}");
+            return null;
+        }
+    }
+
+    private static IEnumerable<string> UnionFiles(string path) =>
+        File.Exists(path) ? new[] { path }
+        : Directory.Exists(path) ? Directory.EnumerateFiles(path, "*.ir", SearchOption.TopDirectoryOnly)
+        : Array.Empty<string>();
+
     private static bool Number(string[] args, ref int i, string flag, TextWriter output, out int value, bool allowZero = false)
     {
         if (int.TryParse(Next(args, ref i), out value) && (value > 0 || (allowZero && value == 0)))

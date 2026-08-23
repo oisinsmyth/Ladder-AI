@@ -1,4 +1,4 @@
-using Harness.Device;
+﻿using Harness.Device;
 
 namespace Harness.Batch;
 
@@ -7,6 +7,26 @@ public enum BatchStepKind
 {
     /// <summary><c>converter lease acquire</c>. Before anything touches Portal or the rig.</summary>
     LeaseAcquire,
+
+    /// <summary><c>openness-cli export-all</c>: what the project actually contains, for the drift check.</summary>
+    ExportAll,
+
+    /// <summary>
+    /// 🔴 <c>converter drift-check</c> — <b>does every object the lanes SUPPLIED still match what is in
+    /// the project?</b>
+    ///
+    /// <para>The build stamp is computed over the supplied program and means "what is executing". Nothing
+    /// verified that claim, and it was measured false: a lane supplied a <c>Main</c> that differed from
+    /// the one on the controller, so the stamp described a program nobody was running — and the block it
+    /// differed by was an uncalled slot FC whose whole lane then timed out.</para>
+    ///
+    /// <para>⚠️ <b>Deliberately WITHOUT <c>--complete</c>.</b> That flag declares the exports dir the whole
+    /// picture, and the union is a SUBSET of a ~119-object project, so it would report every unsupplied
+    /// object as "in the controller and no .ir describes it" — a hundred spurious findings that would get
+    /// the check switched off. The paired question is the right one here, and drift-check's own SCOPE line
+    /// says which question it answered.</para>
+    /// </summary>
+    DriftCheck,
 
     /// <summary><c>harness-run --generate-only --emit</c>: the merged copy layer, from the merged binding.</summary>
     Generate,
@@ -46,6 +66,7 @@ public sealed record BatchStep(BatchStepKind Kind, string Executable, IReadOnlyL
 public sealed record BatchRunOptions(
     string ConverterExe,
     string HarnessRunExe,
+    string OpennessCliExe,
     string LeasesDirectory,
     string PortalProject,
     string RigAddress,
@@ -77,7 +98,13 @@ public sealed record BatchRunOptions(
     int InertRetries = 12,
 
     /// <summary>Seconds between inert attempts. Roughly 200 scans at the measured 24.9 ms.</summary>
-    int InertRetryIntervalSeconds = 5);
+    int InertRetryIntervalSeconds = 5,
+
+    /// <summary>Where the union of the lanes' program IR was materialised, for the drift check.</summary>
+    string? UnionIrDirectory = null,
+
+    /// <summary>Where the project's own objects are exported to, for the drift check.</summary>
+    string? ProjectExportDirectory = null);
 
 /// <summary>The ordered steps of one batch run, or every reason there are none.</summary>
 public sealed record BatchRunPlan(IReadOnlyList<BatchStep> Steps, IReadOnlyList<string> Refusals)
@@ -163,6 +190,27 @@ public sealed record BatchRunPlan(IReadOnlyList<BatchStep> Steps, IReadOnlyList<
         // reached it" and sends a reader to re-download a device that is already correct. Being batched
         // must not change a lane's verdict, and this is what that costs.
         var programUnion = lanes.SelectMany(l => l.ProgramPaths).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+
+        // ---- 2a. DOES THE SUPPLIED PROGRAM STILL MATCH THE PROJECT? -----------------------------
+        //
+        // After the gates (this reads Portal) and before generation, because a stamp computed over a
+        // program that is not the one in the project describes nothing. Skipped only when the caller
+        // supplied nowhere to put the export or nothing to compare — and then the run SAYS so rather
+        // than passing quietly.
+        if (!string.IsNullOrWhiteSpace(options.UnionIrDirectory) && !string.IsNullOrWhiteSpace(options.ProjectExportDirectory))
+        {
+            steps.Add(new BatchStep(
+                BatchStepKind.ExportAll,
+                options.OpennessCliExe,
+                new[] { "export-all", options.PortalProject, "--out", options.ProjectExportDirectory! },
+                "export what the project actually contains, so the supplied program can be compared against it"));
+
+            steps.Add(new BatchStep(
+                BatchStepKind.DriftCheck,
+                options.ConverterExe,
+                new[] { "drift-check", "--project", options.UnionIrDirectory!, "--exports", options.ProjectExportDirectory! },
+                "every object the lanes supplied must match the project - the stamp claims it is what executes"));
+        }
 
         var generatorLane = lanes[0];
         var generateArgs = new List<string>

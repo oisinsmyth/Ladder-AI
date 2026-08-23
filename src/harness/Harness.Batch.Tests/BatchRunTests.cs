@@ -24,6 +24,7 @@ public class BatchRunTests
 
     private static BatchRunOptions Options() => new(
         ConverterExe: @"C:\bin\converter.exe",
+        OpennessCliExe: @"C:\bin\openness-cli.exe",
         HarnessRunExe: @"C:\bin\harness-run.exe",
         LeasesDirectory: @"C:\ProgramData\Ladder-AI\leases",
         PortalProject: @"C:\projects\Rig\Rig.ap20",

@@ -158,7 +158,12 @@ public sealed class BatchCliRunTests : IDisposable
 
         Assert.Equal(BatchExit.Ok, exit);
 
-        // 2 acquire + generate + 1 wave + 2 release. The deployment goes through the gateway, not the runner.
-        Assert.Equal(6, calls);
+        // 2 acquire + export-all + drift-check + generate + 1 wave + 2 release. The deployment goes
+        // through the gateway, not the runner, so it is not in this count.
+        //
+        // The drift pair is here because --staging is set: the run stages the program union and compares
+        // it against the project, since the build stamp claims the supplied program is what executes and
+        // nothing used to verify that.
+        Assert.Equal(8, calls);
     }
 }

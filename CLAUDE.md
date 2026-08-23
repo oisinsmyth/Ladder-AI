@@ -361,6 +361,31 @@ this project's most expensive failures have all been a green that examined nothi
   before this date is now INADMISSIBLE until it declares one** — that is deliberate, and it is the
   cheapest place to find out that a backstop was bounded by nothing.
 
+🔴 **"EMPTY IS NOT CLEAN" HAS A SIBLING: A CHECK CAN BE CLOSED (2026-08-23).** FI-44 covers the check
+that examined *nothing* and reported a pass, and the countermeasure is a denominator. **A CLOSED check
+is different and the denominator does not catch it: it examines something REAL that happens not to be
+the thing it claims**, so it is never empty, never silent, and looks healthiest exactly when it is
+wrong. The worked example is X-E's start echo. It reported `commanded, observed to run` for a slot
+whose FC **was called by nothing** — because both halves of the echo live in the COPY LAYER, which *is*
+called: the copy layer writes the block's start member and latches the echo from that same member a
+scan later, so **the loop closes without the block ever executing**. Every vector in that lane went
+TIMED-OUT and no artifact contradicted the echo — the load manifest said `Loaded`, which is true and is
+not "in the scan". Three more of the same shape, all measured the same week: a cross-process race that
+asserted *exactly one winner* and **passed against a deliberately non-atomic store over 96 contended
+launches** (it never asserted the mechanism, only the observable); `converter diff` matching networks
+by NUMBER, so an insertion reads as *"11 changed, 12 added"*; and a failure report taking a child's
+FIRST output line, which every tool here makes a banner. **THE TEST IS NOT "DID IT LOOK AT SOMETHING"
+BUT "WHAT COULD THIS CHECK NOT POSSIBLY SEE" — and if the answer is the failure you care about, the fix
+is to move the question somewhere it is answerable, not to strengthen the check.** The echo was
+answered by a STATIC reachability refusal at batch-plan time (`Harness.Batch/Reachability.cs`), because
+no runtime signal inside the copy layer can ever see past it. ⚠️ **Two adjacent rules, since the same
+week produced both:** where a test SUBSTITUTES a collaborator, assert on what CROSSES the seam — a fake
+that ignores its argument leaves that argument unverified, which is how a deployment was handed an
+empty object list through a green suite. And when you write a SECOND derivation of an existing rule,
+the pinning test belongs in the same commit as the copy, not after it drifts (`GateParityTests` exists
+because two derivations once disagreed on twelve gate inputs; a batch planner then re-derived slot width
+and was short by the latch registers).
+
 🔴 **Two traps that have each cost a day:**
 
 - ***`--claims <dir>` MUST BE SHARED BY EVERY AGENT ON THE PROJECT.*** Agents work in separate

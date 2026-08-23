@@ -284,6 +284,31 @@ public static class BatchRunner
                 _ => new StepReading(StepVerdict.NotProven, "nothing was decided: " + LastLines(result.StandardError, result.StandardOutput)),
             },
 
+            // export-all: 12 = ExportIncomplete — everything attempted worked and the dump is not whole,
+            // which is NOT a failure of the project and IS a reason the comparison below cannot be
+            // trusted. NotProven, so the run stops without accusing anything.
+            BatchStepKind.ExportAll => result.ExitCode switch
+            {
+                0 => new StepReading(StepVerdict.Ok, "the project's objects were exported."),
+                12 => new StepReading(StepVerdict.NotProven,
+                    "the export is INCOMPLETE, so a drift comparison against it would be over an unstated denominator: "
+                    + LastLines(result.StandardError, result.StandardOutput)),
+                _ => new StepReading(StepVerdict.Failed, "export failed: " + LastLines(result.StandardError, result.StandardOutput)),
+            },
+
+            // drift-check: 1 = something drifted. That is a REAL finding about the supplied program and
+            // it stops the batch — the stamp would otherwise describe a program the controller is not
+            // running, which is exactly the hole an uncalled slot FC hid in.
+            BatchStepKind.DriftCheck => result.ExitCode switch
+            {
+                0 => new StepReading(StepVerdict.Ok, "every supplied object matches the project."),
+                1 => new StepReading(StepVerdict.Failed,
+                    "SUPPLIED PROGRAM DOES NOT MATCH THE PROJECT, so the build stamp would describe something that is not "
+                    + "running: " + LastLines(result.StandardError, result.StandardOutput)),
+                _ => new StepReading(StepVerdict.NotProven,
+                    "the drift check could not run, so nothing was compared: " + LastLines(result.StandardError, result.StandardOutput)),
+            },
+
             // harness-run: Generated == Ran == 0, deliberately.
             BatchStepKind.Generate or BatchStepKind.Wave => result.ExitCode == 0
                 ? new StepReading(StepVerdict.Ok, "ran.")
