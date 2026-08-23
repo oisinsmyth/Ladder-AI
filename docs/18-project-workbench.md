@@ -412,9 +412,10 @@ dangerous instrument in the system.
 > Read the heading, not the number.
 >
 > ➜ **What is actually binding is not in this list. It is in §5z at the foot of this section, and it
-> is that the enumeration has no producer.** A session that scrolls this register looking for the next
-> thing to build will find six greens and three closures and conclude the register is the wrong
-> question. **That conclusion is correct — §5z is the answer to it.** Jump there.
+> is that the enumeration has no THIRD-PARTY PRODUCER — a missing party, not a missing tool.** A
+> session that scrolls this register looking for the next thing to build will find six greens and
+> three closures and conclude the register is the wrong question. **That conclusion is correct — §5z
+> is the answer to it.** Jump there.
 
 **Priority is assigned on three questions, in this order:** does something else rest on it (a
 blocker outranks a big win); how much does it move the 20-minute budget; and what does it cost to
@@ -1061,22 +1062,80 @@ cost to get wrong.* Two facts settle it:
    cite the same assertions. What changed over those runs is the *verdict quality on the same
    assertions* (Unsettled / Inconclusive / Stale / NotDeployed → Pass), not how many assertions were
    asserted. Every finding in that window is a harness, deployment or declaration defect; **zero are
-   plant defects.** ⚠️ **And the recount found something
-   no register holds: two vectors on one lane cite the SAME assertion**, so that lane's vector count
-   rose and its coverage did not move at all.
-2. 🔴 **THE ENUMERATION HAS NO PRODUCER, AND THAT IS WHY (1) IS INVISIBLE.** Stated as a caveat on
-   **every result package** since 2026-08-18, unchanged, in the code that emits it —
-   `src/harness/Harness.Loop/LoopRun.cs:1658-1662`: *"the assertion form has no authority behind it…
-   nothing checks it against the enumeration, **because the enumeration still has no producer**. So
-   F-3 is enforced against what a vector CLAIMS, not against what the assertion IS."* Nothing counts
-   the numerator, which is exactly why two vectors could cite one assertion and no gate noticed.
+   plant defects.** ⚠️ **And the recount found something no register held at the time: two vectors on
+   one lane cite the SAME assertion**, so that lane's vector count went 2 → 3 and its coverage did not
+   move at all. *(A producer that names it now exists — see "What that leaves" below.)*
+   ⚠️ **The two denominators on record disagree by one, and neither is being quietly picked.** The
+   note cited above says **96 and 96**; recomputing from the enumeration projections gives **97 and
+   96**. **The two are known to measure DIFFERENT ARTIFACTS, and the reconciliation is recorded
+   outside this repo** — so this is not a transcription error to be corrected here, and a session that
+   silently adopts either figure has picked an artifact without knowing it. The numerators are
+   unaffected and so is every conclusion in this section. ➜ **A fraction quoted onward must carry the
+   source it came from.**
+2. 🔴 **THE ENUMERATION HAS NO THIRD-PARTY PRODUCER — AND THAT IS A MISSING PARTY, NOT A MISSING
+   TOOL.** `enumerate-assertions` and the `assertion-enumerator` agent both exist; what has never
+   been stood up is **an enumerator that is neither the block author nor the vector author**, running
+   the decomposition before the vectors are written. Until that party exists, the denominator is
+   produced by whoever needed one, which is the D6 failure at the denominator: **coverage measured by
+   the party it measures is unfalsifiable.** No code closes that, and none of the tooling below does
+   either.
 
-➜ **So the next thing is a producer for the enumeration, not another instrument.** The data already
-exists as JSON projections — `assertions`, `forms`, `requiredObservations`, `assertionBounds`,
-`scope`. What is missing is the party that owns it and the gate that reads it. That turns coverage
-into a computed fact instead of something somebody adds up, closes F-3's authority gap, and turns a
-vector's admission from a negotiation into a check — **and it is also what would make the Phase 5
+   ⚠️ **THIS ITEM READ *"THE ENUMERATION HAS NO PRODUCER"* WHEN §5z WAS FIRST WRITTEN ON 2026-08-23,
+   AND THAT WAS FALSE — SEE THE FINDING BELOW.** The correction narrows the constraint; it does not
+   remove it, and it does not change the recommendation.
+
+### 🔴 The finding that corrected this section, and it is a defect class worth naming once
+
+**A CAVEAT THAT CANNOT OBSERVE WHAT IT DESCRIBES IS A CONSTANT, AND A CONSTANT ON EVERY RESULT
+PACKAGE IS AN ASSERTION NOBODY RE-CHECKS.**
+
+- **The check it denied has been running since 2026-08-13.** Gate **`3e assertion form authority`** —
+  `SubmissionGate.AssertionFormAuthority`, `src/harness/Harness.Results/SubmissionGate.cs:1455`,
+  shipped in **`b44677b`** — resolves each citation to its enumeration, reads
+  `enumeration.FormOf(assertionId)`, and refuses **four** ways: no form for that ID (*"a partially-formed
+  enumeration is not a permissive one"*), form `Unstated` in the enumeration, form dropped by the
+  vector, and **declared ≠ enumerated**. Gate 5 likewise takes the form from the enumeration rather
+  than the vector (`:1603`). **It is properly conditional:** an enumeration carrying no forms returns
+  **NOT CHECKED, never a pass**, and gate 5's `?? v.Form` fallback is *reported* rather than silent —
+  so where the projections carry forms the gate has authority, and where they do not it says so.
+- **The caveat could not know any of that, by construction.** `LoopRun.Caveats(LoopRequest)` is built
+  **from the request, before any gate runs** — and `F-3-authority` was a **string literal** asserting
+  *"nothing checks it against the enumeration, because the enumeration still has no producer."*
+- 🔴 **THAT IS WHY IT WAS BYTE-IDENTICAL ON EVERY PACKAGE FROM 08-18 TO 08-23 — NOT BECAUSE THE HOLE
+  STAYED OPEN, BUT BECAUSE THE TEXT WAS A CONSTANT.** A caveat is *what the reader is told the result
+  does not establish*, so this one taught every reader to discount an enforcement that was running. It
+  was quoted onward into a work plan and then into the first draft of this section, **where it became
+  the stated rationale for a programme of work.**
+- **This is the "stated, never narrowed" class eating its own plan** — the same shape as §3.2's status
+  cell and §0's header, one layer up: not a stale *status*, but a stale *disclaimer*, which is worse,
+  because a disclaimer is read as the honest part.
+
+➜ **The rule this earns: a caveat computed before the thing it describes may only report what is
+knowable at that point.** *"Not compared yet"* is true and useful; *"nothing checks this"* is a claim
+about the system that the caveat is in no position to make.
+
+### What that leaves
+
+**Both halves are repaired and shipped — `82af95f`, 7 files, 896 insertions, suite 2,698 passing
+across 16 assemblies, 0 failures, 0 warnings** (up from 2,673 by exactly the 25 new tests).
+`F-3-authority` now carries gate 3e's actual finding — closed for this submission, refused with the
+gate's detail, or not-compared with the reason — and **keeps its ID**, so a search for F-3 still lands
+on it and the good news is visible to the search written to find the bad. A numerator producer now
+exists: `Harness.Results/AssertionCoverage.cs`, counting distinct cited assertions over the third
+party's enumeration, **per subject and never summed**, with `NotComputed` as the default so an unset
+coverage cannot print `0 of 0` and read as a measurement. It names the multiply-cited assertion
+together with both vectors that cite it — the fact that went unnoticed for five days.
+
+➜ **So the next thing is the PRODUCING PARTY, not another instrument and no longer a counting tool.**
+The data exists as JSON projections — `assertions`, `forms`, `requiredObservations`, `assertionBounds`,
+`scope`; the count now has a producer; the form check always had one. **What is still absent is a
+third party who owns the decomposition**, and that is an agent-and-process question rather than a
+`src/` one. Standing it up makes coverage falsifiable, and **it is also what would make the Phase 5
 interpreter question answerable**, since an interpreter with no vectors catches nothing.
+
+⚠️ **DO NOT READ ANY OF THIS AS PROGRESS ON THE MEASUREMENT.** Coverage is still **2 of 97 and 3 of
+96**. Five rig runs still found **zero plant defects**. **C = 0 is still structural.** What changed is
+that one sentence in the diagnosis was wrong; every number under it is unmoved.
 
 ⚠️ **The caveat against that recommendation, stated with it.** **C = 0 is structural**: the delivered
 plant program has never been executed, so no defect that only a running controller could expose can
@@ -1156,6 +1215,26 @@ opinion.** That single sentence is why §3 is the most valuable part of this des
 
 ## 8. Change log
 
+- **v3.4 — 2026-08-23 (later the same evening). 🔴 §5z RESTED ON A FALSE PREMISE, AND THE PREMISE WAS
+  A STRING CONSTANT.** v3.3 closed the ten-phase list and named the binding constraint as *"the
+  enumeration has no producer"*, quoting the `F-3-authority` caveat that rides on every result package.
+  **The check that caveat denies has been running since 2026-08-13.** Gate `3e assertion form
+  authority` (`src/harness/Harness.Results/SubmissionGate.cs:1455`, shipped `b44677b`) reads the form
+  from the enumeration and refuses four ways, and gate 5 does the same at `:1603`. The caveat is built
+  from the **request**, before any gate executes, so it could never report the gate — **it was
+  byte-identical on every package because it was a literal, not because the hole was open.** Verified
+  by reading both sources, not taken from the report that raised it. §5z now states the true
+  constraint — **the missing thing is the third-party PRODUCING PARTY, not the count and not the
+  check** — and names the defect class in its own right: *a caveat that cannot observe what it
+  describes is a constant, and a constant on every package is an assertion nobody re-checks.* That is
+  the "stated, never narrowed" class one layer up from §3.2 and §0, and worse, because a disclaimer is
+  read as the honest part. **Nothing here moves the measurement:** coverage is still 2 of 97 and 3 of
+  96, C = 0 is still structural, five rig runs still found zero plant defects — and the two recorded
+  denominators (96 vs 97) are shown disagreeing rather than silently reconciled, since they measure
+  different artifacts and the reconciliation is held outside this repo. **Both halves of the repair
+  shipped in `82af95f`** — the caveat now reports gate 3e's actual finding while keeping its ID, and
+  `Harness.Results/AssertionCoverage.cs` counts the numerator per subject; suite **2,698 passing
+  across 16 assemblies, 0 failures, 0 warnings.**
 - **v3.3 — 2026-08-23 (evening).** 🔴 **§5 IS NOW TRUE, AND THE REASON IT WAS NOT IS THAT NOTHING MADE
   CLOSING A MARKER PART OF CLOSING A PHASE.** v3 recorded exactly this against itself — *"a change log
   that stops tracking its own document is §3.2's failure in miniature"* — and **it recurred inside 24
@@ -1180,8 +1259,9 @@ opinion.** That single sentence is why §3 is the most valuable part of this des
   **The §0 header** understated its own body for the second time in two days and now says so.
   **New: §5z**, because a corrected list is still not a plan — it records that the list is *finished*
   and that the binding constraint is off it: coverage frozen at 2 and 3 assertions across every rig
-  event since 08-18, and **the enumeration has no producer**, stated on every result package by
-  `src/harness/Harness.Loop/LoopRun.cs:1658-1662`. **Q1 is marked answered; Q2 stays open and is
+  event since 08-18, and ~~**the enumeration has no producer**, stated on every result package by
+  `src/harness/Harness.Loop/LoopRun.cs:1658-1662`~~ — 🔴 **that clause was FALSE and is corrected in
+  v3.4 below; the sentence it trusted was a constant, not a finding.** **Q1 is marked answered; Q2 stays open and is
   marked as blocking nothing.** Phases 1, 2, 3, 4 and 10 were checked and needed nothing; §3.x's
   arguments, §5's priority rule, the ✅/🔨/❓/P0–P2 vocabulary and every measured number and recorded
   defect are deliberately untouched — the failure here was maintenance, not design.

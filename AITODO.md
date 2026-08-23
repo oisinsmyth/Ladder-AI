@@ -44,10 +44,24 @@ real jobs, which the suspension notice explicitly leaves running.
 > fix is that **closing a phase must include closing its status lines, in the same commit.**
 
 🔴 **WHAT IS ACTUALLY NEXT IS NOT A PHASE — see `docs/18` §5z.** Assertion coverage has not moved
-across any rig event since 2026-08-18 (the same 2 and 3 assertions cited every time), and the reason
-nobody noticed is that **the enumeration has no producer** — a caveat on every result package, emitted
-by `src/harness/Harness.Loop/LoopRun.cs:1658-1662`. The instrument is fine and almost nobody is
-feeding it. An eighth round of instrument-building is the wrong answer however tidy it looks.
+across any rig event since 2026-08-18 (the same 2 and 3 assertions cited every time). **The
+enumeration has no THIRD-PARTY PRODUCING PARTY** — an enumerator that is neither the block author nor
+the vector author — which is D6 lost at the denominator: coverage measured by the party it measures is
+unfalsifiable. **That is an agent-and-process question, not a `src/` one.** The instrument is fine and
+almost nobody is feeding it; an eighth round of instrument-building is the wrong answer however tidy
+it looks.
+
+> ⚠️ **CORRECTED WITHIN THE HOUR, AND THE CORRECTION IS THE MORE USEFUL ITEM.** This paragraph first
+> read *"the enumeration has no producer — a caveat on every result package"*, quoting
+> `LoopRun.cs`'s `F-3-authority`. **That caveat was a string constant, and the gate it denies has been
+> running since 2026-08-13** (`3e assertion form authority`,
+> `src/harness/Harness.Results/SubmissionGate.cs:1455`, shipped `b44677b`). Built from the *request*
+> before any gate runs, it could not report the gate — so it was byte-identical on every package
+> because it was a literal, not because the hole was open, and it was quoted onward into a work plan.
+> **A caveat that cannot observe what it describes is a constant.** ✅ **Both halves repaired and
+> shipped in `82af95f`** — the caveat now reports gate 3e's actual finding (keeping its ID), and
+> `Harness.Results/AssertionCoverage.cs` counts the numerator per subject; suite **2,698 passing, 0
+> failures, 0 warnings.** Full record: `docs/18` §5z.
 
 - **Phase 6 — DELIVERED AND RUN ON THE RIG 2026-08-23**, and **re-scoped before it was built**: not
   the element table, but *"the area, derived"*. Y0–Y3 plus `777fac0` / `182b3f9`, closed in `7dbac3c`;
