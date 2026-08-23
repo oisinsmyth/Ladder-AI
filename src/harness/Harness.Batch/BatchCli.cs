@@ -31,7 +31,9 @@ public static class BatchExit
 public static class BatchCli
 {
     private const string Usage =
-        "Usage: harness-batch enqueue --queue <dir> --lane <name> --binding <file> --submission <file> --program <path>... [--purpose <text>]\n"
+        "Usage: harness-batch enqueue --queue <dir> --lane <name> --binding <file> --submission <file>\n"
+        + "                             (--manifest <file> | --program <path>...) [--purpose <text>]\n"
+        + "                             # --manifest DERIVES the program set from what the lane emitted; --program is DECLARED by you\n"
         + "       harness-batch plan    --queue <dir> [--out <merged-binding.json>]\n"
         + "       harness-batch list    --queue <dir>\n"
         + "       harness-batch dequeue --queue <dir> --lane <name>\n"
@@ -64,7 +66,7 @@ public static class BatchCli
         string? queue = null, lane = null, binding = null, submission = null, outPath = null, purpose = null;
         string? merged = null, staging = null, leases = null, holder = null, portalProject = null;
         string? portalEvidence = null, rig = null, converterExe = null, harnessRunExe = null, allowlist = null;
-        string? opennessCliExe = null;
+        string? opennessCliExe = null, manifest = null;
         int holderPid = 0, rigPort = 503, rigUnit = 1, ttlMinutes = 60;
         var settleSeconds = -1;   // -1 = not stated, use the default
         string? attestation = null;
@@ -81,6 +83,10 @@ public static class BatchCli
                 case "--submission": submission = Next(args, ref i); break;
                 case "--out": outPath = Next(args, ref i); break;
                 case "--purpose": purpose = Next(args, ref i); break;
+                // The lane's own emitted object list. Where present the program set is DERIVED from it
+                // rather than typed, which is what stops the build stamp describing a program nobody
+                // deployed. See LaneManifest.
+                case "--manifest": manifest = Next(args, ref i); break;
                 case "--program":
                     // Multi-valued, the same shape harness-run's --program uses: consume until the next flag.
                     while (i + 1 < args.Length && !args[i + 1].StartsWith("--", StringComparison.Ordinal))
@@ -134,7 +140,7 @@ public static class BatchCli
 
         return verb switch
         {
-            "enqueue" => Enqueue(store, output, lane, binding, submission, programs, purpose),
+            "enqueue" => Enqueue(store, output, readFile, lane, binding, submission, programs, purpose, manifest),
             "plan" => Plan(store, output, readFile, writeFile, outPath),
             "list" => List(store, output),
             "dequeue" => Dequeue(store, output, lane),
@@ -354,13 +360,58 @@ public static class BatchCli
     }
 
     private static int Enqueue(
-        LaneQueue store, TextWriter output,
-        string? lane, string? binding, string? submission, List<string> programs, string? purpose)
+        LaneQueue store, TextWriter output, Func<string, string> readFile,
+        string? lane, string? binding, string? submission, List<string> programs, string? purpose, string? manifestPath)
     {
         if (string.IsNullOrWhiteSpace(lane) || string.IsNullOrWhiteSpace(binding) || string.IsNullOrWhiteSpace(submission))
         {
             output.WriteLine("enqueue needs --lane <name>, --binding <file> and --submission <file>.");
             return BatchExit.Unusable;
+        }
+
+        // 🔴 *** THE PROGRAM SET IS DERIVED OR IT IS DECLARED, AND THE REPORT SAYS WHICH. ***
+        //
+        // Declared is the old path and still works. It is the weaker one: the stamp is computed over this
+        // set and means "what is executing", and a hand-typed list is how a lane once got pointed at a
+        // pre-fix Main with the stamp following it. Saying which of the two happened costs one line and
+        // is the difference between a reader knowing and a reader assuming.
+        if (!string.IsNullOrWhiteSpace(manifestPath))
+        {
+            LaneManifest manifest;
+            try
+            {
+                manifest = LaneManifest.Read(manifestPath, readFile);
+            }
+            catch (Exception error) when (error is InvalidOperationException or IOException or UnauthorizedAccessException)
+            {
+                output.WriteLine("REFUSED  " + error.Message);
+                return BatchExit.Unusable;
+            }
+
+            // Never chooses a winner. The caller meant something by --program, and silently overriding it
+            // would swap one unexamined program set for another.
+            if (manifest.Disagreement(programs) is { } disagreement)
+            {
+                output.WriteLine("REFUSED  " + disagreement);
+                return BatchExit.Unusable;
+            }
+
+            programs = manifest.ProgramPaths.ToList();
+
+            var generated = manifest.Objects.Count(o => o.Origin == ObjectOrigin.Generated);
+            output.WriteLine($"  program set DERIVED from the manifest: {manifest.Objects.Count} object(s) "
+                           + $"({generated} generated, {manifest.Objects.Count - generated} authored) "
+                           + $"across {programs.Count} path(s).");
+
+            // Printed, never enforced: this tool cannot create a call site, and a generated FC nothing
+            // calls is deployed, loaded, healthy in every artifact, and never runs.
+            foreach (var obligation in manifest.Obligations)
+                output.WriteLine("  OBLIGATION: " + obligation);
+        }
+        else
+        {
+            output.WriteLine($"  program set DECLARED by the caller: {programs.Count} path(s), from --program. "
+                           + "Nothing emitted this list, so nothing checks it against what the lane actually built.");
         }
 
         var outcome = store.Enqueue(new Lane(lane, binding, submission, programs, purpose ?? string.Empty));
