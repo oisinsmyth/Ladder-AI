@@ -37,9 +37,39 @@ the S7 path is the one transport that structurally cannot answer it.
 
 | probe | what it establishes |
 |---|---|
-| the whole declared area, one FC03 over `0..n-1` | a Modbus client can see the area the IR declares |
+| the whole declared area, `0..n-1`, in `ceil(n/125)` FC03(s) | a Modbus client can see the area the IR declares |
 | single-register probes **inside** the edge | the server answers single reads at all — **the control** |
 | a single-register probe at `n`, the first **undeclared** register | the area is **not wider** than declared |
+
+🔴 **The whole-area read is PAGED, and the passing verdict was unreachable until it was.** FC03 carries
+at most 125 registers. This step issued ONE request whatever the width, which worked only while the
+live run declared 37 — at the rig's real 576, and then 1024, the request was rejected by the client's
+own bounds check before a packet left, the run recorded a finding, and **`exit 0` could not be reached
+on any real area.** Two runs on 2026-08-23 produced a perfect boundary measurement under
+`RESULT: 1 finding(s). This run does NOT pass.`
+
+**Paged rather than declared not-applicable above 125, and the alternative was seriously considered.**
+Skipping the step above the protocol limit would leave the boundary sweep as the only thing that reads
+anything, and the sweep touches five registers at the edge — registers `4..1020` would be read by
+nothing, so a hole in the middle of the mirror would pass every check this tool has. An exemption that
+removes the only coverage of 99.5% of the area is the same closed check by a different door.
+
+⚠️ **`NModbusTransport`'s refusal to split still stands, and is about a different span.** Its words are
+*"splitting it here would hide a map that was derived wrong; the map refuses this at derivation time"* —
+both halves are about a span `MapAllocator` **derived**, where a >125 read means the map cannot be
+served and splitting would paper over a design-time defect. Neither premise holds here: this span is
+`--declared-registers`, read off `MB_HOLD_REG` by the operator, so there is no derivation to be wrong;
+and the split is one layer **above** the transport, counted and named in the output. The transport keeps
+refusing. **The boundary probe stays unpaged**, deliberately and with a test pinning it: paging the read
+whose refusal *is* the measurement would mask it.
+
+**What a pass does NOT establish, printed on every multi-page run.** `n` transactions are `n` separate
+moments on a live mirror — the scan counter moves between them — so the words are a **reassembly, not a
+snapshot**. Two registers from different pages never provably held their values at the same instant.
+The step measures **reachability**, which is per-register and survives that; it licenses nothing about
+coherence. Also unchanged by paging: a refused page is located to the page, not to the register — the
+single-register sweep is what localises an edge, and it only sweeps the declared edge, so a hole in the
+middle is detected (the page fails) but **not localised**.
 
 **Reading the new registers successfully proves the area is *at least* wide enough. It is equally
 consistent with a server exposing far more than intended.** The register one past the declared end

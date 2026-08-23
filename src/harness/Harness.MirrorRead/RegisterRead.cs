@@ -181,8 +181,16 @@ public sealed record RegisterRead(
         var kept = lines.Take(2).Select(l => l.Length > 120 ? l[..120] : l).ToArray();
         var dropped = failure.Length - kept.Sum(l => l.Length);
 
+        // ⚠️ The marker says "stock explanation" AND "appended provenance" because both end up in the
+        // dropped tail. PerformPaged appends which page failed to the END of Failure, so a marker naming
+        // only NModbus's boilerplate would be describing the cut wrongly — announcing a drop and then
+        // misreporting what was in it is worse than not announcing it. The page is not lost with it:
+        // MirrorReadRun names it from the record's own Start and Count, which is structured data rather
+        // than a substring that survives a truncation.
         return string.Join(" | ", kept) +
-               (dropped > 0 ? $" [+{dropped} chars of NModbus's stock explanation, not device data]" : string.Empty);
+               (dropped > 0
+                   ? $" [+{dropped} chars of NModbus's stock explanation and any provenance this tool appended, not device data]"
+                   : string.Empty);
     }
 
     /// <summary>The standard names, so a code does not have to be looked up to be read.</summary>

@@ -194,10 +194,40 @@ public static class MirrorReadRun
         // Splitting still asks about every register 0..n-1 — it changes the transport, not the question.
         // The boundary probe below stays UNPAGED, deliberately: it reads the first register past the area
         // and requires exception 2, and paging that would mask the refusal being measured.
-        var pages = (options.DeclaredRegisters + Harness.Map.ModbusLimits.MaxReadRegisters - 1) / Harness.Map.ModbusLimits.MaxReadRegisters;
-        output.WriteLine($"== step 2: the whole declared area, registers 0..{options.LastDeclaredRegister} in {pages} FC03(s) of at most {Harness.Map.ModbusLimits.MaxReadRegisters} ==");
-        var wide = RegisterRead.PerformPaged(source, 0, options.DeclaredRegisters);
-        output.WriteLine($"  FC03(0, {options.DeclaredRegisters})  {wide.Describe()}");
+        //
+        // 🔴 WHY PAGING AND NOT "NOT APPLICABLE ABOVE 125", WHICH WAS THE OTHER WAY TO STOP AN
+        // UNREACHABLE VERDICT. Skipping the step above the protocol limit would have left the boundary
+        // sweep as the only thing that reads anything — and the sweep touches FIVE registers at the edge.
+        // Registers 4..1020 would then be read by nothing at all, so a hole in the middle of the mirror
+        // would pass every check this tool has. An exemption that removes the only coverage of 99.5% of
+        // the area is not a narrower claim, it is the same closed check arriving by a different door.
+        //
+        // ⚠️ AND THE TRANSPORT'S REFUSAL TO SPLIT STILL STANDS — it is about a different span. Its words
+        // are "splitting it here would hide a map that was derived wrong; the map refuses this at
+        // derivation time", and both halves are about a span MapAllocator DERIVED: a slot read wider than
+        // 125 means the map cannot be served, and hiding that at the transport would paper over a
+        // design-time defect. Neither premise holds here. This span is not derived — it is
+        // --declared-registers, a number the operator reads off MB_HOLD_REG in the IR, so there is no
+        // derivation that could be wrong. And the split is not "here": it is one layer above the
+        // transport, in the tool, counted and named in the output below. NModbusTransport keeps refusing;
+        // this pages above it.
+        var pageSize = Harness.Map.ModbusLimits.MaxReadRegisters;
+        var pages = (options.DeclaredRegisters + pageSize - 1) / pageSize;
+        output.WriteLine($"== step 2: the whole declared area, registers 0..{options.LastDeclaredRegister} in {pages} FC03(s) of at most {pageSize} ==");
+        var wide = RegisterRead.PerformPaged(source, 0, options.DeclaredRegisters, pageSize);
+
+        // *** THE LABEL NAMES THE TRANSACTION THAT WAS ACTUALLY ISSUED. *** It used to be hardcoded
+        // "FC03(0, n)" whatever came back, so a page that failed at 1000 was printed as a 1,024-register
+        // read from 0 — a request nobody made, at an address nobody asked about. PerformPaged already
+        // returns the failing page's OWN Start and Count for exactly this reason; the printer was
+        // throwing that away and reasserting the whole span, which is the false-attribution the paging
+        // was introduced to remove, left standing in the line that reports it.
+        var label = pages == 1
+            ? $"FC03(0, {options.DeclaredRegisters})"
+            : wide.Ok
+                ? $"{pages} x FC03 -> 0..{options.LastDeclaredRegister}"
+                : $"FC03({wide.Start}, {wide.Count})";
+        output.WriteLine($"  {label}  {wide.Describe()}");
         output.WriteLine();
 
         if (wide.Ok)
@@ -211,7 +241,16 @@ public static class MirrorReadRun
             output.WriteLine("  locates the real edge. Whatever it finds, this run does NOT pass: a narrower read");
             output.WriteLine("  that succeeds answers a smaller question than the one asked.");
             output.WriteLine();
-            findings.Add($"the whole declared area (0..{options.LastDeclaredRegister}) could not be read in one FC03: {wide.Describe()}");
+
+            // The finding names the failing transaction, not the whole area. "Could not be read in one
+            // FC03" was true of the old unpaged read and is now simply false — at 1,024 it is nine, and a
+            // finding that misdescribes the request it is complaining about sends a reader to the device
+            // to explain something the tool did.
+            var where = pages == 1
+                ? $"the single FC03(0, {options.DeclaredRegisters})"
+                : $"FC03({wide.Start}, {wide.Count}), page {wide.Start / pageSize + 1} of {pages}";
+            findings.Add($"the whole declared area (0..{options.LastDeclaredRegister}) could not be read. " +
+                         $"The transaction that failed was {where}: {wide.Describe()}");
         }
 
         // ---- 5. THE BOUNDARY SWEEP ----
@@ -247,7 +286,10 @@ public static class MirrorReadRun
         output.WriteLine();
 
         // ---- 7. VERDICTS ----
-        var exit = Verdict(options, controlA, controlB, wide, probes, betweenControls.ElapsedMilliseconds, findings, output);
+        // `pages` is passed, not recomputed. Two derivations of one number is how GateParityTests came to
+        // exist in this repo — the copy drifts, and here the copy would decide what the report claims was
+        // examined while the original decided what actually was.
+        var exit = Verdict(options, controlA, controlB, wide, probes, betweenControls.ElapsedMilliseconds, pages, findings, output);
 
         output.WriteLine();
         output.WriteLine("Operations performed on the device: TCP connect, FC03 read holding registers, disconnect.");
@@ -294,6 +336,7 @@ public static class MirrorReadRun
         RegisterRead wide,
         IReadOnlyList<RegisterRead> probes,
         long measuredIntervalMs,
+        int pages,
         List<string> findings,
         TextWriter output)
     {
@@ -425,6 +468,26 @@ public static class MirrorReadRun
             output.WriteLine($"  RESULT: the area is EXACTLY {options.DeclaredRegisters} register(s) wide " +
                              $"(0..{options.LastDeclaredRegister}), measured from BOTH sides — the declared " +
                              "registers answered and the first undeclared one was refused by the server.");
+
+            // *** THE DENOMINATOR, ON EVERY PASSING RUN. *** Same shape as drift-check's COMPARED line:
+            // every other number in this report is a reason something did not happen, and this is the one
+            // that says how much was looked at. A pass over a small denominator is still a pass, but a
+            // reader has to be able to see which one they got.
+            output.WriteLine($"  EXAMINED    : {wide.Values.Length} register(s) read whole in {pages} FC03 " +
+                             $"transaction(s), plus {probes.Count} single-register probe(s) across the edge " +
+                             $"({options.BoundaryFrom}..{options.BoundaryTo}).");
+
+            // WHAT THIS PASS CANNOT SEE, and it is new with paging rather than inherited.
+            if (pages > 1)
+            {
+                output.WriteLine($"  NOT SEEN    : those {pages} transactions were {pages} separate moments on a " +
+                                 "LIVE mirror — the scan counter moved between them — so the words above are a " +
+                                 "reassembly and NOT one snapshot. Registers in different pages may never have " +
+                                 "held those values at the same instant. This step measures REACHABILITY, which " +
+                                 "is per-register and survives that; nothing here licenses reading two registers " +
+                                 "from different pages as a coherent pair.");
+            }
+
             return MirrorReadExit.Ok;
         }
 
