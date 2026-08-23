@@ -544,6 +544,15 @@ public static class LoopCli
 
         output.WriteLine();
 
+        // 🔴 *** THE NEIGHBOUR INVENTORY, PRINTED ON EVERY RUN INCLUDING THE EMPTY ONE — and the reason is
+        // this exact defect. *** Until 2026-08-23 `reservedRegions` was parsed, validated and then ignored
+        // on this path, and the report said NOTHING either way: a reader could not distinguish "checked and
+        // clear" from "never looked", which is the same indistinguishability the guard exists to remove one
+        // level down. A check that is silent when it passes is a check nobody can confirm ran.
+        WriteNeighbours(map.Geometry, output);
+
+        output.WriteLine();
+
         // *** THE LATCH INVENTORY, PRINTED ON EVERY RUN INCLUDING THE EMPTY ONE. *** A report that appears
         // only when there is something to say teaches a reader that its absence means it was not run.
         var latches = plan.Networks
@@ -587,6 +596,36 @@ public static class LoopCli
         return admissible
             ? runnable ? LoopExit.Generated : LoopExit.GeneratedNotRunnable
             : LoopExit.GeneratedNotAdmissible;
+    }
+
+    /// <summary>
+    /// 🔴 <b>What the mirror was checked against — the reserved regions, and the ceiling on what that
+    /// proves.</b>
+    ///
+    /// <para><b>Printed whether or not any were declared</b>, because the empty case is the one that has
+    /// to be said out loud: an empty reservation list is <i>the absence of a claim</i>, not the claim that
+    /// the area is otherwise empty. The measured collision this whole mechanism exists for happened in a
+    /// deployment where nobody had written the neighbour down, and it would have happened identically with
+    /// this check installed. <b>The check can only ever see a neighbour somebody declared</b>, and the fix
+    /// for an undeclared one is to declare it — never to strengthen the check.</para>
+    /// </summary>
+    private static void WriteNeighbours(MirrorGeometry geometry, TextWriter output)
+    {
+        var reserved = geometry.ReservedRegions;
+
+        output.WriteLine($"NEIGHBOURS  : {reserved.Count} reserved region(s) declared by the binding; every mirror region was compared");
+        output.WriteLine("              against every one of them, and none of them was entered.");
+
+        foreach (var region in reserved)
+            output.WriteLine($"  CLEAR OF  {region.Describe()}");
+
+        if (reserved.Count == 0)
+        {
+            output.WriteLine("  (none declared — *** WHICH IS NOT THE SAME AS 'THE AREA IS OTHERWISE EMPTY'. *** This mirror was proved");
+            output.WriteLine("   disjoint from ITSELF and bounded by the declared width; nothing here knows whether anything else in the");
+            output.WriteLine("   deployed program holds registers in the same %M area. On 2026-08-23 something did, and 53 tags were");
+            output.WriteLine("   overwritten every scan. Declare neighbours in `reservedRegions` — this check cannot find them for you.)");
+        }
     }
 
     /// <summary>
@@ -706,16 +745,37 @@ public static class LoopCli
                 + "produces reads REFUSED BY THE SERVER mid-wave rather than a refusal here. On the rig it is 576.");
         }
 
+        // 🔴 *** THE NEIGHBOURS THE BINDING DECLARED, AND WITHOUT THIS LINE `reservedRegions` PARSED,
+        // VALIDATED AND WAS THEN SILENTLY IGNORED ON EVERY harness-run. *** Measured 2026-08-23: a binding
+        // declaring the virtual panel's band produced a 318-register mirror straight through it,
+        // --generate-only exit 4, clean — no refusal, no warning, no mention that a neighbour had been
+        // declared at all. ReservedRegion exists because of a bit-for-bit collision on a running
+        // controller (53 panel tags overwritten every scan, master enable among them); BatchPlanner was
+        // wired to the guard the same day and this path was not, which left the guard binding on the batch
+        // route and INERT on the one a person drives by hand.
+        //
+        // *** IT SITS IN Compose, NOT IN GenerateOnly. *** Every route out of this CLI — generate-only, the
+        // refusing gateway, --verify — builds its geometry here, so the reservation cannot be reached past.
+        // A guard installed on one entry point is the defect being fixed, not a smaller version of it.
+        //
+        // Malformed reservations are carried through and refused BY THE GEOMETRY rather than dropped: a
+        // binding that declared a neighbour believes part of the area is off limits, and silently ignoring
+        // a typo'd one restores exactly the silence this closes. DeclaredReservations owns that rule and
+        // the empty-set branch, so the batch planner and this path cannot come to derive it differently.
+        var geometry = DeclaredReservations.AppliedTo(
+            MirrorGeometry.ForCpu1214C(
+                retentiveBytes: binding.RetentiveBytes ?? 256,
+                baseByte: binding.BaseByte ?? 1000,
+                declaredRegisters: declaredRegisters),
+            binding);
+
         return new LoopRequest(
             inputs.Vectors,
             inputs.Enumeration,
             inputs.Fidelity,
             inputs.BlockAuthor,
             inputs.Conflicts,
-            MirrorGeometry.ForCpu1214C(
-                retentiveBytes: binding.RetentiveBytes ?? 256,
-                baseByte: binding.BaseByte ?? 1000,
-                declaredRegisters: declaredRegisters),
+            geometry,
             slots,
             bindings,
             new CopyLayerNaming(
