@@ -65,10 +65,22 @@ public static class ReachabilityParity
         if (result.TimedOut)
             return new ReachabilityParityResult(ParityOutcome.NotCompared, "the converter timed out.");
 
+        return CheckAgainst(mine, result.StandardOutput);
+    }
+
+    /// <summary>
+    /// The same comparison against a report somebody has ALREADY fetched. <see cref="UnionPreflight"/>
+    /// runs <c>cross-check</c> over the same union for its own reasons, so the two share one subprocess
+    /// rather than each paying for an identical walk of the same corpus.
+    /// </summary>
+    public static ReachabilityParityResult CheckAgainst(ReachabilityReport mine, string crossCheckJson)
+    {
+        ArgumentNullException.ThrowIfNull(mine);
+
         JsonElement reachability;
         try
         {
-            using var doc = JsonDocument.Parse(result.StandardOutput);
+            using var doc = JsonDocument.Parse(crossCheckJson);
             if (!doc.RootElement.TryGetProperty("reachability", out var node) || node.ValueKind == JsonValueKind.Null)
             {
                 return new ReachabilityParityResult(ParityOutcome.NotCompared,

@@ -243,16 +243,47 @@ public static class BatchCli
         {
             output.WriteLine("  parity    NOT PERFORMED in a dry run — it would start a converter process, and a dry run starts none.");
         }
-        else if (unionIr is not null && batch.Reachability is { } mine && runner is not null)
+        else if (unionIr is not null && runner is not null)
         {
-            var parity = ReachabilityParity.Check(mine, options.ConverterExe, unionIr, runner);
-            output.WriteLine($"  parity    {parity.Outcome}: {parity.Detail}");
+            // 🔴 THE UNION CHECK, RUN — over the UNION, before the lease, and no longer printed for
+            // somebody to type. `harness-batch plan` used to emit one `cross-check` PER LANE PATH, which
+            // is the per-lane filter and not the gate, directly under a sentence correctly arguing that
+            // only a union check sees a cross-lane conflict. ONE subprocess serves both this and the
+            // reachability parity below.
+            var preflight = UnionPreflight.Run(options.ConverterExe, unionIr, runner);
+            output.WriteLine("  " + preflight.Summary);
 
-            if (parity.Outcome == ParityOutcome.Disagreed)
+            foreach (var finding in preflight.Findings)
+                output.WriteLine($"            {finding.Kind}: {finding.Detail}");
+
+            if (preflight.Findings.Count > 0)
             {
-                output.WriteLine();
-                output.WriteLine("REFUSED, and NO GATE WAS TAKEN.");
-                return BatchExit.Unusable;
+                // Report-only, and the reason is stated where a reader meets the findings rather than
+                // buried in a design note: cross-check emits FACTS, and a refusal set chosen without
+                // evidence gets the gate switched off — after which it still appears in the list.
+                output.WriteLine("            ^ FACTS, NOT VERDICTS — reported, not gating. Read them before deploying.");
+            }
+
+            if (batch.Reachability is { } mine)
+            {
+                // No re-run when the pre-flight could not read the converter: the second call would be
+                // the identical subprocess over the identical corpus and would fail the identical way.
+                // Reporting the pre-flight's own reason is both cheaper and more honest than a second
+                // NotCompared with less information in it.
+                var parity = preflight.CrossCheckJson is { } json
+                    ? ReachabilityParity.CheckAgainst(mine, json)
+                    : new ReachabilityParityResult(ParityOutcome.NotCompared,
+                        "the union pre-flight could not consult the converter, so there is only one derivation "
+                        + "to go on and the text walk stands alone: " + preflight.Detail);
+
+                output.WriteLine($"  parity    {parity.Outcome}: {parity.Detail}");
+
+                if (parity.Outcome == ParityOutcome.Disagreed)
+                {
+                    output.WriteLine();
+                    output.WriteLine("REFUSED, and NO GATE WAS TAKEN.");
+                    return BatchExit.Unusable;
+                }
             }
         }
 
@@ -477,10 +508,22 @@ public static class BatchCli
         // cross-check finding is acceptable, and a batch that swallowed one would be the correlated
         // check this project exists to avoid.
         output.WriteLine();
-        output.WriteLine("  UNION PRE-FLIGHT — run these before deploying. This is the step a batch earns:");
-        output.WriteLine("  two blocks that each compiled clean in isolation can still conflict, and only a union check sees it.");
+        // 🔴 THESE ARE PER-LANE CHECKS AND THEY ARE NOT THE UNION CHECK. Until 2026-08-23 this block
+        // printed exactly the same commands under a heading calling them "UNION PRE-FLIGHT", directly
+        // above a sentence correctly explaining that only a union check finds a cross-lane conflict — so
+        // the claim and the command contradicted each other on adjacent lines. A closed check: it names
+        // something real (each lane's own corpus) that is not the thing it claimed.
+        //
+        // `plan` cannot run the union check, because the union corpus is materialised by `run`. So it
+        // says what these are, and where the real one happens, rather than overclaiming.
+        output.WriteLine("  PER-LANE pre-flight — optional, and NOT the union check:");
         foreach (var path in result.ProgramPaths.Distinct())
             output.WriteLine($"    converter cross-check --project {path}");
+
+        output.WriteLine();
+        output.WriteLine("  THE UNION CHECK IS RUN BY `harness-batch run --yes`, over the merged corpus, before the lease.");
+        output.WriteLine("  It is the step a batch earns: two blocks that each compiled clean in isolation can still");
+        output.WriteLine("  conflict, and ONLY a check over the union sees it. Per-lane runs cannot, by construction.");
 
         return BatchExit.Ok;
     }
