@@ -52,6 +52,7 @@ says **where each one is documented and why you would reach for it**.
 | `interface-check` | does the block carry the signals the spec names | `interface-check` — the static comparison D6's green rests on |
 | `reachable-state` | computed slot disjointness — storage a block's CALL tree touches | `reachable-state` — D9's producer |
 | `served-area` | the Modbus holding-register window, read off the `MB_SERVER` call **and** its sidecar constant | `served-area` — the Modbus window, derived from the block that serves it |
+| `neighbours` | every `%M` claim inside a given area, and **the object that declares it** | `neighbours` — the neighbour list, derived from the program |
 | `conflict-graph` | submission-scoped conflict edges for the harness gates | `conflict-graph` — the submission-scoped emission |
 | `ir-hash` | stable readable-IR content hash, immune to SIDECAR/UId churn | `ir-hash` — stable readable-IR content hash |
 | `claim` / `claims` | reserve a shared resource before writing IR | `claim` / `claims` — reserve a shared resource |
@@ -4386,6 +4387,105 @@ probing the device from both sides and nothing here substitutes for that. A corp
 to the rig derives a confident, agreed, *wrong* number and is indistinguishable from a fresh one. The
 claim bought is strictly smaller and the tool prints it on every run: **a binding can no longer
 disagree with the program that was staged.**
+
+## `neighbours` — the neighbour list, derived from the program (2026-08-23, workbench Y1)
+
+```
+converter neighbours --project <ir-dir-or-file>... --base <%M byte> (--registers <n> | --bytes <n>) [--json]
+```
+
+**The defect, measured live on a running controller.** A generated mirror and a hand-authored virtual
+panel both claimed registers 256–323 of one `%M` area — **53 tags overwritten bit for bit every
+scan**, among them the panel's master enable. Nothing caught it, and the reason is not "a check was
+missing": the allocator bounds the mirror against the *declared* area and `RegisterMap` proves the
+mirror's regions disjoint *from each other*. **Both ran. Both passed. Both examined something real
+that was not the thing at risk.** `ReservedRegion` closed the hole and its author wrote the limit into
+the binding document where a reader meets it — *"Until something DERIVES the neighbour list from the
+deployed program, this is a place to put the knowledge rather than a way to obtain it."*
+(`src/harness/Harness.Gate/BindingDocument.cs:63-66`). **This verb obtains it.**
+
+**What it returns.** Every `%M` claim overlapping the given area, from two sources:
+
+- **tag-table entries** with an absolute `%M` address — `%M1009.0`, `%MB…`, `%MW…`, `%MD…`;
+- **every `P#M…` area-pointer literal** in any object's body.
+
+Each claim carries **the object that declares it** as its owner label, plus `file:line`. That is not
+decoration: *"a refusal that cannot say WHOSE space was hit sends the reader looking in the wrong
+place"* (`ReservedRegion.cs:31-35`) — to the mirror, which is the one place the problem is not.
+
+**A NEW VERB, deliberately not an extension of `cross-check`.** On the real corpus `cross-check`
+emits **351 multi-writer facts and 250 dead-member facts**, and
+`docs/notes/preflight-interpreter-classification.md` §6 is an argument about signal-to-noise. A
+refusal-critical fact does not go in that stream.
+
+**Bytes, not registers.** Spans are emitted as `%M` byte addresses and the consumer converts them
+through its own `MirrorGeometry.ReservingBytes` (already derived, already rounding outward). Doing
+that arithmetic twice would give the two halves of one check two chances to disagree.
+
+**The area's own declaration is separated from its occupants**, derived from the span and never from a
+name: a claim covering the area *exactly* is the window stating itself — the `MB_SERVER`
+`MB_HOLD_REG` pointer — and returning it as a neighbour would make every map refuse against its own
+area. A claim that is only *part* of the given area is a genuine claim and is reported as one.
+
+**Exit codes.** `0` derived (a `[]` list under `derived: true` is the **earned zero**) · `1` refused ·
+`2` **NOT DERIVED**, and 2 is never a pass.
+
+**The denominator and the exclusions, printed on every run** — derived, refused or not:
+
+```
+neighbours: 26 region(s) derived from 2 tag table(s) + 18 block(s) + 23 other object(s) in 43 file(s); 0 file(s) unparseable; area %M1000..%M1073 (base 1000, 37 register(s))
+excluded: 3 %M claim(s) below base 1000, 0 at or above %M1074; 0 area pointer(s) outside marker memory; 1 declaration(s) of the area itself. 0 claim(s) bounded by their address alone (a data type this verb does not know).
+
+NOT DERIVED — 1 tag table(s) + 0 block(s) + 0 other object(s) in 2 file(s) scanned; 1 of 2 file(s) would not parse, so the corpus is PARTIAL: …\FB_Broken.ir: would not parse (…); area …
+NOT DERIVED — 0 tag table(s) + 0 block(s) + 0 other object(s) in 0 file(s) scanned; NOTHING WAS EXAMINED, so '0 neighbours' would be a claim about nothing rather than about this area; area …
+```
+
+**Three outcomes that must never render alike, and do not:** a real corpus with no occupant (exit 0,
+the zero line printed with what it read), a corpus that was empty (exit 2), and a corpus one of whose
+files would not parse (exit 2, **naming the file**). An unread file can declare the very claim the
+list is meant to contain, so **no list is emitted rather than a short one** — the shape
+`Reachability.cs`'s silent `continue` already cost this project once.
+
+**Every uncertainty refuses rather than approximates.** A `%M` address form whose width cannot be read
+(`%MX1512`), an area-pointer unit that converts to no width, a `P#` this scan cannot read at all, and
+a tag whose declared type disagrees with its address width (`Real @ %MW1512`) are all **refusals
+naming the object** — a claim that is seen and not measured, dropped quietly, is what turns a short
+occupancy list into one that looks complete. The one exception is sound rather than lenient: an
+unboundable claim whose *start* is at or above the area top cannot reach the area, because occupancy
+runs upward, so it is excluded and counted.
+
+**Extraction is over the file's text, after a successful parse has gated it — a choice, not a
+shortcut.** `IrNetwork` carries about twenty statement kinds and grows; a structural walk that forgot
+one would drop a real claim and report a short list as clean. The parse still runs and still gates;
+what it does not do is decide which shapes are worth looking inside. Quoted text (titles, block and
+network comments) is stripped first, because a pointer *described in prose* is not a pointer and an
+over-broad derivation refuses maps that are fine.
+
+`--project` is **repeatable** and takes a directory or a single `.ir` file, for the same reason
+`served-area`'s is: a batch's corpus is the union of several lanes' program paths.
+
+**The `P#` syntax reader is shared** with `served-area` (`Converter/Ir/AreaPointer.cs`, extracted
+here). Syntax there, policy in each caller — the two legitimately disagree about what is acceptable,
+and two hand-rolled readers of one notation is how two checks come to disagree about what a program
+says.
+
+🔴 **What it cannot possibly see.** Printed on every run, including the derived one:
+
+1. **An occupant that reaches `%M` without DECLARING it** — an indirect access, a runtime-computed
+   pointer, an offset arrived at by arithmetic. The derivation is over **declarations in the IR, not
+   over execution**, and no amount of scanning changes that.
+2. Anything outside the corpus it was handed.
+3. Whether that corpus is the program on the controller. It reads files, never the CPU.
+
+A zero here means *"nothing in the corpus I read declared a claim"*, **never** *"the area is free"*.
+
+⚠️ **The committed suite's positive fixture for a FOREIGN occupant is invented, and a green suite is
+not evidence that the derivation reproduces the real collision.** `ir/test-project001` has 26 `%M`
+tags inside the served area and every one of them belongs to `HarnessMirror` — the mirror's own. The
+real evidence is a re-run against the live corpus, in the job folder, never committed: it must
+reproduce the 256–323 band and its 53 tags. Fewer, or a different band, stops the claim. (This also
+corrects the Y1 plan's prerequisite row, which read the reference project as having no `%M` tag in the
+area on the strength of `DefaultTagTable.ir` alone; `HarnessMirror.ir` is a second tag table.)
 
 ## Rules (docs/05-architecture.md, 04 §8/§10)
 

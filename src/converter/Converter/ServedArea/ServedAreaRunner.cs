@@ -333,62 +333,51 @@ public static class ServedAreaRunner
     /// <summary>
     /// <c>P#M1000.0 WORD 37</c> → marker memory, byte 1000, bit 0, 37 registers. Every shape this does
     /// not recognise is reported by name rather than approximated.
+    ///
+    /// <para><b>The SYNTAX is read by <see cref="AreaPointerParser"/> (shared, 2026-08-23 workbench
+    /// Y1); the POLICY below is this producer's alone.</b> `neighbours` reads the same notation and
+    /// deliberately accepts more of it — a unit it can measure is an occupancy it must report, where
+    /// a unit this one cannot convert to a register count exactly is a width it must refuse. Two
+    /// hand-rolled readers of one notation is how two checks come to disagree about what a program
+    /// says, so the split is syntax-here / judgement-there rather than a second parser.</para>
     /// </summary>
     internal static bool TryParsePointer(string text, out ServedAreaPointer pointer, out string why)
     {
         pointer = new ServedAreaPointer(text, string.Empty, 0, 0, string.Empty, 0);
 
-        if (!text.StartsWith("P#", StringComparison.Ordinal))
+        if (!AreaPointerParser.TryParse(text, out var parsed, out why))
         {
-            why = "it is not an area pointer at all.";
             return false;
         }
 
-        var parts = text.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        if (parts.Length != 3)
+        if (parsed.AddressText.Length < 3 || parsed.AddressText[0] != 'M')
         {
-            why = $"it does not have the three parts (<address> <unit> <count>) an area pointer has; it has {parts.Length}.";
-            return false;
-        }
-
-        var address = parts[0][2..];
-        if (address.Length < 3 || address[0] != 'M')
-        {
-            why = $"`{address}` is not marker memory. The harness mirror is a %M area and this producer derives only "
+            why = $"`{parsed.AddressText}` is not marker memory. The harness mirror is a %M area and this producer derives only "
                 + "that; an area in a data block is a different address space and translating it would be an assumption.";
             return false;
         }
 
-        var dot = address.IndexOf('.', StringComparison.Ordinal);
-        if (dot < 0
-            || !int.TryParse(address[1..dot], System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var baseByte)
-            || !int.TryParse(address[(dot + 1)..], System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var bit))
+        if (!parsed.IsMarker)
         {
-            why = $"`{address}` is not a <byte>.<bit> marker address.";
+            why = $"`{parsed.AddressText}` is not a <byte>.<bit> marker address.";
             return false;
         }
 
-        if (bit != 0)
+        if (parsed.Bit != 0)
         {
-            why = $"it starts at bit {bit} inside byte {baseByte}, and a register area is byte-aligned. What a "
+            why = $"it starts at bit {parsed.Bit} inside byte {parsed.BaseByte}, and a register area is byte-aligned. What a "
                 + "bit-offset holding-register area serves is not something to assume.";
             return false;
         }
 
-        if (!string.Equals(parts[1], Unit, StringComparison.Ordinal))
+        if (!string.Equals(parsed.Unit, Unit, StringComparison.Ordinal))
         {
-            why = $"its unit is `{parts[1]}`, not {Unit}. A register is a word, so only {Unit} converts to a register "
+            why = $"its unit is `{parsed.Unit}`, not {Unit}. A register is a word, so only {Unit} converts to a register "
                 + "count with nothing rounded and nothing assumed; widening this needs a real export to ground the rule.";
             return false;
         }
 
-        if (!int.TryParse(parts[2], System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var count) || count <= 0)
-        {
-            why = $"`{parts[2]}` is not a positive count of {Unit}s.";
-            return false;
-        }
-
-        pointer = new ServedAreaPointer(text, "M", baseByte, bit, Unit, count);
+        pointer = new ServedAreaPointer(text, "M", parsed.BaseByte, parsed.Bit, Unit, parsed.Count);
         why = string.Empty;
         return true;
     }

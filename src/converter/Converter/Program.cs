@@ -123,6 +123,11 @@ internal static class Program
             return RunServedArea(args[1..]);
         }
 
+        if (args.Length >= 1 && args[0] == "neighbours")
+        {
+            return RunNeighbours(args[1..]);
+        }
+
         if (args.Length >= 1 && args[0] == "interface-check")
         {
             return RunInterfaceCheck(args[1..]);
@@ -182,6 +187,7 @@ internal static class Program
             Console.Error.WriteLine("       converter conflict-graph --project <ir-dir> (--submission <file> | --signals <file>) [--json] [--allow-unresolved]   # SUBMISSION-SCOPED `conflictEdges` for harness gates 8/8c, in the exact shape ConflictEdgeDocument deserializes. NOT cross-check with a filter: that emits whole-project fact tables keyed on a storage path, this emits EDGES between BLOCKS with a provenance and a signal class. Only MultiWriter provenance is ever emitted - a CallGraph edge is about no signal, so it could only carry an Unstated class, and ProvenanceComplete is ALL-or-nothing, so ONE such edge would turn gate 8c to NOT CHECKED for the whole submission. `computedConflicts` is never emitted for the same reason (a bare name is Unstated provenance); gate 8's packing set derives from the edges. Exit 0 = computed (an EMPTY list is the EARNED claim that the graph ran and found nothing), 2 = NOT COMPUTED and the key is WITHHELD so the gate reports NOT CHECKED, 3 = emitted but an edge is unprovenanced. 🔴 --submission READS THE DECLARED JOIN `map.storage` (contract 2.7), which it did not until 2026-08-17: a submission cites the SPECIFICATION's names by design (D8) and this fed them to a resolver expecting STORAGE PATHS, measuring 70 of 70 unresolved on a real submission while the field that joins them sat unread in the same document. `map.storage` is signal -> { owner?, path } (two keys - an emitted string is not a schema) and `map.harnessOnly` is a POSITIVE claim that a signal occupies no PLC storage, which is a computed fact and does NOT count against the scope. EVERY resolution reports WHICH JOIN carried it - DeclaredStorage / DeclaredHarnessOnly / ProjectPathMatch / NotDeclared / ContradictoryDeclaration. THE REFUSAL IS NOT WEAKENED: once a map is declared, a signal absent from it stays UNRESOLVED even when its name would have matched something, because a map with one hole is repaired by filling the hole and not by guessing at it; a submission declaring NO map behaves exactly as before. A signal declared BOTH ways, or twice with different storage, is REFUSED and --allow-unresolved does NOT cover it (that flag accepts names nobody looked at, not a document answering one question twice)");
             Console.Error.WriteLine("       converter reachable-state --project <ir-dir> [--block <name>]... [--json]   # D9's PRODUCER (2026-08-14): per block, the transitive closure through its CALL tree of every storage location it touches, keyed on STORAGE IDENTITY. Feeds `TestSlot.ReachableState` + `ReachableStateProvenance`, after which `SlotConflictDerivation.OverlappingReachableState` makes the edges by set intersection with no further work. Until this existed the set arrived from `wave-cli submit --reaches`, i.e. DECLARED BY THE SUBMITTING AGENT — the shape D9 forbids. Reads count as well as writes (two tests cannot share a signal one drives and the other observes). Closes DOWNWARD only: closing upward through callers reaches OB1 from any leaf and would make every pair conflict. An `iDB.<suffix>` reference is CANONICALISED onto the FB's own `<FB>|<suffix>` before intersecting, and every rewrite is reported — without it a slot testing an FB and one testing its caller read as disjoint while driving one location. Exit 0 = computed / 2 = NOT COMPUTED, key withheld / 3 = emitted, but at least one block's closure was withheld BY NAME");
             Console.Error.WriteLine("       converter served-area --project <ir-dir-or-file>... [--json]   # THE MODBUS HOLDING-REGISTER WINDOW, DERIVED (2026-08-23, workbench Y2). A harness binding's `declaredRegisters` was AUTHORED BY HAND per lane and flowed unchecked into MirrorGeometry, the map allocator, RegisterMap.MapHash and therefore the build stamp — so the stamp hashes a declared width, and nothing checked whether that number is TRUE OF THE PROGRAM. The truth lives in the IR in TWO PLACES THAT CAN SILENTLY DISAGREE: the readable `MB_SERVER(..., MB_HOLD_REG := P#M1000.0 WORD 37, ...)` statement and the sidecar constant backing it, joined by the port's UId. `to-xml` rebuilds the operand FROM THE SIDECAR, so a drifted readable line is invisible to every other check. Both are read; a disagreement is a refusal NAMING BOTH LINES. Every uncertainty refuses rather than approximates — a unit that is not WORD, an area outside marker memory, a bit offset inside the byte, a missing sidecar, an unparseable file, a SECOND MB_SERVER call (guessing which serves the mirror invents the answer) — because a width guessed WIDE allocates a map that overflows the real window and fails on the wire as a device fault. Exit 0 = derived / 1 = refused / 2 = NOT DERIVED, and 2 IS NOT A PASS. 🔴 IT READS THE CORPUS, NOT THE CPU: it cannot see whether the block it read is the block on the controller, and the 1024-register widening was proven by probing the device from both sides");
+            Console.Error.WriteLine("       converter neighbours --project <ir-dir-or-file>... --base <%M byte> (--registers <n> | --bytes <n>) [--json]   # EVERY %M CLAIM INSIDE THE AREA, AND THE OBJECT THAT DECLARES IT (2026-08-23, workbench Y1). Measured live: a generated mirror and a hand-authored virtual panel both claimed registers 256-323 of one %M area - 53 tags overwritten bit for bit every scan, including the panel's master enable. Nothing caught it, and not because a check was missing: the allocator bounds the mirror against the DECLARED area and RegisterMap proves the mirror disjoint FROM ITSELF. Both ran, both passed, both examined something real that was not the thing at risk. ReservedRegion closed the hole and its author wrote the limit down - 'a place to put the knowledge rather than a way to obtain it'. This obtains it. Two sources: tag-table entries with an absolute %M address, and every P#M... area-pointer literal in any object's body; each claim carries its DECLARING OBJECT as an owner label, because a refusal that cannot say WHOSE space was hit sends the reader to the mirror, the one place the problem is not. A NEW VERB, deliberately not an extension of cross-check, which emits 351 multi-writer + 250 dead-member facts on the real corpus - a refusal-critical fact does not go in that stream. Spans are %M BYTES; the consumer converts them through its own MirrorGeometry.ReservingBytes rather than this re-deriving the arithmetic. A claim covering the area EXACTLY is the window declaring itself (the MB_SERVER pointer) and is separated out, DERIVED from the span and never from a name. Exit 0 = derived (an empty list under derived:true is the EARNED zero) / 1 = refused / 2 = NOT DERIVED, and 2 IS NOT A PASS. Three outcomes that never render alike: a real corpus with no occupant, an EMPTY corpus, and a corpus one of whose files WOULD NOT PARSE (named, list withheld - an unread file can declare the very claim the list is meant to contain). Every uncertainty refuses: a %M form whose width cannot be read, a pointer unit that converts to no width, a `P#` this scan cannot read, a tag whose declared type disagrees with its address width - except one that provably cannot reach the area, since occupancy runs upward. 🔴 IT CANNOT SEE AN OCCUPANT THAT REACHES %M WITHOUT DECLARING IT (indirect or pointer-computed access): the derivation is over DECLARATIONS IN THE IR, NOT OVER EXECUTION; nor anything outside the corpus it was handed; nor whether that corpus is the program on the controller. A zero means 'nothing in the corpus I read declared a claim', never 'the area is free'");
             Console.Error.WriteLine("       converter interface-check --project <ir-dir> --block <name> (--requires <n1,n2,...> | --requires-file <path>) [--subject <text>] [--json]   # NB-30 (2026-08-14): does the BLOCK carry the response signals the SPECIFICATION names? A set difference over the block's interface MEMBER NAMES, answerable before a scan elapses — which is why D1 (a spec signal the block does not provide) was able to ride inside a relational conformance assertion for a week. Walks INPUT/OUTPUT/INOUT/STATIC/CONSTANT and descends through inlined nested members AND named PLC data types, because on this corpus's house style (C-132) INPUT and OUTPUT are BOTH EMPTY and the whole caller interface is one STATIC UDT member — a check reading those two sections reports every signal missing, including the ones that exist. Matches MEMBER NAMES ONLY: one matching comments would find 'inhibit' in a block comment and pass the defect. TEMP is excluded BY NAME and COUNTED on every run. 🔴 EXIT 1 IS A **FAIL AGAINST THE BLOCK**, NOT AGAINST THE SUBMISSION — every other outcome in the pipeline means 'fix the vector', and reusing one here would send an author to edit the artifact that is correct. Exit 0 = all present / 1 = the block does not carry a required signal / 2 = NOT CHECKED (block absent or ambiguous, empty interface, no required names, an unjudgeable required token, or a member whose type could not be opened — a MISSING verdict is only sound over a COMPLETE member set). Emits the block's ir-hash as the STAMP the result was established against; a consumer carries the stamp, never a bool, so 'nobody ran it' and 'ran it against a different version' stay distinct facts. --requires-file reads one name per line, OR an assertion-enumeration YAML directly (its `response_signal:` values), which is the form with a producer. 🔴 IT NEVER READ THAT FILE'S OWN `subject:` NOR COMPARED IT TO --block, SO THE WRONG FILE WAS A FALSE ACCUSATION AGAINST THE BLOCK (2026-08-18): two enumerations with 28 and 15 signals and an overlap of 2 mean a mis-typed path demands ~26 signals that cannot be present - ~26 MISSING, exit 1, a FAIL AGAINST THE BLOCK - and the C-132 house-style trap makes \"nearly everything missing\" a plausible GENUINE output, so nothing distinguished the two. The declared subject is now REPORTED on every run (including a NOT CHECKED one, which never printed provenance at all), and --subject <text> GATES on it: disagreement, or a file declaring no subject, is EXIT 2 NOT CHECKED, never 1, because a wrong enumeration is an unjudgeable INPUT and not a defective block. Agreement is containment either way, case- and whitespace-insensitive; --subject without --requires-file is refused rather than ignored");
             Console.Error.WriteLine("       converter trace --binding <bindings.json> --project <ir-dir> [--json]   # forward-pass REQ trace: per-hop facts over the reader/writer graph (FI-25); facts not verdicts; exit 0. Hops incl. guard-containment (FI-36-min): every spec-listed condition must appear in the coil's guard");
             Console.Error.WriteLine("       converter candidate-scan --project <ir-dir> --fb <FBName> [--scope <prefix> ...] [--type <T>] [--direction status|command|any] [--json]   # compute every signal that could satisfy a requirement (FI-39); exit 1 if the IO half has >1 candidate");
@@ -2124,6 +2130,117 @@ internal static class Program
             Console.Error.WriteLine(
                 "NOT DERIVED — the served width was not established, so any declared width stands UNCHECKED. "
                 + "This is not a clean run: " + report.Denominator);
+            return 2;
+        }
+
+        return 0;
+    }
+
+    internal static int RunNeighbours(string[] args)
+    {
+        var paths = new List<string>();
+        int? baseByte = null;
+        int? registers = null;
+        int? bytes = null;
+        var json = false;
+
+        for (var i = 0; i < args.Length; i++)
+        {
+            switch (args[i])
+            {
+                case "--project":
+                    var value = RequireValue(args, ref i, "--project");
+                    if (value is null)
+                    {
+                        return 1;
+                    }
+
+                    paths.Add(value);
+                    break;
+                case "--base":
+                case "--registers":
+                case "--bytes":
+                    var flag = args[i];
+                    var number = RequireValue(args, ref i, flag);
+                    if (number is null)
+                    {
+                        return 1;
+                    }
+
+                    if (!int.TryParse(number, System.Globalization.NumberStyles.AllowLeadingSign,
+                            System.Globalization.CultureInfo.InvariantCulture, out var parsed))
+                    {
+                        Console.Error.WriteLine($"Flag '{flag}' takes a whole number; got '{number}'.");
+                        return 1;
+                    }
+
+                    switch (flag)
+                    {
+                        case "--base": baseByte = parsed; break;
+                        case "--registers": registers = parsed; break;
+                        default: bytes = parsed; break;
+                    }
+
+                    break;
+                case "--json":
+                    json = true;
+                    break;
+                default:
+                    Console.Error.WriteLine($"Unexpected argument: {args[i]}");
+                    return 1;
+            }
+        }
+
+        const string Usage = "Usage: converter neighbours --project <ir-dir-or-file>... --base <%M byte> "
+            + "(--registers <n> | --bytes <n>) [--json]";
+
+        if (paths.Count == 0 || baseByte is null)
+        {
+            Console.Error.WriteLine(Usage);
+            return 1;
+        }
+
+        // Two ways to state one area is one way too many to leave unchecked: a run given both would
+        // silently honour one of them, and the refusal it computes would be about the wrong window.
+        if (registers is null == bytes is null)
+        {
+            Console.Error.WriteLine(registers is null
+                ? "The area's WIDTH is required: pass --registers <n> (the harness's own numbering) or --bytes <n>. "
+                  + "`converter served-area` derives it from the block that serves it."
+                : "Pass --registers OR --bytes, not both. Two statements of one width are two chances to disagree, "
+                  + "and a neighbour list computed against the wrong window refuses the wrong maps.");
+            Console.Error.WriteLine(Usage);
+            return 1;
+        }
+
+        Neighbours.MarkerArea area;
+        try
+        {
+            area = registers is int r
+                ? Neighbours.MarkerArea.OfRegisters(baseByte.Value, r)
+                : Neighbours.MarkerArea.OfBytes(baseByte.Value, bytes!.Value);
+        }
+        catch (ArgumentOutOfRangeException e)
+        {
+            Console.Error.WriteLine(e.Message);
+            return 1;
+        }
+
+        var report = Neighbours.NeighbourRunner.Run(paths, area);
+        Console.WriteLine(json
+            ? Neighbours.NeighbourOutputFormatter.FormatJson(report)
+            : Neighbours.NeighbourOutputFormatter.FormatText(report));
+
+        if (report.Refused)
+        {
+            return 1;
+        }
+
+        if (!report.Derived)
+        {
+            Console.Error.WriteLine(
+                "NOT DERIVED — no neighbour list was established, so a declared reservation stands uncorroborated "
+                + "and an undeclared occupant stands unseen. This is not a clean run: " + report.Denominator);
             return 2;
         }
 
