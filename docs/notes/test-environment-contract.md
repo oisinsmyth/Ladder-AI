@@ -959,6 +959,34 @@ because the declaration had come to demand the fault.***
 **Right now it assumes silently, and the assumption has been measured false.** The first whole-project
 `drift-check --complete` against a fresh controller dump reported **4 DRIFTED** and **3 EXPORT-ONLY**.
 
+> #### UPDATE 2026-08-23 — one of the four is paid, and it left an ordering landmine
+>
+> `FB_Comms_ModbusServer` is now **MATCH**. The third leg re-run went **4 drifted → 3**, verified by
+> diffing the sorted per-object status lists rather than the summaries: **exactly one line changed
+> across all 41.**
+>
+> **It was never drift.** `git log` shows the operand going 8 → 31 → 35 → 37 across four commits with
+> the live block a faithful copy of `92fa300` — nobody edited it in TIA. `gen/test-project001/telemetry.log`
+> at `2026-08-14T10:05` recorded the debt as it was incurred: *"COMPILE GATE NOT RUN — Portal fenced…
+> this block is not done… a re-export is owed after the import."* **An owed import, correctly declared
+> and never paid.** The `.ir` needed no edit. The live comment carried **three** stale numbers (8, 31,
+> 35) against an operand of 35 — a comment left behind through two widenings.
+>
+> 🔴 **THE LANDMINE, AND IT IS STILL ARMED.** Registers 35–36 are `HX_HBA_L008`/`L009`, written only by
+> `FC_HarnessCopyLayer` **network 8** — which the live project does not have (7 compile units against
+> the `.ir`'s 8, and `grep HX_HBA_L008` over the live export returns 0). So today nothing writes them
+> and nothing serves them: **dormant.** After this import the server serves 37 while the copy layer
+> still writes 0–34, so they go out as zeros — same dormancy, one half closer to correct.
+>
+> ⚠️ **But if `FC_HarnessCopyLayer` is imported WITHOUT `FB_Comms_ModbusServer`, the latches are
+> written and silently not served — no import error, no compile error, no drift finding.** That is
+> precisely the silent failure the widening existed to prevent. **Import the comms block first, or
+> both together.** The copy-layer divergence is still open and whoever takes it meets this.
+>
+> ⚠️ **`3 drifted / 38 match` is NOT a complete answer.** Neither run passed `--tagtables`, so
+> `DefaultTagTable` and `HarnessMirror` were `SKIPPED` both times — and **`HarnessMirror` is where the
+> register map lives.** The third leg as run has never examined the one object most worth comparing.
+
 #### A DRIFTED model is NOT admissible, and the verdict is `STALE`
 
 > 🔴 **One of the four is `iDB_HopperBlockageStim` — *the stimulus model the live vector set depends
