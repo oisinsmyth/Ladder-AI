@@ -16,11 +16,12 @@ namespace Harness.MirrorView;
 /// on screen are frozen — and they must not go on looking like a live view of a controller because the
 /// page happens to still be open.</para>
 ///
-/// <para>🔴 <b>IN FOLLOW MODE EVERY ROW CARRIES ITS OWN AGE, AND ROWS GO GREY INDIVIDUALLY.</b> A page
-/// composed from the several reads a wave actually makes has rows of DIFFERENT ages, and a single
-/// whole-table verdict would present the old ones as current. In direct mode one FC03 covers the whole
-/// area, so every row shares one instant and the per-row treatment and the whole-table one always agree —
-/// which is why direct mode looks exactly as it did.</para>
+/// <para>🔴 <b>WHENEVER A PICTURE IS COMPOSED, EVERY ROW CARRIES ITS OWN AGE AND ROWS GO GREY
+/// INDIVIDUALLY.</b> A page composed from several reads has rows of DIFFERENT ages, and a single
+/// whole-table verdict would present the old ones as current. That is every follow-mode page — and every
+/// DIRECT page over an area wider than the 125 registers FC03 carries, which the viewer used to render as
+/// though one transaction had produced it. Only a single-transaction poll has every row sharing one
+/// instant, and only there do the per-row and whole-table treatments always agree.</para>
 ///
 /// <para><b>A register nothing read shows NOT READ, never a zero.</b> The server's own zero and this
 /// program's default are the same bytes and completely different facts.</para>
@@ -118,9 +119,11 @@ public static class MirrorPage
 </table>
 
 <footer>
-  <p><b>What this shows.</b> The holding-register mirror the PLC publishes over Modbus, read whole in one
-  FC03 per poll. The map — names, addresses, types, comments — is parsed from the committed IR artifacts
-  named above; there is no table built into this program.</p>
+  <p><b>What this shows.</b> The holding-register mirror the PLC publishes over Modbus, read whole every
+  poll — in one FC03 where the area fits in 125 registers, and in as many as the protocol needs where it
+  does not. The source card above says how many, and above one the table is a reassembly of that many
+  moments rather than a snapshot. The map — names, addresses, types, comments — is parsed from the
+  committed IR artifacts named above; there is no table built into this program.</p>
   <p><b>What it deliberately does NOT show.</b> It is not a debugger and not an online-monitoring tool.
   It cannot see any tag that is not in the mirror, it cannot see DB contents, it cannot step, force,
   breakpoint or write anything at all, and it says nothing about the block logic that produced these
@@ -196,6 +199,17 @@ function render(d) {
       "publisher " + d.feed.publisherId + ", sequence " + d.feed.sequence + ", " + d.feed.frames +
       " read(s) composing " + d.feed.registersObserved + " of " + d.feed.declaredRegisters +
       " register(s). This viewer opened NO socket: these are the bytes the harness read. Feed: " + d.feed.origin;
+  } else if (d.transactionsPerPoll > 1) {
+    /* THE SAME SENTENCE WAS PRINTED AT ANY WIDTH, AND ABOVE 125 REGISTERS IT WAS FALSE. FC03 carries no
+       more than 125, so a wider area is several transactions and several moments — the scan counter moves
+       between them. Saying "one instant" there claimed a coherence the reading did not have. The count
+       comes from the map, so this branch is right before the first poll returns. */
+    el("source").textContent = "DIRECT — this viewer holds the connection";
+    el("sourceNote").textContent =
+      d.transactions + " FC03 read(s) composing " + d.declaredRegisters + " register(s). The declared area " +
+      "is wider than the 125 FC03 carries, so each poll takes " + d.transactionsPerPoll + " transactions: " +
+      "this table is a REASSEMBLY of that many moments, not one snapshot. Each row states the instant its " +
+      "own read returned and goes grey on its own; two rows from different reads were never read together.";
   } else {
     el("source").textContent = "DIRECT — this viewer holds the connection";
     el("sourceNote").textContent =

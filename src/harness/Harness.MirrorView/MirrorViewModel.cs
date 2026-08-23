@@ -16,16 +16,20 @@ namespace Harness.MirrorView;
 /// </param>
 /// <param name="Comment">The tag's own COMMENT text from the IR — the meaning column.</param>
 /// <param name="ObservedUtc">
-/// 🔴 <b>WHEN THE READ BEHIND THIS ROW RETURNED.</b> In DIRECT mode every row shares the poll's instant,
-/// because one FC03 covers the whole area. In FOLLOW mode the picture is composed from the several reads
-/// a wave actually makes, so rows legitimately have DIFFERENT AGES and each states its own. Null means no
+/// 🔴 <b>WHEN THE READ BEHIND THIS ROW RETURNED.</b> Rows share the poll's instant only when ONE
+/// transaction produced them — a direct poll over an area that fits in a single FC03. In FOLLOW mode, and
+/// in DIRECT mode above 125 registers where the protocol forces several FC03s, the picture is composed
+/// from several real reads: rows legitimately have DIFFERENT AGES and each states its own. Null means no
 /// read has covered this register — and the <c>Raw</c> beside it is then null too, never a zero.
+///
+/// <para>A 32-bit element straddling a page boundary takes the OLDER of its two halves' instants: half a
+/// value read a page ago is not a value read now.</para>
 /// </param>
 /// <param name="AgeSeconds">How old that read is. Null when there is none.</param>
 /// <param name="Current">
 /// True only when this row's own reading is inside the freshness window. <b>Per row, so a page composed
 /// from reads of different ages cannot present the old ones as current</b> — the whole-table treatment
-/// remains as well, and in direct mode the two always agree because every row shares one instant.
+/// remains as well, and the two agree only where a single transaction produced every row.
 /// </param>
 public sealed record RegisterRow(
     int Index,
@@ -104,7 +108,26 @@ public sealed record MirrorViewModel(
     int RegistersStale = 0,
 
     /// <summary>Registers no read has covered. Shown as NOT READ, never as a value.</summary>
-    int RegistersNotObserved = 0)
+    int RegistersNotObserved = 0,
+
+    /// <summary>
+    /// 🔴 <b>THE TRANSACTION COUNT BEHIND THE READING ON SCREEN — THE DENOMINATOR DIRECT MODE DID NOT
+    /// HAVE.</b> Follow mode has reported this since it existed (<c>Feed.Frames</c>), and direct mode is
+    /// now the mode that PAGES: the asymmetry was inverted. Printed on every run including one, on the
+    /// same argument as <see cref="RegistersStale"/> — a count that appears only when it is interesting
+    /// teaches a reader that its absence means something.
+    ///
+    /// <para>Zero in follow mode, where this viewer issued no transaction at all.</para>
+    /// </summary>
+    int Transactions = 0,
+
+    /// <summary>
+    /// How many FC03s a direct poll over the declared area TAKES, known from the map before any read.
+    /// <b>This is what decides whether "every row shares one instant" is a true sentence</b>, and the page
+    /// consults it rather than asserting the claim unconditionally. Zero in follow mode, where this viewer
+    /// polls no device.
+    /// </summary>
+    int TransactionsPerPoll = 0)
 {
     /// <summary>True only when the numbers on screen were read just now by a poll that succeeded.</summary>
     public bool ValuesAreCurrent => Status == MirrorStatus.Live;
@@ -139,10 +162,13 @@ public static class MirrorView
 
         var registers = lastSuccess?.Registers ?? Array.Empty<ushort>();
 
-        // *** ONE READING PER REGISTER, WITH THE INSTANT IT WAS READ. *** Direct mode leaves this null and
-        // every row falls back to the poll's own instant, which is correct there by construction: one FC03
-        // covers the whole area, so every register genuinely was read at that moment. Follow mode fills it,
-        // because a wave reads the control region and each slot's results separately and the ages differ.
+        // *** ONE READING PER REGISTER, WITH THE INSTANT IT WAS READ. *** This is null only when ONE
+        // transaction covered everything — a direct poll over an area inside a single FC03 — and every row
+        // then falls back to the poll's own instant, which is that register's true instant. It is filled
+        // whenever the picture was COMPOSED: by a wave reading the control region and each slot separately
+        // in follow mode, and by a direct poll above 125 registers, which the protocol forces into several
+        // FC03s whose ages differ. Direct mode used to leave it null unconditionally, on a premise that
+        // stopped being true the moment the declared area outgrew one transaction.
         var rows = RowsOf(map, registers, lastSuccess?.RegisterObservedUtc, lastSuccess?.At, now, staleAfter);
 
         return new MirrorViewModel(
@@ -182,7 +208,16 @@ public static class MirrorView
             // reason, and a count whose denominator is not the one on screen is a count nobody can check.
             RegistersCurrent: rows.Count(r => r.Current),
             RegistersStale: rows.Count(r => r.ObservedUtc is not null && !r.Current),
-            RegistersNotObserved: rows.Count(r => r.ObservedUtc is null));
+            RegistersNotObserved: rows.Count(r => r.ObservedUtc is null),
+
+            // *** THE TRANSACTION COUNT COMES FROM THE POLL THAT PRODUCED THE ROWS, NOT THE LAST ATTEMPT. ***
+            // It is the denominator OF WHAT IS ON SCREEN; taking it from a later failed attempt would
+            // describe the reading with a number belonging to a read that produced none of it.
+            Transactions: lastSuccess?.Transactions ?? 0,
+
+            // Read from the options' single derivation. Zero in follow mode is not a missing number: this
+            // viewer issues no FC03 there at all, and the publisher's count is its own, in Feed.Frames.
+            TransactionsPerPoll: options.IsFollowing ? 0 : options.TransactionsPerPoll);
     }
 
     /// <summary>
@@ -350,7 +385,7 @@ public static class MirrorView
 
     /// <summary>
     /// When the read behind one register returned. Falls back to the attempt's own instant, which is the
-    /// truth in direct mode and the best available in follow mode when the mask is short.
+    /// truth for a single-transaction poll and the best available when a mask is short.
     /// </summary>
     private static DateTimeOffset ObservedAtRegister(PollAttempt attempt, int register)
     {
@@ -362,8 +397,8 @@ public static class MirrorView
     }
 
     /// <summary>
-    /// Whether an element's every register carries a real reading. <b>Null mask means direct mode</b>,
-    /// where the single transaction covered the whole area by construction.
+    /// Whether an element's every register carries a real reading. <b>A null mask means ONE TRANSACTION
+    /// covered the whole area</b>, which is the only case where every register is read by construction.
     /// </summary>
     private static bool WholeElementObserved(DateTimeOffset?[]? observed, int first, int count)
     {
@@ -418,7 +453,10 @@ public static class MirrorView
         // scan counter may not be that read — so differencing the picture instants would divide a real
         // scan advance by the wrong milliseconds and publish a confident wrong "ms per scan". Each side
         // supplies the instant of the read that produced ITS counter, falling back to the picture's own
-        // instant in direct mode, where they are the same thing by construction.
+        // instant when one transaction produced everything, where they are the same thing by construction.
+        // ⚠️ A direct poll above 125 registers is NOT that case: the counter sits in page 1 and the
+        // picture's instant belongs to the last page, so dividing by the picture instants would have
+        // published a confident wrong "ms per scan" there too.
         var interval = (long)(ObservedAtRegister(lastSuccess, ScanCounterRegister)
                               - ObservedAtRegister(previousSuccess, ScanCounterRegister)).TotalMilliseconds;
 

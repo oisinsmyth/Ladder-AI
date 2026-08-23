@@ -47,6 +47,25 @@ public sealed record MirrorViewOptions(
     /// <summary>True when this viewer follows a wave's published feed rather than opening its own socket.</summary>
     public bool IsFollowing => FollowPath is not null;
 
+    /// <summary>The most registers one FC03 can carry. The protocol's number, never this viewer's.</summary>
+    public static int PageSize => Harness.Map.ModbusLimits.MaxReadRegisters;
+
+    /// <summary>
+    /// 🔴 <b>HOW MANY FC03 TRANSACTIONS ONE DIRECT POLL OVER THE DECLARED AREA TAKES.</b> One at 37, three
+    /// at 300, nine at 1024 — and until 2026-08-23 every label in <see cref="MirrorPoller"/> said one
+    /// whatever the width, because nothing in the viewer computed this at all.
+    ///
+    /// <para><b>DERIVED HERE AND NOWHERE ELSE.</b> The poller needs it to name the transaction it issued
+    /// and the view model needs it to decide whether "every row shares one instant" is still a true
+    /// sentence — so it is one expression with two readers, not two expressions. Two derivations of one
+    /// number is how <c>GateParityTests</c> came to exist in this repo: the copy drifts, and here the copy
+    /// would decide what the page CLAIMS while the original decided what actually happened.</para>
+    /// </summary>
+    public int TransactionsPerPoll => (Math.Max(0, DeclaredRegisters) + PageSize - 1) / PageSize;
+
+    /// <summary>The last register index in the declared area — <c>0..n-1</c>, named once.</summary>
+    public int LastDeclaredRegister => DeclaredRegisters - 1;
+
     /// <summary>
     /// What this viewer is pointed at, in the form the page prints. <b>The two modes read differently on
     /// purpose</b> — a page showing another process's reads must not be mistakeable for one holding a

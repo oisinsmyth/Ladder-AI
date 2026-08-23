@@ -116,13 +116,30 @@ public sealed record FeedProvenance(
 /// <param name="Registers">The whole declared area. Empty unless <see cref="PollOutcome.Ok"/>.</param>
 /// <param name="ElapsedMs">Wall time for the transaction.</param>
 /// <param name="RegisterObservedUtc">
-/// 🔴 <b>PER-REGISTER PROVENANCE, AND A NULL IS "NOTHING READ THIS ONE".</b> Null for the whole array in
-/// DIRECT mode, where one FC03 covers the whole area and every register shares <paramref name="At"/> by
-/// construction. Populated in FOLLOW mode, where the picture is composed from the several reads a wave
-/// actually makes and the registers therefore have DIFFERENT AGES. A consumer that ignored this would
-/// print a register nobody read as a zero, and a register read forty seconds ago beside one read now.
+/// 🔴 <b>PER-REGISTER PROVENANCE, AND A NULL IS "NOTHING READ THIS ONE".</b> Null for the whole array only
+/// when ONE transaction covered everything — a direct poll over an area that fits inside a single FC03,
+/// where every register shares <paramref name="At"/> by construction and a per-register copy of it would
+/// just be a second thing that can disagree with the first.
+///
+/// <para>⚠️ <b>Populated whenever the picture was COMPOSED, and above 125 registers a direct poll composes
+/// too.</b> That premise held while the viewer only ever ran at 37 registers; at the rig's real width the
+/// area is nine FC03s, nine separate moments with the scan counter moving between them, and the null here
+/// asserted a coherence the reading did not have. Each register now carries the instant ITS OWN page
+/// returned — the same treatment follow mode has always had, for the same reason.</para>
+///
+/// <para>A consumer that ignored this would print a register nobody read as a zero, and a register read
+/// forty seconds ago beside one read now.</para>
 /// </param>
 /// <param name="Feed">Where a followed reading came from. Null in direct mode.</param>
+/// <param name="Transactions">
+/// 🔴 <b>HOW MANY FC03s THIS CYCLE ISSUED — THE DENOMINATOR, AND IT IS PRINTED EVEN WHEN IT IS ONE.</b>
+/// Counted at the wire, so a page that timed out still counts as a request this program sent, and a poll
+/// the fence refused reports zero rather than the count a healthy poll would have made.
+///
+/// <para>Zero in FOLLOW mode, where this viewer issues no transaction at all: the publisher's own count is
+/// <c>FeedProvenance.Frames</c>, which is a different process's number and must not be laundered into
+/// this one.</para>
+/// </param>
 public sealed record PollAttempt(
     DateTimeOffset At,
     PollOutcome Outcome,
@@ -130,7 +147,8 @@ public sealed record PollAttempt(
     ushort[] Registers,
     long ElapsedMs,
     DateTimeOffset?[]? RegisterObservedUtc = null,
-    FeedProvenance? Feed = null)
+    FeedProvenance? Feed = null,
+    int Transactions = 0)
 {
     public bool Ok => Outcome == PollOutcome.Ok;
 }

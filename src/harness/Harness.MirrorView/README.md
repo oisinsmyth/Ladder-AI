@@ -81,8 +81,15 @@ A 32-bit element needs **both** halves observed; half a value is not a value, an
 half with one default produces a plausible number. The build-stamp card and the scan-counter card refuse on
 the same rule.
 
-In **direct mode** one FC03 covers the whole area, so every row shares one instant and the per-row treatment
-and the whole-table one always agree — which is why direct mode looks exactly as it did.
+**Direct mode composes too, above 125 registers.** FC03 carries no more, so a declared area of 300 is three
+transactions and one of 1,024 is nine — separate moments on a live mirror, with the scan counter moving
+between them. Each register therefore carries the instant **its own page returned**, exactly as in follow
+mode, and a 32-bit element straddling a page boundary takes the **older** of its two halves. The source card
+states how many transactions composed the reading and says plainly that it is a **reassembly, not a
+snapshot**.
+
+Only where the whole area fits in **one** FC03 does every row share one instant — and only there do the
+per-row treatment and the whole-table one always agree. That case looks exactly as it did.
 
 ## What each row shows
 
