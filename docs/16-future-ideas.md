@@ -39,9 +39,9 @@ IDs are `FI-xx`, citable the same way as `R-xx` (risks), `C-xxx` (conventions), 
 ## Index — coverage repair, 2026-08-23
 
 🔴 **THE SECTION BELOW CALLS ITSELF "THE INDEX", IS DATED 2026-08-05, AND INDEXES ROUGHLY HALF OF
-THIS DOCUMENT.** It is the newest thing a reader meets and it stops at FI-39. **Twenty-nine entries
+THIS DOCUMENT.** It is the newest thing a reader meets and it stops at FI-39. **Thirty entries
 are not in it** — `FI-40`…`FI-54` (fifteen, seven of them raised the same day the index was written)
-and `FI-61`…`FI-73` plus `FI-76` (fourteen, essentially all of the live-job work). A reader who trusts
+and `FI-61`…`FI-73` plus `FI-76` and `FI-77` (fifteen, essentially all of the live-job work). A reader who trusts
 it misses the entire second half of the backlog, including everything learned on real jobs.
 
 ⚠️ **This index states POINTERS AND A DENOMINATOR, and deliberately restates NO status.** That is
@@ -49,7 +49,7 @@ it misses the entire second half of the backlog, including everything learned on
 precisely how the 2026-08-05 section rotted. **Each entry below carries its own authoritative status.
 Go and read it.**
 
-**Denominator: 68 entries exist**, numbered `FI-01`…`FI-54`, `FI-61`…`FI-73`, `FI-76`.
+**Denominator: 69 entries exist**, numbered `FI-01`…`FI-54`, `FI-61`…`FI-73`, `FI-76`, `FI-77`.
 
 🔴 **AND THE NUMBERING HAS HOLES THAT ARE NOT GAPS IN WORK — `FI-55`…`FI-60`, `FI-74` and `FI-75`
 HAVE NO ENTRY IN THIS FILE AT ALL, YET ARE CITED AS SETTLED FACT ELSEWHERE.** Measured by
@@ -81,7 +81,7 @@ whole page keeps recording. **Whoever did that work owns the entries.**
 | **FI-53** | the reference graph did not credit a read taken THROUGH an array element |
 | **FI-54** | the HMI capability probe programme |
 
-**FI-61 … FI-73, FI-76** — Openness, converter and harness work, 2026-08-07 → 08-17:
+**FI-61 … FI-73, FI-76, FI-77** — Openness, converter and harness work, 2026-08-07 → 08-24:
 
 | | |
 |---|---|
@@ -99,6 +99,7 @@ whole page keeps recording. **Whoever did that work owns the entries.**
 | **FI-72** | both converters wrote beside their input, and silently overwrote hand-authored IR |
 | **FI-73** | an unknown `--flag` was treated as a FILENAME; a stale Release build is how it surfaced |
 | **FI-76** | the map model: derive the block structure from the border, build it in order-waves |
+| **FI-77** | a per-block compile reported the whole program's errors, counting empty parent nodes |
 
 ⚠️ **The entries are NOT in numeric order in this file** — FI-67 precedes FI-66, and FI-71/72/73
 precede FI-68/69/70. Read by heading, not by position.
@@ -2165,3 +2166,64 @@ refuses, the current behaviour is correct throughout and this entry closes.
 above.** That is a comparator learning to equate more representations, which is how a comparator
 starts passing things — and it would silently merge two paths in the usage graph on every project,
 for a defect nobody has yet observed on real data.
+
+---
+
+### FI-77 — a per-block compile reports the whole program's errors, and the count includes empty parent nodes
+
+- **Status:** **Raised 2026-08-24 — measured on a real project, documented in
+  `src/openness-cli/README.md`, NOT FIXED.** The counting half is deliberately left alone; see
+  *Why it is not simply fixed* below.
+- **Raised:** 2026-08-24 · **Source:** a build lane keying on the `ERRORS:` line, exactly as the
+  compile-gate guidance tells it to, and reading a provably clean block as seven errors.
+
+**What was measured.** `compile --block <name>` on a block that had just been repaired printed:
+
+```
+STATE: Error
+ERRORS: 7  WARNINGS: 2
+NOTE: compiler reported ErrorCount=2, WarningCount=1 - these disagree with the messages
+      above and are not reliable; counts shown are from the message tree.
+CONSISTENT: yes  (re-read after the compile; TIA will export this item)
+...
+[Success] <the compiled block>: Block was successfully compiled.
+[Error] Compiling finished (errors: 2; warnings: 1)
+```
+
+**None of the seven errors belonged to the block being compiled.** Two were real errors in an
+unrelated block in a different folder — not a dependency, not in the import set. Four were the
+structural parent nodes TIA emits above them (`<device>:`, `Program blocks:`, `<folder>:`,
+`<the other block>:`), each carrying `Error` state and an **empty description**. The seventh was the
+`Compiling finished` rollup.
+
+**Two distinct defects, and they point opposite ways.**
+
+1. **Scope.** A `--block` compile's message tree is program-wide. The per-block command reports a
+   whole-program compile, so `STATE:` and `ERRORS:` are not about the block named on the command
+   line. The only per-item verdict is the `[Success] <name>:` line plus `CONSISTENT:`.
+2. **Counting.** The tree count inflates by counting non-leaf nodes that carry a state but no
+   message. Here the compiler's own `ErrorCount=2` was *right* and the tree count of 7 was wrong —
+   the reverse of the case the `NOTE` was written for, where the compiler reported `WARNINGS: 0`
+   against 156 warning messages.
+
+**The exit code is NOT affected and needs no change.** It takes the larger of the two counts, so it
+is fail-closed and cannot read a dirty program as clean. What it silently is, though, is a
+*program-wide* gate on a per-block command: a genuinely clean block in a program containing one
+unrelated broken block still exits non-zero. That is the safe direction, but it is not what the
+command appears to promise.
+
+**Why it is not simply fixed.** Counting only *leaf* messages would drop the four structural nodes
+and reconcile both observations at once. But `CompileMessage` is **flattened at collection** —
+`CollectMessages` recurses the nested `CompilerResultMessage` tree and keeps every node with no
+parent/child marker — so by the time `OutputFormatter.CountFromMessages` sees them, leaf and parent
+are indistinguishable. Restoring the distinction is a model change (`CompileMessage` gains a leaf
+flag set at collection time) plus a live compile to confirm the real tree shape.
+
+🔴 **The tree shape above is inferred from pre-order output, not observed.** The rollup node prints
+*last*, which a pre-order walk of a single root would not do, so there are multiple roots and the
+nesting is not what the flat listing suggests. **Confirm the shape against a live compile before
+writing the fix** — this entry records a measurement and a hypothesis, and is careful to say which
+is which.
+
+**Do NOT "fix" this by trusting the compiler's aggregates instead.** That inverts a defect already
+measured in the other direction and would make a 156-warning compile report zero.
