@@ -39,9 +39,9 @@ IDs are `FI-xx`, citable the same way as `R-xx` (risks), `C-xxx` (conventions), 
 ## Index — coverage repair, 2026-08-23
 
 🔴 **THE SECTION BELOW CALLS ITSELF "THE INDEX", IS DATED 2026-08-05, AND INDEXES ROUGHLY HALF OF
-THIS DOCUMENT.** It is the newest thing a reader meets and it stops at FI-39. **Thirty-one entries
+THIS DOCUMENT.** It is the newest thing a reader meets and it stops at FI-39. **Thirty-two entries
 are not in it** — `FI-40`…`FI-54` (fifteen, seven of them raised the same day the index was written)
-and `FI-61`…`FI-73` plus `FI-76`…`FI-78` (sixteen, essentially all of the live-job work). A reader who trusts
+and `FI-61`…`FI-73` plus `FI-76`…`FI-79` (seventeen, essentially all of the live-job work). A reader who trusts
 it misses the entire second half of the backlog, including everything learned on real jobs.
 
 ⚠️ **This index states POINTERS AND A DENOMINATOR, and deliberately restates NO status.** That is
@@ -49,7 +49,7 @@ it misses the entire second half of the backlog, including everything learned on
 precisely how the 2026-08-05 section rotted. **Each entry below carries its own authoritative status.
 Go and read it.**
 
-**Denominator: 70 entries exist**, numbered `FI-01`…`FI-54`, `FI-61`…`FI-73`, `FI-76`…`FI-78`.
+**Denominator: 71 entries exist**, numbered `FI-01`…`FI-54`, `FI-61`…`FI-73`, `FI-76`…`FI-79`.
 
 🔴 **AND THE NUMBERING HAS HOLES THAT ARE NOT GAPS IN WORK — `FI-55`…`FI-60`, `FI-74` and `FI-75`
 HAVE NO ENTRY IN THIS FILE AT ALL, YET ARE CITED AS SETTLED FACT ELSEWHERE.** Measured by
@@ -81,7 +81,7 @@ whole page keeps recording. **Whoever did that work owns the entries.**
 | **FI-53** | the reference graph did not credit a read taken THROUGH an array element |
 | **FI-54** | the HMI capability probe programme |
 
-**FI-61 … FI-73, FI-76 … FI-78** — Openness, converter and harness work, 2026-08-07 → 08-25:
+**FI-61 … FI-73, FI-76 … FI-79** — Openness, converter and harness work, 2026-08-07 → 08-25:
 
 | | |
 |---|---|
@@ -101,6 +101,7 @@ whole page keeps recording. **Whoever did that work owns the entries.**
 | **FI-76** | the map model: derive the block structure from the border, build it in order-waves |
 | **FI-77** | a per-block compile reported the whole program's errors, counting empty parent nodes |
 | **FI-78** | `diff` can declare an insertion but not a deletion, so an add-and-remove cannot pass |
+| **FI-79** | `diff` without `--only` exits 0 unconditionally — examining nothing reads as a pass |
 
 ⚠️ **The entries are NOT in numeric order in this file** — FI-67 precedes FI-66, and FI-71/72/73
 precede FI-68/69/70. Read by heading, not by position.
@@ -2279,3 +2280,59 @@ gating is the value: LAD executes in network order and a silent reorder is a beh
 no other check on the mechanical floor would catch. An inferred deletion is the tool guessing at
 intent, which is the same class of error as a comparator learning to equate more representations.
 The escape must stay **declared by the caller and checked by the tool.**
+
+---
+
+### FI-79 — `converter diff` without `--only` returns exit 0 unconditionally, and exit 0 reads as a pass
+
+- **Status:** **Raised 2026-08-25 — confirmed from source, documented in `src/converter/README.md`,
+  NOT changed.** The exit code is a contract other callers key on; see *Why it is not simply changed*.
+- **Raised:** 2026-08-25 · **Source:** an agent that ran the bare form, got exit 0, and **doubted it**
+  — then established from the code that the number could not have been anything else.
+
+**The finding.** Both halves of `diff`'s verdict are guarded on `--only` having been supplied:
+
+```csharp
+public IReadOnlyList<NetworkDiff> InvarianceViolations =>
+    AllowedNetworks.Count == 0 ? Array.Empty<NetworkDiff>() : …   // no --only ⇒ empty, always
+
+public bool HasUnclaimedHeaderChange =>
+    AllowedNetworks.Count > 0 && !HeaderChangeAllowed && …        // no --only ⇒ false, always
+
+public bool HasInvarianceViolation => InvarianceViolations.Count > 0 || HasUnclaimedHeaderChange;
+```
+
+So a bare `converter diff <old> <new>` exits **0** with any number of changed, added or removed
+networks, **and** through an undeclared interface retype **and** a block name mismatch — the two
+header cases the gating rules exist to catch, one of which (`Bool` → `Int` with no network touched)
+compiles, imports, and misbehaves on the controller, and the other of which makes TIA's
+name-matching import create a **duplicate block** rather than update one.
+
+**Why it matters more than a missing flag.** `diff` is the tool agents are instructed to quote as
+invariance evidence — *"touch only the named network(s), and prove the rest identical with
+`converter diff --only`."* The failure mode is not a wrong answer; it is a **confident right-looking
+answer to a question that was never asked.** An agent reporting *"`converter diff` exit 0"* without
+`--only` has reported nothing, and nothing about the output says so.
+
+🔴 **This is `EMPTY IS NOT CLEAN` in the one place the convention does not apply itself.** Across the
+mechanical floor — `candidate-scan`, `undriven-scan`, `reuse-scan`, `relation-reconcile`,
+`signal-sweep` — examining nothing is **exit 2**, deliberately, *because a pass must never be
+returned by a check that looked at nothing*. Here examining nothing is **exit 0**. The project's own
+principle is stated in the README of the tool that breaks it.
+
+**Why it is not simply changed.** Making the bare form exit 2 is the answer that matches the
+convention, and it is also a **breaking change to an exit-code contract** — the report form is
+legitimately useful and other callers may key on 0. The safe shape is probably: keep 0 for the
+explicit report form, and make the *verdict lines themselves* state that no invariance question was
+asked, so the output cannot be quoted as a gate even when the exit code is.
+
+**Do NOT "fix" this by making `--only` mandatory.** The report form has real uses — orientation on
+an unfamiliar change, and the staged proofs FI-78 describes, where a widened run is quoted precisely
+*as* a report alongside the strict run. Removing it would push authors toward worse evidence, not
+better.
+
+**A second trap, measured the same day and the reason the first was nearly misfiled.** A `diff` run
+piped to `tail` reports **`tail`'s** exit status, not `diff`'s, and a real gate result was almost
+recorded as a tool defect on the strength of it. The standing *"never pipe"* rule was written for
+`openness-cli` (Portal is launched as a child and the pipe outlives the command); the mechanism here
+is different and ordinary, but the discipline is identical — **redirect with `>` and read the file.**

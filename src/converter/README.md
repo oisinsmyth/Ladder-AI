@@ -1896,6 +1896,40 @@ so an operand inside an array of UDT now types correctly for `to-xml --synthesiz
 
 `converter diff <old.ir> <new.ir> [--only <network>...] [--allow-header] [--json]`
 
+🔴 **WITHOUT `--only`, `diff` IS A REPORT AND CANNOT GATE. EXIT 0 IS UNCONDITIONAL AND PROVES
+NOTHING (2026-08-25).** Both halves of the verdict are guarded on `--only` having been supplied:
+
+```csharp
+public IReadOnlyList<NetworkDiff> InvarianceViolations =>
+    AllowedNetworks.Count == 0 ? Array.Empty<NetworkDiff>() : …   // no --only ⇒ empty, always
+
+public bool HasUnclaimedHeaderChange =>
+    AllowedNetworks.Count > 0 && !HeaderChangeAllowed && …        // no --only ⇒ false, always
+
+public bool HasInvarianceViolation => InvarianceViolations.Count > 0 || HasUnclaimedHeaderChange;
+```
+
+So a bare `converter diff <old> <new>` returns **0 with any number of changed, added or removed
+networks**, and returns 0 through an undeclared **interface retype** and a **block name mismatch** —
+the two things the header rules below exist to catch. This is by design (the report form is useful),
+but the exit code does not say so, and **`diff` is the tool agents are told to quote as invariance
+evidence.** An agent reporting *"`converter diff` exit 0"* without `--only` has reported nothing at
+all.
+
+**This is `EMPTY IS NOT CLEAN` in the one place the convention does not apply itself:** everywhere
+else on the mechanical floor, examining nothing is **exit 2**, which is never a pass. Here examining
+nothing is **exit 0**, which reads as one. Raised as **FI-79**; not changed here, because the exit
+code is a contract other callers key on.
+
+**When you need the gate, pass `--only`.** When a change genuinely touches every network, say so and
+prove it another way — do not reach for the bare form because it goes green.
+
+⚠️ **And do not read a `diff` exit code through a pipe.** Measured the same day: a run piped to
+`tail` reported the exit status of `tail`, not of `diff`, and a real gate result was nearly filed as
+a tool defect on the strength of it. Redirect with `>` and read the file. (The standing "never pipe"
+rule was written for `openness-cli` and Portal; the reason differs here, but the discipline is the
+same.)
+
 `--only` asks one question: *did anything change outside the named networks that could alter what
 the PLC does?*
 
