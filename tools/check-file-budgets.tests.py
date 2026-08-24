@@ -416,6 +416,88 @@ def worktree_crlf_file_is_not_inflated_twice(tmp):
     assert_in("200 bytes headroom", out, "no invented bytes")
 
 
+# --- the OTHER thing hooks/pre-commit runs: the gate on the agent-evidence gate -------
+#
+# This file is where the hook's logic is tested, because the hook itself is deliberately
+# three lines ("a hook that grows a loop per budgeted path is a hook nobody tests"). The
+# second refusal added on 2026-08-24 is `check-agent-evidence.tests.py --staged-only`, and
+# its decision - run the suite, or don't - is the part that has to be exercised in both
+# directions.
+#
+# Each case copies the suite (and the checker it drives) into a throwaway git repo, exactly
+# as the budget cases above copy the budget script. The copy computes its own ROOT, so it
+# reads the throwaway index and never the real one - which also means the real
+# ir/test-project001 corpus and the Release converter are absent, so the cases stay fast.
+
+def stage_gate(tmp, staged, break_checker=False):
+    """A throwaway repo with `staged` staged. Returns (exit, stdout, stderr)."""
+    os.makedirs(os.path.join(tmp, "tools"))
+    for name in ("check-agent-evidence.py", "check-agent-evidence.tests.py"):
+        src = io.open(os.path.join(ROOT, "tools", name), encoding="utf-8", newline="").read()
+        if break_checker and name == "check-agent-evidence.py":
+            # Break the COPY, never the original: the three cases that need no converter
+            # assert this string, so removing it turns them into real FAILs.
+            src = src.replace("NOTHING VERIFIED", "quietly fine")
+        io.open(os.path.join(tmp, "tools", name), "w",
+                encoding="utf-8", newline="").write(src)
+    io.open(os.path.join(tmp, "unrelated.md"), "w", encoding="utf-8").write("x\n")
+    quiet = {"stdout": subprocess.PIPE, "stderr": subprocess.PIPE, "cwd": tmp}
+    subprocess.call(["git", "init"], **quiet)
+    subprocess.call(["git", "config", "user.email", "t@t"], **quiet)
+    subprocess.call(["git", "config", "user.name", "t"], **quiet)
+    for rel in staged:
+        subprocess.call(["git", "add", rel], **quiet)
+    return run(os.path.join(tmp, "tools", "check-agent-evidence.tests.py"), "--staged-only")
+
+
+@tmpcase
+def staged_gate_skips_when_the_checker_is_not_staged(tmp):
+    """THE CONTROL. An ordinary commit must not pay for this, and - the assertion that
+    matters - the suite must not have run at all, not merely have passed."""
+    code, out, _ = stage_gate(tmp, ["unrelated.md"])
+    assert_eq(code, EXIT_OK, "an unrelated commit is not refused")
+    assert_in("not staged", out, "it says why it did nothing")
+    assert "RESULT:" not in out, "the suite ran when nothing asked it to"
+    assert "PASS  " not in out, "the suite ran when nothing asked it to"
+
+
+@tmpcase
+def staged_gate_runs_when_the_checker_is_staged(tmp):
+    code, out, _ = stage_gate(tmp, ["tools/check-agent-evidence.py"])
+    assert_in("IS staged - running its self-tests", out, "the decision is announced")
+    assert_in("RESULT:", out, "and the suite actually ran")
+
+
+@tmpcase
+def staged_gate_runs_when_only_the_tests_are_staged(tmp):
+    """Editing the tests is editing the gate. A suite weakened in the same commit that
+    weakens the checker would otherwise walk straight through."""
+    code, out, _ = stage_gate(tmp, ["tools/check-agent-evidence.tests.py"])
+    assert_in("IS staged - running its self-tests", out, "the decision is announced")
+
+
+@tmpcase
+def staged_gate_refuses_the_commit_when_the_suite_fails(tmp):
+    """🔴 THE REFUSAL. A staged change to the checker whose self-tests fail must exit
+    non-zero, which is what makes hooks/pre-commit refuse the commit."""
+    code, out, _ = stage_gate(tmp, ["tools/check-agent-evidence.py"], break_checker=True)
+    assert code != EXIT_OK, "a failing self-test suite must refuse the commit"
+    assert_in("FAIL  ", out, "and the failing case is named")
+
+
+@tmpcase
+def staged_gate_fails_closed_when_git_cannot_be_read(tmp):
+    """Not a git repo at all. A gate that disappears when its dependencies do is not a
+    gate - the same rule hooks/pre-commit's own header states."""
+    os.makedirs(os.path.join(tmp, "tools"))
+    for name in ("check-agent-evidence.py", "check-agent-evidence.tests.py"):
+        shutil.copy2(os.path.join(ROOT, "tools", name), os.path.join(tmp, "tools", name))
+    code, _, err = run(os.path.join(tmp, "tools", "check-agent-evidence.tests.py"),
+                       "--staged-only")
+    assert_eq(code, EXIT_CANNOT_RUN, "an unreadable index must refuse, not skip")
+    assert_in("NOTHING CHECKED", err, "the diagnostic")
+
+
 for name, body in [
     ("all under budget passes", all_under_budget_passes),
     ("exactly at the ceiling passes", exactly_at_ceiling_passes),
@@ -440,6 +522,13 @@ for name, body in [
     ("worktree LF file is measured CRLF-equivalent", worktree_lf_file_is_measured_crlf_equivalent),
     ("worktree and staged agree on one commit", worktree_and_staged_agree_on_one_commit),
     ("worktree CRLF file is not inflated twice", worktree_crlf_file_is_not_inflated_twice),
+
+    # The hook's second refusal.
+    ("staged gate skips when the checker is not staged", staged_gate_skips_when_the_checker_is_not_staged),
+    ("staged gate runs when the checker is staged", staged_gate_runs_when_the_checker_is_staged),
+    ("staged gate runs when only the tests are staged", staged_gate_runs_when_only_the_tests_are_staged),
+    ("staged gate refuses the commit when the suite fails", staged_gate_refuses_the_commit_when_the_suite_fails),
+    ("staged gate fails closed when git cannot be read", staged_gate_fails_closed_when_git_cannot_be_read),
 ]:
     case(name, body)
 

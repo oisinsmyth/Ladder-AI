@@ -43,6 +43,31 @@ The dispatcher verifies it with one command, which recomputes every hash itself:
 python tools/check-agent-evidence.py agent-tasks/<id>/evidence.json
 ```
 
+**Then, and only then, release the sub-agent's claims:**
+
+```
+converter claims --project ir/<project>/ --claims C:\ProgramData\Ladder-AI\claims --release --agent "<the agent id in the evidence>" --all
+```
+
+🔴 **THE ORDER IS THE POINT, AND GETTING IT WRONG INVERTED THE GATE ONCE ALREADY.** The claims half of
+the check joins the evidence to claims the registry is *still holding*: it is what proves the block was
+reserved before it was written. Until 2026-08-24 all three `gen-block-*` skills ended by telling the
+sub-agent to release everything, while verification has always been the dispatcher's job and happens
+*after* hand-back — so by the time the check ran the store was empty, and it reported `claims confirmed
+in store: 0` with a message accusing the reader of a misconfigured store root. It reded on every run
+that followed the skills exactly, which is how a team learns to reach for `--no-verify`. The sub-agent
+now hands back HOLDING its claims and this step releases them.
+
+**A dispatch that dies between hand-back and this step leaves a live claim.** Nothing auto-releases,
+deliberately — `ClaimStore` reports stale claims and never clears them, because deleting another
+agent's coordination state on a guess is how work gets lost. The backstop is
+`converter claims --project ir/<project>/ --claims C:\ProgramData\Ladder-AI\claims --check`, which lists
+anything older than 24 h under `stale`. **Run it before dispatching a batch**: a stale claim from a
+dead dispatch does not corrupt anything, but it will refuse the next agent that wants the same block,
+and the refusal names the holder so you can see it was a session that no longer exists. (Measured
+2026-08-24: the shared store was holding fourteen unreleased claims, the oldest a week old. Nothing
+had ever looked.)
+
 **Why this exists.** Hard rule 8 requires the dispatcher to verify the sub-agent's *actual* diff
 and compile evidence rather than its summary. Before this, that meant re-reading the work — the
 single largest source of the recheck-each-other cost, and the thing the 2026-08-21 context cut was

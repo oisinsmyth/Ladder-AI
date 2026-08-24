@@ -119,9 +119,9 @@ Hand back (per `lad-coder`'s "what you hand back" contract — your summary is n
   gate is **required** here — on a fix, the invariance proof is the deliverable. So is **`claims`** —
   `{kind, value, agent}` per claim acquired; a run that touched IR and declares none is refused.
 
-Then **release every claim**:
-`converter claims --project ir/<project>/ --claims C:\ProgramData\Ladder-AI\claims --release --agent "$CLAUDE_CODE_SESSION_ID/lad-coder" --all`.
-Nothing auto-releases; a stale claim is reported and never cleared for you.
+🔴 **DO NOT RELEASE YOUR CLAIMS. Hand back holding them** — the dispatcher verifies against the store
+and releases afterwards (`agent-tasks/README.md`). Releasing first empties the store before the check
+runs, and the check then reds on a correct run.
 
 Append one telemetry line to `gen/<project>/telemetry.log` (`gen-block-modify-fix`; include blocked/routed
 runs) **when the project has one** — a validation corpus (`gen/_validation/*`) has no telemetry log, so
