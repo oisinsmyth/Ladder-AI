@@ -295,6 +295,13 @@ public static class SubmissionGate
         gates.Add(Fidelity(vectors, fidelity));
         gates.Add(FidelityAuthority(vectors, fidelity, blockAuthor));
         gates.Add(Observability(vectors, enumerations, map, floorScans, runtimeCompression));
+
+        // *** BESIDE GATE 5 BECAUSE IT IS THE OTHER HALF OF THE SAME ADMISSION. *** Gate 5 admits a latch
+        // on a block NAME; 5b differences that name against the deployment's object manifest. It reads the
+        // deployment through the same two fields gate 11 does, and it is registered here rather than next
+        // to 11 so a reader of the latch admission finds its closure on the next line.
+        gates.Add(LatchBlockInTheDeployment(map, deployment, tagMapReach));
+
         gates.Add(Settling(vectors));
         gates.Add(new GateResult("6b settling — does the condition imply the value is final", GateStatus.Judgement, true, "none, ever",
             "whether the declared settling condition really implies finality is judgement, informed by the model's fidelity declaration."));
@@ -1548,7 +1555,10 @@ public static class SubmissionGate
             ? " No signal claims a latch: the copy layer emits none for these signals, and none was declared."
             : " *** LATCH CLAIMS ADMITTED ON PROVENANCE, NOT ON VERIFICATION: *** "
               + string.Join("; ", map.LatchProvenance.OrderBy(e => e.Key, StringComparer.Ordinal).Select(e => $"{e.Key} latched by {e.Value}"))
-              + ". Verify those blocks are in the deployment - THIS GATE TAKES THE NAME, NOT THE FACT.";
+              + ". Verify those blocks are in the deployment - THIS GATE TAKES THE NAME, NOT THE FACT."
+              + " *** THE 'IS IT LOADED' HALF IS NOW GATE 5b, FOR THE HAND-AUTHORED CLAIMS ONLY. *** It differences the"
+              + " named blocks against the deployment's own object manifest; it still does not verify that any of them"
+              + " LATCHES anything, which remains what this sentence says it is.";
 
     private static GateResult Observability(IReadOnlyList<SubmissionVector> vectors, AssertionEnumerationSet enumerations, MirrorObservability map, double floorScans, int runtimeCompression)
     {
@@ -1654,6 +1664,138 @@ public static class SubmissionGate
             // ONLY WHEN EVERYTHING PASSED IS MISSING FROM EVERY REPORT ANYONE READS CLOSELY - a refusing
             // report is precisely the one that gets read.
             + LatchAdmission(map));
+    }
+
+    // -------------------------------------------------------------------------------------------------
+    // 5b — the latching block, against the deployment's object manifest (M-19, second limb)
+    // -------------------------------------------------------------------------------------------------
+
+    /// <summary>
+    /// 🔴 <b>GATE 5 TAKES THE NAME. THIS ONE ASKS WHETHER THE THING NAMED IS IN THE DEPLOYMENT AT ALL.</b>
+    ///
+    /// <para><b>Measured, on the deliverable, and it was ADMISSIBLE while it was true.</b> A hand-authored
+    /// latch is admitted on PROVENANCE — <i>"this signal is latched by block X"</i> — and nothing joined X
+    /// to the set of objects that were actually loaded. So a submission could name latching blocks that
+    /// are not in the deployment and still clear every gate; that was the deliverable's own state when the
+    /// hole was found. <b>Admissible is not runnable</b>, and the old gate said so in its report rather
+    /// than pretending otherwise. This is the comparison it was pointing at.</para>
+    ///
+    /// <para>🔴 <b>SCOPED TO THE HAND-AUTHORED HALF, DELIBERATELY — DO NOT WIDEN IT.</b> A latch has two
+    /// sources (<c>Harness.Map.LatchSource</c>) and only one of them is a claim about something this gate
+    /// cannot see:</para>
+    /// <list type="bullet">
+    /// <item><description><b>GENERATED</b> — derived from the signal being declared transient, and the
+    /// copy layer emits the rung itself: the <c>SCOIL</c>/<c>RCOIL</c> pair is readable out of
+    /// <c>ir/test-project001/FC_HarnessCopyLayer.ir</c> NETWORK 8. It names NO block, so there is no name
+    /// to look up, and it is not taken on trust in the first place. <b>Widening this gate to cover it
+    /// would demand a manifest entry for a rung that is already in the artifact</b> — a refusal nobody
+    /// could satisfy, which is how a gate gets switched off.</description></item>
+    /// <item><description><b>HAND-AUTHORED</b> — a block outside the copy layer, named by the binding and
+    /// believed. That name is the whole of the evidence, and this gate is the only thing that touches
+    /// it.</description></item>
+    /// </list>
+    ///
+    /// <para><b>What a pass here does NOT say.</b> It says every named block appears in the deployment's
+    /// object manifest. It says nothing about whether that block latches anything — that is still taken on
+    /// trust, and gate 5's admission line still says so. Closing "is it loaded" does not close "does it
+    /// latch"; conflating the two would turn a narrow, real check into a claim it cannot support.</para>
+    ///
+    /// <para><b>The manifest is the deployment document's own two object lists</b> —
+    /// <c>s7Objects[].harnessObject</c> and <c>deliverableObjects</c> — reached by exactly the path gate 11
+    /// already uses. A block that is loaded and appears in neither is indistinguishable, here, from one
+    /// that is not loaded at all; the repair in both cases is the same, which is to declare it.</para>
+    /// </summary>
+    private static GateResult LatchBlockInTheDeployment(MirrorObservability map, DeploymentDeclaration? deployment, TagMapReach? reach)
+    {
+        const string name = "5b latch block in the deployment (M-19)";
+
+        // *** THE SPLIT IS MADE BY THE RENDERER'S OWN CONSTANT, NOT BY A COPY OF ITS WORDS HERE. ***
+        // `MirrorObservability.LatchProvenance` is string-to-string, so LatchSource does not survive the
+        // trip; `MirroredSignal.IsGeneratedProvenance` lives beside the text that produces it so the two
+        // cannot drift apart.
+        var handAuthored = map.LatchProvenance
+            .Where(e => !Harness.Map.MirroredSignal.IsGeneratedProvenance(e.Value))
+            .OrderBy(e => e.Key, StringComparer.Ordinal)
+            .ToArray();
+
+        // The denominator, printed on every outcome: what was examined, not only what was found.
+        var scope = $"{map.LatchProvenance.Count} latch claim(s) in the map — {handAuthored.Length} HAND-AUTHORED (a block name, believed) "
+            + $"and {map.LatchProvenance.Count - handAuthored.Length} GENERATED (the copy layer's own rung, readable out of the emitted IR, naming no block and OUT OF SCOPE here).";
+
+        if (deployment is null)
+        {
+            return GateResult.CouldNotRun(name, NotCheckedReason.RequiresTheDevice, "the deployment declaration's object manifest",
+                "no `deployment` was declared, so there was no manifest to look any latching block up in. " + scope
+                + " *** THAT IS NOT A PASS, AND IT IS THE STATE THE DELIVERABLE WAS FOUND IN: *** a latch claim carries a block name "
+                + "precisely so it can be differenced against what was loaded, and with nothing to difference it against the name is "
+                + "believed exactly as `latched: true` would have been. Whether a block is in the deployment is a property of the "
+                + "DOWNLOAD; resubmitting the vector cannot supply it.");
+        }
+
+        if (handAuthored.Length == 0)
+        {
+            return new GateResult(name, GateStatus.Checked, true, nameof(DeploymentDeclaration),
+                "no latch claim in this map names a block, so there is no name that could be absent from the deployment. " + scope
+                + " A generated latch is not taken on trust and is not made trustworthy by a manifest entry — it is in the artifact "
+                + "this harness emits.");
+        }
+
+        var manifest = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var row in deployment.S7Objects)
+        {
+            if (!string.IsNullOrWhiteSpace(row.HarnessObject))
+                manifest.Add(row.HarnessObject.Trim());
+        }
+
+        foreach (var deliverable in reach?.DeliverableObjects ?? (IReadOnlySet<string>)new HashSet<string>(StringComparer.Ordinal))
+        {
+            if (!string.IsNullOrWhiteSpace(deliverable))
+                manifest.Add(deliverable.Trim());
+        }
+
+        // *** AN EMPTY MANIFEST IS NOT A CLEAN ONE. *** A deployment that enumerates no object at all
+        // cannot confirm or deny anything, and treating "absent from an empty list" as a refusal would
+        // report the same finding for a submission that named a real loaded block as for one that named a
+        // fiction. Both are unverified; only one is wrong, and this gate cannot tell them apart yet.
+        if (manifest.Count == 0)
+        {
+            return GateResult.CouldNotRun(name, NotCheckedReason.RequiresTheDevice, "the deployment declaration's object manifest",
+                $"a `deployment` was declared and it names NO objects — neither an `s7Objects[].harnessObject` nor a `deliverableObjects` entry — "
+                + $"so the {handAuthored.Length} hand-authored latch claim(s) were compared against nothing: "
+                + string.Join("; ", handAuthored.Select(e => $"{e.Key} latched by '{e.Value}'")) + ". " + scope
+                + " *** AN EMPTY MANIFEST IS NOT AN EMPTY DEPLOYMENT. *** `noS7Transport` and `s7Objects: []` are claims about the "
+                + "classic-S7comm WIRE, not about what was loaded, and neither of them says a latching block is present. What closes "
+                + "this is the load manifest the download already produced, listed in `deliverableObjects`.");
+        }
+
+        var problems = new List<string>();
+
+        foreach (var (signal, block) in handAuthored)
+        {
+            if (manifest.Contains(block))
+                continue;
+
+            // A case-only miss is refused like any other — the manifest is compared ordinally throughout
+            // §4.5 — but it is named as such, so the refusal argues rather than merely walls.
+            var nearly = manifest.FirstOrDefault(m => string.Equals(m, block, StringComparison.OrdinalIgnoreCase));
+
+            problems.Add($"{signal}: latched by '{block}', WHICH THE DEPLOYMENT DOES NOT NAME. "
+                + (nearly is null
+                    ? "The claim is admitted on that name and nothing else, so a block that is not in the deployment makes the expectation unreadable at run time rather than failing — the mirror register is simply never set."
+                    : $"The manifest carries '{nearly}', which differs only in case. §4.5's object names are compared ORDINALLY, so this is a refusal and not a match; fix whichever of the two is wrong."));
+        }
+
+        var where = $"{manifest.Count} object(s) named by the deployment ({deployment.S7Objects.Count} s7Object row(s) + {reach?.DeliverableObjects.Count ?? 0} deliverable(s))";
+
+        return new GateResult(name, GateStatus.Checked, problems.Count == 0, nameof(DeploymentDeclaration),
+            (problems.Count == 0
+                ? $"every hand-authored latch claim names a block the deployment declares, against {where}: "
+                  + string.Join("; ", handAuthored.Select(e => $"{e.Key} latched by '{e.Value}'")) + ". "
+                : string.Join(" | ", problems) + $" Compared against {where}. ")
+            + scope
+            + " *** THIS CLOSES 'IS IT LOADED', NOT 'DOES IT LATCH'. *** The block latching the signal is still taken on trust; what "
+            + "is no longer taken on trust is that the block is in the deployment at all.");
     }
 
     // -------------------------------------------------------------------------------------------------

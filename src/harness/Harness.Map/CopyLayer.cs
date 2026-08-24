@@ -452,6 +452,33 @@ public sealed record MirroredSignal(
     public string? ArmWindow => ArmWindowStated ? ArmedBy!.Trim() : null;
 
     /// <summary>
+    /// 🔴 <b>THE OPENING WORDS OF EVERY GENERATED LATCH PROVENANCE, AND THE ONLY THING THAT TELLS THE TWO
+    /// KINDS APART ONCE THEY ARE BOTH STRINGS.</b>
+    ///
+    /// <para><see cref="LatchProvenance"/> flattens <see cref="LatchSource"/> into prose, and downstream
+    /// only the prose survives — <c>MirrorObservability.LatchProvenance</c> is a
+    /// <c>string</c>-to-<c>string</c> map. Gate 5b has to scope itself to the HAND-AUTHORED half (a
+    /// generated latch names no block, so there is no block to look for), so it needs that distinction
+    /// back. <b>It is a constant here, beside the renderer that emits it, so the test and the text cannot
+    /// drift apart</b> — the failure mode this file already carries two stale-comment tombstones for.</para>
+    /// </summary>
+    public const string GeneratedProvenancePrefix = "the generated copy layer";
+
+    /// <summary>
+    /// True when a rendered <see cref="LatchProvenance"/> came from the GENERATED half — so the caller
+    /// must not read it as a block name.
+    /// </summary>
+    /// <remarks>
+    /// <b>The residual is named rather than hidden:</b> a binding whose <c>latchedBy</c> literally begins
+    /// with <see cref="GeneratedProvenancePrefix"/> is classified generated and skipped by gate 5b. That
+    /// is a forgery and not an accident — the string is not a block name, and the binding is a third-party
+    /// artifact by gate 5's own provenance requirement. Every gate in this system is built against
+    /// correlation and oversight, not against an author deliberately impersonating the generator's prose.
+    /// </remarks>
+    public static bool IsGeneratedProvenance(string? provenance) =>
+        provenance is not null && provenance.StartsWith(GeneratedProvenancePrefix, StringComparison.Ordinal);
+
+    /// <summary>
     /// Who latches it — <b>the provenance a reviewer can check.</b>
     ///
     /// <para>For a GENERATED latch this is the copy layer itself, which is a stronger answer than a block
@@ -461,10 +488,10 @@ public sealed record MirroredSignal(
     public string? LatchProvenance => LatchSource switch
     {
         LatchSource.Generated when PhaseArmed =>
-            "the generated copy layer, PHASE-ARMED (derived: this signal is declared transient and re-arming"
+            GeneratedProvenancePrefix + ", PHASE-ARMED (derived: this signal is declared transient and re-arming"
             + (ArmWindowStated ? $", armed by '{ArmWindow}'" : ", armed by the slot's start bool alone") + ")",
 
-        LatchSource.Generated => "the generated copy layer (derived: this signal is declared transient)",
+        LatchSource.Generated => GeneratedProvenancePrefix + " (derived: this signal is declared transient)",
         LatchSource.HandAuthored => LatchedBy!.Trim(),
         _ => null,
     };

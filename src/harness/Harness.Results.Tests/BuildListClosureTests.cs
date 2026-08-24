@@ -331,15 +331,25 @@ public class BuildListClosureTests
     [Fact]
     public void The_complete_fixture_really_does_close_the_four_and_nothing_else()
     {
-        // *** EVERY OFFLINE-CLOSABLE INPUT SUPPLIED, INCLUDING THE COORDINATOR'S BINDING. *** Exactly one
-        // NOT CHECKED must remain, and it must be the device one. A larger number means the fixture is
-        // not what these tests believe it is; a smaller one would mean a device-bound gate had been
-        // satisfied by an artifact, which is the finding rather than the milestone.
+        // *** EVERY OFFLINE-CLOSABLE INPUT SUPPLIED, INCLUDING THE COORDINATOR'S BINDING. *** Exactly the
+        // DEVICE-BOUND gates may remain. A larger set means the fixture is not what these tests believe it
+        // is; a smaller one would mean a device-bound gate had been satisfied by an artifact, which is the
+        // finding rather than the milestone.
+        //
+        // 🔴 *** IT WENT FROM ONE TO TWO WHEN GATE 5b LANDED, AND THAT IS THE POINT OF 5b RATHER THAN A
+        // REGRESSION. *** `Binding` declares `latchedBy: FC_DemoLatch` and this fixture has no
+        // `deployment`, so the submission names a latching block and nothing says it was loaded — the
+        // measured state that made 5b necessary. The gate is device-bound for the same reason gate 11 is:
+        // what is on the controller is a property of the DOWNLOAD, and no offline artifact substitutes.
+        // The test's invariant is unchanged and is asserted below in its stronger form: nothing remaining
+        // is closable offline.
         var remaining = EvaluateWithBinding(Complete).NotChecked;
 
-        var gate = Assert.Single(remaining);
-        Assert.StartsWith("11 memory layout", gate.Gate, StringComparison.Ordinal);
-        Assert.Equal(NotCheckedReason.RequiresTheDevice, gate.Reason);
+        Assert.Equal(
+            new[] { "11 memory layout", "5b latch block in the deployment" }.OrderBy(s => s, StringComparer.Ordinal).ToArray(),
+            remaining.Select(g => g.Gate.Split(" (")[0]).OrderBy(s => s, StringComparer.Ordinal).ToArray());
+
+        Assert.All(remaining, g => Assert.Equal(NotCheckedReason.RequiresTheDevice, g.Reason));
 
         // And nothing that remains is closable offline — the build list is empty for this submission.
         Assert.DoesNotContain(remaining, g => g.IsClosableOffline);
