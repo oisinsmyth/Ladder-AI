@@ -10,7 +10,10 @@ Phase 8 is **built and contended, and claiming BECAME BINDING at 03:40 on 2026-0
 so the residual moved from "nothing requires claiming" to "adoption has never been run end to end,
 and a defect was found in it immediately afterwards"** (see §5 Phase 8; the marker before this one
 was corrected the same day and was wrong in both directions); Phase 9 is **struck**. **Nothing in §5 is now waiting to be
-picked up as the next thing** — §5's closing note says what is, and it is not a phase.
+picked up as the next thing** — §5's closing note says what is, and it is not a phase. ⚠️ **Phase 10
+carries one listed residual as of 2026-08-24** — `LaneManifest.BlockUnderTest` has no consumer, and the
+owner's ruling is **report, do not gate**; wiring `converter undriven-scan --fb` is a separate job, not
+the next thing.
 
 🔴 **CORRECTION 2026-08-24 — THIS LINE AND §5's TABLE CLAIMED CONTROLLER EXERCISE FOR TWO PHASES THAT
 NEVER HAD IT.** Both read *"delivered, and run on a controller · **1 · 2 · 3 · 4 · 6 · 10**"*.
@@ -1241,12 +1244,17 @@ at:**
   - **The subject must be IN the set, not mentioned beside it.** `Derive` throws when a named
     `blockUnderTest` is not among the supplied program — *"so the build stamp did not hash it, and the
     stamp is the claim that a particular program is executing."*
-  - **`AgreesWithStamp` ties the two sets in BOTH directions:** every hashed object must be named, and
-    every named object that is not the copy layer must have been hashed. 🔴 **The exemption is keyed on
-    `Role`, never on `Origin`** — *"a program under test may perfectly well have been generated, and
-    keying on that would let a real deliverable slip out of the stamp under the label that describes who
-    wrote it."* The agreement detail carries **both counts on success as well as on refusal**, so a
-    green states its own denominator.
+  - **`AgreesWithStamp` ties the two sets across THREE ARMS** — ⚠️ **corrected 2026-08-24: this read
+    *"in BOTH directions"* and both directions were NAMES.** Every hashed object must be named and every
+    named non-copy-layer object must have been hashed (**Names**); every object's IR must still hash to
+    what was recorded (**Content**); and the stamp value recorded beside the manifest must be the one
+    re-derived (**StampValue**). `StampAgreement.Fired` is a `[Flags] StampArm`
+    (`Harness.Batch/LaneManifest.cs:32-45`) *deliberately*, so **a rename fires `Names`, an in-place edit
+    fires `Content|StampValue`, and a changed binding fires `StampValue` alone** — three causes with
+    three remedies, rather than one word. 🔴 **The exemption is keyed on `Role`, never on `Origin`** —
+    *"a program under test may perfectly well have been generated, and keying on that would let a real
+    deliverable slip out of the stamp under the label that describes who wrote it."* The agreement detail
+    carries **both counts on success as well as on refusal**, so a green states its own denominator.
 
   ⚠️ **AND IT IS THE TOOLING HALF ONLY. DO NOT READ THIS AS CLOSED.** A check that would catch the
   error now exists; **nothing yet guarantees anyone runs it with the right inputs.** The stamp still
@@ -1260,6 +1268,42 @@ at:**
     deployment generates in-process. That is a deliberate split — the shelled-out copy is *"worth
     having"* because a person can read it — but it means the readable artifact and the manifested one
     are produced by different code, and only the second is tied to a stamp.
+
+  🔴 **AND THEN AN ADVERSARIAL AUDIT RAN THE "CLOSED" TOOLING AND FOUND FOUR WAYS IT PASSED ON THE CASE
+  IT EXISTS FOR. Fixed in `34210e2`; recorded here 2026-08-24.** ⚠️ **This is not a progression and must
+  not be read as one.** The sequence was: the tooling was described as closed **on this page**, an audit
+  proved four defects **by running it** — each reproduction re-run against the pre-fix binary first —
+  and the fixes shipped. *The description came before the evidence, which is the failure, not the
+  ordering.*
+
+  | # | what passed that should not have | proof | closed by |
+  |---|---|---|---|
+  | **A1** 🔴 | **The tie was NAME-ONLY.** Invert a coil inside a block **without renaming it**: stamp moved `16#CB55C62A → 16#B0993C45` **on the line directly above the verdict**, and `--check` printed `AGREES`, exit 0 | run both ways on one fixture | the three arms above; `ManifestObject.Sha256` and `LaneManifest.Stamp` now persisted and compared |
+  | **A2** | **`--block-under-test` accepted a non-block** — a set holding only `DB_UnitInstance.ir`, named as the subject, exit 0 **with a reassuring sentence attached** | *the documented Phase 10 defect verbatim*, passing the guard built to close it | `EmittedObject` now carries `HarnessObjectKind`, **required and undefaulted**; a non-Block subject is refused naming its kind (`LaneManifest.cs:378-398`) |
+  | **A3** | **`AGREES` over a ZERO DENOMINATOR exited 0** — reachable through the emit-directory case `Derive`'s own docstring contemplates. `ProgramManifest.HashedNothing` existed to tell the case apart and **nothing consulted it** | — | **exit 2**, the converter's mechanical floor reading (`BatchCli.cs:889-913`), taken *before* the copy layer is written |
+  | **B1** | **`enqueue --manifest` applied NO tie at all** and printed `DERIVED` for a hand-typed file naming **two nonexistent paths** | `AgreesWithStamp`'s only two call sites were both inside the `manifest` verb | `ContentStillMatches` re-reads and re-hashes each recorded path through `ProgramManifestEntry.HashOf` — **the rule the stamp itself uses**, one derivation called twice |
+
+  🔴 **A1 IS THE ONE THAT MATTERS, AND THE REASON IS THIS ENTRY'S OWN.** *A pre-fix `Main` and a
+  post-fix `Main` have the same name.* **So the version described above as closing the founding incident
+  could not have caught it** — the arm written to catch the case was blind to the only thing that
+  changed. The data was in hand and discarded: `BuildStamp.Derive` already computed a per-object
+  SHA-256 **and** the stamp value in the same loop, and `LaneManifest` recorded neither.
+
+  ⚠️ **THE FOURTH TIME IN TWO DAYS A PASS HAS HAD TO CORRECT THE PASS BEFORE IT**, counted from this
+  document's own change log: **v3.8** corrected the residual register; **v3.9** corrected three things
+  that went stale *while v3.8 was being written*; **v3.10** retracted v3.9's citation flag, which named a
+  clean file and missed the dirty one; **this entry** corrects v3.9's *"the producer LANDED"* and the
+  *"both directions"* claim it rested on. ***Each correction was sound and each was needed because the
+  one before it described work instead of exercising it.***
+
+  ➜ **RESIDUAL — `LaneManifest.BlockUnderTest` HAS NO CONSUMER.** The intended one, `converter
+  undriven-scan --fb <name>`, is **not wired**: outside this type's own tests the only readers are the
+  two report lines in `BatchCli` (`Manifest` and `Enqueue`), both of which **print** the value and
+  neither of which requires one (`LaneManifest.cs:229-237`). **Owner's ruling 2026-08-24: report, do not
+  gate** — a lane naming no subject still runs, so the report must make a subjectless lane impossible to
+  mistake for a verified one, which is what the banner in those two sites is for. **Wiring
+  `undriven-scan` is a separate job.** *Listed here and not only in the code, because a property that
+  exists reads as a property that is used.*
 
 - 🔴 **TRACK 3, MEASURED: THE BLOCK UNDER TEST ENTERING THE SET MOVES THE STAMP — AND WITH ONLY THE
   INSTANCE DB, TWO PROGRAMS WHOSE LOGIC DIFFERS CARRY ONE STAMP.** This is Phase 10's *"nor is the block
@@ -1885,6 +1929,44 @@ opinion.** That single sentence is why §3 is the most valuable part of this des
 > log entry, which a gate catches — but a gate cannot tell a real entry from `- v3.x — misc`, so it
 > buys the reminder and not the content.
 
+- **v3.11 — 2026-08-24. 🔴 THE TIE THIS PAGE CALLED *"BOTH DIRECTIONS"* WAS NAME-ONLY, AND AN
+  ADVERSARIAL AUDIT PROVED FOUR WAYS THE "CLOSED" MANIFEST TOOLING PASSED ON THE CASE IT EXISTS FOR.**
+  Documentation only; `34210e2` shipped the code and **touched no document** — `git show --stat` lists
+  19 files, all under `src/harness/`. Every claim below re-verified against the code at `442bf2a`.
+  **1. *"in BOTH directions"* corrected to THREE ARMS, and the correction is not cosmetic.** Both
+  directions were **names**. `StampArm` is now a `[Flags]` — `Names` / `Content` / `StampValue`
+  (`Harness.Batch/LaneManifest.cs:32-45`) — so **a rename fires `Names`, an in-place edit fires
+  `Content|StampValue`, and a changed binding fires `StampValue` alone**: three causes, three remedies,
+  rather than one word. 🔴 ***And say the consequence plainly: a pre-fix `Main` and a post-fix `Main`
+  have the same name, so the version this page described as closing the founding incident could not
+  have caught it.*** Proven by running it — invert a coil without renaming the block and the stamp moved
+  `16#CB55C62A → 16#B0993C45` **on the line directly above** a verdict of `AGREES`, exit 0. The data was
+  in hand and discarded: `BuildStamp.Derive` computed the per-object SHA-256 *and* the stamp value in
+  the same loop, and `LaneManifest` recorded neither.
+  **2. The other three defects recorded with their closures** — `--block-under-test` accepting a
+  non-block (*the documented Phase 10 defect verbatim*, passing the guard built to close it, with a
+  reassuring sentence attached); `AGREES` over a **zero denominator** at exit 0, now **exit 2** per the
+  mechanical floor; and `enqueue --manifest` applying **no tie at all** while printing `DERIVED` for a
+  hand-typed file naming nonexistent paths. Full table in §5 Phase 10.
+  ⚠️ **3. Written as what it was, not as a progression.** The tooling was described as closed **on this
+  page**, an audit found four ways it passed, the fixes shipped. ***That is the fourth time in two days
+  a pass has had to correct the pass before it*** — v3.8 corrected the residual register, v3.9 corrected
+  three things that went stale while v3.8 was being written, v3.10 retracted v3.9's citation flag, and
+  this entry corrects v3.9's *"the producer LANDED"*. **Each correction was sound; each was needed
+  because the one before it described work instead of exercising it.** *The v3.9 entry is struck in
+  place rather than rewritten, so the claim and its correction are read together.*
+  **4. `LaneManifest.BlockUnderTest` has no consumer — now a listed residual, not only a docstring.**
+  `undriven-scan --fb` is **not wired**; the only readers are two report lines that print it
+  (`LaneManifest.cs:229-237`). **Owner's ruling: report, do not gate.** Wiring it is a separate job.
+  **5. Two lessons moved to where a campaign session reads them** — `docs/notes/tooling-test-plan.md`
+  §C gains **SELF-10** (*a confident label over the wrong assertion is worse than no test, because it
+  retires the question* — a docstring claiming "THE PRE-FIX `Main` CASE, reproduced" over a test that
+  asserted a **rename**) and **SELF-11** (*a fixture that cannot fail the way the code fails* — two
+  manifests hand-built over paths that did not exist, repaired by making the fixture **write real
+  files**, never by weakening the assertion). §C's own row count was stale by one and is recounted
+  against the table.
+  **Suite at the merge: 2,909 passing, 16 assemblies, 0 failures, 0 warnings** — measured by the owner
+  on the integrated tree, superseding the 2,887 figure taken at `34b8389`.
 - **v3.10 — 2026-08-24. 🔴 A GAP THIS PAGE OVERSTATED, TWO THINGS THAT LIVED ONLY IN `git log`, AND A
   FLAG THAT WAS WRONG IN BOTH DIRECTIONS.** Documentation only — no C#, no behaviour, `src/`, `gen/`
   and `ir/` untouched (another lane is in `src/harness/**`). Every item re-derived from a file, a line
@@ -1975,8 +2057,10 @@ opinion.** That single sentence is why §3 is the most valuable part of this des
   producer in flight; it is now built. `LaneManifest.Derive(...)` emits the manifest from whatever built
   the lane, `harness-batch manifest … --check` re-derives the stamp over an existing manifest's own
   paths (the arm that catches a **stale** manifest, not merely a missing one), and
-  `LaneManifest.AgreesWithStamp(...)` ties the two sets **in both directions** — every hashed object
-  named, every named non-copy-layer object hashed. 🔴 **The exemption keys on `Role`, never `Origin`:**
+  `LaneManifest.AgreesWithStamp(...)` ties the two sets ~~**in both directions**~~ — every hashed object
+  named, every named non-copy-layer object hashed. 🔴 **CORRECTED BY v3.11 ABOVE: both directions were
+  NAMES, and a block edited without being renamed passed `--check` with the stamp visibly moved. There
+  are now three arms — Names, Content, StampValue (`34210e2`).** 🔴 **The exemption keys on `Role`, never `Origin`:**
   a program under test may legitimately be generated, and keying on who wrote it would let a real
   deliverable slip out of the stamp. `Derive` also throws when a named subject is not in the program
   set. ⚠️ **What it does NOT do, stated because the paragraph would otherwise read as closed:**

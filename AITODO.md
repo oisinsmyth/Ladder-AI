@@ -171,8 +171,15 @@ in the same commit* — for the third time, it did not.
   coverage"* where it meant the stamp. Harness **2,698 → 2,724**.
 - **`9b47ea2`** — the tag-table lesson retracted: the flag belongs to a different command.
 - ✅ **Baselines — ALL FIVE MEASURED AT HEAD, 2026-08-24, not sourced from any document.** Converter
-  **1,643** (1 assembly, exit 0) · harness **2,724** (16 assemblies, 0 failures, 0 warnings) ·
-  openness-cli **871** (1 assembly, exit 0) · golden **206** (exit 0) · budget script **23**, 0 failed.
+  **1,643** (1 assembly, exit 0) · harness ~~**2,724**~~ → **2,909** (16 assemblies, 0 failures, 0
+  warnings) · openness-cli **871** (1 assembly, exit 0) · golden **206** (exit 0) · budget script
+  **23**, 0 failed.
+  🔴 **The harness figure moved twice in one day and this line held neither.** 2,724 → **2,887** at
+  `34b8389` → **2,909** at the merge `442bf2a` (`Harness.Batch.Tests` alone 261 → 283, from the
+  four-defect audit fix `34210e2`). **2,909 is the owner's measurement on the integrated tree, taken
+  2026-08-24 and recorded here rather than re-derived** — this pass is documentation-only and ran no
+  build. ⚠️ *Consistent with this bullet's own closing lesson: where a number can be measured, measure
+  it; where it is relayed, say who measured it and on what tree.*
   ⚠️ **Caveat on the openness-cli figure: that run rebuilt the DEBUG binaries only.** Debug and Release
   hold independent TIA approvals, so the Release binaries the agents invoke are untouched — and *"the
   suite passed"* is therefore **not** evidence about the Release build.
