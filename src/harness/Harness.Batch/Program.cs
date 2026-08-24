@@ -113,7 +113,7 @@ if (configPath is not null)
     };
 }
 
-return BatchCli.Run(args, Console.Out, File.ReadAllText, File.WriteAllText, runner, deploy);
+return BatchCli.Run(args, Console.Out, File.ReadAllText, File.WriteAllText, runner, deploy, File.ReadAllBytes);
 
 string? ValueOf(string flag)
 {

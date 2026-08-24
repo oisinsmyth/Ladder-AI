@@ -34,13 +34,32 @@ public static class ProgramUnderTest
     public static IReadOnlyList<HarnessObject> Load(
         IReadOnlyList<string> paths,
         Func<string, string> readFile,
+        Func<string, IReadOnlyList<string>> expand) =>
+        LoadWithPaths(paths, readFile, expand).Select(l => l.Object).ToArray();
+
+    /// <summary>
+    /// 🔴 <b>The same load, KEEPING THE FILE EACH OBJECT CAME FROM.</b>
+    ///
+    /// <para><see cref="HarnessObject"/> carries a name, a kind and IR text and no path, which is right for
+    /// the stamp — a hash of what executes has no business depending on where the file sat. But a LANE
+    /// MANIFEST records a path per object, because a manifest exists to be turned back into a
+    /// <c>--program</c> list. Deriving the path back from the name cannot work: the loader deliberately
+    /// classifies from the IR header rather than the filename, so <c>FB_Thing</c> may well live in
+    /// <c>block-3.ir</c>.</para>
+    ///
+    /// <para><b>Every refusal is the same one</b> — this IS <see cref="Load"/>, which delegates here, so
+    /// the two cannot disagree about what a directory of <c>.ir</c> files contains.</para>
+    /// </summary>
+    public static IReadOnlyList<LoadedProgramObject> LoadWithPaths(
+        IReadOnlyList<string> paths,
+        Func<string, string> readFile,
         Func<string, IReadOnlyList<string>> expand)
     {
         ArgumentNullException.ThrowIfNull(paths);
         ArgumentNullException.ThrowIfNull(readFile);
         ArgumentNullException.ThrowIfNull(expand);
 
-        var objects = new List<HarnessObject>();
+        var objects = new List<LoadedProgramObject>();
         var seen = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var path in paths)
@@ -71,7 +90,7 @@ public static class ProgramUnderTest
                 }
 
                 seen[obj.Name] = file;
-                objects.Add(obj);
+                objects.Add(new LoadedProgramObject(obj, file));
             }
         }
 
@@ -141,3 +160,12 @@ public static class ProgramUnderTest
         }
     }
 }
+
+/// <summary>One loaded object and the <c>.ir</c> file it was read from.</summary>
+/// <param name="Object">Exactly what <see cref="ProgramUnderTest.Load"/> returns — the stamp's input.</param>
+/// <param name="Path">
+/// The file. <b>Recorded because a lane manifest is turned back into a <c>--program</c> list</b>, and a
+/// manifest naming objects with no path could not be. It is deliberately NOT part of
+/// <see cref="Harness.Map.HarnessObject"/>: the build stamp must not move because a file was relocated.
+/// </param>
+public sealed record LoadedProgramObject(HarnessObject Object, string Path);

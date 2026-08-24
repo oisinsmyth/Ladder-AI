@@ -1,6 +1,7 @@
 ﻿using Harness.Device;
 using Harness.Loop;
 using Harness.Map;
+using Harness.Run;
 using System.Text;
 
 namespace Harness.Batch;
@@ -42,6 +43,13 @@ public static class BatchCli
         "Usage: harness-batch enqueue --queue <dir> --lane <name> --binding <file> --submission <file>\n"
         + "                             (--manifest <file> | --program <path>...) [--purpose <text>]\n"
         + "                             # --manifest DERIVES the program set from what the lane emitted; --program is DECLARED by you\n"
+        + "       harness-batch manifest --lane <name> --binding <file> --submission <file> --program <path>...\n"
+        + "                             [--block-under-test <Name>] --emit <dir> --out <manifest.json>\n"
+        + "       harness-batch manifest --lane <name> --binding <file> --submission <file> --check <manifest.json>\n"
+        + "                             # WRITES the lane manifest from what the generator produced, so `enqueue --manifest`\n"
+        + "                             # can DERIVE the program set instead of you typing it. Refuses to emit a manifest\n"
+        + "                             # that names a different program from the one the build stamp hashed.\n"
+        + "                             # --check re-derives the stamp over an EXISTING manifest's own paths and compares\n"
         + "       harness-batch plan    --queue <dir> [--out <merged-binding.json>] [--converter <exe>]\n"
         + "                             [--neighbours derive|declared-only]\n"
         + "                             # --converter DERIVES the served register width from the MB_SERVER call that serves it\n"
@@ -61,7 +69,13 @@ public static class BatchCli
 
     public static int Run(
         string[] args, TextWriter output, Func<string, string> readFile, Action<string, string> writeFile,
-        IProcessRunner? runner = null, Func<IReadOnlyList<string>, DeploymentOutcome>? deploy = null)
+        IProcessRunner? runner = null, Func<IReadOnlyList<string>, DeploymentOutcome>? deploy = null,
+
+        // Only `manifest` needs it: a provenance record stamped over BYTES can only be re-hashed over
+        // bytes, and LoopCli.Compose takes the reader rather than opening files itself. Optional, and
+        // absent leaves those gate inputs NOT CHECKED — which does not move the build stamp, the only
+        // thing this verb derives.
+        Func<string, byte[]>? readBytes = null)
     {
         ArgumentNullException.ThrowIfNull(args);
         ArgumentNullException.ThrowIfNull(output);
@@ -73,9 +87,9 @@ public static class BatchCli
         }
 
         var verb = args[0];
-        if (verb is not ("enqueue" or "plan" or "list" or "dequeue" or "run"))
+        if (verb is not ("enqueue" or "plan" or "list" or "dequeue" or "run" or "manifest"))
         {
-            output.WriteLine($"unknown sub-command '{verb}' — expected one of: enqueue, plan, list, dequeue, run");
+            output.WriteLine($"unknown sub-command '{verb}' — expected one of: enqueue, manifest, plan, list, dequeue, run");
             output.WriteLine(Usage);
             return BatchExit.Unusable;
         }
@@ -85,6 +99,7 @@ public static class BatchCli
         string? portalEvidence = null, rig = null, converterExe = null, harnessRunExe = null, allowlist = null;
         string? opennessCliExe = null, manifest = null, neighboursMode = null;
         string? mirrorReadExe = null, committedCorpus = null;
+        string? blockUnderTest = null, emitDir = null, checkPath = null;
         int holderPid = 0, rigPort = 503, rigUnit = 1, ttlMinutes = 60;
         var settleSeconds = -1;   // -1 = not stated, use the default
         string? attestation = null;
@@ -105,6 +120,12 @@ public static class BatchCli
                 // rather than typed, which is what stops the build stamp describing a program nobody
                 // deployed. See LaneManifest.
                 case "--manifest": manifest = Next(args, ref i); break;
+
+                // 🔴 `manifest` only. The SUBJECT, by name — the one object every per-block check has to
+                // be pointed at, and the one docs/18:1166-1167 records as absent from the stamp.
+                case "--block-under-test": blockUnderTest = Next(args, ref i); break;
+                case "--emit": emitDir = Next(args, ref i); break;
+                case "--check": checkPath = Next(args, ref i); break;
                 case "--program":
                     // Multi-valued, the same shape harness-run's --program uses: consume until the next flag.
                     while (i + 1 < args.Length && !args[i + 1].StartsWith("--", StringComparison.Ordinal))
@@ -146,6 +167,16 @@ public static class BatchCli
                     output.WriteLine($"Unexpected argument: {args[i]}");
                     return BatchExit.Unusable;
             }
+        }
+
+        // 🔴 BEFORE the --queue requirement, because `manifest` touches no queue. It runs at BUILD time —
+        // the lane does not exist yet, and demanding the shared root here would make the producer harder
+        // to reach than the hand-typed list it replaces.
+        if (verb == "manifest")
+        {
+            return Manifest(
+                output, readFile, readBytes, writeFile,
+                new ManifestArgs(lane, binding, submission, programs, blockUnderTest, emitDir, outPath, checkPath));
         }
 
         if (string.IsNullOrWhiteSpace(queue))
@@ -732,6 +763,193 @@ public static class BatchCli
         return false;
     }
 
+    private sealed record ManifestArgs(
+        string? Lane, string? Binding, string? Submission, IReadOnlyList<string> Programs,
+        string? BlockUnderTest, string? EmitDir, string? OutPath, string? CheckPath);
+
+    /// <summary>
+    /// 🔴 <b>THE PRODUCER <c>LaneManifest</c> was written for and never had.</b>
+    ///
+    /// <para><c>LaneManifest</c> opens by saying the program set is <i>"EMITTED BY WHATEVER BUILT THE LANE
+    /// — not typed on a command line"</i>, and every manifest in existence has been hand-authored. So the
+    /// stronger DERIVED wording in <see cref="Enqueue"/> has been unreachable in practice, and a nine-object
+    /// set was deployed on 2026-08-22 that survives only as a shell command.</para>
+    ///
+    /// <para><b>It generates the copy layer to obtain the stamp, not as a side errand.</b> The build stamp
+    /// is what the manifest is checked against, and the only thing that knows it is the derivation inside
+    /// <c>LoopRun.Generate</c>. Two entry points computing it two ways is the drift
+    /// <c>GateParityTests</c> exists to stop, so this one goes through the same composition
+    /// <c>harness-run</c> does.</para>
+    ///
+    /// <para>🔴 <b><c>--check</c> is the other half, and it is the arm that catches a STALE manifest.</b>
+    /// It re-derives the stamp over the manifest's OWN paths and compares. Same paths, so the two agree by
+    /// construction — <i>unless the files changed underneath</i>, which is precisely the case that produced
+    /// a stamp naming a pre-fix <c>Main</c>: the manifest still says one object name and the file at that
+    /// path now declares another.</para>
+    /// </summary>
+    private static int Manifest(
+        TextWriter output, Func<string, string> readFile, Func<string, byte[]>? readBytes,
+        Action<string, string> writeFile, ManifestArgs args)
+    {
+        if (string.IsNullOrWhiteSpace(args.Lane) || string.IsNullOrWhiteSpace(args.Binding) || string.IsNullOrWhiteSpace(args.Submission))
+        {
+            output.WriteLine("manifest needs --lane <name>, --binding <file> and --submission <file>: the copy layer, and so the build "
+                + "stamp the manifest is checked against, is a function of those two documents.");
+            return BatchExit.Unusable;
+        }
+
+        var checking = !string.IsNullOrWhiteSpace(args.CheckPath);
+
+        LaneManifest? existing = null;
+        IReadOnlyList<string> programPaths = args.Programs;
+
+        if (checking)
+        {
+            if (args.Programs.Count > 0 || args.OutPath is not null || args.EmitDir is not null)
+            {
+                output.WriteLine("--check re-examines a manifest that already exists; it does not build one. Drop --program, --emit and "
+                    + "--out, or drop --check. Accepting both would let this command report on one manifest and write another.");
+                return BatchExit.Unusable;
+            }
+
+            try
+            {
+                existing = LaneManifest.Read(args.CheckPath!, readFile);
+            }
+            catch (Exception error) when (error is InvalidOperationException or IOException or UnauthorizedAccessException)
+            {
+                output.WriteLine("REFUSED  " + error.Message);
+                return BatchExit.Unusable;
+            }
+
+            programPaths = existing.ProgramPaths;
+        }
+        else
+        {
+            if (args.Programs.Count == 0 || string.IsNullOrWhiteSpace(args.OutPath) || string.IsNullOrWhiteSpace(args.EmitDir))
+            {
+                output.WriteLine("manifest needs --program <path>..., --emit <dir> and --out <manifest.json>. --emit is not optional: a "
+                    + "manifest records a PATH per object so it can be turned back into a --program list, and the generated copy layer has "
+                    + "no path until something writes it.");
+                return BatchExit.Unusable;
+            }
+        }
+
+        IReadOnlyList<LoadedProgramObject> loaded;
+        LoopGeneration generation;
+        try
+        {
+            loaded = ProgramUnderTest.LoadWithPaths(programPaths, readFile, ManifestExpand);
+
+            var request = LoopCli.Compose(
+                Harness.Gate.SubmissionDocument.Read(readFile(args.Submission!)),
+                Harness.Gate.BindingDocument.Read(readFile(args.Binding!)),
+                loaded.Select(l => l.Object).ToArray(),
+                readFile,
+                readBytes);
+
+            // stopWhenInadmissible: false — the stamp is a function of the map, the binding, the naming and
+            // the program, none of which the gate's verdict touches. Refusing to write a manifest because a
+            // VECTOR was inadmissible would withhold the record of what was built from the person fixing it.
+            generation = LoopRun.Generate(request, stopWhenInadmissible: false);
+        }
+        catch (Exception error) when (error is InvalidDataException or IOException or UnauthorizedAccessException or System.Text.Json.JsonException)
+        {
+            output.WriteLine("REFUSED  the program set or the two documents could not be composed, so nothing was derived and nothing was "
+                + $"written: {error.Message}");
+            return BatchExit.Unusable;
+        }
+
+        if (!generation.Generated || generation.Manifest is not { } hashedSet)
+        {
+            output.WriteLine("REFUSED  no copy layer was generated, so there is no build stamp for a manifest to be checked against and "
+                + $"nothing was written: {generation.Detail}");
+            return BatchExit.Refused;
+        }
+
+        output.WriteLine($"  stamp     {generation.Stamp.Literal} over {hashedSet.Objects.Count} object(s): "
+                       + string.Join(", ", hashedSet.Objects.Select(o => $"{o.Kind}:{o.Name}")));
+
+        if (hashedSet.ExcludedAsSelfReferential.Count > 0)
+        {
+            output.WriteLine($"            EXCLUDED as the harness's own output ({hashedSet.ExcludedAsSelfReferential.Count}): "
+                           + string.Join(", ", hashedSet.ExcludedAsSelfReferential));
+        }
+
+        if (checking)
+        {
+            var verdict = existing!.AgreesWithStamp(hashedSet);
+            output.WriteLine((verdict.Agrees ? "OK       " : "REFUSED  ") + verdict.Detail);
+            return verdict.Agrees ? BatchExit.Ok : BatchExit.Refused;
+        }
+
+        // The copy layer is WRITTEN, not merely named. A manifest whose paths do not exist turns into a
+        // --program list that contributes nothing, and `ProgramFiles` would then report the absence from
+        // three steps away rather than here.
+        var emitted = new List<EmittedObject>();
+        try
+        {
+            Directory.CreateDirectory(args.EmitDir!);
+
+            foreach (var obj in generation.Objects)
+            {
+                var path = Path.Combine(args.EmitDir!, obj.Name + ".ir");
+                writeFile(path, obj.Ir);
+                emitted.Add(new EmittedObject(obj.Name, path));
+                output.WriteLine($"  written   {path}");
+            }
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        {
+            output.WriteLine($"REFUSED  the generated copy layer could not be written to {args.EmitDir}, so no manifest was written "
+                + $"either — a manifest naming files that do not exist is worse than none: {error.Message}");
+            return BatchExit.Unusable;
+        }
+
+        LaneManifest derived;
+        try
+        {
+            derived = LaneManifest.Derive(
+                args.Lane!,
+                loaded.Select(l => new EmittedObject(l.Object.Name, l.Path)).ToArray(),
+                emitted,
+                args.BlockUnderTest,
+                hashedSet,
+
+                // Derived, not typed: the generator knows the copy layer needs a call site and knows what
+                // it is called. It cannot create one, so it says so — see LaneManifest.Obligations.
+                generation.Objects
+                    .Where(o => o.Kind == HarnessObjectKind.Block)
+                    .Select(o => $"'{o.Name}' MUST be called from the cyclic OB. A generated FC nothing calls is deployed, loaded, "
+                               + "healthy in every artifact, and never runs.")
+                    .ToArray());
+        }
+        catch (Exception error) when (error is InvalidOperationException or ArgumentException)
+        {
+            output.WriteLine("REFUSED  " + error.Message);
+            return BatchExit.Refused;
+        }
+
+        writeFile(args.OutPath!, derived.ToJson());
+
+        var subject = derived.BlockUnderTest;
+        output.WriteLine($"  manifest  DERIVED: {derived.Objects.Count} object(s) across {derived.ProgramPaths.Count} path(s), written to {args.OutPath}");
+        output.WriteLine("            " + derived.AgreesWithStamp(hashedSet).Detail);
+        output.WriteLine(subject is null
+            ? "            BLOCK UNDER TEST: none stated. No per-block check can be pointed at this lane — pass --block-under-test <Name>."
+            : $"            BLOCK UNDER TEST: {subject} — IN the stamped set, so changing it changes the stamp.");
+        output.WriteLine($"            Enqueue it with:  harness-batch enqueue --queue <dir> --lane {args.Lane} --binding {args.Binding} "
+                       + $"--submission {args.Submission} --manifest {args.OutPath}");
+
+        return BatchExit.Ok;
+    }
+
+    /// <summary>A directory becomes its <c>.ir</c> files in a stable order; anything else is itself.</summary>
+    private static IReadOnlyList<string> ManifestExpand(string path) =>
+        Directory.Exists(path)
+            ? Directory.GetFiles(path, "*.ir").OrderBy(p => p, StringComparer.Ordinal).ToArray()
+            : new[] { path };
+
     private static int Enqueue(
         LaneQueue store, TextWriter output, Func<string, string> readFile,
         string? lane, string? binding, string? submission, List<string> programs, string? purpose, string? manifestPath)
@@ -783,10 +1001,22 @@ public static class BatchCli
             // numerator can never report a gap. Measured consequence at docs/18-project-workbench.md:821-829.
             staged = manifest.Objects.Select(o => o.Name).ToList();
 
+            // 🔴 THREE BUCKETS, NOT TWO. This counted Generated and called EVERY remaining object
+            // "authored" — including an Unstated one, which is what `LaneManifest.Derive` records for a
+            // program read off disk, because the harness genuinely cannot tell who wrote an .ir file.
+            // Folding "nobody said" into "a person wrote it" answers the question the origin field exists
+            // for — how much of this lane is still hand-built — with a number nothing established.
             var generated = manifest.Objects.Count(o => o.Origin == ObjectOrigin.Generated);
+            var authored = manifest.Objects.Count(o => o.Origin == ObjectOrigin.Authored);
             output.WriteLine($"  program set DERIVED from the manifest: {manifest.Objects.Count} object(s) "
-                           + $"({generated} generated, {manifest.Objects.Count - generated} authored) "
+                           + $"({generated} generated, {authored} authored, {manifest.Objects.Count - generated - authored} origin unstated) "
                            + $"across {programs.Count} path(s).");
+
+            // The subject, or the honest absence of one. Two objects claiming the role reads as none here,
+            // deliberately: a lane tests one block and guessing which would be worse than declining.
+            output.WriteLine(manifest.BlockUnderTest is { } subject
+                ? $"  block under test DERIVED from the manifest: {subject}."
+                : "  block under test NOT STATED by the manifest, so no per-block check can be pointed at this lane.");
             output.WriteLine($"  staged corpus DERIVED from the manifest: {staged.Count} object name(s) — the DENOMINATOR "
                            + "every wave's build stamp will be reported against.");
 

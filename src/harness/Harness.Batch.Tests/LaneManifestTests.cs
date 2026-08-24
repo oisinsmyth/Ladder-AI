@@ -224,6 +224,11 @@ public sealed class LaneManifestTests : IDisposable
     /// <summary>
     /// 🔴 <b>With a manifest, the set is DERIVED and the report says so — with the generated/authored
     /// split, which is how "how much of this lane is still hand-built" stays answerable.</b>
+    ///
+    /// <para><b>THREE buckets, not two.</b> The line counted Generated and called everything else
+    /// "authored", which folds <see cref="ObjectOrigin.Unstated"/> — what <c>LaneManifest.Derive</c>
+    /// honestly records for a program it read off disk — into "a person wrote it". This hand-authored
+    /// sample states all three, so it pins the split rather than the sum.</para>
     /// </summary>
     [Fact]
     public void Enqueue_with_a_manifest_reports_the_set_as_DERIVED()
@@ -232,7 +237,7 @@ public sealed class LaneManifestTests : IDisposable
         var (exit, output) = Enqueue("--manifest", manifest);
 
         Assert.Equal(0, exit);
-        Assert.Contains("DERIVED from the manifest: 3 object(s) (2 generated, 1 authored)", output);
+        Assert.Contains("DERIVED from the manifest: 3 object(s) (2 generated, 1 authored, 0 origin unstated)", output);
         Assert.Contains("OBLIGATION: 'FC_HarnessSlot' MUST be called from the cyclic OB", output);
     }
 
