@@ -18,14 +18,11 @@ allowed-tools:
 
 Ladder-AI project. This is docs/15's `gen-block-new` stage (pipeline skill #7): it consumes **one
 gate-1-signed item from `gen/<project>/architecture.md`** and produces **one new block's IR**,
-imported and compiled clean on the scratch project. It is the skill that finally moves S6 from
-"pipeline built" to "generating" — and the one that closes S6's exit criterion (ten fresh
-plain-language generation requests). `CLAUDE.md` is already in your context — do not re-read it;
-its hard rules bind you and this doc assumes them.
+imported and compiled clean on the scratch project. `CLAUDE.md` is already in your context — do not
+re-read it; its hard rules bind you and this doc assumes them.
 
 **You run inside `lad-coder`** (CLAUDE.md hard rule 8). If you were reached any other way, stop — a
-human-facing agent must dispatch this to `lad-coder`, never run it inline. The whole point of the
-pipeline is that the AI exercises it; an agent quietly hand-coding rungs defeats the deliverable.
+human-facing agent must dispatch this to `lad-coder`, never run it inline.
 
 **You are a coder — not a designer, not a reviewer.**
 
@@ -59,8 +56,7 @@ scaffolding** for any FB it introduces (`openness-cli create-instance-db`).
 **Out of scope — a prerequisite, not something you create:** shared `DB_*` and UDT emission, and tag
 tables. If your item needs a shared DB, UDT, or tag that the export doesn't already show, that is a
 **named gap that stops the run** (same discipline as a `proposed` tag) — the data landscape belongs
-to the design / `gen-integration` / `gen-io-tags`, and inventing it here would launder invented
-reality into code. Report the gap and stop; don't improvise the DB.
+to the design / `gen-integration` / `gen-io-tags`. Report the gap and stop; don't improvise the DB.
 
 ## Inputs
 
@@ -103,6 +99,9 @@ reality into code. Report the gap and stop; don't improvise the DB.
      your work is the **instantiation**: `openness-cli create-instance-db` for the instance, a
      `CALL` with real arguments wired per the manifest (section 8), and the calling network. TIA's
      compiler type-checks every argument for free. Do not re-implement the library block's internals.
+     **Claim the iDB number the moment `create-instance-db` reports it** — `--kind block-number
+     --value DB<n>`, step 3.5's call and exit contract. TIA picks that number, not you, so a refusal
+     here is a real collision to stop and report, never a number to re-pick.
    - **(b) Pattern-composed** (pattern kind 2, repeated rung-shape, e.g. `chained-permissive-enable`,
      `input-mapping`): draft the new instance **by analogy from the pattern's real `examples/`**,
      mapping this equipment's real tags into the documented shape. `pattern.md` says what's fixed and
@@ -122,8 +121,14 @@ reality into code. Report the gap and stop; don't improvise the DB.
    A `MEMBER-UNCHECKED` result means the export cannot enumerate that namespace (an unexported
    UDT, an instance-DB stub): the tool did not verify it, so **you** must, by reading the type.
    Re-verify the manifest's own `exists` marks here — trust the tool, not the artifact's memory.
-   *(Until 2026-08-05 this check was root-level only and would pass an invented member; do not rely
-   on a remembered "it said EXISTS".)*
+   *(Do not rely on a remembered "it said EXISTS" — this check was root-level only until 2026-08-05.)*
+3.5. **Claim the block number — BINDING, before any IR exists.** The `NUMBER <n>` you are about to
+   type *is* the allocation; nothing upstream reserved it.
+   `converter claim --project ir/<project>/ --claims C:\ProgramData\Ladder-AI\claims --agent "$CLAUDE_CODE_SESSION_ID/lad-coder" --kind block-number --value FB<n> --json`
+   — or `--allocate --type FB` for the lowest free one. **0 = yours, write that number. 1 = REFUSED,
+   a real answer: pick another and re-claim. 2 = NOTHING WAS DECIDED — stop the run; never read it as
+   free.** Copy `--agent` from the environment, never invent it. Record it in `evidence.json`'s
+   `claims` array: the verifier joins the claimed value to the `NUMBER` line it reads off disk.
 4. **Write the IR, grouped by function (C-126) at write time — see below.**
 5. **Inner loop to a clean compile** (CLAUDE.md workflow step 4; the loop `lad-coder` owns):
    `converter preflight <files> --project ir/<project>/` — **zero-findings bar** (a consciously
@@ -132,13 +137,10 @@ reality into code. Report the gap and stop; don't improvise the DB.
    the **scratch** project → **`openness-cli sanity-check <project>`** (or per-block
    `compile --block`/`--type` in dependency order) → iterate until clean. On any failure, check the
 
-   > 🔴 *Corrected 2026-08-13: this step used to say `openness-cli compile`, and **a bare
-   > whole-device compile IS NOT THE GATE** (hard rule 4 / FI-52). A freshly re-imported block is
-   > flagged `IsConsistent=false` and a device-level compile reports `Success, errors=0` **without
-   > clearing that flag** — measured at 19 of 34 blocks uncompiled behind a green device compile, one
-   > of which failed with 8 errors when compiled alone. Report `sanity-check`'s `INCONSISTENT: 0` and
-   > **both** the `BLOCKS:` and `TYPES:` lines: before FI-62 it enumerated blocks only, so a
-   > freshly-imported UDT could sit inconsistent behind `OVERALL: HEALTHY`.*
+   > 🔴 **A bare whole-device compile IS NOT THE GATE** (hard rule 4 / FI-52). A re-imported block stays
+   > `IsConsistent=false` behind a device compile reporting `Success, errors=0` — 19 of 34 measured, one
+   > failing with 8 errors alone. Report `sanity-check`'s `INCONSISTENT: 0` on **both** the `BLOCKS:` and
+   > `TYPES:` lines; a freshly-imported UDT sits inconsistent behind `OVERALL: HEALTHY` otherwise.
 
    compile-error-playbook first, verify its hypothesis against the actual error, and harvest any new
    proven error→fix pair back into it. Respect the `agent-tasks/README.md` Portal queue before any
@@ -177,19 +179,16 @@ time on the first run if you don't know them going in:
   supported equivalent with the gap flagged.
 - **Portal mechanics.** A cold `openness-cli` open needs the **absolute `.ap20` path** (a bare project
   name only resolves if it's already open). A `SampleProject` open is slow — run it **backgrounded**
-  rather than foreground (it can exceed the 10-min cap). Copy the device `--group` value **verbatim**
-  from `openness-cli list`'s Path column (it can embed spaces and an article number as one literal
-  string).
+  rather than foreground (it can exceed the 10-min cap). `--group` is copied verbatim, per CLAUDE.md.
 - **Naming vs. the manifest.** If the manifest's literal block name lacks the C-001/C-003 `FB_`/`FC_`
   prefix but the manifest also commits to "names follow C-001/C-003," the convention wins: **apply the
   prefix and proceed**, don't stop on the apparent conflict. Note the applied name in your report.
 
 ## C-126 at write time — group by function, not by instruction kind
 
-The whole pipeline exists because test-project001's first build was compile-clean and *obtuse*
-(docs/15 "Why this exists"). The signature defect was structural: rungs grouped by instruction kind
-— a block-wide "Timers" network, all MOVEs together — so no single network read as one coherent
-piece of equipment behaviour. **Write each network as one function/equipment story** (start/stop
+The signature defect this pipeline exists to prevent is structural: rungs grouped by instruction kind
+— a block-wide "Timers" network, all MOVEs together — so no network reads as one coherent piece of
+equipment behaviour (docs/15 "Why this exists"). **Write each network as one function/equipment story** (start/stop
 seal-in, this motor's fault handling, this step's transition), the way an electrician with a
 multimeter reads a rung and gets the gist. This is cheaper to do at write time than to restructure a
 finished block into — which is exactly the "design-stage mistake caught at code-stage prices" the
@@ -199,9 +198,8 @@ pipeline is built to avoid. Every network gets a title (why, not what).
 
 - **Compile gate (hard rule 4):** nothing is "done" until it imports and compiles clean on scratch.
   Preflight passing is not the compile gate — it is the filter in front of it.
-- **You do not run the AI reviewers.** Hand off compile-clean IR; the Check stage
-  (`review-conventions` / `review-functional` / `review-simplicity`, + `audit-artifact` for
-  artifacts) runs in **fresh context**, given only the IR and its binding docs, never your reasoning.
+- **You do not run the AI reviewers.** Hand off compile-clean IR; the Check stage runs in **fresh
+  context**, given only the IR and its binding docs, never your reasoning.
 - **You never import into the real project** (hard rule 5) — scratch only; your output is a proposal.
 
 ## Exit
@@ -211,11 +209,9 @@ Hand back (per `lad-coder`'s "what you hand back" contract — your summary is n
 - the **IR diff** (the new block; for a tier-(a) instantiation, the calling network + instance DB);
 - a **one-paragraph intent statement** (what it does, which REQ(s) it implements, which pattern/tier);
 - **preflight evidence** (zero findings) and **compile evidence** — `sanity-check`'s `INCONSISTENT: 0`
-  on **both** the `BLOCKS:` and `TYPES:` lines, plus the **error count**. *(Corrected 2026-08-13:
-  this read "pass, error/warning counts". **Key the verdict on errors, never on warnings or on a
-  compile's `State`** — `compile` stopped failing on a warnings-only state on 2026-08-12, because a
-  project carrying a permanent hardware warning made **every** per-block compile look failed. Report
-  warnings; do not gate on them.)*
+  on **both** the `BLOCKS:` and `TYPES:` lines, plus the **error count**. **Key the verdict on errors,
+  never on warnings or on a compile's `State`** (hard rule 4): a permanent hardware warning makes every
+  per-block compile look failed. Report warnings; do not gate on them.
 - the tag-status result (all `exists`), and any gap that stopped the run;
 - **`evidence.json`** — the raw `--json` and exit code of each gate above, plus a `converter ir-hash`
   per file touched. Schema in `.claude/agents/lad-coder.md`. The prose above still stands; this is what
@@ -223,8 +219,12 @@ Hand back (per `lad-coder`'s "what you hand back" contract — your summary is n
   every hash itself. **Set `"kind": "new"`** — that is what tells the verifier not to demand a
   `diff --only` invariance gate, there being nothing here to prove invariant against. For a tier-(a)
   instantiation the *caller* you edited is a modification: list it in `files` and record its diff.
+  **`claims` is required** — `{kind, value, agent}` per claim you acquired; a run that touched IR and
+  declares none is refused.
 
-Then **append one telemetry line** to `gen/<project>/telemetry.log` per `docs/notes/gen-telemetry.md`
+Then **release every claim**:
+`converter claims --project ir/<project>/ --claims C:\ProgramData\Ladder-AI\claims --release --agent "$CLAUDE_CODE_SESSION_ID/lad-coder" --all`.
+Nothing auto-releases; a stale claim is reported and never cleared for you. Then **append one telemetry line** to `gen/<project>/telemetry.log` per `docs/notes/gen-telemetry.md`
 (`gen-block-new` in the skill column; include blocked/abandoned runs — the most informative rows;
 never backfill or rewrite rows). Then **stop.** The Check stage and gate 2 (final presentation,
 `docs/11-review-workflow.md`) belong to others; never treat your own output as reviewed or approved.

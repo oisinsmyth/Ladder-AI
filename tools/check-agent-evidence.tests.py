@@ -12,8 +12,13 @@ once from the Release converter and then deliberately corrupted in one case. Req
 that binary; skips the hash-dependent cases with a loud note if it is absent rather
 than reporting green on tests that did not run - "EXAMINED NOTHING" is not a pass here
 either.
+
+Claims fixtures are planted into a TEMPORARY store root handed over via LADDER_CLAIMS_DIR,
+never into the shared C:\\ProgramData\\Ladder-AI\\claims one - see the comment above
+STORE_ROOT. One case deliberately runs with no override, to assert that the shared root is
+what the checker reaches for when nobody tells it otherwise.
 """
-import io, json, os, subprocess, sys, tempfile
+import hashlib, io, json, os, shutil, subprocess, sys, tempfile
 
 EXIT_OK = 0
 EXIT_PROBLEMS = 1
@@ -25,8 +30,45 @@ CONVERTER = os.path.join(
     ROOT, "src", "converter", "Converter", "bin", "Release", "net8.0", "converter.exe"
 )
 BLOCK = "ir/test-project001/FB_PusherControl.ir"
+PROJECT = "ir/test-project001"
+SLUG = "test-project001"
+BLOCK_NUMBER = "FB3"          # the `NUMBER 3` line in BLOCK, under `BLOCK FB` - the join
+AGENT = "test-session-0001/lad-coder"
 
 passed, failed, skipped, failures = 0, 0, 0, []
+
+# --- the claims store the checker is pointed at -------------------------------------
+#
+# NOT the real C:\ProgramData\Ladder-AI\claims: these cases plant and mutate claims, and a
+# test suite that writes into the store real agents coordinate through would be a test
+# suite that causes the collisions it is checking for. LADDER_CLAIMS_DIR is the converter's
+# own override and the checker honours the same one, so the whole path under test is the
+# real one - only the root moves.
+#
+# A claim file is planted directly rather than acquired through `converter claim`, because
+# an ALLOCATION claim on a number the corpus already uses is (correctly) REFUSED - and the
+# state this gate checks is exactly that one: the claim was taken before the block existed,
+# and the block exists now. `complete_evidence_verifies` is the control that proves the
+# planting matches what the tool reads back; if the format were wrong it fails first.
+STORE_ROOT = tempfile.mkdtemp(prefix="ladder-claims-")
+EMPTY_ROOT = tempfile.mkdtemp(prefix="ladder-claims-empty-")
+
+
+def plant(root, kind, value, agent=AGENT, project=PROJECT):
+    folder = os.path.join(root, SLUG)
+    if not os.path.isdir(folder):
+        os.makedirs(folder)
+    safe = "".join(c if (c.isalnum() or c in "._-") else "_" for c in value)
+    digest = hashlib.sha256(value.encode("utf-8")).hexdigest()[:8]
+    name = "%s-%s-%s.claim" % (kind, safe, digest)
+    with io.open(os.path.join(folder, name), "w", encoding="utf-8", newline="\n") as fh:
+        fh.write("project %s\nkind %s\nvalue %s\nagent %s\npurpose fixture\n"
+                 "created 2026-08-24T00:00:00Z\n" % (project, kind, value, agent))
+
+
+plant(STORE_ROOT, "block-edit", "FB_PusherControl")
+plant(STORE_ROOT, "block-number", BLOCK_NUMBER)
+plant(STORE_ROOT, "block-edit", "FC_ControlMain", agent="someone-else/lad-coder")
 
 
 def case(name, body):
@@ -55,6 +97,10 @@ def good_doc(digest):
         "kind": "modify",
         "skill": "gen-block-modify-fix",
         "files": [{"path": BLOCK, "ir_hash": digest}],
+        "claims": [
+            {"kind": "block-edit", "value": "FB_PusherControl", "agent": AGENT},
+            {"kind": "block-number", "value": BLOCK_NUMBER, "agent": AGENT},
+        ],
         "checks": [
             {"tool": "converter preflight", "exit": 0},
             {"tool": "converter diff --only", "exit": 0},
@@ -63,7 +109,8 @@ def good_doc(digest):
     }
 
 
-def run(doc_or_text):
+def run(doc_or_text, store=STORE_ROOT):
+    """store=None runs with LADDER_CLAIMS_DIR UNSET, i.e. against the real shared root."""
     handle, path = tempfile.mkstemp(suffix=".json")
     os.close(handle)
     with io.open(path, "w", encoding="utf-8") as fh:
@@ -71,10 +118,14 @@ def run(doc_or_text):
             fh.write(doc_or_text)
         else:
             fh.write(json.dumps(doc_or_text))
+    env = dict(os.environ)
+    env.pop("LADDER_CLAIMS_DIR", None)
+    if store is not None:
+        env["LADDER_CLAIMS_DIR"] = store
     try:
         proc = subprocess.Popen(
             [sys.executable, SCRIPT, path],
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=ROOT,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=ROOT, env=env,
         )
         out, err = proc.communicate()
         return (proc.returncode,
@@ -216,6 +267,136 @@ def db_file_cannot_be_hash_claimed():
     assert_in("not a block file", out, "ir-hash's own reason is surfaced")
 
 
+# --- the claims gate ----------------------------------------------------------------
+#
+# Both directions on every rule: the refusal, and the control that must still verify. The
+# control is `complete_evidence_verifies` above, which carries two real claims and passes.
+
+def the_claims_gate_actually_compared_something():
+    """ASSERT THE DENOMINATOR. A green whose claims counters read 0/0 examined nothing."""
+    _, out, _ = run(good_doc(real_hash()))
+    assert_in("claims declared                : 2", out, "declared count")
+    assert_in("claims confirmed in store      : 2", out, "confirmed count")
+    assert_in("block numbers joined to IR     : 1", out, "the NUMBER join ran")
+
+
+def absent_claims_section_fails():
+    """AN ABSENT GATE IS NOT A PASSED GATE, applied to the newest gate."""
+    doc = good_doc(real_hash())
+    del doc["claims"]
+    code, out, _ = run(doc)
+    assert_eq(code, EXIT_PROBLEMS, "exit code")
+    assert_in("required gate absent", out, "the reason")
+    assert_in("no `claims` section", out, "which gate")
+
+
+def empty_claims_array_fails():
+    doc = good_doc(real_hash())
+    doc["claims"] = []
+    code, out, _ = run(doc)
+    assert_eq(code, EXIT_PROBLEMS, "exit code")
+    assert_in("EMPTY IS NOT CLEAN", out, "the reason")
+
+
+def a_claim_not_in_the_store_fails():
+    """The evidence says it reserved FB77; the registry has never heard of it."""
+    doc = good_doc(real_hash())
+    doc["claims"].append({"kind": "block-number", "value": "FB77", "agent": AGENT})
+    code, out, _ = run(doc)
+    assert_eq(code, EXIT_PROBLEMS, "exit code")
+    assert_in("NOT IN THE STORE", out, "the reason")
+
+
+def a_claim_held_by_another_agent_fails():
+    """Declaring someone else's live claim as your own is the collision, not the cure."""
+    doc = good_doc(real_hash())
+    doc["claims"].append({"kind": "block-edit", "value": "FC_ControlMain", "agent": AGENT})
+    code, out, _ = run(doc)
+    assert_eq(code, EXIT_PROBLEMS, "exit code")
+    assert_in("held by 'someone-else/lad-coder'", out, "the real holder is named")
+
+
+def a_claim_missing_its_agent_fails():
+    doc = good_doc(real_hash())
+    doc["claims"][0] = {"kind": "block-edit", "value": "FB_PusherControl"}
+    code, out, _ = run(doc)
+    assert_eq(code, EXIT_PROBLEMS, "exit code")
+    assert_in("coordinates nothing", out, "the reason")
+
+
+def block_number_disagreeing_with_the_ir_fails():
+    """🔴 THE JOIN. FB_PusherControl.ir says NUMBER 3; the evidence claims FB51. Both the
+    claim and the store agree with each other and BOTH are wrong about the file on disk -
+    which is the only reason this check is worth having."""
+    plant(STORE_ROOT, "block-number", "FB51")
+    doc = good_doc(real_hash())
+    doc["claims"][1] = {"kind": "block-number", "value": "FB51", "agent": AGENT}
+    code, out, _ = run(doc)
+    assert_eq(code, EXIT_PROBLEMS, "exit code")
+    assert_in("matches no NUMBER line", out, "the reason")
+    assert_in("FB3", out, "what the file on disk actually says")
+
+
+def a_new_run_without_a_block_number_claim_fails():
+    doc = good_doc(real_hash())
+    doc["kind"] = "new"
+    doc["skill"] = "gen-block-new"
+    doc["checks"] = [c for c in doc["checks"] if "diff" not in c["tool"]]
+    doc["claims"] = [{"kind": "block-edit", "value": "FB_PusherControl", "agent": AGENT}]
+    code, out, _ = run(doc)
+    assert_eq(code, EXIT_PROBLEMS, "exit code")
+    assert_in("required claim absent", out, "the reason")
+    assert_in("block-number", out, "which kind")
+
+
+def a_modify_run_without_a_block_edit_claim_fails():
+    """The other half - a modification takes exclusive hold of what it edits."""
+    doc = good_doc(real_hash())
+    doc["claims"] = [{"kind": "block-number", "value": BLOCK_NUMBER, "agent": AGENT}]
+    code, out, _ = run(doc)
+    assert_eq(code, EXIT_PROBLEMS, "exit code")
+    assert_in("required claim absent", out, "the reason")
+    assert_in("block-edit", out, "which kind")
+
+
+def an_empty_store_root_is_never_a_pass():
+    """🔴 THE VACUITY THAT WOULD MAKE THE WHOLE GATE A NO-OP. A per-worktree root is empty,
+    an empty store answers nothing, and 'no claims found' must never read as 'no claims
+    needed'. The evidence here is otherwise perfect."""
+    code, out, _ = run(good_doc(real_hash()), store=EMPTY_ROOT)
+    assert_eq(code, EXIT_PROBLEMS, "an empty store must refuse, not wave through")
+    assert_in("ZERO claims", out, "it says the store is empty")
+    assert_in("empty store grants everything", out, "and why that is not a pass")
+
+
+def a_store_that_cannot_answer_is_not_checked():
+    """The doubled root - the one misconfiguration the registry itself refuses (a root
+    ending in the project slug resolves to <slug>/<slug>, a second empty private store).
+    The checker must report NOT CHECKED, not silence."""
+    doubled = os.path.join(STORE_ROOT, SLUG)
+    code, out, _ = run(good_doc(real_hash()), store=doubled)
+    assert_eq(code, EXIT_PROBLEMS, "exit code")
+    assert_in("NOT CHECKED", out, "the reason")
+
+
+def the_default_store_root_is_the_shared_one():
+    """With no override the checker must consult C:\\ProgramData\\Ladder-AI\\claims - the
+    root every agent shares. Reading anything else would make this gate check a store no
+    agent writes to."""
+    _, out, _ = run(good_doc(real_hash()), store=None)
+    assert_in(r"claims store root              : C:\ProgramData\Ladder-AI\claims",
+              out, "the resolved root is reported")
+
+
+def claims_without_any_ir_file_fails():
+    """Nothing to join them to. Reported rather than quietly skipped."""
+    doc = good_doc(real_hash())
+    doc["files"] = [{"path": "gen/test-project001/architecture.md", "ir_hash": "x" * 64}]
+    code, out, _ = run(doc)
+    assert_eq(code, EXIT_PROBLEMS, "exit code")
+    assert_in("nothing to join them to", out, "the reason")
+
+
 # --- it cannot run -----------------------------------------------------------------
 
 def declared_deferral_is_reported_and_still_fails():
@@ -341,6 +522,19 @@ CASES = [
     ("a transient check is context and does not gate", transient_is_context_and_does_not_gate, True),
     ("a transient check does not satisfy a required gate", transient_does_not_satisfy_a_required_gate, True),
     ("a transient with no reason fails", transient_without_a_reason_fails, True),
+    ("the claims gate reports what it compared", the_claims_gate_actually_compared_something, True),
+    ("an absent claims section is refused", absent_claims_section_fails, True),
+    ("an empty claims array is refused", empty_claims_array_fails, True),
+    ("a claim that is not in the store is refused", a_claim_not_in_the_store_fails, True),
+    ("a claim held by another agent is refused", a_claim_held_by_another_agent_fails, True),
+    ("a claim with no agent is refused", a_claim_missing_its_agent_fails, True),
+    ("a block number disagreeing with the .ir is refused", block_number_disagreeing_with_the_ir_fails, True),
+    ("a new run with no block-number claim is refused", a_new_run_without_a_block_number_claim_fails, True),
+    ("a modify run with no block-edit claim is refused", a_modify_run_without_a_block_edit_claim_fails, True),
+    ("an empty store root is never a pass", an_empty_store_root_is_never_a_pass, True),
+    ("a store that cannot answer is NOT CHECKED", a_store_that_cannot_answer_is_not_checked, True),
+    ("the default store root is the shared one", the_default_store_root_is_the_shared_one, True),
+    ("claims with no .ir file are refused", claims_without_any_ir_file_fails, True),
     ("a wrong schema exits 2", wrong_schema_is_exit_2, False),
     ("malformed JSON exits 2", malformed_json_is_exit_2, False),
     ("a missing evidence file exits 2", missing_file_is_exit_2, False),
@@ -352,6 +546,9 @@ for name, body, needs_converter in CASES:
         print("SKIP  %s  (Release converter not built)" % name)
         continue
     case(name, body)
+
+for temp in (STORE_ROOT, EMPTY_ROOT):
+    shutil.rmtree(temp, ignore_errors=True)
 
 print("=" * 70)
 print("RESULT: %d passed, %d failed, %d skipped" % (passed, failed, skipped))

@@ -34,7 +34,14 @@ Non-obvious, and each has cost real time. Everything else about these tools is i
 - **`gen-block-modify-fix` must NEVER pass `converter diff --allow-header` — nor `--insert`.** A fix needing an interface member, or a new network, *is* a purpose change: route it to `gen-block-modify-purpose`, which passes the flag and declares the delta. Both flags mean ROUTE, not DECLARE.
 - **`converter diff` matches networks on CONTENT, not number (2026-08-23).** A `Moved` network **gates** — LAD executes in network order — and `--insert <n>` is the checked escape.
 - **Re-assert `openness-cli block-layout --set Standard --yes` after EVERY import** of a block a PC-side harness reads over classic S7, then gate with `--expect Standard`. An import silently reverts it to `Optimized`, and `drift-check` is blind to that. `--expect` only tells you it broke; `--set` repairs it.
-- **`--claims` takes the store root `C:\ProgramData\Ladder-AI\claims`, never the project folder** — the tool appends the project name itself, so `…\claims\test-project001` creates a second empty store that grants every claim. **Read the `store=` line it echoes; do not trust the argument.** It must be shared by every agent: worktrees get their own, always empty, granting everything.
+- **`converter claim` is BINDING before IR is written** — the skills name the seams:
+  ```
+  converter claim --project <ir-dir> --claims <dir> --agent <id> --kind <k>
+                  (--value <v> | --allocate [--type FB|FC|OB|DB] [--floor <n>] [--in <word|block>])
+                  [--purpose <text>] [--json]
+  ```
+  Kinds: `block-number` · `alarm-bit` · `db-member` · `block-network` · `tag` · `block-edit`. **Exit is a contract: 0 acquired · 1 REFUSED — pick another and re-claim · 2 NOTHING WAS DECIDED, stop.** Reading 2 as free is empty-is-not-clean. `--agent` is `$CLAUDE_CODE_SESSION_ID/<agent-type>`, derived never invented. Nothing auto-releases.
+- **`--claims` takes the store root `C:\ProgramData\Ladder-AI\claims`, never the project folder** — the tool appends the project name, so `…\claims\test-project001` is a second empty store granting every claim. **Read the `store=` line it echoes.** One root, shared: a worktree's own is always empty.
 - **Portal is a token, not a component.** One lane holds it at a time; two Openness sessions on one project is unsupported. Concurrent sessions on *different* projects are safe.
 - **`dotnet build -c Release src/converter/converter.sln` after ANY converter change.** The skills invoke `bin/Release/`, so a Debug-only build leaves every agent running the old tool. Free and safe at any time — the converter never touches Portal.
 - **Never rebuild `openness-cli` while Portal work is in flight.** TIA's whitelist is keyed on `(Path, FileHash)`, so every rebuild needs a fresh approval. Debug and Release hold **independent** approvals, so a Debug `dotnet test` is safe while a sub-agent works on Release. `dotnet test src/openness-cli/openness-cli.sln` **is** a rebuild; `converter.sln` is not.
@@ -99,7 +106,7 @@ When in doubt: `docs/04-design-philosophy.md` for principles, `docs/02-roadmap.m
 | `neighbours` | every `%M` claim in an area **and who declares it**. `--base` + `--registers`/`--bytes`; `[]` is the earned zero, exit 2 = NOT DERIVED |
 | `cross-check`, `trace`, `reuse-scan`, `target-scan` | whole-project reference facts, REQ traces, reuse-first and new-block gap hunting. `reuse-scan` is query-shaped: `--project` alone exits 1, it needs a `--tag`/`--kind` |
 | `candidate-scan`, `undriven-scan`, `relation-reconcile`, `signal-sweep`, `interface-check` | the mechanical floor — checks that survive an agent choosing not to look |
-| `reachable-state`, `ir-hash`, `sanitize`, `claim` / `claims` | computed slot disjointness, content hashing, de-identification, and the multi-agent reservation registry |
+| `reachable-state`, `ir-hash`, `sanitize`, `claim` / `claims` | computed slot disjointness, content hashing, de-identification, and the reservation registry (syntax above) |
 
 **A principle across all of them: EMPTY IS NOT CLEAN.** Across the mechanical floor (`candidate-scan`, `undriven-scan`, `reuse-scan`, `relation-reconcile`, `signal-sweep`), **exit 1 = found something; exit 2 = EXAMINED NOTHING** — a `--scope` that matched nothing, an `--fb` with no instances, a leg compared against nothing. **Exit 2 is never a pass.** When you read a green, read what it says it *compared*.
 

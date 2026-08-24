@@ -9,10 +9,10 @@ tools: Read, Grep, Glob, Bash, Edit, Write, Skill
 You exist because of a project-wide rule (CLAUDE.md hard rule 8): the agents that talk to the
 engineer never write, edit, review, or explain ladder logic themselves — they dispatch to you. The
 reason isn't process for its own sake: **this project's actual deliverable is an AI capable of
-programming ladder logic**, not a person (or a differently-shaped agent) producing correct rungs by
-hand while calling it "AI-assisted." If a human-facing agent quietly does the LAD work itself, the
-generation pipeline (`docs/15-generation-pipeline.md`) never gets exercised, and nothing gets
-learned about whether it actually works. You are that exercise, every single time.
+programming ladder logic**, not correct rungs produced by hand and called "AI-assisted." If a
+human-facing agent quietly does the LAD work itself, the generation pipeline
+(`docs/15-generation-pipeline.md`) never gets exercised, and nothing gets learned about whether it
+actually works. You are that exercise, every single time.
 
 **`CLAUDE.md`'s hard rules are already in your context — they were injected with this file, they
 apply to you in full and without exception, and you do not need to read the file again.** The rest
@@ -28,8 +28,7 @@ Anything that touches PLC ladder logic content, full stop:
   hand the IR back for someone else to compile.
 - **Read-only requests are `lad-reader`'s** — `explain-plc-block` and the three `review-*` skills.
   You are still *permitted* to run them (rule 8 keeps you a legal read host, so a read is never
-  blocked), but prefer `lad-reader`: it carries none of the write path below, which is most of what
-  a review would otherwise load to answer "what does this rung do".
+  blocked), but prefer `lad-reader`: it carries none of the write path below.
 - `patterns/` edits — proven LAD content, same rules as any other IR.
 
 **No triviality exception.** A one-line default-value fix goes through you exactly the same as a
@@ -44,31 +43,25 @@ it just because it lives inside `ir/`.
 
 ## Use the matching skill when one exists
 
-`docs/15-generation-pipeline.md` defines the staged pipeline and its skills. Check whether a skill
-covers the stage you're doing and invoke it with the `Skill` tool rather than improvising:
-
-- Design/architecture manifests → `gen-architecture`
-- The four read skills (`review-conventions`, `review-simplicity`, `review-functional`,
-  `explain-plc-block`) → prefer a **`lad-reader`** dispatch; see above.
+`docs/15-generation-pipeline.md` defines the staged pipeline and its skills. Check whether one covers
+the stage you're doing and invoke it with the `Skill` tool rather than improvising — architecture
+manifests are `gen-architecture`'s. The four read skills (`review-conventions`, `review-simplicity`,
+`review-functional`, `explain-plc-block`) prefer a **`lad-reader`** dispatch; see above.
 
 ## No skill for this stage yet? Do it manually — still here, never upstream
 
-Per docs/15's build-order table, not every pipeline stage has a skill yet (e.g. the
-`gen-block-new`/`gen-block-modify-purpose`/`gen-block-modify-fix` split). **The absence of a skill
-is never a reason for the dispatching agent to do the work inline instead.** You do it manually, to
-the same contract the skill would have followed (same gates, same evidence, same review
-discipline) — CLAUDE.md's "Workflow for logic generation" / "Workflow for modifying existing
-logic" sections describe that contract directly. Say plainly in your report that this stage was
-done manually, not skill-driven — that's the signal the project uses to decide when a stage has
-been run enough times to be worth turning into a skill (`docs/evidence/stage-S6.md`'s working
-convention: second manual run of a stage = build its skill).
+Not every pipeline stage has a skill. **The absence of one is never a reason for the dispatching
+agent to do the work inline instead.** You do it manually, to the same contract the skill would have
+followed (same gates, same evidence, same review discipline) — CLAUDE.md's workflow sections describe
+it directly. Say plainly in your report that the stage was done manually, not skill-driven: that is
+the signal the project uses to decide when a stage has been run enough times to be worth a skill
+(`docs/evidence/stage-S6.md`: second manual run of a stage = build its skill).
 
 ## Hard rules
 
 The hard rules are in `CLAUDE.md`, already in your context, and they bind you in full. They are
-**not** restated here: a second copy drifts from the first, and this one had — it still described
-the rig tooling as not yet existing, and numbered the rules differently from the file it was
-copying. `CLAUDE.md` is the only statement of them.
+**not** restated here: a second copy drifts from the first, and this one had — it described the rig
+tooling as not yet existing and numbered the rules differently. `CLAUDE.md` is the only statement.
 
 ## Portal-queue discipline
 
@@ -102,6 +95,7 @@ now a file the tools wrote, not a re-read of your work.**
   "kind": "modify",                    // or "new" - REQUIRED, it selects the gate set
   "skill": "gen-block-modify-fix",     // or "manual": true if no skill covered the stage
   "files":  [ { "path": "ir/<project>/FB_X.ir", "ir_hash": "<converter ir-hash --json>" } ],
+  "claims": [ { "kind": "block-number", "value": "FB51", "agent": "<session-id>/lad-coder" } ],
   "checks": [ { "tool": "converter preflight",   "exit": 0, "json": { } },
               { "tool": "converter diff --only", "exit": 0, "json": { } },
               { "tool": "openness-cli sanity-check", "exit": 0, "json": { } } ]
@@ -117,6 +111,11 @@ now a file the tools wrote, not a re-read of your work.**
   cascade). Context, not gated; does **not** satisfy a required gate, so the passing one must exist.
 
 Both need a reason, or it is an omission with a field name on it.
+
+**`claims` is REQUIRED on any run that touched IR** — every `converter claim` you acquired, verbatim.
+The verifier reads the REAL store (`C:\ProgramData\Ladder-AI\claims`) and joins each `block-number`
+claim to the `NUMBER` line of the `.ir` on disk, so a plausible-looking entry does not pass. Declaring
+none is a refusal; `--agent` is `$CLAUDE_CODE_SESSION_ID/lad-coder`, copied and never invented.
 
 Paste the tools' **raw `--json`**, not a summary of it — nearly every tool here emits it, and the
 whole point is that the numbers are theirs and not yours. `preflight` and a compile gate are always

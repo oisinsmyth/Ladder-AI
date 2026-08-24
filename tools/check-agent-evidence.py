@@ -44,7 +44,9 @@ THREE RULES IT ENFORCES THAT ARE EASY TO GET WRONG:
   not a clean run.
 
   AN ABSENT GATE IS NOT A PASSED GATE. Evidence that simply omits the compile is not
-  evidence of a compile. Required gates missing is exit 1, not a shrug.
+  evidence of a compile. Required gates missing is exit 1, not a shrug. Applied to the
+  claims gate below: a run that touched IR and declares no `claims` is refused, because
+  "I took no reservation" and "I did not say" produce the same silence otherwise.
 
   KEY ON ERRORS, NEVER ON STATE. The station compile scope surfaces standing hardware
   warnings, so a healthy project legitimately returns Warning with errors=0. Gating on
@@ -65,6 +67,19 @@ CONVERTER = os.path.join(
 )
 
 SCHEMA = "ladder-ai/agent-evidence/1"
+
+# THE SHARED CLAIMS STORE ROOT. The tool appends the project slug itself, so this is the
+# ROOT and never the resolved path - passing `…\claims\test-project001` builds
+# `…\claims\test-project001\test-project001`, a second empty store that grants every claim
+# and looks exactly like success (ClaimStore.RejectDoubledRoot, measured 2026-08-14).
+#
+# 🔴 A PER-WORKTREE ROOT MAKES THIS WHOLE GATE A NO-OP. An empty store answers "no such
+# claim" to every question, so pointing this somewhere private would turn every claim
+# check into a refusal - which fails closed, and is the reason the default is the real
+# shared path rather than anything relative to this checkout. LADDER_CLAIMS_DIR overrides
+# it (the converter's own resolution order, and what the test suite drives), and the
+# resolved root is PRINTED in the report so a reader can see which store answered.
+CLAIMS_ROOT = os.environ.get("LADDER_CLAIMS_DIR") or r"C:\ProgramData\Ladder-AI\claims"
 
 # Exit codes that count as a pass, per tool. Anything else fails. Sourced from the
 # tools' own help text and READMEs, not from memory:
@@ -278,6 +293,174 @@ for entry in files:
         fail("%s: ir-hash DRIFTED\n      recorded %s\n      on disk  %s"
              % (path, claimed, actual))
 
+# --- the claims gate, joined to the files on disk -----------------------------------
+#
+# The registry (FI-65) works and, until Phase 8 track B, nothing required anyone to use
+# it: `grep` for `converter claim` across .claude/ returned zero hits. The skills now call
+# it; this is the half that recomputes rather than reads. An agent can write any `claims`
+# array it likes - what it cannot do is make the SHARED STORE contain a claim it never
+# took, or make the `NUMBER` line on disk agree with a block number it never claimed.
+def store_claims(project_dir):
+    """Every claim the shared store holds for one project. (rows, store_path, error)."""
+    if not os.path.exists(CONVERTER):
+        return None, None, "converter Release binary not built"
+    try:
+        proc = subprocess.Popen(
+            [CONVERTER, "claims", "--project", project_dir, "--claims", CLAIMS_ROOT, "--json"],
+            cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        )
+        raw, err = proc.communicate()
+    except OSError as exc:
+        return None, None, "could not run `converter claims` (%s)" % exc
+    if proc.returncode != 0:
+        # Exit 2 here is the doubled-root refusal or an unreadable project - either way
+        # the store did not answer, and an unanswered store is NOT CHECKED, never clean.
+        first = (err.decode("utf-8", "replace").strip().split("\n") or [""])[0]
+        return None, None, "`converter claims` exited %d - %s" % (proc.returncode, first)
+    try:
+        parsed = json.loads(raw.decode("utf-8", "replace"))
+    except ValueError:
+        return None, None, "`converter claims` did not emit JSON"
+    rows = parsed.get("claims") if isinstance(parsed, dict) else None
+    if not isinstance(rows, list):
+        return None, None, "`converter claims` emitted no claims[] array"
+    return rows, parsed.get("store"), None
+
+
+def ir_block_number(path):
+    """'FB3' / 'DB9010' for an .ir file, or None when it declares no block number.
+
+    The join that makes this gate worth having. An IR file names its space on its first
+    line (`BLOCK FB <name>`, or `DB <name>` for a data block) and its number on a `NUMBER`
+    line a couple of lines down - indented for a DB, flush for a code block, so both forms
+    are stripped before splitting. A `TYPE` (UDT) has no number and returns None rather
+    than a guess.
+    """
+    try:
+        with io.open(os.path.join(ROOT, path), encoding="utf-8", errors="replace") as fh:
+            head = [fh.readline() for _ in range(12)]
+    except (IOError, OSError):
+        return None
+    space, number = None, None
+    for raw in head:
+        parts = raw.strip().split()
+        if not parts:
+            continue
+        if space is None:
+            if parts[0] == "TYPE":
+                return None
+            if parts[0] == "BLOCK" and len(parts) >= 2:
+                space = parts[1]
+            elif parts[0] == "DB":
+                space = "DB"
+        if parts[0] == "NUMBER" and len(parts) >= 2:
+            number = parts[1]
+    return None if (space is None or number is None) else space + number
+
+
+ir_files = [e.get("path") for e in files
+            if e.get("path") and str(e.get("path")).endswith(".ir")]
+declared_claims = doc.get("claims")
+claims_verified = 0
+numbers_joined = 0
+store_path = None
+store_held = 0
+
+if ir_files:
+    if declared_claims is None:
+        fail("required gate absent: no `claims` section, and this run touched IR. Every "
+             "block number, network and block edit is reserved BEFORE the IR is written "
+             "(CLAUDE.md; the gen-block-* skills) - an absent gate is not a passed gate")
+    elif not isinstance(declared_claims, list) or not declared_claims:
+        fail("`claims` is empty on a run that touched IR - EMPTY IS NOT CLEAN. A run that "
+             "genuinely reserved nothing wrote no IR")
+elif declared_claims:
+    fail("`claims` declared but this evidence names no .ir file - nothing to join them to")
+
+if ir_files and isinstance(declared_claims, list) and declared_claims:
+    # One store query per project the evidence touched. The project is DERIVED from the
+    # file paths, not declared: a declared project name is one more field an agent could
+    # point at a store where its claims happen to live.
+    projects = sorted({os.path.dirname(p).replace("\\", "/") for p in ir_files})
+    held = []
+    for project in projects:
+        rows, resolved, err = store_claims(project)
+        if err:
+            fail("claims NOT CHECKED for %s - %s (store root %s). A store that did not "
+                 "answer is not a store that said yes" % (project, err, CLAIMS_ROOT))
+            continue
+        store_path = resolved or store_path
+        held.extend(rows)
+    store_held = len(held)
+
+    # THE VACUITY THAT WOULD MAKE THIS GATE A NO-OP, NAMED. Every branch below already
+    # fails closed on a missing claim, so an empty store cannot produce a green - but it
+    # would produce a wall of "not in the store" lines that read like an agent's mistake
+    # rather than a misconfigured root. Say which it is.
+    if store_held == 0 and not any("NOT CHECKED" in p for p in problems):
+        fail("the claims store answered with ZERO claims for %s (root %s, store %s). An "
+             "empty store grants everything and proves nothing - check the root is the "
+             "SHARED one and not a per-worktree path" % (", ".join(projects), CLAIMS_ROOT,
+                                                         store_path or "<none>"))
+
+    by_key = {}
+    for row in held:
+        if isinstance(row, dict):
+            by_key[(row.get("kind"), row.get("value"))] = row
+
+    on_disk = {}
+    for path in ir_files:
+        number = ir_block_number(path)
+        if number:
+            on_disk.setdefault(number, path)
+
+    for entry in declared_claims:
+        if not isinstance(entry, dict):
+            fail("a claims[] entry is not an object")
+            continue
+        # ckind, not kind: `kind` is the RUN's kind (new / modify) and selects the gate
+        # set. Shadowing it here would silently swap one for the other below.
+        ckind = entry.get("kind")
+        value = entry.get("value")
+        agent = entry.get("agent")
+        if not (ckind and value and agent):
+            fail("claims[] entry %r needs all of kind, value and agent - an unattributed "
+                 "claim coordinates nothing (agent-tasks/README.md's own lesson)" % (entry,))
+            continue
+
+        row = by_key.get((ckind, value))
+        if row is None:
+            fail("claim %s '%s' is NOT IN THE STORE - the evidence says it was taken and "
+                 "the registry has no record of it" % (ckind, value))
+            continue
+        holder = row.get("agent")
+        if holder != agent:
+            fail("claim %s '%s' is held by '%s', not by the declared '%s'"
+                 % (ckind, value, holder, agent))
+            continue
+        claims_verified += 1
+
+        # 🔴 THE JOIN. A block number exists first as the `NUMBER` line the agent typed;
+        # this is the one part of the claims gate that an agent cannot satisfy by writing a
+        # plausible evidence file, because it is checked against the IR on disk.
+        if ckind == "block-number":
+            if value in on_disk:
+                numbers_joined += 1
+            else:
+                fail("claim block-number '%s' matches no NUMBER line in the .ir files this "
+                     "evidence lists (on disk: %s) - the reservation and the work disagree"
+                     % (value, ", ".join(sorted(on_disk)) or "none"))
+
+    # The kind-specific floor, the same shape as the required-gate scan above. A new block
+    # allocates a number; a modification takes exclusive hold of the block it edits. Both
+    # are what the skills now do, so evidence showing neither did not follow them - and
+    # without this, declaring one irrelevant claim would satisfy the whole gate.
+    kinds_declared = {e.get("kind") for e in declared_claims if isinstance(e, dict)}
+    needed = "block-number" if kind == "new" else "block-edit"
+    if needed not in kinds_declared:
+        fail("required claim absent: a %r run declares no %s claim (declared: %s)"
+             % (kind, needed, ", ".join(sorted(k for k in kinds_declared if k)) or "none"))
+
 out.write("evidence                       : %s\n" % EVIDENCE)
 out.write("task                           : %s\n" % doc.get("task", "<unnamed>"))
 out.write("kind                           : %s\n" % kind)
@@ -286,6 +469,16 @@ out.write("skill                          : %s\n"
 out.write("files touched                  : %d\n" % len(files))
 out.write("hashes recomputed here         : %d\n" % checked_hashes)
 out.write("gates recorded                 : %d\n" % len(checks))
+# ASSERT THE DENOMINATOR. "0 problems" is true of nothing found and of nothing looked at,
+# so the report says what the claims gate compared: how many the evidence declared, how
+# many the SHARED store confirmed, how many block numbers were joined to a NUMBER line on
+# disk, and - the line that exposes a wrong root - how many claims that store holds at all.
+out.write("claims declared                : %s\n"
+          % (len(declared_claims) if isinstance(declared_claims, list) else "ABSENT"))
+out.write("claims confirmed in store      : %d\n" % claims_verified)
+out.write("block numbers joined to IR     : %d\n" % numbers_joined)
+out.write("claims store root              : %s\n" % CLAIMS_ROOT)
+out.write("store consulted / holds        : %s / %d\n" % (store_path or "<none>", store_held))
 out.write("deferred (declared, not run)   : %d\n" % len(deferred))
 out.write("transient (ran, superseded)    : %d\n" % len(transient))
 out.write("PROBLEMS                       : %d\n" % len(problems))

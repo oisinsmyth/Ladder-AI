@@ -19,8 +19,8 @@ allowed-tools:
 Ladder-AI project. This is docs/15's `gen-block-modify-purpose` stage (pipeline skill #8): implement a
 **gate-1-signed architecture decision that changes an existing block's purpose** — new/changed interface
 members, new/changed/removed networks — **touching only what the manifest names and proving the rest
-identical in IR**. It is highest-risk (changing working logic at a larger scope than a fix), so its whole
-discipline is *authorized, scoped, and proven*. `CLAUDE.md` is already in your context — do not re-read it. Hard rules bind you, and
+identical in IR**. Its discipline is *authorized, scoped, and proven*.
+`CLAUDE.md` is already in your context — do not re-read it. Hard rules bind you, and
 CLAUDE.md's "Workflow for modifying existing logic (Stage S7+)" is the contract this mechanizes.
 
 **You run inside `lad-coder`** (hard rule 8). If reached otherwise, stop — a human-facing agent must
@@ -32,8 +32,8 @@ dispatch this to `lad-coder`.
   (`gen-architecture`, tier-(c)): what changes (interface members, which networks) is decided and signed
   *before* you touch the block. Implement exactly that. Changing more than the manifest names — even to
   "finish the thought" — is a scope breach; changing less leaves the purpose half-done.
-- **Still scoped, even though it's bigger than a fix.** The value of doing this as a *modification* rather
-  than a rewrite is that the untouched networks (the shared skeleton the block keeps) **prove identical**.
+- **Still scoped, even though it's bigger than a fix.** The value of doing this as a *modification* is
+  that the untouched skeleton the block keeps **proves identical**.
   If the manifest's change touches nearly everything, that's a signal it's really a **new block** —
   `gen-block-new` — not a purpose change; say so.
 - **A defect you notice is not yours to fix here.** Route it to `gen-block-modify-fix` / a review; don't
@@ -55,8 +55,8 @@ dispatch this to `lad-coder`.
 - **The requirements register** — the new/changed REQs the purpose delivers; **`docs/06`** (read fresh,
   **by rule ID and never by section heading** — C-204 is a Commenting rule physically sitting under
   `## Data`): C-115 handshake vocabulary for the new interface, **C-132** (the interface is one STATIC
-  UDT member) and **C-605** (interface members carry comments) — both directly in play the moment you
-  add a member — C-118/C-125 if the new purpose is a sequence, C-126, **C-201–C-204**, the stricter
+  UDT member) and **C-605** (interface members carry comments), both in play the moment you add a
+  member; C-118/C-125 if the new purpose is a sequence, C-126, **C-201–C-204**, the stricter
   bar, **plus the rule family any changed network belongs to**.
   Also **`docs/notes/compile-error-playbook.md`**.
 
@@ -68,22 +68,26 @@ re-synthesize → the `converter diff --only` **invariance gate** → compile ga
 notes: the `--only` forms, sidecar-less diffing, the UDT/`TYPE` fallback, the FB-with-timers instance-DB
 rule, and the compound-operand-must-lead synthesis rule). Follow it. **For a purpose change specifically:**
 
+- **Claim before you edit — BINDING, and it comes first.** `--kind block-edit --value <BlockName>` for
+  the target, plus **`--kind block-network --value <BlockName>:<n>` for every network you ADD**:
+  `converter claim --project ir/<project>/ --claims C:\ProgramData\Ladder-AI\claims --agent "$CLAUDE_CODE_SESSION_ID/lad-coder" --kind <k> --value <v> --json`
+  **0 = yours. 1 = REFUSED — another agent holds it; stop and report who. 2 = NOTHING WAS DECIDED —
+  stop; never read it as free.** Copy `--agent` from the environment, never invent it, and record every
+  acquired claim in `evidence.json`'s `claims` array.
 - **Interface change is in scope** (unlike a fix): add/change exactly the interface members the manifest
-  names — the new function's inputs/outputs/settings (e.g. a VSD's speed reference, ramp, control word,
-  speed feedback) — following **C-115 handshake vocabulary** (take member names from the site pattern, not
+  names — the new function's inputs/outputs/settings — following **C-115 handshake vocabulary** (take member names from the site pattern, not
   doc 06's illustrative ones). `converter diff`'s **`HEADER changed`** line surfaces the interface delta;
   that's expected here. The as-built's other members stay untouched.
   🔴 **So this skill's invariance run needs `--allow-header` (2026-08-14) — and that flag is a DECLARATION,
-  not a formality.** Until then an unclaimed header change printed `HEADER changed: interface` and then
-  `INVARIANCE OK: all changes confined to --only {N}`, two lines apart, and **exited 0** — so retyping a
-  member `Bool` → `Int` with no network touched passed the gate whose whole job is *"prove the rest is
-  identical"*, and that is precisely the change that compiles, imports and misbehaves on the controller.
-  An unclaimed header change (or a block rename) is now an **invariance violation, exit 1**.
+  not a formality.** Before it, retyping a member `Bool` → `Int` with no network touched **exited 0** on
+  the gate whose whole job is *"prove the rest is identical"* — precisely the change that compiles,
+  imports and misbehaves on the controller.
+  An undeclared header change (or a block rename) is now an **invariance violation, exit 1**.
   `gen-block-modify-fix` must **never** pass it: a fix that needs an interface member is a purpose change
   and routes here instead.
-- **Networks may be added and removed**, not only edited — per the manifest (add the new function's control
-  networks; retire networks the old purpose made and the new one doesn't need, e.g. a DOL run coil replaced
-  by VSD speed control). Added/removed networks appear in `diff` as `Added`/`Removed` and belong in the
+- **Networks may be added and removed**, not only edited — per the manifest: add the new function's
+  control networks; retire the ones the old purpose needed and the new one does not.
+  Added/removed networks appear in `diff` as `Added`/`Removed` and belong in the
   `--only` changed set; **the untouched skeleton networks (start/stop, permissives, faults, hours, alarms)
   still prove identical** — that invariance is the whole point.
   🔴 **AN INSERTION MID-BLOCK RENUMBERS EVERYTHING AFTER IT (2026-08-23).** `diff` matches on CONTENT
@@ -103,11 +107,9 @@ Hand back (per `lad-coder`'s contract — your summary is not proof):
   the members that changed are the ones the manifest named. **Same for `--insert`.**
 - A **one-paragraph intent**: what purpose change, which REQ(s) it delivers, why it's correct.
 - **preflight** (zero findings) + **compile** evidence: `sanity-check`'s `INCONSISTENT: 0` on **both**
-  the `BLOCKS:` and `TYPES:` lines, plus the **error count**. *(Corrected 2026-08-13: this read
-  "State, error/warning counts". **`State` is not a verdict** — on a project carrying a permanent
-  hardware warning it is non-Success on a perfectly clean block, which is why `compile` stopped
-  keying on it on 2026-08-12. Key on errors; report warnings without gating on them. And a bare
-  whole-device compile is not the gate at all — hard rule 4 / FI-52.)*
+  the `BLOCKS:` and `TYPES:` lines, plus the **error count**. **`State` is not a verdict** — a permanent
+  hardware warning makes it non-Success on a perfectly clean block. Key on errors; report warnings
+  without gating on them. A bare whole-device compile is not the gate at all (hard rule 4 / FI-52).
 
 - **`evidence.json`** (`"kind": "modify"`) — the raw `--json` and exit code of each gate above, plus a
   `converter ir-hash` per file touched. Schema in `.claude/agents/lad-coder.md`. The prose above still
@@ -115,6 +117,12 @@ Hand back (per `lad-coder`'s contract — your summary is not proof):
   `python tools/check-agent-evidence.py <path>`, which recomputes every hash itself. Note that the
   evidence file records the `diff --only` **exit code**, which `--allow-header` can only make greener —
   so it does not relieve you of quoting the interface delta in prose, for exactly the reason above.
+  **`claims` is required too** — `{kind, value, agent}` per claim acquired; a run that touched IR and
+  declares none is refused.
+
+Then **release every claim**:
+`converter claims --project ir/<project>/ --claims C:\ProgramData\Ladder-AI\claims --release --agent "$CLAUDE_CODE_SESSION_ID/lad-coder" --all`.
+Nothing auto-releases; a stale claim is reported and never cleared for you.
 
 Append a `gen/<project>/telemetry.log` line (`gen-block-modify-purpose`) when the project has one (a
 validation corpus has none — note the run in your report instead). Then **stop** — the fresh-context Check

@@ -70,24 +70,24 @@ can't drift; it also carries the tooling notes: the `--only` space/comma/repeate
 diffing, the UDT/`TYPE` no-network-invariance fallback, the FB-with-timers instance-DB rule, and the
 compound-operand-must-lead synthesis rule). Follow it. **For a fix specifically:**
 
+- **Claim the block before you edit it — BINDING, and it comes first.**
+  `converter claim --project ir/<project>/ --claims C:\ProgramData\Ladder-AI\claims --agent "$CLAUDE_CODE_SESSION_ID/lad-coder" --kind block-edit --value <BlockName> --json`
+  **0 = yours. 1 = REFUSED — another agent is editing it; stop and report who holds it. 2 = NOTHING
+  WAS DECIDED — stop; never read it as free.** Copy `--agent` from the environment, never invent it,
+  and record every acquired claim in `evidence.json`'s `claims` array.
 - **Scope = the network(s) the fix-request names — a defect repair, not an interface change.** If the
   "fix" actually needs a new interface member or a new/removed network, it's a *purpose* change → stop
   and route to `gen-block-modify-purpose`; don't grow the fix into a redesign.
   🔴 **The `--only` gate now ENFORCES that (2026-08-14): a header change you did not declare is an
-  invariance violation, exit 1.** Until then it printed `HEADER changed: interface` and then
-  `INVARIANCE OK: all changes confined to --only {N}` and exited 0, so a member retyped `Bool` → `Int`
-  passed a gate whose whole job is *"prove the rest is identical"*. **`--allow-header` exists and is
+  invariance violation, exit 1.** (Before it, an undeclared member retype `Bool` → `Int` passed a gate
+  whose whole job is *"prove the rest is identical"*.) **`--allow-header` exists and is
   `gen-block-modify-purpose`'s, not yours** — if you reach for it, you are on the wrong path and the
   answer is to route, not to declare.
   🔴 **AND `--insert <n>` IS NOT YOURS EITHER (2026-08-23).** `diff` matches on CONTENT now, so an
   inserted network makes the ones after it `MOVED`, and a move **gates**. But a fix needing a *new
   network* is a purpose change by the rule above. **If moves are gating you, route — do not declare.**
-  ✅ **BUT REPAIRING A STALE BLOCK COMMENT IS YOURS, AND IT NO LONGER GATES (narrowed 2026-08-14, on the
-  gate's first contact with real work).** A fix-wave run widened a Modbus area, repaired two block
-  comments that were *already false* — one said the area covered "8 words" when it covered 35 — and hit
-  `INVARIANCE VIOLATION`. It rightly refused `--allow-header`, which left a **documentation-only repair
-  with no clean path under either modify skill**, while leaving false comments in place was not a
-  neutral option either. **`--only` asks one question: did anything change outside the named networks
+  ✅ **BUT REPAIRING A STALE BLOCK COMMENT IS YOURS, AND IT NO LONGER GATES (narrowed 2026-08-14).**
+  **`--only` asks one question: did anything change outside the named networks
   that could alter WHAT THE PLC DOES?** An interface member answers yes; a block title or a rename
   answers yes (both are identity, and TIA's import matches by name). ***A block comment cannot.*** So a
   **comment-only** header change now passes, and prints `HEADER COMMENT CHANGED (does not gate)` on its
@@ -108,17 +108,20 @@ Hand back (per `lad-coder`'s "what you hand back" contract — your summary is n
   result** (exit 0) proving the rest is untouched. This pairing *is* the S7 deliverable.
 - A **one-paragraph intent**: which defect, which REQ/rule it restores, why the change is correct.
 - **preflight** (zero findings) + **compile** evidence: `sanity-check`'s `INCONSISTENT: 0` on **both**
-  the `BLOCKS:` and `TYPES:` lines, plus the **error count**. *(Corrected 2026-08-13: this read
-  "State, error/warning counts". **`State` is not a verdict** — on a project carrying a permanent
-  hardware warning it is non-Success on a perfectly clean block, which is why `compile` stopped
-  keying on it on 2026-08-12. Key on errors; report warnings without gating on them. And a bare
-  whole-device compile is not the gate at all — hard rule 4 / FI-52.)*
+  the `BLOCKS:` and `TYPES:` lines, plus the **error count**. **`State` is not a verdict** — a permanent
+  hardware warning makes it non-Success on a perfectly clean block. Key on errors; report warnings
+  without gating on them. A bare whole-device compile is not the gate at all (hard rule 4 / FI-52).
 
 - **`evidence.json`** (`"kind": "modify"`) — the raw `--json` and exit code of each gate above, plus a
   `converter ir-hash` per file touched. Schema in `.claude/agents/lad-coder.md`. The prose above still
   stands; this is what the dispatcher actually verifies, with
   `python tools/check-agent-evidence.py <path>`, which recomputes every hash itself. The `diff --only`
-  gate is **required** here — on a fix, the invariance proof is the deliverable.
+  gate is **required** here — on a fix, the invariance proof is the deliverable. So is **`claims`** —
+  `{kind, value, agent}` per claim acquired; a run that touched IR and declares none is refused.
+
+Then **release every claim**:
+`converter claims --project ir/<project>/ --claims C:\ProgramData\Ladder-AI\claims --release --agent "$CLAUDE_CODE_SESSION_ID/lad-coder" --all`.
+Nothing auto-releases; a stale claim is reported and never cleared for you.
 
 Append one telemetry line to `gen/<project>/telemetry.log` (`gen-block-modify-fix`; include blocked/routed
 runs) **when the project has one** — a validation corpus (`gen/_validation/*`) has no telemetry log, so
