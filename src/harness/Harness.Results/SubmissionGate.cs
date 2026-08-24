@@ -1708,7 +1708,11 @@ public static class SubmissionGate
             {
                 MapProvenance.Bindings =>
                     "the coordinator's binding was loaded and derived from, but it records no `declaredBy`, so the party who decided WHAT CAN BE SEEN of this block is unknown. "
-                    + "Gate 5's provenance test fences out the VECTOR author and is silent about the BLOCK's: a binding written by the block's author narrows observability with one hand and writes the logic with the other.",
+                    + "Gate 5's provenance test fences out the VECTOR author and is silent about the BLOCK's: a binding written by the block's author narrows observability with one hand and writes the logic with the other. "
+                    + "*** IF THIS BINDING CAME OUT OF `harness-batch plan`, THAT IS THE LIKELIEST CAUSE AND IT IS A RULED OMISSION, NOT A BUG: *** `BatchPlanner.SharedDeclarer` carries a declarer only when EVERY "
+                    + "lane names the SAME one, and drops it when the lanes name DIFFERENT coordinators OR when any single lane is silent — the plan prints which, on its `authority` line. The plural `declaredBy` "
+                    + "that would carry both authorities is RULED NOT BUILT (owner, 2026-08-24, docs/notes/owner-questions.md D2): the correct answer is a SET, and a joined string would compare as one literal "
+                    + "matching neither party. Re-plan under a single coordinator, or gate the lane on its own binding.",
                 MapProvenance.SelfDeclared =>
                     "the map came out of the submission, so gate 5 already refuses to be the deciding voice on it — and there is no separate author to attribute either. "
                     + "This gate closes when a coordinator binding carrying `declaredBy` is supplied (`--binding`), which is the same artifact gate 5 is waiting on.",

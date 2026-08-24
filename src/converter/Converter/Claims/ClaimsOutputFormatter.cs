@@ -19,7 +19,13 @@ public static class ClaimsOutputFormatter
     // here because it is the line that would have let any of the three readers who missed the fork
     // notice it, and because a grant that does not say where it was recorded cannot be cross-checked
     // between two lane reports afterwards.
-    public static string FormatOutcomeText(ClaimOutcome outcome, string? storeDirectory = null)
+    //
+    // 🔴 `bucketNote` (2026-08-24) IS WHAT AN ECHOED PATH ALONE WAS NEVER GOING TO BUY. The line above
+    // states WHERE; a reader still has to know that the last segment of it is the whole key, and that a
+    // generic segment is a bucket other projects land in too. So the ambiguity is stated in words at the
+    // point of the act rather than left to be inferred from a path. It is a REPORT: the direction is
+    // over-refusal, and gating a claim on it would refuse a live job mid-work — see ClaimStore.BucketAmbiguity.
+    public static string FormatOutcomeText(ClaimOutcome outcome, string? storeDirectory = null, string? bucketNote = null)
     {
         var sb = new StringBuilder();
         sb.Append(outcome.Ok ? "CLAIMED   " : "REFUSED   ").Append(outcome.Reason).Append('\n');
@@ -27,6 +33,11 @@ public static class ClaimsOutputFormatter
         if (storeDirectory is not null)
         {
             sb.Append("  store   ").Append(storeDirectory).Append('\n');
+        }
+
+        if (bucketNote is not null)
+        {
+            sb.Append("  bucket  ").Append(bucketNote).Append('\n');
         }
 
         if (outcome.Claim is not null)
@@ -48,12 +59,13 @@ public static class ClaimsOutputFormatter
         return sb.ToString();
     }
 
-    public static string FormatOutcomeJson(ClaimOutcome outcome, string? storeDirectory = null) => JsonSerializer.Serialize(new
+    public static string FormatOutcomeJson(ClaimOutcome outcome, string? storeDirectory = null, string? bucketNote = null) => JsonSerializer.Serialize(new
     {
         result = outcome.Result.ToString(),
         ok = outcome.Ok,
         reason = outcome.Reason,
         store = storeDirectory,
+        bucket = bucketNote,
         claim = outcome.Claim is null ? null : Describe(outcome.Claim),
         holder = outcome.Holder is null ? null : Describe(outcome.Holder),
     }, JsonOptions);

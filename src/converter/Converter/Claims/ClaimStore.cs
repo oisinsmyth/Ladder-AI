@@ -87,6 +87,48 @@ public sealed class ClaimStore
 
     public string Directory => _root;
 
+    /// <summary>
+    /// 🔴 <b>WHY THIS STORE MIGHT NOT BE ABOUT YOUR PROJECT — null when the bucket name identifies one.</b>
+    ///
+    /// <para><b>The hazard, ruled 2026-08-24 and recorded in <c>docs/notes/multi-agent-operating-guide.md</c>
+    /// §1.</b> <see cref="SlugOf"/> keys the bucket on the LAST PATH SEGMENT of <c>--project</c>. A project
+    /// whose IR lives in its own named directory (<c>ir/test-project001</c>) gets a bucket nobody else can
+    /// reach. A project whose IR directory is simply called <c>ir</c> gets a bucket called <c>ir</c> —
+    /// <b>and so does every other project shaped that way.</b> Two unrelated jobs then share one registry.</para>
+    ///
+    /// <para><b>REPORTED, NEVER GATED, and that is the ruling rather than an omission.</b> The failure
+    /// direction is OVER-REFUSAL: the second project's agents are refused against the first project's
+    /// reservations, never granted alongside them, which is the safe direction. Refusing on a generic slug
+    /// would stop work that is otherwise correct — and there is a live job holding claims in exactly such
+    /// a bucket right now, so a gate here would refuse it mid-work. <b>And <see cref="SlugOf"/> is
+    /// deliberately unchanged: re-keying orphans reservations that agents are holding while they work.</b></para>
+    ///
+    /// <para>⚠️ <b>A heuristic, and it says so.</b> The list below cannot know which names are project
+    /// names; it recognises the LAYOUT names a repository uses for the directory rather than for the
+    /// project. A project genuinely called <c>logic</c> gets a line it does not need, which costs a read;
+    /// a generic name not on the list gets no line, which is the state every caller was in before this
+    /// existed. Neither is a gate, so neither can stop anything.</para>
+    /// </summary>
+    public string? BucketAmbiguity => GenericBucketNames.Contains(ProjectSlug)
+        ? $"the bucket is named '{ProjectSlug}', which is a GENERIC DIRECTORY NAME and not a project-identifying one. "
+          + "The store keys on the LAST SEGMENT of --project, so EVERY project whose IR directory is also called "
+          + $"'{ProjectSlug}' shares this one bucket — another job's reservations may be in here, and yours are in with them. "
+          + "REPORTED, NOT REFUSED: the direction is over-refusal (you are blocked by a stranger's claim, never granted "
+          + "alongside one), and gating here would stop correct work. Read the `project` line inside the claims before "
+          + "believing this store is about your project. The slug rule is deliberately unchanged — re-keying would orphan "
+          + "reservations that live agents are holding (docs/notes/multi-agent-operating-guide.md, section 1)."
+        : null;
+
+    // Layout names, not project names. Deliberately short: every entry here is a name this repository (or
+    // an obvious variant of it) uses for the DIRECTORY rather than for the project, and a long speculative
+    // list would produce a line on buckets that are perfectly well identified — which is how a report
+    // teaches its reader to skip it.
+    private static readonly HashSet<string> GenericBucketNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "ir", "src", "source", "blocks", "plc", "program", "logic", "code",
+        "project", "projects", "export", "exports", "simatic-ml", "xml", "out", "build", "tmp", "temp",
+    };
+
     // The claims directory is keyed by the project's own directory name (`ir/test-project001` ->
     // `test-project001`), so one shared claims root serves every project without the caller inventing
     // an id. A path that yields no name (a bare root) falls back to a hash rather than colliding

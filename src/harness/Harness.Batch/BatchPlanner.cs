@@ -39,7 +39,22 @@ public sealed record BatchPlanResult(
     /// The derived set measured against the declared one: what was used, what was excluded as the
     /// mirror's own, and which declarations nothing corroborated.
     /// </summary>
-    NeighbourReconciliation? NeighbourReconciliation = null)
+    NeighbourReconciliation? NeighbourReconciliation = null,
+
+    /// <summary>
+    /// 🔴 <b>WHO THE MERGED BINDING ENDED UP DECLARING, AND — WHEN IT DECLARES NOBODY — WHY.</b>
+    ///
+    /// <para>Null only where no merge happened (a refused plan). Otherwise it is stated on every plan,
+    /// pass or drop, for the reason the neighbour line above is: <b>an authority line that appears only
+    /// when something went wrong teaches a reader that its absence means "attributed"</b>, and the
+    /// absence would in fact mean nobody printed it.</para>
+    ///
+    /// <para>The unattributed text is the SAME account gate 5c gives when it reads <c>NOT CHECKED</c> on
+    /// a batched submission, so the trail works from either end: from the gate, which names
+    /// <see cref="BatchPlanner"/>'s merge; and from here, at the moment the field is dropped, hours
+    /// before anybody runs a wave. See <c>SharedDeclarer</c>.</para>
+    /// </summary>
+    string? MergedAuthority = null)
 {
     public bool Planned => Refusals.Count == 0 && MergedBindingJson is not null;
 }
@@ -396,7 +411,12 @@ public static class BatchPlanner
                 null, served, neighbourFact, reconciliation);
         }
 
-        var merged = MergeBindings(documents.Select(d => d.Binding).ToList(), reserved);
+        // Resolved HERE rather than inside MergeBindings, so the reason a merge drops the field can be
+        // carried onto the result and printed. Computing it in the serializer would leave the only
+        // account of it inside a string nobody sees until a gate reads NOT CHECKED days later.
+        var authority = SharedDeclarer(documents);
+
+        var merged = MergeBindings(documents.Select(d => d.Binding).ToList(), reserved, authority.Name);
 
         return new BatchPlanResult(
             lanes.Count,
@@ -408,7 +428,8 @@ public static class BatchPlanner
             reachability,
             served,
             neighbourFact,
-            reconciliation);
+            reconciliation,
+            authority.Line);
     }
 
     /// <summary>
@@ -441,12 +462,13 @@ public static class BatchPlanner
     /// </summary>
     private static string MergeBindings(
         IReadOnlyList<BindingDocument> documents,
-        IReadOnlyList<ReservedRegion> reserved)
+        IReadOnlyList<ReservedRegion> reserved,
+        string? declaredBy)
     {
         var first = documents[0];
         var merged = new BindingDocument
         {
-            DeclaredBy = SharedDeclarer(documents),
+            DeclaredBy = declaredBy,
             BlockName = first.BlockName,
             BlockNumber = first.BlockNumber,
             TagTableName = first.TagTableName,
@@ -495,31 +517,85 @@ public static class BatchPlanner
     /// merged document declares NOBODY: gate 5c then reads NOT CHECKED and says so by name, which is
     /// fail-closed and audible. <b>A batch is not silently weakened; it is loudly unattributed.</b></para>
     ///
-    /// <para>⚠️ <b>THE PROPERLY CORRECT ANSWER IS A SET, AND IT NEEDS AN OWNER RULING — NOT TAKEN HERE.</b>
+    /// <para>🔴 <b>THE PROPERLY CORRECT ANSWER IS A SET, AND IT IS RULED NOT BUILT — 2026-08-24, owner,
+    /// recorded at <c>docs/notes/owner-questions.md</c> D2. THAT IS A DECISION, NOT AN OVERSIGHT, AND
+    /// THIS PARAGRAPH IS WHERE A READER WHO ARRIVES FROM GATE 5c IS MEANT TO LAND.</b>
     /// A merged map derived from two coordinators' bindings has TWO authorities, and the fail-closed
     /// comparison is "refuse if ANY contributing declarer is the block's author or a vector's". Nothing
     /// less than a set can express that: a joined string like <c>"agent-x; agent-y"</c> is worse than
     /// nothing, because <c>AgentIdentity.SameAs</c> would compare the whole joined literal and match
     /// neither party — a conflict rendered invisible by the formatting. Carrying a set means a PLURAL WIRE
     /// FIELD on <see cref="BindingDocument"/>, which every reader and gate 0b's unknown-field refusal see,
-    /// and a plural <c>MapAuthor</c> on the domain map. That is a schema change with a blast radius, and
-    /// the multi-coordinator batch is not known to have occurred yet. <b>Until it is ruled on, the
-    /// mixed-declarer batch is NOT CHECKED rather than guessed at.</b></para>
+    /// and a plural <c>MapAuthor</c> on the domain map — a schema change across ~29 documents for a case
+    /// no batch has yet produced. <b>The revisit trigger is the first real multi-coordinator batch, which
+    /// is also the first moment the right semantics are knowable; until then the mixed-declarer batch is
+    /// NOT CHECKED rather than guessed at, which is fail-CLOSED.</b></para>
+    ///
+    /// <para>⚠️ <b>THE NULL HAS TWO CAUSES AND THEY ARE NOT THE SAME REPAIR</b> — a message naming only
+    /// one misleads on the other. <b>(1) Disagreement:</b> the lanes name different coordinators.
+    /// <b>(2) Partial silence:</b> the lanes that spoke agree, but at least one lane said nothing — a
+    /// batch attributed to the lanes that happened to say is not an attributed batch, the same rule as a
+    /// partially-attributed enumeration set at gate 3d. A distinct-count alone would miss (2) entirely.
+    /// There is a THIRD state, and it is deliberately not described as a merge effect: when NO lane
+    /// states a declarer the merged document is unattributed for the ordinary reason a single binding is,
+    /// and saying "your lanes disagreed" there would send the reader hunting for a disagreement that does
+    /// not exist.</para>
     /// </summary>
-    private static string? SharedDeclarer(IReadOnlyList<BindingDocument> documents)
+    /// <returns>
+    /// The name to carry — null when the merge cannot attribute — and, always, the line the plan prints.
+    /// Both come from ONE evaluation on purpose: a second method recomputing the predicate to explain it
+    /// is a message that drifts away from the behaviour it describes.
+    /// </returns>
+    private static (string? Name, string Line) SharedDeclarer(IReadOnlyList<(Lane Lane, BindingDocument Binding)> documents)
     {
-        var stated = documents
-            .Select(d => (d.DeclaredBy ?? string.Empty).Trim())
-            .Where(d => d.Length > 0)
+        var named = documents
+            .Where(d => !string.IsNullOrWhiteSpace(d.Binding.DeclaredBy))
             .ToArray();
 
-        // TWO conditions, and the second is the one a distinct-count alone would miss: a batch attributed
-        // to the lanes that happened to say is not an attributed batch, so a single silent lane
-        // unattributes the whole merged document. Same rule as a partially-attributed enumeration set at
-        // gate 3d. Compared with the identity's own normalisation, not ordinally.
-        var oneVoice = stated.Distinct(StringComparer.OrdinalIgnoreCase).Count() == 1;
+        // Compared with the identity's own normalisation — trim, then case-insensitively — and not
+        // ordinally, so `"agent-a"` and `"Agent-A "` are one voice here exactly as AgentIdentity.SameAs
+        // makes them one party at the gate.
+        var distinct = named
+            .Select(d => d.Binding.DeclaredBy!.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
 
-        return oneVoice && stated.Length == documents.Count ? documents[0].DeclaredBy : null;
+        var silent = documents.Where(d => string.IsNullOrWhiteSpace(d.Binding.DeclaredBy)).ToArray();
+
+        if (distinct.Length == 1 && silent.Length == 0)
+        {
+            return (documents[0].Binding.DeclaredBy,
+                $"declared by '{distinct[0]}' — all {documents.Count} lane(s) named the same coordinator, so collapsing to one name lost nothing "
+                + "and gate 5c stays a live verdict on this batch.");
+        }
+
+        // The third state, and it is NOT a merge effect: nobody was dropped, because nobody was named.
+        if (distinct.Length == 0)
+        {
+            return (null,
+                $"UNATTRIBUTED — no lane states `declaredBy` ({documents.Count} lane(s), none of them naming a coordinator). "
+                + "That is an unattributed BINDING and not a merge effect: nothing was dropped here, because nothing was offered. "
+                + "Gate 5c reads NOT CHECKED, and it closes the moment any lane's binding names its author.");
+        }
+
+        var because = distinct.Length > 1
+            ? "the lanes name DIFFERENT coordinators (" + string.Join("; ", named
+                .GroupBy(d => d.Binding.DeclaredBy!.Trim(), StringComparer.OrdinalIgnoreCase)
+                .Select(g => $"'{g.Key}' from {string.Join(", ", g.Select(d => "'" + d.Lane.Name + "'"))}")) + ")"
+            : $"the lanes that spoke all named '{distinct[0]}'";
+
+        var alsoSilent = silent.Length == 0
+            ? string.Empty
+            : $", and {silent.Length} lane(s) state no `declaredBy` at all ({string.Join(", ", silent.Select(d => "'" + d.Lane.Name + "'"))}) — "
+                + "a batch attributed to the lanes that happened to say is not an attributed batch";
+
+        return (null,
+            $"UNATTRIBUTED — {because}{alsoSilent}. The merged document therefore declares NOBODY and gate 5c reads NOT CHECKED. "
+            + "*** THAT IS DELIBERATE AND IT IS NOT REPAIRABLE BY EDITING THIS MERGE. *** Stamping one lane's name over the others is fail-OPEN "
+            + "(if the dropped party is also the block's author, 5c compares the survivor, finds a difference and PASSES a real conflict), and the "
+            + "plural `declaredBy` that would carry both authorities is RULED NOT BUILT — owner, 2026-08-24, docs/notes/owner-questions.md D2 — because "
+            + "the correct answer is a SET and a joined string would compare as one literal matching neither party. "
+            + "Re-plan under a single coordinator, or run the lane on its own binding.");
     }
 
     private static void AgreeOn<T>(
@@ -644,6 +720,14 @@ public static class BatchPlanner
             sb.Append("              was handed; and whether that corpus is the program on the controller — it reads\n");
             sb.Append("              files, not the CPU. A zero means 'nothing in the corpus DECLARED a claim'.\n");
         }
+
+        // 🔴 WHO THE MERGED BINDING DECLARES, ON EVERY PLAN THAT PRODUCED ONE — INCLUDING THE ATTRIBUTED
+        // CASE. Printed unconditionally for the neighbour line's reason: a line that shows up only when
+        // the field was dropped trains a reader to read its absence as "attributed", and the absence in
+        // fact means nobody printed it. The unattributed text is the account gate 5c will give days
+        // later, said here at the moment the field is actually dropped.
+        if (result.MergedAuthority is { } authority)
+            sb.Append("  authority ").Append(authority).Append('\n');
 
         foreach (var refusal in result.Refusals)
             sb.Append("  REFUSED  ").Append(refusal).Append('\n');

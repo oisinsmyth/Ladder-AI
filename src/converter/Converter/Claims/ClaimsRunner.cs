@@ -160,6 +160,16 @@ public static class ClaimsRunner
             warnings.Add($"no claims directory at '{store.Directory}' — 0 claims examined");
         }
 
+        // 🔴 THE BUCKET MAY BE SHARED WITH ANOTHER PROJECT, AND THIS IS WHERE A READER CAN ACT ON IT: the
+        // listing is the surface that shows the claims themselves, so the caveat belongs next to them
+        // rather than only at the moment one is taken. A WARNING deliberately — HasFindings counts only
+        // Conflicts, so this cannot gate; the direction is over-refusal and a live job is holding claims
+        // in exactly such a bucket. See ClaimStore.BucketAmbiguity for the ruling.
+        if (store.BucketAmbiguity is { } ambiguity)
+        {
+            warnings.Add(ambiguity);
+        }
+
         foreach (var claim in claims)
         {
             if (!string.Equals(claim.Project, projectDir, StringComparison.OrdinalIgnoreCase))

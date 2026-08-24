@@ -1537,6 +1537,54 @@ public class SubmissionGateTests
 
         Assert.Equal(GateStatus.NotChecked, gate.Status);
         Assert.Contains("gate 5 already refuses to be the deciding voice", gate.Detail, StringComparison.Ordinal);
+
+        // *** THE OTHER DIRECTION OF THE MERGE SENTENCE BELOW. *** This silence has a different repair —
+        // supply a coordinator binding — and telling this reader their lanes named different coordinators
+        // would send them hunting a batch that does not exist. A message that appears everywhere explains
+        // nothing anywhere.
+        Assert.DoesNotContain("harness-batch plan", gate.Detail, StringComparison.Ordinal);
+        Assert.DoesNotContain("owner-questions.md D2", gate.Detail, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// 🔴 The symptom an agent actually meets is <i>"5c says NOT CHECKED and I supplied a binding"</i>, and
+    /// the merged-batch cause is the one with no code left behind to explain itself — the plural
+    /// <c>declaredBy</c> is RULED NOT BUILT (owner, 2026-08-24). So the refusal names it, names it as a
+    /// DECISION, and points at where the decision is recorded. Without this the trail from the symptom to
+    /// the ruling is archaeology through <c>BatchPlanner</c>.
+    /// </summary>
+    [Fact]
+    public void THE_MERGED_BATCH_CAUSE_IS_NAMED_IN_THE_BINDINGS_SILENCE_as_a_RULED_omission_not_an_oversight()
+    {
+        var gate = Gate(Check(map: MapDeclaredBy(string.Empty)), "5c map authority");
+
+        Assert.Equal(GateStatus.NotChecked, gate.Status);
+
+        // The cause, and BOTH of its two forms — a reader told only about disagreement will not think to
+        // look for the lane that simply said nothing.
+        Assert.Contains("harness-batch plan", gate.Detail, StringComparison.Ordinal);
+        Assert.Contains("DIFFERENT coordinators OR when any single lane is silent", gate.Detail, StringComparison.Ordinal);
+
+        // Ruled, not overlooked — and the record is cited by path, because "we decided not to" with no
+        // pointer reads exactly like "nobody got to it".
+        Assert.Contains("RULED NOT BUILT", gate.Detail, StringComparison.Ordinal);
+        Assert.Contains("docs/notes/owner-questions.md D2", gate.Detail, StringComparison.Ordinal);
+
+        // And it names the surface that says WHICH of the two happened, so the reader is sent to the plan
+        // rather than to the source.
+        Assert.Contains("`authority` line", gate.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AND_IT_IS_ABSENT_FROM_A_MAP_WHOSE_AUTHOR_IS_RECORDED_because_nothing_was_dropped_there()
+    {
+        // The control. A gate that prints the merge story on every submission has told nobody anything:
+        // the sentence has to be a fact about THIS submission or it is decoration.
+        var gate = Gate(Check(), "5c map authority");
+
+        Assert.True(gate.Passed);
+        Assert.DoesNotContain("RULED NOT BUILT", gate.Detail, StringComparison.Ordinal);
+        Assert.DoesNotContain("harness-batch plan", gate.Detail, StringComparison.Ordinal);
     }
 
     // ---------------------------------------------------------------------------------------------

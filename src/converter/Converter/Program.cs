@@ -473,8 +473,8 @@ internal static class Program
                 : ClaimsRunner.Acquire(corpus, store, projectDir, kind, value!, agent, purpose);
 
             var text = json
-                ? ClaimsOutputFormatter.FormatOutcomeJson(outcome, store.Directory)
-                : ClaimsOutputFormatter.FormatOutcomeText(outcome, store.Directory);
+                ? ClaimsOutputFormatter.FormatOutcomeJson(outcome, store.Directory, store.BucketAmbiguity)
+                : ClaimsOutputFormatter.FormatOutcomeText(outcome, store.Directory, store.BucketAmbiguity);
 
             if (outcome.Ok)
             {

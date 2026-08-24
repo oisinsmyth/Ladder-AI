@@ -25,7 +25,8 @@ public class ClaimStoreShadowingTests : IDisposable
     private readonly string _corpusDir = ClaimsTestCorpus.Create();
     private readonly string _claimsRoot = ClaimsTestCorpus.CreateClaimsRoot();
 
-    public void Dispose() => ClaimsTestCorpus.Delete(_corpusDir, _claimsRoot);
+    public void Dispose() =>
+        ClaimsTestCorpus.Delete(_extraDirs.Concat(new[] { _corpusDir, _claimsRoot }).ToArray());
 
     // The slug is the project directory's own last segment, so a corpus at …/claims-corpus-<guid>
     // has that as its slug. Derived rather than hardcoded, so these tests follow SlugOf if it changes.
@@ -178,5 +179,108 @@ public class ClaimStoreShadowingTests : IDisposable
 
         Assert.DoesNotContain("--claims", rendered);
         Assert.Contains("--value FC9001", rendered);
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // 🔴 THE SHARED BUCKET — ruled 2026-08-24. `SlugOf` keys on the LAST PATH SEGMENT, so two projects
+    // whose IR directory is both called `ir` land in ONE registry. The slug rule is deliberately
+    // UNCHANGED (re-keying orphans reservations live agents are holding) and this does not gate (the
+    // direction is over-refusal, and a gate would refuse a live job mid-work). What it does is SAY SO
+    // where somebody is looking. Both directions, as everything else in this file is.
+    // ---------------------------------------------------------------------------------------------
+
+    private readonly List<string> _extraDirs = new();
+
+    /// <summary>A copy of the standard corpus in a directory with a CHOSEN name, so the slug is chosen.</summary>
+    private string CorpusInDirectoryNamed(string name)
+    {
+        var source = ClaimsTestCorpus.Create();
+        var parent = Path.Combine(Path.GetTempPath(), $"claims-bucket-{Guid.NewGuid():N}");
+        var dir = Path.Combine(parent, name);
+        Directory.CreateDirectory(dir);
+        _extraDirs.Add(parent);
+
+        foreach (var file in Directory.GetFiles(source))
+        {
+            File.Copy(file, Path.Combine(dir, Path.GetFileName(file)));
+        }
+
+        ClaimsTestCorpus.Delete(source);
+        return dir;
+    }
+
+    [Fact]
+    public void AGenericIrDirectoryName_SaysTheBucketIsSHARED_atThePointOfUse()
+    {
+        var store = new ClaimStore(_claimsRoot, CorpusInDirectoryNamed("ir"));
+
+        Assert.Equal("ir", store.ProjectSlug);
+        var note = store.BucketAmbiguity;
+        Assert.NotNull(note);
+
+        // The name, the mechanism, and the consequence — a note saying only "this is generic" leaves the
+        // reader to work out why they should care.
+        Assert.Contains("'ir'", note);
+        Assert.Contains("GENERIC DIRECTORY NAME", note);
+        Assert.Contains("LAST SEGMENT", note);
+
+        // The direction, so nobody reads it as a corruption risk; and the ruling, so nobody "fixes" the
+        // slug and orphans a live job's reservations.
+        Assert.Contains("over-refusal", note);
+        Assert.Contains("REPORTED, NOT REFUSED", note);
+        Assert.Contains("deliberately unchanged", note);
+        Assert.Contains("multi-agent-operating-guide.md", note);
+
+        // And the ACTION, which is the only part that changes what the reader does next.
+        Assert.Contains("Read the `project` line inside the claims", note);
+    }
+
+    [Fact]
+    public void APROJECT_IDENTIFYING_NAME_SAYS_NOTHING_because_a_note_on_every_store_is_a_note_nobody_reads()
+    {
+        // The other direction. `_corpusDir` is `claims-corpus-<guid>` — a name no second project can
+        // collide with — and a caveat printed there would be false as well as noisy.
+        Assert.Null(new ClaimStore(_claimsRoot, _corpusDir).BucketAmbiguity);
+    }
+
+    [Fact]
+    public void THE_NOTE_IS_REPORTED_AND_NEVER_GATES_the_claim_still_succeeds_and_the_check_has_no_findings()
+    {
+        // *** THE HALF THAT MATTERS MOST. *** A live job is holding claims in a bucket named exactly this
+        // way; a gate here would refuse it mid-work, which is why the ruling is "report".
+        var corpusDir = CorpusInDirectoryNamed("ir");
+        var corpus = ClaimCorpus.Build(corpusDir);
+        var store = new ClaimStore(_claimsRoot, corpusDir);
+
+        var outcome = ClaimsRunner.Acquire(corpus, store, corpusDir, ClaimKind.BlockNumber, "FB9030", "A", "work");
+        Assert.True(outcome.Ok);
+
+        var report = ClaimsRunner.Check(corpus, store, corpusDir, DateTime.UtcNow);
+        Assert.Contains(report.Warnings, w => w.Contains("GENERIC DIRECTORY NAME"));
+        Assert.False(report.HasFindings); // a warning is not a conflict, and only conflicts gate
+        Assert.Empty(report.Conflicts);
+    }
+
+    [Fact]
+    public void THE_NOTE_REACHES_THE_RENDERED_OUTCOME_and_is_absent_from_an_identified_one()
+    {
+        var outcome = new ClaimOutcome(ClaimResult.Acquired,
+            new Claim("p", ClaimKind.BlockNumber, "FB9030", "A", null, DateTime.UtcNow), null, "claimed");
+
+        var shared = new ClaimStore(_claimsRoot, CorpusInDirectoryNamed("ir"));
+        var identified = new ClaimStore(_claimsRoot, _corpusDir);
+
+        var sharedText = ClaimsOutputFormatter.FormatOutcomeText(outcome, shared.Directory, shared.BucketAmbiguity);
+        var identifiedText = ClaimsOutputFormatter.FormatOutcomeText(outcome, identified.Directory, identified.BucketAmbiguity);
+
+        Assert.Contains("bucket  ", sharedText);
+        Assert.DoesNotContain("bucket", identifiedText);
+
+        // JSON too: the machine-readable surface is the one an agent parses, and a caveat that exists
+        // only in the text form is one an automated reader never sees.
+        Assert.Contains("GENERIC DIRECTORY NAME",
+            ClaimsOutputFormatter.FormatOutcomeJson(outcome, shared.Directory, shared.BucketAmbiguity));
+        Assert.DoesNotContain("GENERIC DIRECTORY NAME",
+            ClaimsOutputFormatter.FormatOutcomeJson(outcome, identified.Directory, identified.BucketAmbiguity));
     }
 }

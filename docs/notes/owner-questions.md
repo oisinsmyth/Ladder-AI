@@ -32,7 +32,8 @@ Read both before concluding nothing is waiting on you.
 *"AS OF 2026-08-23 THE WORKBENCH BATCH HAS NOTHING BLOCKING IN IT. B4 and B5 are both answered and both
 are recorded below with their answers; Q2 is open and blocks nothing. The 13 audit items below are the
 ones actually waiting on you."* **Every clause of that is still true of B4, B5 and Q2 — and two new
-decisions arrived on 2026-08-24 that nobody wrote down here** (see **D1** and **D2** below). ***Third
+decisions arrived on 2026-08-24 that nobody wrote down here** (see **D1** and **D2** below; **D2 was
+ruled the same day and is recorded there — D1 is the one still open**). ***Third
 firing of the process finding at the head of the workbench batch, and the third distinct direction:
 first the questions were missing, then an answer was, now a heading that was accurate the day it was
 written outlived the state it described.*** ➜ **D1 blocks a `gen/` edit that is being deliberately
@@ -91,7 +92,7 @@ AND DO NOT MERGE ANY TWO.**
 `B-4` / `B4` collide the same way (S0's gate; the stray-Portal ruling). **Neither pair answers the
 other.** Anything new written here should use a label that is not `B<n>`.
 
-## 🔴 The two that ARE blocking — gate 5c, added 2026-08-24
+## 🔴 Gate 5c, added 2026-08-24 — **D1 still blocks; D2 is RULED (2026-08-24)**
 
 **Context, once, for both.** `57432c6` / `915b6e8` built gate **`5c map authority`**: the observability
 map a conformance submission is judged against is derived from the coordinator's binding document, and
@@ -117,7 +118,29 @@ table above.)*
   *The hopper binding is the milder case of the same question:* its prose names an **owner as a role**
   and no machine identity, so there is no truthful string to write there either.
 
-- 🔴 **D2 · A multi-coordinator batch cannot be attributed at all. Plural `declaredBy`?**
+- ✅ **D2 · A multi-coordinator batch cannot be attributed at all. Plural `declaredBy`? — RULED
+  2026-08-24: DO NOT BUILD IT. The case stays NOT CHECKED, and the ABSENCE now explains itself.**
+  **The ruling.** No multi-coordinator batch has ever occurred; the current behaviour fails CLOSED; a
+  plural wire field would touch ~29 documents for a hypothetical. So it is **not built — deliberately,
+  not by omission.** ⚠️ **A joined string is not a cheaper version of the same thing and must not be
+  reached for as one: it is worse than nothing, because `AgentIdentity.SameAs` would compare the whole
+  joined literal and match NEITHER party** — a real conflict rendered invisible by formatting. **The
+  correct answer is a SET.** ➜ **Revisit when a real multi-coordinator batch occurs**, which is also the
+  first moment the right semantics are knowable; deciding them now would be inventing them.
+  **The owner's condition, and what was built to meet it (no code is left behind to explain itself, so
+  the explanation is):** the symptom an agent meets is *"5c says NOT CHECKED and I supplied a binding"*,
+  and the trail from there to this entry must not be archaeology.
+  - **Gate 5c's unrecorded-author refusal** (`src/harness/Harness.Results/SubmissionGate.cs`,
+    `MapAuthority`) now names the merged batch as the likeliest cause **in the `Bindings`-provenance
+    branch only**, calls it a ruled omission, and cites this entry by path. It is absent from the
+    self-declared silence, which has a different repair.
+  - **`BatchPlanner.SharedDeclarer`** says the same thing where it drops the field, and the plan prints
+    it on an `authority` line — attributed or not — so the trail works from either end.
+  - ⚠️ **THE NULL HAS TWO CAUSES, NOT ONE, and both messages name them apart:** the lanes naming
+    DIFFERENT coordinators, and **one silent lane** (the lanes that spoke agree, but a batch attributed
+    to the lanes that happened to say is not an attributed batch). A third state — *no* lane naming
+    anybody — is reported as an ordinary unattributed binding and deliberately NOT as a merge effect.
+  *The original question and the evidence behind it, kept because it is what the ruling rests on:*
   `BatchPlanner` merges lane bindings. Identical declarers across lanes collapse losslessly and keep 5c
   a live verdict on the ordinary single-coordinator batch; **different declarers — or one silent lane —
   leave it null, and the batch reads NOT CHECKED.** Two alternatives were **ruled out on evidence, not
@@ -128,8 +151,8 @@ table above.)*
   **The correct answer is a set.** That needs a plural wire field visible to gate 0b and every reader,
   plus a plural `MapAuthor` — **a schema change with a blast radius**, and **no multi-coordinator batch
   is known to have occurred yet.**
-  **What is being asked:** build the plural field now, or leave the case reading NOT CHECKED until a
-  real multi-coordinator batch exists? Until you rule it stays NOT CHECKED rather than guessed at.
+  ~~**What is being asked:** build the plural field now, or leave the case reading NOT CHECKED until a
+  real multi-coordinator batch exists?~~ **Answered above.**
 
 ## The one that was open — ✅ **ANSWERED, and the lane is NOT blocked on you**
 

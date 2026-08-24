@@ -319,6 +319,17 @@ public class BatchPlannerTests : IDisposable
 
         Assert.True(result.Planned, string.Join(" | ", result.Refusals));
         Assert.Equal("agent-k", Harness.Gate.BindingDocument.Read(result.MergedBindingJson!).DeclaredBy);
+
+        // 🔴 THE ATTRIBUTED CASE PRINTS TOO. A line that appears only when the field was dropped teaches
+        // a reader that its absence means "attributed", and the absence would in fact mean nobody printed
+        // it — the same argument the neighbour line above is printed on every plan for.
+        Assert.Contains("declared by 'agent-k'", result.MergedAuthority);
+        Assert.Contains("all 2 lane(s)", result.MergedAuthority);
+        Assert.Contains("authority ", BatchPlanner.Describe(result));
+
+        // And the ruling text is a fact about a DROPPED field, so it must not be here.
+        Assert.DoesNotContain("RULED NOT BUILT", result.MergedAuthority);
+        Assert.DoesNotContain("UNATTRIBUTED", result.MergedAuthority);
     }
 
     [Fact]
@@ -345,6 +356,22 @@ public class BatchPlannerTests : IDisposable
 
         Assert.True(result.Planned, string.Join(" | ", result.Refusals));
         Assert.Null(Harness.Gate.BindingDocument.Read(result.MergedBindingJson!).DeclaredBy);
+
+        // 🔴 *** AND THE PLAN SAYS SO AT THE MOMENT IT DROPS THE FIELD, NAMING THE LANES. *** The symptom
+        // this prevents is met days later and one tool over — "gate 5c says NOT CHECKED and I supplied a
+        // binding" — and without this line the trail from there to the ruling is archaeology.
+        Assert.Contains("UNATTRIBUTED", result.MergedAuthority);
+        Assert.Contains("DIFFERENT coordinators", result.MergedAuthority);
+        Assert.Contains("'agent-k' from 'valve'", result.MergedAuthority);
+        Assert.Contains("'agent-q' from 'vessel'", result.MergedAuthority);
+
+        // Ruled, not overlooked, with the record cited — the same account gate 5c gives from the far end.
+        Assert.Contains("RULED NOT BUILT", result.MergedAuthority);
+        Assert.Contains("docs/notes/owner-questions.md D2", result.MergedAuthority);
+
+        // A DISAGREEMENT is not a silence, and saying both would send the reader looking for a lane that
+        // said nothing when every lane spoke.
+        Assert.DoesNotContain("state no `declaredBy`", result.MergedAuthority);
     }
 
     [Fact]
@@ -365,6 +392,45 @@ public class BatchPlannerTests : IDisposable
 
         Assert.True(result.Planned, string.Join(" | ", result.Refusals));
         Assert.Null(Harness.Gate.BindingDocument.Read(result.MergedBindingJson!).DeclaredBy);
+
+        // ⚠️ THE SECOND CAUSE, AND IT IS NAMED AS ITSELF. Disagreement and partial silence produce the
+        // same null and need different repairs — one re-plans under a single coordinator, the other adds
+        // a `declaredBy` to one lane — so a message naming only disagreement misleads on this one.
+        Assert.Contains("UNATTRIBUTED", result.MergedAuthority);
+        Assert.Contains("state no `declaredBy`", result.MergedAuthority);
+        Assert.Contains("'vessel'", result.MergedAuthority);
+        Assert.DoesNotContain("DIFFERENT coordinators", result.MergedAuthority);
+
+        // The ruling still applies: the field is dropped, and the plural that would carry it is not built.
+        Assert.Contains("docs/notes/owner-questions.md D2", result.MergedAuthority);
+    }
+
+    /// <summary>
+    /// 🔴 THE THIRD STATE, AND IT IS DELIBERATELY NOT DESCRIBED AS A MERGE EFFECT. Nothing was dropped
+    /// here because nothing was offered — an ordinary unattributed binding, whose repair is "name an
+    /// author", not "re-plan under one coordinator". Telling this reader their lanes disagreed sends them
+    /// hunting for a disagreement that does not exist.
+    /// </summary>
+    [Fact]
+    public void NO_LANE_NAMING_ANYBODY_IS_AN_UNATTRIBUTED_BINDING_and_is_NOT_reported_as_a_merge_effect()
+    {
+        var bindings = new Dictionary<string, string>
+        {
+            ["a.json"] = BindingBy("Valve_S0", null),
+            ["b.json"] = BindingBy("Vessel_S0", null),
+        };
+
+        var result = BatchPlanner.Plan(
+            new[] { LaneNamed("valve", "a.json"), LaneNamed("vessel", "b.json") },
+            Reader(bindings));
+
+        Assert.True(result.Planned, string.Join(" | ", result.Refusals));
+        Assert.Null(Harness.Gate.BindingDocument.Read(result.MergedBindingJson!).DeclaredBy);
+
+        Assert.Contains("UNATTRIBUTED", result.MergedAuthority);
+        Assert.Contains("not a merge effect", result.MergedAuthority);
+        Assert.DoesNotContain("DIFFERENT coordinators", result.MergedAuthority);
+        Assert.DoesNotContain("RULED NOT BUILT", result.MergedAuthority);
     }
 
     /// <summary>

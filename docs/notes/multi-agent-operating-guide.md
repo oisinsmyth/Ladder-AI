@@ -87,47 +87,57 @@ than routed around.** `--project` must be the **IR directory** — `ClaimCorpus.
 (`ClaimValidator.cs:32-35`), so passing the project root instead would key the bucket correctly and
 then validate against an **empty corpus**, which is the worse failure. **Operationally: read the
 bucket name off the echoed `store=` line, and where it is generic, read the `project` line inside the
-claims before believing the store is about your project.** *No fix is proposed here.*
+claims before believing the store is about your project.**
 
-> 🔴 **THE CONSEQUENCE CHANGED ON 2026-08-24 AND NOBODY RE-READ THIS SECTION AGAINST IT. THE
-> ASSESSMENT ABOVE — *"the failure direction is over-refusal, not double-grant"* — NO LONGER HOLDS ON
-> ITS OWN.**
+🔴 **RULED 2026-08-24, owner: `SlugOf` IS NOT CHANGED AND THE STORE IS NOT TOUCHED.** A live job's
+claims sit in the `ir` bucket right now, and re-keying them — by changing the slug rule, by changing
+the spelling the skills pass, or by migrating the bucket — **orphans reservations that agents are
+holding while they work.** That is precisely *"deleting another agent's coordination state on a
+guess"*, which `ClaimsModel.cs` names as the thing the registry must never do. **The hazard is
+recorded, the direction is safe, and the rule stands.**
+
+✅ **What was built instead, the same day: the tool SAYS SO at the point of use.** `ClaimStore.BucketAmbiguity`
+recognises a bucket keyed on a **generic layout name** (`ir`, `src`, `blocks`, `plc`, `export`, …) rather
+than a project-identifying one, and prints it in words — a `bucket` line under `store` on
+`converter claim`, a `warning:` line on `converter claims`. It states the mechanism (last path segment),
+the consequence (every project whose IR directory has that name shares this bucket), the direction
+(over-refusal), and the action (read the `project` line inside the claims). ⚠️ **It REPORTS and does not
+gate**, deliberately: `HasFindings` still counts only `Conflicts`, and gating a generic bucket would
+refuse the live job mid-work. A project-identifying bucket prints nothing at all — *a caveat on every
+store is a caveat nobody reads.*
+
+> 🔴 **A PREVIOUS PASS READ THIS BUCKET WRONG AND ESCALATED IT. THE CORRECTION, 2026-08-24, OWNER:
+> THE `test-project001` BUCKET BEING EMPTY IS *CORRECT*, NOT A SYMPTOM — AND THE PARAGRAPH ABOVE IS
+> RIGHT AS WRITTEN.**
 >
-> Everything above was written while **claiming was optional**. `7de3ac0` made it **binding**: the three
-> `gen-block-*` skills now claim before writing, and every one of them passes `--project ir/<project>/`
-> — a spelling that ends in the **project's own directory name**, so `ClaimStore.SlugOf` keys the bucket
-> `<project>` and never `ir`. `SlugOf` trims the trailing separator first (`ClaimStore.cs`), so the
-> trailing slash changes nothing. **The verifier keys it a third way** — `check-agent-evidence.py`
-> takes `os.path.dirname` of each `.ir` file it was given — so **the skill's `--project` and the
-> verifier's derived project agree only when they share a last path segment.** Three producers of one
-> bucket name, none of them reading the other two.
+> **What that pass concluded**, and it is retracted in full: that the populated `ir` bucket was a
+> mis-slugged `test-project001`; that the mandated `--project ir/<project>/` spelling could therefore
+> *never reach its own reservations*; that `claim --allocate` would compute "lowest free" against an
+> empty bucket and hand back a held number — **a double-grant** — and that this **blocked adoption**.
 >
-> **Measured at the shared root, 2026-08-24, by listing it — not quoted:** `C:\ProgramData\Ladder-AI\claims`
-> holds two buckets. **`ir` holds 14 claims, 12 of them `block-number` in the 9000–9999 harness reserve
-> band. `test-project001` holds ZERO.**
+> **What is actually the case.** The `ir` bucket is **a DIFFERENT project's**: a real job whose project
+> path ends `/ir`, so `SlugOf` keys it `ir`. It is not `test-project001` under another name. Nothing has
+> ever been claimed for `test-project001`, so its bucket is empty **because no reservation was ever
+> taken there** — the state a fresh project is supposed to be in. ➜ ***There is no realised
+> two-spelling collision, no double-grant, and no adoption blocker.*** The measured listing is
+> unchanged and still worth knowing: `C:\ProgramData\Ladder-AI\claims` holds two buckets, `ir` with 14
+> claims from 5 agents (12 of them `block-number` in the 9000–9999 harness band) and `test-project001`
+> with zero.
 >
-> ➜ ***So the store's only populated bucket is one the mandated spelling can never reach, and the
-> bucket the mandated spelling does reach is empty.*** Every reservation ever taken under a spelling
-> ending `/ir` is invisible to every run that follows the skills, and vice versa. With `--value <n>` such
-> a claim is granted although the number is held; with `claim --allocate --type FB`, which the skills
-> offer as *"the lowest free one"*, **the tool computes "lowest free" against an empty bucket** and can
-> hand back a number already reserved. **That is a double-grant, and it is the direction this section
-> previously ruled out** — the ruling was correct for two *different* projects sharing one bucket, and
-> it does not cover **one project reachable by two spellings**, which is what adoption introduced. The
-> detector is still only a `Warning` and still does not gate (`ClaimsModel.cs`,
-> `HasFindings => Conflicts.Count > 0`).
+> ⚠️ **What survives, and it is the hazard the paragraph above states:** *any two projects whose IR
+> directory is named `ir` share one bucket.* The direction stays **over-refusal** — the newcomer is
+> blocked by a stranger's reservation, never granted alongside it — and the project-mismatch detector
+> (`ClaimsRunner.cs`) stays a **`Warning` that does not gate** (`ClaimsModel.cs`,
+> `HasFindings => Conflicts.Count > 0`). The three producers of a bucket name (the skills'
+> `--project ir/<project>/`, a job passing a path ending `/ir`, and `check-agent-evidence.py`'s
+> `os.path.dirname` of each `.ir` file) **agree whenever they end in the same directory, which in both
+> real shapes they do** — that is why the earlier "never reaches" reading was wrong.
 >
-> ⚠️ **Unestablished, deliberately: whether the 12 numbers in `ir` and the next mandated run are the same
-> project.** Settling it means reading the `project` line inside those claim files, and they belong to a
-> live job. **The mechanism above does not depend on the answer** — two spellings key two buckets either
-> way — but the *severity* does, so nobody should quote this as a realised collision.
->
-> ⚠️ **This blocks adoption rather than merely complicating it, and it is why no fix is proposed here
-> either.** Any repair is a choice between changing the key, changing the spelling every skill passes,
-> or migrating the existing bucket — each of which invalidates live reservations held by agents that are
-> not asking, and the third is a write to a store this document exists to say is shared. **What is
-> recorded is that the consequence is now different from the paragraph above it, so that nobody reads
-> "the safe direction" and stops.**
+> ➜ **THE LESSON IS THE ESCALATION, NOT THE MECHANISM.** An empty bucket was read as evidence of a
+> fault, and *"empty is not clean"* — this project's own rule, and a good one — is what made the
+> misreading feel rigorous. **Empty is not clean; it is also not, by itself, broken.** Before quoting a
+> store's contents as a finding, establish *whose* they are: the `project` line inside a claim file
+> answers it, and it is the same line the operational rule above already tells you to read.
 
 🔴 ***AND A BOARD IS ONLY A TOKEN IF EVERY LANE WRITES TO IT.*** Twice in one day (2026-08-18) a lane
 did the work on a single-writer resource **without claiming it**. Both times it came out clean — and
@@ -231,7 +241,8 @@ a confident false assurance is worse than either.
 
 1. `--claims C:\ProgramData\Ladder-AI\claims` — **read the echoed `store=` line**, and check the
    bucket name on the end of it. A generic one (`…\claims\ir`) is shared by every project whose IR
-   directory has that name.
+   directory has that name — **the tool now prints a `bucket` line saying so, and it does not gate**,
+   so read the `project` line inside the claims rather than assuming the store is about your project.
 2. One lane holds Portal. Say who.
 3. Wave store: shared path, outside every worktree. `status` it first — **zero slots must mean
    nobody has submitted yet**, and you should know which it is.
