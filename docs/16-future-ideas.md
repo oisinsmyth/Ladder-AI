@@ -2206,6 +2206,14 @@ structural parent nodes TIA emits above them (`<device>:`, `Program blocks:`, `<
    the reverse of the case the `NOTE` was written for, where the compiler reported `WARNINGS: 0`
    against 156 warning messages.
 
+🔴 **The two have different blast radii — the counting half is NOT confined to `--block`.** Confirmed
+the same day on the same project: `sanity-check`'s station device-compile line read
+`Error (errors=9, warnings=0)` while the compiler's own tail *inside that same block* read
+`Compiling finished (errors: 2; warnings: 0)` — **six of the nine were empty `[Error]` tree headers**,
+rendered as blank lines in the output. The scope defect is specific to `--block`/`--type`; the
+counting defect reaches `--station`, `compile-all` and `sanity-check` too. This second sighting is
+what makes the leaf-counting fix worth doing rather than merely documenting.
+
 **The exit code is NOT affected and needs no change.** It takes the larger of the two counts, so it
 is fail-closed and cannot read a dirty program as clean. What it silently is, though, is a
 *program-wide* gate on a per-block command: a genuinely clean block in a program containing one
