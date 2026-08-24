@@ -29,6 +29,59 @@ public class ClaimStoreTests : IDisposable
             ClaimStore.FileNameFor(ClaimKind.AlarmBit, "DB_Alarms.Word0.%X3"),
             ClaimStore.FileNameFor(ClaimKind.AlarmBit, "DB_Alarms.Word0.%X3"));
 
+    // REGRESSION, measured on JOB9004 2026-08-24. An agent read candidate values out of a CRLF file,
+    // so every value carried a trailing '\r'. FileNameFor hashed the value WITH the CR while Parse
+    // strips '\r' on read — so the claim was keyed under a name it did not record, a later lookup
+    // on the clean name computed a different filename and missed, and the value stayed claimable by
+    // the next agent. Mutual exclusion was lost SILENTLY: `claims --json` rendered the store clean,
+    // because the read path had already dropped the CR.
+    [Fact]
+    public void FileName_IgnoresSurroundingWhitespace_SoACrlfReadCannotShadowAClaim() =>
+        Assert.Equal(
+            ClaimStore.FileNameFor(ClaimKind.Tag, "AQ1_DrumA_SpeedRef"),
+            ClaimStore.FileNameFor(ClaimKind.Tag, "AQ1_DrumA_SpeedRef\r"));
+
+    [Fact]
+    public void Acquire_WithTrailingCarriageReturn_IsFoundByTheCleanValue()
+    {
+        var store = new ClaimStore(_claimsRoot, _projectDir);
+
+        var (acquired, _) = store.TryAcquire("ir/p", ClaimKind.Tag, "DI1_Auger_Running\r", "agent-a", null);
+        Assert.True(acquired);
+
+        // The whole point: the clean name must now be TAKEN, not free.
+        Assert.NotNull(store.Find(ClaimKind.Tag, "DI1_Auger_Running"));
+
+        // And a second agent asking for the clean name must be refused.
+        var (second, winner) = store.TryAcquire("ir/p", ClaimKind.Tag, "DI1_Auger_Running", "agent-b", null);
+        Assert.False(second);
+        Assert.Equal("agent-a", winner.Agent);
+    }
+
+    [Fact]
+    public void Acquire_RecordsTheNormalisedValue_SoTheRecordMatchesItsFilename()
+    {
+        var store = new ClaimStore(_claimsRoot, _projectDir);
+
+        store.TryAcquire("ir/p", ClaimKind.Tag, "  DQ9_MixerA_Start\r", "agent-a", null);
+
+        var found = store.Find(ClaimKind.Tag, "DQ9_MixerA_Start");
+        Assert.NotNull(found);
+        Assert.Equal("DQ9_MixerA_Start", found!.Value);
+    }
+
+    [Fact]
+    public void Release_AcceptsTheCleanValue_ForAClaimTakenWithWhitespace()
+    {
+        var store = new ClaimStore(_claimsRoot, _projectDir);
+        store.TryAcquire("ir/p", ClaimKind.Tag, "DQ35_Plant_JogEnable\n", "agent-a", null);
+
+        var released = store.Release(ClaimKind.Tag, "DQ35_Plant_JogEnable", "agent-a", force: false, out _);
+
+        Assert.True(released);
+        Assert.Null(store.Find(ClaimKind.Tag, "DQ35_Plant_JogEnable"));
+    }
+
     [Fact]
     public void SerializeParse_RoundTrips()
     {

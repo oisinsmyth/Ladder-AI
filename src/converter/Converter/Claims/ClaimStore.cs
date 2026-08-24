@@ -146,7 +146,24 @@ public sealed class ClaimStore
     // value is stored inside the file and re-verified on read, so a collision is detected rather than
     // trusted.
     internal static string FileNameFor(ClaimKind kind, string value) =>
-        $"{ClaimKinds.ToToken(kind)}-{Sanitize(value)}-{ShortHash(value)}{Extension}";
+        $"{ClaimKinds.ToToken(kind)}-{Sanitize(NormalizeValue(value))}-{ShortHash(NormalizeValue(value))}{Extension}";
+
+    // A claim value arriving with surrounding whitespace is always an input artefact — the measured
+    // case was an agent reading candidate values out of a CRLF text file, so every value carried a
+    // trailing '\r'.
+    //
+    // That broke mutual exclusion SILENTLY, which is the worst way for a coordination tool to fail:
+    // FileNameFor hashed the value WITH the '\r', while Parse strips '\r' from every line on read.
+    // So the claim was stored under a filename derived from "X\r", its record read back as "X", and
+    // a later Find(kind, "X") computed a DIFFERENT filename, missed, and reported the value free.
+    // Two agents could then hold the same value, and `claims --json` rendered the store clean
+    // because the read path had already dropped the CR.
+    //
+    // Normalising here makes the filename and the recorded value agree by construction. It is
+    // deliberately the same tolerance Parse already applies, so the write path and the read path
+    // can no longer disagree about what a value is. A claim value is an identifier — a block name,
+    // a tag name, a number — so leading/trailing whitespace is never significant in one.
+    private static string NormalizeValue(string value) => value.Trim();
 
     private static string Sanitize(string value)
     {
@@ -171,6 +188,11 @@ public sealed class ClaimStore
     public (bool Acquired, Claim Winner) TryAcquire(string project, ClaimKind kind, string value, string agent, string? purpose)
     {
         System.IO.Directory.CreateDirectory(_root);
+
+        // Normalise ONCE, here, so the record and the filename are built from the same string.
+        // See NormalizeValue: writing the raw value while keying the file on a different one is
+        // how mutual exclusion was silently lost.
+        value = NormalizeValue(value);
 
         var claim = new Claim(project, kind, value, agent, Normalize(purpose), _nowUtc());
         var path = Path.Combine(_root, FileNameFor(kind, value));
@@ -270,6 +292,8 @@ public sealed class ClaimStore
     // exactly the collision the registry removes.
     public bool Release(ClaimKind kind, string value, string agent, bool force, out string reason)
     {
+        // Normalised so the reason text names the value the store actually holds (see NormalizeValue).
+        value = NormalizeValue(value);
         var path = Path.Combine(_root, FileNameFor(kind, value));
         var existing = TryRead(path);
 
