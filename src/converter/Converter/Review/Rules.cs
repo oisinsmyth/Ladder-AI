@@ -1057,9 +1057,29 @@ public static class Rules
             }
         }
 
+        // C-403's dedicated startup-reset block is exempt from the reset-without-set half, and ONLY
+        // that half (2026-08-24). C-403 requires every S/R-written bit in the program to be reset in
+        // one dedicated startup OB; by construction that block can contain nothing BUT unpaired
+        // resets, so C-103's "pair them in the same block" cannot be satisfied there without
+        // breaching C-403. The two rules are in direct conflict on this one block, and C-403 wins:
+        // it is the one that keeps equipment from restarting into a latched state.
+        //
+        // Measured on a real generation before this fix: 131 of that run's 146 findings — 90% — were
+        // this single structural false positive on one OB, all byte-identical bar the operand. That
+        // is not noise, it is a gate that hides its own signal: a genuine finding would have had to
+        // be spotted among 131 false ones, and the honest reading of a 146-finding report is that
+        // nobody reads it.
+        //
+        // The set-without-reset half above is deliberately NOT exempted. A startup block exists to
+        // clear bits; a SET coil in one is exactly the thing worth asking about, and silencing the
+        // whole rule to remove the false half would trade one blind spot for another.
+        var isStartupResetBlock =
+            string.Equals(block.Kind, "OB", StringComparison.Ordinal) &&
+            string.Equals(block.SecondaryType, "Startup", StringComparison.Ordinal);
+
         foreach (var (tag, networkNumber) in resetTargets)
         {
-            if (!setSeen.Contains(tag))
+            if (!setSeen.Contains(tag) && !isStartupResetBlock)
             {
                 yield return new Finding(
                     "C-103",

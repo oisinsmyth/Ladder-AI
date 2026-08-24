@@ -869,6 +869,58 @@ public class ReviewRulesTests
         Assert.Contains("no matching Set", finding.Description);
     }
 
+    // C-403's startup-reset OB is exempt from the reset-without-set half — and only that half.
+    //
+    // Measured on a real generation, 2026-08-24: 131 of that run's 146 findings (90%) were this one
+    // structural false positive on a single OB, byte-identical bar the operand. C-403 requires every
+    // S/R-written bit in the program to be cleared in one dedicated startup block, so by construction
+    // that block holds nothing but unpaired resets and C-103 can never be satisfied there. A gate
+    // where a real finding must be spotted among 131 false ones is a gate nobody reads.
+    [Fact]
+    public void CheckC103_ResetWithoutSet_InTheStartupResetBlock_IsExempt()
+    {
+        var network = new IrNetwork(1, "Clear the hand bits", new[]
+        {
+            new CoilAssignment("iDB_Valve_A.Valve.InHand", new Expr.Literal("TRUE"), CoilKind.Reset),
+        });
+        var block = new IrBlock("0", "OB", "OB100_Startup", 100, "LAD", null, new[] { network },
+            SecondaryType: "Startup");
+
+        Assert.Empty(Rules.CheckC103SetResetPairing(block));
+    }
+
+    // The exemption is keyed on the block being the startup OB, not on being an OB. A cyclic OB has
+    // no C-403 reason to hold unpaired resets, so it still reports.
+    [Fact]
+    public void CheckC103_ResetWithoutSet_InACyclicOb_StillFlags()
+    {
+        var network = new IrNetwork(1, "Clear", new[]
+        {
+            new CoilAssignment("SomeLatch", new Expr.Literal("TRUE"), CoilKind.Reset),
+        });
+        var block = new IrBlock("0", "OB", "Main", 1, "LAD", null, new[] { network },
+            SecondaryType: "ProgramCycle");
+
+        Assert.Single(Rules.CheckC103SetResetPairing(block));
+    }
+
+    // 🔴 The half that must NOT be exempted. A startup block exists to CLEAR bits; a Set coil in one
+    // is exactly the thing worth asking about. Silencing the whole rule to remove the false half
+    // would trade one blind spot for another, which is the failure mode this project keeps meeting.
+    [Fact]
+    public void CheckC103_SetWithoutReset_InTheStartupResetBlock_STILL_FLAGS()
+    {
+        var network = new IrNetwork(1, "Suspicious", new[]
+        {
+            new CoilAssignment("SomeLatch", new Expr.Literal("TRUE"), CoilKind.Set),
+        });
+        var block = new IrBlock("0", "OB", "OB100_Startup", 100, "LAD", null, new[] { network },
+            SecondaryType: "Startup");
+
+        var finding = Assert.Single(Rules.CheckC103SetResetPairing(block));
+        Assert.Contains("no matching Reset", finding.Description);
+    }
+
     // True negative: a Set and its matching Reset in the same block (different networks) are clean.
     [Fact]
     public void CheckC103_PairedSetAndReset_Clean()
