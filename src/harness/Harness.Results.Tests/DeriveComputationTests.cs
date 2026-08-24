@@ -352,7 +352,14 @@ public class DeriveComputationTests
         _ => throw new FileNotFoundException(path),
     };
 
-    private static (int Exit, string Output, Dictionary<string, string> Written) Derive(
+    /// <summary>
+    /// One derive run over the standard artifact set, with any one artifact swapped.
+    ///
+    /// <para><b><c>internal</c> so <c>DeploymentManifestTests</c> can drive the SAME harness.</b> The
+    /// deployment arm's end-to-end tests need exactly this composition, and a second copy of it would be
+    /// a second set of fixtures that ages independently of this one.</para>
+    /// </summary>
+    internal static (int Exit, string Output, Dictionary<string, string> Written) Derive(
         string? submission = null,
         string? binding = null,
         string? reachable = null,

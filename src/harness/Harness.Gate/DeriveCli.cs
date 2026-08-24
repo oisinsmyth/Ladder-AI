@@ -41,13 +41,25 @@ public static class DeriveExit
 /// Fields whose recomputed value DISAGREED with the authored one. The strongest finding this tool can
 /// make, and the reason 1.1 recomputes rather than merely citing.
 /// </param>
+/// <param name="Compared">
+/// 🔴 <b>WHAT EACH COMPARISON THAT AGREED ACTUALLY COMPARED — the denominator behind every
+/// <c>COMPUTED</c>.</b>
+///
+/// <para>*** A MATCH USED TO BE ONE WORD ON ONE LINE, AND IT SAID NOTHING ABOUT ITS OWN SCOPE. *** The
+/// comparisons produce that detail already — how many signals were checked, how many objects the
+/// download loaded and WHICH AUTHORITY the manifest was read off, what the binding provides that the map
+/// does not list — and none of it reached the operator unless the comparison FAILED. "It agreed" is true
+/// of a comparison over 99 objects and of one over a single row; only one of those is worth the word
+/// COMPUTED, and the reader has to be able to tell which they got.</para>
+/// </param>
 public sealed record DeriveOutcome(
     SubmissionDocument Document,
     IReadOnlyList<string> Stamped,
     IReadOnlyList<string> Withheld,
     IReadOnlyList<string> Unattributable,
     IReadOnlyList<string> Rejected,
-    IReadOnlyList<string> Mismatched);
+    IReadOnlyList<string> Mismatched,
+    IReadOnlyList<string> Compared);
 
 /// <summary>
 /// 🔴 <b><c>harness-gate derive</c> — the tool that makes gate 0c satisfiable.</b>
@@ -103,6 +115,7 @@ public static class DeriveCli
         var unattributable = new List<string>();
         var rejected = new List<string>();
         var mismatched = new List<string>();
+        var compared = new List<string>();
         var records = new List<DerivationDocument>();
 
         foreach (var field in document.DerivableFieldsPresent())
@@ -195,6 +208,12 @@ public static class DeriveCli
                 ? DerivationVerification.Computed
                 : DerivationVerification.Attributed;
 
+            // *** THE DENOMINATOR BEHIND THE WORD `COMPUTED`, CARRIED OUT SO THE OPERATOR SEES IT. ***
+            // Only a comparison that RAN says anything: a NotComparable field's detail is a reason nothing
+            // happened, and it belongs with the ATTRIBUTED line rather than being dressed as a result.
+            if (comparison.Outcome == Recompute.Outcome.Matched)
+                compared.Add($"{field}: {comparison.Detail}");
+
             var (hash, overBytes) = Hash(artifact!, content, readBytes);
 
             records.Add(new DerivationDocument
@@ -211,7 +230,7 @@ public static class DeriveCli
         }
 
         document.Derivation = records;
-        return new DeriveOutcome(document, stamped, withheld, unattributable, rejected, mismatched);
+        return new DeriveOutcome(document, stamped, withheld, unattributable, rejected, mismatched, compared);
     }
 
     /// <summary>
@@ -451,6 +470,12 @@ public static class DeriveCli
             var over = string.IsNullOrEmpty(record.Artifact) ? string.Empty : record.HashedOverBytes ? " [bytes]" : " [text]";
             output.WriteLine($"  {how} {record.Field} <- {source} ({record.Producer}){over}");
         }
+
+        // *** WHAT EACH MATCH ACTUALLY COMPARED. *** `COMPUTED deployment` alone is true of a comparison
+        // against 99 loaded objects and of one against a single row, and it does not say which authority
+        // the manifest came from - the probe's live DownloadResult, or its own rendering of it.
+        foreach (var line in outcome.Compared)
+            output.WriteLine($"  COMPARED   {line}");
 
         foreach (var field in outcome.Withheld)
             output.WriteLine($"  WITHHELD   {field} - nothing attributed it, and --withhold-unattributable was given.");

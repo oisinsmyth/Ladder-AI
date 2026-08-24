@@ -65,8 +65,19 @@ public static class ArtifactCheck
     };
 
     /// <summary>
-    /// The deployment artifact is a serialized loop result, and <b>only <c>Ran</c> means the deployment
-    /// actually happened.</b>
+    /// A deployment artifact is one of <b>THREE</b> shapes, and each is judged on the value it publishes
+    /// rather than on how healthy it looks.
+    ///
+    /// <list type="bullet">
+    /// <item><description><b><c>download-probe --json</c></b> — the first-hand report. Judged on
+    /// <c>transferVerdict</c>. <b>This is the shape to capture</b>: it embeds the verbatim log AND the
+    /// first-class <c>loadManifest</c>, so one redirected file satisfies this check and the deployment
+    /// recomputation both.</description></item>
+    /// <item><description><b>A <c>download-probe</c> LOG</b> — the same result after the probe's renderer
+    /// has been at it. Judged on its rendered <c>TRANSFER VERDICT</c> line.</description></item>
+    /// <item><description><b>A serialized loop result</b> — judged on <c>outcome</c>, where only
+    /// <c>Ran</c> means the deployment actually happened.</description></item>
+    /// </list>
     ///
     /// <para><c>NotDeployed</c> is the device refusing the load; <c>NotConfirmed</c> is a load whose
     /// version register did not match, which is worse than useless as provenance because the addresses
@@ -76,28 +87,51 @@ public static class ArtifactCheck
     /// </summary>
     private static ArtifactVerdict Deployment(string content)
     {
-        // 🔴 *** A DOWNLOAD IS PERFORMED BY download-probe, WHICH EMITS A LOG - NOT A LoopResult. ***
+        // 🔴 *** JSON IS TRIED FIRST, AND THE ORDER IS A MEASURED FIX RATHER THAN A TIDY-UP. ***
         //
-        // This check originally accepted only a serialized LoopResult, on the reasoning that the loop's
-        // gateway performs the deployment. Measured on a real submission: that gateway has never run,
-        // every actual download on this rig was done by `download-probe`, and its evidence is a text log.
-        // So `deployment` was UNATTRIBUTABLE in practice - a field nothing could satisfy, which is a gate
-        // that refuses correct work rather than one that catches anything.
-        if (content.Contains("==== download-probe", StringComparison.Ordinal))
-            return ProbeLog(content);
+        // The banner test below used to run first, and `download-probe --json` EMBEDS its verbatim log in
+        // the report rather than pointing at it - so a real capture matches the banner, and `ProbeLog`
+        // then reads the verdict token out of a JSON string literal and comes back with
+        // `TRANSFERRED",` - closing quote, comma and all. MEASURED while wiring the deployment
+        // recomputation: the FIRST-HAND artifact, the one the probe emits precisely so nothing has to
+        // scrape its rendering, was refused by the check meant to admit it. A scrape of a rendering is
+        // never preferred over a first-class field that says the same thing.
+        JsonDocument? document = null;
+        JsonException? parseFailure = null;
 
-        JsonDocument document;
         try
         {
             document = JsonDocument.Parse(content);
         }
         catch (JsonException ex)
         {
-            return new ArtifactVerdict(false, $"WRONG KIND - the deployment artifact is neither a download-probe log nor valid JSON: {ex.Message}");
+            parseFailure = ex;
+        }
+
+        if (document is null)
+        {
+            // 🔴 *** A DOWNLOAD IS PERFORMED BY download-probe, WHICH EMITS A LOG - NOT A LoopResult. ***
+            //
+            // This check originally accepted only a serialized LoopResult, on the reasoning that the loop's
+            // gateway performs the deployment. Measured on a real submission: that gateway has never run,
+            // every actual download on this rig was done by `download-probe`, and its evidence is a text log.
+            // So `deployment` was UNATTRIBUTABLE in practice - a field nothing could satisfy, which is a gate
+            // that refuses correct work rather than one that catches anything.
+            if (content.Contains("==== download-probe", StringComparison.Ordinal))
+                return ProbeLog(content);
+
+            return new ArtifactVerdict(false, $"WRONG KIND - the deployment artifact is neither a download-probe log nor valid JSON: {parseFailure!.Message}");
         }
 
         using (document)
         {
+            // The probe's own report, keyed on the field it publishes for exactly this purpose.
+            if (document.RootElement.ValueKind == JsonValueKind.Object
+                && document.RootElement.TryGetProperty("transferVerdict", out var transferVerdict))
+            {
+                return ProbeJson(transferVerdict);
+            }
+
             if (document.RootElement.ValueKind != JsonValueKind.Object
                 || !document.RootElement.TryGetProperty("outcome", out var outcome)
                 || outcome.ValueKind != JsonValueKind.String)
@@ -119,6 +153,40 @@ public static class ArtifactCheck
                 + "The deployment it describes did not complete, so it cannot be the provenance for a deployment "
                 + "declaration." + detail);
         }
+    }
+
+    /// <summary>
+    /// A <c>download-probe --json</c> report, judged on <b>its first-class <c>transferVerdict</c> key</b>.
+    ///
+    /// <para><b>The same rule as the log form, read off the value instead of the rendering.</b> The probe
+    /// emits this key so a separate process never has to parse its own prose — and the harness gateway's
+    /// notes record what parsing the prose costs: "anything the renderer drops is gone before this reader
+    /// sees it".</para>
+    ///
+    /// <para><b>The whole token, never a substring, for the same reason as below:</b> the serialized enum
+    /// values are <c>Transferred</c>, <c>NothingTransferred</c> and <c>Undetermined</c>, and the first is a
+    /// substring of the second. <b>A null verdict is refused</b> — the probe writes null when no transfer
+    /// classification exists at all (an abort, a throw, a run that never reached the download), which is
+    /// "we cannot say" and never "it happened".</para>
+    /// </summary>
+    private static ArtifactVerdict ProbeJson(JsonElement verdict)
+    {
+        if (verdict.ValueKind != JsonValueKind.String)
+        {
+            return new ArtifactVerdict(false,
+                "ARTIFACT REPORTS FAILURE - the download-probe report's `transferVerdict` is not a value, which is the probe "
+                + "saying no transfer classification exists at all: an abort, a throw, or a run that never reached the "
+                + "download. A run that cannot say whether anything reached the controller is not evidence that something did.");
+        }
+
+        var value = verdict.GetString() ?? string.Empty;
+
+        return string.Equals(value, "Transferred", StringComparison.OrdinalIgnoreCase)
+            ? new ArtifactVerdict(true, "a download-probe report whose transferVerdict is Transferred.")
+            : new ArtifactVerdict(false,
+                $"ARTIFACT REPORTS FAILURE - the download-probe report's own transferVerdict is '{value}', not "
+                + "'Transferred'. The probe distinguishes a download that completed from one that moved anything, and only "
+                + "the second is evidence of a deployment.");
     }
 
     /// <summary>
@@ -220,6 +288,7 @@ public static class Recompute
         DerivableField.Storage => CompareStorage(document, artifact),
         DerivableField.ConflictEdges => CompareConflicts(document, artifact),
         DerivableField.ComputedConflicts => CompareComputedConflicts(document, artifact),
+        DerivableField.Deployment => CompareDeployment(document, artifact),
         _ => NotComparable($"nothing in the harness recomputes '{field}', so it is cited rather than checked."),
     };
 
@@ -440,6 +509,168 @@ public static class Recompute
         return absent.Length == 0
             ? Matched($"all {declared.Length} named conflicting block(s) appear in the artifact's graph.")
             : Differs($"{absent.Length} named conflicting block(s) are not in the graph the artifact carries: {string.Join(", ", absent)}");
+    }
+
+    // -------------------------------------------------------------------------------------------------
+    // deployment — the object manifest, rebuilt from the download that produced it
+    // -------------------------------------------------------------------------------------------------
+
+    /// <summary>
+    /// 🔴 <b>GATE 5b DIFFERENCES A LATCH BLOCK AGAINST THE DEPLOYMENT'S OBJECT MANIFEST. UNTIL NOW THAT
+    /// MANIFEST WAS THE AUTHOR'S OWN LIST.</b>
+    ///
+    /// <para><c>deployment</c> fell to <see cref="Check"/>'s default arm — <b>cited, never compared</b>,
+    /// stamped <c>Attributed</c>. So the set 5b looks a block up in was a self-report, and
+    /// <c>DeploymentDocument.DeliverableObjects</c> says so in its own words: <i>"an author who omits a
+    /// deliverable's name buys silence on that one row."</i> This arm rebuilds the set from the download's
+    /// load manifest and differences the two, which is the difference between 5b returning a verdict and
+    /// 5b confirming a claim against itself.</para>
+    ///
+    /// <para>🔴 <b>THE ASYMMETRY IS <see cref="CompareMap"/>'S, DELIBERATELY AND FOR THE SAME REASON.</b>
+    /// OVER-CLAIMING IS DANGEROUS: a submission naming an object the download did not load makes 5b
+    /// report that a latching block is present when nothing put it there — the exact reassurance 5b
+    /// exists to stop being free. UNDER-CLAIMING IS NOT: a download that loaded MORE than the submission
+    /// lists means the manifest is incomplete, and nothing can rely on an object it does not name.
+    /// Refused in the first direction, REPORTED in the second.</para>
+    ///
+    /// <para>⚠️ <b>THE PRECONDITION, AND IT IS NOT ENFORCEABLE FROM HERE.</b> A captured manifest is only
+    /// comparable against a submission describing <b>THE SAME PROGRAM</b>, loaded the same way. Two
+    /// recorded downloads on this rig put DIFFERENT programs on the device; and a differential run
+    /// (<c>SoftwareOnlyChanges</c>) loads only what changed, so its manifest is a legitimate SUBSET of the
+    /// program on the controller. Compared across either boundary a correctly-authored manifest
+    /// over-claims, and this arm refuses it. <b>Nothing in the two documents joins them</b> — an
+    /// <c>importStamp</c> names an import, a probe log names a project path, and neither is the other —
+    /// so the pairing is the operator's to get right, and the refusal text says so rather than letting a
+    /// mispairing read as a finding about the submission.</para>
+    /// </summary>
+    private static Result CompareDeployment(SubmissionDocument document, string artifact)
+    {
+        if (document.Deployment is not { } deployment)
+            return NotComparable("the submission declares no deployment, so there is no object manifest to compare against the download.");
+
+        // The same two lists gate 5b differences a latch block against, built the same way — trimmed,
+        // ordinal, unioned. Two constructions of one manifest is two manifests.
+        var declared = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var row in deployment.S7Objects ?? new List<S7ObjectDocument>())
+        {
+            if (!string.IsNullOrWhiteSpace(row.HarnessObject))
+                declared.Add(row.HarnessObject!.Trim());
+        }
+
+        foreach (var name in deployment.DeliverableObjects ?? new List<string>())
+        {
+            if (!string.IsNullOrWhiteSpace(name))
+                declared.Add(name.Trim());
+        }
+
+        if (declared.Count == 0)
+        {
+            return NotComparable(
+                "the submission's `deployment` names no object at all — neither an `s7Objects[].harnessObject` nor a "
+                + "`deliverableObjects` entry — so there is nothing to look up in the download's load manifest. "
+                + "`noS7Transport` and `s7Objects: []` are claims about the classic-S7comm WIRE, not about what was loaded.");
+        }
+
+        var (loaded, source, detail) = LoadedObjects(artifact);
+
+        if (loaded is null)
+        {
+            return NotComparable(
+                $"the deployment artifact carries no load manifest, so the {declared.Count} declared object(s) were compared "
+                + $"against nothing: {detail} NOTHING IS BEING ASSERTED ABOUT THIS MANIFEST EITHER WAY — this field is cited, not checked.");
+        }
+
+        // *** AN EMPTY MANIFEST IS NOT A CLEAN ONE, AND GATE 5b ALREADY RULED THIS EXACT CASE. *** Its own
+        // words: treating "absent from an empty list" as a refusal "would report the same finding for a
+        // submission that named a real loaded block as for one that named a fiction. Both are unverified;
+        // only one is wrong." A download whose result exists but reports no object load — every load a
+        // hardware or connection one — can confirm and deny nothing about a program object.
+        if (loaded.Count == 0)
+        {
+            return NotComparable(
+                $"the download's result was read (via {source}) and names NO loaded program object, so the {declared.Count} "
+                + $"declared object(s) were compared against an empty set: {detail} Absent from an empty manifest is the same "
+                + "finding for a real object as for a fiction, which is not a finding.");
+        }
+
+        var overClaimed = declared.Except(loaded, StringComparer.Ordinal).OrderBy(s => s, StringComparer.Ordinal).ToArray();
+        var notListed = loaded.Except(declared, StringComparer.Ordinal).OrderBy(s => s, StringComparer.Ordinal).ToArray();
+
+        if (overClaimed.Length > 0)
+        {
+            // NAMED, never counted — the finding has to be actionable in one reading, and a case-only miss
+            // is named as such so the refusal argues rather than merely walls (gate 5b's precedent; §4.5
+            // object names are compared ORDINALLY throughout).
+            var named = overClaimed.Select(o =>
+            {
+                var nearly = loaded.FirstOrDefault(l => string.Equals(l, o, StringComparison.OrdinalIgnoreCase));
+                return nearly is null ? o : $"{o} (the manifest carries '{nearly}', differing only in case — compared ordinally, so this is a miss)";
+            });
+
+            return Differs(
+                $"the submission's deployment names {overClaimed.Length} of its {declared.Count} object(s) that the download "
+                + $"DID NOT LOAD: {string.Join(", ", named)}. Read off {loaded.Count} loaded object(s) via {source}. "
+                + "*** BEFORE TREATING THIS AS THE SUBMISSION'S FAULT, CHECK THE PAIRING. *** A load manifest only speaks to "
+                + "the submission that describes THE SAME PROGRAM, loaded the same way: a differential run "
+                + "(`SoftwareOnlyChanges`) loads only what changed and its manifest is a legitimate subset, and a log from a "
+                + "download of a different program shares no object names at all. Nothing in these two documents joins them, "
+                + "so pairing them is the operator's act. If the pairing is right, this is a manifest asserting an object "
+                + "nothing put on the device — and gate 5b would report a latching block present on the strength of it.");
+        }
+
+        var incomplete = notListed.Length == 0
+            ? string.Empty
+            : $" (the download also loaded {notListed.Length} object(s) the deployment does not name: {string.Join(", ", notListed)}; incomplete, not wrong)";
+
+        return Matched(
+            $"all {declared.Count} object(s) the submission's deployment names appear in the download's load manifest, "
+            + $"read off {loaded.Count} loaded object(s) via {source}.{incomplete}");
+    }
+
+    /// <summary>
+    /// The download's load manifest, and <b>WHICH AUTHORITY PRODUCED IT</b>.
+    ///
+    /// <para>🔴 <b>FIRST-HAND FIRST.</b> <c>download-probe --json</c> emits <c>loadManifest</c> built by
+    /// <c>DownloadResultAdapter</c> straight off the live Openness <c>DownloadResult</c>; the probe LOG is
+    /// that same result after the probe's renderer has been at it, and <c>ProbeLogReader</c>'s own
+    /// documentation warns that "anything the renderer drops is gone before this reader sees it". Both are
+    /// read here because both are things an operator can be holding, and <b>which one was used is carried
+    /// into every verdict this produces</b> — <c>ProbeReport.Source</c> exists for exactly that, and a
+    /// result that does not say which authority it used invites the stronger reading.</para>
+    ///
+    /// <para><b>A null manifest is NOBODY LOOKED, never "nothing was loaded".</b> An aborted run, a throw,
+    /// a folder download and a loop-result JSON all produce no manifest at all, and reading any of them as
+    /// an empty set would turn "we cannot say" into "the download loaded nothing" at the first consumer.
+    /// <c>ProbeReport</c> keeps that distinction, and it is preserved here rather than re-decided.</para>
+    /// </summary>
+    private static (IReadOnlySet<string>? Loaded, string Source, string Detail) LoadedObjects(string artifact)
+    {
+        if (artifact.TrimStart().StartsWith("{", StringComparison.Ordinal))
+        {
+            // The probe's own stdout — `loadManifest` when the build emits one, its embedded `log` when it
+            // does not. A serialized loop result lands here too and yields no manifest, which is correct:
+            // `outcome: Ran` says a deployment happened and names not one object.
+            var report = Harness.Device.ProbeReport.FromStdout(artifact);
+
+            return report.ManifestAvailable
+                ? (report.Manifest, report.Source, report.Detail)
+                : (null, report.Source, report.Detail);
+        }
+
+        var feedback = Ladder.Download.DownloadFeedbackParser.Parse(Ladder.Download.ProbeLogReader.Read(artifact));
+
+        if (!feedback.ResultPresent)
+        {
+            return (null, nameof(Ladder.Download.ProbeLogReader),
+                "the log carries no `==== DOWNLOAD RESULT` section, so no result object ever existed — an abort or a throw. "
+                + "That is UNDETERMINED, which is not the same claim as nothing having been transferred.");
+        }
+
+        return (new HashSet<string>(feedback.LoadedObjects, StringComparer.Ordinal), nameof(Ladder.Download.ProbeLogReader),
+            $"{feedback.LoadedObjectCount} object(s), {feedback.NonObjectLoadCount} non-object load(s), "
+            + $"{feedback.UnrecognisedMessageCount} unrecognised message(s). RE-DERIVED from the probe's rendering of the "
+            + "result, not read off the live DownloadResult — anything that renderer dropped is already gone.");
     }
 
     /// <summary>Undirected: a conflict between two blocks is one edge however it was written down.</summary>

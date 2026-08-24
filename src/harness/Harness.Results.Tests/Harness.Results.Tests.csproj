@@ -34,4 +34,28 @@
     <ProjectReference Include="..\Harness.Gate\Harness.Gate.csproj" />
   </ItemGroup>
 
+  <!--
+    THE FOUR RECORDED PROBE LOGS, LINKED RATHER THAN COPIED. They are committed fixtures of the
+    download-feedback solution and this suite reads the same files, so the two cannot drift; a copy
+    here would be a second corpus that silently ages.
+
+    *** WHAT A GREEN AGAINST THEM IS WORTH, STATED WHERE THE FILES ARE WIRED IN. *** Their own
+    README says it: "Object names are invented; the message shape is verbatim." They prove the PARSE
+    and the COMPARE. They are not evidence about any real deployment, and a pass here is never a
+    verdict on real material - see the header of DeploymentManifestTests.cs.
+  -->
+  <ItemGroup>
+    <!-- Named one by one, not globbed: this suite reads exactly these four and the header of
+         DeploymentManifestTests.cs says what each of them proves. A glob would quietly enlarge the
+         corpus and make that sentence false. -->
+    <None Include="..\..\download-feedback\DownloadFeedback.Tests\Fixtures\full-ninety-nine-objects.txt"
+          Link="Fixtures\full-ninety-nine-objects.txt" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\download-feedback\DownloadFeedback.Tests\Fixtures\differential-one-object.txt"
+          Link="Fixtures\differential-one-object.txt" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\download-feedback\DownloadFeedback.Tests\Fixtures\up-to-date-nothing-transferred.txt"
+          Link="Fixtures\up-to-date-nothing-transferred.txt" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\download-feedback\DownloadFeedback.Tests\Fixtures\aborted-no-download-result.txt"
+          Link="Fixtures\aborted-no-download-result.txt" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

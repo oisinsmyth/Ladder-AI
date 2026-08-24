@@ -31,6 +31,28 @@
       gate reads the map the way the thing it is fencing reads it.
     -->
     <ProjectReference Include="..\Harness.S7\Harness.S7.csproj" />
+
+    <!--
+      Harness.Device, for ONE reason and ONE type: `ProbeReport.FromStdout`, which recovers a download's
+      LOAD MANIFEST from what `download-probe` emitted. The `deployment` field's arm in `Recompute`
+      rebuilds the submission's object manifest from that, so the manifest is COMPARED rather than
+      believed - and gate 5b's verdict is only worth reading once it is.
+
+      *** "IT READS ONLY" ABOVE IS UNCHANGED, AND THIS REFERENCE DOES NOT WEAKEN IT. *** Harness.Device
+      is the assembly that puts objects on controllers, but it does so by shelling out from methods this
+      gate never calls. `ProbeReport.FromStdout` is a pure string -> record parse: no socket, no Portal,
+      no process. What the reference costs is build-graph weight (Harness.Loop and Harness.Wire arrive
+      behind it) and nothing else.
+
+      *** THE ALTERNATIVE WAS CONSIDERED AND REJECTED FOR A NAMED REASON. *** Referencing only
+      Ladder.Download (netstandard2.0, references nothing) would have got the probe-LOG parser and left
+      the probe's json-mode `loadManifest` - the FIRST-HAND manifest, read off the live Openness
+      DownloadResult - needing a second reader written here. That reader carries doctrine that is easy to
+      get wrong and expensive when it is: `available: false` means NOBODY LOOKED and must never read as
+      "TIA loaded nothing". A second copy of it is a second opinion that can drift from the one the
+      probe's own tests pin, which is the failure this project keeps paying for.
+    -->
+    <ProjectReference Include="..\Harness.Device\Harness.Device.csproj" />
   </ItemGroup>
 
 </Project>
