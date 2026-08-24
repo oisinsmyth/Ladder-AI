@@ -286,6 +286,19 @@ resolved and type-checked — and then dropped on the floor at the point of use.
 small assembly, both found by a person reading, **neither by a test**. That is the argument for
 mechanising it: the class is not rare, and nothing in the ordinary review path looks for it.
 
+🔴 **THIRD INSTANCE, 2026-08-24 — AND IT DEFEATS THE CHECK AS PROPOSED ABOVE.** Seven types in
+`src/wave-control/WaveControl/` — `AdmissionController`, `QueueRehydrator`, `CoordinatorStateStore`,
+`WaveQueues`, `DrainPolicy`, `EscalationLadder`, `StopOnFailedWaveSetGate` — have no caller reachable
+from any entry point; they call **each other**, and their tests call them. Recorded row by row in
+`docs/notes/spec-reconciliation.md` **§UW**. ***The rule written above — "at least one call site in
+the shipped assembly" — passes every one of them***, because `QueueRehydration.cs:185` is a call site
+in the shipped assembly and `AdmissionController.Admit` is a call site's target. **A reference count
+cannot tell a live component from a closed loop.** The check has to be *reachability from a declared
+entry point* — `Main`, a CLI verb, a public API surface — walking forward, not a per-symbol count
+walking back. A cycle with no door is exactly the shape a backward count is blind to, and it is
+cheaper to find than the two heartbeat instances were: the entry points are enumerable
+(`WaveControl.Cli/Program.cs:40-46` lists five verbs).
+
 ⚠️ **The general form is worth more than the check.** When a test double implements one half of a
 protocol, ask **which half the SUBJECT implements**. If the double can be driven into the state a test
 needs without the subject doing anything, that test is about the double.

@@ -22,6 +22,11 @@ into the other three.
 | **NOT BUILT** | nothing implements it. The row carries the **consequence**. |
 | 🔴 **NOT CHECKED** | ***I did not examine it.*** Not compliant, not clean, not a pass. *Empty is not clean* is this repo's most re-earned rule and an audit that quietly omits what it could not reach is the exact failure it exists to prevent. |
 
+🔴 **A BUCKET IS A CLAIM ABOUT WHAT IS BUILT, NEVER ABOUT WHAT IS REACHABLE.** `AS SPECIFIED` can be
+literally true of a type that nothing in production ever calls — measured twice now, at DB-4 (§4) and
+across the seven-type coordinator run-loop family (**§UW**). Read a bucket as *"the code exists and
+matches"*, and go to the row's own evidence cell for whether anything runs it.
+
 **The unit** is one numbered or lettered spec item (`D-n`, `DB-n`, `R-n`, `M-n`, `X-n`, `G-n`, `O-n`,
 `F-n`), or one named section-level normative claim. Sub-items are split and counted separately only
 where the halves land in different buckets — otherwise the row carries the whole item and its
@@ -86,9 +91,9 @@ that §NC's own total is one of the numbers that did not survive the census.**
 | item | bucket | evidence / consequence |
 |---|---|---|
 | 1.1 Loop 1 — test loop bracketed by two review passes, final test cycle | **NOT BUILT** | The review skills exist; **nothing sequences them around a test loop**. `Harness.Loop.LoopRun` is the 8-step *inner* loop and knows nothing of reviews. *Consequence: the bracket is a human/skill discipline, so "its last verified state would not be its final state" is unprevented.* |
-| 1.2 Loop 2 — admission: preflight + compile clean in isolation | AS SPECIFIED | `src/wave-control/WaveControl/AdmissionController.cs`; `converter preflight`; `openness-cli compile --block`. |
+| 1.2 Loop 2 — admission: preflight + compile clean in isolation | AS SPECIFIED | `src/wave-control/WaveControl/AdmissionController.cs`; `converter preflight`; `openness-cli compile --block`. 🔴 **BUILT-BUT-UNREACHABLE (2026-08-24).** `AdmissionController.Admit` has **no production caller.** Its only non-test call site in the tree is `QueueRehydration.cs:185`, inside `QueueRehydrator.Rehydrate`, whose own call sites are *all* in `WaveControl.Tests/CoordinatorStateStoreTests.cs`; every other occurrence of the name is a `<see cref>` in a doc comment. So the artifact-hash freshness comparison (`AdmissionController.cs:224-226`) that `test-environment-build-plan.md:2863-2864` calls load-bearing — *"WITHOUT THAT HASH COMPARISON THE GATE IS A FORMALITY ANY STALE RUN SATISFIES"* — executes in tests and nowhere else. ***A row in this column is a claim about what is BUILT; read it as a claim about what is REACHABLE and it is wrong*** (DB-4's line, §4). **§UW.** |
 | 1.3 Loop 3 — the wave: inert → verify → raise start bools → observe → distribute | AS SPECIFIED | `Harness.Wire/InertPhase.cs` (`Establish`/`Commit`), `SlotRun.cs`, `WaveRun.cs`, `Harness.Loop/WaveSetSequence.cs`. Built; **never yet driven end to end** — see 15a.4. |
-| 1.4 Two download queues; STOP-class accumulates | AS SPECIFIED | `ChangeRouter`, `DownloadQueue`, `WaveQueues`, `DrainPolicy.cs`. |
+| 1.4 Two download queues; STOP-class accumulates | AS SPECIFIED | `ChangeRouter`, `DownloadQueue`, `WaveQueues`, `DrainPolicy.cs`. 🔴 **Mixed reachability:** `ChangeRouter.Route` is reached from `wave-cli route` (`RouteCommand.cs:242`); **`WaveQueues` and `DrainPolicy` are not constructed or called anywhere outside `WaveControl.Tests`** — so nothing accumulates and nothing drains. **§UW.** |
 
 ## §2 — HOW `lad-coder` INTERACTS
 
@@ -125,14 +130,14 @@ that §NC's own total is one of the numbers that did not survive the census.**
 | D14 post-download verification is a program-version constant over Modbus | AS SPECIFIED | `BuildStamp`, `VersionCheck`, `RegisterMap.VersionRegisters = 2`. Measured live: `16#21D74D35` at registers 0–1. |
 | D15 the map is frozen for a wave set | AS SPECIFIED | `RegisterMap.MapHash`; excision does not move it (`RegisterMap.cs:429`). |
 | D16 shared UDTs frozen for a wave set | 🔴 **NOT CHECKED** | See 2.2d. |
-| D17 stop-class refusals are two-stage | AS SPECIFIED | `converter preflight` (stage 1) + `ChangeRouter`/`AdmissionController` against `DeployedProgram` (stage 2). |
+| D17 stop-class refusals are two-stage | AS SPECIFIED | `converter preflight` (stage 1) + `ChangeRouter`/`AdmissionController` against `DeployedProgram` (stage 2). 🔴 **BUILT-BUT-UNREACHABLE ON HALF OF STAGE 2.** `ChangeRouter.Route` *does* have a production caller — `WaveControl.Cli/RouteCommand.cs:242`, reached from `wave-cli route` (`be7f17e`). `AdmissionController` does not (see 1.2). **So stage 2 is half-reachable, and the unreachable half is the one that checks the submitted content against attested evidence.** ⚠️ Also imprecise as written: **neither `ChangeRouter.cs` nor `AdmissionController.cs` names `DeployedProgram` at all** — its non-test consumers are `DependencyClosure`, `DrainPolicy`, `ExcisionClosure`, `WaveBoundaryBatchPlanner` and `WaveControl.Cli/BatchCommand.cs`. **§UW.** |
 | D18 the harness disconnects across a download; reconnect + version check is the normal path | AS SPECIFIED | `Harness.Loop/LoopRun.cs` steps 5–6; `VersionCheck`. |
 | D19 time compression is the throughput lever | **DIVERGED** | Superseded inside the spec itself by §8/D26 (the lever is tensor count) and narrowed by DB-12. Built as the narrow lever only. No further correction needed — the spec already carries it. |
 | D20 loop 1 brackets the test loop | **NOT BUILT** | See 1.1. |
 | D21 results carry a co-running log | AS SPECIFIED | `CoRunningLog.cs`, measured from the echo. |
 | D22 a blacklist may only add | AS SPECIFIED | Gate 8. |
 | D23 changes routed into two queues | AS SPECIFIED | `ChangeRouter`, `RoutingVerdict`. |
-| D24 the deferred queue drains when no test can progress | AS SPECIFIED | `DrainPolicy.cs:270`, `ProgressBlockKind`; zero value authorises nothing. |
+| D24 the deferred queue drains when no test can progress | AS SPECIFIED | `DrainPolicy.cs:270`, `ProgressBlockKind`; zero value authorises nothing. 🔴 **BUILT-BUT-UNREACHABLE.** `DrainPolicy.Decide` (`DrainPolicy.cs:275`) is called only from `WaveControl.Tests/DrainPolicyTests.cs`, and its `WaveQueues` argument has no production producer either. **§UW.** |
 | D25 a disruptive download must be FULL, never differential | AS SPECIFIED | `DownloadConfigurationPolicy`, `DownloadMode`. |
 | D26 a wave is a sequence of tensors | AS SPECIFIED | `WaveRun`, `SlotTensor`. |
 | D26a the wave model — column/row, null=inert, per-slot exit | AS SPECIFIED | `WaveRun.cs`, `SlotDistribution`; an unraised start bool is the null encoding. |
@@ -141,8 +146,8 @@ that §NC's own total is one of the numbers that did not survive the census.**
 | D28 models instanced per test | AS SPECIFIED | Per-slot model + model iDB in the object budget (`BatchPlan`). |
 | D29 tensor width bounded by conflict-freedom, capped by poll bandwidth | **DIVERGED** | Built as `WireTiming.MaxTensorWidth` = `R × floor(S_min × scan / RTT_p99)` — **REPORTED, NEVER ENFORCED**, because D36's free variable `S_min` has never been observed. And the cap is an **input** to `WaveSetAdmission`, whose absence is `ColouringDefect.WidthCapNotSupplied` = *unchecked, never passed*. §12a corrected to say the cap is reported and not enforced. |
 | D30 the lever is information density per wave | AS SPECIFIED | `ResultPackage` built first, as the build order says. |
-| D31 submission is atomic and precedes packing | AS SPECIFIED | `Submission`, `AdmissionController`, `AdmissionDecision`. |
-| D32 every unhandled configuration aborts, and **we** abort it | AS SPECIFIED | `DownloadConfigurationPolicy` + `DownloadAbortedByPolicyException` (throw from the delegate); `EscalationLadder`, `EscalationRecord`, `AttributionOutcome`, `LadderAttempts`. |
+| D31 submission is atomic and precedes packing | AS SPECIFIED | `Submission`, `AdmissionController`, `AdmissionDecision`. 🔴 **BUILT-BUT-UNREACHABLE — and this row's *ordering* claim is the one that suffers.** Atomicity (one bad object refuses the whole submission) is implemented and tested inside `AdmissionController.Admit`, which nothing in production calls. **The packing it is said to precede IS reached:** `wave-cli submit` stores the slot and then calls `WaveSetAdmission.Admit` directly (`WaveControl.Cli/Program.cs:164`, `:178`; `status` again at `:217`). ***So it is not that the ordering is unenforced — the second half runs without the first.*** **§UW.** |
+| D32 every unhandled configuration aborts, and **we** abort it | AS SPECIFIED | `DownloadConfigurationPolicy` + `DownloadAbortedByPolicyException` (throw from the delegate); `EscalationLadder`, `EscalationRecord`, `AttributionOutcome`, `LadderAttempts`. 🔴 **The ladder half is BUILT-BUT-UNREACHABLE:** `EscalationLadder.Decide` (`EscalationLadder.cs:175`) is called only from `WaveControl.Tests/EscalationLadderTests.cs`. *Nothing escalates because nothing calls the ladder* — the same is true of caveats 2 and 3 below, which cite its members. **§UW.** |
 | D32 caveat 1 — attribution structurally impossible for project-level configurations | AS SPECIFIED | `AttributionOutcome` separates "no block is responsible" from "the locator failed". |
 | D32 caveat 2 — the ladder can loop; a second abort is a TOTAL TEST ABORT | AS SPECIFIED | `LadderAttempts`, bounded; `EscalationOutcome`. |
 | D32 caveat 3 — Class A/B/C decides the rung; `StartModules` needs a per-entry rung | AS SPECIFIED | `ConfigurationClassifier`, `ClassAEntry`, `ClassBEntry`, `LadderRung`, `UnknownReason`; `MutantClassifiers` mutation doubles in the tests. |
@@ -185,7 +190,7 @@ that §NC's own total is one of the numbers that did not survive the census.**
 | R4 never write a delegate that accepts everything; the guard is "refuse to answer" | AS SPECIFIED | `DownloadConfigurationPolicy` + throw; `ConfigurationResponse` has no accept-all. |
 | R4a never infer safety from the current selection (zero values differ in direction) | AS SPECIFIED | `ClassAEntry`/`ClassBEntry` are enumerated per selection, not derived from a zero value. |
 | R5 never use folder-scope downloads | AS SPECIFIED | `DownloadOption` offers device scope only. |
-| R6 admission control | AS SPECIFIED | `AdmissionController`. |
+| R6 admission control | AS SPECIFIED | `AdmissionController`. 🔴 **BUILT-BUT-UNREACHABLE, and here the class IS the whole row** — the rule has no second citation to fall back on. A gate with no caller cannot refuse anything, so R6 is satisfied in this table by the existence of a type. *"AN ASSERTION THAT CANNOT FAIL IS DOCUMENTATION WEARING A CHECK'S CLOTHES — AND IT IS WORSE THAN A MISSING CHECK, BECAUSE IT OCCUPIES THE SLOT"* (`docs/notes/autonomous-working-agreement.md:551`). **§UW.** |
 | R7 `Software` (all) only at the disruptive boundary | AS SPECIFIED | `DownloadMode`. |
 | R8 the sanctioned disruptive exception; **confirm RUN at the device once, by eye** | **DIVERGED** | The eyeball requirement is **retired**: `Harness.S7/S7RunState.Decode` keys on `== 8` and the rig answered `Running (8)` on **2026-08-14** after the deploy. §16.11 already predicted this closer; R8 corrected to say it is mechanised and exercised. |
 
@@ -346,7 +351,7 @@ that §NC's own total is one of the numbers that did not survive the census.**
 | X-A.4 the `%M` ceiling — 8,192 bytes, separate from work memory, mirror above the retentive range | AS SPECIFIED | `MirrorGeometry.Cpu1214CBitMemoryBytes = 8192`; a base inside the retentive window is a refusal; `RetentionCheck` re-checks every generated tag. |
 | X-A.5 `MB_SERVER` applies one request's registers within a single scan `[I]` | **DIVERGED** | ***The spec's own named open item is CLOSED.*** §16.1 still says A1's evidence *"was measured at 16 REGISTERS PER FC16"* and calls the gap to full width *"a PRE-EXISTING item, neither widened nor closed here."* It has since been measured **at 123 registers**: no tear in 3,000 writes (variant 1) and 3,200 (variant 2), and **no torn READ in 3,000 reads across 3,000 distinct generations**. Still *"no tear observed"*, never *"atomic"*. §16.1 corrected. |
 | X-B per-test timeout; TIMED-OUT distinct from FAILED; the computed backstop | AS SPECIFIED | `SlotOutcome.{Completed,NotInert,TimedOut}`; `WireTiming.BackstopMs`; per-index backstop in `WaveRun.Observe` measured after re-expression at the wave's `comp`. |
-| X-C coordinator death; on connect assume nothing; a persisted marker; discard interrupted results | AS SPECIFIED | `CoordinatorStateStore` (one atomically-renamed file, `WriteThrough` + flush before rename); legacy two-file form **refused, not read**; `WaveMarker`, `QueueRehydrator`. An unreadable file voids the wave **and** the queue — the 2026-08-13 ruling, implemented. |
+| X-C coordinator death; on connect assume nothing; a persisted marker; discard interrupted results | AS SPECIFIED | `CoordinatorStateStore` (one atomically-renamed file, `WriteThrough` + flush before rename); legacy two-file form **refused, not read**; `WaveMarker`, `QueueRehydrator`. An unreadable file voids the wave **and** the queue — the 2026-08-13 ruling, implemented. 🔴 **BUILT-BUT-UNREACHABLE.** `CoordinatorStateStore` is constructed only in `WaveControl.Tests`; the store `wave-cli` actually opens is the **different** `WaveStore` (`Program.cs:467-468`). ***Nothing writes the persisted marker in production, so there is nothing to rehydrate from*** — and `QueueRehydrator.Rehydrate` is the sole non-test caller of `AdmissionController`, which is how the whole family comes to be reachable only from one another. **§UW.** |
 | X-C residual — a PLC-side watchdog | **NOT BUILT** | Held open deliberately. *Consequence: nothing survives the PC dying; safe only while the rig's outputs cannot actuate (ADR-0009), and that dependency is the condition to revisit on.* |
 | X-D comp_min/comp_max; take the minimum, never the ceiling | **DIVERGED** | Built with four ceilings and no member that returns `CompMax` as a recommendation. **The ceiling is lower than X-D assumed on the term X-D says binds first** — 4.29× at a 500 ms preset. §16.4 corrected. |
 | X-E excision is transitive; closure + threshold + bounded attempts; publish the co-running log from executed start bools | AS SPECIFIED | `ExcisionClosure`, `ExcisionPlan`, `ExcisionDefect`; `CoRunningLog` built from the start **echo**; `RegisterMap` allocates a start-echo block; excision does not move `MapHash`. |
@@ -354,7 +359,7 @@ that §NC's own total is one of the numbers that did not survive the census.**
 | X-G conflict edges carry provenance; multi-writer on a deliverable signal is a FINDING | **DIVERGED** | Built as gate 8c with `ConflictProvenance`/`SignalClass` — and it **reports rather than refuses**, with the code recording that whether it should refuse is an open owner question. It also prints on a clean graph. Currently `NOT CHECKED` in practice because no provenanced graph is produced — ⚠️ **and that is now a SIGNAL-NAME JOIN problem, not a producer gap: `converter conflict-graph` exists and refuses correctly (16 of 17 submission signals resolved to no storage path), and D9's slot↔slot producer landed 2026-08-14. Gate 8c's block↔block graph still needs the submission's logical names bound to storage.** §16.7 corrected. |
 | X-H withdrawn; per-slot instancing stands unconditionally; warn when two slots model one physical instance | **NOT BUILT** (the warning) | The rule stands; no equipment-identity warning exists. *Consequence: case 3 written as two case-2 slots passes against two independent tanks and the coupling is never exercised.* |
 | X-I models go through their own test wave; four rules | AS SPECIFIED | `ModelReadiness`, `ModelReadinessCheck`, `ModelOrdering`, `OrderingDefect` (7 members, **none informational** — pinned over the whole enum). |
-| X-I rule 2 — reading (b) permitted only once a stop-on-failed-wave-set gate demonstrably exists | **DIVERGED** | Built exactly as ruled: `RunLoopGateState` whose **zero value is `NotDeclared` and refuses**, with `DeclaredForADifferentRunLoop` kept separate from it, and `OrderingDefect.ReadingBRefusedBecauseTheGateIsNotEstablished`. **The gate is not established**, so (b) fails closed today. §16.9 corrected. |
+| X-I rule 2 — reading (b) permitted only once a stop-on-failed-wave-set gate demonstrably exists | **DIVERGED** | Built exactly as ruled: `RunLoopGateState` whose **zero value is `NotDeclared` and refuses**, with `DeclaredForADifferentRunLoop` kept separate from it, and `OrderingDefect.ReadingBRefusedBecauseTheGateIsNotEstablished`. **The gate is not established**, so (b) fails closed today. §16.9 corrected. 🔴 **And it cannot become established, because nothing runs it.** `RunLoopGate.cs`'s `StopOnFailedWaveSetGate` is consumed only by `ModelOrdering.Order` (`ModelOrdering.cs:412`), whose own callers are all in `WaveControl.Tests/ModelOrderingTests.cs`; `wave-cli` touches `ModelOrderingPlan` only to print a constant string (`Program.cs:343`). *Failing closed is the right direction, and it is not the same thing as being enforced.* **§UW.** |
 | X-J a reserved number range for harness-generated objects, **and the claim tool refuses allocations inside it** | **DIVERGED** | ***The band is declared: 9000–9999, independently per number space, FB/FC/DB, OBs EXCLUDED*** (`HarnessNumberRange.Declared()`; `HarnessScope.ReservedBandLow/High` in the reviewer). It was measured rather than feared — TIA accepted an import declaring `FC 910` while another block held 910 and created **two blocks at that number**, with import, per-block compile, device compile and `sanity-check` all green. ***The second half is NOT BUILT: `converter claim --allocate` has no knowledge of the band and will not refuse an allocation inside it*** (`ClaimValidator.Candidates` takes a bare `--floor`). §16.10 corrected. |
 | X-K a stopped CPU and a dropped link; `PlcGetStatus` over S7comm; key on `== 8` | AS SPECIFIED | `S7RunState.Decode` keys on `RunValue = 8`; `S7RunState` has **no `Stopped` member** and a pinning test fails if one is added. Re-confirmed on the rig **2026-08-14**: `Running (8)`. |
 | X-K residual — S7 variable access refused CPU-wide; all data reads go over Modbus | AS SPECIFIED | Re-measured 2026-08-14: `DBRead(38)` and `MBRead(0)` both `0x00040000` while SZL answers. |
@@ -362,6 +367,107 @@ that §NC's own total is one of the numbers that did not survive the census.**
 | 16.12b models and instance DBs share the ≤20 budget | AS SPECIFIED | `BatchPlan` counts them. |
 | 16.12c every removal path must release its claim | **HALF BUILT** (2026-08-17) | `Cleanup` computes eligibility; **`harness-cleanup` now reads the shared claims store and emits the exact `converter claims --release` command per removal**, with `Held` / `NoClaimHeld` / `NotChecked` kept apart. It does **not run it**, on purpose: that binary cannot delete, and a release ahead of the deletion hands the number to the next allocator while the block is still in the project. *Consequence: the leak is narrowed to a human step between delete and release, not closed.* |
 | X-L retain is a HARD restriction; work/load/block-count are governed by minimality; read the budget, never hard-code | AS SPECIFIED | `RetentionCheck`/`RetentionVerdict`; `MirrorGeometry.RetentiveBytes` has **no default**; the mirror is placed above the retentive window because a `%M` tag carries no per-tag retain flag at all. |
+
+---
+
+## §UW — THE UNWIRED COORDINATOR FAMILY (2026-08-24)
+
+**This is DB-4's finding again, at family scale.** DB-4 was one planner with no caller; this is
+**seven types that call only each other and are entered only by their own tests**. The rows above are
+corrected individually; they are collected here because ***a reader who wires `AdmissionController`
+alone will find the next six the hard way.***
+
+**Verified by grep over the working tree on 2026-08-24, class by class** — every occurrence of each
+name in `**/*.cs`, then each occurrence classified as a call, a construction, or a `<see cref>` in a
+doc comment. `wave-cli`'s complete verb set is `route` / `submit` / `status` / `reset` / `batch`
+(`WaveControl.Cli/Program.cs:40-46`); the harness executables are `harness-gate`, `rig-read`,
+`rig-write` (§15a.4). Nothing else in the repo is an entry point into `Ladder.Wave`.
+
+| type / entry point | its only non-test call sites | verdict |
+|---|---|---|
+| `AdmissionController.Admit` (`AdmissionController.cs:49`) | `QueueRehydration.cs:185` — and that caller is itself unreachable | 🔴 **UNREACHABLE** |
+| `QueueRehydrator.Rehydrate` (`QueueRehydration.cs:133`, `:143`) | none; 13 call sites, all in `CoordinatorStateStoreTests.cs` | 🔴 **UNREACHABLE** |
+| `CoordinatorStateStore` (`CoordinatorStateStore.cs:220`, `.InDirectory` `:252`) | none. **`wave-cli` opens the different `WaveStore` instead** (`Program.cs:467-468`) | 🔴 **UNREACHABLE** |
+| `WaveQueues` (`WaveQueues.cs:109`) | constructed once, at `QueueRehydration.cs:169` | 🔴 **UNREACHABLE** |
+| `DrainPolicy.Decide` (`DrainPolicy.cs:275`) | none; only `DrainPolicyTests.cs` | 🔴 **UNREACHABLE** |
+| `EscalationLadder.Decide` (`EscalationLadder.cs:175`) | none; only `EscalationLadderTests.cs` | 🔴 **UNREACHABLE** |
+| `StopOnFailedWaveSetGate` (`RunLoopGate.cs:90`) | `ModelOrdering.cs:412` — and `ModelOrdering.Order` is called only from `ModelOrderingTests.cs` | 🔴 **UNREACHABLE** |
+
+**Three siblings are NOT in this bucket, and the contrast is the point.**
+
+| type | reached from | how it got there |
+|---|---|---|
+| `ChangeRouter.Route` | `WaveControl.Cli/RouteCommand.cs:242` — `wave-cli route` | `be7f17e` |
+| `WaveBoundaryBatchPlanner` | `WaveControl.Cli/BatchCommand.cs` — `wave-cli batch` | `53e9e9c` |
+| `WaveSetAdmission.Admit` | `Program.cs:178` (`submit`), `:217` (`status`) | pre-existing |
+
+⚠️ **`ChangeRouter` in particular must not be swept in.** An earlier statement of this finding listed
+it as dead; it is not, and `RouteCommand.cs:242` is the line that settles it.
+
+### The precedents — both fixed this exact shape by WIRING, not deleting
+
+- **`be7f17e`** *"wave-cli: DB-1 gets an entry point — `route` classifies and routes a real change
+  set"* — 7 files, +2,679 lines, all new: `RouteCommand.cs`, `ChangeClassifier.cs`,
+  `ChangeSetDocument.cs`, `IrCorpus.cs` and their tests.
+- **`53e9e9c`** *"wave-cli batch: DB-4 had no caller, and the 45-object deploy never asked it"* — 7
+  files, +1,801 lines: `BatchCommand.cs`, `tools/derive-db4-change-set.py`, 15 lines into
+  `Program.cs`, the write-up at `docs/notes/db-4-batch-verb.md`, and **the one-line correction to the
+  DB-4 row in this file** that established the wording §UW's rows now reuse.
+
+**Neither commit deleted anything.** In both, the library was correct and the missing thing was a way
+in.
+
+### 🔴 The honest difference — why wiring is the SUCCESSOR item and not this push
+
+***Both precedents were single-shot verbs over a document.*** `wave-cli route` reads a change-set
+JSON and prints a routing report; `wave-cli batch` reads a change set plus a deployed baseline and
+prints a plan. Each is stateless, each finishes, and each could be built and driven against the real
+corpus in one commit.
+
+**An `admit` verb is not that shape.**
+
+1. Admission is defined over a **persistent queue** — `AdmissionDecision.cs:244` keeps a member
+   specifically so *"an edit that forgets the queue cannot produce a"* silently unqueued admission —
+   so wiring `AdmissionController` drags in `WaveQueues` and the persistence under it.
+2. That persistence is `CoordinatorStateStore`, which is a **coordinator lifecycle**, not a verb: it
+   has `BeginWave` / `CompleteWave` / `DiscardInterruptedWave` (`CoordinatorStateStore.cs:519`,
+   `:540`, `:566`), and `wave-cli` today keeps its state in the unrelated `WaveStore`. Two stores with
+   overlapping jobs is a design decision, not a plumbing job.
+3. `Rehydrate` **cannot acquire a caller from an `admit` verb at all.** It only runs when something
+   restarts, so its production caller is whatever owns the coordinator process — and §15a.4 already
+   records that *"`Harness.Loop` is a library with no entry point"*. **The driver that would call it
+   does not exist yet.**
+
+*That is a scope statement, not an abandonment.* The gate is correct code; what it lacks is a process
+to live in.
+
+### Why the marker is not enough on its own
+
+> *"AN ASSERTION THAT CANNOT FAIL IS DOCUMENTATION WEARING A CHECK'S CLOTHES — AND IT IS WORSE THAN A
+> MISSING CHECK, BECAUSE IT OCCUPIES THE SLOT."* — `docs/notes/autonomous-working-agreement.md:551`
+
+A gate nothing calls occupies the §1.2 slot in exactly that way. §1.2, D17, D31 and R6 are four
+separate places a reader could go looking for admission control, and until today all four answered
+*yes, built, cited*. **The marker records the debt; it does not pay it.** The row that is honest about
+being unreachable is still a row where a check ought to be — and this document's own census counts it
+in the 123.
+
+**Bucket cells are deliberately unchanged**, following DB-4's treatment: the buckets are defined over
+what is *built*, `AS SPECIFIED` is literally true of every one of these types, and moving four cells
+would break the mechanical census (**123 / 30 / 22 / 14 = 189**) that §THE COUNTS exists to make
+reproducible. *The dishonesty was never in the bucket; it was in the inference.*
+
+### Two things found here and left alone
+
+- ***`WaveQueueStore` does not exist.*** Five comments reference it as a live type — four as
+  `<see cref>` (`WaveQueues.cs:103`, `:170`, `AdmissionDecision.cs:143`, and
+  `QueueRehydration.cs:138` as `<see cref="WaveQueueStore.Read"/>`) and one in prose
+  (`AdmissionController.cs:113`) — and there is no `class WaveQueueStore` anywhere in `src/`. **The family's own comments describe a persistence layer
+  that was never written**, which is the most economical explanation for why nothing calls any of
+  them. *Whether it was planned and dropped or renamed to `CoordinatorStateStore` is* **unestablished**
+  *— the commit that introduced those crefs would settle it.*
+- **This finding was first written up at `docs/18-project-workbench.md:863-880`.** That entry is
+  pointed at, not relied on: every line of §UW is from the grep and the two commits.
 
 ---
 
