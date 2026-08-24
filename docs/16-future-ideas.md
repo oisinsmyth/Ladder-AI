@@ -39,9 +39,9 @@ IDs are `FI-xx`, citable the same way as `R-xx` (risks), `C-xxx` (conventions), 
 ## Index — coverage repair, 2026-08-23
 
 🔴 **THE SECTION BELOW CALLS ITSELF "THE INDEX", IS DATED 2026-08-05, AND INDEXES ROUGHLY HALF OF
-THIS DOCUMENT.** It is the newest thing a reader meets and it stops at FI-39. **Thirty entries
+THIS DOCUMENT.** It is the newest thing a reader meets and it stops at FI-39. **Thirty-one entries
 are not in it** — `FI-40`…`FI-54` (fifteen, seven of them raised the same day the index was written)
-and `FI-61`…`FI-73` plus `FI-76` and `FI-77` (fifteen, essentially all of the live-job work). A reader who trusts
+and `FI-61`…`FI-73` plus `FI-76`…`FI-78` (sixteen, essentially all of the live-job work). A reader who trusts
 it misses the entire second half of the backlog, including everything learned on real jobs.
 
 ⚠️ **This index states POINTERS AND A DENOMINATOR, and deliberately restates NO status.** That is
@@ -49,7 +49,7 @@ it misses the entire second half of the backlog, including everything learned on
 precisely how the 2026-08-05 section rotted. **Each entry below carries its own authoritative status.
 Go and read it.**
 
-**Denominator: 69 entries exist**, numbered `FI-01`…`FI-54`, `FI-61`…`FI-73`, `FI-76`, `FI-77`.
+**Denominator: 70 entries exist**, numbered `FI-01`…`FI-54`, `FI-61`…`FI-73`, `FI-76`…`FI-78`.
 
 🔴 **AND THE NUMBERING HAS HOLES THAT ARE NOT GAPS IN WORK — `FI-55`…`FI-60`, `FI-74` and `FI-75`
 HAVE NO ENTRY IN THIS FILE AT ALL, YET ARE CITED AS SETTLED FACT ELSEWHERE.** Measured by
@@ -81,7 +81,7 @@ whole page keeps recording. **Whoever did that work owns the entries.**
 | **FI-53** | the reference graph did not credit a read taken THROUGH an array element |
 | **FI-54** | the HMI capability probe programme |
 
-**FI-61 … FI-73, FI-76, FI-77** — Openness, converter and harness work, 2026-08-07 → 08-24:
+**FI-61 … FI-73, FI-76 … FI-78** — Openness, converter and harness work, 2026-08-07 → 08-25:
 
 | | |
 |---|---|
@@ -100,6 +100,7 @@ whole page keeps recording. **Whoever did that work owns the entries.**
 | **FI-73** | an unknown `--flag` was treated as a FILENAME; a stale Release build is how it surfaced |
 | **FI-76** | the map model: derive the block structure from the border, build it in order-waves |
 | **FI-77** | a per-block compile reported the whole program's errors, counting empty parent nodes |
+| **FI-78** | `diff` can declare an insertion but not a deletion, so an add-and-remove cannot pass |
 
 ⚠️ **The entries are NOT in numeric order in this file** — FI-67 precedes FI-66, and FI-71/72/73
 precede FI-68/69/70. Read by heading, not by position.
@@ -2235,3 +2236,46 @@ is which.
 
 **Do NOT "fix" this by trusting the compiler's aggregates instead.** That inverts a defect already
 measured in the other direction and would make a 156-warning compile report zero.
+
+---
+
+### FI-78 — `converter diff` can declare an insertion but not a deletion, so an add-and-remove change cannot pass
+
+- **Status:** **Raised 2026-08-25 — measured on a real change, NOT FIXED.**
+- **Raised:** 2026-08-25 · **Source:** a purpose change that inserted one network and removed
+  another, and could not be proven at exit 0 by the tool whose whole job is proving exactly that.
+
+**The gap.** `converter diff` matches networks on **content, not number**, and a `Moved` network
+**gates** — correctly, because LAD executes in network order. `--insert <n>` is the checked escape
+for an insertion: it declares where a network was added so the following networks' renumbering is
+expected rather than suspicious. **There is no counterpart for a removal.**
+
+So a change that both adds and removes a network is unprovable. Measured: an edit inserting one
+network at position 2 and removing one at position 37 left 31 networks shifted by +1, every one of
+them reported by `diff` itself as *"content unchanged"*, and the strict run exits **1**.
+
+**Why this matters more than it sounds.** The two operations arrive together far more often than
+either arrives alone — replacing a mechanism means adding the new network and deleting the old one,
+which is precisely the shape of a well-executed refactor. The tool is at its least useful on the
+change that most needs it, and its failure mode pushes the author toward the two bad escapes:
+widening `--only` until the gate passes, or splitting one coherent change into two commits that each
+pass while neither reflects what happened.
+
+**What the author did instead, and it is the right pattern to copy until this is fixed:** report the
+strict run at its true exit 1; supply a staged run proving the additive half alone is a clean
+insertion; supply a widened run naming how many networks were proven identical; and prove the
+*ordering* half mechanically outside the tool — extract the ordered network-title sequence before and
+after, drop the one addition and the one removal, and compare. Relative order preserved across every
+surviving network is the property LAD semantics actually depend on, and it is scriptable.
+
+**The likely fix** is a `--remove <n>` counterpart to `--insert <n>`, with the same "declared and
+checked" contract: the caller states where a network was deleted, and the tool verifies the
+renumbering below it is exactly the shift that deletion implies and nothing more. Both flags would
+then mean what `--insert` already means — **ROUTE, not DECLARE**: a change needing either is a purpose
+change and belongs in the purpose-modify path, never the fix path.
+
+🔴 **Do NOT "fix" this by making `Moved` non-gating, or by having the tool infer deletions.** The
+gating is the value: LAD executes in network order and a silent reorder is a behavioural change that
+no other check on the mechanical floor would catch. An inferred deletion is the tool guessing at
+intent, which is the same class of error as a comparator learning to equate more representations.
+The escape must stay **declared by the caller and checked by the tool.**
