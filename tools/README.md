@@ -141,7 +141,7 @@ disabled comparison does not affect.
 
 ## `check-file-budgets.py` — the size ratchet on everything injected (2026-08-21)
 
-`CLAUDE.md`, the three agent briefs and the thirteen skills are loaded before an agent does any
+`CLAUDE.md`, the four agent briefs and the fourteen skills are loaded before an agent does any
 work, so their bytes are a tax on **every** dispatch. `CLAUDE.md` grew **45,130 → 96,245 bytes in
 eleven days and not one commit in that span reduced it** — because no commit ever had to justify
 growth. This makes growth explicit.
@@ -164,8 +164,38 @@ be read*, **2** the gate could not run. A file **not** in the table is ignored, 
 unconditionally; a file **in** the table that vanished is a failure rather than a skip, or the table
 rots and a deletion quietly removes a budget nobody notices is gone.
 
-Bytes are CRLF-equivalent, as for every size figure in this project: `core.autocrlf=true`, so
-`--staged` adds the newline count back rather than reporting the smaller blob.
+Bytes are CRLF-equivalent **on both paths**, as for every size figure in this project:
+`core.autocrlf=true`, so both `--staged` and the default add the newline count back rather than
+reporting the smaller LF figure. Both call the same `crlf_equivalent`, which is what stops them
+drifting apart.
+
+> ⚠️ **This sentence was FALSE until 2026-08-24, and in the permissive direction.** `measure_staged`
+> returned `crlf_equivalent(blob)`; `measure_worktree` returned the raw on-disk length. So one commit
+> measured two different ways — and the **strict** path was the hook's while the **permissive** one
+> was the path a human runs by hand. It only diverges where a budgeted file actually sits on disk with
+> LF, which is why it went unnoticed in the worktrees (all CRLF there) while the **main checkout**
+> carried `.claude/agents/hmi-designer.md` at **7,364** LF bytes against a **7,476** CRLF-equivalent:
+> 316 bytes of headroom by hand versus 204 to the hook, so the by-hand run listed **one** tight file
+> where `--staged` on the same commit listed **two**. Normalising the worktree path — rather than
+> dropping the arithmetic from `--staged` — is the direction that cannot silently loosen a gate.
+> **No budgeted file changed side of its ceiling**: the one behaviour change is that
+> `hmi-designer.md` now appears on the TIGHT report by hand, as it always did to the hook.
+
+### What belongs in the table
+
+**Scope: files injected into an agent's context** — `CLAUDE.md`, `.claude/agents/*.md`,
+`.claude/skills/*/SKILL.md`. As of 2026-08-24 the table is **exhaustive over that scope**: 1 + 4 + 14
+= 19, matching the `files in budget table` line the script prints.
+
+🔴 **Nothing enforces that, and the script cannot notice.** The table is its only input, so a skill or
+agent added tomorrow is simply unbudgeted and the gate passes — exhaustive **today** is an
+observation, not an invariant. Adding the file to `BUDGETS` is a manual step in the commit that
+creates it.
+
+**Source files are not candidates however large they get.** `src/`, `tools/`, `tests/` are read on
+demand rather than preloaded, so their bytes are not a per-dispatch tax and the ratchet has no claim
+on them — the six `src/harness/*.cs` files added on 2026-08-23 by `82af95f` and `7bf400b` are
+out of scope, not omissions.
 
 ### Making it fail closed
 
@@ -184,17 +214,29 @@ shebang — silently disabling the gate.
 
 ### It has been executed, in both directions
 
-`check-file-budgets.tests.py` — 12 cases, offline. Each copies the script into a throwaway tree and
-rewrites **only its `BUDGETS` table** to point at fixtures; every other line, including all the
+`check-file-budgets.tests.py` — **23 cases**, offline. Each copies the script into a throwaway tree
+and rewrites **only its `BUDGETS` table** to point at fixtures; every other line, including all the
 measuring and reporting, runs as shipped.
 
 ```
 python tools/check-file-budgets.tests.py
 ```
 
-Negative-tested by disabling the size comparison: **4 of 12 go red**. The other eight cover the
-permit direction, the staged-set selection and the CRLF arithmetic, which a disabled comparison does
-not affect.
+Two fixture builders, and picking the wrong one hides a defect: `sized(n)` writes **LF**, so the
+script measures it as `n + n//64`; `sized_crlf(n)` writes **CRLF**, so its raw and measured lengths
+are the same number. Boundary cases use `sized_crlf` so the assertion is about the boundary. One
+case was green on the wrong number until 2026-08-24 for exactly this reason — an LF fixture put it
+17 bytes over and `over by 1` matched `over by 17` as a **prefix**; it now asserts the whole line.
+
+Negative-tested twice, both re-derived 2026-08-24:
+
+| comparison disabled | red |
+|---|---|
+| `if size > ceiling` → `if False` | **6 of 23** |
+| `measure_worktree` back to raw `len()` (the asymmetry) | **2 of 23** |
+
+The rest cover the permit direction, the staged-set selection and the CRLF arithmetic, which a
+disabled size comparison does not affect.
 
 **End-to-end, the gate was observed refusing a real commit** — see the commit that introduced it.
 It replaces the earlier CLAUDE.md-only budget script, whose cases are ported here.

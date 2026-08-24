@@ -24,10 +24,29 @@ BYTES. They are not a judgement about the right size - they are a ratchet. That 
 deliberate: nobody can say what the right size for a skill is, but everybody can say
 whether it grew, and growth is the failure mode that actually happened.
 
-BYTES ARE CRLF-EQUIVALENT. core.autocrlf=true here, so git stores these files LF and
-materialises them CRLF; --staged adds the newline count back rather than reporting the
-smaller blob. Every size in this project's record is the worktree number, so without that
-the gate and the commit log disagree by one byte per line.
+BYTES ARE CRLF-EQUIVALENT ON BOTH PATHS. core.autocrlf=true here, so git stores these
+files LF and materialises them CRLF; both --staged and the default add the newline count
+back rather than reporting the smaller LF figure. Every size in this project's record is
+the worktree number, so without that the gate and the commit log disagree by one byte per
+line.
+
+  Fixed 2026-08-24: the default path returned the raw on-disk length while --staged
+  returned the CRLF-equivalent, so ONE COMMIT MEASURED TWO DIFFERENT WAYS - and the
+  permissive path was the one a human runs by hand while the strict one was the hook's.
+  It only diverges where a budgeted file actually sits on disk with LF, which is not
+  hypothetical: the main checkout carried `.claude/agents/hmi-designer.md` at 7,364 LF
+  bytes against a 7,476 CRLF-equivalent, so the by-hand run read 112 bytes more headroom
+  and listed ONE tight file where the hook listed two. Normalising the worktree path
+  (rather than dropping the arithmetic from --staged) is the direction that cannot
+  silently loosen a gate. No budgeted file changed side of its ceiling.
+
+WHAT BELONGS IN THE TABLE: files injected into an agent's context - CLAUDE.md, the agent
+briefs in .claude/agents/, the skills in .claude/skills/*/SKILL.md. As of 2026-08-24 the
+table is EXHAUSTIVE over that scope: 1 + 4 + 14 = 19 files, matching `len(BUDGETS)`.
+NOTHING ENFORCES THAT. A new skill or agent added tomorrow is simply unbudgeted and the
+gate passes, because the table is the script's only input. Source files are NOT candidates
+however large they get - src/, tools/, tests/ are read on demand, not preloaded, so their
+bytes are not a per-dispatch tax and the ratchet has no claim on them.
 
 A file NOT in the table is ignored, so the hook can run unconditionally. A file IN the
 table that has been deleted is a failure, not a skip - otherwise the table rots silently
@@ -167,9 +186,18 @@ def measure_staged(path):
 
 
 def measure_worktree(path):
+    """The SAME arithmetic as measure_staged, deliberately - see the module docstring.
+
+    This returned the raw on-disk length until 2026-08-24. A file already materialised
+    CRLF is unaffected (crlf_equivalent leaves it alone), so the change is only visible on
+    a budgeted file sitting on disk with LF - where the old code read one extra byte of
+    headroom per line and let the by-hand run disagree with the hook about the very same
+    commit. Sharing crlf_equivalent, rather than each path doing its own arithmetic, is
+    what makes the two incapable of drifting apart again.
+    """
     try:
         with open(path, "rb") as handle:
-            return len(handle.read())
+            return crlf_equivalent(handle.read())
     except (IOError, OSError):
         return None
 
@@ -181,7 +209,7 @@ if STAGED:
     source = "staged blobs, CRLF-equivalent"
     checked = [(p, c) for p, c in BUDGETS if p.replace("\\", "/") in in_index]
 else:
-    source = "worktree files"
+    source = "worktree files, CRLF-equivalent"
     checked = list(BUDGETS)
 
 for path, ceiling in checked:

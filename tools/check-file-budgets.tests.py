@@ -41,8 +41,26 @@ def case(name, body):
 
 
 def sized(n):
-    """Exactly n bytes, with realistic line structure."""
+    """Exactly n bytes on disk, LF-terminated, with realistic line structure.
+
+    n is the RAW length here, not the measured one: the script inflates an LF file by its
+    newline count, so a sized(n) fixture MEASURES n + n//64. Use this only where the LF-ness
+    is the point (the CRLF arithmetic cases). Anywhere the case is really about a ceiling or
+    the slack floor, use sized_crlf, whose raw and measured lengths are the same number.
+    """
     body = ("x" * 63 + "\n") * (n // 64)
+    return (body + "y" * (n - len(body))).encode("ascii")
+
+
+def sized_crlf(n):
+    """Exactly n bytes on disk AND exactly n bytes as the script measures - CRLF-terminated.
+
+    This is what a budgeted file in this repo actually looks like: core.autocrlf=true, so
+    every one of them materialises CRLF, and crlf_equivalent leaves an already-CRLF file
+    alone. A boundary case wants a fixture whose two lengths agree, so the assertion is
+    about the boundary and not about line-ending arithmetic happening off to one side.
+    """
+    body = ("x" * 62 + "\r\n") * (n // 64)
     return (body + "y" * (n - len(body))).encode("ascii")
 
 
@@ -121,7 +139,7 @@ def all_under_budget_passes(tmp):
 
 @tmpcase
 def exactly_at_ceiling_passes(tmp):
-    s = build(tmp, [("a.md", 1024)], {"a.md": sized(1024)})
+    s = build(tmp, [("a.md", 1024)], {"a.md": sized_crlf(1024)})
     code, _, _ = run(s)
     assert_eq(code, EXIT_OK, "the ceiling is inclusive")
 
@@ -130,7 +148,7 @@ def exactly_at_ceiling_passes(tmp):
 def tightest_headroom_is_reported(tmp):
     """Shrinking room must be visible before it becomes a failure."""
     s = build(tmp, [("a.md", 1024), ("b.md", 4096)],
-              {"a.md": sized(1000), "b.md": sized(2000)})
+              {"a.md": sized_crlf(1000), "b.md": sized_crlf(2000)})
     _, out, _ = run(s)
     assert_in("tightest headroom", out, "headroom section")
     assert_in("24 bytes", out, "the tightest file's actual headroom")
@@ -148,11 +166,14 @@ def untracked_file_is_ignored_not_failed(tmp):
 
 @tmpcase
 def one_byte_over_fails(tmp):
-    s = build(tmp, [("a.md", 1024)], {"a.md": sized(1025)})
+    # sized_crlf, not sized: with an LF fixture this case measured 1041 and passed on the
+    # substring "over by 1" matching "over by 17" - green for the wrong number.
+    s = build(tmp, [("a.md", 1024)], {"a.md": sized_crlf(1025)})
     code, out, _ = run(s)
     assert_eq(code, EXIT_OVER, "exit code")
     assert_in("GATE FAILED", out, "verdict")
-    assert_in("over by 1", out, "the overage")
+    assert_in("1025 bytes, ceiling 1024, over by 1", out,
+              "the whole line, so 'over by 1' cannot pass as a prefix of 'over by 17'")
 
 
 @tmpcase
@@ -196,7 +217,7 @@ def deleted_budgeted_file_fails(tmp):
 def under_floor_is_reported_and_still_passes(tmp):
     """The whole point: reported, exit 0. Found by eye three times in one day before
     this existed, which is what a budget table exists to stop."""
-    s = build(tmp, [("a.md", 1024)], {"a.md": sized(924)})
+    s = build(tmp, [("a.md", 1024)], {"a.md": sized_crlf(924)})
     code, out, _ = run(s)
     assert_eq(code, EXIT_OK, "under the floor is WITHIN budget and must not gate")
     assert_in("GATE PASSED", out, "the verdict is still a pass")
@@ -209,7 +230,7 @@ def under_floor_is_reported_and_still_passes(tmp):
 def exactly_at_the_floor_is_not_reported(tmp):
     """The rule is AT LEAST 256 bytes of slack, so 256 complies. An off-by-one here
     would put a compliant file on a list headed 'under the floor'."""
-    s = build(tmp, [("a.md", 1024)], {"a.md": sized(768)})
+    s = build(tmp, [("a.md", 1024)], {"a.md": sized_crlf(768)})
     code, out, _ = run(s)
     assert_eq(code, EXIT_OK, "exit code")
     assert_in("UNDER SLACK FLOOR (not a fail) : 0", out, "256 bytes of slack complies")
@@ -219,7 +240,7 @@ def exactly_at_the_floor_is_not_reported(tmp):
 @tmpcase
 def one_byte_under_the_floor_is_reported(tmp):
     """The other side of the boundary."""
-    s = build(tmp, [("a.md", 1024)], {"a.md": sized(769)})
+    s = build(tmp, [("a.md", 1024)], {"a.md": sized_crlf(769)})
     code, out, _ = run(s)
     assert_eq(code, EXIT_OK, "exit code")
     assert_in("255 bytes headroom", out, "one byte under the floor is caught")
@@ -336,6 +357,65 @@ def crlf_blob_is_not_inflated_twice(tmp):
     assert_eq(code, EXIT_OK, "no double count")
 
 
+# --- one commit, one measurement -------------------------------------------------
+#
+# Until 2026-08-24 measure_staged returned crlf_equivalent(blob) and measure_worktree
+# returned the raw on-disk length, so the same commit measured two different ways and the
+# PERMISSIVE path was the one a human runs by hand. It only diverges where a budgeted file
+# sits on disk with LF, which is why it survived: this clone materialises CRLF, but the
+# main checkout carried hmi-designer.md at 7,364 LF bytes against a 7,476 CRLF-equivalent
+# and the by-hand run dropped it off the TIGHT list the hook put it on. These three cases
+# pin the arithmetic to ONE function on BOTH paths.
+
+@tmpcase
+def worktree_lf_file_is_measured_crlf_equivalent(tmp):
+    """The defect, in isolation: an LF file on disk whose CRLF-equivalent size is under
+    the slack floor but whose raw size is not. Measured raw it is silently comfortable;
+    measured as the project records sizes it is tight, which is what the hook already
+    said about the very same bytes."""
+    content = sized(1000)                      # 1000 bytes on disk, 15 newlines
+    assert content.count(b"\n") == 15, "fixture must have the newlines this case turns on"
+    # ceiling 1260: raw headroom 260 (comfortable), CRLF-equivalent headroom 245 (tight)
+    s = build(tmp, [("a.md", 1260)], {"a.md": content})
+    code, out, _ = run(s)
+    assert_eq(code, EXIT_OK, "this is a reporting difference, never a refusal")
+    assert_in("worktree files, CRLF-equivalent", out, "the default path states its arithmetic")
+    assert_in("UNDER SLACK FLOOR (not a fail) : 1", out, "the count line")
+    assert_in("TIGHT   a.md", out, "the tight file is named")
+    assert_in("245 bytes headroom", out, "CRLF-equivalent headroom, not the raw 260")
+
+
+@tmpcase
+def worktree_and_staged_agree_on_one_commit(tmp):
+    """The invariant the two cases above are each half of: identical content, identical
+    ceiling, identical reported size and headroom whichever path measured it. A gate that
+    answers differently depending on who invoked it is not a gate."""
+    content = sized(4096)                      # 4096 bytes on disk, 64 newlines -> 4160
+    s = build(tmp, [("a.md", 4300)], {"a.md": content}, git=True)
+    wcode, wout, _ = run(s)
+    scode, sout, _ = run(s, "--staged")
+    assert_eq(wcode, EXIT_OK, "worktree exit code")
+    assert_eq(scode, EXIT_OK, "staged exit code")
+    assert_in("size 4160", wout, "worktree reports the CRLF-equivalent size")
+    assert_in("size 4160", sout, "staged reports the same size")
+    assert_in("140 bytes headroom", wout, "worktree headroom")
+    assert_in("140 bytes headroom", sout, "and staged agrees to the byte")
+
+
+@tmpcase
+def worktree_crlf_file_is_not_inflated_twice(tmp):
+    """The sibling of the staged case above, on the path that changed. A file already
+    materialised CRLF is already the worktree figure; adding the newline count would
+    invent two bytes here and could push a genuinely compliant file over its ceiling."""
+    content = b"line one\r\nline two\r\n"       # 20 bytes, already CRLF
+    # ceiling 220 makes it tight, so the size is printed and can be asserted
+    s = build(tmp, [("a.md", 220)], {"a.md": content})
+    code, out, _ = run(s)
+    assert_eq(code, EXIT_OK, "exit code")
+    assert_in("size 20", out, "the on-disk figure, not 22")
+    assert_in("200 bytes headroom", out, "no invented bytes")
+
+
 for name, body in [
     ("all under budget passes", all_under_budget_passes),
     ("exactly at the ceiling passes", exactly_at_ceiling_passes),
@@ -357,6 +437,9 @@ for name, body in [
     ("staged mode ignores unstaged budgeted files", staged_mode_ignores_unstaged_budgeted_files),
     ("staged over-budget still fails", staged_over_budget_still_fails),
     ("staged CRLF blob is not inflated twice", crlf_blob_is_not_inflated_twice),
+    ("worktree LF file is measured CRLF-equivalent", worktree_lf_file_is_measured_crlf_equivalent),
+    ("worktree and staged agree on one commit", worktree_and_staged_agree_on_one_commit),
+    ("worktree CRLF file is not inflated twice", worktree_crlf_file_is_not_inflated_twice),
 ]:
     case(name, body)
 

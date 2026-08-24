@@ -94,7 +94,29 @@ imported/compiled (still waiting on its own queue slot), but D-6 is not what's b
 > PROVENANCE: 26 of 26 export(s) compared carry TIA's <DocumentInfo>
 > ```
 >
-> **All six of D-7's named blocks are in that 26 and all six read `MATCH`.** The test that pinned them
+> **All six of D-7's named blocks are in that 26 and all six read `MATCH`** — and here are the six
+> per-object lines that say so, filtered from the same command's own output (re-run 2026-08-24 against
+> the **committed** `simatic-ml/test-project001` corpus, converter built `-c Release`; identical
+> `SUMMARY`/`COMPARED`/`PROVENANCE` tail to the block above):
+>
+> ```
+> MATCH: DB_Settings
+> MATCH: FB_PusherControl
+> MATCH: FB_ShredderSequencer
+> MATCH: iDB_MotorFwdRevSystem_Shredder
+> MATCH: iDB_PusherControl
+> MATCH: iDB_ShredderSequencer
+> ```
+>
+> ⚠️ **Corrected 2026-08-24 — the six-block claim was an assertion layered on a totals line.** Until
+> now this entry pasted only the `SUMMARY`/`COMPARED`/`PROVENANCE` tail, which carries **no per-object
+> verdict at all**: `0 drifted, 26 match` is equally consistent with any 26 of the 43 objects having
+> matched. The claim happened to be true, and is now shown rather than asserted. `drift-check` prints
+> a `MATCH:` / `DRIFT:` / `SKIPPED:` line per object above the summary — quoting the tail alone was a
+> choice, not a tool limitation. **Read the denominator, and do not let a total stand in for the
+> members you actually named.**
+>
+> The test that pinned them
 > says so in its own words — `tests/golden/GoldenHarness.Tests/ExportDriftDetectorTests.cs:87`, section
 > header **`test-project001: D-7 IS DISCHARGED, AND WHAT REMAINS IS NOT D-7`** — and records the route:
 > the three instance DBs left the baseline 2026-08-13 when converter `f2a548a` showed *their reason had
