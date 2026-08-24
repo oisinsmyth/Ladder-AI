@@ -129,16 +129,21 @@ public sealed record StagedCorpus
 /// <summary>
 /// 🔴 <b>WHAT THE BUILD STAMP DID <i>NOT</i> HASH — the half the manifest never stated.</b>
 ///
-/// <para>*** MEASURED, AND WRITTEN DOWN AT <c>docs/18-project-workbench.md:821-829</c>. *** The stamp on
-/// the last wave was derived over <b>8 objects</b> and the parameter DB was not one of them:
-/// <i>"THE BUILD STAMP DOES NOT COVER THE PARAMETERS, SO COMPRESSING THEM CHANGES THE CONTROLLER WITHOUT
-/// CHANGING THE STAMP."</i> Two result packages describing materially different programs would carry the
+/// <para>*** MEASURED, AND WRITTEN DOWN IN <c>docs/18-project-workbench.md</c> §5 <b>"Phase 10 — Wave
+/// time"</b>, under <i>"THE BUILD STAMP DOES COVER THE PARAMETER DB"</i>. *** A wave's stamp was derived
+/// over a program set the parameter DB was not in: <i>"compressing them changes the controller without
+/// changing the stamp."</i> Two result packages describing materially different programs would carry the
 /// SAME stamp, and the verifying gateway — whose entire job is to refuse a program that is not the one
 /// described — would not notice.</para>
 ///
+/// <para>⚠️ <b>THE FIGURE IN THAT ENTRY WAS RETRACTED 2026-08-24 — read it before quoting one.</b> It
+/// originally said <b>eight</b> objects; the deploy added the parameter DB 2 h 32 min later the same
+/// afternoon and the build that ran is stamp <c>622F3EB7</c> over <b>nine</b>. The defect CLASS below is
+/// what this type is for and it is unaffected.</para>
+///
 /// <para><b><see cref="ProgramManifest.HashedNothing"/> already told the ZERO case apart. Nothing told the
-/// SHORT case apart</b>, and short is the case that happened. A manifest saying <i>"here are the 8 objects
-/// I hashed"</i> is equally true whether 8 was the whole program or most of it.</para>
+/// SHORT case apart</b>, and short is the case that happened. A manifest saying <i>"here are the n objects
+/// I hashed"</i> is equally true whether <i>n</i> was the whole program or most of it.</para>
 ///
 /// <para><b>Every count here is printed on every run, including when it is zero.</b>
 /// <c>MirrorViewModel.RegistersStale</c> makes the argument and it applies unchanged: a count that appears

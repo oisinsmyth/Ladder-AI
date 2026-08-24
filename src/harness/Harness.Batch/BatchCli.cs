@@ -121,8 +121,16 @@ public static class BatchCli
                 // deployed. See LaneManifest.
                 case "--manifest": manifest = Next(args, ref i); break;
 
-                // 🔴 `manifest` only. The SUBJECT, by name — the one object every per-block check has to
-                // be pointed at, and the one docs/18:1166-1167 records as absent from the stamp.
+                // 🔴 `manifest` only. The SUBJECT, by name — the one object every per-block check has to be
+                // pointed at, and the one docs/18-project-workbench.md §5 "Phase 10 — Wave time" records as
+                // absent from the stamp: search the phrase "appears only as its instance DB".
+                //
+                // The citation here read `docs/18:1166-1167` and was WRONG IN THE COMMIT THAT WROTE IT —
+                // those lines are the compression-ceiling paragraph, nothing to do with the subject. Third
+                // failure of the same class in two days, hence: re-point by SYMBOL AND SECTION, never a
+                // bare line number.
+                //
+                // It must be a Block. `LaneManifest.Derive` refuses an instance DB, which this accepted.
                 case "--block-under-test": blockUnderTest = Next(args, ref i); break;
                 case "--emit": emitDir = Next(args, ref i); break;
                 case "--check": checkPath = Next(args, ref i); break;
@@ -510,8 +518,10 @@ public static class BatchCli
         // 🔴 *** WHAT THE BUILD STAMP WILL BE MEASURED AGAINST, ON EVERY RUN INCLUDING THE ONE WITH NO
         // ANSWER. *** The union above is what gets HASHED; this is what SHOULD have been. Until they were
         // both stated, a short program set produced a stamp indistinguishable from a complete one —
-        // measured at docs/18-project-workbench.md:821-829, where the parameter DB was staged, unhashed,
-        // and "compressing them changes the controller without changing the stamp".
+        // measured in docs/18-project-workbench.md §5 "Phase 10 — Wave time", under "THE BUILD STAMP DOES
+        // COVER THE PARAMETER DB", where the parameter DB was staged, unhashed, and "compressing them
+        // changes the controller without changing the stamp". (That entry's original eight-object figure
+        // was retracted 2026-08-24; the deployed set was nine.)
         //
         // Derived by the SAME call the plan uses, so the line and the command lines cannot disagree.
         output.WriteLine("  corpus    " + LaneCorpus.Of(lanes).Detail);
@@ -876,6 +886,32 @@ public static class BatchCli
                            + string.Join(", ", hashedSet.ExcludedAsSelfReferential));
         }
 
+        // 🔴 *** EXIT 2 = EXAMINED NOTHING, AND IT IS NEVER A PASS. *** `StampAgreement`'s own docstring
+        // names this shape as the disease — "a bare AGREES over a manifest of zero objects and a stamp of
+        // zero objects is the shape of a check that compared nothing" — and the mitigation chosen was to
+        // PRINT the counts. `ProgramManifest.HashedNothing` was built to tell the case apart and nothing
+        // consulted it, so the emit-directory case that `LaneManifest.Derive`'s own docstring contemplates
+        // produced `manifest AGREES` at exit 0 over a denominator of zero.
+        //
+        // Taken BEFORE the copy layer is written, so a refused invocation leaves nothing behind.
+        //
+        // The value matches the converter's mechanical floor — `candidate-scan`, `undriven-scan`,
+        // `reuse-scan`, `relation-reconcile`, `signal-sweep` all read 2 as "examined nothing" — because a
+        // reader who has learned it there must not have to learn a second convention here.
+        if (hashedSet.HashedNothing)
+        {
+            output.WriteLine("REFUSED  the build stamp hashed NOTHING, so there is no program for a manifest to describe and no comparison "
+                + "to make. Every object supplied as the program under test was excluded as the harness's OWN output"
+                + (hashedSet.ExcludedAsSelfReferential.Count > 0
+                    ? $" ({string.Join(", ", hashedSet.ExcludedAsSelfReferential)})"
+                    : string.Empty)
+                + " — which is what happens when --program is pointed at the --emit directory of an earlier run instead of at the lane's "
+                + "IR. A manifest written here would AGREE with the stamp over a denominator of zero and read exactly like a lane that "
+                + "had been fully checked. EXIT 2 IS \"EXAMINED NOTHING\", the same reading it has across the converter's mechanical "
+                + "floor, and it is never a pass.");
+            return BatchExit.Unusable;
+        }
+
         if (checking)
         {
             var verdict = existing!.AgreesWithStamp(hashedSet);
@@ -895,7 +931,7 @@ public static class BatchCli
             {
                 var path = Path.Combine(args.EmitDir!, obj.Name + ".ir");
                 writeFile(path, obj.Ir);
-                emitted.Add(new EmittedObject(obj.Name, path));
+                emitted.Add(new EmittedObject(obj.Name, path, obj.Kind));
                 output.WriteLine($"  written   {path}");
             }
         }
@@ -911,7 +947,9 @@ public static class BatchCli
         {
             derived = LaneManifest.Derive(
                 args.Lane!,
-                loaded.Select(l => new EmittedObject(l.Object.Name, l.Path)).ToArray(),
+                // 🔴 THE KIND TRAVELS. `LoadedProgramObject` classified it from the IR's own header; dropping
+                // it here is what let `--block-under-test` name an instance DB. See LaneManifest.Derive.
+                loaded.Select(l => new EmittedObject(l.Object.Name, l.Path, l.Object.Kind)).ToArray(),
                 emitted,
                 args.BlockUnderTest,
                 hashedSet,
@@ -935,9 +973,20 @@ public static class BatchCli
         var subject = derived.BlockUnderTest;
         output.WriteLine($"  manifest  DERIVED: {derived.Objects.Count} object(s) across {derived.ProgramPaths.Count} path(s), written to {args.OutPath}");
         output.WriteLine("            " + derived.AgreesWithStamp(hashedSet).Detail);
-        output.WriteLine(subject is null
-            ? "            BLOCK UNDER TEST: none stated. No per-block check can be pointed at this lane — pass --block-under-test <Name>."
-            : $"            BLOCK UNDER TEST: {subject} — IN the stamped set, so changing it changes the stamp.");
+        // 🔴 A LANE THAT NAMES NO SUBJECT STILL RUNS — owner's ruling 2026-08-24, REPORT DO NOT GATE — so
+        // the report is the only thing standing between it and a lane with a verified subject. One
+        // sentence read as an invitation; the banner cannot.
+        if (subject is null)
+        {
+            output.WriteLine("            BLOCK UNDER TEST: none stated.");
+            output.WriteLine("            *** SO NO PER-BLOCK CHECK APPLIES: the stamp moves if ANY object changes,");
+            output.WriteLine("                and nothing here says which one is the subject. ***");
+            output.WriteLine("            Pass --block-under-test <Name> to name it.");
+        }
+        else
+        {
+            output.WriteLine($"            BLOCK UNDER TEST: {subject} — a Block, IN the stamped set, so changing it changes the stamp.");
+        }
         output.WriteLine($"            Enqueue it with:  harness-batch enqueue --queue <dir> --lane {args.Lane} --binding {args.Binding} "
                        + $"--submission {args.Submission} --manifest {args.OutPath}");
 
@@ -992,13 +1041,47 @@ public static class BatchCli
                 return BatchExit.Unusable;
             }
 
+            // 🔴 *** DERIVED HAS TO BE EARNED, AND UNTIL 2026-08-24 IT WAS KEYED ON WHICH FLAG WAS
+            // PASSED. *** A hand-written manifest naming TWO NONEXISTENT FILES with fabricated origins
+            // reported as "program set DERIVED from the manifest" and as "the DENOMINATOR every wave's
+            // build stamp will be reported against". Nothing had emitted it and nothing looked.
+            //
+            // `AgreesWithStamp` had two production call sites and both were inside the `manifest` verb;
+            // this path called only `Read`. It still cannot re-derive a stamp — it holds no copy layer —
+            // but a manifest that WAS emitted records the stamp and a hash per object, so the document can
+            // be checked against the files it names. That is the tie, at the cost of one read per object.
+            if (manifest.Stamp is null)
+            {
+                output.WriteLine("REFUSED  the lane manifest at " + manifestPath + " records NO build stamp, so nothing emitted it — it was "
+                    + "typed. THE WHOLE VALUE OF --manifest IS THAT THE PROGRAM SET WAS EMITTED BY WHATEVER BUILT THE LANE rather than "
+                    + "typed on a command line, and a hand-written document reported as DERIVED is the weaker case wearing the stronger "
+                    + "case's word. Produce one with `harness-batch manifest --lane ... --program ... --emit ... --out ...`, which ties it "
+                    + "to the stamp at birth; or pass --program instead and accept the DECLARED wording, which says out loud that nothing "
+                    + "checked the list.");
+                return BatchExit.Unusable;
+            }
+
+            // Re-read every path the manifest names and re-hash it, with the stamp's own hash rule. The
+            // stamp VALUE cannot be recomputed here, so this is the arm that is available: same names AND
+            // same bytes, or the document is stale.
+            var content = manifest.ContentStillMatches(readFile);
+            if (!content.Holds)
+            {
+                output.WriteLine($"REFUSED  the lane manifest at {manifestPath} no longer describes the files it names. {content.Detail} "
+                    + "The build stamp recorded in this manifest was computed over the OLD content, so enqueueing it would queue a lane "
+                    + "whose stamp claims a program that is not on disk — which is how a lane gets pointed at a pre-fix Main and the stamp "
+                    + "goes with it. Re-run `harness-batch manifest` to emit a current one, or restore the files.");
+                return BatchExit.Refused;
+            }
+
             programs = manifest.ProgramPaths.ToList();
 
             // 🔴 *** THE NAMES, NOT ONLY THE PATHS — AND THE NAMES WERE READ AND THROWN AWAY. *** The
             // paths become `--program`, which the build stamp HASHES; the names become the corpus it is
             // MEASURED AGAINST. Deriving the second from the first cannot work: a path is a file and the
             // stamp matches on the object name, and a denominator taken from the same list as the
-            // numerator can never report a gap. Measured consequence at docs/18-project-workbench.md:821-829.
+            // numerator can never report a gap. Measured consequence in docs/18-project-workbench.md §5
+            // "Phase 10 — Wave time", under "THE BUILD STAMP DOES COVER THE PARAMETER DB".
             staged = manifest.Objects.Select(o => o.Name).ToList();
 
             // 🔴 THREE BUCKETS, NOT TWO. This counted Generated and called EVERY remaining object
@@ -1012,11 +1095,27 @@ public static class BatchCli
                            + $"({generated} generated, {authored} authored, {manifest.Objects.Count - generated - authored} origin unstated) "
                            + $"across {programs.Count} path(s).");
 
+            // 🔴 THE DENOMINATOR BEHIND THE WORD "DERIVED". Printed on the passing path, because "the
+            // manifest checked out" is true of a manifest that had nothing to check.
+            output.WriteLine($"  manifest TIED to build stamp 16#{manifest.Stamp.Value:X8}; content re-verified: {content.Detail}");
+
             // The subject, or the honest absence of one. Two objects claiming the role reads as none here,
             // deliberately: a lane tests one block and guessing which would be worse than declining.
-            output.WriteLine(manifest.BlockUnderTest is { } subject
-                ? $"  block under test DERIVED from the manifest: {subject}."
-                : "  block under test NOT STATED by the manifest, so no per-block check can be pointed at this lane.");
+            //
+            // 🔴 NOTHING GATES ON A SUBJECT — owner's ruling 2026-08-24, report do not gate, and the
+            // intended consumer (`converter undriven-scan --fb`) is NOT wired. See
+            // LaneManifest.BlockUnderTest. So a subjectless lane must be impossible to mistake for a lane
+            // with a verified one, and one apologetic clause was not doing that.
+            if (manifest.BlockUnderTest is { } subject)
+            {
+                output.WriteLine($"  block under test DERIVED from the manifest: {subject}.");
+            }
+            else
+            {
+                output.WriteLine("  BLOCK UNDER TEST: none stated.");
+                output.WriteLine("  *** SO NO PER-BLOCK CHECK APPLIES: the stamp moves if ANY object changes,");
+                output.WriteLine("      and nothing here says which one is the subject. ***");
+            }
             output.WriteLine($"  staged corpus DERIVED from the manifest: {staged.Count} object name(s) — the DENOMINATOR "
                            + "every wave's build stamp will be reported against.");
 

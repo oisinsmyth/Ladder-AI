@@ -115,9 +115,11 @@ public sealed record LoopRequest(
     //
     // `ProgramUnderTest` above is the NUMERATOR: the objects this run hands the stamp to hash. Nothing
     // stated what it SHOULD have hashed, so a SHORT list was indistinguishable from a complete one -
-    // measured at docs/18-project-workbench.md:821-829, where a stamp derived over 8 objects omitted the
-    // parameter DB, "so compressing them changes the controller without changing the stamp". Two result
-    // packages describing materially different programs carried the same stamp.
+    // measured in docs/18-project-workbench.md §5 "Phase 10 — Wave time", under "THE BUILD STAMP DOES
+    // COVER THE PARAMETER DB", where a wave's stamp omitted the parameter DB, "so compressing them changes
+    // the controller without changing the stamp". Two result packages describing materially different
+    // programs carried the same stamp. (⚠️ That entry's original eight-object figure was RETRACTED
+    // 2026-08-24: the deployed set was NINE, stamp 622F3EB7. The shape is what stands, not the number.)
     //
     // It comes from somewhere ELSE than --program, deliberately: the lane manifests, which are emitted by
     // whatever built the lane. `Harness.Batch.LaneCorpus` does that projection and `harness-run --staged`

@@ -974,10 +974,12 @@ public static class LoopCli
     /// <summary>
     /// 🔴 <b>HASHED <i>n</i> OF <i>m</i>, AND WHICH STAGED OBJECTS THE STAMP DID NOT COVER.</b>
     ///
-    /// <para>*** MEASURED AT <c>docs/18-project-workbench.md:821-829</c>: *** the stamp on the last wave
-    /// was derived over 8 objects and the parameter DB was not one of them, so <i>"compressing them changes
-    /// the controller without changing the stamp"</i> — two result packages describing materially different
-    /// programs, one stamp, and a verifying gateway that would not notice.</para>
+    /// <para>*** MEASURED, IN <c>docs/18-project-workbench.md</c> §5 <b>"Phase 10 — Wave time"</b>, under
+    /// <i>"THE BUILD STAMP DOES COVER THE PARAMETER DB"</i>: *** a wave's stamp was derived over a program
+    /// set the parameter DB was not in, so <i>"compressing them changes the controller without changing the
+    /// stamp"</i> — two result packages describing materially different programs, one stamp, and a
+    /// verifying gateway that would not notice. ⚠️ <b>The eight-object figure that entry first carried was
+    /// RETRACTED 2026-08-24: the deployed set was NINE</b> (stamp <c>622F3EB7</c>). The shape stands.</para>
     ///
     /// <para><b>Printed on every run, including the complete one and the one with no denominator.</b> Both
     /// of the other sentences are written by <see cref="StampCoverage.Line"/> itself, so this method never
@@ -1332,7 +1334,8 @@ public static class LoopCli
                 // 🔴 *** AND WHAT IT DID NOT HASH. *** The objects above answer "what was this stamp
                 // computed over"; they cannot answer "was that all of it", and that is the question a
                 // verifying gateway silently got wrong — a stamp over 8 of 9 staged objects reads
-                // identically to a complete one (docs/18-project-workbench.md:821-829). Rendered by the
+                // identically to a complete one (docs/18-project-workbench.md §5 "Phase 10 — Wave time",
+                // under "THE BUILD STAMP DOES COVER THE PARAMETER DB"). Rendered by the
                 // SAME helper the per-package artifact uses, so the run document and the package
                 // documents cannot come to say different things about one derivation.
                 ["coverage"] = ResultPackageJson.CoverageOf(manifest.Coverage),
@@ -1473,8 +1476,10 @@ public static class LoopCli
         output.WriteLine("--staged names WHAT THE DEPLOYMENT STAGED — the DENOMINATOR the build stamp's coverage is reported against,");
         output.WriteLine("         one `Name=source` row per object, e.g. --staged \"DB_Params=lane 'vessel'\". It is NOT --program:");
         output.WriteLine("         --program is what gets HASHED, and a short --program list is indistinguishable from a complete one");
-        output.WriteLine("         unless something else states what should have been in it. MEASURED: a stamp over 8 objects omitted");
-        output.WriteLine("         the parameter DB, so compressing it changed the controller and not the stamp. `harness-batch` emits");
+        output.WriteLine("         unless something else states what should have been in it. MEASURED: a wave's stamp was derived over a");
+        output.WriteLine("         set the parameter DB was not in, so compressing it changed the controller and not the stamp. (The");
+        output.WriteLine("         deployed set was NINE objects, stamp 622F3EB7 — an earlier `eight objects` figure was retracted on");
+        output.WriteLine("         2026-08-24; docs/18-project-workbench.md, section 5, `Phase 10 - Wave time`.) `harness-batch` emits");
         output.WriteLine("         these rows from the lane manifests; nothing derives them from --program, which would be the numerator");
         output.WriteLine("         measuring itself. WITH NONE, the run reports NO DENOMINATOR in as many words — an empty gap list is");
         output.WriteLine("         not a clean sheet. THE CORPUS IS NOT A STAMP INPUT: the same objects give the same stamp with or");

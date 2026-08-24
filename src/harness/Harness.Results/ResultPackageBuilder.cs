@@ -172,7 +172,8 @@ public static class ResultPackageBuilder
         // 🔴 *** A STAGED OBJECT THE STAMP DOES NOT COVER IS EXACTLY WHAT A CAVEAT IS: something this
         // result's validity rests on that has NOT been measured. *** The validity stamp claims "a program
         // hashing to this was executing"; an object outside the hash can change under it without moving
-        // it, which is how a changed controller kept an unchanged stamp (docs/18:821-829).
+        // it, which is how a changed controller kept an unchanged stamp (docs/18-project-workbench.md §5
+        // "Phase 10 — Wave time", under "THE BUILD STAMP DOES COVER THE PARAMETER DB").
         //
         // Only when a manifest was supplied — see the `program` parameter. And the LINE is quoted rather
         // than paraphrased, so the caveat carries the device residual with it and cannot be read as a

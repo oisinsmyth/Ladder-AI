@@ -11,9 +11,11 @@ namespace Harness.Loop.Tests;
 ///
 /// <para>Phase 6 Y3 gave <c>BuildStamp.Derive</c> a denominator and left it unfed on purpose: nothing
 /// supplied a <see cref="StagedCorpus"/>, so every real run printed the no-corpus sentence. That was the
-/// honest state and not a closed item — <b>a stamp over 8 objects with the parameter DB missing reads
-/// exactly like a complete one</b> (docs/18-project-workbench.md:821-829), which is how a changed
-/// controller kept an unchanged stamp.</para>
+/// honest state and not a closed item — <b>a stamp with the parameter DB missing reads exactly like a
+/// complete one</b> (docs/18-project-workbench.md §5 "Phase 10 — Wave time", under <i>"THE BUILD STAMP
+/// DOES COVER THE PARAMETER DB"</i>; ⚠️ its original eight-object figure was retracted 2026-08-24 — the
+/// deployed set was nine, stamp <c>622F3EB7</c>), which is how a changed controller kept an unchanged
+/// stamp.</para>
 ///
 /// <para><b>Three things are asserted together, and the third is the one that could quietly rot.</b> The
 /// corpus reaches the derivation; the no-corpus sentence is STILL reachable from a hand-driven run; and

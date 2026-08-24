@@ -40,15 +40,24 @@ public sealed class StagedCorpusFromLaneManifestsTests : IDisposable
         return path;
     }
 
-    /// <summary>A lane manifest for <paramref name="lane"/> naming <paramref name="objects"/>.</summary>
+    /// <summary>
+    /// A lane manifest for <paramref name="lane"/> naming <paramref name="objects"/>.
+    ///
+    /// <para>🔴 <b>EMITTED, not hand-built, and that is the whole point of the change.</b> This method used
+    /// to construct a <c>LaneManifest</c> in memory over a directory path that did not exist, and
+    /// <c>enqueue</c> reported the set as <c>DERIVED</c> anyway — it was keyed on the flag. The manifest is
+    /// now tied to a stamp record over real files, which is the only kind <c>enqueue</c> will accept.</para>
+    /// </summary>
     private string Manifest(string lane, params string[] objects)
     {
-        var manifest = new LaneManifest(
+        EmittedManifests.Write(
             lane,
-            objects.Select(o => new ManifestObject(o, Path.Combine(_root, lane + "-ir"), ObjectOrigin.Generated)).ToArray(),
-            Array.Empty<string>());
+            Path.Combine(_root, lane + "-ir"),
+            Path.Combine(_root, lane + "-manifest.json"),
+            blockUnderTest: null,
+            objects.Select(o => new EmittedManifests.Object(o, HarnessObjectKind.Block, $"BLOCK FB {o}\nNETWORK 1 \"n\"\n")).ToArray());
 
-        return Write(lane + "-manifest.json", manifest.ToJson());
+        return Path.Combine(_root, lane + "-manifest.json");
     }
 
     private (int Exit, string Output) Enqueue(string queue, string lane, params string[] extra)

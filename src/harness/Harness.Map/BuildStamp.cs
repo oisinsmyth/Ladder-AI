@@ -98,13 +98,19 @@ public readonly record struct BuildStamp(uint Value)
     /// <summary>
     /// 🔴 <b>THE DERIVATION, ALSO STATING WHAT IT DID <i>NOT</i> HASH.</b>
     ///
-    /// <para>*** MEASURED, AND WRITTEN DOWN AT <c>docs/18-project-workbench.md:821-829</c>. *** The overload
-    /// above records the objects it hashed, and that was already the fix for one real failure. It never
-    /// stated the DENOMINATOR. The stamp on the last wave was derived over <b>8 objects</b> and the
-    /// parameter DB was not one of them, so <i>"compressing them changes the controller without changing
-    /// the stamp"</i> — two result packages describing materially different programs would carry the SAME
-    /// stamp, and the verifying gateway would not notice. <see cref="ProgramManifest.HashedNothing"/> told
-    /// the ZERO case apart; <b>nothing told the SHORT case apart</b>, and short is the case that happened.</para>
+    /// <para>*** MEASURED, AND WRITTEN DOWN IN <c>docs/18-project-workbench.md</c> §5 <b>"Phase 10 — Wave
+    /// time"</b>, under <i>"THE BUILD STAMP DOES COVER THE PARAMETER DB"</i>. *** The overload above records
+    /// the objects it hashed, and that was already the fix for one real failure. It never stated the
+    /// DENOMINATOR — and a stamp that is SHORT reads exactly like a complete one, so two result packages
+    /// describing materially different programs would carry the SAME stamp and the verifying gateway would
+    /// not notice. <see cref="ProgramManifest.HashedNothing"/> told the ZERO case apart; <b>nothing told the
+    /// SHORT case apart</b>, and short is the case that happened.</para>
+    ///
+    /// <para>⚠️ <b>READ THE RETRACTION AT THAT SECTION BEFORE QUOTING THE FIGURE.</b> The entry as first
+    /// written said the stamp was derived over <b>eight</b> objects with the parameter DB absent; that was
+    /// <b>retracted 2026-08-24</b>. The deploy added the DB 2 h 32 min later the same afternoon and the
+    /// build that ran is stamp <c>622F3EB7</c> over <b>NINE objects, not eight</b>. The shape above is what
+    /// stands; the number does not.</para>
     ///
     /// <para>🔴 <b>THE CORPUS IS A DENOMINATOR, NOT AN INPUT — THE HASH IS BYTE-FOR-BYTE UNCHANGED BY IT.</b>
     /// Nothing about which objects a lane STAGED is on the controller, so hashing it would move every stamp
@@ -241,10 +247,7 @@ public readonly record struct BuildStamp(uint Value)
 
             // Recorded HERE, in the loop that feeds the hash, so the manifest cannot describe a different
             // set from the one that was stamped.
-            hashed.Add(new ProgramManifestEntry(
-                obj.Kind.ToString(),
-                obj.Name,
-                Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(obj.Ir))).ToLowerInvariant()));
+            hashed.Add(new ProgramManifestEntry(obj.Kind.ToString(), obj.Name, ProgramManifestEntry.HashOf(obj.Ir)));
         }
 
         excludedAsSelfReferential = selfReferential;
@@ -289,7 +292,21 @@ public readonly record struct BuildStamp(uint Value)
 /// stamp that no longer matches, and "the same twelve names" is equally true of twelve files that have
 /// since been edited. The hash is what distinguishes a different SET from a changed one.
 /// </param>
-public sealed record ProgramManifestEntry(string Kind, string Name, string Sha256);
+public sealed record ProgramManifestEntry(string Kind, string Name, string Sha256)
+{
+    /// <summary>
+    /// 🔴 <b>THE ONE DERIVATION OF THE CONTENT HASH.</b> The stamp records it here; anything that later
+    /// asks <i>"is the file at this path still the file that was hashed?"</i> — <c>LaneManifest</c> does,
+    /// on behalf of <c>harness-batch enqueue</c> — must ask it the SAME way or the two comparisons are
+    /// about two different numbers.
+    ///
+    /// <para>This project has paid for a second derivation of a rule before: <c>GateParityTests</c> exists
+    /// because two copies of the gate composition disagreed on twelve inputs. So the rule is written once
+    /// and called twice, rather than written twice and hoped about.</para>
+    /// </summary>
+    public static string HashOf(string ir) =>
+        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(ir ?? string.Empty))).ToLowerInvariant();
+}
 
 /// <summary>
 /// 🔴 <b>WHAT THE BUILD STAMP WAS COMPUTED OVER — recorded so a run can be reproduced.</b>
