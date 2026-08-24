@@ -794,11 +794,77 @@ public static class SubmissionGate
     }
 
     // -------------------------------------------------------------------------------------------------
+    // The cross-form sweep every D6 gate runs BEFORE it compares anything
+    // -------------------------------------------------------------------------------------------------
+
+    /// <summary>
+    /// 🔴 <b>ONE SWEEP, SHARED BY EVERY D6 GATE, AND IT RUNS BEFORE THE FIRST COMPARISON.</b>
+    ///
+    /// <para><b>The defect it closes, measured 2026-08-24.</b> Identity comparison was exact string
+    /// equality and the repo carries TWO identity vocabularies at once — role labels in every
+    /// committed submission, instance labels (<c>&lt;session-id&gt;/&lt;agent-type&gt;</c>) from the
+    /// claims convention. A binding stamped in one and a submission stamped in the other <b>cannot
+    /// collide</b>, so the gates returned "these are different parties" having compared two
+    /// namespaces. <b>That is a gate discriminating on formatting.</b></para>
+    ///
+    /// <para><b>Why it takes the WHOLE gate rather than the offending pair.</b> A verdict on the
+    /// comparable subset, silent about the rest, is the partially-attributed shape gate 3d already
+    /// refuses by name: <i>"a partially-attributed set is not an attributed one"</i>. So one
+    /// cross-form pair reads NOT CHECKED for the gate, and the detail states the denominator — how
+    /// many of how many — because nothing found and nothing looked at are not the same result.</para>
+    ///
+    /// <para>Returns <c>null</c> when every pair is comparable, so a caller reads
+    /// <c>if (CrossFormStop(...) is { } stop) return stop;</c> and then compares normally.</para>
+    /// </summary>
+    private static GateResult? CrossFormStop(
+        string gate,
+        AgentIdentity subject,
+        string subjectLabel,
+        string counterpartyKind,
+        IReadOnlyList<(string Label, AgentIdentity Identity)> counterparties)
+    {
+        if (!subject.IsRecorded)
+            return null;
+
+        var recorded = counterparties.Where(c => c.Identity.IsRecorded).ToArray();
+        var mismatched = recorded.Where(c => !subject.CanCompareWith(c.Identity)).ToArray();
+
+        if (mismatched.Length == 0)
+            return null;
+
+        return GateResult.CouldNotRun(gate, NotCheckedReason.AwaitingAnArtifactThatCouldExist,
+            "both sides of the comparison written in ONE identity vocabulary",
+            IdentityVocabulary.CrossFormDetail(
+                $"{subjectLabel} against {mismatched.Length} of {recorded.Length} recorded {counterpartyKind} ({string.Join(", ", mismatched.Select(m => m.Label))})",
+                subject, mismatched[0].Identity));
+    }
+
+    /// <summary>The counterparty list every D6 gate sweeps against: the block's author, then each vector's.</summary>
+    private static (string Label, AgentIdentity Identity)[] AuthorsOf(IReadOnlyList<SubmissionVector> vectors, AgentIdentity blockAuthor) =>
+        new[] { ("the block's author", blockAuthor) }
+            .Concat(vectors.Select(v => (v.Id, v.Author)))
+            .ToArray();
+
+    // -------------------------------------------------------------------------------------------------
     // 2 — authorship (D6)
     // -------------------------------------------------------------------------------------------------
 
+    /// <remarks>
+    /// 🔴 <b>THE CROSS-FORM CHECK COMES FIRST, AND IT TAKES THE WHOLE GATE.</b> A submission whose
+    /// block author is a role label and whose vector authors are instance labels has never had a
+    /// collision TESTED, and reporting "the authors differ" on it would be reporting the string
+    /// formats. One vector in the wrong vocabulary is enough: a gate that verdicts on the comparable
+    /// subset and stays silent about the rest is the partially-attributed shape gate 3d already
+    /// refuses.
+    /// </remarks>
     private static GateResult Authorship(IReadOnlyList<SubmissionVector> vectors, AgentIdentity blockAuthor)
     {
+        if (CrossFormStop("2 authorship (D6)", blockAuthor, "the block's author", "vector author(s)",
+                vectors.Select(v => (v.Id, v.Author)).ToArray()) is { } stop)
+        {
+            return stop;
+        }
+
         var problems = new List<string>();
 
         if (!blockAuthor.IsRecorded)
@@ -808,13 +874,13 @@ public static class SubmissionGate
         {
             if (!v.Author.IsRecorded)
                 problems.Add($"{v.Id}: the vector's author is not recorded.");
-            else if (blockAuthor.IsRecorded && v.Author.SameAs(blockAuthor))
+            else if (blockAuthor.IsRecorded && v.Author.IsSamePartyAs(blockAuthor))
                 problems.Add($"{v.Id}: '{v.Author}' wrote both the block and the vector. That is a correlated check and it is a refusal, not a warning.");
         }
 
         return new GateResult("2 authorship (D6)", GateStatus.Checked, problems.Count == 0, nameof(AgentIdentity),
             problems.Count == 0
-                ? $"vector author(s) differ from the block author '{blockAuthor}' under a normalised comparison. NOTE: what MAKES two agents different is undefined — see AgentIdentity."
+                ? $"vector author(s) differ from the block author '{blockAuthor}' under a normalised comparison, both sides in the same identity vocabulary. NOTE: the string is a LABEL for a different context instance and not a proof of one — docs/notes/test-environment-contract.md §1.1."
                 : string.Join(" | ", problems));
     }
 
@@ -1000,9 +1066,15 @@ public static class SubmissionGate
                 + "That is the shape found live: a model BLOCK existed, a model DECLARATION did not, and the model id occurred only inside the vector file. Unknown is not independent.");
         }
 
+        if (CrossFormStop(name, fidelity.DeclaredBy, $"model '{fidelity.ModelId}'s declarer", "author(s)",
+                AuthorsOf(vectors, blockAuthor)) is { } stop)
+        {
+            return stop;
+        }
+
         var problems = new List<string>();
 
-        foreach (var v in vectors.Where(v => v.Author.IsRecorded && fidelity.DeclaredBy.SameAs(v.Author)))
+        foreach (var v in vectors.Where(v => v.Author.IsRecorded && fidelity.DeclaredBy.IsSamePartyAs(v.Author)))
         {
             problems.Add($"{v.Id}: '{fidelity.DeclaredBy}' both wrote this vector and declared what model '{fidelity.ModelId}' represents. "
                 + "*** THE FIDELITY LIST IS SUPPLIED BY THE PARTY WHOSE VECTORS IT LICENSES *** — M4 permits an assertion only if the model claims that behaviour, so an author who writes both permits their own assertions.");
@@ -1011,7 +1083,7 @@ public static class SubmissionGate
         // The block author is a DIFFERENT conflict and gets its own sentence: a model declared by the
         // block's author describes what the implementation is believed to do, which is the correlated
         // reading this pipeline exists to break.
-        if (blockAuthor.IsRecorded && fidelity.DeclaredBy.SameAs(blockAuthor))
+        if (blockAuthor.IsRecorded && fidelity.DeclaredBy.IsSamePartyAs(blockAuthor))
         {
             problems.Add($"'{fidelity.DeclaredBy}' both wrote the block and declared what model '{fidelity.ModelId}' represents. The model then describes what the implementation is believed to do, and a vector admitted against it is agreeing with the block by construction.");
         }
@@ -1069,16 +1141,31 @@ public static class SubmissionGate
                 $"{which}, so it cannot be shown independent of the block's author. If the block's author decomposed the requirement, D6's independence is lost AT THE DENOMINATOR and citing into it buys nothing. Unknown is not independent.");
         }
 
+        // The cross-form sweep covers EVERY enumeration for the same reason the unrecorded check above
+        // does: one enumerator in the other vocabulary leaves that denominator's independence untested,
+        // and a partially-attributed set is not an attributed one.
+        var counterparties = AuthorsOf(vectors, blockAuthor);
+
+        foreach (var enumeration in enumerations.Enumerations)
+        {
+            var subject = enumerations.IsSingle
+                ? "the enumeration's enumerator"
+                : $"[{AssertionEnumerationSet.DisplaySubject(enumeration.Subject)}]'s enumerator";
+
+            if (CrossFormStop("3d enumerator independence", enumeration.Enumerator, subject, "author(s)", counterparties) is { } stop)
+                return stop;
+        }
+
         var problems = new List<string>();
 
         foreach (var enumeration in enumerations.Enumerations)
         {
             var where = enumerations.IsSingle ? string.Empty : $"[{AssertionEnumerationSet.DisplaySubject(enumeration.Subject)}] ";
 
-            if (blockAuthor.IsRecorded && enumeration.Enumerator.SameAs(blockAuthor))
+            if (blockAuthor.IsRecorded && enumeration.Enumerator.IsSamePartyAs(blockAuthor))
                 problems.Add($"{where}'{enumeration.Enumerator}' both wrote the block and enumerated its assertions. The denominator is then the block author's own reading of the requirement, and a vector citing into it is agreeing with the block by construction.");
 
-            foreach (var v in vectors.Where(v => v.Author.IsRecorded && enumeration.Enumerator.SameAs(v.Author)))
+            foreach (var v in vectors.Where(v => v.Author.IsRecorded && enumeration.Enumerator.IsSamePartyAs(v.Author)))
                 problems.Add($"{v.Id}: {where}'{enumeration.Enumerator}' both enumerated the assertions and wrote this vector. The enumeration is meant to be a THIRD party to both authors.");
         }
 
@@ -1738,11 +1825,20 @@ public static class SubmissionGate
                 + "*** NOTHING FOUND AND NOTHING LOOKED AT ARE NOT THE SAME RESULT, *** and reporting the first while doing the second is how this gate would pass every submission that simply says less.");
         }
 
+        // 🔴 THE PAIRING THIS WHOLE GUARD WAS BUILT FOR. A binding produced under the claims convention
+        // carries `<session-id>/<agent-type>`; every committed submission's blockAuthor is `lad-coder`.
+        // Those two never collide, so this gate PASSED — on the formatting, having compared nothing.
+        if (CrossFormStop(name, map.MapAuthor, "the map's declarer", "author(s)",
+                AuthorsOf(vectors, blockAuthor)) is { } stop)
+        {
+            return stop;
+        }
+
         var problems = new List<string>();
 
         // The block author is the limb M-19 names, and it gets its own sentence: a map written by the
         // block's author bounds what anyone may observe of that author's own logic.
-        if (blockAuthor.IsRecorded && map.MapAuthor.SameAs(blockAuthor))
+        if (blockAuthor.IsRecorded && map.MapAuthor.IsSamePartyAs(blockAuthor))
         {
             problems.Add($"'{map.MapAuthor}' both wrote the block and declared the binding this observability map is derived from. "
                 + "*** THE PARTY UNDER TEST DECIDED WHAT CAN BE SEEN OF IT: *** every vector's expectation is admitted or refused against this map, so a signal left out of it is a behaviour nothing can be written against, and a mode left off is an expectation refused before anything is spent.");
@@ -1755,7 +1851,7 @@ public static class SubmissionGate
         // committed deliverable: the per-vector form emitted the same 300-character paragraph 27 times,
         // and a refusal nobody finishes reading is a refusal nobody acts on. The ids are still all here,
         // and the count is stated against the total so the reader can see how much of the set is affected.
-        var conflicted = vectorAuthors.Where(v => map.MapAuthor.SameAs(v.Author)).ToArray();
+        var conflicted = vectorAuthors.Where(v => map.MapAuthor.IsSamePartyAs(v.Author)).ToArray();
 
         if (conflicted.Length > 0)
         {

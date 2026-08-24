@@ -192,6 +192,34 @@ public class AdmissibilityTests
     }
 
     [Fact]
+    public void CROSS_FORM_AUTHORSHIP_IS_ITS_OWN_REASON_and_is_NOT_a_finding_that_the_parties_MATCH()
+    {
+        // 🔴 A role label and an instance label cannot collide, so admitting on "they differ" would be
+        // admitting on the formatting. This type owns no NOT CHECKED channel — a refusal is its
+        // strictest outcome — so the DISTINCTION lives in the reason name and the detail text.
+        var refusal = Assert.Single(Check(vectorAuthor: "session_015D8Gn9KXogXP6UxXZzHeFj/lad-coder", blockAuthor: "lad-coder").Refusals);
+
+        Assert.Equal(RefusalReason.AuthorshipNotComparable, refusal.Reason);
+        Assert.NotEqual(RefusalReason.AuthorshipCorrelated, refusal.Reason);
+        Assert.Contains("an INSTANCE label (<session-id>/<agent-type>)", refusal.Detail, StringComparison.Ordinal);
+        Assert.Contains("a ROLE label", refusal.Detail, StringComparison.Ordinal);
+        Assert.Contains("This is a RULING and not a bug", refusal.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void THE_CONTROL_both_authors_in_ONE_vocabulary_still_get_a_real_verdict_in_both_directions()
+    {
+        // The guard must not silence what worked. Two instance labels that DIFFER are admissible on the
+        // authorship limb; two that MATCH are still the correlated refusal.
+        Assert.DoesNotContain(
+            Check(vectorAuthor: "sess-1/vector-author", blockAuthor: "sess-1/lad-coder").Refusals,
+            r => r.Reason is RefusalReason.AuthorshipCorrelated or RefusalReason.AuthorshipNotComparable);
+
+        var collide = Assert.Single(Check(vectorAuthor: "sess-1/lad-coder", blockAuthor: "sess-1/lad-coder").Refusals);
+        Assert.Equal(RefusalReason.AuthorshipCorrelated, collide.Reason);
+    }
+
+    [Fact]
     public void An_unobservable_vector_is_refused_because_a_green_that_cannot_mean_anything_is_worse()
     {
         Assert.Contains(Check(observabilitySupported: false).Refusals, r => r.Reason == RefusalReason.Unobservable);

@@ -146,12 +146,17 @@ public class SubmissionGateTests
         BlockCompressionInputs? compressionInputs = null,
         SignalStorageMap? storage = null,
         string? scenarioEndInput = ScenarioEndInput,
-        int? maxIndexScans = null) =>
+        int? maxIndexScans = null,
+        // The two third-party identities, overridable so the cross-form tests can move ONE string at a
+        // time. Everything else in this fixture is a role label, so a single instance-form override is
+        // exactly the mixed tree the guard exists for.
+        string fidelityDeclaredBy = "agent-m",
+        string enumeratedBy = "agent-c") =>
         SubmissionGate.Check(
             vectors ?? new[] { Vector() },
             enumeration ?? AssertionEnumeration.Of(new[] { "REQ-014" }, new[] { AssertionIdValue },
-                new Dictionary<string, AssertionForm> { [AssertionIdValue] = AssertionForm.When }, "agent-c", Texts, Observations, SpecifiedBounds),
-            FidelityDeclaration.Of("M_Ramp", new[] { "ramp-to-limit" }, new[] { "overshoot" }, true, declaredBy: "agent-m"),
+                new Dictionary<string, AssertionForm> { [AssertionIdValue] = AssertionForm.When }, enumeratedBy, Texts, Observations, SpecifiedBounds),
+            FidelityDeclaration.Of("M_Ramp", new[] { "ramp-to-limit" }, new[] { "overshoot" }, true, declaredBy: fidelityDeclaredBy),
             new AgentIdentity(blockAuthor),
             // The DEFAULT fixture stands for a COMPLETE submission, which means the map came from the
             // coordinator's bindings. A caller-supplied map keeps its own provenance, because the whole
@@ -1721,5 +1726,184 @@ public class SubmissionGateTests
         Assert.Equal(StorageJoin.InStorage, map.Resolve("Demo_Count"));
         Assert.Equal(StorageJoin.NotStated, map.Resolve("Some.Path.Demo_Count"));
         Assert.Equal(StorageJoin.NotStated, map.Resolve("Path.Demo_Count"));
+    }
+
+    // =============================================================================================
+    // CROSS-FORM IDENTITY — the vacuous green, at every D6 gate (2026-08-24)
+    //
+    // 🔴 The defect: this repo carries TWO identity vocabularies at once. Role labels — `lad-coder`,
+    // `vector-author-b-5.2`, `model-fidelity-declarer-1` — in every committed submission, and instance
+    // labels `<session-id>/<agent-type>` from the claims convention. Exact string equality can never
+    // make those collide, so a gate handed one of each reported "different parties" HAVING COMPARED
+    // NOTHING. Each test below is paired with a control that must still return a real verdict: a guard
+    // that silences the working comparisons has replaced one wrong answer with another.
+    // =============================================================================================
+
+    /// <summary>A session-id-shaped instance label, the form `converter claim --agent` already takes.</summary>
+    private const string InstanceLabel = "session_015D8Gn9KXogXP6UxXZzHeFj/lad-coder";
+
+    /// <summary>A SECOND instance label — same session, different agent type. Comparable with the first.</summary>
+    private const string OtherInstanceLabel = "session_015D8Gn9KXogXP6UxXZzHeFj/assertion-enumerator";
+
+    [Fact]
+    public void GATE_5c_AN_INSTANCE_FORM_MAP_DECLARER_AGAINST_A_ROLE_FORM_BLOCK_AUTHOR_IS_NOT_CHECKED()
+    {
+        // 🔴 *** THE CASE THE WHOLE GUARD EXISTS FOR, AND IT WAS A GREEN. *** The binding comes out of a
+        // session running the claims convention; the block author is `lad-coder`, as every committed
+        // submission's is. Before this guard the gate compared the two literals, found them unequal and
+        // PASSED — reporting that the party who decided what can be seen of the block is somebody else,
+        // on the strength of a slash.
+        var report = Check(map: MapDeclaredBy(InstanceLabel));
+        var gate = Gate(report, "5c map authority");
+
+        Assert.Equal(GateStatus.NotChecked, gate.Status);
+        Assert.Equal(NotCheckedReason.AwaitingAnArtifactThatCouldExist, gate.Reason);
+        Assert.False(gate.Passed);
+        Assert.Equal(SubmissionVerdict.NotAdmissible, report.Verdict);
+
+        // The text has to tell a reader WHICH is which, that it is a ruling and not a bug, and what the
+        // repair is. Asserted rather than trusted, because that is the whole value of a NOT CHECKED.
+        Assert.Contains("an INSTANCE label (<session-id>/<agent-type>)", gate.Detail, StringComparison.Ordinal);
+        Assert.Contains("a ROLE label", gate.Detail, StringComparison.Ordinal);
+        Assert.Contains("This is a RULING and not a bug", gate.Detail, StringComparison.Ordinal);
+        Assert.Contains("committed artifacts are NOT retrofitted", gate.Detail, StringComparison.Ordinal);
+        Assert.Contains("test-environment-contract.md", gate.Detail, StringComparison.Ordinal);
+
+        // *** THE DENOMINATOR. *** 2 recorded authors here: the block's, and V-1's.
+        Assert.Contains("2 of 2 recorded author(s)", gate.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void GATE_5c_THE_CONTROL_TWO_INSTANCE_LABELS_STILL_GET_A_REAL_VERDICT()
+    {
+        // Both sides in the SAME vocabulary, and different parties: this must still PASS. A guard that
+        // sent every instance label to NOT CHECKED would make the convention useless on arrival.
+        var vectors = new[] { Vector(author: OtherInstanceLabel) };
+        var gate = Gate(Check(vectors, blockAuthor: InstanceLabel, map: MapDeclaredBy(Coordinator + "/coordinator")), "5c map authority");
+
+        Assert.Equal(GateStatus.Checked, gate.Status);
+        Assert.True(gate.Passed);
+    }
+
+    [Fact]
+    public void GATE_5c_THE_OTHER_CONTROL_TWO_MATCHING_INSTANCE_LABELS_ARE_STILL_REFUSED()
+    {
+        // Same vocabulary, SAME party — the collision the gate exists to catch, now expressed in the new
+        // form. NOT CHECKED must not have swallowed the refusal path.
+        var vectors = new[] { Vector(author: OtherInstanceLabel) };
+        var gate = Gate(Check(vectors, blockAuthor: InstanceLabel, map: MapDeclaredBy(InstanceLabel)), "5c map authority");
+
+        Assert.Equal(GateStatus.Checked, gate.Status);
+        Assert.False(gate.Passed);
+        Assert.Contains("THE PARTY UNDER TEST DECIDED WHAT CAN BE SEEN OF IT", gate.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void GATE_2_A_ROLE_BLOCK_AUTHOR_AGAINST_INSTANCE_VECTOR_AUTHORS_IS_NOT_CHECKED_naming_the_denominator()
+    {
+        // One of the two vectors is in the other vocabulary. That is enough: a verdict on the comparable
+        // half, silent about the rest, is the partially-attributed shape 3d already refuses.
+        var vectors = new[] { Vector(), Vector(id: "V-2", author: InstanceLabel) };
+        var gate = Gate(Check(vectors), "2 authorship");
+
+        Assert.Equal(GateStatus.NotChecked, gate.Status);
+        Assert.Equal(NotCheckedReason.AwaitingAnArtifactThatCouldExist, gate.Reason);
+        Assert.Contains("1 of 2 recorded vector author(s) (V-2)", gate.Detail, StringComparison.Ordinal);
+
+        // V-1 was comparable and is NOT named as a problem — the message says which vector is in the
+        // other vocabulary, so the reader is not sent to re-stamp a file that was already correct.
+        Assert.DoesNotContain("V-1", gate.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void GATE_2_THE_CONTROL_two_ROLE_labels_that_DIFFER_still_PASS_and_two_that_MATCH_are_still_REFUSED()
+    {
+        // 🔴 Both directions in one test, because the pair is the assertion: the guard must not silence a
+        // comparison that was working, in EITHER of its two outcomes.
+        var differ = Gate(Check(), "2 authorship");
+        Assert.Equal(GateStatus.Checked, differ.Status);
+        Assert.True(differ.Passed);
+
+        var collide = Gate(Check(new[] { Vector(author: "agent-a") }), "2 authorship");
+        Assert.Equal(GateStatus.Checked, collide.Status);
+        Assert.False(collide.Passed);
+        Assert.Contains("wrote both the block and the vector", collide.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void GATE_4b_AN_INSTANCE_FORM_FIDELITY_DECLARER_AGAINST_ROLE_AUTHORS_IS_NOT_CHECKED()
+    {
+        var gate = Gate(Check(fidelityDeclaredBy: InstanceLabel), "4b fidelity authority");
+
+        Assert.Equal(GateStatus.NotChecked, gate.Status);
+        Assert.Equal(NotCheckedReason.AwaitingAnArtifactThatCouldExist, gate.Reason);
+        Assert.Contains("model 'M_Ramp's declarer", gate.Detail, StringComparison.Ordinal);
+        Assert.Contains("2 of 2 recorded author(s)", gate.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void GATE_4b_THE_CONTROL_a_ROLE_declarer_still_PASSES_and_a_COLLIDING_one_is_still_REFUSED()
+    {
+        var third = Gate(Check(), "4b fidelity authority");
+        Assert.Equal(GateStatus.Checked, third.Status);
+        Assert.True(third.Passed);
+
+        var collide = Gate(Check(fidelityDeclaredBy: "agent-a"), "4b fidelity authority");
+        Assert.Equal(GateStatus.Checked, collide.Status);
+        Assert.False(collide.Passed);
+        Assert.Contains("both wrote the block and declared what model", collide.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void GATE_3d_AN_INSTANCE_FORM_ENUMERATOR_AGAINST_ROLE_AUTHORS_IS_NOT_CHECKED()
+    {
+        var gate = Gate(Check(enumeratedBy: InstanceLabel), "3d enumerator independence");
+
+        Assert.Equal(GateStatus.NotChecked, gate.Status);
+        Assert.Equal(NotCheckedReason.AwaitingAnArtifactThatCouldExist, gate.Reason);
+        Assert.Contains("the enumeration's enumerator", gate.Detail, StringComparison.Ordinal);
+        Assert.Contains("2 of 2 recorded author(s)", gate.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void GATE_3d_THE_CONTROL_a_ROLE_enumerator_still_PASSES_and_a_COLLIDING_one_is_still_REFUSED()
+    {
+        var third = Gate(Check(), "3d enumerator independence");
+        Assert.Equal(GateStatus.Checked, third.Status);
+        Assert.True(third.Passed);
+
+        var collide = Gate(Check(enumeratedBy: "agent-a"), "3d enumerator independence");
+        Assert.Equal(GateStatus.Checked, collide.Status);
+        Assert.False(collide.Passed);
+        Assert.Contains("both wrote the block and enumerated its assertions", collide.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AN_INDETERMINATE_LABEL_IS_NOT_CHECKED_TOO_and_it_says_NEITHER_vocabulary()
+    {
+        // A doubled separator fits neither vocabulary. It is not rounded into the nearer one — "both
+        // unclassifiable" is not evidence that two strings are the same kind of thing.
+        var gate = Gate(Check(map: MapDeclaredBy("session//lad-coder")), "5c map authority");
+
+        Assert.Equal(GateStatus.NotChecked, gate.Status);
+        Assert.Contains("in NEITHER vocabulary", gate.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void EVERY_CROSS_FORM_NOT_CHECKED_IS_CLOSABLE_OFFLINE_and_none_is_a_design_property()
+    {
+        // The claim `NotCheckedReason` makes about itself: no NOT CHECKED in this system is a property of
+        // the design. Each of these closes the moment both sides are produced under the convention.
+        var gates = new[]
+        {
+            Gate(Check(map: MapDeclaredBy(InstanceLabel)), "5c map authority"),
+            Gate(Check(new[] { Vector(author: InstanceLabel) }), "2 authorship"),
+            Gate(Check(fidelityDeclaredBy: InstanceLabel), "4b fidelity authority"),
+            Gate(Check(enumeratedBy: InstanceLabel), "3d enumerator independence"),
+        };
+
+        Assert.Equal(4, gates.Length);
+        Assert.All(gates, g => Assert.True(g.IsClosableOffline, $"{g.Gate} is not closable offline"));
+        Assert.All(gates, g => Assert.Contains("Unknown is not independent.", g.Detail, StringComparison.Ordinal));
     }
 }

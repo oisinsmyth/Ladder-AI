@@ -75,15 +75,64 @@ Where it comes from, both read at their source rather than through a summary:
   the transcriber**, not a particular person."* D6 is a **relation between roles**, and the identity
   string is only how that relation is asserted.
 
+#### 🔴 AND THE STRING NOW HAS A FORM — DEFINED 2026-08-24, THE SAME DAY, AND FOR A MEASURED REASON
+
+The section above says the string is *a label, not a proof*, and deliberately declines to define it.
+**That was one ruling short.** The repo carries **two identity vocabularies at once**, and until this
+was written nothing said so:
+
+| vocabulary | shape | where it lives |
+|---|---|---|
+| **role** | a name for the JOB, no separator — `lad-coder`, `vector-author-b-5.2`, `model-fidelity-declarer-1`, `assertion-enumerator` | **every committed submission**, and every fixture |
+| **instance** | `<session-id>/<agent-type>` | the claims convention (`CLAUDE.md`; `.claude/agents/lad-coder.md:119`) — `converter claim --agent` has taken this shape since 2026-08-23 |
+
+> ***THE INSTANCE FORM IS THE CONVENTION FOR NEW ARTIFACTS. COMMITTED ARTIFACTS ARE NOT RETROFITTED.
+> AND THEREFORE: COMPARING AN IDENTITY IN ONE FORM AGAINST AN IDENTITY IN THE OTHER IS NOT CHECKED,
+> NEVER A PASS.***
+
+**Why the third outcome had to exist.** `AgentIdentity.SameAs` was `Trim()` + `OrdinalIgnoreCase`
+exact match returning a `bool`. A binding stamped `<session>/lad-coder` and a submission stamped
+`lad-coder` are the same party twice over — and the comparison said `false`, so **gate 5c PASSED**,
+reporting *"none of them the same party, so what can be SEEN of this block was decided by somebody who
+neither wrote it nor wrote the tests"*. Measured on the real gate at `3f30b5e`, that exact sentence.
+Not because the parties differed, but because the strings were in different namespaces: **a gate
+discriminating on formatting.** A `bool` has no room for *"these two are not in the same vocabulary"*,
+which is why the return type changed rather than the comparison being patched.
+
+**How the two are told apart, and it is a heuristic.** The separator and only the separator: no `/` is
+a role, exactly one `/` with both sides present is an instance, **anything else touching the separator
+fits neither and compares against nothing**. Keying on the shape of the session id instead would mean
+inventing a grammar nobody has published, and the first id that failed to match would silence a gate
+on exactly the new material the convention exists for. ⚠️ **A role label containing one slash would
+read as an instance** — no rule separates `a/b` from `<session>/lad-coder`. That case is decided
+deliberately, is hypothetical today (no identity string anywhere in `gen/`, `src/` or `docs/` contains
+a slash, checked 2026-08-24), and both the rule and its limits are argued in place at
+`IdentityVocabulary` (`src/harness/Harness.Results/SubmissionVector.cs:504`) with a test per limit.
+
+**The consequence, and it is the honest one to state up front.** Every committed submission is
+role-form, so a gate handed one of them plus a convention-produced binding now reads **NOT CHECKED
+rather than the green it used to read**. That is not a regression: *the green was never a result.*
+🔴 **The first real verdict from gates 2, 3d, 4b and 5c comes from NEW material built under the
+convention — not from a retrofit, which is ruled out, and not from anything already in the tree.**
+The NOT CHECKED is `AwaitingAnArtifactThatCouldExist`: it closes the moment both sides of a comparison
+are produced under the convention, and it says so in its own text.
+
+**Where it is enforced.** `IdentityForm` / `IdentityRelation` / `IdentityVocabulary`
+(`SubmissionVector.cs:416`, `:448`, `:504`); the shared sweep `SubmissionGate.CrossFormStop`
+(`:819`), called by gate 2 (`:862`), gate 4b (`:1069`), gate 3d (`:1155`) and gate 5c (`:1831`);
+and `Admissibility.cs:527`, which owns no NOT CHECKED channel and so files it as the distinct refusal
+`AuthorshipNotComparable` — **fail-closed, and explicitly not a finding that the parties match.**
+
 #### The graded ceiling — say which level a claim rests on
 
 The definition is safe to accept because the ceiling above it is graded rather than absent. Two of the
-five levels are already built, and they are the two that do not depend on the string at all.
+six levels — L2 and L4 — are already built, and they are the two that do not depend on the string at all.
 
 | level | what it establishes | state |
 |---|---|---|
-| **L0** | identity **unrecorded** ⇒ never a pass | ✅ **built, fail-closed both ways.** Gate 2 and `Admissibility.Check` make an unrecorded author a **refusal** (`SubmissionGate.cs:795`, `:800`; `Admissibility.cs:497`); gates 3d and 4b make an unrecorded enumerator / declarer **NOT CHECKED** (`SubmissionGate.cs:1049`, `:1059`; `:987`). *"Unknown is not independent"* is the phrase all four use |
-| **L1** | a **normalised self-declared string** differs | ✅ **built — this is where the system is.** `AgentIdentity.SameAs`, `SubmissionVector.cs:397-400`: `Trim()` + `OrdinalIgnoreCase`. ***Every*** D6 comparison routes through it — gate 2 (`SubmissionGate.cs:802`), gate 3d (`:1069`, `:1072`), gate 4b (`:996`, `:1005`) and `Admissibility.cs:502`; **nothing in the D6 family is bare ordinal.** **Defeats a typo, a case change and a trailing space; defeated by typing a different string** |
+| **L0** | identity **unrecorded** ⇒ never a pass | ✅ **built, fail-closed both ways.** Gate 2 and `Admissibility.Check` make an unrecorded author a **refusal** (`SubmissionGate.cs:869`, `:874`; `Admissibility.cs:517`); gates 3d and 4b make an unrecorded enumerator / declarer **NOT CHECKED** (`SubmissionGate.cs:1140`; `:1063`). *"Unknown is not independent"* is the phrase all four use |
+| **L0b** | identity in a **vocabulary the other side is not in** ⇒ never a pass | ✅ **built 2026-08-24, and it sits BELOW L1 because it decides whether L1 may run at all.** `AgentIdentity.SameAs` returns `IdentityRelation {NotComparable, SameParty, DifferentParties}` (`SubmissionVector.cs:591`), swept once per gate by `CrossFormStop` (`:819`). See the form ruling above — **a cross-form comparison is NOT CHECKED, and it used to be a green** |
+| **L1** | a **normalised self-declared string** differs | ✅ **built — this is where the system is,** *within one vocabulary.* `AgentIdentity.SameAs`, `SubmissionVector.cs:591`: `Trim()` + `OrdinalIgnoreCase` once L0b has cleared. ***Every*** D6 comparison routes through it — gate 2 (`SubmissionGate.cs:877`), gate 3d (`:1165`, `:1168`), gate 4b (`:1077`, `:1086`), gate 5c (`:1841`, `:1854`) and `Admissibility.cs:527`; **nothing in the D6 family is bare ordinal.** **Defeats a typo, a case change and a trailing space; defeated by typing a different string** |
 | **L2** | **provenance of the artifact** rather than the name on it | ✅ **already built, and unbypassable by typing.** `MapProvenance {Unstated, SelfDeclared, Bindings}` (`SubmissionVector.cs:126-154`), consumed by gate 5 (`SubmissionGate.cs:1562`). It asks *which route the tool loaded this artifact by*, and a self-declared map is NOT CHECKED rather than a pass |
 | **L3** | **environment-stamped identity at production time** | ❌ **not built.** Bypassable only by a deliberate act, not by a keystroke |
 | **L4** | make identity **irrelevant** by recomputing the artifact | ✅ **already built twice.** Gate 3g `IdsRecompute` — its own comment is *"THE RECOMPUTATION THAT MAKES THE STAMPER SAFE TO BE ANYBODY"* (`SubmissionGate.cs:1124`, method at `:1145`) — and gate 0c `DerivedFields` (`:399`), which refuses a field a tool already knows when it was typed by hand |
@@ -117,7 +166,7 @@ Recorded because the asymmetry is deliberate and was nowhere written down.
 
 | site | comparison | why that direction is the safe one |
 |---|---|---|
-| **D6 identity**, `SubmissionVector.cs:399` | `Trim()` + `OrdinalIgnoreCase` — **loose** | It gates a **refusal**. Loosening it makes the gate catch *more* collisions: `"AGENT-B "` and `agent-b` are refused as the same party. A tighter comparison here would let a keystroke buy a pass |
+| **D6 identity**, `SubmissionVector.cs:591` | `Trim()` + `OrdinalIgnoreCase` — **loose** *(within one vocabulary; across two it does not compare at all — L0b above)* | It gates a **refusal**. Loosening it makes the gate catch *more* collisions: `"AGENT-B "` and `agent-b` are refused as the same party. A tighter comparison here would let a keystroke buy a pass |
 | **Claim release**, `src/converter/Converter/Claims/ClaimStore.cs:240`, `:247` | bare `StringComparison.Ordinal`, no trim — **strict** | It gates a **permission** — releasing another agent's claim. Loosening it would let a near-miss name *acquire* the right to delete a peer's reservation. The refusal path is already correct and `--force` is the declared override |
 
 ***Loose is safe for a refusal; strict is safe for a permission.*** Neither is a bug, and neither

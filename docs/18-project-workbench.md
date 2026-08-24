@@ -957,9 +957,12 @@ string*.
 ⚠️ **AND THE MECHANISM THIS PARAGRAPH CITED WAS WRONG. CORRECTED 2026-08-24 — see the provenance note
 below.** It read *"the code compares two strings with `StringComparison.Ordinal`"*. It does not, and
 has not since `5d4fa62` (2026-08-13): `AgentIdentity.SameAs`
-(`src/harness/Harness.Results/SubmissionVector.cs:397-400`) is `Trim()` + `OrdinalIgnoreCase`, and
-gate 2 (`SubmissionGate.cs:802`), gate 3d (`:1069`, `:1072`), gate 4b (`:996`, `:1005`) and
-`Admissibility.cs:502` all route through it. **The substance stands and must not be lost with the
+(`src/harness/Harness.Results/SubmissionVector.cs:591`) is `Trim()` + `OrdinalIgnoreCase`, and
+gate 2 (`SubmissionGate.cs:877`), gate 3d (`:1165`, `:1168`), gate 4b (`:1077`, `:1086`), gate 5c
+(`:1841`, `:1854`) and `Admissibility.cs:527` all route through it. **And since 2026-08-24 it returns
+a THREE-valued `IdentityRelation` rather than a `bool`** — a role label and an instance label
+(`<session-id>/<agent-type>`) are `NotComparable` and every one of those gates reads NOT CHECKED, per
+`docs/notes/test-environment-contract.md` §1.1's form ruling. **The substance stands and must not be lost with the
 citation: a normalised string is still a string somebody types**, so the gate establishes
 non-collision of *names*, not independence of *parties*. **A contention run is still worth scheduling;
 what it cannot produce on its own is evidence that two *agents* contended rather than two processes.**
@@ -1288,8 +1291,9 @@ cost to get wrong.* Two facts settle it:
 
    ⚠️ **THE STRUCTURAL LIMIT THAT SURVIVES, AND IT MUST NOT BE LOST IN THIS CORRECTION.** Gate 3d's
    independence is a **normalised string comparison** — `AgentIdentity.SameAs`,
-   `src/harness/Harness.Results/SubmissionVector.cs:397-400`, `Trim()` + `OrdinalIgnoreCase`, called
-   at `SubmissionGate.cs:1069` and `:1072`. **So dispatching the enumerator proves that a
+   `src/harness/Harness.Results/SubmissionVector.cs:591`, `Trim()` + `OrdinalIgnoreCase`, called
+   at `SubmissionGate.cs:1165` and `:1168` — and only after the cross-form sweep at `:1155` has shown
+   both sides are in the same identity vocabulary. **So dispatching the enumerator proves that a
    differently-named party produced the denominator. It does not prove a differently-*constituted*
    one did.** The skill page says the same thing one level down for the enumeration itself: *"nothing
    binds that block to an enumeration produced by a third party, beyond the `enumerator` identity
@@ -1593,7 +1597,7 @@ opinion.** That single sentence is why §3 is the most valuable part of this des
   dispatch `assertion-enumerator` with `enumerate-assertions` against a block with no enumeration,
   grade it with gate 3d, and see whether coverage moves — and names the ceiling on it: gate 3d is a
   **normalised comparison over a self-declared identity string**
-  (`AgentIdentity.SameAs`, `src/harness/Harness.Results/SubmissionVector.cs:397-400`). ⚠️ **This read
+  (`AgentIdentity.SameAs`, `src/harness/Harness.Results/SubmissionVector.cs:591`). ⚠️ **This read
   *"an ordinal comparison over an identity nobody has defined"* until 2026-08-24; both halves are now
   corrected** — the comparison is normalised (`5d4fa62`), and the identity is defined at
   `docs/notes/test-environment-contract.md` §1.1, which also grades the ceiling.

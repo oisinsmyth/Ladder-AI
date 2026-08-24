@@ -555,6 +555,15 @@ public static class BatchPlanner
         // Compared with the identity's own normalisation — trim, then case-insensitively — and not
         // ordinally, so `"agent-a"` and `"Agent-A "` are one voice here exactly as AgentIdentity.SameAs
         // makes them one party at the gate.
+        //
+        // *** IT IS DELIBERATELY NOT FORM-AWARE, AND THE ASYMMETRY IS SAFE IN THIS DIRECTION.  *** Since
+        // 2026-08-24 `AgentIdentity` distinguishes a ROLE label from an INSTANCE label
+        // `<session-id>/<agent-type>` and refuses to compare across them (docs/notes/
+        // test-environment-contract.md §1.1). This collapse asks a DIFFERENT question — did every lane
+        // name the same coordinator — and two lanes naming one coordinator in two forms are two distinct
+        // strings here, so the merged document declares NOBODY and gate 5c reads NOT CHECKED. That is the
+        // same fail-closed outcome the gate would reach itself, arrived at one step earlier; the failure
+        // this must never have is a collapse that hides a conflict, and a stricter comparison cannot.
         var distinct = named
             .Select(d => d.Binding.DeclaredBy!.Trim())
             .Distinct(StringComparer.OrdinalIgnoreCase)

@@ -319,6 +319,26 @@ public enum RefusalReason
     /// <summary>The vector's author is the block's author (D6) — the correlated check this pipeline exists to prevent.</summary>
     AuthorshipCorrelated,
 
+    /// <summary>
+    /// 🔴 <b>THE TWO AUTHOR STRINGS ARE IN DIFFERENT IDENTITY VOCABULARIES, SO NOTHING WAS COMPARED.</b>
+    ///
+    /// <para><b>It is emphatically NOT a finding that the two parties are the same</b> — that is
+    /// <see cref="AuthorshipCorrelated"/> and it is a different fact with a different repair. This is
+    /// D6's NOT CHECKED: a role label and an instance label
+    /// (<c>&lt;session-id&gt;/&lt;agent-type&gt;</c>) cannot collide however correlated the parties
+    /// behind them are, so admitting on "they differ" would be admitting on the formatting.</para>
+    ///
+    /// <para>⚠️ <b>IT IS A REFUSAL BECAUSE THIS TYPE OWNS NO OTHER FAIL-CLOSED OUTCOME, AND THAT IS A
+    /// DELIBERATE DEVIATION WORTH KNOWING ABOUT.</b> The D6 gates in <c>SubmissionGate</c> report
+    /// cross-form as <c>NOT CHECKED</c>, which is the ruling's word for it.
+    /// <c>Admissibility.Check</c> returns a refusal list and nothing else — the same reason
+    /// <see cref="AuthorshipCorrelated"/> already carries "authorship is not recorded on both sides".
+    /// The alternative was to leave the vector ADMISSIBLE, which is exactly the vacuous pass. A
+    /// refusal here is the strictest outcome the type can express; the reason name and the detail text
+    /// carry the distinction the enum could not.</para>
+    /// </summary>
+    AuthorshipNotComparable,
+
     /// <summary>The settling condition is the completion flag re-cited, which is not a settling condition.</summary>
     SettlingIsTheCompletionFlag,
 
@@ -499,10 +519,23 @@ public sealed record Admissibility(IReadOnlyList<(RefusalReason Reason, string D
             refusals.Add((RefusalReason.AuthorshipCorrelated,
                 "authorship is not recorded on both sides, so D6's independence cannot be established. Unknown is not independent."));
         }
-        else if (vectorAuthor.SameAs(blockAuthor))
+        else
         {
-            refusals.Add((RefusalReason.AuthorshipCorrelated,
-                $"'{vectorAuthor}' wrote both the block and the vector. That is a correlated check, and it is a refusal rather than a warning. (The comparison is NORMALISED - trimmed and case-folded - which is strictly tighter than the ordinal one it replaces, and closes the variants a keystroke would otherwise defeat.)"));
+            // *** THE THIRD OUTCOME IS SPELT OUT RATHER THAN FALLING THROUGH. *** `SameAs` returns a
+            // relation and not a bool precisely because `NotComparable` used to arrive here as `false`
+            // and be admitted, so the switch names all three and the compiler keeps it that way.
+            switch (vectorAuthor.SameAs(blockAuthor))
+            {
+                case IdentityRelation.SameParty:
+                    refusals.Add((RefusalReason.AuthorshipCorrelated,
+                        $"'{vectorAuthor}' wrote both the block and the vector. That is a correlated check, and it is a refusal rather than a warning. (The comparison is NORMALISED - trimmed and case-folded - which is strictly tighter than the ordinal one it replaces, and closes the variants a keystroke would otherwise defeat.)"));
+                    break;
+
+                case IdentityRelation.NotComparable:
+                    refusals.Add((RefusalReason.AuthorshipNotComparable,
+                        IdentityVocabulary.CrossFormDetail("the vector's author against the block's author", vectorAuthor, blockAuthor)));
+                    break;
+            }
         }
 
         // --- observability -------------------------------------------------------------------------

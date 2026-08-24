@@ -407,15 +407,160 @@ public sealed record SubmissionVector(
     IReadOnlyDictionary<string, string>? BoundsUsed = null);
 
 /// <summary>
+/// 🔴 <b>WHICH IDENTITY VOCABULARY A STRING IS WRITTEN IN. TWO EXIST IN THIS REPO AT ONCE.</b>
+///
+/// <para><b><see cref="Indeterminate"/> IS 0 ON PURPOSE</b> — a <c>default(IdentityForm)</c> that
+/// arrives from anywhere is the value that compares against nothing, so forgetting to classify fails
+/// closed instead of joining a vocabulary by accident.</para>
+/// </summary>
+public enum IdentityForm
+{
+    /// <summary>
+    /// Fits NEITHER vocabulary. <b>Comparable with nothing — not even with another
+    /// <c>Indeterminate</c></b>, because "both unclassifiable" is not evidence that both are the
+    /// same kind of thing.
+    /// </summary>
+    Indeterminate = 0,
+
+    /// <summary>
+    /// The ROLE vocabulary: a name for the JOB, carrying no separator — <c>lad-coder</c>,
+    /// <c>vector-author-b-5.2</c>, <c>model-fidelity-declarer-1</c>. Every committed submission is
+    /// in this form and <b>none is being retrofitted</b>.
+    /// </summary>
+    Role,
+
+    /// <summary>
+    /// The INSTANCE vocabulary, ruled 2026-08-24: <c>&lt;session-id&gt;/&lt;agent-type&gt;</c>, the
+    /// shape <c>converter claim --agent</c> already takes (<c>CLAUDE.md</c>; <c>lad-coder.md:119</c>).
+    /// The convention for NEW artifacts.
+    /// </summary>
+    Instance,
+}
+
+/// <summary>
+/// What comparing two <see cref="AgentIdentity"/> values established. <b>Three outcomes, because two
+/// were not enough</b> — see <see cref="AgentIdentity.SameAs"/>.
+///
+/// <para><b><see cref="NotComparable"/> IS 0 ON PURPOSE</b>, the same reason as
+/// <see cref="IdentityForm.Indeterminate"/>: the value you get by not deciding is the value that is
+/// not a verdict.</para>
+/// </summary>
+public enum IdentityRelation
+{
+    /// <summary>
+    /// 🔴 <b>NOT A VERDICT.</b> The two strings are in different vocabularies (or one is in neither),
+    /// so they could not have collided however correlated the two parties actually are. <b>Treating
+    /// this as "different parties" is the vacuous pass this enum exists to prevent.</b>
+    /// </summary>
+    NotComparable = 0,
+
+    /// <summary>One party wearing two hats. A refusal at every D6 site.</summary>
+    SameParty,
+
+    /// <summary>Two parties, compared and found distinct. The only shape that is a pass.</summary>
+    DifferentParties,
+}
+
+/// <summary>
+/// 🔴 <b>TELLING THE TWO IDENTITY VOCABULARIES APART — A HEURISTIC, AND THE LIMITS ARE STATED HERE
+/// RATHER THAN IMPLIED AWAY.</b>
+///
+/// <para><b>THE RULE: the separator, and only the separator.</b> A normalised identity with no
+/// <c>/</c> is a <see cref="IdentityForm.Role"/>; one with exactly one <c>/</c> and something on both
+/// sides of it is an <see cref="IdentityForm.Instance"/>; <b>anything else that touches the separator
+/// is <see cref="IdentityForm.Indeterminate"/></b> and compares against nothing.</para>
+///
+/// <para><b>Why the separator and not the session id.</b> The ruling defines the INSTANCE form and
+/// deliberately leaves the role form undefined (<c>docs/notes/test-environment-contract.md</c> §1.1:
+/// the string is a label, not a proof). So the only thing a classifier may key on is the mark the
+/// ruling itself introduced. Keying on the shape of the left-hand side instead would mean inventing a
+/// session-id grammar nobody has published, and the first session id that did not match it would
+/// silence a gate on exactly the new material the convention exists to make checkable.</para>
+///
+/// <para>⚠️ <b>WHERE IT FAILS, BOTH DIRECTIONS, AND WHICH WAY THE AMBIGUOUS CASE WAS SENT.</b></para>
+/// <list type="bullet">
+/// <item><description><b>An instance label that lost its session prefix</b> reads as a Role. There is
+/// nothing to distinguish it from one — and under the convention <c>--agent</c> is DERIVED, never
+/// invented, so a bare agent type is a convention violation rather than an instance label. Cost when
+/// it happens: compared against a real instance label it goes NOT CHECKED, which is the quiet
+/// direction.</description></item>
+/// <item><description>🔴 <b>A ROLE LABEL THAT HAPPENS TO CONTAIN ONE SLASH READS AS AN INSTANCE, AND
+/// THAT IS THE DECIDED CASE.</b> No mechanical rule separates <c>a/b</c> from
+/// <c>&lt;session&gt;/lad-coder</c>. Sending it to <c>Indeterminate</c> instead would have been safer
+/// against one pairing and worse against another — an <c>Indeterminate</c> is never comparable, so a
+/// slash-bearing role compared against an ordinary role would go quiet too. It is sent to
+/// <c>Instance</c> because <b>the committed role vocabulary contains no slash</b> — every identity
+/// string in <c>gen/</c>, <c>src/</c> and <c>docs/</c> on 2026-08-24 was <c>lad-coder</c>,
+/// <c>vector-author-5.2</c>, <c>vector-author-b-5.2</c>, <c>model-fidelity-declarer-1</c>,
+/// <c>assertion-enumerator</c> or an <c>agent-x</c> fixture — so the case is hypothetical today and
+/// the alternative silences a real one. <b>If a slash ever enters a role label this rule is wrong and
+/// this paragraph is where to start.</b></description></item>
+/// </list>
+///
+/// <para><b>What the rule is NOT.</b> It does not verify that a session id is real, that an agent type
+/// exists, or that the party named did the work. It answers one question — <i>which vocabulary is
+/// this string written in</i> — and everything else about identity is still L1 (§1.1's ladder).</para>
+/// </summary>
+public static class IdentityVocabulary
+{
+    /// <summary>Classify a normalised identity string. See the type comment for the rule and its limits.</summary>
+    public static IdentityForm FormOf(string? normalised)
+    {
+        if (string.IsNullOrWhiteSpace(normalised))
+            return IdentityForm.Indeterminate;
+
+        var parts = normalised.Split('/');
+
+        if (parts.Length == 1)
+            return IdentityForm.Role;
+
+        // Exactly one separator, and neither side empty. A leading, trailing or doubled slash fits
+        // neither vocabulary, so it is not quietly rounded into one.
+        if (parts.Length == 2
+            && !string.IsNullOrWhiteSpace(parts[0])
+            && !string.IsNullOrWhiteSpace(parts[1]))
+        {
+            return IdentityForm.Instance;
+        }
+
+        return IdentityForm.Indeterminate;
+    }
+
+    /// <summary>Short human name for a form, for the NOT CHECKED text.</summary>
+    public static string Describe(IdentityForm form) => form switch
+    {
+        IdentityForm.Role => "a ROLE label",
+        IdentityForm.Instance => "an INSTANCE label (<session-id>/<agent-type>)",
+        _ => "in NEITHER vocabulary",
+    };
+
+    /// <summary>
+    /// The one sentence every cross-form NOT CHECKED says, so five gates cannot drift into five
+    /// different accounts of the same ruling. <paramref name="what"/> names the pairing in the gate's
+    /// own words, e.g. <c>"the model's declarer against the block's author"</c>.
+    /// </summary>
+    public static string CrossFormDetail(string what, AgentIdentity left, AgentIdentity right) =>
+        $"comparing {what} was NOT CHECKED: '{left}' is {Describe(left.Form)} and '{right}' is {Describe(right.Form)}. "
+        + "*** TWO IDENTITY VOCABULARIES, AND ACROSS THEM A COMPARISON CANNOT COLLIDE — so a pass here would report the string formats, "
+        + "not the parties. *** This is a RULING and not a bug: the instance form is the convention for NEW artifacts (2026-08-24) and "
+        + "committed artifacts are NOT retrofitted, so a mixed tree is expected. The repair is that both sides be produced under the "
+        + "convention — never that an old artifact be edited to match. docs/notes/test-environment-contract.md §1.1. Unknown is not independent.";
+}
+
+/// <summary>
 /// Who wrote something, for D6's independence check.
 ///
 /// <para><b>Structured rather than a bare string, and the comparison is normalised</b> — but the
 /// underlying question is not settled. D6 turns on "a different agent", and what makes two agents
-/// different (session? model? worktree? role?) is <b>not defined anywhere</b>. Ordinal equality on an
-/// unspecified string is a gate passed by typing a different string; normalising trim and case closes
-/// the trivial variants (<c>"agent-a"</c> versus <c>"Agent-A "</c>, which an ordinal comparison
-/// happily calls independent) and closes nothing else. <b>The definition needs a ruling; this only
-/// stops the gate being defeated by a keystroke.</b></para>
+/// different is <b>a different context instance</b> (ruled 2026-08-24,
+/// <c>docs/notes/test-environment-contract.md</c> §1.1). Ordinal equality on a self-declared string is
+/// a gate passed by typing a different string; normalising trim and case closes the trivial variants
+/// (<c>"agent-a"</c> versus <c>"Agent-A "</c>, which an ordinal comparison happily calls independent)
+/// and closes nothing else. <b>The string is a label for the mechanism, never a proof of it.</b></para>
+///
+/// <para>🔴 <b>AND IT IS WRITTEN IN ONE OF TWO VOCABULARIES</b> — see <see cref="IdentityForm"/>.
+/// Comparing across them is <see cref="IdentityRelation.NotComparable"/>, which is why
+/// <see cref="SameAs"/> no longer returns a <c>bool</c>.</para>
 /// </summary>
 public readonly record struct AgentIdentity(string Value)
 {
@@ -424,8 +569,58 @@ public readonly record struct AgentIdentity(string Value)
     /// <summary>Normalised form: trimmed and case-folded. STRICTLY TIGHTER than the ordinal comparison it replaces.</summary>
     public string Normalised => (Value ?? string.Empty).Trim();
 
-    public bool SameAs(AgentIdentity other) =>
-        string.Equals(Normalised, other.Normalised, StringComparison.OrdinalIgnoreCase);
+    /// <summary>Which identity vocabulary this string is written in. <see cref="IdentityVocabulary"/> owns the rule.</summary>
+    public IdentityForm Form => IdentityVocabulary.FormOf(Normalised);
+
+    /// <summary>
+    /// 🔴 <b>IT RETURNS A RELATION AND NOT A <c>bool</c>, AND THE RETURN TYPE CHANGING IS THE POINT.</b>
+    ///
+    /// <para><b>The hole it closes, measured 2026-08-24.</b> This was <c>Trim()</c> +
+    /// <c>OrdinalIgnoreCase</c> exact match. A binding stamped
+    /// <c>&lt;session&gt;/lad-coder</c> and a submission stamped <c>lad-coder</c> are the same party
+    /// twice over, and the comparison returned <c>false</c> — so gate 5c PASSED, <b>vacuously</b>, on
+    /// a difference of formatting rather than of parties. A <c>bool</c> has no room to say "these two
+    /// strings are not in the same namespace", so every caller that wanted that answer got the pass
+    /// instead. <b>The signature change is what makes each call site face it</b>: the name is kept so
+    /// every document citing <c>AgentIdentity.SameAs</c> by name still lands here.</para>
+    ///
+    /// <para>Use <see cref="CanCompareWith"/> to gate a whole check to NOT CHECKED before comparing,
+    /// and <see cref="IsSamePartyAs"/> where a yes/no reads better — it throws rather than inventing
+    /// one.</para>
+    /// </summary>
+    public IdentityRelation SameAs(AgentIdentity other)
+    {
+        var mine = Form;
+
+        if (mine == IdentityForm.Indeterminate || mine != other.Form)
+            return IdentityRelation.NotComparable;
+
+        return string.Equals(Normalised, other.Normalised, StringComparison.OrdinalIgnoreCase)
+            ? IdentityRelation.SameParty
+            : IdentityRelation.DifferentParties;
+    }
+
+    /// <summary>
+    /// True when the two are in the same vocabulary, so a verdict about them means something.
+    /// <b>The gate-level guard</b>: check this across every pair first and report NOT CHECKED once,
+    /// rather than letting a per-pair comparison decide half a gate.
+    /// </summary>
+    public bool CanCompareWith(AgentIdentity other) => SameAs(other) != IdentityRelation.NotComparable;
+
+    /// <summary>
+    /// The yes/no — <b>and it is PARTIAL ON PURPOSE. It throws on a cross-form pair rather than
+    /// answering <c>false</c></b>, because <c>false</c> is precisely the vacuous pass. A caller that
+    /// forgets <see cref="CanCompareWith"/> gets a loud stop on the first mixed submission instead of
+    /// a green on every one of them.
+    /// </summary>
+    public bool IsSamePartyAs(AgentIdentity other) => SameAs(other) switch
+    {
+        IdentityRelation.SameParty => true,
+        IdentityRelation.DifferentParties => false,
+        _ => throw new InvalidOperationException(
+            $"'{this}' and '{other}' are not comparable ({IdentityVocabulary.Describe(Form)} versus {IdentityVocabulary.Describe(other.Form)}). "
+            + "Gate the check with CanCompareWith and report NOT CHECKED; there is no correct bool here."),
+    };
 
     public override string ToString() => IsRecorded ? Value : "<unrecorded>";
 }
