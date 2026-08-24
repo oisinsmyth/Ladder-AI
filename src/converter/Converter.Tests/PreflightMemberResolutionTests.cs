@@ -128,6 +128,52 @@ public class PreflightMemberResolutionTests : IDisposable
         Assert.Contains("does not resolve", finding.Description);
     }
 
+    // --- the ARRAY SUBSCRIPT defect, 2026-08-24 -------------------------------------------------
+    //
+    // A block reading its OWN declared array static was reported as an unresolved tag root, which
+    // reads as hard-rule-3 tag invention — the most alarming thing this check can say — on a block
+    // that had invented nothing. ComponentPath[0] carries the subscript ("Flags[3]"); the STATIC is
+    // declared on the bare name ("Flags"); the lookup missed.
+    //
+    // Measured on the admitted library block patterns/motor-dol/MotorStarter.ir, which trips it four
+    // times on `RisingEdgeFlags[0..3]` with every subscript in bounds. `tagstatus` has always
+    // stripped the subscript, so the two tools contradicted each other about the same path — and
+    // this class exists precisely because they are asserted never to disagree.
+
+    private string BlockReadingOwnArrayStatic(string path)
+    {
+        var block = new IrBlock("0", "FB", "FB_ArrayProbe", 42, "LAD", "Header.", new[]
+        {
+            new IrNetwork(1, "Read", new[]
+            {
+                new CoilAssignment("DB_Plant.Present", new Expr.TagRef(path)),
+            }),
+        },
+        StaticMembers: new[] { new DbMember("Flags", "Array[0..3] of Bool", Retain: false, StartValue: null) });
+
+        var sidecars = block.Networks
+            .Select(n => new NetworkSidecar(n.Number, n.Number.ToString(), Array.Empty<SidecarAccessEntry>(), Array.Empty<CoilAssignmentSidecar>()))
+            .ToArray();
+        var report = PreflightRunner.Run(new[] { WriteBatchFile(IrSerializer.SerializeBlock(block, sidecars)) }, _projectDir);
+        return string.Join(" | ", Assert.Single(report.Files).Findings.Where(f => f.Check == "tag").Select(f => f.Description));
+    }
+
+    [Theory]
+    [InlineData("Flags[0]")]
+    [InlineData("Flags[3]")]
+    public void OwnArrayStatic_ReadBySubscript_IsNotAFinding(string path) =>
+        Assert.Equal(string.Empty, BlockReadingOwnArrayStatic(path));
+
+    [Fact]
+    public void OwnArrayStatic_ReadWithoutASubscript_IsStillNotAFinding() =>
+        Assert.Equal(string.Empty, BlockReadingOwnArrayStatic("Flags"));
+
+    // The strip must not become a way to invent a root: a subscript on something undeclared is
+    // still an unresolved root, and still says so.
+    [Fact]
+    public void UndeclaredArrayRoot_IsStillAFinding() =>
+        Assert.Contains("does not resolve", BlockReadingOwnArrayStatic("NoSuchFlags[1]"));
+
     // --- the unaffected cases, tested as deliberately as the refused ones ----------------------
 
     [Theory]

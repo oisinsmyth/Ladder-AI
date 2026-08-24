@@ -178,7 +178,26 @@ public static class PreflightRunner
         {
             foreach (var tagPath in TagReferences.AllTagPaths(network))
             {
+                // STRIP THE ARRAY SUBSCRIPT before the local lookup (2026-08-24). A block reading
+                // its own `RisingEdgeFlags[3]` was reported as an unresolved tag root even though
+                // `RisingEdgeFlags : Array[0..3] of Bool` is declared in its own STATIC and every
+                // subscript used is in bounds — because ComponentPath[0] carries the subscript and
+                // the declaration is keyed on the bare name.
+                //
+                // It read as hard-rule-3 tag invention, which is the most alarming thing this check
+                // can say, on a block that had invented nothing. Measured on the admitted library
+                // block `patterns/motor-dol/MotorStarter.ir`, which trips it four times.
+                //
+                // `tagstatus` has always stripped it (Program.cs), as do TagTypeRegistry and the
+                // review rules — so the two tools disagreed about the same path, and this file's own
+                // note below asserts they "cannot drift". Same idiom as TagTypeRegistry.StripSubscript.
                 var root = AccessNode.FromDottedPath(0, "GlobalVariable", tagPath).ComponentPath[0];
+                var subscript = root.IndexOf('[');
+                if (subscript >= 0)
+                {
+                    root = root[..subscript];
+                }
+
                 var isLocal = locals.TryGetValue(root, out var localDeclaration);
                 if (!isLocal && !index.ResolvesAsTagRoot(root))
                 {
