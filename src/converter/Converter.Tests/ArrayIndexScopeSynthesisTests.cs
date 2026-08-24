@@ -98,4 +98,59 @@ public class ArrayIndexScopeSynthesisTests
         Assert.Equal(3, AccessNode.SplitComponent(node.ComponentPath[2]).Index);
         Assert.Equal("DB_A.Vessel[0].Sensor[3].Reading", node.DottedPath);
     }
+
+    // --- the VARIABLE subscript, 2026-08-24 ------------------------------------------------------
+    //
+    // Same defect class as MidPathArraySubscript above, one input class over, and it survived that
+    // fix: the pattern matched `\d+` and fell through to `(component, null)` on anything else, so
+    // `Table[Selector]` was emitted as a component literally NAMED "Table[Selector]". The writer
+    // accepted it and TIA cannot resolve it.
+    //
+    // Consequence where it was found: the access was the sole wire carrying a runtime-selected
+    // parameter set into the block that consumes it. Emitted this way it never lands, and the
+    // consuming sequence cannot start. `converter preflight` did not flag it — preflight resolves
+    // only the ROOT of a dotted path, so a defect below the root is invisible to it, which is why
+    // this needs a test rather than a check.
+    //
+    // The refusal is deliberately not a "best-effort" emit. A sweep of every `AccessModifier="Array"`
+    // reachable on the engineering PC returned 64,878 occurrences and `Scope="LiteralConstant"` on
+    // every one — there is no observed shape for a variable subscript to copy.
+    [Theory]
+    [InlineData("Table[Selector]")]               // the case found live: a runtime-selected slot
+    [InlineData("Vessel[i]")]
+    [InlineData("Buf[Index + 1]")]                // an expression, not merely a symbol
+    [InlineData("Slot[#local]")]
+    public void VariableArraySubscript_IsRefused_NotEmittedAsABracketInTheName(string component)
+    {
+        var ex = Assert.Throws<UnsupportedConstructException>(() => AccessNode.SplitComponent(component));
+
+        // The message must name the construct, or the engineer cannot act on it.
+        Assert.Contains("not a non-negative integer literal", ex.Message);
+        Assert.Contains("LiteralConstant", ex.Message);
+    }
+
+    // Refused on the SAME evidentiary footing, and the reason is worth pinning: `Array[-5..5]` is
+    // legal on S7 and `<ConstantValue>-1</ConstantValue>` looks obviously correct — but no export on
+    // this machine contains a negative subscript, so "obviously correct" is exactly the untested
+    // assumption this project keeps getting caught by. If a real export ever shows one, this test is
+    // the place that records the change of evidence.
+    [Fact]
+    public void NegativeArraySubscript_IsRefusedToo_BecauseNoExportHasEverShownOne() =>
+        Assert.Throws<UnsupportedConstructException>(() => AccessNode.SplitComponent("Window[-1]"));
+
+    // The refusal must not swallow the cases that work. A bare name is not a subscript, and every
+    // non-negative literal still splits — including 0, which a `.+` name group must not eat.
+    [Theory]
+    [InlineData("Recipe", "Recipe", null)]
+    [InlineData("Recipe[0]", "Recipe", 0)]
+    [InlineData("Recipe[50]", "Recipe", 50)]
+    [InlineData("Clock_0.5Hz", "Clock_0.5Hz", null)]   // an embedded dot is not a subscript
+    public void LiteralAndUnsubscriptedComponents_AreUnaffectedByTheRefusal(
+        string component, string expectedName, int? expectedIndex)
+    {
+        var (name, index) = AccessNode.SplitComponent(component);
+
+        Assert.Equal(expectedName, name);
+        Assert.Equal(expectedIndex, index);
+    }
 }

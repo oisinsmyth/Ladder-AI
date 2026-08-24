@@ -74,8 +74,23 @@ public static class SidecarSynthesizer
             .Concat(block.TempMembers)
             .Concat(block.InputMembers ?? Array.Empty<DbMember>())
             .Concat(block.OutputMembers ?? Array.Empty<DbMember>())
-            .Concat(block.InOutMembers);
+            .Concat(block.InOutMembers)
+            .Concat(block.ConstantMembers ?? Array.Empty<DbMember>());
 
+    // CONSTANT is in this list for the same reason every other section is (2026-08-24). A block's
+    // own CONSTANT-section member is part of the interface it declares, so a reference to one is
+    // internal — but it was the one section omitted here, and an omitted section does not fail
+    // loudly: it falls through to GlobalVariable, and TIA then goes looking for a PLC tag of that
+    // name and finds none. That is character-for-character the 2026-07-15 failure described in the
+    // comment below, which this enumeration exists to prevent, recurring in the one section the
+    // enumeration forgot.
+    //
+    // No shape is being guessed here: LocalVariable is the scope already observed 745 times in the
+    // corpus, and the fix is to CLASSIFY the member correctly rather than to invent an encoding.
+    // That distinction matters, because there is no ground truth to copy for this case — not one
+    // real TIA export on this machine both declares a non-empty CONSTANT section AND references a
+    // member of it, so the emitted result is unverified until it passes a real import. Whoever runs
+    // the import gate should point it at a block with constants FIRST.
     private static IReadOnlySet<string> ComputeLocalNames(IrBlock block)
     {
         var names = new HashSet<string>();
@@ -83,7 +98,8 @@ public static class SidecarSynthesizer
             .Concat(block.TempMembers)
             .Concat(block.InputMembers ?? Array.Empty<DbMember>())
             .Concat(block.OutputMembers ?? Array.Empty<DbMember>())
-            .Concat(block.InOutMembers))
+            .Concat(block.InOutMembers)
+            .Concat(block.ConstantMembers ?? Array.Empty<DbMember>()))
         {
             names.Add(member.Name);
         }

@@ -380,6 +380,38 @@ public class SidecarSynthesizerTests
         Assert.Equal("GlobalVariable", externalEntry.Scope);
     }
 
+    // The SAME defect, in the one interface section ComputeLocalNames omitted (2026-08-24). A block
+    // may declare a CONSTANT section — a named boolean standing for a permissive the plant does not
+    // physically have, so the rung states the fact instead of hiding a bare TRUE. That member is as
+    // internal as a STATIC, but it was not in the enumeration, so a reference to it fell through to
+    // GlobalVariable and TIA would go looking for a PLC tag of that name. Same class, same symptom,
+    // same block-wide breakage as the FB_PusherControl bug the test above pins.
+    //
+    // Found by an agent that reasoned it out from the emitted XML rather than by any check: no
+    // preflight/review rule covers it, and there is no ground truth to diff against — not one real
+    // TIA export on this machine both declares a non-empty CONSTANT section and references a member
+    // of it. The corpus fixture that declares one never reads it.
+    [Fact]
+    public void SynthesizeBlock_ReferenceToOwnConstantMember_IsLocalVariableScope()
+    {
+        var network = IrParser.ParseNetworkOnly(
+            "NETWORK 1 \"Test\"\n" +
+            "  COIL ExternalDb.Motor.SystemHealthy := HasNoSystemPermissive\n");
+        var block = new IrBlock("0", "FC", "Test", 1, "LAD", null, new[] { network },
+            ConstantMembers: new[] { new DbMember("HasNoSystemPermissive", "Bool", false, "TRUE") });
+
+        var sidecar = SidecarSynthesizer.SynthesizeBlock(block).Single();
+
+        Assert.Equal(
+            "LocalVariable",
+            sidecar.AccessUIds.Single(a => a.TagPath == "HasNoSystemPermissive").Scope);
+
+        // And the coil, which is genuinely external, must NOT have been dragged local with it.
+        Assert.Equal(
+            "GlobalVariable",
+            sidecar.AccessUIds.Single(a => a.TagPath == "ExternalDb.Motor.SystemHealthy").Scope);
+    }
+
     // Regression test for a real IrParser bug (not SidecarSynthesizer, but found by the same
     // FB_PusherControl build): a decimal literal like "1000.0" (MotorStarter's own real HMI-
     // seconds-to-milliseconds scale factor) fell through ParseLeaf's old integer-only regex and

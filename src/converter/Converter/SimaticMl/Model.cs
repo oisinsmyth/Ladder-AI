@@ -58,12 +58,50 @@ public sealed record AccessNode(
 
     // Splits a "Name[n]" component into its parts. An index never contains a dot, so this is
     // unambiguous against the path join above.
+    //
+    // FAILS CLOSED on a subscript that is not a non-negative integer literal (2026-08-24).
+    // The old pattern matched `\d+` and fell through to `(component, null)` on anything else, so a
+    // VARIABLE subscript — `Table[Selector]`, indexing an array at runtime — was emitted by
+    // FlgNetWriter as `<Component Name="Table[Selector]" />`: a component literally NAMED with the
+    // bracket, a member that cannot exist. That is precisely the defect FI-51 fixed for a mid-path
+    // LITERAL subscript ("accepted by the writer and rejected by TIA"), recurring one input class
+    // over. Found on a real generation, where it silently broke the one wire a runtime-selected
+    // parameter set travelled on; `preflight` did not flag it, because preflight resolves only the
+    // ROOT of a dotted path and this defect sits below the root.
+    //
+    // Refusing rather than guessing a shape, because there is no shape to copy: a sweep of every
+    // `AccessModifier="Array"` on this machine — 64,878 of them across the committed corpus, the
+    // reference project and every worktree — found `Scope="LiteralConstant"` and NOTHING ELSE. Zero
+    // variable subscripts, so the emit shape for one is unobserved. The natural generalisation (a
+    // nested `<Access Scope="LocalVariable">` carrying the index symbol) is plausible and untested;
+    // per design philosophy #10 this is a hard error, not a silent partial result, and per ADR-0010
+    // it is a SCOPE ITEM — widen it against a real TIA import/compile, not against a guess.
+    //
+    // A NEGATIVE literal is refused on the same evidentiary footing. `Array[-5..5]` is legal on S7
+    // and `<ConstantValue>-1</ConstantValue>` looks obviously right, but the corpus contains no
+    // negative subscript either, and this session's whole lesson is that plausible-looking output
+    // is how a defect gets past a green check. Both refusals name themselves in the message.
     public static (string Name, int? Index) SplitComponent(string component)
     {
-        var m = System.Text.RegularExpressions.Regex.Match(component, @"^(?<name>.+)\[(?<index>\d+)\]$");
-        return m.Success
-            ? (m.Groups["name"].Value, int.Parse(m.Groups["index"].Value))
-            : (component, null);
+        var m = System.Text.RegularExpressions.Regex.Match(component, @"^(?<name>.+)\[(?<index>[^\[\]]*)\]$");
+        if (!m.Success)
+        {
+            return (component, null);
+        }
+
+        var index = m.Groups["index"].Value;
+        if (!System.Text.RegularExpressions.Regex.IsMatch(index, @"^\d+$"))
+        {
+            throw new UnsupportedConstructException(
+                $"Array subscript '[{index}]' on component '{m.Groups["name"].Value}' is not a non-negative " +
+                "integer literal. Only `AccessModifier=\"Array\"` with a nested " +
+                "`<Access Scope=\"LiteralConstant\">` has ever been observed in an export, so the emit shape " +
+                "for a variable or negative subscript is unknown and this converter will not invent one. " +
+                "Emitting it as a component name would produce a member that cannot exist. Either use a " +
+                "literal index, or widen the converter against a real TIA import/compile first (ADR-0010).");
+        }
+
+        return (m.Groups["name"].Value, int.Parse(index));
     }
 
     // Siemens's own fixed set of 8 "Clock memory byte" system tags — confirmed real, 2026-07-14
