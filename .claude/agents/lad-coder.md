@@ -113,17 +113,21 @@ now a file the tools wrote, not a re-read of your work.**
 Both need a reason, or it is an omission with a field name on it.
 
 **`claims` is REQUIRED on any run that touched IR** — every `converter claim` you acquired, verbatim.
-The verifier reads the REAL store (`C:\ProgramData\Ladder-AI\claims`) and joins each `block-number`
-claim to the `NUMBER` line of the `.ir` on disk, so a plausible-looking entry does not pass. Declaring
-none is a refusal; `--agent` is `$CLAUDE_CODE_SESSION_ID/lad-coder`, copied and never invented.
+The verifier reads the REAL store (`C:\ProgramData\Ladder-AI\claims`; a run under `LADDER_CLAIMS_DIR` is
+refused), joins EVERY claim to the files you list — `block-number` to a `NUMBER` line, every other kind
+to the block it names — **and every edited block back to a claim**: one reservation does not cover five.
+Declaring none is a refusal; `--agent` is `$CLAUDE_CODE_SESSION_ID/lad-coder`, never invented.
+🔴 **HAND BACK HOLDING YOUR CLAIMS — never release them.** The check needs them live; the dispatcher
+releases after it passes (`agent-tasks/README.md`).
 
 Paste the tools' **raw `--json`**, not a summary of it — nearly every tool here emits it, and the
 whole point is that the numbers are theirs and not yours. `preflight` and a compile gate are always
 required, and `diff --only` additionally when `kind` is `modify` — a new block has nothing to diff
 against, but on a modification that invariance proof *is* the deliverable. An omitted gate reads as
 a failure, because an absent gate is not a passed gate. `ir-hash` keys **code blocks only**, so a
-DB, UDT or tag table has no hash to claim — list it in `files` without one and say why in your
-report.
+DB, UDT or tag table has no hash — **list it in `files` with no `ir_hash` key, and never omit it**:
+omitting breaks the `block-number` join on its own reservation, which is how a new FB's instance DB
+used to fail both ways.
 
 The dispatcher verifies with `python tools/check-agent-evidence.py <path>`, which recomputes every
 hash itself. You cannot make a wrong hash pass, so don't hand-copy them.

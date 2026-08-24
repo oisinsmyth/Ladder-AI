@@ -47,9 +47,11 @@ What stands between you and that, and none of it is a gate:
 | `--claims` is **required** (or `LADDER_CLAIMS_DIR`), no default | `Program.cs:441-444`. Stops *forgetting*, not *mis-pointing* |
 | the echoed `store=` line | `ClaimsOutputFormatter.cs:18` says it plainly: *"**AN ECHOED VALUE NOBODY READS IS NOT A SAFEGUARD** — this line is not claimed as one"* |
 | the hookify rule `claims-store-root` | `.claude/hookify.claims-store-root.local.md`. Its own body: *"**This rule is not load-bearing on its own. Hookify fails open**"* — a missing `python3`, an import error or a wrong cwd disables every rule with no indication |
+| `tools/check-agent-evidence.py`'s claims gate | **The one that is a mechanism, from 2026-08-24.** It resolves `C:\ProgramData\Ladder-AI\claims` as a CONSTANT — `LADDER_CLAIMS_DIR` does not move it — and REFUSES any run whose environment sets that variable elsewhere, because those reservations were taken where nobody else can see them. Its only override is `--claims-root` plus a sentinel file its own test suite plants, and a run using it can never print the plain `VERIFIED` banner. Before that date it read the same env var `converter claim` reads, so one export moved the writer and the reader together and a private store produced a clean green |
 
-**So: one narrow code guard, plus convention.** *Not a vulnerability, and no fix is proposed here* —
-the point is that the checklist item below is the control, and it is a habit rather than a mechanism.
+**So: one narrow code guard, one gate at hand-back, plus convention.** *Not a vulnerability, and no
+further fix is proposed here* — the point is that the checklist item below is still a habit for
+everything the hand-back gate does not see.
 
 > ✅ **A FOURTH DEFENCE ARRIVED WITH ADOPTION AND THIS TABLE PREDATES IT — added 2026-08-24.**
 > `tools/check-agent-evidence.py`'s claims gate hard-codes the shared root

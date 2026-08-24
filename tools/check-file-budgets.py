@@ -115,7 +115,26 @@ BUDGETS = [
     # real growth and deliberately visible. Landed at 9,058, not the ~9,180 first predicted
     # here - the round-trip text overshot 9216 by 177 and was compressed rather than the
     # ceiling raised a second time, which is the pattern this budget exists to prevent.
-    (".claude/agents/lad-coder.md", 9728),
+    #
+    # Raised 9728 -> 10240 on 2026-08-24. Earned by the claims hand-back protocol, which
+    # changes what the agent must DO and must therefore be read at dispatch time rather
+    # than looked up: it now hands back HOLDING its claims and the dispatcher releases
+    # them after verifying. Before, all three gen-block-* skills told it to release
+    # everything on its way out, and because verification happens AFTER hand-back the
+    # store was empty by the time the check ran - so the gate reded on every run that
+    # followed the skills exactly, and blamed a misconfigured store root while doing it.
+    # The same paragraph carries the two other things the agent cannot look up in time:
+    # that every claim is now joined to the files it lists (not just block-number), and
+    # that a DB is listed with NO ir_hash key rather than omitted.
+    #
+    # THIS RAISE IS THE FLOOR REPORT'S, NOT A PERSON'S, AND IT IS THE SECOND KIND OF
+    # RAISE - it pays for growth already landed. The text was compressed TWICE to fit
+    # under 9728 and still landed at 210 bytes of headroom, which is inside the budget
+    # and past the point this table calls cry-wolf: a typo fix would have failed the
+    # hook, and the reflex that teaches is --no-verify. Compressing a third time would
+    # have been the wrong resting place for instruction this load-bearing. 722 bytes,
+    # none of it spent, and no other file's ceiling moves with it.
+    (".claude/agents/lad-coder.md", 10240),
     (".claude/agents/lad-reader.md", 5120),
 
     (".claude/skills/design-for-testability/SKILL.md", 43520),

@@ -222,9 +222,9 @@ Hand back (per `lad-coder`'s "what you hand back" contract — your summary is n
   **`claims` is required** — `{kind, value, agent}` per claim you acquired; a run that touched IR and
   declares none is refused.
 
-Then **release every claim**:
-`converter claims --project ir/<project>/ --claims C:\ProgramData\Ladder-AI\claims --release --agent "$CLAUDE_CODE_SESSION_ID/lad-coder" --all`.
-Nothing auto-releases; a stale claim is reported and never cleared for you. Then **append one telemetry line** to `gen/<project>/telemetry.log` per `docs/notes/gen-telemetry.md`
+🔴 **DO NOT RELEASE YOUR CLAIMS. Hand back holding them** — the dispatcher verifies against the store
+and releases afterwards (`agent-tasks/README.md`). Releasing first empties the store before the check
+runs, and the check then reds on a correct run. Then **append one telemetry line** to `gen/<project>/telemetry.log` per `docs/notes/gen-telemetry.md`
 (`gen-block-new` in the skill column; include blocked/abandoned runs — the most informative rows;
 never backfill or rewrite rows). Then **stop.** The Check stage and gate 2 (final presentation,
 `docs/11-review-workflow.md`) belong to others; never treat your own output as reviewed or approved.

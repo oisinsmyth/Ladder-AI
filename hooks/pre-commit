@@ -1,6 +1,8 @@
 #!/bin/sh
 #
-# Refuses a commit that puts any context-injected file over its size budget.
+# Two refusals, both of them keyed on WHAT IS STAGED:
+#   1. a context-injected file over its size budget;
+#   2. a change to tools/check-agent-evidence.py whose own self-tests do not pass.
 #
 # This exists because CLAUDE.md grew 45,130 -> 96,245 bytes in eleven days and not one
 # commit in that span reduced it. Every byte of CLAUDE.md, the agent briefs and the skills
@@ -34,6 +36,25 @@ if ! python tools/check-file-budgets.py --staged; then
     echo "COMMIT REFUSED: a context-injected file is over its size budget."
     echo "Move the content to its owning doc (README or docs/notes), or raise that"
     echo "file's ceiling deliberately in its own commit. --no-verify is not the answer."
+    exit 1
+fi
+
+# THE GATE ON THE GATE. Added 2026-08-24 after an adversarial audit found five defects in
+# tools/check-agent-evidence.py, every one of them shipped by a change that nothing tested.
+# `--staged-only` returns immediately unless that checker or its tests are in the index, so
+# this costs nothing on an ordinary commit.
+#
+# The EVIDENCE check itself is deliberately NOT here, and that is a decision rather than an
+# omission: an evidence file's hashes legitimately drift once a later commit touches the
+# same block, and its claims are legitimately released the moment the dispatcher verifies
+# them, so a commit hook would refuse work that was correct at the time. See
+# agent-tasks/README.md. Verification of a hand-back belongs at hand-back.
+if ! python tools/check-agent-evidence.tests.py --staged-only; then
+    echo ""
+    echo "COMMIT REFUSED: the agent-evidence gate's own self-tests do not pass."
+    echo "This commit changes the check that verifies sub-agent hand-backs, and a"
+    echo "verifier nobody has watched REFUSE anything is one nobody should trust."
+    echo "Fix the checker or the test. --no-verify is not the answer."
     exit 1
 fi
 

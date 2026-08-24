@@ -89,5 +89,8 @@ compile evidence, and whatever else it asks for; update the docs it names; relea
 queue slot if you claimed one. **If the task touched IR, that includes writing
 `agent-tasks/<id>/evidence.json`** per the hand-back contract in `agent-tasks/README.md` — the
 dispatcher verifies it with `python tools/check-agent-evidence.py`, which recomputes every
-`ir-hash` itself, so hand-copied hashes fail. Never treat your own output as approved — this
+`ir-hash` itself, so hand-copied hashes fail. **Hand back HOLDING any claims you took** — that
+check joins them to the files on disk and needs them live; the dispatcher releases them after it
+passes, and a sub-agent that releases first reds the gate on its own correct work.
+Never treat your own output as approved — this
 project's hard rule 5 means you're producing a proposal for the engineer, not a merge.

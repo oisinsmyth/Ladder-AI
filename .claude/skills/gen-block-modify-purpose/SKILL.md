@@ -120,9 +120,9 @@ Hand back (per `lad-coder`'s contract — your summary is not proof):
   **`claims` is required too** — `{kind, value, agent}` per claim acquired; a run that touched IR and
   declares none is refused.
 
-Then **release every claim**:
-`converter claims --project ir/<project>/ --claims C:\ProgramData\Ladder-AI\claims --release --agent "$CLAUDE_CODE_SESSION_ID/lad-coder" --all`.
-Nothing auto-releases; a stale claim is reported and never cleared for you.
+🔴 **DO NOT RELEASE YOUR CLAIMS. Hand back holding them** — the dispatcher verifies against the store
+and releases afterwards (`agent-tasks/README.md`). Releasing first empties the store before the check
+runs, and the check then reds on a correct run.
 
 Append a `gen/<project>/telemetry.log` line (`gen-block-modify-purpose`) when the project has one (a
 validation corpus has none — note the run in your report instead). Then **stop** — the fresh-context Check
