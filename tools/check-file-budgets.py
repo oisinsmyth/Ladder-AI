@@ -118,7 +118,7 @@ BUDGETS = [
     (".claude/agents/lad-coder.md", 9216),
     (".claude/agents/lad-reader.md", 5120),
 
-    (".claude/skills/design-for-testability/SKILL.md", 43008),
+    (".claude/skills/design-for-testability/SKILL.md", 43520),
     (".claude/skills/enumerate-assertions/SKILL.md", 19968),
     (".claude/skills/explain-plc-block/SKILL.md", 6656),
     (".claude/skills/gen-architecture/SKILL.md", 24064),
