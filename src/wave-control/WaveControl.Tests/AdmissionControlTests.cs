@@ -212,5 +212,59 @@ namespace Ladder.Wave.Tests
             Assert.Single(decision.Routing);
             Assert.Contains("FB_Motor", decision.Describe(), StringComparison.Ordinal);
         }
+
+        // --- WHAT ADMISSION DOES NOT CHECK: WHO IS ASKING --------------------------------------------
+
+        /// <summary>
+        /// 🔴 <b>THIS TEST PASSES TRIVIALLY, AND THE PASS IS THE FINDING — do not read it as evidence of
+        /// an identity check, because it is the record that there is none.</b>
+        ///
+        /// <para>Two DIFFERENT agents submit changes to THE SAME object into one wave, and both are
+        /// admitted, both into the run queue, with no finding between them. <see cref="AdmissionController"/>
+        /// looks at <c>submission.Agent</c> exactly once, to ask whether it is EMPTY (results are
+        /// distributed per agent, §2.4, so an unnamed submitter has nobody to distribute to). It never
+        /// compares one submission's agent against another's, and it holds no cross-submission state in
+        /// which it could: <c>Admit</c> is a pure function of one submission plus its evidence.</para>
+        ///
+        /// <para><b>That is a division of labour, not a hole here.</b> Preventing two agents from editing
+        /// one object is the CLAIM REGISTRY's job (<c>converter claim --kind block-edit</c>, FI-65) and
+        /// happens long before a submission exists; admission's question is whether THIS content passed
+        /// preflight and compiled clean. The reason to write it down in a test is that the two components
+        /// are read together, and "wave-control admits per submission" invites the assumption that
+        /// something in this path would notice a collision. Nothing in this path would.</para>
+        ///
+        /// <para>So: if a collision between two agents is ever to be refused at admission, this test is
+        /// the one that must change, and its changing is the visible sign that a policy was added. Until
+        /// then it documents the boundary — and a green here says nothing whatever about whether either
+        /// agent had claimed the object.</para>
+        /// </summary>
+        [Fact]
+        public void Two_different_agents_changing_one_object_are_both_admitted_because_admission_is_agent_blind()
+        {
+            var mine = ChangeSets.Fb("FB_Motor");
+            var theirs = ChangeSets.Fb("FB_Motor");
+            var first = new Submission("S-alpha", "agent-alpha", new[] { mine });
+            var second = new Submission("S-beta", "agent-beta", new[] { theirs });
+
+            // The denominator: the situation this test is about was actually set up. Two submissions
+            // carrying the same object name and two genuinely different agent strings — without both,
+            // the greens below would be about nothing.
+            Assert.NotEqual(first.Agent, second.Agent);
+            Assert.Equal(first.Objects[0].Name, second.Objects[0].Name);
+
+            var decisionA = AdmissionController.Admit(first, ChangeSets.GoodEvidence(mine));
+            var decisionB = AdmissionController.Admit(second, ChangeSets.GoodEvidence(theirs));
+
+            Assert.Equal(AdmissionOutcome.Admitted, decisionA.Outcome);
+            Assert.Equal(AdmissionOutcome.Admitted, decisionB.Outcome);
+            Assert.Equal(DownloadQueue.RunQueue, decisionA.Queue);
+            Assert.Equal(DownloadQueue.RunQueue, decisionB.Queue);
+
+            // Not "no identity finding" — NO finding at all. A single finding of any kind would mean
+            // something in this path had an opinion about the pair, and the boundary this test records
+            // would be somewhere other than where it says it is.
+            Assert.Empty(decisionA.Findings);
+            Assert.Empty(decisionB.Findings);
+        }
     }
 }

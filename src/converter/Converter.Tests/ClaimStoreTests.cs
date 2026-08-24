@@ -88,6 +88,56 @@ public class ClaimStoreTests : IDisposable
         Assert.Null(store.Find(ClaimKind.Tag, "T3"));
     }
 
+    /// <summary>
+    /// 🔴 <b>A DELIBERATE ASYMMETRY, PINNED SO THAT "consistent" NORMALISATION CANNOT QUIETLY REMOVE
+    /// IT.</b> <c>"Agent-A "</c> — different case, trailing space — is not <c>"agent-a"</c>, and
+    /// <c>ClaimStore.Release</c> (the <c>StringComparison.Ordinal</c> at <c>ClaimStore.cs:240</c> and
+    /// again at <c>:247</c>) refuses it.
+    ///
+    /// <para><b>Loose comparison is safe for a REFUSAL; strict comparison is safe for a PERMISSION.</b>
+    /// Release is a permission — it deletes a claim another agent may be relying on right now — so the
+    /// question it asks is "prove you are the holder", and an over-eager match answers yes for someone
+    /// who is not. Elsewhere in this tool the opposite convention is right and is used deliberately:
+    /// <c>RejectDoubledRoot</c> matches the project slug case-INsensitively, because there the loose
+    /// match produces a refusal and the cost of being generous is a false stop, not a false grant.</para>
+    ///
+    /// <para>Without this test the asymmetry reads as an oversight. A future pass that "consistently
+    /// normalises agent identifiers" — trim, lowercase, one comparer everywhere — would leave every
+    /// other claim test green while enabling cross-agent release, which is the exact collision the
+    /// registry exists to remove. If this test is ever changed to expect a release, that is a policy
+    /// change and belongs in <c>docs/evidence/fi-65-claims-build.md</c>, not in a tidy-up.</para>
+    /// </summary>
+    [Fact]
+    public void Release_RefusesAnAgentStringThatMerelyRESEMBLESTheHolder()
+    {
+        var store = new ClaimStore(_claimsRoot, _projectDir);
+        store.TryAcquire("ir/p", ClaimKind.Tag, "T4", "agent-a", null);
+
+        var released = store.Release(ClaimKind.Tag, "T4", "Agent-A ", force: false, out var reason);
+
+        Assert.False(released);
+        Assert.Contains("held by agent 'agent-a'", reason);
+        Assert.NotNull(store.Find(ClaimKind.Tag, "T4"));
+    }
+
+    /// <summary>
+    /// The other direction, and it is not decoration: a comparison strict enough to refuse
+    /// <c>"Agent-A "</c> must still let the actual holder go. A store that refused every release would
+    /// pass the test above and be useless.
+    /// </summary>
+    [Fact]
+    public void Release_ByTheExactHolderStillSucceeds()
+    {
+        var store = new ClaimStore(_claimsRoot, _projectDir);
+        store.TryAcquire("ir/p", ClaimKind.Tag, "T5", "agent-a", null);
+
+        var released = store.Release(ClaimKind.Tag, "T5", "agent-a", force: false, out var reason);
+
+        Assert.True(released, reason);
+        Assert.DoesNotContain("FORCED", reason);
+        Assert.Null(store.Find(ClaimKind.Tag, "T5"));
+    }
+
     [Fact]
     public void Slug_SeparatesProjectsSharingOneClaimsRoot()
     {
