@@ -111,4 +111,80 @@ public class TagTypeRegistryTests
             Directory.Delete(dir, recursive: true);
         }
     }
+
+    // An INSTANCE DB's member tree is defined by its FB's interface, so INSTANCEOF has to be
+    // followed to type a path through one (2026-08-24).
+    //
+    // Measured on a real TIA import: `iDB.Silo.StableElapsed >= iDB.Settings.StabilityTimeout` is
+    // Time >= Time. Neither operand resolved, InferCompareSrcType's no-tags-no-literals fallback
+    // emitted `SrcType Int`, and TIA rejected the block — 12 compile errors on one FC. The
+    // IDENTICAL comparison written from inside the FB emitted the right type, because there the
+    // local-member namespace answered it. FromFiles indexed DB/TYPE/TAGTABLE files and skipped
+    // BLOCK files entirely, so no FB interface was ever in the registry to follow INSTANCEOF into.
+    //
+    // The instance DB here declares NO members, which is the case that matters: a scaffolded iDB
+    // legitimately has an empty member section because TIA populates it on import. Requiring the
+    // member tree would make correctness depend on whether anyone had re-exported the project.
+    private static string WriteInstanceDbCorpus(string dir, bool includeFb)
+    {
+        File.WriteAllText(Path.Combine(dir, "UDT_Silo.ir"),
+            "TYPE UDT_Silo\n  ROOTID 0\n  MEMBERS\n    Weight : Real\n    StableElapsed : Time\n");
+        File.WriteAllText(Path.Combine(dir, "iDB_Silo_W.ir"),
+            "DB iDB_Silo_W\n  ROOTID 0\n  NUMBER 11\n  INSTANCEOF FB_Silo\n  MEMBERS\n");
+        if (includeFb)
+        {
+            File.WriteAllText(Path.Combine(dir, "FB_Silo.ir"),
+                "BLOCK FB FB_Silo\nROOTID 0\nNUMBER 1\nLANGUAGE LAD\n\n" +
+                "INTERFACE\n  STATIC\n    Silo : \"UDT_Silo\"\n");
+        }
+
+        return dir;
+    }
+
+    [Fact]
+    public void Resolve_ThroughAnInstanceDbRoot_FollowsInstanceOfIntoTheFbInterface()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "tagtype-idb-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            WriteInstanceDbCorpus(dir, includeFb: true);
+            var registry = TagTypeRegistry.FromFiles(Directory.EnumerateFiles(dir, "*.ir"));
+
+            // The whole point: a Time member two levels down, through an iDB that declares nothing.
+            Assert.Equal("Time", registry.Resolve("iDB_Silo_W.Silo.StableElapsed"));
+            Assert.Equal("Real", registry.Resolve("iDB_Silo_W.Silo.Weight"));
+
+            // A member the FB genuinely does not have still returns null — the fallback resolves,
+            // it does not invent.
+            Assert.Null(registry.Resolve("iDB_Silo_W.Silo.NoSuchMember"));
+            Assert.Null(registry.Resolve("iDB_Silo_W.NoSuchStatic"));
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    // The control, and it is the one that pins WHY this needed a fix rather than a config change:
+    // with the FB absent from the corpus there is nothing to follow, and the path must resolve to
+    // null rather than to a guess. Null is what makes the caller fall back honestly; a guess is what
+    // put `Int` on a Time comparison.
+    [Fact]
+    public void Resolve_ThroughAnInstanceDbRoot_WithoutTheFb_ReturnsNull()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "tagtype-idb-nofb-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            WriteInstanceDbCorpus(dir, includeFb: false);
+            var registry = TagTypeRegistry.FromFiles(Directory.EnumerateFiles(dir, "*.ir"));
+
+            Assert.Null(registry.Resolve("iDB_Silo_W.Silo.StableElapsed"));
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
 }

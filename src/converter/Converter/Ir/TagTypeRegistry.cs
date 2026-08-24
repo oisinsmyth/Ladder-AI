@@ -21,16 +21,23 @@ public sealed class TagTypeRegistry
     private readonly IReadOnlyDictionary<string, PlcTypeSource> _udts;
     private readonly IReadOnlyList<DbMember> _localMembers;
 
+    // FB name → its interface members, so an instance DB's INSTANCEOF can be followed into the
+    // block that defines its member tree. See the fallback in Resolve for why this is needed.
+    private readonly IReadOnlyDictionary<string, IReadOnlyList<DbMember>> _fbInterfaces;
+
     private TagTypeRegistry(
         IReadOnlyDictionary<string, string> tagTypes,
         IReadOnlyDictionary<string, DbSource> dbs,
         IReadOnlyDictionary<string, PlcTypeSource> udts,
-        IReadOnlyList<DbMember> localMembers)
+        IReadOnlyList<DbMember> localMembers,
+        IReadOnlyDictionary<string, IReadOnlyList<DbMember>>? fbInterfaces = null)
     {
         _tagTypes = tagTypes;
         _dbs = dbs;
         _udts = udts;
         _localMembers = localMembers;
+        _fbInterfaces = fbInterfaces
+            ?? new Dictionary<string, IReadOnlyList<DbMember>>(StringComparer.Ordinal);
     }
 
     public static readonly TagTypeRegistry Empty = new(
@@ -44,7 +51,7 @@ public sealed class TagTypeRegistry
     // DB, so SynthesizeBlock layers them on top of the project-wide sources. Local members take
     // priority: they're the innermost namespace, exactly the LocalVariable scope ScopeFor assigns.
     public TagTypeRegistry WithLocalMembers(IEnumerable<DbMember> localMembers) =>
-        new(_tagTypes, _dbs, _udts, localMembers.ToList());
+        new(_tagTypes, _dbs, _udts, localMembers.ToList(), _fbInterfaces);
 
     // Resolve a UDT body by name (quotes on the name are tolerated, e.g. a member's raw
     // Datatype string `"UDT_Foo"`). Public so cross-file rules — C-118's interface-UDT Step
@@ -108,6 +115,7 @@ public sealed class TagTypeRegistry
         var dbs = new List<DbSource>();
         var udts = new List<PlcTypeSource>();
         var tags = new List<PlcTagSource>();
+        var fbInterfaces = new Dictionary<string, IReadOnlyList<DbMember>>(StringComparer.Ordinal);
 
         foreach (var path in paths)
         {
@@ -135,6 +143,17 @@ public sealed class TagTypeRegistry
                 {
                     tags.AddRange(TagTableIrParser.ParseTagTable(text).Tags);
                 }
+                else if (text.StartsWith("BLOCK FB ", StringComparison.Ordinal))
+                {
+                    // An FB is indexed for its INTERFACE only — it is the definition of every
+                    // instance DB's member tree, and nothing else here reads its networks.
+                    var fb = IrParser.ParseBlockWithoutSidecar(text);
+                    fbInterfaces[fb.Name] = (fb.StaticMembers ?? Array.Empty<DbMember>())
+                        .Concat(fb.InputMembers ?? Array.Empty<DbMember>())
+                        .Concat(fb.OutputMembers ?? Array.Empty<DbMember>())
+                        .Concat(fb.InOutMembers)
+                        .ToList();
+                }
             }
             catch (Exception ex) when (ex is IrFormatException or SimaticMlFormatException)
             {
@@ -142,7 +161,9 @@ public sealed class TagTypeRegistry
             }
         }
 
-        return FromSources(dbs, udts, tags);
+        var flat = FromSources(dbs, udts, tags);
+        return new TagTypeRegistry(
+            flat._tagTypes, flat._dbs, flat._udts, Array.Empty<DbMember>(), fbInterfaces);
     }
 
     /// <summary>
@@ -175,7 +196,30 @@ public sealed class TagTypeRegistry
 
         if (_dbs.TryGetValue(root, out var db))
         {
-            return ResolveInMembers(AllMembers(db), rest);
+            if (ResolveInMembers(AllMembers(db), rest) is string dbType)
+            {
+                return dbType;
+            }
+
+            // An INSTANCE DB's member tree is its FB's interface, and the FB is the source of truth
+            // for it (2026-08-24). Measured on a real import: `iDB_X.Silo.StableElapsed >=
+            // iDB_X.Settings.StabilityTimeout` is Time >= Time, both operands failed to resolve
+            // here, and InferCompareSrcType's no-tags-no-literals fallback emitted `SrcType Int`.
+            // TIA rejected the block — 12 compile errors — while the IDENTICAL comparison written
+            // against the same members from inside the FB emitted the right type, because there the
+            // local-member namespace answered it.
+            //
+            // Falling back to the FB rather than requiring the iDB to carry members is deliberate:
+            // a scaffolded instance DB legitimately has an EMPTY member section (TIA populates it
+            // on import), so requiring the tree here would make correctness depend on whether
+            // somebody had re-exported the project yet.
+            if (db.InstanceOfName is { Length: > 0 } fbName
+                && _fbInterfaces.TryGetValue(StripQuotes(fbName), out var fbMembers))
+            {
+                return ResolveInMembers(fbMembers, rest);
+            }
+
+            return null;
         }
 
         // A tag whose own type is a UDT, then further members into that UDT.
