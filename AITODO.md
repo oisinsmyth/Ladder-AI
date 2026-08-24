@@ -71,6 +71,29 @@ coverage; it does not close D6 at the denominator.
 The instrument is fine and almost nobody is feeding it; an eighth round of instrument-building is the
 wrong answer however tidy it looks.
 
+🔴 **TEN-MINUTE ITEM, AND IT MAY DELETE A RESTORE-POINTED RIG SESSION: does Openness V20 expose a
+member offset for a Standard-access DB?** Added here 2026-08-24 — it existed in exactly one place,
+`docs/18-project-workbench.md` §5 Phase 10's retention bullet **(b)**, one line of a two-thousand-line
+document, and in **no** register: not `deferred-items.md`, not `owner-questions.md`, not this file.
+
+- **What it decides.** The parameter-DB read-back needs a byte offset per member. Today the plan is to
+  **manufacture landmarks**: write a distinct probe value into every member, read the whole block back,
+  and check each probe lands where the arithmetic put it. That is a **write to the parameter DB**, so
+  hard rule 5's verified restore point is captured first — *"one measured, restore-pointed rig
+  session"*, which docs/18 calls the whole cost of the item. **If the API hands the offsets over, none
+  of that is needed.**
+- **The method, and why it is cheap.** A **reflection pass over the installed V20 assembly** —
+  enumerate the DB/member types on `Siemens.Engineering.dll` and look for an offset attribute. Nothing
+  in `src/openness-cli/` reads one today: `grep -ri offset src/openness-cli --include=*.cs` returns
+  only `DateTimeOffset` and one timezone comment, so this is a **new question, not a forgotten
+  capability**.
+- ⚠️ **Unestablished: whether the pass needs a Portal session at all.** Enumerating types on an
+  assembly should not, but that has not been tried here. **If it turns out to need an open project,
+  the Portal-token rule applies** (one lane at a time) and it stops being a ten-minute item — settle it
+  by running the reflection pass and seeing, not by assuming.
+- **Do it BEFORE costing the rig session**, not after. The rig session is the expensive branch of a
+  decision this probe may make for free.
+
 > ⚠️ **CORRECTED TWICE, IN THE SAME DIRECTION, TWO DAYS RUNNING — AND THE SECOND CORRECTION IS THE
 > MORE USEFUL ITEM.**
 > **First (2026-08-23):** this paragraph read *"the enumeration has no producer — a caveat on every

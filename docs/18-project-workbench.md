@@ -1214,6 +1214,24 @@ at:**
   program nobody deployed."* Until 2026-08-24 `Harness.Batch/LaneManifest.cs` had `Read` and `ToJson`
   and **no producer**, so the nine objects were a hand-typed list the next lane did not inherit.
 
+  🔴 **AND THIS DOCUMENT ARGUED THAT HAZARD ABSTRACTLY FOR AS LONG AS IT DISCUSSED IT, WHILE IT HAD
+  ALREADY HAPPENED. Recorded here 2026-08-24 because it was in no tracked *document* at all.** The
+  source says it plainly and the same sentence names it as fact rather than risk —
+  `Harness.Batch/LaneManifest.cs:79`: *"That is not a hypothetical: **a lane was pointed at a pre-fix
+  `Main` by hand and the stamp went with it.**"* The stamp therefore described a program **nobody
+  deployed** — the failure this whole bullet is about, in the past tense. ⚠️ **Read the mechanism, not
+  just the anecdote:** the stale arm is reached *"unless the files changed underneath, which is exactly
+  how a lane came to be pointed at a pre-fix `Main`"* (`Harness.Batch.Tests/ManifestCommandTests.cs:14-17`),
+  and the case is now driven as a test — the manifest still names `FB_Unit` while the file at that path
+  declares `FB_Unit_v2`, so **both arms fire**
+  (`A_manifest_gone_stale_under_its_own_paths_is_refused_and_both_arms_name_the_object`, `:210-216`).
+  ***An argued hazard and a hazard with a date are different evidence, and only the second tells a
+  reader the guard is worth its cost.*** *(Correcting one detail of the audit that found this: the
+  incident is **not** absent from the repo — `git grep -i "pre-fix"` finds it at **four sites in
+  `LaneManifest.cs`** (`:79`, `:144`, `:249`, and the refusal message at `:308` that a user reads),
+  **five across its test assemblies** and **two in `BatchCli.cs`** (`:787`, `:967`). What it was absent
+  from is `docs/` and `AITODO.md` — which is where a session looks.)*
+
   ✅ **THE PRODUCER LANDED WHILE THIS PASS WAS BEING WRITTEN, AND THE TOOLING HALF IS NOW CLOSED.**
   `LaneManifest.Derive(laneName, programUnderTest, generatedCopyLayer, blockUnderTest, stamp, …)` emits
   the manifest from whatever built the lane, and `harness-batch manifest … --check` re-derives the stamp
@@ -1264,6 +1282,17 @@ at:**
   asserts the two stamps equal *and* asserts the IR text differs, so the invisible difference is stated
   to be a difference in **executable logic**.
 
+  🔴 **AND THE FIX IS DEMONSTRATED RATHER THAN DESCRIBED — TWELVE MUTATIONS, TWELVE KILLED. Recorded
+  here 2026-08-24; until now this lived only in `git log`.** `34b8389`'s message is the evidence and it
+  is the only place carrying it: *"Twelve mutations, twelve killed, **every one built before it was
+  counted**."* ***The seventh is the one worth naming:*** it *"makes the stamp skip block-kind objects,
+  **REPRODUCING THE DOCUMENTED GAP EXACTLY**, and two tests kill it."* **That is the difference between
+  a defect that was described and a defect that was reproduced and then closed** — the same standard
+  `43c57f0` met with its nine, and the reason to write the number down rather than the adjective. ⚠️
+  **A campaign that exists only in a commit message is one `git log` away from being an unevidenced
+  claim** — this document has already had to retract a *"run live"* cell for the same reason (`c851ea0`,
+  §3.2). ➜ **The durable form of a mutation count is a line in the page the claim is made on.**
+
   🔴 **AND THE SHAPE IS CONFIRMED ON REAL DEPLOYED MATERIAL, NOT ONLY ON A FIXTURE.** The deployed corpus
   behind the 2026-08-22 nine-object build was checked: **it carries the unit's instance DB and no
   block.** The stimulus model, the harness slot, the comms objects and `Main` are all present; *the thing
@@ -1299,6 +1328,19 @@ at:**
   `b281348` reported — where the controller changed and the stamp did not — and it is **equally
   invisible to the verifying gateway**, because the gateway compares a hash of staged text against a
   hash of staged text. Nothing in the loop has ever read a parameter's actual value off the device.
+
+  🔴 **NARROWED 2026-08-24 — AND THE NARROWING IS NOT A CLOSE.** *"UNDETERMINED, in both directions"*
+  is true of downloads in general and **is no longer true of the one route this harness can take**: on
+  `--options Software --disruptive` the retentives are reinitialised (observed), and every other
+  answer to that configuration **aborts the download** rather than preserving them — residual **(a)**
+  below carries the evidence and the source lines. **So the ×8-staged / ×4-running scenario above is
+  not reachable through `download-probe`.** ⚠️ **Three reasons it stays written, and they are not
+  hedges:** the hazard is reachable through **any other route to the controller** — TIA Portal by hand
+  is the obvious one, and it is the route the engineer uses on a device in service; a **differential**
+  download that restructures no DB may not raise the configuration at all (a *prediction*, not a
+  measurement); and *the gateway's blindness is unchanged either way* — it still compares staged text
+  against staged text, and **still nothing in the loop reads an actual value off the device**. ***The
+  reachability narrowed; the gateway did not gain an eye.***
 
   ⚠️ **Four members make it sharper rather than softer.** The overcurrent family in `DB_Settings` is
   *"unconfigured by design"* and carries **no start value at all** — so for those four the staged text
@@ -1358,12 +1400,75 @@ at:**
   so *"read once after the deploy"* is a weaker claim than it sounds, and the strong form is a read
   bound into the submission's own derivation.
 
-  **Unestablished, and what would settle each:** (a) whether an S7-1200 download with the harness's
-  current `download-probe` options preserves or reinitialises these retained values — **nobody has
-  observed it**, and one read-back either side of one download settles it; (b) whether TIA's Openness
-  API exposes a member offset for a Standard DB at all — nothing in `src/openness-cli/` reads one, and
-  a reflection pass over the installed V20 assembly would answer it and could make leg 3's manufactured
-  landmarks unnecessary. **(b) is worth ten minutes before anyone pays for (3).**
+  **(a) is ANSWERED — see below. (b) is unestablished, and what would settle it is stated with it.**
+
+  🔴 **(a) ANSWERED, AND IT IS A FINDING RATHER THAN A CORRECTION: THE RETAINED VALUES DO NOT SURVIVE
+  OUR DOWNLOAD, AND THE CONFIGURATION IN WHICH THEY MIGHT CANNOT BE RUN.** Established 2026-08-24 from
+  the deviation record and the probe's own option policy, both read at source.
+
+  1. **The reinitialisation is observed, on the options we actually use.**
+     `docs/notes/2026-08-21-restore-point-deviation.md:48-51` records that the last real download to
+     this rig answered `DataBlockReinitialization -> StopPlcAndReinitialize` and
+     `StopModules -> StopAll`, and that the retentive data was **reset by the STOP/START the download
+     took**. The same page names the invocation at `:90-91` — **`--options Software --disruptive`**,
+     exit 0, 53 items loaded by name, `TRANSFER VERDICT: TRANSFERRED`, `Stopped → Started`. *That is
+     `download-probe` with the harness's current options*, which is precisely the configuration this
+     bullet was asking about. The owner accepted the outcome **in advance** (`:55-56`) — what a
+     deviation recorded before the write buys.
+  2. 🔴 **And the preserve case is not merely unobserved — it is UNREACHABLE.** Without `--disruptive`,
+     `download-probe` answers `NoAction` on `DataBlockReinitialization`, **and the API rejects
+     `NoAction` on the instance** (measured, both routes), so the configuration goes unanswered and the
+     download **aborts** — it does not quietly preserve anything.
+     `NoActionFirstPolicy.DeniedSelections` (`src/openness-cli/DownloadProbe/NoActionFirstPolicy.cs:152-153`)
+     and the *"the `NoAction` decline is largely fictional"* paragraph at `:210-216`, whose point is
+     exactly this: *"what the enum offers and what the instance accepts are different things, and only
+     REFUSING TO ANSWER … is a real one."* Under `--disruptive`, `StopModules/StopAll` and
+     `DataBlockReinitialization/StopPlcAndReinitialize` are explicit **allowances** (`:228-229`),
+     *"because the chosen download option already entails it"*. ***So for a full `Software` download
+     there is no observed preserve case and no runnable one: the two outcomes available are
+     reinitialise, or abort.***
+
+  ⚠️ **WHAT THIS CHANGES, AND IT IS THE PART WORTH CARRYING FORWARD: the read-back's job moved.** It
+  was framed as settling *whether* the retained values survive the download. **That question is
+  closed on our path.** What a read-back now establishes is **what the plant is running AFTER they were
+  reset** — the actual values the controller came up with, which is a different measurement with a
+  different consumer. *A read-back sized for the old question would be one read either side of one
+  download; the question that remains is served by a read bound into the wave's own derivation*, which
+  is what the paragraph above already argues for on other grounds.
+
+  ⚠️ **The one caveat, stated because it is the difference between an observation and a vendor
+  sentence.** *That* the retentives were reset is observed here. *That they were reset **to the
+  declared start values of the staged program*** is the reinit dialogue's own text, quoted in our
+  source (`NoActionFirstPolicy.cs:139-142`) and **not separately measured on this rig**. The
+  distinction matters because the second form is the one that would let staged IR predict controller
+  state, and nothing here has earned it.
+
+  ***What is still open is narrower than the old blanket question, and is worth stating as the
+  question:*** whether a **differential** download that restructures **no** DB raises the configuration
+  at all — `DownloadOptionChoice.cs:143-144` records that as a **PREDICTION**, not a measurement — and
+  whether a **hardware** download wipes retentives. 🔴 **Neither is answered by anything above, and
+  reading them off a `Software`-download measurement would be a green over a question nobody
+  examined.** The hardware half is not a new question here: it is `docs/notes/tooling-test-plan.md`
+  **NC-11 (G3)**, already costed — one rig session, a recovery download owed (34 s, measured), **and it
+  must go LAST in the session**. The same question is carried in two other vocabularies by
+  `docs/notes/deferred-items.md`'s **A8 / G2** (owner-deferred, with a revisit trigger) and
+  `docs/notes/spec-reconciliation.md` §14's **G3** row (NOT CHECKED). ➜ **Anyone scheduling rig time on
+  the strength of this bullet should read NC-11 first — the method and the cost are already written
+  down.**
+
+  ℹ️ *What this bullet used to say, kept so the correction is legible:* *"whether an S7-1200 download
+  with the harness's current `download-probe` options preserves or reinitialises these retained values
+  — **nobody has observed it**, and one read-back either side of one download settles it."* **Somebody
+  had observed it, three days earlier, in a file this page already cites for other reasons.**
+
+  **(b) whether TIA's Openness API exposes a member offset for a Standard DB at all** — nothing in
+  `src/openness-cli/` reads one, and a reflection pass over the installed V20 assembly would answer it
+  and could make leg 3's manufactured landmarks unnecessary. **(b) is worth ten minutes before anyone
+  pays for (3)** — 🔴 **and it now lives in a register a session actually opens** (`AITODO.md`,
+  "Current task / in flight"). It was written into this file the same day it was found (`4401929`,
+  2026-08-24) and existed **nowhere else**: one line of a two-thousand-line document, absent from
+  `AITODO.md`, `deferred-items.md` and `owner-questions.md` alike. *A ten-minute item that can save a
+  restore-pointed rig session is worth more than one line in the middle of a long page.*
 
 ✅ **THE ONE THING COMPRESSION DID MOVE, AND HOW IT CLOSED.** On the first compressed run the dominant
 index's `becomesAndHolds` expectation on the observed weight went `Pass` 7/7 → **`Inconclusive` 6/7**:
@@ -1780,6 +1885,87 @@ opinion.** That single sentence is why §3 is the most valuable part of this des
 > log entry, which a gate catches — but a gate cannot tell a real entry from `- v3.x — misc`, so it
 > buys the reminder and not the content.
 
+- **v3.10 — 2026-08-24. 🔴 A GAP THIS PAGE OVERSTATED, TWO THINGS THAT LIVED ONLY IN `git log`, AND A
+  FLAG THAT WAS WRONG IN BOTH DIRECTIONS.** Documentation only — no C#, no behaviour, `src/`, `gen/`
+  and `ir/` untouched (another lane is in `src/harness/**`). Every item re-derived from a file, a line
+  or a git object read in this pass; nothing taken from another document, **including the audit brief
+  that prompted it — one of whose claims did not survive checking, recorded below.**
+  **1. 🔴 RESIDUAL (a) IS ANSWERED, AND THE ANSWER IS BIGGER THAN THE OVERSTATEMENT THAT LED TO IT.
+  THE RETAINED VALUES DO NOT SURVIVE OUR DOWNLOAD, AND THE CONFIGURATION IN WHICH THEY MIGHT CANNOT BE
+  RUN.** Two legs, both read at source. **(i) Observed:**
+  `docs/notes/2026-08-21-restore-point-deviation.md:48-51` — the last real download to this rig
+  answered `DataBlockReinitialization -> StopPlcAndReinitialize` / `StopModules -> StopAll` and **reset
+  the retentives**, owner acceptance taken **in advance** at `:55-56`; `:90-91` names the invocation,
+  **`--options Software --disruptive`**, which *is* `download-probe` with the harness's current
+  options. **(ii) Unreachable, not merely unobserved:** without `--disruptive` the probe answers
+  `NoAction`, ***the API rejects `NoAction` on the instance***, and the download **ABORTS** rather than
+  preserving anything (`NoActionFirstPolicy.cs:152-153`, and `:210-216`'s *"the `NoAction` decline is
+  largely fictional"*); with it, both selections are explicit allowances (`:228-229`). ***The two
+  outcomes available to a full `Software` download are reinitialise or abort.***
+  ⚠️ **What that changes, and it is why this is a finding and not a footnote: the read-back's job
+  moved.** It was sized to settle *whether* the values survive; that is closed on our path. What a
+  read-back now establishes is **what the plant is running after they were reset** — a different
+  measurement with a different consumer, and one served by a read bound into the wave's derivation
+  rather than by one read either side of one download. **The §5 hazard argument is narrowed in place
+  too:** *"UNDETERMINED, in both directions"* no longer holds for the route `download-probe` can take,
+  so the ×8-staged / ×4-running scenario is **not reachable through our tooling** — though it remains
+  reachable through TIA Portal by hand, and **the gateway is no less blind either way**.
+  ⚠️ **One line held back deliberately:** *that* the retentives reset is observed; *that they reset **to
+  the staged program's declared start values*** is the reinit dialogue's own text
+  (`NoActionFirstPolicy.cs:139-142`), **not measured here** — and it is the form that would let staged
+  IR predict controller state, so it is not claimed.
+  **The overstatement that led to all this**, kept in place beneath the answer: the bullet read
+  *"nobody has observed it"* while the observation sat three days old in a file this page already
+  cites.
+  **2. The question was live in three registers that never pointed at each other — now cross-linked.**
+  `docs/notes/tooling-test-plan.md` **NC-11** (the costed method: one rig session, recovery download
+  owed at 34 s, **last** in the session), `docs/notes/deferred-items.md` **A8/G2** (the owner deferral
+  and its revisit trigger) and `docs/notes/spec-reconciliation.md` §14 **G3** (`NOT CHECKED`). Each now
+  names the other two and says what only it carries. ⚠️ **The cross-links also had to say what the
+  observation does NOT reach:** the measured case was a *Software* download, so it settles neither
+  G3's *hardware* form nor A8/G2's *restructure* form. G3's *"External"* is corrected — **it is
+  checkable on our own rig and already costed** — while its bucket stays `NOT CHECKED`.
+  **3. The ten-minute Openness member-offset probe now lives in `AITODO.md`.** It existed only at
+  Phase 10 bullet **(b)** — one line, in no register — and it is the item that could make the
+  restore-pointed rig session unnecessary. Grounded: `grep -ri offset src/openness-cli --include=*.cs`
+  returns only `DateTimeOffset` and one timezone comment, so nothing reads a member offset today.
+  **4. The pre-fix `Main` incident is now in a tracked document.** This page argued the hazard
+  abstractly throughout; `Harness.Batch/LaneManifest.cs:79` states it happened — *"That is not a
+  hypothetical: a lane was pointed at a pre-fix `Main` by hand and the stamp went with it."* ⚠️ **The
+  audit that raised this said `git grep -i "pre-fix"` across `src/`, `docs/` and `AITODO.md` returns
+  nothing. IT DOES NOT — IT RETURNS ELEVEN SITES**: four in `LaneManifest.cs`, five across its tests,
+  two in `BatchCli.cs`. **The true gap was narrower and is the one fixed: absent from `docs/` and
+  `AITODO.md`, which is where a session looks.** *Recorded as a correction rather than quietly
+  repaired, because **a wrong denominator that gets silently fixed teaches nobody** — the next audit
+  runs the same grep and believes the same zero.*
+  **5. The twelve-mutation campaign is out of `git log`.** `34b8389`: *"Twelve mutations, twelve
+  killed, every one built before it was counted"*, the seventh making the stamp **skip block-kind
+  objects — reproducing the documented gap exactly** — killed by two tests. **That is the evidence the
+  fix is demonstrated rather than described**, and it was in no tracked document.
+  **6. v3.9's item 4 flag is RETRACTED — it named a clean file and missed the dirty one.**
+  `LaneManifest.cs` was re-pointed to section and phrase in `34b8389` and carries **no** `:1166`
+  citation. The stale one is **`BatchCli.cs:125`**, ***born stale in that same commit***, unflagged —
+  and since the flag was the only trace, a session working it would have fixed nothing and closed the
+  item. **`src/harness/**` is another lane's tree: the flag is corrected, the code is not touched.**
+  🔴 **The lesson is not "check the flag" — it is that a flag pointing at the wrong file is worse than
+  no flag**, because it converts an open item into a closed one on inspection.
+  **7. Outside this file, in the same pass — WHO MAY WRITE `owner:`, because the risk inverted and
+  nothing said so.** `43c57f0` added the owner-identity form and left *"the SKILL page's one-line owner
+  stamp"* on its own **NOT DONE** list; it is now written. **Owner-versus-agent-instance is
+  `DifferentParties` *by construction*, without comparing the strings** — so it is the one D6 answer no
+  keystroke can defeat **and the only one a single keystroke can manufacture**: an agent stamping bare
+  `MaTRiXz` used to get `NotComparable` → NOT CHECKED (audible), and `owner:MaTRiXz` now gets
+  `Checked / Passed`. Three edits: `docs/notes/test-environment-contract.md` §1.1 gains the
+  **eligibility rule stated as a rule** — it existed only as a table cell — with the reason it cannot
+  be mechanised (`SubmissionVector.cs:566-569`: the classifier *"does not verify … that a handle
+  belongs to anybody, or that the party named did the work"*); the *"makes a truthful `declaredBy`
+  writable"* sentence now carries **"by the owner, and by nobody else"** *at* the sentence, beside the
+  hopper binding's own *"NOT AN AUTHORING. Owner remains the coordinator"*
+  (`gen/…/harness-binding.json:2-3`, quoted, not edited); and the `design-for-testability` SKILL gains
+  **one sentence** at its identity item — *the form exists, an agent never writes it* — **fitted with
+  348 bytes of headroom, no ceiling raised.** ⚠️ *The audit's third premise did not hold: the "D1 stays
+  open, the decision is the owner's" caveat was **already** in the same paragraph as that sentence.
+  What was genuinely missing beside it was **who may write the string**, and that is what was added.*
 - **v3.9 — 2026-08-24 (same session, immediately after v3.8). 🔴 THREE THINGS WENT STALE *WHILE v3.8
   WAS BEING WRITTEN* — WHICH IS THE EXACT SHAPE v3.8 WAS CONVENED TO CORRECT.** Caught before the
   commit rather than after it, which is the only difference between this entry and the four failures
@@ -1825,10 +2011,24 @@ opinion.** That single sentence is why §3 is the most valuable part of this des
   `MapAuthority` `:1861`/`:1874`, `CrossFormStop` `:827`. **`Admissibility.cs:527` was the only one that
   survived unchanged.** Every citation now names the SYMBOL first per v3.6's rule, with the line
   carrying "at HEAD".
-  ⚠️ **One citation left alone and reported instead:** `Harness.Batch/LaneManifest.cs` cites
+  ⚠️ ~~**One citation left alone and reported instead:** `Harness.Batch/LaneManifest.cs` cites
   `docs/18-project-workbench.md:1166-1167` twice — in a doc comment and in a refusal message a user
   will read — and **this pass moved that text**, so both are now stale. `src/` is another lane's tree;
-  flagged, not edited.
+  flagged, not edited.~~
+  🔴 **THAT FLAG IS FALSE IN BOTH DIRECTIONS AND IS RETRACTED — corrected 2026-08-24 (v3.10 below).**
+  It **names a clean file and misses the dirty one**, and being the only trace, a session working it
+  would have fixed nothing and closed the item.
+  - **`LaneManifest.cs` no longer carries a line citation at all.** `34b8389` re-pointed both to
+    section and phrase — *"`docs/18-project-workbench.md` under …"* at `:134` of that diff, and the
+    refusal message now reads *"Background: docs/18-project-workbench.md §5 'Phase 10 — Wave time', the
+    finding that the subject …"*. **`git grep ":1166"` returns zero hits in that file.**
+  - **The file that IS stale is `Harness.Batch/BatchCli.cs:125`** — *"the one docs/18:1166-1167 records
+    as absent from the stamp"* — and it was ***born stale in the same commit `34b8389`***, unflagged.
+    `:1166-1167` in this document is now blank-line-plus-compression-ceiling prose; the text it means
+    is the Phase 10 Track 3 bullet, *"the block under test … appears only as its instance DB"*.
+  ➜ **Being fixed elsewhere: `src/harness/**` is another lane's tree and this pass did not touch it.**
+  The correct repair is `34b8389`'s own — cite the **section and phrase**, not the line — which is
+  v3.6's rule and the one that made `LaneManifest.cs` clean in the first place.
 - **v3.8 — 2026-08-24 (later the same evening). 🔴 PHASE 10'S RESIDUAL REGISTER LISTED THREE ITEMS
   THAT WERE ALREADY DONE, TWO OF THEM CLOSED BY COMMITS MADE HOURS LATER THE SAME DAY BY THE SAME
   AUTHOR.** Documentation only; no

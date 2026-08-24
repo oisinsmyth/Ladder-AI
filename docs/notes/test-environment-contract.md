@@ -85,7 +85,7 @@ was written nothing said so:
 |---|---|---|
 | **role** | a name for the JOB, no separator — `lad-coder`, `vector-author-b-5.2`, `model-fidelity-declarer-1`, `assertion-enumerator` | **every committed submission**, and every fixture |
 | **instance** | `<session-id>/<agent-type>` | the claims convention (`CLAUDE.md`; `.claude/agents/lad-coder.md:119`) — `converter claim --agent` has taken this shape since 2026-08-23 |
-| **owner** *(added 2026-08-24, see below)* | `owner:<handle>` — **in use: `owner:MaTRiXz`** | any artifact the owner authored. **Names a HUMAN; the other two name agents** |
+| **owner** *(added 2026-08-24, see below)* | `owner:<handle>` — **in use: `owner:MaTRiXz`** | any artifact the owner authored. **Names a HUMAN; the other two name agents.** 🔴 **An agent never writes this form** — the eligibility rule is stated below, not in this cell |
 
 > ***THE INSTANCE FORM IS THE CONVENTION FOR NEW ARTIFACTS. COMMITTED ARTIFACTS ARE NOT RETROFITTED.
 > AND THEREFORE: COMPARING AN IDENTITY IN ONE FORM AGAINST AN IDENTITY IN THE OTHER IS NOT CHECKED,
@@ -148,6 +148,35 @@ convention-stamped block author — **note the last sentence**:
 
 > ***THE FORM IS `owner:<handle>`. THE HANDLE IN USE IS `MaTRiXz`.*** A human author is not an agent,
 > **so agent-independence is simply not the question being asked of that artifact.**
+
+##### 🔴 WHO MAY WRITE `owner:` — THE ELIGIBILITY RULE, STATED AS A RULE. *Added 2026-08-24; it existed only as a table cell*
+
+> ***`owner:<handle>` MAY BE WRITTEN ONLY ON AN ARTIFACT THE NAMED HUMAN AUTHORED. AN AGENT NEVER
+> WRITES IT — NOT ON ITS OWN WORK, NOT ON A COLLEAGUE'S, NOT "ON THE OWNER'S BEHALF".***
+
+**Why it needs saying out loud, and it is the reason the form is worth having in reverse.** The
+relation table below makes **Owner versus Instance `DifferentParties` by construction — the strings
+are never compared at all.** That is exactly why it is the one D6 answer no keystroke can defeat, and
+therefore ***the only one a single keystroke can manufacture***:
+
+| what an agent stamps on its own work | form | verdict at gate 3d |
+|---|---|---|
+| `MaTRiXz` (bare) | Role vs Instance | `NotComparable` → **NOT CHECKED** — audible, and correctly so |
+| `owner:MaTRiXz` | Owner vs Instance | **`Checked` / `Passed`** — a real verdict, produced by six typed characters |
+
+**The risk inverted with the form, and nothing said so.** Before 2026-08-24 the worst an agent could
+do by mis-stamping a human's handle was **silence a gate**; after it, the same mis-stamp **passes**
+one. The addition is right and the exposure is new, so the rule is written where the form is defined
+rather than left to be inferred from the table cell at §1.1's vocabulary list.
+
+🔴 **NOTHING MECHANICAL CATCHES A FALSE OWNER STAMP, AND NOTHING IS PROPOSED THAT WOULD.** The
+classifier says so at its source — `IdentityVocabulary` (`src/harness/Harness.Results/SubmissionVector.cs:566-569`):
+*"It does not verify that a session id is real, that an agent type exists, that a handle belongs to
+anybody, or that the party named did the work. It answers one question — which vocabulary is this
+string written in."* The handle is deliberately unvalidated (the paragraph below on why), so
+**validating the handle would not help either**: the forgeable part is the *claim of authorship*, not
+the spelling. ***This is an L1 rule enforced by convention and by review, and it is stated so that a
+reader of a green gate knows what the green did and did not establish.***
 
 **Why a colon, and why the shape was not `owner/<handle>`.** 🔴 **The slash spelling is not a
 near-miss — it is wrong by construction.** Apply the instance rule to `owner/MaTRiXz`: exactly one
@@ -223,9 +252,19 @@ new verdict arrives through `SameAs` and falls through to admission; asserted in
 rather than assumed.
 
 ℹ️ **This makes a truthful `declaredBy` writable where D1 currently says no truthful string exists**
-(the hopper binding, whose prose names an owner as a role and no machine identity). ***D1 is NOT
-ruled by this and stays open*** — the decision is the owner's and it has not been taken. Nothing in
-`gen/` was changed.
+(the hopper binding, whose prose names an owner as a role and no machine identity) — ⚠️ **writable
+BY THE OWNER, under the eligibility rule above, and by nobody else.** *This sentence is the one an
+agent is most likely to read as an instruction, so the rule is repeated at it rather than cited:*
+***D1 is NOT ruled by this and stays open*** — the decision is the owner's and it has not been taken.
+Nothing in `gen/` was changed.
+
+🔴 **And read the hopper binding's own header before touching it.** Its loadable form opens
+*"TRANSCRIPTION of harness-binding.md into the loadable form. **NOT AN AUTHORING.** Owner remains
+the coordinator"* (`gen/test-project001/hopper-blockage-alarm/harness-binding.json:2-3`). **An agent
+stamping `owner:MaTRiXz` into that file would be doing the exact thing the file's first two lines
+forbid** — and would turn a NOT CHECKED into a pass while doing it. `gen/` is `lad-coder`'s in any
+case (hard rule 8), which is a routing rule and not the reason: the reason is that the string would
+be false.
 
 ➜ **A related ruling the same day, and it is the stronger one where it applies:** the **per-block
 spec is owner-authored** (`docs/notes/owner-questions.md` **D3**). That settles 3d's question at the

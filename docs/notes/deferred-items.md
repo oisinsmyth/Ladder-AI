@@ -263,6 +263,18 @@ retain as the tightest budget on the rig by a factor of twelve, so a harness tha
 the remaining retain makes this answer matter considerably more than it does today. That is the
 signal, not the calendar.
 
+⚠️ **The same question is live in two other registers, and none of the three pointed at the others
+until 2026-08-24.** `docs/notes/tooling-test-plan.md` **NC-11** carries the **costed method** — one
+rig session, a recovery download owed (34 s, measured), and it must go **last** in the session;
+`docs/notes/spec-reconciliation.md` §14's **G3** row carries it as `NOT CHECKED`. **This entry is the
+only one of the three carrying the owner's deferral and the trigger above** — so a session that finds
+G3 or NC-11 first should come back here before scheduling anything, and a session scheduling the rig
+should take NC-11's cost rather than re-deriving one. ⚠️ **One adjacent thing IS observed and it is
+not this:** a **`--options Software --disruptive`** download reset the rig's retentives
+(`docs/notes/2026-08-21-restore-point-deviation.md:90`, consequence `:48-51`). **That is a whole-program
+download, not a structural DB change** — this entry's question is what a *restructure* does, and the
+observation does not answer it.
+
 ## Q-04 (test-project001) — Per-type overcurrent setpoint numbers
 
 **What:** REQ-019 needs an overcurrent setpoint pair (`OvercurrentSetpointMedium`,

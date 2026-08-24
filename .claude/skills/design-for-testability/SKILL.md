@@ -509,7 +509,10 @@ turns on one, escalate rather than picking a reading.
    proof of it.* 🔴 **A normalised string is still a string somebody types** — the gate establishes
    non-collision of *names*, not independence of *parties*. 🔴 **Stamp every NEW identity
    `<session-id>/<agent-type>`**: a role label compared against an instance label is **NOT CHECKED at
-   gates 2, 3d, 4b and 5c**, and committed artifacts are not retrofitted. Graded ceiling and the
+   gates 2, 3d, 4b and 5c**, and committed artifacts are not retrofitted. 🔴 **A third form,
+   `owner:<handle>`, names a HUMAN — an agent NEVER writes it**: owner-vs-instance is
+   `DifferentParties` *by construction*, so stamping it on your own work manufactures a pass.
+   Graded ceiling, the eligibility rule and the
    claims-registry asymmetry: **`docs/notes/test-environment-contract.md` §1.1.**
 5. **The "map's observability declarations" (§4.3) — half resolved.** The submission's `map.providedFor`
    is now that list, and gate 5 checks against it. **What is still open is who fills it in:** it is
