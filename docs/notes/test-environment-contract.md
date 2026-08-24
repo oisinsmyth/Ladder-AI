@@ -85,6 +85,7 @@ was written nothing said so:
 |---|---|---|
 | **role** | a name for the JOB, no separator — `lad-coder`, `vector-author-b-5.2`, `model-fidelity-declarer-1`, `assertion-enumerator` | **every committed submission**, and every fixture |
 | **instance** | `<session-id>/<agent-type>` | the claims convention (`CLAUDE.md`; `.claude/agents/lad-coder.md:119`) — `converter claim --agent` has taken this shape since 2026-08-23 |
+| **owner** *(added 2026-08-24, see below)* | `owner:<handle>` — **in use: `owner:MaTRiXz`** | any artifact the owner authored. **Names a HUMAN; the other two name agents** |
 
 > ***THE INSTANCE FORM IS THE CONVENTION FOR NEW ARTIFACTS. COMMITTED ARTIFACTS ARE NOT RETROFITTED.
 > AND THEREFORE: COMPARING AN IDENTITY IN ONE FORM AGAINST AN IDENTITY IN THE OTHER IS NOT CHECKED,
@@ -107,7 +108,7 @@ on exactly the new material the convention exists for. ⚠️ **A role label con
 read as an instance** — no rule separates `a/b` from `<session>/lad-coder`. That case is decided
 deliberately, is hypothetical today (no identity string anywhere in `gen/`, `src/` or `docs/` contains
 a slash, checked 2026-08-24), and both the rule and its limits are argued in place at
-`IdentityVocabulary` (`src/harness/Harness.Results/SubmissionVector.cs:504`) with a test per limit.
+`IdentityVocabulary` (`src/harness/Harness.Results/SubmissionVector.cs:571`) with a test per limit.
 
 **The consequence, and it is the honest one to state up front.** Every committed submission is
 role-form, so a gate handed one of them plus a convention-produced binding now reads **NOT CHECKED
@@ -118,10 +119,119 @@ The NOT CHECKED is `AwaitingAnArtifactThatCouldExist`: it closes the moment both
 are produced under the convention, and it says so in its own text.
 
 **Where it is enforced.** `IdentityForm` / `IdentityRelation` / `IdentityVocabulary`
-(`SubmissionVector.cs:416`, `:448`, `:504`); the shared sweep `SubmissionGate.CrossFormStop`
-(`:819`), called by gate 2 (`:862`), gate 4b (`:1069`), gate 3d (`:1155`) and gate 5c (`:1831`);
+(`SubmissionVector.cs:422`, `:471`, `:571`); the shared sweep `SubmissionGate.CrossFormStop`
+(`:827`), called by gate 2 (`:870`), gate 4b (`:1089`), gate 3d (`:1175`) and gate 5c (`:1851`);
 and `Admissibility.cs:527`, which owns no NOT CHECKED channel and so files it as the distinct refusal
 `AuthorshipNotComparable` — **fail-closed, and explicitly not a finding that the parties match.**
+
+#### 🔴 AND A THIRD FORM, FOR A HUMAN — RULED 2026-08-24. ***The convention had no way to say "the owner wrote this"***
+
+The two vocabularies above both name **agents**. Nothing named a **person** — and the consequence was
+backwards. The owner's handle carries no separator, so the detector read it as a **role label**, and
+every comparison against a convention-stamped agent came back `NotComparable`:
+
+> ***THE GATES WENT SILENT ON PRECISELY THE ARTIFACTS WITH THE BEST PROVENANCE IN THE SYSTEM.*** An
+> owner-authored artifact is the strongest independence this pipeline has, and it was being reported
+> identically to an unattributed one.
+
+Measured on the real gates before the change, with an owner-authored enumeration against a
+convention-stamped block author — **note the last sentence**:
+
+```
+3d enumerator independence: Status=NotChecked ::
+  comparing the enumeration's enumerator against 2 of 2 recorded author(s) was NOT CHECKED:
+  'owner:MaTRiXz' is a ROLE label and 'session_…/lad-coder' is an INSTANCE label …
+  Unknown is not independent.
+```
+
+**`MaTRiXz` is not unknown.** That sentence is the whole argument for this addition.
+
+> ***THE FORM IS `owner:<handle>`. THE HANDLE IN USE IS `MaTRiXz`.*** A human author is not an agent,
+> **so agent-independence is simply not the question being asked of that artifact.**
+
+**Why a colon, and why the shape was not `owner/<handle>`.** 🔴 **The slash spelling is not a
+near-miss — it is wrong by construction.** Apply the instance rule to `owner/MaTRiXz`: exactly one
+slash, both sides non-empty, so it classifies as an **INSTANCE with session id `owner` and agent type
+`MaTRiXz`**. The owner would be filed as an agent, silently, and would produce a **verdict** rather
+than a refusal — the dangerous direction. A test asserts that spelling stays Instance, so nobody can
+"tidy" the prefix later without a red. The colon was chosen on three grounds: **no committed identity
+string in this repo contains one** (measured across `gen/` on 2026-08-24, every value is
+`lad-coder`, `vector-author-5.2`, `vector-author-b-5.2`, `model-fidelity-declarer-1`,
+`assertion-enumerator` or an `agent-x` fixture); it is a **prefix**, so the vocabulary is the first
+thing a reader of a refusal meets; and it is **the literal word rather than a sigil** such as `@` — a
+sigil means "a person" only by convention, is already meaningful in YAML, JSON, markdown and mention
+syntax, and is the character most easily lost in transcription, after which the string silently
+becomes a role label. **The handle itself is NOT validated**, for the same reason the session id is
+not: encoding one person's spelling in a classifier means a code change the first time it is not that
+person, and a silent misfile until then.
+
+**The relation table, all sixteen cells, asserted as a matrix test** (`AgentIdentityVocabularyTests`):
+
+| left \ right | Indeterminate | Role | Instance | Owner |
+|---|---|---|---|---|
+| **Indeterminate** | NotComparable | NotComparable | NotComparable | NotComparable |
+| **Role** | NotComparable | *same / different* | **NotComparable** | **NotComparable** |
+| **Instance** | NotComparable | **NotComparable** | *same / different* | 🔴 **DifferentParties** |
+| **Owner** | NotComparable | **NotComparable** | 🔴 **DifferentParties** | *same / different* |
+
+🔴 **OWNER versus AGENT-INSTANCE is a real verdict, and it is the case worth getting right.** A human
+and an agent are different parties **by construction** — no string comparison is needed and none could
+help. This is the pairing that turns a permanent NOT CHECKED into a genuine pass. The same measurement
+as above, after:
+
+```
+3d enumerator independence: Status=Checked Passed=True ::
+  the enumeration was produced by 'owner:MaTRiXz', who is neither the block's author
+  nor any vector's.
+```
+
+⚠️ **OWNER versus ROLE is `NotComparable`, and that is the deliberately weaker of the two answers.**
+The construction argument — *a role label names an agent's job, a human is not an agent, therefore
+different parties* — is real, and **it leaks**. The role vocabulary is **the undefined one**: it is
+*every string with no separator*, so the set of role strings **contains strings that denote the
+owner**. A bare `MaTRiXz` is a role label. Under `DifferentParties`, `owner:MaTRiXz` against
+`MaTRiXz` — **the same human written twice, once under the convention and once not** — would return
+"two parties" and pass a self-check, which is exactly the vacuous pass this family exists to remove.
+🔴 **And it is not hypothetical:** `docs/notes/owner-questions.md` **D1** records a committed binding
+whose prose *"names an **owner as a role**"*. The construction argument is airtight only against the
+**defined** instance form — a machine shape no human can be written in — which is where it is used and
+nowhere else.
+
+**The NOT CHECKED text has its own branch, because the generic one is wrong twice over for a named
+human.** It ends *"Unknown is not independent"*, and the owner side is the opposite of unknown; and
+its repair — *"both sides produced under the convention"* — is unreachable, because the owner will
+never hold a session id. The owner branch says the artifact **is** attributed, to a person; says what
+cannot be settled is the **counterparty**; and puts the repair there: *stamp the counterparty
+`<session-id>/<agent-type>` and this becomes a real verdict.* A test asserts the phrase *"Unknown is
+not independent"* never appears in it.
+
+**Malformed owner strings go to the fail-safe sink, never to the nearer vocabulary**: `owner:` (no
+handle), `owner:   `, `owner:a:b`, `owner:a/b`. And the decided case on the other side — **a
+non-owner colon such as `foo:bar` stays a ROLE**, the same trade as the slash paragraph above,
+resolved the same way, because no such string exists in the tree. Both have tripwire tests.
+
+⚠️ **The owner form's own limit, stated rather than implied away: a BARE handle still reads as a
+ROLE.** `MaTRiXz` has no separator and nothing can tell it from a role label. That is unchanged
+behaviour rather than a regression — the form did not exist — and it is *why* Owner-versus-Role is
+`NotComparable`. The convention is the prefixed form; a bare handle is a convention violation.
+
+**Where the third form is enforced.** `IdentityForm.Owner` (`SubmissionVector.cs:422`),
+`IdentityVocabulary.OwnerPrefix` + `FormOf`'s ordered rule (`:571`), the relation table in
+`AgentIdentity.SameAs` (`:740`), and the owner branch of `IdentityVocabulary.CrossFormDetail`. No
+change was needed in `Admissibility.cs` — its switch already spells out all three relations, so the
+new verdict arrives through `SameAs` and falls through to admission; asserted in both directions
+rather than assumed.
+
+ℹ️ **This makes a truthful `declaredBy` writable where D1 currently says no truthful string exists**
+(the hopper binding, whose prose names an owner as a role and no machine identity). ***D1 is NOT
+ruled by this and stays open*** — the decision is the owner's and it has not been taken. Nothing in
+`gen/` was changed.
+
+➜ **A related ruling the same day, and it is the stronger one where it applies:** the **per-block
+spec is owner-authored** (`docs/notes/owner-questions.md` **D3**). That settles 3d's question at the
+source rather than at the comparison — the enumerator works from material **no agent wrote at all**,
+which is an independence the gate has no vocabulary for. **The gate is not wrong; it is narrower than
+the fact.**
 
 #### The graded ceiling — say which level a claim rests on
 
@@ -130,9 +240,9 @@ six levels — L2 and L4 — are already built, and they are the two that do not
 
 | level | what it establishes | state |
 |---|---|---|
-| **L0** | identity **unrecorded** ⇒ never a pass | ✅ **built, fail-closed both ways.** Gate 2 and `Admissibility.Check` make an unrecorded author a **refusal** (`SubmissionGate.cs:869`, `:874`; `Admissibility.cs:517`); gates 3d and 4b make an unrecorded enumerator / declarer **NOT CHECKED** (`SubmissionGate.cs:1140`; `:1063`). *"Unknown is not independent"* is the phrase all four use |
-| **L0b** | identity in a **vocabulary the other side is not in** ⇒ never a pass | ✅ **built 2026-08-24, and it sits BELOW L1 because it decides whether L1 may run at all.** `AgentIdentity.SameAs` returns `IdentityRelation {NotComparable, SameParty, DifferentParties}` (`SubmissionVector.cs:591`), swept once per gate by `CrossFormStop` (`:819`). See the form ruling above — **a cross-form comparison is NOT CHECKED, and it used to be a green** |
-| **L1** | a **normalised self-declared string** differs | ✅ **built — this is where the system is,** *within one vocabulary.* `AgentIdentity.SameAs`, `SubmissionVector.cs:591`: `Trim()` + `OrdinalIgnoreCase` once L0b has cleared. ***Every*** D6 comparison routes through it — gate 2 (`SubmissionGate.cs:877`), gate 3d (`:1165`, `:1168`), gate 4b (`:1077`, `:1086`), gate 5c (`:1841`, `:1854`) and `Admissibility.cs:527`; **nothing in the D6 family is bare ordinal.** **Defeats a typo, a case change and a trailing space; defeated by typing a different string** |
+| **L0** | identity **unrecorded** ⇒ never a pass | ✅ **built, fail-closed both ways.** Gate 2 and `Admissibility.Check` make an unrecorded author a **refusal** (`SubmissionGate.cs:879`, `:884`; `Admissibility.cs:517`); gates 3d and 4b make an unrecorded enumerator / declarer **NOT CHECKED** (`SubmissionGate.cs:1160`; `:1084`). *"Unknown is not independent"* is the phrase all four use |
+| **L0b** | identity in a **vocabulary the other side is not in** ⇒ never a pass | ✅ **built 2026-08-24, and it sits BELOW L1 because it decides whether L1 may run at all.** `AgentIdentity.SameAs` returns `IdentityRelation {NotComparable, SameParty, DifferentParties}` (`SubmissionVector.cs:740`), swept once per gate by `CrossFormStop` (`:827`). See the form ruling above — **a cross-form comparison is NOT CHECKED, and it used to be a green.** ⚠️ **ONE EXCEPTION, and it is a verdict rather than a leak: OWNER against agent-INSTANCE.** Different parties **by construction**, so the sweep passes it — the third form's whole purpose. Everything else cross-form is still NOT CHECKED |
+| **L1** | a **normalised self-declared string** differs | ✅ **built — this is where the system is,** *within one vocabulary.* `AgentIdentity.SameAs`, `SubmissionVector.cs:740`: `Trim()` + `OrdinalIgnoreCase` once L0b has cleared. ***Every*** D6 comparison routes through it — gate 2 (`SubmissionGate.cs:885`), gate 3d (`:1185`, `:1188`), gate 4b (`:1097`, `:1106`), gate 5c (`:1861`, `:1874`) and `Admissibility.cs:527`; **nothing in the D6 family is bare ordinal.** **Defeats a typo, a case change and a trailing space; defeated by typing a different string.** 🔴 **An OWNER against an agent-INSTANCE does not rest on L1 at all** — it is decided at L0b by construction, so no keystroke reaches it. That is the only D6 answer in the system a typed string cannot defeat |
 | **L2** | **provenance of the artifact** rather than the name on it | ✅ **already built, and unbypassable by typing.** `MapProvenance {Unstated, SelfDeclared, Bindings}` (`SubmissionVector.cs:126-154`), consumed by gate 5 (`SubmissionGate.cs:1562`). It asks *which route the tool loaded this artifact by*, and a self-declared map is NOT CHECKED rather than a pass |
 | **L3** | **environment-stamped identity at production time** | ❌ **not built.** Bypassable only by a deliberate act, not by a keystroke |
 | **L4** | make identity **irrelevant** by recomputing the artifact | ✅ **already built twice.** Gate 3g `IdsRecompute` — its own comment is *"THE RECOMPUTATION THAT MAKES THE STAMPER SAFE TO BE ANYBODY"* (`SubmissionGate.cs:1124`, method at `:1145`) — and gate 0c `DerivedFields` (`:399`), which refuses a field a tool already knows when it was typed by hand |
@@ -166,7 +276,7 @@ Recorded because the asymmetry is deliberate and was nowhere written down.
 
 | site | comparison | why that direction is the safe one |
 |---|---|---|
-| **D6 identity**, `SubmissionVector.cs:591` | `Trim()` + `OrdinalIgnoreCase` — **loose** *(within one vocabulary; across two it does not compare at all — L0b above)* | It gates a **refusal**. Loosening it makes the gate catch *more* collisions: `"AGENT-B "` and `agent-b` are refused as the same party. A tighter comparison here would let a keystroke buy a pass |
+| **D6 identity**, `SubmissionVector.cs:740` | `Trim()` + `OrdinalIgnoreCase` — **loose** *(within one vocabulary; across two it does not compare at all — L0b above, whose one exception is owner-vs-instance)* | It gates a **refusal**. Loosening it makes the gate catch *more* collisions: `"AGENT-B "` and `agent-b` are refused as the same party. A tighter comparison here would let a keystroke buy a pass |
 | **Claim release**, `src/converter/Converter/Claims/ClaimStore.cs:240`, `:247` | bare `StringComparison.Ordinal`, no trim — **strict** | It gates a **permission** — releasing another agent's claim. Loosening it would let a near-miss name *acquire* the right to delete a peer's reservation. The refusal path is already correct and `--force` is the declared override |
 
 ***Loose is safe for a refusal; strict is safe for a permission.*** Neither is a bug, and neither

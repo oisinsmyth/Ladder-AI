@@ -815,6 +815,14 @@ public static class SubmissionGate
     ///
     /// <para>Returns <c>null</c> when every pair is comparable, so a caller reads
     /// <c>if (CrossFormStop(...) is { } stop) return stop;</c> and then compares normally.</para>
+    ///
+    /// <para>⚠️ <b>"CROSS-FORM" AND "CANNOT COMPARE" STOPPED BEING SYNONYMS ON 2026-08-24, AND THE NAME
+    /// OF THIS METHOD IS NOW THE LOOSER OF THE TWO.</b> The owner form (<c>owner:&lt;handle&gt;</c>) is
+    /// a third vocabulary, and an owner against an agent INSTANCE is a real verdict —
+    /// <c>DifferentParties</c> by construction — so this sweep must let it through. It does, because it
+    /// asks <see cref="AgentIdentity.CanCompareWith"/> and never <c>left.Form == right.Form</c>.
+    /// <b>Re-deriving it from form equality would restore a permanent NOT CHECKED on every
+    /// owner-authored artifact</b>, which is the exact defect the owner form was added to end.</para>
     /// </summary>
     private static GateResult? CrossFormStop(
         string gate,
@@ -878,9 +886,21 @@ public static class SubmissionGate
                 problems.Add($"{v.Id}: '{v.Author}' wrote both the block and the vector. That is a correlated check and it is a refusal, not a warning.");
         }
 
+        // *** THE PASS SENTENCE SAYS WHAT WAS ESTABLISHED, AND IT USED TO SAY MORE THAN THAT. *** It read
+        // "both sides in the same identity vocabulary" until the owner form landed (2026-08-24), and that
+        // clause is FALSE of the one pairing this gate most wants to pass: an owner-authored artifact
+        // against a convention-stamped agent is comparable BECAUSE the vocabularies differ, not despite
+        // it. A gate whose green describes the wrong mechanism is a green nobody can audit.
+        var byConstruction = blockAuthor.Form == IdentityForm.Owner
+                             || vectors.Any(v => v.Author.Form == IdentityForm.Owner);
+
         return new GateResult("2 authorship (D6)", GateStatus.Checked, problems.Count == 0, nameof(AgentIdentity),
             problems.Count == 0
-                ? $"vector author(s) differ from the block author '{blockAuthor}' under a normalised comparison, both sides in the same identity vocabulary. NOTE: the string is a LABEL for a different context instance and not a proof of one — docs/notes/test-environment-contract.md §1.1."
+                ? $"vector author(s) differ from the block author '{blockAuthor}', every pair compared in a vocabulary where the answer means something"
+                    + (byConstruction
+                        ? " — and at least one pair is an OWNER against an agent INSTANCE, which is different parties BY CONSTRUCTION rather than by a string differing. A human is not an agent, so no keystroke defeats that one."
+                        : " (a normalised comparison within one identity vocabulary).")
+                    + " NOTE: where the comparison IS of strings, the string is a LABEL for a different context instance and not a proof of one — docs/notes/test-environment-contract.md §1.1."
                 : string.Join(" | ", problems));
     }
 

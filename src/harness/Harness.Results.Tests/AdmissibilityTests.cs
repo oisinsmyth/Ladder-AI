@@ -220,6 +220,48 @@ public class AdmissibilityTests
     }
 
     [Fact]
+    public void AN_OWNER_AUTHORED_BLOCK_AGAINST_AN_AGENT_WRITTEN_VECTOR_IS_ADMISSIBLE_on_the_authorship_limb()
+    {
+        // 🔴 The owner form (2026-08-24). This type owns no NOT CHECKED channel, so before the form
+        // existed the owner's handle read as a ROLE label and an owner-authored block against a
+        // convention-stamped vector author was REFUSED as AuthorshipNotComparable — the best-attributed
+        // pairing in the system, refused. A human and an agent are different parties by construction.
+        //
+        // No code changed in Admissibility for this: the switch already spells out all three relations,
+        // so the new verdict arrives through `SameAs` and falls through to admission. Asserted rather
+        // than assumed, in both directions, because "it should follow" is not a test.
+        Assert.DoesNotContain(
+            Check(vectorAuthor: "sess-1/vector-author", blockAuthor: "owner:MaTRiXz").Refusals,
+            r => r.Reason is RefusalReason.AuthorshipCorrelated or RefusalReason.AuthorshipNotComparable);
+
+        Assert.DoesNotContain(
+            Check(vectorAuthor: "owner:MaTRiXz", blockAuthor: "sess-1/lad-coder").Refusals,
+            r => r.Reason is RefusalReason.AuthorshipCorrelated or RefusalReason.AuthorshipNotComparable);
+    }
+
+    [Fact]
+    public void AN_OWNER_AGAINST_A_ROLE_LABEL_IS_STILL_REFUSED_and_the_text_does_not_call_a_named_human_unknown()
+    {
+        // The deliberately weaker half: the ROLE vocabulary is the undefined one and CONTAINS strings
+        // that denote the owner, so `owner:MaTRiXz` against a bare `MaTRiXz` would be the same human
+        // passing a self-check. It stays a refusal — but it must not read as an unattributed artifact.
+        var refusal = Assert.Single(Check(vectorAuthor: "owner:MaTRiXz", blockAuthor: "lad-coder").Refusals);
+
+        Assert.Equal(RefusalReason.AuthorshipNotComparable, refusal.Reason);
+        Assert.NotEqual(RefusalReason.AuthorshipCorrelated, refusal.Reason);
+        Assert.DoesNotContain("Unknown is not independent", refusal.Detail, StringComparison.Ordinal);
+        Assert.Contains("a named human, not an agent", refusal.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void THE_OWNER_WEARING_TWO_HATS_IS_STILL_THE_CORRELATED_REFUSAL()
+    {
+        // A vocabulary that could never refuse would be a pass bought by typing a prefix.
+        var collide = Assert.Single(Check(vectorAuthor: "owner:MaTRiXz", blockAuthor: "owner:matrixz").Refusals);
+        Assert.Equal(RefusalReason.AuthorshipCorrelated, collide.Reason);
+    }
+
+    [Fact]
     public void An_unobservable_vector_is_refused_because_a_green_that_cannot_mean_anything_is_worse()
     {
         Assert.Contains(Check(observabilitySupported: false).Refusals, r => r.Reason == RefusalReason.Unobservable);

@@ -407,11 +407,17 @@ public sealed record SubmissionVector(
     IReadOnlyDictionary<string, string>? BoundsUsed = null);
 
 /// <summary>
-/// 🔴 <b>WHICH IDENTITY VOCABULARY A STRING IS WRITTEN IN. TWO EXIST IN THIS REPO AT ONCE.</b>
+/// 🔴 <b>WHICH IDENTITY VOCABULARY A STRING IS WRITTEN IN. THREE EXIST IN THIS REPO AT ONCE.</b>
 ///
 /// <para><b><see cref="Indeterminate"/> IS 0 ON PURPOSE</b> — a <c>default(IdentityForm)</c> that
 /// arrives from anywhere is the value that compares against nothing, so forgetting to classify fails
 /// closed instead of joining a vocabulary by accident.</para>
+///
+/// <para><b>Two of the three name AGENTS</b> (<see cref="Role"/>, <see cref="Instance"/>) and the
+/// third names a HUMAN (<see cref="Owner"/>). That split is what decides the relation table in
+/// <see cref="AgentIdentity.SameAs"/>: across the two agent vocabularies a comparison cannot collide
+/// and is not a verdict, but an owner and an agent-INSTANCE are different parties <i>by
+/// construction</i> and that IS a verdict.</para>
 /// </summary>
 public enum IdentityForm
 {
@@ -435,6 +441,23 @@ public enum IdentityForm
     /// The convention for NEW artifacts.
     /// </summary>
     Instance,
+
+    /// <summary>
+    /// 🔴 <b>THE OWNER VOCABULARY, RULED 2026-08-24: <c>owner:&lt;handle&gt;</c>. A NAMED HUMAN, AND A
+    /// HUMAN IS NOT AN AGENT.</b>
+    ///
+    /// <para><b>The gap it closes.</b> Until this member existed the convention had <i>no form for a
+    /// person</i>. An owner-authored artifact stamped with a bare handle carries no separator, so it
+    /// classified as a <see cref="Role"/> and every comparison against a convention-stamped agent
+    /// returned <see cref="IdentityRelation.NotComparable"/> — <b>permanently NOT CHECKED on precisely
+    /// the artifacts with the BEST provenance in the system.</b> An owner-authored artifact is the
+    /// strongest independence this pipeline has, and it was being reported identically to an
+    /// unattributed one.</para>
+    ///
+    /// <para><b>Appended rather than inserted</b> so no existing member's numeric value moves:
+    /// <c>Indeterminate=0, Role=1, Instance=2, Owner=3</c>.</para>
+    /// </summary>
+    Owner,
 }
 
 /// <summary>
@@ -465,10 +488,11 @@ public enum IdentityRelation
 /// 🔴 <b>TELLING THE TWO IDENTITY VOCABULARIES APART — A HEURISTIC, AND THE LIMITS ARE STATED HERE
 /// RATHER THAN IMPLIED AWAY.</b>
 ///
-/// <para><b>THE RULE: the separator, and only the separator.</b> A normalised identity with no
-/// <c>/</c> is a <see cref="IdentityForm.Role"/>; one with exactly one <c>/</c> and something on both
-/// sides of it is an <see cref="IdentityForm.Instance"/>; <b>anything else that touches the separator
-/// is <see cref="IdentityForm.Indeterminate"/></b> and compares against nothing.</para>
+/// <para><b>THE RULE, IN ORDER. The owner prefix is tested FIRST, and the order is load-bearing.</b>
+/// A normalised identity beginning <c>owner:</c> is an <see cref="IdentityForm.Owner"/>. Otherwise:
+/// no <c>/</c> is a <see cref="IdentityForm.Role"/>; exactly one <c>/</c> with something on both
+/// sides of it is an <see cref="IdentityForm.Instance"/>; <b>anything else that touches either
+/// separator is <see cref="IdentityForm.Indeterminate"/></b> and compares against nothing.</para>
 ///
 /// <para><b>Why the separator and not the session id.</b> The ruling defines the INSTANCE form and
 /// deliberately leaves the role form undefined (<c>docs/notes/test-environment-contract.md</c> §1.1:
@@ -497,17 +521,81 @@ public enum IdentityRelation
 /// this paragraph is where to start.</b></description></item>
 /// </list>
 ///
+/// <para>🔴 <b>WHY THE OWNER FORM IS <c>owner:&lt;handle&gt;</c> AND NOT <c>owner/&lt;handle&gt;</c>.
+/// THE SLASH SHAPE IS NOT A NEAR-MISS — IT IS WRONG BY CONSTRUCTION, AND THERE IS A TEST HOLDING IT
+/// THAT WAY.</b> Read the Instance rule above and apply it to <c>owner/MaTRiXz</c>: exactly one
+/// slash, both sides non-empty, so it classifies as an INSTANCE with session id <c>owner</c> and
+/// agent type <c>MaTRiXz</c>. <b>The owner would be filed as an agent</b> — the single reading the
+/// ruling exists to forbid — and it would do so silently, reporting a verdict rather than a
+/// refusal. <c>owner:MaTRiXz</c> cannot land in that branch, because the branch is reached only by
+/// a string containing a slash.</para>
+///
+/// <para><b>Why a colon, and why a word rather than a sigil.</b> Three reasons, and the first is
+/// measured: <b>no committed identity string in this repo contains a colon</b> — every value in
+/// <c>gen/</c> on 2026-08-24 was <c>lad-coder</c>, <c>vector-author-5.2</c>,
+/// <c>vector-author-b-5.2</c>, <c>model-fidelity-declarer-1</c>, <c>assertion-enumerator</c> or an
+/// <c>agent-x</c> fixture, so the new form cannot collide with an existing one. Second, it is a
+/// PREFIX, so the vocabulary is the first thing both this classifier and a human reading a gate
+/// message meet — a refusal opens with <c>owner:</c> before it opens with a person. Third, it is the
+/// literal word and not a sigil such as <c>@</c>: a sigil means "a person" only by convention, is
+/// already meaningful in YAML, JSON, markdown and mention syntax, and is the character most easily
+/// lost in transcription — after which the string silently becomes a Role. The word cannot be
+/// dropped by accident and it greps cleanly.</para>
+///
+/// <para><b>The HANDLE is not validated, deliberately — the same reasoning as the session id above.</b>
+/// The form is <c>owner:</c> plus any non-blank handle; <b>the handle in use is <c>MaTRiXz</c></b> and
+/// it lives in <c>docs/notes/test-environment-contract.md</c> §1.1, not in this classifier. Encoding
+/// one person's spelling here would mean a code change the first time it is not that person, and a
+/// silent misfile in the meantime.</para>
+///
+/// <para>⚠️ <b>THE OWNER FORM'S OWN FAILURE MODE, STATED RATHER THAN IMPLIED AWAY: a BARE handle
+/// reads as a ROLE.</b> <c>MaTRiXz</c> has no separator, so it is a role label and nothing can tell
+/// it from one. That is today's behaviour unchanged rather than a regression — the form did not exist
+/// — and it is the reason <see cref="AgentIdentity.SameAs"/> sends <b>Owner versus Role</b> to
+/// <see cref="IdentityRelation.NotComparable"/> instead of to <c>DifferentParties</c>: the role
+/// vocabulary is the UNDEFINED one, so it CONTAINS strings that denote the owner, and a verdict
+/// across that boundary could be reporting the prefix rather than the parties. The argument in
+/// full, with the live instance it rests on, is on <see cref="AgentIdentity.SameAs"/>.</para>
+///
+/// <para><b>And the decided case on the other side of the colon: a NON-owner colon stays a ROLE.</b>
+/// <c>foo:bar</c> is not sent to <c>Indeterminate</c>. Same trade as the slash paragraph above,
+/// resolved the same way — no such string exists in the tree (measured, as above), so sending it to
+/// <c>Indeterminate</c> would silence a real comparison to guard a hypothetical one. <b>If a colon
+/// ever enters a role label this rule is wrong and this paragraph is where to start.</b></para>
+///
 /// <para><b>What the rule is NOT.</b> It does not verify that a session id is real, that an agent type
-/// exists, or that the party named did the work. It answers one question — <i>which vocabulary is
-/// this string written in</i> — and everything else about identity is still L1 (§1.1's ladder).</para>
+/// exists, that a handle belongs to anybody, or that the party named did the work. It answers one
+/// question — <i>which vocabulary is this string written in</i> — and everything else about identity
+/// is still L1 (§1.1's ladder).</para>
 /// </summary>
 public static class IdentityVocabulary
 {
+    /// <summary>
+    /// The owner vocabulary's marker. <b>Matched case-insensitively</b>, consistent with the
+    /// loose-is-safe-for-a-refusal rule recorded at contract §1.1: this classifier gates refusals,
+    /// so a case variant must not buy a different vocabulary.
+    /// </summary>
+    public const string OwnerPrefix = "owner:";
     /// <summary>Classify a normalised identity string. See the type comment for the rule and its limits.</summary>
     public static IdentityForm FormOf(string? normalised)
     {
         if (string.IsNullOrWhiteSpace(normalised))
             return IdentityForm.Indeterminate;
+
+        // 🔴 *** THE OWNER PREFIX IS TESTED BEFORE THE SEPARATOR RULE, AND MOVING IT BELOW BREAKS THE
+        // FORM. *** `owner:MaTRiXz` contains no slash, so the separator rule would classify it Role -
+        // the very misfile this vocabulary was added to end. Order is behaviour here, not tidiness.
+        if (normalised.StartsWith(OwnerPrefix, StringComparison.OrdinalIgnoreCase))
+        {
+            var handle = normalised[OwnerPrefix.Length..];
+
+            // The fail-safe sink, and it catches the two shapes that would otherwise smuggle a second
+            // vocabulary inside the handle: a further ':' (which owns no defined meaning) and a '/'
+            // (which is the agent-instance separator). Neither is rounded into the owner form.
+            return string.IsNullOrWhiteSpace(handle) || handle.Contains(':') || handle.Contains('/')
+                ? IdentityForm.Indeterminate
+                : IdentityForm.Owner;
+        }
 
         var parts = normalised.Split('/');
 
@@ -531,6 +619,9 @@ public static class IdentityVocabulary
     {
         IdentityForm.Role => "a ROLE label",
         IdentityForm.Instance => "an INSTANCE label (<session-id>/<agent-type>)",
+        // Named as a person, not as a string shape. The whole point of the form is that the reader of a
+        // gate message should not have to be told a human is not an agent.
+        IdentityForm.Owner => "the OWNER'S OWN HANDLE (owner:<handle>) — a named human, not an agent",
         _ => "in NEITHER vocabulary",
     };
 
@@ -539,12 +630,31 @@ public static class IdentityVocabulary
     /// different accounts of the same ruling. <paramref name="what"/> names the pairing in the gate's
     /// own words, e.g. <c>"the model's declarer against the block's author"</c>.
     /// </summary>
-    public static string CrossFormDetail(string what, AgentIdentity left, AgentIdentity right) =>
-        $"comparing {what} was NOT CHECKED: '{left}' is {Describe(left.Form)} and '{right}' is {Describe(right.Form)}. "
-        + "*** TWO IDENTITY VOCABULARIES, AND ACROSS THEM A COMPARISON CANNOT COLLIDE — so a pass here would report the string formats, "
-        + "not the parties. *** This is a RULING and not a bug: the instance form is the convention for NEW artifacts (2026-08-24) and "
-        + "committed artifacts are NOT retrofitted, so a mixed tree is expected. The repair is that both sides be produced under the "
-        + "convention — never that an old artifact be edited to match. docs/notes/test-environment-contract.md §1.1. Unknown is not independent.";
+    public static string CrossFormDetail(string what, AgentIdentity left, AgentIdentity right)
+    {
+        // 🔴 *** AN OWNER-AUTHORED ARTIFACT GETS ITS OWN SENTENCE, AND THE REASON IS THAT THE GENERIC
+        // ONE IS WRONG TWICE OVER FOR A NAMED HUMAN. *** It ends "Unknown is not independent", and the
+        // owner side is the opposite of unknown - it is the best-attributed artifact in the system. And
+        // its repair, "both sides produced under the convention", is unreachable: the owner will never
+        // hold a session id, so telling a reader to wait for one is telling them to wait for ever.
+        if (left.Form == IdentityForm.Owner || right.Form == IdentityForm.Owner)
+        {
+            var owner = left.Form == IdentityForm.Owner ? left : right;
+            var other = left.Form == IdentityForm.Owner ? right : left;
+
+            return $"comparing {what} was NOT CHECKED: '{owner}' is {Describe(owner.Form)} and '{other}' is {Describe(other.Form)}. "
+                + "*** THIS ARTIFACT IS ATTRIBUTED — TO A PERSON. THE SILENCE IS NOT A DOUBT ABOUT ITS PROVENANCE: *** an owner-authored artifact is the strongest independence here, and agent-independence is not the question being asked of it. "
+                + "What cannot be settled is the OTHER side: the ROLE vocabulary is the undefined one — every string with no separator — so it CONTAINS strings that denote the owner. A verdict here could be reporting the PREFIX rather than the parties. "
+                + "*** THE REPAIR IS ON THE COUNTERPARTY, NEVER THE OWNER: *** stamp it <session-id>/<agent-type> and this becomes a real verdict — an owner and an agent instance are DIFFERENT PARTIES by construction. "
+                + "docs/notes/test-environment-contract.md §1.1.";
+        }
+
+        return $"comparing {what} was NOT CHECKED: '{left}' is {Describe(left.Form)} and '{right}' is {Describe(right.Form)}. "
+            + "*** TWO IDENTITY VOCABULARIES, AND ACROSS THEM A COMPARISON CANNOT COLLIDE — so a pass here would report the string formats, "
+            + "not the parties. *** This is a RULING and not a bug: the instance form is the convention for NEW artifacts (2026-08-24) and "
+            + "committed artifacts are NOT retrofitted, so a mixed tree is expected. The repair is that both sides be produced under the "
+            + "convention — never that an old artifact be edited to match. docs/notes/test-environment-contract.md §1.1. Unknown is not independent.";
+    }
 }
 
 /// <summary>
@@ -558,9 +668,15 @@ public static class IdentityVocabulary
 /// (<c>"agent-a"</c> versus <c>"Agent-A "</c>, which an ordinal comparison happily calls independent)
 /// and closes nothing else. <b>The string is a label for the mechanism, never a proof of it.</b></para>
 ///
-/// <para>🔴 <b>AND IT IS WRITTEN IN ONE OF TWO VOCABULARIES</b> — see <see cref="IdentityForm"/>.
-/// Comparing across them is <see cref="IdentityRelation.NotComparable"/>, which is why
-/// <see cref="SameAs"/> no longer returns a <c>bool</c>.</para>
+/// <para>🔴 <b>AND IT IS WRITTEN IN ONE OF THREE VOCABULARIES</b> — see <see cref="IdentityForm"/>.
+/// Two name agents and one names a human. Comparing across the two AGENT vocabularies is
+/// <see cref="IdentityRelation.NotComparable"/>, which is why <see cref="SameAs"/> no longer returns
+/// a <c>bool</c>; comparing the human against an agent INSTANCE is a verdict by construction. The
+/// full table is on <see cref="SameAs"/>.</para>
+///
+/// <para><b>"Agent" in this type's name is now a slight lie, and renaming it would be a worse one.</b>
+/// It is the identity of whoever authored an artifact, agent or person. The name is kept because
+/// every document in this repo cites <c>AgentIdentity.SameAs</c> by it.</para>
 /// </summary>
 public readonly record struct AgentIdentity(string Value)
 {
@@ -587,13 +703,70 @@ public readonly record struct AgentIdentity(string Value)
     /// <para>Use <see cref="CanCompareWith"/> to gate a whole check to NOT CHECKED before comparing,
     /// and <see cref="IsSamePartyAs"/> where a yes/no reads better — it throws rather than inventing
     /// one.</para>
+    ///
+    /// <para>🔴 <b>THE THIRD VOCABULARY BROKE "SAME FORM OR NOTHING", AND ON PURPOSE — THE FULL TABLE
+    /// IS HERE AND A MATRIX TEST ASSERTS ALL SIXTEEN CELLS.</b></para>
+    ///
+    /// <list type="table">
+    /// <listheader><description><b>left \ right — Indeterminate / Role / Instance / Owner</b></description></listheader>
+    /// <item><description><b>Indeterminate</b> — NotComparable, NotComparable, NotComparable, NotComparable</description></item>
+    /// <item><description><b>Role</b> — NotComparable, <i>same/different</i>, <b>NotComparable</b>, <b>NotComparable</b></description></item>
+    /// <item><description><b>Instance</b> — NotComparable, <b>NotComparable</b>, <i>same/different</i>, <b>DifferentParties</b></description></item>
+    /// <item><description><b>Owner</b> — NotComparable, <b>NotComparable</b>, <b>DifferentParties</b>, <i>same/different</i></description></item>
+    /// </list>
+    ///
+    /// <para><b>OWNER versus AGENT-INSTANCE is <see cref="IdentityRelation.DifferentParties"/> — a real
+    /// verdict, and it is the case worth getting right.</b> A human and an agent are different parties
+    /// by construction; no string comparison is needed and none could help. This is the pairing that
+    /// turns a permanent NOT CHECKED into a genuine pass, on the artifacts with the best provenance in
+    /// the system. Before the owner form existed the owner's handle classified as a
+    /// <see cref="IdentityForm.Role"/>, so this pairing read <see cref="IdentityRelation.NotComparable"/>
+    /// for ever and the gates went silent exactly where they had the most to report.</para>
+    ///
+    /// <para>🔴 <b>OWNER versus ROLE is <see cref="IdentityRelation.NotComparable"/>, AND IT IS THE
+    /// DELIBERATELY WEAKER ANSWER OF THE TWO.</b> The construction argument above — <i>a role label
+    /// names an agent's job, a human is not an agent, therefore different parties</i> — is real and it
+    /// LEAKS, so it is not used here. <b>The role vocabulary is the UNDEFINED one:</b> it is every
+    /// string with no separator, which means the set of role strings CONTAINS strings that denote the
+    /// owner. A bare <c>MaTRiXz</c> is a role label. So <c>owner:MaTRiXz</c> against <c>MaTRiXz</c> —
+    /// <b>the same human written twice, once under the convention and once not</b> — would return
+    /// "different parties" and pass a self-check. <i>That is precisely the vacuous pass this enum
+    /// exists to remove.</i> ⚠️ <b>And it is not hypothetical:</b>
+    /// <c>docs/notes/owner-questions.md</c> D1 records a committed binding whose prose "names an
+    /// <b>owner as a role</b>". The construction argument is airtight only against the DEFINED
+    /// instance form — a machine shape no human can be written in — which is exactly where it is
+    /// used and nowhere else.</para>
     /// </summary>
     public IdentityRelation SameAs(AgentIdentity other)
     {
         var mine = Form;
+        var theirs = other.Form;
 
-        if (mine == IdentityForm.Indeterminate || mine != other.Form)
+        // Unclassifiable compares against nothing, including against another unclassifiable: "both
+        // unclassifiable" is not evidence that both are the same kind of thing.
+        if (mine == IdentityForm.Indeterminate || theirs == IdentityForm.Indeterminate)
             return IdentityRelation.NotComparable;
+
+        if (mine == IdentityForm.Owner || theirs == IdentityForm.Owner)
+        {
+            // Two owner handles: an ordinary string comparison, because two handles CAN collide and the
+            // collision is the finding. Falls through to the normalised compare below.
+            if (mine != theirs)
+            {
+                // One owner, one agent vocabulary. See the table above for why these two answers differ.
+                var agent = mine == IdentityForm.Owner ? theirs : mine;
+
+                return agent == IdentityForm.Instance
+                    ? IdentityRelation.DifferentParties
+                    : IdentityRelation.NotComparable;
+            }
+        }
+        else if (mine != theirs)
+        {
+            // The two AGENT vocabularies. Unchanged, and it must stay unchanged: a role label and an
+            // instance label can never collide, so a verdict here would report the formats.
+            return IdentityRelation.NotComparable;
+        }
 
         return string.Equals(Normalised, other.Normalised, StringComparison.OrdinalIgnoreCase)
             ? IdentityRelation.SameParty
@@ -601,9 +774,17 @@ public readonly record struct AgentIdentity(string Value)
     }
 
     /// <summary>
-    /// True when the two are in the same vocabulary, so a verdict about them means something.
-    /// <b>The gate-level guard</b>: check this across every pair first and report NOT CHECKED once,
-    /// rather than letting a per-pair comparison decide half a gate.
+    /// True when a verdict about these two would MEAN something. <b>The gate-level guard</b>: check
+    /// this across every pair first and report NOT CHECKED once, rather than letting a per-pair
+    /// comparison decide half a gate.
+    ///
+    /// <para>⚠️ <b>THIS IS NO LONGER THE SAME QUESTION AS "same vocabulary", AND THE TWO PARTED
+    /// COMPANY WHEN THE OWNER FORM ARRIVED.</b> An <see cref="IdentityForm.Owner"/> and an
+    /// <see cref="IdentityForm.Instance"/> are in DIFFERENT vocabularies and are perfectly comparable
+    /// — different parties by construction. Anything that re-derives this from
+    /// <c>left.Form == right.Form</c> silently reinstates the permanent NOT CHECKED on every
+    /// owner-authored artifact. It is defined in terms of <see cref="SameAs"/> for that reason, and
+    /// must stay that way.</para>
     /// </summary>
     public bool CanCompareWith(AgentIdentity other) => SameAs(other) != IdentityRelation.NotComparable;
 

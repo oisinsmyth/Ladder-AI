@@ -201,4 +201,268 @@ public class AgentIdentityVocabularyTests
         // precedent: a refusal nobody finishes is a refusal nobody acts on.
         Assert.True(detail.Length < 900, $"the cross-form text is {detail.Length} characters");
     }
+
+    // =============================================================================================
+    // THE OWNER FORM — ruled 2026-08-24. `owner:<handle>`, a THIRD vocabulary, and the first one
+    // that does not name an agent.
+    //
+    // The gap it closes: the convention had no form for a human. An owner-authored artifact stamped
+    // with a bare handle carries no separator, so it read as a ROLE and every comparison against a
+    // convention-stamped agent went NotComparable — permanently NOT CHECKED on precisely the
+    // artifacts with the best provenance in the system, reported identically to an unattributed one.
+    // =============================================================================================
+
+    /// <summary>The owner's handle, under the convention. The spelling and capitalisation are the owner's own.</summary>
+    private const string Owner = "owner:MaTRiXz";
+
+    [Theory]
+    [InlineData("owner:MaTRiXz")]
+    [InlineData("OWNER:MaTRiXz")]      // the prefix is matched case-insensitively
+    [InlineData("  owner:MaTRiXz  ")]  // Normalised trims first
+    [InlineData("owner:someone-else")]
+    public void THE_OWNER_PREFIX_IS_ITS_OWN_VOCABULARY(string value)
+    {
+        Assert.Equal(IdentityForm.Owner, Id(value).Form);
+    }
+
+    [Fact]
+    public void THE_TRAP_THE_SHAPE_WAS_CHOSEN_TO_AVOID_owner_SLASH_handle_IS_AN_AGENT_AND_NOT_THE_OWNER()
+    {
+        // 🔴 *** THIS IS WHY THE SEPARATOR IS A COLON. *** `owner/MaTRiXz` has exactly one slash with both
+        // sides non-empty, so the INSTANCE rule claims it: session id `owner`, agent type `MaTRiXz`. The
+        // owner would be silently filed as an agent — the one reading the ruling exists to forbid, and it
+        // would produce a VERDICT rather than a refusal, which is the dangerous direction.
+        //
+        // The test is here so that "tidying" the prefix to a slash later fails loudly instead of quietly.
+        Assert.Equal(IdentityForm.Instance, Id("owner/MaTRiXz").Form);
+        Assert.NotEqual(IdentityForm.Owner, Id("owner/MaTRiXz").Form);
+
+        // And the consequence, spelled out: under the slash spelling the owner would compare against a
+        // real agent instance as two agents, on a string difference.
+        Assert.Equal(IdentityRelation.DifferentParties, Id("owner/MaTRiXz").SameAs(Id(Session + "/lad-coder")));
+    }
+
+    [Theory]
+    [InlineData("owner:")]        // no handle
+    [InlineData("owner:   ")]     // whitespace is not a handle
+    [InlineData("owner:a:b")]     // a second colon owns no defined meaning
+    [InlineData("owner:a/b")]     // the agent separator, smuggled inside a handle
+    public void A_MALFORMED_OWNER_STRING_GOES_TO_THE_FAIL_SAFE_SINK_and_is_not_rounded_into_a_vocabulary(string value)
+    {
+        Assert.Equal(IdentityForm.Indeterminate, Id(value).Form);
+        Assert.False(Id(value).CanCompareWith(Id(Session + "/lad-coder")));
+        Assert.False(Id(value).CanCompareWith(Id(Owner)));
+    }
+
+    [Fact]
+    public void THE_OWNER_FORMS_OWN_LIMIT_A_BARE_HANDLE_STILL_READS_AS_A_ROLE()
+    {
+        // ⚠️ Stated rather than implied away. `MaTRiXz` has no separator and nothing can tell it from a
+        // role label. That is today's behaviour unchanged — the form did not exist — and it is exactly
+        // why Owner-versus-Role is NotComparable rather than DifferentParties: see the test below.
+        Assert.Equal(IdentityForm.Role, Id("MaTRiXz").Form);
+
+        // `owner` on its own is a role label too: no colon, no prefix, nothing to key on.
+        Assert.Equal(IdentityForm.Role, Id("owner").Form);
+    }
+
+    [Fact]
+    public void THE_DECIDED_CASE_ON_THE_OTHER_SIDE_a_NON_OWNER_COLON_STAYS_A_ROLE()
+    {
+        // Same trade as the slash paragraph, resolved the same way: no committed identity string contains
+        // a colon (measured across gen/ on 2026-08-24), so sending `foo:bar` to Indeterminate would
+        // silence a real comparison to guard a hypothetical one. If a colon ever enters a role label this
+        // test is the tripwire.
+        Assert.Equal(IdentityForm.Role, Id("foo:bar").Form);
+        Assert.Equal(IdentityRelation.DifferentParties, Id("foo:bar").SameAs(Id("lad-coder")));
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // The relation table
+    // ---------------------------------------------------------------------------------------------
+
+    [Fact]
+    public void OWNER_AGAINST_AN_AGENT_INSTANCE_IS_A_REAL_VERDICT_and_this_is_the_case_worth_getting_right()
+    {
+        // 🔴 *** THE PAIRING THE WHOLE FORM EXISTS FOR. *** A human and an agent are different parties by
+        // construction — no string comparison is needed and none could help. This is the one that turns a
+        // permanent NOT CHECKED into a genuine pass.
+        Assert.Equal(IdentityRelation.DifferentParties, Id(Owner).SameAs(Id(Session + "/lad-coder")));
+        Assert.Equal(IdentityRelation.DifferentParties, Id(Session + "/lad-coder").SameAs(Id(Owner)));
+
+        // And it is comparable, which is what lets a gate get past its cross-form sweep at all.
+        Assert.True(Id(Owner).CanCompareWith(Id(Session + "/lad-coder")));
+    }
+
+    [Fact]
+    public void OWNER_AGAINST_A_ROLE_LABEL_IS_NOT_COMPARABLE_and_the_weaker_answer_is_the_deliberate_one()
+    {
+        // 🔴 The construction argument — a role names an agent's job, a human is not an agent, therefore
+        // different parties — LEAKS, and this assertion is the leak. The role vocabulary is the UNDEFINED
+        // one: every string with no separator. So it CONTAINS strings that denote the owner, and under
+        // `DifferentParties` the line below would be the same human written twice, passing a self-check.
+        Assert.Equal(IdentityForm.Role, Id("MaTRiXz").Form);
+        Assert.Equal(IdentityRelation.NotComparable, Id(Owner).SameAs(Id("MaTRiXz")));
+
+        // Not hypothetical: owner-questions.md D1 records a committed binding whose prose names an
+        // "owner as a role". Any role label, not just the handle-shaped one.
+        Assert.Equal(IdentityRelation.NotComparable, Id(Owner).SameAs(Id("lad-coder")));
+        Assert.Equal(IdentityRelation.NotComparable, Id("lad-coder").SameAs(Id(Owner)));
+    }
+
+    [Fact]
+    public void TWO_OWNER_HANDLES_COMPARE_AS_STRINGS_because_two_handles_CAN_collide()
+    {
+        Assert.Equal(IdentityRelation.SameParty, Id(Owner).SameAs(Id(Owner)));
+        Assert.Equal(IdentityRelation.DifferentParties, Id(Owner).SameAs(Id("owner:someone-else")));
+
+        // Normalised, like every other same-vocabulary comparison: loose is safe for a refusal, so a case
+        // or whitespace variant must not buy a second party.
+        Assert.Equal(IdentityRelation.SameParty, Id("  OWNER:matrixz ").SameAs(Id(Owner)));
+    }
+
+    [Fact]
+    public void THE_FULL_RELATION_MATRIX_ALL_SIXTEEN_CELLS_and_the_denominator_that_keeps_it_complete()
+    {
+        // *** THE DENOMINATOR ASSERTION. *** Four forms, so sixteen ordered pairs, every one named. A
+        // fifth form cannot be added without this test failing, which is the point: the table is the
+        // specification and a new member that nobody routed would otherwise default into silence.
+        Assert.Equal(4, Enum.GetValues(typeof(IdentityForm)).Length);
+        Assert.Equal(3, Enum.GetValues(typeof(IdentityRelation)).Length);
+
+        var representative = new Dictionary<IdentityForm, string>
+        {
+            [IdentityForm.Indeterminate] = "a/b/c",
+            [IdentityForm.Role] = "lad-coder",
+            [IdentityForm.Instance] = Session + "/lad-coder",
+            [IdentityForm.Owner] = Owner,
+        };
+
+        Assert.Equal(4, representative.Count);
+        foreach (var (form, value) in representative)
+            Assert.Equal(form, Id(value).Form);
+
+        const IdentityRelation no = IdentityRelation.NotComparable;
+        const IdentityRelation diff = IdentityRelation.DifferentParties;
+        const IdentityRelation same = IdentityRelation.SameParty;
+
+        var expected = new Dictionary<(IdentityForm Left, IdentityForm Right), IdentityRelation>
+        {
+            // Indeterminate compares against nothing, including itself.
+            [(IdentityForm.Indeterminate, IdentityForm.Indeterminate)] = no,
+            [(IdentityForm.Indeterminate, IdentityForm.Role)] = no,
+            [(IdentityForm.Indeterminate, IdentityForm.Instance)] = no,
+            [(IdentityForm.Indeterminate, IdentityForm.Owner)] = no,
+
+            // The two AGENT vocabularies never compare across. 5c99bd3's guard, and it must not weaken.
+            [(IdentityForm.Role, IdentityForm.Indeterminate)] = no,
+            [(IdentityForm.Role, IdentityForm.Role)] = same,
+            [(IdentityForm.Role, IdentityForm.Instance)] = no,
+            [(IdentityForm.Role, IdentityForm.Owner)] = no,
+
+            [(IdentityForm.Instance, IdentityForm.Indeterminate)] = no,
+            [(IdentityForm.Instance, IdentityForm.Role)] = no,
+            [(IdentityForm.Instance, IdentityForm.Instance)] = same,
+            [(IdentityForm.Instance, IdentityForm.Owner)] = diff,   // by construction
+
+            [(IdentityForm.Owner, IdentityForm.Indeterminate)] = no,
+            [(IdentityForm.Owner, IdentityForm.Role)] = no,         // the undefined vocabulary
+            [(IdentityForm.Owner, IdentityForm.Instance)] = diff,   // by construction
+            [(IdentityForm.Owner, IdentityForm.Owner)] = same,
+        };
+
+        Assert.Equal(16, expected.Count);
+
+        foreach (var ((left, right), want) in expected)
+        {
+            // Same representative on both sides where the forms match, so the diagonal reads SameParty.
+            var got = Id(representative[left]).SameAs(Id(representative[right]));
+            Assert.True(want == got, $"{left} vs {right}: expected {want}, got {got}");
+        }
+    }
+
+    [Fact]
+    public void THE_RELATION_IS_SYMMETRIC_for_every_pair_of_representative_strings()
+    {
+        // An asymmetric relation would mean a gate's verdict depended on which identity the caller
+        // happened to put first — and the four gates do not all order them the same way.
+        var values = new[]
+        {
+            "a/b/c", "lad-coder", "agent-b", Session + "/lad-coder", Session + "/assertion-enumerator",
+            Owner, "owner:someone-else", "owner:", "MaTRiXz",
+        };
+
+        Assert.Equal(9, values.Length);
+
+        var pairs = 0;
+        foreach (var left in values)
+        {
+            foreach (var right in values)
+            {
+                Assert.True(Id(left).SameAs(Id(right)) == Id(right).SameAs(Id(left)),
+                    $"'{left}' vs '{right}' is not symmetric");
+                pairs++;
+            }
+        }
+
+        Assert.Equal(81, pairs);
+    }
+
+    [Fact]
+    public void THE_PRESERVED_GUARD_the_two_AGENT_vocabularies_STILL_do_not_compare()
+    {
+        // 🔴 Landed 2026-08-24 in 5c99bd3, hours before the owner form. Adding a third vocabulary must not
+        // orphan it: a role label and an instance label can never collide, so a verdict across them would
+        // report the string formats. Both directions, because that is what the guard claims.
+        Assert.Equal(IdentityRelation.NotComparable, Id(Session + "/lad-coder").SameAs(Id("lad-coder")));
+        Assert.Equal(IdentityRelation.NotComparable, Id("lad-coder").SameAs(Id(Session + "/lad-coder")));
+        Assert.False(Id("agent-a").CanCompareWith(Id(Session + "/agent-a")));
+    }
+
+    [Fact]
+    public void IsSamePartyAs_ANSWERS_FOR_AN_OWNER_AGAINST_AN_INSTANCE_and_still_THROWS_against_a_ROLE()
+    {
+        // The partial function must stay partial in exactly the same places the relation says
+        // NotComparable — no wider, no narrower.
+        Assert.False(Id(Owner).IsSamePartyAs(Id(Session + "/lad-coder")));
+        Assert.True(Id(Owner).IsSamePartyAs(Id("owner:matrixz")));
+
+        var ex = Assert.Throws<InvalidOperationException>(() => Id(Owner).IsSamePartyAs(Id("lad-coder")));
+        Assert.Contains("CanCompareWith", ex.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void THE_OWNER_NOT_CHECKED_TEXT_NEVER_CALLS_A_NAMED_HUMAN_UNKNOWN()
+    {
+        // 🔴 *** "Unknown is not independent" IS THE WRONG SENTENCE FOR A NAMED HUMAN, *** and the generic
+        // text is wrong twice over here: the owner side is the best-attributed artifact in the system,
+        // and the generic repair — "both sides produced under the convention" — is unreachable, because
+        // the owner will never hold a session id.
+        var detail = IdentityVocabulary.CrossFormDetail(
+            "the map's declarer against the block's author", Id(Owner), Id("lad-coder"));
+
+        Assert.DoesNotContain("Unknown is not independent", detail, StringComparison.Ordinal);
+        Assert.DoesNotContain("committed artifacts are NOT retrofitted", detail, StringComparison.Ordinal);
+
+        Assert.Contains("MaTRiXz", detail, StringComparison.Ordinal);
+        Assert.Contains("a named human, not an agent", detail, StringComparison.Ordinal);
+        Assert.Contains("THIS ARTIFACT IS ATTRIBUTED", detail, StringComparison.Ordinal);
+        Assert.Contains("THE REPAIR IS ON THE COUNTERPARTY, NEVER THE OWNER", detail, StringComparison.Ordinal);
+        Assert.Contains("docs/notes/test-environment-contract.md §1.1", detail, StringComparison.Ordinal);
+
+        // Same budget as the generic branch, for the same reason.
+        Assert.True(detail.Length < 900, $"the owner cross-form text is {detail.Length} characters");
+    }
+
+    [Fact]
+    public void THE_OWNER_TEXT_NAMES_THE_OWNER_FIRST_WHICHEVER_SIDE_THE_CALLER_PUT_THEM_ON()
+    {
+        // The four gates do not all order the pair the same way, and a message that opened with the agent
+        // when the owner was the subject would read as an accusation against the artifact that is fine.
+        var ownerLeft = IdentityVocabulary.CrossFormDetail("x", Id(Owner), Id("lad-coder"));
+        var ownerRight = IdentityVocabulary.CrossFormDetail("x", Id("lad-coder"), Id(Owner));
+
+        Assert.Equal(ownerLeft, ownerRight);
+        Assert.Contains($"'{Owner}' is the OWNER'S OWN HANDLE", ownerLeft, StringComparison.Ordinal);
+    }
 }

@@ -154,6 +154,54 @@ table above.)*
   ~~**What is being asked:** build the plural field now, or leave the case reading NOT CHECKED until a
   real multi-coordinator batch exists?~~ **Answered above.**
 
+## ✅ D3 · The per-block spec is OWNER-AUTHORED, not derived — **RULED 2026-08-24. Recorded, not built.**
+
+*(Label `D3` and not `B<n>`, per the collision table above.)*
+
+**The ruling, in the owner's own terms:**
+
+> *"The per-block spec is not a derived artifact in the way we think about it for other artifacts.
+> The agent using the export and overall spec as reference is a speed-up tool instead of having me
+> re-write it. I am basically the author with agent assist.* ***Treat it as if I authored it
+> entirely.****"*
+
+**Consequences, recorded rather than implemented. Nothing was built for this entry.**
+
+- 🔴 **No derivation record, no recompute-and-compare, no `DerivationProducer` entry.** An authored
+  artifact is authored. `DerivationProducer.Known` (`src/harness/Harness.Results/Derivation.cs:80`)
+  is **deliberately not extended** — written down here so a later reader does not add one thinking it
+  was an omission. Gate 0c refuses a field a tool already knows when it was typed by hand; the
+  per-block spec is not that kind of field.
+
+- 🔴 **IT SETTLES THE ENUMERATOR QUESTION, AND MORE THOROUGHLY THAN GATE 3d CAN.** 3d exists to stop
+  *the block's author* deciding what the block is measured against. It does that by **comparing agent
+  identities**. An owner-authored spec means the enumerator works from material ***no agent wrote at
+  all*** — which is a stronger independence than 3d has any vocabulary for. **The gate is not wrong;
+  it is narrower than the fact.** Note the ordering: this is the *spec-side* answer, and it stands
+  whatever 3d reports about the *enumeration*.
+  *(The identity vocabulary gained an owner form the same day, so the relation can now at least be
+  expressed where the counterparty is convention-stamped — `docs/notes/test-environment-contract.md`
+  §1.1. That is a narrower thing than this ruling and does not replace it.)*
+
+- **The owner also states that a per-block spec is checked against the master spec for anything
+  missed.** ⚠️ ***That is the owner's stated PRACTICE. It is NOT a mechanical check, and nothing in
+  the repo implements it*** — searched 2026-08-24 and recorded so a future reader does not go hunting
+  for a gate that is not there:
+  - `per-block spec` — **zero hits** across `docs/`, `src/`, `.claude/`. The artifact is described in
+    `docs/18-project-workbench.md` §2.1–2.3 as `blocks/<name>.md` plus a **carve-out**.
+  - `carve-out` / `unallocated` — every hit is unrelated (the OB block-number band in
+    `Converter/Claims/`, the comment-only carve-out in `Converter/Diff/`, FI-54 in
+    `SidecarSynthesizer`). **Nothing implements the spec partition.**
+  - The converter has no spec-to-spec command; `TraceRunner` walks **REQ → IR**, not per-block spec →
+    master spec.
+  - `docs/18` §2.3 step 2 describes the partition (*"as a partition, not an extract"*, every clause in
+    exactly one carve-out or on an explicit `unallocated` list) as **v2 design, unbuilt**.
+  ➜ **A practice is not a gate.** If the partition is ever built, this bullet is where to record that
+  it stopped being a practice.
+
+**Not recorded in a SKILL page, deliberately** — a page injected on every dispatch carries
+instruction, not history (§1.1's own rule).
+
 ## The one that was open — ✅ **ANSWERED, and the lane is NOT blocked on you**
 
 - ✅ **B5 (workbench) · Which block becomes the third conformance lane? — ANSWERED: `FB_SiloSequence`.**

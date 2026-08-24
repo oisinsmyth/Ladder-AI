@@ -1906,4 +1906,134 @@ public class SubmissionGateTests
         Assert.All(gates, g => Assert.True(g.IsClosableOffline, $"{g.Gate} is not closable offline"));
         Assert.All(gates, g => Assert.Contains("Unknown is not independent.", g.Detail, StringComparison.Ordinal));
     }
+
+    // =============================================================================================
+    // THE OWNER FORM AT THE GATES — ruled 2026-08-24
+    //
+    // 🔴 The consequence being fixed: an owner-authored artifact stamped with a bare handle read as a
+    // ROLE label, so against a convention-stamped agent every one of these four gates went
+    // NotComparable — PERMANENTLY NOT CHECKED on the artifacts with the best provenance in the
+    // system, reported identically to an unattributed one. The direction was safe; the outcome was
+    // not.
+    // =============================================================================================
+
+    /// <summary>The owner's handle under the convention. The spelling and capitalisation are the owner's own.</summary>
+    private const string OwnerLabel = "owner:MaTRiXz";
+
+    [Fact]
+    public void THE_OWNER_FORM_TURNS_A_PERMANENT_NOT_CHECKED_INTO_A_REAL_PASS_at_all_four_D6_gates()
+    {
+        // 🔴 *** THE DEMONSTRATION. *** Written with string literals only — no reference to
+        // IdentityForm.Owner — so this exact test COMPILES AND RUNS against the pre-change code, where
+        // every assertion below fails with NOT CHECKED. That is what makes the before-state measurable
+        // on the same test rather than on a description of one.
+
+        // (a) The owner as the THIRD PARTY — the enumeration's enumerator, the model's declarer and the
+        // binding the observability map derives from — against agents stamped under the convention.
+        var thirdParty = Check(
+            new[] { Vector(author: OtherInstanceLabel) },
+            blockAuthor: InstanceLabel,
+            map: MapDeclaredBy(OwnerLabel),
+            fidelityDeclaredBy: OwnerLabel,
+            enumeratedBy: OwnerLabel);
+
+        foreach (var name in new[] { "3d enumerator independence", "4b fidelity authority", "5c map authority" })
+        {
+            var gate = Gate(thirdParty, name);
+
+            // *** THE FAILURE MESSAGE CARRIES THE VERDICT TEXT ON PURPOSE. *** Run this test against the
+            // pre-change code and the message IS the before-state, verbatim, rather than a bare
+            // "values differ" that has to be taken on trust.
+            Assert.True(gate.Status == GateStatus.Checked, $"{name}: Status={gate.Status} :: {gate.Detail}");
+            Assert.True(gate.Passed, $"{name}: Passed=False :: {gate.Detail}");
+        }
+
+        // (b) The owner as the BLOCK AUTHOR, which is gate 2's pairing. An owner-authored block against
+        // vectors written by an agent is the strongest D6 independence the system can express.
+        var ownerWroteTheBlock = Gate(
+            Check(new[] { Vector(author: InstanceLabel) }, blockAuthor: OwnerLabel),
+            "2 authorship");
+
+        Assert.True(ownerWroteTheBlock.Status == GateStatus.Checked,
+            $"2 authorship: Status={ownerWroteTheBlock.Status} :: {ownerWroteTheBlock.Detail}");
+        Assert.True(ownerWroteTheBlock.Passed, $"2 authorship: Passed=False :: {ownerWroteTheBlock.Detail}");
+
+        // *** AND THE PASS SAYS WHICH MECHANISM ESTABLISHED IT. *** Gate 2's sentence claimed "both sides
+        // in the same identity vocabulary" until this ruling, which is FALSE of exactly this pass: it is
+        // comparable BECAUSE the vocabularies differ, not despite it. A green describing the wrong
+        // mechanism is a green nobody can audit.
+        Assert.Contains("BY CONSTRUCTION", ownerWroteTheBlock.Detail, StringComparison.Ordinal);
+        Assert.DoesNotContain("both sides in the same identity vocabulary", ownerWroteTheBlock.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AN_OWNER_AGAINST_ROLE_FORM_AGENTS_IS_STILL_NOT_CHECKED_but_never_as_an_UNATTRIBUTED_one()
+    {
+        // The deliberately weaker half of the ruling. The role vocabulary is the UNDEFINED one and
+        // CONTAINS strings that denote the owner, so a verdict here could be reporting the prefix. What
+        // must NOT happen is this reading like the unattributed case: the artifact has a named human on
+        // it, and "Unknown is not independent" is the wrong sentence for one.
+        var gate = Gate(Check(map: MapDeclaredBy(OwnerLabel)), "5c map authority");
+
+        Assert.Equal(GateStatus.NotChecked, gate.Status);
+        Assert.Equal(NotCheckedReason.AwaitingAnArtifactThatCouldExist, gate.Reason);
+        Assert.False(gate.Passed);
+
+        Assert.DoesNotContain("Unknown is not independent", gate.Detail, StringComparison.Ordinal);
+        Assert.Contains("MaTRiXz", gate.Detail, StringComparison.Ordinal);
+        Assert.Contains("a named human, not an agent", gate.Detail, StringComparison.Ordinal);
+        Assert.Contains("THE REPAIR IS ON THE COUNTERPARTY, NEVER THE OWNER", gate.Detail, StringComparison.Ordinal);
+
+        // The denominator survives the new branch — nothing found and nothing looked at stay distinct.
+        Assert.Contains("2 of 2 recorded author(s)", gate.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void THE_OWNER_IS_NOT_EXEMPT_the_same_handle_on_both_sides_is_still_a_REFUSAL()
+    {
+        // A form that could never refuse would be a way of buying a pass by typing `owner:`. The owner
+        // wearing two hats is the same correlated check as any other party wearing two hats.
+        var gate = Gate(
+            Check(new[] { Vector(author: InstanceLabel) }, blockAuthor: OwnerLabel, map: MapDeclaredBy(OwnerLabel)),
+            "5c map authority");
+
+        Assert.Equal(GateStatus.Checked, gate.Status);
+        Assert.False(gate.Passed);
+        Assert.Contains("THE PARTY UNDER TEST DECIDED WHAT CAN BE SEEN OF IT", gate.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void THE_PRESERVED_GUARD_AT_THE_GATES_a_ROLE_against_an_INSTANCE_is_STILL_NOT_CHECKED()
+    {
+        // 🔴 5c99bd3 landed hours before the owner form. A third vocabulary must not orphan its guard:
+        // the two AGENT vocabularies still cannot compare, at every gate, with the original text.
+        var gates = new[]
+        {
+            Gate(Check(map: MapDeclaredBy(InstanceLabel)), "5c map authority"),
+            Gate(Check(new[] { Vector(author: InstanceLabel) }), "2 authorship"),
+            Gate(Check(fidelityDeclaredBy: InstanceLabel), "4b fidelity authority"),
+            Gate(Check(enumeratedBy: InstanceLabel), "3d enumerator independence"),
+        };
+
+        Assert.Equal(4, gates.Length);
+        Assert.All(gates, g => Assert.Equal(GateStatus.NotChecked, g.Status));
+        Assert.All(gates, g => Assert.Contains("Unknown is not independent.", g.Detail, StringComparison.Ordinal));
+        Assert.All(gates, g => Assert.DoesNotContain("MaTRiXz", g.Detail, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void A_MALFORMED_OWNER_STRING_DOES_NOT_BUY_A_PASS_it_reads_as_NEITHER_vocabulary()
+    {
+        // `owner/MaTRiXz` is the trap the colon was chosen to avoid, and `owner:` is the empty handle.
+        // Neither may become a verdict by accident. The slash spelling classifies as an agent INSTANCE,
+        // so against a ROLE-form fixture it is NOT CHECKED; the empty handle fits nothing at all.
+        var slashed = Gate(Check(map: MapDeclaredBy("owner/MaTRiXz")), "5c map authority");
+        Assert.Equal(GateStatus.NotChecked, slashed.Status);
+        Assert.Contains("an INSTANCE label", slashed.Detail, StringComparison.Ordinal);
+        Assert.DoesNotContain("a named human", slashed.Detail, StringComparison.Ordinal);
+
+        var empty = Gate(Check(map: MapDeclaredBy("owner:")), "5c map authority");
+        Assert.Equal(GateStatus.NotChecked, empty.Status);
+        Assert.Contains("in NEITHER vocabulary", empty.Detail, StringComparison.Ordinal);
+    }
 }
