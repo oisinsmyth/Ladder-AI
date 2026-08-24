@@ -352,10 +352,9 @@ under-sizes and a healthy test **`TIMED-OUT`s, and is believed**.
 - **Read every figure from §12a derivation 5, never from memory.** The measured timer floor is higher
   than X-D assumed, which pulls a 500 ms preset's ceiling from 10x down to roughly 4.3x — *every
   marginal case moved toward REFUSE, so a remembered number is a permissive number here.*
-- 🔴 **Known hole, do not paper over it:** 10b's model bound keys on `comp_min` in the built code and on
-  `runtimeCompression` in the contract. **They differ**, and a wave at `runtimeCompression = 8` whose
-  `comp_min` is 1 passes today with **no `comp_stable` declared at all**. If a submission runs above
-  `comp_min`, treat the model ceiling as **NOT CHECKED by hand** whatever the tool printed.
+- ✅ **Closed at `859b731` (2026-08-13): 10b keys on `max(comp_min, runtimeCompression)`,** so an absent
+  `comp_stable` above 1x is refused. ⚠️ *This bullet called it a known hole and told you to treat the
+  model ceiling as NOT CHECKED by hand — for eleven days after the fix. Do not re-apply that.*
 
 ### Gate 11 — memory layout, ***the property that decides whether there is anything to observe at all***
 Gate 5 asks whether a window clears a floor. **This is prior to that and it is binary.**

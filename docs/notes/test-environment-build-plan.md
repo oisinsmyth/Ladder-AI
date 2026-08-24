@@ -111,6 +111,21 @@ phase 2 with the copy-layer generator.
 > > 10b is NOT CHECKED even for a submission that could answer it; and **10b keys on
 > > `runtimeCompression` while the branch inside `Plan` keys on `comp_min`**, so **a wave at comp 8
 > > with `comp_min = 1` passes today with no `comp_stable` declared at all.** Owed by the harness.
+> >
+> > ✅ 🔴 **CORRECTION 2026-08-24 — THE THIRD OF THOSE THREE GAPS WAS CLOSED THE SAME EVENING THIS
+> > ENTRY WAS WRITTEN, AND THE ENTRY WAS NEVER ANNOTATED.** *What was claimed:* *"10b keys on
+> > `runtimeCompression` while the branch inside `Plan` keys on `comp_min`, so a wave at comp 8 with
+> > `comp_min = 1` passes today with no `comp_stable` declared at all. Owed by the harness."* *What is
+> > true:* `859b731` (2026-08-13 **17:48**) made `CompressionRequest` require the runtime factor and
+> > every *"is anything scaled?"* branch key on `applied = max(compMin, runtimeCompression)`; an absent
+> > `compStable` above 1× returns `NotComputable` and gate 10b fails it. Pinned by
+> > `Harness.Results.Tests/ContractOwedTests.cs` —
+> > `A_WAVE_AT_COMP_8_WITH_COMP_MIN_1_AND_NO_COMP_STABLE_IS_REFUSED` (`:137` at HEAD), mutation control
+> > at `:153`. **The same commit closed the other two named here as well** — its message covers
+> > `completionValue` (now `int?`, refused when absent and outside `0..65535`) and `GateCli.Evaluate`
+> > (now passes `BlockCompressionInputs`). *What the mistake was:* the record is kept as written
+> > because it is a dated journal, but nothing pointed forward from it, and three downstream documents
+> > were still repeating the hole eleven days later.
 >
 > > ### 📐 X-J's RESERVED BAND — DECLARED 2026-08-13, BY ME, BECAUSE NOBODY HAD
 > >
@@ -314,6 +329,17 @@ phase 2 with the copy-layer generator.
 > > the spec's number and not a measured one** — the scan period under it *is* measured, so what is
 > > unverified is precisely whether a preset scaled to 5 scans still behaves like a timer on a 1214C.
 > > Fold both into #2 rather than scheduling a second session.
+> >
+> > ✅ 🔴 **CORRECTION 2026-08-24 — THE FIRST OF THOSE TWO IS DONE; THE SECOND IS NOT, AND THE
+> > COMPRESSED RUN DID NOT TOUCH IT.** *"No wave has ever run compressed"* stopped being true on
+> > **2026-08-22**: a three-vector wave ran on the rig **at comp 4** — 8.1 min → 2.23 min, 6,185 →
+> > 1,676 round trips, all three verdicts reproducing the uncompressed run (`22362e0` 14:37,
+> > `d9bb788` 14:50), on build `622F3EB7`. It was a real preset change on the device, not just a
+> > shorter wait: *"The block's timer presets **WERE** compressed - that half deployed correctly"*
+> > (`46f9aa8`). ⚠️ **`k ≈ 5` is STILL unmeasured and this run says nothing about it** — the wave ran
+> > at 4×, which is *below* the floor `k` sets, so no preset was ever scaled to 5 scans. The two items
+> > were folded together here and only one of them came back; **do not let the closure of the first
+> > carry the second.**
 > >
 > > **And record the run-state at each step.** A6 taught us the two abort kinds differ in exactly
 > > that, and a session that only records outcomes cannot tell a CPU that kept running from one that

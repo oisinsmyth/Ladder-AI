@@ -525,8 +525,24 @@ nothing verifies it today.* **What would change that:** the block's timers are a
 its IR, so an empty declaration contradicted by a `TON`/`TONR`/`TOF` in the block should become a
 refusal as soon as the gate can read the IR. Until then it is reported as a claim, never as a check.
 
-> 🔴 ***`model.compStable` IS REQUIRED AT `runtimeCompression > 1`, NOT AT `comp_min > 1` — AND THE
-> RUNNER TODAY KEYS ON THE WRONG ONE.*** The two are not the same number. `comp_min` is derived from
+> ✅ ***`model.compStable` IS REQUIRED AT `runtimeCompression > 1`, NOT AT `comp_min > 1` — AND THE
+> RUNNER NOW KEYS ON THE RIGHT ONE.*** 🔴 **RETRACTION 2026-08-24.** The paragraph below said *"THE
+> RUNNER TODAY KEYS ON THE WRONG ONE"* and closed *"it is a harness defect, and until it is fixed a
+> green on this bound at `comp_min = 1` is worth less than it looks."* **It was already fixed when this
+> section was written.** `859b731` (2026-08-13 **17:48**) made `CompressionRequest` require the runtime
+> factor and every *"is anything scaled?"* branch key on `applied = max(compMin, runtimeCompression)`;
+> taking the maximum can only tighten. An absent `compStable` at an applied factor above 1× returns
+> `NotComputable` and **gate 10b fails the submission**. Pinned by
+> `Harness.Results.Tests/ContractOwedTests.cs` —
+> `A_WAVE_AT_COMP_8_WITH_COMP_MIN_1_AND_NO_COMP_STABLE_IS_REFUSED` (`:137` at HEAD), asserting
+> `GateStatus.Checked`, `Passed == false`, and both *"comp_stable"* and *"the wave runs at comp=8"* in
+> the detail — with the mutation control `And_the_same_wave_WITH_comp_stable_declared_clears_the_ceiling`
+> (`:153`) proving the refusal is about the ceiling. **The contract and the code now agree, and the
+> paragraph below is kept only to say what was claimed.** *Nothing else in it is retracted: the
+> distinction it draws between the two numbers is the rule, and it is the rule the code implements.*
+>
+> ~~🔴 ***`model.compStable` IS REQUIRED AT `runtimeCompression > 1`, NOT AT `comp_min > 1` — AND THE
+> RUNNER TODAY KEYS ON THE WRONG ONE.***~~ The two are not the same number. `comp_min` is derived from
 > `plantMs / budgetMs` and is `1` whenever the behaviour already fits its budget; `runtimeCompression`
 > is what the wave is actually driven at, and it may legitimately exceed `comp_min` (the gate even
 > prints a note when it does). **Measured on the built code: a wave at `runtimeCompression = 8` whose
@@ -534,8 +550,9 @@ refusal as soon as the gate can read the IR. Until then it is reported as a clai
 > 8x on nobody's authority, and the plan's model bound is filed *reported-but-not-gating* because
 > `comp_min` said 1. That contradicts the runner's own recorded resolution that these ceilings key on
 > the **runtime** factor. **The contract's rule is the runtime factor.** Named here rather than worked
-> around: it is a harness defect, and until it is fixed a green on this bound at `comp_min = 1` is worth
-> less than it looks.
+> around: ~~it is a harness defect, and until it is fixed a green on this bound at `comp_min = 1` is
+> worth less than it looks.~~ **STRUCK 2026-08-24 — see the retraction above. It was fixed at `859b731`
+> before this paragraph existed; a green on this bound is worth what it says.**
 
 **No timing constant appears above, deliberately.** The timer floor is `k x scan_period`; read `k` and
 the scan period from **§12a derivation 5**, which is also where the correction lives that moved this
@@ -591,7 +608,7 @@ This is the one table to read before omitting anything. Four treatments, and the
 | `blockCompression`, at `runtimeCompression` = 1 | **CHECKED, a real pass** | nothing is scaled, so none of the three *can* bind — **computed from the submission, not assumed** |
 | a preset's `source` | **REFUSED** | the two real answers push OPPOSITE ways; there is no fail-safe guess |
 | `negligibleFraction` | **NOT DECLARED, never invented** | the spec works an example and never says where negligible ends |
-| `model.compStable`, at `runtimeCompression` > 1 | **REFUSED** | the plan is asking a model to run at a rate nobody declared *(and see §2.3's 🔴 — the runner keys this on `comp_min` today, which is a hole)* |
+| `model.compStable`, at `runtimeCompression` > 1 | **REFUSED** | the plan is asking a model to run at a rate nobody declared. ✅ *Built and matching: the runner keys on `max(comp_min, runtimeCompression)` as of `859b731`, pinned by `ContractOwedTests.A_WAVE_AT_COMP_8_WITH_COMP_MIN_1_AND_NO_COMP_STABLE_IS_REFUSED`.* ⚠️ **This cell read *"the runner keys this on `comp_min` today, which is a hole"* until 2026-08-24; it was written after the fix — see §2.3's retraction.** |
 | `model.compStable`, at `runtimeCompression` = 1 | **reported, does not gate** | nothing is scaled, so it cannot bind — computed, not assumed |
 | a latched or stamped expectation's `windowScans` | **NOT DECLARED** | legal (exempt from the floor, §4.2) and it still yields no assertion ceiling |
 | a **sampled** expectation's `windowScans` | **REFUSED** | undeclared is not exempt |

@@ -957,9 +957,17 @@ string*.
 ⚠️ **AND THE MECHANISM THIS PARAGRAPH CITED WAS WRONG. CORRECTED 2026-08-24 — see the provenance note
 below.** It read *"the code compares two strings with `StringComparison.Ordinal`"*. It does not, and
 has not since `5d4fa62` (2026-08-13): `AgentIdentity.SameAs`
-(`src/harness/Harness.Results/SubmissionVector.cs:591`) is `Trim()` + `OrdinalIgnoreCase`, and
-gate 2 (`SubmissionGate.cs:877`), gate 3d (`:1165`, `:1168`), gate 4b (`:1077`, `:1086`), gate 5c
-(`:1841`, `:1854`) and `Admissibility.cs:527` all route through it. **And since 2026-08-24 it returns
+(`src/harness/Harness.Results/SubmissionVector.cs`, `:740` at HEAD) reaches a `Trim()` +
+`OrdinalIgnoreCase` compare (`AgentIdentity.Normalised`, `:686`; the comparison itself `:771`) once the
+form checks admit the pair, and the gates route through it via `AgentIdentity.IsSamePartyAs` (`:797`):
+`SubmissionGate.Authorship` — gate 2 — at `:885`, `SubmissionGate.EnumeratorIndependence` — gate 3d —
+at `:1185` and `:1188`, `SubmissionGate.FidelityAuthority` — gate 4b — at `:1097` and `:1106`,
+`SubmissionGate.MapAuthority` — gate 5c — at `:1861` and `:1874`, and `Admissibility.cs:527`.
+⚠️ **CITATIONS RE-DERIVED 2026-08-24 by reading each cited line, not re-copied.** They previously read
+`SubmissionVector.cs:591` and `SubmissionGate.cs` `:877`/`:1165`/`:1168`/`:1077`/`:1086`/`:1841`/`:1854`
+— every one of them stale after `43c57f0`, and the comparison had been renamed to `IsSamePartyAs`
+besides, so the old numbers pointed at neither the symbol nor a call site. *Only `Admissibility.cs:527`
+survived unchanged.* **And since 2026-08-24 it returns
 a THREE-valued `IdentityRelation` rather than a `bool`** — a role label and an instance label
 (`<session-id>/<agent-type>`) are `NotComparable` and every one of those gates reads NOT CHECKED, per
 `docs/notes/test-environment-contract.md` §1.1's form ruling. **The substance stands and must not be lost with the
@@ -1117,7 +1125,9 @@ NOT deployed** — its mirror signals were left out of this deploy, so none of t
   poll budget is ~200 rounds ≈ 30 s of wall clock. **Aligning to that window means raising the budget,
   which lengthens how long a genuinely wedged inert phase takes to detect.** That is a trade to make
   deliberately, not a default to slide.
-- **W3 · Apply compression** — ⚙️ **HARNESS HALF BUILT 2026-08-22; NOT YET EXERCISED.** The planner was
+- **W3 · Apply compression** — ✅ **BUILT, AND RUN ON THE CONTROLLER 2026-08-22.** *(This read
+  ⚙️ "HARNESS HALF BUILT 2026-08-22; NOT YET EXERCISED" until 2026-08-24 — see the dated correction
+  that closes this item.)* The planner was
   always complete — `TimeCompression.Plan` returns `CompMin`/`CompMax` across all four ceilings, gates
   10a/10b check them, `ScanBudget` re-expresses every duration at the factor — and **nothing ever
   changed a preset on the device**, so the factor governed only how long the harness would *wait*.
@@ -1130,6 +1140,26 @@ NOT deployed** — its mirror signals were left out of this deploy, so none of t
   that knows both halves. **The block-side precondition holds** — a read confirmed 19 of 23 presets are
   DB data, not `T#` literals, and the shortest gives the recorded 4.0× ceiling — **but there is no
   runtime write path**, so the values arrive at download time, which is the same deploy W2 needs.
+
+  🔴 **CORRECTION 2026-08-24 — "NOT YET EXERCISED" WAS FALSE ELEVEN HOURS AFTER IT WAS WRITTEN, AND
+  IT CONTRADICTED THIS DOCUMENT'S OWN PHASE 10 HEADER FOR TWO DAYS.** The marker went in at `9861d1b`,
+  **2026-08-22 03:29**. The compressed wave ran on the rig the same day: `22362e0` (14:37) —
+  *"PHASE 10 DELIVERED ON THE CONTROLLER"*, 8.1 min → 2.23 min **at comp 4** — and §2.4 above records
+  the build it ran on, `622F3EB7`, *"time-compressed at ×4"*.
+
+  ⚠️ **And the narrow reading does not rescue it: the PRESET-TABLE half is precisely the half that WAS
+  exercised.** `46f9aa8` (14:26) says so in terms nothing else in this file does — *"The block's timer
+  presets **WERE** compressed - that half deployed correctly - so it ran its windows four times faster
+  against a full-length scenario."* That is also why `622F3EB7` is the first stamp covering the
+  parameter DB: the compressed presets are DB data (19 of 23), so applying them **is** a change to that
+  DB, which is what forced it into the program-under-test set. The half that failed on the first
+  compressed run was the **scenario coordinates**, which `Generate` re-expressed into a local and never
+  handed back — fixed in the same commit, and the run reproduced all three verdicts afterwards
+  (`d9bb788`, 14:50).
+
+  **What survives of the caveat, and it is the only thing that does:** there is **no runtime write
+  path**, so the factor arrives at download time. *Changing the compression factor is a redeploy, not a
+  parameter* — and see the retention item below for what a redeploy does and does not overwrite.
 
 🔴 **Two findings from putting real numbers through W3, both of which change what the deploy is aiming
 at:**
@@ -1161,21 +1191,179 @@ at:**
   scenario still occupies the same real time. The tick is a *vector input*, not a block preset, so it
   sits outside the compressed-preset table — and at ×4 it lands on exactly one scan, which is why the
   model ceiling is where it is.
-- 🔴 **THE BUILD STAMP DOES NOT COVER THE PARAMETERS, SO COMPRESSING THEM CHANGES THE CONTROLLER
-  WITHOUT CHANGING THE STAMP.** Measured on the last wave's own manifest: the stamp is derived over
-  **8 objects**, and the parameter DB is not one of them — nor is the block under test itself, which
-  appears only as its instance DB. Two result packages describing materially different programs would
-  therefore carry the **same** stamp, and the verifying gateway — whose entire job is to refuse a
-  program that is not the one described — would not notice. **The deploy must add the parameter DB to
-  the program-under-test set**, which changes the stamp and so obliges the copy layer to be regenerated
-  and redeployed with it. That is the coherent sequence, not an extra step to trim.
+- ✅ **THE BUILD STAMP DOES COVER THE PARAMETER DB — DONE THE SAME AFTERNOON THIS ENTRY WAS WRITTEN,
+  AND THE ENTRY WAS NEVER UPDATED.**
+
+  🔴 **RETRACTION 2026-08-24.** *What was claimed:* this bullet read **"THE BUILD STAMP DOES NOT COVER
+  THE PARAMETERS, SO COMPRESSING THEM CHANGES THE CONTROLLER WITHOUT CHANGING THE STAMP"** — the stamp
+  derived over **8 objects**, the parameter DB not one of them, two materially different programs
+  carrying the same stamp and the verifying gateway not noticing, with the remedy stated as *"the
+  deploy must add the parameter DB to the program-under-test set."* *What is true:* the deploy did
+  exactly that, **2 h 32 min later on the same day.** §2.4 above records stamp **`622F3EB7`** as *"the
+  first build whose stamp covers the parameter DB — **nine objects, not eight**"*, time-compressed at
+  ×4, three vectors `Pass`. *What the mistake was:* the gap was written at `b281348` (**2026-08-22
+  13:19**) and closed by the deploy recorded at `c5aa85a` (**15:51**) — **same document, same day, same
+  author, and nobody closed the loop**, so §5 Phase 10 has been contradicting §2.4 ever since. The
+  copy-layer regeneration the entry said the change would oblige is likewise not owed: it happened with
+  the deploy.
+
+  🔴 **AND THE RESIDUAL IS NOT THAT THE DB IS MISSING — IT IS THAT NOTHING MAKES THE NINE-OBJECT SET
+  STICK.** The deploy-side act was performed **once, on one lane, by hand.** `--program` is
+  author-declared at enqueue and `LaneManifest` exists to replace that typing with an emission — its
+  own docstring says so: *"a mistyped, stale or short `--program` list produces a stamp describing a
+  program nobody deployed."* Until 2026-08-24 `Harness.Batch/LaneManifest.cs` had `Read` and `ToJson`
+  and **no producer**, so the nine objects were a hand-typed list the next lane did not inherit.
+
+  ✅ **THE PRODUCER LANDED WHILE THIS PASS WAS BEING WRITTEN, AND THE TOOLING HALF IS NOW CLOSED.**
+  `LaneManifest.Derive(laneName, programUnderTest, generatedCopyLayer, blockUnderTest, stamp, …)` emits
+  the manifest from whatever built the lane, and `harness-batch manifest … --check` re-derives the stamp
+  over an existing manifest's own paths and compares — the arm that catches a **stale** manifest rather
+  than only a missing one. Two refusals carry it, both at birth rather than in a later check that might
+  not run:
+  - **The subject must be IN the set, not mentioned beside it.** `Derive` throws when a named
+    `blockUnderTest` is not among the supplied program — *"so the build stamp did not hash it, and the
+    stamp is the claim that a particular program is executing."*
+  - **`AgreesWithStamp` ties the two sets in BOTH directions:** every hashed object must be named, and
+    every named object that is not the copy layer must have been hashed. 🔴 **The exemption is keyed on
+    `Role`, never on `Origin`** — *"a program under test may perfectly well have been generated, and
+    keying on that would let a real deliverable slip out of the stamp under the label that describes who
+    wrote it."* The agreement detail carries **both counts on success as well as on refusal**, so a
+    green states its own denominator.
+
+  ⚠️ **AND IT IS THE TOOLING HALF ONLY. DO NOT READ THIS AS CLOSED.** A check that would catch the
+  error now exists; **nothing yet guarantees anyone runs it with the right inputs.** The stamp still
+  covers whatever `--program` names, and *a deployment still has to actually pass both the right program
+  set and the right subject* — which no tool can make it do. Two concrete seams remain open:
+  - **`harness-run --generate-only --emit` writes no manifest.** `LoopCli` writes `<name>.ir` per object
+    and nothing else (`LoopCli.cs:630-634` at HEAD), and `Harness.Batch/Program.cs` says so in its own
+    words: *"`--emit` writes `<name>.ir` and nothing else."*
+  - **So the two emit paths coexist and only one produces a manifest.** `BatchRunPlan`'s Generate step
+    still shells out to `harness-run --generate-only --emit` (`BatchRunPlan.cs:66`, `:415`) while the
+    deployment generates in-process. That is a deliberate split — the shelled-out copy is *"worth
+    having"* because a person can read it — but it means the readable artifact and the manifested one
+    are produced by different code, and only the second is tied to a stamp.
+
+- 🔴 **TRACK 3, MEASURED: THE BLOCK UNDER TEST ENTERING THE SET MOVES THE STAMP — AND WITH ONLY THE
+  INSTANCE DB, TWO PROGRAMS WHOSE LOGIC DIFFERS CARRY ONE STAMP.** This is Phase 10's *"nor is the block
+  under test itself, which appears only as its instance DB"* turned from a sentence into a number. Same
+  map, same binding, same naming, same instance DB; the only difference is whether the block's own `.ir`
+  is in the set:
+
+  | program set | stamp |
+  |---|---|
+  | instance DB alone | `16#F6276CA9` |
+  | instance DB **+ the block** | `16#F037F18D` |
+
+  Both values are **pinned as literals**, not merely asserted unequal —
+  `Harness.Map.Tests/BlockUnderTestEntersTheStampTests.cs`,
+  `The_stamp_changes_when_the_block_under_test_enters_the_set`, because *"`NotEqual` alone is satisfied
+  by a derivation that has begun returning noise."* Three tests hold the claim up from the other sides:
+  `The_same_set_stamps_the_same_twice` (a stamp that moved on every re-derivation would satisfy the
+  headline and prove nothing), `Editing_the_block_under_test_moves_the_stamp_once_it_is_in_the_set`,
+  and the negative half — **`With_only_the_instance_DB_two_different_programs_carry_one_stamp`**, which
+  asserts the two stamps equal *and* asserts the IR text differs, so the invisible difference is stated
+  to be a difference in **executable logic**.
+
+  🔴 **AND THE SHAPE IS CONFIRMED ON REAL DEPLOYED MATERIAL, NOT ONLY ON A FIXTURE.** The deployed corpus
+  behind the 2026-08-22 nine-object build was checked: **it carries the unit's instance DB and no
+  block.** The stimulus model, the harness slot, the comms objects and `Main` are all present; *the thing
+  whose behaviour was being measured is not.* **The shape is the record; the names, the lane and the
+  stamp value are not repeated here** — that material is a live job and stays in its own folder.
 - ⚠️ **Nothing yet ties `runtimeCompression` to evidence that the presets were actually applied.** The
   gate checks the *ceilings* admit the factor; it cannot check the device was changed. A submission
   declaring 4 against a program deployed without the scaled values would shrink the backstop 4× on a
   plant still running at 1× — the exact spurious TIMED-OUT this work exists to avoid, arrived at from
   the other side. The natural close is for `runtimeCompression`'s derivation to cite the compressed
   preset table instead of being settled by rule, but the evidence it should really cite is a read-back
-  of the applied values, which needs the deploy. **Open, and named here rather than assumed away.**
+  of the applied values. **Open, and named here rather than assumed away.** ⚠️ *This bullet ended
+  "…which needs the deploy" until 2026-08-24; the deploy happened on 2026-08-22 (`622F3EB7`, above) and
+  the item did not close, because a deploy is not a read-back. The next item is why.*
+
+- 🔴 **THE OPEN ITEM PHASE 10 NAMED IS NOT THE ONE THAT IS OPEN. ADDING THE PARAMETER DB TO THE STAMP
+  DOES NOT CLOSE THE GAP — IT CHANGES WHICH DIRECTION THE LIE POINTS.** Recorded 2026-08-24.
+
+  The stamp is a hash over the objects as **staged** — for a DB, over its **IR text**, which states
+  *declared start values*. The controller runs its **actual values**, and those are a different number
+  the moment anything has written to the block. For this DB they are also a number a re-download need
+  not touch: **every member of `ir/test-project001/DB_Settings.ir:6-27` is `RETAIN`** — 22 of 22, 19
+  `Real`, 2 `Int`, 1 `Bool` — and `ir/test-project001/iDB_HopperBlockageMonitor.ir:9` declares its whole
+  `IO` structure `RETAIN SETPOINT`. **Retentive members are exactly the ones a download need not
+  overwrite.** `docs/10-non-goals.md:16` already names the same hazard from the other side — *"a
+  download can silently reinitialise DB actual values and retentive data"* — and the pair is the point:
+  **retention makes a download's effect on these values UNDETERMINED, in both directions, from any
+  artifact we hold.**
+
+  **So the stamp can move while the plant keeps running the old presets.** Stage a ×8 preset table,
+  redeploy, get a new stamp, and a controller that kept its retained ×4 values reports a program the
+  gateway accepts and a plant the submission misdescribes. That is the **inverse** of the failure
+  `b281348` reported — where the controller changed and the stamp did not — and it is **equally
+  invisible to the verifying gateway**, because the gateway compares a hash of staged text against a
+  hash of staged text. Nothing in the loop has ever read a parameter's actual value off the device.
+
+  ⚠️ **Four members make it sharper rather than softer.** The overcurrent family in `DB_Settings` is
+  *"unconfigured by design"* and carries **no start value at all** — so for those four the staged text
+  states nothing, and the stamp covers that nothing faithfully.
+
+  **THE HONEST CLOSE IS A READ-BACK, AND THE TOOL IS FREE.** `rig-read --db <n> --offset <bytes>
+  --length <bytes>` exists (`Harness.RigRead/Program.cs`) and is read-only **by construction** — its
+  only device operations are `ConnectTo`, `DBRead`, `MBRead`, `GetOrderCode` and `PlcGetStatus`. **The
+  cost is not the tool. It is the offsets, and they cannot be derived.**
+
+  🔴 ***THE OFFSETS QUESTION, ANSWERED: THERE IS NO ROUTE TO A TRUSTWORTHY OFFSET FROM ANY ARTIFACT
+  THIS PROJECT HOLDS. THEY MUST BE MEASURED — AND THE MEASUREMENT THAT SETTLED THE MARKER DB DOES NOT
+  TRANSFER TO THIS ONE.*** Three legs, each established rather than assumed:
+
+  1. **The file format has no offset channel, and this was already investigated on the owner's own
+     question.** `Converter/SimaticMl/BlockMemoryLayout.cs` records it (2026-08-12): asked whether a
+     Standard layout could be **computed** from member order and types instead of stored, the answer
+     was that *"SimaticML carries no per-member byte/bit offsets at all … there is no offset channel
+     for TIA to infer a layout from, and none for a derivation to be verified against — the CPU memory
+     layout … is computed by TIA and never serialized."* **Re-measured at HEAD rather than re-cited:**
+     `grep -ril offset simatic-ml/` returns **nothing** across all 26 exported objects, and the **790**
+     `<Member>` elements in the committed corpus carry exactly six attributes —
+     `Name`/`Datatype`/`Remanence`/`Accessibility`/`Version`/`Informative`. `Harness.RigRead`'s own
+     header states the same fact one layer out.
+  2. **Computing them is possible, and computation alone is not trustworthy — the project already says
+     so about its own only instance.** `Harness.RigWrite/MarkerDbLayout.cs` derives its four offsets
+     from the S7 standard-access rules and states its own limit: the corroboration available is that
+     the members sum to the block size TIA reports, which is *"evidence about SIZES; it is not evidence
+     about ORDER, since any permutation of three equal-length strings sums the same."* Those offsets
+     **have still never been compared with a device.**
+  3. **`DB_Settings` is worse than the marker DB, not the same.** The marker DB is confirmable because
+     it is three `String[32]`s, and an S7 `String` carries a self-describing two-byte
+     `(declared, current)` header — a landmark that either lands at 2, 36 and 70 or does not.
+     **`DB_Settings` has no self-describing byte anywhere**: 19 `Real`, 2 `Int`, 1 `Bool`, none of which
+     announces its own boundary. The only distinguishing content is the values, and **the values are
+     what the read-back exists to establish** — circular on the first read. *A wrong offset table here
+     does not fail; it returns four plausible bytes from the neighbouring member.*
+
+  ➜ **Therefore: landmarks have to be MANUFACTURED, once.** Write a distinct probe value into every
+  member through a channel already trusted, read the whole block back, and check each probe lands where
+  the arithmetic put it. **That is a measurement, and it is a WRITE to the parameter DB**, so hard rule
+  5's verified restore point is captured first or it does not happen.
+
+  **What the close costs, without building it:**
+
+  | | cost | note |
+  |---|---|---|
+  | the read-back binary | **zero** | `rig-read --db/--offset/--length` exists and is read-only by construction |
+  | flip `DB_Settings` to **Standard** access | one `openness-cli block-layout --set Standard --yes`, re-asserted after **every** import and gated `--expect Standard` | **A PRECONDITION, NOT A DETAIL.** The DB is `Optimized` today (`simatic-ml/test-project001/DB_Settings.xml:275` — as is every DB in the corpus), and classic S7comm **cannot see an optimized block at all**: not an error, simply absent, failing at the first data read. The flip is also what *creates* byte offsets |
+  | the consequence of that flip | a program change, so the **stamp moves** and the copy layer regenerates with it — the nine-object sequence Phase 10 already ran once | and per `Harness.Map/RetentionCheck.cs`, retention is *"per-tag on an OPTIMIZED block but ALL-OR-NOTHING on a STANDARD-access one"*. All 22 members are already `RETAIN`, so the block stays retentive — but the semantics change, and that is a fact about the deployed object, not about the file |
+  | a deploy to read back from | **already paid** — `622F3EB7` | the deploy is not the gap; the read is |
+  | **the offset table** | **one measured, restore-pointed rig session** + a committed artifact | 🔴 **the whole cost of this item.** Not derivable, per the three legs above |
+  | keeping it true | a staleness rule on that artifact | the arithmetic is order-dependent: any member added, removed or reordered invalidates **every offset after it**, and nothing today would notice |
+
+  ⚠️ **And state what a read-back would then prove.** It proves the actual values **at the instant of
+  the read**. It says nothing about the values *while the wave ran* unless it is read inside the wave —
+  so *"read once after the deploy"* is a weaker claim than it sounds, and the strong form is a read
+  bound into the submission's own derivation.
+
+  **Unestablished, and what would settle each:** (a) whether an S7-1200 download with the harness's
+  current `download-probe` options preserves or reinitialises these retained values — **nobody has
+  observed it**, and one read-back either side of one download settles it; (b) whether TIA's Openness
+  API exposes a member offset for a Standard DB at all — nothing in `src/openness-cli/` reads one, and
+  a reflection pass over the installed V20 assembly would answer it and could make leg 3's manufactured
+  landmarks unnecessary. **(b) is worth ten minutes before anyone pays for (3).**
 
 ✅ **THE ONE THING COMPRESSION DID MOVE, AND HOW IT CLOSED.** On the first compressed run the dominant
 index's `becomesAndHolds` expectation on the observed weight went `Pass` 7/7 → **`Inconclusive` 6/7**:
@@ -1200,6 +1388,12 @@ judges frames and changes nothing that executes, so `BuildStamp` deliberately ex
 re-run needed no redeploy.** Gate 0c did catch the binding's changed hash and refused until the
 submission was re-derived, which is exactly the intended sequence: *"re-derive rather than re-stamp."*
 
+✅ **A DROPPED LINK STOPS A WAVE INSTEAD OF DESTROYING IT — found 2026-08-22, twice; FIXED THE SAME
+DAY.** *(The three paragraphs below were written in the* should *voice at `bfc0299`, 2026-08-22 15:38,
+and the fix landed at `32a5bf2`, **17:54 — 2 h 16 min later**. They stayed in the* should *voice until
+2026-08-24. Kept, because the finding is the useful part; the closing paragraph is now what the code
+does.)*
+
 🔴 **A DROPPED LINK DESTROYS A WAVE AND LEAVES NO RECORD AT ALL — found 2026-08-22, twice.** A remote
 rig reached over a tunnel produced `SocketException 10060` mid-observation, and the loop exited with an
 **unhandled exception**: no result package, no partial distribution, no statement that the link went
@@ -1211,9 +1405,32 @@ wave path has no equivalent, so **"the network died" is indistinguishable from "
 neither is distinguishable from a run that never started. On a rig reached over a tunnel — which is how
 this one is reached — that is not an edge case.
 
-**What it should do:** end the wave with a real outcome naming the transport, keep the indices already
-distributed, and mark the rest NEVER ATTEMPTED with the link as the stated reason. Contained, and it is
-the same "empty is not clean" shape as the rest of this phase.
+✅ **WHAT IT DOES, AS OF `32a5bf2` (2026-08-22 17:54).** The wave ends with a real outcome naming the
+transport, keeps the indices already distributed, and marks the rest NEVER ATTEMPTED with the link as
+the stated reason — which is what the paragraph above proposed, built.
+
+- **`NModbusTransport` classifies, and only it does** (`Harness.Wire/NModbusTransport.cs`): a lost link
+  becomes `WireLinkLostException` and *"everything else [is left] alone"*, so the discriminator the
+  mirror path already had now exists on the wave path.
+- **`WaveRun.Run` catches that one type and nothing wider** (`catch (WireLinkLostException lost)`,
+  `Harness.Wire/WaveRun.cs:481` at HEAD). Its own comment states the bound: *"Catching `Exception` here
+  would swallow every programming error in the observation path and file it as network weather, which
+  is a worse defect than the one being fixed."* So *"the network died"* and *"the tool crashed"* are
+  now different outcomes rather than the same stack trace.
+- **Every active slot is accounted for, not just the one that was reading.** Each gets a
+  `SlotRunResult(SlotOutcome.LinkLost, …)` carrying *"NOTHING WAS LEARNED ABOUT THIS VECTOR"*, and a
+  slot that already has a result at this index **keeps it** — the link can die after `Observe` returned,
+  on the control read, and a second result would put the tensor and the collected list out of step for
+  every index after it (`WaveRun.cs:492-507` at HEAD).
+- **The record survives as data:** `WaveInterruption(AtIndex, IndicesCompleted, IndicesNeverAttempted,
+  Detail)` (`WaveRun.cs:155`) on the wave result, and `ResultPackage` renders `SlotOutcome.LinkLost` as
+  its own disposition rather than folding it into a failure.
+- **Pinned by `Harness.Wire.Tests/LinkLostTests.cs`** — a 245-line file, 7 tests, including the negative
+  control that an uninterrupted wave says so, the degenerate case where the link never worked at all,
+  and the accounting over every active slot. **Negative run recorded in the commit:** making the catch
+  rethrow reddens them, with the `SocketException` escaping exactly as it used to.
+
+Contained, and it is the same "empty is not clean" shape as the rest of this phase.
 
 **Investigated and rejected — recorded so they are not re-proposed:**
 
@@ -1290,10 +1507,15 @@ cost to get wrong.* Two facts settle it:
      has a third-party denominator. **That, and not the absence of a party, is the binding constraint.**
 
    ⚠️ **THE STRUCTURAL LIMIT THAT SURVIVES, AND IT MUST NOT BE LOST IN THIS CORRECTION.** Gate 3d's
-   independence is a **normalised string comparison** — `AgentIdentity.SameAs`,
-   `src/harness/Harness.Results/SubmissionVector.cs:591`, `Trim()` + `OrdinalIgnoreCase`, called
-   at `SubmissionGate.cs:1165` and `:1168` — and only after the cross-form sweep at `:1155` has shown
-   both sides are in the same identity vocabulary. **So dispatching the enumerator proves that a
+   independence is a **normalised string comparison** — `AgentIdentity.SameAs`
+   (`src/harness/Harness.Results/SubmissionVector.cs`, `:740` at HEAD), `Trim()` + `OrdinalIgnoreCase`,
+   reached through `AgentIdentity.IsSamePartyAs` (`:797`) and called from
+   `SubmissionGate.EnumeratorIndependence` (`:1148`) at `:1185` and `:1188` — and only after the
+   cross-form guard `SubmissionGate.CrossFormStop` (defined `:827`, called for this gate at `:1175`)
+   has shown the two sides are comparable at all. ⚠️ *Re-derived 2026-08-24 by reading each line: this
+   read `SubmissionVector.cs:591`, `SubmissionGate.cs:1165`/`:1168` and a sweep at `:1155`, all stale
+   after `43c57f0`, which also renamed the comparison to `IsSamePartyAs`.* **So dispatching the
+   enumerator proves that a
    differently-named party produced the denominator. It does not prove a differently-*constituted*
    one did.** The skill page says the same thing one level down for the enumeration itself: *"nothing
    binds that block to an enumeration produced by a third party, beyond the `enumerator` identity
@@ -1558,6 +1780,113 @@ opinion.** That single sentence is why §3 is the most valuable part of this des
 > log entry, which a gate catches — but a gate cannot tell a real entry from `- v3.x — misc`, so it
 > buys the reminder and not the content.
 
+- **v3.9 — 2026-08-24 (same session, immediately after v3.8). 🔴 THREE THINGS WENT STALE *WHILE v3.8
+  WAS BEING WRITTEN* — WHICH IS THE EXACT SHAPE v3.8 WAS CONVENED TO CORRECT.** Caught before the
+  commit rather than after it, which is the only difference between this entry and the four failures
+  above it. Every item below re-verified against the code at `43c57f0` plus the harness lane's
+  uncommitted work; nothing taken from another document.
+  **1. The `LaneManifest` producer LANDED.** v3.8 stated the gap *"as of `5c99bd3`"* and flagged a
+  producer in flight; it is now built. `LaneManifest.Derive(...)` emits the manifest from whatever built
+  the lane, `harness-batch manifest … --check` re-derives the stamp over an existing manifest's own
+  paths (the arm that catches a **stale** manifest, not merely a missing one), and
+  `LaneManifest.AgreesWithStamp(...)` ties the two sets **in both directions** — every hashed object
+  named, every named non-copy-layer object hashed. 🔴 **The exemption keys on `Role`, never `Origin`:**
+  a program under test may legitimately be generated, and keying on who wrote it would let a real
+  deliverable slip out of the stamp. `Derive` also throws when a named subject is not in the program
+  set. ⚠️ **What it does NOT do, stated because the paragraph would otherwise read as closed:**
+  `harness-run --generate-only --emit` still writes no manifest — `LoopCli.cs:630-634` writes
+  `<name>.ir` and nothing else — and `BatchRunPlan`'s Generate step still shells out to it
+  (`BatchRunPlan.cs:66`, `:415`), so **the two emit paths coexist and only one produces a manifest.**
+  **2. The deployment side of the parameter-DB item is NOT closed, and the distinction is the point.**
+  The bullet still carried *"the deploy must add the parameter DB to the program-under-test set"* as a
+  live instruction. The **tooling** half is now done — the producer refuses a subject outside the
+  stamped set, and the stamp covers whatever `--program` names. What remains is that **a deployment
+  still has to actually pass both**, and no tool can make it. *A check that would catch the error now
+  exists; nothing yet guarantees anyone runs it with the right inputs.* Written that way deliberately,
+  because collapsing the two is how this document produced the contradiction v3.8 had to retract.
+  **3. Track 3 is proven, with numbers now in the record.** Same map, binding, naming and instance DB;
+  the only difference is whether the block's own `.ir` is in the set — **`16#F6276CA9` before,
+  `16#F037F18D` after**, both pinned as literals in
+  `Harness.Map.Tests/BlockUnderTestEntersTheStampTests.cs` rather than merely asserted unequal, *"because
+  `NotEqual` alone is satisfied by a derivation that has begun returning noise."* The negative half is
+  asserted too — `With_only_the_instance_DB_two_different_programs_carry_one_stamp` holds the two stamps
+  equal **and** the IR text different, so the invisible difference is stated to be executable logic.
+  That turns Phase 10's *"appears only as its instance DB"* from a sentence into a measurement.
+  🔴 **And the shape is confirmed on real deployed material:** the corpus behind the 2026-08-22
+  nine-object build carries the unit's instance DB and **no block** — stimulus model, harness slot,
+  comms and `Main` all present, the subject absent. **The shape is recorded; no names, no lane, no stamp
+  value from that job** — it is a live job and the boundary is retention, not access.
+  **4. Every `SubmissionVector.cs` / `SubmissionGate.cs` citation in this file RE-POINTED, each
+  re-derived by reading the cited line.** `43c57f0` moved them all and renamed the comparison to
+  `IsSamePartyAs`, so `SubmissionVector.cs:591` and `SubmissionGate.cs`
+  `:877`/`:1165`/`:1168`/`:1077`/`:1086`/`:1841`/`:1854` pointed at neither the symbol nor a call site.
+  Now: `AgentIdentity.SameAs` `:740`, `IsSamePartyAs` `:797`, `Normalised` `:686`, the compare `:771`;
+  `Authorship` `:885`, `EnumeratorIndependence` `:1185`/`:1188`, `FidelityAuthority` `:1097`/`:1106`,
+  `MapAuthority` `:1861`/`:1874`, `CrossFormStop` `:827`. **`Admissibility.cs:527` was the only one that
+  survived unchanged.** Every citation now names the SYMBOL first per v3.6's rule, with the line
+  carrying "at HEAD".
+  ⚠️ **One citation left alone and reported instead:** `Harness.Batch/LaneManifest.cs` cites
+  `docs/18-project-workbench.md:1166-1167` twice — in a doc comment and in a refusal message a user
+  will read — and **this pass moved that text**, so both are now stale. `src/` is another lane's tree;
+  flagged, not edited.
+- **v3.8 — 2026-08-24 (later the same evening). 🔴 PHASE 10'S RESIDUAL REGISTER LISTED THREE ITEMS
+  THAT WERE ALREADY DONE, TWO OF THEM CLOSED BY COMMITS MADE HOURS LATER THE SAME DAY BY THE SAME
+  AUTHOR.** Documentation only; no
+  code touched. Every correction below was grounded in a commit, a source line or a command run in this
+  pass — never in another document.
+  **1. `comp_stable` keyed on the wrong factor is FIXED, and four live documents said otherwise.**
+  `859b731` (2026-08-13 17:48) made the runner key every *"is anything scaled?"* branch on
+  `max(compMin, runtimeCompression)`; an absent `compStable` above 1× is refused, pinned by
+  `Harness.Results.Tests/ContractOwedTests.cs`
+  (`A_WAVE_AT_COMP_8_WITH_COMP_MIN_1_AND_NO_COMP_STABLE_IS_REFUSED` at `:137`, mutation control
+  `And_the_same_wave_WITH_comp_stable_declared_clears_the_ceiling` at `:153`). The four documents still
+  carrying the hole — `docs/notes/spec-reconciliation.md` item 13, `docs/notes/test-environment-contract.md`
+  §2.3 and its §2.4 table row, `docs/notes/test-environment-build-plan.md`, and the
+  `design-for-testability` SKILL — are retracted in place, **and a FIFTH was found by grep that the
+  brief did not name: `docs/notes/tooling-test-plan.md`, twice — row `DV-9`, which states the defect
+  and prescribes the exact fix that had already shipped, and row `AS-15`'s residual column.** *That is
+  the argument for grepping the claim rather than working the list.* **The nearest of them was written
+  eight hours after the fix**, and the SKILL's told a reader to *"treat the model ceiling as NOT
+  CHECKED by hand"* for eleven days after it stopped being true — a stale warning that costs real work.
+  **2. The build stamp DOES cover the parameter DB.** `b281348` (08-22 **13:19**) wrote the gap; the
+  deploy at `c5aa85a` (**15:51**, 2 h 32 min later) recorded stamp `622F3EB7` as *"the first build whose
+  stamp covers the parameter DB — nine objects, not eight"*, ×4 compressed, three vectors `Pass`. §5
+  Phase 10 has contradicted §2.4 of this same file ever since. **The real residual is that nothing makes
+  the nine-object set stick:** `Harness.Batch/LaneManifest.cs` has `Read` and `ToJson` and **no
+  producer at `5c99bd3`** — `ToJson` is called from tests only and no manifest file exists in the tree
+  — so the set is hand-typed and the next lane does not inherit it. A producer (`LaneManifest.Derive`)
+  is in flight in another lane and is **not** described here as done.
+  **3. The dropped-link finding is implemented**, `32a5bf2` (08-22 **17:54**, 2 h 16 min after the
+  sentence proposing it): `WaveRun.Run` catches `WireLinkLostException` and nothing wider, every active
+  slot is accounted for, `WaveInterruption` carries the record, 7 tests in a 245-line
+  `LinkLostTests.cs` with a rethrow negative-run. Rewritten from *should* to *did*; the finding kept.
+  **4. "No wave has ever run compressed" is false**, and it was found in **five** tracked places, not
+  the three on the brief — `spec-reconciliation.md:285`, `tooling-test-plan.md` AS-15,
+  `test-environment-build-plan.md`, plus `gen/…/conformance-vectors.md` and
+  `src/harness/Harness.Device/RIG-SESSION.md`, which are other agents' trees and are **reported, not
+  edited**.
+  **5. W3's "NOT YET EXERCISED" was stale, not narrow — and my reading differs from the brief's.** The
+  marker went in at `9861d1b` (08-22 **03:29**) and the compressed wave ran eleven hours later. The
+  suggested reconciliation — that W3's claim was about the *preset-table* half, the wave running
+  compressed against 1× presets — **does not survive the artifacts: that is the half that WORKED.**
+  `46f9aa8` states it outright: *"The block's timer presets WERE compressed - that half deployed
+  correctly - so it ran its windows four times faster against a full-length scenario."* The half that
+  failed was the scenario coordinates, re-expressed into a local and never handed back. All that
+  survives of the caveat is that there is no runtime write path, so the factor is a redeploy.
+  🔴 **AND THE GAP PHASE 10 NAMED IS NOT THE GAP THAT IS OPEN.** The stamp covers the DB's IR text —
+  its *declared start values*. The controller runs its *actual* values, and **all 22 members of
+  `DB_Settings` are `RETAIN`** (`iDB_HopperBlockageMonitor.ir:9` is `RETAIN SETPOINT`), which is exactly
+  the class a download need not overwrite. So the stamp can move while the plant keeps the old presets
+  — the inverse of the reported failure and equally invisible to the gateway. **Answered on the offsets:
+  there is no route to a trustworthy offset from any artifact this project holds; they must be
+  measured.** The corpus carries none (`grep -ril offset simatic-ml/` → nothing; the **790** `<Member>`
+  elements carry six attributes and no offset), `Converter/SimaticMl/BlockMemoryLayout.cs` records the
+  same investigation from 2026-08-12, `MarkerDbLayout`'s computed offsets have never met a device and
+  its own corroboration is *"evidence about SIZES … not about ORDER"*, and `DB_Settings` — 19 `Real`,
+  2 `Int`, 1 `Bool` — carries **no self-describing byte** to land a landmark on, so the technique that
+  would settle the marker DB does not transfer. The close is costed in §5 Phase 10 and not built: the
+  binary is free, the offset table is one measured restore-pointed session, and a
+  `block-layout --set Standard` flip is a precondition that moves the stamp on its own.
 - **v3.7 — 2026-08-24 (evening). 🔴 PHASE 8 SHIPPED EIGHT COMMITS AND THIS DOCUMENT RECORDED NONE OF
   THEM.** `f8f1770..a3dcd6f`. What shipped, each verified by reading the commit and the artifact:
   **claiming became BINDING** (`7de3ac0`) — the three `gen-block-*` skills claim at the seam where a
@@ -1597,7 +1926,8 @@ opinion.** That single sentence is why §3 is the most valuable part of this des
   dispatch `assertion-enumerator` with `enumerate-assertions` against a block with no enumeration,
   grade it with gate 3d, and see whether coverage moves — and names the ceiling on it: gate 3d is a
   **normalised comparison over a self-declared identity string**
-  (`AgentIdentity.SameAs`, `src/harness/Harness.Results/SubmissionVector.cs:591`). ⚠️ **This read
+  (`AgentIdentity.SameAs`, `src/harness/Harness.Results/SubmissionVector.cs:591` **as of v3.6 — the
+  symbol is at `:740` at HEAD after `43c57f0`; §5z above carries the re-derived set**). ⚠️ **This read
   *"an ordinal comparison over an identity nobody has defined"* until 2026-08-24; both halves are now
   corrected** — the comparison is normalised (`5d4fa62`), and the identity is defined at
   `docs/notes/test-environment-contract.md` §1.1, which also grades the ceiling.

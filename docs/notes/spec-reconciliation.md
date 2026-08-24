@@ -282,7 +282,7 @@ that §NC's own total is one of the numbers that did not survive the census.**
 | Derivation 2 — `K_max = R × floor(S_min × scan / RTT_p99)` | **DIVERGED** | Built as `WireTiming.MaxTensorWidth` but ***reported, never enforced***, on D36's grounds. §12a corrected. |
 | Derivation 3 — the wire term | AS SPECIFIED | `WireTiming.RoundTripsPerIndex`. |
 | Derivation 4 — the 2,216 ms outlier; ≥3,000 ms per-request timeout; the computed backstop | AS SPECIFIED | `PerRequestTimeoutMs = 3000`; `BackstopMs` has **no `int` overload**, so a bare scan count is unexpressible; `ModbusPolicy.Default` sets `Retries: 0` against NModbus's default of 3. |
-| Derivation 5 — X-D's compression constants | **DIVERGED** | Timer floor `k × scan = 5 × 23.33 = 116.65 ms`; a 500 ms preset caps at **4.29×** (asserted to two places, `TimeCompressionTests.cs:54`, alongside `NotEqual(10.0)`; mutating the floor back to 50 ms reddens six tests), against the spec's rounded 4.3× and X-D's original 10×. §12a corrected to the computed figure. 🔴 **And the figure is HALF-measured, which the spec does not say: the scan term is `[M]`, `k ≈ 5` is X-D's own number and has never been measured.** Also: **no wave has ever run compressed** — every compression ceiling is arithmetic over measured inputs, exercised against the simulator only. |
+| Derivation 5 — X-D's compression constants | **DIVERGED** | Timer floor `k × scan = 5 × 23.33 = 116.65 ms`; a 500 ms preset caps at **4.29×** (asserted to two places, `TimeCompressionTests.cs:54`, alongside `NotEqual(10.0)`; mutating the floor back to 50 ms reddens six tests), against the spec's rounded 4.3× and X-D's original 10×. §12a corrected to the computed figure. 🔴 **And the figure is HALF-measured, which the spec does not say: the scan term is `[M]`, `k ≈ 5` is X-D's own number and has never been measured.** ⚠️ **AND A RETRACTION, 2026-08-24.** This cell read *"Also: **no wave has ever run compressed** — every compression ceiling is arithmetic over measured inputs, exercised against the simulator only"*, written **2026-08-14, eight days before it stopped being true.** A three-vector wave ran on the rig **at comp 4** on 2026-08-22 (`22362e0`, 14:37 — 8.1 min → 2.23 min, 6,185 → 1,676 round trips; all three verdicts reproduced the uncompressed run, `d9bb788` 14:50), on build `622F3EB7`, and the block's timer presets were compressed on the device rather than only in the harness's waiting (`46f9aa8`). *The rest of this cell is untouched and still stands: `k ≈ 5` is X-D's number and has still never been measured, so the timer floor remains **half**-measured — and the compressed run does not change that, because it ran at 4×, below the floor's own ceiling, and tested nothing about `k`.* |
 | Derivation 6 — batching got stronger | AS SPECIFIED | `ModbusLimits.MaxReadRegisters = 125` / `MaxWriteRegisters = 123`; `SlotsPerRead = floor(125/Wr)`. |
 | F-1 adopted — a read never SPLITS a slot | AS SPECIFIED | `RegisterMap.ResultRead(SlotSpan)`; **no register-range overload exists**, so a split read is unexpressible rather than validated. |
 | F-2 DB-13's max-width input shape | **NOT BUILT** | Still a scalar input with a provenance requirement. *Consequence: one number per wave set must be the worst case, discarding most of the width the link sustains.* |
@@ -545,10 +545,22 @@ Nothing below is a pass. Each is something this reconciliation did not reach.
     no S7 transport in this run"* are different claims and the document can only express the first, so
     the gate demands a tag map to verify a claim a map would be meaningless for. **No tag map exists
     on disk.** This is `null` vs `[]` care, one level further out.
-13. ***A measured harness defect against contract §2.3:*** a wave at `runtimeCompression = 8` whose
-    `comp_min` is 1 **passes with no `comp_stable` declared at all**. The contract's rule is the
-    **runtime** factor; until it is fixed, a green on that bound at `comp_min = 1` is worth less than
-    it looks.
+13. ✅ ***FIXED — and this item was written EIGHT HOURS AFTER the fix.*** 🔴 **RETRACTION 2026-08-24.**
+    *What was claimed:* *"a measured harness defect against contract §2.3 — a wave at
+    `runtimeCompression = 8` whose `comp_min` is 1 **passes with no `comp_stable` declared at all**.
+    The contract's rule is the **runtime** factor; until it is fixed, a green on that bound at
+    `comp_min = 1` is worth less than it looks."* *What is true:* **`859b731`, 2026-08-13 17:48**, made
+    `CompressionRequest` require the runtime factor and every *"is anything scaled?"* branch key on
+    `applied = max(compMin, runtimeCompression)`; an absent `compStable` above 1× returns
+    `NotComputable` and gate 10b **fails** it. Pinned by
+    `Harness.Results.Tests/ContractOwedTests.cs` —
+    `A_WAVE_AT_COMP_8_WITH_COMP_MIN_1_AND_NO_COMP_STABLE_IS_REFUSED` (`:137` at HEAD) with the mutation
+    control `And_the_same_wave_WITH_comp_stable_declared_clears_the_ceiling` (`:153`), so the refusal is
+    demonstrably about the ceiling and not about anything incidental. *What the mistake was:* this
+    document is dated 2026-08-14 and the fix is dated 2026-08-13 — **the defect was closed before the
+    line describing it as open was typed**, and nobody re-read the commit that the same reconciliation
+    pass was reconciling against. **A green on this bound at `comp_min = 1` is now worth exactly what it
+    says.**
 14. ***D6's gate was passed by whitespace.*** Identity was `StringComparison.Ordinal` on an unspecified
     string, so `"Agent-A "` was *independent of* `"agent-a"`. The one check the pipeline exists for,
     defeated by a trailing space.
