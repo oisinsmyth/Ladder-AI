@@ -347,7 +347,7 @@ def ir_identity(path):
     declared name, and 'FB3'/'DB9010' where one exists.
 
     The parse the whole claims join is built on. An IR file names itself on its first
-    line - `BLOCK FB FB_PusherControl`, `DB DB_Alarms`, `TYPE UDT_SiloParam`,
+    line - `BLOCK FB FB_PusherControl`, `DB DB_Alarms`, `TYPE UDT_Valve`,
     `TAGTABLE Default tag table` (whose name may contain spaces) - and a code block or DB
     carries its number on a `NUMBER` line a couple of lines down, indented for a DB and
     flush for a code block, so both forms are stripped before splitting. A TYPE or a
@@ -569,7 +569,7 @@ if ir_files and isinstance(declared_claims, list) and declared_claims:
             by_key[(row.get("kind"), row.get("value"))] = row
 
     # THE FILES ON DISK, INDEXED BOTH WAYS the claim vocabulary can name them: by block
-    # number (`FB3`, `DB9010`) and by declared name (`FB_PusherControl`, `UDT_SiloParam`,
+    # number (`FB3`, `DB9010`) and by declared name (`FB_PusherControl`, `UDT_Valve`,
     # `Default tag table`). Every join below resolves a claim to ONE of these entries, and
     # the same index drives the coverage pass in the other direction.
     by_number, by_name, identity = {}, {}, {}
