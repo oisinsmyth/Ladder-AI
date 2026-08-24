@@ -82,6 +82,12 @@ logic; reviewers err toward flagging, and "defensible" is not a pass.
 - C-107 *(info — soft rule)* — Edge previous-scan memory may live in a dedicated bool array (e.g. `aEdgeMem[]`) where it keeps networks tidy. Elements are **statically referenced only** (no looped/indexed access) and each element is written in exactly one place — which makes C-402 directly auditable via cross-reference on the array. Drop this rule if it ever conflicts with a stronger one.
 - C-108 *(warn)* — Before writing a new block, reuse an existing site-proven block or pattern that solves the same problem. A new block for an already-solved problem needs a stated reason. (Human-side mirror of `07-pattern-library-spec.md`: proven code over fresh invention, for people and AI alike.)
 - C-109 *(warn)* — **OB1 contains only calls to area Main FCs** (`FC_ComsMain`, `FC_MapIOMain`, `FC_AlarmsMain`, `FC_ControlMain`, …); no working logic directly in OB1. Each area Main calls only its own area's blocks (one `Map` FC per IO source, one alarm FC per category, etc.). One level of dispatch — the call tree reads like a table of contents. **Documented exception (2026-07-16, owner ruling — retrospective §5.4): IO mapping.** The `Map` FCs may be called directly from OB1 without an `FC_MapIOMain` wrapper — their first/last position is already pinned by C-110; wrapper FCs remain the rule for every other area.
+  **AN AREA MAIN CALLS FCs ONLY, NEVER FBs** *(owner ruling, 2026-08-24)*. FBs and their instance
+  DBs live one level down, in the leaf FCs. Three levels, each with one job: OB1 calls `FC_*Main`;
+  each `FC_*Main` calls FCs; the leaf FCs hold the FB calls and their instances. Without this, "its
+  own area's blocks" above permits an area Main to call an FB directly and the dispatch layer stops
+  being a table of contents. *Why:* it gives the program a structure a human engineer can trace —
+  one that says where to look before saying what happens.
 - C-110 *(warn)* — **Input mapping is the first call in OB1; output mapping is the last.** All logic in between sees the current scan's fresh inputs, and the field receives the current scan's final decisions. Mapping mid-sequence introduces a silent one-scan latency — usually invisible, occasionally not, always undocumented.
 - C-111 *(error)* — **Simulation mode** is implemented entirely at the mapping layer; logic blocks are untouched and unaware (possible because of C-304). `DB_PLC.Simulation` (see C-305):
   - gates the `FC_…InputMap` calls off via `-|/|-`, and enables `FC_Simulation`, which drives the input buffer DBs from the output buffers plus configured settings/event triggers;
@@ -493,6 +499,36 @@ logic; reviewers err toward flagging, and "defensible" is not a pass.
 
   *Mechanised:* `converter preflight` implements this as **`literal-fit`**, scoped to the two forms
   above. Preflight is a filter before the compile gate, never a substitute for it (hard rule 4).
+
+- C-311 *(error)* — **A function block never references a global DB.** *(Owner ruling,
+  2026-08-24.)* Every value an FB needs from outside itself arrives **through its interface**,
+  written there by the calling FC with a MOVE or a coil. An FB's referenced blocks are therefore
+  only the blocks it calls internally — its own nested instances. This includes the buffer DBs:
+  C-304 gets logic off `%I`/`%Q` and onto `DB_Inputs`/`DB_Outputs`, and C-311 takes the next step,
+  keeping the FB off those too. Settings, commands, IO and alarm bits all cross the boundary at the
+  call site.
+  *Why:* three things at once. **The block becomes testable in isolation** — drive its interface
+  and it runs, with nothing else standing around it, which is what makes a design-for-testability
+  requirement achievable rather than aspirational. **It becomes portable** — it carries no
+  assumption about what any DB is called or how it is laid out. And **the call site tells the whole
+  story**: every value crossing the boundary is visible in one place at the FC, instead of buried
+  in the FB's rungs where a cross-reference is the only way to find it. This is C-304's own
+  argument — logic that only touches a buffer is trivially simulatable and portable — applied one
+  level further out.
+  *Read with C-306*, which says equipment FBs "consume from" the operator command DB. They do, but
+  **through their interface, wired by the calling FC** — not by referencing that DB. The two rules
+  are compatible only on that reading.
+  *Exceptions — named, per project, per exception (owner ruling, 2026-08-24).* A project may grant
+  an FB direct access to a global DB member, but **only by naming it**: the exception is recorded
+  against **one member** (never a whole DB), states the sole writer and that every FB reading it is
+  read-only, and is granted **per project** — an exception in one project carries no weight in
+  another, and a second member in the same project needs its own grant. **An unnamed direct
+  reference is a violation, not an exception.** The case this exists for is a single plant-wide
+  boolean that nearly every equipment instance needs, where wiring it through every interface adds
+  many wires carrying the same bit and one forgotten wire is a silent fault.
+  *What it costs, and why it stays narrow:* an FB that takes an exception is **no longer testable
+  by driving its interface alone** — a test must stand up that DB too. That is the property C-311
+  exists to buy, so each exception spends it. Record the cost with the grant.
 
 ## Instructions
 
