@@ -446,6 +446,7 @@ public static class BatchPlanner
         var first = documents[0];
         var merged = new BindingDocument
         {
+            DeclaredBy = SharedDeclarer(documents),
             BlockName = first.BlockName,
             BlockNumber = first.BlockNumber,
             TagTableName = first.TagTableName,
@@ -467,6 +468,58 @@ public static class BatchPlanner
         };
 
         return JsonSerializer.Serialize(merged, Json);
+    }
+
+    /// <summary>
+    /// 🔴 <b>THE MERGED DOCUMENT'S <c>declaredBy</c> — CARRIED WHEN IT IS LOSSLESS, DROPPED WHEN IT IS NOT,
+    /// AND NEVER COLLAPSED TO ONE NAME.</b>
+    ///
+    /// <para>Every other document-level field above goes through <see cref="AgreeOn"/>, which REFUSES
+    /// disagreement. That is right for the geometry — <c>baseByte</c> is a property of one deployed
+    /// harness, so two answers is a mistake. <b>It is wrong here.</b> An author is not a property of the
+    /// deployment; different lanes legitimately have different coordinators, and refusing that would
+    /// refuse a configuration nothing else in this system objects to. <c>AgreeOn</c> is therefore
+    /// deliberately not used, and this is not an oversight.</para>
+    ///
+    /// <para>🔴 <b>THE OPTION RULED OUT ON EVIDENCE, NOT ON TASTE: the merged document declaring its own
+    /// author (the batcher).</b> Gate 5c refuses a map declared by the block's author or a vector's. If
+    /// the batch stamps its own name over lane B's, and lane B's coordinator is also lane B's block
+    /// author, <b>the gate compares the batcher against the block author, finds them different, and
+    /// PASSES</b> — a real conflict laundered into a green by the merge step. That is fail-OPEN, and it is
+    /// the one outcome this whole gate exists to prevent.</para>
+    ///
+    /// <para><b>What is done instead.</b> When every contributing lane names the SAME declarer, collapsing
+    /// to that one name loses nothing and it is carried — this is the ordinary case, one coordinator
+    /// running a batch of their own lanes, and it keeps gate 5c a live verdict on batched runs rather than
+    /// a permanent NOT CHECKED that would get switched off. When the lanes name DIFFERENT declarers, the
+    /// merged document declares NOBODY: gate 5c then reads NOT CHECKED and says so by name, which is
+    /// fail-closed and audible. <b>A batch is not silently weakened; it is loudly unattributed.</b></para>
+    ///
+    /// <para>⚠️ <b>THE PROPERLY CORRECT ANSWER IS A SET, AND IT NEEDS AN OWNER RULING — NOT TAKEN HERE.</b>
+    /// A merged map derived from two coordinators' bindings has TWO authorities, and the fail-closed
+    /// comparison is "refuse if ANY contributing declarer is the block's author or a vector's". Nothing
+    /// less than a set can express that: a joined string like <c>"agent-x; agent-y"</c> is worse than
+    /// nothing, because <c>AgentIdentity.SameAs</c> would compare the whole joined literal and match
+    /// neither party — a conflict rendered invisible by the formatting. Carrying a set means a PLURAL WIRE
+    /// FIELD on <see cref="BindingDocument"/>, which every reader and gate 0b's unknown-field refusal see,
+    /// and a plural <c>MapAuthor</c> on the domain map. That is a schema change with a blast radius, and
+    /// the multi-coordinator batch is not known to have occurred yet. <b>Until it is ruled on, the
+    /// mixed-declarer batch is NOT CHECKED rather than guessed at.</b></para>
+    /// </summary>
+    private static string? SharedDeclarer(IReadOnlyList<BindingDocument> documents)
+    {
+        var stated = documents
+            .Select(d => (d.DeclaredBy ?? string.Empty).Trim())
+            .Where(d => d.Length > 0)
+            .ToArray();
+
+        // TWO conditions, and the second is the one a distinct-count alone would miss: a batch attributed
+        // to the lanes that happened to say is not an attributed batch, so a single silent lane
+        // unattributes the whole merged document. Same rule as a partially-attributed enumeration set at
+        // gate 3d. Compared with the identity's own normalisation, not ordinally.
+        var oneVoice = stated.Distinct(StringComparer.OrdinalIgnoreCase).Count() == 1;
+
+        return oneVoice && stated.Length == documents.Count ? documents[0].DeclaredBy : null;
     }
 
     private static void AgreeOn<T>(

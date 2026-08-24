@@ -203,7 +203,14 @@ public class LoopRunTests
             // and it is TRUE here rather than convenient — these vectors are ramp-to-limit, completion is a
             // count reaching a limit, and there is no clock whose scale could disagree with the block's.
             // Omitting it would be NOT CHECKED, which is the honest answer for a stimulus that HAS one.
-            ScenarioTimeInputs: Array.Empty<string>());
+            ScenarioTimeInputs: Array.Empty<string>(),
+
+            // 🔴 Gate 5c: WHO declared the binding the observability map is derived from. A FOURTH party —
+            // agent-a wrote the block, agent-b the vectors, agent-c the enumeration, agent-m the model.
+            // Stated rather than defaulted for the reason above it: a hand-composed request legitimately
+            // has no document behind it, so the honest default is unrecorded, and an unrecorded map author
+            // is NOT CHECKED. This fixture stands for a COMPLETE submission and has to say so.
+            MapAuthor: new AgentIdentity("agent-k"));
 
     private static (LoopResult Result, SimulatedGateway Gateway) Run(LoopRequest? request = null, SimulatedGateway? gateway = null)
     {

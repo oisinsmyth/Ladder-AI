@@ -44,6 +44,7 @@ public class StagedCorpusReachesTheRunTests
 
     private const string Binding = """
     {
+      "declaredBy": "agent-k",
       "blockNumber": 9001,
       "baseByte": 1000,
       "declaredRegisters": 576,

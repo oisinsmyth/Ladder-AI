@@ -295,6 +295,7 @@ public static class SubmissionGate
         gates.Add(Fidelity(vectors, fidelity));
         gates.Add(FidelityAuthority(vectors, fidelity, blockAuthor));
         gates.Add(Observability(vectors, enumerations, map, floorScans, runtimeCompression));
+        gates.Add(MapAuthority(vectors, map, blockAuthor));
         gates.Add(Settling(vectors));
         gates.Add(new GateResult("6b settling — does the condition imply the value is final", GateStatus.Judgement, true, "none, ever",
             "whether the declared settling condition really implies finality is judgement, informed by the model's fidelity declaration."));
@@ -1654,6 +1655,101 @@ public static class SubmissionGate
             // ONLY WHEN EVERYTHING PASSED IS MISSING FROM EVERY REPORT ANYONE READS CLOSELY - a refusing
             // report is precisely the one that gets read.
             + LatchAdmission(map));
+    }
+
+    // -------------------------------------------------------------------------------------------------
+    // 5c — the map's AUTHOR, as opposed to the map's PROVENANCE
+    // -------------------------------------------------------------------------------------------------
+
+    /// <summary>
+    /// *** GATE 5 FENCES THE VECTOR AUTHOR STRUCTURALLY AND SAYS NOTHING ABOUT THE BLOCK'S AUTHOR. ***
+    ///
+    /// <para>Gate 5 refuses a map that came out of the SUBMISSION — a provenance test, and a good one.
+    /// But a map with <c>MapProvenance.Bindings</c> is trusted on the strength of WHERE it came from and
+    /// never on WHO wrote it, so <b>a block author who also writes the coordinator's binding decides both
+    /// what the block does and what can be seen of it</b>. Every expectation any vector may state is
+    /// checked against that map: a signal the binding does not carry is unobservable, and a mode it does
+    /// not offer is refused. Narrowing the map narrows what the block can be caught doing.</para>
+    ///
+    /// <para><b>Fourth instance of this family</b> — 3d (the enumeration's producer), 4b (the fidelity
+    /// list's declarer), 5's own provenance, and now 5's author. Fixed the same way each time: name an
+    /// authority, compare it, and report NOT CHECKED when there is none. The comparison operator
+    /// (<c>AgentIdentity.SameAs</c>) already existed and had no second operand — <c>BindingDocument</c>
+    /// carried no author at any level, which is why nothing here was "simply not pointed at" the second
+    /// party.</para>
+    ///
+    /// <para><b>Both silences are NOT CHECKED rather than a pass:</b> an unrecorded map author, and a
+    /// submission that records no party to compare one against. <c>problems.Count == 0</c> is true of
+    /// nothing found and of nothing looked at, so the denominator is stated in the verdict either way.</para>
+    /// </summary>
+    private static GateResult MapAuthority(IReadOnlyList<SubmissionVector> vectors, MirrorObservability map, AgentIdentity blockAuthor)
+    {
+        const string name = "5c map authority";
+
+        if (!map.MapAuthor.IsRecorded)
+        {
+            // The provenance is named in the text because the two silences have different repairs, and a
+            // reader who has just been told gate 5 could not run needs to know whether this is the same
+            // fact or a second one.
+            var because = map.Provenance switch
+            {
+                MapProvenance.Bindings =>
+                    "the coordinator's binding was loaded and derived from, but it records no `declaredBy`, so the party who decided WHAT CAN BE SEEN of this block is unknown. "
+                    + "Gate 5's provenance test fences out the VECTOR author and is silent about the BLOCK's: a binding written by the block's author narrows observability with one hand and writes the logic with the other.",
+                MapProvenance.SelfDeclared =>
+                    "the map came out of the submission, so gate 5 already refuses to be the deciding voice on it — and there is no separate author to attribute either. "
+                    + "This gate closes when a coordinator binding carrying `declaredBy` is supplied (`--binding`), which is the same artifact gate 5 is waiting on.",
+                _ =>
+                    "nothing said where the map came from and nothing said who wrote it. An unattributed map is indistinguishable from one written by the party it is used to adjudicate.",
+            };
+
+            return GateResult.CouldNotRun(name, NotCheckedReason.AwaitingAnArtifactThatCouldExist, "the binding document's own identity field",
+                because + " *** UNKNOWN IS NOT INDEPENDENT. *** That is a missing artifact and not a design property: this gate RUNS and returns a verdict the moment a binding naming its author is supplied.");
+        }
+
+        // *** THE DENOMINATOR. *** With no recorded block author and no recorded vector author there is
+        // nothing for `SameAs` to be false OF, and a green here would be a comparison against an empty
+        // set wearing a verdict's clothes. Gate 2 refuses an unrecorded block author independently; this
+        // does not rely on that, because a check whose correctness rests on another gate's is a check
+        // that silently stops working when the other one moves.
+        var vectorAuthors = vectors.Where(v => v.Author.IsRecorded).ToArray();
+
+        if (!blockAuthor.IsRecorded && vectorAuthors.Length == 0)
+        {
+            return GateResult.CouldNotRun(name, NotCheckedReason.AwaitingAnArtifactThatCouldExist, "a recorded block author or vector author to compare against",
+                $"the map was declared by '{map.MapAuthor}', and NEITHER the block's author NOR any of the {vectors.Count} vector(s) records an identity — so there is nobody to show that party is independent OF. "
+                + "*** NOTHING FOUND AND NOTHING LOOKED AT ARE NOT THE SAME RESULT, *** and reporting the first while doing the second is how this gate would pass every submission that simply says less.");
+        }
+
+        var problems = new List<string>();
+
+        // The block author is the limb M-19 names, and it gets its own sentence: a map written by the
+        // block's author bounds what anyone may observe of that author's own logic.
+        if (blockAuthor.IsRecorded && map.MapAuthor.SameAs(blockAuthor))
+        {
+            problems.Add($"'{map.MapAuthor}' both wrote the block and declared the binding this observability map is derived from. "
+                + "*** THE PARTY UNDER TEST DECIDED WHAT CAN BE SEEN OF IT: *** every vector's expectation is admitted or refused against this map, so a signal left out of it is a behaviour nothing can be written against, and a mode left off is an expectation refused before anything is spent.");
+        }
+
+        // A vector author writing the map is gate 5's own concern arriving by a route its provenance test
+        // cannot see: the map is `Bindings`-derived and therefore trusted, while the same party wrote both.
+        //
+        // *** ONE SENTENCE NAMING EVERY VECTOR, NOT ONE SENTENCE PER VECTOR. *** Measured against the
+        // committed deliverable: the per-vector form emitted the same 300-character paragraph 27 times,
+        // and a refusal nobody finishes reading is a refusal nobody acts on. The ids are still all here,
+        // and the count is stated against the total so the reader can see how much of the set is affected.
+        var conflicted = vectorAuthors.Where(v => map.MapAuthor.SameAs(v.Author)).ToArray();
+
+        if (conflicted.Length > 0)
+        {
+            problems.Add($"'{map.MapAuthor}' declared the binding this map is derived from AND wrote {conflicted.Length} of the {vectors.Count} vector(s) it adjudicates ({string.Join(", ", conflicted.Select(v => v.Id))}). "
+                + "Gate 5's provenance test cannot see this — the map IS derived from the coordinator's bindings, so it is trusted on WHERE it came from while the vector's own author wrote WHAT it came from.");
+        }
+
+        return new GateResult(name, GateStatus.Checked, problems.Count == 0, nameof(AgentIdentity),
+            problems.Count == 0
+                ? $"the observability map was declared by '{map.MapAuthor}', compared against the block's author ({blockAuthor}) and {vectorAuthors.Length} recorded vector author(s) — none of them the same party, so what can be SEEN of this block was decided by somebody who neither wrote it nor wrote the tests."
+                : string.Join(" | ", problems));
     }
 
     // -------------------------------------------------------------------------------------------------

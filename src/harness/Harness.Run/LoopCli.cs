@@ -860,7 +860,11 @@ public static class LoopCli
             ScenarioTimeInputs: inputs.ScenarioTimeInputs,
             InertSettle: inertSettle,
             StagedCorpus: stagedCorpus,
-            NeighboursNotDerived: neighboursNotDerived);
+            NeighboursNotDerived: neighboursNotDerived,
+
+            // 🔴 Gate 5c's second operand, read off the document rather than the derived slots — see
+            // LoopRequest.MapAuthor for why it is document-level.
+            MapAuthor: new AgentIdentity(binding.DeclaredBy ?? string.Empty));
     }
 
     private static IReadOnlyList<MirroredSignal> Signals(List<MirroredSignalDocument>? rows) =>

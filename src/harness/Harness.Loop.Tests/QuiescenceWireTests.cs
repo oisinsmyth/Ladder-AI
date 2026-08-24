@@ -91,6 +91,7 @@ public class QuiescenceWireTests
     /// <summary>The binding, with the quiescence declaration as a PARAMETER — including "absent".</summary>
     private static string Binding(string quiescenceField) => $$"""
     {
+      "declaredBy": "agent-k",
       "blockName": "FC_HarnessCopyLayer",
       "blockNumber": 900,
       "baseByte": {{MirrorBase}},

@@ -13,6 +13,28 @@ namespace Harness.Gate;
 /// </summary>
 public sealed class BindingDocument
 {
+    /// <summary>
+    /// 🔴 <b>WHO WROTE THIS BINDING — and until now the document carried no author at ANY of its levels.</b>
+    ///
+    /// <para>The observability map gate 5 adjudicates against is DERIVED FROM THIS DOCUMENT
+    /// (<c>MirrorObservability.FromBindings</c>), so this document decides <b>what can be seen of the
+    /// block</b>. Gate 5 fences the vector author out of it STRUCTURALLY — by provenance, refusing a map
+    /// that came out of the submission — and that fence says nothing whatever about the BLOCK's author.
+    /// <b>A block author who also writes this file decides both what the block does and what anyone is
+    /// able to observe of it</b>, which is the correlated reading the whole pipeline exists to break, and
+    /// no code compared the two parties because there was no second operand to compare.</para>
+    ///
+    /// <para><b>Same shape and same name as <c>FidelityDeclaration.DeclaredBy</c></b>, which is the same
+    /// defect one artifact over: the fidelity list licenses what a vector may ASSERT, this document
+    /// decides what a vector may OBSERVE, and both are worthless as checks if the party being checked
+    /// wrote them. See gate <c>5c map authority</c>.</para>
+    ///
+    /// <para><b>Absent is NOT CHECKED, never a pass</b> — <i>unknown is not independent</i>. It is a
+    /// mapped field rather than an <c>_</c>-annotation for <c>ValueEncodingDocument.Source</c>'s reason:
+    /// an annotation is read by nothing, so a convention kept there is one somebody eventually drops.</para>
+    /// </summary>
+    public string? DeclaredBy { get; set; }
+
     public List<SlotBindingDocument>? Slots { get; set; }
 
     /// <summary>Copy-layer block name. Defaults to the generator's own.</summary>

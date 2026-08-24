@@ -23,11 +23,20 @@ public class MirrorObservabilityAcrossSlotsTests
     private static MirroredSignal Signal(string tag, string spec, string? latchedBy = null) =>
         new(tag, MirrorValueType.Bool, SpecName: spec, LatchedBy: latchedBy);
 
+    /// <summary>
+    /// The derivation under test, attributed. <b>These tests are about the MODE ALGEBRA and not about
+    /// authority</b> — but <c>FromBindings</c> takes the author as a required argument precisely so that
+    /// no call site can leave it unsaid, and a bare <c>default</c> repeated four times below would read
+    /// as an oversight rather than as the choice it is.
+    /// </summary>
+    private static MirrorObservability Map(IEnumerable<MirroredSignal> signals) =>
+        MirrorObservability.FromBindings(signals, new AgentIdentity("agent-k"));
+
     [Fact]
     public void SIX_AGREEING_DECLARATIONS_FOLD_INTO_ONE_ENTRY_and_nothing_is_reported_as_divergent()
     {
         // The deliverable's own shape: six slots, one block, identical instrumentation on each.
-        var map = MirrorObservability.FromBindings(
+        var map = Map(
             Enumerable.Range(0, 6).Select(_ => Signal("IO.HopperBlockedAlarm", "HopperBlockedAlarm", "FB_HarnessViolationLatch")));
 
         var modes = Assert.Single(map.ProvidedFor).Value;
@@ -46,8 +55,8 @@ public class MirrorObservabilityAcrossSlotsTests
         var withLatch = Signal("IO.Alarm", "Alarm", "FB_HarnessViolationLatch");
         var without = Signal("IO.Alarm", "Alarm");
 
-        var forwards = MirrorObservability.FromBindings(new[] { withLatch, without });
-        var backwards = MirrorObservability.FromBindings(new[] { without, withLatch });
+        var forwards = Map(new[] { withLatch, without });
+        var backwards = Map(new[] { without, withLatch });
 
         // Order-independent, which is the property that makes it a rule rather than an accident.
         Assert.Equal(forwards.For("Alarm"), backwards.For("Alarm"));
@@ -69,7 +78,7 @@ public class MirrorObservabilityAcrossSlotsTests
     public void A_SINGLE_DECLARATION_IS_UNTOUCHED_and_reports_no_divergence()
     {
         // The unaffected case, asserted as deliberately as the narrowed one.
-        var map = MirrorObservability.FromBindings(new[] { Signal("IO.Alarm", "Alarm", "FB_HarnessViolationLatch") });
+        var map = Map(new[] { Signal("IO.Alarm", "Alarm", "FB_HarnessViolationLatch") });
 
         Assert.Contains(InstrumentationMode.Latched, map.For("Alarm"));
         Assert.Empty(map.DivergentAcrossDeclarations);

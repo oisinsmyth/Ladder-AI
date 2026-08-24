@@ -81,6 +81,7 @@ internal static class Fixtures
 
     internal static string BindingJson => """
     {
+      "declaredBy": "agent-k",
       "blockName": "FC_HarnessCopyLayer",
       "blockNumber": 9001,
       "baseByte": 1000,

@@ -251,7 +251,10 @@ public static class Recompute
             .SelectMany(s => s.ResultSources ?? new List<MirroredSignalDocument>())
             .Select(GateCli.ToMirroredSignal);
 
-        var computed = MirrorObservability.FromBindings(signals);
+        // `default` author, stated rather than defaulted: this map is a SCRATCH VALUE for the set
+        // comparison below and never reaches a gate — only `ProvidedFor`'s keys and modes are read from
+        // it. Gate 5c adjudicates the map GateCli derives, which does carry `binding.DeclaredBy`.
+        var computed = MirrorObservability.FromBindings(signals, default);
 
         var authoredSignals = authored.Keys.ToHashSet(StringComparer.Ordinal);
         var computedSignals = computed.ProvidedFor.Keys.ToHashSet(StringComparer.Ordinal);

@@ -129,7 +129,10 @@ public class RunDenominatorTests
             Derivation: DerivationEvidence.NoDocument,
 
             // Gate 1b's flat ceiling — no scenario clock on these vectors. See LoopRunTests.Request.
-            MaxIndexScans: 200);
+            MaxIndexScans: 200,
+
+            // Gate 5c: the coordinator who declared the binding, a fourth party. See LoopRunTests.Request.
+            MapAuthor: new AgentIdentity("agent-k"));
     }
 
     private static string Console(LoopResult result)

@@ -123,6 +123,7 @@ public class UnknownFieldScopeTests
 
     private const string Binding = """
     {
+      "declaredBy": "agent-k",
       "blockName": "FC_HarnessCopyLayer",
       "blockNumber": 9000,
       "baseByte": 1000,

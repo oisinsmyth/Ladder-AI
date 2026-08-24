@@ -86,6 +86,7 @@ public class GateCliTests
     /// </summary>
     internal const string Binding = """
     {
+      "declaredBy": "agent-k",
       "slots": [{
         "slotId": "S0",
         "vectorTargets": [{ "tag": "Demo_Step", "type": "Int" }],
