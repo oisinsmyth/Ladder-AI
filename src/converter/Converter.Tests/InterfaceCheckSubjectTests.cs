@@ -22,6 +22,7 @@ namespace Converter.Tests;
 ///
 /// <para>THE OUTCOME IS 2, NOT 1. A wrong enumeration is an unjudgeable INPUT, not a defective block.</para>
 /// </summary>
+[Collection(TestCollections.ConsoleCapture)]
 public class InterfaceCheckSubjectTests : IDisposable
 {
     private readonly string _dir;

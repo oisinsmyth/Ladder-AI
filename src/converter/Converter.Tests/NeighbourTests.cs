@@ -29,6 +29,7 @@ namespace Converter.Tests;
 /// <para>The two real-artifact tests are the ZERO case and the AREA-DECLARATION case, and they run
 /// against <c>ir/test-project001</c> exactly as committed.</para>
 /// </summary>
+[Collection(TestCollections.ConsoleCapture)]
 public class NeighbourTests : IDisposable
 {
     private readonly string _dir;

@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using Xunit;
@@ -40,6 +39,7 @@ namespace Converter.Tests;
 /// process narrowing is about the converter assembly, not this one) apply here. What stays in this file
 /// is the argument vector and how a winner is recognised.</para>
 /// </summary>
+[Collection(TestCollections.ProcessRace)]
 public sealed class ClaimProcessRaceTests : IDisposable
 {
     private const int Racers = 4;
@@ -197,7 +197,7 @@ public sealed class ClaimProcessRaceTests : IDisposable
     [Fact]
     public void Four_PROCESSES_taking_four_DIFFERENT_block_numbers_all_win()
     {
-        var raced = ProcessRace.UntilTheyOverlap((attempt, i) => ClaimArgs($"FB{7200 + (attempt * Racers) + i}", $"agent-{attempt}-{i}"));
+        var raced = ProcessRace.UntilTheyOverlap((attempt, i) => ClaimArgs($"FB{7200 + (attempt * Racers) + i}", $"agent-{attempt}-{i}"), Racers);
 
         AssertEveryRacerGotARealAnswer(raced.Runs, Racers);
 
@@ -217,7 +217,7 @@ public sealed class ClaimProcessRaceTests : IDisposable
     [Fact]
     public void After_the_race_the_store_holds_exactly_one_claim()
     {
-        var raced = ProcessRace.UntilTheyOverlap((attempt, i) => ClaimArgs($"FB{7300 + attempt}", $"agent-{attempt}-{i}"));
+        var raced = ProcessRace.UntilTheyOverlap((attempt, i) => ClaimArgs($"FB{7300 + attempt}", $"agent-{attempt}-{i}"), Racers);
         var value = $"FB{7300 + raced.Attempt}";
 
         AssertEveryRacerGotARealAnswer(raced.Runs, Racers);

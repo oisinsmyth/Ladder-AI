@@ -1,15 +1,15 @@
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using Converter.Tests;
 using Xunit;
 
 namespace Ladder.Converter.Tests;
 
 /// <summary>
-/// 🔴 <b>The only test in this suite that runs real PROCESSES, and the reason the lease is allowed to
-/// call itself a lock.</b>
+/// 🔴 <b>One of the two tests in this suite that run real PROCESSES, and the reason the lease is allowed
+/// to call itself a lock.</b>
 ///
 /// <para>Everything else about the lease is decided in-process: <c>LeaseStoreTests</c> is
 /// single-threaded, and the one racing test the converter had before this
@@ -22,12 +22,20 @@ namespace Ladder.Converter.Tests;
 /// <para>The component this replaces is recorded as <i>"BUILT, NEVER RUN WITH TWO AGENTS
 /// CONTENDING"</i>. This is that run.</para>
 ///
-/// <para><b>Two caveats stated rather than hidden.</b> First, this exercises the BUILT BINARY, so it
-/// reports on whatever was last compiled — Release by preference, since that is what the skills invoke.
-/// Second, <c>System.Diagnostics.Process</c> appears here, in the TEST assembly; the FI-24 narrowing
-/// pinned by <c>ConverterProcessInvariantTests</c> is about the converter assembly itself, which starts
-/// no child processes.</para>
+/// <para>🔴 <b>2026-08-24 — AND FOR ITS FIRST LIFE IT PROVED LESS THAN IT SAID.</b> The overlap
+/// assertion below, the one that makes the sentence above true, <b>could not fail</b>: it compared a
+/// timestamp taken before <c>Process.Start</c> against one taken in the DRAIN LOOP, which runs after
+/// every racer has been launched, so <c>lastStart &lt; firstExit</c> held by construction. Serialising
+/// the launches left all three tests GREEN. The comment said "a race that did not race proves nothing"
+/// and the code did not implement it. Fixed by moving the machinery into <see cref="ProcessRace"/>,
+/// where the timestamps are the OPERATING SYSTEM's and the same mutation reddens all three — the
+/// measurement is recorded there, on the type that carries them.</para>
+///
+/// <para>The launching, timing and overlap machinery is shared with <c>ClaimProcessRaceTests</c> rather
+/// than copied: it was wrong in two places at once, one copy got fixed, and the other went on running
+/// the broken form. What stays here is the argument vector and how a winner is recognised.</para>
 /// </summary>
+[Collection(TestCollections.ProcessRace)]
 public sealed class LeaseProcessRaceTests : IDisposable
 {
     private const int Racers = 4;
@@ -37,95 +45,6 @@ public sealed class LeaseProcessRaceTests : IDisposable
     public void Dispose()
     {
         try { if (Directory.Exists(_root)) Directory.Delete(_root, recursive: true); } catch (IOException) { }
-    }
-
-    /// <summary>
-    /// The built CLI. <b>Release first — that is what the skills invoke</b> — and an absent binary is a
-    /// FAILURE, not a reason to skip: a race test that quietly does not run is the "empty is not clean"
-    /// failure in its purest form.
-    /// </summary>
-    private static string ConverterExe()
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null)
-        {
-            foreach (var configuration in new[] { "Release", "Debug" })
-            {
-                var candidate = Path.Combine(
-                    directory.FullName, "src", "converter", "Converter", "bin", configuration, "net8.0", "converter.exe");
-                if (File.Exists(candidate))
-                {
-                    return candidate;
-                }
-            }
-
-            directory = directory.Parent;
-        }
-
-        throw new InvalidOperationException(
-            "converter.exe was not found by walking up from " + AppContext.BaseDirectory + ". "
-            + "*** THIS IS A FAILURE, NOT A REASON TO SKIP *** — build it with: "
-            + "dotnet build -c Release src/converter/converter.sln");
-    }
-
-    private sealed record Run(int ExitCode, string Stdout, string Stderr, DateTime StartedUtc, DateTime ExitedUtc);
-
-    /// <summary>
-    /// Launch every racer, THEN wait for any of them. Starting each in turn costs a millisecond or two
-    /// while a converter start-up costs tens, so by the time the first reaches its acquire the rest are
-    /// already running — and <see cref="AssertTheyActuallyOverlapped"/> checks that rather than trusting it.
-    /// </summary>
-    private List<Run> Race(Func<int, string[]> argumentsFor, int racers = Racers)
-    {
-        var exe = ConverterExe();
-        var processes = new List<(Process Process, DateTime Started)>();
-
-        for (var i = 0; i < racers; i++)
-        {
-            var info = new ProcessStartInfo(exe)
-            {
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true,
-            };
-
-            foreach (var argument in argumentsFor(i))
-            {
-                info.ArgumentList.Add(argument);
-            }
-
-            var started = DateTime.UtcNow;
-            processes.Add((Process.Start(info)!, started));
-        }
-
-        var runs = new List<Run>();
-        foreach (var (process, started) in processes)
-        {
-            var stdout = process.StandardOutput.ReadToEnd();
-            var stderr = process.StandardError.ReadToEnd();
-            process.WaitForExit();
-            runs.Add(new Run(process.ExitCode, stdout, stderr, started, DateTime.UtcNow));
-            process.Dispose();
-        }
-
-        return runs;
-    }
-
-    /// <summary>
-    /// <b>A race that did not race proves nothing.</b> If the racers ran one after another, "exactly one
-    /// won" would be true of a lock that does not work at all — so the overlap is asserted, and its
-    /// absence FAILS rather than passing quietly.
-    /// </summary>
-    private static void AssertTheyActuallyOverlapped(List<Run> runs)
-    {
-        var lastStart = runs.Max(r => r.StartedUtc);
-        var firstExit = runs.Min(r => r.ExitedUtc);
-
-        Assert.True(lastStart < firstExit,
-            $"the racers did not overlap: the last one started at {lastStart:O} but the first had already exited at "
-            + $"{firstExit:O}. They ran in sequence, so nothing was raced and 'exactly one won' would be true even of "
-            + "a lock that does nothing.");
     }
 
     private string[] AcquireArgs(string target, string holder) => new[]
@@ -138,6 +57,8 @@ public sealed class LeaseProcessRaceTests : IDisposable
         "--ttl", "10",
         "--purpose", "process race",
     };
+
+    private string[] LeaseFiles() => Directory.GetFiles(_root, "*.lease");
 
     // ---------------------------------------------------------------------------------------------
 
@@ -162,23 +83,44 @@ public sealed class LeaseProcessRaceTests : IDisposable
     {
         const int rounds = 12;
         const int racersPerRound = 8;
+        const int attemptsPerRound = 4;
+
+        // Every attempt — including one discarded for not overlapping — takes one fresh resource and so
+        // leaves exactly one lease file behind. Counting attempts rather than rounds keeps the file
+        // count an assertion about the store rather than about the retry loop.
+        var attemptsRun = 0;
 
         for (var round = 0; round < rounds; round++)
         {
-            // Holder names carry the round. Without that they repeat, lease files accumulate across
-            // rounds in one store, and the "exactly one file names the winner" check below matches an
-            // EARLIER round's file — a failure that looks exactly like a broken lock. Cost an
-            // investigation once already.
-            var target = $"rig:10.10.10.{round}";
-            var runs = Race(i => AcquireArgs(target, $"agent-{round}-{i}"), racersPerRound);
+            // The resource and the holder names carry the round AND the attempt. Without that they
+            // repeat, lease files accumulate across rounds in one store, and the "exactly one file names
+            // the winner" check below matches an EARLIER round's file — a failure that looks exactly
+            // like a broken lock. Cost an investigation once already.
+            string TargetFor(int attempt) => $"rig:10.10.10.{(round * attemptsPerRound) + attempt}";
 
-            AssertTheyActuallyOverlapped(runs);
+            var raced = ProcessRace.UntilTheyOverlap(
+                (attempt, i) => AcquireArgs(TargetFor(attempt), $"agent-{round}-{attempt}-{i}"),
+                racersPerRound,
+                attemptsPerRound);
+
+            attemptsRun += raced.Attempt + 1;
+
+            var runs = raced.Runs;
+            var target = TargetFor(raced.Attempt);
+
+            // Every racer must have reached the store: the lease contract is 0 = acquired,
+            // 1 = refused, 2 = unusable input, and a field of 2s would make "exactly one won" fail (or,
+            // in a variant that only counted winners, pass) for a reason that is not about the lock.
+            Assert.Equal(racersPerRound, runs.Count);
+            Assert.All(runs, r => Assert.True(r.ExitCode is 0 or 1,
+                $"a racer exited {r.ExitCode}, which is neither ACQUIRED (0) nor REFUSED (1) — it never reached the "
+                + $"store, so it raced nothing.\nstdout:\n{r.Stdout}\nstderr:\n{r.Stderr}"));
 
             var winners = runs.Where(r => r.ExitCode == 0).ToList();
             var losers = runs.Where(r => r.ExitCode == 1).ToList();
 
             Assert.True(winners.Count == 1,
-                $"round {round}: exactly one process must win, but {winners.Count} did. Exit codes were: "
+                $"round {round}: exactly one process must win {target}, but {winners.Count} did. Exit codes were: "
                 + string.Join(", ", runs.Select(r => r.ExitCode))
                 + "\nstdout of each winner:\n" + string.Join("\n---\n", winners.Select(r => r.Stdout)));
 
@@ -187,7 +129,7 @@ public sealed class LeaseProcessRaceTests : IDisposable
             // Every refusal must name the SAME holder, and it must be the one that actually won. Two
             // losers naming two different winners would mean the store had briefly held two leases.
             var winningHolder = Enumerable.Range(0, racersPerRound)
-                .Select(i => $"agent-{round}-{i}")
+                .Select(i => $"agent-{round}-{raced.Attempt}-{i}")
                 .Single(holder => winners[0].Stdout.Contains($"holder  {holder}"));
 
             foreach (var loser in losers)
@@ -195,8 +137,12 @@ public sealed class LeaseProcessRaceTests : IDisposable
                 Assert.Contains(winningHolder, loser.Stderr);
             }
 
-            // One slot per target, so the round's own file is the only thing that may have appeared.
-            Assert.Single(Directory.GetFiles(_root, "*.lease"), f => File.ReadAllText(f).Contains(winningHolder));
+            // One slot per resource and one resource per attempt, so the store holds exactly as many
+            // lease files as attempts run — not merely "at least one naming the winner", which would
+            // also be true of a store that wrote a file per racer.
+            var files = LeaseFiles();
+            Assert.Equal(attemptsRun, files.Length);
+            Assert.Single(files, f => File.ReadAllText(f).Contains(winningHolder));
         }
     }
 
@@ -208,33 +154,40 @@ public sealed class LeaseProcessRaceTests : IDisposable
     [Fact]
     public void Four_PROCESSES_taking_four_DIFFERENT_resources_all_win()
     {
-        var runs = Race(i => AcquireArgs($"rig:10.10.10.{i}", $"agent-{i}"));
+        var raced = ProcessRace.UntilTheyOverlap(
+            (attempt, i) => AcquireArgs($"rig:10.10.10.{(attempt * Racers) + i}", $"agent-{attempt}-{i}"),
+            Racers);
 
-        AssertTheyActuallyOverlapped(runs);
+        Assert.All(raced.Runs, r => Assert.Equal(0, r.ExitCode));
 
-        Assert.All(runs, r => Assert.Equal(0, r.ExitCode));
+        // And all four grants were recorded, distinctly: four exit-0s over a store holding one file
+        // would be four holders told they own the same rig. (Four per attempt — a discarded attempt
+        // took four resources of its own.)
+        Assert.Equal(Racers * (raced.Attempt + 1), LeaseFiles().Length);
     }
 
     /// <summary>
-    /// The lock survives the losers: after the race, the store holds exactly one lease and it belongs to
-    /// the process that reported winning. A store left with two files, or none, would still have
-    /// produced one exit-0 above.
+    /// The lock survives the losers: after the race, the store holds exactly one lease for the contested
+    /// resource and it belongs to the process that reported winning. A store left with two files, or
+    /// none, would still have produced one exit-0 above.
     /// </summary>
     [Fact]
     public void After_the_race_the_store_holds_exactly_one_lease()
     {
-        var runs = Race(i => AcquireArgs("rig:10.10.10.11", $"agent-{i}"));
-        AssertTheyActuallyOverlapped(runs);
+        var raced = ProcessRace.UntilTheyOverlap(
+            (attempt, i) => AcquireArgs($"rig:10.10.10.{200 + attempt}", $"agent-{attempt}-{i}"),
+            Racers);
 
-        var leaseFiles = Directory.GetFiles(_root, "*.lease");
-        Assert.Single(leaseFiles);
+        // One file per contested resource, and one resource per attempt — a discarded attempt leaves
+        // its own.
+        var files = LeaseFiles();
+        Assert.Equal(raced.Attempt + 1, files.Length);
 
-        var winner = runs.Single(r => r.ExitCode == 0);
-        var recorded = File.ReadAllText(leaseFiles[0]);
+        var winner = raced.Runs.Single(r => r.ExitCode == 0);
         var winningHolder = Enumerable.Range(0, Racers)
-            .Select(i => $"agent-{i}")
+            .Select(i => $"agent-{raced.Attempt}-{i}")
             .Single(holder => winner.Stdout.Contains($"holder  {holder}"));
 
-        Assert.Contains(winningHolder, recorded);
+        Assert.Single(files, f => File.ReadAllText(f).Contains(winningHolder));
     }
 }

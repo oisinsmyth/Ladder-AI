@@ -23,6 +23,7 @@ namespace Converter.Tests;
 /// proven by probing the device from both sides, and nothing here substitutes for that. This buys
 /// exactly one thing — that a binding cannot disagree with the program that was staged.</para>
 /// </summary>
+[Collection(TestCollections.ConsoleCapture)]
 public class ServedAreaTests : IDisposable
 {
     private readonly string _dir;

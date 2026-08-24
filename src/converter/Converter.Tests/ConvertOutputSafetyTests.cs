@@ -8,6 +8,7 @@ namespace Converter.Tests;
 
 // FI-71 and FI-72 — the two traps a fix wave walked into on a live job, both about where converter
 // output goes and what it is allowed to guess.
+[Collection(TestCollections.ConsoleCapture)]
 public class ConvertOutputSafetyTests : IDisposable
 {
     private readonly string _dir;
