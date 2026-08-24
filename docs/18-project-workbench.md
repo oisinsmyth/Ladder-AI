@@ -6,8 +6,10 @@ Phases **2, 3, 6 and 10** are delivered **and have run on a controller**. Phases
 delivered and **have not** — see the correction below. Phase 4 was **redefined** and Phase 6
 **re-scoped** before either was built (see §5 — both kept their numbers, neither kept its original
 scope). Phase 5 is **decided and declined as a build**; Phase 7 is **closed, its premise overtaken**;
-Phase 8 is **built and contended — the residual is that nothing REQUIRES claiming** (corrected
-2026-08-24; the old marker was wrong in both directions); Phase 9 is **struck**. **Nothing in §5 is now waiting to be
+Phase 8 is **built and contended, and claiming BECAME BINDING at 03:40 on 2026-08-24 (`7de3ac0`) —
+so the residual moved from "nothing requires claiming" to "adoption has never been run end to end,
+and a defect was found in it immediately afterwards"** (see §5 Phase 8; the marker before this one
+was corrected the same day and was wrong in both directions); Phase 9 is **struck**. **Nothing in §5 is now waiting to be
 picked up as the next thing** — §5's closing note says what is, and it is not a phase.
 
 🔴 **CORRECTION 2026-08-24 — THIS LINE AND §5's TABLE CLAIMED CONTROLLER EXERCISE FOR TWO PHASES THAT
@@ -430,7 +432,7 @@ dangerous instrument in the system.
 > | ✅ delivered, **never run on a controller** | **1 · 4** |
 > | ✅ decided · 🚫 declined as a build | **5** |
 > | 🚫 closed, premise overtaken | **7** |
-> | ✅ built · ⚠️ never contended (residual is an agent-identity contract question) | **8** |
+> | ✅ built · contended · claiming **BINDING** since `7de3ac0` · ⚠️ **adoption never run end to end** | **8** |
 > | 🚫 struck, its subject deleted | **9** |
 >
 > ⚠️ **The first two rows were ONE row reading `1 · 2 · 3 · 4 · 6 · 10` until 2026-08-24.** Phase 1's
@@ -438,6 +440,13 @@ dangerous instrument in the system.
 > diff`, and the only controller sentence in it is Phase 6's run quoted inside a Phase 4 argument. §0
 > carries the full correction. **Delivered and exercised-on-hardware are different claims and this
 > table now separates them.**
+>
+> ⚠️ **Phase 8's row read `built · never contended (residual is an agent-identity contract question)`
+> until 2026-08-24 evening, and was stale in BOTH halves** — *never contended* was already refuted by
+> the entry it summarises (§5 Phase 8, heading and finding 1), and the agent-identity residual was
+> struck in §5z (*"that question is now answered as a definition ... and was never the residual
+> anyway"*). **A table cell that summarises a section it no longer agrees
+> with is the same failure as a header that stopped tracking its body**, one heading level down.
 >
 > **4 and 6 kept their numbers and did NOT keep their scope** — the spine and the element table were
 > both argued down before they were built, and what shipped under those numbers is different work.
@@ -831,7 +840,7 @@ itself, in a folder it does not own. Both corrected there.
 
 ---
 
-### Phase 8 — Multi-agent contention · **P2** · ✅ **BUILT AND CONTENDED** · 🔴 **NOTHING REQUIRES CLAIMING**
+### Phase 8 — Multi-agent contention · **P2** · ✅ **BUILT AND CONTENDED** · ✅ **CLAIMING IS BINDING** · 🔴 **ADOPTION NEVER RUN END TO END**
 
 > ⚠️ **This heading carried 🔨 — *"specified, not built"* — above a sentence that says the parts "are
 > built".** One line contradicting the next, in the vocabulary the section defines. The marker was
@@ -841,6 +850,15 @@ itself, in a folder it does not own. Both corrected there.
 > ✅ BUILT · ⚠️ *never contended*. **"Never contended" was false of the thing it named** and **the
 > real never-contended case was not in the entry at all.** The three findings are below; the entry
 > above them is the corrected one.
+>
+> 🔴 **AND THE CORRECTED ENTRY WAS TRUE FOR EIGHTY-EIGHT MINUTES. UPDATED 2026-08-24 EVENING.**
+> `9f0b344` wrote *"nothing REQUIRES claiming"* at **02:12**; `7de3ac0` made claiming binding at
+> **03:40**; four more Phase 8 commits landed by **04:17** and three had already landed before it —
+> **eight in the range, none of them touching this document.** ***And it was the same lane*** —
+> `9f0b344` and all eight carry the identical `Claude-Session` trailer. **The marker was not stale by
+> neglect over days; it was falsified inside ninety minutes by the session that had just written it.**
+> The residual below is rewritten, not softened: what is open is no longer the requirement, it is
+> whether the requirement works.
 
 The claims registry (`src/converter/Converter/Claims/` — `ClaimStore`, `ClaimValidator`,
 `ReservedBand`), wave-set admission (`src/wave-control/WaveControl/WaveSetAdmission.cs`) and slot
@@ -879,18 +897,38 @@ download, total abort — keyed on pre/post transfer (`LadderRung`, `AbortAfterm
 the download story. Removing it and its record type from this phase's ledger removes **740 lines**
 (`EscalationLadder.cs` 321 + `EscalationRecord.cs` 419).
 
-🔴 **SO WHAT IS ACTUALLY NEVER CONTENDED IS *TWO CODING AGENTS IN A LIVE LANE* — AND IT CANNOT HAPPEN,
-BECAUSE NOTHING REQUIRES CLAIMING.** `grep` across `.claude/skills/` and `.claude/agents/` for
-`converter claim` or `--claims` returns **zero hits**: no skill and no agent definition asks an agent
-to reserve anything before writing. `docs/evidence/fi-65-claims-build.md` §1 says it outright —
-*"Nothing yet requires an agent to claim before writing. **The registry is available, not binding.**"*
-— and its standing requirement 8 (`:176-178`) names the missing acceptance test: *"add an end-to-end
-test that two concurrent agent runs against one project cannot both take the same resource. That is
-the real acceptance criterion for this feature and it does not exist yet."* **Unwritten since
-2026-08-07.**
+🔴 **WHAT WAS NEVER CONTENDED IS *TWO CODING AGENTS IN A LIVE LANE*, AND UNTIL 03:40 ON 2026-08-24 IT
+COULD NOT HAPPEN, BECAUSE NOTHING REQUIRED CLAIMING.** This paragraph read: *"`grep` across
+`.claude/skills/` and `.claude/agents/` for `converter claim` or `--claims` returns **zero hits**"*.
+
+✅ **IT RETURNS SEVEN. Re-run at `a3dcd6f`, not quoted:** six in the three coding skills — a claim step
+and a release step each in `gen-block-new`, `gen-block-modify-fix` and `gen-block-modify-purpose` —
+plus one in `.claude/agents/lad-coder.md`, which requires the `claims` array in `evidence.json`.
+`7de3ac0` put them there, and CLAUDE.md gained the command syntax and the exit contract in `bb091b7`
+(*"the file previously named the registry twice and carried no way to call it"*).
+
+**Standing requirement 8 is HALF closed, and the half matters.** `bb6f9e8` added
+`src/converter/Converter.Tests/ClaimProcessRaceTests.cs` — **twelve rounds of eight** real OS processes
+(read off the file's own `rounds` / `racersPerRound` constants at `a3dcd6f`, not off the commit message)
+contending one block number through the built CLI, exactly one exit 0, every loser's stderr naming the
+actual winner, with a redden proof (swap the atomic move for check-then-write and *"exactly one process
+must win FB7100, but 2 did"*). **What it does not close is the workflow**: requirement 8 asks for two
+concurrent **agent runs**, and this is two concurrent **processes running one verb**. Nothing
+dispatches an agent, and holding a claim across a stage and releasing it is unexercised. The file says
+so in its own doc comment; `docs/evidence/fi-65-claims-build.md` §4.8 now says it too.
+
+🔴 **AND THE ADOPTION HAS NEVER BEEN RUN END TO END — NOT ONCE, IN EITHER DIRECTION.** No generation run
+has gone through a claiming skill and been verified by `tools/check-agent-evidence.py`'s claims gate
+since either landed. **A defect was found in it immediately afterwards — by reading the two artifacts
+against each other, not by running them** (`docs/evidence/fi-65-claims-build.md` §5.8), which is the
+only reason it is known at all. ***So the residual is no longer "nothing requires
+claiming" — it is that a requirement nobody has exercised is a requirement nobody has tested.*** Two
+things independently block that first run, both recorded rather than fixed here:
+`docs/notes/multi-agent-operating-guide.md`'s store-bucketing consequence, and the two `declaredBy`
+decisions in `docs/notes/owner-questions.md`.
 ➜ ***That, and not the mechanism, is what this phase's caveat points at.*** The mechanism is built and
-raced; **the adoption is not, and a contention run against a protocol nobody is required to follow
-measures the harness rather than the practice.**
+raced; **the practice is now mandated and unmeasured, which is a different open question from the one
+this entry carried all week and not a smaller one.**
 
 ⚠️ **And one clause of the original entry is overtaken: the lease *was* raced.** `converter lease` is a
 real lock and **two processes ran the race** — `9b4a863` (the lock and the IL walk that decodes rather
@@ -942,6 +980,17 @@ FIRST, COMMITTED BY THE PASS THAT WROTE THE FIRST ONE DOWN.**
   blocks nothing about contention. The instruction *"Answer M-19 before scheduling a contention run"*
   was **unfollowable**: a reader obeying it closes a fencing gap and finds the contention question
   untouched. Struck.
+  🔴 **THE HALF OF THAT BULLET THAT SIZED M-19 WAS ITSELF WRONG, AND THE QUOTE IS THE REASON — NOTED
+  2026-08-24 EVENING.** *"A small specified code change"* rested entirely on the backlog's *Mechanise*
+  line, and **that line has since been retracted twice by the lane that built it** (`57432c6`,
+  `915b6e8`): the operator existed and had **no second operand**, so what it called a repointing was a
+  wire field, a domain field, a changed signature, four call sites, a merge decision and 108 flipped
+  fixtures. Both limbs are now gated — **`5b latch block in the deployment`** (`c9b594f`) and
+  **`5c map authority`** (`915b6e8`) — and M-19 stays **open**, because each gate establishes less than
+  its limb asks (`mechanisation-backlog.md` M-19 carries both "does not establish" lists). ***The
+  conclusion above is unaffected: M-19 still blocks nothing about contention. What is affected is that
+  this bullet priced a piece of work off a document, which is the same doc-to-doc route the bullets
+  around it exist to record.***
 - 🔴 **The `StringComparison.Ordinal` claim was stale, and the PROVENANCE IS THE POINT: it arrived in
   `fad8703` — THE SAME COMMIT AS THE TWO BULLETS ABOVE IT.** Verified, not inferred:
   `git log -S "Ordinal equality" -- docs/18-project-workbench.md` and `git log -S "CORRECTED
@@ -1182,10 +1231,14 @@ happened; 10 arrived after 2 and outranked the rest on priority.
 ## 5z — 🔴 THE LIST IS FINISHED. WHAT IS BINDING IS NOT ON IT.
 
 **Read this before picking a phase, because there is no phase left to pick.** Six are delivered, one
-is decided-and-declined, one is closed, one is struck, and **Phase 8's residual is ADOPTION** — the
-mechanism is built and raced, and *nothing requires an agent to claim before writing*
-(`docs/evidence/fi-65-claims-build.md` §1, standing requirement 8; zero hits for `converter claim` or
-`--claims` across `.claude/skills/` and `.claude/agents/`). ⚠️ **This read *"the agent-identity
+is decided-and-declined, one is closed, one is struck, and **Phase 8's residual is ADOPTION** — but
+**not the half this line named until 2026-08-24 evening.** It read *"nothing requires an agent to claim
+before writing ... zero hits for `converter claim` or `--claims` across `.claude/skills/` and
+`.claude/agents/`"*. **Claiming became binding at 03:40 that morning (`7de3ac0`) and the same grep now
+returns SEVEN** — six across the three coding skills, one in `lad-coder.md`. ➜ **The residual is now
+that the adoption has never been run end to end and a defect was found in it straight away**
+(`docs/evidence/fi-65-claims-build.md` §5.8), which is a harder open item than the one it replaces, not
+an easier one. ⚠️ **This read *"the agent-identity
 contract question"* until 2026-08-24; that question is now answered as a definition
 (`docs/notes/test-environment-contract.md` §1.1) and was never the residual anyway.** **A session that
 comes here looking for "the next phase" and finds one has misread a marker.**
@@ -1475,6 +1528,19 @@ opinion.** That single sentence is why §3 is the most valuable part of this des
 
 ## 8. Change log
 
+> 🔴 **FOURTH TIME — `f8f1770..a3dcd6f`, EIGHT COMMITS, ZERO DOCUMENTS. AND IT IS THE FASTEST OF THE
+> FOUR BY AN ORDER OF MAGNITUDE.** The previous three took days to go stale. This one took **88
+> minutes**: `9f0b344` (02:12) rewrote §0, §5's table and this section's Phase 8 entry to say *nothing
+> requires claiming*; `7de3ac0` (03:40) made claiming binding; five more commits landed by 04:17. ➜
+> ***A hook that refuses a commit touching this file without a log line would not have caught this
+> either*** — none of the eight touched this file, so there was no commit for it to refuse. **The gate
+> that fits the observed failure is the inverse one: refuse a commit that changes a mechanism this
+> document CITES unless the document is in the same diff.** That is materially harder to build than the
+> proposed one and no precedent for it exists in this repo, so it is named as the shape of the answer
+> and **not** proposed as work. What is cheap and does have precedent is the budget gate's own habit:
+> the four commits that DID move a marker each said so in their message, and `git log --oneline` over
+> the range was enough to reconstruct all of it in one pass.
+>
 > 🔴 **THIS LOG HAS NOW STOPPED TRACKING ITS OWN DOCUMENT THREE TIMES, AND THE THIRD TIME IS RECORDED
 > IN v3.5 BELOW.** The rule it drew each time — *"closing a phase includes closing its markers, in the
 > same commit"* — has been stated three times and has held zero times. **A fourth statement is not the
@@ -1488,6 +1554,28 @@ opinion.** That single sentence is why §3 is the most valuable part of this des
 > log entry, which a gate catches — but a gate cannot tell a real entry from `- v3.x — misc`, so it
 > buys the reminder and not the content.
 
+- **v3.7 — 2026-08-24 (evening). 🔴 PHASE 8 SHIPPED EIGHT COMMITS AND THIS DOCUMENT RECORDED NONE OF
+  THEM.** `f8f1770..a3dcd6f`. What shipped, each verified by reading the commit and the artifact:
+  **claiming became BINDING** (`7de3ac0`) — the three `gen-block-*` skills claim at the seam where a
+  number is first chosen and release at the end, `lad-coder.md` requires a `claims` array in
+  `evidence.json`, and `tools/check-agent-evidence.py` **recomputes** rather than reads: it resolves the
+  real store, confirms each claim is held by the declared agent, and joins every block-number claim to
+  the `NUMBER` line of the `.ir` on disk. CLAUDE.md gained the syntax and the exit contract in
+  `bb091b7`. **Requirement 8's process race** (`bb6f9e8`) — twelve rounds of eight real OS processes,
+  one winner, every loser naming it, with a redden proof. **Gate `5b latch block in the deployment`**
+  (`c9b594f`) and **gate `5c map authority`** (`915b6e8`), M-19's two limbs. **Seven wave-control types
+  marked built-and-unreachable** (`22ca02c`). **Race-guard and flake repairs** (`a3dcd6f`).
+  **Three markers in this file were falsified by that range and are rewritten here:** §0's status line,
+  §5's table row for Phase 8, and §5z's residual — all three said *nothing requires claiming*, and all
+  three were written at 02:12, ninety minutes before it did. **The grep they rest on returns SEVEN, not
+  zero, re-run at `a3dcd6f`.**
+  🔴 **AND THE NEW RESIDUAL IS NOT SMALLER THAN THE OLD ONE.** Adoption has never been run end to end,
+  and a defect in it was found immediately afterwards by inspection
+  (`docs/evidence/fi-65-claims-build.md` §5.8). Two further things block the first run and neither is
+  a build: the claims store's bucketing consequence
+  (`docs/notes/multi-agent-operating-guide.md`) and two `declaredBy` decisions now tabled at
+  `docs/notes/owner-questions.md`. **Requirement 8 is HALF closed** — the primitive, not the workflow —
+  and that caveat existed only in a C# doc comment until this pass moved it into the requirement.
 - **v3.6 — 2026-08-24. 🔴 THE CORRECTION PASS COMMITTED THE DEFECT CLASS IT WAS CONVENED TO FIX, AND
   FOUR OF ITS CITATIONS WERE BORN WRONG.** An independent audit of the 2026-08-23 pass; every finding
   below was re-verified against the artifact before being acted on.

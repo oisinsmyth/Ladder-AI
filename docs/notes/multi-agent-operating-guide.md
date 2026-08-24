@@ -51,6 +51,20 @@ What stands between you and that, and none of it is a gate:
 **So: one narrow code guard, plus convention.** *Not a vulnerability, and no fix is proposed here* —
 the point is that the checklist item below is the control, and it is a habit rather than a mechanism.
 
+> ✅ **A FOURTH DEFENCE ARRIVED WITH ADOPTION AND THIS TABLE PREDATES IT — added 2026-08-24.**
+> `tools/check-agent-evidence.py`'s claims gate hard-codes the shared root
+> (`C:\ProgramData\Ladder-AI\claims`, overridable only by `LADDER_CLAIMS_DIR`) rather than taking it
+> from the evidence file — *"A PER-WORKTREE ROOT MAKES THIS WHOLE GATE A NO-OP … which is the reason
+> the default is the real shared path rather than anything relative to this checkout"* — and it
+> **derives the project from the `.ir` file paths rather than reading a declared name**, because
+> *"a declared project name is one more field an agent could point at a store where its claims happen
+> to live."* It also names the vacuity explicitly: **a store answering with zero claims is a failure,
+> with the message
+> saying to check the root is the SHARED one and not a per-worktree path.** ➜ **It is a real gate and it
+> is on the DISPATCHER's side, not the agent's**, so it catches the forked store only on runs the
+> dispatcher actually verifies. **It does not make the fork undetectable-from-inside any less true**;
+> it means a forked run now fails the evidence check afterwards instead of passing quietly.
+
 #### ⚠️ The store buckets by the LAST PATH SEGMENT, so a project directory named `ir` collides
 
 `ClaimStore.SlugOf` (`ClaimStore.cs:94`) keys the bucket on the project directory's own name (`ir/test-project001` →
@@ -72,6 +86,46 @@ than routed around.** `--project` must be the **IR directory** — `ClaimCorpus.
 then validate against an **empty corpus**, which is the worse failure. **Operationally: read the
 bucket name off the echoed `store=` line, and where it is generic, read the `project` line inside the
 claims before believing the store is about your project.** *No fix is proposed here.*
+
+> 🔴 **THE CONSEQUENCE CHANGED ON 2026-08-24 AND NOBODY RE-READ THIS SECTION AGAINST IT. THE
+> ASSESSMENT ABOVE — *"the failure direction is over-refusal, not double-grant"* — NO LONGER HOLDS ON
+> ITS OWN.**
+>
+> Everything above was written while **claiming was optional**. `7de3ac0` made it **binding**: the three
+> `gen-block-*` skills now claim before writing, and every one of them passes `--project ir/<project>/`
+> — a spelling that ends in the **project's own directory name**, so `ClaimStore.SlugOf` keys the bucket
+> `<project>` and never `ir`. `SlugOf` trims the trailing separator first (`ClaimStore.cs`), so the
+> trailing slash changes nothing. **The verifier keys it a third way** — `check-agent-evidence.py`
+> takes `os.path.dirname` of each `.ir` file it was given — so **the skill's `--project` and the
+> verifier's derived project agree only when they share a last path segment.** Three producers of one
+> bucket name, none of them reading the other two.
+>
+> **Measured at the shared root, 2026-08-24, by listing it — not quoted:** `C:\ProgramData\Ladder-AI\claims`
+> holds two buckets. **`ir` holds 14 claims, 12 of them `block-number` in the 9000–9999 harness reserve
+> band. `test-project001` holds ZERO.**
+>
+> ➜ ***So the store's only populated bucket is one the mandated spelling can never reach, and the
+> bucket the mandated spelling does reach is empty.*** Every reservation ever taken under a spelling
+> ending `/ir` is invisible to every run that follows the skills, and vice versa. With `--value <n>` such
+> a claim is granted although the number is held; with `claim --allocate --type FB`, which the skills
+> offer as *"the lowest free one"*, **the tool computes "lowest free" against an empty bucket** and can
+> hand back a number already reserved. **That is a double-grant, and it is the direction this section
+> previously ruled out** — the ruling was correct for two *different* projects sharing one bucket, and
+> it does not cover **one project reachable by two spellings**, which is what adoption introduced. The
+> detector is still only a `Warning` and still does not gate (`ClaimsModel.cs`,
+> `HasFindings => Conflicts.Count > 0`).
+>
+> ⚠️ **Unestablished, deliberately: whether the 12 numbers in `ir` and the next mandated run are the same
+> project.** Settling it means reading the `project` line inside those claim files, and they belong to a
+> live job. **The mechanism above does not depend on the answer** — two spellings key two buckets either
+> way — but the *severity* does, so nobody should quote this as a realised collision.
+>
+> ⚠️ **This blocks adoption rather than merely complicating it, and it is why no fix is proposed here
+> either.** Any repair is a choice between changing the key, changing the spelling every skill passes,
+> or migrating the existing bucket — each of which invalidates live reservations held by agents that are
+> not asking, and the third is a write to a store this document exists to say is shared. **What is
+> recorded is that the consequence is now different from the paragraph above it, so that nobody reads
+> "the safe direction" and stops.**
 
 🔴 ***AND A BOARD IS ONLY A TOKEN IF EVERY LANE WRITES TO IT.*** Twice in one day (2026-08-18) a lane
 did the work on a single-writer resource **without claiming it**. Both times it came out clean — and

@@ -36,7 +36,13 @@ phases are delivered — **1, 2, 3, 4, 6, 10** — and **four of them have run o
 1's body names no rig and closes on a **dry run**, and Phase 4 ships generators and `converter diff`
 (its one controller sentence is Phase 6's run quoted inside a Phase 4 argument). **Delivered and
 exercised-on-hardware are different claims.** Phase 5 is decided and
-declined as a build; Phase 7 is closed; Phase 8 is built but never contended; Phase 9 is struck. This
+declined as a build; Phase 7 is closed; **Phase 8 is built, contended, and its claiming is BINDING as
+of `7de3ac0` — what is open there is that the adoption has never been run end to end** (`docs/18` §5
+Phase 8). 🔴 **This line read *"built but never contended"* until 2026-08-24 evening, and it was wrong
+the moment it was written, IN THE SAME COMMIT THAT WROTE IT.** `9f0b344` set `docs/18:834` to
+*"✅ BUILT AND CONTENDED"* and this line to *"never contended"* — **one commit, two tracked files,
+opposite claims about the same phase.** *Staleness at least has an excuse; a contradiction inside one
+diff does not.* Phase 9 is struck. This
 work is **not part of the suspended staged plan** (`docs/03-development-plan.md`) — it is tooling for
 real jobs, which the suspension notice explicitly leaves running.
 
@@ -82,6 +88,47 @@ wrong answer however tidy it looks.
 > number is a coordinate in a document that moves.** Full record: `docs/18` §5z and §8 v3.6.
 > **Suite: 2,724 passing, 16 assemblies, 0 failures, 0 warnings at HEAD** (`7bf400b`; this line said
 > **2,698** — correct at `82af95f`, stale from `7bf400b` onward).
+
+🔴 **PHASE 8 — EIGHT COMMITS (`f8f1770..a3dcd6f`, all on 2026-08-24) AND THIS FILE WAS NOT TOUCHED BY
+ANY OF THEM. THE RULE HAS NOW FAILED A FOURTH TIME.** Added 2026-08-24 evening.
+
+- **What shipped, so this section carries it rather than pointing at a log:** **claiming became
+  BINDING** (`7de3ac0`) — the three `gen-block-*` skills claim before writing and release at the end,
+  `lad-coder.md` requires a `claims` array in `evidence.json`, and `tools/check-agent-evidence.py`
+  **recomputes**: it resolves the real store, checks each claim is held by the declared agent, and
+  joins every block-number claim to the `NUMBER` line of the `.ir` on disk. CLAUDE.md gained the
+  syntax and the exit contract (`bb091b7`). **Requirement 8's process race** (`bb6f9e8`), **gate 5b**
+  (`c9b594f`) and **gate 5c** (`915b6e8`) — M-19's two limbs — **seven wave-control types marked
+  built-and-unreachable** (`22ca02c`), and race-guard repairs (`a3dcd6f`).
+- 🔴 **AND THE ADOPTION HAS NEVER BEEN RUN.** No generation run has gone through a claiming skill and
+  been checked by the claims gate. A defect was found in it immediately afterwards **by inspection,
+  not by a run** — `docs/evidence/fi-65-claims-build.md` §5.8. ➜ **Do not read "claiming is binding"
+  as "claiming works."**
+- **Two things block the first run, and neither is a build:** the claims store's bucketing consequence
+  (`docs/notes/multi-agent-operating-guide.md`) and two `declaredBy` decisions now tabled in
+  `docs/notes/owner-questions.md`.
+
+🔴 **FOUR FAILURES OF A RULE THAT IS RESTATED EACH TIME IS EVIDENCE THE RULE DOES NOT WORK AS A RULE.**
+The tally, taken from this file's own numbering of the first three rather than recounted: **(1)** this
+section read *"nothing mid-execution"* for a week while Phases 1/2/3/10, the harness, the rig loop, the
+lease and the batch were all being built and run (the note at the head of this section); **(2)** it read
+*"IN FLIGHT: Phase 4"* after Phase 4 closed, with Phase 6 delivered, re-scoped and **run on the rig**
+and named nowhere in this file (the note **above**, which calls itself *"the second time in one week"*);
+**(3)** three commits after `4102a48` recorded nowhere but `git log` — the bullets below, which call
+themselves *"the third time"*; **(4)** Phase 8's eight, above. Each time
+the repair written down was *"closing a phase includes closing its status lines, in the same commit."*
+**It has now been written four times and held zero.** ➜ ***A rule whose only enforcement is a sentence
+inside the document it governs is not a control; it is the document asking to be believed.***
+**What would work is a gate, and the honest report is that the obvious one does not fit this failure.**
+A hook refusing a commit that touches `docs/18-project-workbench.md` without a change-log line is
+cheap, precedented (`hooks/`, `python tools/check-claude-md-migration.py`, `git config core.hooksPath
+hooks`) and **would not have caught any of the four** — none of those commits touched the status files
+at all, so there was nothing to refuse. The gate that fits is the inverse: refuse a commit that changes
+a mechanism a status file CITES unless that file is in the same diff. **No precedent for that exists in
+this repo, so it is named as the shape of the answer and NOT proposed as work.** What is available
+today and did work: `git log --oneline <last-touched>..HEAD` over the range reconstructed all eight in
+one pass, because every one of them said in its own message what marker it moved. **Run that at the top
+of the recovery procedure and this failure is detected, not prevented.**
 
 🔴 **THREE COMMITS LANDED AFTER THIS FILE WAS LAST TOUCHED (`4102a48`) AND NONE WAS RECORDED HERE.**
 Added 2026-08-24. **This file's own recovery procedure tells the next session to trust this section**,

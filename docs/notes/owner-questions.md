@@ -28,12 +28,16 @@ answered; `agent-tasks/` is where the resulting work gets dispatched.
 **TWO BATCHES ARE BELOW** (2026-08-23 workbench, then the 2026-08-05 audit's 13 `decide` items).
 Read both before concluding nothing is waiting on you.
 
-🔴 **AS OF 2026-08-23 THE WORKBENCH BATCH HAS NOTHING BLOCKING IN IT.** B4 and B5 are both answered
-and both are recorded below with their answers; Q2 is open and blocks nothing. **The 13 audit items
-below are the ones actually waiting on you.** Said here because this file's own recurring failure is
-that its heading and its contents disagree — see the process finding at the head of the workbench
-batch, which has now fired in both directions: once with the questions missing, once with an answer
-missing.
+🔴 **THAT LINE IS NOW FALSE, AND IT FAILED THE SAME WAY THE THIRD TIME. UPDATED 2026-08-24.** It read:
+*"AS OF 2026-08-23 THE WORKBENCH BATCH HAS NOTHING BLOCKING IN IT. B4 and B5 are both answered and both
+are recorded below with their answers; Q2 is open and blocks nothing. The 13 audit items below are the
+ones actually waiting on you."* **Every clause of that is still true of B4, B5 and Q2 — and two new
+decisions arrived on 2026-08-24 that nobody wrote down here** (see **D1** and **D2** below). ***Third
+firing of the process finding at the head of the workbench batch, and the third distinct direction:
+first the questions were missing, then an answer was, now a heading that was accurate the day it was
+written outlived the state it described.*** ➜ **D1 blocks a `gen/` edit that is being deliberately
+withheld pending your word, so the board is not clear.** The 13 audit items below are still waiting on
+you as well.
 
 **Last cleared:** 2026-07-17. The 2026-07-17 batch (~50 items, sections A–F, three rounds of
 owner answers) is fully resolved. Where things landed:
@@ -86,6 +90,46 @@ AND DO NOT MERGE ANY TWO.**
 
 `B-4` / `B4` collide the same way (S0's gate; the stray-Portal ruling). **Neither pair answers the
 other.** Anything new written here should use a label that is not `B<n>`.
+
+## 🔴 The two that ARE blocking — gate 5c, added 2026-08-24
+
+**Context, once, for both.** `57432c6` / `915b6e8` built gate **`5c map authority`**: the observability
+map a conformance submission is judged against is derived from the coordinator's binding document, and
+that document now carries a `declaredBy`. 5c compares it against the block author and against every
+vector author. **Unrecorded reads NOT CHECKED, never a pass — and one NOT CHECKED makes a submission
+inadmissible.** Both committed bindings currently record nothing, so both read NOT CHECKED today.
+**The lane deliberately did not fill the field in, because the value is the thing in question and
+inventing one is the hard-rule-3 shape.** *(Labels are `D1`/`D2` and not `B<n>` — see the collision
+table above.)*
+
+- 🔴 **D1 · Filling `declaredBy` truthfully on the hx-corpus binding REFUSES that wave. Does it stay
+  admissible?**
+  `gen/test-project001/hx-corpus/harness-binding.md`'s own header says it: *"This one was written by the
+  **block author**, on the coordinator's instruction, because for this corpus the two halves are the
+  same person: I wrote the blocks and I wrote the register they are specified in. **That is itself a
+  finding.**"* **So the honest value for `declaredBy` is the block author, and 5c refuses on it.**
+  ***That is the gate working, not the gate misfiring*** — a correlation the prose has admitted in
+  writing since the day the file was written, and never once mechanically enforced until now.
+  **What is being asked:** does that wave stay admissible (an explicit, recorded exception with an
+  expiry), or does the corpus get a third-party binding author before it runs again? **Nothing is
+  written into `gen/` until you rule**, because the alternatives are inventing an identity or leaving
+  the field blank, and blank is the NOT CHECKED that already makes it inadmissible.
+  *The hopper binding is the milder case of the same question:* its prose names an **owner as a role**
+  and no machine identity, so there is no truthful string to write there either.
+
+- 🔴 **D2 · A multi-coordinator batch cannot be attributed at all. Plural `declaredBy`?**
+  `BatchPlanner` merges lane bindings. Identical declarers across lanes collapse losslessly and keep 5c
+  a live verdict on the ordinary single-coordinator batch; **different declarers — or one silent lane —
+  leave it null, and the batch reads NOT CHECKED.** Two alternatives were **ruled out on evidence, not
+  taste**, and are recorded so they are not re-proposed: the batcher stamping its own name **fails
+  open** (where a lane's coordinator is also that lane's block author, 5c compares batcher against block
+  author, finds a difference, and passes a real conflict); a **joined string is worse than nothing**,
+  because the comparison would match neither party — a conflict rendered invisible by formatting.
+  **The correct answer is a set.** That needs a plural wire field visible to gate 0b and every reader,
+  plus a plural `MapAuthor` — **a schema change with a blast radius**, and **no multi-coordinator batch
+  is known to have occurred yet.**
+  **What is being asked:** build the plural field now, or leave the case reading NOT CHECKED until a
+  real multi-coordinator batch exists? Until you rule it stays NOT CHECKED rather than guessed at.
 
 ## The one that was open — ✅ **ANSWERED, and the lane is NOT blocked on you**
 

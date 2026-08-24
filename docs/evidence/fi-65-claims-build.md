@@ -22,6 +22,20 @@ Not built, and worth naming separately because it is the difference between a to
 mattering: **adoption**. Nothing yet *requires* an agent to claim before writing. The registry is
 available, not binding.
 
+> 🔴 **SUPERSEDED 2026-08-24 — THE REGISTRY IS NOW BINDING.** `7de3ac0` wired the claim at the seam
+> where a block number is first chosen in all three `gen-block-*` skills, added a release step to each,
+> made `claims` a required section of `evidence.json` (`.claude/agents/lad-coder.md`), and put the
+> command syntax and the exit contract into CLAUDE.md (`bb091b7`). The verifier
+> `tools/check-agent-evidence.py` **recomputes rather than reads**: it resolves the real store, confirms
+> each declared claim exists and is held by the declared agent, and **joins every `block-number` claim
+> to the `NUMBER` line of the `.ir` on disk** — the half an agent cannot satisfy by writing a plausible
+> evidence file. Absent `claims` on a run that touched IR is exit 1, on the script's existing rule that
+> an absent gate is not a passed gate.
+>
+> ⚠️ **Binding is not the same as working, and nothing here should be read as saying it is.** No
+> generation run has yet gone through a claiming skill and been checked by that gate — see **§5.8**,
+> and requirement **§4.8**, which is half closed rather than closed.
+
 **Hard rules:** rule 8 is not engaged — this is PC-side tooling (`src/converter/`), where normal
 software rules apply. No `.ir`, `patterns/`, `ir/` or `gen/` file is touched by the branch (verified:
 `git diff --name-only master...HEAD | grep -E "\.ir$|^patterns/|^ir/|^gen/"` returns nothing).
@@ -177,6 +191,28 @@ These are obligations on **future** changes, not a description of what was done.
    concurrent agent runs against one project cannot both take the same resource. That is the real
    acceptance criterion for this feature and it does not exist yet.
 
+   🔴 **HALF CLOSED 2026-08-24, AND THE OTHER HALF IS STILL OPEN. READ BOTH SENTENCES.**
+
+   - ✅ **Closed — the primitive.** `src/converter/Converter.Tests/ClaimProcessRaceTests.cs`
+     (`bb6f9e8`): twelve rounds of **eight real OS processes** contending one block number through the
+     built CLI against a real corpus — argument parsing, corpus build, store resolution,
+     `File.Move(overwrite: false)` and the exit-code contract included. Exactly one exit 0, seven exit
+     1s, **every loser's stderr naming the actual winner**, a file-count denominator rather than
+     "at least one", and an exit 2 anywhere counted as a failure because a racer that examined nothing
+     has not raced. **Redden proof:** swap the atomic move for check-then-write and the suite reports
+     *"exactly one process must win FB7100, but 2 did."*
+   - 🔴 **NOT closed — the workflow, which is what this requirement asked for.** It says *two concurrent
+     **agent runs***. That file runs two concurrent **processes of one verb**. Nothing in it dispatches
+     an agent; **holding a claim across a stage, releasing it, retrying after a crash, and simply
+     forgetting to ask are all unexercised.** An agent run does far more than one verb.
+
+   ➜ **So the words that may be struck from this requirement are *"cannot both take the same resource"*
+   for a single contended acquire. The words that may not be struck are *"two concurrent agent runs."***
+   Marking the whole requirement satisfied on the strength of that file records a workflow test nobody
+   wrote. *(That caveat lived only in the test file's own doc comment until this entry was written —
+   which is the reason it is here: a caveat a reader of the requirement never reaches is a caveat that
+   does not exist.)*
+
 ---
 
 ## 5. Not tested — known gaps
@@ -200,11 +236,41 @@ Stated plainly rather than left for someone to discover.
 5. **Very large allocation ranges.** Candidates are bounded at 512 numbers past the floor and 64
    network slots; a project exceeding those gets "no free … found" rather than a hang. The bound is
    not exercised by a test.
-6. **Adoption.** No skill calls this yet, so nothing verifies that a real generation run actually
-   takes claims. See standing requirement 8.
+6. **Adoption.** ~~No skill calls this yet~~ — **three do, as of `7de3ac0` (2026-08-24): `gen-block-new`,
+   `gen-block-modify-fix`, `gen-block-modify-purpose`.** 🔴 **The gap did not close; it moved.** What is
+   now untested is the wired path itself: **no generation run has been executed through a claiming skill
+   and verified by `tools/check-agent-evidence.py`'s claims gate, in either direction — not once.**
+   Everything known about that path is known by reading it. See §5.8 and requirement §4.8.
 7. **The six kinds are not a proof of completeness.** They cover every collision source this repo has
    evidence for (`NUMBER` lines, the `%X9` telemetry line, `FC_ControlMain` NW8/NW9 appends, shared
    DB members). A resource class nobody enumerated is still an undetected collision.
+8. 🔴 **THE GATE IS INVERTED AGAINST A COMPLIANT RUN, AND IT WAS FOUND BY READING THE TWO ARTIFACTS
+   AGAINST EACH OTHER RATHER THAN BY RUNNING THEM. Found 2026-08-24, verified at `a3dcd6f`.**
+
+   The two halves, each read from the file it lives in:
+
+   - **The skills release before the dispatcher verifies.** Each coding skill writes `evidence.json`,
+     then — *"Then release every claim"* — runs `converter claims … --release --agent <id> --all`, then
+     **stops**, explicitly handing the check stage to somebody else
+     (`.claude/skills/gen-block-new/SKILL.md`, the release step immediately after the `evidence.json`
+     step; the same shape in both `gen-block-modify-*` skills).
+   - **The verifier requires the claim to still be held.** `tools/check-agent-evidence.py`'s claims gate
+     fails with *"claim %s '%s' is NOT IN THE STORE — the evidence says it was taken and the registry
+     has no record of it"* for any declared claim the store no longer holds, and, if the release
+     emptied the bucket, with *"the claims store answered with ZERO claims"* instead.
+
+   **So a run that follows the skills exactly is refused, and a run that skips the release passes.** The
+   gate rewards the non-compliant path. **It fails closed rather than open**, which is the safe
+   direction and is why this is a defect and not an incident — but *a gate that refuses every correct
+   run is a gate that gets switched off*, which is this project's own recurring finding about
+   `--no-verify`.
+
+   ⚠️ **What this entry deliberately does not do is say how to fix it.** The ordering question —
+   whether the release moves after verification, whether the verifier reads a release record instead of
+   a live claim, or whether the dispatcher verifies before the sub-agent stops — is a contract change
+   across a skill, an agent definition and a tool, and it is being worked elsewhere. **What is recorded
+   here is the observation and its date, so that a later green cannot be read as evidence this never
+   happened.**
 
 ---
 

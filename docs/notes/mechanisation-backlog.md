@@ -392,7 +392,7 @@ The failure is never the copy being wrong; it is the copy being *readable and co
 
 ---
 
-### M-19. The observability gate fences the VECTOR author from the map, and nobody fences the BLOCK author
+### M-19. The observability gate fences the VECTOR author from the map, and nobody fences the BLOCK author ✅ BOTH LIMBS GATED 2026-08-24 · ⚠️ STILL OPEN
 
 **Found 2026-08-20, while closing that gate.** The map a conformance submission is judged observable
 against is authored by somebody. The gate's independence argument fences it from the **vector** author —
@@ -414,19 +414,84 @@ because the CHECK does not exist, not because the map is believed compromised.
 > identity string is a label for it.* §1.1's graded ceiling **cites the sentence above as the statement
 > of the real threat**: the exposure is *accidental correlation — one party doing two jobs without
 > noticing* — and against that a normalised comparison is adequate, **because an accident produces the
-> same string**. So M-19 remains exactly what it says it is: a missing check, cheap, and **an option
-> awaiting a decision — not planned work.**
+> same string**. ~~So M-19 remains exactly what it says it is: a missing check, cheap, and **an option
+> awaiting a decision — not planned work.**~~ ⚠️ **Overtaken 2026-08-24: it was neither missing nor
+> cheap, and it was built rather than decided against — see the two gate notes below.** What survives
+> unchanged is §1.1's grading of the threat: the exposure is *accidental correlation*, and a normalised
+> comparison is adequate against it because an accident produces the same string.
 
 **Mechanise:** the same normalised-identity comparison the gate already performs against the vector
-author, performed against the block author too. It is the cheapest possible closure — the comparison code
-exists and is simply not pointed at the second party.
+author, performed against the block author too. ~~It is the cheapest possible closure — the comparison code
+exists and is simply not pointed at the second party.~~
+
+> ✅ **BUILT 2026-08-24 AS GATE `5c map authority` (`57432c6`, merged `915b6e8`). AND THE COST LINE
+> STRUCK ABOVE WAS FALSE — the commit that closed this says so in its own message.**
+> **The operator existed and had no second operand.** `AgentIdentity.SameAs` (`Trim()` +
+> `OrdinalIgnoreCase`) was already there; `BindingDocument` carried **no author at any of its four
+> levels**. What that line called a repointing was a **wire field, a domain field, a changed signature,
+> four call sites and a merge decision** — plus 108 test fixtures that flipped the moment the gate
+> landed, every one repaired by attributing the fixture rather than weakening the gate.
+> **That one line was retracted TWICE, in two consecutive commit messages** (`57432c6`, then `915b6e8`)
+> — and it had already been quoted onward as fact into `docs/18-project-workbench.md` §5 Phase 8, where
+> it was doing work: it was the evidence for calling M-19 *"a small specified code change."* ➜ ***A
+> backlog entry may state the SHAPE of a closure; it must not state its PRICE, because at the time it is
+> written nobody has looked — and a price written here is read as a measurement everywhere else.***
+>
+> **What 5c does:** compares the binding document's `declaredBy` against the block author, and against
+> every vector author, on the map gate-5 adjudicates against. Unrecorded reads **NOT CHECKED, never a
+> pass**. Demonstrated on the shipped deliverable through the CLI: unattributed → NOT CHECKED; the real
+> block author → REFUSES; the real vector author, via a case-and-space variant → REFUSES naming 27 of
+> 27 vectors; a third party → PASSES and prints its denominator.
+>
+> 🔴 **WHAT 5c DOES NOT ESTABLISH, AND EACH OF THESE IS LIVE.**
+> - **It compares a string somebody types.** Non-collision of *names*, not independence of *parties* —
+>   the same ceiling as gates 2, 3d and 4b, graded at `docs/notes/test-environment-contract.md` §1.1.
+> - **The two committed `gen/` bindings still carry no `declaredBy`, so both read NOT CHECKED today.**
+>   Filling one in truthfully **refuses that wave** — that file's own prose says the block author wrote
+>   it. Held for an owner ruling rather than resolved by inventing an identity: `docs/notes/owner-questions.md`.
+> - **The multi-coordinator batch is NOT CHECKED by construction.** Identical declarers across lanes
+>   collapse losslessly; different declarers, or one silent lane, leave it null. The correct answer is a
+>   **set**, and a joined string was rejected on evidence because the comparison would match neither
+>   party. Unbuilt, and tabled in `owner-questions.md`.
+> - **One threading site is read by nothing.** `LoopRun`'s `MapAuthor` reaches
+>   `ObservabilityCheck.Evaluate`, which never touches it, so **no mutation of that argument can go
+>   red.** The caveat is in the code beside the field; it is repeated here because the reasonable
+>   inference from *"the author is passed"* is *"the author is checked"*, and it is wrong.
 
 ⚠️ **Second, unrelated limit of the same gate, in its own words: it TAKES THE NAME, NOT THE FACT.** Latch
 claims are admitted on *provenance* — "this signal is latched by block X" — with no check that block X is
 in the deployment at all. **A submission can therefore be ADMISSIBLE while naming latching blocks that are
 not loaded**, which is precisely the state the deliverable was in when this was found. Admissible is not
-runnable, and the gate says so out loud rather than pretending otherwise; the check that would close it is
-a deployment-manifest comparison nobody has built.
+runnable, and the gate says so out loud rather than pretending otherwise; ~~the check that would close it is
+a deployment-manifest comparison nobody has built.~~
+
+> ✅ **BUILT 2026-08-24 AS GATE `5b latch block in the deployment` (`c9b594f`), which landed FIRST — it
+> is why the other limb is named 5c and not 5b.** A hand-authored latch claim must now name a block the
+> deployment names. **No schema change:** both operands were already in the submission and already
+> parsed. Measured on the shipped deliverable through the CLI, not a fixture — **five hand-authored
+> latch claims, none of them verifiable**, reported as NOT CHECKED with the output saying that is the
+> state the deliverable was found in; pointed at a reconciled deliverable it REFUSES and names each
+> missing block; declaring the missing one turns it green.
+>
+> 🔴 **WHAT 5b DOES NOT ESTABLISH.**
+> - **It is scoped to the hand-authored half, deliberately, with a do-not-widen note in its own doc
+>   comment.** A *generated* latch is derived from the transient declaration and the copy layer emits
+>   the rung, so it names no block; widening would demand a manifest entry for something already in the
+>   artifact — a refusal nobody can satisfy, which is how a gate gets switched off.
+> - **The generated/hand-authored split reads rendered prose**, so a `latchedBy` that literally opens
+>   with the generated prefix is skipped. That is a forgery rather than an accident, and the binding is
+>   third-party by gate 5's own provenance requirement — but it is a residual, not nothing.
+> - **Three absences are NOT CHECKED, not passes**: no deployment at all (classified as needing the
+>   device, because what is on the controller is a property of the download), and a deployment naming no
+>   object (*"absent from an empty list"* would answer the same for a real loaded block as for a
+>   fiction). **Zero hand-authored claims is a pass, with the denominator printed.**
+> - **It is not redundant with gate 11 and that was the risk.** On the reconciled deliverable gate 11
+>   passes — its claim is about the wire — and 5b is the only device-bound NOT CHECKED left.
+>
+> ➜ **So both limbs of M-19 now have a gate, and M-19 is not closed.** Each gate establishes less than
+> the limb it answers: 5c compares names rather than parties and reads NOT CHECKED on both committed
+> bindings; 5b covers the hand-authored half only. **Leave this entry open, and read the two
+> "does not establish" lists above before quoting either gate as coverage.**
 
 ---
 
