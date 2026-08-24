@@ -323,6 +323,7 @@ public class DeriveComputationTests
 
     private const string Binding = """
     {
+      "declaredBy": "agent-k",
       "slots": [{
         "slotId": "S0",
         "vectorTargets": [{ "tag": "Demo_Step", "type": "Int" }],

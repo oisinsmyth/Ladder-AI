@@ -122,6 +122,7 @@ public class GateParityTests
     private static string Binding(string? extraField = null) => $$"""
     {
       {{extraField ?? string.Empty}}
+      "declaredBy": "agent-k",
       "blockName": "FC_HarnessCopyLayer",
       "blockNumber": 9001,
       "baseByte": 1000,

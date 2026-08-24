@@ -104,6 +104,7 @@ public class SettlingPerSignalTests
     /// </summary>
     private static readonly string Binding = $$"""
     {
+      "declaredBy": "agent-k",
       "blockName": "FC_HarnessCopyLayer",
       "blockNumber": 900,
       "baseByte": {{MirrorBase}},

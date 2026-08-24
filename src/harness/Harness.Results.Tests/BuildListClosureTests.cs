@@ -96,6 +96,7 @@ public class BuildListClosureTests
     /// </summary>
     private const string Binding = """
     {
+      "declaredBy": "agent-k",
       "blockName": "FC_HarnessCopyLayer",
       "blockNumber": 9001,
       "tagTableName": "HarnessMirror",

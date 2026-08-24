@@ -114,6 +114,26 @@ public class SubmissionGateTests
         ("Demo_Inhibit", new SignalStorage("DemoUnit", "Demo_Inhibit")),
     });
 
+    /// <summary>
+    /// 🔴 <b>THE COORDINATOR — a FOURTH party, and the fixture is deliberately four-way independent.</b>
+    ///
+    /// <para><c>agent-a</c> wrote the block, <c>agent-b</c> the vectors, <c>agent-c</c> the enumeration,
+    /// <c>agent-m</c> the model declaration, and this one the binding the observability map is derived
+    /// from. Gate 5c compares the last against the first two, so a fixture that left the map unattributed
+    /// would report NOT CHECKED in every test below and none of them would be measuring the map.</para>
+    /// </summary>
+    internal const string Coordinator = "agent-k";
+
+    /// <summary>
+    /// A map derived the way production derives it, attributed to <see cref="Coordinator"/>.
+    ///
+    /// <para><c>FromBindings</c> takes the author as a REQUIRED argument, so the alternative here is
+    /// repeating the same identity at every call site — and one site quietly written <c>default</c> would
+    /// turn gate 5c off for that test while it went on asserting about gate 5.</para>
+    /// </summary>
+    private static MirrorObservability Bound(params MirroredSignal[] signals) =>
+        MirrorObservability.FromBindings(signals, new AgentIdentity(Coordinator));
+
     private static SubmissionReport Check(
         IReadOnlyList<SubmissionVector>? vectors = null,
         string blockAuthor = "agent-a",
@@ -136,8 +156,11 @@ public class SubmissionGateTests
             // The DEFAULT fixture stands for a COMPLETE submission, which means the map came from the
             // coordinator's bindings. A caller-supplied map keeps its own provenance, because the whole
             // point of the gate-5 tests below is that a self-declared map is adjudicated differently.
+            // ...and attributed to the coordinator, for gate 5c, for the same reason: an unattributed map
+            // is NOT CHECKED, and a default fixture that could not clear 5c would make every verdict
+            // assertion below a test of the fixture rather than of the gate under examination.
             map ?? MirrorObservability.Of(("Demo_Count", new[] { InstrumentationMode.Latched }))
-                with { Provenance = MapProvenance.Bindings },
+                with { Provenance = MapProvenance.Bindings, MapAuthor = new AgentIdentity(Coordinator) },
             floor, runtimeCompression,
             omitConflictGraph ? null : conflicts ?? ConflictGraph.Empty,
             compressionInputs,
@@ -467,7 +490,8 @@ public class SubmissionGateTests
         var report = Check(both,
             map: MirrorObservability.Of(
                 ("Demo_Count", new[] { InstrumentationMode.Latched }),
-                ("Demo_Inhibit", new[] { InstrumentationMode.Latched })) with { Provenance = MapProvenance.Bindings },
+                ("Demo_Inhibit", new[] { InstrumentationMode.Latched }))
+                with { Provenance = MapProvenance.Bindings, MapAuthor = new AgentIdentity(Coordinator) },
             enumeration: Relational("Demo_Count", "Demo_Inhibit"));
 
         Assert.True(Gate(report, "3h required observations").Passed);
@@ -1248,7 +1272,7 @@ public class SubmissionGateTests
         // 🔴 *** A FENCE THAT REFUSES EVERYTHING PASSES EVERY TEST THAT ONLY CHECKS REFUSALS. *** The
         // whole change is about not matching by accident, so the case that MUST keep working is the one
         // where the accident would have succeeded: the two names are the same, and the binding SAYS so.
-        var map = MirrorObservability.FromBindings(new[]
+        var map = Bound(new[]
         {
             new MirroredSignal("Demo_Count", MirrorValueType.Int, SpecName: "Demo_Count", LatchedBy: "FB_DemoLatch"),
         });
@@ -1266,7 +1290,7 @@ public class SubmissionGateTests
         // The measured case: the block calls it one thing, the specification another, and a vector cites
         // the specification. 16 of 17 real signals were in this position and every mechanical path missed
         // them.
-        var map = MirrorObservability.FromBindings(new[]
+        var map = Bound(new[]
         {
             new MirroredSignal("HBA_Inhibit", MirrorValueType.Bool, SpecName: "Demo_Count", LatchedBy: "FB_DemoLatch"),
         });
@@ -1282,7 +1306,7 @@ public class SubmissionGateTests
     {
         // *** ABSENT DOES NOT MEAN "THE SAME AS THE TAG". *** That silent identity is the assumption being
         // removed, so re-introducing it as a default would remove nothing.
-        var map = MirrorObservability.FromBindings(new[]
+        var map = Bound(new[]
         {
             new MirroredSignal("Demo_Count", MirrorValueType.Int),
         });
@@ -1310,7 +1334,7 @@ public class SubmissionGateTests
         // its own documentation. So Sampled is computed from what the generator does; nothing takes a
         // caller's word for it. Thirteen of the seventeen refusals in the live run were exactly this, and
         // they were CORRECT.
-        var map = MirrorObservability.FromBindings(new[]
+        var map = Bound(new[]
         {
             new MirroredSignal("Alarm", MirrorValueType.Bool, SpecName: "Alarm"),
         });
@@ -1326,7 +1350,7 @@ public class SubmissionGateTests
         // a hand-authored block the generator did not emit, and the schema could not say so. *** The fix
         // is not `latched: true` — a caller assertion is forgotten exactly when it matters — but a BLOCK
         // NAME, which is provenance and is checkable against the deployed object set.
-        var map = MirrorObservability.FromBindings(new[]
+        var map = Bound(new[]
         {
             new MirroredSignal("HBA_Violation_1", MirrorValueType.Bool, SpecName: "Violation1", LatchedBy: "FB_HarnessViolationLatch"),
         });
@@ -1339,7 +1363,7 @@ public class SubmissionGateTests
     [Fact]
     public void And_the_GATE_PRINTS_the_latch_provenance_so_the_claim_can_be_CHECKED_rather_than_taken()
     {
-        var map = MirrorObservability.FromBindings(new[]
+        var map = Bound(new[]
         {
             new MirroredSignal("Demo_Count", MirrorValueType.Int, SpecName: "Demo_Count", LatchedBy: "FB_HarnessViolationLatch"),
         });
@@ -1363,7 +1387,7 @@ public class SubmissionGateTests
         //
         // *** AN ADMISSION THAT APPEARS ONLY WHEN EVERYTHING PASSED IS MISSING FROM EVERY REPORT ANYONE
         // READS CLOSELY *** - a refusing report is precisely the one that gets read.
-        var map = MirrorObservability.FromBindings(new[]
+        var map = Bound(new[]
         {
             new MirroredSignal("Demo_Count", MirrorValueType.Int, SpecName: "Demo_Count", LatchedBy: "FB_HarnessViolationLatch"),
         });
@@ -1403,7 +1427,7 @@ public class SubmissionGateTests
         // *** WHAT THIS DOES NOT FIX, AS A TEST RATHER THAN A SENTENCE. *** Giving the translation a home
         // does not make the copy layer emit latches. A Latched expectation on a signal no block latches is
         // still refused, and that refusal was one of the thirteen CORRECT ones.
-        var map = MirrorObservability.FromBindings(new[]
+        var map = Bound(new[]
         {
             new MirroredSignal("Demo_Count", MirrorValueType.Int, SpecName: "Demo_Count"),
         });
@@ -1418,6 +1442,101 @@ public class SubmissionGateTests
         Assert.Equal(GateStatus.Checked, gate.Status);
         Assert.False(gate.Passed);
         Assert.Contains("MapDoesNotProvideIt", gate.Detail, StringComparison.Ordinal);
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // Gate 5c — the map's AUTHOR. Gate 5 fences the VECTOR author out structurally, by provenance, and
+    // says nothing whatever about the BLOCK's author: a coordinator binding written by the party who
+    // wrote the block decides both what the block does and what can be seen of it. Same three outcomes
+    // as 3d and 4b, the two gates this is the fourth instance of.
+    // ---------------------------------------------------------------------------------------------
+
+    /// <summary>A bindings-derived map, attributed to whoever is named — the only knob these tests turn.</summary>
+    private static MirrorObservability MapDeclaredBy(string author) =>
+        MirrorObservability.Of(("Demo_Count", new[] { InstrumentationMode.Latched }))
+            with { Provenance = MapProvenance.Bindings, MapAuthor = new AgentIdentity(author) };
+
+    [Fact]
+    public void AN_UNRECORDED_MAP_AUTHOR_IS_NOT_CHECKED_BECAUSE_UNKNOWN_IS_NOT_INDEPENDENT()
+    {
+        var report = Check(map: MapDeclaredBy(string.Empty));
+        var gate = Gate(report, "5c map authority");
+
+        Assert.Equal(GateStatus.NotChecked, gate.Status);
+        Assert.Equal(NotCheckedReason.AwaitingAnArtifactThatCouldExist, gate.Reason);
+        Assert.Contains("UNKNOWN IS NOT INDEPENDENT", gate.Detail, StringComparison.Ordinal);
+        Assert.Equal(SubmissionVerdict.NotAdmissible, report.Verdict);
+
+        // 🔴 *** AND IT IS A SECOND FACT, NOT THE SAME SILENCE TWICE. *** The map IS derived from the
+        // coordinator's bindings, so gate 5 ran and returned a verdict on this very submission — which is
+        // the whole gap: a bindings-derived map is trusted on WHERE it came from and never on WHO wrote it.
+        Assert.Equal(GateStatus.Checked, Gate(report, "5 observability").Status);
+        Assert.True(Gate(report, "5 observability").Passed);
+    }
+
+    [Fact]
+    public void THE_BLOCKS_AUTHOR_DECLARING_THE_OBSERVABILITY_MAP_IS_REFUSED()
+    {
+        // M-19's first limb. Every expectation any vector may state is admitted or refused against this
+        // map, so the party under test would be bounding what it can be caught doing.
+        var gate = Gate(Check(map: MapDeclaredBy("agent-a")), "5c map authority");
+
+        Assert.Equal(GateStatus.Checked, gate.Status);
+        Assert.False(gate.Passed);
+        Assert.Contains("THE PARTY UNDER TEST DECIDED WHAT CAN BE SEEN OF IT", gate.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void SO_IS_A_VECTORS_AUTHOR_DECLARING_IT_and_the_provenance_test_cannot_see_that_at_all()
+    {
+        // Normalised, like D6 itself: a case-and-whitespace variant is not a different agent. And the map
+        // is `Bindings`-derived here, so gate 5 passes it — this is the route its provenance test misses.
+        var gate = Gate(Check(map: MapDeclaredBy("AGENT-B ")), "5c map authority");
+
+        Assert.False(gate.Passed);
+        Assert.Contains("V-1", gate.Detail, StringComparison.Ordinal);
+        Assert.Contains("provenance test cannot see this", gate.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void THE_CONTROL_a_THIRD_PARTY_MAP_PASSES_and_the_verdict_STATES_ITS_DENOMINATOR()
+    {
+        // 🔴 A gate that refuses everything passes every test that only checks refusals. This is the
+        // other direction — and it asserts the DENOMINATOR the pass was reached over, because
+        // `problems.Count == 0` is true of nothing found and of nothing looked at alike.
+        var gate = Gate(Check(), "5c map authority");
+
+        Assert.Equal(GateStatus.Checked, gate.Status);
+        Assert.True(gate.Passed);
+        Assert.Contains($"declared by '{Coordinator}'", gate.Detail, StringComparison.Ordinal);
+        Assert.Contains("compared against the block's author (agent-a) and 1 recorded vector author(s)", gate.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void WITH_NOBODY_TO_COMPARE_AGAINST_IT_IS_NOT_CHECKED_rather_than_green_over_an_empty_set()
+    {
+        // *** THE DENOMINATOR, AS A BRANCH RATHER THAN AS A SENTENCE. *** Gate 2 refuses an unrecorded
+        // block author independently, and this does not lean on that: a check whose correctness rests on
+        // another gate's is a check that silently stops working when the other one moves.
+        var report = Check(new[] { Vector(author: "   ") }, blockAuthor: "   ");
+        var gate = Gate(report, "5c map authority");
+
+        Assert.Equal(GateStatus.NotChecked, gate.Status);
+        Assert.Contains("NOTHING FOUND AND NOTHING LOOKED AT ARE NOT THE SAME RESULT", gate.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_SELF_DECLARED_MAP_IS_NOT_CHECKED_HERE_TOO_and_says_it_is_waiting_on_the_SAME_artifact()
+    {
+        // The two silences have different repairs, and a reader who has just been told gate 5 could not
+        // run needs to know whether this is the same fact or a second one. Here it is the same one.
+        var selfDeclared = MirrorObservability.Of(("Demo_Count", new[] { InstrumentationMode.Latched }))
+            with { Provenance = MapProvenance.SelfDeclared };
+
+        var gate = Gate(Check(map: selfDeclared), "5c map authority");
+
+        Assert.Equal(GateStatus.NotChecked, gate.Status);
+        Assert.Contains("gate 5 already refuses to be the deciding voice", gate.Detail, StringComparison.Ordinal);
     }
 
     // ---------------------------------------------------------------------------------------------

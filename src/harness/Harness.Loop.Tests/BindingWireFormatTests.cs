@@ -22,6 +22,7 @@ public class BindingWireFormatTests
 {
     private const string BindingJson = """
     {
+      "declaredBy": "agent-k",
       "blockNumber": 9001,
       "baseByte": 1000,
       "declaredRegisters": 576,
@@ -137,6 +138,45 @@ public class BindingWireFormatTests
     public void THE_ENCODINGS_SOURCE_reaches_the_domain_so_a_dropped_citation_FAILS_rather_than_passing()
     {
         Assert.Equal("md:123-130", Slot().VectorTargets[0].Encoding!.Source);
+    }
+
+    [Fact]
+    public void DECLARED_BY_reaches_the_REQUEST_and_therefore_the_map_gate_5c_adjudicates()
+    {
+        // 🔴 *** THE SIXTH INSTANCE OF THIS FILE'S SHAPE, AND THE ONE WHERE NOTHING DOWNSTREAM EXISTED
+        // EITHER. *** The others were a domain field the wire could not set; this was a comparison
+        // (`AgentIdentity.SameAs`) with no second operand at all, because the binding document carried no
+        // author at any of its levels. Asserted on the REQUEST rather than on the document, because the
+        // document parsing it is not the part that was missing — reaching the gate is.
+        var request = LoopCli.Compose(
+            SubmissionDocument.Read("""
+            {
+              "blockAuthor": "agent-a",
+              "runtimeCompression": 1,
+              "slotsInWaveSet": 1,
+              "resultRegistersPerSlot": 4,
+              "enumeration": { "clauses": ["REQ-1"], "assertions": ["REQ-1:aaaaaa"] },
+              "vectors": []
+            }
+            """),
+            BindingDocument.Read(BindingJson),
+            Array.Empty<HarnessObject>());
+
+        Assert.Equal("agent-k", request.MapAuthor.Value);
+        Assert.True(request.MapAuthor.IsRecorded);
+    }
+
+    [Fact]
+    public void AND_A_MISSPELT_declaredBy_IS_VISIBLE_TO_GATE_0b_rather_than_silently_unattributed()
+    {
+        // Without this the failure is the quietest one in the system: the field vanishes, the map reads
+        // unattributed, gate 5c says NOT CHECKED — and the document LOOKS like it named its author.
+        var document = BindingDocument.Read(BindingJson.Replace("\"declaredBy\"", "\"declaredby_\"", StringComparison.Ordinal));
+
+        var (unknown, _) = document.AllExtraFieldPaths();
+
+        Assert.Null(document.DeclaredBy);
+        Assert.Contains("binding.declaredby_", unknown);
     }
 
     [Fact]

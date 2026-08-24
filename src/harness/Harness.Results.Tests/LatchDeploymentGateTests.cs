@@ -39,7 +39,7 @@ public class LatchDeploymentGateTests
 
     /// <summary>The map, built the way the coordinator's binding builds it — modes DERIVED, never declared.</summary>
     private static MirrorObservability Map(params MirroredSignal[] signals) =>
-        MirrorObservability.FromBindings(signals);
+        MirrorObservability.FromBindings(signals, new AgentIdentity("agent-k"));
 
     private static MirroredSignal HandAuthored(string spec, string block) =>
         new(spec, MirrorValueType.Bool, SpecName: spec, LatchedBy: block);

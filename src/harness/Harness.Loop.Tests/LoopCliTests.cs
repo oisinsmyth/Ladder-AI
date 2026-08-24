@@ -31,6 +31,7 @@ public class LoopCliTests
 
     private const string Binding = """
     {
+      "declaredBy": "agent-k",
       "blockNumber": 9001,
       "baseByte": 1000,
       "declaredRegisters": 576,
@@ -51,6 +52,7 @@ public class LoopCliTests
     /// </summary>
     private const string BindingWithNoDeclaredRest = """
     {
+      "declaredBy": "agent-k",
       "blockNumber": 9001,
       "baseByte": 1000,
       "declaredRegisters": 576,
@@ -66,6 +68,7 @@ public class LoopCliTests
     /// <summary>The same binding again, migrated by the named escape rather than by declaring.</summary>
     private const string BindingAssumingZeroRest = """
     {
+      "declaredBy": "agent-k",
       "blockNumber": 9001,
       "baseByte": 1000,
       "declaredRegisters": 576,
@@ -86,6 +89,7 @@ public class LoopCliTests
     /// </summary>
     private const string BindingTwoGroupsNoOrder = """
     {
+      "declaredBy": "agent-k",
       "blockNumber": 9001,
       "baseByte": 1000,
       "declaredRegisters": 576,

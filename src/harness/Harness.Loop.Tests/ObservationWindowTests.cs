@@ -138,7 +138,10 @@ public class ObservationWindowTests
             // 800 rather than that file's 200 because THIS fixture declares MaxDurationScans: 400 — these
             // tests are about observation WINDOWS and need a long one. The ceiling is a per-submission
             // decision for exactly this reason, and 200 would refuse the fixture correctly.
-            MaxIndexScans: 800);
+            MaxIndexScans: 800,
+
+            // Gate 5c: the coordinator who declared the binding, a fourth party. See LoopRunTests.Request.
+            MapAuthor: new AgentIdentity("agent-k"));
     }
 
     /// <summary>One scan per transaction, so the poll rate resolves the window rather than stepping over it.</summary>

@@ -159,6 +159,25 @@ public sealed record MirrorObservability(IReadOnlyDictionary<string, IReadOnlySe
     public MapProvenance Provenance { get; init; } = MapProvenance.Unstated;
 
     /// <summary>
+    /// 🔴 <b>WHO WROTE THE BINDING THIS MAP WAS DERIVED FROM — the second operand that did not exist.</b>
+    ///
+    /// <para><see cref="Provenance"/> fences the VECTOR author out of the map structurally: a map that
+    /// came out of the submission is refused as the deciding voice. <b>That fence is silent about the
+    /// BLOCK's author</b>, and a coordinator binding written by the party who wrote the block decides both
+    /// what the block does and what can be seen of it — the two halves of a correlated reading, in one
+    /// hand. <c>AgentIdentity.SameAs</c> already existed to compare them; the binding document carried no
+    /// author at any level, so there was nothing to compare it WITH.</para>
+    ///
+    /// <para><b>An init-only property with a default</b>, following <see cref="Provenance"/> and
+    /// <c>AssertionEnumeration.Subject</c>: an unrecorded identity fails closed at gate <c>5c map
+    /// authority</c>, which reports NOT CHECKED rather than passing — <i>unknown is not independent</i>.
+    /// The DERIVING constructor <see cref="FromBindings"/> takes it as a REQUIRED argument for the
+    /// opposite reason: a caller with no author to give says so by passing <c>default</c>, and nobody
+    /// says it for them.</para>
+    /// </summary>
+    public AgentIdentity MapAuthor { get; init; } = default;
+
+    /// <summary>
     /// For each signal offering <c>Latched</c>, <b>the block that does the latching</b>.
     ///
     /// <para><b>Carried so the gate's report can name it</b>: "Latched, provided by FB_X" is checkable
@@ -259,7 +278,15 @@ public sealed record MirrorObservability(IReadOnlyDictionary<string, IReadOnlySe
     /// than being entered under its tag name. Entering it under the tag would be the silent identity this
     /// whole change removes; leaving it out makes gate 5 say NOT CHECKED and name it.</para>
     /// </summary>
-    public static MirrorObservability FromBindings(IEnumerable<Harness.Map.MirroredSignal> signals)
+    /// <param name="mapAuthor">
+    /// 🔴 <b>Who wrote the binding document these signals were read out of — <c>BindingDocument.DeclaredBy</c>.</b>
+    /// <b>Required, deliberately not optional.</b> An optional parameter would let every call site that
+    /// predates this one keep deriving a map with a silently unrecorded author, which is the exact shape
+    /// this file already records four times: <i>a capability documented as declared, supplied by the code
+    /// instead</i>. Pass <c>default</c> to say the author is unknown — gate 5c then reports NOT CHECKED
+    /// and names the gap, rather than the gap being invisible.
+    /// </param>
+    public static MirrorObservability FromBindings(IEnumerable<Harness.Map.MirroredSignal> signals, AgentIdentity mapAuthor)
     {
         ArgumentNullException.ThrowIfNull(signals);
 
@@ -317,6 +344,7 @@ public sealed record MirrorObservability(IReadOnlyDictionary<string, IReadOnlySe
         return new MirrorObservability(provided)
         {
             Provenance = MapProvenance.Bindings,
+            MapAuthor = mapAuthor,
             LatchProvenance = latchedBy,
             TagsWithNoSpecName = unjoined,
             DivergentAcrossDeclarations = divergent.ToArray(),

@@ -88,6 +88,7 @@ public class ReservedRegionRunPathTests
 
         return $$"""
         {
+          "declaredBy": "agent-k",
           "blockNumber": 9001,
           "baseByte": 1000,
           "declaredRegisters": {{declaredRegisters}},

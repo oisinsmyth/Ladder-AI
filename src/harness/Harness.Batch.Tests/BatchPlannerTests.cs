@@ -288,6 +288,85 @@ public class BatchPlannerTests : IDisposable
         Assert.All(reloaded.Slots, s => Assert.NotEmpty(s.ResultSources!));
     }
 
+    // ---------------------------------------------------------------------------------------------
+    // 🔴 `declaredBy` ACROSS A MERGE — the one document-level field that does NOT go through AgreeOn.
+    //
+    // AgreeOn refuses disagreement, which is right for the geometry (one deployed harness has one
+    // baseByte) and wrong here: an author is not a property of the deployment, and different lanes
+    // legitimately have different coordinators. The rejected alternative was the merged document
+    // declaring its OWN author — see BatchPlanner.SharedDeclarer for why that is fail-OPEN.
+    // ---------------------------------------------------------------------------------------------
+
+    /// <summary>A lane binding that names its declarer, or names nobody when <paramref name="declaredBy"/> is null.</summary>
+    private static string BindingBy(string slotId, string? declaredBy) =>
+        Binding(slotId, (declaredBy is null ? string.Empty : $"\"declaredBy\": \"{declaredBy}\", ") + Geometry);
+
+    [Fact]
+    public void ONE_COORDINATOR_ACROSS_EVERY_LANE_survives_the_merge_because_collapsing_it_loses_nothing()
+    {
+        // The ordinary case — one coordinator batching their own lanes — and the control for the two
+        // below. Without it, dropping the field unconditionally would pass every refusal test here while
+        // leaving gate 5c permanently NOT CHECKED on batched runs, which is how a gate gets switched off.
+        var bindings = new Dictionary<string, string>
+        {
+            ["a.json"] = BindingBy("Valve_S0", "agent-k"),
+            ["b.json"] = BindingBy("Vessel_S0", "agent-k"),
+        };
+
+        var result = BatchPlanner.Plan(
+            new[] { LaneNamed("valve", "a.json"), LaneNamed("vessel", "b.json") },
+            Reader(bindings));
+
+        Assert.True(result.Planned, string.Join(" | ", result.Refusals));
+        Assert.Equal("agent-k", Harness.Gate.BindingDocument.Read(result.MergedBindingJson!).DeclaredBy);
+    }
+
+    [Fact]
+    public void TWO_DIFFERENT_COORDINATORS_STILL_PLAN_but_the_merged_document_declares_NOBODY()
+    {
+        // 🔴 Both halves matter and they pull opposite ways.
+        //
+        // IT IS NOT A REFUSAL: different lanes may legitimately have different coordinators, and AgreeOn
+        // here would refuse a configuration nothing else in this system objects to.
+        //
+        // AND IT IS NOT lane 0's NAME: a merged map derived from two coordinators' bindings has TWO
+        // authorities, and stamping one of them over the other is the laundering path — if the dropped
+        // party is also the block's author, gate 5c compares the survivor, finds a difference, and passes
+        // a real conflict. Unattributed is NOT CHECKED, which is loud and cannot be mistaken for a green.
+        var bindings = new Dictionary<string, string>
+        {
+            ["a.json"] = BindingBy("Valve_S0", "agent-k"),
+            ["b.json"] = BindingBy("Vessel_S0", "agent-q"),
+        };
+
+        var result = BatchPlanner.Plan(
+            new[] { LaneNamed("valve", "a.json"), LaneNamed("vessel", "b.json") },
+            Reader(bindings));
+
+        Assert.True(result.Planned, string.Join(" | ", result.Refusals));
+        Assert.Null(Harness.Gate.BindingDocument.Read(result.MergedBindingJson!).DeclaredBy);
+    }
+
+    [Fact]
+    public void AND_ONE_SILENT_LANE_UNATTRIBUTES_THE_WHOLE_BATCH_not_just_its_own_slots()
+    {
+        // A batch attributed to the lanes that happened to say is not an attributed batch: the merged map
+        // covers every lane's signals, so an unattributed contribution leaves the whole map's authority
+        // unestablished. Same rule as a partially-attributed enumeration set at gate 3d.
+        var bindings = new Dictionary<string, string>
+        {
+            ["a.json"] = BindingBy("Valve_S0", "agent-k"),
+            ["b.json"] = BindingBy("Vessel_S0", null),
+        };
+
+        var result = BatchPlanner.Plan(
+            new[] { LaneNamed("valve", "a.json"), LaneNamed("vessel", "b.json") },
+            Reader(bindings));
+
+        Assert.True(result.Planned, string.Join(" | ", result.Refusals));
+        Assert.Null(Harness.Gate.BindingDocument.Read(result.MergedBindingJson!).DeclaredBy);
+    }
+
     /// <summary>
     /// camelCase, because every hand-written binding in this repo is. The reader is case-insensitive so
     /// PascalCase would work and look wrong — the kind of difference that gets explained away.

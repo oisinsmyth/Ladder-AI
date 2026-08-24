@@ -226,7 +226,12 @@ public static class GateCli
             map = MirrorObservability.FromBindings(
                 (binding.Slots ?? new List<SlotBindingDocument>())
                     .SelectMany(sl => sl.ResultSources ?? new List<MirroredSignalDocument>())
-                    .Select(ToMirroredSignal));
+                    .Select(ToMirroredSignal),
+
+                // 🔴 WHO wrote it, alongside WHERE it came from — gate 5c. Provenance fences out the
+                // vector author structurally and is silent about the block's, so a binding declared by
+                // the block's author would reach the gate above as fully trusted.
+                new AgentIdentity(binding.DeclaredBy ?? string.Empty));
         }
 
         // *** THE FLOOR IS COMPUTED FROM SECTION 12a, NEVER CARRIED HERE. *** It scales with the number

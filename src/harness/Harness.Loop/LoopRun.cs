@@ -141,7 +141,23 @@ public sealed record LoopRequest(
     //
     // It comes from OUTSIDE the two documents, deliberately, exactly as StagedCorpus does: a binding's
     // `reservedRegions` is the DECLARED half, and a document cannot testify that something derived it.
-    string? NeighboursNotDerived = null)
+    string? NeighboursNotDerived = null,
+
+    // 🔴 *** WHO DECLARED THE COORDINATOR'S BINDING — `BindingDocument.DeclaredBy`, for gate 5c. ***
+    //
+    // It sits HERE, beside BlockAuthor, and NOT on SlotBinding, because it is a property of the DOCUMENT
+    // and not of a slot: one binding file declares every slot in it, and pushing the author down onto
+    // each SlotBinding would be one fact stored N times, free to disagree with itself. That also settles
+    // the awkward site — Package() derives its per-vector map from ONE domain SlotBinding and has no
+    // document in scope, so it reads this instead and the domain model needs no new field at all.
+    //
+    // Unrecorded is NOT CHECKED at gate 5c, never a pass: a hand-built request with no document behind it
+    // legitimately has no author, and it must go on saying so.
+    //
+    // ⚠️ TWO SITES READ THIS AND ONLY ONE OF THEM CHECKS IT. The gate call at step 2 is the real consumer.
+    // The per-vector map built in Package() takes it too and NOTHING downstream looks at it — see the note
+    // at that call site for why it is passed anyway and why no mutation there can fail.
+    AgentIdentity MapAuthor = default)
 {
     /// <summary>The factor, defaulting to uncompressed only where the caller passed nothing at all.</summary>
     public RuntimeCompression Compression => RuntimeCompression ?? Harness.Wire.RuntimeCompression.Uncompressed;
@@ -695,7 +711,7 @@ public static class LoopRun
         // The COORDINATOR'S bindings, which is what makes gate 5 a verdict here rather than the vector
         // author checking their own homework - and keyed on the SPECIFICATION's names, with the modes
         // DERIVED. Keying on the block tag is the assumption that failed 16 times in 17 in one run.
-        var mirror = MirrorObservability.FromBindings(request.Bindings.SelectMany(b => b.ResultSources));
+        var mirror = MirrorObservability.FromBindings(request.Bindings.SelectMany(b => b.ResultSources), request.MapAuthor);
 
         // *** ONE COMPRESSION VALUE, READ ONCE. *** It goes to the gate below and to the wave at step 7,
         // and the local is what makes it impossible for the two to be different numbers.
@@ -967,7 +983,24 @@ public static class LoopRun
                 new VectorDeclaration(vector.Id, vector.Basis, request.Fidelity, vector.Settling,
                     vector.AssertedBehaviours, vector.CompletionSignal, vector.Author, request.BlockAuthor,
                     ObservabilityCheck.Evaluate(vector.Expectations, vector.Form,
-                        MirrorObservability.FromBindings(binding.ResultSources),
+                        // The author comes off the REQUEST, not off `binding`: one document declares every
+                        // slot, so the identity is document-level and a copy per SlotBinding could disagree
+                        // with itself. Same value the gate above was run with, by construction.
+                        //
+                        // 🔴 *** AND NOTHING READS IT HERE. THREADED FOR CONSISTENCY, NOT CHECKED. ***
+                        // `ObservabilityCheck.Evaluate` consumes `ProvidedFor` and the modes; it never
+                        // touches `MapAuthor`. Gate 5c is the only reader, and it runs at step 2 off the
+                        // map derived at LoopRun's gate call — not off this one. So passing the author on
+                        // this line changes NO behaviour, and **no mutation of this argument can go red**:
+                        // replace it with `default` and the whole suite stays green.
+                        //
+                        // *** THAT IS THE THING THIS FILE KEEPS CATCHING — A FIELD THAT LOOKS VERIFIED AND
+                        // IS NOT. *** It is written down here rather than left to be rediscovered, because
+                        // the next reader's reasonable inference from "the author is passed" is "the author
+                        // is checked", and that inference is wrong. It is passed so the value cannot
+                        // silently diverge from the gate's if something downstream ever DOES read it; until
+                        // something does, this argument is documentation, not a check.
+                        MirrorObservability.FromBindings(binding.ResultSources, request.MapAuthor),
                         observabilityFloorScans, vector.CompressionFactor, request.Compression.Factor)),
                 request.Enumeration,
                 run,
