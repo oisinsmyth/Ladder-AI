@@ -395,6 +395,15 @@ gate would pass.
 already recorded that *what makes two agents different is undefined* (an open contract question). Recorded
 because the CHECK does not exist, not because the map is believed compromised.
 
+> ✅ **That cross-reference is out of date as of 2026-08-24, and the update strengthens this entry
+> rather than closing it.** The question is now answered — `docs/notes/test-environment-contract.md`
+> §1.1: *a different agent means a different context instance; the mechanism is isolation, and the
+> identity string is a label for it.* §1.1's graded ceiling **cites the sentence above as the statement
+> of the real threat**: the exposure is *accidental correlation — one party doing two jobs without
+> noticing* — and against that a normalised comparison is adequate, **because an accident produces the
+> same string**. So M-19 remains exactly what it says it is: a missing check, cheap, and **an option
+> awaiting a decision — not planned work.**
+
 **Mechanise:** the same normalised-identity comparison the gate already performs against the vector
 author, performed against the block author too. It is the cheapest possible closure — the comparison code
 exists and is simply not pointed at the second party.

@@ -504,10 +504,12 @@ turns on one, escalate rather than picking a reading.
    tell the author the tool is wrong.* ⚠️ **Expect this**: a vector set that names its bound in **prose
    only** carries no `boundsUsed` and is **NOT CHECKED at 3i**. The repair is to declare the field, not
    to argue that the number was written down somewhere.
-4. **"Agent identity" is undefined.** D6 turns on vector author ≠ block author, and the code compares
-   two strings with `StringComparison.Ordinal`. What makes two agents different — session, model,
-   worktree? **Ordinal equality on an unspecified string is a gate that is passed by typing a different
-   string.**
+4. **"Agent identity" — ✅ DEFINED, and the D6 comparison is NORMALISED**
+   (`AgentIdentity.SameAs`: `Trim()` + `OrdinalIgnoreCase`). *A different agent means a different
+   context instance: isolation is the mechanism, and the identity string is a label for it, not a
+   proof of it.* 🔴 **A normalised string is still a string somebody types** — the gate establishes
+   non-collision of *names*, not independence of *parties*. Graded ceiling L0–L4 and the
+   claims-registry asymmetry: **`docs/notes/test-environment-contract.md` §1.1.**
 5. **The "map's observability declarations" (§4.3) — half resolved.** The submission's `map.providedFor`
    is now that list, and gate 5 checks against it. **What is still open is who fills it in:** it is
    supposed to be built by the coordinator *from the copy layer it generated*, and a submission in which
@@ -515,7 +517,8 @@ turns on one, escalate rather than picking a reading.
 6. **The spec-derived assertion enumeration — half resolved.** The submission's `enumeration` block
    populates it, and `docs/notes/assertion-enumeration.md` defines the decomposition. **The remaining
    hole is the same one:** nothing binds that block to an enumeration produced by a third party, beyond
-   the `enumerator` identity string gate 3d compares. **The flat projection (clauses + assertions, no
+   the `enumerator` identity string gate 3d compares. *(Bounded, not closed — contract §1.1.)*
+   **The flat projection (clauses + assertions, no
    `forms`) is legal and costs two gates** — 3d and 3e go NOT CHECKED against it.
 7. **"reject" vs "refuse" in §10's on-failure column** are used differently — *refuse* is emphasised for
    authorship and observability — but `RefusalReason` treats every gate identically. Treated here as one

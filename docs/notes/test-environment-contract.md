@@ -45,8 +45,101 @@ Plus two guards that are not "elements" but are checked at the same gate:
 
 | | | | |
 |---|---|---|---|
-| **Authorship (D6)** | vector author ≠ block author | ✅ fully | recorded agent identity; a match is a **refusal**, not a warning |
+| **Authorship (D6)** | vector author ≠ block author | ✅ fully | recorded agent identity, **normalised**; a match is a **refusal**, not a warning. ***What "different" means is §1.1***, and so is the ceiling on it |
 | **Model fidelity (M4)** | a vector may only assert behaviours the model claims to represent | ✅ fully | set-difference against the model's fidelity declaration |
+
+---
+
+### 1.1 ✅ WHAT MAKES TWO AGENTS DIFFERENT — DEFINED 2026-08-24. ***It was a definition, not a build.***
+
+This question has been deferred as open since 5.1's skill was written, cited as a ceiling on gate 3d,
+on the enumerator dispatch and on Phase 8's contention residual. **The answer already existed in this
+repo in two places and needed promoting, not deciding.**
+
+> ***A DIFFERENT AGENT MEANS A DIFFERENT CONTEXT INSTANCE. THE MECHANISM IS ISOLATION; THE IDENTITY
+> STRING IS A LABEL FOR IT, NOT A PROOF OF IT.***
+
+**The question was asked as *"session, model, worktree?"*, and the answer is none of those three.** A
+second model in the same context is not a second party; the same model in a fresh dispatch is. Session
+and worktree are **incidental** — they usually accompany a fresh context and neither constitutes one.
+
+Where it comes from, both read at their source rather than through a summary:
+
+- **`docs/notes/test-environment-build-plan.md:3635`** — *"`assertion-enumerator` (the agent — **fresh
+  context, which is the only independence mechanism this harness actually offers**)"*, written directly
+  beneath the finding that produced it: *"A SKILL RUNS IN THE CALLER'S CONTEXT … INDEPENDENCE IS A
+  PROPERTY OF WHO RUNS IT, NOT OF WHAT IT SAYS."* The same passage describes enforcement honestly as
+  ***isolated, not enforced*** — fresh context and a tool set with no `Bash`, plus instructions that
+  `Read` cannot be path-fenced to obey.
+- **`docs/notes/hammer-campaign-results.md:229`** — *"D6 requires the reviewer be **someone other than
+  the transcriber**, not a particular person."* D6 is a **relation between roles**, and the identity
+  string is only how that relation is asserted.
+
+#### The graded ceiling — say which level a claim rests on
+
+The definition is safe to accept because the ceiling above it is graded rather than absent. Two of the
+five levels are already built, and they are the two that do not depend on the string at all.
+
+| level | what it establishes | state |
+|---|---|---|
+| **L0** | identity **unrecorded** ⇒ never a pass | ✅ **built, fail-closed both ways.** Gate 2 and `Admissibility.Check` make an unrecorded author a **refusal** (`SubmissionGate.cs:795`, `:800`; `Admissibility.cs:497`); gates 3d and 4b make an unrecorded enumerator / declarer **NOT CHECKED** (`SubmissionGate.cs:1049`, `:1059`; `:987`). *"Unknown is not independent"* is the phrase all four use |
+| **L1** | a **normalised self-declared string** differs | ✅ **built — this is where the system is.** `AgentIdentity.SameAs`, `SubmissionVector.cs:397-400`: `Trim()` + `OrdinalIgnoreCase`. ***Every*** D6 comparison routes through it — gate 2 (`SubmissionGate.cs:802`), gate 3d (`:1069`, `:1072`), gate 4b (`:996`, `:1005`) and `Admissibility.cs:502`; **nothing in the D6 family is bare ordinal.** **Defeats a typo, a case change and a trailing space; defeated by typing a different string** |
+| **L2** | **provenance of the artifact** rather than the name on it | ✅ **already built, and unbypassable by typing.** `MapProvenance {Unstated, SelfDeclared, Bindings}` (`SubmissionVector.cs:126-154`), consumed by gate 5 (`SubmissionGate.cs:1562`). It asks *which route the tool loaded this artifact by*, and a self-declared map is NOT CHECKED rather than a pass |
+| **L3** | **environment-stamped identity at production time** | ❌ **not built.** Bypassable only by a deliberate act, not by a keystroke |
+| **L4** | make identity **irrelevant** by recomputing the artifact | ✅ **already built twice.** Gate 3g `IdsRecompute` — its own comment is *"THE RECOMPUTATION THAT MAKES THE STAMPER SAFE TO BE ANYBODY"* (`SubmissionGate.cs:1124`, method at `:1145`) — and gate 0c `DerivedFields` (`:399`), which refuses a field a tool already knows when it was typed by hand |
+
+**The honest ceiling: L4 wherever the artifact is derivable, L2 where it is not, L1 the residue.**
+🔴 **No level stops an agent that deliberately wants both roles** — the process that writes the JSON
+can write anything into it — and no level ever will, because the submission is authored by the party
+being checked.
+
+#### And that is bounded, because of what the threat actually is
+
+Graded against the exposure the backlog states **in its own voice**, not against an invented one.
+`docs/notes/mechanisation-backlog.md` M-19: *"**Not a refusal and not an accusation** — the identity
+string is weak evidence … Recorded because the CHECK does not exist, not because the map is believed
+compromised."*
+
+**The exposure is accidental correlation — one party doing two jobs without noticing — not an
+adversary.** ***Against that threat L1 is adequate, and adequate for a structural reason rather than
+an optimistic one: an accident produces the SAME string.*** A lane that transcribes a vector under the
+identity it already wrote the block under collides with itself, and gate 2 refuses it. Defeating L1
+takes choosing a second name, which is no longer an accident.
+
+So this is **a bounded, understood limit**, and it should be written that way wherever it is cited.
+It is not a vulnerability, and a report that presents it as one is overstating what the repo says
+about it. Levels above the current one — an L3 stamp, and M-19's block-author fencing — are
+**options awaiting a decision. Neither is planned work, and no decision has been taken on either.**
+
+#### ⚠️ Two comparisons in this repo differ on purpose. Say so, or somebody will "fix" it
+
+Recorded because the asymmetry is deliberate and was nowhere written down.
+
+| site | comparison | why that direction is the safe one |
+|---|---|---|
+| **D6 identity**, `SubmissionVector.cs:399` | `Trim()` + `OrdinalIgnoreCase` — **loose** | It gates a **refusal**. Loosening it makes the gate catch *more* collisions: `"AGENT-B "` and `agent-b` are refused as the same party. A tighter comparison here would let a keystroke buy a pass |
+| **Claim release**, `src/converter/Converter/Claims/ClaimStore.cs:240`, `:247` | bare `StringComparison.Ordinal`, no trim — **strict** | It gates a **permission** — releasing another agent's claim. Loosening it would let a near-miss name *acquire* the right to delete a peer's reservation. The refusal path is already correct and `--force` is the declared override |
+
+***Loose is safe for a refusal; strict is safe for a permission.*** Neither is a bug, and neither
+should be aligned to the other without changing which of those two things it gates.
+
+#### ⚠️ The retraction that produced this section — recorded HERE and not in the SKILL page
+
+**`.claude/skills/design-for-testability/SKILL.md` item 4 asserted *"the code compares two strings with
+`StringComparison.Ordinal`"* until 2026-08-24, contradicting its own gate table (rows 2 and 3d, which
+have said *normalised* throughout).** The claim was true for **thirty minutes**: `e7f6e59` (12:15,
+the skill) → `5d4fa62` (12:45, `AgentIdentity`), both 2026-08-13. It then survived eleven days and was
+**copied out of the SKILL page into `docs/18-project-workbench.md` in `fad8703`** — the same commit
+that recorded this repo's *"never another document"* citation standard, one paragraph away. Full
+provenance: `docs/18` §5 Phase 8's correction block; origin marked in place at
+`docs/notes/test-environment-build-plan.md` (the `e7f6e59` entry).
+
+🔴 **This paragraph lives here rather than in the skill on purpose.** A SKILL page is injected into
+every dispatched agent's context, so **a retraction kept there is a history lesson paid for on every
+dispatch.** The skill keeps the two sentences an author acts on — *the comparison is normalised* and
+*a normalised string is still a string somebody types* — and points here for the rest. **Apply the
+same test to anything else that accretes there: would a fresh agent writing a vector need this
+sentence? If it is about what a document used to say, the answer is no.**
 
 ---
 

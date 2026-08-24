@@ -56,9 +56,12 @@ time). **The third-party enumerator EXISTS, IS GATED, AND HAS BEEN RUN ONCE** �
 unrecorded. ➜ **The next action: dispatch the `assertion-enumerator` agent with the
 `enumerate-assertions` skill against a block that has no enumeration, grade it with gate 3d, and see
 whether coverage moves.** Named agent, named skill, a worked precedent to copy, a falsifiable result.
-⚠️ **Ceiling on it:** gate 3d is an ordinal comparison over an identity nobody has defined
-(`.claude/skills/design-for-testability/SKILL.md` §"agent identity is undefined") — *a gate passed by
-typing a different string*. So the dispatch raises coverage; it does not close D6 at the denominator.
+⚠️ **Ceiling on it, corrected 2026-08-24:** gate 3d is a **normalised** comparison over a
+self-declared identity string (`AgentIdentity.SameAs`,
+`src/harness/Harness.Results/SubmissionVector.cs:397-400`), **not the ordinal one this line used to
+claim** — and the identity is now **defined** at `docs/notes/test-environment-contract.md` §1.1,
+graded L0–L4. It is still *a gate passed by typing a different string*, so the dispatch raises
+coverage; it does not close D6 at the denominator.
 The instrument is fine and almost nobody is feeding it; an eighth round of instrument-building is the
 wrong answer however tidy it looks.
 

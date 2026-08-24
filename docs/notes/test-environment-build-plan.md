@@ -3102,6 +3102,14 @@ on **citing into something unreadable**; "reject" versus "refuse" is used incons
 short-circuit while the code reports every failure; and §9.1/§9.4 are open with gate-5 refusal being an
 **escalation, not a task**.
 
+> ⚠️ **SUPERSEDED CLAUSE, MARKED RATHER THAN REWRITTEN (2026-08-24).** *"D6 is `StringComparison.Ordinal`"*
+> was true on **2026-08-13 when this entry was written**, and stopped being true **later the same day**
+> — `5d4fa62` replaced it with `AgentIdentity.SameAs`, `Trim()` + `OrdinalIgnoreCase`
+> (`src/harness/Harness.Results/SubmissionVector.cs:397-400`). The sentence survived in the SKILL page
+> for eleven days and was **copied from there into `docs/18` in `fad8703` (2026-08-24)**. ***Left standing here
+> because this entry is a dated record of what a lane found, and flagged because it is the copy source.***
+> The identity question itself is answered at `docs/notes/test-environment-contract.md` §1.1.
+
 #### The frontmatter was verified the only way that proves anything
 
 Quoted the `description`, **converted to CRLF first** — *the state git leaves it in, and the exact

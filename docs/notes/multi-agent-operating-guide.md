@@ -24,6 +24,55 @@ The same trap catches a per-worktree store: agents work in separate worktrees, s
 claims dir is *always empty, grants everything, and looks like success*. There is no default for
 `--claims` on purpose.
 
+#### ⚠️ The code guard catches ONE shape. The rest is convention — recorded 2026-08-24
+
+Stated so nobody reads "there's a guard" as "the mistake is unreachable."
+
+`ClaimStore.RejectDoubledRoot` (`src/converter/Converter/Claims/ClaimStore.cs:62-83`, called from the
+**constructor** at `:31`, so every verb inherits it) throws when the root's **last segment equals this
+project's slug**. That is the measured SELF-1 failure — `…\claims\test-project001` — and it is now
+unreachable. ***It is the only shape refused.***
+
+🔴 **The per-worktree fork the routing rule actually warns about is an ordinary path, and it is
+accepted silently.** The suite says so in its own words:
+`Converter.Tests/ClaimStoreShadowingTests.cs:151`,
+`TwoDifferentRoots_StillForkTheRegistry_WhichIsWhyTheDoubledFormIsRefused` — two roots, one resource,
+`Assert.True(a.Ok); Assert.True(b.Ok); // BOTH granted — no process can see the other's store`. **No
+process can detect this from inside**: each store is well-formed and legitimately empty.
+
+What stands between you and that, and none of it is a gate:
+
+| defence | what it actually is |
+|---|---|
+| `--claims` is **required** (or `LADDER_CLAIMS_DIR`), no default | `Program.cs:441-444`. Stops *forgetting*, not *mis-pointing* |
+| the echoed `store=` line | `ClaimsOutputFormatter.cs:18` says it plainly: *"**AN ECHOED VALUE NOBODY READS IS NOT A SAFEGUARD** — this line is not claimed as one"* |
+| the hookify rule `claims-store-root` | `.claude/hookify.claims-store-root.local.md`. Its own body: *"**This rule is not load-bearing on its own. Hookify fails open**"* — a missing `python3`, an import error or a wrong cwd disables every rule with no indication |
+
+**So: one narrow code guard, plus convention.** *Not a vulnerability, and no fix is proposed here* —
+the point is that the checklist item below is the control, and it is a habit rather than a mechanism.
+
+#### ⚠️ The store buckets by the LAST PATH SEGMENT, so a project directory named `ir` collides
+
+`ClaimStore.SlugOf` (`ClaimStore.cs:94`) keys the bucket on the project directory's own name (`ir/test-project001` →
+`test-project001`). **Pass a path that ends `/ir` and the bucket is called `ir`.** The live store has
+one: as of 2026-08-24 it holds **14 claims from 5 distinct agents**, all from a single job whose IR
+directory was passed as the project. ***Any two projects whose IR directory is named `ir` share that
+bucket.***
+
+**The failure direction is over-refusal, not double-grant** — which is the safe direction: the second
+project's agents are refused against the first project's reservations rather than granted alongside
+them. There **is** a detector — `ClaimsRunner.cs:165-170` warns when a claim's recorded `project`
+differs from the one being checked — but ***it is a warning and it does not gate***:
+`ClaimsModel.cs:87`, `HasFindings => Conflicts.Count > 0`, and a project mismatch lands in
+`Warnings`, not `Conflicts`. **"A warning is not a gate"** — this project's own phrase, and this is
+another instance of it.
+➜ **There is no argument that fixes this from the caller's side, which is why it is recorded rather
+than routed around.** `--project` must be the **IR directory** — `ClaimCorpus.Build` scans it
+(`ClaimValidator.cs:32-35`), so passing the project root instead would key the bucket correctly and
+then validate against an **empty corpus**, which is the worse failure. **Operationally: read the
+bucket name off the echoed `store=` line, and where it is generic, read the `project` line inside the
+claims before believing the store is about your project.** *No fix is proposed here.*
+
 🔴 ***AND A BOARD IS ONLY A TOKEN IF EVERY LANE WRITES TO IT.*** Twice in one day (2026-08-18) a lane
 did the work on a single-writer resource **without claiming it**. Both times it came out clean — and
 **the lane that reported it was right to call that luck rather than a licence.**
@@ -124,7 +173,9 @@ a confident false assurance is worse than either.
 
 ## 6. Before you start — 60-second checklist
 
-1. `--claims C:\ProgramData\Ladder-AI\claims` — **read the echoed `store=` line.**
+1. `--claims C:\ProgramData\Ladder-AI\claims` — **read the echoed `store=` line**, and check the
+   bucket name on the end of it. A generic one (`…\claims\ir`) is shared by every project whose IR
+   directory has that name.
 2. One lane holds Portal. Say who.
 3. Wave store: shared path, outside every worktree. `status` it first — **zero slots must mean
    nobody has submitted yet**, and you should know which it is.

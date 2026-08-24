@@ -6,7 +6,8 @@ Phases **2, 3, 6 and 10** are delivered **and have run on a controller**. Phases
 delivered and **have not** — see the correction below. Phase 4 was **redefined** and Phase 6
 **re-scoped** before either was built (see §5 — both kept their numbers, neither kept its original
 scope). Phase 5 is **decided and declined as a build**; Phase 7 is **closed, its premise overtaken**;
-Phase 8 is **built but never contended**; Phase 9 is **struck**. **Nothing in §5 is now waiting to be
+Phase 8 is **built and contended — the residual is that nothing REQUIRES claiming** (corrected
+2026-08-24; the old marker was wrong in both directions); Phase 9 is **struck**. **Nothing in §5 is now waiting to be
 picked up as the next thing** — §5's closing note says what is, and it is not a phase.
 
 🔴 **CORRECTION 2026-08-24 — THIS LINE AND §5's TABLE CLAIMED CONTROLLER EXERCISE FOR TWO PHASES THAT
@@ -830,16 +831,66 @@ itself, in a folder it does not own. Both corrected there.
 
 ---
 
-### Phase 8 — Multi-agent contention · **P2** · ✅ **BUILT** · ⚠️ **NEVER CONTENDED BY TWO AGENTS**
+### Phase 8 — Multi-agent contention · **P2** · ✅ **BUILT AND CONTENDED** · 🔴 **NOTHING REQUIRES CLAIMING**
 
 > ⚠️ **This heading carried 🔨 — *"specified, not built"* — above a sentence that says the parts "are
 > built".** One line contradicting the next, in the vocabulary the section defines. The marker was
 > wrong; the sentence was right.
+>
+> 🔴 **AND THE REPLACEMENT MARKER WAS WRONG IN BOTH DIRECTIONS — REWRITTEN 2026-08-24.** It read
+> ✅ BUILT · ⚠️ *never contended*. **"Never contended" was false of the thing it named** and **the
+> real never-contended case was not in the entry at all.** The three findings are below; the entry
+> above them is the corrected one.
 
 The claims registry (`src/converter/Converter/Claims/` — `ClaimStore`, `ClaimValidator`,
-`ReservedBand`), wave-set admission (`src/wave-control/WaveControl/AdmissionController.cs`), slot
-colouring and the escalation ladder (`EscalationLadder.cs`) are all built. **What has never happened
-is two agents actually contending.**
+`ReservedBand`), wave-set admission (`src/wave-control/WaveControl/WaveSetAdmission.cs`) and slot
+colouring are built, **and both of the first two have been contended for real, repeatedly.**
+
+**1 — The claims registry has been contended, cross-process, and CI contends it every build.**
+`docs/evidence/fi-65-claims-build.md` §3.2 records **10 real `claim` invocations as separate OS
+processes** on one value: `launched=10 claimed=1 refused=9`, one claim file on disk, all nine losers
+naming the same holder — **run 4 times, with the winner differing between runs** (`agent3`, then
+`agent1` three times), *"which is what makes it a genuine race rather than deterministic ordering."*
+`docs/notes/test-log.tsv:11` records the two-agent shape end to end: *"A acquired FB9020 exit 0; B
+refused exit 1 naming A's purpose; B acquired FB9021 exit 0."*
+➜ **Cite the tests, so nobody schedules a rig run to re-derive what CI already runs every build:**
+`src/converter/Converter.Tests/LeaseProcessRaceTests.cs` (real `Process.Start`, `:99`),
+`src/converter/Converter.Tests/ClaimConcurrencyTests.cs` (`Parallel.For`),
+`src/harness/Harness.Batch.Tests/LaneQueueTests.cs`,
+`src/wave-control/WaveControl.Tests/CoordinatorStateRaceTests.cs`.
+
+🔴 **2 — THE ENTRY NAMED THE WRONG CLASS, AND IT IS YESTERDAY'S DEFECT SHAPE EXACTLY: A CAPABILITY
+PROVEN BY ONE BINARY, ATTRIBUTED TO ANOTHER.** The cited `AdmissionController.cs` **has no production
+caller.** `AdmissionController.Admit` is reached only from `QueueRehydration.cs:185`, inside
+`QueueRehydrator.Rehydrate` — and *that* has no production caller either (every call site is
+`WaveControl.Tests/CoordinatorStateStoreTests.cs`; nothing under `WaveControl.Cli` mentions
+`AdmissionController` at all). **The admission that actually runs is `WaveSetAdmission.Admit`**, via
+`wave-cli submit` (`WaveControl.Cli/Program.cs:43` → `Submit` at `:94` → `:178`, inside the lease).
+**And that one was contended to 128 agents** — `test-log.tsv:15`, *"128 agents admitted 128/128
+reconciled on disk; per-agent lease 66-122 ms"* — **after a crash that was invisible at 8/16/32**
+(`:14`: three unhandled `UnauthorizedAccessException` at 48, fixed in `bee686b`). *So the phase's
+strongest evidence sat under a class the entry did not name, while the class it did name is dead
+code.*
+
+**3 — `EscalationLadder` is not multi-agent anything, and listing it inflated the phase.** Its rungs
+are about a **download** aborting on a configuration prompt — excise-and-redownload, disruptive full
+download, total abort — keyed on pre/post transfer (`LadderRung`, `AbortAftermath`,
+`AttributionOutcome`, `ConfigurationVerdict`). **It contains no concept of an agent.** It belongs to
+the download story. Removing it and its record type from this phase's ledger removes **740 lines**
+(`EscalationLadder.cs` 321 + `EscalationRecord.cs` 419).
+
+🔴 **SO WHAT IS ACTUALLY NEVER CONTENDED IS *TWO CODING AGENTS IN A LIVE LANE* — AND IT CANNOT HAPPEN,
+BECAUSE NOTHING REQUIRES CLAIMING.** `grep` across `.claude/skills/` and `.claude/agents/` for
+`converter claim` or `--claims` returns **zero hits**: no skill and no agent definition asks an agent
+to reserve anything before writing. `docs/evidence/fi-65-claims-build.md` §1 says it outright —
+*"Nothing yet requires an agent to claim before writing. **The registry is available, not binding.**"*
+— and its standing requirement 8 (`:176-178`) names the missing acceptance test: *"add an end-to-end
+test that two concurrent agent runs against one project cannot both take the same resource. That is
+the real acceptance criterion for this feature and it does not exist yet."* **Unwritten since
+2026-08-07.**
+➜ ***That, and not the mechanism, is what this phase's caveat points at.*** The mechanism is built and
+raced; **the adoption is not, and a contention run against a protocol nobody is required to follow
+measures the harness rather than the practice.**
 
 ⚠️ **And one clause of the original entry is overtaken: the lease *was* raced.** `converter lease` is a
 real lock and **two processes ran the race** — `9b4a863` (the lock and the IL walk that decodes rather
@@ -850,16 +901,33 @@ lock is exercised, the **multi-agent admission and escalation path above it** is
 🔴 **The residual is narrower than "run it with two agents", and it is a contract question, not a
 build.** `harness-batch run` self-supplies its own pid and is honest about doing so, because it spans
 the lease (`Harness.Batch/BatchCli.cs`, the `holderPid` default and the comment above it — at HEAD
-`:438-451`); the gap bites the **agent-across-shells** case. But *what makes two agents different* has
-no definition anywhere in this repo: D6 turns on vector author ≠ block author, and the code compares
-two strings with `StringComparison.Ordinal`. The question is written down at
-`.claude/skills/design-for-testability/SKILL.md` §"agent identity is undefined" — ***"Ordinal equality
-on an unspecified string is a gate that is passed by typing a different string"*** — and until it has
-an answer, "two agents contending" has no definition to test against. **A contention run is worth
-scheduling anyway; what it cannot produce is evidence that two *agents* contended rather than two
-processes.**
+`:438-451`); the gap bites the **agent-across-shells** case. But *what makes two agents different* is
+the question underneath "two agents contending", and D6 turns on vector author ≠ block author.
 
-⚠️ **CORRECTED 2026-08-24, TWICE IN ONE SENTENCE.**
+✅ **ANSWERED 2026-08-24, AS A DEFINITION RATHER THAN A BUILD — `docs/notes/test-environment-contract.md`
+§1.1.** *A different agent means a different context instance; the mechanism is isolation, and the
+identity string is a label for it, not a proof of it.* It was already in the repo twice
+(`docs/notes/test-environment-build-plan.md:3635`, *"fresh context, which is the only independence
+mechanism this harness actually offers"*, enforcement described as *isolated, not enforced*;
+`docs/notes/hammer-campaign-results.md:229`, *"D6 requires the reviewer be someone other than the
+transcriber, not a particular person"*) and needed promoting, not deciding. §1.1 carries the graded
+ceiling with it — **L2 and L4 are already built and neither depends on the string** — and grades the
+residue against the exposure M-19 states in its own voice: **accidental correlation, not an
+adversary**, against which a normalised string is adequate *because an accident produces the same
+string*.
+
+⚠️ **AND THE MECHANISM THIS PARAGRAPH CITED WAS WRONG. CORRECTED 2026-08-24 — see the provenance note
+below.** It read *"the code compares two strings with `StringComparison.Ordinal`"*. It does not, and
+has not since `5d4fa62` (2026-08-13): `AgentIdentity.SameAs`
+(`src/harness/Harness.Results/SubmissionVector.cs:397-400`) is `Trim()` + `OrdinalIgnoreCase`, and
+gate 2 (`SubmissionGate.cs:802`), gate 3d (`:1069`, `:1072`), gate 4b (`:996`, `:1005`) and
+`Admissibility.cs:502` all route through it. **The substance stands and must not be lost with the
+citation: a normalised string is still a string somebody types**, so the gate establishes
+non-collision of *names*, not independence of *parties*. **A contention run is still worth scheduling;
+what it cannot produce on its own is evidence that two *agents* contended rather than two processes.**
+
+⚠️ **CORRECTED 2026-08-24, THREE TIMES IN ONE PARAGRAPH — AND THE THIRD IS THE SAME FAILURE AS THE
+FIRST, COMMITTED BY THE PASS THAT WROTE THE FIRST ONE DOWN.**
 - **The citation was `BatchCli.cs:188-196`, and those lines are the `--neighbours derive needs
   --converter` refusal** — a different guard entirely. `BatchCli.cs` has not changed since `dc8308d`,
   so this is not drift. The sentence, wrong citation and all, was **lifted from
@@ -874,6 +942,21 @@ processes.**
   blocks nothing about contention. The instruction *"Answer M-19 before scheduling a contention run"*
   was **unfollowable**: a reader obeying it closes a fencing gap and finds the contention question
   untouched. Struck.
+- 🔴 **The `StringComparison.Ordinal` claim was stale, and the PROVENANCE IS THE POINT: it arrived in
+  `fad8703` — THE SAME COMMIT AS THE TWO BULLETS ABOVE IT.** Verified, not inferred:
+  `git log -S "Ordinal equality" -- docs/18-project-workbench.md` and `git log -S "CORRECTED
+  2026-08-24, TWICE IN ONE SENTENCE"` **both return `fad8703` and nothing else.** ***So the pass that
+  wrote down "never another document" broke it in the act of writing it down, one paragraph away.***
+  The source was `.claude/skills/design-for-testability/SKILL.md` §"agent identity is undefined", whose
+  item 4 did say it — and that page **contradicted its own gate table**, which has said *normalised*
+  at rows 2 and 3d since `5d4fa62`. The pass read the prose, not the table, and neither read
+  `SubmissionVector.cs`. **The sentence was true for thirty minutes**: `e7f6e59` (12:15, the skill) →
+  `5d4fa62` (12:45, the normalised comparison), both 2026-08-13. It then survived eleven days in a
+  page nobody re-derived. ***The lesson is not "cite harder" — it is that a document quoting a
+  mechanism can go stale in silence and a source file cannot.*** Corrected at the skill page's item 4,
+  at `AITODO.md:59`, and marked-not-rewritten at its origin
+  (`docs/notes/test-environment-build-plan.md`, the 2026-08-13 `e7f6e59` entry), so the stale sentence
+  is no longer available to copy from any of the three.
 
 ---
 
@@ -1099,9 +1182,13 @@ happened; 10 arrived after 2 and outranked the rest on priority.
 ## 5z — 🔴 THE LIST IS FINISHED. WHAT IS BINDING IS NOT ON IT.
 
 **Read this before picking a phase, because there is no phase left to pick.** Six are delivered, one
-is decided-and-declined, one is closed, one is struck, and Phase 8's residual is the **agent-identity
-contract question** rather than a build. **A session that comes here looking for "the next phase" and
-finds one has misread a marker.**
+is decided-and-declined, one is closed, one is struck, and **Phase 8's residual is ADOPTION** — the
+mechanism is built and raced, and *nothing requires an agent to claim before writing*
+(`docs/evidence/fi-65-claims-build.md` §1, standing requirement 8; zero hits for `converter claim` or
+`--claims` across `.claude/skills/` and `.claude/agents/`). ⚠️ **This read *"the agent-identity
+contract question"* until 2026-08-24; that question is now answered as a definition
+(`docs/notes/test-environment-contract.md` §1.1) and was never the residual anyway.** **A session that
+comes here looking for "the next phase" and finds one has misread a marker.**
 
 **Apply §5's own priority rule to what remains and it disqualifies more instrument-building.** The
 rule is: *does something else rest on it · how much does it move the 20-minute budget · what does it
@@ -1147,17 +1234,27 @@ cost to get wrong.* Two facts settle it:
      has a third-party denominator. **That, and not the absence of a party, is the binding constraint.**
 
    ⚠️ **THE STRUCTURAL LIMIT THAT SURVIVES, AND IT MUST NOT BE LOST IN THIS CORRECTION.** Gate 3d's
-   independence is a **normalised string comparison over an identity nobody has defined.** The
-   question is recorded at `.claude/skills/design-for-testability/SKILL.md` §"agent identity is
-   undefined": *"D6 turns on vector author ≠ block author, and the code compares two strings with
-   `StringComparison.Ordinal`. What makes two agents different — session, model, worktree?* ***Ordinal
-   equality on an unspecified string is a gate that is passed by typing a different string.***" The
-   same page's enumeration item says the same thing one level down: *"nothing binds that block to an
-   enumeration produced by a third party, beyond the `enumerator` identity string gate 3d compares."*
-   **So dispatching the enumerator proves that a differently-named party produced the denominator. It
-   does not prove a differently-*constituted* one did.** That is a real ceiling on what the
-   recommendation below can establish, and it is the same open question Phase 8's contention residual
-   turns on — one question, two consumers.
+   independence is a **normalised string comparison** — `AgentIdentity.SameAs`,
+   `src/harness/Harness.Results/SubmissionVector.cs:397-400`, `Trim()` + `OrdinalIgnoreCase`, called
+   at `SubmissionGate.cs:1069` and `:1072`. **So dispatching the enumerator proves that a
+   differently-named party produced the denominator. It does not prove a differently-*constituted*
+   one did.** The skill page says the same thing one level down for the enumeration itself: *"nothing
+   binds that block to an enumeration produced by a third party, beyond the `enumerator` identity
+   string gate 3d compares."*
+
+   🔴 **THIS PARAGRAPH QUOTED THE SKILL PAGE SAYING `StringComparison.Ordinal`, AND THAT WAS NEVER
+   TRUE OF THE CODE. STRUCK 2026-08-24** — same provenance as the `BatchCli` citation in §5 Phase 8,
+   same commit (`fad8703`), same doc-to-doc route, and the skill page contradicted its own gate table.
+   *The limit above is unchanged by the correction: a normalised string is still a string somebody
+   types.*
+
+   ✅ **AND THE QUESTION IT TURNS ON IS NOW ANSWERED — `docs/notes/test-environment-contract.md`
+   §1.1.** *A different agent means a different context instance; the mechanism is isolation, and the
+   identity string is a label for it.* §1.1 also grades the ceiling: **L4 wherever the artifact is
+   derivable** (gate 3g recomputes every assertion ID, which is why the stamper needs no independence
+   at all), **L2 where it is not** (`MapProvenance`, gate 5), **L1 the residue** — and grades that
+   residue against the exposure as stated rather than an imagined one. **One question, two consumers,
+   and both now have a bounded answer rather than an open one.**
 
    ⚠️ **THIS ITEM HAS NOW BEEN WRONG TWICE, IN THE SAME DIRECTION, IN TWO DAYS — SEE THE TWO FINDINGS
    BELOW.** It read *"the enumeration has no producer"* on 2026-08-23; that was corrected to *"no
@@ -1406,9 +1503,12 @@ opinion.** That single sentence is why §3 is the most valuable part of this des
   constraint is narrower and dispatchable: **the party has been run ONCE**, on one block in the whole
   corpus (`find gen -name 'assertion-enumeration*'` → one file). §5z now names the concrete action —
   dispatch `assertion-enumerator` with `enumerate-assertions` against a block with no enumeration,
-  grade it with gate 3d, and see whether coverage moves — and names the ceiling on it: gate 3d is an
-  **ordinal comparison over an identity nobody has defined**
-  (`.claude/skills/design-for-testability/SKILL.md` §"agent identity is undefined").
+  grade it with gate 3d, and see whether coverage moves — and names the ceiling on it: gate 3d is a
+  **normalised comparison over a self-declared identity string**
+  (`AgentIdentity.SameAs`, `src/harness/Harness.Results/SubmissionVector.cs:397-400`). ⚠️ **This read
+  *"an ordinal comparison over an identity nobody has defined"* until 2026-08-24; both halves are now
+  corrected** — the comparison is normalised (`5d4fa62`), and the identity is defined at
+  `docs/notes/test-environment-contract.md` §1.1, which also grades the ceiling.
   **The diagnosis is untouched:** coverage frozen across every rig event since 2026-08-18, C = 0
   structural, every finding in the window a harness/deployment/declaration defect.
   **§0 and §5's table claimed controller exercise for Phases 1 and 4, which never had it** — Phase 1's
@@ -1501,10 +1601,13 @@ opinion.** That single sentence is why §3 is the most valuable part of this des
   **Phase 5** had **no marker at all**; it is ✅ decided / 🚫 declined as a build, with the next
   interpreter action named as the cheap disproof rather than a build.
   **Phase 7** is 🚫 **closed** — Track 2 below.
-  **Phase 8**'s 🔨 contradicted its own next sentence (*"are built"*); it is ✅ built / never contended,
-  and the clause saying the lease had never been raced is overtaken — two processes ran the race in
-  Phase 3 (`9b4a863`, `e7b2af9`). Its residual is re-stated as a **contract question (M-19)**, not a
-  build.
+  **Phase 8**'s 🔨 contradicted its own next sentence (*"are built"*), and the clause saying the lease
+  had never been raced is overtaken — two processes ran the race in Phase 3 (`9b4a863`, `e7b2af9`).
+  🔴 **The replacement marker was itself wrong in both directions and was rewritten 2026-08-24**: it is
+  ✅ **built and contended** (claims registry raced cross-process 4× in
+  `docs/evidence/fi-65-claims-build.md` §3.2, and by CI every build; `WaveSetAdmission` contended to
+  128 agents), and **the residual is ADOPTION — nothing requires claiming** — not a contract question
+  and **not M-19**, which this section had already struck as the wrong entry two bullets earlier.
   **Phase 9** is 🚫 **struck**: it was specified as *"a viewer over Phase 4's files"* and Phase 4 struck
   that spine in the section directly above it — a status line resting on a deleted deliverable, one
   heading from the strike that deleted it. **Every strike in this pass carries a forwarding address**,
