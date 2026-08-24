@@ -540,9 +540,11 @@ if ir_files and isinstance(declared_claims, list) and declared_claims:
         seen_projects.setdefault(folder.lower(), folder)
     projects = sorted(seen_projects.values())
     held = []
+    store_unreadable = False
     for project in projects:
         rows, resolved, err = store_claims(project)
         if err:
+            store_unreadable = True
             fail("claims NOT CHECKED for %s - %s (store root %s). A store that did not "
                  "answer is not a store that said yes" % (project, err, CLAIMS_ROOT))
             continue
@@ -620,8 +622,28 @@ if ir_files and isinstance(declared_claims, list) and declared_claims:
 
         row = by_key.get((ckind, value))
         if row is None:
-            fail("claim %s '%s' is NOT IN THE STORE - the evidence says it was taken and "
-                 "the registry has no record of it" % (ckind, value))
+            # 🔴 "I COULD NOT LOOK" IS NOT "I LOOKED AND IT IS ABSENT" (2026-08-24). When no
+            # store answered, this loop used to emit one NOT-IN-THE-STORE line per declared
+            # claim - a specific, alarming accusation that the registry had lost them.
+            #
+            # Measured on a real run: a lane recorded its file paths RELATIVE ("ir-new/X.ir"),
+            # the project resolved against this script's own cwd instead of the evidence
+            # file's, `converter claims` exited 2 - directory not found, and the checker
+            # printed ONE honest "claims NOT CHECKED" line followed by FORTY-EIGHT lines
+            # saying the claims did not exist. They existed: 48 files in the store carried
+            # that agent id. The dispatcher (me) nearly released work on the strength of it.
+            #
+            # This is the project's own empty-is-not-clean rule, inverted: exit 2 means
+            # EXAMINED NOTHING, and a check that turns "examined nothing" into a negative
+            # finding is worse than one that stays silent, because it is believed.
+            if store_unreadable:
+                fail("claim %s '%s' NOT CHECKED - no claims store answered for this "
+                     "evidence, so this says nothing about whether the claim is held. Fix "
+                     "the store lookup (see the NOT CHECKED line above) and re-run; do NOT "
+                     "read this as a missing claim" % (ckind, value))
+            else:
+                fail("claim %s '%s' is NOT IN THE STORE - the evidence says it was taken "
+                     "and the registry has no record of it" % (ckind, value))
             continue
         holder = row.get("agent")
         if holder != agent:

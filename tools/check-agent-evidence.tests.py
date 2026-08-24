@@ -775,6 +775,41 @@ def transient_without_a_reason_fails():
     assert_in("transient with no reason", out, "the reason")
 
 
+# --- F6: "I could not look" is not "I looked and it is absent" ----------------------
+#
+# Measured 2026-08-24. A lane recorded its file paths RELATIVE ("ir-new/X.ir"), so the
+# project resolved against THIS script's cwd rather than the evidence file's, `converter
+# claims` exited 2 (directory not found), and the report printed ONE honest "claims NOT
+# CHECKED" line followed by FORTY-EIGHT lines saying each claim was not in the store.
+# They were all in the store - 48 files there carried that agent id. The dispatcher very
+# nearly released the lane's work on the strength of a false accusation.
+#
+# This is the project's own EMPTY-IS-NOT-CLEAN rule inverted: exit 2 means examined
+# nothing, and a check that converts "examined nothing" into a negative finding is worse
+# than one that stays quiet, because it gets believed.
+
+def f6_an_unreadable_store_does_not_accuse():
+    doc = good_doc(real_hash())
+    # A path whose directory does not exist -> the store lookup for that project fails.
+    doc["files"] = [{"path": "no-such-dir/FB_PusherControl.ir", "ir_hash": real_hash()}]
+    _, out, _ = run(doc)
+
+    assert_in("NOT CHECKED", out, "it must say it could not look")
+    assert "NOT IN THE STORE" not in out, (
+        "an unreadable store must NOT accuse the claim of being absent; got:\n%s" % out)
+
+
+def f6_a_readable_store_still_reports_an_absent_claim():
+    """The other half: softening must not blunt the real finding."""
+    doc = good_doc(real_hash())
+    doc["claims"] = [
+        {"kind": "block-edit", "value": "FB_NeverClaimedAtAll", "agent": AGENT},
+    ]
+    _, out, _ = run(doc)
+
+    assert_in("NOT IN THE STORE", out, "a readable store must still accuse")
+
+
 def wrong_schema_is_exit_2():
     code, out, err = run({"schema": "something-else", "files": [], "checks": []})
     assert_eq(code, EXIT_NOT_VERIFIED, "exit code")
@@ -850,6 +885,11 @@ CASES = [
     ("F5 an uppercase .IR still enters the gate", f5_an_uppercase_ir_extension_still_enters_the_gate, True),
     ("F5 a mixed-case directory is one project", f5_a_mixed_case_directory_is_one_project_not_two, True),
     ("F5 control: an uppercase .IR verifies when claimed", f5_an_uppercase_ir_extension_verifies_when_claimed, True),
+
+    ("F6 an unreadable store says NOT CHECKED, never NOT IN THE STORE",
+     f6_an_unreadable_store_does_not_accuse, True),
+    ("F6 control: a readable store still accuses a genuinely absent claim",
+     f6_a_readable_store_still_reports_an_absent_claim, True),
 
     ("a wrong schema exits 2", wrong_schema_is_exit_2, False),
     ("malformed JSON exits 2", malformed_json_is_exit_2, False),
