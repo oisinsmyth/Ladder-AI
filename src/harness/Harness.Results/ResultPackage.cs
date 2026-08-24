@@ -225,11 +225,13 @@ public sealed record ResultPackage(
     /// measured 2026-08-21, when a wave that had run green could not be re-run. The manifest is the input
     /// side of that same claim.</para>
     ///
-    /// <para>*** AND THE MANIFEST ALONE WAS STILL SHORT OF THE POINT, MEASURED AGAIN AT
-    /// <c>docs/18-project-workbench.md:821-829</c>. *** It named the 8 objects hashed and never said how
-    /// many were STAGED — the parameter DB was staged and unhashed, so <i>"compressing them changes the
-    /// controller without changing the stamp"</i>, and two packages describing materially different
-    /// programs would carry the same one. <see cref="ProgramManifest.Coverage"/> is the denominator, and it
+    /// <para>*** AND THE MANIFEST ALONE WAS STILL SHORT OF THE POINT, MEASURED AGAIN IN
+    /// <c>docs/18-project-workbench.md</c> §5 <b>"Phase 10 — Wave time"</b>, under <i>"THE BUILD STAMP DOES
+    /// COVER THE PARAMETER DB"</i> (⚠️ <b>and its RETRACTION 2026-08-24 — the deployed set was NINE
+    /// objects, stamp <c>622F3EB7</c>, not the eight first written</b>). *** It named the objects hashed and
+    /// never said how many were STAGED — the parameter DB was staged and unhashed, so <i>"compressing them
+    /// changes the controller without changing the stamp"</i>, and two packages describing materially
+    /// different programs would carry the same one. <see cref="ProgramManifest.Coverage"/> is the denominator, and it
     /// travels with the manifest rather than beside it so the two cannot be separated.</para>
     ///
     /// <para><b>Null is "no manifest was recorded for this result", which is not "the stamp covered

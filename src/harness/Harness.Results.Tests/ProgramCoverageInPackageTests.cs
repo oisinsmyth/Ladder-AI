@@ -8,9 +8,11 @@ namespace Harness.Results.Tests;
 /// <summary>
 /// 🔴 <b>THE STAMP'S COVERAGE TRAVELS IN THE RESULT PACKAGE, BESIDE THE MANIFEST IT QUALIFIES.</b>
 ///
-/// <para>*** MEASURED, <c>docs/18-project-workbench.md:821-829</c>. *** The last wave's stamp was derived
-/// over <b>8 objects</b> and the parameter DB was not one of them, so <i>"compressing them changes the
-/// controller without changing the stamp"</i>. <b>Two result packages describing materially different
+/// <para>*** MEASURED, <c>docs/18-project-workbench.md</c> §5 "Phase 10 — Wave time", under <i>"THE BUILD
+/// STAMP DOES COVER THE PARAMETER DB"</i> (⚠️ <b>retracted figure: the deployed set was NINE, stamp
+/// <c>622F3EB7</c>, not the eight first written</b>). *** A wave's stamp was derived over a set the
+/// parameter DB was not in, so <i>"compressing them changes the controller without changing the
+/// stamp"</i>. <b>Two result packages describing materially different
 /// programs would carry the same stamp, and the verifying gateway would not notice.</b> The package is the
 /// artifact meant to OUTLIVE the run, so the count has to be IN it — a number printed to a terminal is gone
 /// with the terminal, which is the same lesson that put the manifest here in the first place.</para>

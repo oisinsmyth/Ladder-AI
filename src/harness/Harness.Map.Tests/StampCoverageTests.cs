@@ -7,8 +7,10 @@ namespace Harness.Map.Tests;
 /// 🔴 <b>THE BUILD STAMP STATES ITS OWN COVERAGE — because until now it stated only what it DID hash,
 /// and a SHORT list is indistinguishable from a complete one.</b>
 ///
-/// <para>*** MEASURED, AND WRITTEN DOWN AT <c>docs/18-project-workbench.md:821-829</c>. *** The stamp on
-/// the last wave was derived over <b>8 objects</b> and the parameter DB was not one of them, so
+/// <para>*** MEASURED, AND WRITTEN DOWN IN <c>docs/18-project-workbench.md</c> §5 <b>"Phase 10 — Wave
+/// time"</b>, under <i>"THE BUILD STAMP DOES COVER THE PARAMETER DB"</i> — ⚠️ <b>read its RETRACTION
+/// 2026-08-24 before quoting a figure: the deployed set was NINE objects, stamp <c>622F3EB7</c>, not the
+/// eight first written.</b> *** A wave's stamp was derived over a set the parameter DB was not in, so
 /// <i>"compressing them changes the controller without changing the stamp"</i>. Two result packages
 /// describing materially different programs would carry the SAME stamp, and the verifying gateway —
 /// whose entire job is to refuse a program that is not the one described — would not notice.

@@ -24,17 +24,28 @@ public sealed class LaneManifestProducerTests
     private const string CopyLayerBlock = "FC_HarnessCopyLayer";
     private const string MirrorTable = "HarnessMirror";
 
-    private static EmittedObject Emitted(string name) => new(name, $@"C:\ir\{name}.ir");
+    /// <summary>
+    /// A supplied object. <b>The kind is explicit</b> — <c>ProgramUnderTest</c> reads it off the IR header
+    /// and a fixture that guessed would be guessing about the very thing the subject guard checks.
+    /// </summary>
+    private static EmittedObject Emitted(string name, HarnessObjectKind kind = HarnessObjectKind.Block) =>
+        new(name, $@"C:\ir\{name}.ir", kind);
 
     private static IReadOnlyList<EmittedObject> CopyLayer() =>
-        new[] { Emitted(CopyLayerBlock), Emitted(MirrorTable) };
+        new[] { Emitted(CopyLayerBlock), Emitted(MirrorTable, HarnessObjectKind.TagTable) };
 
     /// <summary>A stamp record naming <paramref name="hashed"/>, with nothing excluded unless asked.</summary>
     private static ProgramManifest Stamp(IEnumerable<string> hashed, params string[] excluded) =>
         new(
-            hashed.Select(n => new ProgramManifestEntry("Block", n, new string('0', 64))).ToArray(),
+            hashed.Select(n => new ProgramManifestEntry("Block", n, Sha(n))).ToArray(),
             excluded,
             0xDEADBEEF);
+
+    /// <summary>
+    /// A distinct, stable content hash per object name. <b>Distinct matters</b>: a fixture reusing one
+    /// constant across every object would let a content comparison that matched the WRONG entry still pass.
+    /// </summary>
+    private static string Sha(string name) => ProgramManifestEntry.HashOf("ir-of-" + name);
 
     // ---------------------------------------------------------------------------------------------
     // The producer
@@ -167,6 +178,256 @@ public sealed class LaneManifestProducerTests
             "valve", new[] { Emitted("FB_Unit") }, CopyLayer(), null, Stamp(new[] { "FB_Unit" }));
 
         Assert.Null(manifest.BlockUnderTest);
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // AND THE SUBJECT MUST BE A BLOCK — the second half of the same guard
+    // ---------------------------------------------------------------------------------------------
+
+    /// <summary>
+    /// 🔴 <b>AN INSTANCE DB NAMED AS THE SUBJECT IS REFUSED, AND THE KIND IS IN THE MESSAGE.</b>
+    ///
+    /// <para>The guard above matches by NAME, so a set holding only <c>DB_UnitInstance</c> with
+    /// <c>--block-under-test DB_UnitInstance</c> satisfied it and the command reported the subject as
+    /// <i>"IN the stamped set"</i> at exit 0 — <b>the Phase 10 defect verbatim, passing the guard built to
+    /// close it.</b> An instance DB is DATA: the logic under test can be rewritten end to end while its
+    /// iDB stays byte-identical.</para>
+    /// </summary>
+    [Theory]
+    [InlineData(HarnessObjectKind.DataBlock, "DataBlock")]
+    [InlineData(HarnessObjectKind.DataType, "DataType")]
+    [InlineData(HarnessObjectKind.TagTable, "TagTable")]
+    public void A_subject_that_is_not_a_code_block_is_refused_and_the_kind_is_named(HarnessObjectKind kind, string rendered)
+    {
+        var error = Assert.Throws<InvalidOperationException>(() => LaneManifest.Derive(
+            "valve",
+            new[] { Emitted("Subject", kind) },
+            CopyLayer(),
+            "Subject",
+            Stamp(new[] { "Subject" })));
+
+        Assert.Contains($"it is a {rendered}, not a Block", error.Message, StringComparison.Ordinal);
+        Assert.Contains("Subject", error.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// THE PAIRED CONTROL. The identical lane whose subject IS a block derives, so the guard is not simply
+    /// refusing every subject. Both halves in one test because the two differ by one argument.
+    /// </summary>
+    [Fact]
+    public void A_subject_that_is_a_code_block_is_accepted()
+    {
+        var manifest = LaneManifest.Derive(
+            "valve",
+            new[] { Emitted("Subject", HarnessObjectKind.Block) },
+            CopyLayer(),
+            "Subject",
+            Stamp(new[] { "Subject" }));
+
+        Assert.Equal("Subject", manifest.BlockUnderTest);
+    }
+
+    /// <summary>
+    /// The measured lane in full: the instance DB IS legitimately in the program set, and only naming it
+    /// as the SUBJECT is refused. A guard that had refused the DB's presence would have refused every real
+    /// lane, since a unit's iDB belongs in the stamp.
+    /// </summary>
+    [Fact]
+    public void The_instance_DB_may_be_in_the_set_and_only_naming_it_as_the_subject_is_refused()
+    {
+        var program = new[] { Emitted("FB_Unit"), Emitted("DB_UnitInstance", HarnessObjectKind.DataBlock) };
+        var stamp = Stamp(new[] { "FB_Unit", "DB_UnitInstance" });
+
+        var ok = LaneManifest.Derive("valve", program, CopyLayer(), "FB_Unit", stamp);
+        Assert.Equal("FB_Unit", ok.BlockUnderTest);
+        Assert.Equal(2, ok.Objects.Count(o => o.Role != ObjectRole.CopyLayer));
+
+        Assert.Throws<InvalidOperationException>(() =>
+            LaneManifest.Derive("valve", program, CopyLayer(), "DB_UnitInstance", stamp));
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // THE CONTENT ARM — the same names carrying different IR
+    // ---------------------------------------------------------------------------------------------
+
+    /// <summary>
+    /// 🔴 <b>THE HASHES ARE RECORDED, one per stamped object, and the copy layer's is null.</b> Without
+    /// them there is nothing for the content arm to compare, and this is the field that was read from
+    /// <c>ProgramManifestEntry</c> and thrown away.
+    /// </summary>
+    [Fact]
+    public void A_derived_manifest_records_the_stamps_own_hash_per_object_and_the_stamp_value()
+    {
+        var manifest = LaneManifest.Derive(
+            "valve", new[] { Emitted("FB_Unit") }, CopyLayer(), "FB_Unit", Stamp(new[] { "FB_Unit" }));
+
+        Assert.Equal(0xDEADBEEFu, manifest.Stamp);
+        Assert.Equal(Sha("FB_Unit"), Assert.Single(manifest.Objects.Where(o => o.Name == "FB_Unit")).Sha256);
+
+        // The copy layer is not hashed by the stamp, so it carries no hash — null, and counted as such
+        // rather than folded into the verified total.
+        Assert.All(manifest.Objects.Where(o => o.Role == ObjectRole.CopyLayer), o => Assert.Null(o.Sha256));
+    }
+
+    /// <summary>
+    /// 🔴 <b>SAME NAMES, DIFFERENT IR: the content arm fires and the NAME arms do not.</b> This is the
+    /// pre-fix <c>Main</c> shape — the incident every docstring in this file cites — and a name-set
+    /// comparison is blind to it by construction.
+    /// </summary>
+    [Fact]
+    public void A_manifest_whose_object_hashes_differently_disagrees_on_CONTENT_and_not_on_names()
+    {
+        var manifest = LaneManifest.Derive(
+            "valve", new[] { Emitted("FB_Unit") }, CopyLayer(), "FB_Unit", Stamp(new[] { "FB_Unit" }));
+
+        // The SAME name, a different hash — one object edited in place.
+        var edited = new ProgramManifest(
+            new[] { new ProgramManifestEntry("Block", "FB_Unit", ProgramManifestEntry.HashOf("ir-of-FB_Unit, inverted")) },
+            Array.Empty<string>(),
+            0xDEADBEEF);
+
+        var verdict = manifest.AgreesWithStamp(edited);
+
+        Assert.False(verdict.Agrees);
+        Assert.Equal(StampArm.Content, verdict.Fired);
+        Assert.Contains("CONTENT DRIFT (1): FB_Unit", verdict.Detail, StringComparison.Ordinal);
+        Assert.DoesNotContain("HASHED BUT NOT NAMED", verdict.Detail, StringComparison.Ordinal);
+        Assert.DoesNotContain("NAMED BUT NOT HASHED", verdict.Detail, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// <b>A RENAME still fires BOTH name arms</b> — the older behaviour is not traded away for the new one.
+    /// It also fires nothing else, so the two diagnoses stay separable.
+    /// </summary>
+    [Fact]
+    public void A_rename_still_fires_both_name_arms()
+    {
+        var manifest = LaneManifest.Derive(
+            "valve", new[] { Emitted("FB_Unit") }, CopyLayer(), "FB_Unit", Stamp(new[] { "FB_Unit" }));
+
+        var verdict = manifest.AgreesWithStamp(Stamp(new[] { "FB_Unit_v2" }));
+
+        Assert.False(verdict.Agrees);
+        Assert.Equal(StampArm.Names, verdict.Fired);
+        Assert.Contains("HASHED BUT NOT NAMED (1): FB_Unit_v2", verdict.Detail, StringComparison.Ordinal);
+        Assert.Contains("NAMED BUT NOT HASHED (1): FB_Unit", verdict.Detail, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// <b>THE STAMP VALUE IS ITS OWN ARM, and it is the only one that can fire alone.</b> Every object is
+    /// present and unchanged and the stamp still moved — a changed binding, map or naming. Reported as
+    /// such, because the remedy is not in the program set at all.
+    /// </summary>
+    [Fact]
+    public void A_stamp_that_moved_with_no_object_changing_fires_only_the_stamp_arm_and_says_so()
+    {
+        var manifest = LaneManifest.Derive(
+            "valve", new[] { Emitted("FB_Unit") }, CopyLayer(), "FB_Unit", Stamp(new[] { "FB_Unit" }));
+
+        var sameObjectsNewStamp = new ProgramManifest(
+            new[] { new ProgramManifestEntry("Block", "FB_Unit", Sha("FB_Unit")) },
+            Array.Empty<string>(),
+            0x0BADF00D);
+
+        var verdict = manifest.AgreesWithStamp(sameObjectsNewStamp);
+
+        Assert.False(verdict.Agrees);
+        Assert.Equal(StampArm.StampValue, verdict.Fired);
+        Assert.Contains("STAMP MOVED: the manifest was derived beside 16#DEADBEEF", verdict.Detail, StringComparison.Ordinal);
+        Assert.Contains("NO OBJECT CHANGED", verdict.Detail, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// THE PAIRED CONTROL for all three arms: the manifest checked against the stamp it was derived beside
+    /// agrees, <b>and the agreement states how many objects it compared by hash.</b> A green with no
+    /// content denominator is true of a comparison that compared nothing.
+    /// </summary>
+    [Fact]
+    public void The_manifest_agrees_with_its_own_stamp_and_says_how_many_it_compared_by_hash()
+    {
+        var stamp = Stamp(new[] { "FB_Unit", "DB_UnitInstance" });
+        var manifest = LaneManifest.Derive(
+            "valve",
+            new[] { Emitted("FB_Unit"), Emitted("DB_UnitInstance", HarnessObjectKind.DataBlock) },
+            CopyLayer(), "FB_Unit", stamp);
+
+        var verdict = manifest.AgreesWithStamp(stamp);
+
+        Assert.True(verdict.Agrees);
+        Assert.Equal(StampArm.None, verdict.Fired);
+        Assert.Contains("CONTENT: 2 object(s) compared by SHA-256, 2 carrying no recorded hash", verdict.Detail, StringComparison.Ordinal);
+        Assert.Contains("STAMP: recorded 16#DEADBEEF, re-derived 16#DEADBEEF", verdict.Detail, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// 🔴 <b>A MANIFEST THAT RECORDS NO HASHES SAYS SO IN THE PASS MESSAGE, rather than reading as
+    /// verified.</b> An older document carries none, and "0 compared" is the number a reader needs to see
+    /// before treating an AGREES as evidence about content.
+    /// </summary>
+    [Fact]
+    public void A_manifest_carrying_no_recorded_hashes_agrees_and_states_that_it_compared_none()
+    {
+        var older = new LaneManifest(
+            "valve",
+            new[] { new ManifestObject("FB_Unit", @"C:\ir\FB_Unit.ir", ObjectOrigin.Unstated) },
+            Array.Empty<string>());
+
+        var verdict = older.AgreesWithStamp(Stamp(new[] { "FB_Unit" }));
+
+        Assert.True(verdict.Agrees);
+        Assert.Contains("CONTENT: 0 object(s) compared by SHA-256, 1 carrying no recorded hash", verdict.Detail, StringComparison.Ordinal);
+        Assert.Contains("the manifest records none of its own", verdict.Detail, StringComparison.Ordinal);
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // ContentStillMatches — the arm `enqueue` can take without a copy layer
+    // ---------------------------------------------------------------------------------------------
+
+    /// <summary>
+    /// 🔴 <b>Re-reading the files: unchanged verifies, edited drifts, missing drifts.</b> All three in one
+    /// test because the three buckets are one denominator and asserting them apart would let their sum
+    /// disagree with the object count.
+    /// </summary>
+    [Fact]
+    public void ContentStillMatches_verifies_unchanged_files_and_calls_edited_and_missing_ones_drift()
+    {
+        var manifest = LaneManifest.Derive(
+            "valve",
+            new[] { Emitted("FB_Same"), Emitted("FB_Edited"), Emitted("FB_Gone") },
+            CopyLayer(), null,
+            Stamp(new[] { "FB_Same", "FB_Edited", "FB_Gone" }));
+
+        var check = manifest.ContentStillMatches(path => Path.GetFileNameWithoutExtension(path) switch
+        {
+            "FB_Same" => "ir-of-FB_Same",                     // exactly what Stamp() hashed
+            "FB_Edited" => "ir-of-FB_Edited, but changed",
+            "FB_Gone" => throw new FileNotFoundException(path),
+            _ => throw new FileNotFoundException(path),
+        });
+
+        Assert.False(check.Holds);
+        Assert.Equal(new[] { "FB_Same" }, check.Verified);
+        Assert.Equal(2, check.Drifted.Count);
+        Assert.Contains(check.Drifted, d => d.StartsWith("FB_Edited", StringComparison.Ordinal));
+        Assert.Contains(check.Drifted, d => d.Contains("could not be read", StringComparison.Ordinal));
+
+        // The copy layer carries no hash, so it is neither verified nor drifted — and the three buckets
+        // still account for every row.
+        Assert.Equal(2, check.NotRecorded.Count);
+        Assert.Equal(manifest.Objects.Count, check.Verified.Count + check.Drifted.Count + check.NotRecorded.Count);
+    }
+
+    /// <summary>THE PAIRED CONTROL: every file unchanged holds, and the detail states the denominator.</summary>
+    [Fact]
+    public void ContentStillMatches_holds_when_nothing_changed_and_states_what_it_compared()
+    {
+        var manifest = LaneManifest.Derive(
+            "valve", new[] { Emitted("FB_Unit") }, CopyLayer(), "FB_Unit", Stamp(new[] { "FB_Unit" }));
+
+        var check = manifest.ContentStillMatches(path => "ir-of-" + Path.GetFileNameWithoutExtension(path));
+
+        Assert.True(check.Holds);
+        Assert.Contains("1 object(s) re-hashed and unchanged, 0 drifted or unreadable", check.Detail, StringComparison.Ordinal);
     }
 
     /// <summary>

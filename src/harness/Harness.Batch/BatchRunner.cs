@@ -557,7 +557,9 @@ public static class BatchRunner
     /// <para>Every tool here prints a banner before it prints a verdict, so the first non-empty line
     /// of a failing run is a heading. Measured repeatedly on 2026-08-22: a batch that stopped at
     /// generation reported <i>"program : 8 object(s) under test; THE BUILD STAMP IS TAKEN OVER 8 OF
-    /// THEM."</i> — informational, true, and nothing to do with the failure. The real reasons (a map
+    /// THEM."</i> — informational, true, and nothing to do with the failure. (That is a QUOTED BANNER from
+    /// one stopped batch, not the deployed set: the deployed wave was nine objects, stamp
+    /// <c>622F3EB7</c> — <c>docs/18-project-workbench.md</c> §5 "Phase 10 — Wave time".) The real reasons (a map
     /// that did not fit, a submission gate refusal, an unresolved member type) were all on the last
     /// lines, and finding them meant re-running each child command by hand. Three round trips, three
     /// times.</para>

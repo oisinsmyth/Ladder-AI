@@ -111,10 +111,12 @@ public static class ResultPackageJson
     /// <para><b>2026-08-21:</b> a wave that ran green could not be re-run, because nothing recorded which
     /// program set its stamp came from. That put <c>objects</c> here.</para>
     ///
-    /// <para><b><c>docs/18-project-workbench.md:821-829</c>:</b> the stamp was derived over 8 objects and
-    /// the parameter DB was not one of them, so <i>"compressing them changes the controller without
-    /// changing the stamp"</i> — two packages describing materially different programs, one stamp, and a
-    /// verifying gateway that would not notice. That puts <c>coverage</c> here.</para>
+    /// <para><b><c>docs/18-project-workbench.md</c> §5 "Phase 10 — Wave time", under <i>"THE BUILD STAMP
+    /// DOES COVER THE PARAMETER DB"</i>:</b> a wave's stamp was derived over a set the parameter DB was not
+    /// in, so <i>"compressing them changes the controller without changing the stamp"</i> — two packages
+    /// describing materially different programs, one stamp, and a verifying gateway that would not notice.
+    /// That puts <c>coverage</c> here. ⚠️ <b>The eight-object figure that entry first carried was retracted
+    /// 2026-08-24: the deployed set was nine, stamp <c>622F3EB7</c>.</b></para>
     ///
     /// <para><b>Three absences, three renderings, none of them an absent key.</b> <c>recorded: false</c> is
     /// "no manifest was recorded for this result". <c>hashedNothing</c> with a null

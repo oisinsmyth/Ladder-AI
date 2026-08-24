@@ -321,9 +321,11 @@ public sealed record BatchRunPlan(
         // 🔴 *** AND THE DENOMINATOR THAT UNION IS MEASURED AGAINST — the other half of the same claim. ***
         //
         // The union above is what the stamp HASHES. Nothing stated what it SHOULD have hashed, so a short
-        // union produced a stamp indistinguishable from a complete one: measured at
-        // docs/18-project-workbench.md:821-829, where a stamp over 8 objects omitted the parameter DB and
-        // "compressing them changes the controller without changing the stamp".
+        // union produced a stamp indistinguishable from a complete one: measured in
+        // docs/18-project-workbench.md §5 "Phase 10 — Wave time", under "THE BUILD STAMP DOES COVER THE
+        // PARAMETER DB", where a wave's stamp omitted the parameter DB and "compressing them changes the
+        // controller without changing the stamp". (The eight-object figure in that entry was retracted
+        // 2026-08-24: the deployed set was nine, stamp 622F3EB7.)
         //
         // It goes to the GENERATE step and to every WAVE for the identical reason the union does — a step
         // measured against a different denominator would report a different gap from the deployment it

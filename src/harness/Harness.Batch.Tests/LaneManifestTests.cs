@@ -1,4 +1,5 @@
 using Harness.Batch;
+using Harness.Map;
 
 namespace Harness.Batch.Tests;
 
@@ -222,23 +223,88 @@ public sealed class LaneManifestTests : IDisposable
     }
 
     /// <summary>
-    /// 🔴 <b>With a manifest, the set is DERIVED and the report says so — with the generated/authored
-    /// split, which is how "how much of this lane is still hand-built" stays answerable.</b>
+    /// 🔴 <b>With an EMITTED manifest, the set is DERIVED and the report says so — with the
+    /// generated/authored split, which is how "how much of this lane is still hand-built" stays
+    /// answerable.</b>
     ///
     /// <para><b>THREE buckets, not two.</b> The line counted Generated and called everything else
     /// "authored", which folds <see cref="ObjectOrigin.Unstated"/> — what <c>LaneManifest.Derive</c>
-    /// honestly records for a program it read off disk — into "a person wrote it". This hand-authored
-    /// sample states all three, so it pins the split rather than the sum.</para>
+    /// honestly records for a program it read off disk — into "a person wrote it". Every object here is
+    /// Unstated for exactly that reason, so the line pins the split rather than the sum.</para>
+    ///
+    /// <para>🔴 <b>The manifest is DERIVED over real files rather than hand-built, and until 2026-08-24
+    /// this test hand-built one.</b> It passed against a document nothing had emitted, over paths that did
+    /// not exist — which is the defect it was supposed to be the control for. See the refusal beside it.</para>
     /// </summary>
     [Fact]
     public void Enqueue_with_a_manifest_reports_the_set_as_DERIVED()
     {
-        var manifest = Write("m.json", Sample().ToJson());
+        var manifest = EmittedManifests.Write(
+            "valve", Path.Combine(_root, "lane-ir"), Path.Combine(_root, "emitted.json"), "FB_DemoUnderTest",
+            new EmittedManifests.Object("FC_HarnessSlot", HarnessObjectKind.Block, "BLOCK FC FC_HarnessSlot\n"),
+            new EmittedManifests.Object("FB_DemoStim", HarnessObjectKind.Block, "BLOCK FB FB_DemoStim\n"),
+            new EmittedManifests.Object("FB_DemoUnderTest", HarnessObjectKind.Block, "BLOCK FB FB_DemoUnderTest\n"));
+
         var (exit, output) = Enqueue("--manifest", manifest);
 
         Assert.Equal(0, exit);
-        Assert.Contains("DERIVED from the manifest: 3 object(s) (2 generated, 1 authored, 0 origin unstated)", output);
-        Assert.Contains("OBLIGATION: 'FC_HarnessSlot' MUST be called from the cyclic OB", output);
+        Assert.Contains("DERIVED from the manifest: 3 object(s) (0 generated, 0 authored, 3 origin unstated)", output);
+        Assert.Contains("block under test DERIVED from the manifest: FB_DemoUnderTest", output);
+
+        // 🔴 THE DENOMINATOR BEHIND THE WORD. "DERIVED" over nothing verified is the shape this whole
+        // change is about, so the count is asserted rather than the adjective alone.
+        Assert.Contains("3 object(s) re-hashed and unchanged, 0 drifted or unreadable", output);
+        Assert.Contains("TIED to build stamp 16#1234ABCD", output);
+    }
+
+    /// <summary>
+    /// 🔴 <b>THE REFUSAL: a HAND-TYPED manifest cannot report as DERIVED, because nothing emitted it.</b>
+    ///
+    /// <para>*** REPRODUCED BY AN ADVERSARIAL AUDIT 2026-08-24: *** a hand-written manifest naming two
+    /// nonexistent files with fabricated origins produced <i>"program set DERIVED from the manifest:
+    /// 2 object(s)"</i> and <i>"staged corpus DERIVED from the manifest … the DENOMINATOR every wave's
+    /// build stamp will be reported against"</i>, at exit 0. <see cref="LaneManifest.Derive"/> always
+    /// records the stamp it was built beside, so its absence is proof the document was typed.</para>
+    ///
+    /// <para><see cref="Sample"/> is that document: three objects, an authored/generated split stated by
+    /// hand, and no stamp.</para>
+    /// </summary>
+    [Fact]
+    public void Enqueue_refuses_a_hand_typed_manifest_and_queues_nothing()
+    {
+        var (exit, output) = Enqueue("--manifest", Write("typed.json", Sample().ToJson()));
+
+        Assert.NotEqual(0, exit);
+        Assert.Contains("records NO build stamp, so nothing emitted it", output);
+        Assert.DoesNotContain("DERIVED from the manifest", output);
+        Assert.Empty(new LaneQueue(Path.Combine(_root, "queue")).All());
+    }
+
+    /// <summary>
+    /// 🔴 <b>AND A STALE EMITTED ONE IS REFUSED TOO — the same content arm, one command earlier.</b>
+    ///
+    /// <para><c>enqueue</c> holds no copy layer and cannot re-derive the stamp, so it re-reads each
+    /// recorded path and re-hashes it. Here the object is edited after the manifest is written and
+    /// <b>keeps its name</b>: the name set is untouched and only the bytes moved, which is the case
+    /// <c>manifest --check</c> was missing entirely until this pass.</para>
+    /// </summary>
+    [Fact]
+    public void Enqueue_refuses_an_emitted_manifest_whose_files_changed_underneath_it()
+    {
+        var dir = Path.Combine(_root, "stale-ir");
+        var manifest = EmittedManifests.Write(
+            "valve", dir, Path.Combine(_root, "stale.json"), "FB_DemoUnderTest",
+            new EmittedManifests.Object("FB_DemoUnderTest", HarnessObjectKind.Block, "BLOCK FB FB_DemoUnderTest\n  COIL Out := Go\n"));
+
+        // Same name, different logic — a rename would have been caught by the name arm alone.
+        File.WriteAllText(Path.Combine(dir, "FB_DemoUnderTest.ir"), "BLOCK FB FB_DemoUnderTest\n  COIL Out := NOT Go\n");
+
+        var (exit, output) = Enqueue("--manifest", manifest);
+
+        Assert.NotEqual(0, exit);
+        Assert.Contains("no longer describes the files it names", output);
+        Assert.Contains("FB_DemoUnderTest", output);
+        Assert.Empty(new LaneQueue(Path.Combine(_root, "queue")).All());
     }
 
     /// <summary>
