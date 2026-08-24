@@ -1,22 +1,43 @@
 # 18 — The Project Workbench: a block-centric workflow (v2)
 
-**Status (2026-08-23, second revision that day): ADOPTED AND LARGELY BUILT. Six of the ten phases are
-delivered against a real rig; the four that are not are each CLOSED rather than pending.** Phases 1,
-2, 3, 4, 6 and 10 are delivered and have run on a controller. Phase 4 was **redefined** and Phase 6
+**Status (2026-08-24): ADOPTED AND LARGELY BUILT. Six of the ten phases are delivered; FOUR of those
+six have run on a controller. The four that are not delivered are each CLOSED rather than pending.**
+Phases **2, 3, 6 and 10** are delivered **and have run on a controller**. Phases **1 and 4** are
+delivered and **have not** — see the correction below. Phase 4 was **redefined** and Phase 6
 **re-scoped** before either was built (see §5 — both kept their numbers, neither kept its original
 scope). Phase 5 is **decided and declined as a build**; Phase 7 is **closed, its premise overtaken**;
 Phase 8 is **built but never contended**; Phase 9 is **struck**. **Nothing in §5 is now waiting to be
 picked up as the next thing** — §5's closing note says what is, and it is not a phase.
 
-🔴 **THIS LINE HAS NOW UNDERSTATED ITS OWN BODY TWICE, TWO DAYS APART, AND THAT IS THE FINDING.** It
-read *"Not adopted"* until 2026-08-23 with four phases marked delivered inside the same document; it
-was repaired that morning to *"the rest is still proposal"* and by that evening Phase 6 had been
-re-scoped, delivered and **run on a controller** while the header still called it proposal. A reader
-who trusts the header discounts the whole page, including the parts running on hardware. Recorded
-rather than quietly overwritten, because the same shape — a status line that stopped tracking its own
-body — is what §3.2's table did, what §5's Phase 3 and Phase 4 headings did, and what the change log
-below did. **The repair is not a better sentence; it is that closing a phase includes closing its
-markers, in the same commit.**
+🔴 **CORRECTION 2026-08-24 — THIS LINE AND §5's TABLE CLAIMED CONTROLLER EXERCISE FOR TWO PHASES THAT
+NEVER HAD IT.** Both read *"delivered, and run on a controller · **1 · 2 · 3 · 4 · 6 · 10**"*.
+Checked against the phase bodies in this document:
+
+- **Phase 1** (§5, *Close the derive mechanism*) contains **no mention of a rig, controller, download
+  or deployment**. Its five gaps are derive-mechanism work and its strongest evidence is *"the dry run
+  over the live job found four defects"* — a dry run, stated as one in its own text.
+- **Phase 4** (§5, *the lane, generated*) delivers `SlotFcGenerator`, `StimShellGenerator`, an emitted
+  lane manifest and content-matching in `converter diff`. Its heading says **DELIVERED**, not *run*.
+  The one controller sentence in its body — the area *"widened 576 → 1024 and proven on the
+  controller"* (`99396b9`) — is **Phase 6's run cited inside a Phase 4 argument**, not Phase 4's own.
+  It may well be that Phase 4's generated lane manifests fed the Phase 6 rig run; **no document in
+  this repo says so, so it is unestablished and the claim is not made here.**
+
+This is the **same direction** as the overclaim struck in `c851ea0` a day earlier, which wrote the
+rule: *a document wrongly saying "not yet proven" costs a re-check; one wrongly saying "run live"
+costs the check itself.* It was also **self-contradictory inside this file** — §0 claimed six phases
+on a controller while §3.2 said the deploy gateway is **BUILT — NEVER RUN**.
+
+🔴 **AND THIS LINE HAD ALREADY UNDERSTATED ITS OWN BODY TWICE, TWO DAYS APART.** It read *"Not
+adopted"* until 2026-08-23 with four phases marked delivered inside the same document; it was repaired
+that morning to *"the rest is still proposal"* and by that evening Phase 6 had been re-scoped,
+delivered and **run on a controller** while the header still called it proposal. A reader who trusts
+the header discounts the whole page, including the parts running on hardware. Recorded rather than
+quietly overwritten, because the same shape — a status line that stopped tracking its own body — is
+what §3.2's table did, what §5's Phase 3 and Phase 4 headings did, and what the change log below did.
+**The repair is not a better sentence; it is that closing a phase includes closing its markers, in the
+same commit.** ⚠️ **The header has now failed in BOTH directions**, which is the argument in §8 v3.6
+for making the stamp mechanical rather than remembered a fourth time.
 
 **What changed from v1:** v1 recorded the owner's design and listed eight problems with it. v2
 applies those eight, and adds the owner's two new directives — **a ~20-minute per-block budget
@@ -404,21 +425,28 @@ dangerous instrument in the system.
 >
 > | | |
 > |---|---|
-> | ✅ delivered, and run on a controller | **1 · 2 · 3 · 4 · 6 · 10** |
+> | ✅ delivered, **and run on a controller** | **2 · 3 · 6 · 10** |
+> | ✅ delivered, **never run on a controller** | **1 · 4** |
 > | ✅ decided · 🚫 declined as a build | **5** |
 > | 🚫 closed, premise overtaken | **7** |
-> | ✅ built · ⚠️ never contended (residual is a contract question, M-19) | **8** |
+> | ✅ built · ⚠️ never contended (residual is an agent-identity contract question) | **8** |
 > | 🚫 struck, its subject deleted | **9** |
+>
+> ⚠️ **The first two rows were ONE row reading `1 · 2 · 3 · 4 · 6 · 10` until 2026-08-24.** Phase 1's
+> body names no rig and closes on a **dry run**; Phase 4's deliverables are generators and `converter
+> diff`, and the only controller sentence in it is Phase 6's run quoted inside a Phase 4 argument. §0
+> carries the full correction. **Delivered and exercised-on-hardware are different claims and this
+> table now separates them.**
 >
 > **4 and 6 kept their numbers and did NOT keep their scope** — the spine and the element table were
 > both argued down before they were built, and what shipped under those numbers is different work.
 > Read the heading, not the number.
 >
-> ➜ **What is actually binding is not in this list. It is in §5z at the foot of this section, and it
-> is that the enumeration has no THIRD-PARTY PRODUCER — a missing party, not a missing tool.** A
-> session that scrolls this register looking for the next thing to build will find six greens and
-> three closures and conclude the register is the wrong question. **That conclusion is correct — §5z
-> is the answer to it.** Jump there.
+> ➜ **What is actually binding is not in this list. It is in §5z at the foot of this section: the
+> third-party enumerator EXISTS and has been run ONCE, on one block in the whole corpus.** A session
+> that scrolls this register looking for the next thing to build will find greens and closures and
+> conclude the register is the wrong question. **That conclusion is correct — §5z is the answer to
+> it, and the answer is dispatchable in a session.** Jump there.
 
 **Priority is assigned on three questions, in this order:** does something else rest on it (a
 blocker outranks a big win); how much does it move the 20-minute budget; and what does it cost to
@@ -821,10 +849,31 @@ lock is exercised, the **multi-agent admission and escalation path above it** is
 
 🔴 **The residual is narrower than "run it with two agents", and it is a contract question, not a
 build.** `harness-batch run` self-supplies its own pid and is honest about doing so, because it spans
-the lease (`src/harness/Harness.Batch/BatchCli.cs:188-196`); the gap bites the **agent-across-shells**
-case. But *what makes two agents different* is a recorded open question — `docs/notes/mechanisation-backlog.md`
-**M-19** — and until it has an answer, "two agents contending" has no definition to test against.
-**Answer M-19 before scheduling a contention run.**
+the lease (`Harness.Batch/BatchCli.cs`, the `holderPid` default and the comment above it — at HEAD
+`:438-451`); the gap bites the **agent-across-shells** case. But *what makes two agents different* has
+no definition anywhere in this repo: D6 turns on vector author ≠ block author, and the code compares
+two strings with `StringComparison.Ordinal`. The question is written down at
+`.claude/skills/design-for-testability/SKILL.md` §"agent identity is undefined" — ***"Ordinal equality
+on an unspecified string is a gate that is passed by typing a different string"*** — and until it has
+an answer, "two agents contending" has no definition to test against. **A contention run is worth
+scheduling anyway; what it cannot produce is evidence that two *agents* contended rather than two
+processes.**
+
+⚠️ **CORRECTED 2026-08-24, TWICE IN ONE SENTENCE.**
+- **The citation was `BatchCli.cs:188-196`, and those lines are the `--neighbours derive needs
+  --converter` refusal** — a different guard entirely. `BatchCli.cs` has not changed since `dc8308d`,
+  so this is not drift. The sentence, wrong citation and all, was **lifted from
+  `docs/notes/workbench-phase6-plan.md`** (a bare `BatchCli.cs:188-196`) and its filename promoted to
+  a full path on the way in. **The standard for this document is "never another document," and this is
+  that standard failing in the exact predicted way: a doc-to-doc citation wearing a source line's
+  clothes.** The source note is corrected too, so the wrong line is no longer available to copy.
+- **The open question was cited as M-19**, which is a different item: M-19
+  (`docs/notes/mechanisation-backlog.md`, *"The observability gate fences the VECTOR author from the
+  map, and nobody fences the BLOCK author"*) is a **small specified code change** — its own *Mechanise*
+  line says *"the comparison code exists and is simply not pointed at the second party"* — and it
+  blocks nothing about contention. The instruction *"Answer M-19 before scheduling a contention run"*
+  was **unfollowable**: a reader obeying it closes a fencing gap and finds the contention question
+  untouched. Struck.
 
 ---
 
@@ -1050,9 +1099,9 @@ happened; 10 arrived after 2 and outranked the rest on priority.
 ## 5z — 🔴 THE LIST IS FINISHED. WHAT IS BINDING IS NOT ON IT.
 
 **Read this before picking a phase, because there is no phase left to pick.** Six are delivered, one
-is decided-and-declined, one is closed, one is struck, and Phase 8's residual is a contract question
-(M-19) rather than a build. **A session that comes here looking for "the next phase" and finds one has
-misread a marker.**
+is decided-and-declined, one is closed, one is struck, and Phase 8's residual is the **agent-identity
+contract question** rather than a build. **A session that comes here looking for "the next phase" and
+finds one has misread a marker.**
 
 **Apply §5's own priority rule to what remains and it disqualifies more instrument-building.** The
 rule is: *does something else rest on it · how much does it move the 20-minute budget · what does it
@@ -1060,7 +1109,8 @@ cost to get wrong.* Two facts settle it:
 
 1. 🔴 **THE INSTRUMENT IS FINE AND ALMOST NOBODY IS FEEDING IT.** Coverage against the spec-derived
    assertion enumeration stands at **2 and 3 distinct assertions on the two blocks that have run a
-   wave** (`docs/notes/preflight-interpreter-classification.md:144-146`), and it has **not moved
+   wave** (`docs/notes/preflight-interpreter-classification.md` §7, *"Vector supply is the measured
+   bottleneck"* — at HEAD `:144-146`), and it has **not moved
    across any rig event since 2026-08-18** — 08-18, 08-20, the 08-23 batch, and the 08-23 Phase 6 run
    cite the same assertions. What changed over those runs is the *verdict quality on the same
    assertions* (Unsettled / Inconclusive / Stale / NotDeployed → Pass), not how many assertions were
@@ -1075,17 +1125,44 @@ cost to get wrong.* Two facts settle it:
    silently adopts either figure has picked an artifact without knowing it. The numerators are
    unaffected and so is every conclusion in this section. ➜ **A fraction quoted onward must carry the
    source it came from.**
-2. 🔴 **THE ENUMERATION HAS NO THIRD-PARTY PRODUCER — AND THAT IS A MISSING PARTY, NOT A MISSING
-   TOOL.** `enumerate-assertions` and the `assertion-enumerator` agent both exist; what has never
-   been stood up is **an enumerator that is neither the block author nor the vector author**, running
-   the decomposition before the vectors are written. Until that party exists, the denominator is
-   produced by whoever needed one, which is the D6 failure at the denominator: **coverage measured by
-   the party it measures is unfalsifiable.** No code closes that, and none of the tooling below does
-   either.
+2. 🔴 **THE THIRD-PARTY ENUMERATOR EXISTS, IS GATED, AND HAS BEEN RUN AGAINST EXACTLY ONE BLOCK.**
+   The constraint is not *constitute a party*. It is *the party has been run once.*
 
-   ⚠️ **THIS ITEM READ *"THE ENUMERATION HAS NO PRODUCER"* WHEN §5z WAS FIRST WRITTEN ON 2026-08-23,
-   AND THAT WAS FALSE — SEE THE FINDING BELOW.** The correction narrows the constraint; it does not
-   remove it, and it does not change the recommendation.
+   - **The agent, the skill and a worked artifact all exist.** `gen/test-project001/hopper-blockage-alarm/assertion-enumeration.yaml`
+     is issue **5** — 13 → 19 → 23 → 25 → **27 assertions**, re-decomposed from the amended register
+     rather than from a delta — and its own header states the property in the required words:
+     *"Produced from the specification only, before any vector exists, by a third party to the block's
+     author and the vector's author."* Its `enumerator:` field reads `assertion-enumerator`.
+   - **Code enforces the independence.** `SubmissionGate.EnumeratorIndependence`
+     (`src/harness/Harness.Results/SubmissionGate.cs`, wired in the gate list as **`3d enumerator
+     independence`**) refuses when the enumerator equals the block author, refuses when it equals any
+     vector author, and returns **NOT CHECKED, never a pass**, when unrecorded — *"unknown is not
+     independent"*, and an unattributed enumerator on **any** enumeration in the set fails the whole
+     gate, because a partially-attributed set is not an attributed one.
+   - **It has been exercised for real.** `conformance-vectors-b.json` records
+     `"enumerator": "assertion-enumerator"` against `"author": "vector-author-b-5.2"`, and
+     `conformance-vectors-b.md`'s gate table lists **3d enumerator independence** among the 16 gates
+     *CHECKED and passed*.
+   - ➜ **`find gen -name 'assertion-enumeration*'` returns ONE file.** One block in the whole corpus
+     has a third-party denominator. **That, and not the absence of a party, is the binding constraint.**
+
+   ⚠️ **THE STRUCTURAL LIMIT THAT SURVIVES, AND IT MUST NOT BE LOST IN THIS CORRECTION.** Gate 3d's
+   independence is a **normalised string comparison over an identity nobody has defined.** The
+   question is recorded at `.claude/skills/design-for-testability/SKILL.md` §"agent identity is
+   undefined": *"D6 turns on vector author ≠ block author, and the code compares two strings with
+   `StringComparison.Ordinal`. What makes two agents different — session, model, worktree?* ***Ordinal
+   equality on an unspecified string is a gate that is passed by typing a different string.***" The
+   same page's enumeration item says the same thing one level down: *"nothing binds that block to an
+   enumeration produced by a third party, beyond the `enumerator` identity string gate 3d compares."*
+   **So dispatching the enumerator proves that a differently-named party produced the denominator. It
+   does not prove a differently-*constituted* one did.** That is a real ceiling on what the
+   recommendation below can establish, and it is the same open question Phase 8's contention residual
+   turns on — one question, two consumers.
+
+   ⚠️ **THIS ITEM HAS NOW BEEN WRONG TWICE, IN THE SAME DIRECTION, IN TWO DAYS — SEE THE TWO FINDINGS
+   BELOW.** It read *"the enumeration has no producer"* on 2026-08-23; that was corrected to *"no
+   THIRD-PARTY producer — a missing party, not a missing tool ... no code closes that"* the same
+   evening, and **that was false too, against an artifact and a gate both already in the repo.**
 
 ### 🔴 The finding that corrected this section, and it is a defect class worth naming once
 
@@ -1093,12 +1170,13 @@ cost to get wrong.* Two facts settle it:
 PACKAGE IS AN ASSERTION NOBODY RE-CHECKS.**
 
 - **The check it denied has been running since 2026-08-13.** Gate **`3e assertion form authority`** —
-  `SubmissionGate.AssertionFormAuthority`, `src/harness/Harness.Results/SubmissionGate.cs:1455`,
+  `SubmissionGate.AssertionFormAuthority` (`src/harness/Harness.Results/SubmissionGate.cs`),
   shipped in **`b44677b`** — resolves each citation to its enumeration, reads
   `enumeration.FormOf(assertionId)`, and refuses **four** ways: no form for that ID (*"a partially-formed
   enumeration is not a permissive one"*), form `Unstated` in the enumeration, form dropped by the
   vector, and **declared ≠ enumerated**. Gate 5 likewise takes the form from the enumeration rather
-  than the vector (`:1603`). **It is properly conditional:** an enumeration carrying no forms returns
+  than the vector (same file, the `?? v.Form` fallback in the gate-5 body). **It is properly
+  conditional:** an enumeration carrying no forms returns
   **NOT CHECKED, never a pass**, and gate 5's `?? v.Form` fallback is *reported* rather than silent —
   so where the projections carry forms the gate has authority, and where they do not it says so.
 - **The caveat could not know any of that, by construction.** `LoopRun.Caveats(LoopRequest)` is built
@@ -1117,10 +1195,59 @@ PACKAGE IS AN ASSERTION NOBODY RE-CHECKS.**
 knowable at that point.** *"Not compared yet"* is true and useful; *"nothing checks this"* is a claim
 about the system that the caveat is in no position to make.
 
+### 🔴 The finding that corrected the correction — 2026-08-24, and it is the SAME defect class
+
+**THE PARAGRAPH DIRECTLY ABOVE RETRACTED A CLAIM ABOUT SYSTEM STATE MADE WITHOUT OBSERVING THE SYSTEM.
+THE PARAGRAPH DIRECTLY BELOW IT THEN MADE ANOTHER ONE — ONE PARAGRAPH LATER, IN THE SAME EDIT, AGAINST
+A GATE IN THE SAME SOURCE FILE IT HAD JUST FINISHED RE-CHECKING.** That is the uncomfortable part and
+it is stated plainly rather than absorbed into a tidier sentence.
+
+- **What it claimed:** *"the enumeration has no THIRD-PARTY PRODUCER — a missing party, not a missing
+  tool ... No code closes that."*
+- **What was on disk when it was written:** a third-party enumeration at issue 5 with 27 assertions
+  (`gen/test-project001/hopper-blockage-alarm/assertion-enumeration.yaml`), and
+  `SubmissionGate.EnumeratorIndependence` — gate **3d** — refusing block-author and vector-author
+  collisions and returning NOT CHECKED when unrecorded. Both older than the sentence. Item 2 above
+  carries the detail.
+- **How it happened, and it is not a new mechanism:** the previous item's rationale was retired but
+  its *conclusion* was kept and re-argued one level up. Retiring a premise and keeping the verdict is
+  how a diagnosis survives its own disproof.
+
+- ⚠️ **AND THE SAME EDIT MISCITED THE SOURCES IT SAID IT HAD READ.** The v3.4 entry states *"Verified
+  by reading both sources, not taken from the report that raised it"*, and cites
+  `SubmissionGate.cs:1455` and `:1603`. **Those numbers were BORN WRONG, not drifted.** They were
+  exact at `3926b65`; `82af95f` then inserted ~25 lines above them, moving the two symbols to **1480**
+  (`AssertionFormAuthority`) and **1628** (the `?? v.Form` fallback); `4102a48` wrote the citations
+  *after* `82af95f` had landed, off a superseded copy. The verification was real — the *gates* are
+  exactly as described — but it was performed against a stale read, and the entry's "verified" claim
+  is corrected here rather than deleted.
+
+➜ **The rule this earns, and it is a citation-form rule: cite the SYMBOL, and the file. A line number
+is a coordinate in a document that moves; a symbol name is the thing itself.** Every line-number
+citation into `src/` in this section has now been wrong at least once, and not one of them was wrong
+about *what the code does* — the fact survived, only the coordinate rotted. `SubmissionGate.cs` alone
+moved twice in two days. **Line numbers are kept only where they are pinned with an "at HEAD", and are
+never the sole locator.** Applied throughout this section; not retrofitted to sections this pass did
+not touch, which is a known inconsistency and is recorded as one.
+
+➜ 🔴 **AND THE SAME ARGUMENT, ONE STEP FURTHER ON, FOR A COUNT: THE DURABLE FORM OF A NUMBER IS A
+FRESH MEASUREMENT, NOT A BETTER POINTER.** This pass proved it against itself. A suite figure here was
+sourced to the commit that measured it, hedged, and labelled *as of `7dbac3c`, not as of HEAD* —
+textbook attribution — **and it was still wrong, because twelve tests had been added since
+(`c53858e`).** A better pointer repairs a coordinate that rotted; it cannot repair a value that moved.
+**A correctly-attributed stale figure is still a stale figure, and it is worse than an obviously
+unsourced one, because the attribution is what persuades the reader not to check.** So: where a number
+can be measured, measure it and stamp the measurement with its date; cite a commit only for a figure
+you cannot re-run. Every suite count in this document is now a measurement at HEAD on 2026-08-24 or is
+explicitly pinned to the commit it describes as *history*, never as *current*.
+
 ### What that leaves
 
 **Both halves are repaired and shipped — `82af95f`, 7 files, 896 insertions, suite 2,698 passing
-across 16 assemblies, 0 failures, 0 warnings** (up from 2,673 by exactly the 25 new tests).
+across 16 assemblies, 0 failures, 0 warnings *as measured at `82af95f`* (up from 2,673 by exactly the
+25 new tests). At HEAD the harness suite is **2,724 passing, 16 assemblies, 0 failures, 0 warnings —
+measured 2026-08-24, not quoted from a commit message**; `7bf400b` added the 26 and updated no
+document.
 `F-3-authority` now carries gate 3e's actual finding — closed for this submission, refused with the
 gate's detail, or not-compared with the reason — and **keeps its ID**, so a search for F-3 still lands
 on it and the good news is visible to the search written to find the bad. A numerator producer now
@@ -1129,16 +1256,49 @@ party's enumeration, **per subject and never summed**, with `NotComputed` as the
 coverage cannot print `0 of 0` and read as a measurement. It names the multiply-cited assertion
 together with both vectors that cite it — the fact that went unnoticed for five days.
 
-➜ **So the next thing is the PRODUCING PARTY, not another instrument and no longer a counting tool.**
-The data exists as JSON projections — `assertions`, `forms`, `requiredObservations`, `assertionBounds`,
-`scope`; the count now has a producer; the form check always had one. **What is still absent is a
-third party who owns the decomposition**, and that is an agent-and-process question rather than a
-`src/` one. Standing it up makes coverage falsifiable, and **it is also what would make the Phase 5
-interpreter question answerable**, since an interpreter with no vectors catches nothing.
+➜ 🔴 **SO THE NEXT THING IS A DISPATCH, NOT A DELIBERATION: RUN THE ENUMERATOR ON A SECOND BLOCK.**
+The party is constituted, the skill is written, the gate that grades its output runs, and there is a
+five-issue worked precedent to copy. What has never happened is a **second** run.
 
-⚠️ **DO NOT READ ANY OF THIS AS PROGRESS ON THE MEASUREMENT.** Coverage is still **2 of 97 and 3 of
-96**. Five rig runs still found **zero plant defects**. **C = 0 is still structural.** What changed is
-that one sentence in the diagnosis was wrong; every number under it is unmoved.
+> **The action, in full, so no session has to reconstruct it.** Dispatch the **`assertion-enumerator`**
+> agent with the **`enumerate-assertions`** skill against a block in `gen/test-project001/` that has no
+> `assertion-enumeration.yaml` — from the **specification only**, never the implementation, and never
+> the agent that authored the block or its vectors. Grade the output with gate **3d enumerator
+> independence** and the enumeration-shaped gates beside it. Copy the shape of
+> `hopper-blockage-alarm/assertion-enumeration.yaml`: no `id:` key on issue, IDs recomputed fresh,
+> the re-hash set reported, the UNCLASSIFIED residual stated.
+>
+> **The falsifiable result:** does a second denominator, and vectors written against it, move coverage
+> off the frozen 2-and-3? If it does, the constraint was supply and the path is to repeat it. If it
+> does not, the constraint is somewhere this section has not found, and *that* is worth more than
+> another instrument. **Either outcome is an answer; the present state is not.**
+
+⚠️ **What the dispatch CANNOT establish, stated with it.** Gate 3d compares normalised identity
+strings, and *what makes two agents different* is undefined
+(`.claude/skills/design-for-testability/SKILL.md` §"agent identity is undefined"). **A gate passed by
+typing a different string does not prove independence; it proves non-collision of names.** So a second
+enumeration raises coverage and exercises the party — it does not close D6 at the denominator. Closing
+that needs the identity contract, which is one question serving two consumers, this and Phase 8's
+contention residual, and **it is not a blocker on the dispatch: run it, and record which agent, which
+session and which model produced it, so the answer has data to be about.**
+
+⚠️ **The superseded recommendation, kept visible.** This section previously read *"the next thing is
+the PRODUCING PARTY ... an agent-and-process question rather than a `src/` one"* and pointed at no
+acceptance criterion. It is replaced, not softened: the party is not the missing thing.
+
+⚠️ **DO NOT READ ANY OF THIS AS PROGRESS ON THE MEASUREMENT.** Coverage is unmoved. Five rig runs still
+found **zero plant defects**. **C = 0 is still structural.** What changed is that two sentences in the
+diagnosis were wrong; every number under them is exactly where it was.
+
+**The figures, each carrying its source, per the rule in item 1 above.** The note at
+`docs/notes/preflight-interpreter-classification.md` §7 reads **2 of 96 and 3 of 96**; recomputing from
+the enumeration projections gives **2 of 97 and 3 of 96**. **The numerators agree; the denominators
+disagree by one, they measure different artifacts, and the reconciliation is held outside this repo.**
+➜ Quote the pair with the source attached, or quote **the numerators alone (2 and 3), which are not in
+dispute.** ⚠️ **This paragraph is itself a correction:** the line here read *"Coverage is still 2 of 97
+and 3 of 96"* with no source — the recomputed denominator silently preferred over the cited one, four
+paragraphs after this section made carrying the source a rule in bold. **A rule stated in one paragraph
+and broken in the next is the strongest available evidence that stating it is not the mechanism.**
 
 ⚠️ **The caveat against that recommendation, stated with it.** **C = 0 is structural**: the delivered
 plant program has never been executed, so no defect that only a running controller could expose can
@@ -1218,26 +1378,116 @@ opinion.** That single sentence is why §3 is the most valuable part of this des
 
 ## 8. Change log
 
+> 🔴 **THIS LOG HAS NOW STOPPED TRACKING ITS OWN DOCUMENT THREE TIMES, AND THE THIRD TIME IS RECORDED
+> IN v3.5 BELOW.** The rule it drew each time — *"closing a phase includes closing its markers, in the
+> same commit"* — has been stated three times and has held zero times. **A fourth statement is not the
+> fix.** ➜ **What would actually work is mechanical and cheap: a repo hook that refuses a commit
+> touching `docs/18-project-workbench.md` unless the same commit's diff also adds a line under `## 8.
+> Change log` and touches the `**Status (` stamp in §0.** The budget gate at `hooks/` already refuses
+> commits on a content rule, so the mechanism exists and is installed
+> (`python tools/check-claude-md-migration.py`, and `git config core.hooksPath hooks`). **Not built by
+> this pass — proposed, and named here so the next session does not re-derive it.** It is worth noting
+> what such a gate would NOT have caught: `c851ea0` was a *correct* one-line fix that simply forgot its
+> log entry, which a gate catches — but a gate cannot tell a real entry from `- v3.x — misc`, so it
+> buys the reminder and not the content.
+
+- **v3.6 — 2026-08-24. 🔴 THE CORRECTION PASS COMMITTED THE DEFECT CLASS IT WAS CONVENED TO FIX, AND
+  FOUR OF ITS CITATIONS WERE BORN WRONG.** An independent audit of the 2026-08-23 pass; every finding
+  below was re-verified against the artifact before being acted on.
+  **§5z's central recommendation was FALSE and is REPLACED.** It read *"the enumeration has no
+  THIRD-PARTY PRODUCER — a missing party, not a missing tool ... No code closes that."* Both halves
+  are wrong: `gen/test-project001/hopper-blockage-alarm/assertion-enumeration.yaml` is a third-party
+  enumeration at issue 5 (27 assertions) whose header states the property verbatim, and
+  `SubmissionGate.EnumeratorIndependence` — gate **3d enumerator independence** — has been refusing
+  author collisions and returning NOT CHECKED on an unrecorded enumerator all along, recorded CHECKED
+  and passed on `conformance-vectors-b`. **This is a claim about system state made without observing
+  the system — the exact class §5z exists to name — recurring ONE PARAGRAPH after the retraction of
+  the previous instance, in the same source file as the gate it had just re-checked.** The true
+  constraint is narrower and dispatchable: **the party has been run ONCE**, on one block in the whole
+  corpus (`find gen -name 'assertion-enumeration*'` → one file). §5z now names the concrete action —
+  dispatch `assertion-enumerator` with `enumerate-assertions` against a block with no enumeration,
+  grade it with gate 3d, and see whether coverage moves — and names the ceiling on it: gate 3d is an
+  **ordinal comparison over an identity nobody has defined**
+  (`.claude/skills/design-for-testability/SKILL.md` §"agent identity is undefined").
+  **The diagnosis is untouched:** coverage frozen across every rig event since 2026-08-18, C = 0
+  structural, every finding in the window a harness/deployment/declaration defect.
+  **§0 and §5's table claimed controller exercise for Phases 1 and 4, which never had it** — Phase 1's
+  body names no rig and closes on a dry run; Phase 4 ships generators and `converter diff`, and its
+  one controller sentence is Phase 6's run quoted inside a Phase 4 argument. Same direction as
+  `c851ea0`, and self-contradictory against §3.2's *BUILT — NEVER RUN*. The table now separates
+  delivered from exercised-on-hardware. Whether Phase 4's lane manifests fed the Phase 6 run is
+  **unestablished** and therefore not claimed.
+  **Four line-number citations were born wrong, not drifted.** `SubmissionGate.cs:1455`/`:1603` were
+  exact at `3926b65`; `82af95f` moved the symbols to 1480 and 1628; `4102a48` wrote the citations
+  afterwards off a superseded copy — inside the entry that says *"verified by reading both sources."*
+  And `BatchCli.cs:188-196` (§5 Phase 8) is the `--neighbours derive needs --converter` refusal; the
+  real code is the `holderPid` default and its comment, **`:438-451`** at HEAD. `BatchCli.cs` has not changed since
+  `dc8308d`, so that one is not drift either: **the sentence was lifted out of
+  `docs/notes/workbench-phase6-plan.md` and its bare filename promoted to a full path** — the pass's
+  own *"never another document"* standard failing in the predicted way. Source note fixed too.
+  ➜ **Citation-form rule adopted in the sections this pass touched: cite the SYMBOL and the file; a
+  line number is never the sole locator and carries an "at HEAD" when kept.**
+  **Phase 8's residual pointed at the wrong backlog entry.** M-19 is *"the observability gate fences
+  the VECTOR author from the map, and nobody fences the BLOCK author"* — a specified code change whose
+  own *Mechanise* line says the comparison code exists and is simply not pointed at the second party.
+  It blocks nothing about contention, so *"Answer M-19 before scheduling a contention run"* was an
+  instruction nobody could follow. Repointed at the agent-identity question and struck.
+  **§5z forbade quoting a fraction without its source and then did it** at *"Coverage is still 2 of 97
+  and 3 of 96"* — the recomputed denominator silently preferred over the cited note, which says **96
+  and 96**, four paragraphs after the rule was set in bold. Both quotations now carry their source.
+  **The harness figure was stale in three tracked places** — `7bf400b` took it 2,698 → 2,724 and
+  updated no document (`docs/18` ×2, `AITODO.md`). **All five baselines were then MEASURED at HEAD
+  rather than re-sourced:** converter **1,643** · harness **2,724**, 16 assemblies, 0 failures, 0
+  warnings · openness-cli **871** · golden **206** · budget script **23**, 0 failed — 2026-08-24, exit
+  0 throughout. ⚠️ *The openness-cli run rebuilt DEBUG only; Debug and Release hold independent TIA
+  approvals, so it says nothing about the Release binaries the agents invoke.*
+  🔴 **The reason they were measured and not cited is the pass's second citation finding.** A draft of
+  this entry carried golden as **194 of 194**, sourced to `docs/notes/workbench-phase6-plan.md`'s Phase
+  6 header, hedged, and explicitly labelled *as of `7dbac3c`, not as of HEAD*. **It was stale anyway —
+  `c53858e` had added twelve tests.** A correctly-attributed stale number is still stale, and the
+  attribution is precisely what stops the reader checking. ➜ **Recorded as a rule in §5z: the durable
+  form of a count is a fresh measurement, not a better pointer.**
+- **v3.5 — 2026-08-24. THE ENTRY THAT SHOULD HAVE BEEN WRITTEN BY `c851ea0` AND WAS NOT — WRITTEN
+  RETROSPECTIVELY BY v3.6, WHICH IS THE THIRD OCCURRENCE OF THIS EXACT FAILURE.** `c851ea0` rewrote
+  §3.2's deploy-gateway status cell from **"run live — 45 objects, CPU `Running`"** to 🔴 **"BUILT —
+  NEVER RUN"**: `Harness.Device` appears **zero** times in `docs/notes/test-log.tsv`, and what ran on
+  2026-08-14 was the constituent binaries driven separately — `download-probe` at 00:52, `rig-read` at
+  00:58, `openness-cli`'s `import-all`/`compile-all`/`sanity-check` at 02:40, *after* the download
+  rather than before it, which is the reverse of the gateway's sequence. **Nothing has ever executed
+  it as one program.** That is the largest correction in the batch and the only one in the
+  over-claiming direction — **and it left no trace in this log, while §0's stamp went on reading
+  "2026-08-23, second revision that day" for a day after.** Both fixed in v3.6.
 - **v3.4 — 2026-08-23 (later the same evening). 🔴 §5z RESTED ON A FALSE PREMISE, AND THE PREMISE WAS
   A STRING CONSTANT.** v3.3 closed the ten-phase list and named the binding constraint as *"the
   enumeration has no producer"*, quoting the `F-3-authority` caveat that rides on every result package.
   **The check that caveat denies has been running since 2026-08-13.** Gate `3e assertion form
-  authority` (`src/harness/Harness.Results/SubmissionGate.cs:1455`, shipped `b44677b`) reads the form
-  from the enumeration and refuses four ways, and gate 5 does the same at `:1603`. The caveat is built
-  from the **request**, before any gate executes, so it could never report the gate — **it was
-  byte-identical on every package because it was a literal, not because the hole was open.** Verified
-  by reading both sources, not taken from the report that raised it. §5z now states the true
-  constraint — **the missing thing is the third-party PRODUCING PARTY, not the count and not the
-  check** — and names the defect class in its own right: *a caveat that cannot observe what it
+  authority` (`SubmissionGate.AssertionFormAuthority`, shipped `b44677b`) reads the form from the
+  enumeration and refuses four ways, and gate 5 does the same via its `?? v.Form` fallback. The caveat
+  is built from the **request**, before any gate executes, so it could never report the gate — **it
+  was byte-identical on every package because it was a literal, not because the hole was open.**
+  ⚠️ **CORRECTED 2026-08-24 — this entry read `SubmissionGate.cs:1455` and `:1603`, and both numbers
+  were WRONG WHEN WRITTEN** (see v3.6): exact at `3926b65`, moved to **1480** and **1628** by
+  `82af95f`, cited by `4102a48` afterwards off a superseded copy. The claim *"verified by reading both
+  sources, not taken from the report that raised it"* is **kept and qualified rather than deleted**:
+  the gates behave exactly as described, so the reading happened — but it happened against a stale
+  copy, and a verification that cannot notice its source moved is a weaker claim than it sounds.
+  ⚠️ **AND THIS ENTRY'S CONCLUSION WAS ITSELF FALSE.** It read *"the missing thing is the third-party
+  PRODUCING PARTY, not the count and not the check"* — the party existed, gate 3d enforced it, and one
+  block already had a third-party enumeration. **Retracted by v3.6.** What survives is the defect class
+  it named: *a caveat that cannot observe what it
   describes is a constant, and a constant on every package is an assertion nobody re-checks.* That is
   the "stated, never narrowed" class one layer up from §3.2 and §0, and worse, because a disclaimer is
-  read as the honest part. **Nothing here moves the measurement:** coverage is still 2 of 97 and 3 of
-  96, C = 0 is still structural, five rig runs still found zero plant defects — and the two recorded
-  denominators (96 vs 97) are shown disagreeing rather than silently reconciled, since they measure
-  different artifacts and the reconciliation is held outside this repo. **Both halves of the repair
-  shipped in `82af95f`** — the caveat now reports gate 3e's actual finding while keeping its ID, and
+  read as the honest part. **Nothing here moves the measurement:** the numerators are still **2 and
+  3**; the denominator is **96 and 96** per `docs/notes/preflight-interpreter-classification.md` §7,
+  or **97 and 96** recomputed from the enumeration projections — *the pair is quoted with its source
+  because they measure different artifacts and the reconciliation is held outside this repo.*
+  ⚠️ **This sentence read a bare "2 of 97 and 3 of 96" until 2026-08-24** — one denominator silently
+  picked, in the entry that introduced the rule against exactly that. C = 0 is still structural, five
+  rig runs still found zero plant defects. **Both halves of the repair shipped in `82af95f`** — the
+  caveat now reports gate 3e's actual finding while keeping its ID, and
   `Harness.Results/AssertionCoverage.cs` counts the numerator per subject; suite **2,698 passing
-  across 16 assemblies, 0 failures, 0 warnings.**
+  across 16 assemblies, 0 failures, 0 warnings *as measured at `82af95f`* — history, not current.
+  Current is 2,724, measured at HEAD 2026-08-24 (v3.6).**
 - **v3.3 — 2026-08-23 (evening).** 🔴 **§5 IS NOW TRUE, AND THE REASON IT WAS NOT IS THAT NOTHING MADE
   CLOSING A MARKER PART OF CLOSING A PHASE.** v3 recorded exactly this against itself — *"a change log
   that stops tracking its own document is §3.2's failure in miniature"* — and **it recurred inside 24

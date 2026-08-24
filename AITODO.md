@@ -31,7 +31,11 @@ documented/committed, delete it from this file rather than letting it accumulate
 > silently overwritten.
 
 **IN FLIGHT: NOTHING IN `docs/18-project-workbench.md` §5. THE TEN-PHASE LIST IS FINISHED.** Six
-phases are delivered and have run on a controller (1, 2, 3, 4, **6**, 10); Phase 5 is decided and
+phases are delivered — **1, 2, 3, 4, 6, 10** — and **four of them have run on a controller: 2, 3, 6,
+10.** ⚠️ **This line said all six had, until 2026-08-24**, as did `docs/18` §0 and §5's table: Phase
+1's body names no rig and closes on a **dry run**, and Phase 4 ships generators and `converter diff`
+(its one controller sentence is Phase 6's run quoted inside a Phase 4 argument). **Delivered and
+exercised-on-hardware are different claims.** Phase 5 is decided and
 declined as a build; Phase 7 is closed; Phase 8 is built but never contended; Phase 9 is struck. This
 work is **not part of the suspended staged plan** (`docs/03-development-plan.md`) — it is tooling for
 real jobs, which the suspension notice explicitly leaves running.
@@ -43,25 +47,70 @@ real jobs, which the suspension notice explicitly leaves running.
 > because this is the second time in one week that the fix has been *"update the stale line"* when the
 > fix is that **closing a phase must include closing its status lines, in the same commit.**
 
-🔴 **WHAT IS ACTUALLY NEXT IS NOT A PHASE — see `docs/18` §5z.** Assertion coverage has not moved
-across any rig event since 2026-08-18 (the same 2 and 3 assertions cited every time). **The
-enumeration has no THIRD-PARTY PRODUCING PARTY** — an enumerator that is neither the block author nor
-the vector author — which is D6 lost at the denominator: coverage measured by the party it measures is
-unfalsifiable. **That is an agent-and-process question, not a `src/` one.** The instrument is fine and
-almost nobody is feeding it; an eighth round of instrument-building is the wrong answer however tidy
-it looks.
+🔴 **WHAT IS ACTUALLY NEXT IS NOT A PHASE, AND IT IS A DISPATCH — see `docs/18` §5z.** Assertion
+coverage has not moved across any rig event since 2026-08-18 (the same 2 and 3 assertions cited every
+time). **The third-party enumerator EXISTS, IS GATED, AND HAS BEEN RUN ONCE** — one
+`assertion-enumeration.yaml` in the whole corpus (`find gen -name 'assertion-enumeration*'`), for
+`hopper-blockage-alarm`, at issue 5 / 27 assertions, with `SubmissionGate.EnumeratorIndependence`
+(gate **3d**) refusing block-author and vector-author collisions and returning NOT CHECKED when
+unrecorded. ➜ **The next action: dispatch the `assertion-enumerator` agent with the
+`enumerate-assertions` skill against a block that has no enumeration, grade it with gate 3d, and see
+whether coverage moves.** Named agent, named skill, a worked precedent to copy, a falsifiable result.
+⚠️ **Ceiling on it:** gate 3d is an ordinal comparison over an identity nobody has defined
+(`.claude/skills/design-for-testability/SKILL.md` §"agent identity is undefined") — *a gate passed by
+typing a different string*. So the dispatch raises coverage; it does not close D6 at the denominator.
+The instrument is fine and almost nobody is feeding it; an eighth round of instrument-building is the
+wrong answer however tidy it looks.
 
-> ⚠️ **CORRECTED WITHIN THE HOUR, AND THE CORRECTION IS THE MORE USEFUL ITEM.** This paragraph first
-> read *"the enumeration has no producer — a caveat on every result package"*, quoting
-> `LoopRun.cs`'s `F-3-authority`. **That caveat was a string constant, and the gate it denies has been
-> running since 2026-08-13** (`3e assertion form authority`,
-> `src/harness/Harness.Results/SubmissionGate.cs:1455`, shipped `b44677b`). Built from the *request*
-> before any gate runs, it could not report the gate — so it was byte-identical on every package
-> because it was a literal, not because the hole was open, and it was quoted onward into a work plan.
-> **A caveat that cannot observe what it describes is a constant.** ✅ **Both halves repaired and
-> shipped in `82af95f`** — the caveat now reports gate 3e's actual finding (keeping its ID), and
-> `Harness.Results/AssertionCoverage.cs` counts the numerator per subject; suite **2,698 passing, 0
-> failures, 0 warnings.** Full record: `docs/18` §5z.
+> ⚠️ **CORRECTED TWICE, IN THE SAME DIRECTION, TWO DAYS RUNNING — AND THE SECOND CORRECTION IS THE
+> MORE USEFUL ITEM.**
+> **First (2026-08-23):** this paragraph read *"the enumeration has no producer — a caveat on every
+> result package"*, quoting `LoopRun.cs`'s `F-3-authority`. **That caveat was a string constant, and
+> the gate it denies has been running since 2026-08-13** (`3e assertion form authority`,
+> `SubmissionGate.AssertionFormAuthority`, shipped `b44677b`). Built from the *request* before any gate
+> runs, it could not report the gate — so it was byte-identical on every package because it was a
+> literal, not because the hole was open, and it was quoted onward into a work plan. **A caveat that
+> cannot observe what it describes is a constant.** ✅ Both halves repaired in `82af95f`.
+> **Second (2026-08-24):** the replacement text — *"the enumeration has no THIRD-PARTY PRODUCING
+> PARTY"* — **was also false**, against an artifact and a gate both already in the repo. That is the
+> same defect class one paragraph later: a claim about system state made without observing the system.
+> ⚠️ **`SubmissionGate.cs:1455` was cited here and was wrong when written** — the symbol is at 1480 at
+> HEAD, moved by `82af95f` before the citation was authored. ➜ **Cite the SYMBOL and the file; a line
+> number is a coordinate in a document that moves.** Full record: `docs/18` §5z and §8 v3.6.
+> **Suite: 2,724 passing, 16 assemblies, 0 failures, 0 warnings at HEAD** (`7bf400b`; this line said
+> **2,698** — correct at `82af95f`, stale from `7bf400b` onward).
+
+🔴 **THREE COMMITS LANDED AFTER THIS FILE WAS LAST TOUCHED (`4102a48`) AND NONE WAS RECORDED HERE.**
+Added 2026-08-24. **This file's own recovery procedure tells the next session to trust this section**,
+and ten lines above sat its own warning that *closing a phase must include closing its status lines,
+in the same commit* — for the third time, it did not.
+- 🔴 **`c851ea0` — THE SHARPEST OF THE THREE, AND IT EXISTED NOWHERE BUT `git log`.** `docs/18` §3.2's
+  deploy-gateway cell read **"run live — 45 objects, CPU `Running`"** and was retracted to **"BUILT —
+  NEVER RUN"**. `Harness.Device` appears **zero** times in `docs/notes/test-log.tsv`; what ran on
+  2026-08-14 was the constituent binaries driven separately (`download-probe` 00:52, `rig-read` 00:58,
+  `openness-cli` import/compile/sanity 02:40 — *after* the download, the reverse of the gateway's
+  sequence). **A hardware-exercise claim retracted on the page CLAUDE.md sends every reader to first.**
+  `docs/notes/live-project-readiness.md` corrected in the same commit.
+- **`7bf400b`** — the coverage numerator reaches the run path. `AssertionCoverage.Lines` had two
+  callers and the wave renderer was neither, so a two-lane batch printed the fraction for lane 0 only,
+  to scrollback, and no run left an artifact carrying it. Now emitted per lane from **the gate that
+  lane was admitted by**, to console and artifact, **no aggregate at all**. *"Coverage"* → *"stamp
+  coverage"* where it meant the stamp. Harness **2,698 → 2,724**.
+- **`9b47ea2`** — the tag-table lesson retracted: the flag belongs to a different command.
+- ✅ **Baselines — ALL FIVE MEASURED AT HEAD, 2026-08-24, not sourced from any document.** Converter
+  **1,643** (1 assembly, exit 0) · harness **2,724** (16 assemblies, 0 failures, 0 warnings) ·
+  openness-cli **871** (1 assembly, exit 0) · golden **206** (exit 0) · budget script **23**, 0 failed.
+  ⚠️ **Caveat on the openness-cli figure: that run rebuilt the DEBUG binaries only.** Debug and Release
+  hold independent TIA approvals, so the Release binaries the agents invoke are untouched — and *"the
+  suite passed"* is therefore **not** evidence about the Release build.
+  🔴 **THIS BULLET FIRST READ "golden 194 of 194 … as of `7dbac3c`, not as of HEAD", AND THAT IS THE
+  MOST INSTRUCTIVE MISTAKE IN THE PASS.** The figure was sourced correctly, hedged correctly and
+  explicitly labelled as-of-a-commit rather than as-of-HEAD — **and it was still stale**, because
+  `c53858e` had added twelve tests. **A correctly-attributed stale number is exactly the failure this
+  audit is about.** ➜ **The durable form of a COUNT is a fresh measurement, not a better pointer.**
+  A citation is what you fall back on when you cannot measure; where a number can be measured, measure
+  it. (Same argument as the symbol-vs-line-number rule in `docs/18` §5z, one step further on: a better
+  pointer fixes a coordinate that rotted, and cannot fix a value that moved.)
 
 - **Phase 6 — DELIVERED AND RUN ON THE RIG 2026-08-23**, and **re-scoped before it was built**: not
   the element table, but *"the area, derived"*. Y0–Y3 plus `777fac0` / `182b3f9`, closed in `7dbac3c`;
@@ -125,8 +174,11 @@ it looks.
   evidence. Documented in `src/openness-cli/README.md` (`portal-close` section) and CLAUDE.md's index.
 - ✅ **B5 — ANSWERED: `FB_SiloSequence` is the third conformance lane. THE LANE IS NOT BLOCKED ON THE
   OWNER.** 🔴 **This line read *"Blocked on this and nothing else"* after the answer was given**, as did
-  `docs/notes/owner-questions.md:72` and `docs/notes/workbench-phase6-plan.md:150`/`:367`/`:395` —
-  three tracked files manufacturing a blocker that did not exist. **Two decisions of the lane's own now
+  `docs/notes/owner-questions.md` and **six** places in `docs/notes/workbench-phase6-plan.md` —
+  tracked files manufacturing a blocker that did not exist. ⚠️ **This bullet cited that plan as
+  `:150`/`:367`/`:395` and undercounted at three; all six sites are now marked in place and named by
+  SECTION rather than line, because every one of those line numbers was stale in the commit that wrote
+  it** (2026-08-24; see that file's correction under *Blocked / needs the owner*). **Two decisions of the lane's own now
   stand ahead of authoring it**, and their substance lives only in the live job's gitignored folder:
   (1) a scope choice about observation depth that must be taken *before* the build, because it changes
   the interface, the drive surface and the register bill, and whose thorough option overruns the

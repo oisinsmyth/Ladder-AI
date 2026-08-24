@@ -6,6 +6,15 @@ subject: the reservation guard was **inert on three of the four paths that build
 had two derivations. Converter **1,569 → 1,643** · harness **2,501 → 2,625** · openness-cli **871** ·
 golden **194 of 194** · 0 warnings · no existing test edited.
 
+> ⚠️ **THOSE FIVE FIGURES ARE THIS PHASE'S MEASUREMENT AT `7dbac3c`. THEY ARE HISTORY, NOT A BASELINE —
+> DO NOT QUOTE THEM AS CURRENT.** Marked 2026-08-24 after a correction pass did exactly that: it took
+> golden **194 of 194** from this line, attributed it correctly, hedged it, and labelled it *as of
+> `7dbac3c`* — and it was still wrong, because `c53858e` had since added twelve tests. **A
+> correctly-attributed stale count is still stale, and the attribution is what stops the reader
+> checking.** Measured at HEAD on 2026-08-24: converter **1,643** · harness **2,724** · openness-cli
+> **871** · golden **206** · budget script **23**. ➜ **The durable form of a count is a fresh
+> measurement, not a better pointer** (`docs/18` §5z).
+
 **What the phase actually bought:** the mirror no longer takes anybody's word for where it lives.
 `served-area` reads the served width off the block that serves it — **both homes, or neither**;
 `neighbours` derives who else is in the area **and who declares them**; the build stamp says **n of m**
@@ -35,7 +44,9 @@ here still reads the **staged corpus, never the CPU**, and the **foreign-occupan
 invented**.
 
 ✅ **The element table is now re-labelled *"on demand, not a phase"* in `docs/18` §5**, as this plan
-recommended at `:97`. ⚠️ **That recommendation sat unapplied for the whole of the phase that replaced
+recommended under *The element table as written — NOT this phase* (this cited `:97` until 2026-08-24,
+a line number stale in the commit that wrote it — see the correction under *Blocked / needs the
+owner*). ⚠️ **That recommendation sat unapplied for the whole of the phase that replaced
 it**, which is how `docs/18` §5 still read 🔨 *"Element-table widening · P2"* on the evening of the day
 Phase 6 shipped and ran. **A recommendation to re-label is not applied by making it.**
 
@@ -51,8 +62,16 @@ for where it lives and what is serving it.
 **Size, honestly: smaller than Phase 4 or 5.** Four items — one 30 minutes of hygiene, one medium,
 one medium-small, one small. **No rig, no Portal, no Openness re-approval, nothing committed that
 needs a data-boundary permission.** The single biggest thing the workbench needs next — the third
-conformance lane — is **blocked on an owner ruling (B5)**, and that is said plainly here rather than
-papered over with scope.
+conformance lane — is ~~**blocked on an owner ruling (B5)**~~, and that is said plainly here rather
+than papered over with scope.
+
+> 🔴 **B5 IS ANSWERED — THE LANE IS NOT BLOCKED ON THE OWNER.** See the correction under *Blocked /
+> needs the owner* below; canonical record `docs/notes/owner-questions.md`. **This pointer was added
+> 2026-08-24** because the correction block sat 359 lines further down and the file's own framing
+> paragraph — the first thing a reader meets — still manufactured the blocker. The body below is left
+> as written, per that block's stated policy; **what is not acceptable is the dead claim being the
+> first one read.** Two more sites carry it: the table row under *Why not these* and the last bullet
+> under *Risks*, both marked in place.
 
 ---
 
@@ -163,10 +182,12 @@ mechanisable is a coverage ledger with four bucket counts and an oldest-deferral
 funding authoring throughput with a wrapper.** Recorded so it is not re-proposed as tooling; it is a
 staffing and ordering question.
 
-### The third conformance lane — the right next RIG event, and blocked
+### The third conformance lane — the right next RIG event, and ~~blocked~~ **not blocked on the owner**
 
-Phase 4 exists to make it cheap and it has never happened; **two is not N.** Blocked on **B5 — which
-block.** It also needs Portal and a deployment. **Phase 6 is deliberately the offline half that should
+Phase 4 exists to make it cheap and it has never happened; **two is not N.** ~~Blocked on **B5 — which
+block.**~~ 🔴 **B5 is answered — `FB_SiloSequence`** (correction under *Blocked / needs the owner*;
+canonical record `docs/notes/owner-questions.md`). Two decisions of the lane's own stand ahead of it
+instead. It also needs Portal and a deployment. **Phase 6 is deliberately the offline half that should
 land before the mirror grows again**, because growing from one lane to two is precisely what walked
 the mirror into the panel, a third lane is the next such growth, and **band D ends exactly at 1023
 with zero slack above the panel** (704 clears four lanes at padded width ≤174 and no more).
@@ -382,8 +403,8 @@ failure class this whole phase is about.
 | **The element table** | Inexpressible ≠ mishandled; nothing blocked; would answer open owner question Q2 by fiat. On demand, not a phase. |
 | **Building the interpreter** | Value bounded by vector supply (2/96, 3/96); its recommendation rests on an **untried** judgement. **The next interpreter action is the note's own: attempt the two-or-three rule specifications over the 17 B rows.** A session, not a phase — and it needs a **new per-item data-boundary permission**, because a rule specification derived from B rows is written in the shape of a defect. |
 | **Vector supply as tooling** | The mechanisable slice is already `enumerate-assertions`'s declared output. Funding it would be a wrapper. |
-| **The third conformance lane** | **The right next rig event.** Blocked on **B5**. Y1/Y2 are the guards that should exist *before* the mirror grows a third time. |
-| **`converter lease` — an agent holder** | Real, and **narrower than it looks**: `harness-batch run` self-supplies its own pid and is honest about it, because it spans the lease (`BatchCli.cs:188-196`). The gap bites the **agent across shells** case. But *what makes two agents different* is a recorded open contract question (M-19), so this is **Phase 8**, not Phase 6. ⚠️ **Cheapest honest fix if wanted now:** an explicit `TtlOnly` liveness mode recorded in the lease file and printed in every reclaim, so a timer-only lease stops *looking* evidence-based. Offered, not planned. |
+| **The third conformance lane** | **The right next rig event.** ~~Blocked on **B5**.~~ 🔴 **B5 is answered — not blocked on the owner** (correction below; `docs/notes/owner-questions.md`). Y1/Y2 are the guards that should exist *before* the mirror grows a third time. |
+| **`converter lease` — an agent holder** | Real, and **narrower than it looks**: `harness-batch run` self-supplies its own pid and is honest about it, because it spans the lease (`Harness.Batch/BatchCli.cs`, the `holderPid` default and its comment — at HEAD `:438-451`). 🔴 **This cell read `BatchCli.cs:188-196` until 2026-08-24, and those lines are the `--neighbours derive needs --converter` refusal — a different guard.** `BatchCli.cs` has not changed since `dc8308d`, so it was not drift; the wrong line was **copied out of here into `docs/18` §5 Phase 8** with its bare filename promoted to a full path, which is why it is corrected in both places. The gap bites the **agent across shells** case. But *what makes two agents different* is a recorded open contract question — the **agent-identity** one at `.claude/skills/design-for-testability/SKILL.md` §"agent identity is undefined", **not M-19**, which is the block-author/observability-map fencing gap and blocks nothing here (corrected 2026-08-24) — so this is **Phase 8**, not Phase 6. ⚠️ **Cheapest honest fix if wanted now:** an explicit `TtlOnly` liveness mode recorded in the lease file and printed in every reclaim, so a timer-only lease stops *looking* evidence-based. Offered, not planned. |
 | **`portal-close` consulting `AttachedSessions`** | ✅ **DONE 2026-08-23 — this exclusion is spent.** It read: *"excluded because probing an unexplored API needs Portal."* Portal came free, it was probed, and the API **distinguishes attached from abandoned decisively and across processes** — a sweeper that is not the holder reads the holder's own pid. An empty Portal with a live session is now `Leave` unless named by `--pid`. Two traps recorded at `openness-api-surface-v20.md:69`: `IsActive` is `False` during a live attachment (it does not mean "attached"), and a hard-killed holder leaves no stale session, so the guard cannot be jammed. 🔴 **Residual:** an `OpennessInvisible` process is not in `GetProcesses()` at all, so it can never report attachment and is swept as blindly as before, protected only by the 5-minute age floor. |
 | **Deriving `retentiveBytes`** | M-11 is recorded **NOT MECHANISABLE** — no Openness path reads the PLC-tags retain setting. Do not re-attempt it inside Y1 because it is adjacent. |
 | **Splitting `Converter.Core` out** | A build-layout change to buy an in-process call where a document already works. **Record the finding in §3.6; do not act on it here.** |
@@ -410,18 +431,35 @@ failure class this whole phase is about.
 
 ## Blocked / needs the owner
 
-> ✅ **CORRECTION 2026-08-23 — B5 IS ANSWERED AND THIS SECTION'S HEADLINE CLAIM IS DEAD.** Three
-> places in this plan say the third conformance lane is blocked on the owner — here, `:150`
-> (*"Blocked on **B5**"*) and `:367` — and one says the answer is *"recorded in `AITODO.md` only"*.
+> ✅ **CORRECTION 2026-08-23 — B5 IS ANSWERED AND THIS SECTION'S HEADLINE CLAIM IS DEAD.**
 > **The answer is `FB_SiloSequence`, and the lane is not blocked on the owner.** Two decisions of the
 > lane's own now stand ahead of authoring it, and the canonical tracked record — with the shape stated
 > and the live-run data boundary drawn — is **`docs/notes/owner-questions.md`**, not `AITODO.md` and
 > not here. This plan is a *delivered* Phase 6 record; its body is left as written, but do not carry
 > the blocked claim out of it.
+>
+> 🔴 **AMENDED 2026-08-24, TWICE, AND BOTH AMENDMENTS ARE THE SAME DEFECT AS THE ONE THIS BLOCK
+> CORRECTS.**
+> 1. **The block's own line citations were invalidated by the commit that wrote them.** It said *"Three
+>    places … here, `:150` and `:367`"*. Those were exact at `7dbac3c`; the *same commit* that added
+>    this block (`3926b65`) also inserted **18 lines near the top of this file**, so both numbers were
+>    stale the moment they were written. The nearby *"as this plan recommended at `:97`"* moved the same
+>    way. ➜ **Every site is now named by its SECTION, and no line number is cited into this file at
+>    all.** A heading does not move when a paragraph is inserted above it, and this file is edited by
+>    insertion.
+> 2. **It under-counted.** *Three places* was **six**, and the sixth was a section HEADING. All of them
+>    are now marked in place: the **Size, honestly** paragraph near the top of the file — the first
+>    statement a reader meets, and hundreds of lines above this notice — the heading and body of **The
+>    third conformance lane — the right next RIG event**, the table row under **Not in scope**, the
+>    struck bullet in this section, and the last bullet under **Risks**. **The policy of leaving the
+>    body as written is kept for interior prose; it is not kept for the file's framing paragraph or for
+>    a heading**, because *"the wrong one is the one a reader meets first"* is the failure this whole
+>    correction exists to fix.
 
 - ~~🔴 **B5 — which block becomes the third conformance lane.** Recorded in **`AITODO.md` only.**~~
   ✅ **Answered — see the correction above.**
-- **Q2 — element-table width** (`docs/18:902-903`). Answering it converts "on demand" into a scoped
+- **Q2 — element-table width** (`docs/18` §7, *Q2 — Element-table width*; this cited `:902-903` until
+  2026-08-24, invalidated by that document's own growth). Answering it converts "on demand" into a scoped
   item with the right type list. Blocks nothing today.
 - **Not blocked, offered:** the `TtlOnly` lease-liveness mode; a per-item permission for the
   interpreter rule-specification attempt.
@@ -480,6 +518,8 @@ served width is **derived**, printed with its source line, and agrees with the b
   exactly as it does today. The gain is that the next lane can grow the mirror without a person
   remembering what else lives in the area — worth having *before* the third lane, not after.
   **Said before starting, not after.**
-- 🔴 **The most valuable thing in the workbench right now is still blocked on one sentence from the
-  owner.** If B5 is answered while Y1 is in flight, **stop and run the third lane** — Phase 6 is a
-  guard for a growth event, and the growth event outranks the guard's polish.
+- 🔴 ~~**The most valuable thing in the workbench right now is still blocked on one sentence from the
+  owner.**~~ **B5 WAS ANSWERED — see the correction under *Blocked / needs the owner*.** If B5 is
+  answered while Y1 is in flight, **stop and run the third lane** — Phase 6 is a guard for a growth
+  event, and the growth event outranks the guard's polish. *(The conditional resolved: Y1 shipped and
+  the lane is still unauthored, now behind two decisions of its own rather than behind the owner.)*
