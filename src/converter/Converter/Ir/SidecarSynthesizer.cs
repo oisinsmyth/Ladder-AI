@@ -990,7 +990,9 @@ public static class SidecarSynthesizer
         // adding a *second*, separate top-level Access entry for the same UId produced a genuine
         // TIA Import() rejection: "There are at least two definitions for UIds").
         var instanceUId = nextUid++;
-        var instanceComponentPath = timer.InstancePath.Split('.');
+        // Bracket-aware: the component path is emitted one <Component> per element, and a component
+        // carrying a symbolic subscript (`Timers[iDB.Slot]`) is ONE component (2026-08-27, TagPath).
+        var instanceComponentPath = TagPath.Split(timer.InstancePath);
 
         var etWireUId = nextUid++;
         var etOpenConUId = nextUid++;
@@ -1420,7 +1422,7 @@ public static class SidecarSynthesizer
             // always done this correctly (its own ScopeFor call below), so the two paths were asymmetric
             // for no reason other than that no multi-instance FB call had ever been written.
             instanceScope = ScopeFor(instancePath, localNames);
-            instanceComponentPath = instancePath.Split('.');
+            instanceComponentPath = TagPath.Split(instancePath);
         }
 
         var arguments = BuildCallArguments(call, callees, ref nextUid, accessEntries, constantEntries, localNames);

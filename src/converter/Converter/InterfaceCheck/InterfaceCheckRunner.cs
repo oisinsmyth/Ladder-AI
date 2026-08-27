@@ -225,7 +225,7 @@ public static class InterfaceCheckRunner
                     ? "empty required name."
                     : $"'{name}' looks like a PATH. The ruling is member names only: the same member is reachable by "
                       + "different paths from different callers, so a path would make the answer depend on who is asking. "
-                      + $"Give the leaf name ('{name[(name.LastIndexOf('.') + 1)..]}').");
+                      + $"Give the leaf name ('{name[(TagPath.LastIndexOfSeparator(name) + 1)..]}').");
         }
 
         if (byName.TryGetValue(name, out var paths))

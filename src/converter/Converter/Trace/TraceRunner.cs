@@ -133,7 +133,10 @@ public static class TraceRunner
             new[] { loc });
     }
 
-    private static string Leaf(string path) => path.Contains('.') ? path[(path.LastIndexOf('.') + 1)..] : path;
+    // The last COMPONENT boundary, not the last raw '.' — a symbolic array subscript carries its own
+    // dots and would otherwise yield a leaf like `ChosenIndex]` (2026-08-27, TagPath).
+    private static string Leaf(string path) =>
+        TagPath.LastIndexOfSeparator(path) is var dot && dot >= 0 ? path[(dot + 1)..] : path;
 
     private static string StripMsSuffix(string leaf) =>
         leaf.EndsWith("MS", StringComparison.OrdinalIgnoreCase) ? leaf[..^2] : leaf;

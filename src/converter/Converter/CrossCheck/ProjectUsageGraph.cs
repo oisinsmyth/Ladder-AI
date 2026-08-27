@@ -410,12 +410,18 @@ public sealed class ProjectUsageGraph
         return (writers, readers);
     }
 
-    // Removes "[n]" from every component. An index never contains a dot, so this cannot disturb the
-    // component boundaries the path is built from.
-    public static string StripSubscripts(string path) =>
-        path.IndexOf('[') < 0
-            ? path
-            : System.Text.RegularExpressions.Regex.Replace(path, @"\[\d+\]", string.Empty);
+    // Removes the subscript from every component, WHATEVER IS INSIDE IT.
+    //
+    // 🔴 The old form matched `\[\d+\]` under a comment asserting "an index never contains a dot".
+    // Both halves stopped being true on 2026-08-27, when the converter began accepting a VARIABLE
+    // subscript: `Buffer[iDB.Slot].Value` matched no `\[\d+\]`, so the subscript SURVIVED, and the
+    // `root.IndexOf('.')` in OwnerOf below then cut the path at the dot INSIDE the brackets and got
+    // the root `Buffer[iDB`. That root matches no block-local declaration, so a block-local path
+    // silently reclassified as GLOBAL — and OwnerOf is the test that separates a real cross-block
+    // conflict from an alias. Delegated to TagPath so a literal and a symbolic index are stripped
+    // alike, which is the only answer consistent with the question these callers ask ("which declared
+    // thing does this name?").
+    public static string StripSubscripts(string path) => TagPath.StripSubscripts(path);
 
     private static readonly HashSet<string> IecInstanceTypes = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -627,7 +633,7 @@ public sealed class ProjectUsageGraph
     // null when the root is not a known iDB (a global-DB / local / physical path).
     public string? CanonicalizeInstancePath(string path)
     {
-        var dot = path.IndexOf('.');
+        var dot = TagPath.IndexOfSeparator(path);
         if (dot <= 0)
         {
             return null;
@@ -651,7 +657,7 @@ public sealed class ProjectUsageGraph
     public string? OwnerOf(string block, string path)
     {
         var root = StripSubscripts(path);
-        var dot = root.IndexOf('.');
+        var dot = TagPath.IndexOfSeparator(root);
         if (dot > 0)
         {
             root = root.Substring(0, dot);

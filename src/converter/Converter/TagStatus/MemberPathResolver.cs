@@ -62,9 +62,14 @@ public static class MemberPathResolver
     /// </summary>
     public static MemberPathResolution Resolve(string dottedPath, TagTypeRegistry registry)
     {
-        // Plain Split('.'), matching TagTypeRegistry.Resolve: a literal-dot tag name (Clock_0.5Hz) is
-        // settled by the caller's whole-name-first check before it ever reaches a member walk.
-        var components = dottedPath.Split('.');
+        // Bracket-aware, matching TagTypeRegistry.Resolve: a literal-dot tag name (Clock_0.5Hz) is
+        // settled by the caller's whole-name-first check before it ever reaches a member walk, and a
+        // SYMBOLIC array subscript is itself a dotted path that must stay inside its own component.
+        // Was a plain Split('.') and reported "no member 'Sequence'" for
+        // `DB_Config.Profile[iDB_Unit_A.Cycle.ChosenIndex]` — hard rule 3's
+        // anti-laundering gate accusing wiring tagstatus itself confirms exists (live run,
+        // 2026-08-27; the same edit with a literal `[1]` subscript resolved clean).
+        var components = TagPath.Split(dottedPath);
 
         // A trailing ".%X3" is a SLICE, not a member: C-501 alarm-bit addressing, carried on the access
         // as SliceAccessModifier and re-appended by AccessNode.DottedPath. Walked as a component it
@@ -131,7 +136,7 @@ public static class MemberPathResolver
     public static MemberPathResolution ResolveUnderLocal(
         string dottedPath, DbMember rootDeclaration, TagTypeRegistry registry)
     {
-        var components = dottedPath.Split('.');
+        var components = TagPath.Split(dottedPath);
         if (SliceOf(components) is string slice)
         {
             return CheckSlice(
@@ -336,18 +341,11 @@ public static class MemberPathResolver
         return ofIdx < 0 ? StripQuotes(trimmed) : StripQuotes(trimmed[(ofIdx + 4)..].Trim());
     }
 
-    private static string? Subscript(string component)
-    {
-        var open = component.IndexOf('[');
-        var close = component.LastIndexOf(']');
-        return open < 0 || close < open ? null : component[(open + 1)..close];
-    }
+    // Component-level subscript handling is TagPath's — one mechanism, so a symbolic index is
+    // stripped exactly where a literal one is (2026-08-27).
+    private static string? Subscript(string component) => TagPath.SubscriptOf(component);
 
-    private static string StripSubscript(string component)
-    {
-        var idx = component.IndexOf('[');
-        return idx < 0 ? component : component[..idx];
-    }
+    private static string StripSubscript(string component) => TagPath.StripComponentSubscript(component);
 
     private static string StripQuotes(string type) => type.Trim('"');
 }

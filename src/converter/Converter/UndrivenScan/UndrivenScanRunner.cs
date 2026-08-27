@@ -224,7 +224,7 @@ public static class UndrivenScanRunner
         SignalInventory.SignalInventory inventory,
         string member)
     {
-        var tokens = Tokens(member.Split('.').Last());
+        var tokens = Tokens(TagPath.Split(member).Last());
         if (tokens.Count < 2)
         {
             // A single-token member name (`Stop`, `InHand`) cannot be matched discriminatingly — one

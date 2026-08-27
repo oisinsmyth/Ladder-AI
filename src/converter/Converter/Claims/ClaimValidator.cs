@@ -159,7 +159,7 @@ public static class ClaimValidator
 
     private static ClaimOutcome? RejectDbMember(ClaimCorpus corpus, string value)
     {
-        var lastDot = value.LastIndexOf('.');
+        var lastDot = TagPath.LastIndexOfSeparator(value);
         if (lastDot <= 0 || lastDot == value.Length - 1)
         {
             return Fail(ClaimResult.Invalid, $"'{value}' is not a DB member path — expected e.g. DB_Settings.NewMember");

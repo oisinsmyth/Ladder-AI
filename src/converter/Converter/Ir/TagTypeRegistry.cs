@@ -173,7 +173,11 @@ public sealed class TagTypeRegistry
     /// </summary>
     public string? Resolve(string dottedPath)
     {
-        var components = dottedPath.Split('.');
+        // Bracket-aware: a SYMBOLIC subscript is itself a dotted path (`Recipe[iDB.Seq.Slot]`), so a
+        // plain Split('.') cut a valid path into components that resolve to nothing and this returned
+        // null — which MemberPathResolver then reads as "type unknown". 2026-08-27, same defect class
+        // as the tagstatus/review false positives; see TagPath.
+        var components = TagPath.Split(dottedPath);
         var root = StripSubscript(components[0]);
 
         // The enclosing block's own interface members are the innermost, highest-priority namespace.
@@ -276,11 +280,8 @@ public sealed class TagTypeRegistry
 
     private static bool HasSubscript(string component) => component.Contains('[');
 
-    private static string StripSubscript(string component)
-    {
-        var idx = component.IndexOf('[');
-        return idx < 0 ? component : component[..idx];
-    }
+    // Component-level subscript handling is TagPath's — one mechanism (2026-08-27).
+    private static string StripSubscript(string component) => TagPath.StripComponentSubscript(component);
 
     private static string StripQuotes(string type) => type.Trim('"');
 
