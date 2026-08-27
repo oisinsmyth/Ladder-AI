@@ -2525,3 +2525,50 @@ the `<Constant>` emit shape for that scope.
 **Verdict / revisit trigger:** Open. Revisit before any lane relies on `compare` or `drift-check`
 being clean on a re-derived block — which is the next time a sent-vs-returned comparison is used as
 a gate rather than as an observation.
+
+## FI-84 — the readable IR cannot express an INTERLEAVED pair of instruction kinds
+
+**Raised 2026-08-27.** Status: **Raised.** Found while deriving a specification from an implemented
+block — i.e. by reading a real network closely, not by exercising the converter.
+
+`ir/SPEC.md` requires each instruction kind to appear as **one contiguous run**, in a fixed relative
+order between kinds, and states plainly that listed order **is** execution order: *"it mirrors real
+top-to-bottom rung-execution order within the compiled network, so it determines same-scan data
+freshness."*
+
+A real network can interleave two kinds. The observed shape is three independent branches off the
+power rail, each an arithmetic instruction feeding a conversion — `A→B`, `A→B`, `A→B`, paired by
+wire and sharing one TEMP. The grammar cannot render that. It renders all three `A`s, then all three
+`B`s.
+
+**Read literally in the order the IR states, that computes the wrong answer** — every conversion
+would take the last arithmetic result, and all three outputs would collapse to one value.
+
+**Why this is an ADR-0010 item and not a cosmetic gap.** ADR-0010 is *no IR that the AI cannot
+change*, and requires that anything the AI must change lives in the **readable** IR and never only
+in the sidecar. Here the pairing that makes the network correct lives **only** in the wires. So:
+
+- The readable IR **misstates the execution order** of a block that is currently correct.
+- A reader — human or agent — reasoning from the readable form reaches the wrong conclusion, and the
+  block's own comment has to carry a warning to stop them.
+- **Any re-render, reorder or regeneration that honours the stated grammar would serialise the pairs
+  and silently swap the outputs, with no compile error**, because the result is well-formed. The
+  compile gate cannot catch a defect whose only symptom is a wrong value.
+
+**It is not currently broken**, and that is the dangerous part: the correctness sits in a
+representation the format does not claim to preserve, so it survives by not being touched.
+
+**What this does NOT establish.** That the wires execute as branch-depth-first was read off the
+export and reasoned about, not measured on a controller. The claim above holds either way — if that
+reasoning is wrong the block is already broken and the finding is more urgent, not less — but the
+mechanism should be confirmed against a running CPU before any fix is designed on it.
+
+**Fix shape, not yet chosen:** either the grammar grows a way to express a branch (so the pairing is
+readable and re-renderable), or the converter REFUSES to render a network whose wires interleave
+kinds it would have to serialise — a loud failure being far better than a silent reorder. The second
+is cheaper and is the house style; the first is what ADR-0010 actually asks for, since a construct
+the AI cannot express is a block the AI can never safely regenerate.
+
+**Verdict / revisit trigger:** Open. 🔴 **Revisit BEFORE any tool regenerates, re-renders or
+round-trips a network containing more than one instruction kind** — that is the operation this makes
+unsafe, and it is an operation the pipeline performs routinely.
