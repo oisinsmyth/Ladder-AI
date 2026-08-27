@@ -921,7 +921,15 @@ public static class LoopRun
                 .SelectMany(d => new[] { d.StimulusHead?.InstancePath, d.BlockUnderTest?.InstancePath })
                 .Where(path => path is { Length: > 0 })
                 .Select(path => path!.Split('.')[0])
-                .ToArray());
+                .ToArray(),
+
+            // 🔴 THE MIRROR'S OWN GEOMETRY, SO THE COMMS FB SERVES THE WINDOW THIS RUN ALLOCATED AGAINST.
+            // The served area was a hand-typed `declaredRegisters` in a binding document AND a hand-typed
+            // area pointer in a hand-authored block, and nothing compared them; `converter served-area`
+            // exists because the two machine copies inside that block can silently disagree, and it cannot
+            // see the third disagreement — with the map. Passing the map's own geometry here makes that
+            // one impossible rather than checked.
+            map.Geometry);
 
         if (programGeneration.Refused)
         {

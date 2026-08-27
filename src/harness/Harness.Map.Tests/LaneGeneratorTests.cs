@@ -155,11 +155,15 @@ public class LaneGeneratorTests
         Assert.Null(slot.SlotFc);
         Assert.Null(slot.StimShell);
 
-        // TWO lines, not one: the slot FC and the head are separately declarable and separately absent.
-        Assert.Equal(2, slot.NotDeclared.Count);
+        Assert.Null(slot.StimUdt);
+
+        // THREE lines, not one: the slot FC, the head and the stimulus UDT are separately declarable and
+        // separately absent.
+        Assert.Equal(3, slot.NotDeclared.Count);
         Assert.All(slot.NotDeclared, line => Assert.Contains("AUTHORED", line, StringComparison.Ordinal));
         Assert.Contains(slot.NotDeclared, l => l.Contains("no slot FC was declared", StringComparison.Ordinal));
         Assert.Contains(slot.NotDeclared, l => l.Contains("no stimulus head spec was declared", StringComparison.Ordinal));
+        Assert.Contains(slot.NotDeclared, l => l.Contains("no stimulus UDT was declared", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -171,8 +175,12 @@ public class LaneGeneratorTests
         Assert.Single(result.Objects);
         Assert.Empty(result.Fragments);
 
-        var absent = Assert.Single(Assert.Single(result.Slots).NotDeclared);
-        Assert.Contains("stimulus head", absent, StringComparison.Ordinal);
+        // The head is absent, and so is the UDT that would have been derived from its shell — reported
+        // separately, because they are separately declarable.
+        var absent = Assert.Single(result.Slots).NotDeclared;
+        Assert.Equal(2, absent.Count);
+        Assert.Contains(absent, l => l.Contains("stimulus head", StringComparison.Ordinal));
+        Assert.Contains(absent, l => l.Contains("stimulus UDT", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -192,8 +200,8 @@ public class LaneGeneratorTests
             new LaneDeclaration("SPARE"),
         }).Summary();
 
-        Assert.Contains("1 slot FC(s) and 1 stimulus shell(s) GENERATED", summary, StringComparison.Ordinal);
-        Assert.Contains("2 object(s) NOT generated", summary, StringComparison.Ordinal);
+        Assert.Contains("1 slot FC(s), 1 stimulus shell(s) and 0 stimulus UDT(s) GENERATED", summary, StringComparison.Ordinal);
+        Assert.Contains("4 object(s) NOT generated", summary, StringComparison.Ordinal);
         Assert.Contains("AUTHORED", summary, StringComparison.Ordinal);
     }
 

@@ -15,12 +15,18 @@ public sealed record CyclicObDeclaration(CyclicObNaming Naming, IReadOnlyList<Ob
 /// <see cref="LaneDeclaration"/> follows, reported the same way, on a positive line rather than by
 /// silence.</para>
 /// </summary>
+/// <param name="CommsFb">
+/// 🔴 <b>The Modbus server, or null. One per PROGRAM, like the OB and for the same reason</b> — it serves
+/// ONE window, and <c>converter served-area</c> refuses a corpus holding two <c>MB_SERVER</c> calls
+/// outright, because which one serves the harness mirror is then not derivable.
+/// </param>
 public sealed record ProgramDeclaration(
     CyclicObDeclaration? CyclicOb = null,
-    IReadOnlyList<InstanceDbDeclaration>? InstanceDbs = null)
+    IReadOnlyList<InstanceDbDeclaration>? InstanceDbs = null,
+    CommsFbDeclaration? CommsFb = null)
 {
     /// <summary>True when this declaration asks for nothing at all — which is a legitimate program.</summary>
-    public bool Empty => CyclicOb is null && (InstanceDbs is null || InstanceDbs.Count == 0);
+    public bool Empty => CyclicOb is null && (InstanceDbs is null || InstanceDbs.Count == 0) && CommsFb is null;
 }
 
 /// <summary>
@@ -33,7 +39,8 @@ public sealed record ProgramGenerationResult(
     IReadOnlyList<InstanceDbResult> InstanceDbs,
     IReadOnlyList<string> Obligations,
     IReadOnlyList<string> NotDeclared,
-    IReadOnlyList<string> Refusals)
+    IReadOnlyList<string> Refusals,
+    CommsFbResult? CommsFb = null)
 {
     /// <summary>Nothing declared. An empty result is legitimate and is not a refusal.</summary>
     public static readonly ProgramGenerationResult Nothing = new(
@@ -54,6 +61,9 @@ public sealed record ProgramGenerationResult(
             if (CyclicOb is not null)
                 objects.Add(new HarnessObject(CyclicOb.BlockName, HarnessObjectKind.Block, CyclicOb.Ir));
 
+            if (CommsFb is not null)
+                objects.Add(new HarnessObject(CommsFb.BlockName, HarnessObjectKind.Block, CommsFb.Ir));
+
             foreach (var db in InstanceDbs)
                 objects.Add(new HarnessObject(db.DbName, HarnessObjectKind.DataBlock, db.Ir));
 
@@ -66,7 +76,8 @@ public sealed record ProgramGenerationResult(
     /// "3 generated" is true of a program whose other five objects nobody looked at.
     /// </summary>
     public string Summary() =>
-        $"{(CyclicOb is null ? "no cyclic OB" : "1 cyclic OB")} and {InstanceDbs.Count} instance DB(s) GENERATED; "
+        $"{(CyclicOb is null ? "no cyclic OB" : "1 cyclic OB")}, {(CommsFb is null ? "no comms FB" : "1 comms FB")} and "
+        + $"{InstanceDbs.Count} instance DB(s) GENERATED; "
         + $"{NotDeclared.Count} program object(s) NOT generated because nothing declared them — those remain AUTHORED.";
 }
 
@@ -119,12 +130,19 @@ public static class ProgramGenerator
     /// generated instance DB named by NOTHING, here or in the OB, is a data block loaded into a controller
     /// and never written.
     /// </param>
+    /// <param name="geometry">
+    /// 🔴 <b>The mirror's geometry — REQUIRED to generate a comms FB and ignored otherwise.</b> The served
+    /// window is <see cref="MirrorGeometry.BaseByte"/> and <see cref="MirrorGeometry.DeclaredRegisters"/>
+    /// and nothing else; a comms FB declared with no geometry in hand is refused rather than pointed at a
+    /// window this generator picked.
+    /// </param>
     public static ProgramGenerationResult Generate(
         ProgramDeclaration? declaration,
         IReadOnlyDictionary<string, string>? fbIrByName = null,
         LaneGenerationResult? lane = null,
         string? copyLayerBlock = null,
-        IReadOnlyList<string>? instancePathsUsedElsewhere = null)
+        IReadOnlyList<string>? instancePathsUsedElsewhere = null,
+        MirrorGeometry? geometry = null)
     {
         if (declaration is null || declaration.Empty)
             return ProgramGenerationResult.Nothing;
@@ -134,6 +152,57 @@ public static class ProgramGenerator
         var obligations = new List<string>();
         var notDeclared = new List<string>();
         var instanceDbs = new List<InstanceDbResult>();
+
+        // ---- the comms FB ----------------------------------------------------------------------------
+        //
+        // 🔴 IT RUNS FIRST BECAUSE IT IS AN FB SOURCE. A caller declaring an instance DB of the generated
+        // server would otherwise have to hand its IR back in through `--program`, which is a snapshot of a
+        // declaration this same pass is about to supersede.
+        CommsFbResult? commsFb = null;
+
+        if (declaration.CommsFb is null)
+        {
+            notDeclared.Add("no comms FB was declared, so none was generated. The block that SERVES the mirror is "
+                          + "AUTHORED — and it is the one block that states the served window, so nothing here has "
+                          + "checked that the window it serves is the window this map was allocated against.");
+        }
+        else if (geometry is null)
+        {
+            refusals.Add(
+                $"a comms FB ('{declaration.CommsFb.Naming?.BlockName}') was declared and no mirror geometry was supplied, "
+                + "so there is no window to point MB_HOLD_REG at. The served area IS the geometry's base and declared "
+                + "width; a generator that picked one would hand the controller an area the map was never allocated "
+                + "against, and the symptom is reads refused by the server partway through the band — a wave that looks "
+                + "like a device fault.");
+        }
+        else
+        {
+            try
+            {
+                commsFb = CommsFbGenerator.Generate(declaration.CommsFb, geometry);
+
+                obligations.Add(
+                    $"'{commsFb.BlockName}' serves `{commsFb.AreaPointer}`, derived from this run's geometry. Read it back "
+                    + $"with `converter served-area` over the emitted set: exit 2 is NOT DERIVED and is never a pass.");
+
+                foreach (var owed in commsFb.Obligations)
+                    obligations.Add($"{commsFb.BlockName}: {owed}");
+
+                if (fbIrByName is null || !fbIrByName.ContainsKey(commsFb.BlockName))
+                {
+                    // The generated server is an FB source like any other, so an instance DB declared
+                    // against it can be projected without the caller re-supplying what this pass emitted.
+                    sources = new Dictionary<string, string>(sources, StringComparer.OrdinalIgnoreCase)
+                    {
+                        [commsFb.BlockName] = commsFb.Ir,
+                    };
+                }
+            }
+            catch (ArgumentException error)
+            {
+                refusals.Add($"the comms FB could not be generated: {error.Message}");
+            }
+        }
 
         // ---- the instance DBs -----------------------------------------------------------------------
         var declaredDbs = declaration.InstanceDbs ?? Array.Empty<InstanceDbDeclaration>();
@@ -257,6 +326,19 @@ public static class ProgramGenerator
                 }
             }
 
+            // 🔴 THE SERVER IS THE ONE BLOCK WHOSE ABSENCE FROM THE CALL LIST LOOKS LIKE A NETWORK FAULT.
+            // A copy layer that is never called leaves the mirror still; a SERVER that is never called
+            // leaves nothing listening, so every client read fails to connect — which reads as a cable, a
+            // firewall or a CPU, and sends the investigation to the wrong place entirely.
+            if (commsFb is not null)
+            {
+                presence.Add(new ObCallPresence(
+                    commsFb.BlockName,
+                    "The Modbus server is what the client actually talks to. An OB that does not call it deploys, loads and "
+                    + "reports healthy while nothing listens on the port — and every read then fails as a CONNECTION error "
+                    + "rather than a wrong value, which looks like a network fault and is not one."));
+            }
+
             if (copyLayerBlock is { Length: > 0 })
             {
                 presence.Add(new ObCallPresence(
@@ -310,7 +392,8 @@ public static class ProgramGenerator
         // LaneGenerator states and for the same reason: two thirds of a program is the orphan with the
         // paperwork filed.
         return refusals.Count > 0
-            ? new ProgramGenerationResult(null, Array.Empty<InstanceDbResult>(), Array.Empty<string>(), Array.Empty<string>(), refusals)
-            : new ProgramGenerationResult(cyclicOb, instanceDbs, obligations, notDeclared, refusals);
+            ? new ProgramGenerationResult(
+                null, Array.Empty<InstanceDbResult>(), Array.Empty<string>(), Array.Empty<string>(), refusals, CommsFb: null)
+            : new ProgramGenerationResult(cyclicOb, instanceDbs, obligations, notDeclared, refusals, commsFb);
     }
 }

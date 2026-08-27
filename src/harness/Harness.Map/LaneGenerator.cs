@@ -21,15 +21,23 @@ namespace Harness.Map;
 /// The head spec the 18-network shell is derived from, or null. <b>Independent of the three above</b>: a
 /// lane may generate its slot FC while its head stays wholly authored, and the report says which.
 /// </param>
+/// <param name="StimUdt">
+/// 🔴 <b>The stimulus UDT, or null. DEPENDENT on <paramref name="StimHead"/>, and it is the only field
+/// here that is</b> — <see cref="StimUdtGenerator"/> derives the member set and the types it can from the
+/// EMITTED RUNGS rather than from the spec, so with no shell generated there is nothing to derive from
+/// and declaring one is refused rather than answered from the spec instead.
+/// </param>
 public sealed record LaneDeclaration(
     string SlotId,
     SlotFcNaming? SlotFc = null,
     SlotCall? StimulusHead = null,
     SlotCall? BlockUnderTest = null,
-    StimHeadSpec? StimHead = null)
+    StimHeadSpec? StimHead = null,
+    StimUdtDeclaration? StimUdt = null)
 {
     /// <summary>True when this declaration asks for nothing at all — which is a legitimate lane.</summary>
-    public bool Empty => SlotFc is null && StimulusHead is null && BlockUnderTest is null && StimHead is null;
+    public bool Empty =>
+        SlotFc is null && StimulusHead is null && BlockUnderTest is null && StimHead is null && StimUdt is null;
 }
 
 /// <summary>
@@ -104,7 +112,8 @@ public sealed record LaneSlotGeneration(
     string SlotId,
     SlotFcResult? SlotFc,
     StimShellFragment? StimShell,
-    IReadOnlyList<string> NotDeclared);
+    IReadOnlyList<string> NotDeclared,
+    StimUdtResult? StimUdt = null);
 
 /// <summary>
 /// Everything <see cref="LaneGenerator"/> produced for one request. <b><see cref="Refusals"/> non-empty
@@ -125,9 +134,16 @@ public sealed record LaneGenerationResult(
     /// 🔴 <b>The DEPLOYABLE generated objects — the slot FCs and nothing else.</b> A shell fragment is
     /// deliberately absent: see <see cref="StimShellFragment"/>.
     /// </summary>
+    /// <remarks>
+    /// A generated stimulus UDT IS one, unlike the shell fragment beside it: it is a complete
+    /// <c>TYPE</c> document, it imports and compiles, and <see cref="HarnessObjectKind.DataType"/> exists
+    /// precisely so a type can be declared without being handed a data block's retention rules.
+    /// </remarks>
     public IReadOnlyList<HarnessObject> Objects =>
         Slots.Where(s => s.SlotFc is not null)
              .Select(s => new HarnessObject(s.SlotFc!.BlockName, HarnessObjectKind.Block, s.SlotFc.Ir))
+             .Concat(Slots.Where(s => s.StimUdt is not null)
+                          .Select(s => new HarnessObject(s.StimUdt!.TypeName, HarnessObjectKind.DataType, s.StimUdt.Ir)))
              .ToArray();
 
     /// <summary>The shell fragments, which are NOT objects.</summary>
@@ -142,7 +158,8 @@ public sealed record LaneGenerationResult(
     /// "2 generated" is true of a lane whose other six objects nobody looked at.
     /// </summary>
     public string Summary() =>
-        $"{Objects.Count} slot FC(s) and {Fragments.Count} stimulus shell(s) GENERATED across "
+        $"{Slots.Count(s => s.SlotFc is not null)} slot FC(s), {Fragments.Count} stimulus shell(s) and "
+        + $"{Slots.Count(s => s.StimUdt is not null)} stimulus UDT(s) GENERATED across "
         + $"{Slots.Count} declared slot(s); {NotDeclared.Count} object(s) NOT generated because nothing declared them "
         + "— those remain AUTHORED.";
 }
@@ -195,6 +212,7 @@ public static class LaneGenerator
             var notDeclared = new List<string>();
             SlotFcResult? slotFc = null;
             StimShellFragment? shell = null;
+            StimUdtResult? stimUdt = null;
 
             // ---- the slot FC ------------------------------------------------------------------------
             var named = new (string What, bool Present)[]
@@ -281,7 +299,60 @@ public static class LaneGenerator
                 }
             }
 
-            slots.Add(new LaneSlotGeneration(declaration.SlotId, slotFc, shell, notDeclared));
+            // ---- the stimulus UDT -------------------------------------------------------------------
+            //
+            // 🔴 IT NEEDS THE SHELL, NOT THE SPEC, AND THAT IS THE WHOLE DESIGN. `StimUdtGenerator` derives
+            // the member set and every type it can from the EMITTED RUNGS. With no shell there is nothing
+            // to derive from, and answering from the spec instead would put the type and the rungs on
+            // separate mechanisms — free to disagree, which is the defect `converter served-area` exists
+            // to close one artifact over.
+            if (declaration.StimUdt is null)
+            {
+                notDeclared.Add($"slot '{declaration.SlotId}': no stimulus UDT was declared, so none was generated. The "
+                              + "type this head is commanded through is AUTHORED.");
+            }
+            else if (shell is null)
+            {
+                refusals.Add(
+                    $"slot '{declaration.SlotId}' declares a stimulus UDT and no stimulus head, so no shell was generated "
+                    + "and there are no rungs to derive the type from. The generator reads the EMITTED RUNGS, not the spec: "
+                    + "a type derived from anything else is a second statement of what the head references, free to "
+                    + "disagree with the networks that actually resolve against it. Declare the head too, or author the type.");
+            }
+            else
+            {
+                try
+                {
+                    stimUdt = StimUdtGenerator.Generate(declaration.StimUdt, shell.Shell);
+
+                    if (emitted.TryGetValue(stimUdt.TypeName, out var owner))
+                    {
+                        refusals.Add(
+                            $"slot '{declaration.SlotId}' and slot '{owner}' both generate an object called "
+                            + $"'{stimUdt.TypeName}'. TIA matches an import by NAME, so the second would replace the first "
+                            + "— with both files present on disk and nothing saying so.");
+                        stimUdt = null;
+                    }
+                    else
+                    {
+                        emitted[stimUdt.TypeName] = declaration.SlotId;
+
+                        obligations.Add(
+                            $"'{stimUdt.TypeName}' has {stimUdt.DerivedCount} member(s) whose type the shell's own rungs "
+                            + $"FIXED and {stimUdt.DeclaredCount} whose type somebody DECLARED. The second number is the "
+                            + "part nothing checked.");
+
+                        foreach (var owed in stimUdt.Obligations)
+                            obligations.Add($"{stimUdt.TypeName}: {owed}");
+                    }
+                }
+                catch (ArgumentException error)
+                {
+                    refusals.Add($"slot '{declaration.SlotId}' could not generate its stimulus UDT: {error.Message}");
+                }
+            }
+
+            slots.Add(new LaneSlotGeneration(declaration.SlotId, slotFc, shell, notDeclared, stimUdt));
         }
 
         // 🔴 A REFUSED REQUEST YIELDS NOTHING USABLE, INCLUDING THE PARTS THAT WORKED. Handing back the two
