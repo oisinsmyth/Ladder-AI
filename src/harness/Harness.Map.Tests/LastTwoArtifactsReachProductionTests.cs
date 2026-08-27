@@ -1,4 +1,4 @@
-using Harness.Map;
+﻿using Harness.Map;
 
 namespace Harness.Map.Tests;
 
@@ -100,7 +100,8 @@ public class LastTwoArtifactsReachProductionTests
         new CommsNetworkText("Serve The Widget Mirror", "Runs the server every scan. Synthetic test material."));
 
     private static CyclicObDeclaration Ob(params ObCall[] calls) =>
-        new(new CyclicObNaming("OB_HarnessCycle", 1, "ProgramCycle", "Harness Program Sweep"), calls);
+        new(new CyclicObNaming("OB_HarnessCycle", 1, "ProgramCycle", "Harness Program Sweep",
+            "Sweeps the widget lane once per scan. Synthetic test material."), calls);
 
     [Fact]
     public void A_DECLARED_COMMS_FB_IS_GENERATED_BY_THE_PROGRAM_AND_SERVES_THE_MAPS_OWN_WINDOW()

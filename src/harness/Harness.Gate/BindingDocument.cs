@@ -170,6 +170,15 @@ public sealed class BindingDocument
 
             foreach (var (phase, j) in (slot.Generate?.StimHead?.Phases ?? new List<StimPhaseDocument>()).Select((p, k) => (p, k)))
                 Collect(phase.UnknownFields, $"{path}.generate.stimHead.phases[{j}]", found);
+
+            // The stimulus UDT, to its full depth. A misspelt `datatype` on a member the shell does not
+            // reference does not produce an untyped member — the generator refuses that by name — but a
+            // misspelt `startValue` or `comment` produces a member silently missing the one thing a person
+            // was asserting about it, which nothing downstream can tell from a member nobody annotated.
+            Collect(slot.Generate?.StimUdt?.UnknownFields, $"{path}.generate.stimUdt", found);
+
+            foreach (var (member, j) in (slot.Generate?.StimUdt?.Members ?? new List<StimUdtMemberDocument>()).Select((m, k) => (m, k)))
+                Collect(member.UnknownFields, $"{path}.generate.stimUdt.members[{j}]", found);
         }
 
         // 🔴 THE PROGRAM-LEVEL GENERATION DECLARATION, TO ITS FULL DEPTH, AND IT FAILS EVEN QUIETER THAN
@@ -179,6 +188,13 @@ public sealed class BindingDocument
         // the only thing that can tell a declaration that asked for something from one that did not.
         Collect(GenerateProgram?.UnknownFields, "binding.generateProgram", found);
         Collect(GenerateProgram?.CyclicOb?.UnknownFields, "binding.generateProgram.cyclicOb", found);
+
+        // 🔴 THE COMMS FB, WHERE A DROPPED KEY IS WORSE STILL. A misspelt `localPort` or `connectionId`
+        // does not produce a wrong number, it produces a REFUSAL naming all three endpoint fields — loud,
+        // and pointing at the two the author did type. But a misspelt `memoryLayout` silently omits the
+        // line, which is the state this generator's absent-layout obligation exists to describe, and a
+        // misspelt `networkComment` costs the block the only prose that says what it serves.
+        Collect(GenerateProgram?.CommsFb?.UnknownFields, "binding.generateProgram.commsFb", found);
 
         foreach (var (call, index) in (GenerateProgram?.CyclicOb?.Calls ?? new List<ObCallDocument>()).Select((c, i) => (c, i)))
             Collect(call.UnknownFields, $"binding.generateProgram.cyclicOb.calls[{index}]", found);
@@ -425,7 +441,78 @@ public sealed class LaneGenerationDocument
     /// </summary>
     public StimHeadSpecDocument? StimHead { get; set; }
 
+    /// <summary>
+    /// 🔴 <b>The stimulus UDT, or absent. DEPENDENT on <see cref="StimHead"/>, and the only field here
+    /// that is</b> — <c>Harness.Map.StimUdtGenerator</c> derives the member set and every type it can from
+    /// the EMITTED RUNGS, so with no shell generated there is nothing to derive from and declaring one is
+    /// refused rather than answered from the spec instead.
+    ///
+    /// <para>*** IT WAS UNREACHABLE FROM HERE FOR FIVE DAYS AND THE COMMIT THAT ADDED IT SAID OTHERWISE.
+    /// *** <c>d61652c</c> claimed <i>"<c>LaneDeclaration.StimUdt</c> through <c>LaneGenerator</c>"</i> was
+    /// wired to production; <c>LoopCli.ToLaneDeclaration</c> constructed a five-argument
+    /// <c>LaneDeclaration</c> and this class had no <c>stimUdt</c> property at all, so a binding that
+    /// declared one ran clean and reported the type AUTHORED. <b>A field nobody can set is a field that
+    /// does not exist</b>, however well it is implemented downstream — the rule
+    /// <see cref="MirroredSignalDocument.Transient"/> already records twice over.</para>
+    /// </summary>
+    public StimUdtDocument? StimUdt { get; set; }
+
     /// <summary>Unknown keys here. Folded into gate 0b — a misspelt key would silently mean "not generated".</summary>
+    [JsonExtensionData]
+    public Dictionary<string, object?>? UnknownFields { get; set; }
+}
+
+/// <summary>
+/// One slot's stimulus UDT, on the wire. See <c>Harness.Map.StimUdtGenerator</c> for what is DERIVED from
+/// the emitted rungs and what is refused; this type is only its JSON shape.
+///
+/// <para>Naming is FLATTENED into this object rather than nested, matching <see cref="CyclicObDocument"/>
+/// and <see cref="InstanceDbDocument"/>, which flatten theirs. The domain records nest, and a wire shape
+/// that mirrored that nesting would be a second nesting convention inside one document.</para>
+/// </summary>
+public sealed class StimUdtDocument
+{
+    /// <summary>The generated UDT's name.</summary>
+    public string? TypeName { get; set; }
+
+    /// <summary>
+    /// The type's own comment. <b>Required</b>: this type is the vocabulary a model is commanded in, and a
+    /// comment describing that is a description of the plant, which no generator originates.
+    /// </summary>
+    public string? Comment { get; set; }
+
+    /// <summary>
+    /// The declared half — every member the rungs do not prove, and every type, start value and comment the
+    /// rungs cannot fix. <b>Absent or empty is legitimate and is not a claim that there are none</b>: the
+    /// generator refuses BY NAME each member it cannot type, so an under-declared UDT fails loudly.
+    /// </summary>
+    public List<StimUdtMemberDocument>? Members { get; set; }
+
+    /// <summary>Unknown keys, folded into gate 0b like every other level.</summary>
+    [JsonExtensionData]
+    public Dictionary<string, object?>? UnknownFields { get; set; }
+}
+
+/// <summary>One declared UDT member, on the wire. See <c>Harness.Map.StimUdtMember</c> for the three jobs it does.</summary>
+public sealed class StimUdtMemberDocument
+{
+    /// <summary>The member's name, without the <c>Stim.</c> root.</summary>
+    public string? Name { get; set; }
+
+    /// <summary>
+    /// The IR datatype. <b>Required for a member the shell does not reference</b>; for one it does, it is
+    /// CHECKED against the derived type rather than trusted — a declaration contradicting the rungs is a
+    /// refusal, not an override.
+    /// </summary>
+    public string? Datatype { get; set; }
+
+    /// <summary>The member's start value, verbatim as IR writes it. A start value is a preset and a preset is a claim about the plant.</summary>
+    public string? StartValue { get; set; }
+
+    /// <summary>The member's own comment. Optional; its absence is REPORTED rather than filled.</summary>
+    public string? Comment { get; set; }
+
+    /// <summary>Unknown keys, folded into gate 0b like every other level.</summary>
     [JsonExtensionData]
     public Dictionary<string, object?>? UnknownFields { get; set; }
 }
@@ -536,6 +623,101 @@ public sealed class ProgramGenerationDocument
     /// <summary>The instance DBs. Absent or empty means every one of them is AUTHORED, which is reported.</summary>
     public List<InstanceDbDocument>? InstanceDbs { get; set; }
 
+    /// <summary>
+    /// 🔴 <b>The Modbus server, or absent. One per PROGRAM</b> — it serves ONE window, and
+    /// <c>converter served-area</c> refuses a corpus holding two <c>MB_SERVER</c> calls outright, because
+    /// which one serves the harness mirror is then not derivable.
+    ///
+    /// <para>*** UNREACHABLE FROM HERE FOR FIVE DAYS, ALONGSIDE <see cref="LaneGenerationDocument.StimUdt"/>
+    /// AND FOR THE SAME REASON. *** <c>LoopCli.ToProgramDeclaration</c> constructed a two-argument
+    /// <c>ProgramDeclaration</c> and this class had no <c>commsFb</c> property, so a binding declaring one
+    /// reported <c>no comms FB was declared, so none was generated</c> — <b>a true sentence about a document
+    /// that plainly asked for generation</b>, which this file's gate-0b note already names as the quietest
+    /// failure of any level here.</para>
+    ///
+    /// <para>The served WINDOW is deliberately not on the wire: it is <see cref="BindingDocument.BaseByte"/>
+    /// and <see cref="BindingDocument.DeclaredRegisters"/>, handed to the generator as the map's own geometry
+    /// so the block cannot serve an area the map was never allocated against.</para>
+    /// </summary>
+    public CommsFbDocument? CommsFb { get; set; }
+
+    /// <summary>Unknown keys, folded into gate 0b like every other level.</summary>
+    [JsonExtensionData]
+    public Dictionary<string, object?>? UnknownFields { get; set; }
+}
+
+/// <summary>
+/// The comms FB, on the wire. See <c>Harness.Map.CommsFbGenerator</c> for what is derived and what is
+/// refused; this type is only its JSON shape, flattened as <see cref="CyclicObDocument"/> is.
+///
+/// <para><b>The connection SHAPE is not here.</b> <c>CommsConnectionShape</c> has exactly one member —
+/// passive TCP accepting any client, whose four <c>TCON_IP_v4</c> values are read off the one committed
+/// server block — so a wire field offering that single choice would set nothing and reach nothing. A second
+/// shape needs its own export behind it, and the key arrives in the same commit that grounds it.</para>
+/// </summary>
+public sealed class CommsFbDocument
+{
+    /// <summary>The generated FB's name.</summary>
+    public string? BlockName { get; set; }
+
+    /// <summary>
+    /// Its number. <b>Required and never defaulted</b> — hard rule 3 forbids inventing one, and harness
+    /// objects come from the reserved 9000–9999 range the caller allocates from
+    /// (<c>converter claim --allocate --kind block-number --type FB --floor 9000</c>).
+    /// </summary>
+    public int? BlockNumber { get; set; }
+
+    /// <summary>The block's TITLE. Required; the generator will not invent one.</summary>
+    public string? Title { get; set; }
+
+    /// <summary>
+    /// The block's own COMMENT. <b>Required.</b> It may write the served window as the placeholders
+    /// <c>{base}</c> and <c>{registers}</c>, which the generator fills from the geometry — so the prose
+    /// cannot fall behind the area pointer beside it. A number typed here instead is CHECKED against the
+    /// geometry, not trusted.
+    /// </summary>
+    public string? Comment { get; set; }
+
+    /// <summary>
+    /// 🔴 The TCP port the server listens on. <b>Required.</b> 502 is the Modbus registered port and that is
+    /// exactly why it is not a default: the port a rig listens on is a commissioning decision, it IDENTIFIES
+    /// the instance, and a wrong one is not a compile error but a connection that never establishes.
+    /// </summary>
+    public int? LocalPort { get; set; }
+
+    /// <summary>The <c>CONN_OUC</c> connection ID, verbatim as IR writes it (<c>16#0010</c>, or a decimal). Required; unique per connection on the CPU.</summary>
+    public string? ConnectionId { get; set; }
+
+    /// <summary>
+    /// The <c>HW_ANY</c> hardware identifier of the PROFINET interface to listen on. <b>Required — it names
+    /// a piece of hardware, which hard rule 3 forbids inventing outright</b>, so there is nothing to default
+    /// it to even in principle. Read it off the device's own configuration, never from another project's block.
+    /// </summary>
+    public int? InterfaceId { get; set; }
+
+    /// <summary>The one network's title. Required (C-201).</summary>
+    public string? NetworkTitle { get; set; }
+
+    /// <summary>The one network's comment. Required, and it takes the same two placeholders the block comment does.</summary>
+    public string? NetworkComment { get; set; }
+
+    /// <summary>
+    /// 🔴 <b>The <c>MEMORYLAYOUT</c> line, or absent to omit it — and ABSENT IS THE DELIBERATE DEFAULT,
+    /// not an oversight.</b>
+    ///
+    /// <para>The layout that actually runs is asserted after every import by
+    /// <c>openness-cli block-layout --set Standard --yes</c>, because a TIA import silently reverts a block
+    /// to <c>Optimized</c>. A line here is a SECOND, WEAKER statement of the same fact, free to disagree
+    /// with the one that runs — so the generator originates none, and a caller who states one is told in an
+    /// obligation that the import can revert it.</para>
+    ///
+    /// <para><b>Consequence, measured 2026-08-27:</b> a generated block compared against its own TIA
+    /// re-export is <c>converter compare</c> exit 2 — <i>only one document declares a MemoryLayout</i> —
+    /// which is the documented input pair for <c>--allow-silent-layout</c>, not a defect in the block. The
+    /// generators say so in an obligation rather than leaving it to be remembered.</para>
+    /// </summary>
+    public string? MemoryLayout { get; set; }
+
     /// <summary>Unknown keys, folded into gate 0b like every other level.</summary>
     [JsonExtensionData]
     public Dictionary<string, object?>? UnknownFields { get; set; }
@@ -565,6 +747,21 @@ public sealed class CyclicObDocument
 
     /// <summary>The OB's title. Required; the generator will not invent one.</summary>
     public string? Title { get; set; }
+
+    /// <summary>
+    /// 🔴 <b>The OB's header COMMENT. Required — and until 2026-08-27 there was no such key, so NO BINDING
+    /// COULD PRODUCE A C-201-COMPLIANT OB.</b>
+    ///
+    /// <para><c>converter preflight</c> refuses a generated OB with <c>[review:C-201] [Error] … has no
+    /// header comment</c>. TIA imports and compiles it happily, so nothing on the device path caught it;
+    /// the conventions gate did. <b>The 9000–9999 harness exemption does not apply</b> — an OB's number is
+    /// fixed by its event class, so it is excluded from that band and <c>review:harness-scope</c> cannot
+    /// classify it, which it says out loud rather than excusing.</para>
+    ///
+    /// <para>Say what this OB sweeps and in what order. In the one block whose entire content IS an order,
+    /// that is the sentence worth writing.</para>
+    /// </summary>
+    public string? Comment { get; set; }
 
     /// <summary>🔴 <b>IN THE ORDER THEY WILL EXECUTE.</b> LAD runs networks in order and nothing here reorders them.</summary>
     public List<ObCallDocument>? Calls { get; set; }

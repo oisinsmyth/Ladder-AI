@@ -1105,6 +1105,50 @@ public sealed record CopyLayerNetwork(
 /// <summary>One artifact the generator emits, as IR text ready to hand to the converter.</summary>
 public sealed record HarnessObject(string Name, HarnessObjectKind Kind, string Ir);
 
+/// <summary>
+/// 🔴 <b>WHY NO GENERATOR IN THIS COMPONENT EMITS A <c>MEMORYLAYOUT</c> LINE, AND WHAT THE CONFIRM LOOP
+/// MUST THEREFORE BE TOLD — decided 2026-08-27, stated once so it is not re-argued per generator.</b>
+///
+/// <para><b>The measurement.</b> <c>converter compare</c> of a generated block against its own TIA
+/// re-export exits <b>2 — NOT COMPARED</b>: <i>"only one document declares a MemoryLayout ('Optimized');
+/// … states none."</i> With <c>--allow-silent-layout</c> both come back <c>EQUIVALENT</c>, so the CONTENT
+/// is right and the refusal is entirely about the missing declaration.</para>
+///
+/// <para><b>The decision: the generators stay silent and the COMPARISON is invoked differently.</b> A
+/// layout emitted here would be a value this code never observed. The layout that actually runs is
+/// asserted AFTER every import by <c>openness-cli block-layout --set Standard --yes</c>, because a TIA
+/// import silently reverts a block to <c>Optimized</c> — so:</para>
+/// <list type="bullet">
+/// <item>Emitting <c>Optimized</c> to match what TIA happens to re-export would turn exit 2 green by
+/// asserting TIA's own default back at it. It compares nothing, and it is <b>WRONG for every block a
+/// PC-side harness reads over classic S7</b>, which must end up <c>Standard</c>.</item>
+/// <item>Emitting <c>Standard</c> would make the same comparison exit <b>1 — DIFFERS</b> against the
+/// re-export taken before the layout is asserted, which is a red on a block that is fine.</item>
+/// </list>
+///
+/// <para><b>So exit 2 is the honest answer to a question with two documents and one opinion</b>, and
+/// <c>--allow-silent-layout</c> is the escape the converter's own README documents for exactly this input
+/// pair — <i>"deliberately comparing converter output against an export"</i> — not a weakening invented
+/// here. What was wrong is that it was left to a caller to REMEMBER: this sentence travels with the
+/// generated objects, into the run's own obligation list, so the round trip is invoked knowingly.</para>
+///
+/// <para>A caller who KNOWS the layout may still state one — <c>CommsFbDeclaration.MemoryLayout</c>, and
+/// <c>commsFb.memoryLayout</c> on the wire — and is told in a second obligation that an import can revert
+/// it. That is a person's claim, which is a different thing from a generator's guess.</para>
+/// </summary>
+public static class GeneratedLayoutObligation
+{
+    /// <inheritdoc cref="GeneratedLayoutObligation"/>
+    public const string Text =
+        "NO GENERATED OBJECT HERE DECLARES A `MEMORYLAYOUT`, deliberately: this code cannot observe the layout, and the one "
+        + "that runs is asserted after every import by `openness-cli block-layout --set Standard --yes` (a TIA import "
+        + "silently reverts a block to Optimized). CONSEQUENCE FOR THE ROUND TRIP: `converter compare` of one of these "
+        + "against its own TIA re-export exits 2 — NOT COMPARED, 'only one document declares a MemoryLayout' — which is the "
+        + "documented input pair for `--allow-silent-layout`, not a fault in the block. Pass that flag for THIS comparison "
+        + "and no other; with it the pair is EQUIVALENT. Exit 2 is never a pass, so a run that omits the flag has compared "
+        + "nothing and must not be read as a round trip.";
+}
+
 /// <summary>The kinds of object the harness generates. Used by <see cref="RetentionCheck"/> to pick its rules.</summary>
 public enum HarnessObjectKind
 {

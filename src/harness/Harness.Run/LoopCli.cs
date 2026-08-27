@@ -726,6 +726,16 @@ public static class LoopCli
                                + "IT IS A FRAGMENT, NOT A BLOCK.");
             }
 
+            // 🔴 THE PER-MEMBER SPLIT, NOT A TOTAL. "18 members" is true of a type whose every type somebody
+            // asserted, and the whole worth of this generator is the half the RUNGS fixed — so the two
+            // numbers are printed apart, and the declared one is named as the part nothing checked.
+            if (slot.StimUdt is { } udt)
+            {
+                output.WriteLine($"  GENERATED  slot '{slot.SlotId}': TYPE {udt.TypeName} — {udt.Members.Count} member(s): "
+                               + $"{udt.DerivedCount} typed by the shell's OWN RUNGS, {udt.DeclaredCount} typed by a DECLARATION. "
+                               + "The second number is the part nothing checked.");
+            }
+
             foreach (var absent in slot.NotDeclared)
                 output.WriteLine("  AUTHORED   " + absent);
         }
@@ -773,6 +783,15 @@ public static class LoopCli
         {
             output.WriteLine($"  GENERATED  OB {ob.BlockName} — {ob.CalledBlocks.Count} call(s), in order: "
                            + string.Join(" → ", ob.CalledBlocks));
+        }
+
+        // 🔴 THE AREA POINTER VERBATIM, because it is the one number a reader can check against the map
+        // width printed a few lines above — and the disagreement between those two is what
+        // `converter served-area` exists to catch on the AUTHORED side of this same block.
+        if (program.CommsFb is { } comms)
+        {
+            output.WriteLine($"  GENERATED  FB {comms.BlockName} — serves {comms.AreaPointer} "
+                           + $"({comms.Registers} register(s) at %M{comms.BaseByte}), derived from THIS run's geometry.");
         }
 
         foreach (var db in program.InstanceDbs)
@@ -872,6 +891,8 @@ public static class LoopCli
         ArgumentNullException.ThrowIfNull(submission);
         ArgumentNullException.ThrowIfNull(binding);
         ArgumentNullException.ThrowIfNull(program);
+
+        RefuseUnreadKeysInsideAGenerationDeclaration(binding);
 
         var inputs = GateCli.InputsOf(submission, binding, readFile, readBytes);
 
@@ -1029,6 +1050,57 @@ public static class LoopCli
             ProgramGeneration: ToProgramDeclaration(binding.GenerateProgram));
     }
 
+    /// <summary>The program-level generation subtree, in gate-0b path form.</summary>
+    private const string ProgramGenerationPrefix = "binding.generateProgram.";
+
+    /// <summary>The per-slot generation subtree, in gate-0b path form: <c>binding.slots[n].generate.…</c>.</summary>
+    private const string SlotGenerationSegment = ".generate.";
+
+    /// <summary>
+    /// 🔴 <b>A KEY INSIDE A GENERATION DECLARATION THAT NO SCHEMA READS IS A REFUSAL HERE, BEFORE ANYTHING
+    /// IS COMPOSED — because this is the one subtree where the silent failure is a TRUE SENTENCE.</b>
+    ///
+    /// <para><b>Gate 0b already covers stray keys, and it is not enough on its own.</b> Checked
+    /// 2026-08-27: <c>GateCli.InputsOf</c> does hand the binding's unknown-field set to gate 0b, which
+    /// refuses naming every path — so a deploying run stops at the gate and never reaches generation. But
+    /// <c>--generate-only</c> runs the gate with <c>stopWhenInadmissible: false</c> DELIBERATELY (the gate
+    /// is a verdict about the VECTORS; the copy layer is a function of the binding alone), so the run goes
+    /// on to print <c>AUTHORED — no comms FB was declared, so none was generated</c> in the same report as
+    /// the 0b refusal that names <c>binding.generateProgram.commsFb</c>. <b>Two lines about one document,
+    /// and the reassuring one is the false one.</b> Generate-only is exactly where a person eyeballs what
+    /// a lane still hand-builds, so it is the worst place for that sentence to appear.</para>
+    ///
+    /// <para><b>Narrow on purpose.</b> Everywhere else in this document a dropped key produces a wrong or
+    /// missing VALUE, which downstream checks can still catch and which gate 0b names once; only here does
+    /// it produce a whole ARTIFACT's absence, reported as a deliberate authoring choice. So this refuses
+    /// only inside <c>generateProgram</c> and <c>slots[n].generate</c>, and gate 0b remains the general
+    /// check — a second general rule beside it would be free to disagree with it.</para>
+    ///
+    /// <para><b>Annotations are not stray.</b> A leading <c>_</c> is the document-wide convention for a
+    /// deliberate comment and <c>SubmissionDocument.Split</c> has already separated them; refusing one here
+    /// would make this the only level of the binding where a note is illegal.</para>
+    /// </summary>
+    private static void RefuseUnreadKeysInsideAGenerationDeclaration(BindingDocument binding)
+    {
+        var (unknown, _) = binding.AllExtraFieldPaths();
+
+        var stray = unknown
+            .Where(path => path.StartsWith(ProgramGenerationPrefix, StringComparison.Ordinal)
+                        || path.Contains(SlotGenerationSegment, StringComparison.Ordinal))
+            .ToArray();
+
+        if (stray.Length == 0)
+            return;
+
+        throw new InvalidDataException(
+            $"{stray.Length} key(s) inside a GENERATION declaration are read by no schema: {string.Join(", ", stray)}. "
+            + "*** THIS IS A REFUSAL AND NOT AN 'AUTHORED' LINE. *** A dropped key in this subtree does not produce a wrong "
+            + "artifact, it produces NO artifact — and the run then reports that absence as a deliberate authoring choice, "
+            + "which is a true sentence about a document that plainly asked for generation. Either the key is misspelt, or it "
+            + "names a capability this build cannot reach; this refusal does not decide which, it makes the disagreement "
+            + "impossible to miss. A deliberate note belongs under a leading '_', which is excluded by name.");
+    }
+
     /// <summary>
     /// 🔴 <b>The <c>generateProgram</c> section, off the wire.</b> Every parse failure is a THROW, never a
     /// silently dropped field: a misspelt key here produces an artifact that is simply absent, and an absent
@@ -1041,7 +1113,95 @@ public static class LoopCli
 
         return new ProgramDeclaration(
             ToCyclicOb(document.CyclicOb),
-            (document.InstanceDbs ?? new List<InstanceDbDocument>()).Select(ToInstanceDb).ToArray());
+            (document.InstanceDbs ?? new List<InstanceDbDocument>()).Select(ToInstanceDb).ToArray(),
+            ToCommsFb(document.CommsFb));
+    }
+
+    /// <summary>
+    /// 🔴 <b>The <c>commsFb</c> section, off the wire — and the whole reason this method exists is that it
+    /// DID NOT, for five days, while the commit that landed the generator said it did.</b>
+    ///
+    /// <para><c>ProgramDeclaration</c> gained a third parameter, <c>CommsFbGenerator</c> was tested against
+    /// the committed corpus, and this method constructed a TWO-argument declaration — so every binding that
+    /// declared a server was told <c>no comms FB was declared, so none was generated</c>. Nothing was wrong
+    /// with the generator and nothing failed; the run simply described a document that had asked for the
+    /// block as one that had not.</para>
+    ///
+    /// <para><b>The served window is deliberately not read here.</b> It is the map's own geometry, handed
+    /// to <c>ProgramGenerator</c> at the call site, so the emitted area pointer cannot disagree with the
+    /// area this run allocated against.</para>
+    /// </summary>
+    private static CommsFbDeclaration? ToCommsFb(CommsFbDocument? document)
+    {
+        if (document is null)
+            return null;
+
+        if (document.BlockName is not { Length: > 0 } name)
+            throw new InvalidDataException("`generateProgram.commsFb` declares no `blockName`. There is nothing to generate.");
+
+        if (document.BlockNumber is not int number)
+        {
+            throw new InvalidDataException(
+                $"`generateProgram.commsFb` ('{name}') declares no `blockNumber`. It is REQUIRED and never defaulted: hard "
+                + "rule 3 forbids inventing one, and harness objects come from the reserved 9000-9999 range the caller "
+                + "allocates from — `converter claim --allocate --kind block-number --type FB --floor 9000`.");
+        }
+
+        if (document.Title is not { Length: > 0 } title)
+            throw new InvalidDataException($"`generateProgram.commsFb` ('{name}') declares no `title`; the generator will not invent one.");
+
+        if (document.Comment is not { Length: > 0 } comment)
+        {
+            throw new InvalidDataException(
+                $"`generateProgram.commsFb` ('{name}') declares no `comment`. It is the only prose that says what this server "
+                + $"exposes, and the generator will not write it — though it WILL fill `{CommsFbGenerator.BasePlaceholder}` and "
+                + $"`{CommsFbGenerator.RegistersPlaceholder}` from the geometry, so the sentence cannot fall behind the area "
+                + "pointer beside it.");
+        }
+
+        if (document.NetworkTitle is not { Length: > 0 } networkTitle)
+            throw new InvalidDataException($"`generateProgram.commsFb` ('{name}') declares no `networkTitle`. Every network gets one (C-201).");
+
+        if (document.NetworkComment is not { Length: > 0 } networkComment)
+            throw new InvalidDataException($"`generateProgram.commsFb` ('{name}') declares no `networkComment`; the generator will not write one.");
+
+        // 🔴 THE THREE ENDPOINT NUMBERS TRAVEL TOGETHER OR NOT AT ALL, AND NONE OF THE THREE HAS A DEFAULT.
+        // The port and the connection ID each IDENTIFY this instance — two servers on one CPU cannot share
+        // either — and the failure of a wrong one is not a compile error but a connection that never
+        // establishes, on a rig, hours later. The interface ID names a piece of HARDWARE, so hard rule 3
+        // forbids inventing it outright. Named together rather than one at a time: an author who omitted
+        // the section omitted all three, and three consecutive refusals is one refusal typed three times.
+        var missing = new[]
+        {
+            ("localPort", document.LocalPort is null),
+            ("connectionId", string.IsNullOrWhiteSpace(document.ConnectionId)),
+            ("interfaceId", document.InterfaceId is null),
+        };
+
+        if (missing.Any(m => m.Item2))
+        {
+            throw new InvalidDataException(
+                $"`generateProgram.commsFb` ('{name}') is missing: {string.Join(", ", missing.Where(m => m.Item2).Select(m => m.Item1))}. "
+                + "All three identify ONE server instance on ONE CPU and none is defaulted. 502 is the Modbus registered "
+                + "port and that is exactly why it is not a default here: the port a rig listens on is a commissioning "
+                + "decision. The interface ID names a piece of hardware, which hard rule 3 forbids inventing outright. The "
+                + "engineer who commissioned the CPU resolves all three.");
+        }
+
+        return new CommsFbDeclaration(
+            new CommsFbNaming(name, number, title, comment),
+            new CommsEndpoint(document.LocalPort!.Value, document.ConnectionId!.Trim(), document.InterfaceId!.Value),
+            new CommsNetworkText(networkTitle, networkComment),
+
+            // The shape is not on the wire: the enum has one member, so a key offering that single choice
+            // would set nothing. See CommsFbDocument's own note.
+            CommsConnectionShape.PassiveAnyClient,
+
+            // 🔴 ABSENT MEANS NO LINE IS EMITTED AND TIA DECIDES, which is NOT a claim that the block has no
+            // layout — the generator reports it either way on a positive line. The layout that actually runs
+            // is asserted after every import by `openness-cli block-layout --set Standard --yes`, so a line
+            // here is a second, weaker statement of the same fact.
+            string.IsNullOrWhiteSpace(document.MemoryLayout) ? null : document.MemoryLayout!.Trim());
     }
 
     private static CyclicObDeclaration? ToCyclicOb(CyclicObDocument? document)
@@ -1072,6 +1232,20 @@ public static class LoopCli
         if (document.Title is not { Length: > 0 } title)
             throw new InvalidDataException($"`generateProgram.cyclicOb` '{name}' declares no `title`; the generator will not invent one.");
 
+        // 🔴 C-201, AND THE FIELD THAT DID NOT EXIST. `converter preflight` refuses a generated OB with
+        // "has no header comment" as an ERROR, and the 9000-9999 harness exemption is unavailable to an OB
+        // because its number is fixed by its event class. So this is not a caller who forgot — until this
+        // key existed, no binding could produce a compliant OB at all.
+        if (document.Comment is not { Length: > 0 } comment)
+        {
+            throw new InvalidDataException(
+                $"`generateProgram.cyclicOb` '{name}' declares no `comment`. C-201 requires a header comment and "
+                + "`converter preflight` refuses the block without one — as an Error. The `review:harness-scope` exemption "
+                + "that covers the slot FC does NOT cover an OB: an OB's number is fixed by its event class, so OBs are "
+                + "excluded from the 9000-9999 band and their C-201 findings gate as normal. Say what this OB sweeps and in "
+                + "what order.");
+        }
+
         var calls = (document.Calls ?? new List<ObCallDocument>()).Select((call, index) =>
         {
             if (call.Block is not { Length: > 0 } block)
@@ -1093,7 +1267,7 @@ public static class LoopCli
                 string.IsNullOrWhiteSpace(call.NetworkComment) ? null : call.NetworkComment);
         }).ToArray();
 
-        return new CyclicObDeclaration(new CyclicObNaming(name, number, secondaryType, title), calls);
+        return new CyclicObDeclaration(new CyclicObNaming(name, number, secondaryType, title, comment), calls);
     }
 
     private static InstanceDbDeclaration ToInstanceDb(InstanceDbDocument document, int index)
@@ -1200,7 +1374,61 @@ public static class LoopCli
             naming,
             ToSlotCall(declared.StimulusHead, id, "stimulusHead"),
             ToSlotCall(declared.BlockUnderTest, id, "blockUnderTest"),
-            ToStimHeadSpec(declared.StimHead, id));
+            ToStimHeadSpec(declared.StimHead, id),
+            ToStimUdt(declared.StimUdt, id));
+    }
+
+    /// <summary>
+    /// 🔴 <b>The <c>stimUdt</c> section, off the wire — the other half of the same defect
+    /// <see cref="ToCommsFb"/> records.</b>
+    ///
+    /// <para><c>LaneDeclaration</c> gained a sixth parameter and this method constructed FIVE, so a binding
+    /// that declared the type it commands its model through was told the type was AUTHORED. The generator
+    /// worked, its tests passed, and nothing could reach it.</para>
+    ///
+    /// <para><b>The member SET is not read here and must not be.</b> <c>StimUdtGenerator</c> derives it from
+    /// the EMITTED RUNGS; what travels from the document is only the declared half — the members the shell
+    /// references nowhere, and the types, start values and comments no rung can fix.</para>
+    /// </summary>
+    private static StimUdtDeclaration? ToStimUdt(StimUdtDocument? document, string slotId)
+    {
+        if (document is null)
+            return null;
+
+        if (document.TypeName is not { Length: > 0 } typeName)
+        {
+            throw new InvalidDataException(
+                $"slot '{slotId}' declares a `stimUdt` with no `typeName`. The emitted TYPE is named after it, and a type "
+                + "nobody can name is a file the head's own members cannot resolve against.");
+        }
+
+        if (document.Comment is not { Length: > 0 } comment)
+        {
+            throw new InvalidDataException(
+                $"slot '{slotId}' declares `stimUdt` '{typeName}' with no `comment`. This type is the vocabulary the model is "
+                + "COMMANDED IN, so a comment describing it is a description of the plant — which no generator originates.");
+        }
+
+        var members = (document.Members ?? new List<StimUdtMemberDocument>()).Select((member, index) =>
+        {
+            if (member.Name is not { Length: > 0 } memberName)
+            {
+                throw new InvalidDataException(
+                    $"slot '{slotId}': `stimUdt.members[{index}]` of '{typeName}' has no `name`. There is nothing to declare "
+                    + "about a member nobody named.");
+            }
+
+            // Every other field is legitimately absent: a `datatype` omitted on a member the shell's own
+            // rungs type is the DERIVED case and is the point of the generator, and the generator refuses BY
+            // NAME each member it cannot type. Filling one in here would be this file guessing on its behalf.
+            return new StimUdtMember(
+                memberName,
+                string.IsNullOrWhiteSpace(member.Datatype) ? null : member.Datatype!.Trim(),
+                string.IsNullOrWhiteSpace(member.StartValue) ? null : member.StartValue!.Trim(),
+                string.IsNullOrWhiteSpace(member.Comment) ? null : member.Comment);
+        }).ToArray();
+
+        return new StimUdtDeclaration(new StimUdtNaming(typeName, comment), members);
     }
 
     private static SlotCall? ToSlotCall(CalledBlockDocument? call, string slotId, string field)

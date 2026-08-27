@@ -388,6 +388,13 @@ public static class ProgramGenerator
             }
         }
 
+        // 🔴 EMITTED ONCE, AND ONLY WHEN SOMETHING DEPLOYABLE CAME OUT — the rule LaneGenerator follows.
+        // See GeneratedLayoutObligation: the missing MEMORYLAYOUT is a decision, `converter compare` exit 2
+        // against a TIA re-export is its honest consequence, and `--allow-silent-layout` is the documented
+        // escape for that input pair — which a caller must pass knowingly rather than remember.
+        if (cyclicOb is not null || commsFb is not null || instanceDbs.Count > 0)
+            obligations.Add(GeneratedLayoutObligation.Text);
+
         // 🔴 A REFUSED REQUEST YIELDS NOTHING USABLE, INCLUDING THE PARTS THAT WORKED — the rule
         // LaneGenerator states and for the same reason: two thirds of a program is the orphan with the
         // paperwork filed.

@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using Harness.Map;
 
 namespace Harness.Map.Tests;
@@ -98,7 +98,8 @@ public class ProgramGeneratorConverterRoundTripTests
         ProgramGenerator.Generate(
             new ProgramDeclaration(
                 new CyclicObDeclaration(
-                    new CyclicObNaming("OB_HarnessCycle", 1, "ProgramCycle", "Harness Program Sweep"),
+                    new CyclicObNaming("OB_HarnessCycle", 1, "ProgramCycle", "Harness Program Sweep",
+                        "Sweeps the widget lane once per scan. Synthetic test material."),
                     new[]
                     {
                         new ObCall("FB_Widget", "iDB_Widget", "Run The Widget",
@@ -139,6 +140,51 @@ public class ProgramGeneratorConverterRoundTripTests
                 Assert.True(File.Exists(Path.Combine(work.FullName, obj.Name + ".xml")),
                     $"converter to-xml reported success for '{obj.Name}' and wrote no XML.");
             }
+        }
+        finally
+        {
+            work.Delete(recursive: true);
+        }
+    }
+
+    /// <summary>
+    /// 🔴 <b>C-201 ON THE GENERATED OB, ASKED OF THE CONVERTER RATHER THAN OF THIS COMPONENT — the check
+    /// that was missing while the generator emitted a block <c>converter preflight</c> refused.</b>
+    ///
+    /// <para><b>Measured 2026-08-27, before the fix:</b> <c>[review:C-201] [Error] 'OB_…' has no header
+    /// comment.</c> TIA imported and compiled the same block happily, so nothing on the device path caught
+    /// it — and the byte-for-byte test guarding the generator compared it against
+    /// <c>ir/test-project001/Main.ir</c>, which has no header comment either. <b>The corpus ratified the
+    /// breach</b>, and only a second party asking a different question could say so.</para>
+    ///
+    /// <para><b>The scope line is asserted too, and it is the reason this gates at all.</b>
+    /// <c>review:harness-scope</c> excuses C-001/C-201 inside the reserved 9000–9999 band — which is why
+    /// the slot FC's identical omission does not gate — but an OB's number is fixed by its event class, so
+    /// OBs are excluded from that band and the rule says out loud that it cannot classify one. If that ever
+    /// changes, this assertion is what stops the C-201 assertion beside it from passing vacuously.</para>
+    /// </summary>
+    [Fact]
+    public void THE_GENERATED_OB_PASSES_C201_AND_DOES_NOT_GET_THE_HARNESS_BAND_EXEMPTION()
+    {
+        var ob = Generated().CyclicOb;
+        Assert.NotNull(ob);
+
+        var work = Directory.CreateTempSubdirectory("programgen-review-");
+        try
+        {
+            var irPath = Path.Combine(work.FullName, ob!.BlockName + ".ir");
+            File.WriteAllText(irPath, ob.Ir);
+
+            var (exit, output) = RunConverter("review", irPath);
+
+            Assert.True(exit == 0, $"converter review found something on the generated OB (exit {exit}): {output}");
+            Assert.Contains("C-201: checked, clean", output, StringComparison.Ordinal);
+            Assert.DoesNotContain("has no header comment", output, StringComparison.Ordinal);
+
+            // The exemption is UNAVAILABLE here, stated by the tool. A green C-201 under a harness-scope
+            // waiver would prove nothing about the block.
+            Assert.Contains("an OB's number is fixed by its event class", output, StringComparison.Ordinal);
+            Assert.Contains("gate as normal", output, StringComparison.Ordinal);
         }
         finally
         {

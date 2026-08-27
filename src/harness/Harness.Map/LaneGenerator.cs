@@ -355,6 +355,13 @@ public static class LaneGenerator
             slots.Add(new LaneSlotGeneration(declaration.SlotId, slotFc, shell, notDeclared, stimUdt));
         }
 
+        // 🔴 EMITTED ONCE, AND ONLY WHEN SOMETHING DEPLOYABLE CAME OUT. See GeneratedLayoutObligation for
+        // the decision and the measurement: the silence is deliberate, the resulting `converter compare`
+        // exit 2 is the honest answer, and the flag that resolves it must be passed KNOWINGLY rather than
+        // remembered. An obligation on a run that generated nothing would be noise, and noise gets skipped.
+        if (slots.Any(s => s.SlotFc is not null || s.StimUdt is not null))
+            obligations.Add(GeneratedLayoutObligation.Text);
+
         // 🔴 A REFUSED REQUEST YIELDS NOTHING USABLE, INCLUDING THE PARTS THAT WORKED. Handing back the two
         // objects that generated beside a refusal about the third invites a caller to deploy two thirds of
         // a lane — and a lane missing its slot FC is the orphan, which is the failure this whole file

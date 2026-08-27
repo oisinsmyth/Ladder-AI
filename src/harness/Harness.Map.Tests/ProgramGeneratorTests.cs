@@ -1,4 +1,4 @@
-using Harness.Map;
+﻿using Harness.Map;
 
 namespace Harness.Map.Tests;
 
@@ -62,7 +62,8 @@ public class ProgramGeneratorTests
         new(new InstanceDbNaming(name, number, fb, "Synthetic test material."), members);
 
     private static CyclicObDeclaration Ob(params ObCall[] calls) =>
-        new(new CyclicObNaming("OB_HarnessCycle", 1, "ProgramCycle", "Harness Program Sweep"), calls);
+        new(new CyclicObNaming("OB_HarnessCycle", 1, "ProgramCycle", "Harness Program Sweep",
+            "Sweeps the harness lane once per scan. Synthetic test material."), calls);
 
     private static LaneGenerationResult LaneWithSlotFc(string slotFc = "FC_HarnessWidgetSlot") =>
         LaneGenerator.Generate(new[]

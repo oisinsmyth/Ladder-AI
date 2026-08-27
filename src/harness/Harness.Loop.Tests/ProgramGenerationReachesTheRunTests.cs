@@ -76,6 +76,7 @@ public class ProgramGenerationReachesTheRunTests
           "number": 1,
           "secondaryType": "ProgramCycle",
           "title": "Harness Program Sweep",
+          "comment": "Runs the widget, then publishes the mirror. Invented test material.",
           "calls": [
             { "block": "FB_Widget", "instance": "iDB_Widget", "networkTitle": "Run The Widget",
               "networkComment": "Ahead of the copy layer so the mirror publishes THIS scan's outputs." },

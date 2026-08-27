@@ -15,7 +15,30 @@ namespace Harness.Map;
 /// system parameters make that a grounding question rather than a preference.
 /// </param>
 /// <param name="Title">The OB's title. Required; the generator will not invent one.</param>
-public sealed record CyclicObNaming(string BlockName, int Number, string SecondaryType, string Title);
+/// <param name="Comment">
+/// 🔴 <b>The block's own COMMENT — required, never defaulted, and ADDED 2026-08-27 because without it no
+/// declaration could produce a C-201-compliant OB at all.</b>
+///
+/// <para><b>Measured:</b> <c>converter preflight</c> on a generated OB fails
+/// <c>[review:C-201] [Error] 'OB_…' has no header comment</c>. TIA imports and compiles the block happily
+/// — this is a CONVENTIONS gate failure, not an import failure — and the generator emitted
+/// <c>BLOCK/ROOTID/NUMBER/LANGUAGE/SECONDARYTYPE/TITLE</c> and stopped, with no field anywhere in
+/// <see cref="CyclicObNaming"/> or the binding document that could have supplied one. <b>The defect was
+/// not that a caller forgot; it was that no caller could.</b></para>
+///
+/// <para>🔴 <b>The slot FC beside it has the same omission and does NOT gate</b>, because
+/// <c>review:harness-scope</c> excuses C-001/C-201 for a block inside the reserved 9000–9999 band. <b>An OB
+/// is excluded from that band by rule</b> — its number is fixed by its event class — so
+/// <c>HarnessScope</c> cannot classify it in either direction and says so: <i>"if this IS a harness OB,
+/// that is not derivable from the artifact — an honest gap, and its C-001/C-201 findings gate as
+/// normal"</i>. The exemption is unavailable to this block on purpose, so the comment is real.</para>
+///
+/// <para>⚠️ <b>The committed <c>ir/test-project001/Main.ir</c> carries NO header comment</b>, and the
+/// byte-for-byte test guarding this generator compared against it — so the corpus RATIFIED the breach for
+/// as long as the generator reproduced it. That test now regenerates the committed block and asserts the
+/// only difference is this one line, which keeps it a round-trip proof rather than a re-pin.</para>
+/// </param>
+public sealed record CyclicObNaming(string BlockName, int Number, string SecondaryType, string Title, string Comment);
 
 /// <summary>One call the OB makes, in the position the declaration puts it.</summary>
 /// <param name="BlockName">The FB or FC being called.</param>
@@ -132,6 +155,13 @@ public static class CyclicObGenerator
         // that is what TIA exported. Reproduced rather than tidied: the round trip is the authority on this
         // field, not taste.
         ir.Append($"TITLE \"\\\"{Escape(naming.Title)}\\\"\"\n");
+
+        // 🔴 C-201's header half. Plain — NOT double-quoted the way TITLE is: `FB_Comms_ModbusServer.ir`
+        // is the committed block that carries one, and its COMMENT is a bare IR string while its TITLE
+        // wears the inner quotes TIA exported. Two adjacent fields with different quoting is not taste; it
+        // is what the round trip is the authority on, checked here against a block TIA produced.
+        ir.Append($"COMMENT \"{Escape(naming.Comment)}\"\n");
+
         ir.Append('\n');
         ir.Append("INTERFACE\n");
         ir.Append("  INPUT\n");
@@ -244,6 +274,21 @@ public static class CyclicObGenerator
 
         if (string.IsNullOrWhiteSpace(naming.Title))
             throw new ArgumentException($"'{naming.BlockName}' has no title; the generator will not invent one.", nameof(naming));
+
+        // 🔴 C-201, AND THE ONE RULE IN THIS FILE THAT THE COMMITTED CORPUS DOES NOT SUPPORT. Every other
+        // shape here is checked against `Main.ir`, which carries no header comment — so reproducing the
+        // corpus faithfully is exactly how this generator came to emit a block `converter preflight`
+        // refuses. Required rather than defaulted for the reason every other prose field here is: an
+        // invented comment passes review and tells a reader nothing, which is worse than the refusal.
+        if (string.IsNullOrWhiteSpace(naming.Comment))
+        {
+            throw new ArgumentException(
+                $"'{naming.BlockName}' has no header comment. C-201 requires one and `converter preflight` refuses the block "
+                + "without it — as an ERROR, not a warning. The 9000-9999 harness exemption (`review:harness-scope`) is NOT "
+                + "available here: an OB's number is fixed by its event class, so OBs are excluded from that band and their "
+                + "C-201 findings gate as normal. Say what this OB sweeps and in what order; the generator will not invent it.",
+                nameof(naming));
+        }
 
         if (calls.Count == 0)
         {
