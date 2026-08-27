@@ -4614,6 +4614,101 @@ gets skimmed.
   offers a labelled heuristic hint for a human; this emits data for a generator, where a heuristic
   would be laundered into a fact.
 
+## `harness-binding` — the derivable half of a binding document, emitted (2026-08-27)
+
+```
+converter harness-binding --project <ir-dir> --stimulus <FBName> --slot <id>
+                          [--observe <FBName>]... [--scope <tag-prefix>]...
+                          [--instance <iDB>] [--emit <file.json>] [--json]
+```
+
+`signal-set` states a block's signals. **This turns that statement into the document the harness
+actually loads** — `Harness.Gate.BindingDocument`'s wire format — and stops at the exact line where
+the corpus stops knowing. Without `--emit` it only reports; with it, it writes the scaffold.
+
+### What it derives, measured against the committed 297-line artifact
+
+Run against `ir/test-project001` for the `HBA` slot and compared to
+`gen/test-project001/hopper-blockage-alarm/harness-binding.json`:
+
+| field | result |
+|---|---|
+| `tag` | **20 of 20**, exact |
+| `type` (+ register width: Bool 1, Int 1, Time 2) | **20 of 20**, exact |
+| driven vs observed | **0 misclassifications** over the 20 shared rows |
+| `latchedBy` | **all 8 result sources exact** — 5 named, 3 correctly left absent |
+| `baseByte` / `declaredRegisters` | `1000` / `37`, from `served-area` |
+
+**Recall is 20 of 20; precision is 20 of 27.** It offers 7 rows the deliverable does not want (2 driven
+— `Stim.Start`, which is that slot's `startCondition`, and `Stim.ModelThreshold`, which the prose
+deliberately leaves unnamed — and 5 observed). That asymmetry is chosen: deleting a row a human did not
+want is safe, and silently lacking one they did is not. Both properties are locked by
+`Harness.Results.Tests/ScaffoldedBindingParityTests.cs`, which runs this binary and parses the result
+with the harness's own reader — the only thing connecting the two schemas.
+
+### 🔴 The partition is NOT `direction` alone
+
+Two rules, and the real corpus needs both:
+
+- **`both` is never a vector target.** The block writes the member itself, so a harness write contends
+  with its own coil — and the `writers` list is the evidence that it would. It is offered as an
+  observation instead, because reading is non-destructive.
+- **A `read` member of an `--observe` block is driven by the STIMULUS MODEL, not by the harness.**
+  Driving it would have the harness testing its own arithmetic.
+
+Both are **excluded with a reason and counted**, never dropped: a shortened document reads exactly
+like a shorter block. Roles are declared by the caller and never inferred — a corpus cannot say which
+of its FBs is the stimulus head, and guessing decides from nothing which signals may be *driven*.
+
+### 🔴 `latchedBy` is derivable, and the deliverable records a human deriving it by hand
+
+Its own note reads *"the latch provenance was in the IR all along … a whole-corpus search finds no
+other writer."* That search is two conditions, both required: a **SET or RESET coil** among the
+writers, and **every writer in one block**. A plain coil is not a latch however it is sealed —
+`IO.HopperBlockedAlarm` seals itself in its own rung and the deliverable correctly claims no latch for
+it. Absent is itself the claim *"this binding claims no latch"*, so it is never written speculatively,
+and the evidence rides along in `_latchEvidence` so a reader can check it without re-deriving.
+
+### What it will not write, ever
+
+`specName` · `encoding` · `inertRest` · `startCondition`. Each is a claim about the **plant** or about
+a **specification**, and a generator that supplies one has invented the fact this pipeline exists to
+keep out. `startCondition` is the trap: **absent parses as null, and null is the positive claim "this
+slot has no start gate"** — so neither answer is emitted.
+
+They become named holes under **`unresolvedHoles`**, which is deliberately **not** underscore-prefixed:
+gate 0b splits a binding's unmapped keys on the leading underscore, counts `_note` as an annotation and
+**refuses** everything else. So an unfinished scaffold is *unrunnable*, not merely commented — a
+warning is not a gate. Each hole names what is missing **and who resolves it**.
+
+`baseByte`/`declaredRegisters` are written **only when `served-area` derived them**; NOT DERIVED is
+carried as an absence, never as a number. `BatchPlanner` still compares this derived width against any
+authored one and refuses on disagreement rather than substituting — that property is untouched.
+
+### Exit codes
+
+| exit | meaning |
+|---|---|
+| 0 | a scaffold was derived (and written, if `--emit`) |
+| 1 | **REFUSED** — no document is written at all; or PARTIAL corpus; or a usage error |
+| 2 | **NOTHING EXAMINED** — a named block is not in the corpus, or `--scope` admitted nothing |
+
+Refusals name what is missing and who resolves it: an unknown block, a block with **no** placement (the
+engineer creates the instance — hard rule 3 forbids inventing one), a block with **two** (the caller
+picks with `--instance`; which unit is on the rig is a fact about the plant), and a type the mirror has
+no element for — refused by name rather than approximated, because a hard-coded `Int` once reached a
+controller and TIA answered `Data type Bool is not permitted here` after a full import.
+
+**One refusal refuses the whole scaffold** (`CopyLayerResult`'s rule): a partially-emitted binding is
+the shape that looks finished.
+
+### Where it stops
+
+The order of the two arrays **is** the register order, and the scaffold's ordinal-by-tag order is a
+decision it makes, not a fact it read — so it is named as a hole. It also does not derive `serves`,
+`servesRunInOrder`, `boundarySpanning`, `transient`, `rearmsEachIndex` or `armedBy`: those are claims
+carried by the **vector submission**, not by the corpus, and joining the two is a separate seam.
+
 ## Rules (docs/05-architecture.md, 04 §8/§10)
 
 - Unknown elements are hard errors, never warnings or best-effort.

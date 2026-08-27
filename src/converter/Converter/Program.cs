@@ -7,6 +7,7 @@ using Converter.CrossCheck;
 using Converter.Diff;
 using Converter.Digest;
 using Converter.DriftCheck;
+using Converter.HarnessBinding;
 using Converter.Ir;
 using Converter.IrHash;
 using Converter.Preflight;
@@ -87,6 +88,11 @@ internal static class Program
         if (args.Length >= 1 && args[0] == "signal-set")
         {
             return RunSignalSet(args[1..]);
+        }
+
+        if (args.Length >= 1 && args[0] == "harness-binding")
+        {
+            return RunHarnessBinding(args[1..]);
         }
 
         if (args.Length >= 1 && args[0] == "ir-hash")
@@ -201,6 +207,7 @@ internal static class Program
             Console.Error.WriteLine("       converter relation-reconcile --specs <dir> --ledger <code-structure.md> --register <requirements.md> [--project <ir-dir>] [--json]   # reconcile (instance, relation-id) sets across the spec artifacts + probative citations (FI-39); exit 1 on any difference");
             Console.Error.WriteLine("       converter signal-sweep --project <ir-dir> --specs <dir> [--register <file>] [--unclaimed <file>] [--json]   # project-level residual signal coverage (FI-39); exit 1 if any signal is in no spec and no disposition table");
             Console.Error.WriteLine("       converter signal-set --project <ir-dir> --block <Name> [--origin interface|external|any] [--type <T>] [--direction read|written|both|unused|any] [--json]   # ONE machine-readable document of a block's signal set: every interface member it declares plus every external signal it references, each with type, RETAIN, start value, direction and the project-wide writer/reader sites. The mechanically-derivable half of a harness binding, which was hand-transcribed until 2026-08-27. DIRECTION IS RELATIVE TO THE BLOCK and computed from the usage graph, never from the interface section (C-132 puts the members that matter under STATIC). Reuses candidate-scan's inventory-x-usage-graph join rather than walking the corpus again, so the two tools cannot disagree about what a block writes. Exit 0 = a set was derived / 1 = PARTIAL, a file in the corpus could not be read so the set is incomplete (exit-bearing rather than a warning line, because a generator consumes this and never sees the warning) / 2 = NOTHING EXAMINED: --block names no block, or the origin/type/direction filters left zero rows. Keyed on the ROW COUNT as well as the scope enum, per undriven-scan's third shape");
+            Console.Error.WriteLine("       converter harness-binding --project <ir-dir> --stimulus <FBName> --slot <id> [--observe <FBName>]... [--scope <member-prefix>]... [--instance <iDB>] [--emit <file.json>] [--json]   # THE MECHANICALLY DERIVABLE HALF OF A HARNESS BINDING DOCUMENT, emitted instead of transcribed (FI-83, 2026-08-27). The committed binding is 297 lines for ONE slot of 20 signals, hand-typed, and a transcription is the one step in this pipeline with no mechanical check behind it. Derives `tag`, `type` (the mirror's Bool/Int/Time vocabulary, with the register width), the vectorTarget/resultSource PARTITION, `latchedBy`, and `baseByte`/`declaredRegisters` from `served-area`. WHAT IT WILL NOT WRITE, because each is a claim about the PLANT or a SPECIFICATION: `specName`, `encoding`, `inertRest`, `startCondition` - where null is the POSITIVE claim `no start gate`, not an absence. Those become named holes under `unresolvedHoles`, a NON-ANNOTATION key that gate 0b REFUSES, so an unfinished scaffold cannot reach a run. THE PARTITION IS NOT `direction` ALONE: `both` is never a vector target (the harness would contend with the block's own coil) and a `read` member of an OBSERVED block is driven by the stimulus model, so both are excluded and COUNTED, never dropped. Roles are declared by the caller and never inferred - a corpus cannot say which of its FBs is the stimulus head. Exit 0 = derived / 1 = REFUSED (no document written) or PARTIAL / 2 = NOTHING EXAMINED");
             Console.Error.WriteLine("       converter claim  --project <ir-dir> --claims <dir> --agent <id> --kind <k> (--value <v> | --allocate [--type FB|FC|OB|DB] [--floor <n>] [--in <word|block>]) [--purpose <text>] [--json]   # reserve a shared resource BEFORE writing IR (FI-65); exit 1 refused, 2 unusable. X-J RESERVED BAND (2026-08-14): block numbers 9000-9999 are reserved for harness-generated objects per number space, FB/FC/DB, OB EXCLUDED (an OB's number is fixed by its event class, and applying a band to OBs emits a false finding on OB80, the first harness object the spec lists). A PLAIN --allocate CANNOT return a band number - the band is REMOVED from the candidate set, not deprioritised. --floor 9000 aims the search INTO the band, and that allocation is CONFINED to it: running out is `BandExhausted` naming the band, NEVER a quiet step past 9999 into deliverable numbers. An explicit --value inside the band is ACCEPTED and SAID SO in the outcome, not refused - the block does not exist yet (that is what an allocation claim means), so nothing derivable distinguishes a harness claim from a plant one, and a --harness flag would be a caller assertion forgotten exactly when it matters. The band is read from HarnessNumberRange.Declared(), never restated here");
             Console.Error.WriteLine("       converter claims --project <ir-dir> --claims <dir> [--check] [--release --agent <id> (--kind <k> --value <v> | --all) [--force]] [--agent <id>] [--json]   # list/verify/release claims (FI-65); exit 1 on conflict");
             Console.Error.WriteLine("       converter lease  acquire|release|status --resource portal:<project>|rig:<address> --leases <dir> --holder <id> --pid <n> [--ttl <minutes>] [--purpose <text>] [--portal-evidence <file.json>] [--json]   # a REAL lock on Portal and the rig (FI-65 component 3), sibling of the claims registry and deliberately NOT the same semantics: a claim is held until released, a lease EXPIRES, because one crashed agent must not wedge the gate forever. Reclaim needs BOTH halves - the holder provably gone AND the lease expired; a LIVE holder past its TTL is reported and NEVER evicted (a long download is not a dead one). Identity is holder + pid + PROCESS START TIME, because pids are reused. A Portal lease REFUSES without --portal-evidence <file.json>, the output of `openness-cli portal-status --json`: the converter cannot see which project a Portal process has open (that fact lives behind Siemens.Engineering, net48) so it consumes the evidence the tool that CAN produce it wrote, and ABSENT IS A REFUSAL. Every branch fails closed - a process Openness cannot see reports `projectPath: null`, IDENTICAL to one with nothing open, so an OS-ONLY process is `cannot decide`, not `free`. A rig lease takes no evidence and SAYS SO: nothing detects a rig in use, MB_SERVER's one connection is discovered BY FAILURE. exit 0 acquired/reclaimed, 1 refused, 2 unusable");
@@ -1779,6 +1786,141 @@ internal static class Program
                 $"signal-set: {report.Warnings.Count} file(s) in {projectDir} could not be read, so this set "
                 + "is not a complete statement of '" + block + "'s signals. Do not bind against it until the "
                 + "corpus parses.");
+            return 1;
+        }
+
+        return 0;
+    }
+
+    // FI-83 (2026-08-27). The binding document was hand-typed — 297 lines for ONE slot of 20 signals in
+    // `gen/test-project001/hopper-blockage-alarm/harness-binding.json` — and a transcription is the one
+    // step in this pipeline with no mechanical check behind it. This emits the half the corpus states
+    // and REFUSES the half it does not.
+    internal static int RunHarnessBinding(string[] args)
+    {
+        string? projectDir = null;
+        string? stimulus = null;
+        string? instance = null;
+        string? slotId = null;
+        string? emit = null;
+        var observed = new List<string>();
+        var scopes = new List<string>();
+        var json = false;
+
+        for (var i = 0; i < args.Length; i++)
+        {
+            switch (args[i])
+            {
+                case "--project":
+                    projectDir = RequireValue(args, ref i, "--project");
+                    break;
+                case "--stimulus":
+                    stimulus = RequireValue(args, ref i, "--stimulus");
+                    break;
+                case "--observe":
+                    var block = RequireValue(args, ref i, "--observe");
+                    if (block is null)
+                    {
+                        return 1;
+                    }
+
+                    observed.Add(block);
+                    break;
+                case "--scope":
+                    var scope = RequireValue(args, ref i, "--scope");
+                    if (scope is null)
+                    {
+                        return 1;
+                    }
+
+                    scopes.Add(scope);
+                    break;
+                case "--instance":
+                    instance = RequireValue(args, ref i, "--instance");
+                    break;
+                case "--slot":
+                    slotId = RequireValue(args, ref i, "--slot");
+                    break;
+                case "--emit":
+                    emit = RequireValue(args, ref i, "--emit");
+                    break;
+                case "--json":
+                    json = true;
+                    break;
+                default:
+                    Console.Error.WriteLine($"Unexpected argument: {args[i]}");
+                    return 1;
+            }
+        }
+
+        const string Usage = "Usage: converter harness-binding --project <ir-dir> --stimulus <FBName> "
+            + "--slot <id> [--observe <FBName>]... [--scope <tag-prefix>]... [--instance <iDB>] "
+            + "[--emit <file.json>] [--json]";
+
+        // --slot is REQUIRED and deliberately has no default. The slot id is the join key a copy layer's
+        // tag names are built from, so a generated one would rename every tag in a deployed mirror the
+        // first time somebody re-ran this with a different guess.
+        if (projectDir is null || stimulus is null || slotId is null)
+        {
+            Console.Error.WriteLine(Usage);
+            return 1;
+        }
+
+        if (!Directory.Exists(projectDir))
+        {
+            Console.Error.WriteLine($"--project directory not found: {projectDir}");
+            return 1;
+        }
+
+        var report = HarnessBindingRunner.Run(projectDir, stimulus, observed, scopes, slotId, instance);
+        Console.WriteLine(json
+            ? HarnessBindingOutputFormatter.FormatJson(report)
+            : HarnessBindingOutputFormatter.FormatText(report));
+
+        // NOTHING MAY BE USED FROM A REFUSED SCAFFOLD — CopyLayerResult's rule, and for its reason: a
+        // half-written binding is the shape that looks finished. The file is not written at all.
+        if (report.Refused)
+        {
+            Console.Error.WriteLine(
+                $"harness-binding: {report.Refusals.Count} refusal(s) — no document was written. "
+                + "Each names what is missing and who resolves it.");
+            return 1;
+        }
+
+        if (report.ExaminedNothing)
+        {
+            Console.Error.WriteLine(
+                $"harness-binding: nothing was examined in {projectDir} — this is not a pass. " + report.Scope switch
+                {
+                    BindingScope.UnknownBlock => "A named block is not in this corpus.",
+                    BindingScope.NothingInScope =>
+                        $"--scope {string.Join(",", scopes)} admitted no member of the named blocks. "
+                        + "Check it against an unscoped run before believing the zero.",
+                    _ =>
+                        $"'{stimulus}' and {observed.Count} observed block(s) yielded no bindable member. "
+                        + "A binding derived from no signal is not a statement that the blocks have none.",
+                });
+            return 2;
+        }
+
+        if (emit is not null)
+        {
+            File.WriteAllText(emit, HarnessBindingOutputFormatter.FormatBinding(report));
+            Console.Error.WriteLine(
+                $"harness-binding: wrote {emit} with {report.Holes.Count} unresolved hole(s). "
+                + "*** IT WILL NOT PASS GATE 0b UNTIL THEY ARE RESOLVED AND `unresolvedHoles` IS DELETED. *** "
+                + "That is deliberate: an unfinished binding that ran would be worse than one that refuses.");
+        }
+
+        // A finding about THE DOCUMENT, not about the plant, and exit-bearing for signal-set's reason:
+        // the consumer here is a person filling in a binding, and an incompleteness that only warns is
+        // one they read past.
+        if (report.Partial)
+        {
+            Console.Error.WriteLine(
+                $"harness-binding: {report.Warnings.Count} file(s) in {projectDir} could not be read, so these "
+                + "rows are not a complete statement of the blocks' signals. Do not bind against them until "
+                + "the corpus parses.");
             return 1;
         }
 
