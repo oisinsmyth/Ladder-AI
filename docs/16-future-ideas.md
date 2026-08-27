@@ -2487,3 +2487,41 @@ the total disagree, which is the denominator discipline every other mechanical-f
 **Verdict / revisit trigger:** Open. Revisit when a consumer first acts on `unused` — a binding
 generator that excludes unused signals, or any proposal to delete a member on this evidence. Until
 then the entry is the warning: **`unused` from `signal-set` is not yet a safe input to a decision.**
+
+## FI-83 — `SidecarSynthesizer.ScopeFor` has no CONSTANT case, so a block CONSTANT is emitted as a variable
+
+**Raised 2026-08-27.** Status: **Raised.**
+
+`ScopeFor` decides `LocalVariable` vs `GlobalVariable` and nothing else. A reference to a member of
+the block's own **CONSTANT** section is a local name, so it takes the `LocalVariable` branch and is
+emitted with a `<Symbol>`. TIA's canonical form is `Scope="LocalConstant"` carrying a
+`<Constant>` — so TIA **stores and returns the repaired form**, and a sent-vs-returned `compare`
+shows one real difference per such reference.
+
+**Why this is not "harmless because it compiles".** It compiles because **TIA repaired it**, not
+because it was right. The 2026-08-27 confirm loop measured the neighbouring case directly: TIA
+accepts a mislabelled scope **at import, exit 0**, and refuses only at compile — so "it imported" is
+not evidence about scope correctness, and here even the compile passed because TIA had already
+rewritten the value. The mechanism that saved this is TIA's tolerance, and tolerance is not a
+contract. This is the same reasoning that retracted BD-19: a block compiling clean proved TIA
+*tolerated* a form, not that the form was canonical.
+
+**The second cost is to drift detection.** Every re-export of an affected block differs from what
+was sent, so genuine drift hides in known noise, and `drift-check` / `compare` on those blocks read
+as dirty for a reason that is not a change. This is the same class of harm FI-80 records from the
+other side of the round trip: FI-80 is the COMPARER unable to tell two constants apart; this is the
+SYNTHESIZER unable to emit one correctly. They are independent and both are open.
+
+**Reaches production only through re-derivation.** A block whose stored sidecar is used is
+unaffected; a block whose sidecar is re-derived (ADR-0005 derive-always, or any lane that must drop
+a stored sidecar to synthesize new statements) picks it up. So it appears intermittently, on the
+blocks most recently edited — the worst possible distribution for noticing it.
+
+**The fix shape:** `ScopeFor` needs to know a name's SECTION, not merely whether the block declares
+it. The block's `ConstantMembers` are already in scope at the call site — the same set the local-name
+walk builds from — so this is a section-aware lookup rather than new analysis. The writer then needs
+the `<Constant>` emit shape for that scope.
+
+**Verdict / revisit trigger:** Open. Revisit before any lane relies on `compare` or `drift-check`
+being clean on a re-derived block — which is the next time a sent-vs-returned comparison is used as
+a gate rather than as an observation.
