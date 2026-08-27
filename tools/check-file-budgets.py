@@ -103,7 +103,19 @@ BUDGETS = [
     # bytes a typo fix in CLAUDE.md could fail the build, and the reflex that teaches is
     # --no-verify. This restores the seeding rule's slack rather than buying anything: 664
     # bytes, none of it spent, and no other budgeted file's ceiling moves with it.
-    ("CLAUDE.md", 22016),
+    # Raised 22016 -> 22528 on 2026-08-27. Earned by TWO converter command-index rows, both of
+    # the kind this table's own text carves out: a command an agent cannot look up is one it
+    # substitutes for. `signal-set` emits a block's signal set as one machine-readable document,
+    # and its row carries the thing that is NOT inferable from its siblings - it is the only
+    # mechanical-floor command where EXIT 1 (PARTIAL) GATES RATHER THAN WARNS, because its reader
+    # is a generator and a generator never sees a warning line. `harness-binding` scaffolds the
+    # derivable half of a harness binding, and its row says the underivable fields land as
+    # `unresolvedHoles` that REFUSE at gate 0b rather than defaulting quietly.
+    # The same commit also added `lease` and `conflict-graph`, which are NOT new - they had been
+    # real verbs in the dispatch and absent from this table, which is the file an agent reads to
+    # decide which command to go and read about. That absence is the discovery failure the
+    # `portal-close` raise above was granted for, found twice more.
+    ("CLAUDE.md", 22528),
 
     (".claude/agents/assertion-enumerator.md", 5120),
     (".claude/agents/hmi-designer.md", 7680),
