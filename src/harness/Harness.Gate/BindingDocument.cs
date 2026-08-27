@@ -37,6 +37,23 @@ public sealed class BindingDocument
 
     public List<SlotBindingDocument>? Slots { get; set; }
 
+    /// <summary>
+    /// 🔴 <b>WHAT THE PROGRAM GENERATES RATHER THAN HAS TYPED — the artifacts that belong to the PROGRAM
+    /// rather than to one slot.</b>
+    ///
+    /// <para><see cref="SlotBindingDocument.Generate"/> covers the per-slot half: the slot FC and the
+    /// stimulus head's index shell. These are the other half — the cyclic OB (one per program however many
+    /// slots it drives) and the instance DBs (each belonging to the FB it instantiates, which may be a
+    /// slot's or the comms block every slot shares). Between them, four of the lane's hand-authored
+    /// <c>.ir</c> artifacts stop being typed.</para>
+    ///
+    /// <para><b>ABSENT MEANS NOT GENERATED, and it is REPORTED as such rather than passed over</b> — the
+    /// rule <see cref="SlotBindingDocument.Generate"/> already follows. A lane written before this field
+    /// existed behaves exactly as it did, and its run says in words that its OB and its instance DBs are
+    /// AUTHORED.</para>
+    /// </summary>
+    public ProgramGenerationDocument? GenerateProgram { get; set; }
+
     /// <summary>Copy-layer block name. Defaults to the generator's own.</summary>
     public string? BlockName { get; set; }
 
@@ -153,6 +170,26 @@ public sealed class BindingDocument
 
             foreach (var (phase, j) in (slot.Generate?.StimHead?.Phases ?? new List<StimPhaseDocument>()).Select((p, k) => (p, k)))
                 Collect(phase.UnknownFields, $"{path}.generate.stimHead.phases[{j}]", found);
+        }
+
+        // 🔴 THE PROGRAM-LEVEL GENERATION DECLARATION, TO ITS FULL DEPTH, AND IT FAILS EVEN QUIETER THAN
+        // THE SLOT'S. A misspelt `calls` produces no OB and is reported as "the OB is AUTHORED"; a misspelt
+        // `presets` produces an instance DB whose commissioning defaults are simply absent, and absent start
+        // values are ZEROS on the controller, which is a plausible number rather than an error. Gate 0b is
+        // the only thing that can tell a declaration that asked for something from one that did not.
+        Collect(GenerateProgram?.UnknownFields, "binding.generateProgram", found);
+        Collect(GenerateProgram?.CyclicOb?.UnknownFields, "binding.generateProgram.cyclicOb", found);
+
+        foreach (var (call, index) in (GenerateProgram?.CyclicOb?.Calls ?? new List<ObCallDocument>()).Select((c, i) => (c, i)))
+            Collect(call.UnknownFields, $"binding.generateProgram.cyclicOb.calls[{index}]", found);
+
+        foreach (var (db, index) in (GenerateProgram?.InstanceDbs ?? new List<InstanceDbDocument>()).Select((d, i) => (d, i)))
+        {
+            var path = $"binding.generateProgram.instanceDbs[{index}]";
+            Collect(db.UnknownFields, path, found);
+
+            foreach (var (preset, j) in (db.Presets ?? new List<InstanceDbPresetDocument>()).Select((p, k) => (p, k)))
+                Collect(preset.UnknownFields, $"{path}.presets[{j}]", found);
         }
 
         return SubmissionDocument.Split(found);
@@ -475,6 +512,153 @@ public sealed class StimPhaseDocument
     /// silently produce a head that can never clear the block under test.
     /// </summary>
     public string? Kind { get; set; }
+
+    /// <summary>Unknown keys, folded into gate 0b like every other level.</summary>
+    [JsonExtensionData]
+    public Dictionary<string, object?>? UnknownFields { get; set; }
+}
+
+/// <summary>
+/// The program-level generation declaration, on the wire. See <see cref="BindingDocument.GenerateProgram"/>
+/// and <c>Harness.Map.ProgramGenerator</c>.
+///
+/// <para><b>It is DATA, deliberately, and it is kept small.</b> Moving hand-authoring out of IR and into a
+/// declarative document is the whole point; moving it into a LARGE document is not. Everything derivable is
+/// derived — every instance DB member and marker from the FB's interface, every ordering obligation from the
+/// lane, the OB's system parameters from its event class — and what is left is the handful of facts no code
+/// can know: the names, the numbers, the order, and the presets.</para>
+/// </summary>
+public sealed class ProgramGenerationDocument
+{
+    /// <summary>The cyclic OB. Absent means it is AUTHORED, which is reported.</summary>
+    public CyclicObDocument? CyclicOb { get; set; }
+
+    /// <summary>The instance DBs. Absent or empty means every one of them is AUTHORED, which is reported.</summary>
+    public List<InstanceDbDocument>? InstanceDbs { get; set; }
+
+    /// <summary>Unknown keys, folded into gate 0b like every other level.</summary>
+    [JsonExtensionData]
+    public Dictionary<string, object?>? UnknownFields { get; set; }
+}
+
+/// <summary>
+/// The cyclic OB, on the wire. 🔴 <b><see cref="Calls"/> IS THE BLOCK</b> — see
+/// <c>Harness.Map.CyclicObGenerator</c>: the order is the content, and the generator originates none of it.
+/// </summary>
+public sealed class CyclicObDocument
+{
+    /// <summary>The OB's name.</summary>
+    public string? BlockName { get; set; }
+
+    /// <summary>
+    /// Its number. <b>Required and never defaulted</b>, and unlike every other harness object it does NOT
+    /// come from the 9000–9999 band: an OB's number is fixed by its event class, which is why OBs are
+    /// excluded from that band. The generator refuses a number inside it.
+    /// </summary>
+    public int? Number { get; set; }
+
+    /// <summary>
+    /// The event class. Only <c>ProgramCycle</c> is accepted — TIA requires an OB's system parameters to be
+    /// present and informative, they differ by event class, and the committed corpus grounds one set.
+    /// </summary>
+    public string? SecondaryType { get; set; }
+
+    /// <summary>The OB's title. Required; the generator will not invent one.</summary>
+    public string? Title { get; set; }
+
+    /// <summary>🔴 <b>IN THE ORDER THEY WILL EXECUTE.</b> LAD runs networks in order and nothing here reorders them.</summary>
+    public List<ObCallDocument>? Calls { get; set; }
+
+    /// <summary>Unknown keys, folded into gate 0b like every other level.</summary>
+    [JsonExtensionData]
+    public Dictionary<string, object?>? UnknownFields { get; set; }
+}
+
+/// <summary>One call the cyclic OB makes.</summary>
+public sealed class ObCallDocument
+{
+    /// <summary>The FB or FC being called.</summary>
+    public string? Block { get; set; }
+
+    /// <summary>
+    /// Its instance DB, or a dotted multi-instance path. <b>Absent is a CLAIM that this is an FC</b>, which
+    /// has no instance; the emitted call then omits the leading positional argument.
+    /// </summary>
+    public string? Instance { get; set; }
+
+    /// <summary>The network's title. Required (C-201); the generator will not invent one.</summary>
+    public string? NetworkTitle { get; set; }
+
+    /// <summary>
+    /// Why the call sits where it sits. Optional — but in the one block whose entire content is an ORDER,
+    /// this is where an ordering argument belongs.
+    /// </summary>
+    public string? NetworkComment { get; set; }
+
+    /// <summary>Unknown keys, folded into gate 0b like every other level.</summary>
+    [JsonExtensionData]
+    public Dictionary<string, object?>? UnknownFields { get; set; }
+}
+
+/// <summary>
+/// One instance DB, on the wire. 🔴 <b>Its STRUCTURE is a mechanical projection of the FB's interface and is
+/// never declared here; its START VALUES are presets, and a preset is a claim about the plant.</b>
+/// </summary>
+public sealed class InstanceDbDocument
+{
+    /// <summary>The DB's name.</summary>
+    public string? DbName { get; set; }
+
+    /// <summary>
+    /// Its number. <b>Required and never defaulted</b> — hard rule 3 forbids inventing one, and harness
+    /// objects come from the reserved 9000–9999 range
+    /// (<c>converter claim --allocate --kind block-number --type DB --floor 9000</c>).
+    /// </summary>
+    public int? DbNumber { get; set; }
+
+    /// <summary>The FB this instantiates. Its IR must be in the program set — a name alone is not something to project from.</summary>
+    public string? Fb { get; set; }
+
+    /// <summary>
+    /// The DB's own comment. <b>Required</b>: every DB in the committed corpus carries one, generated code is
+    /// held to a stricter bar than site code, and an invented "Instance of FB_X" tells a reader nothing.
+    /// </summary>
+    public string? Comment { get; set; }
+
+    /// <summary>
+    /// 🔴 <b><c>projectedFromFb</c> or <c>leftToTia</c>, and there is NO DEFAULT</b> — the two differ in what
+    /// happens to the FB's own start values. <c>projectedFromFb</c> copies the structure and drops every start
+    /// value unless a preset declares it; <c>leftToTia</c> emits an empty MEMBERS section, so TIA fills the
+    /// instance from the FB INCLUDING its start values, and a second instance declared that way inherits the
+    /// same ones (which is refused).
+    /// </summary>
+    public string? Members { get; set; }
+
+    /// <summary>The start values this instance carries, by member path. See <c>Harness.Map.InstanceDbPreset</c>.</summary>
+    public List<InstanceDbPresetDocument>? Presets { get; set; }
+
+    /// <summary>Unknown keys, folded into gate 0b like every other level.</summary>
+    [JsonExtensionData]
+    public Dictionary<string, object?>? UnknownFields { get; set; }
+}
+
+/// <summary>
+/// One declared start value. 🔴 <b>Exactly one of <see cref="Value"/> and <see cref="Cleared"/>; neither is a
+/// declaration that has not decided, and both are opposite claims about what the instance starts at.</b>
+/// </summary>
+public sealed class InstanceDbPresetDocument
+{
+    /// <summary>Dotted member path from the top of the MEMBERS section (<c>Stim.ModelThreshold</c>, <c>Comms.RemoteAddress.ADDR[1]</c>).</summary>
+    public string? Path { get; set; }
+
+    /// <summary>The start value, verbatim as IR writes it (<c>T#60S</c>, <c>16#0010</c>, <c>503</c>).</summary>
+    public string? Value { get; set; }
+
+    /// <summary>
+    /// The explicit "this instance deliberately starts at the type default". It exists so that DROPPING a
+    /// start value the FB declares is also something somebody typed.
+    /// </summary>
+    public bool Cleared { get; set; }
 
     /// <summary>Unknown keys, folded into gate 0b like every other level.</summary>
     [JsonExtensionData]

@@ -165,6 +165,17 @@ public enum ObjectRole
 
     /// <summary>🔴 <b>The block being tested — the subject every per-block check has to be pointed at.</b></summary>
     BlockUnderTest = 4,
+
+    /// <summary>
+    /// 🔴 <b>The cyclic OB — the block whose entire content is the ORDER the rest run in.</b> Recorded with a
+    /// role of its own because it is the only object whose defect is invisible in every other object: a
+    /// program whose blocks are all correct and whose OB does not call one of them deploys clean, loads
+    /// clean and reports healthy.
+    /// </summary>
+    CyclicOb = 5,
+
+    /// <summary>An instance DB — a projection of its FB's interface, carrying the presets that FB starts from.</summary>
+    InstanceDb = 6,
 }
 
 /// <summary>

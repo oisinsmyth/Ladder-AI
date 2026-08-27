@@ -630,10 +630,13 @@ public static class LoopCli
         // that its absence means there was nothing left to generate, which is the opposite of the truth on
         // every lane that exists.
         WriteLane(generation.Lane, output);
+        WriteProgram(generation.Program, output);
 
         output.WriteLine();
 
-        foreach (var obj in generation.Objects.Concat(generation.Lane?.Objects ?? Array.Empty<HarnessObject>()))
+        foreach (var obj in generation.Objects
+                     .Concat(generation.Lane?.Objects ?? Array.Empty<HarnessObject>())
+                     .Concat(generation.Program?.Objects ?? Array.Empty<HarnessObject>()))
         {
             output.WriteLine($"----- {obj.Kind} {obj.Name} -----");
             output.WriteLine(obj.Ir.TrimEnd('\n'));
@@ -649,7 +652,9 @@ public static class LoopCli
 
         if (emitDir is not null)
         {
-            foreach (var obj in generation.Objects.Concat(generation.Lane?.Objects ?? Array.Empty<HarnessObject>()))
+            foreach (var obj in generation.Objects
+                     .Concat(generation.Lane?.Objects ?? Array.Empty<HarnessObject>())
+                     .Concat(generation.Program?.Objects ?? Array.Empty<HarnessObject>()))
             {
                 var path = Path.Combine(emitDir, obj.Name + ".ir");
                 writeFile(path, obj.Ir);
@@ -740,6 +745,54 @@ public static class LoopCli
         output.WriteLine();
         output.WriteLine($"  🔴 OBLIGATIONS ({lane.Obligations.Count}) — THIS TOOL CANNOT DISCHARGE ANY OF THEM:");
         foreach (var obligation in lane.Obligations)
+            output.WriteLine("     - " + obligation);
+    }
+
+    /// <summary>
+    /// 🔴 <b>What the PROGRAM generated and what it did not — printed on every run, including the one that
+    /// declared nothing.</b>
+    ///
+    /// <para>Same rule as <see cref="WriteLane"/> and for the same reason: a section that appears only when
+    /// something was generated teaches a reader that its absence means there was nothing left to generate,
+    /// which is the opposite of the truth on every lane that exists today. <b>An instance DB reported as
+    /// AUTHORED is a projection of a moving interface being maintained by hand</b> — the committed
+    /// <c>iDB_HopperBlockageStim.ir</c> is nine statics behind its own FB, which is what that costs.</para>
+    /// </summary>
+    private static void WriteProgram(ProgramGenerationResult? program, TextWriter output)
+    {
+        if (program is null)
+        {
+            output.WriteLine("PROGRAM     : NOT COMPUTED — the run stopped before any declaration was read. Nothing here says "
+                           + "whether this program's cyclic OB or its instance DBs are generated or authored.");
+            return;
+        }
+
+        output.WriteLine($"PROGRAM     : {program.Summary()}");
+
+        if (program.CyclicOb is { } ob)
+        {
+            output.WriteLine($"  GENERATED  OB {ob.BlockName} — {ob.CalledBlocks.Count} call(s), in order: "
+                           + string.Join(" → ", ob.CalledBlocks));
+        }
+
+        foreach (var db in program.InstanceDbs)
+        {
+            output.WriteLine($"  GENERATED  DB {db.DbName} — instance of {db.FbName}, members "
+                           + (db.Members == InstanceDbMemberSource.ProjectedFromFb
+                               ? "PROJECTED from that FB's interface. Every start value it carries was DECLARED."
+                               : $"LEFT TO TIA, which fills them from the FB — INCLUDING its "
+                                 + $"{db.InheritedStartValues.Count} start value(s)."));
+        }
+
+        foreach (var absent in program.NotDeclared)
+            output.WriteLine("  AUTHORED   " + absent);
+
+        if (program.Obligations.Count == 0)
+            return;
+
+        output.WriteLine();
+        output.WriteLine($"  🔴 OBLIGATIONS ({program.Obligations.Count}) — THIS TOOL CANNOT DISCHARGE ANY OF THEM:");
+        foreach (var obligation in program.Obligations)
             output.WriteLine("     - " + obligation);
     }
 
@@ -968,7 +1021,134 @@ public static class LoopCli
             // that declares nothing — see LoopRequest.LaneDeclarations for why the empty ones travel too.
             LaneDeclarations: (binding.Slots ?? new List<SlotBindingDocument>())
                 .Select(ToLaneDeclaration)
-                .ToArray());
+                .ToArray(),
+
+            // 🔴 *** AND WHAT THE PROGRAM GENERATES — the cyclic OB and the instance DBs. *** Absent leaves
+            // it null, which every lane written before this field existed means, and the run then REPORTS
+            // those artifacts as authored rather than passing over them.
+            ProgramGeneration: ToProgramDeclaration(binding.GenerateProgram));
+    }
+
+    /// <summary>
+    /// 🔴 <b>The <c>generateProgram</c> section, off the wire.</b> Every parse failure is a THROW, never a
+    /// silently dropped field: a misspelt key here produces an artifact that is simply absent, and an absent
+    /// instance DB preset is a ZERO on the controller — a plausible number rather than an error.
+    /// </summary>
+    private static ProgramDeclaration? ToProgramDeclaration(ProgramGenerationDocument? document)
+    {
+        if (document is null)
+            return null;
+
+        return new ProgramDeclaration(
+            ToCyclicOb(document.CyclicOb),
+            (document.InstanceDbs ?? new List<InstanceDbDocument>()).Select(ToInstanceDb).ToArray());
+    }
+
+    private static CyclicObDeclaration? ToCyclicOb(CyclicObDocument? document)
+    {
+        if (document is null)
+            return null;
+
+        if (document.BlockName is not { Length: > 0 } name)
+            throw new InvalidDataException("`generateProgram.cyclicOb` declares no `blockName`. There is nothing to generate.");
+
+        // The number and the event class travel together with the name or not at all. Hard rule 3 forbids
+        // inventing a number, and an OB's is fixed by its event class rather than allocated — which is why
+        // OBs are excluded from the 9000-9999 harness band.
+        if (document.Number is not int number)
+        {
+            throw new InvalidDataException(
+                $"`generateProgram.cyclicOb` declares `blockName` '{name}' and no `number`. It is REQUIRED and never "
+                + "defaulted: an OB's number is fixed by its event class, so it is read off the project rather than chosen.");
+        }
+
+        if (document.SecondaryType is not { Length: > 0 } secondaryType)
+        {
+            throw new InvalidDataException(
+                $"`generateProgram.cyclicOb` '{name}' declares no `secondaryType`. The event class decides which system "
+                + "parameters TIA requires on the block, and the generator will not assume one.");
+        }
+
+        if (document.Title is not { Length: > 0 } title)
+            throw new InvalidDataException($"`generateProgram.cyclicOb` '{name}' declares no `title`; the generator will not invent one.");
+
+        var calls = (document.Calls ?? new List<ObCallDocument>()).Select((call, index) =>
+        {
+            if (call.Block is not { Length: > 0 } block)
+                throw new InvalidDataException($"`generateProgram.cyclicOb.calls[{index}]` has no `block`. There is nothing to call.");
+
+            if (call.NetworkTitle is not { Length: > 0 } networkTitle)
+            {
+                throw new InvalidDataException(
+                    $"`generateProgram.cyclicOb.calls[{index}]` calls '{block}' with no `networkTitle`. Every network gets a "
+                    + "title (C-201) and the generator will not invent one — least of all in the block whose entire content "
+                    + "is the order its networks are in.");
+            }
+
+            // Absent `instance` is the CLAIM that this is an FC — stateless, with no instance at all.
+            return new ObCall(
+                block,
+                string.IsNullOrWhiteSpace(call.Instance) ? null : call.Instance,
+                networkTitle,
+                string.IsNullOrWhiteSpace(call.NetworkComment) ? null : call.NetworkComment);
+        }).ToArray();
+
+        return new CyclicObDeclaration(new CyclicObNaming(name, number, secondaryType, title), calls);
+    }
+
+    private static InstanceDbDeclaration ToInstanceDb(InstanceDbDocument document, int index)
+    {
+        if (document.DbName is not { Length: > 0 } name)
+            throw new InvalidDataException($"`generateProgram.instanceDbs[{index}]` declares no `dbName`. There is nothing to generate.");
+
+        if (document.DbNumber is not int number)
+        {
+            throw new InvalidDataException(
+                $"`generateProgram.instanceDbs[{index}]` ('{name}') declares no `dbNumber`. It is REQUIRED and never defaulted: "
+                + "hard rule 3 forbids inventing one, and harness objects come from the reserved 9000-9999 range the caller "
+                + "allocates from — `converter claim --allocate --kind block-number --type DB --floor 9000`.");
+        }
+
+        if (document.Fb is not { Length: > 0 } fb)
+        {
+            throw new InvalidDataException(
+                $"`generateProgram.instanceDbs[{index}]` ('{name}') declares no `fb`. An instance DB is a projection of an FB's "
+                + "interface; with no FB named there is no interface to project.");
+        }
+
+        if (document.Comment is not { Length: > 0 } comment)
+        {
+            throw new InvalidDataException(
+                $"`generateProgram.instanceDbs[{index}]` ('{name}') declares no `comment`. Every DB in the committed corpus "
+                + "carries one and the generator will not invent it.");
+        }
+
+        // 🔴 NO DEFAULT, AND A MISSPELT VALUE IS A THROW. The two shapes differ in what happens to the FB's
+        // own start values — `projectedFromFb` drops every one of them unless a preset declares it, while
+        // `leftToTia` inherits the lot. A default here would silently decide a question about presets.
+        var members = document.Members switch
+        {
+            "projectedFromFb" => InstanceDbMemberSource.ProjectedFromFb,
+            "leftToTia" => InstanceDbMemberSource.LeftToTia,
+            null or "" => throw new InvalidDataException(
+                $"`generateProgram.instanceDbs[{index}]` ('{name}') declares no `members`. Say `projectedFromFb` — the structure "
+                + "is projected from the FB and every start value is dropped unless a preset declares it — or `leftToTia`, which "
+                + "emits an empty MEMBERS section and lets TIA fill the instance from the FB INCLUDING its start values. There "
+                + "is no default, because the two differ over exactly the presets."),
+            var other => throw new InvalidDataException(
+                $"`generateProgram.instanceDbs[{index}]` ('{name}') declares `members` '{other}'. The two values are "
+                + "`projectedFromFb` and `leftToTia`."),
+        };
+
+        var presets = (document.Presets ?? new List<InstanceDbPresetDocument>()).Select((preset, j) =>
+        {
+            if (preset.Path is not { Length: > 0 } path)
+                throw new InvalidDataException($"`generateProgram.instanceDbs[{index}].presets[{j}]` has no `path`. There is nothing to set.");
+
+            return new InstanceDbPreset(path, preset.Value, preset.Cleared);
+        }).ToArray();
+
+        return new InstanceDbDeclaration(new InstanceDbNaming(name, number, fb, comment), members, presets);
     }
 
     /// <summary>

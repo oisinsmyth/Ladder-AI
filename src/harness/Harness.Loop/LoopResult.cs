@@ -337,7 +337,31 @@ public sealed record LoopGeneration(
     /// program without moving the stamp. The shell fragments are NOT, and cannot be: they are networks, not
     /// blocks, and nothing imports them.</para>
     /// </summary>
-    LaneGenerationResult? Lane = null)
+    LaneGenerationResult? Lane = null,
+
+    /// <summary>
+    /// 🔴 <b>THE PROGRAM-LEVEL ARTIFACTS — the cyclic OB and the instance DBs, generated rather than typed.</b>
+    ///
+    /// <para><c>Harness.Map.InstanceDbGenerator</c> and <c>Harness.Map.CyclicObGenerator</c> close the half of
+    /// a lane's hand-authored IR that belongs to the PROGRAM rather than to one slot. An instance DB is a
+    /// mechanical projection of its FB's interface — the committed <c>iDB_HopperBlockageStim.ir</c> is 52
+    /// typed lines its FB determines in full, and is already stale against it — <b>except for its start
+    /// values, which are presets, and a preset is a claim about the plant</b>. Those are declared or the
+    /// generation refuses.</para>
+    ///
+    /// <para>🔴 <b>And the OB is where <c>SlotFcGenerator</c>'s obligation becomes a check</b>: generated in
+    /// the same pass as the slot FCs, it is refused if it does not call one of them, or calls it after the
+    /// copy layer.</para>
+    ///
+    /// <para><b>Null is NOT COMPUTED and an EMPTY result is NOTHING DECLARED; neither is "nothing to
+    /// generate".</b> <see cref="Harness.Map.ProgramGenerationResult.NotDeclared"/> carries the sentence that
+    /// says which artifacts remain AUTHORED.</para>
+    ///
+    /// <para>🔴 <b>These objects ARE in the build stamp.</b> The OB executes and the instance DBs are loaded;
+    /// neither embeds the stamp, so hashing them is not circular the way the copy layer is, and leaving them
+    /// out would let a declaration change the deployed program without moving the stamp.</para>
+    /// </summary>
+    ProgramGenerationResult? Program = null)
 {
     /// <summary>True only when a copy layer exists. Equivalent to <c>Stopped is null</c> by construction.</summary>
     public bool Generated => Stopped is null;
@@ -369,9 +393,14 @@ public sealed record LoopGeneration(
         // the refusal, and a run refused for an unrelated reason must still be able to say which parts of
         // the lane were declared. A stop that drops the report answers "what is still hand-built?" with
         // silence at exactly the moment somebody is reading closely.
-        LaneGenerationResult? lane = null) =>
+        LaneGenerationResult? lane = null,
+
+        // Carried onto the stop path for the same reason `lane` is: a run refused for a program-generation
+        // reason must be able to PRINT the refusal, and a run refused for an unrelated reason must still be
+        // able to say which of its OB and instance DBs were declared and which remain hand-authored.
+        ProgramGenerationResult? program = null) =>
         new(outcome, gate, sizeReport, null, default, copyLayer, retention, caveats, detail,
-            Lane: lane);
+            Lane: lane, Program: program);
 }
 
 /// <summary>
