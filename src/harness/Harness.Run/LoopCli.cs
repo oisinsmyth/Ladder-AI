@@ -507,6 +507,11 @@ public static class LoopCli
             foreach (var refusal in generation.Refusals)
                 output.WriteLine("  - " + refusal);
 
+            // The lane's refusals are on a different object from the copy layer's, and printing only the
+            // second would leave a NotGeneratable stop with its whole cause missing.
+            foreach (var refusal in generation.Lane?.Refusals ?? Array.Empty<string>())
+                output.WriteLine("  - " + refusal);
+
             // *** THE 0.1b FINDINGS THEMSELVES, NOT ONLY THEIR COUNT. *** `REFUSED: 159 finding(s) across
             // 45 object(s)` is a number a reader cannot act on, and the objects are named in the findings
             // and nowhere else — so the one path that could tell you WHICH object and WHICH address was
@@ -620,20 +625,51 @@ public static class LoopCli
 
         output.WriteLine();
 
-        foreach (var obj in generation.Objects)
+        // 🔴 *** WHAT THE LANE GENERATED AND WHAT IT DID NOT — PRINTED ON EVERY RUN, INCLUDING THE ONE THAT
+        // DECLARED NOTHING. *** A section that appears only when something was generated teaches a reader
+        // that its absence means there was nothing left to generate, which is the opposite of the truth on
+        // every lane that exists.
+        WriteLane(generation.Lane, output);
+
+        output.WriteLine();
+
+        foreach (var obj in generation.Objects.Concat(generation.Lane?.Objects ?? Array.Empty<HarnessObject>()))
         {
             output.WriteLine($"----- {obj.Kind} {obj.Name} -----");
             output.WriteLine(obj.Ir.TrimEnd('\n'));
             output.WriteLine();
         }
 
+        foreach (var fragment in generation.Lane?.Fragments ?? Array.Empty<StimShellFragment>())
+        {
+            output.WriteLine($"----- STIMULUS SHELL (networks 1..{fragment.Shell.Networks.Count} of {fragment.HeadName}) -----");
+            output.WriteLine(fragment.Shell.Ir.TrimEnd('\n'));
+            output.WriteLine();
+        }
+
         if (emitDir is not null)
         {
-            foreach (var obj in generation.Objects)
+            foreach (var obj in generation.Objects.Concat(generation.Lane?.Objects ?? Array.Empty<HarnessObject>()))
             {
                 var path = Path.Combine(emitDir, obj.Name + ".ir");
                 writeFile(path, obj.Ir);
                 output.WriteLine($"WRITTEN: {path}");
+            }
+
+            // 🔴 *** THE SHELL FRAGMENTS GO IN A SUBDIRECTORY, AND THAT IS NOT TIDINESS. *** Every loader
+            // that turns an emit directory back into a --program list globs `*.ir` NON-RECURSIVELY. A
+            // fragment sitting beside the deployables would be picked up as a block, handed to the
+            // converter, and refused — or worse, counted. It is networks, not a block: no header, no
+            // interface, no statics.
+            foreach (var fragment in generation.Lane?.Fragments ?? Array.Empty<StimShellFragment>())
+            {
+                var shellPath = Path.Combine(emitDir, StimShellFragment.Subdirectory, fragment.FileName);
+                writeFile(shellPath, fragment.Shell.Ir);
+                output.WriteLine($"WRITTEN: {shellPath}  (A FRAGMENT — networks only, NOT an importable block)");
+
+                var requiresPath = Path.Combine(emitDir, StimShellFragment.Subdirectory, fragment.RequirementsFileName);
+                writeFile(requiresPath, fragment.Requirements());
+                output.WriteLine($"WRITTEN: {requiresPath}");
             }
         }
 
@@ -643,6 +679,68 @@ public static class LoopCli
         return admissible
             ? runnable ? LoopExit.Generated : LoopExit.GeneratedNotRunnable
             : LoopExit.GeneratedNotAdmissible;
+    }
+
+    /// <summary>
+    /// 🔴 <b>WHAT THE LANE GENERATED, WHAT IT DECLINED TO, AND WHAT NOBODY DECLARED — all three, on every
+    /// run.</b>
+    ///
+    /// <para><b>The third is the one this exists for.</b> Standing a lane up meant hand-authoring eight
+    /// <c>.ir</c> artifacts and the harness generated two of them, and nothing anywhere said so: a reader
+    /// of a clean run could not tell a lane whose test side is generated from one where every block was
+    /// typed. <c>ObjectOrigin</c> was built to answer <i>how much of this lane is still hand-built</i> and
+    /// could only be reached from a document a person had written by hand.</para>
+    ///
+    /// <para><b>AUTHORED is printed as a positive line, never as an absence.</b> An undeclared object and a
+    /// generated one must not be distinguishable only by which line is missing.</para>
+    /// </summary>
+    private static void WriteLane(LaneGenerationResult? lane, TextWriter output)
+    {
+        if (lane is null)
+        {
+            output.WriteLine("LANE        : NOT COMPUTED — the run stopped before any declaration was read. Nothing here says whether "
+                           + "this lane's slot FC or stimulus head are generated or authored.");
+            return;
+        }
+
+        output.WriteLine($"LANE        : {lane.Summary()}");
+
+        foreach (var slot in lane.Slots)
+        {
+            if (slot.SlotFc is { } fc)
+            {
+                output.WriteLine($"  GENERATED  slot '{slot.SlotId}': FC {fc.BlockName} — calls {fc.StimulusHeadBlock} FIRST, "
+                               + $"then {fc.BlockUnderTestBlock}. The order is the whole content.");
+            }
+
+            if (slot.StimShell is { } shell)
+            {
+                output.WriteLine($"  GENERATED  slot '{slot.SlotId}': {shell.HeadName} networks 1..{shell.Shell.Networks.Count} "
+                               + $"(the index shell) — {shell.Shell.RequiredUdtMembers.Count} UDT member(s) and "
+                               + $"{shell.Shell.RequiredStatics.Count} static(s) are REFERENCED and NOT created. "
+                               + "IT IS A FRAGMENT, NOT A BLOCK.");
+            }
+
+            foreach (var absent in slot.NotDeclared)
+                output.WriteLine("  AUTHORED   " + absent);
+        }
+
+        // 🔴 THE OBLIGATIONS, AND THE FIRST OF THEM IS WHY THIS WHOLE SEAM EXISTS. A hand-written slot FC
+        // was deployed and called by nothing: every vector timed out while the start echo reported
+        // "commanded, observed to run" throughout, because both halves of that echo live in the copy layer,
+        // which IS called. It cost a wave and three hours. The generator emits its own obligation so the
+        // omission is a thing somebody DECLINED to do rather than a thing nobody was told about — and this
+        // is where it has to arrive, or it was emitted into a variable and dropped.
+        if (lane.Obligations.Count == 0)
+        {
+            output.WriteLine("  (no obligations — nothing was generated, so nothing is owed by this run)");
+            return;
+        }
+
+        output.WriteLine();
+        output.WriteLine($"  🔴 OBLIGATIONS ({lane.Obligations.Count}) — THIS TOOL CANNOT DISCHARGE ANY OF THEM:");
+        foreach (var obligation in lane.Obligations)
+            output.WriteLine("     - " + obligation);
     }
 
     /// <summary>
@@ -864,7 +962,142 @@ public static class LoopCli
 
             // 🔴 Gate 5c's second operand, read off the document rather than the derived slots — see
             // LoopRequest.MapAuthor for why it is document-level.
-            MapAuthor: new AgentIdentity(binding.DeclaredBy ?? string.Empty));
+            MapAuthor: new AgentIdentity(binding.DeclaredBy ?? string.Empty),
+
+            // 🔴 *** WHAT THE LANE GENERATES RATHER THAN HAS TYPED. *** One per slot, INCLUDING every slot
+            // that declares nothing — see LoopRequest.LaneDeclarations for why the empty ones travel too.
+            LaneDeclarations: (binding.Slots ?? new List<SlotBindingDocument>())
+                .Select(ToLaneDeclaration)
+                .ToArray());
+    }
+
+    /// <summary>
+    /// 🔴 <b>One slot's <c>generate</c> section, off the wire — and an ABSENT section produces an EMPTY
+    /// declaration rather than nothing at all.</b>
+    ///
+    /// <para>Dropping the slot would make "nobody declared anything for it" indistinguishable from "it does
+    /// not exist", and the report's whole job here is to say which parts of a lane are still hand-built.
+    /// This is the same rule the binding document already applies four times over — an absence is a fact to
+    /// be carried, not a row to be skipped.</para>
+    ///
+    /// <para><b>Every parse failure is a THROW, never a silently dropped field.</b> A misspelt phase
+    /// <c>kind</c> falling back to <c>Unstated</c> would produce a head whose reset pulse has no terms —
+    /// which the generator refuses, but for the wrong reason and naming the wrong thing.</para>
+    /// </summary>
+    private static LaneDeclaration ToLaneDeclaration(SlotBindingDocument slot)
+    {
+        var id = slot.SlotId ?? string.Empty;
+        var declared = slot.Generate;
+
+        if (declared is null)
+            return new LaneDeclaration(id);
+
+        // The name and the number travel together or not at all. A name with no number would reach
+        // SlotFcGenerator's own refusal, which is correct and says nothing about WHERE the number was
+        // meant to come from; hard rule 3 forbids inventing one and the reserved range is 9000-9999.
+        SlotFcNaming? naming = null;
+        if (declared.SlotFcName is { Length: > 0 } || declared.SlotFcNumber is not null)
+        {
+            if (declared.SlotFcName is not { Length: > 0 } name)
+            {
+                throw new InvalidDataException(
+                    $"slot '{id}' declares `slotFcNumber` and no `slotFcName`. A block number with no block names nothing.");
+            }
+
+            if (declared.SlotFcNumber is not int number)
+            {
+                throw new InvalidDataException(
+                    $"slot '{id}' declares `slotFcName` '{name}' and no `slotFcNumber`. The number is REQUIRED and is never "
+                    + "defaulted: hard rule 3 forbids inventing one, and harness objects come from the reserved 9000-9999 range "
+                    + "the caller allocates from — `converter claim --allocate --kind block-number --type FC --floor 9000`.");
+            }
+
+            naming = new SlotFcNaming(name, number);
+        }
+
+        return new LaneDeclaration(
+            id,
+            naming,
+            ToSlotCall(declared.StimulusHead, id, "stimulusHead"),
+            ToSlotCall(declared.BlockUnderTest, id, "blockUnderTest"),
+            ToStimHeadSpec(declared.StimHead, id));
+    }
+
+    private static SlotCall? ToSlotCall(CalledBlockDocument? call, string slotId, string field)
+    {
+        if (call is null)
+            return null;
+
+        if (call.Block is not { Length: > 0 } block)
+            throw new InvalidDataException($"slot '{slotId}' declares `{field}` with no `block`. There is nothing to call.");
+
+        // C-201: every network gets a title, and a generated one is no exception. Refused rather than
+        // defaulted — a generator that invents "Network 1" produces a block that passes review and tells a
+        // reader nothing about why the call is where it is.
+        if (call.NetworkTitle is not { Length: > 0 } title)
+        {
+            throw new InvalidDataException(
+                $"slot '{slotId}' declares `{field}.block` '{block}' with no `networkTitle`. Every network gets a title (C-201) "
+                + "and the generator will not invent one: an invented title passes review and tells a reader nothing.");
+        }
+
+        // Absent `instance` is the CLAIM that this is an FC — stateless, with no instance at all — and the
+        // emitted call then omits the leading positional argument. It is not a blank.
+        return new SlotCall(block, string.IsNullOrWhiteSpace(call.Instance) ? null : call.Instance, title);
+    }
+
+    private static StimHeadSpec? ToStimHeadSpec(StimHeadSpecDocument? spec, string slotId)
+    {
+        if (spec is null)
+            return null;
+
+        if (spec.HeadName is not { Length: > 0 } head)
+        {
+            throw new InvalidDataException(
+                $"slot '{slotId}' declares a `stimHead` with no `headName`. The emitted shell is named after it, and a fragment "
+                + "nobody can attach to a head is a file with no owner.");
+        }
+
+        var phases = (spec.Phases ?? new List<StimPhaseDocument>())
+            .Select(p => new StimPhase(
+                p.Bit ?? string.Empty,
+                p.End ?? string.Empty,
+                p.Duration ?? string.Empty,
+                ParsePhaseKind(p.Kind, p.Bit, slotId)))
+            .ToArray();
+
+        return new StimHeadSpec(
+            head,
+            spec.UutReset ?? string.Empty,
+            spec.Watchdog ?? string.Empty,
+            spec.Dwell ?? string.Empty,
+            phases,
+            spec.Causes?.ToArray() ?? Array.Empty<string>(),
+            spec.CycleEdges?.ToArray() ?? Array.Empty<string>(),
+            spec.OutcomeBits?.ToArray() ?? Array.Empty<string>());
+    }
+
+    /// <summary>
+    /// 🔴 <b>An unrecognised phase kind is a THROW, exactly as an unrecognised <c>phaseTrigger</c> is.</b>
+    ///
+    /// <para><c>Reset</c> is the only kind the shell generator READS — it builds the reset pulse from the
+    /// phases carrying it. So a typo'd <c>"rest"</c> falling back to <c>Unstated</c> yields a head with no
+    /// reset phase, which the generator then refuses for having no reset pulse at all: a true refusal
+    /// pointing at the wrong thing, sending its reader to redesign a phase list that was already right.</para>
+    /// </summary>
+    private static StimPhaseKind ParsePhaseKind(string? declared, string? bit, string slotId)
+    {
+        if (string.IsNullOrWhiteSpace(declared))
+            return StimPhaseKind.Unstated;
+
+        if (Enum.TryParse<StimPhaseKind>(declared, ignoreCase: true, out var parsed) && parsed != StimPhaseKind.Unstated)
+            return parsed;
+
+        throw new InvalidDataException(
+            $"slot '{slotId}' declares phase '{bit}' with kind '{declared}', which is not one of Disarm, Reset, Verify, Scenario "
+            + "or Settle. *** REFUSED RATHER THAN TREATED AS UNSTATED: *** Reset is the only kind the shell reads, so a typo here "
+            + "silently produces a head that can never clear the block under test — and every cleardown outcome then reports "
+            + "whatever was already standing.");
     }
 
     private static IReadOnlyList<MirroredSignal> Signals(List<MirroredSignalDocument>? rows) =>
@@ -1493,6 +1726,12 @@ public static class LoopCli
         output.WriteLine("         the mirror width and the latch inventory. IT CONSTRUCTS NO GATEWAY AND READS NO HOST: nothing is");
         output.WriteLine("         imported, compiled or downloaded, and no socket exists on that path. Use it to review what would");
         output.WriteLine("         be deployed. --emit <dir> also writes one .ir file per generated object.");
+        output.WriteLine();
+        output.WriteLine("         A slot whose binding carries a `generate` section ALSO gets its SLOT FC and its STIMULUS SHELL");
+        output.WriteLine("         generated here. The slot FC is a deployable block and IS in the build stamp; the shell is");
+        output.WriteLine("         NETWORKS 1..N OF A HEAD AND NOT A BLOCK, so it is written to " + StimShellFragment.Subdirectory + "/ and is never a");
+        output.WriteLine("         manifest object. A slot that declares nothing is REPORTED AS AUTHORED — absent never means");
+        output.WriteLine("         generated, and generated is never reported for something a person wrote.");
         output.WriteLine();
         output.WriteLine("--verify uses the VERIFYING gateway: it reads the build stamp off the device and refuses any mismatch.");
         output.WriteLine("         It imports nothing, compiles nothing, downloads nothing and writes nothing. Use it to run vectors");

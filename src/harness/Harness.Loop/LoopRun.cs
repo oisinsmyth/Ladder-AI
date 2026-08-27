@@ -159,7 +159,24 @@ public sealed record LoopRequest(
     // ⚠️ TWO SITES READ THIS AND ONLY ONE OF THEM CHECKS IT. The gate call at step 2 is the real consumer.
     // The per-vector map built in Package() takes it too and NOTHING downstream looks at it — see the note
     // at that call site for why it is passed anyway and why no mutation there can fail.
-    AgentIdentity MapAuthor = default)
+    AgentIdentity MapAuthor = default,
+
+    // 🔴 *** WHAT THE LANE GENERATES RATHER THAN HAS TYPED — one per slot, INCLUDING the slots that declare
+    // nothing. ***
+    //
+    // `SlotFcGenerator` and `StimShellGenerator` both existed, both were tested, and neither had a
+    // production caller: a generator nothing calls removes no work at all, and the two objects whose whole
+    // content is derivable from a handful of declared names were the two still being hand-authored.
+    //
+    // NULL AND EMPTY BOTH MEAN "NOTHING WAS DECLARED", which is what every lane written before this field
+    // existed means, and those lanes go on behaving exactly as they did. A slot that declares nothing is
+    // still PASSED HERE with its fields null, so the report can say its slot FC and its head are AUTHORED —
+    // omitting the slot instead would make "nobody declared anything for it" indistinguishable from "it
+    // does not exist", which is the same silence this loop keeps closing one field at a time.
+    //
+    // Appended at the END, like every field before it: this record has enough positional parameters that
+    // inserting one mid-list silently re-binds arguments at a call site.
+    IReadOnlyList<LaneDeclaration>? LaneDeclarations = null)
 {
     /// <summary>The factor, defaulting to uncompressed only where the caller passed nothing at all.</summary>
     public RuntimeCompression Compression => RuntimeCompression ?? Harness.Wire.RuntimeCompression.Uncompressed;
@@ -330,7 +347,21 @@ public static class LoopRun
         }
 
         // ---- 5. DEPLOY — the device boundary --------------------------------------------------------
-        var deployment = gateway.Deploy(copyLayer.Objects.Concat(request.ProgramUnderTest).ToArray(), stamp);
+        //
+        // 🔴 *** THE LANE-GENERATED OBJECTS GO DOWN TOO, AND UNDER THE SAME PRECEDENCE THE STAMP USED. ***
+        // A slot FC that is generated, stamped and then not deployed is the orphan by a different route:
+        // the copy layer runs, its start echo reports "commanded, observed to run" from both halves of
+        // itself, and the block under test never executes. The generated version wins a name collision
+        // here for exactly the reason it wins one in the stamp — the two sets must be the same set, or the
+        // version register would confirm a program other than the one on the wire.
+        var laneObjects = generation.Lane?.Objects ?? Array.Empty<HarnessObject>();
+        var laneNames = new HashSet<string>(laneObjects.Select(o => o.Name), StringComparer.OrdinalIgnoreCase);
+
+        var deployedProgram = laneObjects
+            .Concat(request.ProgramUnderTest.Where(o => !laneNames.Contains(o.Name)))
+            .ToArray();
+
+        var deployment = gateway.Deploy(copyLayer.Objects.Concat(deployedProgram).ToArray(), stamp);
 
         // 🔴 IMMEDIATELY, AND BEFORE THE NOT-DEPLOYED STOP. The refusing and partial paths are the ones a
         // reader examines closely, and they are exactly the runs where "which gateway was this?" decides
@@ -413,7 +444,13 @@ public static class LoopRun
             // OUTLIVES THE RUN. *** It reached LoopResult and stopped one argument short of the packages,
             // so a consumer reading a package alone could not tell a complete stamp from a short one.
             // Handed down from the SAME generation the stamp came from, never re-derived.
-            generation.Manifest);
+            generation.Manifest,
+
+            // 🔴 THE SET ACTUALLY SENT, INCLUDING WHAT THIS RUN GENERATED. `ManifestOf` compares the
+            // device's load manifest against it, and comparing against `request.ProgramUnderTest` would
+            // leave a generated slot FC that failed to load reported as Loaded — which is the orphan
+            // reading as healthy, one artifact further on.
+            deployedProgram);
 
         // ---- 8b. RELEASE THE RIG — AFTER PACKAGING, NEVER BEFORE ------------------------------------
         //
@@ -806,8 +843,51 @@ public static class LoopRun
         // run reported "NO STAGED CORPUS WAS SUPPLIED" - honest, and the reason Y3 was not closed. The
         // coverage is computed inside this derivation, from the loop that feeds the hash, so it cannot
         // disagree with the manifest beside it. Null stays null and stays loud.
+        //
+        // ---- 3a. THE REST OF THE LANE'S TEST SIDE, GENERATED --------------------------------------
+        //
+        // 🔴 *** TWO WORKING GENERATORS HAD NO PRODUCTION CALLER, AND A GENERATOR NOTHING CALLS REMOVES NO
+        // WORK. *** `SlotFcGenerator` and `StimShellGenerator` were reachable only from their own tests,
+        // so the slot FC and the head's 18-network index shell — whose entire content is derived from a
+        // handful of declared names and three declared lists — were still hand-authored on every lane.
+        //
+        // It runs BEFORE the stamp because the generated slot FCs are stamp INPUTS. The copy layer is
+        // excluded from the stamp because it embeds the stamp and hashing it would be circular; a slot FC
+        // embeds nothing and EXECUTES ON THE CONTROLLER, so leaving it out would let a changed declaration
+        // change the deployed program without moving the stamp — the pre-fix `Main` shape, one artifact
+        // over.
+        //
+        // A lane declaring nothing produces an empty result and the identical stamp it produced before this
+        // existed, which is asserted rather than assumed.
+        var lane = LaneGenerator.Generate(request.LaneDeclarations);
+
+        if (lane.Refused)
+        {
+            return LoopGeneration.Stop(LoopOutcome.NotGeneratable, gate, mapResult.SizeReport, null, caveats,
+                $"{lane.Refusals.Count} lane-generation declaration(s) could not be honoured, so NOTHING was generated — "
+                + "not the slot FC, not the stimulus shell, and not the copy layer. *** A COPY LAYER EMITTED BESIDE A REFUSED "
+                + "SLOT FC IS THE ORPHAN WITH THE PAPERWORK FILED: *** the copy layer is the block that IS called, both halves "
+                + "of the start echo live inside it, and the block under test never runs. "
+                + string.Join(" | ", lane.Refusals),
+                null, lane);
+        }
+
+        // 🔴 THE GENERATED OBJECTS GO IN AHEAD OF `--program`, AND A NAME COLLISION RESOLVES TOWARD THE
+        // GENERATOR. A caller who has promoted an earlier run's slot FC into the lane's `ir/` hands it back
+        // in through --program; hashing both copies would put one object in the stamp twice, and hashing
+        // the PROMOTED one would stamp a file that this run has just superseded.
+        var stampInput = MergeGenerated(lane.Objects, request.ProgramUnderTest, out var superseded);
+
+        if (superseded.Count > 0)
+        {
+            caveats = caveats.Append(new LoopCaveat("lane-generated-supersedes",
+                $"{superseded.Count} object(s) supplied as the program under test were SUPERSEDED by this run's generated "
+                + $"version and the generated IR is what was stamped: {string.Join(", ", superseded)}. A promoted copy of a "
+                + "generated object is a snapshot of an earlier declaration, and the stamp must describe what this run emits.")).ToArray();
+        }
+
         var stamp = BuildStamp.Derive(
-            map, request.Bindings, request.Naming, request.ProgramUnderTest, request.StagedCorpus,
+            map, request.Bindings, request.Naming, stampInput, request.StagedCorpus,
             out _, out var manifest);
         var copyLayer = CopyLayerGenerator.Generate(map, request.Bindings, request.Naming, stamp);
 
@@ -815,7 +895,7 @@ public static class LoopRun
         {
             return LoopGeneration.Stop(LoopOutcome.NotDerivable, gate, mapResult.SizeReport, null, caveats,
                 "the copy layer could not be generated: " + string.Join(" | ", copyLayer.Refusals),
-                copyLayer);
+                copyLayer, lane);
         }
 
         // ---- 4. ASSERT 0.1b -------------------------------------------------------------------------
@@ -846,7 +926,7 @@ public static class LoopRun
         {
             return LoopGeneration.Stop(LoopOutcome.NotAssertable, gate, mapResult.SizeReport, retention, caveats,
                 "the generated objects failed the non-retentive assertion, so nothing was deployed: " + retention.Summary(),
-                copyLayer);
+                copyLayer, lane);
         }
 
         // ---- 4c. THE INERT EXPECTATION — computed from the bindings, REPORTED here, GATED in Execute ---
@@ -863,7 +943,8 @@ public static class LoopRun
         return new LoopGeneration(null, gate, mapResult.SizeReport, map, stamp, copyLayer, retention, caveats,
             $"the copy layer was generated: {copyLayer.Objects.Count} object(s), {copyLayer.Require().Networks.Count} network(s), "
             + $"{copyLayer.Require().Tags.Count} mirror tag(s), {map.TotalRegisters} register(s) of mirror. NOTHING WAS DEPLOYED. "
-            + inertRest.Summary(),
+            + inertRest.Summary()
+            + (request.LaneDeclarations is { Count: > 0 } ? " LANE: " + lane.Summary() : string.Empty),
             OrderOf(request),
             inertRest,
             floor,
@@ -873,7 +954,43 @@ public static class LoopRun
             // `request` parameter above scales nothing for the caller, which holds its own reference —
             // measured on the rig, where the gate reported 18 coordinates re-expressed and the device got
             // all 18 unscaled.
-            request.Vectors);
+            request.Vectors,
+            lane);
+    }
+
+    /// <summary>
+    /// 🔴 <b>The generated objects FIRST, then everything supplied under a name not already taken — and the
+    /// displaced names are handed back rather than dropped.</b>
+    ///
+    /// <para>A caller who has promoted an earlier run's generated slot FC into the lane's <c>ir/</c> hands
+    /// it straight back in through <c>--program</c>. Hashing both copies would put one object in the stamp
+    /// twice; hashing the PROMOTED one would stamp a file this run has just superseded, which is how a lane
+    /// gets pointed at a stale block with the stamp following it. The generator's output wins because it is
+    /// the thing about to be written, and the substitution is REPORTED as a caveat rather than made
+    /// silently — a swap nobody is told about is the same defect one layer down.</para>
+    ///
+    /// <para>The copy layer is not in either list here: <c>BuildStamp</c> excludes it BY NAME, from
+    /// <c>naming</c>, because it embeds the stamp and hashing it would be circular.</para>
+    /// </summary>
+    private static IReadOnlyList<HarnessObject> MergeGenerated(
+        IReadOnlyList<HarnessObject> generated,
+        IReadOnlyList<HarnessObject> supplied,
+        out IReadOnlyList<string> superseded)
+    {
+        var byName = new HashSet<string>(generated.Select(o => o.Name), StringComparer.OrdinalIgnoreCase);
+        var displaced = new List<string>();
+        var merged = new List<HarnessObject>(generated);
+
+        foreach (var obj in supplied ?? Array.Empty<HarnessObject>())
+        {
+            if (byName.Contains(obj.Name))
+                displaced.Add(obj.Name);
+            else
+                merged.Add(obj);
+        }
+
+        superseded = displaced;
+        return merged;
     }
 
     /// <summary>
@@ -942,7 +1059,12 @@ public static class LoopRun
         // artifact meant to outlive the run, and a stamp nobody can say the inputs of cannot be re-run.
         // Null is "no manifest was recorded", which the artifact states rather than leaving to be read as
         // a clean sheet.
-        ProgramManifest? manifest = null)
+        ProgramManifest? manifest = null,
+
+        // 🔴 What was actually handed to the gateway — the program under test WITH this run's generated
+        // lane objects merged in under the same precedence the stamp used. Null falls back to the
+        // request's own list, which is right for every caller that generates nothing.
+        IReadOnlyList<HarnessObject>? deployedProgram = null)
     {
         var packages = new List<ResultPackage>();
         var slotsCoveredByOneRead = map.ReadPlan(Enumerable.Range(0, map.Slots.Count)).Max(r => r.SlotCount);
@@ -978,7 +1100,7 @@ public static class LoopRun
                 Executed: logIndex?.Executed.Contains(slotIndex) ?? false,
                 ScanAdvance: run.ElapsedScans,
                 RoundTrips: Math.Max(1, client.RoundTrips - roundTripsBefore),
-                Manifest: ManifestOf(deployment, request.ProgramUnderTest),
+                Manifest: ManifestOf(deployment, deployedProgram ?? request.ProgramUnderTest),
                 Version: version);
 
             packages.Add(ResultPackageBuilder.Build(

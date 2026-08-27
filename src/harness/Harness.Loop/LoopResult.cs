@@ -118,6 +118,27 @@ public enum LoopOutcome
     /// nothing whatever about how it came out.
     /// </summary>
     Ran,
+
+    /// <summary>
+    /// 🔴 <b>THE LANE DECLARED PART OF ITS TEST SIDE AND THE DECLARATION COULD NOT BE HONOURED.</b> Nothing
+    /// was generated and nothing was deployed.
+    ///
+    /// <para><b>Distinct from <see cref="NotDerivable"/>, which is about the MAP.</b> Everything here
+    /// derived; what failed is a declaration — a slot FC named without a block number, a head spec whose
+    /// phases do not include a reset, a shell that sets a bit its own re-arm list does not clear.</para>
+    ///
+    /// <para><b>And distinct from declaring NOTHING, which is not a refusal at all.</b> An absent
+    /// declaration means the object is authored, is reported as authored, and the lane runs exactly as it
+    /// did before the field existed. Only a declaration that ASKS for something the generator will not
+    /// invent lands here — <i>every uncertainty is a refusal rather than a guess</i>, which is the contract
+    /// <c>CopyLayerGenerator</c> sets and both of these generators copy.</para>
+    ///
+    /// <para><b>It stops generation, deliberately.</b> A lane whose slot FC was refused and whose copy layer
+    /// was emitted anyway is the orphan with the paperwork filed: the copy layer IS called, its start echo
+    /// reports "commanded, observed to run" from both halves of itself, and the block under test never
+    /// executes. That cost a wave and three hours.</para>
+    /// </summary>
+    NotGeneratable,
 }
 
 /// <summary>A known gap this run rests on, carried with the result rather than closed silently.</summary>
@@ -293,7 +314,30 @@ public sealed record LoopGeneration(
     ///
     /// <para>Null when generation stopped before the vectors were re-expressed.</para>
     /// </summary>
-    IReadOnlyList<SubmissionVector>? Vectors = null)
+    IReadOnlyList<SubmissionVector>? Vectors = null,
+
+    /// <summary>
+    /// 🔴 <b>THE REST OF THE LANE'S TEST SIDE — the slot FC and the stimulus shell, generated rather than
+    /// typed.</b>
+    ///
+    /// <para><c>Harness.Map.SlotFcGenerator</c> and <c>Harness.Map.StimShellGenerator</c> were reachable
+    /// only from their own tests until this field existed. Both emit objects whose entire content is
+    /// derived from a handful of declared names and three declared lists, and both were being hand-authored
+    /// per lane anyway — which is what made a third lane cost a day.</para>
+    ///
+    /// <para><b>Null is NOT COMPUTED and an EMPTY result is NOTHING DECLARED; neither is "nothing to
+    /// generate".</b> A lane that declares no generation keeps working exactly as it did, and
+    /// <see cref="Harness.Map.LaneGenerationResult.NotDeclared"/> carries the sentence that says so per
+    /// slot. The one reading that must never be available is the reverse — an authored object counted as
+    /// generated.</para>
+    ///
+    /// <para>🔴 <b>The slot FCs on this ARE in the build stamp</b>, unlike the copy layer. The copy layer is
+    /// excluded because it embeds the stamp and hashing it would be circular; a slot FC embeds nothing, and
+    /// it executes on the controller — so leaving it out would let the declaration change the deployed
+    /// program without moving the stamp. The shell fragments are NOT, and cannot be: they are networks, not
+    /// blocks, and nothing imports them.</para>
+    /// </summary>
+    LaneGenerationResult? Lane = null)
 {
     /// <summary>True only when a copy layer exists. Equivalent to <c>Stopped is null</c> by construction.</summary>
     public bool Generated => Stopped is null;
@@ -319,8 +363,15 @@ public sealed record LoopGeneration(
         RetentionVerdict? retention,
         IReadOnlyList<LoopCaveat> caveats,
         string detail,
-        CopyLayerResult? copyLayer = null) =>
-        new(outcome, gate, sizeReport, null, default, copyLayer, retention, caveats, detail);
+        CopyLayerResult? copyLayer = null,
+
+        // Carried onto the stop path too: a run refused for a lane-generation reason must be able to PRINT
+        // the refusal, and a run refused for an unrelated reason must still be able to say which parts of
+        // the lane were declared. A stop that drops the report answers "what is still hand-built?" with
+        // silence at exactly the moment somebody is reading closely.
+        LaneGenerationResult? lane = null) =>
+        new(outcome, gate, sizeReport, null, default, copyLayer, retention, caveats, detail,
+            Lane: lane);
 }
 
 /// <summary>

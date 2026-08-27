@@ -923,6 +923,7 @@ public static class BatchCli
         // --program list that contributes nothing, and `ProgramFiles` would then report the absence from
         // three steps away rather than here.
         var emitted = new List<EmittedObject>();
+        var generatedLane = new List<GeneratedObject>();
         try
         {
             Directory.CreateDirectory(args.EmitDir!);
@@ -933,6 +934,36 @@ public static class BatchCli
                 writeFile(path, obj.Ir);
                 emitted.Add(new EmittedObject(obj.Name, path, obj.Kind));
                 output.WriteLine($"  written   {path}");
+            }
+
+            // 🔴 *** THE REST OF THE LANE'S TEST SIDE — GENERATED, AND SEPARATE FROM THE COPY LAYER
+            // BECAUSE IT IS STAMPED. *** The copy layer is excluded from the build stamp (it embeds the
+            // stamp; hashing it would be circular). A slot FC embeds nothing and EXECUTES, so it is hashed
+            // like any other deployed object and recorded with `ObjectRole.SlotFc` rather than folded in
+            // beside the mirror.
+            foreach (var obj in generation.Lane?.Objects ?? Array.Empty<HarnessObject>())
+            {
+                var path = Path.Combine(args.EmitDir!, obj.Name + ".ir");
+                writeFile(path, obj.Ir);
+                generatedLane.Add(new GeneratedObject(obj.Name, path, obj.Kind, ObjectRole.SlotFc));
+                output.WriteLine($"  written   {path}  (generated slot FC)");
+            }
+
+            // 🔴 *** A SHELL FRAGMENT IS NOT AN OBJECT AND IS NEVER RECORDED AS ONE. *** It is networks —
+            // no header, no interface, no statics — so nothing can import it, it cannot be in the stamp,
+            // and a manifest naming it would put an unimportable file in the list the lane deploys from.
+            // It goes in a SUBDIRECTORY because `ManifestExpand` globs `*.ir` non-recursively.
+            foreach (var fragment in generation.Lane?.Fragments ?? Array.Empty<StimShellFragment>())
+            {
+                var shellDir = Path.Combine(args.EmitDir!, StimShellFragment.Subdirectory);
+                Directory.CreateDirectory(shellDir);
+
+                writeFile(Path.Combine(shellDir, fragment.FileName), fragment.Shell.Ir);
+                writeFile(Path.Combine(shellDir, fragment.RequirementsFileName), fragment.Requirements());
+
+                output.WriteLine($"  written   {Path.Combine(shellDir, fragment.FileName)}  "
+                               + $"(networks 1..{fragment.Shell.Networks.Count} of {fragment.HeadName} — A FRAGMENT, NOT A BLOCK, "
+                               + "and deliberately NOT a manifest object)");
             }
         }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException)
@@ -956,11 +987,25 @@ public static class BatchCli
 
                 // Derived, not typed: the generator knows the copy layer needs a call site and knows what
                 // it is called. It cannot create one, so it says so — see LaneManifest.Obligations.
+                //
+                // 🔴 AND THE LANE'S OWN OBLIGATIONS TRAVEL WITH IT. `SlotFcGenerator` emits a call-site
+                // sentence with every block it produces, precisely so the omission becomes a thing somebody
+                // declined to do rather than a thing nobody was told about; `StimShellGenerator` emits what
+                // it cannot do and a person must. Both were emitted into a variable and dropped until this
+                // line existed.
                 generation.Objects
                     .Where(o => o.Kind == HarnessObjectKind.Block)
                     .Select(o => $"'{o.Name}' MUST be called from the cyclic OB. A generated FC nothing calls is deployed, loaded, "
                                + "healthy in every artifact, and never runs.")
-                    .ToArray());
+                    .Concat(generation.Lane?.Obligations ?? Array.Empty<string>())
+                    .ToArray(),
+
+                generatedLane,
+
+                // The head, derived by the FC generator rather than typed on a command line — see
+                // LaneManifest.Derive's `stimulusHead`. Two slots naming two heads means no single head,
+                // and null is the honest answer there.
+                SingleStimulusHead(generation.Lane));
         }
         catch (Exception error) when (error is InvalidOperationException or ArgumentException)
         {
@@ -991,6 +1036,24 @@ public static class BatchCli
                        + $"--submission {args.Submission} --manifest {args.OutPath}");
 
         return BatchExit.Ok;
+    }
+
+    /// <summary>
+    /// 🔴 <b>The one stimulus head this lane's generated slot FCs name, or null when they do not agree.</b>
+    ///
+    /// <para><b>Two heads reads as none, deliberately</b> — the same rule <see cref="LaneManifest.BlockUnderTest"/>
+    /// already applies to the subject. A manifest that picked one of two would put a role on an object that
+    /// half the lane does not treat that way, and guessing is worse than declining.</para>
+    /// </summary>
+    private static string? SingleStimulusHead(LaneGenerationResult? lane)
+    {
+        var heads = (lane?.Slots ?? Array.Empty<LaneSlotGeneration>())
+            .Where(s => s.SlotFc is not null)
+            .Select(s => s.SlotFc!.StimulusHeadBlock)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        return heads.Length == 1 ? heads[0] : null;
     }
 
     /// <summary>A directory becomes its <c>.ir</c> files in a stable order; anything else is itself.</summary>

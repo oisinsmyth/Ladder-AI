@@ -140,6 +140,19 @@ public sealed class BindingDocument
                 // misspelt `basis` silently removes the only thing a reader can check an exclusion by.
                 Collect(signal.InertRest?.UnknownFields, $"{path}.resultSources[{j}].inertRest", found);
             }
+
+            // 🔴 THE GENERATION DECLARATION, TO ITS FULL DEPTH — and here a dropped key fails in the
+            // QUIETEST direction of any level in this document. A misspelt `slotFcNumber` or `stimHead`
+            // does not produce a wrong block; it produces NO block, reported as "nothing was declared,
+            // so this is authored" — which is a true sentence about a document that plainly asked for
+            // generation. Gate 0b is the only thing that can tell those two apart.
+            Collect(slot.Generate?.UnknownFields, $"{path}.generate", found);
+            Collect(slot.Generate?.StimulusHead?.UnknownFields, $"{path}.generate.stimulusHead", found);
+            Collect(slot.Generate?.BlockUnderTest?.UnknownFields, $"{path}.generate.blockUnderTest", found);
+            Collect(slot.Generate?.StimHead?.UnknownFields, $"{path}.generate.stimHead", found);
+
+            foreach (var (phase, j) in (slot.Generate?.StimHead?.Phases ?? new List<StimPhaseDocument>()).Select((p, k) => (p, k)))
+                Collect(phase.UnknownFields, $"{path}.generate.stimHead.phases[{j}]", found);
         }
 
         return SubmissionDocument.Split(found);
@@ -310,7 +323,160 @@ public sealed class SlotBindingDocument
     /// </summary>
     public string? PhaseGuardSignal { get; set; }
 
+    /// <summary>
+    /// 🔴 <b>WHAT THIS LANE'S TEST SIDE IS GENERATED FROM RATHER THAN TYPED — and until it existed, two
+    /// working generators had no production caller at all.</b>
+    ///
+    /// <para>Standing a conformance lane up meant hand-authoring eight <c>.ir</c> artifacts, two of which —
+    /// the slot FC and the stimulus head's 18-network index shell — are derived <b>exactly</b> from a
+    /// handful of declared names and three declared lists. <c>Harness.Map.SlotFcGenerator</c> and
+    /// <c>Harness.Map.StimShellGenerator</c> both existed, both were tested, and neither was reachable from
+    /// <c>harness-run</c> or <c>harness-batch</c>: the work they remove was still being done by hand.</para>
+    ///
+    /// <para><b>ABSENT MEANS NOT GENERATED, and it is REPORTED as such rather than passed over.</b> A lane
+    /// written before this field existed behaves exactly as it did, and its run says in words that its slot
+    /// FC and its head are AUTHORED. The one thing that must never happen is the reverse reading — an
+    /// authored object counted as generated — because the question the origin field answers is <i>how much
+    /// of this lane is still hand-built</i>.</para>
+    ///
+    /// <para><b>It is DATA, deliberately, and it is kept small.</b> Moving hand-authoring out of IR and into
+    /// a declarative document is the whole point; moving it into a LARGE document is not. Everything
+    /// derivable is derived — the roles in the lane manifest, the call-site obligation, the shell's required
+    /// statics and UDT members — and what is left is the handful of facts no code can know.</para>
+    /// </summary>
+    public LaneGenerationDocument? Generate { get; set; }
+
     /// <summary>Unknown keys at slot level. Folded into gate 0b — see <see cref="BindingDocument.UnknownFields"/>.</summary>
+    [JsonExtensionData]
+    public Dictionary<string, object?>? UnknownFields { get; set; }
+}
+
+/// <summary>
+/// One slot's generation declaration. See <see cref="SlotBindingDocument.Generate"/>.
+///
+/// <para>🔴 <b>A PARTIAL slot-FC declaration is REFUSED, not partially honoured.</b> The FC's entire content
+/// is its two CALLs in order, so a declaration naming the block and not the block under test describes no
+/// block — <c>Harness.Map.LaneGenerator</c> names the missing half rather than filling it in.</para>
+/// </summary>
+public sealed class LaneGenerationDocument
+{
+    /// <summary>The generated slot FC's name.</summary>
+    public string? SlotFcName { get; set; }
+
+    /// <summary>
+    /// Its block number. <b>Required alongside the name and never defaulted</b> — hard rule 3 forbids
+    /// inventing one, and harness objects come from the reserved 9000–9999 range the caller allocates from
+    /// (<c>converter claim --allocate --kind block-number --type FC --floor 9000</c>).
+    /// </summary>
+    public int? SlotFcNumber { get; set; }
+
+    /// <summary>
+    /// The block the slot calls FIRST. <b>That order is not a parameter anywhere</b>: the head commands the
+    /// plant model for this scan and the block under test must see this scan's commands, so reversing them
+    /// costs one scan of latency on every transition and shows up only as vectors timing out near their
+    /// backstop. See <c>Harness.Map.SlotFcGenerator</c>.
+    /// </summary>
+    public CalledBlockDocument? StimulusHead { get; set; }
+
+    /// <summary>The block the slot calls SECOND — the subject of the lane.</summary>
+    public CalledBlockDocument? BlockUnderTest { get; set; }
+
+    /// <summary>
+    /// The head spec the index shell is derived from, or absent. <b>Independent of the three fields
+    /// above</b>: a lane may generate its slot FC while its head stays wholly authored, and the run's report
+    /// says which of the two happened.
+    /// </summary>
+    public StimHeadSpecDocument? StimHead { get; set; }
+
+    /// <summary>Unknown keys here. Folded into gate 0b — a misspelt key would silently mean "not generated".</summary>
+    [JsonExtensionData]
+    public Dictionary<string, object?>? UnknownFields { get; set; }
+}
+
+/// <summary>One of the slot FC's two calls, on the wire.</summary>
+public sealed class CalledBlockDocument
+{
+    /// <summary>The FB or FC being called.</summary>
+    public string? Block { get; set; }
+
+    /// <summary>
+    /// Its instance DB, or a dotted multi-instance path. <b>Absent is a CLAIM that this is an FC</b>, which
+    /// is stateless and has no instance — the emitted call then omits the leading positional argument.
+    /// </summary>
+    public string? Instance { get; set; }
+
+    /// <summary>
+    /// The network's title. <b>Required, and the generator will not invent one</b> (C-201): a generated
+    /// "Network 1" passes review and tells a reader nothing.
+    /// </summary>
+    public string? NetworkTitle { get; set; }
+
+    /// <summary>Unknown keys, folded into gate 0b like every other level.</summary>
+    [JsonExtensionData]
+    public Dictionary<string, object?>? UnknownFields { get; set; }
+}
+
+/// <summary>
+/// A stimulus head declared, on the wire — the input <c>Harness.Map.StimShellGenerator</c> derives the
+/// index shell from. See <c>Harness.Map.StimHeadSpec</c> for what each field means and for the refusals,
+/// several of which are computed from the emitted rungs rather than from a list somebody maintains.
+/// </summary>
+public sealed class StimHeadSpecDocument
+{
+    /// <summary>The head's block name. Used to name the emitted fragment; never emitted into the rungs.</summary>
+    public string? HeadName { get; set; }
+
+    /// <summary>The block-under-test's fault-reset input, as a full member path. Owned by S9 and written by nothing else.</summary>
+    public string? UutReset { get; set; }
+
+    /// <summary>The index watchdog's preset, as a Time literal.</summary>
+    public string? Watchdog { get; set; }
+
+    /// <summary>The three cleardown dwells, as a Time literal.</summary>
+    public string? Dwell { get; set; }
+
+    /// <summary>Ordered. The one design decision that settles four networks at once.</summary>
+    public List<StimPhaseDocument>? Phases { get; set; }
+
+    /// <summary>
+    /// Every latched cause the block can hold. 🔴 <b>The most dangerous field here</b>: a cause left out is
+    /// one that every cleardown outcome reports as absent, forever, in green. Empty is permitted and is
+    /// REPORTED, because "nothing to clear" and "nobody listed anything" must not look the same.
+    /// </summary>
+    public List<string>? Causes { get; set; }
+
+    /// <summary>Every one-scan counting edge. Empty omits the counting network entirely.</summary>
+    public List<string>? CycleEdges { get; set; }
+
+    /// <summary>Every published bit the re-arm network must clear. Checked against what the shell actually SETS.</summary>
+    public List<string>? OutcomeBits { get; set; }
+
+    /// <summary>Unknown keys, folded into gate 0b like every other level.</summary>
+    [JsonExtensionData]
+    public Dictionary<string, object?>? UnknownFields { get; set; }
+}
+
+/// <summary>One phase of the index, on the wire.</summary>
+public sealed class StimPhaseDocument
+{
+    /// <summary>The membership bit this phase drives (a static Bool).</summary>
+    public string? Bit { get; set; }
+
+    /// <summary>The boundary static holding the time this phase ends at.</summary>
+    public string? End { get; set; }
+
+    /// <summary>How long it lasts — a static or a UDT member, <b>never a literal</b>, or the index can only be re-timed by regenerating the block.</summary>
+    public string? Duration { get; set; }
+
+    /// <summary>
+    /// <c>Disarm</c>, <c>Reset</c>, <c>Verify</c>, <c>Scenario</c> or <c>Settle</c>. <b>Only <c>Reset</c> is
+    /// read by the generator</b> — it builds the reset pulse from the phases carrying it; the rest document
+    /// intent. An unrecognised value is refused rather than treated as unstated: a typo'd <c>Reset</c> would
+    /// silently produce a head that can never clear the block under test.
+    /// </summary>
+    public string? Kind { get; set; }
+
+    /// <summary>Unknown keys, folded into gate 0b like every other level.</summary>
     [JsonExtensionData]
     public Dictionary<string, object?>? UnknownFields { get; set; }
 }

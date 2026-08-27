@@ -21,6 +21,21 @@ namespace Harness.Batch;
 /// </summary>
 public sealed record EmittedObject(string Name, string Path, HarnessObjectKind Kind);
 
+/// <summary>
+/// 🔴 <b>An object a GENERATOR produced, with the role the generator itself knows.</b>
+///
+/// <para><see cref="EmittedObject"/> carries no role because <see cref="LaneManifest.Derive"/> derives it —
+/// §3.1, a field that can be derived must never be typed. This type is the case where the derivation
+/// happened one layer UP: <c>SlotFcGenerator</c> is handed both the head and the block under test, so by
+/// the time an FC exists its role is settled and re-deriving it here would be a second opinion.</para>
+///
+/// <para><b>It is NOT for the copy layer</b>, which has its own parameter and its own exclusion from the
+/// build stamp. Everything here EXECUTES and is expected to have been hashed — which is why the role is
+/// carried and the origin is not: the origin of an object on this list is <see cref="ObjectOrigin.Generated"/>
+/// by construction, and a parameter for it would be a caller able to state it wrongly.</para>
+/// </summary>
+public sealed record GeneratedObject(string Name, string Path, HarnessObjectKind Kind, ObjectRole Role);
+
 /// <summary>Which comparison inside <see cref="LaneManifest.AgreesWithStamp"/> refused.</summary>
 /// <remarks>
 /// 🔴 <b>Flags, because more than one can be true and collapsing them loses the diagnosis.</b> A rename
@@ -312,7 +327,24 @@ public sealed record LaneManifest(
         IReadOnlyList<EmittedObject> generatedCopyLayer,
         string? blockUnderTest,
         ProgramManifest stamp,
-        IReadOnlyList<string>? obligations = null)
+        IReadOnlyList<string>? obligations = null,
+
+        // 🔴 *** THE OTHER GENERATED OBJECTS — THE ONES THAT EXECUTE. *** The copy layer above is the ONE
+        // legitimate exclusion from the stamp, and it is excluded by ROLE. Everything on this list is a
+        // deployed, hashed object that a GENERATOR produced rather than a person, and recording it as
+        // Unstated — which is what happens to anything read off disk — would answer "how much of this lane
+        // is still hand-built" with a guess in the pessimistic direction.
+        //
+        // Listed after the copy layer and BEFORE the program under test for the same collision reason: a
+        // caller who passes the emit directory as --program hands its own generated objects back in, and
+        // the generated row must win.
+        IReadOnlyList<GeneratedObject>? generated = null,
+
+        // 🔴 THE STIMULUS HEAD, DERIVED RATHER THAN TYPED. `SlotFcGenerator` is handed the head and the
+        // block under test and used to discard them; naming the head here is that derivation arriving,
+        // so `ObjectRole.StimulusHead` stops being a value nothing ever sets. Null is "no generator knew",
+        // which is every lane that declares no generation.
+        string? stimulusHead = null)
     {
         ArgumentNullException.ThrowIfNull(programUnderTest);
         ArgumentNullException.ThrowIfNull(generatedCopyLayer);
@@ -333,13 +365,23 @@ public sealed record LaneManifest(
 
         string? HashOf(string name) => hashedByName.TryGetValue(name, out var entry) ? entry.Sha256 : null;
 
-        foreach (var generated in generatedCopyLayer)
+        foreach (var mirror in generatedCopyLayer)
         {
-            if (seen.Add(generated.Name))
+            if (seen.Add(mirror.Name))
             {
                 objects.Add(new ManifestObject(
-                    generated.Name, generated.Path, ObjectOrigin.Generated, ObjectRole.CopyLayer,
-                    HashOf(generated.Name), generated.Kind));
+                    mirror.Name, mirror.Path, ObjectOrigin.Generated, ObjectRole.CopyLayer,
+                    HashOf(mirror.Name), mirror.Kind));
+            }
+        }
+
+        foreach (var produced in generated ?? Array.Empty<GeneratedObject>())
+        {
+            if (seen.Add(produced.Name))
+            {
+                objects.Add(new ManifestObject(
+                    produced.Name, produced.Path, ObjectOrigin.Generated, produced.Role,
+                    HashOf(produced.Name), produced.Kind));
             }
         }
 
@@ -348,9 +390,16 @@ public sealed record LaneManifest(
             if (!seen.Add(supplied.Name))
                 continue;
 
-            var role = blockUnderTest is not null && string.Equals(supplied.Name, blockUnderTest, StringComparison.OrdinalIgnoreCase)
-                ? ObjectRole.BlockUnderTest
-                : ObjectRole.Unstated;
+            // 🔴 THE ROLES A GENERATOR ALREADY KNEW, ARRIVING RATHER THAN BEING RE-DERIVED. The block under
+            // test is named by the caller; the stimulus head is named by `SlotFcGenerator`, which was handed
+            // both and discarded them. Checked in that order because a lane whose head IS its subject is a
+            // block driving itself, which the FC generator refuses at source — so the two cannot both match.
+            var role =
+                blockUnderTest is not null && string.Equals(supplied.Name, blockUnderTest, StringComparison.OrdinalIgnoreCase)
+                    ? ObjectRole.BlockUnderTest
+                    : stimulusHead is not null && string.Equals(supplied.Name, stimulusHead, StringComparison.OrdinalIgnoreCase)
+                        ? ObjectRole.StimulusHead
+                        : ObjectRole.Unstated;
 
             objects.Add(new ManifestObject(
                 supplied.Name, supplied.Path, ObjectOrigin.Unstated, role,
