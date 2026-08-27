@@ -106,7 +106,8 @@ When in doubt: `docs/04-design-philosophy.md` for principles, `docs/02-roadmap.m
 | `neighbours` | every `%M` claim in an area **and who declares it**. `--base` + `--registers`/`--bytes`; `[]` is the earned zero, exit 2 = NOT DERIVED |
 | `cross-check`, `trace`, `reuse-scan`, `target-scan` | whole-project reference facts, REQ traces, reuse-first and new-block gap hunting. `reuse-scan` is query-shaped: `--project` alone exits 1, it needs a `--tag`/`--kind` |
 | `candidate-scan`, `undriven-scan`, `relation-reconcile`, `signal-sweep`, `interface-check` | the mechanical floor — checks that survive an agent choosing not to look |
-| `reachable-state`, `ir-hash`, `sanitize`, `claim` / `claims` | computed slot disjointness, content hashing, de-identification, and the reservation registry (syntax above) |
+| `reachable-state`, `ir-hash`, `sanitize`, `claim` / `claims`, `lease`, `conflict-graph` | computed slot disjointness, content hashing, de-identification, and the reservation registry (syntax above) |
+| `signal-set` | a block's signals as ONE machine-readable document — member/type/retain/startValue/direction/origin/writers/readers, `--json`. The derivable half of a harness binding. **Exit 1 = PARTIAL gates here rather than warning**, deliberately unlike its siblings: its reader is a generator, and a generator never sees a warning line |
 
 **A principle across all of them: EMPTY IS NOT CLEAN.** Across the mechanical floor (`candidate-scan`, `undriven-scan`, `reuse-scan`, `relation-reconcile`, `signal-sweep`), **exit 1 = found something; exit 2 = EXAMINED NOTHING** — a `--scope` that matched nothing, an `--fb` with no instances, a leg compared against nothing. **Exit 2 is never a pass.** When you read a green, read what it says it *compared*.
 
