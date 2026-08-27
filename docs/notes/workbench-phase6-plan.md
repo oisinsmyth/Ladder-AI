@@ -185,7 +185,7 @@ staffing and ordering question.
 ### The third conformance lane — the right next RIG event, and ~~blocked~~ **not blocked on the owner**
 
 Phase 4 exists to make it cheap and it has never happened; **two is not N.** ~~Blocked on **B5 — which
-block.**~~ 🔴 **B5 is answered — `FB_SiloSequence`** (correction under *Blocked / needs the owner*;
+block.**~~ 🔴 **B5 is answered — `FB_CellSequence`** (correction under *Blocked / needs the owner*;
 canonical record `docs/notes/owner-questions.md`). Two decisions of the lane's own stand ahead of it
 instead. It also needs Portal and a deployment. **Phase 6 is deliberately the offline half that should
 land before the mirror grows again**, because growing from one lane to two is precisely what walked
@@ -432,7 +432,7 @@ failure class this whole phase is about.
 ## Blocked / needs the owner
 
 > ✅ **CORRECTION 2026-08-23 — B5 IS ANSWERED AND THIS SECTION'S HEADLINE CLAIM IS DEAD.**
-> **The answer is `FB_SiloSequence`, and the lane is not blocked on the owner.** Two decisions of the
+> **The answer is `FB_CellSequence`, and the lane is not blocked on the owner.** Two decisions of the
 > lane's own now stand ahead of authoring it, and the canonical tracked record — with the shape stated
 > and the live-run data boundary drawn — is **`docs/notes/owner-questions.md`**, not `AITODO.md` and
 > not here. This plan is a *delivered* Phase 6 record; its body is left as written, but do not carry

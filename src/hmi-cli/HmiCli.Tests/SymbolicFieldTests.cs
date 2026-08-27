@@ -9,7 +9,7 @@ namespace HmiCli.Tests;
 ///
 /// 🔴 Built after the owner reviewed the first real screen and asked whether a non-technical operator
 /// could read it. Nine of nineteen fields on it were bare integers standing in for words — the state,
-/// the hold cause, the moisture stage — because the emitter had no type that could resolve them.
+/// the hold cause, the process stage — because the emitter had no type that could resolve them.
 ///
 /// The structure is harvested from TWO real specimens, not documentation: the owner's own
 /// hand-placed field on the JOB9004 screen (BIT mode — BitNumber/OnValue with TextOff/TextOn) and the
@@ -48,18 +48,18 @@ public class SymbolicFieldTests
     [Fact]
     public void Emits_a_text_list_link_on_the_item_and_a_tag_link_on_the_property()
     {
-        var doc = Emit(Ir(Sym("Silo_W_StateID", "TL_SiloState")));
+        var doc = Emit(Ir(Sym("Bay_A_StateID", "TL_BayState")));
 
         var field = Find(doc, "Hmi.Screen.SymbolicIOField")!;
 
         var listLink = field.Elements().First(e => e.Name.LocalName == "LinkList")
                             .Elements().First(e => e.Name.LocalName == "TextList");
         Assert.Equal("@OpenLink", listLink.Attribute("TargetID")?.Value);
-        Assert.Equal("TL_SiloState", listLink.Element("Name")?.Value);
+        Assert.Equal("TL_BayState", listLink.Element("Name")?.Value);
 
         var property = Find(doc, "Hmi.Screen.Property")!;
         Assert.Equal("ProcessValue", property.Element("AttributeList")?.Element("Name")?.Value);
-        Assert.Equal("Silo_W_StateID", Find(doc, "Tag")!.Element("Name")?.Value);
+        Assert.Equal("Bay_A_StateID", Find(doc, "Tag")!.Element("Name")?.Value);
     }
 
     // ---- fail-closed on BOTH halves -------------------------------------------------------------

@@ -106,7 +106,7 @@ public static class SignalSetRunner
     // 🔴 AN INTERFACE MEMBER IS ADDRESSED TWO WAYS AND BOTH HAVE TO BE RESOLVED — the repair
     // `undriven-scan` needed on 2026-08-18, where looking up one form only made 136 of 228 rows false.
     // From INSIDE the block the member is BARE and local (`IO.Step`); from every other block it is
-    // ABSOLUTE on the placement (`iDB_Drum_DrumA.IO.Step`).
+    // ABSOLUTE on the placement (`iDB_Rack_RackA.IO.Step`).
     //
     // The owner restriction applies to the BARE form and must: `_usages` is keyed verbatim, so three
     // FBs each declaring their own `IO.Step` land on one key — the false-multi-writer defect
@@ -155,7 +155,7 @@ public static class SignalSetRunner
             .Where(f => string.Equals(f.Block, blockName, StringComparison.Ordinal))
             .Select(f => ProjectUsageGraph.StripSubscripts(f.Path))
             .Where(p => graph.OwnerOf(blockName, p) is null)
-            // A CALL names its own state store: `CALL FB_Drum(iDB_Drum_DrumA, ...)` records a
+            // A CALL names its own state store: `CALL FB_Rack(iDB_Rack_RackA, ...)` records a
             // reference to the bare instance path. That is a placement, not a signal, and listing it
             // would put a row in the binding document that has no value to read or write.
             .Where(p => !graph.InstanceToFb.ContainsKey(p) && !graph.MultiInstanceToFb.ContainsKey(p))

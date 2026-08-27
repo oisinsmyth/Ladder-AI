@@ -144,14 +144,14 @@ running does not license:
     ➜ *** A CHECK THAT DERIVES ITS EXPECTATION THE SAME WAY THE SUBJECT DOES IS SELF-CONSISTENT AND
       PROVES NOTHING. *** Measured 2026-08-17, HMI lane. A copy generator producing four screen
       instances held only the OLD token and derived the new one as `token[:-1] + letter` — right for
-      `SILO W` → `SILO X`, wrong for `Silo_W_`, which became **`Silo_WX`**. Its inverse-substitution
+      `BAY A` → `BAY B`, wrong for `Bay_A_`, which became **`Bay_AB`**. Its inverse-substitution
       round-trip check **PASSED**, because the inverse used *the same derivation*. What caught it was
-      normalising the EMITTED document, which states the expected form `Silo_X_` **independently**.
+      normalising the EMITTED document, which states the expected form `Bay_B_` **independently**.
         ▪ **The fix is to state both sides, never to derive one from the other** — a substitution
-          table spells out `Silo_W_` and `Silo_X_` literally, so no shared rule can be wrong in both
+          table spells out `Bay_A_` and `Bay_B_` literally, so no shared rule can be wrong in both
           directions at once.
-        ▪ A second lane hit the same class from the other side: a naive `s/DRUM A/DRUM B/` corrupted
-          `DRUM ABANDON` into `DRUM BBANDON`, **and no round-trip proof can catch that** — the
+        ▪ A second lane hit the same class from the other side: a naive `s/RACK A/RACK B/` corrupted
+          `RACK ABANDON` into `RACK BBANDON`, **and no round-trip proof can catch that** — the
           inverse restores it perfectly. It needs a separate guard asserting no substitution token is
           followed by a word character.
 - *** NEGATIVE-TEST THE GUARD, OR IT IS NOT A GUARD. *** Same lane, same day: hardening the above

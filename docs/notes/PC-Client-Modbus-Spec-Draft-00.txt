@@ -111,8 +111,8 @@ Parametrising a PLC-side model removes the problem rather than working around it
 sets a setpoint and a rate, and the DYNAMICS ARE GENERATED AT SCAN RATE inside the
 controller. The link carries parameters and results, not moment-to-moment values.
 
-This is not novel to this project — the live program already carries `FC_SimPlant`,
-`FB_SimSilo` and `FB_SimDrum`, a closed-loop plant simulation mandated by its control
+This is not novel to this project — the live program already carries `FC_SimLine`,
+`FB_SimBay` and `FB_SimRack`, a closed-loop plant simulation mandated by its control
 spec. The proposal generalises an approach already proven in this codebase.
 
 Three caveats that must not be lost:

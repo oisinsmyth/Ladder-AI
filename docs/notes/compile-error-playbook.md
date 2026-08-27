@@ -224,7 +224,7 @@ guess, so the tag wins whenever one is present.
 **Cause 2 — CONVERTING WITHOUT `--project`, and this is the one that will keep happening.**
 A block converted with `converter to-xml <file>` and no `--project` cannot see any other DB, so a
 comparison against a member of one falls back to the literal's type. Measured:
-`DB_HmiCmd.Heartbeat <> 0` where Heartbeat is a `UInt` emits `SrcType=Int` blind and `SrcType=UInt`
+`DB_PanelCmd.Heartbeat <> 0` where Heartbeat is a `UInt` emits `SrcType=Int` blind and `SrcType=UInt`
 with `--project`.
 
 **ALWAYS CONVERT WITH `--project <ir-dir>`.** The converter now warns when it converts a block that

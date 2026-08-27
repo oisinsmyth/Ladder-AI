@@ -12,7 +12,13 @@ that quietly accumulated.
 
 ---
 
-## AB-1. Plant-specific identifiers in committed source — DEFERRED BY THE OWNER, 2026-08-18
+## AB-1. Plant-specific identifiers in committed source — ✅ REMEDIATED 2026-08-27 (deferred 2026-08-18)
+
+> **Status.** Deferred by the owner on 2026-08-18; **cleanup authorised by the owner and performed on
+> 2026-08-27** — *"fix it how you see fit, don't break it."* **285 sites across 49 tracked files**
+> were rewritten to invented vocabulary. The section is kept, not deleted: a finding is never
+> silently removed, the "how this got in" analysis below is the part worth keeping, and the check is
+> the thing that has to keep being run. **The remediation record is at the end of this section.**
 
 **Found:** a repo-wide sweep on 2026-08-18 matched **82 sites across 15 tracked files** against the
 vocabulary of the live job `JOB9004`. Bare job codes are **not** the issue — `docs/13-data-boundary.md`
@@ -60,9 +66,14 @@ the lane that was working catches the lane; only a repo-wide sweep catches the r
 
 ### The check — re-run it, do not trust this list's age
 
+🔴 **A job folder has MORE THAN ONE IR directory** — a rework, a second project, a `-new` — and step
+1 must take *all* of them. On 2026-08-27 the job that produced this finding had two, and a sweep
+against only the older one would have reported a clean repo. `ls "Live Runs/<JOB>"` first, always.
+
 ```bash
-# 1. The job's vocabulary, from the job folder (gitignored — it never enters the repo)
-ls "Live Runs/<JOB>/ir/"*.ir | xargs -n1 basename | sed 's/\.ir$//' | sort -u > /tmp/job.txt
+# 1. The job's vocabulary, from EVERY ir dir in the job folder (gitignored — never enters the repo)
+ls "Live Runs/<JOB>"/*/ir*/*.ir "Live Runs/<JOB>"/ir*/*.ir 2>/dev/null \
+  | xargs -n1 basename | sed 's/\.ir$//' | sort -u > /tmp/job.txt
 
 # 2. Everything Green-tier, so conventional names do not read as leaks
 { ls ir/*/ patterns/*/ gen/*/ simatic-ml/*/ ; } | sed 's/\.[a-z]*$//' | sort -u > /tmp/green.txt
@@ -73,6 +84,26 @@ comm -23 /tmp/job.txt /tmp/green.txt | awk 'length($0)>=8' > /tmp/candidates.txt
 # 4. Whole-word match against TRACKED files only
 grep -n -w -F -f /tmp/candidates.txt $(git ls-files '*.cs' '*.md' '*.py' '*.ps1' '*.json')
 ```
+
+**Steps 1–4 catch BLOCK names only, and that is not the whole finding.** Two more passes are needed,
+and both found real sites on 2026-08-27 that steps 1–4 could not:
+
+```bash
+# 5. MEMBER names, from inside the .ir files rather than their filenames. Very noisy — a member
+#    called `Heartbeat` collides with ordinary code — so triage it hard. The distinctive ones are
+#    invented compound names no second author would coin independently.
+grep -ohE '^[ \t]+[A-Za-z_][A-Za-z0-9_]{7,}[ \t]*:' "<every ir dir>"/*.ir | tr -d ' \t:' | sort -u
+
+# 6. CASE-INSENSITIVE, over .html/.py too, on the equipment STEMS the triage in step 3 identified.
+#    HMI element ids and screen titles are lower-case and hyphenated, so no identifier-shaped
+#    pattern reaches them; they are invisible to every step above.
+grep -rn -i -E '<stem>|<stem>' --include=*.cs --include=*.md --include=*.txt \
+   --include=*.py --include=*.html --include=*.json .
+```
+
+🔴 **AND THE REPLACEMENT VOCABULARY IS PART OF THE CHECK.** Before keeping an invented name, grep the
+job folder for it. On 2026-08-27 one replacement already existed verbatim in the job's own IR — a
+fix that would have introduced a fresh leak while closing an old one.
 
 ### ⚠️ THE CHECK IS A CANDIDATE GENERATOR, NOT A VERDICT — and it cannot be made into one
 
@@ -102,3 +133,57 @@ Not a bigger grep. The durable fix is the one recorded as `M-5` in
 live run**, so the question is asked while the comment is being written and the author still
 remembers whether the concrete case was load-bearing. Retrofitting it afterwards means re-deriving
 intent from prose, which is why this deferral is cheap to record and expensive to discharge.
+
+**The remediation below discharged the 2026-08-18 instance. It did NOT close AB-1's cause** — `M-5`
+is still open, and until it lands the next live run recurs the same way for the same reason.
+
+### ✅ Remediation, 2026-08-27 — authorised by the owner and performed
+
+**Scale.** **285 sites across 49 tracked files**, covering 30 block/type/DB names, 12 member and HMI
+tag names, and 4 prose descriptions of the plant's process. Against the 2026-08-18 figure of 82/15:
+the finding was **larger than recorded**, because work landed in the nine days between, and because
+this sweep added two passes the original did not have (a member-name pass, and a case-insensitive
+pass over `.html`/`.py` that caught HMI tag fixtures no `.ir` filename would ever match). The
+original file list was a floor, not a census — which is the whole reason it says not to trust its age.
+
+**Method — SUBSTITUTE VOCABULARY, NEVER DELETE EXPLANATION.** Each identifier was replaced with an
+invented, obviously-synthetic one; every comment kept its measurement, its date, its reasoning and
+its shape. Where the replacement made a neighbouring word stale (a valve described by what it did on
+the plant), the *word* was generalised and the sentence left standing. **No paragraph was removed**,
+and no comment lost its concrete case — it kept a concrete case with a different name on it. Where a
+file already carried a sanitised fixture, the new vocabulary was aligned to it rather than invented
+again, so comment and fixture now agree where they previously disagreed.
+
+**Traps that were live on this run, all three measured rather than anticipated:**
+
+- **A blanket token replace would have corrupted Green-tier content.** One equipment word in the job
+  vocabulary is *also* the name of a machine in the reference project, in `patterns/`, in
+  `CHANGELOG.md` and in `docs/13-data-boundary.md`'s own worked example of this exact confusion. Only
+  the composite identifiers were rewritten; the bare word was left alone deliberately.
+- **A replacement can BE a leak.** One invented member name turned out to exist verbatim in the job's
+  own IR. Every replacement was checked back against the job folder before it was kept, and the
+  colliding one was changed. **Choosing the new vocabulary is part of the check, not after it.**
+- **One test asserted an order that the rename made trivially true.** `DeclaredAreas` sorts, and the
+  old fixture names happened to make sorted ≠ first-seen. Renaming collapsed the two. The fixture was
+  adjusted so the assertion still distinguishes them — *a rename must not silently weaken a test.*
+
+**Judged NOT leaks, and deliberately left untouched** — each is either mandated by
+`docs/06-lad-conventions.md`, present in Green-tier corpora, or an ordinary industrial word the
+tooling invented for its own fixtures: the conventional alarm-category FCs, the buffer DBs, the motor
+type and DOL pattern block, the startup OB, the generic vessel/recipe/weigher test fixtures in
+`wave-control`, `harness` and `hmi-cli`, the harness's own generated stimulus vocabulary (**the repo
+is that vocabulary's origin, not the job**), and the HMI symbol-library exercise in `hmi/`, whose
+subject genuinely is the drawing of a generic industrial shape.
+
+**Verification.** The check re-run at the top of this section returns only that conventional
+residual — an **earned** zero: it compared 1,656 tracked files against the vocabulary of both of the
+job's IR directories. `converter` 1,783 passed; `harness` 3,077 passed across 16 assemblies;
+`openness-cli` 871; `device-guard` 65 + 12; `hmi-cli` 161. `tools/check-file-budgets.py` passed with
+no ceiling raised. Line endings and BOM state unchanged (the substitution was applied byte-wise).
+
+**One thing was found and NOT acted on**, because it is outside this finding's scope and acting on it
+alone would have edited a convention rule's rationale: `docs/06-lad-conventions.md` illustrates
+C-124/C-128 with a **process description** — a named dwell time and a named measurement history —
+rather than with any identifier. It names no block, tag, equipment or site; it was not on the
+finding's file list; and it reads as the engineer's own batch-plant reasoning. **Flagged for the
+owner to rule on, not decided here** — this section exists to record that it was seen.

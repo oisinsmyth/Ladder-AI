@@ -82,7 +82,7 @@ public class LayerTests
     {
         var doc = Emit(Ir(
             Box("chrome"),
-            Decl("prompt", "1", "Silo_W_PromptID", "0..0"),
+            Decl("prompt", "1", "Bay_A_PromptID", "0..0"),
             Box("dlg-back", "prompt"),
             Box("dlg-text", "prompt")));
 
@@ -99,7 +99,7 @@ public class LayerTests
             // Visible=false INSIDE the range is the only form measured against Portal, and what
             // TIA itself writes. "Show while a prompt stands" is authored as "hide while it is 0".
             Assert.Equal("false", al.Element("Visible")?.Value);
-            Assert.Equal("Silo_W_PromptID",
+            Assert.Equal("Bay_A_PromptID",
                 a.Descendants().First(x => x.Name.LocalName == "Tag").Element("Name")?.Value);
         }
 
@@ -163,7 +163,7 @@ public class LayerTests
         // to learn.
         var own = new IrVisibility { Tag = "Other", RangeStart = "1", RangeEnd = "2", Visible = false };
         var ex = Assert.Throws<LayerException>(() => Emitter.Emit(Ir(
-            Decl("prompt", "1", "Silo_W_PromptID", "0..0"),
+            Decl("prompt", "1", "Bay_A_PromptID", "0..0"),
             Box("dlg", "prompt", own)), "S", 1));
         Assert.Contains("own visibility rule", ex.Message, StringComparison.Ordinal);
     }
@@ -172,7 +172,7 @@ public class LayerTests
     public void A_malformed_hide_range_is_refused_rather_than_guessed()
     {
         var ex = Assert.Throws<LayerException>(() => Emitter.Emit(Ir(
-            Decl("prompt", "1", "Silo_W_PromptID", "nonsense"),
+            Decl("prompt", "1", "Bay_A_PromptID", "nonsense"),
             Box("dlg", "prompt")), "S", 1));
         Assert.Contains("low..high", ex.Message, StringComparison.Ordinal);
     }
@@ -199,7 +199,7 @@ public class LayerTests
     public void The_show_form_emits_Visible_true_over_the_declared_range()
     {
         var doc = Emit(Ir(
-            ShowDecl("memfault", "1", "Silo_W_StateID", "1000..1000"),
+            ShowDecl("memfault", "1", "Bay_A_StateID", "1000..1000"),
             Box("dlg", "memfault")));
 
         var anim = doc.Descendants().Single(x => x.Name.LocalName == "Hmi.Dynamic.VisibilityAnimation");
@@ -208,7 +208,7 @@ public class LayerTests
         Assert.Equal("true", al.Element("Visible")?.Value);
         Assert.Equal("1000", al.Element("RangeStart")?.Value);
         Assert.Equal("1000", al.Element("RangeEnd")?.Value);
-        Assert.Equal("Silo_W_StateID",
+        Assert.Equal("Bay_A_StateID",
             anim.Descendants().First(x => x.Name.LocalName == "Tag").Element("Name")?.Value);
     }
 
@@ -216,7 +216,7 @@ public class LayerTests
     [Fact]
     public void The_hide_form_is_unchanged_by_the_show_form_existing()
     {
-        var doc = Emit(Ir(Decl("prompt", "1", "Silo_W_PromptID", "0..0"), Box("dlg", "prompt")));
+        var doc = Emit(Ir(Decl("prompt", "1", "Bay_A_PromptID", "0..0"), Box("dlg", "prompt")));
         var al = doc.Descendants().Single(x => x.Name.LocalName == "Hmi.Dynamic.VisibilityAnimation")
                     .Element("AttributeList")!;
 
@@ -248,7 +248,7 @@ public class LayerTests
     public void A_malformed_show_range_is_refused_and_names_the_show_attribute()
     {
         var ex = Assert.Throws<LayerException>(() => Emitter.Emit(Ir(
-            ShowDecl("memfault", "1", "Silo_W_StateID", "nonsense"),
+            ShowDecl("memfault", "1", "Bay_A_StateID", "nonsense"),
             Box("dlg", "memfault")), "S", 1));
 
         Assert.Contains("show-range", ex.Message, StringComparison.Ordinal);
@@ -276,7 +276,7 @@ public class LayerTests
         // A host button and a popup button in the same place: the popup covers the host, and the
         // emitter hides the popup whenever the dialog is down.
         var ir = Ir(Btn("host-abort", 100, 200),
-                    Decl("prompt", "1", "Silo_W_PromptID", "0..0"),
+                    Decl("prompt", "1", "Bay_A_PromptID", "0..0"),
                     Btn("dlg-answer", 100, 200, "prompt"));
 
         var findings = Linter.Run(ir, Panels.Ktp700Basic).Findings;
@@ -297,8 +297,8 @@ public class LayerTests
     [Fact]
     public void Interactives_on_different_layers_keyed_on_DIFFERENT_tags_DO_collide()
     {
-        var ir = Ir(Decl("ans1", "1", "Silo_W_PromptAnswerCode1", "0..0"), Btn("a", 100, 200, "ans1"),
-                    Decl("ans2", "2", "Silo_W_PromptAnswerCode2", "0..0"), Btn("b", 110, 210, "ans2"));
+        var ir = Ir(Decl("ans1", "1", "Bay_A_PromptAnswerCode1", "0..0"), Btn("a", 100, 200, "ans1"),
+                    Decl("ans2", "2", "Bay_A_PromptAnswerCode2", "0..0"), Btn("b", 110, 210, "ans2"));
 
         Assert.Contains(Linter.Run(ir, Panels.Ktp700Basic).Findings, x => x.RuleId == "H-503");
     }
@@ -311,8 +311,8 @@ public class LayerTests
     public void A_live_control_and_its_greyed_stand_in_do_not_collide()
     {
         var ir = Ir(
-            ShowDecl("blocked", "1", "Silo_W_PromptOffer", "1..99"), Btn("grey", 100, 200, "blocked"),
-            Decl("ans1", "2", "Silo_W_PromptOffer", "0..100"), Btn("live", 100, 200, "ans1"));
+            ShowDecl("blocked", "1", "Bay_A_PromptOffer", "1..99"), Btn("grey", 100, 200, "blocked"),
+            Decl("ans1", "2", "Bay_A_PromptOffer", "0..100"), Btn("live", 100, 200, "ans1"));
 
         Assert.DoesNotContain(Linter.Run(ir, Panels.Ktp700Basic).Findings,
             x => x.RuleId is "H-503" or "H-404");
@@ -326,8 +326,8 @@ public class LayerTests
     public void Same_tag_layers_whose_ranges_overlap_DO_collide()
     {
         var ir = Ir(
-            Decl("frame", "1", "Silo_W_PromptID", "0..0"), Btn("f", 100, 200, "frame"),
-            Decl("ans1", "2", "Silo_W_PromptID", "0..100"), Btn("a", 110, 210, "ans1"));
+            Decl("frame", "1", "Bay_A_PromptID", "0..0"), Btn("f", 100, 200, "frame"),
+            Decl("ans1", "2", "Bay_A_PromptID", "0..100"), Btn("a", 110, 210, "ans1"));
 
         Assert.Contains(Linter.Run(ir, Panels.Ktp700Basic).Findings, x => x.RuleId == "H-503");
     }
@@ -335,7 +335,7 @@ public class LayerTests
     [Fact]
     public void Interactives_on_the_SAME_layer_still_collide()
     {
-        var ir = Ir(Decl("prompt", "1", "Silo_W_PromptID", "0..0"),
+        var ir = Ir(Decl("prompt", "1", "Bay_A_PromptID", "0..0"),
                     Btn("a", 100, 200, "prompt"),
                     Btn("b", 110, 210, "prompt"));
 

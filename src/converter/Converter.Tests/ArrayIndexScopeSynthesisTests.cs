@@ -37,10 +37,10 @@ public class ArrayIndexScopeSynthesisTests
     }
 
     // FI-51 (2026-08-07). A subscript in the MIDDLE of a path — an array of structs, e.g.
-    // `DB_Weigh.Silo[0].RawValue` — was inexpressible, and the two halves of the converter
+    // `DB_Gauge.Bay[0].RawValue` — was inexpressible, and the two halves of the converter
     // disagreed about it in the worst possible way: the parser REFUSED a non-final indexed
-    // component, while the writer silently emitted `<Component Name="Silo[0]" />`, a component
-    // literally named "Silo[0]" that names no member and that TIA rejects on import.
+    // component, while the writer silently emitted `<Component Name="Bay[0]" />`, a component
+    // literally named "Bay[0]" that names no member and that TIA rejects on import.
     //
     // Real consequence on a live job: the four weighing devices' slices of the interface DB could
     // not be mapped, so no vessel had a weight, and every weight-derived judgement on the plant —
@@ -48,13 +48,13 @@ public class ArrayIndexScopeSynthesisTests
     [Fact]
     public void MidPathArraySubscript_WritesTheRealSimaticMlShape_NotABracketInTheName()
     {
-        var node = AccessNode.FromDottedPath(3, "GlobalVariable", "DB_Weigh.Silo[0].RawValue");
+        var node = AccessNode.FromDottedPath(3, "GlobalVariable", "DB_Gauge.Bay[0].RawValue");
 
-        Assert.Equal(new[] { "DB_Weigh", "Silo[0]", "RawValue" }, node.ComponentPath);
-        Assert.Equal("DB_Weigh.Silo[0].RawValue", node.DottedPath);
+        Assert.Equal(new[] { "DB_Gauge", "Bay[0]", "RawValue" }, node.ComponentPath);
+        Assert.Equal("DB_Gauge.Bay[0].RawValue", node.DottedPath);
 
         var (name, index) = AccessNode.SplitComponent(node.ComponentPath[1]);
-        Assert.Equal("Silo", name);
+        Assert.Equal("Bay", name);
         Assert.Equal("0", index);
 
         // The un-subscripted siblings must not acquire one.

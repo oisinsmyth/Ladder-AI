@@ -48,7 +48,7 @@ public class BindingTests
     [Fact]
     public void IOField_emits_a_tag_connection_naming_the_tag()
     {
-        var doc = Emit(Ir(Field("SiloLevel")));
+        var doc = Emit(Ir(Field("BayLevel")));
 
         var property = Find(doc, "Hmi.Screen.Property");
         Assert.NotNull(property);
@@ -61,7 +61,7 @@ public class BindingTests
         var tag = Find(doc, "Tag");
         Assert.NotNull(tag);
         Assert.Equal("@OpenLink", tag!.Attribute("TargetID")?.Value);
-        Assert.Equal("SiloLevel", tag.Element("Name")?.Value);
+        Assert.Equal("BayLevel", tag.Element("Name")?.Value);
     }
 
     /// <summary>
@@ -72,8 +72,8 @@ public class BindingTests
     [Fact]
     public void The_authored_tag_name_survives_to_the_document()
     {
-        var xml = Emitter.Emit(Ir(Field("DB_HmiSilo_Level_0")), "S", 1).Xml;
-        Assert.Contains("DB_HmiSilo_Level_0", xml, StringComparison.Ordinal);
+        var xml = Emitter.Emit(Ir(Field("DB_HmiBay_Level_0")), "S", 1).Xml;
+        Assert.Contains("DB_HmiBay_Level_0", xml, StringComparison.Ordinal);
     }
 
     // ---- fail-closed --------------------------------------------------------------------------

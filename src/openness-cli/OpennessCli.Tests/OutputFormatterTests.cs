@@ -164,7 +164,7 @@ public class OutputFormatterTests
         InconsistentBlocks: System.Array.Empty<BlockConsistencyIssue>(),
         DeviceCompiles: new[] { new DeviceCompileSummary("S7-1200 station_1/PLC_1", CleanCompile, StationScope) },
         TotalTypes: 7,
-        InconsistentTypes: new[] { new TypeConsistencyIssue("UDT_Drum", "S7-1200 station_1/PLC_1") },
+        InconsistentTypes: new[] { new TypeConsistencyIssue("UDT_Rack", "S7-1200 station_1/PLC_1") },
         DuplicateNumbers: System.Array.Empty<DuplicateBlockNumber>());
 
     [Fact]
@@ -189,7 +189,7 @@ public class OutputFormatterTests
 
         Assert.Contains("OVERALL: ISSUES FOUND", text);
         Assert.Contains("TYPES: 7  INCONSISTENT: 1", text);
-        Assert.Contains("UDT_Drum", text);
+        Assert.Contains("UDT_Rack", text);
         Assert.Contains("--type", text);
     }
 
@@ -218,7 +218,7 @@ public class OutputFormatterTests
         Assert.False(root.GetProperty("healthy").GetBoolean());
         Assert.Equal(7, root.GetProperty("totalTypes").GetInt32());
         Assert.Equal(1, root.GetProperty("inconsistentTypes").GetArrayLength());
-        Assert.Equal("UDT_Drum", root.GetProperty("inconsistentTypes")[0].GetProperty("name").GetString());
+        Assert.Equal("UDT_Rack", root.GetProperty("inconsistentTypes")[0].GetProperty("name").GetString());
     }
 
     [Fact]

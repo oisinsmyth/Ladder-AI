@@ -140,7 +140,7 @@ public class VariableSubscriptFalsePositiveTests : IDisposable
             })));
 
         WriteProjectFile("iDB_Unit_A.ir", DbIrSerializer.Serialize(new DbSource(
-            "0", "iDB_Unit_A", 31, InstanceOfName: null, Comment: "Silo state.", Members: new[]
+            "0", "iDB_Unit_A", 31, InstanceOfName: null, Comment: "Unit state.", Members: new[]
             {
                 new DbMember("Sequence", "\"UDT_SeqState\"", Retain: false, StartValue: null),
             })));

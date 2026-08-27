@@ -204,7 +204,7 @@ instruction, not history (§1.1's own rule).
 
 ## The one that was open — ✅ **ANSWERED, and the lane is NOT blocked on you**
 
-- ✅ **B5 (workbench) · Which block becomes the third conformance lane? — ANSWERED: `FB_SiloSequence`.**
+- ✅ **B5 (workbench) · Which block becomes the third conformance lane? — ANSWERED: `FB_CellSequence`.**
   🔴 **This entry read *"Blocked on this and nothing else"* until 2026-08-23, after the answer was
   given.** So did `AITODO.md:88` and `docs/notes/workbench-phase6-plan.md:150`, `:367`, `:395`. **Three
   tracked files told a session the third lane was waiting on one sentence from the owner, and it was

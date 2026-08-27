@@ -66,7 +66,7 @@ public class StableNameTests
     [Fact]
     public void An_id_is_used_verbatim_as_the_object_name()
     {
-        Assert.Contains("silo-w-weight", NamesOf(Ir(Box("silo-w-weight"))));
+        Assert.Contains("bay-a-weight", NamesOf(Ir(Box("bay-a-weight"))));
     }
 
     /// <summary>

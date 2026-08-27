@@ -1315,7 +1315,7 @@ public static class Emitter
     /// <c>SetTag</c> / <c>IncreaseTag</c> / <c>DecreaseTag</c>: (Tag link, value).
     ///
     /// The value is EITHER a literal OR another tag, and the author picks with a leading <c>@</c>:
-    /// <c>data-hmi-cmd-int1="3"</c> writes the number 3, <c>data-hmi-cmd-int1="@Silo_W_StateID"</c>
+    /// <c>data-hmi-cmd-int1="3"</c> writes the number 3, <c>data-hmi-cmd-int1="@Bay_A_StateID"</c>
     /// copies that tag's LIVE VALUE at the moment of the press.
     ///
     /// 🔴 THE TAG-VALUED FORM IS NOT COSMETIC — TWO COMMANDS ARE IMPOSSIBLE WITHOUT IT.
@@ -1361,7 +1361,7 @@ public static class Emitter
     /// The field that shows a coded value as a WORD instead of a number.
     ///
     /// 🔴 This is the type whose absence made the first real screen unreadable: nine of nineteen
-    /// fields on it were bare integers standing in for words - the state, the hold cause, the moisture
+    /// fields on it were bare integers standing in for words - the state, the hold cause, the process
     /// stage - because the emitter had nothing that could resolve them. The owner's verdict on seeing
     /// it was that a non-technical operator could not read the screen, and they were right.
     ///

@@ -30,7 +30,7 @@ internal static class DbInterfaceMembers
     // FI-58 (2026-08-08) adds `Version`. A nested member whose type is a SYSTEM STRUCTURED TYPE —
     // `DTL` is the one this corpus hit — carries a `Version` attribute in TIA's own export, and
     // refusing it hard-errored `to-ir` on any DB with such a member nested inside a structure:
-    //     "member 'Silo' has a nested/bare member 'LastCleaned' with unexpected attribute(s)
+    //     "member 'Bay' has a nested/bare member 'LastServiced' with unexpected attribute(s)
     //      [Version]"
     // Two DBs could not be read back at all, so a re-export could not be verified and the agent
     // had to extract member sets from the raw XML by hand instead.
