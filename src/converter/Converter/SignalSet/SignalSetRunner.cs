@@ -164,7 +164,7 @@ public static class SignalSetRunner
         foreach (var path in paths)
         {
             // The instance/DB root is the floor here for the same reason it is on the interface half.
-            var dot = path.IndexOf('.');
+            var dot = TagPath.IndexOfSeparator(path);
             var root = dot > 0 ? path[..dot] : null;
             var (writers, readers) = graph.UsagesReaching(path, notAbove: root);
 

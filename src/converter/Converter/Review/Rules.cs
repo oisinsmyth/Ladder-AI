@@ -444,7 +444,15 @@ public static class Rules
 
     private static IEnumerable<Finding> CheckPathCharset(string path, string blockName, int networkNumber)
     {
-        foreach (var rawComponent in path.Split('.', StringSplitOptions.RemoveEmptyEntries))
+        // BRACKET-AWARE, and RemoveEmptyEntries is applied afterwards rather than by the splitter:
+        // a SYMBOLIC array subscript is itself a dotted path, so a plain Split('.') cut
+        // `DB.Profile[iDB.Cycle.ChosenIndex]` into pieces and then accused one of them —
+        // "C-005 Name component 'ChosenIndex]' contains characters other than
+        // letters/digits/underscore" — on wiring tagstatus confirms exists. Live run, 2026-08-27; the
+        // same edit with a literal `[1]` subscript reviewed clean, so the dotted index alone was the
+        // trigger. A component whose name is genuinely invalid is still reported: the split changed,
+        // the charset test did not.
+        foreach (var rawComponent in TagPath.Split(path).Where(c => c.Length > 0))
         {
             if (rawComponent.StartsWith('%'))
             {
@@ -452,8 +460,7 @@ public static class Rules
                 continue;
             }
 
-            var bracketIndex = rawComponent.IndexOf('[');
-            var name = bracketIndex >= 0 ? rawComponent[..bracketIndex] : rawComponent;
+            var name = TagPath.StripComponentSubscript(rawComponent);
 
             if (!IsValidIdentifier(name))
             {
@@ -465,8 +472,44 @@ public static class Rules
                     $"Name component '{name}' (from '{path}') contains characters other than letters/digits/underscore, or doesn't start with a letter.",
                     $"Rename '{name}' to use only letters, digits, and underscore, starting with a letter.");
             }
+
+            // A VARIABLE subscript is a tag path in its own right — TIA resolves it as one, and it is
+            // emitted as its own nested <Access> with one <Component> per segment. So its segments are
+            // names and C-005 judges them as names. Checking them here is what keeps this fix from
+            // being a weakening: before the bracket-aware split the segments were checked by accident
+            // (as bogus outer components, which is why a valid one was accused); now they are checked
+            // on purpose, and a genuinely invalid segment still reports.
+            //
+            // A LITERAL subscript is skipped: `[3]` and `[0,1]` are integers, not names, and running
+            // the identifier test over them would accuse every array element in the corpus.
+            if (TagPath.SubscriptOf(rawComponent) is not string subscript || IsLiteralSubscript(subscript))
+            {
+                continue;
+            }
+
+            foreach (var segment in TagPath.Split(subscript).Where(s => s.Length > 0))
+            {
+                // TIA writes a DB name quoted in readable forms and bare in the component's own Name
+                // attribute; the quotes are punctuation of the path, not of the name.
+                var segmentName = TagPath.StripComponentSubscript(segment).Trim('"');
+                if (!IsValidIdentifier(segmentName))
+                {
+                    yield return new Finding(
+                        "C-005",
+                        FindingSeverity.Error,
+                        blockName,
+                        networkNumber,
+                        $"Name component '{segmentName}' (from the array subscript '[{subscript}]' in '{path}') contains characters other than letters/digits/underscore, or doesn't start with a letter.",
+                        $"Rename '{segmentName}' to use only letters, digits, and underscore, starting with a letter.");
+                }
+            }
         }
     }
+
+    // Every dimension an integer literal — `[3]`, `[-1]`, `[0,1]`. Anything else is treated as a
+    // symbol path and its segments are name-checked.
+    private static bool IsLiteralSubscript(string subscript) =>
+        subscript.Split(',').All(d => AccessNode.IsLiteralIndex(d.Trim()));
 
     private static bool IsValidIdentifier(string component)
     {
@@ -675,7 +718,7 @@ public static class Rules
     // registry that splits a slice path differently from the rule that audits it is worse than none.
     internal static bool IsSliceAccessTag(string tag)
     {
-        var lastDot = tag.LastIndexOf('.');
+        var lastDot = TagPath.LastIndexOfSeparator(tag);
         return lastDot >= 0 && lastDot + 1 < tag.Length && tag[lastDot + 1] == '%';
     }
 
@@ -684,14 +727,14 @@ public static class Rules
     // counts. Only ever called on a tag IsSliceAccessTag already accepted.
     internal static string SliceWordPath(string tag)
     {
-        var lastDot = tag.LastIndexOf('.');
+        var lastDot = TagPath.LastIndexOfSeparator(tag);
         return lastDot >= 0 ? tag[..lastDot] : tag;
     }
 
     // "DB_Alarms.EStopAlarm0.%X3" -> "%X3", for checking the comment's bit map mentions it.
     internal static string SliceBitToken(string tag)
     {
-        var lastDot = tag.LastIndexOf('.');
+        var lastDot = TagPath.LastIndexOfSeparator(tag);
         return lastDot >= 0 ? tag[(lastDot + 1)..] : tag;
     }
 
@@ -1001,7 +1044,7 @@ public static class Rules
         // The first component after the instance is the port; anything below it (a hypothetical
         // `X.Q.<something>`) is still a read of that port.
         var member = path[(instancePath.Length + 1)..];
-        var dot = member.IndexOf('.');
+        var dot = TagPath.IndexOfSeparator(member);
         var port = dot < 0 ? member : member[..dot];
         return string.Equals(port, "Q", StringComparison.OrdinalIgnoreCase)
             || string.Equals(port, "ET", StringComparison.OrdinalIgnoreCase);
@@ -1292,7 +1335,7 @@ public static class Rules
 
         foreach (var path in stepPaths)
         {
-            var components = path.Split('.');
+            var components = TagPath.Split(path);
 
             // Bare `Step` — a block-local (private Static/Temp) register, not the interface UDT.
             if (components.Length == 1)
@@ -1660,7 +1703,10 @@ public static class Rules
 
     private static string LeafName(string tagPath)
     {
-        var idx = tagPath.LastIndexOf('.');
+        // The last COMPONENT boundary, not the last raw '.': on `IO.Profile[iDB.Cycle.ChosenIndex]`
+        // the last raw dot sits inside the subscript and this returned `ChosenIndex]` — a leaf that
+        // names nothing, matched against nothing (2026-08-27, TagPath).
+        var idx = TagPath.LastIndexOfSeparator(tagPath);
         return StripSubscriptComponent(idx < 0 ? tagPath : tagPath[(idx + 1)..]);
     }
 
@@ -1724,7 +1770,7 @@ public static class Rules
                 }
 
                 // (b) Multi-instance in the block's own Static — never DB_Timers.
-                var instanceRoot = StripSubscriptComponent(timer.InstancePath.Split('.')[0]);
+                var instanceRoot = StripSubscriptComponent(TagPath.Split(timer.InstancePath)[0]);
                 if (string.Equals(instanceRoot, "DB_Timers", StringComparison.Ordinal))
                 {
                     yield return new Finding(
@@ -1746,7 +1792,7 @@ public static class Rules
                 // DB_Settings timing is the documented judgment exception.
                 if (timer.Pt is Expr.TagRef ptRef)
                 {
-                    var ptRoot = StripSubscriptComponent(ptRef.Path.Split('.')[0]);
+                    var ptRoot = StripSubscriptComponent(TagPath.Split(ptRef.Path)[0]);
                     var ptRootMember = interfaceMembers.FirstOrDefault(m => string.Equals(m.Name, ptRoot, StringComparison.Ordinal));
                     var isUdtSettingsMember = ptRootMember is not null && udtIndex.TryGetUdt(ptRootMember.Datatype.Trim('"'), out _);
 
@@ -1865,7 +1911,7 @@ public static class Rules
     // — the C-125 clean case. A bare block-local leaf, a DB member, or an unresolvable root is not.
     private static bool FaultBitHomeIsInterfaceUdt(string coilTag, IReadOnlyList<DbMember> interfaceMembers, TagTypeRegistry udtIndex)
     {
-        var components = coilTag.Split('.');
+        var components = TagPath.Split(coilTag);
         if (components.Length == 1)
         {
             return false; // bare block-local (private Static), not the interface UDT
@@ -1880,7 +1926,7 @@ public static class Rules
     // a cleared-by tag against "FaultReset" without matching a same-named intermediate component.
     private static bool LeafEndsWith(string tag, string suffix)
     {
-        var lastDot = tag.LastIndexOf('.');
+        var lastDot = TagPath.LastIndexOfSeparator(tag);
         var leaf = lastDot < 0 ? tag : tag[(lastDot + 1)..];
         return leaf.EndsWith(suffix, StringComparison.Ordinal);
     }
@@ -2078,9 +2124,6 @@ public static class Rules
             .Concat(block.TempMembers)
             .Concat(block.ConstantMembers ?? Array.Empty<DbMember>());
 
-    private static string StripSubscriptComponent(string component)
-    {
-        var idx = component.IndexOf('[');
-        return idx < 0 ? component : component[..idx];
-    }
+    // Component-level subscript handling is TagPath's — one mechanism (2026-08-27).
+    private static string StripSubscriptComponent(string component) => TagPath.StripComponentSubscript(component);
 }

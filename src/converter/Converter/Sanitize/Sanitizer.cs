@@ -419,7 +419,14 @@ public static class Sanitizer
             return access;
         }
 
-        return access with { ComponentPath = sanitizedPath.Split('.', access.ComponentPath.Count) };
+        // 2026-08-27: the count-capped split is now BRACKET-AWARE (TagPath). `Split('.', count)` merges
+        // excess dots into the LAST piece, which is right for a literal-dot name (that name is the last
+        // component here) and wrong for a symbolic array subscript, whose dots sit mid-path: the real
+        // ["DB", "Recipe[iDB.Slot]", "Target"] met an invented value that split to
+        // ["…", "SRecipe[siDB", "SSlot].STarget"] — a sanitizer-introduced corruption of exactly the
+        // Clock_0.5Hz shape this method already exists to prevent. TagPath.Split(path, count) is the
+        // same cap applied at component boundaries only, so both cases come out right.
+        return access with { ComponentPath = TagPath.Split(sanitizedPath, access.ComponentPath.Count) };
     }
 
     /// <summary>

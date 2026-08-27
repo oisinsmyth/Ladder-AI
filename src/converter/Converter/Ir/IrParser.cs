@@ -1558,7 +1558,7 @@ public static partial class IrParser
 
         var instanceUId = int.Parse(RequirePrefixedLine(lines, ref i, "    instanceuid = "));
         var instanceScope = RequirePrefixedLine(lines, ref i, "    instancescope = ");
-        var instancePath = RequirePrefixedLine(lines, ref i, "    instancepath = ").Split('.');
+        var instancePath = TagPath.Split(RequirePrefixedLine(lines, ref i, "    instancepath = "));
 
         var arguments = new List<FixedShapeArgumentSidecar>();
         while (i < lines.Length && lines[i].StartsWith("    port ", StringComparison.Ordinal))
@@ -1894,7 +1894,7 @@ public static partial class IrParser
 
         var instanceUId = int.Parse(RequirePrefixedLine(lines, ref i, "    instanceuid = "));
         var instanceScope = RequirePrefixedLine(lines, ref i, "    instancescope = ");
-        var instancePath = RequirePrefixedLine(lines, ref i, "    instancepath = ").Split('.');
+        var instancePath = TagPath.Split(RequirePrefixedLine(lines, ref i, "    instancepath = "));
 
         var reqRailWireUId = ParseRail(RequirePrefixedLine(lines, ref i, "    reqrail = "));
         var reqSteps = new List<ChainStepSidecar>();
@@ -1940,7 +1940,7 @@ public static partial class IrParser
 
         var instanceUId = int.Parse(RequirePrefixedLine(lines, ref i, "    instanceuid = "));
         var instanceScope = RequirePrefixedLine(lines, ref i, "    instancescope = ");
-        var instancePath = RequirePrefixedLine(lines, ref i, "    instancepath = ").Split('.');
+        var instancePath = TagPath.Split(RequirePrefixedLine(lines, ref i, "    instancepath = "));
 
         var reqOperand = ParseOperand(lines, ref i, "    ", "req");
         var portOperand = ParseOperand(lines, ref i, "    ", "port");
@@ -2019,7 +2019,7 @@ public static partial class IrParser
         {
             instanceUId = int.Parse(RequirePrefixedLine(lines, ref i, "    instanceuid = "));
             instanceScope = RequirePrefixedLine(lines, ref i, "    instancescope = ");
-            instancePath = RequirePrefixedLine(lines, ref i, "    instancepath = ").Split('.');
+            instancePath = TagPath.Split(RequirePrefixedLine(lines, ref i, "    instancepath = "));
         }
 
         var arguments = new List<CallArgumentSidecar>();
@@ -2160,7 +2160,7 @@ public static partial class IrParser
         var timeType = RequirePrefixedLine(lines, ref i, "    timetype = ");
         var instanceUId = int.Parse(RequirePrefixedLine(lines, ref i, "    instanceuid = "));
         var instanceScope = RequirePrefixedLine(lines, ref i, "    instancescope = ");
-        var instancePath = RequirePrefixedLine(lines, ref i, "    instancepath = ").Split('.');
+        var instancePath = TagPath.Split(RequirePrefixedLine(lines, ref i, "    instancepath = "));
         var railWireUId = ParseRail(RequirePrefixedLine(lines, ref i, "    rail = "));
 
         var steps = new List<ChainStepSidecar>();

@@ -2689,7 +2689,7 @@ check's question.
    ones the **FB itself** writes, so they should never have been in the caller-driven scope at all —
    a reader was being told a caller had failed to wire an FB's own outputs.
 
-Measured across the corpus, old binary → new: `FB_RecipeSelect` **40 undriven → 0** (48 rows leave
+Measured across the corpus, old binary → new: `FB_ProfileSelect` **40 undriven → 0** (48 rows leave
 the scope entirely), `FB_MotorDOL` **58 → 10**, `FB_Valve` **100 → 68**. The remaining findings are
 genuine — a per-valve member written for one placement and not its siblings.
 
@@ -4668,3 +4668,52 @@ when read back out of the controller, with `compile-all` reporting 33 compiled /
 all pass; only the import refuses. `import-all` fails closed (exit 13) and names the member, which is
 what stops it being silent — but a caller reading only "the FB imported" would not learn that the
 instance DBs did not.
+
+## 🔴 A dotted path split on `.` — the whole class, not the one splitter (2026-08-27)
+
+`Split('.')` on a tag path was safe for exactly as long as an array subscript could only be an
+integer literal: an integer contains no dot. That stopped being true the same day the converter
+began accepting a **variable** subscript, because a symbolic index *is* a dotted path.
+`DB_Config.Profile[iDB_Unit_A.Cycle.ChosenIndex].Target` cut into
+`["…Profile[iDB_Unit_A", "Sequence", "ChosenIndex]"]` — three pieces that name nothing.
+
+`1a6eed0` repaired **one** splitter (`AccessNode.FromDottedPath`) with a private bracket-aware copy.
+A live run then hit the others and got two false positives on wiring `tagstatus` confirms exists:
+
+- `preflight` / `tagstatus`: `member path … does not resolve: no member 'Sequence'`
+- `review`: `C-005 Name component 'ChosenIndex]' contains characters other than letters/digits/underscore`
+
+**How it was isolated, and why the trigger is certain.** `preflight` on the pre-edit file: exit 0, 0
+findings. The identical edit with the subscript written as a literal `[1]`, nothing else changed:
+exit 0, 0 findings. So the **dotted index alone** was the trigger, not the edit.
+
+**The fix is one shared primitive, `Converter.TagPath`** — per this repo's standing rule that a
+second instance of a bug class earns the general fix rather than another special case (the same
+ruling that retired `AccessNode`'s positional special-casing outright). It offers `Split`,
+`Split(path, count)` (the bracket-aware generalization of `string.Split('.', count)`, which is what
+keeps the `Clock_0.5Hz` system tags intact for the sanitizer), `IndexOfSeparator`,
+`LastIndexOfSeparator`, `StripSubscripts` and the two component-level helpers. It lives in the root
+`Converter` namespace, dependency-free, so `Review`, `TagStatus`, `CrossCheck` and `Ir` all reach it
+by enclosing-namespace lookup — **no analysis layer takes a dependency on the SimaticML
+serialization model just to learn where a dot is.** Nesting cannot occur (`IsSymbolicIndex` rejects a
+bracket inside an index), so the depth counter is exact; an unbalanced bracket degrades to
+whole-string rather than dropping text.
+
+**The defect reached further than the two reported files.** `ProjectUsageGraph.StripSubscripts`
+matched `\[\d+\]` under a comment asserting *"an index never contains a dot"* — so a symbolic
+subscript **survived the strip**, and `OwnerOf`'s `root.IndexOf('.')` then cut at the dot *inside*
+the brackets and produced the root `Buffer[iDB`. `OwnerOf` is the test that separates a real
+cross-block conflict from an alias, so a block-local path silently reclassified as global.
+`Sanitizer.SanitizeAccessNode`'s `Split('.', count)` merges excess dots into the LAST piece — right
+for a literal-dot name, wrong for a mid-path subscript. Both are routed through `TagPath` now, along
+with `TagTypeRegistry.Resolve`, the `instancepath` splits on both sides of the IR round trip, and
+`Trace`/`SignalSet`/`UndrivenScan`/`Claims`/`InterfaceCheck`'s leaf and root extraction.
+
+**C-005 got stricter, not looser.** A variable subscript is a tag path TIA resolves as one, emitted
+as its own nested `<Access>` with one `<Component>` per segment — so its segments are names and
+C-005 now judges them **on purpose**. Before the bracket-aware split they were judged *by accident*,
+as bogus outer components, which is exactly why a valid one was accused. A literal subscript (`[3]`,
+`[0,1]`, `[-1]`) is never charset-checked: those are integers, not names. Measured on a synthetic
+fixture: the valid construct gives `preflight` exit 0 / `review` `C-005: checked, clean`; a stray `]`
+outside any subscript and a hyphen inside one both still report, the second naming the subscript it
+came from.
