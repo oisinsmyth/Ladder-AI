@@ -115,7 +115,7 @@ public class TagTypeRegistryTests
     // An INSTANCE DB's member tree is defined by its FB's interface, so INSTANCEOF has to be
     // followed to type a path through one (2026-08-24).
     //
-    // Measured on a real TIA import: `iDB.Silo.StableElapsed >= iDB.Settings.StabilityTimeout` is
+    // Measured on a real TIA import: `iDB.Bay.SettledElapsed >= iDB.Settings.DwellTimeout` is
     // Time >= Time. Neither operand resolved, InferCompareSrcType's no-tags-no-literals fallback
     // emitted `SrcType Int`, and TIA rejected the block — 12 compile errors on one FC. The
     // IDENTICAL comparison written from inside the FB emitted the right type, because there the
@@ -127,15 +127,15 @@ public class TagTypeRegistryTests
     // member tree would make correctness depend on whether anyone had re-exported the project.
     private static string WriteInstanceDbCorpus(string dir, bool includeFb)
     {
-        File.WriteAllText(Path.Combine(dir, "UDT_Silo.ir"),
-            "TYPE UDT_Silo\n  ROOTID 0\n  MEMBERS\n    Weight : Real\n    StableElapsed : Time\n");
-        File.WriteAllText(Path.Combine(dir, "iDB_Silo_W.ir"),
-            "DB iDB_Silo_W\n  ROOTID 0\n  NUMBER 11\n  INSTANCEOF FB_Silo\n  MEMBERS\n");
+        File.WriteAllText(Path.Combine(dir, "UDT_Bay.ir"),
+            "TYPE UDT_Bay\n  ROOTID 0\n  MEMBERS\n    Weight : Real\n    SettledElapsed : Time\n");
+        File.WriteAllText(Path.Combine(dir, "iDB_Bay_A.ir"),
+            "DB iDB_Bay_A\n  ROOTID 0\n  NUMBER 11\n  INSTANCEOF FB_Bay\n  MEMBERS\n");
         if (includeFb)
         {
-            File.WriteAllText(Path.Combine(dir, "FB_Silo.ir"),
-                "BLOCK FB FB_Silo\nROOTID 0\nNUMBER 1\nLANGUAGE LAD\n\n" +
-                "INTERFACE\n  STATIC\n    Silo : \"UDT_Silo\"\n");
+            File.WriteAllText(Path.Combine(dir, "FB_Bay.ir"),
+                "BLOCK FB FB_Bay\nROOTID 0\nNUMBER 1\nLANGUAGE LAD\n\n" +
+                "INTERFACE\n  STATIC\n    Bay : \"UDT_Bay\"\n");
         }
 
         return dir;
@@ -152,13 +152,13 @@ public class TagTypeRegistryTests
             var registry = TagTypeRegistry.FromFiles(Directory.EnumerateFiles(dir, "*.ir"));
 
             // The whole point: a Time member two levels down, through an iDB that declares nothing.
-            Assert.Equal("Time", registry.Resolve("iDB_Silo_W.Silo.StableElapsed"));
-            Assert.Equal("Real", registry.Resolve("iDB_Silo_W.Silo.Weight"));
+            Assert.Equal("Time", registry.Resolve("iDB_Bay_A.Bay.SettledElapsed"));
+            Assert.Equal("Real", registry.Resolve("iDB_Bay_A.Bay.Weight"));
 
             // A member the FB genuinely does not have still returns null — the fallback resolves,
             // it does not invent.
-            Assert.Null(registry.Resolve("iDB_Silo_W.Silo.NoSuchMember"));
-            Assert.Null(registry.Resolve("iDB_Silo_W.NoSuchStatic"));
+            Assert.Null(registry.Resolve("iDB_Bay_A.Bay.NoSuchMember"));
+            Assert.Null(registry.Resolve("iDB_Bay_A.NoSuchStatic"));
         }
         finally
         {
@@ -180,7 +180,7 @@ public class TagTypeRegistryTests
             WriteInstanceDbCorpus(dir, includeFb: false);
             var registry = TagTypeRegistry.FromFiles(Directory.EnumerateFiles(dir, "*.ir"));
 
-            Assert.Null(registry.Resolve("iDB_Silo_W.Silo.StableElapsed"));
+            Assert.Null(registry.Resolve("iDB_Bay_A.Bay.SettledElapsed"));
         }
         finally
         {

@@ -816,7 +816,7 @@ public static class FlgNetParser
         // FI-51. A subscript on ANY component is now read, and rides back into that component's
         // own name as "Name[n]". The previous refusal of a non-final indexed component was
         // correct at the time — it was an unobserved shape, and refusing beats guessing — but the
-        // shape turned out to be ordinary (an array of structs, `DB_Weigh.Silo[0].RawValue`), and
+        // shape turned out to be ordinary (an array of structs, `DB_Gauge.Bay[0].RawValue`), and
         // the writer was meanwhile emitting a corrupt version of the same thing rather than
         // refusing alongside.
         // A VARIABLE subscript's scope is carried alongside the path, not folded into the name: TIA

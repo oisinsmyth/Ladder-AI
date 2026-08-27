@@ -388,7 +388,7 @@ public class DbConverterTests
     // FI-58 (2026-08-08). A nested member whose type is a SYSTEM STRUCTURED TYPE carries a
     // `Version` attribute in TIA's own export, and refusing it hard-errored `to-ir` on any DB with
     // such a member nested inside a structure:
-    //     "member 'Silo' has a nested/bare member 'LastCleaned' with unexpected attribute(s)
+    //     "member 'Bay' has a nested/bare member 'LastServiced' with unexpected attribute(s)
     //      [Version]"
     // Two DBs could not be read back at all, so a re-export could not be verified and their member
     // sets had to be extracted from raw XML by hand.
@@ -406,7 +406,7 @@ public class DbConverterTests
                 <AttributeList>
                   <Interface><Sections xmlns="http://www.siemens.com/automation/Openness/SW/Interface/v5">
               <Section Name="Static">
-                <Member Name="Silo" Datatype="&quot;UDT_SiloRet&quot;" Remanence="Retain" Accessibility="Public">
+                <Member Name="Bay" Datatype="&quot;UDT_BayRet&quot;" Remanence="Retain" Accessibility="Public">
                   <AttributeList>
                     <BooleanAttribute Name="ExternalAccessible" SystemDefined="true">true</BooleanAttribute>
                     <BooleanAttribute Name="ExternalVisible" SystemDefined="true">true</BooleanAttribute>
@@ -415,7 +415,7 @@ public class DbConverterTests
                   </AttributeList>
                   <Sections>
                     <Section Name="None">
-                      <Member Name="LastCleaned" Datatype="DTL" Version="1.0" />
+                      <Member Name="LastServiced" Datatype="DTL" Version="1.0" />
                       <Member Name="Plain" Datatype="Bool" />
                     </Section>
                   </Sections>
@@ -446,7 +446,7 @@ public class DbConverterTests
         var db = DbSourceParser.Parse(xml);
         var nested = Assert.Single(db.Members!).NestedMembers!;
 
-        Assert.Equal(new[] { "LastCleaned", "Plain" }, nested.Select(m => m.Name).ToArray());
+        Assert.Equal(new[] { "LastServiced", "Plain" }, nested.Select(m => m.Name).ToArray());
         Assert.Equal("DTL", nested[0].Datatype);
     }
 

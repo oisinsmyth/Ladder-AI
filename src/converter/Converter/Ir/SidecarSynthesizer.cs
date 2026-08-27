@@ -742,7 +742,7 @@ public static class SidecarSynthesizer
     // comparison was emitted as the signed type, which TIA rejects outright:
     //     "The data type UInt of the actual parameter does not match the data type Int of the
     //      formal parameter"
-    // Found live on `IO.UnloadHoldSeq <> IO.UnloadHoldAck`-adjacent logic — the first unsigned
+    // Found live on `IO.ReleaseHoldSeq <> IO.ReleaseHoldAck`-adjacent logic — the first unsigned
     // tag this corpus had ever compared to a constant.
     //
     // The old rank table was the mechanism: it listed Int/DInt/UDInt/LInt/ULInt/Real and returned
@@ -1417,7 +1417,7 @@ public static class SidecarSynthesizer
 
             // MULTI-INSTANCE: a call whose instance is a STATIC of this block is a LocalVariable, not a
             // global instance DB. This was hardcoded to GlobalVariableScope with a comment saying
-            // multi-instance was out of scope, so TIA resolved `#ValveWater` as a global DB name and
+            // multi-instance was out of scope, so TIA resolved `#ValveA` as a global DB name and
             // reported "Missing instance DB" on a block that had imported cleanly. BuildTimerSidecar has
             // always done this correctly (its own ScopeFor call below), so the two paths were asymmetric
             // for no reason other than that no multi-instance FB call had ever been written.

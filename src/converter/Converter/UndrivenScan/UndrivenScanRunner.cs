@@ -115,7 +115,7 @@ public static class UndrivenScanRunner
 
     // 🔴 ALL THREE OF THESE RESOLVE THROUGH `UsagesReaching`, NOT THROUGH A VERBATIM KEY LOOKUP
     // (2026-08-18). A block that writes a whole struct — `MOVE(IN := DB_Param.Recipe[3]) => Selected` —
-    // writes every member of it, under a usage key that names no member. Looking `Selected.SRID` up
+    // writes every member of it, under a usage key that names no member. Looking `Selected.SetId` up
     // verbatim finds nothing, so the FB's own output members survived the scope filter below and were
     // then reported UNDRIVEN to their caller: the caller is not supposed to drive them at all.
     private static bool IsReadByFb(ProjectUsageGraph graph, string fbName, string suffix) =>
@@ -146,15 +146,15 @@ public static class UndrivenScanRunner
     {
         // FI-50. An instance DB is addressed by its own name from outside (`iDB_X.IO.Step`), but a
         // MULTI-INSTANCE is addressed from inside its owner by its bare static name
-        // (`ValveWater.IO.Step`) — there is no instance root in the text at all. So the lookup uses
+        // (`ValveA.IO.Step`) — there is no instance root in the text at all. So the lookup uses
         // the local form, then restricts to the owning block: two FBs that both happen to declare a
-        // `ValveWater` would otherwise pool each other's writers and each mask the other's gap.
+        // `ValveA` would otherwise pool each other's writers and each mask the other's gap.
         var isMulti = graph.MultiInstanceOrigin.TryGetValue(instance, out var origin);
 
         // 🔴 A MULTI-INSTANCE MEMBER IS ADDRESSED TWO WAYS, AND ONLY ONE OF THEM WAS EVER LOOKED UP
-        // (2026-08-18). From INSIDE the owning FB it is bare and local — `ValveDrain.IO.InHand`. From
+        // (2026-08-18). From INSIDE the owning FB it is bare and local — `ValveB.IO.InHand`. From
         // ANY OTHER BLOCK it is absolute and rooted on the owner's instance DB —
-        // `iDB_SiloVessel_SiloW.ValveDrain.IO.InHand`. This method resolved the local form only, so
+        // `iDB_Cell_North.ValveB.IO.InHand`. This method resolved the local form only, so
         // every write from an orchestrator, a command decoder or a startup block was invisible.
         //
         // MEASURED: six members reported UNDRIVEN on all sixteen placements of one valve FB — 96 false
@@ -162,8 +162,8 @@ public static class UndrivenScanRunner
         // path plainly. Two tools contradicting each other over one corpus is what made it findable,
         // and a check wrong in one direction 60% of the time cannot be trusted in the other.
         //
-        // The owner restriction applies to the LOCAL form only, and must: a bare `ValveDrain.IO.InHand`
-        // could belong to any FB that happens to declare a `ValveDrain`, so pooling those would let one
+        // The owner restriction applies to the LOCAL form only, and must: a bare `ValveB.IO.InHand`
+        // could belong to any FB that happens to declare a `ValveB`, so pooling those would let one
         // block's wiring mask another's gap. The ABSOLUTE form names one placement and needs no such
         // guard — that is exactly what makes it absolute.
         var lookups = new List<(string Path, string Root, string? RestrictToBlock)>();

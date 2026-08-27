@@ -10,7 +10,7 @@ public sealed record BlockConsistencyIssue(string Name, string Path, string Lang
 ///
 /// Measured on a live job: `sanity-check` reported `OVERALL: HEALTHY`, `BLOCKS: 52`,
 /// `INCONSISTENT: 0` and a device compile of `Success (errors=0, warnings=0)` — and TIA then
-/// refused `export --type UDT_Drum` with *"Inconsistent blocks and PLC data types (UDT) cannot be
+/// refused `export --type UDT_Rack` with *"Inconsistent blocks and PLC data types (UDT) cannot be
 /// exported."* The refusal came from TIA, not from us (<c>ExportType</c> has no consistency guard
 /// of its own; it just calls <c>type.Export(...)</c>).
 ///

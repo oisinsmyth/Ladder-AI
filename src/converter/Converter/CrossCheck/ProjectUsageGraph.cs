@@ -33,7 +33,7 @@ public sealed class ProjectUsageGraph
     private readonly List<(string InstanceDb, string Suffix)> _instanceMemberPaths = new();
 
     // FI-50. A MULTI-INSTANCE is an FB instantiated as a STATIC member of another FB rather than as
-    // its own instance DB — `ValveWater : "FB_Valve"` inside FB_SiloVessel. It is a real instance
+    // its own instance DB — `ValveA : "FB_Valve"` inside FB_Cell. It is a real instance
     // with real per-instance state, and the indexes above cannot see it: they are built from DB
     // sources carrying an InstanceOf, and a multi-instance has no DB of its own.
     //
@@ -44,7 +44,7 @@ public sealed class ProjectUsageGraph
     //
     // KEPT DELIBERATELY SEPARATE from _instanceToFb / _instanceMemberPaths rather than merged into
     // them. Those two are keyed on an iDB NAME and CanonicalizeInstancePath splits a path on its
-    // root against them; a synthetic dotted key like "FB_SiloVessel.ValveWater" would canonicalize
+    // root against them; a synthetic dotted key like "FB_Cell.ValveA" would canonicalize
     // paths that no logic ever writes, silently changing cross-check and trace output. Additive
     // index, no existing consumer perturbed.
     private readonly Dictionary<string, string> _multiInstanceToFb = new(StringComparer.Ordinal);
@@ -57,7 +57,7 @@ public sealed class ProjectUsageGraph
     private readonly List<(string OwnerFb, DbMember Member)> _multiInstanceCandidates = new();
 
     // Every block's own declared interface. Needed because a multi-instance static is written BARE —
-    // `ValveIntake : "FB_Valve"` with no members beneath it, unlike a UDT-typed static, which the IR
+    // `ValveC : "FB_Valve"` with no members beneath it, unlike a UDT-typed static, which the IR
     // expands in place. So the members of a multi-instance have to be read off the instantiated
     // block's own declaration rather than off the declaration site.
     private readonly Dictionary<string, IReadOnlyList<DbMember>> _blockInterfaces =
@@ -148,16 +148,16 @@ public sealed class ProjectUsageGraph
     public IReadOnlyList<(string InstanceDb, string Suffix)> InstanceMemberPaths => _instanceMemberPaths;
 
     // FI-50. Multi-instance path -> the FB it instantiates. The path is the chain of static member
-    // names from a root, e.g. "iDB_SiloW.ValveWater" where the owning FB has an instance DB, or
-    // "FB_SiloVessel/ValveWater" where it does not yet (declaration-site form — see
+    // names from a root, e.g. "iDB_Cell_North.ValveA" where the owning FB has an instance DB, or
+    // "FB_Cell/ValveA" where it does not yet (declaration-site form — see
     // MultiInstanceOrigin). Disjoint from InstanceToFb by construction.
     public IReadOnlyDictionary<string, string> MultiInstanceToFb => _multiInstanceToFb;
 
     public IReadOnlyList<(string Instance, string Suffix)> MultiInstanceMemberPaths => _multiInstanceMemberPaths;
 
     // For a multi-instance path: the block whose networks address it, and the LOCAL root those
-    // networks use. Inside FB_SiloVessel the water valve's open command is written as
-    // `ValveWater.IO.OpenCmd` — bare, with no instance root — so a usage lookup has to be made on
+    // networks use. Inside FB_Cell one valve's open command is written as
+    // `ValveA.IO.OpenCmd` — bare, with no instance root — so a usage lookup has to be made on
     // the local form and then restricted to the owning block, or two FBs that happen to share a
     // static name would pool each other's writers.
     public IReadOnlyDictionary<string, (string OwnerFb, string LocalRoot)> MultiInstanceOrigin =>
@@ -189,8 +189,8 @@ public sealed class ProjectUsageGraph
     // FI-50. Expand every multi-instance static into instance paths, rooted on a real instance DB
     // where the owning FB has one.
     //
-    // ITERATED TO A FIXPOINT because multi-instances nest: FB_SiloSequence owns a FB_SiloCycle,
-    // and if FB_SiloSequence is itself reached through an instance DB then the cycle's real path is
+    // ITERATED TO A FIXPOINT because multi-instances nest: FB_CellSequence owns a FB_CellCycle,
+    // and if FB_CellSequence is itself reached through an instance DB then the cycle's real path is
     // iDB_SeqW.Cycle. A single pass would root the cycle on the declaration site and lose the
     // per-instance resolution that is this whole index's reason to exist.
     private void ResolveMultiInstances()
@@ -312,10 +312,10 @@ public sealed class ProjectUsageGraph
     // subscripts.
     //
     // Why this is needed at all: an `Array[0..3] of "UDT_X"` member is inventoried as ONE leaf
-    // (`DB_ParamRet.Silo`) because the walk does not expand a UDT behind an array. Every real
-    // reference, though, is written through an element and a member — `DB_ParamRet.Silo[0].ZeroOffset`
+    // (`DB_TuningRet.Bay`) because the walk does not expand a UDT behind an array. Every real
+    // reference, though, is written through an element and a member — `DB_TuningRet.Bay[0].ZeroOffset`
     // — so an exact-string lookup finds nothing and the member reads as dead. Measured on a live
-    // project: `DB_ParamRet.Silo` and `DB_WeighInterface.Silo` both reported "unused (no writer, no
+    // project: `DB_TuningRet.Bay` and `DB_GaugeInterface.Bay` both reported "unused (no writer, no
     // reader)" against 24 and 16 real readers respectively, while their plain-scalar siblings in the
     // same DB listed theirs correctly.
     //
@@ -357,7 +357,7 @@ public sealed class ProjectUsageGraph
     /// That one asks <i>"does anything use this declared thing, at any depth inside it?"</i> and walks
     /// DOWNWARD. This one asks <i>"does this one leaf receive a value?"</i> and walks UPWARD, because a
     /// write to a whole struct writes every member of it: <c>MOVE(IN := DB_Param.Recipe[3]) =&gt;
-    /// Selected</c> drives <c>Selected.SRID</c>, <c>Selected.TargetMC</c> and every other member,
+    /// Selected</c> drives <c>Selected.SetId</c>, <c>Selected.TargetGrade</c> and every other member,
     /// under a usage key that mentions none of them.</para>
     ///
     /// <para>MEASURED, 2026-08-18: fifty such whole-struct MOVEs left every <c>Selected.*</c> member
@@ -366,13 +366,13 @@ public sealed class ProjectUsageGraph
     /// than in the scan, because the join is a property of how storage nests and not of any one
     /// check's question.</para>
     ///
-    /// <para>Only the ANCESTOR direction is admitted. A write to a DESCENDANT (<c>Selected.SRID</c>)
+    /// <para>Only the ANCESTOR direction is admitted. A write to a DESCENDANT (<c>Selected.SetId</c>)
     /// drives part of <c>Selected</c> and not the rest, so counting it would be the false-green
     /// direction; <see cref="UsagesCovering"/> answers that separately and says so.</para>
     ///
     /// <para>🔴 <b><paramref name="notAbove"/> IS NOT OPTIONAL POLISH — WITHOUT IT THIS METHOD MARKS
-    /// EVERY MEMBER OF EVERY INSTANCE DRIVEN.</b> <c>CALL FB_Drum(iDB_Drum_DrumA, EN := TRUE)</c>
-    /// records a WRITE at the bare path <c>iDB_Drum_DrumA</c> — the instance root — which is an
+    /// EVERY MEMBER OF EVERY INSTANCE DRIVEN.</b> <c>CALL FB_Rack(iDB_Rack_RackA, EN := TRUE)</c>
+    /// records a WRITE at the bare path <c>iDB_Rack_RackA</c> — the instance root — which is an
     /// ancestor of every member in it. That reference is the CALL naming its own state store; it is
     /// not a data write of the interface, and treating it as one turned a block with 20 genuine
     /// undriven members into 168 driven ones and exit 0. Measured while building this, and it is the

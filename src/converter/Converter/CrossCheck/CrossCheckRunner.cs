@@ -75,7 +75,7 @@ public static class CrossCheckRunner
         {
             // FI-53: pooled across array elements and members reached through them, not an exact
             // string match. An `Array[0..3] of "UDT_X"` member is one declared leaf but is only ever
-            // referenced through an element (`…Silo[0].ZeroOffset`), so the exact lookup this used to
+            // referenced through an element (`…Bay[0].ZeroOffset`), so the exact lookup this used to
             // do reported live members dead.
             var (writers, readers) = graph.UsagesCovering(path);
             if (writers.Count == 0 || readers.Count == 0)

@@ -98,7 +98,7 @@ taken **before** the work.
 
 Found by a coding agent that read a settled architecture, hit the tool boundary, and **stopped
 before writing any IR** rather than working around it. The construct — an FB called with one of the
-calling block's own statics as its instance, `#ValveWater` rather than a global instance DB —
+calling block's own statics as its instance, `#ValveA` rather than a global instance DB —
 appears **nowhere in the committed export corpus**. It had simply never been written, so nothing
 had ever exercised the path.
 

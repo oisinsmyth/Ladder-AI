@@ -41,7 +41,7 @@ public static class FlgNetWriter
             // FI-51. Every component is treated identically: a "Name[n]" suffix becomes the real
             // SimaticML subscript shape wherever it sits in the path. Previously only the last
             // component could carry one, and a mid-path subscript was written out as a component
-            // literally NAMED "Silo[0]" — a member that does not exist, accepted by the writer and
+            // literally NAMED "Bay[0]" — a member that does not exist, accepted by the writer and
             // rejected by TIA. The slice modifier stays last-component-only, because a slice really
             // is an access-level suffix rather than a per-component one.
             var componentElements = access.ComponentPath

@@ -60,7 +60,7 @@ public class StagedWriteTests
     [Fact]
     public void A_staged_write_emits_one_SetTag_and_NO_sequence_bump()
     {
-        var doc = Emit(Ir(Button(set: "Cmd_Silo_W_Int1=@Recipe_01_SRID")));
+        var doc = Emit(Ir(Button(set: "Cmd_Bay_A_Int1=@Recipe_01_SetId")));
 
         var functions = Functions(doc);
         Assert.Single(functions);
@@ -73,20 +73,20 @@ public class StagedWriteTests
     [Fact]
     public void A_staged_write_carrying_an_at_sign_emits_a_LINK_and_not_a_literal()
     {
-        var doc = Emit(Ir(Button(set: "Cmd_Silo_W_Int1=@Recipe_01_SRID")));
+        var doc = Emit(Ir(Button(set: "Cmd_Bay_A_Int1=@Recipe_01_SetId")));
 
         var parameters = doc.Descendants().Where(e => e.Name.LocalName == "Hmi.Event.FunctionListEntryParameter").ToList();
         var value = parameters.Single(p => p.Element("AttributeList")?.Element("Name")?.Value == "Value");
 
         var link = value.Descendants().FirstOrDefault(e => e.Name.LocalName == "Value" && e.Attribute("TargetID") is not null);
         Assert.NotNull(link);
-        Assert.Equal("Recipe_01_SRID", link!.Element("Name")?.Value);
+        Assert.Equal("Recipe_01_SetId", link!.Element("Name")?.Value);
     }
 
     [Fact]
     public void A_staged_write_is_emitted_BEFORE_the_navigation_on_the_same_button()
     {
-        var doc = Emit(Ir(Button(set: "Cmd_Silo_W_Int1=@Recipe_01_SRID", goTo: "02 Silo Detail W")));
+        var doc = Emit(Ir(Button(set: "Cmd_Bay_A_Int1=@Recipe_01_SetId", goTo: "02 Bay Detail A")));
 
         var names = Functions(doc).Select(FunctionName).ToList();
         Assert.Equal(new[] { "SetTag", "ActivateScreen" }, names);
@@ -95,7 +95,7 @@ public class StagedWriteTests
     [Fact]
     public void A_button_carrying_only_a_staged_write_is_NOT_reported_inert()
     {
-        var result = Emitter.Emit(Ir(Button(set: "Cmd_Silo_W_Int1=5")), "TestScreen", 1);
+        var result = Emitter.Emit(Ir(Button(set: "Cmd_Bay_A_Int1=5")), "TestScreen", 1);
         Assert.DoesNotContain(result.HandOff, h => h.Contains("INERT"));
     }
 
@@ -131,7 +131,7 @@ public class StagedWriteTests
     [Fact]
     public void Several_staged_writes_are_all_emitted_BEFORE_the_navigation()
     {
-        var doc = Emit(Ir(Button(set: "A_Tag=1; B_Tag=2", goTo: "02 Silo Detail W")));
+        var doc = Emit(Ir(Button(set: "A_Tag=1; B_Tag=2", goTo: "02 Bay Detail A")));
         Assert.Equal(new[] { "SetTag", "SetTag", "ActivateScreen" },
                      Functions(doc).Select(FunctionName).ToArray());
     }
@@ -192,27 +192,27 @@ public class StagedWriteTests
     [Fact]
     public void A_staged_write_aimed_at_a_sequence_tag_is_REFUSED()
     {
-        var ex = Assert.Throws<OperandStagingException>(() => Emit(Ir(Button(set: "Cmd_Silo_W_Seq=1"))));
+        var ex = Assert.Throws<OperandStagingException>(() => Emit(Ir(Button(set: "Cmd_Bay_A_Seq=1"))));
         Assert.Contains("_Seq", ex.Message);
     }
 
     [Fact]
     public void A_staged_write_aimed_at_a_code_tag_is_REFUSED()
     {
-        Assert.Throws<OperandStagingException>(() => Emit(Ir(Button(set: "Cmd_Silo_W_Code=12"))));
+        Assert.Throws<OperandStagingException>(() => Emit(Ir(Button(set: "Cmd_Bay_A_Code=12"))));
     }
 
     [Fact]
     public void A_staged_write_on_a_button_that_also_commands_is_REFUSED()
     {
         Assert.Throws<OperandStagingException>(() =>
-            Emit(Ir(Button(set: "Cmd_Silo_W_Int1=3", cmd: "Cmd_Silo_W", code: "12"))));
+            Emit(Ir(Button(set: "Cmd_Bay_A_Int1=3", cmd: "Cmd_Bay_A", code: "12"))));
     }
 
     [Fact]
     public void A_staged_write_with_no_equals_sign_is_REFUSED()
     {
-        Assert.Throws<OperandStagingException>(() => Emit(Ir(Button(set: "Cmd_Silo_W_Int1"))));
+        Assert.Throws<OperandStagingException>(() => Emit(Ir(Button(set: "Cmd_Bay_A_Int1"))));
     }
 
     [Fact]
@@ -221,7 +221,7 @@ public class StagedWriteTests
         var text = new IrItem
         {
             Type = "Text", Left = 10, Top = 10, Width = 100, Height = 20,
-            SetTag = "Cmd_Silo_W_Int1=3", Text = "X", FontSizePx = 14,
+            SetTag = "Cmd_Bay_A_Int1=3", Text = "X", FontSizePx = 14,
         };
         Assert.Throws<OperandStagingException>(() => Emit(Ir(text)));
     }

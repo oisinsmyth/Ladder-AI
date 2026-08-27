@@ -227,7 +227,7 @@ this directly and fast:
 3. Enumerates every **PLC data type** and reads its `IsConsistent` flag too (**FI-62**, 2026-08-09).
    A UDT is not a `PlcBlock`, so step 2 never saw one: measured live, `sanity-check` reported
    `OVERALL: HEALTHY`, `BLOCKS: 52  INCONSISTENT: 0` and a device compile of
-   `Success (errors=0, warnings=0)`, and TIA then refused `export --type UDT_Drum` as inconsistent.
+   `Success (errors=0, warnings=0)`, and TIA then refused `export --type UDT_Rack` as inconsistent.
    The device compile stayed green because **nothing in that corpus instantiated the type** — an
    uninstantiated UDT has nothing to make a compile fail. No safety handling is needed here: a
    `PlcType` carries no `ProgrammingLanguage` at all, so there is nothing for the F-prefix

@@ -712,7 +712,7 @@ one probe cycle here and would have cost a misdiagnosed redesign otherwise.
 **Confirmed live 2026-08-08, by an agent that destroyed its own work with it and reported it.**
 
 Converting a TIA re-export to compare it against the working IR is an obvious move — and running
-`to-ir ir/FB_Drum.xml` writes `ir/FB_Drum.ir`, **overwriting the file you were about to compare it
+`to-ir ir/FB_Rack.xml` writes `ir/FB_Rack.ir`, **overwriting the file you were about to compare it
 against.** The agent lost every edit in two blocks this way. Worse, the rewritten files carried
 `SIDECAR` sections, which this corpus does not use, so the damage was not a clean revert either.
 

@@ -419,7 +419,7 @@ public class DuplicateBlockNumberTests
     [Fact]
     public void Import_AsType_DoesNotScanForDuplicates()
     {
-        var gateway = new FakeGateway { ImportedTypes = new[] { "UDT_Drum" } };
+        var gateway = new FakeGateway { ImportedTypes = new[] { "UDT_Rack" } };
 
         var (exitCode, _, _) = CaptureConsole(() =>
             Program.RunImport(gateway, ImportOptions(asType: true), timeoutOpenSeconds: 1));

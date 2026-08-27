@@ -38,8 +38,8 @@ public class ClaimStoreTests : IDisposable
     [Fact]
     public void FileName_IgnoresSurroundingWhitespace_SoACrlfReadCannotShadowAClaim() =>
         Assert.Equal(
-            ClaimStore.FileNameFor(ClaimKind.Tag, "AQ1_DrumA_SpeedRef"),
-            ClaimStore.FileNameFor(ClaimKind.Tag, "AQ1_DrumA_SpeedRef\r"));
+            ClaimStore.FileNameFor(ClaimKind.Tag, "AQ1_RackA_SpeedRef"),
+            ClaimStore.FileNameFor(ClaimKind.Tag, "AQ1_RackA_SpeedRef\r"));
 
     [Fact]
     public void Acquire_WithTrailingCarriageReturn_IsFoundByTheCleanValue()
