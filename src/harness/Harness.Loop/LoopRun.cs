@@ -176,7 +176,26 @@ public sealed record LoopRequest(
     //
     // Appended at the END, like every field before it: this record has enough positional parameters that
     // inserting one mid-list silently re-binds arguments at a call site.
-    IReadOnlyList<LaneDeclaration>? LaneDeclarations = null)
+    IReadOnlyList<LaneDeclaration>? LaneDeclarations = null,
+
+    // 🔴 *** WHAT THE PROGRAM GENERATES RATHER THAN HAS TYPED — the cyclic OB and the instance DBs. ***
+    //
+    // The per-slot half above closed the slot FC and the stimulus shell. These are the artifacts that belong
+    // to the PROGRAM rather than to one slot: one OB however many slots it drives, and one instance DB per
+    // FB instantiated. An instance DB is a mechanical projection of an interface and had no business being
+    // typed; the OB is an ordered call list, and the ORDER is the one thing in it that is not mechanical.
+    //
+    // 🔴 AND IT IS WHERE `SlotFcGenerator`'s OBLIGATION STOPS BEING A SENTENCE. That generator emits, with
+    // every slot FC, the words "'X' MUST be called from the cyclic OB, ahead of the copy layer" — because a
+    // hand-written slot FC once sat in a controller called by nothing and cost a wave and three hours. With
+    // the OB generated in the same pass, the sentence becomes a CHECK against the call list.
+    //
+    // NULL AND EMPTY BOTH MEAN "NOTHING WAS DECLARED", which is what every lane written before this field
+    // existed means, and those lanes go on behaving exactly as they did — with their OB and their instance
+    // DBs REPORTED as authored rather than passed over in silence.
+    //
+    // Appended at the END, like every field before it.
+    ProgramDeclaration? ProgramGeneration = null)
 {
     /// <summary>The factor, defaulting to uncompressed only where the caller passed nothing at all.</summary>
     public RuntimeCompression Compression => RuntimeCompression ?? Harness.Wire.RuntimeCompression.Uncompressed;
@@ -354,7 +373,14 @@ public static class LoopRun
         // itself, and the block under test never executes. The generated version wins a name collision
         // here for exactly the reason it wins one in the stamp — the two sets must be the same set, or the
         // version register would confirm a program other than the one on the wire.
-        var laneObjects = generation.Lane?.Objects ?? Array.Empty<HarnessObject>();
+        //
+        // The program-level generated objects — the cyclic OB and the instance DBs — go down on exactly the
+        // same terms. The OB is the block that CALLS everything else: stamping one and deploying another
+        // would put a call list on the device that the version register says is something different.
+        var laneObjects = (generation.Lane?.Objects ?? Array.Empty<HarnessObject>())
+            .Concat(generation.Program?.Objects ?? Array.Empty<HarnessObject>())
+            .ToArray();
+
         var laneNames = new HashSet<string>(laneObjects.Select(o => o.Name), StringComparer.OrdinalIgnoreCase);
 
         var deployedProgram = laneObjects
@@ -872,11 +898,52 @@ public static class LoopRun
                 null, lane);
         }
 
+        // ---- 3b. THE PROGRAM-LEVEL ARTIFACTS: THE CYCLIC OB AND THE INSTANCE DBS -------------------
+        //
+        // 🔴 *** AN INSTANCE DB IS A MECHANICAL PROJECTION OF ITS FB'S INTERFACE, AND THREE OF THEM WERE
+        // BEING TYPED. *** `ir/test-project001/iDB_HopperBlockageStim.ir` is 52 hand-typed lines that its
+        // own FB determines in full — and it is ALREADY STALE, missing nine statics the FB has grown since.
+        // That is what a hand-authored projection of a moving interface does.
+        //
+        // 🔴 *** AND IT RUNS AFTER THE LANE BECAUSE IT CHECKS THE LANE'S OBLIGATION. *** `SlotFcGenerator`
+        // emits "'X' MUST be called from the cyclic OB, ahead of the copy layer" with every block it makes.
+        // With the OB generated in the same pass that sentence becomes a check, so the orphan that cost a
+        // wave and three hours is refused at generation time rather than diagnosed on a rig.
+        //
+        // The FB sources come from `--program`: an instance DB projected from an interface nobody supplied
+        // would be a block asserted to mirror something never looked at, so a missing FB is a refusal.
+        var programGeneration = ProgramGenerator.Generate(
+            request.ProgramGeneration,
+            request.ProgramUnderTest.ToDictionary(o => o.Name, o => o.Ir, StringComparer.OrdinalIgnoreCase),
+            lane,
+            request.Naming.BlockName,
+            (request.LaneDeclarations ?? Array.Empty<LaneDeclaration>())
+                .SelectMany(d => new[] { d.StimulusHead?.InstancePath, d.BlockUnderTest?.InstancePath })
+                .Where(path => path is { Length: > 0 })
+                .Select(path => path!.Split('.')[0])
+                .ToArray());
+
+        if (programGeneration.Refused)
+        {
+            return LoopGeneration.Stop(LoopOutcome.NotGeneratable, gate, mapResult.SizeReport, null, caveats,
+                $"{programGeneration.Refusals.Count} program-generation declaration(s) could not be honoured, so NOTHING was "
+                + "generated — not the cyclic OB, not the instance DBs, not the slot FC and not the copy layer. *** THE OB IS "
+                + "THE ONE BLOCK WHOSE ENTIRE CONTENT IS AN ORDER, *** and an instance DB carries the presets the block starts "
+                + "from; a program emitted around a refused one of either is a deployment nobody chose. "
+                + string.Join(" | ", programGeneration.Refusals),
+                null, lane, programGeneration);
+        }
+
         // 🔴 THE GENERATED OBJECTS GO IN AHEAD OF `--program`, AND A NAME COLLISION RESOLVES TOWARD THE
         // GENERATOR. A caller who has promoted an earlier run's slot FC into the lane's `ir/` hands it back
         // in through --program; hashing both copies would put one object in the stamp twice, and hashing
         // the PROMOTED one would stamp a file that this run has just superseded.
-        var stampInput = MergeGenerated(lane.Objects, request.ProgramUnderTest, out var superseded);
+        //
+        // The program-level objects join the lane's here for exactly the same reason they are stamped at
+        // all: the OB EXECUTES and the instance DBs are LOADED, so a changed declaration must move the
+        // stamp. Neither embeds the stamp, so hashing them is not circular the way the copy layer is.
+        var stampInput = MergeGenerated(
+            lane.Objects.Concat(programGeneration.Objects).ToArray(), request.ProgramUnderTest, out var superseded);
 
         if (superseded.Count > 0)
         {
@@ -895,7 +962,7 @@ public static class LoopRun
         {
             return LoopGeneration.Stop(LoopOutcome.NotDerivable, gate, mapResult.SizeReport, null, caveats,
                 "the copy layer could not be generated: " + string.Join(" | ", copyLayer.Refusals),
-                copyLayer, lane);
+                copyLayer, lane, programGeneration);
         }
 
         // ---- 4. ASSERT 0.1b -------------------------------------------------------------------------
@@ -926,7 +993,7 @@ public static class LoopRun
         {
             return LoopGeneration.Stop(LoopOutcome.NotAssertable, gate, mapResult.SizeReport, retention, caveats,
                 "the generated objects failed the non-retentive assertion, so nothing was deployed: " + retention.Summary(),
-                copyLayer, lane);
+                copyLayer, lane, programGeneration);
         }
 
         // ---- 4c. THE INERT EXPECTATION — computed from the bindings, REPORTED here, GATED in Execute ---
@@ -944,7 +1011,8 @@ public static class LoopRun
             $"the copy layer was generated: {copyLayer.Objects.Count} object(s), {copyLayer.Require().Networks.Count} network(s), "
             + $"{copyLayer.Require().Tags.Count} mirror tag(s), {map.TotalRegisters} register(s) of mirror. NOTHING WAS DEPLOYED. "
             + inertRest.Summary()
-            + (request.LaneDeclarations is { Count: > 0 } ? " LANE: " + lane.Summary() : string.Empty),
+            + (request.LaneDeclarations is { Count: > 0 } ? " LANE: " + lane.Summary() : string.Empty)
+            + (request.ProgramGeneration is { Empty: false } ? " PROGRAM: " + programGeneration.Summary() : string.Empty),
             OrderOf(request),
             inertRest,
             floor,
@@ -955,7 +1023,8 @@ public static class LoopRun
             // measured on the rig, where the gate reported 18 coordinates re-expressed and the device got
             // all 18 unscaled.
             request.Vectors,
-            lane);
+            lane,
+            programGeneration);
     }
 
     /// <summary>

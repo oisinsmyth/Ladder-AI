@@ -15,4 +15,14 @@
     runtime one"), so the whole component is testable with no device, no rig and no TIA session.
   -->
 
+  <!--
+    The member-line grammar reader (IrMemberLine.cs) is internal: it is a SECOND copy of a grammar the
+    converter owns, kept internal so nothing outside this assembly comes to depend on the copy. Its own
+    tests must still be able to reach it, because the one failure a duplicated parser must not have is
+    projecting a line WRONG rather than refusing it.
+  -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="Harness.Map.Tests" />
+  </ItemGroup>
+
 </Project>

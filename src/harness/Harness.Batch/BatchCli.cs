@@ -949,6 +949,21 @@ public static class BatchCli
                 output.WriteLine($"  written   {path}  (generated slot FC)");
             }
 
+            // 🔴 *** AND THE PROGRAM-LEVEL HALF: THE CYCLIC OB AND THE INSTANCE DBS. *** Written and recorded
+            // on the same terms as the slot FC, and for the same reason — the OB EXECUTES and the instance
+            // DBs are LOADED, so both are in the stamp and both must be in the list the lane deploys from.
+            // Their roles are recorded distinctly because a check pointed at "some block" cannot find the one
+            // whose whole content is the order the others run in.
+            foreach (var obj in generation.Program?.Objects ?? Array.Empty<HarnessObject>())
+            {
+                var path = Path.Combine(args.EmitDir!, obj.Name + ".ir");
+                writeFile(path, obj.Ir);
+
+                var role = obj.Kind == HarnessObjectKind.DataBlock ? ObjectRole.InstanceDb : ObjectRole.CyclicOb;
+                generatedLane.Add(new GeneratedObject(obj.Name, path, obj.Kind, role));
+                output.WriteLine($"  written   {path}  (generated {(role == ObjectRole.CyclicOb ? "cyclic OB" : "instance DB")})");
+            }
+
             // 🔴 *** A SHELL FRAGMENT IS NOT AN OBJECT AND IS NEVER RECORDED AS ONE. *** It is networks —
             // no header, no interface, no statics — so nothing can import it, it cannot be in the stamp,
             // and a manifest naming it would put an unimportable file in the list the lane deploys from.
@@ -998,6 +1013,7 @@ public static class BatchCli
                     .Select(o => $"'{o.Name}' MUST be called from the cyclic OB. A generated FC nothing calls is deployed, loaded, "
                                + "healthy in every artifact, and never runs.")
                     .Concat(generation.Lane?.Obligations ?? Array.Empty<string>())
+                    .Concat(generation.Program?.Obligations ?? Array.Empty<string>())
                     .ToArray(),
 
                 generatedLane,
