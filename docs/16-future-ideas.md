@@ -2343,9 +2343,32 @@ is different and ordinary, but the discipline is identical — **redirect with `
 
 ### FI-80 — the Normalizer's Access content key is EMPTY for a constant, so two different constants compare equal
 
-- **Status:** **Raised 2026-08-27 — read from source and reproduced in a real comparison, NOT FIXED**
-  (owner ruled analyse-only for that session). **The most severe converter defect currently open:
-  it is a comparator that can report FALSE EQUALITY.**
+- **Status:** ✅ **FIXED 2026-08-27, and the false PASS was DEMONSTRATED before it was fixed.**
+  Raised earlier the same day as analyse-only; the owner then asked for the fix **and** for the
+  wider case to be measured rather than left as inference. Both done. 1,676 converter tests pass.
+  ⚠️ **This does NOT make the observed 940-difference comparison clean** — that noise comes from
+  the converter emitting a non-canonical `Scope` for constant references, which is a separate,
+  still-open defect. This fix stops two *different* constants being interchangeable; it does not
+  change what we emit.
+
+  🔴 **THE WIDER CASE WAS REAL AND BIGGER THAN THE ORIGINAL FINDING.** Measured across **47 real
+  exports**: `LiteralConstant` occurs **151 times and carries `<Symbol>` exactly ZERO times**;
+  `TypedConstant` 5 times, likewise zero. So the empty-discriminator key was never confined to
+  `LocalConstant` — **every literal in every document collapsed to `tag:LiteralConstant:`**, and
+  only `TypedConstant` escaped it via its own special case. The entry below flagged this as an
+  inference to be measured before acting; it measured true.
+
+  **The harmful direction was demonstrated, not argued.** The regression test takes a real block
+  fixture, leaves both constant `<Access>` elements byte-identical, and swaps ONLY the wires
+  (`IdentCon`) between them — a genuine change to which constant feeds which pin. Against the
+  unfixed `Normalizer` that comparison returns **`Expected: Differs / Actual: Equivalent`**: a
+  comparator passing two documents that differ. Changing a literal's *value* instead would have
+  been caught by the element comparison and would have proven nothing about the key.
+
+  Fix: `Converter/SimaticMl/Normalizer.cs` — when an `Access` has no `<Symbol>`, discriminate on
+  what it actually carries: `<Constant Name=…>` → the name; `<Constant><ConstantType>/<ConstantValue>`
+  → type + **canonicalized** value. Test: `Converter.Tests/CompareTests.cs`,
+  `TwoConstantsSwappedBetweenOperands_CompareUnequal`.
 - **Raised:** 2026-08-27 · **Source:** decomposing a 940-difference re-export comparison, where the
   same defect showed up in its harmless direction (noise) and its mechanism made the harmful
   direction obvious.

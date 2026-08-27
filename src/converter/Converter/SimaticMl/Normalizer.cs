@@ -213,7 +213,56 @@ public static class Normalizer
         // The full <Symbol> (component names plus any slice/array modifiers) so two Access
         // elements only compare equal when truly identical, not just same top-level path.
         var symbol = access.Elements().FirstOrDefault(e => e.Name.LocalName == "Symbol");
-        return $"tag:{scope}:{symbol?.ToString(SaveOptions.DisableFormatting)}";
+        if (symbol is not null)
+        {
+            return $"tag:{scope}:{symbol.ToString(SaveOptions.DisableFormatting)}";
+        }
+
+        // 🔴 NO <Symbol>. A CONSTANT-SHAPED Access lands here, and until 2026-08-27 it fell through
+        // to `tag:{scope}:` with the symbol interpolated as EMPTY — so every constant in the
+        // document collapsed to ONE key. Measured across 47 real exports: `LiteralConstant`
+        // occurs 151 times and carries `<Symbol>` ZERO times, `<Constant>` all 151. The comment on
+        // the TypedConstant branch above even records that TIA writes literals under
+        // LiteralConstant "which takes the `tag:` branch below" — it names this path without
+        // noticing the key it produces.
+        //
+        // Why that is worse than the noise that revealed it: this key BECOMES the Access's UId in
+        // the stripped tree, every IdentCon is rewritten to it, and the part-identification
+        // refinement colours on it. Two DIFFERENT constants sharing one key are therefore
+        // interchangeable to the comparer — so two documents that differ only in which constant an
+        // operand names can compare EQUAL. A comparator returning a false PASS is the one failure
+        // it must never have. The regression test asserts that direction, not merely the noise.
+        //
+        // Two observed shapes, both discriminated here:
+        //   LocalConstant   <Constant Name="SomeNamedConstant" />          -> the NAME is the identity
+        //   LiteralConstant <Constant><ConstantType>Word</ConstantType>
+        //                             <ConstantValue>16#89</ConstantValue> -> the TYPE + VALUE are
+        //
+        // Canonicalized, never raw, for exactly the reason the TypedConstant branch gives: a raw
+        // literal would put the re-rendered form back into the comparison after NumericLiteral
+        // removed it, and `0.10` would stop matching `0.1`.
+        var constant = access.Elements().FirstOrDefault(e => e.Name.LocalName == "Constant");
+        if (constant is not null)
+        {
+            var constantName = constant.Attribute("Name")?.Value;
+            if (!string.IsNullOrEmpty(constantName))
+            {
+                return $"tag:{scope}:name:{constantName}";
+            }
+
+            var constantType = constant.Elements()
+                .FirstOrDefault(e => e.Name.LocalName == "ConstantType")?.Value ?? string.Empty;
+            var constantValue = constant.Elements()
+                .FirstOrDefault(e => e.Name.LocalName == "ConstantValue");
+            return $"tag:{scope}:lit:{constantType}:" +
+                   $"{(constantValue is null ? string.Empty : NumericLiteral.Canonicalize(constantValue))}";
+        }
+
+        // Genuinely nothing to discriminate on. Preserved as the pre-2026-08-27 behaviour rather
+        // than invented, and deliberately NOT falling back to the raw Access UId — that would
+        // reinstate the volatile number this whole content-key mechanism exists to remove, turning
+        // every ordinary TIA UId reassignment back into a false DIFFERENCE.
+        return $"tag:{scope}:";
     }
 
     // A bare Part (Contact/Coil/TON/etc.) has no distinguishing content of its own the way Access

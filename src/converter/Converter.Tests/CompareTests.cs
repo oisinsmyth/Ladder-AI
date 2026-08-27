@@ -117,6 +117,90 @@ public class CompareTests : IDisposable
         Assert.Equal(CompareStatus.Equivalent, report.Status);
     }
 
+    // ------------------------------------------------- FI-80: the FALSE-EQUALITY guard
+
+    /// <summary>
+    /// 🔴 THE HARMFUL DIRECTION OF FI-80, WHICH IS THE ONLY DIRECTION WORTH TESTING.
+    ///
+    /// <see cref="Normalizer"/> rewrites every <c>Access</c> UId to a content-derived key so two
+    /// documents compare equal regardless of the arbitrary numbers TIA assigned. Until 2026-08-27
+    /// that key was <c>tag:{scope}:{&lt;Symbol&gt;}</c> for everything except <c>TypedConstant</c> —
+    /// and a constant-shaped Access has NO <c>&lt;Symbol&gt;</c>, it has <c>&lt;Constant&gt;</c>.
+    /// So every constant in the document collapsed to the single key <c>tag:LiteralConstant:</c>.
+    /// Measured across 47 real exports: <c>LiteralConstant</c> occurs 151 times and carries
+    /// <c>&lt;Symbol&gt;</c> exactly zero times.
+    ///
+    /// The defect surfaced as NOISE (an inflated difference count), and fixing only that would have
+    /// tested the wrong half. This test asserts the direction that actually matters: the key also
+    /// becomes the Access's identity for the part-identification refinement, so two constants
+    /// sharing one key are INTERCHANGEABLE — and a document where the operands were swapped
+    /// compares EQUAL to one where they were not. A comparator returning a false PASS is the one
+    /// failure it must never have.
+    ///
+    /// The construction is deliberate: the two <c>&lt;Access&gt;</c> elements are left byte-identical
+    /// and in the same document order, and ONLY the wires (<c>IdentCon</c>) are swapped. Changing a
+    /// literal's VALUE would be caught by the element comparison anyway and would prove nothing
+    /// about the key.
+    /// </summary>
+    [Fact]
+    public void TwoConstantsSwappedBetweenOperands_CompareUnequal()
+    {
+        var original = Fixture("FixedShapeModbusTcpBlock.xml");
+        var swapped = Fixture("FixedShapeModbusTcpBlock.xml");
+
+        // Derived, never hard-coded: UIds are per-CompileUnit in SimaticML, and this fixture reuses
+        // 22/23/24 across units, so the swap is scoped to ONE unit and the targets are found rather
+        // than assumed. A fixture edit that removed them fails the sanity assertions below instead
+        // of quietly turning this into a test of nothing.
+        // NB the element is literally named `SW.Blocks.CompileUnit` — the dots are part of the
+        // local name, not a namespace separator.
+        var unit = swapped.Descendants().First(e => e.Name.LocalName == "SW.Blocks.CompileUnit");
+
+        static (string Uid, string Key) Describe(XElement access) => (
+            (string?)access.Attribute("UId") ?? string.Empty,
+            string.Concat(access.Descendants()
+                .Where(e => e.Name.LocalName is "ConstantType" or "ConstantValue")
+                .Select(e => e.Value)));
+
+        var literals = unit.Descendants()
+            .Where(e => e.Name.LocalName == "Access"
+                        && (string?)e.Attribute("Scope") == "LiteralConstant")
+            .Select(Describe)
+            .ToList();
+
+        var first = literals[0];
+        var second = literals.First(l => l.Key != first.Key);
+
+        var wires = unit.Descendants()
+            .Where(e => e.Name.LocalName == "IdentCon")
+            .Where(e => (string?)e.Attribute("UId") == first.Uid
+                        || (string?)e.Attribute("UId") == second.Uid)
+            .ToList();
+
+        // Both constants must actually be wired, or swapping proves nothing about the key.
+        Assert.Contains(wires, w => (string?)w.Attribute("UId") == first.Uid);
+        Assert.Contains(wires, w => (string?)w.Attribute("UId") == second.Uid);
+
+        foreach (var wire in wires)
+        {
+            wire.SetAttributeValue(
+                "UId",
+                (string?)wire.Attribute("UId") == first.Uid ? second.Uid : first.Uid);
+        }
+
+        // Sanity: the swap really did alter the document, and the two constants really are
+        // distinguishable by content — which is precisely what the broken key threw away.
+        Assert.NotEqual(first.Key, second.Key);
+        Assert.NotEqual(original.ToString(), swapped.ToString());
+
+        var report = CompareRunner.Run(
+            Write("constants-first.xml", original),
+            Write("constants-second.xml", swapped),
+            allowSilentLayout: true);
+
+        Assert.Equal(CompareStatus.Differs, report.Status);
+    }
+
     // ------------------------------------------------------------- THE regression guard
 
     /// <summary>
