@@ -14,6 +14,7 @@ using Converter.ReuseScan;
 using Converter.RelationReconcile;
 using Converter.Review;
 using Converter.Sanitize;
+using Converter.SignalSet;
 using Converter.SignalSweep;
 using Converter.SimaticMl;
 using Converter.TagStatus;
@@ -81,6 +82,11 @@ internal static class Program
         if (args.Length >= 1 && args[0] == "signal-sweep")
         {
             return RunSignalSweep(args[1..]);
+        }
+
+        if (args.Length >= 1 && args[0] == "signal-set")
+        {
+            return RunSignalSet(args[1..]);
         }
 
         if (args.Length >= 1 && args[0] == "ir-hash")
@@ -194,6 +200,7 @@ internal static class Program
             Console.Error.WriteLine("       converter undriven-scan --project <ir-dir> --fb <FBName> [--instance <iDB> ...] [--caller <file.ir> ...] [--hints] [--json]   # per-instance interface drive states (FI-39); exit 1 on undriven/disarmed. EXIT 2 = NOTHING EXAMINED, and there are FOUR ways now (2026-08-18): --fb names no block; the block has no instances; --instance matched none of them; or the block HAS instances and NO interface member is in scope because the FB writes every one of them - an ordinary state for a block that only publishes, and on a live corpus TWO OF THE THREE LARGEST BLOCKS were in it, reporting 0 rows and exit 0. The gate keys on the ROW COUNT as well as on the scope enum, so a fifth shape gates on arrival rather than on being noticed. Writes are joined through ProjectUsageGraph.UsagesReaching: a multi-instance member is resolved BOTH bare-and-local (restricted to its owning FB) and ABSOLUTE on the owner iDB (unrestricted) - only the first was ever looked up, so every write from an orchestrator or startup block was invisible - and a WHOLE-STRUCT write (`MOVE(...) => Selected`) drives every member of the struct. 136 of 228 rows on a live corpus were false before this. The ancestor rule takes a FLOOR at the instance root: `CALL FB(iDB, ...)` records a write at the bare iDB path, and admitting it marks EVERY member of EVERY instance driven");
             Console.Error.WriteLine("       converter relation-reconcile --specs <dir> --ledger <code-structure.md> --register <requirements.md> [--project <ir-dir>] [--json]   # reconcile (instance, relation-id) sets across the spec artifacts + probative citations (FI-39); exit 1 on any difference");
             Console.Error.WriteLine("       converter signal-sweep --project <ir-dir> --specs <dir> [--register <file>] [--unclaimed <file>] [--json]   # project-level residual signal coverage (FI-39); exit 1 if any signal is in no spec and no disposition table");
+            Console.Error.WriteLine("       converter signal-set --project <ir-dir> --block <Name> [--origin interface|external|any] [--type <T>] [--direction read|written|both|unused|any] [--json]   # ONE machine-readable document of a block's signal set: every interface member it declares plus every external signal it references, each with type, RETAIN, start value, direction and the project-wide writer/reader sites. The mechanically-derivable half of a harness binding, which was hand-transcribed until 2026-08-27. DIRECTION IS RELATIVE TO THE BLOCK and computed from the usage graph, never from the interface section (C-132 puts the members that matter under STATIC). Reuses candidate-scan's inventory-x-usage-graph join rather than walking the corpus again, so the two tools cannot disagree about what a block writes. Exit 0 = a set was derived / 1 = PARTIAL, a file in the corpus could not be read so the set is incomplete (exit-bearing rather than a warning line, because a generator consumes this and never sees the warning) / 2 = NOTHING EXAMINED: --block names no block, or the origin/type/direction filters left zero rows. Keyed on the ROW COUNT as well as the scope enum, per undriven-scan's third shape");
             Console.Error.WriteLine("       converter claim  --project <ir-dir> --claims <dir> --agent <id> --kind <k> (--value <v> | --allocate [--type FB|FC|OB|DB] [--floor <n>] [--in <word|block>]) [--purpose <text>] [--json]   # reserve a shared resource BEFORE writing IR (FI-65); exit 1 refused, 2 unusable. X-J RESERVED BAND (2026-08-14): block numbers 9000-9999 are reserved for harness-generated objects per number space, FB/FC/DB, OB EXCLUDED (an OB's number is fixed by its event class, and applying a band to OBs emits a false finding on OB80, the first harness object the spec lists). A PLAIN --allocate CANNOT return a band number - the band is REMOVED from the candidate set, not deprioritised. --floor 9000 aims the search INTO the band, and that allocation is CONFINED to it: running out is `BandExhausted` naming the band, NEVER a quiet step past 9999 into deliverable numbers. An explicit --value inside the band is ACCEPTED and SAID SO in the outcome, not refused - the block does not exist yet (that is what an allocation claim means), so nothing derivable distinguishes a harness claim from a plant one, and a --harness flag would be a caller assertion forgotten exactly when it matters. The band is read from HarnessNumberRange.Declared(), never restated here");
             Console.Error.WriteLine("       converter claims --project <ir-dir> --claims <dir> [--check] [--release --agent <id> (--kind <k> --value <v> | --all) [--force]] [--agent <id>] [--json]   # list/verify/release claims (FI-65); exit 1 on conflict");
             Console.Error.WriteLine("       converter lease  acquire|release|status --resource portal:<project>|rig:<address> --leases <dir> --holder <id> --pid <n> [--ttl <minutes>] [--purpose <text>] [--portal-evidence <file.json>] [--json]   # a REAL lock on Portal and the rig (FI-65 component 3), sibling of the claims registry and deliberately NOT the same semantics: a claim is held until released, a lease EXPIRES, because one crashed agent must not wedge the gate forever. Reclaim needs BOTH halves - the holder provably gone AND the lease expired; a LIVE holder past its TTL is reported and NEVER evicted (a long download is not a dead one). Identity is holder + pid + PROCESS START TIME, because pids are reused. A Portal lease REFUSES without --portal-evidence <file.json>, the output of `openness-cli portal-status --json`: the converter cannot see which project a Portal process has open (that fact lives behind Siemens.Engineering, net48) so it consumes the evidence the tool that CAN produce it wrote, and ABSENT IS A REFUSAL. Every branch fails closed - a process Openness cannot see reports `projectPath: null`, IDENTICAL to one with nothing open, so an OS-ONLY process is `cannot decide`, not `free`. A rig lease takes no evidence and SAYS SO: nothing detects a rig in use, MB_SERVER's one connection is discovered BY FAILURE. exit 0 acquired/reclaimed, 1 refused, 2 unusable");
@@ -1669,6 +1676,113 @@ internal static class Program
         // Non-zero when the requirement could be satisfied by more than one signal — the mechanical
         // trigger that makes an ambiguous binding non-discretionary.
         return report.HasChoice ? 1 : 0;
+    }
+
+    internal static int RunSignalSet(string[] args)
+    {
+        string? projectDir = null;
+        string? block = null;
+        string? type = null;
+        var origin = "any";
+        var direction = "any";
+        var json = false;
+
+        for (var i = 0; i < args.Length; i++)
+        {
+            switch (args[i])
+            {
+                case "--project":
+                    projectDir = RequireValue(args, ref i, "--project");
+                    break;
+                case "--block":
+                    block = RequireValue(args, ref i, "--block");
+                    break;
+                case "--type":
+                    type = RequireValue(args, ref i, "--type");
+                    break;
+                case "--origin":
+                    origin = RequireValue(args, ref i, "--origin") ?? "any";
+                    break;
+                case "--direction":
+                    direction = RequireValue(args, ref i, "--direction") ?? "any";
+                    break;
+                case "--json":
+                    json = true;
+                    break;
+                default:
+                    Console.Error.WriteLine($"Unexpected argument: {args[i]}");
+                    return 1;
+            }
+        }
+
+        const string Usage = "Usage: converter signal-set --project <ir-dir> --block <Name> "
+            + "[--origin interface|external|any] [--type <T>] "
+            + "[--direction read|written|both|unused|any] [--json]";
+
+        if (projectDir is null || block is null)
+        {
+            Console.Error.WriteLine(Usage);
+            return 1;
+        }
+
+        if (origin is not ("interface" or "external" or "any"))
+        {
+            Console.Error.WriteLine($"--origin must be interface, external or any (got '{origin}')");
+            return 1;
+        }
+
+        if (direction is not ("read" or "written" or "both" or "unused" or "any"))
+        {
+            Console.Error.WriteLine(
+                $"--direction must be read, written, both, unused or any (got '{direction}'). "
+                + "It is relative to the block: `read` is what a harness must stimulate, `written` what it observes.");
+            return 1;
+        }
+
+        if (!Directory.Exists(projectDir))
+        {
+            Console.Error.WriteLine($"--project directory not found: {projectDir}");
+            return 1;
+        }
+
+        var report = SignalSetRunner.Run(projectDir, block, origin, type, direction);
+        Console.WriteLine(json
+            ? SignalSetOutputFormatter.FormatJson(report)
+            : SignalSetOutputFormatter.FormatText(report));
+
+        // "Empty is not clean", the house contract every mechanical-floor command carries. An emitter
+        // is not exempt: a document with no rows is what a block with no signals produces AND what a
+        // mis-typed --block produces, and the consumer downstream is a generator that will happily
+        // emit a binding for zero signals.
+        if (report.ExaminedNothing)
+        {
+            Console.Error.WriteLine("signal-set: " + report.Scope switch
+            {
+                SignalSetScope.UnknownBlock =>
+                    $"no block named '{block}' in {projectDir} - nothing was examined. A signal set computed "
+                    + "against a block that does not exist is not a statement that the block has no signals.",
+                _ =>
+                    $"'{block}' yielded no signal under origin={origin}, type={type ?? "any"}, "
+                    + $"direction={direction} in {projectDir} - nothing was examined. Widen the filters, or "
+                    + "check them against the unfiltered run.",
+            });
+            return 2;
+        }
+
+        // A finding about THE DOCUMENT, not about the plant: the corpus could not be read in full, so
+        // members may be absent and referenced paths may be misclassified `undeclared`. It gates
+        // rather than warns because the reader of this output is a generator (`docs/notes` — a
+        // warning that only prints on the path to production gets skimmed).
+        if (report.Partial)
+        {
+            Console.Error.WriteLine(
+                $"signal-set: {report.Warnings.Count} file(s) in {projectDir} could not be read, so this set "
+                + "is not a complete statement of '" + block + "'s signals. Do not bind against it until the "
+                + "corpus parses.");
+            return 1;
+        }
+
+        return 0;
     }
 
     private static int RunReuseScan(string[] args)

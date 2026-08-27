@@ -4521,6 +4521,99 @@ reproduce the 256–323 band and its 53 tags. Fewer, or a different band, stops 
 corrects the Y1 plan's prerequisite row, which read the reference project as having no `%M` tag in the
 area on the strength of `DefaultTagTable.ir` alone; `HarnessMirror.ir` is a second tag table.)
 
+## `signal-set` — a block's signal set as one machine-readable document (2026-08-27)
+
+```
+converter signal-set --project <ir-dir> --block <Name>
+                     [--origin interface|external|any] [--type <T>]
+                     [--direction read|written|both|unused|any] [--json]
+```
+
+**What it is for.** The harness binding document is hand-typed — **297 lines for a single slot of 20
+signals** — and roughly half of every entry is a restatement of what the block's own IR already says:
+the member's type, whether it is RETAIN, its start value, whether the block reads it or writes it, and
+who else touches it. Nothing emitted that half, so it was transcribed, and a transcription is the one
+step in this pipeline with no mechanical check behind it. This emits it.
+
+**It is not a check and states no verdict.** It never says a signal is bindable, safe to force, or
+missing. Facts only.
+
+### What the set contains
+
+Two halves, counted separately (one total would hide which half is empty):
+
+| half | what | `origin` |
+|---|---|---|
+| `interface` | every leaf of the block's OWN declared interface | `interface` |
+| `referenced` | every signal the block references and does not declare | `globaldb` · `tagtable` · `instancedb` · `undeclared` |
+
+`undeclared` is a path the block references that **nothing the inventory walked declares** — a raw
+address, or a declaration in a file this export does not contain. It is **emitted and labelled, never
+dropped**: a generator handed a silently-shortened signal set produces a binding that looks complete,
+and the missing entries are exactly the ones nothing else will mention. Its `type` is `null`, because
+nothing states one and naming one anyway would be an invented fact.
+
+### 🔴 `direction` is relative to the BLOCK; `writers`/`readers` are project-wide
+
+That is the distinction a binding is built on: a signal the block **reads** is one the harness must
+**stimulate**; one it **writes** is one the harness **observes**. Getting them the wrong way round
+produces a binding that drives an output and watches an input. The site lists are project-wide on
+purpose — a harness needs to know who is *already* driving the signal it is about to contend with.
+
+`direction` is **COMPUTED from the usage graph**, never read off the interface section: under C-132
+the caller-facing members live under STATIC inside interface-UDT structs while INPUT/OUTPUT carry
+unrelated data-link words, so a section filter answers the wrong question on the real corpus. This is
+the same computation `candidate-scan`'s `MemberRole` performs, over the same join
+(`SignalInventory` × `ProjectUsageGraph`) — **deliberately reused rather than re-derived**, so the two
+tools cannot give different answers to "does this block write this member". `cross-check` and
+`undriven-scan` contradicting each other over one corpus is what made a 60%-false check findable, and
+the cost of that lesson is not worth paying twice.
+
+Two joins it inherits from that repair, both load-bearing:
+
+- **An interface member is addressed two ways.** Bare and local from inside the block (`IO.Step`),
+  absolute on the placement from everywhere else (`iDB_Drum_DrumA.IO.Step`). Both are resolved; the
+  **bare form is restricted to the subject block**, because `_usages` is keyed verbatim and three FBs
+  each declaring their own `IO.Step` land on one key — the false-multi-writer defect of 2026-08-14.
+- **The placement is the FLOOR on the ancestor walk.** `CALL FB(iDB, …)` records a write at the bare
+  instance path, an ancestor of every member in it; admitting it marks the whole interface written.
+  That same reference is also excluded from the referenced half outright — a CALL naming its own state
+  store is a placement, not a signal.
+
+### The denominator, and the exit codes
+
+Every run states `N file(s) scanned` and the two half-counts, so a consumer can tell **"no signals"**
+from **"nothing was examined"** — in the text output, in `--json` (`counts`, `scope`,
+`examinedNothing`), and in the exit code.
+
+| exit | meaning |
+|---|---|
+| 0 | a complete signal set was derived |
+| 1 | **PARTIAL** — a file in the corpus could not be read, so the set is not a complete statement of the block's signals. Also the usage/argument refusal code, per the house convention |
+| 2 | **NOTHING EXAMINED** — `--block` names no block in the corpus, or the origin/type/direction filters left zero rows |
+
+**Exit 2 is never a pass.** An emitter is not exempt from "empty is not clean": an empty document is
+what a block with no signals produces *and* what a mis-typed `--block` produces, and the consumer
+downstream is a generator that will happily emit a binding for zero signals. `candidate-scan --fb <a
+name in no block>` scanned all 43 files and exited 0 for a week (FI-44). The gate here keys on the
+**row count** as well as on the scope enum, per `undriven-scan`'s third shape — so a shape nobody has
+enumerated yet still cannot report a pass.
+
+**Exit 1 on a partial corpus GATES rather than warns**, unlike every sibling, which prints its
+inventory warnings and exits 0. That is right for a check a human reads; this document's reader is a
+generator that never sees a warning line, and a detection that only warns on the path to production
+gets skimmed.
+
+### What it deliberately does not do
+
+- **No filtering of instruction state.** An IEC timer's `.IN`/`.PT`/`.ET`/`.Q` appear as ordinary
+  interface leaves, because the inventory is declaration-only and deciding they are "not really
+  signals" would be a judgement the document is not entitled to make. Filter with `--type` if you
+  want them out.
+- **No name-resemblance matching**, no suggested bindings, no "this looks like that". `undriven-scan`
+  offers a labelled heuristic hint for a human; this emits data for a generator, where a heuristic
+  would be laundered into a fact.
+
 ## Rules (docs/05-architecture.md, 04 §8/§10)
 
 - Unknown elements are hard errors, never warnings or best-effort.
