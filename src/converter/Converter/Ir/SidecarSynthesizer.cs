@@ -148,6 +148,66 @@ public static class SidecarSynthesizer
         return localNames.Contains(firstComponent) ? LocalVariableScope : GlobalVariableScope;
     }
 
+    private static readonly IReadOnlyDictionary<int, string> NoIndexScopes = new Dictionary<int, string>();
+
+    /// <summary>
+    /// The ONLY way a <see cref="SidecarAccessEntry"/> is built here — deliberately, so an index scope
+    /// cannot be resolved at fourteen call sites and forgotten at the fifteenth. Every site previously
+    /// wrote <c>new SidecarAccessEntry(p, uid, ScopeFor(p, localNames))</c> by hand; routing them all
+    /// through one factory is what makes <see cref="IndexScopesFor"/> unconditional rather than
+    /// opt-in.
+    /// </summary>
+    private static SidecarAccessEntry Access(string tagPath, int uid, IReadOnlySet<string> localNames) =>
+        new(tagPath, uid, ScopeFor(tagPath, localNames))
+        {
+            IndexScopes = IndexScopesFor(tagPath, localNames),
+        };
+
+    /// <summary>
+    /// Resolve the scope of every VARIABLE array subscript in a tag path, keyed by the component
+    /// position carrying it.
+    ///
+    /// <para>🔴 <b>An index's scope is resolved INDEPENDENTLY of its enclosing access's, and that is the
+    /// whole reason this exists.</b> In <c>Recipe[Slot]</c> the array may be a global DB member while the
+    /// index is a local static, so the two scopes routinely differ. Inheriting the outer scope would be
+    /// wrong about half the time and wrong silently: TIA accepts a mislabelled index scope at IMPORT
+    /// (measured, exit 0) and refuses only at compile.</para>
+    ///
+    /// <para>A literal subscript is skipped — it emits as a constant and has no scope. A path with no
+    /// bracket at all short-circuits before any parsing, which is nearly every access in a real block.</para>
+    /// </summary>
+    private static IReadOnlyDictionary<int, string> IndexScopesFor(
+        string tagPath, IReadOnlySet<string> localNames)
+    {
+        if (!tagPath.Contains('[', StringComparison.Ordinal))
+        {
+            return NoIndexScopes;
+        }
+
+        // Reuse the real splitter rather than re-implementing it: it is bracket-aware (a symbolic
+        // index is itself a dotted path) and it strips the `.%X15` slice suffix. The UId and scope
+        // passed here are placeholders — only ComponentPath is read back.
+        var componentPath = AccessNode.FromDottedPath(0, GlobalVariableScope, tagPath).ComponentPath;
+
+        Dictionary<int, string>? scopes = null;
+        for (var i = 0; i < componentPath.Count; i++)
+        {
+            // SplitComponent throws UnsupportedConstructException on a COMPUTED index. That refusal
+            // is deliberately allowed to surface here, at synthesis, rather than being deferred to
+            // the writer: it is the same refusal either way, and an author gets it before the IR is
+            // committed rather than at emit time.
+            var (_, index) = AccessNode.SplitComponent(componentPath[i]);
+            if (index is null || AccessNode.IsLiteralIndex(index))
+            {
+                continue;
+            }
+
+            (scopes ??= new Dictionary<int, string>())[i] = ScopeFor(index, localNames);
+        }
+
+        return scopes ?? NoIndexScopes;
+    }
+
     // Convenience overload for a single network with no enclosing block context — every existing
     // test and v1 caller uses this, unaffected by the v2 local-scope refinement (NoLocalNames
     // reduces ScopeFor to the original always-GlobalVariable behavior exactly).
@@ -432,7 +492,7 @@ public static class SidecarSynthesizer
 
         var coilUId = nextUid++;
         var coilOperandAccessUId = nextUid++;
-        accessEntries.Add(new SidecarAccessEntry(assignment.CoilTag, coilOperandAccessUId, ScopeFor(assignment.CoilTag, localNames)));
+        accessEntries.Add(Access(assignment.CoilTag, coilOperandAccessUId, localNames));
         var coilOperandWireUId = nextUid++;
 
         return new CoilAssignmentSidecar(chainRail, steps, coilUId, coilOperandAccessUId, coilOperandWireUId);
@@ -619,7 +679,7 @@ public static class SidecarSynthesizer
 
         var contactUId = nextUid++;
         var accessUId = nextUid++;
-        accessEntries.Add(new SidecarAccessEntry(tagPath, accessUId, ScopeFor(tagPath, localNames)));
+        accessEntries.Add(Access(tagPath, accessUId, localNames));
         var operandWireUId = nextUid++;
         var outgoingWireUId = nextUid++;
 
@@ -774,7 +834,7 @@ public static class SidecarSynthesizer
         {
             case Expr.TagRef tagRef:
                 var accessUId = nextUid++;
-                accessEntries.Add(new SidecarAccessEntry(tagRef.Path, accessUId, ScopeFor(tagRef.Path, localNames)));
+                accessEntries.Add(Access(tagRef.Path, accessUId, localNames));
                 var tagWireUId = nextUid++;
                 return new OperandSidecar.TagOperand(accessUId, tagWireUId);
 
@@ -983,7 +1043,7 @@ public static class SidecarSynthesizer
             portType: tagTypes.Resolve(move.DestTag));
 
         var destAccessUId = nextUid++;
-        accessEntries.Add(new SidecarAccessEntry(move.DestTag, destAccessUId, ScopeFor(move.DestTag, localNames)));
+        accessEntries.Add(Access(move.DestTag, destAccessUId, localNames));
         var destWireUId = nextUid++;
 
         return new MoveStatementSidecar(movePartUId, chainRail, steps, inOperand, destAccessUId, destWireUId);
@@ -1055,7 +1115,7 @@ public static class SidecarSynthesizer
         }
 
         var destAccessUId = nextUid++;
-        accessEntries.Add(new SidecarAccessEntry(mul.DestTag, destAccessUId, ScopeFor(mul.DestTag, localNames)));
+        accessEntries.Add(Access(mul.DestTag, destAccessUId, localNames));
         var destWireUId = nextUid++;
 
         return new MulStatementSidecar(mulPartUId, enSidecar, inputs, destAccessUId, destWireUId, mul.Kind, SrcType: null);
@@ -1094,7 +1154,7 @@ public static class SidecarSynthesizer
         var inOperand = ResolveOperand(convert.In, typedConstant: false, ref nextUid, accessEntries, constantEntries, localNames, portType: srcType);
 
         var destAccessUId = nextUid++;
-        accessEntries.Add(new SidecarAccessEntry(convert.DestTag, destAccessUId, ScopeFor(convert.DestTag, localNames)));
+        accessEntries.Add(Access(convert.DestTag, destAccessUId, localNames));
         var destWireUId = nextUid++;
 
         return new ConvertStatementSidecar(convertPartUId, enSidecar, inOperand, srcType, destType, destAccessUId, destWireUId);
@@ -1117,7 +1177,7 @@ public static class SidecarSynthesizer
         var inOperand = ResolveOperand(abs.In, typedConstant: false, ref nextUid, accessEntries, constantEntries, localNames, portType: srcType);
 
         var destAccessUId = nextUid++;
-        accessEntries.Add(new SidecarAccessEntry(abs.DestTag, destAccessUId, ScopeFor(abs.DestTag, localNames)));
+        accessEntries.Add(Access(abs.DestTag, destAccessUId, localNames));
         var destWireUId = nextUid++;
 
         return new AbsStatementSidecar(absPartUId, enSidecar, inOperand, srcType, destAccessUId, destWireUId);
@@ -1137,7 +1197,7 @@ public static class SidecarSynthesizer
         var inOperand = ResolveOperand(swap.In, typedConstant: false, ref nextUid, accessEntries, constantEntries, localNames, portType: srcType);
 
         var destAccessUId = nextUid++;
-        accessEntries.Add(new SidecarAccessEntry(swap.DestTag, destAccessUId, ScopeFor(swap.DestTag, localNames)));
+        accessEntries.Add(Access(swap.DestTag, destAccessUId, localNames));
         var destWireUId = nextUid++;
 
         return new SwapStatementSidecar(swapPartUId, enSidecar, inOperand, srcType, destAccessUId, destWireUId);
@@ -1211,7 +1271,7 @@ public static class SidecarSynthesizer
         }
 
         var destAccessUId = nextUid++;
-        accessEntries.Add(new SidecarAccessEntry(wordAnd.DestTag, destAccessUId, ScopeFor(wordAnd.DestTag, localNames)));
+        accessEntries.Add(Access(wordAnd.DestTag, destAccessUId, localNames));
         var destWireUId = nextUid++;
 
         return new WordAndStatementSidecar(andPartUId, chainRail, steps, inputs, srcType, destAccessUId, destWireUId);
@@ -1235,7 +1295,7 @@ public static class SidecarSynthesizer
         }
 
         var destAccessUId = nextUid++;
-        accessEntries.Add(new SidecarAccessEntry(calc.DestTag, destAccessUId, ScopeFor(calc.DestTag, localNames)));
+        accessEntries.Add(Access(calc.DestTag, destAccessUId, localNames));
         var destWireUId = nextUid++;
 
         return new CalcStatementSidecar(calcPartUId, enSidecar, inputs, calc.Equation, srcType, destAccessUId, destWireUId);
@@ -1257,7 +1317,7 @@ public static class SidecarSynthesizer
         var in2 = ResolveOperand(tsub.In2, typedConstant: false, ref nextUid, accessEntries, constantEntries, localNames, portType: timeType);
 
         var destAccessUId = nextUid++;
-        accessEntries.Add(new SidecarAccessEntry(tsub.DestTag, destAccessUId, ScopeFor(tsub.DestTag, localNames)));
+        accessEntries.Add(Access(tsub.DestTag, destAccessUId, localNames));
         var destWireUId = nextUid++;
 
         return new TSubStatementSidecar(tsubPartUId, "1.2", enSidecar, in1, in2, dateType, timeType, destAccessUId, destWireUId);
@@ -1279,7 +1339,7 @@ public static class SidecarSynthesizer
         var inOperand = ResolveOperand(tconv.In, typedConstant: false, ref nextUid, accessEntries, constantEntries, localNames, portType: srcType);
 
         var destAccessUId = nextUid++;
-        accessEntries.Add(new SidecarAccessEntry(tconv.DestTag, destAccessUId, ScopeFor(tconv.DestTag, localNames)));
+        accessEntries.Add(Access(tconv.DestTag, destAccessUId, localNames));
         var destWireUId = nextUid++;
 
         return new TConvStatementSidecar(tconvPartUId, "1.2", enSidecar, inOperand, srcType, destType, destAccessUId, destWireUId);
@@ -1306,11 +1366,11 @@ public static class SidecarSynthesizer
         var destIndex = ResolveOperand(move.DestIndex, typedConstant: false, ref nextUid, accessEntries, constantEntries, localNames, portType: null);
 
         var retValAccessUId = nextUid++;
-        accessEntries.Add(new SidecarAccessEntry(move.RetValTag, retValAccessUId, ScopeFor(move.RetValTag, localNames)));
+        accessEntries.Add(Access(move.RetValTag, retValAccessUId, localNames));
         var retValWireUId = nextUid++;
 
         var destAccessUId = nextUid++;
-        accessEntries.Add(new SidecarAccessEntry(move.DestTag, destAccessUId, ScopeFor(move.DestTag, localNames)));
+        accessEntries.Add(Access(move.DestTag, destAccessUId, localNames));
         var destWireUId = nextUid++;
 
         return new MoveBlkVariantStatementSidecar(
@@ -1424,7 +1484,7 @@ public static class SidecarSynthesizer
                 {
                     var param = RequireParam(call.BlockName, output.ParamName, "Output", parms);
                     var destAccessUId = nextUid++;
-                    accessEntries.Add(new SidecarAccessEntry(output.DestTag, destAccessUId, ScopeFor(output.DestTag, localNames)));
+                    accessEntries.Add(Access(output.DestTag, destAccessUId, localNames));
                     var destWireUId = nextUid++;
                     arguments.Add(new CallArgumentSidecar.OutputArgSidecar(output.ParamName, param.Type, destAccessUId, destWireUId));
                     break;

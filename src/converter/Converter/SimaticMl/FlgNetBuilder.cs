@@ -365,8 +365,15 @@ public static class FlgNetBuilder
         // Scope is carried per-entry (not assumed) since 2026-07-11 — a plain tag Access can be
         // LocalVariable-scoped too (an FC/FB's own interface parameter, confirmed real grounding
         // TON's PT against FC ControlDelays), not only GlobalVariable.
+        // IndexScopes rides across from the sidecar for the same reason Scope does, and it is the
+        // piece that lets a VARIABLE array subscript be emitted from hand-authored IR rather than
+        // only echoed back out of an export. This builder has no block context of its own, so it
+        // cannot resolve an index's scope — SidecarSynthesizer did that against the block's declared
+        // members. Empty for nearly every access; a variable subscript arriving here without one is
+        // a refusal in FlgNetWriter, never a default.
         var accessNodes = sidecar.AccessUIds
-            .Select(entry => AccessNode.FromDottedPath(entry.UId, entry.Scope, entry.TagPath))
+            .Select(entry => AccessNode.FromDottedPath(entry.UId, entry.Scope, entry.TagPath)
+                with { IndexScopes = entry.IndexScopes })
             .ToList();
         var constants = sidecar.ConstantUIds
             .Select(entry => new ConstantAccessNode(entry.UId, entry.Value, entry.ConstantType))

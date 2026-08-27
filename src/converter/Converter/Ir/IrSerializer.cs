@@ -516,7 +516,18 @@ public static class IrSerializer
         sb.Append("  compileunit = ").Append(sidecar.CompileUnitUId).Append('\n');
         foreach (var access in sidecar.AccessUIds)
         {
-            sb.Append("  access ").Append(access.TagPath).Append(" = ").Append(access.UId).Append(' ').Append(access.Scope).Append('\n');
+            sb.Append("  access ").Append(access.TagPath).Append(" = ").Append(access.UId).Append(' ').Append(access.Scope);
+
+            // Variable-array-subscript scopes, as optional trailing ` idx<position>=<scope>` tokens.
+            // Appended rather than inserted so that an access without one — which is nearly all of
+            // them — serializes to exactly the line it always did, and every sidecar written before
+            // this existed still parses. Emitted in ascending position order so the output is stable.
+            foreach (var indexScope in access.IndexScopes.OrderBy(kv => kv.Key))
+            {
+                sb.Append(" idx").Append(indexScope.Key).Append('=').Append(indexScope.Value);
+            }
+
+            sb.Append('\n');
         }
 
         foreach (var constant in sidecar.ConstantUIds)

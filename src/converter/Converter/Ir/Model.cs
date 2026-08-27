@@ -590,7 +590,28 @@ public sealed record IrBlock(
 // tag seen before now (all GlobalVariable) but is exactly the kind of silent scope drift this
 // project's discipline exists to prevent, now that a real LocalVariable-scoped ordinary tag
 // reference is grounded.
-public sealed record SidecarAccessEntry(string TagPath, int UId, string Scope);
+public sealed record SidecarAccessEntry(string TagPath, int UId, string Scope)
+{
+    /// <summary>
+    /// 🔴 <b>The scope of each VARIABLE array subscript in <see cref="TagPath"/>, by the component
+    /// position that carries it</b> — the sidecar half of <c>AccessNode.IndexScopes</c>, which is what
+    /// lets <c>to-xml</c> emit a variable subscript from HAND-AUTHORED IR rather than only echo one
+    /// back out of an export it just parsed.
+    ///
+    /// <para>It has to be carried rather than derived at write time because the two ends know
+    /// different things: resolving an index's scope needs the enclosing block's declared member names,
+    /// which <c>SidecarSynthesizer</c> has and <c>FlgNetBuilder</c> does not. The index's scope is
+    /// genuinely INDEPENDENT of the enclosing access's — <c>Recipe[Slot]</c> can be a global DB member
+    /// indexed by a local static, so reusing the outer scope would be wrong roughly half the time and
+    /// wrong SILENTLY: TIA accepts a mislabelled index scope at import (exit 0) and refuses it only at
+    /// compile.</para>
+    ///
+    /// <para>Empty for every literal subscript and every unsubscripted path, which is nearly all of
+    /// them — so it serializes as nothing at all and an older sidecar file parses unchanged.</para>
+    /// </summary>
+    public IReadOnlyDictionary<int, string> IndexScopes { get; init; } =
+        new Dictionary<int, string>();
+}
 
 // A literal operand — sidecar counterpart of SidecarAccessEntry for the constant case. Value is
 // verbatim, same discipline as everywhere else in this format. ConstantType is null for

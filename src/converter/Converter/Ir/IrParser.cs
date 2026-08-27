@@ -1355,7 +1355,17 @@ public static partial class IrParser
                 throw new IrFormatException($"Malformed sidecar access line: '{lines[i]}'");
             }
 
-            accessEntries.Add(new SidecarAccessEntry(match.Groups["path"].Value, int.Parse(match.Groups["uid"].Value), match.Groups["scope"].Value));
+            var indexScopes = new Dictionary<int, string>();
+            foreach (Match token in SidecarIndexScopeTokenRegex().Matches(match.Groups["indexscopes"].Value))
+            {
+                indexScopes[int.Parse(token.Groups["position"].Value)] = token.Groups["scope"].Value;
+            }
+
+            accessEntries.Add(
+                new SidecarAccessEntry(match.Groups["path"].Value, int.Parse(match.Groups["uid"].Value), match.Groups["scope"].Value)
+                {
+                    IndexScopes = indexScopes,
+                });
             i++;
         }
 
@@ -2489,8 +2499,14 @@ public static partial class IrParser
     [GeneratedRegex(@"^NETWORK (?<number>\d+)$")]
     private static partial Regex SidecarNetworkLineRegex();
 
-    [GeneratedRegex(@"^  access (?<path>\S+) = (?<uid>\d+) (?<scope>\S+)$")]
+    // The trailing ` idx<position>=<scope>` tokens are OPTIONAL and the group can match empty, so a
+    // sidecar written before variable subscripts existed parses through this unchanged — the
+    // backward compatibility is in the regex, not in a second code path.
+    [GeneratedRegex(@"^  access (?<path>\S+) = (?<uid>\d+) (?<scope>\S+?)(?<indexscopes>(?: idx\d+=\S+)*)$")]
     private static partial Regex SidecarAccessLineRegex();
+
+    [GeneratedRegex(@" idx(?<position>\d+)=(?<scope>\S+)")]
+    private static partial Regex SidecarIndexScopeTokenRegex();
 
     // 🔴 The value is `.+`, NOT `\S+` — fixed 2026-08-12. **A constant value can contain spaces**,
     // and until this changed the converter could emit an IR it could not read back: a classic S7

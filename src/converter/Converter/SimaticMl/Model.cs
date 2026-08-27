@@ -192,12 +192,53 @@ public sealed record AccessNode(
         var slice = sliceMatch.Success ? sliceMatch.Groups["slice"].Value.ToLowerInvariant() : null;
         var rest = sliceMatch.Success ? sliceMatch.Groups["rest"].Value : dottedPath;
 
-        // Subscripts stay attached to their own component through the split — an index contains
-        // no dot, so splitting on '.' cannot cut one in half, and no separate extraction step is
-        // needed at any position.
-        var componentPath = KnownDottedSingleComponentNames.Contains(rest) ? new[] { rest } : rest.Split('.');
+        // Subscripts stay attached to their own component through the split. The split is
+        // BRACKET-AWARE and must stay so: a LITERAL index contains no dot, but a symbolic one is a
+        // dotted path by definition (`Recipe[DB_Settings.Slot]`), so a plain Split('.') cuts it in
+        // half. Measured 2026-08-27, not reasoned about: that path split to
+        // ["Recipe[DB_Settings", "Slot]", "Target"] — two components that name nothing, which TIA
+        // rejects as undefined tags. The defect arrived with the variable-subscript widening itself:
+        // the splitter carried a comment asserting "an index contains no dot", true of every input
+        // it had ever seen and false the moment IsSymbolicIndex began accepting a dotted index.
+        var componentPath = KnownDottedSingleComponentNames.Contains(rest)
+            ? new[] { rest }
+            : SplitOutsideBrackets(rest);
 
         return new AccessNode(uid, scope, componentPath, slice);
+    }
+
+    /// <summary>
+    /// Split a dotted path on '.' at bracket depth zero only, so a dotted symbolic subscript stays
+    /// inside the component that carries it. Nesting cannot occur — <see cref="IsSymbolicIndex"/>
+    /// rejects a bracket inside an index — so a simple depth counter is exact rather than a
+    /// heuristic, and an unbalanced bracket degrades to the old whole-string behaviour rather than
+    /// silently dropping text.
+    /// </summary>
+    private static IReadOnlyList<string> SplitOutsideBrackets(string path)
+    {
+        var components = new List<string>();
+        var depth = 0;
+        var start = 0;
+
+        for (var i = 0; i < path.Length; i++)
+        {
+            switch (path[i])
+            {
+                case '[':
+                    depth++;
+                    break;
+                case ']':
+                    if (depth > 0) depth--;
+                    break;
+                case '.' when depth == 0:
+                    components.Add(path[start..i]);
+                    start = i + 1;
+                    break;
+            }
+        }
+
+        components.Add(path[start..]);
+        return components;
     }
 }
 

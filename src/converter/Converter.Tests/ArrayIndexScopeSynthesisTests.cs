@@ -1,4 +1,6 @@
+using System;
 using System.Linq;
+using System.Xml.Linq;
 using Converter.Ir;
 using Converter.SimaticMl;
 using Xunit;
@@ -190,4 +192,173 @@ public class ArrayIndexScopeSynthesisTests
         Assert.Equal(expectedName, name);
         Assert.Equal(expectedIndex, index);
     }
+
+    // --- the splitter defect the widening itself introduced, 2026-08-27 ---------------------------
+    //
+    // 🔴 MEASURED, NOT REASONED ABOUT. FromDottedPath split on '.' unconditionally, carrying a comment
+    // that justified it: "an index contains no dot, so splitting on '.' cannot cut one in half". That
+    // was true of every input it had ever seen and became false the same day IsSymbolicIndex began
+    // accepting a DOTTED index — `Recipe[DB_Settings.Slot].Target` split to
+    // ["Recipe[DB_Settings", "Slot]", "Target"], three components of which two name nothing that can
+    // exist. The widening shipped with a committed test using exactly that path shape, and the test
+    // passed, because it exercised SplitComponent on an already-separated component and never put the
+    // path through the splitter. A true statement in a comment does not stay true when the input class
+    // widens underneath it.
+    [Theory]
+    [InlineData("Recipe[DB_Settings.Slot].Target", new[] { "Recipe[DB_Settings.Slot]", "Target" })]
+    [InlineData("DB_A.Recipe[DB_Settings.Slot]", new[] { "DB_A", "Recipe[DB_Settings.Slot]" })]
+    [InlineData("Vessel[i].Sensor[DB_Cfg.Which].Reading",
+        new[] { "Vessel[i]", "Sensor[DB_Cfg.Which]", "Reading" })]
+    public void DottedSymbolicIndex_SurvivesTheComponentSplit(string dottedPath, string[] expected)
+    {
+        var node = AccessNode.FromDottedPath(9, "GlobalVariable", dottedPath);
+
+        Assert.Equal(expected, node.ComponentPath);
+        // And it rejoins to what it came from — the round trip is the check that nothing was eaten.
+        Assert.Equal(dottedPath, node.DottedPath);
+    }
+
+    // --- the sidecar half: emitting a variable subscript from HAND-AUTHORED IR --------------------
+    //
+    // Until this landed, the widening could only ECHO a variable subscript back out of an export it
+    // had just parsed: the writer needs the index's scope, only the enclosing block's declared members
+    // resolve it, and FlgNetBuilder has no block context. So `to-xml` on hand-authored IR hit the
+    // writer's refusal — a correct failure, and still a total block on authoring one.
+    //
+    // 🔴 THIS IS THE CASE THAT MAKES THE CARRIED SCOPE NECESSARY RATHER THAN CONVENIENT: a GLOBAL array
+    // indexed by a LOCAL variable. The two scopes differ, so anything that reuses the enclosing
+    // access's scope for its index emits `GlobalVariable` here and sends TIA hunting for a PLC tag
+    // named "Slot" that does not exist. It would not be caught at import either — the 2026-08-27
+    // confirm loop mislabelled an index scope deliberately and TIA IMPORTED IT AT EXIT 0, refusing
+    // only at compile.
+    [Fact]
+    public void GlobalArrayIndexedByLocalVariable_EmitsTheIndexScopeSeparately()
+    {
+        var xml = EmitSingleNetwork(
+            "NETWORK 1 \"N\"\n  COIL Out := DB_Recipe.Table[Slot]\n",
+            new DbMember("Slot", "Int", Retain: false, StartValue: null),
+            new DbMember("Out", "Bool", Retain: false, StartValue: null));
+
+        var component = SubscriptedComponent(xml, "Table");
+        Assert.Equal("Array", component.Attribute("AccessModifier")?.Value);
+
+        var nested = Assert.Single(component.Elements().Where(e => e.Name.LocalName == "Access"));
+        // The index is local; the array it indexes is not. Both facts survive to the XML.
+        Assert.Equal("LocalVariable", nested.Attribute("Scope")?.Value);
+        Assert.Equal("GlobalVariable", component.Ancestors()
+            .First(e => e.Name.LocalName == "Access").Attribute("Scope")?.Value);
+
+        var indexSymbol = Assert.Single(nested.Elements().Where(e => e.Name.LocalName == "Symbol"));
+        var segment = Assert.Single(indexSymbol.Elements().Where(e => e.Name.LocalName == "Component"));
+        Assert.Equal("Slot", segment.Attribute("Name")?.Value);
+    }
+
+    // The all-local case — the shape the plant wiring actually needs.
+    [Fact]
+    public void LocalArrayIndexedByLocalVariable_Emits()
+    {
+        var xml = EmitSingleNetwork(
+            "NETWORK 1 \"N\"\n  COIL Out := Recipe[Slot]\n",
+            new DbMember("Recipe", "Array[0..9] of Bool", Retain: false, StartValue: null),
+            new DbMember("Slot", "Int", Retain: false, StartValue: null),
+            new DbMember("Out", "Bool", Retain: false, StartValue: null));
+
+        var nested = Assert.Single(
+            SubscriptedComponent(xml, "Recipe").Elements().Where(e => e.Name.LocalName == "Access"));
+        Assert.Equal("LocalVariable", nested.Attribute("Scope")?.Value);
+    }
+
+    // A LITERAL subscript must not acquire a scope entry — it emits as a constant and has none. This
+    // guards the fast path from quietly changing the overwhelmingly common case.
+    [Fact]
+    public void LiteralSubscript_CarriesNoIndexScope()
+    {
+        var block = BlockWith(
+            "NETWORK 1 \"N\"\n  COIL Out := RisingEdgeFlags[3]\n",
+            new DbMember("RisingEdgeFlags", "Array[0..14] of Bool", Retain: false, StartValue: null),
+            new DbMember("Out", "Bool", Retain: false, StartValue: null));
+
+        var sidecar = SidecarSynthesizer.SynthesizeBlock(block).Single();
+
+        Assert.Empty(sidecar.AccessUIds.Single(a => a.TagPath == "RisingEdgeFlags[3]").IndexScopes);
+    }
+
+    // 🔴 THE REFUSAL MUST SURVIVE THE FIX. Carrying the scope must not become a way to default it: an
+    // AccessNode built WITHOUT the sidecar context still refuses rather than guessing, which is the
+    // whole discipline the widening was built on.
+    [Fact]
+    public void VariableSubscriptWithNoResolvedScope_StillRefusesToWrite()
+    {
+        var orphan = AccessNode.FromDottedPath(1, "LocalVariable", "Recipe[Slot]");
+        var net = new FlgNetwork(new[] { orphan }, Array.Empty<PartNode>(), Array.Empty<WireNode>());
+
+        var ex = Assert.Throws<UnsupportedConstructException>(() => FlgNetWriter.Write(net));
+        Assert.Contains("nothing resolved that index's scope", ex.Message);
+    }
+
+    // The sidecar is a TEXT format and it is what a hand-authored block is stored as, so a scope that
+    // does not survive serialization is a scope the author does not have.
+    [Fact]
+    public void IndexScopes_SurviveTheSidecarTextRoundTrip()
+    {
+        var block = BlockWith(
+            "NETWORK 1 \"N\"\n  COIL Out := DB_Recipe.Table[Slot]\n",
+            new DbMember("Slot", "Int", Retain: false, StartValue: null),
+            new DbMember("Out", "Bool", Retain: false, StartValue: null));
+
+        var original = SidecarSynthesizer.SynthesizeBlock(block).Single();
+        var text = IrSerializer.SerializeBlock(block, new[] { original });
+
+        // The token is visible in the text, not just in the object graph — a reader can see it.
+        Assert.Contains("idx1=LocalVariable", text);
+
+        var (_, sidecars) = IrParser.ParseBlock(text);
+        var entry = sidecars.Single().AccessUIds.Single(a => a.TagPath == "DB_Recipe.Table[Slot]");
+
+        Assert.Equal("LocalVariable", Assert.Single(entry.IndexScopes).Value);
+        Assert.Equal("GlobalVariable", entry.Scope);
+    }
+
+    // BACKWARD COMPATIBILITY, asserted rather than assumed: every sidecar on disk predates this
+    // field, and they are the stored form of real blocks — a parse regression here would not be a
+    // failing test, it would be an unreadable corpus.
+    //
+    // The legacy text is produced by stripping the new token out of a genuinely valid file rather
+    // than by hand-writing one, so the test cannot pass against a shape the serializer never emits.
+    [Fact]
+    public void SidecarLineWrittenBeforeIndexScopesExisted_StillParses()
+    {
+        var block = BlockWith(
+            "NETWORK 1 \"N\"\n  COIL Out := DB_Recipe.Table[Slot]\n",
+            new DbMember("Slot", "Int", Retain: false, StartValue: null),
+            new DbMember("Out", "Bool", Retain: false, StartValue: null));
+
+        var current = IrSerializer.SerializeBlock(block, SidecarSynthesizer.SynthesizeBlock(block));
+        var legacy = System.Text.RegularExpressions.Regex.Replace(current, @" idx\d+=\S+", string.Empty);
+        Assert.DoesNotContain("idx", legacy);
+
+        var (_, sidecars) = IrParser.ParseBlock(legacy);
+        var entry = sidecars.Single().AccessUIds.Single(a => a.TagPath == "DB_Recipe.Table[Slot]");
+
+        // Parses, keeps its own scope, and acquires NO default for the index.
+        Assert.Equal("GlobalVariable", entry.Scope);
+        Assert.Empty(entry.IndexScopes);
+    }
+
+    private static IrBlock BlockWith(string networkText, params DbMember[] statics) =>
+        new("0", "FB", "T", 1, "LAD", null,
+            new[] { IrParser.ParseNetworkOnly(networkText) }, StaticMembers: statics);
+
+    private static XElement EmitSingleNetwork(string networkText, params DbMember[] statics)
+    {
+        var block = BlockWith(networkText, statics);
+        var sidecar = SidecarSynthesizer.SynthesizeBlock(block).Single();
+        return FlgNetWriter.Write(FlgNetBuilder.Build(block.Networks[0], sidecar));
+    }
+
+    /// <summary>The one <c>&lt;Component&gt;</c> named <paramref name="name"/> that carries a subscript.</summary>
+    private static XElement SubscriptedComponent(XElement xml, string name) =>
+        Assert.Single(xml.Descendants()
+            .Where(e => e.Name.LocalName == "Component" && e.Attribute("Name")?.Value == name
+                        && e.Attribute("AccessModifier") is not null));
 }
