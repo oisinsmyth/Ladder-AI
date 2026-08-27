@@ -819,16 +819,26 @@ public static class FlgNetParser
         // shape turned out to be ordinary (an array of structs, `DB_Weigh.Silo[0].RawValue`), and
         // the writer was meanwhile emitting a corrupt version of the same thing rather than
         // refusing alongside.
-        var indexedPath = components
-            .Select(c =>
+        // A VARIABLE subscript's scope is carried alongside the path, not folded into the name: TIA
+        // validates it and a wrong one imports clean (see ParseArrayIndex), so it has to survive the
+        // round trip rather than be re-derived on the way out.
+        var indexedPath = new List<string>(components.Count);
+        var indexScopes = new Dictionary<int, string>();
+        for (var position = 0; position < components.Count; position++)
+        {
+            var name = RequireAttribute(components[position], "Name");
+            var (index, indexScope) = ParseArrayIndex(components[position]);
+            indexedPath.Add(index is null ? name : $"{name}[{index}]");
+            if (indexScope is not null)
             {
-                var name = RequireAttribute(c, "Name");
-                var index = ParseArrayIndex(c);
-                return index is null ? name : $"{name}[{index}]";
-            })
-            .ToList();
+                indexScopes[position] = indexScope;
+            }
+        }
 
-        return new AccessNode(RequireIntAttribute(access, "UId"), scope, indexedPath, sliceModifier);
+        return new AccessNode(RequireIntAttribute(access, "UId"), scope, indexedPath, sliceModifier)
+        {
+            IndexScopes = indexScopes,
+        };
     }
 
     // A LocalConstant Access — confirmed real, 2026-07-12 (S1 item 21), 4 independent instances
@@ -869,14 +879,19 @@ public static class FlgNetParser
     // </Access></Component>`. Only this exact shape (literal constant, DInt) has been observed —
     // a computed/variable index would need a different nested Access scope, refused rather than
     // guessed at.
-    private static int? ParseArrayIndex(XElement component)
+    /// <summary>
+    /// Returns the subscript as TEXT plus, for a VARIABLE index only, the scope TIA declared for it.
+    /// A literal index has no scope to carry — <c>LiteralConstant</c> is implied by the text being a
+    /// number, and re-deriving it on the way out keeps every existing block byte-identical.
+    /// </summary>
+    private static (string? Index, string? IndexScope) ParseArrayIndex(XElement component)
     {
         var accessModifier = component.Attribute("AccessModifier")?.Value;
         var nestedAccess = component.Element(Ns + "Access");
 
         if (accessModifier is null && nestedAccess is null)
         {
-            return null;
+            return (null, null);
         }
 
         if (accessModifier != "Array" || nestedAccess is null)
@@ -887,10 +902,46 @@ public static class FlgNetParser
         }
 
         var indexScope = RequireAttribute(nestedAccess, "Scope");
+
+        // ✅ A VARIABLE index — widened 2026-08-27 against a real TIA import/compile/export, not
+        // generalised. The nested <Access> carries the index expression's own scope and a <Symbol>,
+        // which is the same shape an ordinary operand uses; `LiteralConstant` was never special, it
+        // is just the scope a literal has in this slot. Refusing this was previously correct — no
+        // export on this machine contained one, so the shape was unobserved — and it made a
+        // TIA-valid block unreadable, which ADR-0010 calls a scope item rather than a resting place.
+        if (indexScope is "LocalVariable" or "GlobalVariable")
+        {
+            var indexSymbol = nestedAccess.Element(Ns + "Symbol")
+                ?? throw new SimaticMlFormatException(
+                    $"Array index <Access Scope=\"{indexScope}\"> is missing its <Symbol> element.");
+
+            var indexPath = string.Join('.', indexSymbol
+                .Elements(Ns + "Component")
+                .Select(c => RequireAttribute(c, "Name")));
+
+            if (indexPath.Length == 0)
+            {
+                throw new SimaticMlFormatException(
+                    $"Array index <Access Scope=\"{indexScope}\"><Symbol> has no <Component> path elements.");
+            }
+
+            // A nested subscript (`Table[Other[3]]`) would round-trip into ambiguous IR text, and was
+            // not covered by the confirm loop. Refused rather than flattened.
+            if (indexSymbol.Descendants(Ns + "Access").Any())
+            {
+                throw new UnsupportedConstructException(
+                    $"Array index '{indexPath}' is itself array-indexed. A nested subscript has never been " +
+                    "observed and has no unambiguous IR text form.");
+            }
+
+            return (indexPath, indexScope);
+        }
+
         if (indexScope != "LiteralConstant")
         {
             throw new UnsupportedConstructException(
-                $"Array index Access scope '{indexScope}' is not supported — only a literal constant index has been observed.");
+                $"Array index Access scope '{indexScope}' is not supported — only a literal constant and a " +
+                "LocalVariable/GlobalVariable symbol index have been observed.");
         }
 
         var constant = nestedAccess.Element(Ns + "Constant")
@@ -905,12 +956,16 @@ public static class FlgNetParser
 
         var constantValue = constant.Element(Ns + "ConstantValue")?.Value
             ?? throw new SimaticMlFormatException("Array index <Constant> is missing <ConstantValue>.");
+
+        // Negative accepted since 2026-08-27: `Array[-5..5]` indexed at `[-3]` was confirmed to compile
+        // clean and to emit this same ordinary literal shape. `to-ir` already accepted one here while
+        // `to-xml` refused it, so a real block could be read in and not written back out.
         if (!int.TryParse(constantValue, out var index))
         {
             throw new SimaticMlFormatException($"Array index constant value is not an integer: '{constantValue}'.");
         }
 
-        return index;
+        return (index.ToString(System.Globalization.CultureInfo.InvariantCulture), null);
     }
 
     // Only `<Negated Name="operand" />` has been observed on a Contact — anything else (a

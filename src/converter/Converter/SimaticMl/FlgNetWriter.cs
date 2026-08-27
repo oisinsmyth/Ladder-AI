@@ -52,14 +52,19 @@ public static class FlgNetWriter
 
                     if (arrayIndex is not null)
                     {
+                        // `AccessModifier="Array"` is identical for both index kinds — measured on a
+                        // real TIA export, 2026-08-27. What differs is only what the nested <Access>
+                        // carries: a literal constant, or the index expression's own symbol.
                         element.Add(new XAttribute("AccessModifier", "Array"));
-                        element.Add(new XElement(
-                            ns + "Access",
-                            new XAttribute("Scope", "LiteralConstant"),
-                            new XElement(
-                                ns + "Constant",
-                                new XElement(ns + "ConstantType", "DInt"),
-                                new XElement(ns + "ConstantValue", arrayIndex.Value))));
+                        element.Add(AccessNode.IsLiteralIndex(arrayIndex)
+                            ? new XElement(
+                                ns + "Access",
+                                new XAttribute("Scope", "LiteralConstant"),
+                                new XElement(
+                                    ns + "Constant",
+                                    new XElement(ns + "ConstantType", "DInt"),
+                                    new XElement(ns + "ConstantValue", arrayIndex)))
+                            : SymbolicIndexAccess(ns, access, index, name, arrayIndex));
                     }
 
                     if (index == access.ComponentPath.Count - 1 && access.SliceAccessModifier is not null)
@@ -263,6 +268,45 @@ public static class FlgNetWriter
     // with the downstream parts it feeds before moving to independent rungs. Byte-stable for real blocks
     // (their flow == UId order, so the DFS reproduces it); validated against TIA import for the
     // synthesized case (MotorStarter/MotorVSDSystem NW3, the same-network-timer-.Q-consumer shape).
+    /// <summary>
+    /// The nested <c>&lt;Access&gt;</c> for a VARIABLE array subscript, in TIA's own canonical form —
+    /// measured 2026-08-27 by an ADR-0011 confirm loop (import, compile clean, export, compare), not
+    /// generalised from the literal case.
+    ///
+    /// <para>🔴 <b>The scope is RESOLVED OR THE WRITE REFUSES. It is never defaulted.</b> The same
+    /// confirm loop deliberately mislabelled an index scope and found that TIA <b>accepts the import
+    /// at exit 0</b> and refuses only at compile — so a plausible default here would produce a block
+    /// that imports clean and fails later, which is the exact failure mode this converter keeps being
+    /// bitten by. <c>GlobalVariable</c> is the tempting default and is the wrong one: it sends TIA
+    /// hunting for a PLC tag that does not exist.</para>
+    /// </summary>
+    private static XElement SymbolicIndexAccess(
+        XNamespace ns, AccessNode access, int componentPosition, string componentName, string index)
+    {
+        if (!access.IndexScopes.TryGetValue(componentPosition, out var indexScope))
+        {
+            throw new UnsupportedConstructException(
+                $"Component '{componentName}' carries the variable array subscript '[{index}]', but nothing " +
+                "resolved that index's scope. TIA validates the nested <Access Scope=...> and a wrong value " +
+                "IMPORTS CLEANLY and fails only at compile, so this converter refuses to default it. The scope " +
+                "is resolved from the enclosing block's own declared members (SidecarSynthesizer.ScopeFor); an " +
+                "AccessNode built without that context cannot emit a variable subscript.");
+        }
+
+        // A dotted symbol path becomes one <Component> per segment, exactly as the enclosing <Symbol>
+        // does. Quotes are stripped: TIA writes a DB name quoted in readable forms and bare in the
+        // component's Name attribute.
+        var segments = index
+            .Split('.')
+            .Select(segment => segment.Trim('"'))
+            .Select(segment => new XElement(ns + "Component", new XAttribute("Name", segment)));
+
+        return new XElement(
+            ns + "Access",
+            new XAttribute("Scope", indexScope),
+            new XElement(ns + "Symbol", segments));
+    }
+
     private static IEnumerable<PartNode> FlowOrderedParts(FlgNetwork network)
     {
         var partByUId = network.Parts.ToDictionary(p => p.UId);

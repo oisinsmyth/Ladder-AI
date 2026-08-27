@@ -38,6 +38,26 @@ public sealed record AccessNode(
     IReadOnlyList<string> ComponentPath,
     string? SliceAccessModifier = null)
 {
+    /// <summary>
+    /// 🔴 <b>The SCOPE of a VARIABLE array subscript, by the component position that carries it.</b>
+    /// Empty for every literal subscript and for every path with no subscript at all, which is the
+    /// overwhelming majority — a corpus sweep found 64,878 array accesses and not one variable index.
+    ///
+    /// <para>It exists because <b>TIA validates this scope and a wrong one survives import</b>. The
+    /// 2026-08-27 confirm loop mislabelled an index scope deliberately: the import returned exit 0 and
+    /// only the COMPILE refused it. So the scope is RESOLVED — by the same
+    /// <c>SidecarSynthesizer.ScopeFor</c> rule the enclosing access uses, against the block's own
+    /// declared members — and rides here to the writer. It is never defaulted: a variable subscript
+    /// with no entry here is a REFUSAL in <c>FlgNetWriter</c>, not a guess, because
+    /// <c>GlobalVariable</c> is exactly the plausible-looking default that would send TIA hunting for
+    /// a PLC tag that does not exist.</para>
+    ///
+    /// <para>Keyed by position rather than by name because the same array may legitimately appear
+    /// twice in one path with different indices.</para>
+    /// </summary>
+    public IReadOnlyDictionary<int, string> IndexScopes { get; init; } =
+        new Dictionary<int, string>();
+
     // "[n]" rides in its own component; ".%X15" is still an access-level suffix, because a slice
     // genuinely is one — it addresses a bit within whatever the whole path resolved to. The site's
     // own ".%X15" convention is preserved exactly; "[n]" is the natural notation for a subscript
@@ -77,11 +97,41 @@ public sealed record AccessNode(
     // per design philosophy #10 this is a hard error, not a silent partial result, and per ADR-0010
     // it is a SCOPE ITEM — widen it against a real TIA import/compile, not against a guess.
     //
-    // A NEGATIVE literal is refused on the same evidentiary footing. `Array[-5..5]` is legal on S7
-    // and `<ConstantValue>-1</ConstantValue>` looks obviously right, but the corpus contains no
-    // negative subscript either, and this session's whole lesson is that plausible-looking output
-    // is how a defect gets past a green check. Both refusals name themselves in the message.
-    public static (string Name, int? Index) SplitComponent(string component)
+    // ✅ WIDENED 2026-08-27, AND THE SHAPE WAS MEASURED RATHER THAN GUESSED — which is what the
+    // refusal above asked for in its own words: "widen the converter against a real TIA
+    // import/compile first (ADR-0010)". An ADR-0011 confirm loop did exactly that on the scratch
+    // project: a probe block indexing an array by a variable was hand-authored, imported, compiled
+    // clean, and EXPORTED BACK OUT. TIA's own canonical form is the natural generalisation:
+    //
+    //     <Component Name="Flags" AccessModifier="Array">
+    //       <Access Scope="LocalVariable"><Symbol><Component Name="IdxIn" /></Symbol></Access>
+    //     </Component>
+    //
+    // `AccessModifier="Array"` is unchanged and still required; the nested <Access> carries the
+    // INDEX EXPRESSION'S OWN SCOPE plus a <Symbol>. `LiteralConstant` was never a special scope —
+    // it is simply the scope a literal has, in the same slot. Array-of-UDT-plus-member works too
+    // (the trailing member is an ordinary sibling <Component>), and it is valid as a Coil operand,
+    // not only a Contact.
+    //
+    // 🔴 THE NESTED Scope IS VALIDATED BY TIA AND IS LOAD-BEARING. The confirm loop deliberately
+    // mislabelled one candidate's index scope: the IMPORT ACCEPTED IT, exit 0, and only the compile
+    // refused — "The entered index is invalid" / `Tag #DB_ProbeStore.ProbeIndex not defined`, the
+    // `#` showing TIA had taken `LocalVariable` at its word. So a wrong scope here is a defect that
+    // survives import and surfaces late. It is RESOLVED (SidecarSynthesizer.ScopeFor, against the
+    // enclosing block's own declared members), never defaulted — see FlgNetWriter, which refuses to
+    // emit a variable subscript whose scope nothing resolved.
+    //
+    // A NEGATIVE literal is now accepted too, and on measured grounds rather than by relaxation:
+    // the same probe confirmed `Array[-5..5]` indexed at `[-3]` compiles clean and emits the
+    // ORDINARY literal shape with a negative <ConstantValue> — no new structure. It also closed a
+    // split-brain that made a real TIA-valid block unreadable: `to-ir` accepted a negative subscript
+    // (int.TryParse) while `to-xml` refused it here, so a block could be read INTO the IR and then
+    // could not be written back out — precisely the "no IR the AI cannot change" failure ADR-0010
+    // exists to forbid.
+    //
+    // The index is returned as TEXT, not as an int, because it is now either a literal or a symbol
+    // and the caller must branch on which. <see cref="IsLiteralIndex"/> is that test.
+    public static (string Name, string? Index) SplitComponent(string component)
     {
         var m = System.Text.RegularExpressions.Regex.Match(component, @"^(?<name>.+)\[(?<index>[^\[\]]*)\]$");
         if (!m.Success)
@@ -90,19 +140,33 @@ public sealed record AccessNode(
         }
 
         var index = m.Groups["index"].Value;
-        if (!System.Text.RegularExpressions.Regex.IsMatch(index, @"^\d+$"))
+        if (IsLiteralIndex(index) || IsSymbolicIndex(index))
         {
-            throw new UnsupportedConstructException(
-                $"Array subscript '[{index}]' on component '{m.Groups["name"].Value}' is not a non-negative " +
-                "integer literal. Only `AccessModifier=\"Array\"` with a nested " +
-                "`<Access Scope=\"LiteralConstant\">` has ever been observed in an export, so the emit shape " +
-                "for a variable or negative subscript is unknown and this converter will not invent one. " +
-                "Emitting it as a component name would produce a member that cannot exist. Either use a " +
-                "literal index, or widen the converter against a real TIA import/compile first (ADR-0010).");
+            return (m.Groups["name"].Value, index);
         }
 
-        return (m.Groups["name"].Value, int.Parse(index));
+        throw new UnsupportedConstructException(
+            $"Array subscript '[{index}]' on component '{m.Groups["name"].Value}' is neither an integer " +
+            "literal nor a symbol path. TIA's canonical form for a subscript is a nested " +
+            "`<Access>` carrying either a literal constant or the index expression's own symbol, and a " +
+            "subscript matching neither has no observed emit shape. Emitting it as part of a component " +
+            "name would produce a member that cannot exist. A COMPUTED index (`[#i + 1]`) is one such " +
+            "shape and is deliberately still refused: it was NOT covered by the 2026-08-27 confirm loop.");
     }
+
+    /// <summary>An integer subscript, negative permitted — see the note on <see cref="SplitComponent"/>.</summary>
+    public static bool IsLiteralIndex(string index) =>
+        System.Text.RegularExpressions.Regex.IsMatch(index, @"^-?\d+$");
+
+    /// <summary>
+    /// A variable subscript: a dotted symbol path, optionally with a quoted leading segment as TIA
+    /// writes a DB name. Deliberately NOT an expression — an operator anywhere makes this false, so
+    /// a computed index refuses in <see cref="SplitComponent"/> rather than being emitted as a
+    /// symbol TIA would then fail to resolve.
+    /// </summary>
+    public static bool IsSymbolicIndex(string index) =>
+        System.Text.RegularExpressions.Regex.IsMatch(
+            index, @"^""?[A-Za-z_][A-Za-z0-9_]*""?(\.[A-Za-z_][A-Za-z0-9_]*)*$");
 
     // Siemens's own fixed set of 8 "Clock memory byte" system tags — confirmed real, 2026-07-14
     // (`FB ShredderControlSystem`'s own reference to `Clock_0.5Hz`, real XML: a single
