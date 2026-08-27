@@ -2453,3 +2453,37 @@ iterations but is not a substitute for iterating.
 **Do NOT "fix" this by making the caller responsible for re-running.** That is the current
 behaviour, and it already produced a project reported at `INCONSISTENT: 14` by a command asked to
 compile everything.
+
+## FI-82 — `signal-set` reports an IEC timer's own members as `unused`
+
+**Raised 2026-08-27.** Status: **Raised.**
+
+Found on the first run of `converter signal-set` (`93ad3ae`) against real material rather than the
+reference corpus — which is the point worth recording, because the reference corpus did not surface
+it.
+
+A block declaring an IEC timer instance gets that instance's four members — `.IN`, `.PT`, `.ET`,
+`.Q` — enumerated as ordinary interface leaves, each with `direction: unused`. They are not unused.
+A timer's members are reached through the timer Part, not through ordinary Accesses, so the usage
+graph legitimately records no reader or writer for them. `ProjectUsageGraph`'s instance walk
+excludes them; `SignalInventory`, which is declaration-only, does not — and `signal-set` joins the
+two, so the exclusion is lost.
+
+**Why this is worth an entry rather than a shrug.** `unused` is the one direction a consumer acts
+destructively on. It reads as "declared and dead", which invites deletion of a member the program
+depends on, and it inflates the unused count on every block carrying a timer — most of them. On the
+block this was found on, **4 of the 6 reported `unused` members were timer members**, so the false
+positives outnumbered the real findings 2:1. A number that is wrong two-thirds of the time in the
+direction of "safe to delete" is worse than no number.
+
+**Not fixed on discovery, deliberately.** Excluding timer members outright would be a judgement the
+document is not entitled to make — a harness consumer may legitimately want to observe a `.Q`, and
+`signal-set`'s contract is to report what the corpus declares, not to curate it. The likely right
+shape is a distinct value (`direction: instance-internal`, or an `originKind` marking the member as
+reached through a Part) so a consumer can filter deliberately, rather than silently dropping rows.
+Whatever is chosen, **the count must stay honest**: dropping the rows would make `filesScanned` and
+the total disagree, which is the denominator discipline every other mechanical-floor command holds.
+
+**Verdict / revisit trigger:** Open. Revisit when a consumer first acts on `unused` — a binding
+generator that excludes unused signals, or any proposal to delete a member on this evidence. Until
+then the entry is the warning: **`unused` from `signal-set` is not yet a safe input to a decision.**
