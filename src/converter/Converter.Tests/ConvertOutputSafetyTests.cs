@@ -73,11 +73,11 @@ public class ConvertOutputSafetyTests : IDisposable
     public void BlindTypeDetector_NamesTheRootsItCannotSee()
     {
         var file = Path.Combine(_dir, "FB_Blind.ir");
-        File.WriteAllText(file, "BLOCK FB FB_Blind\nNETWORK 1 \"T\"\n  COIL Out := DB_HmiCmd.Heartbeat <> 0\n");
+        File.WriteAllText(file, "BLOCK FB FB_Blind\nNETWORK 1 \"T\"\n  COIL Out := DB_PanelCmd.Heartbeat <> 0\n");
 
         var roots = Program.WarnIfConvertingBlindToExternalTypes("to-xml", new[] { file }, projectDir: null);
 
-        Assert.Contains("DB_HmiCmd", roots);
+        Assert.Contains("DB_PanelCmd", roots);
     }
 
     [Fact]
@@ -95,7 +95,7 @@ public class ConvertOutputSafetyTests : IDisposable
     public void BlindTypeDetector_IsSilentWhenAProjectWasSupplied()
     {
         var file = Path.Combine(_dir, "FB_Blind.ir");
-        File.WriteAllText(file, "BLOCK FB FB_Blind\nNETWORK 1 \"T\"\n  COIL Out := DB_HmiCmd.Heartbeat <> 0\n");
+        File.WriteAllText(file, "BLOCK FB FB_Blind\nNETWORK 1 \"T\"\n  COIL Out := DB_PanelCmd.Heartbeat <> 0\n");
 
         // --project is the whole remedy: with the other DB in scope the type is knowable.
         Assert.Empty(Program.WarnIfConvertingBlindToExternalTypes("to-xml", new[] { file }, projectDir: _dir));

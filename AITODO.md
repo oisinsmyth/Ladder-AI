@@ -252,7 +252,7 @@ in the same commit* — for the third time, it did not.
   possible and **failed** stops the terminate (`PortalCloseExecution.cs:167-173`). 🔴 **Never run
   against a live Portal.** The decision half is pure and unit-tested; the execution half has no live
   evidence. Documented in `src/openness-cli/README.md` (`portal-close` section) and CLAUDE.md's index.
-- ✅ **B5 — ANSWERED: `FB_SiloSequence` is the third conformance lane. THE LANE IS NOT BLOCKED ON THE
+- ✅ **B5 — ANSWERED: `FB_CellSequence` is the third conformance lane. THE LANE IS NOT BLOCKED ON THE
   OWNER.** 🔴 **This line read *"Blocked on this and nothing else"* after the answer was given**, as did
   `docs/notes/owner-questions.md` and **six** places in `docs/notes/workbench-phase6-plan.md` —
   tracked files manufacturing a blocker that did not exist. ⚠️ **This bullet cited that plan as

@@ -20,10 +20,10 @@ namespace Converter.SimaticMl;
 // "Name[n]" suffix, at ANY position in the path, instead of in a separate field pinned to the
 // last component. The old shape modelled the index as a property of the ACCESS; it is a property
 // of a COMPONENT, and pinning it to the last one made a mid-path subscript inexpressible —
-// `DB_Weigh.Silo[0].RawValue`, an array of structs, which is an ordinary shape rather than an
+// `DB_Gauge.Bay[0].RawValue`, an array of structs, which is an ordinary shape rather than an
 // exotic one. Worse, the two halves disagreed: the parser REFUSED a non-final indexed component
-// (correct, loud) while the writer silently emitted `<Component Name="Silo[0]" />` — a component
-// literally named "Silo[0]", which is not the member and does not exist. A read that refuses and
+// (correct, loud) while the writer silently emitted `<Component Name="Bay[0]" />` — a component
+// literally named "Bay[0]", which is not the member and does not exist. A read that refuses and
 // a write that corrupts is the worst possible pairing.
 //
 // This is the SECOND defect in this class. The first collapsed `Node_Error[1]`/`[2]`/`[3]` into

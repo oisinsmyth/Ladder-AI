@@ -201,7 +201,7 @@ public class CrossCheckTests : IDisposable
     // element AND a member (`DB_Arr.Slot[0].Value`), so the exact-string lookup this used to do
     // matched nothing and the member reported "unused (no writer, no reader)".
     //
-    // Measured on a live project before the fix: the weighing-interface array and the per-silo
+    // Measured on a live project before the fix: the weighing-interface array and the per-bay
     // parameter array both read as dead against 16 and 24 real readers. Acting on that advice would
     // have deleted the plant's entire weighing path — which makes this the more dangerous half of
     // the array-subscript problem. FI-51 fixed expressing a subscript; this is the reference graph

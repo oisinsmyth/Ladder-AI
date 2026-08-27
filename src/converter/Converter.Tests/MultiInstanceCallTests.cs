@@ -8,7 +8,7 @@ namespace Converter.Tests;
 
 /// <summary>
 /// MULTI-INSTANCE FB CALLS (2026-08-06). An FB called with one of the calling block's own STATICS as
-/// its instance — `#ValveWater` rather than a global instance DB. The converter could not express it
+/// its instance — `#ValveA` rather than a global instance DB. The converter could not express it
 /// at all, in two independent ways, and the construct appears nowhere in the committed export corpus:
 /// it had simply never been written.
 ///
@@ -38,8 +38,8 @@ public class MultiInstanceCallTests
     public void Synthesize_CallOnLocalStaticInstance_ScopesLocalVariable()
     {
         var block = BlockCalling(
-            "ValveWater",
-            new DbMember("ValveWater", "\"FB_Valve\"", Retain: false, StartValue: null));
+            "ValveA",
+            new DbMember("ValveA", "\"FB_Valve\"", Retain: false, StartValue: null));
 
         var call = SidecarSynthesizer.SynthesizeBlock(block).Single().Calls.Single();
 
@@ -66,12 +66,12 @@ public class MultiInstanceCallTests
     [Fact]
     public void WriteMember_MultiInstance_OmitsRemanence()
     {
-        var member = new DbMember("ValveWater", "\"FB_Valve\"", Retain: false, StartValue: null);
+        var member = new DbMember("ValveA", "\"FB_Valve\"", Retain: false, StartValue: null);
 
         var element = DbInterfaceMembers.WriteMember(member, omitRemanence: true);
 
         Assert.Null(element.Attribute("Remanence"));
-        Assert.Equal("ValveWater", element.Attribute("Name")!.Value);
+        Assert.Equal("ValveA", element.Attribute("Name")!.Value);
         Assert.Equal("\"FB_Valve\"", element.Attribute("Datatype")!.Value);
     }
 

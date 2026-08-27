@@ -240,7 +240,7 @@ public class CompileVerdictTests
             Program.RunCompile(gateway, TypeOptions(), timeoutOpenSeconds: 1));
 
         Assert.Equal(ExitCodes.CompileIncomplete, exitCode);
-        Assert.Contains("UDT_Drum", stderr);
+        Assert.Contains("UDT_Rack", stderr);
     }
 
     /// <summary>
@@ -385,7 +385,7 @@ public class CompileVerdictTests
 
     private static CompileCommandOptions BlockOptions() => DeviceOptions() with { Block = "FB_X" };
 
-    private static CompileCommandOptions TypeOptions() => DeviceOptions() with { Type = "UDT_Drum" };
+    private static CompileCommandOptions TypeOptions() => DeviceOptions() with { Type = "UDT_Rack" };
 
     private static (int ExitCode, string StdOut, string StdErr) CaptureConsole(Func<int> action)
     {

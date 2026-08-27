@@ -67,24 +67,24 @@ public class NamedTypeExpansionReadBackTests
     {
         var member = Member(
             "Claim",
-            "Array[1..8] of \"UDT_ResourceClaim\"",
+            "Array[1..8] of \"UDT_SlotTicket\"",
             ExpansionOf(("Request", "Bool"), ("Granted", "Bool"), ("Priority", "Bool")));
 
-        var parsed = DbInterfaceMembers.ParseTypeMember(member, "UDT_ResourceQueue");
+        var parsed = DbInterfaceMembers.ParseTypeMember(member, "UDT_SlotQueue");
 
         Assert.Equal("Claim", parsed.Name);
         // The reference survives; the expansion is discarded because the IR already names the type.
-        Assert.Equal("Array[1..8] of \"UDT_ResourceClaim\"", parsed.Datatype);
+        Assert.Equal("Array[1..8] of \"UDT_SlotTicket\"", parsed.Datatype);
     }
 
     [Fact]
     public void PlainNamedType_ExpandedByTia_CollapsesToTheTypeReference()
     {
-        var member = Member("IO", "\"UDT_DrumIO\"", ExpansionOf(("State", "Int"), ("SimActive", "Bool")));
+        var member = Member("IO", "\"UDT_RackIO\"", ExpansionOf(("State", "Int"), ("SimActive", "Bool")));
 
-        var parsed = DbInterfaceMembers.ParseTypeMember(member, "UDT_Drum");
+        var parsed = DbInterfaceMembers.ParseTypeMember(member, "UDT_Rack");
 
-        Assert.Equal("\"UDT_DrumIO\"", parsed.Datatype);
+        Assert.Equal("\"UDT_RackIO\"", parsed.Datatype);
     }
 
     // The guard that matters most. An anonymous Struct's nested content is its ONLY definition —
@@ -116,9 +116,9 @@ public class NamedTypeExpansionReadBackTests
     [Fact]
     public void NamedTypeWithoutExpansion_IsUnchanged()
     {
-        var parsed = DbInterfaceMembers.ParseTypeMember(Member("IO", "\"UDT_DrumIO\""), "UDT_Drum");
+        var parsed = DbInterfaceMembers.ParseTypeMember(Member("IO", "\"UDT_RackIO\""), "UDT_Rack");
 
-        Assert.Equal("\"UDT_DrumIO\"", parsed.Datatype);
+        Assert.Equal("\"UDT_RackIO\"", parsed.Datatype);
     }
 
     // ------------------------------------------------- FI-75: the collapse discarded start values
@@ -250,13 +250,13 @@ public class NamedTypeExpansionReadBackTests
         var bare = new XElement(
             XName.Get("Member", Ns),
             new XAttribute("Name", "Claim"),
-            new XAttribute("Datatype", "Array[1..8] of \"UDT_ResourceClaim\""),
+            new XAttribute("Datatype", "Array[1..8] of \"UDT_SlotTicket\""),
             ExpansionOf(("Request", "Bool")));
 
         var parsedBare = DbInterfaceMembers.ParseBareMember(bare, "DB_Queue", "Work");
         var parsedType = DbInterfaceMembers.ParseTypeMember(
-            Member("Claim", "Array[1..8] of \"UDT_ResourceClaim\"", ExpansionOf(("Request", "Bool"))),
-            "UDT_ResourceQueue");
+            Member("Claim", "Array[1..8] of \"UDT_SlotTicket\"", ExpansionOf(("Request", "Bool"))),
+            "UDT_SlotQueue");
 
         Assert.Equal(parsedBare.Datatype, parsedType.Datatype);
     }

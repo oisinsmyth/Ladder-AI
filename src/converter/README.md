@@ -2593,7 +2593,7 @@ undriven sibling. Exit 1 on undriven/disarmed; dead-interface reports, never gat
 instances. Under FI-44 both used to exit 0, so a block that had never been written passed the check.
 
 **An INSTANCE means an instance DB *or* a MULTI-INSTANCE** (an FB placed as a STATIC of another FB,
-`ValveWater : "FB_Valve"`) — FI-50. It used to mean instance DBs only, so on a corpus following
+`ValveA : "FB_Valve"`) — FI-50. It used to mean instance DBs only, so on a corpus following
 C-132's single-STATIC-UDT house style *every* block reported "no instances" and the check examined
 nothing. IEC timer/counter statics are excluded (a TON's `Q` is written by the instruction, not a
 caller); **an owner with no instance DB yet reports its placements under a declaration-site path
@@ -2632,7 +2632,7 @@ labelled heuristic, and on a real corpus it fires often enough to bury the findi
 ### Multi-instances count as instances (2026-08-07, FI-50)
 
 An **instance** here is an instance DB *or* a **multi-instance** — an FB placed as a `STATIC` member of
-another FB (`ValveWater : "FB_Valve"`) rather than given a DB of its own. Both carry per-instance state
+another FB (`ValveA : "FB_Valve"`) rather than given a DB of its own. Both carry per-instance state
 and both can be left undriven.
 
 Originally only instance DBs were counted, because instances were read off DB sources carrying an
@@ -2644,17 +2644,17 @@ FI-44 did not consider.
 
 Two details the implementation has to get right, both of which are the reason this is not a one-liner:
 
-- **A multi-instance is addressed by its bare static name from inside its owner** (`ValveWater.IO.Cmd`),
+- **A multi-instance is addressed by its bare static name from inside its owner** (`ValveA.IO.Cmd`),
   with no instance root in the text at all — unlike an iDB, which callers address by name. So the usage
   lookup is made on the local form and then **restricted to the owning block**, or two FBs that happen
   to share a static name pool each other's writers and each masks the other's gap.
-- **Resolution iterates to a fixpoint**, because multi-instances nest: if `FB_SiloSequence` owns an
-  `FB_SiloCycle` and is itself reached through an instance DB, the cycle's real path is
+- **Resolution iterates to a fixpoint**, because multi-instances nest: if `FB_CellSequence` owns an
+  `FB_CellCycle` and is itself reached through an instance DB, the cycle's real path is
   `iDB_SeqW.Cycle`. A single pass would root it at the declaration site and lose exactly the
   per-instance resolution this command exists for.
 
 Where the owning FB has no instance DB **yet**, the placement is reported under a **declaration-site**
-path — `FB_SiloVessel/ValveWater`, with a `/` that can never be mistaken for a member path. That keeps a
+path — `FB_Cell/ValveA`, with a `/` that can never be mistaken for a member path. That keeps a
 block written before its caller judgeable instead of unexaminable; the alternative is reporting nothing,
 which is the failure this fix exists to remove.
 
@@ -2677,14 +2677,14 @@ check's question.
 1. **An ABSOLUTE instance-path write to a MULTI-INSTANCE member was not joined.** The bullet above
    explains that a multi-instance is addressed *bare and local* from inside its owner. It is also
    addressed **absolutely, rooted on the owner's instance DB, from everywhere else** —
-   `iDB_SiloVessel_SiloW.ValveDrain.IO.InHand`. Only the local form was ever looked up, so every
+   `iDB_Cell_North.ValveB.IO.InHand`. Only the local form was ever looked up, so every
    write from an orchestrator, a command decoder or a startup block was invisible. Both forms are now
    resolved and unioned; the **owner restriction stays on the local form only**, and must — a bare
-   `ValveDrain.IO.InHand` could belong to any FB declaring a `ValveDrain`, while the absolute form
+   `ValveB.IO.InHand` could belong to any FB declaring a `ValveB`, while the absolute form
    names one placement, which is what makes it absolute.
 
 2. **A WHOLE-STRUCT write was not attributed to the struct's members.** `MOVE(…) => Selected` drives
-   `Selected.SRID`, `Selected.TargetMC` and every other member under a key that mentions none of
+   `Selected.SetId`, `Selected.TargetGrade` and every other member under a key that mentions none of
    them, so a verbatim lookup found nothing. Worse than noise on the measured case: those members are
    ones the **FB itself** writes, so they should never have been in the caller-driven scope at all —
    a reader was being told a caller had failed to wire an FB's own outputs.
@@ -2695,7 +2695,7 @@ genuine — a per-valve member written for one placement and not its siblings.
 
 #### The floor, and why an ancestor rule without one is worse than the bug
 
-`CALL FB_Drum(iDB_Drum_DrumA, EN := TRUE)` records a **write at the bare instance path** — the CALL
+`CALL FB_Rack(iDB_Rack_RackA, EN := TRUE)` records a **write at the bare instance path** — the CALL
 naming its own state store, not a data write of the interface. A naive ancestor rule admits it, and
 then every member of every instance reads as `driven`. **Measured live while building this fix:** a
 block with 20 genuine undriven members reported **168 driven and exit 0**. So `UsagesReaching` takes
@@ -3272,7 +3272,7 @@ collapse was load-bearing for the committed corpus's fixed point. **It was not**
 radius below, which is zero.
 
 **The collapse.** FI-56 (2026-08-08) taught the parser to accept TIA's expansion of a member whose
-type is a named UDT — TIA renders `Claim : Array[1..8] of "UDT_ResourceClaim"` as a nested
+type is a named UDT — TIA renders `Claim : Array[1..8] of "UDT_SlotTicket"` as a nested
 `<Sections>` on re-export, and refusing it had made whole blocks unreadable. It accepted the
 expansion by **discarding** it, reasoning that *the IR already names the type, so TIA's rendering of
 that type is redundant*. FI-64 (2026-08-09) applied the same rule to the third parse path.
@@ -4572,7 +4572,7 @@ the cost of that lesson is not worth paying twice.
 Two joins it inherits from that repair, both load-bearing:
 
 - **An interface member is addressed two ways.** Bare and local from inside the block (`IO.Step`),
-  absolute on the placement from everywhere else (`iDB_Drum_DrumA.IO.Step`). Both are resolved; the
+  absolute on the placement from everywhere else (`iDB_Rack_RackA.IO.Step`). Both are resolved; the
   **bare form is restricted to the subject block**, because `_usages` is keyed verbatim and three FBs
   each declaring their own `IO.Step` land on one key — the false-multi-writer defect of 2026-08-14.
 - **The placement is the FLOOR on the ancestor walk.** `CALL FB(iDB, …)` records a write at the bare
@@ -4738,7 +4738,7 @@ import-all  SUMMARY: 14 imported, 4 failed, 0 rejected   exit 13
 ```
 
 The member named is a **multi-instance static** — one whose datatype is a quoted FB name
-(`FillStartWin : "FB_MoveWindow"`). TIA will not accept `Remanence` on one, and the round trip puts
+(`TrendWin : "FB_RollingWindow"`). TIA will not accept `Remanence` on one, and the round trip puts
 it there.
 
 **Why `BlockSourceWriter`'s existing guard does not cover it.** That writer already omits `Remanence`
@@ -4747,8 +4747,8 @@ for multi-instances (`WriteMember(..., omitRemanence:)`), deriving the set of mu
 so the derivation has nothing to work from and `DbSourceWriter` emits the attribute unguarded.
 
 **Why the obvious fixes are wrong.** A quoted datatype is *not* enough on its own — in the same
-section, `IO : "UDT_SiloSequence" RETAIN` is a UDT and legitimately carries `Remanence`, while
-`FillStartWin : "FB_MoveWindow"` is an FB and must not. Telling them apart needs `--project` type
+section, `IO : "UDT_CellSequence" RETAIN` is a UDT and legitimately carries `Remanence`, while
+`TrendWin : "FB_RollingWindow"` is an FB and must not. Telling them apart needs `--project` type
 resolution plumbed into the DB writer. **And a name-prefix test (`FB_…`) is not acceptable** — this
 repo already rules that out for reachability, for the same reason: anything can be renamed into a
 prefix.

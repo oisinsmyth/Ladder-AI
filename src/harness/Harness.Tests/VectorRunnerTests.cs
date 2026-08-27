@@ -54,13 +54,13 @@ public class VectorRunnerTests
     {
         var t = new FakeTransport();
         var v = Vector(steps: Step(
-            writes: new[] { new TagWrite("DB_WeighInterface", "Raw_Value", "3400.0") },
+            writes: new[] { new TagWrite("DB_GaugeInterface", "Raw_Value", "3400.0") },
             expect: new[] { new Expectation("Raw_Value", "3400.0") }));
 
         var r = new VectorRunner(t, TargetEnvironment.Both).Run(v);
 
         Assert.Equal(VectorOutcome.Passed, r.Outcome);
-        Assert.Equal("DB_WeighInterface", Assert.Single(t.Writes).Area);
+        Assert.Equal("DB_GaugeInterface", Assert.Single(t.Writes).Area);
     }
 
     // ---------------------------------------------------------------- tolerance
@@ -130,7 +130,7 @@ public class VectorRunnerTests
     public void A_writing_vector_is_not_observable_on_a_read_only_transport()
     {
         var t = new FakeTransport(TransportCapabilities.ScanCounter);
-        var v = Vector(steps: Step(writes: new[] { new TagWrite("DB_HmiCmd", "Code", "25") }));
+        var v = Vector(steps: Step(writes: new[] { new TagWrite("DB_PanelCmd", "Code", "25") }));
 
         Assert.Equal(VectorOutcome.NotObservable, new VectorRunner(t, TargetEnvironment.Both).Run(v).Outcome);
     }
@@ -251,17 +251,18 @@ public class VectorRunnerTests
     {
         var vectors = new[]
         {
-            Vector("V-01", steps: Step(writes: new[] { new TagWrite("DB_WeighInterface", "Raw", "1") })),
+            Vector("V-01", steps: Step(writes: new[] { new TagWrite("DB_PanelCmd", "Code", "1") })),
             Vector("V-02", steps: Step(writes: new[]
             {
-                new TagWrite("DB_HmiCmd", "Code", "25"),
-                new TagWrite("DB_WeighInterface", "Quality", "0"),
+                new TagWrite("DB_PanelCmd", "Code", "25"),
+                new TagWrite("DB_GaugeInterface", "Quality", "0"),
             })),
         };
 
         var areas = VectorSet.DeclaredAreas(vectors);
 
-        Assert.Equal(new[] { "DB_HmiCmd", "DB_WeighInterface" }, areas);
+        // Sorted, NOT first-seen: the vectors write DB_PanelCmd first.
+        Assert.Equal(new[] { "DB_GaugeInterface", "DB_PanelCmd" }, areas);
     }
 
     [Fact]

@@ -3156,7 +3156,7 @@ internal static class Program
     // FI-57 (2026-08-08). Converting a block WITHOUT `--project` silently mistypes every comparison
     // against a member of another DB.
     //
-    // Measured: `DB_HmiCmd.Heartbeat <> 0`, where Heartbeat is a UInt, emits `SrcType=Int` with no
+    // Measured: `DB_PanelCmd.Heartbeat <> 0`, where Heartbeat is a UInt, emits `SrcType=Int` with no
     // --project and `SrcType=UInt` with it. TIA then rejects the block:
     //     "The data type UInt of the actual parameter does not match the data type Int of the
     //      formal parameter"

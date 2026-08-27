@@ -206,8 +206,8 @@ public sealed class TagTypeRegistry
             }
 
             // An INSTANCE DB's member tree is its FB's interface, and the FB is the source of truth
-            // for it (2026-08-24). Measured on a real import: `iDB_X.Silo.StableElapsed >=
-            // iDB_X.Settings.StabilityTimeout` is Time >= Time, both operands failed to resolve
+            // for it (2026-08-24). Measured on a real import: `iDB_X.Bay.SettledElapsed >=
+            // iDB_X.Settings.DwellTimeout` is Time >= Time, both operands failed to resolve
             // here, and InferCompareSrcType's no-tags-no-literals fallback emitted `SrcType Int`.
             // TIA rejected the block — 12 compile errors — while the IDENTICAL comparison written
             // against the same members from inside the FB emitted the right type, because there the

@@ -782,7 +782,7 @@ public static class SimaticMlReader
 
             // 🔴 A PARAMETER IS EITHER A TYPED LITERAL IN THE AttributeList OR AN @OpenLink IN THE
             // LinkList, AND THE DIFFERENCE IS THE WHOLE MEANING. `Value=3` writes the number three;
-            // `Value=@Silo_State` copies that tag's LIVE value at the press. Two commands in the
+            // `Value=@Bay_State` copies that tag's LIVE value at the press. Two commands in the
             // corpus are impossible without the second form. Read as one, a literal 3 and a tag
             // named "3" would be indistinguishable, so the IR marks the tag form with a leading @.
             var literal = al?.Elements().FirstOrDefault(x => x.Name.LocalName == "Value");

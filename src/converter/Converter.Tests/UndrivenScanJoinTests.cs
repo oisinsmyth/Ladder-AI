@@ -13,8 +13,8 @@ namespace Converter.Tests;
 /// <list type="number">
 /// <item><b>An ABSOLUTE instance-path write to a MULTI-INSTANCE member was not joined.</b> A member of
 /// a multi-instance is addressed two ways: bare and local from inside its owning FB
-/// (<c>ValveDrain.IO.InHand</c>), absolute and rooted on the owner's instance DB from anywhere else
-/// (<c>iDB_SiloVessel_SiloW.ValveDrain.IO.InHand</c>). Only the first was ever looked up, so every
+/// (<c>ValveB.IO.InHand</c>), absolute and rooted on the owner's instance DB from anywhere else
+/// (<c>iDB_Cell_North.ValveB.IO.InHand</c>). Only the first was ever looked up, so every
 /// write from an orchestrator, a command decoder or a startup block was invisible. Measured: two
 /// members on sixteen placements of one valve FB, and six members on eight placements of a motor FB —
 /// 80 false UNDRIVEN reports from this mechanism alone.</item>

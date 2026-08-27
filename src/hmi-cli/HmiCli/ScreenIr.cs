@@ -200,7 +200,7 @@ public sealed record IrItem
     /// (<c>data-hmi-textlist</c>). Required on a SymbolicIOField.
     ///
     /// This is the half that makes a coded value readable. Nine of nineteen fields on the first real
-    /// screen delivered were bare numbers standing in for words - state, hold cause, moisture stage -
+    /// screen delivered were bare numbers standing in for words - state, hold cause, process stage -
     /// because the emitter had no type that could resolve them. The text list itself is a project
     /// object the engineer creates; this only names it.
     /// </summary>

@@ -1209,7 +1209,7 @@ Also: the bottleneck has never been notation fluency — it is grounding (real t
   *shape* of the miss matters more than the fix.
 - **The shape.** `undriven-scan` resolved instances by looking for DB sources carrying an
   `InstanceOf`. A **multi-instance** — an FB placed as a `STATIC` member of another FB,
-  `ValveWater : "FB_Valve"` — has no DB of its own and was therefore not an instance at all. Every
+  `ValveA : "FB_Valve"` — has no DB of its own and was therefore not an instance at all. Every
   FB on the driving corpus reported `no instances`; the scan examined **zero members of zero
   instances** and said so quietly.
 - **Why it is not a corner case.** C-132 makes the single-`STATIC`-UDT interface the house style, so
@@ -1223,7 +1223,7 @@ Also: the bottleneck has never been notation fluency — it is grounding (real t
   **"empty is not clean" needs re-asking every time a new shape enters the corpus**, because the set
   of ways to examine nothing grows with the codebase.
 - **What the fix had to get right**, both non-obvious:
-  1. **Addressing.** A multi-instance is written bare inside its owner (`ValveWater.IO.Cmd`) with no
+  1. **Addressing.** A multi-instance is written bare inside its owner (`ValveA.IO.Cmd`) with no
      instance root, unlike an iDB. So lookups use the local form **restricted to the owning block** —
      without that restriction two FBs sharing a static name pool each other's writers and each masks
      the other's gap, which would have turned a blind check into a wrong one.
@@ -1231,7 +1231,7 @@ Also: the bottleneck has never been notation fluency — it is grounding (real t
      roots a nested placement at its declaration site and loses the per-instance resolution the
      command exists for.
 - **A judgement recorded rather than buried:** where the owning FB has **no instance DB yet**, the
-  placement is reported under a declaration-site path (`FB_SiloVessel/ValveWater`). That is a class,
+  placement is reported under a declaration-site path (`FB_Cell/ValveA`). That is a class,
   not a placement, and the `/` says so. Reporting it is right — a block written before its caller is
   otherwise unexaminable, and unexaminable is the state this entry exists to abolish.
 - **One false positive removed with it.** IEC timer/counter statics are excluded: a `TON_TIME`'s `Q`
@@ -1245,15 +1245,15 @@ Also: the bottleneck has never been notation fluency — it is grounding (real t
 - **Status:** **BUILT AND FIXED 2026-08-07.** Found while asking why four vessels on a live job
   had no weight.
 - **The shape.** `AccessNode` carried a single `int? ArrayIndex`, documented as "seen only on the
-  last component". So `DB_Weigh.Silo[0].RawValue` — an **array of structs**, indexed in the
+  last component". So `DB_Gauge.Bay[0].RawValue` — an **array of structs**, indexed in the
   MIDDLE of the path — had nowhere to live.
 - **The two halves disagreed, in the worst possible direction.** The parser **refused** a non-final
   indexed component with a clear `UnsupportedConstructException`. The writer **silently emitted**
-  `<Component Name="Silo[0]" />` — a component literally *named* `Silo[0]`, which names no member
+  `<Component Name="Bay[0]" />` — a component literally *named* `Bay[0]`, which names no member
   and which TIA rejects on import. A read path that refuses and a write path that corrupts is
   strictly worse than either alone: the loud half never fires on content the quiet half produced.
 - **What it cost.** On the driving job the weighing interface is
-  `Silo : Array[0..3] of UDT_WeighSilo`, so the input map could not be written. **No vessel had a
+  `Bay : Array[0..3] of UDT_GaugeBay`, so the input map could not be written. **No vessel had a
   weight**, and every weight-derived judgement on the plant — stability, trust, the overfill
   defence, and the inference of valve position that thirteen blind valves depend on — ran on zero.
   The block comment recorded it as a tooling limitation and moved on, which is the right thing to
@@ -1335,13 +1335,13 @@ Also: the bottleneck has never been notation fluency — it is grounding (real t
 ### FI-53 — the reference graph did not credit a read taken THROUGH an array element
 - **Status:** **BUILT AND FIXED 2026-08-07**, hours after FI-51, and found by the agent that FI-51
   had just unblocked.
-- **The shape.** An `Array[0..3] of "UDT_X"` member is inventoried as ONE leaf (`DB_ParamRet.Silo`),
+- **The shape.** An `Array[0..3] of "UDT_X"` member is inventoried as ONE leaf (`DB_TuningRet.Bay`),
   because the signal walk does not expand a UDT sitting behind an array. Every real reference,
-  though, goes through an element AND a member — `DB_ParamRet.Silo[0].ZeroOffset`. `cross-check`
+  though, goes through an element AND a member — `DB_TuningRet.Bay[0].ZeroOffset`. `cross-check`
   looked the declared path up by exact string, found nothing, and reported the member
   **`unused (no writer, no reader)`**.
-- **Measured, not theorised.** On the live corpus `DB_ParamRet.Silo` reported dead against **24**
-  real readers and `DB_WeighInterface.Silo` against **16**, while plain scalar siblings *in the same
+- **Measured, not theorised.** On the live corpus `DB_TuningRet.Bay` reported dead against **24**
+  real readers and `DB_GaugeInterface.Bay` against **16**, while plain scalar siblings *in the same
   DB* listed their readers correctly — which is what makes it so easy to believe.
 - **This is the more dangerous half of the array problem.** FI-51's failure was a corrupt write that
   TIA would reject. This one is a check quietly telling you a live member is dead, and the natural
@@ -1425,7 +1425,7 @@ Also: the bottleneck has never been notation fluency — it is grounding (real t
   and nothing else. A `PlcType` is not a block, so a freshly-imported UDT was never examined.
 - **Measured, not theorised.** On a live job it reported `OVERALL: HEALTHY`, `BLOCKS: 52`,
   `INCONSISTENT: 0`, device compile `Success (errors=0, warnings=0)`, exit 0 — and TIA then refused
-  `export --type UDT_Drum` with *"Inconsistent blocks and PLC data types (UDT) cannot be exported."*
+  `export --type UDT_Rack` with *"Inconsistent blocks and PLC data types (UDT) cannot be exported."*
   The agent checked the source rather than guessing: `ExportType` has no consistency guard of its
   own, so the refusal came from TIA.
 - **Why the compile did not catch it either.** Nothing in that corpus instantiated the type. An
@@ -1504,7 +1504,7 @@ Also: the bottleneck has never been notation fluency — it is grounding (real t
   `Datatype="SomeOtherType"` — a *named* reference. It encoded the rule being fixed rather than
   catching a mistake in the fix, so it now guards the anonymous-`Struct` half that must still refuse.
 - **Verified against the file that caused it**, not just in unit tests: `to-ir` on the real
-  `UDT_ResourceQueue` export now exits 0, collapses `Claim : Array[1..8] of "UDT_ResourceClaim"` to
+  `UDT_SlotQueue` export now exits 0, collapses `Claim : Array[1..8] of "UDT_SlotTicket"` to
   its reference, and reads back all nine members including the one previously provable only by hand.
 - **Verdict.** Built and verified. 865 converter tests (+6), 39 golden.
 

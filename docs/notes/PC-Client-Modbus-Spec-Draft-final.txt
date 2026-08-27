@@ -1788,7 +1788,7 @@ detection (DB-3), and guarding the frozen map (DB-6).
 message tree contains one message per object, verbatim:
 
     'DB_RigMarker' was loaded successfully.
-    'UDT_CmdAck' was loaded successfully.
+    'UDT_ReplyAck' was loaded successfully.
     ... one per object ...
 
 MEASURED, and both runs matched prediction EXACTLY:
