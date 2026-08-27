@@ -39,9 +39,9 @@ IDs are `FI-xx`, citable the same way as `R-xx` (risks), `C-xxx` (conventions), 
 ## Index — coverage repair, 2026-08-23
 
 🔴 **THE SECTION BELOW CALLS ITSELF "THE INDEX", IS DATED 2026-08-05, AND INDEXES ROUGHLY HALF OF
-THIS DOCUMENT.** It is the newest thing a reader meets and it stops at FI-39. **Thirty-two entries
+THIS DOCUMENT.** It is the newest thing a reader meets and it stops at FI-39. **Thirty-four entries
 are not in it** — `FI-40`…`FI-54` (fifteen, seven of them raised the same day the index was written)
-and `FI-61`…`FI-73` plus `FI-76`…`FI-79` (seventeen, essentially all of the live-job work). A reader who trusts
+and `FI-61`…`FI-73` plus `FI-76`…`FI-81` (nineteen, essentially all of the live-job work). A reader who trusts
 it misses the entire second half of the backlog, including everything learned on real jobs.
 
 ⚠️ **This index states POINTERS AND A DENOMINATOR, and deliberately restates NO status.** That is
@@ -49,7 +49,7 @@ it misses the entire second half of the backlog, including everything learned on
 precisely how the 2026-08-05 section rotted. **Each entry below carries its own authoritative status.
 Go and read it.**
 
-**Denominator: 71 entries exist**, numbered `FI-01`…`FI-54`, `FI-61`…`FI-73`, `FI-76`…`FI-79`.
+**Denominator: 73 entries exist**, numbered `FI-01`…`FI-54`, `FI-61`…`FI-73`, `FI-76`…`FI-81`.
 
 🔴 **AND THE NUMBERING HAS HOLES THAT ARE NOT GAPS IN WORK — `FI-55`…`FI-60`, `FI-74` and `FI-75`
 HAVE NO ENTRY IN THIS FILE AT ALL, YET ARE CITED AS SETTLED FACT ELSEWHERE.** Measured by
@@ -81,7 +81,7 @@ whole page keeps recording. **Whoever did that work owns the entries.**
 | **FI-53** | the reference graph did not credit a read taken THROUGH an array element |
 | **FI-54** | the HMI capability probe programme |
 
-**FI-61 … FI-73, FI-76 … FI-79** — Openness, converter and harness work, 2026-08-07 → 08-25:
+**FI-61 … FI-73, FI-76 … FI-81** — Openness, converter and harness work, 2026-08-07 → 08-27:
 
 | | |
 |---|---|
@@ -102,6 +102,8 @@ whole page keeps recording. **Whoever did that work owns the entries.**
 | **FI-77** | a per-block compile reported the whole program's errors, counting empty parent nodes |
 | **FI-78** | `diff` can declare an insertion but not a deletion, so an add-and-remove cannot pass |
 | **FI-79** | `diff` without `--only` exits 0 unconditionally — examining nothing reads as a pass |
+| **FI-80** | 🔴 the Normalizer's Access key is EMPTY for a constant — two constants compare EQUAL |
+| **FI-81** | `compile-all` is not convergent: one pass can leave more inconsistent than it cleared |
 
 ⚠️ **The entries are NOT in numeric order in this file** — FI-67 precedes FI-66, and FI-71/72/73
 precede FI-68/69/70. Read by heading, not by position.
@@ -2336,3 +2338,95 @@ piped to `tail` reports **`tail`'s** exit status, not `diff`'s, and a real gate 
 recorded as a tool defect on the strength of it. The standing *"never pipe"* rule was written for
 `openness-cli` (Portal is launched as a child and the pipe outlives the command); the mechanism here
 is different and ordinary, but the discipline is identical — **redirect with `>` and read the file.**
+
+---
+
+### FI-80 — the Normalizer's Access content key is EMPTY for a constant, so two different constants compare equal
+
+- **Status:** **Raised 2026-08-27 — read from source and reproduced in a real comparison, NOT FIXED**
+  (owner ruled analyse-only for that session). **The most severe converter defect currently open:
+  it is a comparator that can report FALSE EQUALITY.**
+- **Raised:** 2026-08-27 · **Source:** decomposing a 940-difference re-export comparison, where the
+  same defect showed up in its harmless direction (noise) and its mechanism made the harmful
+  direction obvious.
+
+**The code.** `Normalizer.AccessContentKey` rewrites each `Access` UId to a content-derived key so
+two documents compare equal regardless of the arbitrary numbers TIA assigned. It special-cases
+`TypedConstant`, then falls through to:
+
+```csharp
+var symbol = access.Elements().FirstOrDefault(e => e.Name.LocalName == "Symbol");
+return $"tag:{scope}:{symbol?.ToString(SaveOptions.DisableFormatting)}";
+```
+
+**A `LocalConstant` Access has no `<Symbol>`.** It carries `<Constant Name="…"/>`. So `symbol` is
+null and the key is literally **`tag:LocalConstant:`** — an empty discriminator. **Every
+`LocalConstant` in the document collapses to one key**, and because that key also feeds the
+part-identification refinement, two *different* constants become interchangeable to the comparer
+**and** to the topology hashing built on top of it.
+
+The method's own comment states the intent it defeats: *"The full `<Symbol>` … so two Access elements
+only compare equal when truly identical, not just same top-level path."*
+
+🔴 **Why this is worse than the noise that revealed it.** In the observed case it only inflated a
+difference count. The same mechanism, with the operands the other way round, **silently equates two
+documents that differ** — a comparator quietly passing something it should have caught. That is the
+one failure a comparator must never have, and it is the exact class this repo warns about elsewhere:
+*"a comparator learning to equate more representations is how a comparator starts passing things."*
+
+⚠️ **Possibly wider — stated as INFERENCE, not measurement.** The same fall-through takes
+`LiteralConstant`, and the `TypedConstant` branch's own comment records that *TIA writes a Real
+literal under `Scope="LiteralConstant"`*. If those Access elements likewise carry no `<Symbol>`, then
+**every literal in a document collapses to `tag:LiteralConstant:` as well.** Not measured. **Measure
+it before acting on it in either direction** — including before assuming the blast radius is small.
+
+**The fix shape is already in the same method.** `TypedConstant` returns
+`const:{NumericLiteral.Canonicalize(value)}`. The other constant scopes need an equivalent
+discriminator drawn from what they actually carry — the `<Constant>` element's `Name` and/or
+canonicalized `ConstantValue` — rather than a null `<Symbol>`. **Canonicalize, do not use raw text:**
+that branch exists precisely because a raw literal would put `0.10` vs `0.1` back into the comparison
+after `NumericLiteral` removed it.
+
+**Do NOT fix this by falling back to the raw Access UId when the Symbol is missing.** That reinstates
+the volatile number the whole content-key mechanism exists to remove, and would turn every ordinary
+TIA UId reassignment back into a false *difference* — trading a silent wrong answer for a noisy one
+in the other direction.
+
+**A regression test must assert the harmful direction**, not just the noisy one: two documents whose
+only difference is *which* constant an Access names must compare **UNEQUAL**.
+
+---
+
+### FI-81 — `compile-all` is not convergent: one pass can leave more inconsistent than it cleared
+
+- **Status:** **Raised 2026-08-27 — measured on a real project, NOT FIXED.**
+- **Raised:** 2026-08-27 · **Source:** an import that re-typed a widely-declared UDT, where a single
+  `compile-all` reported success-shaped progress and left the project dirty.
+
+**Measured.** After importing a changed type plus two blocks, one `compile-all` reported
+`passes: 1`, cleared the 6 primary items — and **in that same pass knocked their 9 instance DBs and
+4 caller FCs inconsistent**, finishing `stillInconsistent: 14`, exit 8, **without retrying.** A
+second explicit pass, ordering **instance DBs before their callers**, cleared all 14. Visible in the
+raw gate files either side: `INCONSISTENT: 14` then `INCONSISTENT: 0`.
+
+**Why it happens.** Compiling a block re-derives the layout of everything that declares it, so
+clearing a primary *creates* inconsistency downstream. That is ordinary TIA behaviour. The defect is
+that a command named `-all` **does not iterate to a fixpoint** — it makes one pass and reports what
+is left, so the caller must know to run it again, in dependency order, to get the result the name
+implies.
+
+🔴 **The gate consequence.** `sanity-check` immediately after a single `compile-all` reads the
+*intermediate* state, not the settled one. A lane that ran one pass and quoted the gate would be
+quoting a number that a second pass changes — and the exit code (8) is the only hint, on a project
+where **a clean block already exits 8 on a standing hardware-warning floor** (see `compile` in
+`src/openness-cli/README.md`). **Two different reasons for the same exit code, one of which means
+"not finished".**
+
+**The fix shape:** iterate until the inconsistent set stops shrinking, bounded by a pass limit, and
+report the pass count and the final set — so `stillInconsistent: n` means *n after convergence*, not
+*n after one attempt*. Dependency-ordering instance DBs before callers within a pass would cut the
+iterations but is not a substitute for iterating.
+
+**Do NOT "fix" this by making the caller responsible for re-running.** That is the current
+behaviour, and it already produced a project reported at `INCONSISTENT: 14` by a command asked to
+compile everything.
