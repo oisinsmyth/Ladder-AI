@@ -80,6 +80,26 @@
 # `git add -f`, and by any tool that walks the repo. It is not a weaker fence: it is the same file
 # with the same rules, in the one place where a mistake cannot publish it.
 
+# *** root: ENTRIES, ADDED 2026-08-28 ON THE OWNER'S INSTRUCTION. *** A "root:" entry names a
+# DIRECTORY and permits every .apNN at or under it, so a new project in an area somebody has already
+# named needs no edit to this file. The owner's ask was to stop the fence demanding a per-project
+# decision for ordinary work; this is that, without turning the fence into a wildcard.
+#
+# WHAT DID NOT CHANGE, DELIBERATELY. An entry WITHOUT the prefix still means exactly the one file it
+# always meant -- this file's own rule above is that redefining an existing entry's meaning is an
+# owner decision with a review behind it, and widening a fence is not the moment to also change what
+# its existing lines say. Both forms are pinned by tests, including that a root which is only a NAME
+# PREFIX of a directory ("...\Sand" against "...\Sandbox") does NOT match: on a machine whose whole
+# risk is private projects in SIBLING folders, the separator is the entire check.
+#
+# THESE TWO ROOTS COVER THE REPOSITORY'S OWN SCRATCH PROJECTS. They are deliberately NOT a root over
+# the repository, because "Live Runs/" sits inside it and holds private engineering projects -- including
+# the REAL JOB9004 project, not just its scratch copies. A root there would permit downloading a
+# site's live program to the controller that project points at, which is the one thing this
+# fence exists to prevent.
+root:repo:GenProject1
+root:repo:Test Enviroment
+
 # The S6 sandbox / validation project. Called test-project001 everywhere in docs and IR; the live
 # Portal folder on disk keeps its original name (CLAUDE.md, "Codename note").
 repo:GenProject1/GenProject1.ap20

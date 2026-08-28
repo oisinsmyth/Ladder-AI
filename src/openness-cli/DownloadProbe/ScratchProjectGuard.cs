@@ -49,6 +49,14 @@ internal static class ScratchProjectGuard
     internal const string RepoPrefix = "repo:";
 
     /// <summary>
+    /// Names a DIRECTORY rather than a project file: every <c>.apNN</c> at or under it is permitted.
+    /// Composes with <see cref="RepoPrefix"/> — <c>root:repo:&lt;relative&gt;</c> — by stripping this
+    /// prefix first and resolving the remainder exactly as any other entry, so there is one
+    /// resolution path and not two.
+    /// </summary>
+    internal const string RootPrefix = "root:";
+
+    /// <summary>
     /// The machine-local allowlist, for a scratch project whose PATH MAY NOT BE COMMITTED — which on
     /// this machine is the rig's project, a copy of a live engineering job. A fixed path: there is no
     /// flag, no environment variable and no argument that changes it, so it is a file the owner
@@ -187,8 +195,29 @@ internal static class ScratchProjectGuard
                     continue;
                 }
 
+                // `root:` is stripped FIRST and the remainder resolved by the ordinary rules, so
+                // `root:repo:x`, `root:C:\x` and their non-root forms all travel one code path.
                 var value = raw;
-                if (raw.StartsWith(RepoPrefix, StringComparison.OrdinalIgnoreCase))
+                var isRoot = false;
+                if (value.StartsWith(RootPrefix, StringComparison.OrdinalIgnoreCase))
+                {
+                    isRoot = true;
+                    value = value.Substring(RootPrefix.Length).Trim();
+
+                    if (value.Length == 0)
+                    {
+                        return GuardDecision.Deny(
+                            projectPath,
+                            new[]
+                            {
+                                $"Allowlist entry '{raw}' in '{file}' is a bare '{RootPrefix}' with no directory after it.",
+                                "A root that names nothing would either permit everything or nothing, and neither is a",
+                                "claim anybody made. Name the directory.",
+                            });
+                    }
+                }
+
+                if (value.StartsWith(RepoPrefix, StringComparison.OrdinalIgnoreCase))
                 {
                     if (repoRoot is null)
                     {
@@ -201,7 +230,7 @@ internal static class ScratchProjectGuard
                             }.Concat(RepoRootNote(repoRoot, binaryDirectory)).ToList());
                     }
 
-                    value = Path.Combine(repoRoot, raw.Substring(RepoPrefix.Length).Trim());
+                    value = Path.Combine(repoRoot, value.Substring(RepoPrefix.Length).Trim());
                 }
 
                 if (!Path.IsPathRooted(value))
@@ -224,7 +253,7 @@ internal static class ScratchProjectGuard
                         new[] { $"Allowlist entry '{raw}' in '{file}' could not be canonicalised: {problem}" });
                 }
 
-                entries.Add(new AllowlistEntry(raw, resolved, file));
+                entries.Add(new AllowlistEntry(raw, resolved, file, isRoot));
             }
         }
 
@@ -302,7 +331,11 @@ internal static class ScratchProjectGuard
 
         foreach (var entry in entries)
         {
-            if (string.Equals(projectResolved, entry.Resolved, StringComparison.OrdinalIgnoreCase))
+            var matched = entry.IsRoot
+                ? IsUnderRoot(projectResolved, entry.Resolved)
+                : string.Equals(projectResolved, entry.Resolved, StringComparison.OrdinalIgnoreCase);
+
+            if (matched)
             {
                 return GuardDecision.Permit(
                     projectResolved,
@@ -312,6 +345,7 @@ internal static class ScratchProjectGuard
                         "SCRATCH FENCE: PERMITTED.",
                         $"  project resolves to : {projectResolved}",
                         $"  allowlist entry     : {entry.Raw}",
+                        entry.IsRoot ? "  matched as          : a project UNDER a permitted root" : "  matched as          : an exact project path",
                         $"  from                : {entry.Source}",
                     });
             }
@@ -326,6 +360,32 @@ internal static class ScratchProjectGuard
                 $"  resolves to : {projectResolved}",
             },
             permitted);
+    }
+
+    /// <summary>
+    /// Is <paramref name="projectResolved"/> genuinely beneath <paramref name="rootResolved"/>?
+    ///
+    /// <para>🔴 THE SEPARATOR IS THE WHOLE CHECK, AND A PREFIX TEST WITHOUT IT IS A HOLE. A bare
+    /// <c>StartsWith</c> makes a root of <c>…\Rig</c> permit <c>…\RigLiveJob\x.ap20</c> — a
+    /// DIFFERENT directory whose name merely begins the same way. On a machine whose whole risk is
+    /// private projects in sibling folders, that is the exact failure this fence exists to prevent,
+    /// so the root is normalised to end in a separator before comparing.</para>
+    ///
+    /// <para>Both sides are already canonicalised by the caller, and a project reached through a
+    /// junction has already been refused, so this is a string comparison over two paths that were
+    /// each positively resolved — not a guess about the filesystem.</para>
+    /// </summary>
+    private static bool IsUnderRoot(string projectResolved, string rootResolved)
+    {
+        if (string.IsNullOrEmpty(rootResolved))
+        {
+            return false;
+        }
+
+        var root = rootResolved.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+                   + Path.DirectorySeparatorChar;
+
+        return projectResolved.StartsWith(root, StringComparison.OrdinalIgnoreCase);
     }
 
     private static IReadOnlyList<string> RepoRootNote(string? repoRoot, string? binaryDirectory) =>
@@ -346,6 +406,8 @@ internal static class ScratchProjectGuard
             $"  {RepoPrefix}<path>   resolved against the repository root — use this for a project INSIDE the repo,",
             "                so the entry stays correct in every checkout and worktree.",
             "  <absolute>    a fully-qualified path.",
+            $"  {RootPrefix}<dir>    a DIRECTORY: every .apNN at or under it is permitted, so a new project in an",
+            $"                already-named area needs no edit. Composes: '{RootPrefix}{RepoPrefix}<relative>'.",
             string.Empty,
             "A project whose PATH MAY NOT BE COMMITTED — a copy of a live engineering job, which is what the",
             "rig's scratch project is — goes in the MACHINE-LOCAL file instead, never in the repository one",
@@ -455,11 +517,12 @@ internal static class ScratchProjectGuard
 /// <summary>One allowlist line, as written and as resolved, with the file it came from.</summary>
 internal sealed class AllowlistEntry
 {
-    internal AllowlistEntry(string raw, string resolved, string source)
+    internal AllowlistEntry(string raw, string resolved, string source, bool isRoot = false)
     {
         Raw = raw;
         Resolved = resolved;
         Source = source;
+        IsRoot = isRoot;
     }
 
     internal string Raw { get; }
@@ -467,6 +530,22 @@ internal sealed class AllowlistEntry
     internal string Resolved { get; }
 
     internal string Source { get; }
+
+    /// <summary>
+    /// True for a <c>root:</c> entry, which names a DIRECTORY and permits every <c>.apNN</c> at or
+    /// under it, rather than naming one project file.
+    ///
+    /// <para>Added 2026-08-28 on the owner's instruction to stop the fence requiring a per-project
+    /// edit. It is ADDITIVE: an entry without the prefix still means exactly the one file it always
+    /// meant, because this file's own rule is that redefining an existing entry's meaning is an owner
+    /// decision with a review behind it, and widening a fence is not the place to also change what
+    /// its existing lines say.</para>
+    ///
+    /// <para>🔴 A root is still a POSITIVE, BOUNDED claim about a directory somebody named. It is not
+    /// a wildcard over the machine — the point is that a project nobody named is still refused, which
+    /// is the property protecting the ~19 private engineering projects that sit in sibling folders.</para>
+    /// </summary>
+    internal bool IsRoot { get; }
 }
 
 /// <summary>
