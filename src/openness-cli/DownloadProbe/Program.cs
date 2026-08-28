@@ -25,9 +25,11 @@ namespace DownloadProbe;
 /// in full.
 ///
 /// TWO THINGS A REVIEWER SHOULD CHECK IN ONE READ:
-///   1. <see cref="ScratchProjectGuard"/> runs BEFORE anything else — before the log file is even
-///      created, and long before Portal is contacted. A project that is not the scratch copy exits
-///      <see cref="ProbeExitCodes.RefusedByPath"/> having touched nothing.
+///   1. 🔴 <b>THERE IS NO PROJECT FENCE.</b> One stood here and was REMOVED on 2026-08-28
+///      (<c>docs/adr/adr-0013-remove-the-download-project-fence.md</c>), on the owner's instruction.
+///      This binary downloads any project it is pointed at, to whatever controller that project
+///      names, and it cannot read that address — so it cannot say which device it is stopping. What
+///      replaced the refusal is a DISCLOSURE line naming the resolved project: a receipt, not a gate.
 ///   2. <see cref="NoActionFirstPolicy"/> is the only thing that can decide a selection, and
 ///      <see cref="NoActionFirstPolicy.DeniedSelections"/> is a readable list of what it will never
 ///      choose. There is no flag, argument or environment variable that empties that list.
@@ -49,15 +51,43 @@ internal static class Program
         Run(args, Console.Out, Console.Error, ProbeSession.Execute);
 
     /// <summary>
+    /// The project path as an absolute, canonical string, purely so the log can state WHAT WAS
+    /// DOWNLOADED (ADR-0013). It is a receipt, never a check.
+    ///
+    /// <para>It cannot throw and cannot refuse: a path that will not canonicalise is reported
+    /// verbatim with a note, because this replaced a fence and must not become one by accident —
+    /// failing here would turn a disclosure line into a way to stop a download, which is exactly the
+    /// behaviour the owner removed.</para>
+    /// </summary>
+    private static string ResolveForDisclosure(string? projectPath)
+    {
+        if (string.IsNullOrWhiteSpace(projectPath))
+        {
+            return "(no project path was given)";
+        }
+
+        try
+        {
+            return Path.GetFullPath(projectPath!);
+        }
+        catch (Exception ex)
+        {
+            return $"{projectPath}   (could not be canonicalised: {ex.GetType().Name} — reported, not refused)";
+        }
+    }
+
+    /// <summary>
     /// The whole program, with the Portal half injected so that everything before it — which is
     /// everything that decides whether Portal is contacted at all — is testable without Portal.
     /// </summary>
     /// <param name="fenceOrigin">
-    /// Where the allowlist search starts — the directory this binary was built into, in every real
-    /// run. Injected ONLY so the fence's own tests can stand up a repository with a known allowlist;
-    /// <see cref="Main"/> never passes it and there is no argument, flag or environment variable that
-    /// reaches it. Omitting it selects the REAL discovery, so the default is the safe one: a caller
-    /// that forgets this parameter gets the fence, not a hole.
+    /// 🔴 <b>VESTIGIAL SINCE ADR-0013 (2026-08-28) — IT SELECTS NOTHING.</b> It used to be where the
+    /// allowlist search started, injected only so the fence's own tests could stand up a repository
+    /// with a known allowlist. The fence is gone, so this parameter is read by nothing.
+    ///
+    /// <para>Kept rather than deleted so that existing callers still compile, and named here so the
+    /// next reader is not left inferring that a fence still exists because a parameter mentions one.
+    /// <b>Passing it does not restrict anything.</b></para>
     /// </param>
     internal static int Run(
         IReadOnlyList<string> args,
@@ -66,6 +96,8 @@ internal static class Program
         Func<ProbeArguments, ProbeLog, ProbeOutcome> runSession,
         string? fenceOrigin = null)
     {
+        _ = fenceOrigin;
+
         var parsed = ProbeArgumentParser.Parse(args);
         if (parsed is ProbeParseResult.Failure failure)
         {
@@ -75,15 +107,27 @@ internal static class Program
 
         var arguments = ((ProbeParseResult.Success)parsed).Arguments;
 
-        // FIRST, and before any side effect at all — not even a log file is created. The guard's
-        // value is that it is reachable with no Portal session and no artifacts in existence.
-        var fence = ScratchProjectGuard.Evaluate(
-            arguments.ProjectPath, fenceOrigin ?? AppDomain.CurrentDomain.BaseDirectory);
-        if (!fence.Permitted)
-        {
-            stderr.WriteLine(fence.Text);
-            return ProbeExitCodes.RefusedByPath;
-        }
+        // *** THE PROJECT FENCE WAS REMOVED HERE — ADR-0013, 2026-08-28, on the owner's instruction.
+        //
+        // What stood here refused any project not named in an allowlist, before any side effect at
+        // all: no Portal session, no log file. It is gone. THIS BINARY NOW DOWNLOADS ANY PROJECT IT
+        // IS POINTED AT, to whatever controller that project's own hardware configuration names.
+        //
+        // 🔴 AND NOTHING DOWNSTREAM CATCHES IT, which is why ADR-0013 spells out the blast radius
+        // rather than just recording a preference. This binary consults no device allowlist, and a
+        // target-scoped fence CANNOT be built in its place: ConnectionTargetSelection records that
+        // the target interface's configured addresses are EMPTY on this project, because the human
+        // downloads through TIA's "Extended download to device" dialog and that scan result never
+        // reaches the project model. So no code here can know which controller it is about to stop.
+        // The project path was the only thing identifying the site.
+        //
+        // What survives is DISCLOSURE, not a fence. The resolved project path is stated below and in
+        // the JSON, so a transfer to an unintended target is visible in the record afterwards. It
+        // blocks nothing and prompts nobody — that is the point; it is a receipt, not a gate.
+        //
+        // CLAUDE.md hard rule 5 (a verified restore point before every device write) still stands and
+        // is now the ONLY discipline on this path — a rule with nothing enforcing it.
+        var resolvedProjectPath = ResolveForDisclosure(arguments.ProjectPath);
 
         // With --json, stdout carries the machine-readable report ALONE, so the verbatim log goes to
         // stderr instead. Without it, the log is the output. Either way the file gets everything.
@@ -107,7 +151,7 @@ internal static class Program
         ProbeOutcome outcome;
         using (log)
         {
-            WriteHeader(log, arguments, logPath, fence);
+            WriteHeader(log, arguments, logPath, resolvedProjectPath);
 
             try
             {
@@ -141,15 +185,24 @@ internal static class Program
         return outcome.ExitCode;
     }
 
-    private static void WriteHeader(ProbeLog log, ProbeArguments arguments, string logPath, GuardDecision fence)
+    private static void WriteHeader(ProbeLog log, ProbeArguments arguments, string logPath, string resolvedProjectPath)
     {
         log.Rule("download-probe");
         log.Line($"started (UTC)  : {DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture)}");
         log.Line($"project        : {arguments.ProjectPath}");
 
-        // WHICH ENTRY VOUCHED FOR THIS PROJECT, in the artifact. A fence that only speaks when it
-        // refuses leaves a permitted run unable to say what permitted it.
-        log.Block(fence.Lines);
+        // THE DISCLOSURE THAT REPLACED THE FENCE (ADR-0013). Nothing vouches for this project any
+        // more — no allowlist is consulted and none exists — so the artifact states the RESOLVED
+        // path instead. A run that reached an unintended target can be identified afterwards from
+        // this line, which is the only property that survived the refusal being removed.
+        log.Block(new[]
+        {
+            "NO PROJECT FENCE (ADR-0013, 2026-08-28). Nothing restricted which project this is.",
+            $"  resolves to : {resolvedProjectPath}",
+            "  This tool will download it to whatever controller that project's hardware",
+            "  configuration names. It cannot read that address, so it cannot tell you which",
+            "  device this is about to stop. Hard rule 5 still requires a verified restore point.",
+        });
         log.Line($"options        : {arguments.Options}");
         log.Line($"device filter  : {arguments.Device ?? "(none — one PLC device must resolve)"}");
         log.Line($"pc interface   : {arguments.PcInterface ?? "(none given — REQUIRED unless the project declares exactly one)"}");

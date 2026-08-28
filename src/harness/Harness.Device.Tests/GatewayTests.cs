@@ -23,13 +23,10 @@ public sealed class GatewayTests : IDisposable
         foreach (var name in new[] { "converter.exe", "openness-cli.exe", "download-probe.exe" })
             File.WriteAllText(Path.Combine(_root, name), "not a real binary; the runner is injected.");
 
-        // The write fence is an ALLOWLIST OF FILES, so a test that wants a project allowed has to write
-        // one. That is the point: there is no flag and no environment variable that allows a project.
+        // No allowlist is written: the project fence was removed on 2026-08-28 (ADR-0013), so there
+        // is no file that makes a project allowed and nothing here needs to make one.
         Directory.CreateDirectory(Path.Combine(_root, "tools"));
-        File.WriteAllText(Path.Combine(_root, "CLAUDE.md"), "# fence root marker");
-        File.WriteAllLines(
-            Path.Combine(_root, "tools", ScratchAllowlist.AllowlistFileName),
-            new[] { "repo:Scratch.ap20" });
+        File.WriteAllText(Path.Combine(_root, "CLAUDE.md"), "# repo root marker");
     }
 
     public void Dispose()
@@ -209,19 +206,23 @@ public sealed class GatewayTests : IDisposable
     }
 
     [Fact]
-    public void A_project_NOBODY_ALLOWLISTED_is_refused_before_a_single_command_runs()
+    public void A_project_NOBODY_NAMED_IS_NOW_ATTEMPTED_BecauseTheFenceWasRemoved()
     {
-        // Note the shape of the refused name: it would have SATISFIED the old file-name-suffix fence.
-        // A convention is something anything can be renamed into, and this machine carries about
-        // nineteen private engineering projects beside the scratch ones.
+        // 🔴 THE INVERSE OF WHAT THIS ASSERTED, AND THE MOST CONSEQUENTIAL ONE IN THIS FILE. It
+        // required that a project nobody allowlisted be refused BEFORE A SINGLE COMMAND RAN — this
+        // gateway imports and compiles into the project, so it writes before download-probe would
+        // ever have been reached. That refusal was removed on 2026-08-28 (ADR-0013).
+        //
+        // The name below is shaped like a live engineering job on purpose: it is what the fence existed
+        // to stop, and it now proceeds.
         var options = Options() with { ProjectPath = Path.Combine(_root, "RealProject scratch.ap20") };
         var runner = new RecordingRunner();
 
         var outcome = new OpennessDeviceGateway(options, runner).Deploy(Objects(), new BuildStamp(1));
 
-        Assert.False(outcome.Attempted);
-        Assert.Empty(runner.Calls);
-        Assert.Contains("IS NOT AN ALLOWLISTED PROJECT", outcome.Detail, StringComparison.Ordinal);
+        Assert.True(outcome.Attempted, "A project nobody named was refused. ADR-0013 removed that fence.");
+        Assert.NotEmpty(runner.Calls);
+        Assert.DoesNotContain("ALLOWLISTED PROJECT", outcome.Detail, StringComparison.Ordinal);
     }
 
     // ---- A DOWNLOAD THAT RAN AND DID NOT LAND ----------------------------------------------------

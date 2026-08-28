@@ -88,7 +88,7 @@ When in doubt: `docs/04-design-philosophy.md` for principles, `docs/02-roadmap.m
 | `portal-close` | 🔴 **TERMINATES Portal processes**; `--yes`-gated, sweeps empty ones by default. **Never run live** |
 | `hmi`, `hmi-create-screen`, `hmi-edit-screen`, `hmi-compile` | HMI observation and the two write probes. HMI *engineering* is still a non-goal (`docs/10-non-goals.md`) |
 
-`download-probe` (`src/openness-cli/DownloadProbe/`) is the only binary that can transfer a program, fenced by `tools/download-probe.allowlist`.
+`download-probe` (`src/openness-cli/DownloadProbe/`) is the only binary that can transfer a program. 🔴 **IT IS NO LONGER FENCED — ADR-0013, 2026-08-28.** It downloads ANY project it is pointed at, to whatever controller that project's hardware config names, and **it cannot read that address**, so it cannot tell you which device it is about to stop. Hard rule 5 (a verified restore point first) is now the only discipline on this path and nothing enforces it.
 
 ### `converter` (net8.0; pure in-process file transformer, never touches Portal)
 

@@ -92,9 +92,6 @@ public class ArgumentVocabularyTests
         Directory.CreateDirectory(Path.Combine(root, "tools"));
         Directory.CreateDirectory(Path.Combine(root, "Scratch"));
         File.WriteAllText(Path.Combine(root, "CLAUDE.md"), "# fence root marker");
-        File.WriteAllLines(
-            Path.Combine(root, "tools", ScratchAllowlist.AllowlistFileName),
-            new[] { "# the committed allowlist", "repo:Scratch/Scratch.ap20", "", "  # blank and comment lines are skipped", "not-rooted/refused.ap20" });
         return root;
     }
 
@@ -356,90 +353,27 @@ public class ArgumentVocabularyTests
     /// diverging into a fence that refuses <c>GenProject1.ap20</c> — the actual scratch project.</para>
     /// </summary>
     /// <summary>
-    /// *** THE INVARIANT: THE GATEWAY'S FENCE IS NEVER LOOSER THAN THE PROBE'S. ***
+    /// 🔴 <b>THE INVERSE OF THE TWO TESTS THAT USED TO BE HERE.</b> They asserted that this gateway
+    /// refused any project an allowlist did not name, and that its fence read the same two files as
+    /// <c>download-probe</c>'s. Both fences were deleted on 2026-08-28 (ADR-0013) on the owner's
+    /// instruction, so both guarantees are gone.
     ///
-    /// <para><b>Asserted as a property over paths, not as a shared string literal.</b> The previous version
-    /// of this test asserted that both files contained <c>" scratch.ap20"</c> — a PROXY, and one that was
-    /// always going to break the moment either side improved, which is exactly what happened. The invariant
-    /// is what matters and the literal never was.</para>
-    ///
-    /// <para><b>What "not looser" reduces to, given the probe's own stated rule</b> (allowlist of resolved
-    /// paths, two fixed files, <c>repo:</c> resolution, no override): the gateway must allow a path <i>only
-    /// if that path is a resolved entry of one of those two files</i>. So the test drives the gateway's
-    /// fence with a battery of candidates — including every shape the OLD suffix fence would have admitted —
-    /// and asserts the allow-set is exactly the allowlist's own contents.</para>
-    ///
-    /// <para><b>What cannot be asserted here, stated rather than glossed:</b> the two fences cannot be run
-    /// against each other. <c>ScratchProjectGuard</c> is <c>internal</c> in a <c>net48</c> assembly that
-    /// references <c>Siemens.Engineering</c>; this one is <c>net8.0</c> and must stay that way, or every
-    /// harness build joins TIA's <c>(Path, FileHash)</c> approval cycle. So the strongest available check is
-    /// this property plus the file-location agreement below — and a divergence in the RESOLUTION RULES
-    /// (junction handling, 8.3 short names) would not be caught by either. That gap is real and is reported.</para>
+    /// <para>Asserted rather than deleted, because the gateway <b>writes before the probe would have
+    /// refused</b> — it imports and compiles into the project first. That was the reason it carried
+    /// its own copy of the fence, and it is the reason the removal is worth a standing test rather
+    /// than an absence. If a refusal is ever reinstated here, this fails and names the ADR.</para>
     /// </summary>
     [Fact]
-    public void The_gateway_allows_ONLY_what_an_allowlist_names_which_is_the_probes_own_rule()
+    public void The_gateway_no_longer_refuses_a_project_nobody_named()
     {
-        var allowed = new[] { AllowedProject };
-
-        var candidates = new[]
-        {
-            AllowedProject,
-
-            // Every one of these SATISFIES the file-name-suffix fence the gateway shipped with. On a
-            // machine carrying about nineteen private engineering projects, a convention is something anything
-            // can be renamed into — which is the openness-cli lane's measured argument, applied here.
-            Path.Combine(FenceRoot, "Site scratch.ap20"),
-            Path.Combine(FenceRoot, "Scratch", "Site Scratch.AP20"),
-            Path.Combine(FenceRoot, "Anything scratch.ap20"),
-
-            // And these do not: near-misses, a sibling in the allowlisted folder, and nothing at all.
-            Path.Combine(FenceRoot, "Scratch", "Other.ap20"),
-            Path.Combine(FenceRoot, "Scratch.ap20"),
-            Path.Combine(FenceRoot, "not-rooted", "refused.ap20"),
-            string.Empty,
-        };
-
-        foreach (var candidate in candidates)
-        {
-            var expected = allowed.Contains(candidate, StringComparer.OrdinalIgnoreCase);
-            var decision = ScratchAllowlist.Evaluate(candidate, FenceRoot);
-
-            Assert.True(expected == decision.Allowed,
-                $"'{candidate}' — the allowlist {(expected ? "names" : "does NOT name")} it and the fence said {(decision.Allowed ? "ALLOW" : "REFUSE")}. "
-                + "The gateway writes BEFORE the probe refuses, so a gateway fence looser than the allowlist means a full import and compile land in a project nobody named.");
-        }
-    }
-
-    /// <summary>
-    /// The two fences must read the SAME two files, or "not looser" is being asserted about different data.
-    /// This is the part that has to be a source read, and it is deliberately about LOCATIONS rather than
-    /// about a shared convention string.
-    /// </summary>
-    [Fact]
-    public void Both_fences_read_the_same_two_allowlist_files()
-    {
-        var guard = ReadSource("src/openness-cli/DownloadProbe/ScratchProjectGuard.cs", "ScratchProjectGuard");
+        var namedByNobody = Path.Combine(FenceRoot, "Scratch", "NamedByNobody.ap20");
 
         Assert.True(
-            guard.Contains("\"" + ScratchAllowlist.AllowlistFileName + "\"", StringComparison.Ordinal),
-            $"the gateway reads '{ScratchAllowlist.AllowlistFileName}' and ScratchProjectGuard does not name that file. The two fences have diverged, and the gateway is the one that writes FIRST.");
+            DeviceGatewayOptions.IsScratchProject(namedByNobody),
+            "A project nobody named was refused. ADR-0013 removed that fence; if it is back, this test is the record that it was deliberately taken away.");
 
-        Assert.True(
-            guard.Contains("\"" + ScratchAllowlist.RepoPrefix + "\"", StringComparison.Ordinal),
-            $"the gateway resolves the '{ScratchAllowlist.RepoPrefix}' entry form and ScratchProjectGuard does not name it.");
-
-        Assert.True(
-            guard.Contains("\"Ladder-AI\"", StringComparison.Ordinal),
-            "the gateway reads the machine-local allowlist under %ProgramData%/Ladder-AI and ScratchProjectGuard does not name that folder. "
-            + "The rig's project is a copy of a live engineering job, so its path may not be committed and lives there and nowhere else.");
-
-        // *** NO OVERRIDE, CHECKED RATHER THAN STATED — and with the instrument controlled. *** The same
-        // search over a file that demonstrably HAS an environment read excludes a false clean from a typo.
-        var fenceSource = ReadSource("src/harness/Harness.Device/ScratchAllowlist.cs", "ScratchAllowlist");
-        var probeArgs = ReadSource("src/openness-cli/DownloadProbe/ProbeArguments.cs", "ProbeArgumentParser");
-
-        Assert.DoesNotContain("GetEnvironmentVariable", fenceSource, StringComparison.Ordinal);
-        Assert.Contains("GetEnvironmentVariable", probeArgs, StringComparison.Ordinal);
+        // And the empty case, which the old fence also refused, is no longer special either.
+        Assert.True(DeviceGatewayOptions.IsScratchProject(string.Empty));
     }
 
     /// <summary>
@@ -468,50 +402,7 @@ public class ArgumentVocabularyTests
             + "The gateway would fall back to scraping the embedded log — quietly, and reading a RENDERING instead of the live DownloadResult.");
     }
 
-    /// <summary>
-    /// The refusal names the exact path and format, and <b>says the machine-local file is the owner's to
-    /// write</b>. An agent creating it would be granting its own permission to download to a live-job copy.
-    /// </summary>
-    [Fact]
-    public void The_refusal_names_the_remedy_and_forbids_an_agent_from_applying_it()
-    {
-        var decision = ScratchAllowlist.Evaluate(Path.Combine(FenceRoot, "Scratch", "Other.ap20"), FenceRoot);
 
-        Assert.False(decision.Allowed);
-        Assert.Contains(ScratchAllowlist.MachineAllowlistPath, decision.Reason, StringComparison.Ordinal);
-        Assert.Contains(ScratchAllowlist.RepoRelativeAllowlist, decision.Reason, StringComparison.Ordinal);
-        Assert.Contains("MUST NEVER BE CREATED BY AN AGENT", decision.Reason, StringComparison.Ordinal);
-    }
 
-    /// <summary>
-    /// *** NO ALLOWLIST ANYWHERE IS A REFUSAL. *** An absent fence must never read as an open one — and a
-    /// missing file is exactly the direction that fails permissively if nobody writes this test.
-    /// </summary>
-    [Fact]
-    public void With_no_allowlist_at_all_every_project_is_refused()
-    {
-        var bare = Path.Combine(Path.GetTempPath(), "harness-fence-empty-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(bare);
-        File.WriteAllText(Path.Combine(bare, "CLAUDE.md"), "# marker, and no tools/ allowlist beside it");
 
-        var decision = ScratchAllowlist.Evaluate(Path.Combine(bare, "Anything.ap20"), bare);
-
-        Assert.False(decision.Allowed);
-        Assert.Contains("NO ALLOWLIST ENTRY WAS FOUND", decision.Reason, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void A_bare_relative_allowlist_entry_is_skipped_rather_than_guessed_at()
-    {
-        // ADR-0011 requirement 4: relative to WHAT is exactly the question, and every wrong answer names
-        // a real file. The fixture allowlist carries one, and it must allow nothing.
-        Assert.False(ScratchAllowlist.Evaluate(Path.Combine(FenceRoot, "not-rooted", "refused.ap20"), FenceRoot).Allowed);
-    }
-
-    [Fact]
-    public void A_repo_prefixed_entry_resolves_against_the_repository_root()
-    {
-        Assert.True(ScratchAllowlist.Evaluate(AllowedProject, FenceRoot).Allowed);
-        Assert.False(ScratchAllowlist.Evaluate(Path.Combine(FenceRoot, "Scratch", "Other.ap20"), FenceRoot).Allowed);
-    }
 }

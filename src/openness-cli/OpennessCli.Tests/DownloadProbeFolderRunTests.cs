@@ -45,7 +45,7 @@ public class DownloadProbeFolderRunTests
 
     private static string ReadFixture(string name)
     {
-        var repoRoot = ScratchProjectGuard.FindRepoRoot(AppContext.BaseDirectory);
+        var repoRoot = RepoRoot.Find(AppContext.BaseDirectory);
         Assert.NotNull(repoRoot);
 
         var path = Path.Combine(repoRoot!, "src", "openness-cli", "OpennessCli.Tests", "Fixtures", name);
@@ -180,7 +180,7 @@ public class DownloadProbeFolderRunTests
 
     private static JsonElement RunFolder(DownloadFeedback? feedback)
     {
-        using var repo = ProbeFenceRepo.Permitting();
+        using var repo = ProbeProjectRepo.Create();
         var logDir = Path.Combine(Path.GetTempPath(), "probe-folder-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(logDir);
         var stdout = new StringWriter();
@@ -345,7 +345,7 @@ public class DownloadProbeFolderRunTests
     [Fact]
     public void TheControllerPathStillReportsARealManifest()
     {
-        using var repo = ProbeFenceRepo.Permitting();
+        using var repo = ProbeProjectRepo.Create();
         var logDir = Path.Combine(Path.GetTempPath(), "probe-folder-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(logDir);
         var stdout = new StringWriter();

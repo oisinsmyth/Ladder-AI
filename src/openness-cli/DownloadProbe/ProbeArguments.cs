@@ -157,11 +157,13 @@ internal static class ProbeArgumentParser
         "               [--target <exact target-interface name>] [--log-dir <dir>]\n" +
         "               [--timeout-connect <seconds>] [--timeout-open <seconds>] [--disruptive]\n" +
         "\n" +
-        "  <project.ap20>  MUST be an ALLOWLISTED scratch project: the PATH to the .apNN file, resolved\n" +
-        "                  and compared against '" + ScratchProjectGuard.RepoRelativeAllowlist + "' in this repository and\n" +
-        "                  '" + ScratchProjectGuard.MachineAllowlistPath + "'.\n" +
-        "                  There is NO override flag and no environment variable; a project whose path may\n" +
-        "                  not be committed (a copy of a live job) goes in the machine-local file.\n" +
+        "  <project.ap20>  ANY project. The PATH to the .apNN file. *** THERE IS NO ALLOWLIST AND NO\n" +
+        "                  RESTRICTION *** -- the project fence was removed on 2026-08-28 (ADR-0013).\n" +
+        "                  THIS WILL DOWNLOAD WHATEVER YOU POINT IT AT, to whatever controller that\n" +
+        "                  project's hardware configuration names, and it CANNOT read that address, so\n" +
+        "                  it cannot tell you which device it is about to stop. A download stops the CPU\n" +
+        "                  and resets retentive memory. Hard rule 5 still requires a verified restore\n" +
+        "                  point first, and nothing here enforces it.\n" +
         "  --options       REQUIRED, no default. Exactly one of the three literals above.\n" +
         "  --pc-interface  the PC adapter to download through, by EXACT name (case-sensitive, whole\n" +
         "                  string). REQUIRED whenever the project declares more than one; no default,\n" +

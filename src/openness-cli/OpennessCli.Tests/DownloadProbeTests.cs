@@ -940,7 +940,7 @@ public class DownloadProbeTests
     public void Run_PropagatesTheSessionExitCode_AndTheFooterCallsAnAbortAResult()
     {
         var logDir = NewTempDir();
-        using var repo = ProbeFenceRepo.Permitting();
+        using var repo = ProbeProjectRepo.Create();
 
         var exit = ProbeProgram.Run(
             new[] { repo.ProjectPath, "--options", "Hardware", "--log-dir", logDir },
@@ -970,7 +970,7 @@ public class DownloadProbeTests
     {
         var logDir = NewTempDir();
         var stdout = new StringWriter();
-        using var repo = ProbeFenceRepo.Permitting();
+        using var repo = ProbeProjectRepo.Create();
 
         ProbeProgram.Run(
             new[] { repo.ProjectPath, "--options", "SoftwareOnlyChanges", "--log-dir", logDir },
@@ -994,7 +994,7 @@ public class DownloadProbeTests
         var logDir = NewTempDir();
         var stdout = new StringWriter();
         var stderr = new StringWriter();
-        using var repo = ProbeFenceRepo.Permitting();
+        using var repo = ProbeProjectRepo.Create();
 
         ProbeProgram.Run(
             new[] { repo.ProjectPath, "--options", "SoftwareOnlyChanges", "--json", "--log-dir", logDir },
@@ -1021,7 +1021,7 @@ public class DownloadProbeTests
     public void Run_RefusesRatherThanRunningUnlogged_WhenTheLogFileCannotBeOpened()
     {
         var stderr = new StringWriter();
-        using var repo = ProbeFenceRepo.Permitting();
+        using var repo = ProbeProjectRepo.Create();
 
         // A path that cannot be a directory: an existing FILE stands where the log directory would go.
         var blocker = Path.Combine(Path.GetTempPath(), "download-probe-blocker-" + Guid.NewGuid().ToString("N"));
@@ -1636,7 +1636,7 @@ public class DownloadProbeTests
     {
         var logDir = NewTempDir();
         IReadOnlyList<string> captured = Array.Empty<string>();
-        using var repo = ProbeFenceRepo.Permitting();
+        using var repo = ProbeProjectRepo.Create();
 
         ProbeProgram.Run(
             new[] { repo.ProjectPath, "--options", options.ToString(), "--log-dir", logDir },

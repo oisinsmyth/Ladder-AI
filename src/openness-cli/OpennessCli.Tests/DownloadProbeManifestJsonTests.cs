@@ -38,7 +38,7 @@ public class DownloadProbeManifestJsonTests
     /// </summary>
     private static JsonElement ManifestFrom(DownloadFeedback? feedback, string? source)
     {
-        using var repo = ProbeFenceRepo.Permitting();
+        using var repo = ProbeProjectRepo.Create();
         var logDir = Path.Combine(Path.GetTempPath(), "probe-manifest-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(logDir);
         var stdout = new StringWriter();
@@ -63,7 +63,7 @@ public class DownloadProbeManifestJsonTests
 
     private static string ReadFixture(string name)
     {
-        var repoRoot = ScratchProjectGuard.FindRepoRoot(AppContext.BaseDirectory);
+        var repoRoot = RepoRoot.Find(AppContext.BaseDirectory);
         Assert.NotNull(repoRoot);
 
         var path = Path.Combine(
@@ -252,7 +252,7 @@ public class DownloadProbeManifestJsonTests
     [Fact]
     public void TheEmbeddedLogIsStillThere_SoTheChangeIsAdditive()
     {
-        using var repo = ProbeFenceRepo.Permitting();
+        using var repo = ProbeProjectRepo.Create();
         var logDir = Path.Combine(Path.GetTempPath(), "probe-manifest-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(logDir);
         var stdout = new StringWriter();

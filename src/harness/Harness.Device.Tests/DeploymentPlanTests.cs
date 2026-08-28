@@ -152,13 +152,18 @@ public class DeploymentPlanTests
     // ---- REFUSALS --------------------------------------------------------------------------------
 
     [Fact]
-    public void A_project_NOBODY_ALLOWLISTED_yields_NO_STEPS_AT_ALL()
+    public void A_project_NOBODY_NAMED_NOW_YIELDS_A_FULL_PLAN_BecauseTheFenceWasRemoved()
     {
+        // 🔴 THE INVERSE OF WHAT THIS ASSERTED. It required a project nobody allowlisted to yield NO
+        // STEPS AT ALL. The fence was removed on 2026-08-28 (ADR-0013) on the owner's instruction, so
+        // a path that looks exactly like a live engineering job now plans in full: import, compile,
+        // download. Kept rather than deleted because that is the change, and a deleted test would
+        // leave the repository with no record that the refusal ever stood here.
         var plan = Plan(options: Options(project: @"C:\Jobs\RealProject\RealProject.ap20"));
 
-        Assert.False(plan.Planned);
-        Assert.Empty(plan.Steps);
-        Assert.Contains(plan.Refusals, r => r.Contains("IS NOT AN ALLOWLISTED PROJECT", StringComparison.Ordinal));
+        Assert.True(plan.Planned, "A project nobody named was refused. ADR-0013 removed that fence.");
+        Assert.NotEmpty(plan.Steps);
+        Assert.DoesNotContain(plan.Refusals, r => r.Contains("ALLOWLISTED PROJECT", StringComparison.Ordinal));
     }
 
     /// <summary>
@@ -167,22 +172,6 @@ public class DeploymentPlanTests
     /// renamed into — on a machine carrying about nineteen private engineering projects beside the scratch
     /// ones.
     /// </summary>
-    [Theory]
-    [InlineData(@"D:\Jobs\Site scratch.ap20")]
-    [InlineData(@"D:\Jobs\Anything Scratch.AP20")]
-    [InlineData(@"D:\x\myscratch.ap20")]
-    [InlineData("")]
-    public void A_name_that_LOOKS_like_a_scratch_project_allows_nothing(string path)
-    {
-        Assert.False(ScratchAllowlist.Evaluate(path, ArgumentVocabularyTests.FenceRoot).Allowed);
-    }
-
-    [Fact]
-    public void The_fence_accepts_exactly_what_the_allowlist_names()
-    {
-        Assert.True(ScratchAllowlist.Evaluate(ArgumentVocabularyTests.AllowedProject, ArgumentVocabularyTests.FenceRoot).Allowed);
-    }
-
     [Fact]
     public void Without_AllowCpuStop_there_is_no_plan_because_a_download_could_not_complete()
     {

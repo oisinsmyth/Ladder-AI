@@ -122,30 +122,46 @@ public class DownloadProbeDisruptiveTests
     }
 
     /// <summary>
-    /// The device-download fence is not a thing <c>--disruptive</c> gets to skip. The project here
-    /// EXISTS and sits in the same folder as the allowlisted one — the mistyped-path case — so the
-    /// refusal is the allowlist's, not an accident of a path that happens not to resolve.
+    /// 🔴 <b>THE INVERSE OF THE TEST THAT USED TO BE HERE, AND IT IS DELIBERATELY NOT DELETED.</b>
+    ///
+    /// <para>This asserted that <c>--disruptive</c> could not skip the device-download fence, using a
+    /// project that EXISTS beside the allowlisted one — the mistyped-path case. The fence was removed
+    /// on 2026-08-28 (ADR-0013) on the owner's instruction, so that guarantee is gone, and a deleted
+    /// test would leave nothing recording that it went. <b>This one now proves the opposite holds:</b>
+    /// a project nobody named reaches the session.</para>
+    ///
+    /// <para>The stub is the instrument — it records the call rather than throwing, so "Portal was
+    /// reached" is asserted positively instead of being inferred from an absence. If a fence is ever
+    /// reinstated, this test fails and names the ADR, which is the outcome worth having.</para>
     /// </summary>
     [Fact]
-    public void Disruptive_DoesNotBypassTheScratchPathGuard()
+    public void AProjectNamedInNoAllowlist_NowReachesTheSession_BecauseTheFenceWasRemoved()
     {
         var logDir = NewTempDir();
-        var stderr = new StringWriter();
-        using var repo = ProbeFenceRepo.Permitting();
+        using var repo = ProbeProjectRepo.Create();
 
-        var neighbour = Path.Combine(Path.GetDirectoryName(repo.ProjectPath)!, "NotAllowlisted.ap20");
-        File.WriteAllText(neighbour, "(a project nobody allowlisted)");
+        var neighbour = Path.Combine(Path.GetDirectoryName(repo.ProjectPath)!, "NamedByNobody.ap20");
+        File.WriteAllText(neighbour, "(a project no allowlist ever mentioned)");
 
-        var exit = ProbeProgram.Run(
+        var reached = false;
+
+        ProbeProgram.Run(
             new[] { neighbour, "--options", "Software", "--disruptive", "--log-dir", logDir },
             new StringWriter(),
-            stderr,
-            (_, _) => throw new InvalidOperationException("Portal was contacted despite a non-allowlisted project."),
+            new StringWriter(),
+            (_, _) =>
+            {
+                reached = true;
+                return new ProbeOutcome(ProbeExitCodes.Completed, "stub — the session is not the subject of this test");
+            },
             repo.BinaryDirectory);
 
-        Assert.Equal(ProbeExitCodes.RefusedByPath, exit);
-        Assert.Contains("not on the allowlist", stderr.ToString(), StringComparison.Ordinal);
-        Assert.Empty(Directory.GetFiles(logDir));
+        Assert.True(reached, "The session was never reached, which would mean something still fences the project.");
+
+        // And the disclosure that replaced the refusal is in the artifact, naming what was opened.
+        var log = string.Concat(Directory.GetFiles(logDir).Select(File.ReadAllText));
+        Assert.Contains("NO PROJECT FENCE", log, StringComparison.Ordinal);
+        Assert.Contains("NamedByNobody.ap20", log, StringComparison.Ordinal);
     }
 
     // ---- (1) without the flag, nothing changed ---------------------------------------------------
@@ -1020,7 +1036,7 @@ public class DownloadProbeDisruptiveTests
     private static IReadOnlyList<string> RunWithStubSession(bool disruptive)
     {
         var logDir = NewTempDir();
-        using var repo = ProbeFenceRepo.Permitting();
+        using var repo = ProbeProjectRepo.Create();
         var args = new List<string> { repo.ProjectPath, "--options", "Software", "--log-dir", logDir };
         if (disruptive)
         {

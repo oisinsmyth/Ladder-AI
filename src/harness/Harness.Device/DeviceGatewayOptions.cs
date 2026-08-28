@@ -70,15 +70,16 @@ public sealed record DeviceGatewayOptions(
     string? AllowlistStartDirectory = null)
 {
     /// <summary>
-    /// Where the allowlist search starts. <b>A test seam, and NOT an override</b> — it moves where the
-    /// repository root is looked for, exactly as <c>nowMs</c> moves the clock elsewhere in this harness;
-    /// it cannot name a different allowlist file, cannot add an entry, and the machine-local list is read
-    /// regardless. Null is production and means "from where this assembly sits".
+    /// 🔴 <b>VESTIGIAL SINCE ADR-0013 (2026-08-28) — IT SELECTS NOTHING.</b> It used to move where
+    /// the allowlist search started, as a test seam. The gateway's copy of the project fence
+    /// (<c>ScratchAllowlist</c>) was deleted with the probe's, so nothing reads this.
+    ///
+    /// <para>Kept so existing callers still compile, and documented here so the next reader does not
+    /// infer from a surviving parameter name that a fence still exists. <b>This gateway restricts no
+    /// project.</b> Note it has also never executed against Portal or a controller
+    /// (<c>LoopResult.cs</c>), so nothing here has ever gated a real download either way.</para>
     /// </summary>
-    public ScratchAllowlist.Decision AllowlistDecision =>
-        AllowlistStartDirectory is null
-            ? ScratchAllowlist.Evaluate(ProjectPath)
-            : ScratchAllowlist.Evaluate(ProjectPath, AllowlistStartDirectory);
+    public string? AllowlistSearchStart => AllowlistStartDirectory;
 
     /// <summary>Where the probe's per-run log goes, if the caller did not name a directory.</summary>
     public string ResolvedProbeLogDirectory =>
@@ -112,15 +113,11 @@ public sealed record DeviceGatewayOptions(
             Required(refusals, ModbusHost, nameof(ModbusHost));
             Required(refusals, StagingDirectory, nameof(StagingDirectory));
 
-            if (!string.IsNullOrWhiteSpace(ProjectPath))
-            {
-                var decision = AllowlistDecision;
-                if (!decision.Allowed)
-                {
-                    refusals.Add(decision.Reason
-                        + " This gateway imports, compiles and downloads, so a project nobody named is refused here for the same reason download-probe refuses it — and refused EARLIER, before anything is written.");
-                }
-            }
+            // 🔴 THE PROJECT REFUSAL THAT STOOD HERE IS GONE (ADR-0013, 2026-08-28). It refused a
+            // project nobody had named, earlier than download-probe did, because this gateway
+            // imports, compiles AND downloads. Both fences were deleted together on the owner's
+            // instruction: leaving this one would have refused here what the probe now permits, which
+            // is a contradiction rather than a safeguard. A project nobody named is now accepted.
 
             if (!AllowCpuStop)
             {
@@ -154,8 +151,18 @@ public sealed record DeviceGatewayOptions(
         .Select(b => $"{b.Item1}: '{b.Item2}' does not exist.")
         .ToArray();
 
-    /// <summary>Same rule as the probe's own guard: an ALLOWLIST of resolved paths, never a name convention.</summary>
-    public static bool IsScratchProject(string? projectPath) => ScratchAllowlist.Evaluate(projectPath).Allowed;
+    /// <summary>
+    /// 🔴 <b>ALWAYS TRUE SINCE ADR-0013 (2026-08-28).</b> It used to ask the gateway's allowlist
+    /// whether a project was the scratch copy. That fence is deleted, so there is no longer any such
+    /// thing as a project this tooling declines — and answering "yes, always" is the honest report of
+    /// that, where deleting the method would leave a caller free to assume the question was still
+    /// being asked somewhere.
+    /// </summary>
+    public static bool IsScratchProject(string? projectPath)
+    {
+        _ = projectPath;
+        return true;
+    }
 
     private static void Required(List<string> refusals, string? value, string name)
     {

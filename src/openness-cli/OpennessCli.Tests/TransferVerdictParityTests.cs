@@ -41,7 +41,7 @@ public class TransferVerdictParityTests
 
     private static string RepoRoot()
     {
-        var root = ScratchProjectGuard.FindRepoRoot(AppContext.BaseDirectory);
+        var root = DownloadProbe.RepoRoot.Find(AppContext.BaseDirectory);
         Assert.NotNull(root);
         return root!;
     }
