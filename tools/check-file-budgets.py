@@ -115,7 +115,15 @@ BUDGETS = [
     # real verbs in the dispatch and absent from this table, which is the file an agent reads to
     # decide which command to go and read about. That absence is the discovery failure the
     # `portal-close` raise above was granted for, found twice more.
-    ("CLAUDE.md", 22528),
+    # Raised 22528 -> 23040 on 2026-08-28. Earned by ONE line, and it is the clearest case this
+    # table's own rule has had: `download-probe` IS NO LONGER FENCED (ADR-0013). The previous line
+    # said it was "fenced by tools/download-probe.allowlist" - a file that no longer exists.
+    # A resident file earns a line when it changes what an agent must do BEFORE it looks anything
+    # up, and "the tool that can stop a PLC will download anything you point it at, and cannot tell
+    # you which device it is about to stop" is exactly that: an agent that learns this afterwards
+    # learns it from the consequence. The old line was worse than absent, because it described a
+    # safeguard that had been removed.
+    ("CLAUDE.md", 23040),
 
     (".claude/agents/assertion-enumerator.md", 5120),
     (".claude/agents/hmi-designer.md", 7680),
