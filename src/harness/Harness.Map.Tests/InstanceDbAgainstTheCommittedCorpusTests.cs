@@ -106,13 +106,32 @@ public class InstanceDbAgainstTheCommittedCorpusTests
         // Every member the hand-authored file has, the projection has.
         Assert.Empty(committedNames.Except(generatedNames, StringComparer.Ordinal));
 
-        // And nine it does not — read off the FB, not typed here.
+        // And fourteen it does not — read off the FB, not typed here.
+        //
+        // 🔴 THE LIST GREW 9 → 14 ON 2026-09-01, AND THAT IS THE TEST WORKING, NOT THE TEST BREAKING.
+        // The five additions are the trailing clear-down's statics (CleardownPending,
+        // InTrailingCleardown, TrailingReset, TrailingT, TrailingTimer), added to FB_HopperBlockageStim
+        // so a completed run clears the monitor before the next index's inert check. Nobody touched
+        // iDB_HopperBlockageStim.ir — which is the point: the hand-authored projection drifted further
+        // behind its own FB the moment the FB moved, silently, exactly as this test exists to say.
+        //
+        // Updating the expectation here is legitimate ONLY because the assertion above it is the load-
+        // bearing half: `committedNames.Except(generatedNames)` must stay EMPTY, i.e. the projection
+        // never loses a member the file has. That is the direction a wrong projection would fail in, and
+        // it is untouched. This list is the drift measurement, and a drift measurement that never moves
+        // when the interface moves would be measuring nothing.
         var missing = generatedNames.Except(committedNames, StringComparer.Ordinal).ToArray();
         Assert.Equal(
             new[]
             {
-                "ClearDownReset", "HopperClearedInStop", "HopperClearedMidRun", "HopperHeldHigh", "RunHeldOn",
-                "RunStoppedMidRun", "RunStoppedRoundClear", "RunT", "ScenarioReset",
+                // ORDINAL order, so 'D' (0x44) sorts before 'd' (0x64) and ClearDownReset precedes
+                // CleardownPending. The comparer is StringComparer.Ordinal on both sides deliberately —
+                // a case-insensitive expectation here would pass against a projection that had quietly
+                // changed a member's casing, which on an instance DB is a different member.
+                "ClearDownReset", "CleardownPending", "HopperClearedInStop", "HopperClearedMidRun",
+                "HopperHeldHigh", "InTrailingCleardown", "RunHeldOn", "RunStoppedMidRun",
+                "RunStoppedRoundClear", "RunT", "ScenarioReset", "TrailingReset", "TrailingT",
+                "TrailingTimer",
             },
             missing.OrderBy(n => n, StringComparer.Ordinal).ToArray());
     }

@@ -3,7 +3,7 @@ ROOTID 0
 NUMBER 9002
 LANGUAGE LAD
 TITLE "Hopper-Blockage Stimulus Model"
-COMMENT "Drives the three sensor signals the hopper-blockage monitor consumes - hopper high, plant running, operator reset - to a timeline the harness commands, so a conformance run exercises the monitor against a plant that behaves to order. A run is a clear-down that puts the monitor into a known unalarmed state, optionally a pre-boundary phase that leaves it part-way through its persistence window before the CPU is stopped and restarted, then the scenario itself. The clear-down exists because the monitor's alarm is latched and retentive and can only be cleared by a reset edge, so a scenario that did not start by clearing it would be reading the previous run. The scenario's shape comes from the tens digit of Profile and its durations from P1 to P4; six shapes cover every scenario the vector set asks for, because the scenarios differ in WHICH of the two driven signals drops and WHEN, never in anything else. The model publishes Armed so that observation latches are armed by its own phase - a latch running free from the start of the run would refill from the clear-down and read true no matter what the monitor did. It publishes its own threshold belief rather than reading the monitor's, so a reset placed at the threshold crossing stays a stimulus decision. This block drives the monitor's inputs and nothing else: it writes no plant tag, reads nothing the monitor writes, and is called only from the cyclic program."
+COMMENT "Drives the three sensor signals the hopper-blockage monitor consumes - hopper high, plant running, operator reset - to a timeline the harness commands, so a conformance run exercises the monitor against a plant that behaves to order. A run is a clear-down that puts the monitor into a known unalarmed state, optionally a pre-boundary phase that leaves it part-way through its persistence window before the CPU is stopped and restarted, then the scenario itself, and once the harness has acknowledged the result by dropping the start bool, a trailing clear-down that repeats the reset so the NEXT run starts from a known unalarmed state rather than from whatever the previous scenario left standing - suppressed across a stop/restart boundary, where clearing would destroy the latched alarm the startup scenarios exist to observe. The clear-down exists because the monitor's alarm is latched and retentive and can only be cleared by a reset edge, so a scenario that did not start by clearing it would be reading the previous run. The scenario's shape comes from the tens digit of Profile and its durations from P1 to P4; six shapes cover every scenario the vector set asks for, because the scenarios differ in WHICH of the two driven signals drops and WHEN, never in anything else. The model publishes Armed so that observation latches are armed by its own phase - a latch running free from the start of the run would refill from the clear-down and read true no matter what the monitor did. It publishes its own threshold belief rather than reading the monitor's, so a reset placed at the threshold crossing stays a stimulus decision. This block drives the monitor's inputs and nothing else: it writes no plant tag, reads nothing the monitor writes, and is called only from the cyclic program."
 
 INTERFACE
   INPUT
@@ -57,7 +57,16 @@ INTERFACE
     ClearResetUntil : Time COMMENT "When the clear-down's own reset pulse ends."
     ResetPulseEnd : Time COMMENT "End of the commanded reset pulse under ResetMode 1."
     ThresholdPulseEnd : Time COMMENT "End of the commanded reset pulse under ResetMode 3."
+    CleardownPending : Bool COMMENT "A scenario has completed and its trailing clear-down has not yet run. Set when the scenario publishes ScenarioDone, cleared when the trailing clear-down's timer expires, so the phase runs exactly once per completed run and never twice."
+    InTrailingCleardown : Bool COMMENT "The trailing clear-down phase is running - after the harness has acknowledged the result by dropping the start bool, and before the next run begins."
+    TrailingReset : Bool COMMENT "The trailing clear-down's own reset pulse is asserted."
+    TrailingT : Time COMMENT "Time since the trailing clear-down started, copied out of its timer so the pulse window compares against a plain value."
     RunTimer : TON_TIME VERSION 1.0 SETPOINT
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool
+    TrailingTimer : TON_TIME VERSION 1.0 SETPOINT
       PT : Time
       ET : Time
       IN : Bool
@@ -163,12 +172,24 @@ NETWORK 20 "Re-Arm For The Next Run"
   RCOIL PreBoundaryDone := Stim.ScenarioDone
 
 NETWORK 21 "Force The Monitored Inputs"
-  COMMENT "Presents the commanded plant to the input map through the input buffer's own test-injection members, which is the facility the input map already provides: with the test flag set the map ignores the physical terminal and takes each input from its test member. Only the flag and the two inputs this model commands are written, and only while a run is under way - outside a run the flag is low and every input comes from the field exactly as it otherwise would. The operator reset is written directly because it is not a field input and does not pass through the map."
-  COIL DB_Input.Test[0] := Running
+  COMMENT "Presents the commanded plant to the input map through the input buffer's own test-injection members, which is the facility the input map already provides: with the test flag set the map ignores the physical terminal and takes each input from its test member. Only the flag and the two inputs this model commands are written, and only while a run is under way or the trailing clear-down after it is running - at every other time the flag is low and every input comes from the field exactly as it otherwise would. THE TRAILING CLEAR-DOWN IS WHY THE FLAG OUTLASTS THE RUN: its reset has to land on a hopper this model is still driving low, because a reset landing on a released input can be fighting the very cause it is trying to clear. The two commanded inputs need no such term - they are ANDed with the run, so outside a run they are already low, which is exactly the stopped plant and clear hopper the clear-down wants. The operator reset is written directly because it is not a field input and does not pass through the map."
+  COIL DB_Input.Test[0] := Running OR InTrailingCleardown
   COIL DB_Input.Test[5] := Running AND Stim.Run
   COIL DB_Input.Test[8] := Running AND Stim.Hopper
-  COIL DB_Controls.FaultReset := Running AND Stim.FaultReset
+  COIL DB_Controls.FaultReset := TrailingReset OR Running AND Stim.FaultReset
 
 NETWORK 22 "Hold The Reverse Feedback Clear"
-  COMMENT "The model commands one running feedback, and the plant-running condition the monitor sees is the forward feedback or the reverse one. The reverse feedback's test member is therefore held clear for the whole run rather than left at whatever it happened to contain, so that the commanded stop is a stop and not merely the forward feedback going low."
-  RCOIL DB_Input.Test[6] := Running
+  COMMENT "The model commands one running feedback, and the plant-running condition the monitor sees is the forward feedback or the reverse one. The reverse feedback's test member is therefore held clear for the whole run, and through the trailing clear-down that follows it, rather than left at whatever it happened to contain, so that the commanded stop is a stop and not merely the forward feedback going low. It extends across the clear-down for the same reason the injection flag does: a clear-down that let this member float could present a running plant to the monitor while the reset is trying to clear it."
+  RCOIL DB_Input.Test[6] := Running OR InTrailingCleardown
+
+NETWORK 23 "Trailing Clear-Down Pending"
+  COMMENT "Remembers that a completed run still owes a clear-down. It is set the moment the scenario publishes ScenarioDone and NOT PreBoundaryDone, and that second term is the whole protection for the startup scenarios: across an externally performed CPU stop and restart the run has not completed, ScenarioDone is false and the retained PreBoundaryDone is set, so nothing is owed and nothing is cleared - the latched alarm those scenarios exist to find still standing survives the restart untouched. It is cleared by the trailing timer below, so the phase runs once per completed run rather than continuously while the slot is idle."
+  SCOIL CleardownPending := Stim.ScenarioDone AND NOT PreBoundaryDone
+  RCOIL CleardownPending := TrailingTimer.Q
+
+NETWORK 24 "Trailing Clear-Down Window"
+  COMMENT "Runs the clear-down AFTER the harness has read the result, so the monitor is back in a known unalarmed state before the next run is asked to start. It waits for the start bool to fall because that is the harness acknowledging the result: clearing any earlier would wipe the live alarm and inhibit the run was measured to produce, and the harness would read a cleared block instead of the one it tested. It reuses the pre-scenario clear-down's own times - five seconds, with the reset pulsed from three to four - because the requirement is the same one: long enough for the monitor's confirmed-clear filter to expire, with a pulse wide enough that it cannot fall between two scans. The injection stays held throughout by the force network above, so the reset lands on a hopper that is being driven low rather than on a released input that may be re-asserting the very cause the reset is trying to clear."
+  TON(TrailingTimer, IN := CleardownPending AND NOT Stim.Start AND NOT Running, PT := ClearDownTime)
+  COIL InTrailingCleardown := CleardownPending AND NOT Stim.Start AND NOT Running
+  COIL TrailingReset := InTrailingCleardown AND TrailingT >= ClearResetFrom AND TrailingT < ClearResetUntil
+  MOVE(EN := TRUE, IN := TrailingTimer.ET) => TrailingT
