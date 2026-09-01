@@ -483,7 +483,7 @@ public class InterfaceCheckTests : IDisposable
     /// than argued.
     /// </summary>
     [Fact]
-    public void RealCorpus_TheHopperBlockMonitorDoesNotCarryTheInhibitSignalTheEnumerationNames()
+    public void RealCorpus_TheHopperBlockMonitorNowCarriesTheInhibitSignalTheEnumerationNames()
     {
         var report = InterfaceCheckRunner.Run(
             CorpusDir(),
@@ -492,9 +492,25 @@ public class InterfaceCheckTests : IDisposable
             "assertion-enumeration.yaml");
 
         Assert.True(report.Checked);
-        Assert.True(report.BlockFails);
-        Assert.Equal("HopperBlockedAlarm", Assert.Single(report.Present).Name);
-        Assert.Equal("HopperBlockedInhibit", Assert.Single(report.Missing).Name);
+
+        // 🔴 THIS ASSERTION INVERTED ON 2026-09-01, AND THAT IS THE TEST WORKING RATHER THAN BREAKING.
+        //
+        // It used to assert the monitor did NOT carry `HopperBlockedInhibit` and that the block
+        // FAILED — pinning divergence D1, where the register, the enumeration and the vectors all
+        // said `HopperBlockedInhibit` while the implementation said `HopperBlockStopReq`. They had
+        // disagreed for 19 days.
+        //
+        // D1 IS CLOSED: ruling AR-HBA-01 renamed the interface member to the name the specification
+        // gives it, so the block now carries it and nothing is missing. A test asserting the absence
+        // of a signal that is now present is asserting the divergence still exists.
+        //
+        // Left as a live check rather than deleted: it is now the guard that D1 STAYS closed, and it
+        // would fail again the moment the implementation drifted back off the spec's vocabulary.
+        Assert.False(report.BlockFails);
+        Assert.Empty(report.Missing);
+        Assert.Equal(
+            new[] { "HopperBlockedAlarm", "HopperBlockedInhibit" },
+            report.Present.Select(p => p.Name).OrderBy(n => n, StringComparer.Ordinal).ToArray());
 
         // The house style, measured on the real block rather than on the fixture: both the sections a
         // naive check would have read are EMPTY.

@@ -392,7 +392,33 @@ public sealed class ProjectUsageGraph
         {
             var stripped = StripSubscripts(kv.Key);
             var exact = string.Equals(stripped, target, StringComparison.Ordinal);
-            if (!exact && !target.StartsWith(stripped + ".", StringComparison.Ordinal))
+
+            // 🔴 A BIT SLICE IS PART OF ITS PARENT'S STORAGE, NOT A CHILD OF IT (fixed 2026-09-01).
+            //
+            // MEASURED ON A REAL JOB: a motor block drives its alarm word one bit at a time —
+            // `COIL IO.Alarm.%X0 := …`, `%X1`, `%X2` — and never as a whole. `IO.Alarm` came back
+            // `direction: "unused", writers: []`. Its whole-written sibling `IO.FTR` resolved
+            // correctly in the same run, which is what pinned the blindness to the slice and not to
+            // the block. On that plant EVERY alarm word is written this way.
+            //
+            // The match below admits a usage that is the target EXACTLY or an ANCESTOR of it. A bit
+            // slice is neither — `IO.Alarm.%X0` is a DESCENDANT — so it fell through and the member
+            // read as driven by nothing.
+            //
+            // It matters more than one member because signal-set's stated reader is a GENERATOR,
+            // which is why that command gates on PARTIAL rather than warning: "a generator never
+            // sees a warning line". This did not produce a partial. It produced a confident `unused`
+            // for a member three coils drive.
+            //
+            // ONLY `%X<n>`, AND DELIBERATELY NOT DESCENDANTS IN GENERAL. A bit slice has no storage
+            // of its own; a struct FIELD does, and admitting that direction generally is the shape
+            // that once turned 20 genuine undriven members into 168 driven ones (see `notAbove`).
+            // TIA also spells %B/%W/%D slices, which appear in NO committed .ir here and are left
+            // out for that reason — MemberPathResolver records the same limit. Admitting a token
+            // this does not understand would be guessing at a width.
+            var sliceOfTarget = !exact && IsBitSliceOf(stripped, target);
+
+            if (!exact && !sliceOfTarget && !target.StartsWith(stripped + ".", StringComparison.Ordinal))
             {
                 continue;
             }
@@ -408,6 +434,43 @@ public sealed class ProjectUsageGraph
         }
 
         return (writers, readers);
+    }
+
+    /// <summary>
+    /// True when <paramref name="candidate"/> is <paramref name="target"/> plus exactly one bit-slice
+    /// token — <c>IO.Alarm.%X0</c> against <c>IO.Alarm</c>.
+    ///
+    /// <para><b>EXACTLY ONE, AND ONLY <c>%X</c>.</b> Anything else is a member with storage of its
+    /// own, and treating one as part of its parent is the false-green direction. The token is
+    /// checked whole — <c>%X0</c> and not merely a <c>%X</c> prefix — so a member legitimately named
+    /// <c>%Xtra</c> could not slip through, and the digits are required so <c>%X</c> alone does not
+    /// either.</para>
+    /// </summary>
+    private static bool IsBitSliceOf(string candidate, string target)
+    {
+        if (candidate.Length <= target.Length + 1 ||
+            !candidate.StartsWith(target + ".", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        var tail = candidate.Substring(target.Length + 1);
+
+        // One component only: a slice OF a slice is not a thing, and a deeper path is a member.
+        if (tail.IndexOf('.') >= 0 || !tail.StartsWith("%X", StringComparison.Ordinal) || tail.Length <= 2)
+        {
+            return false;
+        }
+
+        for (var i = 2; i < tail.Length; i++)
+        {
+            if (!char.IsDigit(tail[i]))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     // Removes the subscript from every component, WHATEVER IS INSIDE IT.
