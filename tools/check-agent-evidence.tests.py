@@ -387,6 +387,53 @@ def a_claim_not_in_the_store_fails():
     assert_in("NOT IN THE STORE", out, "the reason")
 
 
+def f7_a_non_empty_store_holding_none_of_them_says_wrong_store():
+    """🔴 THE WRONG STORE IS NOT THE EMPTY STORE, AND IT USED TO READ AS A LOST REGISTRY.
+
+    MEASURED 2026-09-01: a lane staged into `work-runstate/ir/`. `converter claims` names the
+    store from the LEAF of --project, and --project is derived from the directory the .ir files
+    sit in - so leaf `ir` selected `…\\claims\\ir`, a DIFFERENT project's store left over from an
+    earlier generation. It was not empty, so the vacuity guard (which keys on ZERO claims) stayed
+    quiet, and all five of the lane's correctly-held claims were reported NOT IN THE STORE. The
+    lane's own conclusion was that the registry had lost them. Renaming the scratch directory
+    fixed it.
+
+    Deriving the project from the paths STAYS - a declared project name would be one more field
+    an agent could point at a store that agrees with it. What changes is the diagnosis when the
+    answer is unanimous: a store that held claims and matched NOT ONE of the declared set is far
+    more likely to be the wrong store than a registry that lost one lane's entire reservation set
+    while keeping everybody else's.
+    """
+    doc = good_doc(real_hash())
+    doc["claims"] = [
+        {"kind": "block-number", "value": "FB77", "agent": AGENT},
+        {"kind": "block-edit", "value": "FB_NotInThisStore", "agent": AGENT},
+    ]
+    code, out, _ = run(doc)
+    assert_eq(code, EXIT_PROBLEMS, "exit code")
+    assert_in("WRONG STORE", out, "it names the likely cause")
+    assert_in("LEAF", out, "it says where the store name comes from")
+    assert "ZERO claims" not in out, (
+        "the vacuity guard must NOT fire - this store is populated, and conflating "
+        "'wrong store' with 'empty store' is what hid this for a whole lane")
+
+
+def f7_control_a_partial_match_is_still_a_plain_absent_claim():
+    """The control: one bad claim among good ones is an ABSENT CLAIM, not a wrong store.
+
+    Without this, the case above could pass by shouting WRONG STORE at every missing
+    reservation - which would bury the finding it exists to sharpen.
+    """
+    doc = good_doc(real_hash())
+    doc["claims"].append({"kind": "block-number", "value": "FB77", "agent": AGENT})
+    code, out, _ = run(doc)
+    assert_eq(code, EXIT_PROBLEMS, "exit code")
+    assert_in("NOT IN THE STORE", out, "the plain accusation still stands")
+    assert "WRONG STORE" not in out, (
+        "some declared claims WERE matched, so the store is the right one and a single "
+        "absent claim must read as an absent claim")
+
+
 def a_claim_held_by_another_agent_fails():
     """Declaring someone else's live claim as your own is the collision, not the cure."""
     doc = good_doc(real_hash())
@@ -890,6 +937,11 @@ CASES = [
      f6_an_unreadable_store_does_not_accuse, True),
     ("F6 control: a readable store still accuses a genuinely absent claim",
      f6_a_readable_store_still_reports_an_absent_claim, True),
+
+    ("F7 a populated store matching NONE of them says WRONG STORE",
+     f7_a_non_empty_store_holding_none_of_them_says_wrong_store, True),
+    ("F7 control: a partial match is still a plain absent claim",
+     f7_control_a_partial_match_is_still_a_plain_absent_claim, True),
 
     ("a wrong schema exits 2", wrong_schema_is_exit_2, False),
     ("malformed JSON exits 2", malformed_json_is_exit_2, False),

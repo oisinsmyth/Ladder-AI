@@ -570,6 +570,46 @@ if ir_files and isinstance(declared_claims, list) and declared_claims:
         if isinstance(row, dict):
             by_key[(row.get("kind"), row.get("value"))] = row
 
+    # 🔴 THE WRONG STORE, WHICH IS NOT THE SAME AS AN EMPTY ONE (2026-09-01).
+    #
+    # `converter claims` names the store from the LEAF of --project, and --project here is
+    # derived from the directory the evidence's own .ir files sit in. That is deliberate and
+    # stays: a DECLARED project name would be one more field an agent could point at a store
+    # where its claims happen to live. But it means a lane working in a scratch copy is
+    # looked up under that copy's leaf name, not the project's.
+    #
+    # MEASURED: a lane staged into `work-runstate/ir/`. Leaf `ir` named the store
+    # `…\claims\ir` - a DIFFERENT project's store, left over from an earlier generation, and
+    # very much not empty. All five of its correctly-held claims were reported NOT IN THE
+    # STORE. Renaming the scratch dir to `ir-new/` fixed it. CLAUDE.md warns about exactly
+    # this collision for `converter claim`; nothing warned about it here.
+    #
+    # The vacuity guard above cannot catch it, because it keys on the store being EMPTY and
+    # this store answered confidently about somebody else's reservations. So this is the
+    # other half: a store that held claims, none of which are the ones declared, is far more
+    # likely to be the wrong store than a registry that lost an entire lane's work.
+    #
+    # It changes no verdict - every claim below still fails closed - it changes the DIAGNOSIS,
+    # because the failure mode this replaces is a wall of alarming lines that read as "the
+    # registry lost your claims" when the truth is "you asked the wrong registry".
+    declared_pairs = [(e.get("kind"), e.get("value")) for e in declared_claims
+                      if isinstance(e, dict) and e.get("kind") and e.get("value")]
+    matched_pairs = [p for p in declared_pairs if p in by_key]
+    if declared_pairs and not matched_pairs and store_held > 0:
+        fail("WRONG STORE, ALMOST CERTAINLY - the store answered with %d claim(s) and NOT "
+             "ONE of the %d declared here is among them. A registry that lost one lane's "
+             "entire reservation set while keeping everyone else's is far less likely than a "
+             "lookup pointed at the wrong project. *** THE STORE IS NAMED FROM THE LEAF OF "
+             "THE DIRECTORY THE .ir FILES SIT IN, *** which this evidence gives as %s, "
+             "resolving to %s. A lane staging into a scratch copy whose leaf differs from the "
+             "project's - `work-x/ir/` under a project whose IR directory is `ir-new/` - is "
+             "looked up in a different project's store, and that store can be non-empty and "
+             "answer with total confidence about claims that are not yours. Check the leaf, "
+             "then re-run. The per-claim lines below are reported for completeness and should "
+             "NOT be read as missing reservations until the store is confirmed."
+             % (store_held, len(declared_pairs), ", ".join(projects),
+                store_path or "<none>"))
+
     # THE FILES ON DISK, INDEXED BOTH WAYS the claim vocabulary can name them: by block
     # number (`FB3`, `DB9010`) and by declared name (`FB_PusherControl`, `UDT_Valve`,
     # `Default tag table`). Every join below resolves a claim to ONE of these entries, and
@@ -642,8 +682,12 @@ if ir_files and isinstance(declared_claims, list) and declared_claims:
                      "the store lookup (see the NOT CHECKED line above) and re-run; do NOT "
                      "read this as a missing claim" % (ckind, value))
             else:
-                fail("claim %s '%s' is NOT IN THE STORE - the evidence says it was taken "
-                     "and the registry has no record of it" % (ckind, value))
+                fail("claim %s '%s' is NOT IN THE STORE %s - the evidence says it was "
+                     "taken and that store has no record of it. The store is named from "
+                     "the LEAF of the directory the .ir files sit in (%s), so confirm the "
+                     "lookup found the right project before reading this as a missing "
+                     "reservation"
+                     % (ckind, value, store_path or "<none>", ", ".join(projects)))
             continue
         holder = row.get("agent")
         if holder != agent:
