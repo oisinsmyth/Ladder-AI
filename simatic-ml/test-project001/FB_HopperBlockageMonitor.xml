@@ -2,7 +2,7 @@
 <Document>
   <Engineering version="V20" />
   <DocumentInfo>
-    <Created>2026-08-13T15:37:26.8928635Z</Created>
+    <Created>2026-09-01T12:42:15.710481Z</Created>
     <ExportSetting>WithDefaults</ExportSetting>
     <InstalledProducts>
       <Product>
@@ -71,7 +71,7 @@
         <BooleanAttribute Name="SetPoint" SystemDefined="true">true</BooleanAttribute>
       </AttributeList>
       <Comment>
-        <MultiLanguageText Lang="en-US">Caller interface (C-115). Inputs (HopperLevelHigh/PlantRunning/FaultReset) are written by FC_ControlMain at integration; outputs (HopperBlockedAlarm/HopperBlockStopReq) are read there. The whole interface is RETAIN - immaterial for the re-driven inputs, deliberate for the two output latches (C-124 carve-out).</MultiLanguageText>
+        <MultiLanguageText Lang="en-US">Caller interface (C-115). Inputs (HopperLevelHigh/PlantRunning/FaultReset) are written by FC_ControlMain at integration; outputs (HopperBlockedAlarm/HopperBlockedInhibit) are read there. The whole interface is RETAIN - immaterial for the re-driven inputs, deliberate for the two output latches (C-124 carve-out).</MultiLanguageText>
       </Comment>
       <Sections>
         <Section Name="None">
@@ -81,7 +81,7 @@
           <Member Name="BlockedTimeThreshold" Datatype="Time" />
           <Member Name="ClearDebounceTime" Datatype="Time" />
           <Member Name="HopperBlockedAlarm" Datatype="Bool" />
-          <Member Name="HopperBlockStopReq" Datatype="Bool" />
+          <Member Name="HopperBlockedInhibit" Datatype="Bool" />
         </Section>
       </Sections>
     </Member>
@@ -129,6 +129,28 @@
         <MultiLanguageText Lang="en-US">One-scan pulse when BlockActive falls (plant stop or genuine clear) - fires the T_SUB bank in NETWORK 4.</MultiLanguageText>
       </Comment>
     </Member>
+    <Member Name="FaultResetMem" Datatype="Bool" Remanence="NonRetain" Accessibility="Public">
+      <AttributeList>
+        <BooleanAttribute Name="ExternalAccessible" SystemDefined="true">true</BooleanAttribute>
+        <BooleanAttribute Name="ExternalVisible" SystemDefined="true">true</BooleanAttribute>
+        <BooleanAttribute Name="ExternalWritable" SystemDefined="true">true</BooleanAttribute>
+        <BooleanAttribute Name="SetPoint" SystemDefined="true">false</BooleanAttribute>
+      </AttributeList>
+      <Comment>
+        <MultiLanguageText Lang="en-US">Previous-scan copy of the operator FaultReset input; NETWORK 5 compares the two to find the moment it goes true. Transient (non-retentive).</MultiLanguageText>
+      </Comment>
+    </Member>
+    <Member Name="FaultResetEdge" Datatype="Bool" Remanence="NonRetain" Accessibility="Public">
+      <AttributeList>
+        <BooleanAttribute Name="ExternalAccessible" SystemDefined="true">true</BooleanAttribute>
+        <BooleanAttribute Name="ExternalVisible" SystemDefined="true">true</BooleanAttribute>
+        <BooleanAttribute Name="ExternalWritable" SystemDefined="true">true</BooleanAttribute>
+        <BooleanAttribute Name="SetPoint" SystemDefined="true">false</BooleanAttribute>
+      </AttributeList>
+      <Comment>
+        <MultiLanguageText Lang="en-US">One-scan pulse when FaultReset goes true - the operator acknowledgement that clears the alarm latch in NETWORK 5. A reset held on produces one pulse, not a continuous clear. Transient (non-retentive).</MultiLanguageText>
+      </Comment>
+    </Member>
     <Member Name="AccumulatedElapsed" Datatype="Time" Remanence="NonRetain" Accessibility="Public">
       <AttributeList>
         <BooleanAttribute Name="ExternalAccessible" SystemDefined="true">true</BooleanAttribute>
@@ -137,7 +159,7 @@
         <BooleanAttribute Name="SetPoint" SystemDefined="true">false</BooleanAttribute>
       </AttributeList>
       <Comment>
-        <MultiLanguageText Lang="en-US">Cumulative high-and-running elapsed banked across plant-stop pauses (NEW-HBA-01). Two disjoint writers (NETWORK 3): reset to T#0S on a confirmed clear or FaultReset, banked up by each just-ended segment's elapsed on a plant-stop pause - never both in one scan. Transient (non-retentive); starts 0, so no first-scan trip. Replaces the former countdown RemainingTime (F1/F2/S1 fix, 2026-07-20).</MultiLanguageText>
+        <MultiLanguageText Lang="en-US">Cumulative high-and-running elapsed banked across plant-stop pauses (NEW-HBA-01). Two writers (NETWORK 3) that can never fire in the same scan: back to T#0S on a confirmed clear, banked up by each just-ended segment's elapsed on a plant-stop pause. A FaultReset does not touch it (REQ-HBA-005). Transient (non-retentive); starts 0, so no first-scan trip.</MultiLanguageText>
       </Comment>
     </Member>
     <Member Name="CumulativeElapsed" Datatype="Time" Remanence="NonRetain" Accessibility="Public">
@@ -472,183 +494,143 @@
     </Access>
     <Access Scope="LocalVariable" UId="27">
       <Symbol>
-        <Component Name="IO" />
-        <Component Name="FaultReset" />
+        <Component Name="ZeroTime" />
       </Symbol>
     </Access>
     <Access Scope="LocalVariable" UId="28">
       <Symbol>
-        <Component Name="ZeroTime" />
+        <Component Name="AccumulatedElapsed" />
       </Symbol>
     </Access>
     <Access Scope="LocalVariable" UId="29">
       <Symbol>
-        <Component Name="AccumulatedElapsed" />
+        <Component Name="PauseEdge" />
       </Symbol>
     </Access>
     <Access Scope="LocalVariable" UId="30">
       <Symbol>
-        <Component Name="PauseEdge" />
-      </Symbol>
-    </Access>
-    <Access Scope="LocalVariable" UId="31">
-      <Symbol>
         <Component Name="HighQualified" />
       </Symbol>
     </Access>
-    <Access Scope="LocalVariable" UId="32">
-      <Symbol>
-        <Component Name="IO" />
-        <Component Name="FaultReset" />
-      </Symbol>
-    </Access>
-    <Access Scope="LocalVariable" UId="33">
+    <Access Scope="LocalVariable" UId="31">
       <Symbol>
         <Component Name="PersistenceTimer" />
         <Component Name="ET" />
       </Symbol>
     </Access>
-    <Access Scope="LocalVariable" UId="34">
+    <Access Scope="LocalVariable" UId="32">
       <Symbol>
         <Component Name="AccumulatedElapsed" />
       </Symbol>
     </Access>
-    <Access Scope="LocalVariable" UId="35">
+    <Access Scope="LocalVariable" UId="33">
       <Symbol>
         <Component Name="AccumulatedElapsed" />
       </Symbol>
     </Access>
-    <Part Name="Contact" UId="36">
+    <Part Name="Contact" UId="34">
       <Negated Name="operand" />
     </Part>
+    <Part Name="Contact" UId="35" />
+    <Part Name="Coil" UId="36" />
     <Part Name="Contact" UId="37" />
     <Part Name="Coil" UId="38" />
-    <Part Name="Contact" UId="39" />
-    <Part Name="Coil" UId="40" />
-    <Part Name="Contact" UId="41">
+    <Part Name="Contact" UId="39">
       <Negated Name="operand" />
     </Part>
-    <Part Name="Contact" UId="42" />
-    <Part Name="O" UId="43">
-      <TemplateValue Name="Card" Type="Cardinality">2</TemplateValue>
-    </Part>
-    <Part Name="Move" UId="44" DisabledENO="true">
+    <Part Name="Move" UId="40" DisabledENO="true">
       <TemplateValue Name="Card" Type="Cardinality">1</TemplateValue>
     </Part>
-    <Part Name="Contact" UId="45" />
-    <Part Name="Contact" UId="46" />
-    <Part Name="Contact" UId="47">
-      <Negated Name="operand" />
-    </Part>
-    <Part Name="Add" UId="48" DisabledENO="true">
+    <Part Name="Contact" UId="41" />
+    <Part Name="Contact" UId="42" />
+    <Part Name="Add" UId="43" DisabledENO="true">
       <TemplateValue Name="Card" Type="Cardinality">2</TemplateValue>
       <AutomaticTyped Name="SrcType" />
     </Part>
   </Parts>
   <Wires>
-    <Wire UId="49">
+    <Wire UId="44">
       <IdentCon UId="21" />
+      <NameCon UId="34" Name="operand" />
+    </Wire>
+    <Wire UId="45">
+      <NameCon UId="34" Name="out" />
+      <NameCon UId="35" Name="in" />
+    </Wire>
+    <Wire UId="46">
+      <IdentCon UId="22" />
+      <NameCon UId="35" Name="operand" />
+    </Wire>
+    <Wire UId="47">
+      <NameCon UId="35" Name="out" />
+      <NameCon UId="36" Name="in" />
+    </Wire>
+    <Wire UId="48">
+      <IdentCon UId="23" />
       <NameCon UId="36" Name="operand" />
     </Wire>
-    <Wire UId="50">
-      <NameCon UId="36" Name="out" />
+    <Wire UId="49">
+      <Powerrail />
+      <NameCon UId="34" Name="in" />
       <NameCon UId="37" Name="in" />
+      <NameCon UId="39" Name="in" />
+      <NameCon UId="41" Name="in" />
     </Wire>
-    <Wire UId="51">
-      <IdentCon UId="22" />
+    <Wire UId="50">
+      <IdentCon UId="24" />
       <NameCon UId="37" Name="operand" />
     </Wire>
-    <Wire UId="52">
+    <Wire UId="51">
       <NameCon UId="37" Name="out" />
       <NameCon UId="38" Name="in" />
     </Wire>
-    <Wire UId="53">
-      <IdentCon UId="23" />
+    <Wire UId="52">
+      <IdentCon UId="25" />
       <NameCon UId="38" Name="operand" />
     </Wire>
-    <Wire UId="54">
-      <Powerrail />
-      <NameCon UId="36" Name="in" />
-      <NameCon UId="39" Name="in" />
-      <NameCon UId="41" Name="in" />
-      <NameCon UId="42" Name="in" />
-      <NameCon UId="45" Name="in" />
-    </Wire>
-    <Wire UId="55">
-      <IdentCon UId="24" />
+    <Wire UId="53">
+      <IdentCon UId="26" />
       <NameCon UId="39" Name="operand" />
     </Wire>
-    <Wire UId="56">
+    <Wire UId="54">
       <NameCon UId="39" Name="out" />
+      <NameCon UId="40" Name="en" />
+    </Wire>
+    <Wire UId="55">
+      <IdentCon UId="27" />
       <NameCon UId="40" Name="in" />
     </Wire>
-    <Wire UId="57">
-      <IdentCon UId="25" />
-      <NameCon UId="40" Name="operand" />
+    <Wire UId="56">
+      <NameCon UId="40" Name="out1" />
+      <IdentCon UId="28" />
     </Wire>
-    <Wire UId="58">
-      <IdentCon UId="26" />
+    <Wire UId="57">
+      <IdentCon UId="29" />
       <NameCon UId="41" Name="operand" />
     </Wire>
-    <Wire UId="59">
+    <Wire UId="58">
       <NameCon UId="41" Name="out" />
-      <NameCon UId="43" Name="in1" />
+      <NameCon UId="42" Name="in" />
     </Wire>
-    <Wire UId="60">
-      <IdentCon UId="27" />
+    <Wire UId="59">
+      <IdentCon UId="30" />
       <NameCon UId="42" Name="operand" />
     </Wire>
-    <Wire UId="61">
+    <Wire UId="60">
       <NameCon UId="42" Name="out" />
-      <NameCon UId="43" Name="in2" />
+      <NameCon UId="43" Name="en" />
+    </Wire>
+    <Wire UId="61">
+      <IdentCon UId="31" />
+      <NameCon UId="43" Name="in1" />
     </Wire>
     <Wire UId="62">
-      <NameCon UId="43" Name="out" />
-      <NameCon UId="44" Name="en" />
+      <IdentCon UId="32" />
+      <NameCon UId="43" Name="in2" />
     </Wire>
     <Wire UId="63">
-      <IdentCon UId="28" />
-      <NameCon UId="44" Name="in" />
-    </Wire>
-    <Wire UId="64">
-      <NameCon UId="44" Name="out1" />
-      <IdentCon UId="29" />
-    </Wire>
-    <Wire UId="65">
-      <IdentCon UId="30" />
-      <NameCon UId="45" Name="operand" />
-    </Wire>
-    <Wire UId="66">
-      <NameCon UId="45" Name="out" />
-      <NameCon UId="46" Name="in" />
-    </Wire>
-    <Wire UId="67">
-      <IdentCon UId="31" />
-      <NameCon UId="46" Name="operand" />
-    </Wire>
-    <Wire UId="68">
-      <NameCon UId="46" Name="out" />
-      <NameCon UId="47" Name="in" />
-    </Wire>
-    <Wire UId="69">
-      <IdentCon UId="32" />
-      <NameCon UId="47" Name="operand" />
-    </Wire>
-    <Wire UId="70">
-      <NameCon UId="47" Name="out" />
-      <NameCon UId="48" Name="en" />
-    </Wire>
-    <Wire UId="71">
+      <NameCon UId="43" Name="out" />
       <IdentCon UId="33" />
-      <NameCon UId="48" Name="in1" />
-    </Wire>
-    <Wire UId="72">
-      <IdentCon UId="34" />
-      <NameCon UId="48" Name="in2" />
-    </Wire>
-    <Wire UId="73">
-      <NameCon UId="48" Name="out" />
-      <IdentCon UId="35" />
     </Wire>
   </Wires>
 </FlgNet></NetworkSource>
@@ -660,7 +642,7 @@
               <MultilingualTextItem ID="F" CompositionName="Items">
                 <AttributeList>
                   <Culture>en-US</Culture>
-                  <Text>Banks cumulative high-and-running time across plant-stop pauses (NEW-HBA-01), replacing the former countdown budget (F1/F2/S1 fix, 2026-07-20). AccumulatedElapsed has two provably-disjoint writers, so there is no same-scan race and no next-scan cleanup (the F2/S1 root cause is gone): it is reset to T#0S on a genuine confirmed clear (NOT HighQualified) or on FaultReset, and otherwise banked up by the just-ended segment's elapsed only on a real plant-stop pause (PauseEdge AND HighQualified AND NOT FaultReset - i.e. the hopper is still blocked but the plant stopped). PauseEdge is a constructed falling edge (C-404); it and the bank read PersistenceTimer.ET from before NETWORK 4's TON re-evaluates this scan, so the ET captured is the just-completed segment's, with no separate held-value register needed.</Text>
+                  <Text>Banks cumulative high-and-running time across plant-stop pauses (NEW-HBA-01). AccumulatedElapsed has two writers that can never fire in the same scan: it goes back to T#0S once the hopper is no longer qualified high (a confirmed clear), and it is otherwise banked up by the just-ended segment's elapsed when the plant stops with the hopper still blocked. An operator FaultReset appears nowhere here: acknowledging an alarm says nothing about the hopper, so it neither discards nor freezes the accumulated evidence (REQ-HBA-005). PauseEdge is the falling edge of BlockActive, taken against the previous-scan copy that the coil below it then updates - the two coils must stay in this order or the edge never fires. Both PauseEdge and the bank read PersistenceTimer.ET before NETWORK 4 re-evaluates the timer this scan, so the elapsed banked is the just-completed segment's, with no separate held-value register needed.</Text>
                 </AttributeList>
               </MultilingualTextItem>
             </ObjectList>
@@ -689,87 +671,70 @@
     <Access Scope="LocalVariable" UId="22">
       <Symbol>
         <Component Name="IO" />
-        <Component Name="FaultReset" />
+        <Component Name="BlockedTimeThreshold" />
       </Symbol>
     </Access>
     <Access Scope="LocalVariable" UId="23">
       <Symbol>
-        <Component Name="IO" />
-        <Component Name="BlockedTimeThreshold" />
-      </Symbol>
-    </Access>
-    <Access Scope="LocalVariable" UId="24">
-      <Symbol>
         <Component Name="AccumulatedElapsed" />
       </Symbol>
     </Access>
-    <Access Scope="LocalVariable" UId="25">
+    <Access Scope="LocalVariable" UId="24">
       <Symbol>
         <Component Name="PersistenceTimer" />
         <Component Name="ET" />
       </Symbol>
     </Access>
-    <Access Scope="LocalVariable" UId="26">
+    <Access Scope="LocalVariable" UId="25">
       <Symbol>
         <Component Name="CumulativeElapsed" />
       </Symbol>
     </Access>
-    <Part Name="Contact" UId="27" />
-    <Part Name="Contact" UId="28">
-      <Negated Name="operand" />
-    </Part>
-    <Part Name="TON" Version="1.0" UId="29">
-      <Instance Scope="LocalVariable" UId="30">
+    <Part Name="Contact" UId="26" />
+    <Part Name="TON" Version="1.0" UId="27">
+      <Instance Scope="LocalVariable" UId="28">
         <Component Name="PersistenceTimer" />
       </Instance>
       <TemplateValue Name="time_type" Type="Type">Time</TemplateValue>
     </Part>
-    <Part Name="Add" UId="31" DisabledENO="true">
+    <Part Name="Add" UId="29" DisabledENO="true">
       <TemplateValue Name="Card" Type="Cardinality">2</TemplateValue>
       <AutomaticTyped Name="SrcType" />
     </Part>
   </Parts>
   <Wires>
-    <Wire UId="33">
+    <Wire UId="31">
       <Powerrail />
-      <NameCon UId="27" Name="in" />
-      <NameCon UId="31" Name="en" />
+      <NameCon UId="26" Name="in" />
+      <NameCon UId="29" Name="en" />
+    </Wire>
+    <Wire UId="32">
+      <IdentCon UId="23" />
+      <NameCon UId="29" Name="in1" />
+    </Wire>
+    <Wire UId="33">
+      <IdentCon UId="24" />
+      <NameCon UId="29" Name="in2" />
     </Wire>
     <Wire UId="34">
-      <IdentCon UId="24" />
-      <NameCon UId="31" Name="in1" />
+      <NameCon UId="29" Name="out" />
+      <IdentCon UId="25" />
     </Wire>
     <Wire UId="35">
-      <IdentCon UId="25" />
-      <NameCon UId="31" Name="in2" />
+      <IdentCon UId="21" />
+      <NameCon UId="26" Name="operand" />
     </Wire>
     <Wire UId="36">
-      <NameCon UId="31" Name="out" />
-      <IdentCon UId="26" />
+      <NameCon UId="26" Name="out" />
+      <NameCon UId="27" Name="IN" />
     </Wire>
     <Wire UId="37">
-      <IdentCon UId="21" />
-      <NameCon UId="27" Name="operand" />
+      <IdentCon UId="22" />
+      <NameCon UId="27" Name="PT" />
     </Wire>
     <Wire UId="38">
-      <NameCon UId="27" Name="out" />
-      <NameCon UId="28" Name="in" />
-    </Wire>
-    <Wire UId="39">
-      <IdentCon UId="22" />
-      <NameCon UId="28" Name="operand" />
-    </Wire>
-    <Wire UId="40">
-      <NameCon UId="28" Name="out" />
-      <NameCon UId="29" Name="IN" />
-    </Wire>
-    <Wire UId="41">
-      <IdentCon UId="23" />
-      <NameCon UId="29" Name="PT" />
-    </Wire>
-    <Wire UId="42">
-      <NameCon UId="29" Name="ET" />
-      <OpenCon UId="32" />
+      <NameCon UId="27" Name="ET" />
+      <OpenCon UId="30" />
     </Wire>
   </Wires>
 </FlgNet></NetworkSource>
@@ -781,7 +746,7 @@
               <MultilingualTextItem ID="14" CompositionName="Items">
                 <AttributeList>
                   <Culture>en-US</Culture>
-                  <Text>Plain TON, never TONR (C-406), times the current contiguous high-and-running segment; FaultReset in its IN forces the current segment back to zero so a reset clears the in-progress time too (F1: reset is history-independent). CumulativeElapsed = AccumulatedElapsed (banked pauses) + this segment's live ET is the total cumulative high-and-running time, compared against BlockedTimeThreshold in NETWORK 5. PT is BlockedTimeThreshold only so a single contiguous segment's ET can itself reach the threshold; the trip is the comparison, not the timer's own Q.</Text>
+                  <Text>Times the current contiguous high-and-running segment, and adds the banked pause time to it: CumulativeElapsed is the total cumulative high-and-running time that NETWORK 5 compares against BlockedTimeThreshold. The timer runs on the blockage-and-running condition alone - an operator FaultReset does not stop, freeze or rewind the segment in progress (REQ-HBA-005). PT is BlockedTimeThreshold only so that a single uninterrupted segment can itself reach the threshold; the trip is the comparison in NETWORK 5, never the timer's own Q.</Text>
                 </AttributeList>
               </MultilingualTextItem>
             </ObjectList>
@@ -791,7 +756,7 @@
               <MultilingualTextItem ID="16" CompositionName="Items">
                 <AttributeList>
                   <Culture>en-US</Culture>
-                  <Text>Cumulative Persistence Timer (TON, C-406)</Text>
+                  <Text>Cumulative Persistence Timer</Text>
                 </AttributeList>
               </MultilingualTextItem>
             </ObjectList>
@@ -804,19 +769,18 @@
   <Parts>
     <Access Scope="LocalVariable" UId="21">
       <Symbol>
-        <Component Name="CumulativeElapsed" />
+        <Component Name="IO" />
+        <Component Name="FaultReset" />
       </Symbol>
     </Access>
     <Access Scope="LocalVariable" UId="22">
       <Symbol>
-        <Component Name="IO" />
-        <Component Name="BlockedTimeThreshold" />
+        <Component Name="FaultResetMem" />
       </Symbol>
     </Access>
     <Access Scope="LocalVariable" UId="23">
       <Symbol>
-        <Component Name="IO" />
-        <Component Name="HopperBlockedAlarm" />
+        <Component Name="FaultResetEdge" />
       </Symbol>
     </Access>
     <Access Scope="LocalVariable" UId="24">
@@ -827,63 +791,131 @@
     </Access>
     <Access Scope="LocalVariable" UId="25">
       <Symbol>
+        <Component Name="FaultResetMem" />
+      </Symbol>
+    </Access>
+    <Access Scope="LocalVariable" UId="26">
+      <Symbol>
+        <Component Name="CumulativeElapsed" />
+      </Symbol>
+    </Access>
+    <Access Scope="LocalVariable" UId="27">
+      <Symbol>
+        <Component Name="IO" />
+        <Component Name="BlockedTimeThreshold" />
+      </Symbol>
+    </Access>
+    <Access Scope="LocalVariable" UId="28">
+      <Symbol>
         <Component Name="IO" />
         <Component Name="HopperBlockedAlarm" />
       </Symbol>
     </Access>
-    <Part Name="Ge" UId="26">
-      <TemplateValue Name="SrcType" Type="Type">Time</TemplateValue>
-    </Part>
-    <Part Name="Contact" UId="27" />
-    <Part Name="O" UId="28">
-      <TemplateValue Name="Card" Type="Cardinality">2</TemplateValue>
-    </Part>
-    <Part Name="Contact" UId="29">
+    <Access Scope="LocalVariable" UId="29">
+      <Symbol>
+        <Component Name="FaultResetEdge" />
+      </Symbol>
+    </Access>
+    <Access Scope="LocalVariable" UId="30">
+      <Symbol>
+        <Component Name="IO" />
+        <Component Name="HopperBlockedAlarm" />
+      </Symbol>
+    </Access>
+    <Part Name="Contact" UId="31" />
+    <Part Name="Contact" UId="32">
       <Negated Name="operand" />
     </Part>
-    <Part Name="Coil" UId="30" />
+    <Part Name="Coil" UId="33" />
+    <Part Name="Contact" UId="34" />
+    <Part Name="Coil" UId="35" />
+    <Part Name="Ge" UId="36">
+      <TemplateValue Name="SrcType" Type="Type">Time</TemplateValue>
+    </Part>
+    <Part Name="Contact" UId="37" />
+    <Part Name="O" UId="38">
+      <TemplateValue Name="Card" Type="Cardinality">2</TemplateValue>
+    </Part>
+    <Part Name="Contact" UId="39">
+      <Negated Name="operand" />
+    </Part>
+    <Part Name="Coil" UId="40" />
   </Parts>
   <Wires>
-    <Wire UId="31">
+    <Wire UId="41">
       <IdentCon UId="21" />
-      <NameCon UId="26" Name="in1" />
+      <NameCon UId="31" Name="operand" />
     </Wire>
-    <Wire UId="32">
+    <Wire UId="42">
+      <NameCon UId="31" Name="out" />
+      <NameCon UId="32" Name="in" />
+    </Wire>
+    <Wire UId="43">
       <IdentCon UId="22" />
-      <NameCon UId="26" Name="in2" />
+      <NameCon UId="32" Name="operand" />
     </Wire>
-    <Wire UId="33">
-      <NameCon UId="26" Name="out" />
-      <NameCon UId="28" Name="in1" />
+    <Wire UId="44">
+      <NameCon UId="32" Name="out" />
+      <NameCon UId="33" Name="in" />
     </Wire>
-    <Wire UId="34">
-      <Powerrail />
-      <NameCon UId="26" Name="pre" />
-      <NameCon UId="27" Name="in" />
-    </Wire>
-    <Wire UId="35">
+    <Wire UId="45">
       <IdentCon UId="23" />
-      <NameCon UId="27" Name="operand" />
+      <NameCon UId="33" Name="operand" />
     </Wire>
-    <Wire UId="36">
-      <NameCon UId="27" Name="out" />
-      <NameCon UId="28" Name="in2" />
+    <Wire UId="46">
+      <Powerrail />
+      <NameCon UId="31" Name="in" />
+      <NameCon UId="34" Name="in" />
+      <NameCon UId="36" Name="pre" />
+      <NameCon UId="37" Name="in" />
     </Wire>
-    <Wire UId="37">
-      <NameCon UId="28" Name="out" />
-      <NameCon UId="29" Name="in" />
-    </Wire>
-    <Wire UId="38">
+    <Wire UId="47">
       <IdentCon UId="24" />
-      <NameCon UId="29" Name="operand" />
+      <NameCon UId="34" Name="operand" />
     </Wire>
-    <Wire UId="39">
-      <NameCon UId="29" Name="out" />
-      <NameCon UId="30" Name="in" />
+    <Wire UId="48">
+      <NameCon UId="34" Name="out" />
+      <NameCon UId="35" Name="in" />
     </Wire>
-    <Wire UId="40">
+    <Wire UId="49">
       <IdentCon UId="25" />
-      <NameCon UId="30" Name="operand" />
+      <NameCon UId="35" Name="operand" />
+    </Wire>
+    <Wire UId="50">
+      <IdentCon UId="26" />
+      <NameCon UId="36" Name="in1" />
+    </Wire>
+    <Wire UId="51">
+      <IdentCon UId="27" />
+      <NameCon UId="36" Name="in2" />
+    </Wire>
+    <Wire UId="52">
+      <NameCon UId="36" Name="out" />
+      <NameCon UId="38" Name="in1" />
+    </Wire>
+    <Wire UId="53">
+      <IdentCon UId="28" />
+      <NameCon UId="37" Name="operand" />
+    </Wire>
+    <Wire UId="54">
+      <NameCon UId="37" Name="out" />
+      <NameCon UId="38" Name="in2" />
+    </Wire>
+    <Wire UId="55">
+      <NameCon UId="38" Name="out" />
+      <NameCon UId="39" Name="in" />
+    </Wire>
+    <Wire UId="56">
+      <IdentCon UId="29" />
+      <NameCon UId="39" Name="operand" />
+    </Wire>
+    <Wire UId="57">
+      <NameCon UId="39" Name="out" />
+      <NameCon UId="40" Name="in" />
+    </Wire>
+    <Wire UId="58">
+      <IdentCon UId="30" />
+      <NameCon UId="40" Name="operand" />
     </Wire>
   </Wires>
 </FlgNet></NetworkSource>
@@ -895,7 +927,7 @@
               <MultilingualTextItem ID="19" CompositionName="Items">
                 <AttributeList>
                   <Culture>en-US</Culture>
-                  <Text>Latched fault (C-123): set when cumulative high-and-running time reaches BlockedTimeThreshold (CumulativeElapsed >= threshold), held until FaultReset. FaultReset gates the whole rung (AND NOT FaultReset) so a reset clears the latch regardless of the trip's current state (F1 fix - the old rung let a still-true trip defeat the reset); paired with NETWORK 3/4 zeroing the accumulator and current segment, a reset requires a fresh full accumulation before re-alarming, identically whether the trip was contiguous or post-pause. Lives in the RETAIN interface and deliberately survives a power cycle (C-124 carve-out, NEW-HBA-04) - a blockage needing a human still needs acknowledgement after a restart, like the sequencer's DischargeConveyorTimeoutFault. Fail-safe: the stop demand below stays asserted until acknowledged.</Text>
+                  <Text>Latches the hopper-blockage alarm when the cumulative high-and-running time reaches BlockedTimeThreshold, and holds it until an operator acknowledges. The acknowledgement is the moment FaultReset goes true, not the fact that it is true: a reset left on, wired on or stuck on clears the latch once and cannot hold the alarm off afterwards (REQ-HBA-005). Because the reset leaves the accumulated evidence alone, the latch re-evaluates on the very next scan against that same evidence - a hopper still blocked past the threshold re-alarms at once, whether or not the plant is running, while a hopper whose evidence has been discarded stays quiet. The reset pulse is taken against the previous-scan copy that the coil below it then updates - the two coils must stay in this order or the pulse never fires. The latch lives in the RETAIN interface and survives a power cycle: a blockage that needed a human still needs acknowledging after a restart, and the stop demand below stays asserted until it gets one.</Text>
                 </AttributeList>
               </MultilingualTextItem>
             </ObjectList>
@@ -925,7 +957,7 @@
     <Access Scope="LocalVariable" UId="22">
       <Symbol>
         <Component Name="IO" />
-        <Component Name="HopperBlockStopReq" />
+        <Component Name="HopperBlockedInhibit" />
       </Symbol>
     </Access>
     <Part Name="Contact" UId="23" />

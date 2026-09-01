@@ -2,7 +2,7 @@
 <Document>
   <Engineering version="V20" />
   <DocumentInfo>
-    <Created>2026-07-20T10:18:37.8245968Z</Created>
+    <Created>2026-09-01T12:42:18.3340095Z</Created>
     <ExportSetting>WithDefaults</ExportSetting>
     <InstalledProducts>
       <Product>
@@ -2159,7 +2159,7 @@
               <MultilingualTextItem ID="28" CompositionName="Items">
                 <AttributeList>
                   <Culture>en-US</Culture>
-                  <Text>Integration of the hopper-blockage supervisor (S6 request #1). Appended after the output map to keep NETWORK 1-7 byte-identical (S7 invariance discipline); functionally safe - this FB's outputs feed only FC_AlarmsMain's annunciation, never NETWORK 7's buffer output map, so its scan position relative to NETWORK 7 is immaterial. PlantRunning is the confirmed shredder-running feedback, either direction (REQ-069 honesty - field feedback, not command). The FB's HopperBlockStopReq stop demand is deliberately left unwired for now (owner scope call - alarm-only integration).</Text>
+                  <Text>Integration of the hopper-blockage supervisor (S6 request #1). Appended after the output map to keep NETWORK 1-7 byte-identical (S7 invariance discipline); functionally safe - this FB's outputs feed only FC_AlarmsMain's annunciation, never NETWORK 7's buffer output map, so its scan position relative to NETWORK 7 is immaterial. PlantRunning is the confirmed shredder-running feedback, either direction (REQ-069 honesty - field feedback, not command). The FB's HopperBlockedInhibit stop demand is deliberately left unwired for now (owner scope call - alarm-only integration).</Text>
                 </AttributeList>
               </MultilingualTextItem>
             </ObjectList>

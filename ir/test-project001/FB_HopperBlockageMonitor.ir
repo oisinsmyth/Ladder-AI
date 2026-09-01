@@ -9,14 +9,14 @@ INTERFACE
   INPUT
   OUTPUT
   STATIC
-    IO : "UDT_HopperBlockageIO" RETAIN SETPOINT COMMENT "Caller interface (C-115). Inputs (HopperLevelHigh/PlantRunning/FaultReset) are written by FC_ControlMain at integration; outputs (HopperBlockedAlarm/HopperBlockStopReq) are read there. The whole interface is RETAIN - immaterial for the re-driven inputs, deliberate for the two output latches (C-124 carve-out)."
+    IO : "UDT_HopperBlockageIO" RETAIN SETPOINT COMMENT "Caller interface (C-115). Inputs (HopperLevelHigh/PlantRunning/FaultReset) are written by FC_ControlMain at integration; outputs (HopperBlockedAlarm/HopperBlockedInhibit) are read there. The whole interface is RETAIN - immaterial for the re-driven inputs, deliberate for the two output latches (C-124 carve-out)."
       HopperLevelHigh : Bool
       PlantRunning : Bool
       FaultReset : Bool
       BlockedTimeThreshold : Time
       ClearDebounceTime : Time
       HopperBlockedAlarm : Bool
-      HopperBlockStopReq : Bool
+      HopperBlockedInhibit : Bool
     HighQualified : Bool COMMENT "Debounced blockage-present latch: set the instant the hopper reads high, held through momentary sensor clears (chatter), cleared only once the hopper has read clear continuously for ClearDebounceTime (Q-HBA-02). Transient (non-retentive)."
     BlockActive : Bool COMMENT "The persistence window accrues only while this is true: a qualified blockage AND the plant actually running (Q-HBA-04)."
     BlockActiveMem : Bool COMMENT "Previous-scan BlockActive, for the constructed falling-edge (C-404)."
@@ -66,4 +66,4 @@ NETWORK 5 "Hopper-Blocked Alarm Latch (RETAIN - Survives Power Cycle)"
 
 NETWORK 6 "Stop / Inhibit Demand"
   COMMENT "The FB emits a stop/inhibit demand on its own interface (Q-HBA-05) and writes no shared output - integration wires this demand to the actual stop and the alarm to annunciation at a separate step (out of gen-block-new scope, converter-diff-enforced). Kept a distinct member from the alarm so the two can be routed independently."
-  COIL IO.HopperBlockStopReq := IO.HopperBlockedAlarm
+  COIL IO.HopperBlockedInhibit := IO.HopperBlockedAlarm

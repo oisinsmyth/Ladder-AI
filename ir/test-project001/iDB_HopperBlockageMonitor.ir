@@ -13,7 +13,7 @@ DB iDB_HopperBlockageMonitor
       BlockedTimeThreshold : Time = T#60S
       ClearDebounceTime : Time = T#2S
       HopperBlockedAlarm : Bool
-      HopperBlockStopReq : Bool
+      HopperBlockedInhibit : Bool
     HighQualified : Bool
     BlockActive : Bool
     BlockActiveMem : Bool

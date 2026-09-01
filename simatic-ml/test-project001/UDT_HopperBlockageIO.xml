@@ -2,7 +2,7 @@
 <Document>
   <Engineering version="V20" />
   <DocumentInfo>
-    <Created>2026-08-13T15:37:26.0644471Z</Created>
+    <Created>2026-09-01T12:42:23.817266Z</Created>
     <ExportSetting>WithDefaults</ExportSetting>
     <InstalledProducts>
       <Product>
@@ -121,7 +121,7 @@
         <MultiLanguageText Lang="en-US">Out: latched hopper-blockage alarm (REQ-HBA-001/004). RETAIN - deliberately survives a power cycle (C-124 carve-out), cleared only by FaultReset, like the sequencer's DischargeConveyorTimeoutFault; a blockage needing a human still needs acknowledgement after a restart.</MultiLanguageText>
       </Comment>
     </Member>
-    <Member Name="HopperBlockStopReq" Datatype="Bool">
+    <Member Name="HopperBlockedInhibit" Datatype="Bool">
       <AttributeList>
         <BooleanAttribute Name="ExternalAccessible" SystemDefined="true">true</BooleanAttribute>
         <BooleanAttribute Name="ExternalVisible" SystemDefined="true">true</BooleanAttribute>
@@ -144,7 +144,7 @@
           <MultilingualTextItem ID="2" CompositionName="Items">
             <AttributeList>
               <Culture>en-US</Culture>
-              <Text>Caller-visible interface (C-115) for FB_HopperBlockageMonitor. FC_ControlMain writes HopperLevelHigh/PlantRunning/FaultReset in and reads HopperBlockedAlarm/HopperBlockStopReq out (wiring is a separate integration step). Per the Gate-1 supervisory-monitor exemption (NEW-HBA-07) this pure monitor carries no enable/ready/running vocabulary stubs. BlockedTimeThreshold/ClearDebounceTime are this instance's own tunables (C-307), commissioning defaults set as the iDB start values.</Text>
+              <Text>Caller-visible interface (C-115) for FB_HopperBlockageMonitor. FC_ControlMain writes HopperLevelHigh/PlantRunning/FaultReset in and reads HopperBlockedAlarm/HopperBlockedInhibit out (wiring is a separate integration step). Per the Gate-1 supervisory-monitor exemption (NEW-HBA-07) this pure monitor carries no enable/ready/running vocabulary stubs. BlockedTimeThreshold/ClearDebounceTime are this instance's own tunables (C-307), commissioning defaults set as the iDB start values.</Text>
             </AttributeList>
           </MultilingualTextItem>
         </ObjectList>

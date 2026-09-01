@@ -31,8 +31,8 @@ NETWORK 3 "Alarm Held Clear By A Standing Reset"
 
 NETWORK 4 "The Two Outputs Disagreeing"
   COMMENT "The stop demand and the alarm are required to agree, and the two directions are latched separately because one latch on their inequality could not say which way round it went. Note what this pair does not constrain: it is satisfied by both outputs moving together at the wrong moment, so it is evidence about the relation and about nothing else - what pins the pair to the plant is the timing assertions, not these."
-  SCOIL InhibitLowWhileAlarmHigh := iDB_HopperBlockageMonitor.IO.HopperBlockedAlarm AND NOT iDB_HopperBlockageMonitor.IO.HopperBlockStopReq AND iDB_HopperBlockageStim.Stim.Armed
-  SCOIL InhibitHighWhileAlarmLow := iDB_HopperBlockageMonitor.IO.HopperBlockStopReq AND NOT iDB_HopperBlockageMonitor.IO.HopperBlockedAlarm AND iDB_HopperBlockageStim.Stim.Armed
+  SCOIL InhibitLowWhileAlarmHigh := iDB_HopperBlockageMonitor.IO.HopperBlockedAlarm AND NOT iDB_HopperBlockageMonitor.IO.HopperBlockedInhibit AND iDB_HopperBlockageStim.Stim.Armed
+  SCOIL InhibitHighWhileAlarmLow := iDB_HopperBlockageMonitor.IO.HopperBlockedInhibit AND NOT iDB_HopperBlockageMonitor.IO.HopperBlockedAlarm AND iDB_HopperBlockageStim.Stim.Armed
 
 NETWORK 5 "Previous Alarm State"
   COMMENT "Stores this scan's alarm state for the next scan's falling-edge comparison. Written after the networks that read it, so those see the previous scan's value."
