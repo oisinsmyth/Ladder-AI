@@ -86,10 +86,28 @@ public static class DerivationProducer
     public const string TimeCompression = "TimeCompression";
     public const string S7TagMap = "S7TagMap";
 
+    /// <summary>
+    /// 🔴 <b>THE TOOL THAT ACTUALLY PERFORMS DOWNLOADS ON THIS RIG.</b>
+    ///
+    /// <para>Added 2026-08-28 because <c>deployment</c> was unattributable in practice. The only producer
+    /// mapping to <see cref="ArtifactKind.DeployResult"/> was <see cref="DeviceGateway"/>
+    /// (<c>Harness.Device</c>), <b>which has never executed against Portal or a controller</b> — so the
+    /// only way to satisfy gate 0c for <c>deployment</c> was to name a producer that has never run, which
+    /// is the false attribution the closed set exists to prevent.</para>
+    ///
+    /// <para><b>This completes a change the artifact side already made.</b>
+    /// <c>ArtifactCheck.Deployment</c> was taught to read <c>download-probe</c>'s JSON report and its
+    /// verbatim log — in its own words, <i>"every actual download on this rig was done by
+    /// <c>download-probe</c>"</i> — while the producer set was never widened to let anyone NAME it. The
+    /// artifact could be validated and could not be attributed.</para>
+    /// </summary>
+    public const string DownloadProbe = "download-probe";
+
     /// <summary>Every producer this gate will accept.</summary>
     public static IReadOnlySet<string> Known { get; } = new HashSet<string>(StringComparer.Ordinal)
     {
         CopyLayerGenerator, ReachableState, SlotConflictDerivation, DeviceGateway, TimeCompression, S7TagMap,
+        DownloadProbe,
     };
 
     /// <summary>
@@ -108,6 +126,7 @@ public static class DerivationProducer
         ReachableState => ArtifactKind.ReachableState,
         SlotConflictDerivation => ArtifactKind.ConflictGraph,
         DeviceGateway => ArtifactKind.DeployResult,
+        DownloadProbe => ArtifactKind.DeployResult,
         S7TagMap => ArtifactKind.TagMap,
         TimeCompression => ArtifactKind.None,
         _ => ArtifactKind.None,

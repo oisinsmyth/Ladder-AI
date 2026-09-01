@@ -487,7 +487,16 @@ public class DeploymentManifestTests
     /// <summary>
     /// <c>download-probe --json</c> stdout, carrying the first-hand manifest, the rendered log, or both.
     /// </summary>
-    private static string ProbeJson(string? firstHand, string loggedObject, string? transferVerdict = "Transferred")
+    // 🔴 THE DEFAULT WAS "Transferred", A TOKEN NO REAL PROBE HAS EVER EMITTED (corrected 2026-08-28).
+    // download-probe serializes TransferVerdictKind — SoftwareLoaded / NothingTransferred /
+    // Undetermined — and "Transferred" belongs to the Openness library's enum, which the probe maps
+    // ONTO SoftwareLoaded before writing. So every test built on this default was exercising the
+    // check against a value the artifact under test cannot produce, and the check's own comparison
+    // was wrong in exactly the same way. THE FIXTURE RATIFIED THE DEFECT: a real download reported
+    // SoftwareLoaded, gate 0c refused it as "ARTIFACT REPORTS FAILURE", and the suite stayed green
+    // throughout. A fixture that invents its subject's vocabulary cannot catch the subject getting
+    // that vocabulary wrong.
+    private static string ProbeJson(string? firstHand, string loggedObject, string? transferVerdict = "SoftwareLoaded")
     {
         var manifest = firstHand is null
             ? string.Empty

@@ -298,7 +298,10 @@ public static class DeriveCli
         DerivableField.ComputedConflicts => DerivationProducer.SlotConflictDerivation,
         DerivableField.BlockCompression => DerivationProducer.TimeCompression,
         DerivableField.RuntimeCompression => DerivationProducer.TimeCompression,
-        DerivableField.Deployment => DerivationProducer.DeviceGateway,
+        // Was DeviceGateway ("Harness.Device"), WHICH HAS NEVER EXECUTED. That default silently attributed a
+        // download-probe artifact to a tool that has never run, and ArtifactCheck.Deployment - which was
+        // taught to read download-probe's own JSON and log - would pass it. A wrong answer nothing catches.
+        DerivableField.Deployment => DerivationProducer.DownloadProbe,
         DerivableField.TagMapPath => DerivationProducer.S7TagMap,
         _ => string.Empty,
     };

@@ -163,11 +163,28 @@ public static class ArtifactCheck
     /// notes record what parsing the prose costs: "anything the renderer drops is gone before this reader
     /// sees it".</para>
     ///
-    /// <para><b>The whole token, never a substring, for the same reason as below:</b> the serialized enum
-    /// values are <c>Transferred</c>, <c>NothingTransferred</c> and <c>Undetermined</c>, and the first is a
-    /// substring of the second. <b>A null verdict is refused</b> — the probe writes null when no transfer
-    /// classification exists at all (an abort, a throw, a run that never reached the download), which is
-    /// "we cannot say" and never "it happened".</para>
+    /// <para><b>The whole token, never a substring:</b> the serialized values are
+    /// <c>SoftwareLoaded</c>, <c>NothingTransferred</c> and <c>Undetermined</c>. <b>A null verdict is
+    /// refused</b> — the probe writes null when no transfer classification exists at all (an abort, a
+    /// throw, a run that never reached the download), which is "we cannot say" and never "it happened".</para>
+    ///
+    /// <para>🔴 <b>CORRECTED 2026-08-28: this compared against <c>Transferred</c>, WHICH THE PROBE CANNOT
+    /// EMIT.</b> <c>TransferVerdictKind</c> — the enum the probe actually serializes — has exactly three
+    /// members and <c>Transferred</c> is not one of them; <c>TransferVerdict.cs</c> maps the Openness
+    /// library's <c>Transferred</c> onto the probe's own <c>SoftwareLoaded</c>. So this read the right
+    /// FIELD and compared it against a token from the wrong ENUM, and every genuine download failed it.
+    /// The doc's own "first is a substring of the second" rationale belonged to the library's names and
+    /// does not arise here. The comment above this method already recorded that <c>deployment</c> was
+    /// "a field nothing could satisfy — a gate that refuses correct work rather than one that catches
+    /// anything"; the artifact side was taught to find probe reports and this comparison was left behind.</para>
+    ///
+    /// <para>🔴 <b>AND THE OBVIOUS ALTERNATIVE IS A TRAP — DO NOT "FIX" THIS BY READING
+    /// <c>loadManifest.verdict</c> INSTEAD.</b> That field reads <c>Transferred</c> on a
+    /// <c>--to-folder</c> run THAT CONTACTED NO CONTROLLER, measured and recorded in
+    /// <c>DownloadProbe/Program.cs</c>: a folder run reported <c>verdict: Transferred</c> while
+    /// <c>transferVerdict</c> said <c>Undetermined</c>. Matching the manifest would accept a run that
+    /// downloaded to a directory as evidence of a deployment. The FIELD was always right; only the token
+    /// was wrong, so only the token changed.</para>
     /// </summary>
     private static ArtifactVerdict ProbeJson(JsonElement verdict)
     {
@@ -181,11 +198,11 @@ public static class ArtifactCheck
 
         var value = verdict.GetString() ?? string.Empty;
 
-        return string.Equals(value, "Transferred", StringComparison.OrdinalIgnoreCase)
-            ? new ArtifactVerdict(true, "a download-probe report whose transferVerdict is Transferred.")
+        return string.Equals(value, "SoftwareLoaded", StringComparison.OrdinalIgnoreCase)
+            ? new ArtifactVerdict(true, "a download-probe report whose transferVerdict is SoftwareLoaded.")
             : new ArtifactVerdict(false,
                 $"ARTIFACT REPORTS FAILURE - the download-probe report's own transferVerdict is '{value}', not "
-                + "'Transferred'. The probe distinguishes a download that completed from one that moved anything, and only "
+                + "'SoftwareLoaded'. The probe distinguishes a download that completed from one that moved anything, and only "
                 + "the second is evidence of a deployment.");
     }
 

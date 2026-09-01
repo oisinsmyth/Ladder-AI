@@ -296,13 +296,39 @@ public static class InertPhase
     /// round-trip ratio. A literal on both sides is how the plan's refusal and the loop's actual bound
     /// would come to be different numbers, which is a shape this codebase records four times.</para>
     ///
-    /// <para><b>200 is unchanged from the literal it replaces</b>, so nothing about today's runs moves.
+    /// <para><s><b>200 is unchanged from the literal it replaces</b>, so nothing about today's runs moves.
     /// Note what it buys and what it does not: at the measured 63–106 ms round trip it is 12.6–21 s of
-    /// wall clock, so a wait near 9.5 s has only about a quarter of the budget to spare in the worst case.
-    /// Raising it is a decision about how long a wave may sit on a wedged rig, and is deliberately taken
-    /// deliberately.</para>
+    /// wall clock, so a wait near 9.5 s has only about a quarter of the budget to spare in the worst
+    /// case.</s> <b>Raising it is a decision about how long a wave may sit on a wedged rig, and is
+    /// deliberately taken deliberately.</b> That last sentence still governs, and this raise is that
+    /// decision being taken — owner instruction 2026-09-01, *"fix the timing so the inert check waits"*.</para>
+    ///
+    /// <para>🔴 <b>RAISED 200 → 2560 BECAUSE THE OLD CEILING MADE A CORRECT DECLARATION UNDECLARABLE.</b>
+    /// `quiescenceScans` may not exceed this budget, so 200 capped the inert wait at 200 SCANS — about
+    /// 0.45 s at the rig's measured 2.20–2.27 ms scan. A stimulus model whose trailing clear-down runs
+    /// `T#5S` therefore could not state its own settle time at all, and the slot died at index 1 with
+    /// `NotInert` on a block that was mid-clear. <b>Measured, not reasoned about:</b> the same registers
+    /// read 1 during the index-1 check and 0 with the rig idle afterwards, and the only path to that
+    /// reset was the clear-down itself. 5 s at the FASTEST observed scan is ~2,270 scans, so 2,560 covers
+    /// it with headroom.</para>
+    ///
+    /// <para><b>What this does NOT cost, and the distinction is the whole argument.</b> The budget is a
+    /// worst-case BOUND, not a per-run price: polling stops the moment quiescence is met. The "one scan
+    /// per poll" worst case behind the old ceiling assumes a scan SLOWER than the link; on this rig a
+    /// ~72 ms poll spans ~32 scans, so a 2,270-scan wait is about 70 polls, ~5 s — which is exactly the
+    /// settle being waited for and not a second longer. What does grow is the pathological case: a wedged
+    /// rig can now hold a phase for 2,560 polls rather than 200. That is the trade being made
+    /// consciously — a wave that waits out a stall is recoverable, a wave that refuses every index for
+    /// being mid-clear is not.</para>
+    ///
+    /// <para>⚠️ <b>2,560 is a SCAN count and scan time is a property of the PROGRAM, not the controller</b>
+    /// (see the standing-facts table in `docs/notes/live-project-readiness.md`, where a "now deployed"
+    /// scan figure was quoted onward for six days after it stopped being true). It covers 5 s only at
+    /// roughly this program's scan rate. A slower program needs fewer scans for the same wall time and a
+    /// faster one needs more — so a lane that changes the program under test should re-derive the
+    /// quiescence it declares rather than inheriting this one.</para>
     /// </summary>
-    public const int PollBudget = 200;
+    public const int PollBudget = 2560;
 
     /// <summary>Establish inert for one slot and verify it, both checks.</summary>
     /// <param name="maxPolls">
