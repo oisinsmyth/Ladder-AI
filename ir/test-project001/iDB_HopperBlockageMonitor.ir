@@ -18,6 +18,8 @@ DB iDB_HopperBlockageMonitor
     BlockActive : Bool
     BlockActiveMem : Bool
     PauseEdge : Bool
+    FaultResetMem : Bool
+    FaultResetEdge : Bool
     AccumulatedElapsed : Time
     CumulativeElapsed : Time
     ZeroTime : Time
