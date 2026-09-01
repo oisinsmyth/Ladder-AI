@@ -538,12 +538,27 @@ PROGRAM, NOT OF THE CONTROLLER, AND THIS ONE WAS RECORDED AS A RIG FACT.***
 |---|---|---|
 | **22.64 ms idle / 23.33 ms loaded** | ***the A1 SPIKE CHECKER*** — 123-register comparisons every scan. Its own source says *"the 16-register unrolled checker is inside that figure"* | 2026-08-13, n=101 idle (spread 22.20–23.02), n=16 loaded |
 | **~2.1 ms** | ***a BARE HARNESS program, deployed on 2026-08-14 and NOT on the rig since*** — no checker, and no plant program either | 2026-08-14, **THREE independent paths**: `harness-mirror-read` **2.11 / 2.07 ms**, and `harness-mirror-view` **2.13 ms** (510 scans in 1087 ms) during a separate 13-minute session |
-| **23.80 ms quiet / 24.931 ms loaded** | ***the PLANT program + harness, which is what runs today*** | 2026-08-18, **12,027 scans over 299.8 s, ±0.002 ms**; re-confirmed live 2026-08-20 three times (24.19 over 1,252 scans; 24.24; 24.27). `Harness.Wire/WireTiming.cs` is the authority |
+| **23.80 ms quiet / 24.931 ms loaded** | ***the PLANT program + harness*** — ⚠️ **its "which is what runs today" was true when written and is NOT true now**, see the row below | 2026-08-18, **12,027 scans over 299.8 s, ±0.002 ms**; re-confirmed live 2026-08-20 three times (24.19 over 1,252 scans; 24.24; 24.27). `Harness.Wire/WireTiming.cs` is the authority |
+| **~2.26 ms** | ***`GenProject1` — the hopper-blockage lane, build stamp `16#41E5DA59`, WHICH IS WHAT IS ON THE RIG AS OF 2026-09-01*** | measured three times off the rig by scan-counter delta against wall clock: **2.2629 ms** (79.906 s / 35,312 scans), **2.2733 ms**, and **2.2041 ms** (fastest observed). Added 2026-09-01 |
 
 🔴 **THE ~2.1 ms ROW SAID "now deployed" AND WAS QUOTED ONWARD ON THAT BASIS FOR SIX DAYS.** It was
 true when written and became false the moment a plant program went back on the rig. **Every row in
 this table is a property of the PROGRAM, not of the controller** — that is the whole point of the
 table, and the "now" in one cell defeated it.
+
+🔴 **AND IT HAPPENED AGAIN ON 2026-09-01, TO A READER WHO HAD JUST FINISHED CATCHING IT.** An
+independent fidelity declarer correctly retracted a stale ~2.1 ms figure from a model declaration —
+and replaced it with the **23.80 ms** row above, which belongs to a different program again. Its own
+account: *"I retracted a figure for bad provenance and then substituted another figure with bad
+provenance… I checked the constant and never asked which program it described."* The error was a
+~10× overstatement, in a bound that scales linearly with the scan.
+
+**The cause was this table, not the reader.** It had rows for the spike checker, the bare harness and
+the plant+harness — and **no row for the program actually on the rig**, so the nearest-looking row
+won. That is why the `GenProject1` row now exists and why every row names its program in the cell
+rather than in a footnote. **A table of program-specific figures that omits the deployed program is
+not neutral: it actively supplies a wrong answer to the reader who trusts it most.** If you deploy
+something else, add its row before you rely on any figure here.
 
 **Poll load costs a reproducible +1.13 ms/scan**, so the quiet and loaded figures are two operating
 points rather than two estimates of one number, and **a wave only ever runs at the loaded one.**
