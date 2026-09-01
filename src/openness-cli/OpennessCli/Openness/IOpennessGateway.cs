@@ -574,6 +574,24 @@ public interface IOpennessGateway : IDisposable
     DownloadPlanResult BuildDownloadPlan(string? deviceFilter, DownloadOptionKind options);
 
     /// <summary>
+    /// Every hardware identifier the PROJECT declares, walked off the device tree.
+    ///
+    /// <para>Added because nothing in this CLI could answer "what is this CPU's interface
+    /// identifier", and a harness comms block needs one: <c>Harness.Map/CommsFbGenerator.cs</c>
+    /// requires it be "read off the device's own configuration, never from another project's
+    /// block". Without this the value was carried across from a sibling project and shipped
+    /// flagged as unverified.</para>
+    ///
+    /// <para>🔴 <b>READS THE PROJECT, NOT THE CONTROLLER.</b> No CPU is contacted. A project stale
+    /// against its device answers confidently and wrongly, exactly as <c>served-area</c> warns of a
+    /// stale corpus.</para>
+    ///
+    /// <para>Attribute names are DISCOVERED via <c>GetAttributeInfos</c>, never hardcoded — the
+    /// spelling differs between device families.</para>
+    /// </summary>
+    HardwareIdentifierResult ReadHardwareIdentifiers(string? deviceFilter, bool allAttributes);
+
+    /// <summary>
     /// The method that would perform a device download. It never does.
     ///
     /// It exists on this interface, rather than being simply absent, so that "no download was

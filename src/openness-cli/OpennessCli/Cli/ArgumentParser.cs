@@ -174,6 +174,23 @@ public sealed record DownloadPlanCommandOptions(
     int TimeoutConnectSeconds,
     int TimeoutOpenSeconds);
 
+// `hw-identifiers`. READ-ONLY, and read-only in the stronger sense that matters here: it reads the
+// PROJECT and never a controller. No socket, no download, no write of any kind.
+//
+// It exists because a harness comms block carries a HW_ANY interface identifier that
+// Harness.Map/CommsFbGenerator.cs requires be "read off the device's own configuration, never from
+// another project's block" — and until this command there was no way in this CLI to do that at all.
+// The value therefore got carried across from a sibling project and shipped flagged as unverified.
+// A wrong identifier is not a compile error; it is a connection that never establishes.
+public sealed record HardwareIdentifierCommandOptions(
+    string ProjectIdentifier,
+    string? Device,
+    bool Json,
+    bool AllAttributes,
+    string? TiaInstallOverride,
+    int TimeoutConnectSeconds,
+    int TimeoutOpenSeconds);
+
 // Grounding/scaffolding command (2026-07-14, `PlantAutoControl` round-trip plan Phase 0.2) — creates an
 // instance DB backing an already-existing FB, for FBs imported standalone with no calling context.
 // Not S6+ logic generation: invents no tag/address/DB number (DbName is engineer-supplied, the DB
@@ -396,6 +413,8 @@ public abstract record ParseResult
 
     public sealed record DownloadPlanSuccess(DownloadPlanCommandOptions Options) : ParseResult;
 
+    public sealed record HardwareIdentifierSuccess(HardwareIdentifierCommandOptions Options) : ParseResult;
+
     public sealed record CreateInstanceDbSuccess(CreateInstanceDbCommandOptions Options) : ParseResult;
 
     public sealed record SanityCheckSuccess(ListOptions Options) : ParseResult;
@@ -518,6 +537,13 @@ public static class ArgumentParser
         "    UNVERIFIED: whether a later re-import of the same block reverts the layout. The converter emits no MemoryLayout and Normalizer ignores it, so drift-check cannot see either\n" +
         "    direction. Re-assert with --expect after every import until that is settled.\n" +
         "  openness-cli download-plan <project> [--device <name>] [--options Software|SoftwareOnlyChanges|Hardware] [--json]\n" +
+        "  openness-cli hw-identifiers <project> [--device <name>] [--all] [--json]\n" +
+        "    --all shows EVERY attribute, not only identifier-named ones: the name filter is a guess,\n" +
+        "    and a guess that misses reads as an absence rather than as a miss.\n" +
+        "    Hardware identifiers the PROJECT declares. Reads the project, NEVER a controller: no socket,\n" +
+        "    no download, no write. Attribute names are DISCOVERED via GetAttributeInfos, never hardcoded -\n" +
+        "    the spelling differs between device families. A project stale against its device answers\n" +
+        "    confidently and WRONGLY, the same caveat served-area prints about a stale corpus.\n" +
         "    READ-ONLY AND DRY-RUN ONLY. Reports what a download WOULD comprise and CANNOT PERFORM ONE - there is no --yes, no --force and no confirmed form; nothing in this binary reaches\n" +
         "    DownloadProvider.Download. GRANULARITY IS DEVICE-LEVEL: Download() takes a connection, two callbacks and a DownloadOptions - no block, no group, no selection - so the smallest real\n" +
         "    unit is THE WHOLE PLC SOFTWARE. There is no per-block download, and 'SoftwareOnlyChanges' means the parts TIA finds different, NOT the blocks you edited. Reports where the\n" +
@@ -634,6 +660,7 @@ public static class ArgumentParser
         ParseResult.DeleteSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
         ParseResult.BlockLayoutSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
         ParseResult.DownloadPlanSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
+        ParseResult.HardwareIdentifierSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
         ParseResult.CreateInstanceDbSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
         ParseResult.SanityCheckSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
         ParseResult.CompileScopesSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
@@ -673,6 +700,7 @@ public static class ArgumentParser
         ParseResult.DeleteSuccess s => s.Options.ProjectIdentifier,
         ParseResult.BlockLayoutSuccess s => s.Options.ProjectIdentifier,
         ParseResult.DownloadPlanSuccess s => s.Options.ProjectIdentifier,
+        ParseResult.HardwareIdentifierSuccess s => s.Options.ProjectIdentifier,
         ParseResult.CreateInstanceDbSuccess s => s.Options.ProjectIdentifier,
         ParseResult.SanityCheckSuccess s => s.Options.ProjectIdentifier,
         ParseResult.CompileScopesSuccess s => s.Options.ProjectIdentifier,
@@ -717,6 +745,7 @@ public static class ArgumentParser
             "delete" => ParseDelete(args),
             "block-layout" => ParseBlockLayout(args),
             "download-plan" => ParseDownloadPlan(args),
+            "hw-identifiers" => ParseHardwareIdentifiers(args),
             "create-instance-db" => ParseCreateInstanceDb(args),
             "sanity-check" => ParseSanityCheck(args),
             "compile-scopes" => ParseCompileScopes(args),
@@ -743,7 +772,7 @@ public static class ArgumentParser
                 var other => other,
             },
             var other => new ParseResult.Failure(
-                $"Unknown subcommand '{other}'. Supported subcommands: list, export, import, compile, delete, block-layout, download-plan, create-instance-db, sanity-check, compile-scopes, portal-status, portal-close, library, graphics, hmi, hmi-compile, hmi-delete-screen, hmi-delete-tagtable, hmi-create-screen, hmi-edit-screen, hmi-create-tag, hmi-inventory, hmi-new, hmi-delete, hmi-set.{Environment.NewLine}{Usage}"),
+                $"Unknown subcommand '{other}'. Supported subcommands: list, export, import, compile, delete, block-layout, download-plan, hw-identifiers, create-instance-db, sanity-check, compile-scopes, portal-status, portal-close, library, graphics, hmi, hmi-compile, hmi-delete-screen, hmi-delete-tagtable, hmi-create-screen, hmi-edit-screen, hmi-create-tag, hmi-inventory, hmi-new, hmi-delete, hmi-set.{Environment.NewLine}{Usage}"),
         };
     }
 
@@ -1904,6 +1933,89 @@ public static class ArgumentParser
 
         return new ParseResult.DownloadPlanSuccess(new DownloadPlanCommandOptions(
             projectIdentifier, device, options, json, tiaInstall, timeoutConnect, timeoutOpen));
+    }
+
+    private static ParseResult ParseHardwareIdentifiers(string[] args)
+    {
+        string? projectIdentifier = null;
+        string? device = null;
+        var json = false;
+        var allAttributes = false;
+        string? tiaInstall = null;
+        var timeoutConnect = DefaultTimeoutConnectSeconds;
+        var timeoutOpen = DefaultTimeoutOpenSeconds;
+
+        for (var i = 1; i < args.Length; i++)
+        {
+            switch (args[i])
+            {
+                case "--device":
+                    if (!TryTakeValue(args, ref i, "--device", out device, out var deviceErr))
+                    {
+                        return new ParseResult.Failure(deviceErr);
+                    }
+
+                    break;
+                case "--json":
+                    json = true;
+                    break;
+
+                // --all exists because the identifier-sense filter is a GUESS about naming, and a
+                // guess that misses reads as an absence. When the attribute you want is not in the
+                // filtered set, the useful next question is "what IS on this item", not "try
+                // another guess" - so the command can show its whole working.
+                case "--all":
+                    allAttributes = true;
+                    break;
+
+                // Refused BY NAME for the same reason download-plan refuses them: someone typing
+                // these has concluded this command can be talked into doing something to a device.
+                // It cannot. It reads the project file and never opens a socket, and contradicting
+                // that belief immediately is more useful than ignoring an unknown flag.
+                case "--yes":
+                case "--force":
+                    return new ParseResult.Failure(
+                        $"'{args[i]}' is not a flag on hw-identifiers. It READS the project's hardware " +
+                        "configuration and has no write, no download and no device contact of any kind to " +
+                        $"unlock.{Environment.NewLine}{Usage}");
+                case "--tia-install":
+                    if (!TryTakeValue(args, ref i, "--tia-install", out tiaInstall, out var installErr))
+                    {
+                        return new ParseResult.Failure(installErr);
+                    }
+
+                    break;
+                case "--timeout-connect":
+                    if (!TryTakeIntValue(args, ref i, "--timeout-connect", out timeoutConnect, out var connectErr))
+                    {
+                        return new ParseResult.Failure(connectErr);
+                    }
+
+                    break;
+                case "--timeout-open":
+                    if (!TryTakeIntValue(args, ref i, "--timeout-open", out timeoutOpen, out var openErr))
+                    {
+                        return new ParseResult.Failure(openErr);
+                    }
+
+                    break;
+                default:
+                    if (!TryTakePositional(args[i], ref projectIdentifier, out var posErr))
+                    {
+                        return new ParseResult.Failure(posErr);
+                    }
+
+                    break;
+            }
+        }
+
+        if (projectIdentifier is null)
+        {
+            return new ParseResult.Failure($"Missing required argument: <project>.{Environment.NewLine}{Usage}");
+        }
+
+        return new ParseResult.HardwareIdentifierSuccess(new HardwareIdentifierCommandOptions(
+            projectIdentifier, device, json, allAttributes, tiaInstall, timeoutConnect, timeoutOpen));
     }
 
     private static ParseResult ParseCreateInstanceDb(string[] args)

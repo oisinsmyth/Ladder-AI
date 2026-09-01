@@ -1058,6 +1058,81 @@ public static class OutputFormatter
         });
     }
 
+    public static string FormatHardwareIdentifiersTable(HardwareIdentifierResult result)
+    {
+        var sb = new StringBuilder();
+
+        sb.Append("HARDWARE IDENTIFIERS - READ FROM THE PROJECT, NOT FROM A CONTROLLER.\n");
+        sb.Append("  Nothing here was observed on a device. These are the identifiers the hardware\n");
+        sb.Append("  CONFIGURATION declares, so a project stale with respect to its CPU reports a\n");
+        sb.Append("  confident, agreed and WRONG value - and is indistinguishable from a fresh one.\n");
+        sb.Append("  Attribute names are DISCOVERED via GetAttributeInfos, never hardcoded: the\n");
+        sb.Append("  spelling differs between device families, and a name written for the wrong one\n");
+        sb.Append("  reads as an ABSENCE rather than as a miss.\n\n");
+
+        sb.Append("DEVICE FILTER : ").Append(result.DeviceFilter ?? "<none - every device>").Append('\n');
+        sb.Append("ITEMS WALKED  : ").Append(result.ItemsWalked).Append('\n');
+        sb.Append("WITH IDENTIFIERS: ").Append(result.ItemsWithIdentifiers).Append("\n\n");
+
+        if (result.ItemsWalked == 0)
+        {
+            sb.Append("*** NOTHING EXAMINED. *** No device item was walked, so this report is a\n");
+            sb.Append("statement about the filter and not about any hardware. Empty is not clean.\n");
+            return sb.ToString();
+        }
+
+        if (result.Items.Count == 0)
+        {
+            sb.Append("No device item declares an identifier attribute. THIS IS AN EARNED ZERO: ")
+              .Append(result.ItemsWalked)
+              .Append(" item(s) were examined and each self-described its attributes.\n");
+            return sb.ToString();
+        }
+
+        foreach (var item in result.Items)
+        {
+            sb.Append(item.Path).Append("  [").Append(item.TypeName).Append("]\n");
+            foreach (var attribute in item.Attributes)
+            {
+                sb.Append("    ").Append(attribute.Name).Append(" = ").Append(attribute.Value).Append('\n');
+            }
+
+            sb.Append('\n');
+        }
+
+        return sb.ToString();
+    }
+
+    public static string FormatHardwareIdentifiersJson(HardwareIdentifierResult result)
+    {
+        var payload = new
+        {
+            // First, and deliberately: a consumer learns what this CANNOT see before it reads a
+            // single value, because the value is confidently wrong on a stale project.
+            readFrom = "project hardware configuration",
+            cannotSee =
+                "WHAT THIS CANNOT SEE: whether the configuration it read is the configuration on the " +
+                "controller. It reads the project, never the CPU - a project stale with respect to the " +
+                "device yields a confident, agreed, WRONG identifier and is indistinguishable from a " +
+                "fresh one.",
+            attributeDiscovery =
+                "Attribute names come from GetAttributeInfos, never a hardcoded list: the spelling " +
+                "differs between device families and a wrong name reads as an absence, not a miss.",
+            deviceFilter = result.DeviceFilter,
+            itemsWalked = result.ItemsWalked,
+            itemsWithIdentifiers = result.ItemsWithIdentifiers,
+            nothingExamined = result.ItemsWalked == 0,
+            items = result.Items.Select(i => new
+            {
+                path = i.Path,
+                type = i.TypeName,
+                attributes = i.Attributes.Select(a => new { name = a.Name, value = a.Value }),
+            }),
+        };
+
+        return JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true });
+    }
+
     public static string FormatCompileTable(CompileResult result)
     {
         var sb = new StringBuilder();

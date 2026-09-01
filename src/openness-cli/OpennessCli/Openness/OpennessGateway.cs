@@ -6470,6 +6470,358 @@ public sealed class OpennessGateway : IOpennessGateway
     }
 
     /// <summary>
+    /// Attribute names that carry an identifier sense, DISCOVERED from the object rather than
+    /// assumed. Openness self-describes through <c>GetAttributeInfos</c>, and the spelling differs
+    /// between device families — the same reason <see cref="DiscoverNumberAttributeNames"/> exists.
+    /// A hardcoded "HwIdentifier" would read nothing on the family it was not written against, and
+    /// would read it as an ABSENCE rather than as a miss.
+    /// </summary>
+    private static readonly string[] IdentifierAttributeSenses = { "Identifier", "HwId", "HandleId" };
+
+    /// <summary>
+    /// Every attribute the object self-describes, for <c>--all</c>. The filtered set is a GUESS
+    /// about naming, and when the attribute somebody wants is not in it the useful next question is
+    /// "what IS on this item" rather than "try another guess" — a guess that misses is reported as
+    /// an absence, which is the failure this escape exists to break.
+    /// </summary>
+    /// <summary>
+    /// Identifier-bearing SERVICES on a device item, reached by reflection.
+    ///
+    /// <para>Openness exposes a hardware identifier through a service, not an attribute — measured,
+    /// see the call site. <c>GetService&lt;T&gt;()</c> is generic, so calling it for a type this
+    /// assembly does not reference means constructing the generic method at run time.</para>
+    ///
+    /// <para><b>Every failure here is silent BY DESIGN and that is safe</b>, because this is
+    /// additive: it can only add rows to a report that already stands on the attribute walk. A
+    /// service that is absent on this Openness version, or whose shape moved, yields nothing rather
+    /// than breaking the command — and the report's counts still say what was examined.</para>
+    /// </summary>
+    private static IEnumerable<HardwareIdentifierAttribute> ReadIdentifierServices(DeviceItem item)
+    {
+        var results = new List<HardwareIdentifierAttribute>();
+
+        Type[] candidates;
+        try
+        {
+            candidates = typeof(DeviceItem).Assembly.GetTypes()
+                .Where(t => t.IsInterface || t.IsClass)
+                .Where(t => t.Name.IndexOf("HwIdentifier", StringComparison.OrdinalIgnoreCase) >= 0)
+                .ToArray();
+        }
+        catch (Exception)
+        {
+            return results;
+        }
+
+        foreach (var candidate in candidates)
+        {
+            object? service;
+            try
+            {
+                var generic = typeof(IEngineeringServiceProvider)
+                    .GetMethods()
+                    .FirstOrDefault(m => m.Name == "GetService" && m.IsGenericMethodDefinition);
+                if (generic is null)
+                {
+                    continue;
+                }
+
+                service = generic.MakeGenericMethod(candidate).Invoke(item, null);
+            }
+            catch (Exception)
+            {
+                continue;
+            }
+
+            if (service is null)
+            {
+                continue;
+            }
+
+            foreach (var property in service.GetType().GetProperties())
+            {
+                if (property.GetIndexParameters().Length > 0)
+                {
+                    continue;
+                }
+
+                object? value;
+                try
+                {
+                    value = property.GetValue(service);
+                }
+                catch (Exception ex)
+                {
+                    results.Add(new HardwareIdentifierAttribute(
+                        $"{candidate.Name}.{property.Name}", $"<unreadable: {ex.GetType().Name}>"));
+                    continue;
+                }
+
+                // 🔴 THE ANSWER IS INSIDE A COLLECTION, NOT IN THE PROPERTY ITSELF (measured).
+                // `RegisteredHwIdentifiers` renders as "Siemens.Engineering.HW.HwIdentifierAssociation"
+                // — the TYPE NAME, which is exactly the useless answer a naive Describe gives for
+                // every association. The identifiers are its ELEMENTS. An association that is empty
+                // is reported as empty rather than skipped: "this controller registers none" and
+                // "nobody looked inside" are different facts.
+                if (value is System.Collections.IEnumerable enumerable && value is not string)
+                {
+                    var index = 0;
+                    var any = false;
+                    try
+                    {
+                        foreach (var element in enumerable)
+                        {
+                            any = true;
+                            results.Add(new HardwareIdentifierAttribute(
+                                $"{candidate.Name}.{property.Name}[{index++}]", DescribeElement(element)));
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        results.Add(new HardwareIdentifierAttribute(
+                            $"{candidate.Name}.{property.Name}[{index}]",
+                            $"<enumeration failed: {ex.GetType().Name}>"));
+                    }
+
+                    if (!any)
+                    {
+                        results.Add(new HardwareIdentifierAttribute(
+                            $"{candidate.Name}.{property.Name}", "<empty collection - registers none>"));
+                    }
+
+                    continue;
+                }
+
+                results.Add(new HardwareIdentifierAttribute(
+                    $"{candidate.Name}.{property.Name}", value is null ? "<null>" : Describe(value)));
+            }
+        }
+
+        return results;
+    }
+
+    /// <summary>
+    /// One element of an identifier association, rendered as its own readable properties rather
+    /// than as its type name. A <c>HwIdentifier</c> carries the pair somebody actually wants — the
+    /// system-constant name and its numeric value — and <c>ToString()</c> on it yields the class
+    /// name, which is the answer that looks like data and is not.
+    /// </summary>
+    private static string DescribeElement(object? element)
+    {
+        if (element is null)
+        {
+            return "<null>";
+        }
+
+        var parts = new List<string>();
+        foreach (var property in element.GetType().GetProperties())
+        {
+            if (property.GetIndexParameters().Length > 0)
+            {
+                continue;
+            }
+
+            // Skip the back-references every Openness object carries; they are noise here and each
+            // renders as another class name.
+            if (property.Name is "Parent" or "OwnedBy" or "Container")
+            {
+                continue;
+            }
+
+            try
+            {
+                var value = property.GetValue(element);
+                if (value is null)
+                {
+                    continue;
+                }
+
+                // 🔴 THE NUMBER ALONE IS NOT THE ANSWER, and this is the property that finishes it.
+                //
+                // A registered identifier renders as `Identifier=64` — which proves 64 is A valid
+                // identifier on this CPU and NOT that it is the one belonging to any particular
+                // interface. `CommsFbGenerator` wants the identifier OF a named interface, so a bare
+                // number is exactly the confident half-answer that gets pasted into a comms block and
+                // fails as "a connection that never establishes".
+                //
+                // The controllers association is the back-reference: each entry is the device item
+                // that USES this identifier, and its owner's name is the missing half.
+                if (value is System.Collections.IEnumerable owners && value is not string)
+                {
+                    var names = new List<string>();
+                    try
+                    {
+                        foreach (var owner in owners)
+                        {
+                            var ownedBy = owner?.GetType().GetProperty("OwnedBy")?.GetValue(owner);
+                            var name = ownedBy?.GetType().GetProperty("Name")?.GetValue(ownedBy);
+                            if (name is not null)
+                            {
+                                names.Add(name.ToString() ?? "?");
+                            }
+                        }
+                    }
+                    catch (Exception)
+                    {
+                        // Partial is still useful: whatever resolved is reported.
+                    }
+
+                    parts.Add(names.Count > 0
+                        ? $"usedBy=[{string.Join("; ", names)}]"
+                        : $"{property.Name}=<no owner resolved>");
+                    continue;
+                }
+
+                parts.Add($"{property.Name}={Describe(value)}");
+            }
+            catch (Exception)
+            {
+                // An element property that will not read is dropped rather than failing the row -
+                // the useful half of the pair is usually still readable.
+            }
+        }
+
+        return parts.Count > 0 ? string.Join(", ", parts) : Describe(element);
+    }
+
+    private static IEnumerable<string> AllAttributeNames(IEngineeringObject obj)
+    {
+        List<string> names;
+        try
+        {
+            names = obj.GetAttributeInfos()
+                .Select(a => a.Name)
+                .OrderBy(n => n, StringComparer.Ordinal)
+                .ToList();
+        }
+        catch (Exception)
+        {
+            yield break;
+        }
+
+        foreach (var name in names)
+        {
+            yield return name;
+        }
+    }
+
+    private static IEnumerable<string> DiscoverIdentifierAttributeNames(IEngineeringObject obj)
+    {
+        List<string> names;
+        try
+        {
+            names = obj.GetAttributeInfos()
+                .Select(a => a.Name)
+                .Where(n => IdentifierAttributeSenses.Any(
+                    sense => n.IndexOf(sense, StringComparison.OrdinalIgnoreCase) >= 0))
+                .OrderBy(n => n, StringComparer.Ordinal)
+                .ToList();
+        }
+        catch (Exception)
+        {
+            yield break;
+        }
+
+        foreach (var name in names)
+        {
+            yield return name;
+        }
+    }
+
+    public HardwareIdentifierResult ReadHardwareIdentifiers(string? deviceFilter, bool allAttributes)
+    {
+        if (_project is null)
+        {
+            throw new InvalidOperationException(
+                $"{nameof(OpenProject)} must be called before {nameof(ReadHardwareIdentifiers)}.");
+        }
+
+        var items = new List<HardwareIdentifierItem>();
+        var walked = 0;
+
+        foreach (Device device in _project.Devices)
+        {
+            if (deviceFilter is not null &&
+                device.Name.IndexOf(deviceFilter, StringComparison.OrdinalIgnoreCase) < 0)
+            {
+                continue;
+            }
+
+            foreach (DeviceItem item in device.DeviceItems)
+            {
+                WalkDeviceItemForIdentifiers(item, device.Name, items, ref walked, allAttributes);
+            }
+        }
+
+        return new HardwareIdentifierResult(
+            items,
+            walked,
+            items.Count(i => i.Attributes.Count > 0),
+            deviceFilter);
+    }
+
+    /// <summary>
+    /// Every device item is WALKED and counted; only those carrying an identifier are RECORDED.
+    /// The two counts are reported separately on purpose — a report listing no identifiers is a
+    /// statement about the hardware only if something was actually examined, and a device filter
+    /// that matched nothing produces the same empty list otherwise.
+    /// </summary>
+    private static void WalkDeviceItemForIdentifiers(
+        DeviceItem item, string parentPath, List<HardwareIdentifierItem> results, ref int walked,
+        bool allAttributes)
+    {
+        var path = $"{parentPath}/{item.Name}";
+        walked++;
+
+        var attributes = new List<HardwareIdentifierAttribute>();
+        foreach (var name in allAttributes ? AllAttributeNames(item) : DiscoverIdentifierAttributeNames(item))
+        {
+            string rendered;
+            try
+            {
+                var value = item.GetAttribute(name);
+                // A null is rendered as the word, not as an empty string. "The attribute exists and
+                // is null" and "the attribute could not be read" are different facts and the whole
+                // value of this command is keeping them apart.
+                rendered = value is null ? "<null>" : Describe(value);
+            }
+            catch (Exception ex)
+            {
+                rendered = $"<unreadable: {ex.GetType().Name}>";
+            }
+
+            attributes.Add(new HardwareIdentifierAttribute(name, rendered));
+        }
+
+        // 🔴 THE HW IDENTIFIER IS NOT A DEVICE-ITEM ATTRIBUTE, MEASURED 2026-09-01.
+        //
+        // `--all` over this project dumped every attribute on all 18 items — 295 lines — and NOT ONE
+        // carries a hardware identifier. The PROFINET interface item has PositionNumber and
+        // PnSubslotNumber and no HW_ANY anywhere. So the attribute route, which is what the filtered
+        // set searches, cannot answer the question this command exists for.
+        //
+        // `download-plan`'s own service dump lists HwIdentifierController on the software-bearing
+        // item, so that is the route. It is reached by REFLECTION rather than a compile-time
+        // reference: the type lives in the Openness assembly and its exact shape is not verified
+        // here, and a hard reference to a member that moved between versions would fail to build
+        // rather than fail to find — turning a recoverable miss into an unusable binary.
+        foreach (var svc in ReadIdentifierServices(item))
+        {
+            attributes.Add(svc);
+        }
+
+        if (attributes.Count > 0)
+        {
+            results.Add(new HardwareIdentifierItem(path, item.GetType().Name, attributes));
+        }
+
+        foreach (DeviceItem child in item.DeviceItems)
+        {
+            WalkDeviceItemForIdentifiers(child, path, results, ref walked, allAttributes);
+        }
+    }
+
+    /// <summary>
     /// The one PLC device a download would target, its path, and its blocks — or a refusal.
     ///
     /// Extracted from <see cref="BuildDownloadPlan"/> so that

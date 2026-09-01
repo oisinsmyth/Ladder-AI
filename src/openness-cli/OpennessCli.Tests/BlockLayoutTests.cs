@@ -498,6 +498,26 @@ internal sealed class FakeGateway : IOpennessGateway
 
     public string? LastDeviceFilter { get; private set; }
 
+    /// <summary>What <see cref="ReadHardwareIdentifiers"/> hands back; default is an EARNED zero
+    /// (items walked, none carrying an identifier) rather than a NOTHING EXAMINED, so a test that
+    /// forgets to arrange one does not accidentally assert the refusal path.</summary>
+    public HardwareIdentifierResult HardwareIdentifiers { get; set; } =
+        new(System.Array.Empty<HardwareIdentifierItem>(), ItemsWalked: 1, ItemsWithIdentifiers: 0, DeviceFilter: null);
+
+    public string? LastHardwareIdentifierFilter { get; private set; }
+
+    public int ReadHardwareIdentifiersCalls { get; private set; }
+
+    public bool LastHardwareIdentifierAllAttributes { get; private set; }
+
+    public HardwareIdentifierResult ReadHardwareIdentifiers(string? deviceFilter, bool allAttributes)
+    {
+        ReadHardwareIdentifiersCalls++;
+        LastHardwareIdentifierFilter = deviceFilter;
+        LastHardwareIdentifierAllAttributes = allAttributes;
+        return HardwareIdentifiers;
+    }
+
     public DownloadPlanResult BuildDownloadPlan(string? deviceFilter, DownloadOptionKind options)
     {
         BuildDownloadPlanCalls++;

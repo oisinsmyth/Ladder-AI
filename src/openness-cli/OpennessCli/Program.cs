@@ -208,6 +208,8 @@ internal static class Program
                     return RunBlockLayout(gateway, blockLayout.Options, timeoutOpenSeconds);
                 case ParseResult.DownloadPlanSuccess downloadPlan:
                     return RunDownloadPlan(gateway, downloadPlan.Options, timeoutOpenSeconds);
+                case ParseResult.HardwareIdentifierSuccess hwIdentifiers:
+                    return RunHardwareIdentifiers(gateway, hwIdentifiers.Options, timeoutOpenSeconds);
                 case ParseResult.CreateInstanceDbSuccess createInstanceDb:
                     return RunCreateInstanceDb(gateway, createInstanceDb.Options, timeoutOpenSeconds);
                 case ParseResult.SanityCheckSuccess sanityCheck:
@@ -1517,6 +1519,42 @@ internal static class Program
             return ExitCodes.DownloadPlanIncomplete;
         }
 
+        return ExitCodes.Success;
+    }
+
+    /// <summary>
+    /// `hw-identifiers` — the hardware identifiers the PROJECT declares.
+    ///
+    /// <para>Reads the project and never a controller. No socket is opened and nothing is written.</para>
+    /// </summary>
+    internal static int RunHardwareIdentifiers(
+        IOpennessGateway gateway, HardwareIdentifierCommandOptions options, int timeoutOpenSeconds)
+    {
+        gateway.OpenProject(options.ProjectIdentifier, TimeSpan.FromSeconds(timeoutOpenSeconds));
+
+        var result = gateway.ReadHardwareIdentifiers(options.Device, options.AllAttributes);
+        Console.WriteLine(options.Json
+            ? OutputFormatter.FormatHardwareIdentifiersJson(result)
+            : OutputFormatter.FormatHardwareIdentifiersTable(result));
+
+        // EMPTY IS NOT CLEAN, and this command has two distinct emptinesses that must not be
+        // conflated. Walking zero device items means the --device filter matched nothing: the report
+        // is then a statement about the FILTER, and returning 0 would present "I looked nowhere" as
+        // "there is nothing there". That is the project's standing exit-2 contract.
+        if (result.ItemsWalked == 0)
+        {
+            Console.Error.WriteLine(
+                "NOTHING EXAMINED: no device item was walked" +
+                (options.Device is null
+                    ? ", and no --device filter was applied, so this project exposes no device items at all."
+                    : $", because --device '{options.Device}' matched no device.") +
+                " This report says nothing about any hardware identifier.");
+            return ExitCodes.NothingExamined;
+        }
+
+        // The OTHER emptiness is legitimate and is NOT an error: items were walked and none of them
+        // declares an identifier attribute. That is an earned zero, so it exits 0 - and the report
+        // says how many items it compared against, which is what makes it readable as one.
         return ExitCodes.Success;
     }
 
