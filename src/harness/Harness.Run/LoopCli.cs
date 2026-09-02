@@ -1953,9 +1953,18 @@ public static class LoopCli
             foreach (var o in manifest.Objects)
                 objects.Add(new JsonObject { ["kind"] = o.Kind, ["name"] = o.Name, ["sha256"] = o.Sha256 });
 
+            // 🔴 `JsonValue.Create`, NOT `excluded.Add(e)`. `JsonArray.Add(string)` binds to the GENERIC
+            // overload and boxes a `JsonValueCustomized<string>`, which throws on serialise for want of a
+            // `TypeInfoResolver` — the same split `ResultPackageJson.Strings` documents. It threw HERE, on
+            // 2026-09-02, and the shape of the failure is why it took a real wave to find: this array is
+            // empty unless something WAS excluded, so every `--generate-only` run rendered clean and only
+            // a staged run with the copy layer and mirror excluded reached it. The throw lands in
+            // `Render`, which is what writes `--out`, so the file was never created and the path kept a
+            // PREVIOUS run's result — a wave that ran left the earlier `NotAdmissible` document standing
+            // as the only machine-readable account of it.
             var excluded = new JsonArray();
             foreach (var e in manifest.ExcludedAsSelfReferential)
-                excluded.Add(e);
+                excluded.Add(JsonValue.Create(e));
 
             programUnderTest = new JsonObject
             {
