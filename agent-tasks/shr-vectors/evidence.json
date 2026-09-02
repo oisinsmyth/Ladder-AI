@@ -1,0 +1,113 @@
+{
+  "schema": "ladder-ai/agent-evidence/1",
+  "task": "Author the conformance VECTORS for slot SHR, block under test FB_ShredderSequencer, in test-project001; fill the harness binding's specName and encoding holes; report the UNREACHABLE candidate bucket list and any decomposition dispute.",
+  "kind": "modify",
+  "_kind": "'modify' is declared deliberately even though this run wrote no IR, because it is the STRICTER of the two gate sets - it additionally requires `converter diff --only`. Declaring 'new' would have quietly dropped a required gate, and the point of naming a kind is that the gate set cannot be chosen for convenience.",
+
+  "_thisRunTouchedNoIR": "🔴 READ THIS BEFORE THE EXIT CODE. NOT ONE .ir FILE WAS WRITTEN, EDITED OR CONVERTED BY THIS RUN. The deliverables are two artifacts under gen/, which are project content but are not ladder logic: a conformance vector set (JSON) and specName/encoding fields added to an existing harness binding (JSON). Consequently `converter preflight`, `converter diff --only` and any compile gate had NOTHING TO EXAMINE - they are not gates this run skipped, they are gates with no subject. Each is declared `deferred` below with that reason rather than omitted, because an omitted gate and an inapplicable one produce the same silence otherwise. THE CHECKER WILL EXIT 1, AND THAT IS THE CORRECT OUTCOME: a deferred gate is not a pass, and this run has no IR gate to pass. It will additionally report `no ir_hash recorded` on both files, because ir-hash keys code blocks only and its exemption is decided from an IR header (BLOCK/DB/TYPE/TAGTABLE) that a .json file does not have. THAT IS A GAP IN THE CHECKER, NOT A DEFECT IN THIS RUN, and it is reported as such rather than worked around: tools/check-agent-evidence.py has no admissible shape for a lad-coder run whose deliverable is a gen/ artifact. Do not read its exit 1 as a failed gate on ladder logic; read the deferral reasons.",
+
+  "files": [
+    {
+      "path": "gen/test-project001/shredder-sequencer/conformance-vectors.json",
+      "_role": "NEW. The conformance vector set: 2 vectors against the stamped 43-assertion denominator, plus the transcribed enumeration block, the map, the model transcription, and the reasoned account of the 41 assertions no vector may cite.",
+      "_noIrHash": "Not an .ir file. `converter ir-hash` keys code blocks only and refuses anything whose content does not begin with `BLOCK `, so no hash exists to record."
+    },
+    {
+      "path": "gen/test-project001/shredder-sequencer/harness-binding.json",
+      "_role": "MODIFIED. specName added to all 44 signals (20 vectorTargets + 24 resultSources) and an `encoding` added to the single hole the head author named (Stim.ResetMode). declaredBy and every inertRest deliberately untouched - see the file's own _specNameFilledBy.",
+      "_noIrHash": "Not an .ir file, same reason."
+    }
+  ],
+
+  "claims": [],
+  "_claims": "EMPTY, AND THE REASON IS STRUCTURAL RATHER THAN AN OMISSION. `converter claim` reserves block numbers, alarm bits, DB members, block networks, tags and block edits - every one of them a PLC object inside ir/<project>/. This run wrote no IR and reserved nothing, so there is no reservation to declare and nothing for the verifier to join a claim to. tools/check-agent-evidence.py agrees by construction: it requires `claims` only on a run that names an .ir file, and refuses a `claims` list on a run that does not. NOTHING WAS RELEASED, because nothing was ever acquired.",
+
+  "checks": [
+    {
+      "tool": "converter preflight",
+      "deferred": "NO SUBJECT. Preflight is a static pre-import check over IR, and this run produced no IR. Running it against the previous state of ir/test-project001 would have been a check of somebody else's work reported as this run's gate."
+    },
+    {
+      "tool": "converter diff --only",
+      "deferred": "NO SUBJECT. The invariance proof compares networks between two versions of an IR block. No IR block has two versions in this run, because none was edited."
+    },
+    {
+      "tool": "openness-cli sanity-check",
+      "deferred": "NO SUBJECT, AND EXPLICITLY FORBIDDEN BY THE DISPATCH. Nothing was imported, so nothing could be compiled; and the dispatch's own terms were NO PORTAL, NO RIG, NO SOCKET, NO harness-run --verify, NO DOWNLOAD, and no rebuild of openness-cli in any configuration. Both reasons stand independently."
+    },
+    {
+      "tool": "assertion-id recomputation (Harness.Results.AssertionId algorithm, reimplemented in .scratch/shr_vectors.py)",
+      "exit": 0,
+      "json": {
+        "source": "gen/test-project001/shredder-sequencer/assertion-enumeration.yaml",
+        "algorithm": "trim, collapse internal whitespace to single spaces, strip ONE trailing '.' or ';' then TrimEnd, SHA-256 of the UTF-8 bytes, first 6 hex characters, prefixed '<clauseId>:'",
+        "assertionsExtracted": 43,
+        "idsRecomputed": 43,
+        "mismatches": 0,
+        "forms": { "When": 27, "Never": 16 },
+        "clauses": 24,
+        "boundsRowsTranscribed": 10,
+        "_whyThisIsTheGateThatMatTERSHere": "Gate 3g exists because a hand-written hex string is indistinguishable from a computed one, and the omission is exactly what a compromised stamper would emit. Every ID in the submission was produced by this recomputation, not copied, so no citation in it can be a transcription error."
+      }
+    },
+    {
+      "tool": "gate-3h set difference (required observations vs declared expectations), computed locally",
+      "exit": 0,
+      "json": {
+        "rule": "requiredObservations = response_signal MERGED WITH also_requires_observation_of, per the enumeration",
+        "VS-SHR-001": { "assertion": "REQ-004:b6006f", "required": ["DQ10_SYS_PreStartSounder", "DQ5_DIS_Run"], "missingFromExpectations": [] },
+        "VS-SHR-002": { "assertion": "REQ-011:7adda5", "required": ["DQ4_IFC_Run", "DQ9_SYS_EnableUpstream"], "missingFromExpectations": [] },
+        "assertionsWhoseFullRequiredSetIsObservableInThisSlot": 5,
+        "ofWhichCitable": 2,
+        "_theOtherThree": "REQ-011:71f815 and REQ-027:99d80f are Never-form (no latch exists in this slot, so F-3 refuses a sampled verifier); REQ-024:f6a85d and REQ-027:99d80f are additionally unreachable, triggering on an overcurrent event the block cannot produce."
+      }
+    },
+    {
+      "tool": "gate-3i bounds currency, computed locally",
+      "exit": 0,
+      "json": {
+        "VS-SHR-001": { "boundsUsed": { "pre_start_sounder_time": "10 s" }, "matchesEnumerationBounds": true, "matchesAssertionBounds": true },
+        "VS-SHR-002": { "boundsUsed": { "infeed_to_upstream_enable_delay": "3 s" }, "matchesEnumerationBounds": true, "matchesAssertionBounds": true },
+        "_note": "Both values are byte-for-byte the enumeration's own bounds-table strings, and each vector's boundsUsed key set equals the enumeration's assertionBounds entry for the assertion it cites. Neither is the empty claim."
+      }
+    },
+    {
+      "tool": "specName chain verification against the IR corpus (read-only grep + read)",
+      "exit": 0,
+      "json": {
+        "verified": [
+          "FC_ControlMain N7: DB_Output.Run_Discharge_Conv := iDB_ShredderSequencer.IO.RunDischargeConv; FC_Outputs N1: DQ5_DIS_Run := ... DB_Output.Run_Discharge_Conv ... -> specName DQ5_DIS_Run ACCEPTED",
+          "same chain for Run_Infeed_Conv -> DQ4_IFC_Run, Enable_Upstream -> DQ9_SYS_EnableUpstream, PreStart_Sounder -> DQ10_SYS_PreStartSounder: ACCEPTED"
+        ],
+        "refused": [
+          "DQ1_SHR_RunFwd for IO.MotorAutoStartCmd - REFUSED: FC_ControlMain N7 takes DB_Output.Run_Shredder_Fwd from iDB_MotorFwdRevSystem_Shredder.IO.RunFwd",
+          "DQ2_SHR_RunRev for IO.MotorReverseCmd - REFUSED: same, from .RunRev, and the motor FB interposes ReverseDelay = 8.0 s (iDB_MotorFwdRevSystem_Shredder.ir:38)",
+          "DQ8_SYS_InCycle for IO.InCycle - REFUSED: FC_ControlMain N7's own comment records the member as superseded and unwired; DQ8's source is an OR of field feedbacks"
+        ],
+        "_whyThisIsAGate": "An accepted specName that is wrong is silent: the citation joins, the wave runs, and the vector tests a signal the clause is not about. Two of the four cross-block multi-writer findings this project has recorded were fiction produced by name-shape matching."
+      }
+    },
+    {
+      "tool": "verifier presence (design-for-testability skill step 0), read from source rather than from the skill's table",
+      "exit": 0,
+      "json": {
+        "confirmedPresent": [
+          "Harness.Results/SubmissionGate.cs:1393 - gate 3h as a set difference over AssertionEnumeration.RequiredObservationsOf",
+          "Harness.Results/AssertionId.cs - Compute/Normalise/HashOf, reimplemented and agreeing on 43 of 43",
+          "Harness.Gate/SubmissionDocument.cs:849 - ExpectationDocument.TemporalShape IS mapped, so `temporalShape` is no longer a gate-0b unknown field",
+          "Harness.Gate/BindingDocument.cs:889/919/954/971 - SpecName, Transient, ArmedBy, Encoding",
+          "Harness.Results.Tests/AgentIdentityVocabularyTests.cs:91 - instance-vs-role identity is NotComparable",
+          "Harness.Map/CopyLayer.cs - a result latch is emitted only for a signal declared Transient; the arm register only where ArmedBy is named",
+          "Harness.Loop/LoopRun.cs - the live F-3 rule: a SAMPLED observation of a NEVER assertion is refused"
+        ],
+        "skillTableCorrection": "The skill's gate table is dated 2026-08-13 and predates the temporalShape field (2026-08-18) and the observation-window shape model entirely. Neither appears in it. The table is behind the code in that respect."
+      }
+    },
+    {
+      "tool": "dotnet run --project src/harness/Harness.Gate -- check",
+      "deferred": "NOT RUN, AND NO RESULT FROM IT IS CLAIMED ANYWHERE IN THE DELIVERABLE. The dispatch fenced this run off Portal, the rig, sockets, harness-run --verify and downloads. A Harness.Gate build touches none of those, but running it was outside what was authorised and this lane did not extend its own scope. EVERY GATE STATUS IN conformance-vectors.json IS THEREFORE DERIVED BY READING THE VERIFIER'S SOURCE AGAINST THE CONTENT, WHICH IS WEAKER THAN RUNNING IT AND IS LABELLED AS SUCH IN THE DOCUMENT. It is the single most valuable thing the dispatcher could add to this hand-back."
+    }
+  ],
+
+  "_whatWasNotVerified": "Stated because an honest gap is worth more than a green that examined nothing. (1) THE SUBMISSION HAS NEVER BEEN THROUGH harness-gate, so no gate in it is reported as CHECKED by a tool - only as derived from source. (2) NOTHING HAS RUN ON A CONTROLLER; FB_ShredderSequencerStim has never executed, its call site is not wired (the binding's own unresolvedHoles), and no copy layer exists for slot SHR. (3) THE TWO MUTANTS each vector claims to kill are argued from the IR and have NOT been shown to go red - no wave has been spent on this slot, so the mutation half of the skill's step 3 is asserted, not demonstrated. (4) map.providedFor is a derivation from CopyLayer's rules, not a reading of a generated copy layer, because none exists for this slot - it is a declaration checked against itself, and the derivation is written into the document so it can be falsified in one grep. (5) The model's `represents` list is a TRANSCRIPTION by this lane of the head author's declaration; an error of transcription is this lane's and an error of substance is the head author's, and nothing mechanical separates them. (6) Gates 2 and 3d will be NOT CHECKED for a vocabulary mismatch (instance identity vs the role identities the enumeration and the corpus carry) that this lane refused to resolve by downgrading its own identity."
+}

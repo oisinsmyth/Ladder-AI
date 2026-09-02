@@ -1,0 +1,820 @@
+{
+  "schema": "ladder-ai/agent-evidence/1",
+  "task": "Author the conformance VECTORS for slot PSH, block under test FB_PusherControl, in test-project001; fill the harness binding's `specName` and `encoding` holes; then, after the requirements register named the four pusher annunciation bits on 2026-09-02, pick up the assertions that unblocked.",
+  "kind": "modify",
+  "_kind": "`modify` because harness-binding.json existed and was edited. *** BUT READ THE NEXT FIELD BEFORE READING THIS EVIDENCE AT ALL: THIS RUN TOUCHED NO `.ir` FILE. *** `kind` is required and its two legal values both describe IR work, so neither is a good fit and the closer of the two is declared rather than a third invented.",
+  "_thisRunTouchedNoIR": "*** NOT ONE `.ir` FILE WAS WRITTEN, EDITED OR CONVERTED, AND THAT CHANGES WHAT THIS DOCUMENT CAN MEAN. *** The two artifacts below are JSON under gen/, which is lad-coder territory but is not IR. THE CONSEQUENCES, STATED SO THE DISPATCHER IS NOT MISLED BY A NON-ZERO EXIT: (1) `tools/check-agent-evidence.py` WILL REPORT PROBLEMS ON THIS FILE and they are structural, not failures. It refuses a files[] entry with no `ir_hash` unless the file's own first line reads BLOCK / DB / TYPE / TAGTABLE, and a .json file reads none of those - so both entries below will be reported as `no ir_hash recorded`. There is no honest way round it: `converter ir-hash` keys code blocks only and refuses anything not starting with `BLOCK `, so inventing a hash is impossible and omitting the files would be worse. (2) The three required gates are DEFERRED with reasons, which keeps the exit non-zero by design and names which and why rather than reading like gates left out. (3) `claims` is declared EMPTY, and the checker's own rule is that a claims section declared against no .ir file is itself a problem - so it is `[]`, which is falsy, rather than a list of reservations that would have nothing to join to. See `_claims` for why nothing was claimed.",
+  "skill": "design-for-testability",
+  "_skill": "*** THE STAGE WAS RUN MANUALLY AND ONLY PART OF IT WAS SKILL-DRIVEN, WHICH IS THE SIGNAL THE PROJECT USES. *** `/design-for-testability` was invoked and is the ADMISSIBILITY skill - it says how to CHECK a vector set against the contract, and this lane used it that way, including its Step 0 'verify the verifier' discipline. *** THERE IS NO SKILL FOR AUTHORING A VECTOR SET *** - no `gen-conformance-vectors` exists in `.claude/skills/` - so the authoring half (scenario design, arming windows, the mutant each vector kills, the coverage partition, the binding's specName and encoding) was done manually, to the contract directly. docs/evidence/stage-S6.md's rule is that the second manual run of a stage is when its skill gets built; this is the SECOND vector set this project has produced (the hopper's was the first), so on that rule a vector-authoring skill is now owed.",
+  "manual": true,
+  "files": [
+    {
+      "path": "gen/test-project001/pusher-control/conformance-vectors.json",
+      "_note": "NEW. 24 vectors, 10 slots, citing 24 of the enumeration's 44 assertions 1:1. No ir_hash: not IR, and `converter ir-hash` refuses anything whose content does not start with `BLOCK `."
+    },
+    {
+      "path": "gen/test-project001/pusher-control/harness-binding.json",
+      "_note": "MODIFIED. `specName` added to all 55 mirrored-signal rows; `encoding` added to the two Int vector targets (Stim.Mode, Stim.ResetMode); the `specName` and `encoding` entries removed from `unresolvedHoles`, which now holds three - inertRest, declaredBy, retentiveBytes - NONE of which is this party's to close and none of which was touched. Nothing else in the file was altered: no row added or removed, no tag, type, latchedBy, startCondition, baseByte or declaredRegisters changed. No ir_hash: not IR.",
+      "_lineEndings": "CORRECTED BEFORE HAND-BACK, AND RECORDED BECAUSE IT NEARLY WENT UNNOTICED. The patch was written through a Python text stream, which on Windows translates every newline to CRLF - while the file the converter emitted was LF. That is the same whole-file rewrite CLAUDE.md warns about for 'sed -i', arriving through a different door, and 'git diff --stat' would not have shown it because autocrlf normalises on the way in. Found by counting CR bytes in the working file against the pre-edit copy: 0 before, 377 after. Rewritten with LF, so the file now matches its pre-edit bytes everywhere the patch did not touch; CR count 0 again, and 'git diff --numstat' reads 80 insertions / 78 deletions rather than the whole 376-line file."
+    }
+  ],
+  "claims": [],
+  "_claims": "*** EMPTY, AND IT IS A POSITIVE STATEMENT RATHER THAN AN OMISSION: NO `converter claim` WAS TAKEN AND NONE WAS NEEDED. *** The registry's six kinds are block-number, alarm-bit, db-member, block-network, tag and block-edit, and every one of them reserves a resource inside the PLC PROGRAM. This run wrote no block, reserved no number, added no DB member, wrote no network, invented no tag and edited no IR - it produced a test-vector document and filled two declaration holes in a binding. Taking a claim to have one to show would have manufactured a join over nothing, and the checker's own rule agrees in the other direction: a `claims` section declared against evidence that names no .ir file is itself reported as a problem. *** NOTHING IS BEING HELD, SO THERE IS NOTHING FOR THE DISPATCHER TO RELEASE. *** LADDER_CLAIMS_DIR was not set and no claim store was written to.",
+  "checks": [
+    {
+      "tool": "converter preflight",
+      "deferred": "NOT APPLICABLE AND NOT RUN: preflight is a static pre-import check over IR, and this run wrote no IR. There is no .ir file whose import it could precede."
+    },
+    {
+      "tool": "openness-cli sanity-check (the compile gate)",
+      "deferred": "NOT RUN, TWO REASONS, AND THE FIRST ALONE IS SUFFICIENT: (a) nothing was produced that can be compiled - a conformance-vector document and a binding are read by the harness, never imported into a TIA project; (b) the dispatch fences this lane off Portal, the rig and any openness-cli rebuild in any configuration, because a deploy lane holds the rig and MB_SERVER accepts one connection. No Portal session was opened."
+    },
+    {
+      "tool": "converter diff --only (the invariance proof)",
+      "deferred": "NOT APPLICABLE: `diff` compares IR networks and there is no IR on either side. The invariance that DOES matter for the binding edit was established differently and is recorded below as the `binding invariance` check - a structural comparison of the before and after documents."
+    },
+    {
+      "tool": "harness-gate check --binding (the phase 5.1 admissibility gate)",
+      "exit": 1,
+      "_command": "src/harness/Harness.Gate/bin/Debug/net8.0/harness-gate.exe check gen/test-project001/pusher-control/conformance-vectors.json --binding gen/test-project001/pusher-control/harness-binding.json",
+      "_binaryFreshness": "The committed Debug binary, 2026-09-01 23:15, NEWER than every source under Harness.Gate and Harness.Results (newest 2026-08-28 10:18). NOT rebuilt. It opens no socket, contacts no Portal and writes no file.",
+      "_exit1IsEXPECTEDhere": "exit 1 = NOT ADMISSIBLE, and there is deliberately no plain ADMISSIBLE. FOUR GATES REFUSE AND SIX ARE NOT CHECKED, AND NOT ONE OF THE TEN IS REPAIRED BY EDITING A VECTOR. The six new vectors moved NO gate's status - same four refusals, same six NOT CHECKED - which is the expected result: the register naming the annunciation bits removed a blocker on AUTHORING, not on admissibility.",
+      "json": {
+        "verdict": "VERDICT: NOT ADMISSIBLE",
+        "vectorsExamined": 30,
+        "gatesRun": 31,
+        "coverage": [
+          "pusher [denominator by assertion-enumerator]: 30 of 44 assertion(s) cited, by 30 vector(s)."
+        ],
+        "refused": [
+          ">>[REFUSED   ] 0b unknown fields  (by SubmissionGate)",
+          ">>[REFUSED   ] 0c derived fields  (by SubmissionGate)",
+          ">>[REFUSED   ] 4 fidelity (M4)  (by Admissibility)",
+          ">>[REFUSED   ] 5 observability  (by ObservabilityCheck)"
+        ],
+        "notChecked": [
+          "!![NOT CHECKED] 2 authorship (D6)  (by both sides of the comparison written in ONE identity vocabulary)",
+          "!![NOT CHECKED] 3d enumerator independence  (by both sides of the comparison written in ONE identity vocabulary)",
+          "!![NOT CHECKED] 4b fidelity authority (M3/M4)  (by a model declaration from an authority the vector author does not control)",
+          "!![NOT CHECKED] 5b latch block in the deployment (M-19)  (by the deployment declaration's object manifest)",
+          "!![NOT CHECKED] 5c map authority  (by the binding document's own identity field)",
+          "!![NOT CHECKED] 11 memory layout (�4.5)  (by deployment declaration + the tag map's reach)"
+        ],
+        "checked": [
+          "[CHECKED   ] 1 schema  (by SubmissionGate)",
+          "[CHECKED   ] 1b backstop bound - the scenario the vector itself declares  (by SubmissionGate)",
+          "[CHECKED   ] 10c scenario scale - does the scenario shrink WITH the block  (by ScenarioScale)",
+          "[CHECKED   ] 3j subject resolution  (by AssertionEnumerationSet)",
+          "[CHECKED   ] 3 basis - clause AND assertion  (by Admissibility)",
+          "[CHECKED   ] 3f citation shape  (by AssertionId)",
+          "[CHECKED   ] 3g assertion IDs recompute  (by AssertionId)",
+          "[CHECKED   ] 3h required observations (AMB-14)  (by AssertionEnumeration)",
+          "[CHECKED   ] 3e assertion form authority  (by AssertionEnumeration)",
+          "[CHECKED   ] 3i bounds currency (AMB-19)  (by BoundsCurrencyCheck, against the enumeration's bounds table)",
+          "[CHECKED   ] 6 settling  (by Admissibility)",
+          "[CHECKED   ] 7 start bool (submission half)  (by SubmissionGate)",
+          "[CHECKED   ] 8s signal storage join (2.7)  (by SignalStorageMap)",
+          "[CHECKED   ] 8 blacklist  (by SubmissionGate)",
+          "[CHECKED   ] 8c multi-writer provenance (X-G)  (by ConflictGraph)",
+          "[CHECKED   ] 9 liveness preconditions (submission half)  (by SubmissionGate)",
+          "[CHECKED   ] 10a time compression - assertion ceiling (X-D)  (by TimeCompression)",
+          "[CHECKED   ] 10b time compression - timer / model / ratio ceilings (X-D)  (by TimeCompression)"
+        ],
+        "judgement": [
+          "[JUDGEMENT ] 3c basis - faithful reading of the clause  (by none, ever)",
+          "[JUDGEMENT ] 6b settling - does the condition imply the value is final  (by none, ever)",
+          "[JUDGEMENT ] 8b blacklist - over-broad?  (by density, reported not gated)"
+        ],
+        "vectorsRefusedAtGate5": [
+          "VP-PSH-001",
+          "VP-PSH-002",
+          "VP-PSH-003",
+          "VP-PSH-004",
+          "VP-PSH-005",
+          "VP-PSH-006",
+          "VP-PSH-007",
+          "VP-PSH-008",
+          "VP-PSH-009",
+          "VP-PSH-010",
+          "VP-PSH-011",
+          "VP-PSH-012",
+          "VP-PSH-013",
+          "VP-PSH-014",
+          "VP-PSH-015",
+          "VP-PSH-016",
+          "VP-PSH-017",
+          "VP-PSH-018",
+          "VP-PSH-019",
+          "VP-PSH-020",
+          "VP-PSH-021",
+          "VP-PSH-022",
+          "VP-PSH-023",
+          "VP-PSH-024",
+          "VP-PSH-025",
+          "VP-PSH-026",
+          "VP-PSH-027",
+          "VP-PSH-028",
+          "VP-PSH-029",
+          "VP-PSH-030"
+        ],
+        "gate5RefusalCounts": {
+          "SignalNotInMap": 49,
+          "MapDoesNotProvideIt": 18
+        }
+      }
+    },
+    {
+      "tool": "converter conflict-graph --submission",
+      "exit": 0,
+      "_command": "converter conflict-graph --project ir/test-project001 --submission gen/test-project001/pusher-control/conformance-vectors.json --json",
+      "json": {
+        "conflictEdges": [
+          {
+            "blockA": "FB_PusherStim",
+            "blockB": "FB_ShredderSequencerStim",
+            "provenance": "MultiWriter",
+            "signal": "DB_Controls.PusherMode",
+            "class": "HarnessInstrumentation"
+          }
+        ],
+        "derivation": {
+          "computed": true,
+          "corpus": "50 project file(s); 0 unparseable",
+          "signalsExamined": 61,
+          "signalsResolved": 59,
+          "signalsUnresolved": 0,
+          "signalsAmbiguous": 0,
+          "signalsHarnessOnly": 2,
+          "signalsRefused": 0,
+          "joinsUsed": {
+            "DeclaredHarnessOnly": 2,
+            "DeclaredStorage": 59
+          },
+          "edgesWithoutRecordedProvenance": 0,
+          "provenanceKindsEmitted": [
+            "MultiWriter"
+          ],
+          "signals": [
+            {
+              "signal": "DB_Controls.PusherJogExtendCmd",
+              "resolution": "Resolved",
+              "join": "DeclaredStorage",
+              "candidates": [
+                "DB_Controls.PusherJogExtendCmd"
+              ],
+              "reason": "resolved through the submission's declared join DB_Controls.PusherJogExtendCmd; storage location DB_Controls.PusherJogExtendCmd, reached by 1 reference(s) (DB_Controls.PusherJogExtendCmd)"
+            },
+            {
+              "signal": "DB_Controls.PusherJogRetractCmd",
+              "resolution": "Resolved",
+              "join": "DeclaredStorage",
+              "candidates": [
+                "DB_Controls.PusherJogRetractCmd"
+              ],
+              "reason": "resolved through the submission's declared join DB_Controls.PusherJogRetractCmd; storage location DB_Controls.PusherJogRetractCmd, reached by 1 reference(s) (DB_Controls.PusherJogRetractCmd)"
+            },
+            {
+              "signal": "DB_Controls.PusherManualCycleCmd",
+              "resolution": "Resolved",
+              "join": "DeclaredStorage",
+              "candidates": [
+                "DB_Controls.PusherManualCycleCmd"
+              ],
+              "reason": "resolved through the submission's declared join DB_Controls.PusherManualCycleCmd; storage location DB_Controls.PusherManualCycleCmd, reached by 1 reference(s) (DB_Controls.PusherManualCycleCmd)"
+            },
+            {
+              "signal": "DB_Controls.PusherMode",
+              "resolution": "Resolved",
+              "join": "DeclaredStorage",
+              "candidates": [
+                "DB_Controls.PusherMode"
+              ],
+              "reason": "resolved through the submission's declared join DB_Controls.PusherMode; storage location DB_Controls.PusherMode, reached by 1 reference(s) (DB_Controls.PusherMode)"
+            },
+            {
+              "signal": "DI11_PSH_PowerPackRunning",
+              "resolution": "Resolved",
+              "join": "DeclaredStorage",
+              "candidates": [
+                "DB_Input.Pusher_PowerPack_Running"
+              ],
+              "reason": "resolved through the submission's declared join DB_Input.Pusher_PowerPack_Running; storage location DB_Input.Pusher_PowerPack_Running, reached by 1 reference(s) (DB_Input.Pusher_PowerPack_Running)"
+            },
+            {
+              "signal": "DI12_PSH_HomeLimit",
+              "resolution": "Resolved",
+              "join": "DeclaredStorage",
+              "candidates": [
+                "DB_Input.Pusher_Home_Limit"
+              ],
+              "reason": "resolved through the submission's declared join DB_Input.Pusher_Home_Limit; storage location DB_Input.Pusher_Home_Limit, reached by 1 reference(s) (DB_Input.Pusher_Home_Limit)"
+            },
+            {
+              "signal": "DI13_PSH_FullTravelLimit",
+              "resolution": "Resolved",
+              "join": "DeclaredStorage",
+              "candidates": [
+                "DB_Input.Pusher_Full_Travel_Limit"
+              ],
+              "reason": "resolved through the submission's declared join DB_Input.Pusher_Full_Travel_Limit; storage location DB_Input.Pusher_Full_Travel_Limit, reached by 1 reference(s) (DB_Input.Pusher_Full_Travel_Limit)"
+            },
+            {
+              "signal": "DI14_PSH_HighPressure",
+              "resolution": "Resolved",
+              "join": "DeclaredStorage",
+              "candidates": [
+                "DB_Input.Pusher_High_Pressure"
+              ],
+              "reason": "resolved through the submission's declared join DB_Input.Pusher_High_Pressure; storage location DB_Input.Pusher_High_Pressure, reached by 1 reference(s) (DB_Input.Pusher_High_Pressure)"
+            },
+            {
+              "signal": "DI5_SHR_RunFwdFB",
+              "resolution": "Resolved",
+              "join": "DeclaredStorage",
+              "candidates": [
+                "DB_Input.Shredder_Run_Fwd_FB"
+              ],
+              "reason": "resolved through the submission's declared join DB_Input.Shredder_Run_Fwd_FB; storage location DB_Input.Shredder_Run_Fwd_FB, reached by 1 reference(s) (DB_Input.Shredder_Run_Fwd_FB)"
+            },
+            {
+              "signal": "DI6_SHR_RunRevFB",
+              "resolution": "Resolved",
+              "join": "DeclaredStorage",
+              "candidates": [
+                "DB_Input.Shredder_Run_Rev_FB"
+              ],
+              "reason": "resolved through the submission's declared join DB_Input.Shredder_Run_Rev_FB; storage location DB_Input.Shredder_Run_Rev_FB, reached by 1 reference(s) (DB_Input.Shredder_Run_Rev_FB)"
+            },
+            {
+              "signal": "DI8_HPR_LevelHigh",
+              "resolution": "Resolved",
+              "join": "DeclaredStorage",
+              "candidates": [
+                "DB_Input.Hopper_Level_High"
+              ],
+              "reason": "resolved through the submission's declared join DB_Input.Hopper_Level_High; storage location DB_Input.Hopper_Level_High, reached by 1 reference(s) (DB_Input.Hopper_Level_High)"
+            },
+            {
+              "signal": "DQ10_SYS_PreStartSounder",
+              "resolution": "Resolved",
+              "join": "DeclaredStorage",
+              "candidates": [
+                "DB_Output.PreStart_Sounder"
+              ],
+              "reason": "resolved through the submission's declared join DB_Output.PreStart_Sounder; storage location DB_Output.PreStart_Sounder, reached by 1 reference(s) (DB_Output.PreStart_Sounder)"
+            },
+            {
+              "signal": "DQ3_PSH_RunPowerPack",
+              "resolution": "Resolved",
+              "join": "DeclaredStorage",
+              "candidates": [
+                "iDB_PusherControl.IO.RunPowerPack"
+              ],
+              "reason": "resolved through the submission's declared join iDB_PusherControl.IO.RunPowerPack; storage location iDB_PusherControl.IO.RunPowerPack, reached by 2 reference(s) (FB_PusherControl.IO.RunPowerPack, iDB_PusherControl.IO.RunPowerPack), whose writers are unioned"
+            },
+            {
+              "signal": "DQ6_PSH_Extend",
+              "resolution": "Resolved",
+              "join": "DeclaredStorage",
+              "candidates": [
+                "iDB_PusherControl.IO.Extend"
+              ],
+              "reason": "resolved through the submission's declared join iDB_PusherControl.IO.Extend; storage location iDB_PusherControl.IO.Extend, reached by 2 reference(s) (FB_PusherControl.IO.Extend, iDB_PusherControl.IO.Extend), whose writers are unioned"
+            },
+            {
+              "signal": "DQ7_PSH_Retract",
+              "resolution": "Resolved",
+              "join": "DeclaredStorage",
+              "candidates": [
+                "iDB_PusherControl.IO.Retract"
+              ],
+              "reason": "resolved through the submission's declared join iDB_PusherControl.IO.Retract; storage location iDB_PusherControl.IO.Retract, reached by 2 reference(s) (FB_PusherControl.IO.Retract, iDB_PusherControl.IO.Retract), whose writers are unioned"
+            },
+            {
+              "signal": "PSH_BlockedFaultLatch",
+              "resolution": "Resolved",
+              "join": "DeclaredStorage",
+              "candidates": [
+                "iDB_PusherControl.IO.Blocked"
+              ],
+              "reason": "resolved through the submission's declared join iDB_PusherControl.IO.Blocked; storage location iDB_PusherControl.IO.Blocked, reached by 2 reference(s) (FB_PusherControl.IO.Blocked, iDB_PusherControl.IO.Blocked), whose writers are unioned"
+            },
+            {
+              "signal": "PSH_BothSwitchesFaultLatch",
+              "resolution": "Resolved",
+              "join": "DeclaredStorage",
+              "candidates": [
+                "iDB_PusherControl.IO.BothSwitchesFault"
+              ],
+              "reason": "resolved through the submission's declared join iDB_PusherControl.IO.BothSwitchesFault; storage location iDB_PusherControl.IO.BothSwitchesFault, reached by 2 reference(s) (FB_PusherControl.IO.BothSwitchesFault, iDB_PusherControl.IO.BothSwitchesFault), whose writers are unioned"
+            },
+            {
+              "signal": "PSH_EndTravelTimeoutFaultLatch",
+              "resolution": "Resolved",
+              "join": "DeclaredStorage",
+              "candidates": [
+                "iDB_PusherControl.IO.EndTravelTimeoutFault"
+              ],
+              "reason": "resolved through the submission's declared join iDB_PusherControl.IO.EndTravelTimeoutFault; storage location iDB_PusherControl.IO.EndTravelTimeoutFault, reached by 2 reference(s) (FB_PusherControl.IO.EndTravelTimeoutFault, iDB_PusherControl.IO.EndTravelTimeoutFault), whose writers are unioned"
+            },
+            {
+              "signal": "PSH_ParkedTimeoutFaultLatch",
+              "resolution": "Resolved",
+              "join": "DeclaredStorage",
+              "candidates": [
+                "iDB_PusherControl.IO.ParkedTimeoutFault"
+              ],
+              "reason": "resolved through the submission's declared join iDB_PusherControl.IO.ParkedTimeoutFault; storage location iDB_PusherControl.IO.ParkedTimeoutFault, reached by 2 reference(s) (FB_PusherControl.IO.ParkedTimeoutFault, iDB_PusherControl.IO.ParkedTimeoutFault), whose writers are unioned"
+            },
+            {
+              "signal": "PSH_Stim.ArmAtMs",
+              "resolution": "Resolved",
+              "join": "DeclaredStorage",
+              "candidates": [
+                "iDB_PusherStim.Stim.ArmAt"
+              ],
+              "reason": "resolved through the submission's declared join iDB_PusherStim.Stim.ArmAt; storage location iDB_PusherStim.Stim.ArmAt, reached by 1 reference(s) (FB_PusherStim.Stim.ArmAt)"
+            },
+            {
+              "signal": "PSH_Stim.ArmUntilMs",
+              "resolution": "Resolved",
+              "join": "DeclaredStorage",
+              "candidates": [
+                "iDB_PusherStim.Stim.ArmUntil"
+              ],
+              "reason": "resolved through the submission's declared join iDB_PusherStim.Stim.ArmUntil; storage location iDB_PusherStim.Stim.ArmUntil, reached by 1 reference(s) (FB_PusherStim.Stim.ArmUntil)"
+            },
+            {
+              "signal": "PSH_Stim.DownstreamEdge1Ms",
+              "resolution": "Resolved",
+              "join": "DeclaredStorage",
+              "candidates": [
+                "iDB_PusherStim.Stim.DownstreamEdge1"
+              ],
+              "reason": "resolved through the submission's declared join iDB_PusherStim.Stim.DownstreamEdge1; storage location iDB_PusherStim.Stim.DownstreamEdge1, reached by 1 reference(s) (FB_PusherStim.Stim.DownstreamEdge1)"
+            },
+            {
+              "signal": "PSH_Stim.DownstreamEdge2Ms",
+              "resolution": "Resolved",
+              "join": "DeclaredStorage",
+              "candidates": [
+                "iDB_PusherStim.Stim.DownstreamEdge2"
+              ],
+              "reason": "resolved through the submission's declared join iDB_PusherStim.Stim.DownstreamEdge2; storage location iDB_PusherStim.Stim.DownstreamEdge2, reached by 1 reference(s) (FB_PusherStim.Stim.DownstreamEdge2)"
+            },
+            {
+              "signal": "PSH_Stim.DownstreamInitial",
+              "resolution": "Resolved",
+              "join": "DeclaredStorage",
+              "candidates": [
+                "iDB_PusherStim.Stim.DownstreamInitial"
+              ],
+              "reason": "resolved through the submission's declared join iDB_PusherStim.Stim.DownstreamInitial; storage location iDB_PusherStim.Stim.DownstreamInitial, reached by 1 reference(s) (FB_PusherStim.Stim.DownstreamInitial)"
+            },
+            {
+              "signal": "PSH_Stim.EndMs",
+              "resolution": "Resolved",
+              "join": "DeclaredStorage",
+              "candidates": [
+                "iDB_PusherStim.Stim.EndAt"
+              ],
+              "reason": "resolved through the submission's declared join iDB_PusherStim.Stim.EndAt; storage location iDB_PusherStim.Stim.EndAt, reached by 1 reference(s) (FB_PusherStim.Stim.EndAt)"
+            },
+            {
+              "signal": "PSH_Stim.FullTravelEdge1Ms",
+              "resolution": "Resolved",
+              "join": "DeclaredStorage",
+              "candidates": [
+                "iDB_PusherStim.Stim.FullTravelEdge1"
+              ],
+              "reason": "resolved through the submission's declared join iDB_PusherStim.Stim.FullTravelEdge1; storage location iDB_PusherStim.Stim.FullTravelEdge1, reached by 1 reference(s) (FB_PusherStim.Stim.FullTravelEdge1)"
+            },
+            {
+              "signal": "PSH_Stim.FullTravelEdge2Ms",
+              "resolution": "Resolved",
+              "join": "DeclaredStorage",
+              "candidates": [
+                "iDB_PusherStim.Stim.FullTravelEdge2"
+              ],
+              "reason": "resolved through the submission's declared join iDB_PusherStim.Stim.FullTravelEdge2; storage location iDB_PusherStim.Stim.FullTravelEdge2, reached by 1 reference(s) (FB_PusherStim.Stim.FullTravelEdge2)"
+            },
+            {
+              "signal": "PSH_Stim.FullTravelInitial",
+              "resolution": "Resolved",
+              "join": "DeclaredStorage",
+              "candidates": [
+                "iDB_PusherStim.Stim.FullTravelInitial"
+              ],
+              "reason": "resolved through the submission's declared join iDB_PusherStim.Stim.FullTravelInitial; storage location iDB_PusherStim.Stim.FullTravelInitial, reached by 1 reference(s) (FB_PusherStim.Stim.FullTravelInitial)"
+            },
+            {
+              "signal": "PSH_Stim.HealthyEdge1Ms",
+              "resolution": "Resolved",
+              "join": "DeclaredStorage",
+              "candidates": [
+                "iDB_PusherStim.Stim.HealthyEdge1"
+              ],
+              "reason": "resolved through the submission's declared join iDB_PusherStim.Stim.HealthyEdge1; storage location iDB_PusherStim.Stim.HealthyEdge1, reached by 1 reference(s) (FB_PusherStim.Stim.HealthyEdge1)"
+            },
+            {
+              "signal": "PSH_Stim.HealthyEdge2Ms",
+              "resolution": "Resolved",
+              "join": "DeclaredStorage",
+              "candidates": [
+                "iDB_PusherStim.Stim.HealthyEdge2"
+              ],
+              "reason": "resolved through the submission's declared join iDB_PusherStim.Stim.HealthyEdge2; storage location iDB_PusherStim.Stim.HealthyEdge2, reached by 1 reference(s) (FB_PusherStim.Stim.HealthyEdge2)"
+            },
+            {
+              "signal": "PSH_Stim.HealthyInitial",
+              "resolution": "Resolved",
+              "join": "DeclaredStorage",
+              "candidates": [
+                "iDB_PusherStim.Stim.HealthyInitial"
+              ],
+              "reason": "resolved through the submission's declared join iDB_PusherStim.Stim.HealthyInitial; storage location iDB_PusherStim.Stim.HealthyInitial, reached by 1 reference(s) (FB_PusherStim.Stim.HealthyInitial)"
+            },
+            {
+              "signal": "PSH_Stim.HighPressureEdge1Ms",
+              "resolution": "Resolved",
+              "join": "DeclaredStorage",
+              "candidates": [
+                "iDB_PusherStim.Stim.HighPressureEdge1"
+              ],
+              "reason": "resolved through the submission's declared join iDB_PusherStim.Stim.HighPressureEdge1; storage location iDB_PusherStim.Stim.HighPressureEdge1, reached by 1 reference(s) (FB_PusherStim.Stim.HighPressureEdge1)"
+            },
+            {
+              "signal": "PSH_Stim.HighPressureEdge2Ms",
+              "resolution": "Resolved",
+              "join": "DeclaredStorage",
+              "candidates": [
+                "iDB_PusherStim.Stim.HighPressureEdge2"
+              ],
+              "reason": "resolved through the submission's declared join iDB_PusherStim.Stim.HighPressureEdge2; storage location iDB_PusherStim.Stim.HighPressureEdge2, reached by 1 reference(s) (FB_PusherStim.Stim.HighPressureEdge2)"
+            },
+            {
+              "signal": "PSH_Stim.HighPressureInitial",
+              "resolution": "Resolved",
+              "join": "DeclaredStorage",
+              "candidates": [
+                "iDB_PusherStim.Stim.HighPressureInitial"
+              ],
+              "reason": "resolved through the submission's declared join iDB_PusherStim.Stim.HighPressureInitial; storage location iDB_PusherStim.Stim.HighPressureInitial, reached by 1 reference(s) (FB_PusherStim.Stim.HighPressureInitial)"
+            },
+            {
+              "signal": "PSH_Stim.HomeEdge1Ms",
+              "resolution": "Resolved",
+              "join": "DeclaredStorage",
+              "candidates": [
+                "iDB_PusherStim.Stim.HomeEdge1"
+              ],
+              "reason": "resolved through the submission's declared join iDB_PusherStim.Stim.HomeEdge1; storage location iDB_PusherStim.Stim.HomeEdge1, reached by 1 reference(s) (FB_PusherStim.Stim.HomeEdge1)"
+            },
+            {
+              "signal": "PSH_Stim.HomeEdge2Ms",
+              "resolution": "Resolved",
+              "join": "DeclaredStorage",
+              "candidates": [
+                "iDB_PusherStim.Stim.HomeEdge2"
+              ],
+              "reason": "resolved through the submission's declared join iDB_PusherStim.Stim.HomeEdge2; storage location iDB_PusherStim.Stim.HomeEdge2, reached by 1 reference(s) (FB_PusherStim.Stim.HomeEdge2)"
+            },
+            {
+              "signal": "PSH_Stim.HomeInitial",
+              "resolution": "Resolved",
+              "join": "DeclaredStorage",
+              "candidates": [
+                "iDB_PusherStim.Stim.HomeInitial"
+              ],
+              "reason": "resolved through the submission's declared join iDB_PusherStim.Stim.HomeInitial; storage location iDB_PusherStim.Stim.HomeInitial, reached by 1 reference(s) (FB_PusherStim.Stim.HomeInitial)"
+            },
+            {
+              "signal": "PSH_Stim.HopperEdge1Ms",
+              "resolution": "Resolved",
+              "join": "DeclaredStorage",
+              "candidates": [
+                "iDB_PusherStim.Stim.HopperEdge1"
+              ],
+              "reason": "resolved through the submission's declared join iDB_PusherStim.Stim.HopperEdge1; storage location iDB_PusherStim.Stim.HopperEdge1, reached by 1 reference(s) (FB_PusherStim.Stim.HopperEdge1)"
+            },
+            {
+              "signal": "PSH_Stim.HopperEdge2Ms",
+              "resolution": "Resolved",
+              "join": "DeclaredStorage",
+              "candidates": [
+                "iDB_PusherStim.Stim.HopperEdge2"
+              ],
+              "reason": "resolved through the submission's declared join iDB_PusherStim.Stim.HopperEdge2; storage location iDB_PusherStim.Stim.HopperEdge2, reached by 1 reference(s) (FB_PusherStim.Stim.HopperEdge2)"
+            },
+            {
+              "signal": "PSH_Stim.HopperInitial",
+              "resolution": "Resolved",
+              "join": "DeclaredStorage",
+              "candidates": [
+                "iDB_PusherStim.Stim.HopperInitial"
+              ],
+              "reason": "resolved through the submission's declared join iDB_PusherStim.Stim.HopperInitial; storage location iDB_PusherStim.Stim.HopperInitial, reached by 1 reference(s) (FB_PusherStim.Stim.HopperInitial)"
+            },
+            {
+              "signal": "PSH_Stim.JogExtendEdge1Ms",
+              "resolution": "Resolved",
+              "join": "DeclaredStorage",
+              "candidates": [
+                "iDB_PusherStim.Stim.JogExtendEdge1"
+              ],
+              "reason": "resolved through the submission's declared join iDB_PusherStim.Stim.JogExtendEdge1; storage location iDB_PusherStim.Stim.JogExtendEdge1, reached by 1 reference(s) (FB_PusherStim.Stim.JogExtendEdge1)"
+            },
+            {
+              "signal": "PSH_Stim.JogExtendEdge2Ms",
+              "resolution": "Resolved",
+              "join": "DeclaredStorage",
+              "candidates": [
+                "iDB_PusherStim.Stim.JogExtendEdge2"
+              ],
+              "reason": "resolved through the submission's declared join iDB_PusherStim.Stim.JogExtendEdge2; storage location iDB_PusherStim.Stim.JogExtendEdge2, reached by 1 reference(s) (FB_PusherStim.Stim.JogExtendEdge2)"
+            },
+            {
+              "signal": "PSH_Stim.JogExtendInitial",
+              "resolution": "Resolved",
+              "join": "DeclaredStorage",
+              "candidates": [
+                "iDB_PusherStim.Stim.JogExtendInitial"
+              ],
+              "reason": "resolved through the submission's declared join iDB_PusherStim.Stim.JogExtendInitial; storage location iDB_PusherStim.Stim.JogExtendInitial, reached by 1 reference(s) (FB_PusherStim.Stim.JogExtendInitial)"
+            },
+            {
+              "signal": "PSH_Stim.JogRetractEdge1Ms",
+              "resolution": "Resolved",
+              "join": "DeclaredStorage",
+              "candidates": [
+                "iDB_PusherStim.Stim.JogRetractEdge1"
+              ],
+              "reason": "resolved through the submission's declared join iDB_PusherStim.Stim.JogRetractEdge1; storage location iDB_PusherStim.Stim.JogRetractEdge1, reached by 1 reference(s) (FB_PusherStim.Stim.JogRetractEdge1)"
+            },
+            {
+              "signal": "PSH_Stim.JogRetractEdge2Ms",
+              "resolution": "Resolved",
+              "join": "DeclaredStorage",
+              "candidates": [
+                "iDB_PusherStim.Stim.JogRetractEdge2"
+              ],
+              "reason": "resolved through the submission's declared join iDB_PusherStim.Stim.JogRetractEdge2; storage location iDB_PusherStim.Stim.JogRetractEdge2, reached by 1 reference(s) (FB_PusherStim.Stim.JogRetractEdge2)"
+            },
+            {
+              "signal": "PSH_Stim.JogRetractInitial",
+              "resolution": "Resolved",
+              "join": "DeclaredStorage",
+              "candidates": [
+                "iDB_PusherStim.Stim.JogRetractInitial"
+              ],
+              "reason": "resolved through the submission's declared join iDB_PusherStim.Stim.JogRetractInitial; storage location iDB_PusherStim.Stim.JogRetractInitial, reached by 1 reference(s) (FB_PusherStim.Stim.JogRetractInitial)"
+            },
+            {
+              "signal": "PSH_Stim.ManualCycleEdge1Ms",
+              "resolution": "Resolved",
+              "join": "DeclaredStorage",
+              "candidates": [
+                "iDB_PusherStim.Stim.ManualCycleEdge1"
+              ],
+              "reason": "resolved through the submission's declared join iDB_PusherStim.Stim.ManualCycleEdge1; storage location iDB_PusherStim.Stim.ManualCycleEdge1, reached by 1 reference(s) (FB_PusherStim.Stim.ManualCycleEdge1)"
+            },
+            {
+              "signal": "PSH_Stim.ManualCycleEdge2Ms",
+              "resolution": "Resolved",
+              "join": "DeclaredStorage",
+              "candidates": [
+                "iDB_PusherStim.Stim.ManualCycleEdge2"
+              ],
+              "reason": "resolved through the submission's declared join iDB_PusherStim.Stim.ManualCycleEdge2; storage location iDB_PusherStim.Stim.ManualCycleEdge2, reached by 1 reference(s) (FB_PusherStim.Stim.ManualCycleEdge2)"
+            },
+            {
+              "signal": "PSH_Stim.ManualCycleInitial",
+              "resolution": "Resolved",
+              "join": "DeclaredStorage",
+              "candidates": [
+                "iDB_PusherStim.Stim.ManualCycleInitial"
+              ],
+              "reason": "resolved through the submission's declared join iDB_PusherStim.Stim.ManualCycleInitial; storage location iDB_PusherStim.Stim.ManualCycleInitial, reached by 1 reference(s) (FB_PusherStim.Stim.ManualCycleInitial)"
+            },
+            {
+              "signal": "PSH_Stim.Mode",
+              "resolution": "Resolved",
+              "join": "DeclaredStorage",
+              "candidates": [
+                "iDB_PusherStim.Stim.Mode"
+              ],
+              "reason": "resolved through the submission's declared join iDB_PusherStim.Stim.Mode; storage location iDB_PusherStim.Stim.Mode, reached by 1 reference(s) (FB_PusherStim.Stim.Mode)"
+            },
+            {
+              "signal": "PSH_Stim.PackRunningEdge1Ms",
+              "resolution": "Resolved",
+              "join": "DeclaredStorage",
+              "candidates": [
+                "iDB_PusherStim.Stim.PackRunningEdge1"
+              ],
+              "reason": "resolved through the submission's declared join iDB_PusherStim.Stim.PackRunningEdge1; storage location iDB_PusherStim.Stim.PackRunningEdge1, reached by 1 reference(s) (FB_PusherStim.Stim.PackRunningEdge1)"
+            },
+            {
+              "signal": "PSH_Stim.PackRunningEdge2Ms",
+              "resolution": "Resolved",
+              "join": "DeclaredStorage",
+              "candidates": [
+                "iDB_PusherStim.Stim.PackRunningEdge2"
+              ],
+              "reason": "resolved through the submission's declared join iDB_PusherStim.Stim.PackRunningEdge2; storage location iDB_PusherStim.Stim.PackRunningEdge2, reached by 1 reference(s) (FB_PusherStim.Stim.PackRunningEdge2)"
+            },
+            {
+              "signal": "PSH_Stim.PackRunningInitial",
+              "resolution": "Resolved",
+              "join": "DeclaredStorage",
+              "candidates": [
+                "iDB_PusherStim.Stim.PackRunningInitial"
+              ],
+              "reason": "resolved through the submission's declared join iDB_PusherStim.Stim.PackRunningInitial; storage location iDB_PusherStim.Stim.PackRunningInitial, reached by 1 reference(s) (FB_PusherStim.Stim.PackRunningInitial)"
+            },
+            {
+              "signal": "PSH_Stim.ResetAtMs",
+              "resolution": "Resolved",
+              "join": "DeclaredStorage",
+              "candidates": [
+                "iDB_PusherStim.Stim.ResetAt"
+              ],
+              "reason": "resolved through the submission's declared join iDB_PusherStim.Stim.ResetAt; storage location iDB_PusherStim.Stim.ResetAt, reached by 1 reference(s) (FB_PusherStim.Stim.ResetAt)"
+            },
+            {
+              "signal": "PSH_Stim.ResetMode",
+              "resolution": "Resolved",
+              "join": "DeclaredStorage",
+              "candidates": [
+                "iDB_PusherStim.Stim.ResetMode"
+              ],
+              "reason": "resolved through the submission's declared join iDB_PusherStim.Stim.ResetMode; storage location iDB_PusherStim.Stim.ResetMode, reached by 1 reference(s) (FB_PusherStim.Stim.ResetMode)"
+            },
+            {
+              "signal": "PSH_Violation_PumpDroppedInCycle",
+              "resolution": "HarnessOnly",
+              "join": "DeclaredHarnessOnly",
+              "candidates": [],
+              "reason": "declared `harnessOnly`: a POSITIVE CLAIM that it occupies no PLC storage, so NO CONFLICT EDGE IS POSSIBLE for it. That is a computed fact rather than a gap, and it does not count against the scope."
+            },
+            {
+              "signal": "PSH_Violation_RetractDroppedUnderPressure",
+              "resolution": "HarnessOnly",
+              "join": "DeclaredHarnessOnly",
+              "candidates": [],
+              "reason": "declared `harnessOnly`: a POSITIVE CLAIM that it occupies no PLC storage, so NO CONFLICT EDGE IS POSSIBLE for it. That is a computed fact rather than a gap, and it does not count against the scope."
+            },
+            {
+              "signal": "the both-pusher-switches fault annunciation — *** NO TAG NAMED IN THE REGISTER, see AMB-PSH-14 ***",
+              "resolution": "Resolved",
+              "join": "DeclaredStorage",
+              "candidates": [
+                "DB_Alarms.ShredderAlarm0.%X3"
+              ],
+              "reason": "resolved through the submission's declared join DB_Alarms.ShredderAlarm0.%X3; storage location DB_Alarms.ShredderAlarm0.%X3, reached by 1 reference(s) (DB_Alarms.ShredderAlarm0.%X3)"
+            },
+            {
+              "signal": "the end-travel-timeout fault annunciation — *** NO TAG NAMED IN THE REGISTER, see AMB-PSH-14 ***",
+              "resolution": "Resolved",
+              "join": "DeclaredStorage",
+              "candidates": [
+                "DB_Alarms.ShredderAlarm0.%X5"
+              ],
+              "reason": "resolved through the submission's declared join DB_Alarms.ShredderAlarm0.%X5; storage location DB_Alarms.ShredderAlarm0.%X5, reached by 1 reference(s) (DB_Alarms.ShredderAlarm0.%X5)"
+            },
+            {
+              "signal": "the parked-timeout fault annunciation — *** NO TAG NAMED IN THE REGISTER, see AMB-PSH-14 ***",
+              "resolution": "Resolved",
+              "join": "DeclaredStorage",
+              "candidates": [
+                "DB_Alarms.ShredderAlarm0.%X6"
+              ],
+              "reason": "resolved through the submission's declared join DB_Alarms.ShredderAlarm0.%X6; storage location DB_Alarms.ShredderAlarm0.%X6, reached by 1 reference(s) (DB_Alarms.ShredderAlarm0.%X6)"
+            },
+            {
+              "signal": "the pusher-blocked fault annunciation — *** NO TAG NAMED IN THE REGISTER, see AMB-PSH-14 ***",
+              "resolution": "Resolved",
+              "join": "DeclaredStorage",
+              "candidates": [
+                "DB_Alarms.ShredderAlarm0.%X4"
+              ],
+              "reason": "resolved through the submission's declared join DB_Alarms.ShredderAlarm0.%X4; storage location DB_Alarms.ShredderAlarm0.%X4, reached by 1 reference(s) (DB_Alarms.ShredderAlarm0.%X4)"
+            }
+          ],
+          "edges": [
+            {
+              "storagePath": "DB_Controls.PusherMode",
+              "derivation": "both blocks write DB_Controls.PusherMode; every writer is a harness-generated block (reserved band 9000-9999), so this conflict is an artefact of testing"
+            }
+          ],
+          "warnings": []
+        }
+      },
+      "_scopeGrew": "Re-run after the six new vectors and the eight new storage entries: scope 53 -> 61 signals, 59 resolved through DeclaredStorage and 2 through DeclaredHarnessOnly, 0 unresolved, 0 ambiguous. *** THE FOUR ALARM BIT SLICES RESOLVED *** - `DB_Alarms.ShredderAlarm0.%X3` and siblings matched the corpus usage graph as ordinary storage paths, which is independent evidence that a Word bit slice is addressable as a signal here. Still ONE edge, unchanged."
+    },
+    {
+      "tool": "converter conflict-graph --submission (MUTATION CONTROL - one storage path made plausible-but-wrong)",
+      "exit": 2,
+      "transient": "DELIBERATELY FAILED, ON A MUTATED COPY IN A TEMP DIRECTORY, NEVER ON THE SUBMISSION. It is here as evidence that the edge list above is ARMED: replacing DQ6_PSH_Extend's storage path with the plausible `iDB_PusherControl.IO.ExtendSolenoid` returns UNRESOLVED, exit 2, and WITHHOLDS `conflictEdges` entirely rather than emitting an empty list - so a wrong join cannot present as a clean program. It supersedes nothing and satisfies no required gate.",
+      "json": {
+        "conflictEdgesKeyPresent": false,
+        "notComputed": "1 of 53 submission signal(s) could not be resolved to exactly one storage path (1 unresolved, 0 ambiguous; 0 of them have NO DECLARED JOIN at all). An edge list computed over a scope that was mostly not looked at is empty for a reason that has nothing to do with conflicts, and at the gate that is indistinguishable from a clean program. Or pass --allow-unresolved to emit the edges for the signals that DID resolve and accept the gap deliberately.",
+        "signalsResolved": 50,
+        "signalsUnresolved": 1
+      }
+    },
+    {
+      "tool": "assertion-id recomputation (pre-check, independent reimplementation of Harness.Results/AssertionId.cs)",
+      "exit": 0,
+      "_whatItIs": "*** NOT A PROJECT TOOL - A HAND-WRITTEN REIMPLEMENTATION, LABELLED AS ONE. *** Run BEFORE any citation was written, because the enumeration's own header says at line 9 that the file is UNSTAMPED and at line 13 that NO VECTOR MAY CITE IT AS IT STANDS, while the file on disk carries an `id:` on all 44 assertions. Both statements cannot be true and the citation had to be safe either way. Algorithm per AssertionId.cs: trim, collapse internal whitespace runs to one space, strip ONE trailing '.' or ';', preserve case; SHA-256 over the UTF-8 bytes; first 6 hex; prefixed with the clause id.",
+      "json": {
+        "assertionsChecked": 44,
+        "mismatches": 0
+      },
+      "_supersededBy": "The harness gate's own gate 3g independently recomputed all 44 and agrees: 'all 44 assertion ID(s) recompute from their own normalised text. The stamper is verified rather than trusted.' THAT is the authoritative run; this one is recorded because it is what licensed citing a file whose header forbids it."
+    },
+    {
+      "tool": "binding invariance (structural before/after comparison of harness-binding.json)",
+      "exit": 0,
+      "_whatItIs": "*** THE STAND-IN FOR `converter diff --only`, WHICH CANNOT RUN ON JSON. *** The pre-edit file was copied aside before the patch and the two were compared key by key: 55 rows in, 55 rows out, in the same order, with `tag`, `type` and `latchedBy` byte-identical on every one; the only additions are `specName` on all 55 and `encoding` on exactly two; `unresolvedHoles` went from 5 entries to 3 by removal of the two named, with the remaining three unmodified; every other top-level key - blockName, blockNumber, tagTableName, tagPrefix, baseByte, declaredRegisters, slots[0].slotId, slots[0].startCondition - is unchanged. Results below are the machine comparison, not a reading.",
+      "json": {
+        "rowsBefore": 55,
+        "rowsAfter": 55,
+        "rowOrderPreserved": true,
+        "keysAdded": {
+          "specName": 55,
+          "encoding": 2
+        },
+        "existingKeysChangedOrRemoved": [],
+        "topLevelKeysUnchanged": [
+          "_generatedBy",
+          "_derivedFrom",
+          "_blockIdentity",
+          "blockName",
+          "blockNumber",
+          "tagTableName",
+          "tagPrefix",
+          "_baseByte",
+          "baseByte",
+          "declaredRegisters",
+          "_resolvedByLadCoder"
+        ],
+        "slotKeysUnchanged": [
+          "slotId",
+          "_registerOrder",
+          "_startCondition",
+          "startCondition"
+        ],
+        "unresolvedHolesBefore": [
+          "specName",
+          "encoding",
+          "inertRest",
+          "declaredBy",
+          "retentiveBytes"
+        ],
+        "unresolvedHolesAfter": [
+          "inertRest",
+          "declaredBy",
+          "retentiveBytes"
+        ],
+        "remainingHolesByteIdentical": true
+      }
+    },
+    {
+      "tool": "converter cross-check (verifying the register's annunciation naming rather than taking it on report)",
+      "exit": 0,
+      "_command": "converter cross-check --project ir/test-project001 --json",
+      "_why": "*** THE COORDINATOR HANDED THIS LANE A NAMING AND A TABLE. A NAMING THAT WAS WRONG WOULD BE WORSE THAN NONE, because six vectors would then assert against the wrong bit and pass or fail for reasons having nothing to do with the block. *** So the corpus was read directly: FC_AlarmsMain networks 4 to 7 are each a single unconditional COIL copying IO.BothSwitchesFault, IO.Blocked, IO.EndTravelTimeoutFault and IO.ParkedTimeoutFault into .%X3/.%X4/.%X5/.%X6, and requirements.md's new table matches that line for line. cross-check then confirmed the two structural claims the judgement rests on.",
+      "json": {
+        "soleWriterPathsFound": [
+          "DB_Alarms.ShredderAlarm0.%X0",
+          "DB_Alarms.ShredderAlarm0.%X1",
+          "DB_Alarms.ShredderAlarm0.%X2",
+          "DB_Alarms.ShredderAlarm0.%X3",
+          "DB_Alarms.ShredderAlarm0.%X4",
+          "DB_Alarms.ShredderAlarm0.%X5",
+          "DB_Alarms.ShredderAlarm0.%X6",
+          "DB_Alarms.ShredderAlarm0.%X7",
+          "DB_Alarms.ShredderAlarm0.%X8",
+          "DB_Alarms.ShredderAlarm0.%X9"
+        ],
+        "deadMemberPathsFound": [
+          "DB_Alarms.ShredderAlarm0"
+        ],
+        "_reads": "All four pusher bits are SOLE WRITERS - no second writer can contradict the copy. DB_Alarms.ShredderAlarm0 is a DEAD MEMBER with no readers - nothing in this corpus consumes the alarm word, so no vector here can test that anything is DISPLAYED."
+      }
+    }
+  ],
+  "_whatIDidNotVerify": [
+    "*** NOTHING WAS RUN AGAINST A CONTROLLER. *** No Portal session, no rig, no socket, no download, no `harness-run --verify`, no import, no compile, no rebuild of anything. A wave is on the rig; nothing under `ir/` was read for edit and nothing under `ir/` was written. Every vector in this set is UNEXECUTED: not one has been shown to go red against the mutant its `kills` field names, so each `kills` is an argument and not a measurement. That is the ordinary state of a submission at admission and it is the single largest thing this evidence does not establish.",
+    "*** ALL 30 VECTORS ARE REFUSED AT GATE 5 AND NONE CAN RUN AS THINGS STAND. *** 67 refusals: the copy layer publishes nothing for slot PSH, so the 17 readbacks, 4 fault source latches, 9 occurrence latches and 2 violation latches this set needs do not exist. NOTHING WAS BUILT TO CLOSE THAT - FC_HarnessCopyLayer, FB_HarnessViolationLatch and the binding's row set are other lanes' artifacts, and the rig is busy.",
+    "*** THE ANNUNCIATION DECISION RESTS ON AN UNMEASURED ASSUMPTION: that the copy-layer generator can take a Word BIT SLICE as a READ operand. *** FC_AlarmsMain writes those exact slices, DB_Alarms records slice access as a documented C-301 exception, and `converter conflict-graph` resolved all four slice paths against the usage graph - but no generator has been seen to emit a slice read. If it cannot, the six annunciation vectors fall back to the source latch alone and must be re-annotated to say they are then blind to FC_AlarmsMain networks 4 to 7.",
+    "*** NO VECTOR HERE TESTS THAT ANYTHING IS DISPLAYED. *** cross-check reports DB_Alarms.ShredderAlarm0 as a dead member with no readers, so the annunciation chain ends at a word nothing consumes. Consistent with the enumeration's J4, which routed the display limb to an HMI enumeration that does not exist - and not covered by it either.",
+    "*** THE SCENARIOS ARE DESK-TRACED, NOT SIMULATED. *** Each was worked through FB_PusherControl's fourteen networks and FB_PusherStim's twenty-one by hand - the launch at 1.0 s, the dwell exit at 8.0 s, the pressure confirm at 4.5 s, the end-travel timeout at 61.0 s, the parked timeout at 31.0 s. No PLCSIM run, no simulation of any kind. A transition landing a scan either side of where this author put it would move an arming window; the two tightest margins are named on the vectors that carry them (VP-PSH-011, 100 ms; VP-PSH-003, 200 ms).",
+    "The `latchedBy` names in the binding were NOT verified against a deployment - gate 5 admitted five latch claims ON PROVENANCE, NOT VERIFICATION, and gate 5b is NOT CHECKED for want of a deployment declaration.",
+    "`resultRegistersPerSlot: 52` is an ESTIMATE with its arithmetic shown, not a count of anything that exists. It does not move the observability floor at one slot, which is checked, but the coordinator owns the real number.",
+    "No review skill was run. `review-conventions`, `review-simplicity` and `review-functional` read LAD, and nothing in this run is LAD."
+  ],
+  "_issue2": "*** SECOND ISSUE, 2026-09-02. 24 vectors -> 30. *** The register added a section 'Annunciation bits (DB_Alarms, DB 5)' naming DB_Alarms.ShredderAlarm0.%X3 to .%X6 and their FC_AlarmsMain source networks. Six assertions that had no citable response signal became writable and are now covered: REQ-052:925a32, REQ-048:fea9bf, REQ-054:9a52ca, REQ-055:e662ca, REQ-054:f54a2e, REQ-055:341c91. Coverage 24/44 -> 30/44. Three of the eleven AMB-PSH-14 assertions did NOT recover, each for a second and independent reason, and they were moved to the cause that actually blocks them rather than left where they would read as a naming problem.",
+  "_correctionToTheFIRSTISSUE": "🔴 *** THE FIRST ISSUE OF THIS EVIDENCE AND ITS SUBMISSION BOTH CLAIMED THAT GATE 5 REFUSED `11 of the 24` VECTORS, AND THAT AN EARLIER PREDICTION HAD `NAMED EXACTLY THOSE 11 BEFORE THE GATE WAS RUN`. BOTH CLAIMS WERE FALSE. *** The gate refused essentially every vector, then and now: the prediction had counted only the `MapDoesNotProvideIt` subset (Latched asked of a Sampled binding) and missed that `SignalNotInMap` on the thirteen readbacks reaches almost every vector, because nearly every assertion in this enumeration names an INPUT as a co-observation. *** THE SECOND SENTENCE IS THE WORSE ONE: IT PRESENTED A PREDICTION AS CONFIRMED BY A MEASUREMENT THAT HAD CONTRADICTED IT *** - the exact shape of error this pipeline exists to catch, made by reading a long gate output instead of counting it. Corrected by counting mechanically. MEASURED THIS ISSUE: all 30 vectors are refused at gate 5, on 67 individual refusals (49 SignalNotInMap, 18 MapDoesNotProvideIt). The remedy is unchanged and larger than reported: NOT ONE VECTOR CAN RUN UNTIL THE COPY LAYER IS REGENERATED."
+}

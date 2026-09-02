@@ -3,80 +3,6 @@
   "_derivedFrom": "ir/test-project001 (46 file(s)). Types and RETAIN from the typed signal inventory; direction and the writer/reader sites from ProjectUsageGraph - the same producers `signal-set`, `candidate-scan` and `undriven-scan` answer from, so this document cannot disagree with them. Modbus window: served area: base 1000, 1024 register(s), derived from ir/test-project001\\FB_Comms_ModbusServer.ir:31 + sidecar ir/test-project001\\FB_Comms_ModbusServer.ir:39",
   "unresolvedHoles": [
     {
-      "field": "specName",
-      "paths": [
-        "iDB_PusherStim.Stim.ArmAt",
-        "iDB_PusherStim.Stim.ArmUntil",
-        "iDB_PusherStim.Stim.DownstreamEdge1",
-        "iDB_PusherStim.Stim.DownstreamEdge2",
-        "iDB_PusherStim.Stim.DownstreamInitial",
-        "iDB_PusherStim.Stim.EndAt",
-        "iDB_PusherStim.Stim.FullTravelEdge1",
-        "iDB_PusherStim.Stim.FullTravelEdge2",
-        "iDB_PusherStim.Stim.FullTravelInitial",
-        "iDB_PusherStim.Stim.HealthyEdge1",
-        "iDB_PusherStim.Stim.HealthyEdge2",
-        "iDB_PusherStim.Stim.HealthyInitial",
-        "iDB_PusherStim.Stim.HighPressureEdge1",
-        "iDB_PusherStim.Stim.HighPressureEdge2",
-        "iDB_PusherStim.Stim.HighPressureInitial",
-        "iDB_PusherStim.Stim.HomeEdge1",
-        "iDB_PusherStim.Stim.HomeEdge2",
-        "iDB_PusherStim.Stim.HomeInitial",
-        "iDB_PusherStim.Stim.HopperEdge1",
-        "iDB_PusherStim.Stim.HopperEdge2",
-        "iDB_PusherStim.Stim.HopperInitial",
-        "iDB_PusherStim.Stim.JogExtendEdge1",
-        "iDB_PusherStim.Stim.JogExtendEdge2",
-        "iDB_PusherStim.Stim.JogExtendInitial",
-        "iDB_PusherStim.Stim.JogRetractEdge1",
-        "iDB_PusherStim.Stim.JogRetractEdge2",
-        "iDB_PusherStim.Stim.JogRetractInitial",
-        "iDB_PusherStim.Stim.ManualCycleEdge1",
-        "iDB_PusherStim.Stim.ManualCycleEdge2",
-        "iDB_PusherStim.Stim.ManualCycleInitial",
-        "iDB_PusherStim.Stim.Mode",
-        "iDB_PusherStim.Stim.PackRunningEdge1",
-        "iDB_PusherStim.Stim.PackRunningEdge2",
-        "iDB_PusherStim.Stim.PackRunningInitial",
-        "iDB_PusherStim.Stim.ResetAt",
-        "iDB_PusherStim.Stim.ResetMode",
-        "iDB_PusherStim.Stim.Start",
-        "iDB_PusherStim.Stim.Armed",
-        "iDB_PusherStim.Stim.ArrivedDirty",
-        "iDB_PusherStim.Stim.InertAtEnd",
-        "iDB_PusherStim.Stim.InertAtStart",
-        "iDB_PusherStim.Stim.Phase",
-        "iDB_PusherStim.Stim.RecoverFailed",
-        "iDB_PusherStim.Stim.ResetRequest",
-        "iDB_PusherStim.Stim.ScenarioDone",
-        "iDB_PusherControl.IO.Blocked",
-        "iDB_PusherControl.IO.BothSwitchesFault",
-        "iDB_PusherControl.IO.Cycling",
-        "iDB_PusherControl.IO.Enable",
-        "iDB_PusherControl.IO.EndTravelTimeoutFault",
-        "iDB_PusherControl.IO.Extend",
-        "iDB_PusherControl.IO.JogPreStartSounder",
-        "iDB_PusherControl.IO.ParkedTimeoutFault",
-        "iDB_PusherControl.IO.Retract",
-        "iDB_PusherControl.IO.RunPowerPack",
-        "iDB_PusherControl.IO.Step"
-      ],
-      "missing": "the specification's own name for each of these signals",
-      "resolvedBy": "the coordinator. It is a spec<->code TRANSLATION and the corpus contains only one of the two sides. Absent, gate 5 reports NOT CHECKED and nothing joins what a vector cites to what the copy layer carries.",
-      "_notResolvedBy": "NOT RESOLVED BY THE BLOCK AUTHOR, DELIBERATELY. It is the translation between what a vector cites and what the copy layer carries, and the vector side is being written in parallel by a third party this lane must not read. Filling it from the IR member names would be this lane inventing the other party's vocabulary and then agreeing with itself."
-    },
-    {
-      "field": "encoding",
-      "paths": [
-        "iDB_PusherStim.Stim.Mode",
-        "iDB_PusherStim.Stim.ResetMode"
-      ],
-      "missing": "whether the cited values for these are SYMBOLS needing a table, or numbers written as themselves",
-      "resolvedBy": "the coordinator, transcribing the specification's own table and CITING the line (`source`, e.g. `md:132-143`). Without it an encoded value is indistinguishable from a number somebody invented. If the cited text IS the value, leave `encoding` absent — that is the positive claim `no table`.",
-      "_notResolvedBy": "NOT RESOLVED. UDT_PusherStim states what Mode and ResetMode MEAN (0/1/2 in each case, in the members' own comments), but an encoding is the mapping from the SYMBOLS a vector cites to those numbers, and no symbol vocabulary exists on this side. If the vectors cite the numbers themselves, `whenNumeric: Literal` with no table is the answer - and that is still the coordinator's sentence, not this lane's."
-    },
-    {
       "field": "inertRest",
       "paths": [
         "iDB_PusherStim.Stim.Armed",
@@ -139,232 +65,307 @@
       "vectorTargets": [
         {
           "tag": "iDB_PusherStim.Stim.ArmAt",
+          "specName": "PSH_Stim.ArmAtMs",
           "type": "Time"
         },
         {
           "tag": "iDB_PusherStim.Stim.ArmUntil",
+          "specName": "PSH_Stim.ArmUntilMs",
           "type": "Time"
         },
         {
           "tag": "iDB_PusherStim.Stim.DownstreamEdge1",
+          "specName": "PSH_Stim.DownstreamEdge1Ms",
           "type": "Time"
         },
         {
           "tag": "iDB_PusherStim.Stim.DownstreamEdge2",
+          "specName": "PSH_Stim.DownstreamEdge2Ms",
           "type": "Time"
         },
         {
           "tag": "iDB_PusherStim.Stim.DownstreamInitial",
+          "specName": "PSH_Stim.DownstreamInitial",
           "type": "Bool"
         },
         {
           "tag": "iDB_PusherStim.Stim.EndAt",
+          "specName": "PSH_Stim.EndMs",
           "type": "Time"
         },
         {
           "tag": "iDB_PusherStim.Stim.FullTravelEdge1",
+          "specName": "PSH_Stim.FullTravelEdge1Ms",
           "type": "Time"
         },
         {
           "tag": "iDB_PusherStim.Stim.FullTravelEdge2",
+          "specName": "PSH_Stim.FullTravelEdge2Ms",
           "type": "Time"
         },
         {
           "tag": "iDB_PusherStim.Stim.FullTravelInitial",
+          "specName": "PSH_Stim.FullTravelInitial",
           "type": "Bool"
         },
         {
           "tag": "iDB_PusherStim.Stim.HealthyEdge1",
+          "specName": "PSH_Stim.HealthyEdge1Ms",
           "type": "Time"
         },
         {
           "tag": "iDB_PusherStim.Stim.HealthyEdge2",
+          "specName": "PSH_Stim.HealthyEdge2Ms",
           "type": "Time"
         },
         {
           "tag": "iDB_PusherStim.Stim.HealthyInitial",
+          "specName": "PSH_Stim.HealthyInitial",
           "type": "Bool"
         },
         {
           "tag": "iDB_PusherStim.Stim.HighPressureEdge1",
+          "specName": "PSH_Stim.HighPressureEdge1Ms",
           "type": "Time"
         },
         {
           "tag": "iDB_PusherStim.Stim.HighPressureEdge2",
+          "specName": "PSH_Stim.HighPressureEdge2Ms",
           "type": "Time"
         },
         {
           "tag": "iDB_PusherStim.Stim.HighPressureInitial",
+          "specName": "PSH_Stim.HighPressureInitial",
           "type": "Bool"
         },
         {
           "tag": "iDB_PusherStim.Stim.HomeEdge1",
+          "specName": "PSH_Stim.HomeEdge1Ms",
           "type": "Time"
         },
         {
           "tag": "iDB_PusherStim.Stim.HomeEdge2",
+          "specName": "PSH_Stim.HomeEdge2Ms",
           "type": "Time"
         },
         {
           "tag": "iDB_PusherStim.Stim.HomeInitial",
+          "specName": "PSH_Stim.HomeInitial",
           "type": "Bool"
         },
         {
           "tag": "iDB_PusherStim.Stim.HopperEdge1",
+          "specName": "PSH_Stim.HopperEdge1Ms",
           "type": "Time"
         },
         {
           "tag": "iDB_PusherStim.Stim.HopperEdge2",
+          "specName": "PSH_Stim.HopperEdge2Ms",
           "type": "Time"
         },
         {
           "tag": "iDB_PusherStim.Stim.HopperInitial",
+          "specName": "PSH_Stim.HopperInitial",
           "type": "Bool"
         },
         {
           "tag": "iDB_PusherStim.Stim.JogExtendEdge1",
+          "specName": "PSH_Stim.JogExtendEdge1Ms",
           "type": "Time"
         },
         {
           "tag": "iDB_PusherStim.Stim.JogExtendEdge2",
+          "specName": "PSH_Stim.JogExtendEdge2Ms",
           "type": "Time"
         },
         {
           "tag": "iDB_PusherStim.Stim.JogExtendInitial",
+          "specName": "PSH_Stim.JogExtendInitial",
           "type": "Bool"
         },
         {
           "tag": "iDB_PusherStim.Stim.JogRetractEdge1",
+          "specName": "PSH_Stim.JogRetractEdge1Ms",
           "type": "Time"
         },
         {
           "tag": "iDB_PusherStim.Stim.JogRetractEdge2",
+          "specName": "PSH_Stim.JogRetractEdge2Ms",
           "type": "Time"
         },
         {
           "tag": "iDB_PusherStim.Stim.JogRetractInitial",
+          "specName": "PSH_Stim.JogRetractInitial",
           "type": "Bool"
         },
         {
           "tag": "iDB_PusherStim.Stim.ManualCycleEdge1",
+          "specName": "PSH_Stim.ManualCycleEdge1Ms",
           "type": "Time"
         },
         {
           "tag": "iDB_PusherStim.Stim.ManualCycleEdge2",
+          "specName": "PSH_Stim.ManualCycleEdge2Ms",
           "type": "Time"
         },
         {
           "tag": "iDB_PusherStim.Stim.ManualCycleInitial",
+          "specName": "PSH_Stim.ManualCycleInitial",
           "type": "Bool"
         },
         {
           "tag": "iDB_PusherStim.Stim.Mode",
-          "type": "Int"
+          "specName": "PSH_Stim.Mode",
+          "type": "Int",
+          "encoding": {
+            "_note": "*** THE SPECIFICATION NAMES THE THREE MODES AND STATES NO NUMBERS, SO THIS TABLE IS NOT CITED TO IT AND SAYS SO. *** gen/test-project001/requirements.md:354 reads 'The pusher has three modes of operation: off, automatic, manual' and its Source quote is the same three words; nothing in the register, and nothing in the functional description it quotes, assigns 0, 1 and 2. The codes are therefore transcribed from the definition of the MEMBER THIS ROW IS ABOUT - the stimulus head's own UDT, whose Mode comment reads '0 Off, 1 Auto, 2 Manual' - and the citation below is that line rather than a requirements line. WHAT THAT COSTS, STATED: if the implementation's numbering were wrong, vectors citing these symbols would inherit the error and agree with the block. It costs nothing that any assertion can see, because the specification asserts nothing about which number is which mode, and no assertion in the enumeration turns on it - what the assertions turn on is that the AUTO trigger works in auto and the MANUAL triggers work in manual, and each of those vectors observes DB_Controls.PusherMode alongside its response so that the mode actually presented is evidence rather than assumption.",
+            "source": "ir/test-project001/UDT_PusherStim.ir:19",
+            "whenNumeric": "Refuse",
+            "values": {
+              "OFF": 0,
+              "AUTO": 1,
+              "MANUAL": 2
+            }
+          }
         },
         {
           "tag": "iDB_PusherStim.Stim.PackRunningEdge1",
+          "specName": "PSH_Stim.PackRunningEdge1Ms",
           "type": "Time"
         },
         {
           "tag": "iDB_PusherStim.Stim.PackRunningEdge2",
+          "specName": "PSH_Stim.PackRunningEdge2Ms",
           "type": "Time"
         },
         {
           "tag": "iDB_PusherStim.Stim.PackRunningInitial",
+          "specName": "PSH_Stim.PackRunningInitial",
           "type": "Bool"
         },
         {
           "tag": "iDB_PusherStim.Stim.ResetAt",
+          "specName": "PSH_Stim.ResetAtMs",
           "type": "Time"
         },
         {
           "tag": "iDB_PusherStim.Stim.ResetMode",
-          "type": "Int"
+          "specName": "PSH_Stim.ResetMode",
+          "type": "Int",
+          "encoding": {
+            "_note": "A HARNESS CLASSIFICATION WITH NO SPECIFICATION SIDE AT ALL, and unlike Mode there is nothing in the register it could have been cited to: how a test asserts the operator fault reset is a property of the stimulus, not of the plant. The three values are transcribed from the member's own comment - '0 never asserts the fault reset inside the scenario; 1 pulses it once at ResetAt; 2 holds it true throughout, so an edge-triggered reset finds no edge'. The symbols are this author's vocabulary for those three, which is what the encoding hole asked for. Every vector in the current set cites NONE: the cleardown either side of each index pulses the reset regardless (FB_PusherStim N8, N9), and ResetMode 0 means 'no reset INSIDE the scenario' rather than 'no reset in this index' - a distinction the hopper set had to learn the hard way and one this note carries forward rather than rediscovering.",
+            "source": "ir/test-project001/UDT_PusherStim.ir:9",
+            "whenNumeric": "Refuse",
+            "values": {
+              "NONE": 0,
+              "PULSE_AT": 1,
+              "HELD": 2
+            }
+          }
         }
       ],
       "resultSources": [
         {
           "tag": "iDB_PusherControl.IO.Blocked",
+          "specName": "PSH_BlockedFaultLatch",
           "type": "Bool"
         },
         {
           "tag": "iDB_PusherControl.IO.BothSwitchesFault",
+          "specName": "PSH_BothSwitchesFaultLatch",
           "type": "Bool"
         },
         {
           "tag": "iDB_PusherControl.IO.Cycling",
+          "specName": "PSH_InCycle",
           "type": "Bool"
         },
         {
           "tag": "iDB_PusherControl.IO.Enable",
+          "specName": "PSH_Enable",
           "type": "Bool"
         },
         {
           "tag": "iDB_PusherControl.IO.EndTravelTimeoutFault",
+          "specName": "PSH_EndTravelTimeoutFaultLatch",
           "type": "Bool"
         },
         {
           "tag": "iDB_PusherControl.IO.Extend",
+          "specName": "DQ6_PSH_Extend",
           "type": "Bool"
         },
         {
           "tag": "iDB_PusherControl.IO.JogPreStartSounder",
+          "specName": "PSH_JogPreStartRequest",
           "type": "Bool"
         },
         {
           "tag": "iDB_PusherControl.IO.ParkedTimeoutFault",
+          "specName": "PSH_ParkedTimeoutFaultLatch",
           "type": "Bool"
         },
         {
           "tag": "iDB_PusherControl.IO.Retract",
+          "specName": "DQ7_PSH_Retract",
           "type": "Bool"
         },
         {
           "tag": "iDB_PusherControl.IO.RunPowerPack",
+          "specName": "DQ3_PSH_RunPowerPack",
           "type": "Bool"
         },
         {
           "tag": "iDB_PusherControl.IO.Step",
+          "specName": "PSH_Step",
           "type": "Int"
         },
         {
           "tag": "iDB_PusherStim.Stim.Armed",
+          "specName": "PSH_Stim.Armed",
           "type": "Bool"
         },
         {
           "tag": "iDB_PusherStim.Stim.ArrivedDirty",
+          "specName": "PSH_Stim.ArrivedDirty",
           "type": "Bool",
           "latchedBy": "FB_PusherStim",
           "_latchEvidence": "FB_PusherStim N11 SETCOIL, FB_PusherStim N16 RESETCOIL; no other writer in this corpus"
         },
         {
           "tag": "iDB_PusherStim.Stim.InertAtEnd",
+          "specName": "PSH_Stim.InertAtEnd",
           "type": "Bool",
           "latchedBy": "FB_PusherStim",
           "_latchEvidence": "FB_PusherStim N13 SETCOIL, FB_PusherStim N13 RESETCOIL, FB_PusherStim N16 RESETCOIL; no other writer in this corpus"
         },
         {
           "tag": "iDB_PusherStim.Stim.InertAtStart",
+          "specName": "PSH_Stim.InertAtStart",
           "type": "Bool",
           "latchedBy": "FB_PusherStim",
           "_latchEvidence": "FB_PusherStim N12 SETCOIL, FB_PusherStim N12 RESETCOIL, FB_PusherStim N16 RESETCOIL; no other writer in this corpus"
         },
         {
           "tag": "iDB_PusherStim.Stim.Phase",
+          "specName": "PSH_Stim.Phase",
           "type": "Int"
         },
         {
           "tag": "iDB_PusherStim.Stim.RecoverFailed",
+          "specName": "PSH_Stim.RecoverFailed",
           "type": "Bool",
           "latchedBy": "FB_PusherStim",
           "_latchEvidence": "FB_PusherStim N13 SETCOIL, FB_PusherStim N16 RESETCOIL; no other writer in this corpus"
         },
         {
           "tag": "iDB_PusherStim.Stim.ResetRequest",
+          "specName": "PSH_Stim.ResetRequest",
           "type": "Bool"
         },
         {
           "tag": "iDB_PusherStim.Stim.ScenarioDone",
+          "specName": "PSH_Scenario_Done",
           "type": "Bool",
           "latchedBy": "FB_PusherStim",
           "_latchEvidence": "FB_PusherStim N15 SETCOIL, FB_PusherStim N16 RESETCOIL; no other writer in this corpus"
@@ -372,5 +373,6 @@
       ]
     }
   ],
-  "_resolvedByLadCoder": "Three of the scaffold's eight holes are resolved above and each is a TRANSCRIPTION or a DERIVATION, never a decision: the copy layer's identity (read off the two committed harness artifacts), the start condition (read off the emitted shell's own network 1, and removed from vectorTargets so it is not written twice), and the register order (there is no earlier order, which is checkable against HarnessMirror.ir). The five that remain are named above with the reason this lane is the wrong party to answer them. THE DOCUMENT IS THEREFORE STILL REFUSED BY GATE 0b, which is the correct state for it: the mechanism is built, the claims about the spec and the plant are not made."
+  "_resolvedByLadCoder": "Three of the scaffold's eight holes are resolved above and each is a TRANSCRIPTION or a DERIVATION, never a decision: the copy layer's identity (read off the two committed harness artifacts), the start condition (read off the emitted shell's own network 1, and removed from vectorTargets so it is not written twice), and the register order (there is no earlier order, which is checkable against HarnessMirror.ir). The five that remain are named above with the reason this lane is the wrong party to answer them. THE DOCUMENT IS THEREFORE STILL REFUSED BY GATE 0b, which is the correct state for it: the mechanism is built, the claims about the spec and the plant are not made.",
+  "_resolvedByVectorAuthor": "*** TWO OF THE FIVE REMAINING HOLES CLOSED 2026-09-02 BY THE VECTOR AUTHOR (ee055079-868d-48bc-aa0a-7516e8688d29/lad-coder-pshvectors), AND ONLY THE TWO THAT ARE THIS PARTY'S TO CLOSE. *** `specName` on all 55 rows and `encoding` on the two Int vector targets. Both are the VECTOR AUTHOR'S VOCABULARY by construction - a specName is the name a citation uses, and an encoding is the mapping from the symbols a vector writes to the numbers the register carries - which is why the scaffold refused to write them and why the block author's lane refused too: filling them from the IR member names would have been that lane inventing this one's vocabulary and then agreeing with itself. THE SPEC NAMES COME FROM TWO PLACES AND THE DIFFERENCE MATTERS. (a) For signals the requirements register itself names - the two solenoid outputs, the pack output, and every input and operator command bit - the specName IS the register's own equipment-inventory name (DQ6_PSH_Extend, DI12_PSH_HomeLimit, DB_Controls.PusherMode and so on), which is what the enumeration cites and therefore what a vector must cite. Eleven of those differ from their tag, which is the ordinary case and the one an absent specName would have silently broken by defaulting to equality. (b) For signals the register does NOT name - the block's step, its enable, its four fault latches, the pusher's own sounder REQUEST, and the head's own bookkeeping - the specName is a harness-side name in this author's vocabulary, prefixed PSH_. *** THE FOUR FAULT LATCHES ARE DELIBERATELY NOT GIVEN ANNUNCIATION NAMES, AND THIS IS THE MOST IMPORTANT LINE IN THIS ANNOTATION. *** IO.Blocked, IO.EndTravelTimeoutFault, IO.ParkedTimeoutFault and IO.BothSwitchesFault are bound to PSH_BlockedFaultLatch, PSH_EndTravelTimeoutFaultLatch, PSH_ParkedTimeoutFaultLatch and PSH_BothSwitchesFaultLatch - names that describe what the members ARE and claim nothing about what the specification means. AMB-PSH-14 records that the register describes four pusher annunciation bits and names none of them, and ELEVEN of the enumeration's 44 assertions have a response signal or co-observation that can be described and not named. Binding one of these latches to 'the pusher-blocked fault annunciation' would make eight of those eleven citations resolve - and it would be THIS party deciding which controller tag a specification sentence refers to, purely so that a citation would resolve. That is the invention hard rule 3 forbids and the reason the specName mechanism exists at all. THE REPAIR IS TO THE REGISTER OR TO A COORDINATOR-SIGNED BINDING, NEVER TO THIS FILE OR TO THE VECTORS. SIMILARLY IO.JogPreStartSounder IS *NOT* BOUND TO DQ10_SYS_PreStartSounder. It is the pusher's REQUEST into a sounder the plant pre-start also drives, and AMB-PSH-08 is precisely about a vector being unable to tell the two apart; giving the request the output's name would launder that ambiguity into a resolved citation. The vectors observe DB_Output.PreStart_Sounder instead, which is the combined signal the requirement is about, and attribute it with the jog commands. ONE PATH THE SCAFFOLD LISTED UNDER `specName` COULD NOT BE GIVEN ONE HERE: iDB_PusherStim.Stim.Start. It is the slot's `startCondition` and not a row, so there is no MirroredSignalDocument to carry the field. The ten slot-level start-bool names the vectors use (PSH_Start_CYCLE and its nine siblings, all resolving to that one member because gate 7 wants exactly one start bool per slot and there are ten slots) are declared in the submission's own `map.storage` instead. Reported as a small gap in the scaffold rather than worked around: either startCondition should be a row, or the hole should not list it. *** WHAT IS STILL OPEN IS STILL OPEN, AND THIS DOCUMENT IS STILL REFUSED BY GATE 0b, WHICH IS CORRECT. *** `inertRest` was NOT filled and the `assumedZeroRest` escape was NOT taken: nothing has measured a resting value for this slot, the block author refused the escape deliberately, and a vector author asserting nineteen resting values would be exactly the invention the hole exists to prevent. `declaredBy` was NOT filled: gate 5c exists so that the party deciding what may be observed is not the party deciding what is asserted about it, and this author writes the vectors. `retentiveBytes` was NOT filled: it is a property of the PROGRAM's retentive %M extent and it feeds the build stamp."
 }

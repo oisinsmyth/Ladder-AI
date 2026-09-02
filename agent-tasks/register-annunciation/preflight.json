@@ -1,0 +1,133 @@
+{
+  "files": [
+    {
+      "filePath": "ir/test-project001/DB_Alarms.ir",
+      "name": "DB_Alarms",
+      "findings": []
+    },
+    {
+      "filePath": "ir/test-project001/FC_AlarmsMain.ir",
+      "name": "FC_AlarmsMain",
+      "findings": [
+        {
+          "check": "review:C-201",
+          "description": "[Error] \u0027FC_AlarmsMain\u0027 has no header comment.",
+          "gates": true
+        },
+        {
+          "check": "review:C-301",
+          "description": "network 1: [Error] Network 1 writes slice-access bit(s) (DB_Alarms.ShredderAlarm0.%X0) without satisfying the C-501 alarm-word exception: \u0027DB_Alarms.ShredderAlarm0\u0027 is also written by network(s) 2, 3, 4, 5, 6, 7, 8, 9, 10 \u2014 all of a word\u0027s bits belong in one network; it has no network comment carrying the bit map (one line per bit, with that bit\u0027s C-505 alarm text).",
+          "gates": true
+        },
+        {
+          "check": "review:C-501",
+          "description": "network 1: [Warn] Network 1\u0027s slice-access alarm bit(s) don\u0027t satisfy C-501\u0027s own conditions: \u0027DB_Alarms.ShredderAlarm0\u0027 is also written by network(s) 2, 3, 4, 5, 6, 7, 8, 9, 10 \u2014 all of a word\u0027s bits belong in one network; it has no network comment carrying the bit map (one line per bit, with that bit\u0027s C-505 alarm text).",
+          "gates": true
+        },
+        {
+          "check": "review:C-301",
+          "description": "network 2: [Error] Network 2 writes slice-access bit(s) (DB_Alarms.ShredderAlarm0.%X1) without satisfying the C-501 alarm-word exception: \u0027DB_Alarms.ShredderAlarm0\u0027 is also written by network(s) 1, 3, 4, 5, 6, 7, 8, 9, 10 \u2014 all of a word\u0027s bits belong in one network; it has no network comment carrying the bit map (one line per bit, with that bit\u0027s C-505 alarm text).",
+          "gates": true
+        },
+        {
+          "check": "review:C-501",
+          "description": "network 2: [Warn] Network 2\u0027s slice-access alarm bit(s) don\u0027t satisfy C-501\u0027s own conditions: \u0027DB_Alarms.ShredderAlarm0\u0027 is also written by network(s) 1, 3, 4, 5, 6, 7, 8, 9, 10 \u2014 all of a word\u0027s bits belong in one network; it has no network comment carrying the bit map (one line per bit, with that bit\u0027s C-505 alarm text).",
+          "gates": true
+        },
+        {
+          "check": "review:C-301",
+          "description": "network 3: [Error] Network 3 writes slice-access bit(s) (DB_Alarms.ShredderAlarm0.%X2) without satisfying the C-501 alarm-word exception: \u0027DB_Alarms.ShredderAlarm0\u0027 is also written by network(s) 1, 2, 4, 5, 6, 7, 8, 9, 10 \u2014 all of a word\u0027s bits belong in one network; it has no network comment carrying the bit map (one line per bit, with that bit\u0027s C-505 alarm text).",
+          "gates": true
+        },
+        {
+          "check": "review:C-501",
+          "description": "network 3: [Warn] Network 3\u0027s slice-access alarm bit(s) don\u0027t satisfy C-501\u0027s own conditions: \u0027DB_Alarms.ShredderAlarm0\u0027 is also written by network(s) 1, 2, 4, 5, 6, 7, 8, 9, 10 \u2014 all of a word\u0027s bits belong in one network; it has no network comment carrying the bit map (one line per bit, with that bit\u0027s C-505 alarm text).",
+          "gates": true
+        },
+        {
+          "check": "review:C-301",
+          "description": "network 4: [Error] Network 4 writes slice-access bit(s) (DB_Alarms.ShredderAlarm0.%X3) without satisfying the C-501 alarm-word exception: \u0027DB_Alarms.ShredderAlarm0\u0027 is also written by network(s) 1, 2, 3, 5, 6, 7, 8, 9, 10 \u2014 all of a word\u0027s bits belong in one network; it has no network comment carrying the bit map (one line per bit, with that bit\u0027s C-505 alarm text).",
+          "gates": true
+        },
+        {
+          "check": "review:C-501",
+          "description": "network 4: [Warn] Network 4\u0027s slice-access alarm bit(s) don\u0027t satisfy C-501\u0027s own conditions: \u0027DB_Alarms.ShredderAlarm0\u0027 is also written by network(s) 1, 2, 3, 5, 6, 7, 8, 9, 10 \u2014 all of a word\u0027s bits belong in one network; it has no network comment carrying the bit map (one line per bit, with that bit\u0027s C-505 alarm text).",
+          "gates": true
+        },
+        {
+          "check": "review:C-301",
+          "description": "network 5: [Error] Network 5 writes slice-access bit(s) (DB_Alarms.ShredderAlarm0.%X4) without satisfying the C-501 alarm-word exception: \u0027DB_Alarms.ShredderAlarm0\u0027 is also written by network(s) 1, 2, 3, 4, 6, 7, 8, 9, 10 \u2014 all of a word\u0027s bits belong in one network; it has no network comment carrying the bit map (one line per bit, with that bit\u0027s C-505 alarm text).",
+          "gates": true
+        },
+        {
+          "check": "review:C-501",
+          "description": "network 5: [Warn] Network 5\u0027s slice-access alarm bit(s) don\u0027t satisfy C-501\u0027s own conditions: \u0027DB_Alarms.ShredderAlarm0\u0027 is also written by network(s) 1, 2, 3, 4, 6, 7, 8, 9, 10 \u2014 all of a word\u0027s bits belong in one network; it has no network comment carrying the bit map (one line per bit, with that bit\u0027s C-505 alarm text).",
+          "gates": true
+        },
+        {
+          "check": "review:C-301",
+          "description": "network 6: [Error] Network 6 writes slice-access bit(s) (DB_Alarms.ShredderAlarm0.%X5) without satisfying the C-501 alarm-word exception: \u0027DB_Alarms.ShredderAlarm0\u0027 is also written by network(s) 1, 2, 3, 4, 5, 7, 8, 9, 10 \u2014 all of a word\u0027s bits belong in one network; it has no network comment carrying the bit map (one line per bit, with that bit\u0027s C-505 alarm text).",
+          "gates": true
+        },
+        {
+          "check": "review:C-501",
+          "description": "network 6: [Warn] Network 6\u0027s slice-access alarm bit(s) don\u0027t satisfy C-501\u0027s own conditions: \u0027DB_Alarms.ShredderAlarm0\u0027 is also written by network(s) 1, 2, 3, 4, 5, 7, 8, 9, 10 \u2014 all of a word\u0027s bits belong in one network; it has no network comment carrying the bit map (one line per bit, with that bit\u0027s C-505 alarm text).",
+          "gates": true
+        },
+        {
+          "check": "review:C-301",
+          "description": "network 7: [Error] Network 7 writes slice-access bit(s) (DB_Alarms.ShredderAlarm0.%X6) without satisfying the C-501 alarm-word exception: \u0027DB_Alarms.ShredderAlarm0\u0027 is also written by network(s) 1, 2, 3, 4, 5, 6, 8, 9, 10 \u2014 all of a word\u0027s bits belong in one network; it has no network comment carrying the bit map (one line per bit, with that bit\u0027s C-505 alarm text).",
+          "gates": true
+        },
+        {
+          "check": "review:C-501",
+          "description": "network 7: [Warn] Network 7\u0027s slice-access alarm bit(s) don\u0027t satisfy C-501\u0027s own conditions: \u0027DB_Alarms.ShredderAlarm0\u0027 is also written by network(s) 1, 2, 3, 4, 5, 6, 8, 9, 10 \u2014 all of a word\u0027s bits belong in one network; it has no network comment carrying the bit map (one line per bit, with that bit\u0027s C-505 alarm text).",
+          "gates": true
+        },
+        {
+          "check": "review:C-301",
+          "description": "network 8: [Error] Network 8 writes slice-access bit(s) (DB_Alarms.ShredderAlarm0.%X7) without satisfying the C-501 alarm-word exception: \u0027DB_Alarms.ShredderAlarm0\u0027 is also written by network(s) 1, 2, 3, 4, 5, 6, 7, 9, 10 \u2014 all of a word\u0027s bits belong in one network; it has no network comment carrying the bit map (one line per bit, with that bit\u0027s C-505 alarm text).",
+          "gates": true
+        },
+        {
+          "check": "review:C-501",
+          "description": "network 8: [Warn] Network 8\u0027s slice-access alarm bit(s) don\u0027t satisfy C-501\u0027s own conditions: \u0027DB_Alarms.ShredderAlarm0\u0027 is also written by network(s) 1, 2, 3, 4, 5, 6, 7, 9, 10 \u2014 all of a word\u0027s bits belong in one network; it has no network comment carrying the bit map (one line per bit, with that bit\u0027s C-505 alarm text).",
+          "gates": true
+        },
+        {
+          "check": "review:C-301",
+          "description": "network 9: [Error] Network 9 writes slice-access bit(s) (DB_Alarms.ShredderAlarm0.%X8) without satisfying the C-501 alarm-word exception: \u0027DB_Alarms.ShredderAlarm0\u0027 is also written by network(s) 1, 2, 3, 4, 5, 6, 7, 8, 10 \u2014 all of a word\u0027s bits belong in one network; it has no network comment carrying the bit map (one line per bit, with that bit\u0027s C-505 alarm text).",
+          "gates": true
+        },
+        {
+          "check": "review:C-501",
+          "description": "network 9: [Warn] Network 9\u0027s slice-access alarm bit(s) don\u0027t satisfy C-501\u0027s own conditions: \u0027DB_Alarms.ShredderAlarm0\u0027 is also written by network(s) 1, 2, 3, 4, 5, 6, 7, 8, 10 \u2014 all of a word\u0027s bits belong in one network; it has no network comment carrying the bit map (one line per bit, with that bit\u0027s C-505 alarm text).",
+          "gates": true
+        },
+        {
+          "check": "review:C-301",
+          "description": "network 10: [Error] Network 10 writes slice-access bit(s) (DB_Alarms.ShredderAlarm0.%X9) without satisfying the C-501 alarm-word exception: \u0027DB_Alarms.ShredderAlarm0\u0027 is also written by network(s) 1, 2, 3, 4, 5, 6, 7, 8, 9 \u2014 all of a word\u0027s bits belong in one network; it has no network comment carrying the bit map (one line per bit, with that bit\u0027s C-505 alarm text).",
+          "gates": true
+        },
+        {
+          "check": "review:C-501",
+          "description": "network 10: [Warn] Network 10\u0027s slice-access alarm bit(s) don\u0027t satisfy C-501\u0027s own conditions: \u0027DB_Alarms.ShredderAlarm0\u0027 is also written by network(s) 1, 2, 3, 4, 5, 6, 7, 8, 9 \u2014 all of a word\u0027s bits belong in one network; it has no network comment carrying the bit map (one line per bit, with that bit\u0027s C-505 alarm text).",
+          "gates": true
+        }
+      ]
+    }
+  ],
+  "indexWarnings": [],
+  "corpus": {
+    "projectDir": "ir/test-project001",
+    "projectFileCount": 50,
+    "batchFileCount": 2,
+    "projectContributedNothing": false,
+    "blockNameCount": 21,
+    "tagRootNameCount": 147,
+    "typeNameCount": 7,
+    "memberBodyCount": 27,
+    "calleeInterfaceCount": 21,
+    "harnessCorpusFileCount": 50
+  }
+}

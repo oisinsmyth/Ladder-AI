@@ -1,0 +1,124 @@
+{
+  "schema": "ladder-ai/agent-evidence/1",
+  "task": "Four surgical edits to gen/test-project001/pusher-control/assertion-enumeration.yaml (stamped-header prose, AMB-PSH-14 severity+count, REQ-052 rig_note, and the 44 bounds_depended_on encodings), with all 44 hashed normalised_text/id lines proven byte-identical.",
+  "kind": "modify",
+  "manual": true,
+  "skill": null,
+  "_manual_note": "NO SKILL COVERS THIS STAGE. enumerate-assertions produces or checks an enumeration; this is a surgical repair of an ALREADY-STAMPED one, where the whole constraint is that the hashed content must not be regenerated. Done manually to the same contract. Second-manual-run signal per docs/evidence/stage-S6.md.",
+
+  "_THIS_RUN_TOUCHED_NO_IR": "Nothing under ir/ was read or written. A live wave holds the rig and the stimulus heads, arbiter and Main are in the build-stamp basis. The two files here are gen/ pipeline artifacts, so there is no block, no SimaticML, no Portal object and no claimable resource: `claims` is therefore ABSENT rather than empty, which is what this checker's own `elif declared_claims:` branch requires of a run naming no .ir file. No `converter claim` was taken and none should have been.",
+
+  "_WHY_THIS_CHECKER_EXITS_1": "Three required gates (preflight, a compile gate, diff --only) are DECLARED DEFERRED below, and the one file carries no ir_hash because `converter ir-hash` keys code blocks only and refuses anything not starting with `BLOCK `. Both are structural consequences of a gen/ artifact, not findings against the work. The exit stays 1 deliberately: a deferred gate is not a pass. The verification that DOES bear on this task is the four sha256 digests under `checks`, each independently recomputable by the dispatcher.",
+
+  "files": [
+    {
+      "path": "gen/test-project001/pusher-control/assertion-enumeration.yaml",
+      "ir_hash": null,
+      "_no_ir_hash_because": "not IR - a YAML pipeline artifact. `converter ir-hash` refuses it. Content digest recorded under checks.file-digest instead.",
+      "sha256_after": "07f9c59672223a7e667f37633207c8c0464134aeb2c7b1eecea7c2cc9d9d529b",
+      "sha256_before": "ea74b3e67c40a72b439086e5d7780e00f477b3372a911b292daf74cf00ec8c80"
+    }
+  ],
+
+  "checks": [
+    {
+      "tool": "hashed-sentence invariance: sha256 over the 44 extracted `normalised_text:` lines, before vs after",
+      "exit": 0,
+      "json": {
+        "extractor": "grep -hE '^[[:space:]]*normalised_text:' (excludes the header comment line, which legitimately contains the token in backticks)",
+        "count_before": 44,
+        "count_after": 44,
+        "sha256_before": "54c56c0f1e37cf82bf7e65c6c842cafa0fc8113b228cdbec7d7d94f80035f470",
+        "sha256_after": "54c56c0f1e37cf82bf7e65c6c842cafa0fc8113b228cdbec7d7d94f80035f470",
+        "diff": "EMPTY - identical",
+        "errors": 0
+      }
+    },
+    {
+      "tool": "assertion-id invariance: sha256 over the 44 extracted `id:` lines, before vs after",
+      "exit": 0,
+      "json": {
+        "extractor": "grep -hE '^[[:space:]]*id:'",
+        "count_before": 44,
+        "count_after": 44,
+        "sha256_before": "c5af6ff2c43d78ae679333b166052e15afcb39e5ec14cdf7d63d04878be0c49d",
+        "sha256_after": "c5af6ff2c43d78ae679333b166052e15afcb39e5ec14cdf7d63d04878be0c49d",
+        "diff": "EMPTY - identical",
+        "errors": 0
+      }
+    },
+    {
+      "tool": "line-ending integrity (CR byte count)",
+      "exit": 0,
+      "json": {
+        "cr_before": 0, "cr_after": 0,
+        "lf_before": 1038, "lf_after": 1081,
+        "bytes_before": 78008, "bytes_after": 81140,
+        "crlf_before": 0, "crlf_after": 0,
+        "_note": "This file is LF-only on disk, NOT CRLF as the repo default. It was measured before editing rather than assumed, and preserved. +43 LF accounted for exactly: header +8, AMB-PSH-14 +33, two bounds_note siblings +2.",
+        "errors": 0
+      }
+    },
+    {
+      "tool": "AssertionId.Compute recomputation over the edited file (gate 3g's own arithmetic, replicated offline)",
+      "exit": 0,
+      "json": {
+        "recipe": "clauseId + ':' + sha256(utf8(normalise(normalised_text)))[:6], per src/harness/Harness.Results/AssertionId.cs",
+        "yaml_recomputed_matching": 44, "yaml_total": 44, "yaml_mismatches": 0,
+        "json_projection_recomputed_matching": 44, "json_total": 44, "json_mismatches": 0,
+        "errors": 0
+      }
+    },
+    {
+      "tool": "harness-gate check (prebuilt Release binary, no rebuild) - gate 3g",
+      "exit": 1,
+      "json": {
+        "gate_3g": "CHECKED - all 44 assertion ID(s) recompute from their own normalised text. The stamper is verified rather than trusted.",
+        "submission": "gen/test-project001/pusher-control/conformance-vectors.json",
+        "binding": "gen/test-project001/pusher-control/harness-binding.json",
+        "overall_exit": 1,
+        "_exit_1_is_pre_existing_and_not_mine": "NOT ADMISSIBLE is driven by authority/independence gates untouched by this run: 4 derivable fields authored not derived (map, map.storage, conflictEdges, runtimeCompression), 2 authorship (D6), 3d enumerator independence, 4b fidelity authority, 5c map authority. The gate reads the SUBMISSION and the BINDING; it references assertion-enumeration.yaml zero times, so this edit is gate-neutral by construction.",
+        "errors": 0
+      }
+    },
+    {
+      "tool": "YAML well-formedness + id-to-text pairing vs the assertions.json projection",
+      "exit": 0,
+      "json": {
+        "yaml_parses": true,
+        "assertions_parsed": 44,
+        "id_to_normalised_text_map_identical_to_json": true,
+        "mismatched_pairs": 0,
+        "errors": 0
+      }
+    },
+    {
+      "tool": "EnumerationStamper line-oriented parser replication (would it still stamp cleanly)",
+      "exit": 0,
+      "json": {
+        "assertions_found_by_stamper_shaped_parse": 44,
+        "declared_denominator_assertions": 44,
+        "count_matches_denominator": true,
+        "missing_normalised_text": 0,
+        "missing_id": 0,
+        "empty_scalar_refusals": 0,
+        "_note": "New key `bounds_note` falls through the stamper's known-key switch harmlessly, as `bounds_depended_on` already did. src/harness was NOT rebuilt - a wave is live and replacing those binaries mid-run is the hazard. Parser replicated in Python instead.",
+        "errors": 0
+      }
+    },
+    {
+      "tool": "converter preflight",
+      "deferred": "NOT APPLICABLE AND NOT RUN. preflight is a static pre-import check over IR destined for SimaticML. This run wrote no IR and produced nothing importable; there is no block to preflight."
+    },
+    {
+      "tool": "openness-cli sanity-check (the compile gate)",
+      "deferred": "NOT APPLICABLE AND REFUSED BY SCOPE. No PLC content changed, so there is nothing to compile. Independently, the dispatch fences Portal entirely: a wave is running on the rig and a second Openness session is unsupported. Portal was not opened."
+    },
+    {
+      "tool": "converter diff --only (the invariance proof)",
+      "deferred": "NOT APPLICABLE IN ITS OWN FORM - `converter diff` compares LAD networks in IR and cannot read YAML. The equivalent invariance proof for this artifact IS the first two checks above: the 44 hashed sentences and their 44 IDs are byte-identical before and after, proven by sha256 over the extracted sets, not by assertion."
+    }
+  ],
+
+  "agent": "ee055079-868d-48bc-aa0a-7516e8688d29/lad-coder-enumfix"
+}

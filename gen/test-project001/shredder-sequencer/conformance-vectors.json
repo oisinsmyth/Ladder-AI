@@ -1,0 +1,1024 @@
+{
+  "_artifact": "Conformance vector set for slot SHR, block under test FB_ShredderSequencer, test-project001. TWO VECTORS AGAINST A 43-ASSERTION DENOMINATOR, AND THE NUMBER IS THE FINDING. Read _observabilityShortfall and _unreachable before reading the vectors: 41 of the 43 are blocked, none of them by anything a vector author can repair, and a set that quietly shipped twenty plausible-looking vectors over them would have been the single most misleading output this slot can produce.",
+  "_author": "ee055079-868d-48bc-aa0a-7516e8688d29/lad-coder-shrvectors",
+  "_authorship": "THE VECTOR AUTHOR IS STAMPED IN THE INSTANCE FORM, DELIBERATELY, AND IT COSTS GATES 2 AND 3d. blockAuthor below is 'lad-coder' - the role form, which is what every prior artifact in this corpus carries for that block - and enumeration.enumerator is 'assertion-enumerator', also a role. An instance identity compared against a role identity is NotComparable (Harness.Results.Tests/AgentIdentityVocabularyTests.cs:91), which is NOT CHECKED and is never a pass. *** THE ALTERNATIVE WAS TO STAMP THIS LANE IN THE ROLE FORM, WHICH WOULD HAVE TURNED BOTH GATES GREEN BY DOWNGRADING THE ONE IDENTITY IN THIS DOCUMENT THAT IS ACTUALLY DERIVED FROM A SESSION. *** That is manufacturing a pass out of a vocabulary choice, and it is refused here. The enumeration predicted this exact state in its own enumerator_vocabulary block and named the repair as the coordinator's: restamp all three parties in ONE vocabulary. Nothing about the SUBSTANCE is in doubt - this lane did not write FB_ShredderSequencer, did not write FB_ShredderSequencerStim, and did not enumerate the assertions.",
+  "blockAuthor": "lad-coder",
+  "_blockAuthor": "The role form, transcribed to match the corpus rather than invented: gen/test-project001/hopper-blockage-alarm/conformance-vectors*.json all carry blockAuthor 'lad-coder' for blocks of this project, and FB_ShredderSequencer was built and repeatedly fixed by lad-coder lanes (agent-tasks/c603-n14, c603-n15, c204-members and others). No session-stamped identity for that block exists to transcribe, and inventing one would be worse than the NotComparable above.",
+  "runtimeCompression": 1,
+  "_runtimeCompression": "1, AND IT IS A DECISION. Compressing this block means scaling ten DB_Settings presets that are Real seconds read at run time (FB_ShredderSequencer NETWORK 2 converts every one), plus the motor block's ReverseDelay = 8.0 s and FTTime = 10.0 s, plus this head's three 15 s cleardown dwells - and the head's dwells were derived as the smallest round number above the longest settling constant in the loop, so scaling one without the other breaks the cleardown. blockCompression is therefore OMITTED, which at comp = 1 is contract section 2.4's 'CHECKED, a real pass' row: nothing is scaled, so none of X-D's three ceilings can bind. It is not an omission and it is not NOT CHECKED. The cost is wall-clock: each index here is 150-165 s.",
+  "slotsInWaveSet": 3,
+  "resultRegistersPerSlot": 24,
+  "_waveGeometry": "OVER-DECLARED ON PURPOSE, AND THE PERMISSIVE DIRECTION IS THE OPPOSITE OF THE INTUITIVE ONE. Section 12a derivation 1's correction of 2026-08-14 states it plainly: over-declaring slots gives a floor that is too HIGH and is conservative; UNDER-declaring is what admits an unobservable window, and a submission declaring 1 while running in a wider wave gets a floor roughly a third of the true one, with the symptom being a missed assertion reported as a pass. This slot cannot run alone - harness-binding.json's unresolvedHoles requires it to be merged with the hopper and pusher documents into one multi-slot binding first - so 3 is the smallest honest wave, and 24 is this slot's own result-source count. At W=24 the read plan is floor(125/24) = 5 whole slots per FC03 read and ceil(3/5) = 1 read cycle, so the multiplier on the floor is 1 and the sampled floor stays 9 scans. Every windowScans here clears it by two orders of magnitude, so the figure is not load-bearing for any expectation in this set - which is stated so nobody reads the margin as care.",
+  "model": {
+    "id": "MDL-ShredderSequencerStimulus-1",
+    "declaredBy": "ee055079-868d-48bc-aa0a-7516e8688d29/lad-coder-shredderslot",
+    "_declaredBy": "THE HEAD'S AUTHOR, NOT THIS LANE. The model IS FB_ShredderSequencerStim, and what it represents is a property of the object that lane authored; the lists below are transcribed from that head's own authored NETWORKS 18-26, its block comment, and the _role annotations on harness-binding.json's vectorTargets. Attributing the declaration to this lane would make the fidelity declaration and the vectors that are set-differenced against it the same party's, which is the correlation gate 4 exists to break. THE LIMIT: this lane TRANSCRIBED the declaration, so an error of transcription is this lane's and an error of substance is the head author's, and nothing mechanical separates them.",
+    "represents": [
+      "The commanded state of ten members of the shared input-injection array DB_Input.Test[0,1,3,4,5,6,7,8,10,15], each written with the pass-through idiom so the head drives them only while its own index runs (FB_ShredderSequencerStim NETWORK 25).",
+      "A momentary operator cycle-start press, held for a commanded width so it cannot fall between two scans, beginning after a commanded idle-but-healthy hold measured from the start of the scenario (NETWORK 21).",
+      "An operator cycle-stop press asserted through every cleardown phase, which is how the plant is held at the idle step while latched causes are cleared, and inside the scenario at a commanded instant when the stop-by-button lever is set (NETWORK 21).",
+      "Downstream-running and control-circuit-healthy permissions, each held true through the cleardown and each droppable at the commanded stop instant by its own lever (NETWORK 22).",
+      "A hopper high-level sensor that is high between two commanded instants and clear outside them, so a window at or past the scenario end is how a timeline says the hopper never goes high (NETWORK 23).",
+      "A field motor-fault input, asserted at the commanded stop instant when its lever is set and held clear through every cleardown phase (NETWORK 23).",
+      "THREE CLOSED-LOOP MODELLED CONTACTORS: forward-running, reverse-running and discharge-conveyor-running feedbacks, each timed from the moment the PLC actually drives the corresponding output buffer member, after a pull-in delay the vector chooses, with drop-out modelled as instantaneous (NETWORK 24).",
+      "A withhold lever per modelled contactor, which suppresses the feedback whatever its delay says (NETWORK 24).",
+      "The operator pusher mode held at 0 for the whole index, which keeps the pusher parked and jog-blocked (NETWORK 26). *** THIS IS A DECLARED PLANT ASSUMPTION, NOT A DERIVATION *** - nothing here proves the pusher stays quiet, and it fails if the pusher slot runs concurrently.",
+      "An arbitrated write onto the shared operator fault-reset coil, which passes another head's value through whenever this index is not running (NETWORK 19).",
+      "A six-phase cleardown around the scenario - disarm, reset, verify, head and tail - with the plant held stopped and every fault source held clear throughout (generated NETWORKS 1-17, with the disarm lever at NETWORK 18)."
+    ],
+    "doesNotRepresent": [
+      "THE SHREDDER MOTOR CURRENT. It is a Real, MirrorValueType carries Bool, Int and Time only, and the head writes nothing to DB_AnalogInput - so no overcurrent event of any magnitude can be commanded.",
+      "ANY OVERCURRENT EVENT AT ALL, by any route: FB_ShredderSequencer NETWORK 12 gates both detection timers on 'AND NOT AlwaysTrue', a permanently false placeholder the block's own OvercurrentTripped comment declares.",
+      "The motor block's own fail-to-run and fail-to-stop timers, which are a function of what the sequencer commands and of the feedback delays, never of a vector directly.",
+      "iDB_ShredderSequencer.IO.MotorFaultActive as a commandable value: FC_ControlMain NETWORK 1 rewrites it from the motor instance every scan, immediately before the CALL at NETWORK 2.",
+      "The pusher's own cycle, its hydraulics, or FB_PusherControl's jog pre-start sounder, which reaches IO.PreStartSounder from outside this slot's boundary.",
+      "The physical terminals. Every commanded input enters at the input map's test members and every observed output is read at the block's own interface member, one output-map hop short of the DQ.",
+      "Any second instance of this sequence. The head, the binding and this vector set are single-instance throughout.",
+      "The infeed conveyor's running feedback DI9_IFC_Running. The sequencer does not consume it and the head does not drive it, so REQ-063's infeed instance has no route into this slot at all.",
+      "Physical plant dynamics of any kind - inertia, rotor spin-down, material loading, belt speed. Every modelled response is a delay, and a delay is not a plant."
+    ],
+    "validatedAgainstPlantData": false,
+    "_validatedAgainstPlantData": "False, and not close to true. This head has never run: harness-binding.json's unresolvedHoles records that the call site is not wired, so the head would import, compile and do nothing. Nothing in this document rests on a measurement taken from this slot.",
+    "_compStable": "NOT DECLARED. It is the model author's number and this lane is not the model author. At runtimeCompression = 1 contract section 2.4 files it 'reported, does not gate' - nothing is scaled, so it cannot bind - so its absence is not a hole here. *** IT BECOMES A REFUSAL THE MOMENT ANYONE RAISES runtimeCompression ABOVE 1, *** keyed on max(comp_min, runtimeCompression) since 859b731. Named so a later coordinator raising the factor knows it has to go and ask."
+  },
+  "map": {
+    "_status": "WRITTEN BY THE VECTOR AUTHOR, WHICH IS THE WEAKNESS TO KNOW ABOUT AND IT IS WORSE HERE THAN IN THE HOPPER SET. Contract section 4.3 wants providedFor built by the coordinator FROM THE COPY LAYER IT GENERATED. *** NO COPY LAYER EXISTS FOR SLOT SHR. *** harness-binding.json's unresolvedHoles records that generating from that one-slot fragment is REFUSED by the reservation on slot HBA's band, so FC_HarnessCopyLayer today contains slot HBA and nothing else. providedFor below is therefore a DERIVATION FROM THE GENERATOR'S RULES rather than a reading of an artifact, and it is checked against itself. The derivation is stated in _providedFor so a reader can falsify it in one grep rather than trust it.",
+    "_providedFor": "EVERY SIGNAL IS Sampled AND ONLY Sampled, AND THAT IS COMPUTED, NOT CONSERVATIVE. Harness.Map.CopyLayer emits a result latch only for a MirroredSignal declared Transient, and the arm register only where the signal also names ArmedBy (CopyLayer.cs LatchRegisters, ArmWindowStated). harness-binding.json declares NEITHER on any of its 24 result sources. The three signals that carry latchedBy - DischargeConveyorTimeoutFault, ShredderBlockedFault and the motor's FaultActive - name FB_ShredderSequencer and FB_MotorFwdRevSystem, which are the block under test and a block inside the stimulated loop: contract section 2.8 rules that a block latching its own output is A VALUE UNDER TEST, NOT INSTRUMENTATION, and that such expectations are declared Sampled with latchedBy absent. So no signal in this slot has an admissible Latched mode, and none is offered.",
+    "providedFor": {
+      "DQ10_SYS_PreStartSounder": [
+        "Sampled"
+      ],
+      "DQ4_IFC_Run": [
+        "Sampled"
+      ],
+      "DQ5_DIS_Run": [
+        "Sampled"
+      ],
+      "DQ9_SYS_EnableUpstream": [
+        "Sampled"
+      ],
+      "SHR.ArmAt": [
+        "Sampled"
+      ],
+      "SHR.ArmUntil": [
+        "Sampled"
+      ],
+      "SHR.Armed": [
+        "Sampled"
+      ],
+      "SHR.ArrivedDirty": [
+        "Sampled"
+      ],
+      "SHR.DischargeConfirmDelay": [
+        "Sampled"
+      ],
+      "SHR.DischargeConveyorTimeoutFault": [
+        "Sampled"
+      ],
+      "SHR.EndAt": [
+        "Sampled"
+      ],
+      "SHR.FwdFeedbackDelay": [
+        "Sampled"
+      ],
+      "SHR.HopperClearAt": [
+        "Sampled"
+      ],
+      "SHR.HopperHighAt": [
+        "Sampled"
+      ],
+      "SHR.InCycle": [
+        "Sampled"
+      ],
+      "SHR.InertAtEnd": [
+        "Sampled"
+      ],
+      "SHR.InertAtStart": [
+        "Sampled"
+      ],
+      "SHR.InjectMotorFault": [
+        "Sampled"
+      ],
+      "SHR.MotorAutoStartCmd": [
+        "Sampled"
+      ],
+      "SHR.MotorFaultActive": [
+        "Sampled"
+      ],
+      "SHR.MotorPreStartDoneCmd": [
+        "Sampled"
+      ],
+      "SHR.MotorReverseCmd": [
+        "Sampled"
+      ],
+      "SHR.MotorStartArm": [
+        "Sampled"
+      ],
+      "SHR.Phase": [
+        "Sampled"
+      ],
+      "SHR.PreStartHold": [
+        "Sampled"
+      ],
+      "SHR.PusherCycleInhibitCmd": [
+        "Sampled"
+      ],
+      "SHR.PusherModeCmd": [
+        "Sampled"
+      ],
+      "SHR.PusherParkCmd": [
+        "Sampled"
+      ],
+      "SHR.RecoverFailed": [
+        "Sampled"
+      ],
+      "SHR.ResetAt": [
+        "Sampled"
+      ],
+      "SHR.ResetMode": [
+        "Sampled"
+      ],
+      "SHR.ResetRequest": [
+        "Sampled"
+      ],
+      "SHR.RevFeedbackDelay": [
+        "Sampled"
+      ],
+      "SHR.ScenarioDone": [
+        "Sampled"
+      ],
+      "SHR.ShredderBlockedFault": [
+        "Sampled"
+      ],
+      "SHR.StartPressWidth": [
+        "Sampled"
+      ],
+      "SHR.Step": [
+        "Sampled"
+      ],
+      "SHR.StopAt": [
+        "Sampled"
+      ],
+      "SHR.StopByButton": [
+        "Sampled"
+      ],
+      "SHR.StopByDownstreamLoss": [
+        "Sampled"
+      ],
+      "SHR.StopByUnhealthy": [
+        "Sampled"
+      ],
+      "SHR.WithholdDischargeConfirm": [
+        "Sampled"
+      ],
+      "SHR.WithholdFwdFeedback": [
+        "Sampled"
+      ],
+      "SHR.WithholdRevFeedback": [
+        "Sampled"
+      ]
+    },
+    "_storage": "Every specName in this document resolves to exactly one global path - an instance-DB member, which section 2.7 names as an already-unique form - so no `owner` is needed and none is claimed. The join is declared from harness-binding.json's own tag column, one row per signal, and NOT by name shape: nothing here was matched because two names looked alike, which is the aliasing that manufactured two of the four cross-block multi-writer findings this project has ever recorded.",
+    "storage": {
+      "DQ10_SYS_PreStartSounder": {
+        "path": "iDB_ShredderSequencer.IO.PreStartSounder"
+      },
+      "DQ4_IFC_Run": {
+        "path": "iDB_ShredderSequencer.IO.RunInfeedConv"
+      },
+      "DQ5_DIS_Run": {
+        "path": "iDB_ShredderSequencer.IO.RunDischargeConv"
+      },
+      "DQ9_SYS_EnableUpstream": {
+        "path": "iDB_ShredderSequencer.IO.EnableUpstream"
+      },
+      "SHR.ArmAt": {
+        "path": "iDB_ShredderSequencerStim.Stim.ArmAt"
+      },
+      "SHR.ArmUntil": {
+        "path": "iDB_ShredderSequencerStim.Stim.ArmUntil"
+      },
+      "SHR.Armed": {
+        "path": "iDB_ShredderSequencerStim.Stim.Armed"
+      },
+      "SHR.ArrivedDirty": {
+        "path": "iDB_ShredderSequencerStim.Stim.ArrivedDirty"
+      },
+      "SHR.DischargeConfirmDelay": {
+        "path": "iDB_ShredderSequencerStim.Stim.DischargeConfirmDelay"
+      },
+      "SHR.DischargeConveyorTimeoutFault": {
+        "path": "iDB_ShredderSequencer.IO.DischargeConveyorTimeoutFault"
+      },
+      "SHR.EndAt": {
+        "path": "iDB_ShredderSequencerStim.Stim.EndAt"
+      },
+      "SHR.FwdFeedbackDelay": {
+        "path": "iDB_ShredderSequencerStim.Stim.FwdFeedbackDelay"
+      },
+      "SHR.HopperClearAt": {
+        "path": "iDB_ShredderSequencerStim.Stim.HopperClearAt"
+      },
+      "SHR.HopperHighAt": {
+        "path": "iDB_ShredderSequencerStim.Stim.HopperHighAt"
+      },
+      "SHR.InCycle": {
+        "path": "iDB_ShredderSequencer.IO.InCycle"
+      },
+      "SHR.InertAtEnd": {
+        "path": "iDB_ShredderSequencerStim.Stim.InertAtEnd"
+      },
+      "SHR.InertAtStart": {
+        "path": "iDB_ShredderSequencerStim.Stim.InertAtStart"
+      },
+      "SHR.InjectMotorFault": {
+        "path": "iDB_ShredderSequencerStim.Stim.InjectMotorFault"
+      },
+      "SHR.MotorAutoStartCmd": {
+        "path": "iDB_ShredderSequencer.IO.MotorAutoStartCmd"
+      },
+      "SHR.MotorFaultActive": {
+        "path": "iDB_MotorFwdRevSystem_Shredder.IO.FaultActive"
+      },
+      "SHR.MotorPreStartDoneCmd": {
+        "path": "iDB_ShredderSequencer.IO.MotorPreStartDoneCmd"
+      },
+      "SHR.MotorReverseCmd": {
+        "path": "iDB_ShredderSequencer.IO.MotorReverseCmd"
+      },
+      "SHR.MotorStartArm": {
+        "path": "iDB_ShredderSequencer.IO.MotorStartArm"
+      },
+      "SHR.Phase": {
+        "path": "iDB_ShredderSequencerStim.Stim.Phase"
+      },
+      "SHR.PreStartHold": {
+        "path": "iDB_ShredderSequencerStim.Stim.PreStartHold"
+      },
+      "SHR.PusherCycleInhibitCmd": {
+        "path": "iDB_ShredderSequencer.IO.PusherCycleInhibitCmd"
+      },
+      "SHR.PusherModeCmd": {
+        "path": "iDB_ShredderSequencer.IO.PusherModeCmd"
+      },
+      "SHR.PusherParkCmd": {
+        "path": "iDB_ShredderSequencer.IO.PusherParkCmd"
+      },
+      "SHR.RecoverFailed": {
+        "path": "iDB_ShredderSequencerStim.Stim.RecoverFailed"
+      },
+      "SHR.ResetAt": {
+        "path": "iDB_ShredderSequencerStim.Stim.ResetAt"
+      },
+      "SHR.ResetMode": {
+        "path": "iDB_ShredderSequencerStim.Stim.ResetMode"
+      },
+      "SHR.ResetRequest": {
+        "path": "iDB_ShredderSequencerStim.Stim.ResetRequest"
+      },
+      "SHR.RevFeedbackDelay": {
+        "path": "iDB_ShredderSequencerStim.Stim.RevFeedbackDelay"
+      },
+      "SHR.ScenarioDone": {
+        "path": "iDB_ShredderSequencerStim.Stim.ScenarioDone"
+      },
+      "SHR.ShredderBlockedFault": {
+        "path": "iDB_ShredderSequencer.IO.ShredderBlockedFault"
+      },
+      "SHR.StartPressWidth": {
+        "path": "iDB_ShredderSequencerStim.Stim.StartPressWidth"
+      },
+      "SHR.Step": {
+        "path": "iDB_ShredderSequencer.IO.Step"
+      },
+      "SHR.StopAt": {
+        "path": "iDB_ShredderSequencerStim.Stim.StopAt"
+      },
+      "SHR.StopByButton": {
+        "path": "iDB_ShredderSequencerStim.Stim.StopByButton"
+      },
+      "SHR.StopByDownstreamLoss": {
+        "path": "iDB_ShredderSequencerStim.Stim.StopByDownstreamLoss"
+      },
+      "SHR.StopByUnhealthy": {
+        "path": "iDB_ShredderSequencerStim.Stim.StopByUnhealthy"
+      },
+      "SHR.WithholdDischargeConfirm": {
+        "path": "iDB_ShredderSequencerStim.Stim.WithholdDischargeConfirm"
+      },
+      "SHR.WithholdFwdFeedback": {
+        "path": "iDB_ShredderSequencerStim.Stim.WithholdFwdFeedback"
+      },
+      "SHR.WithholdRevFeedback": {
+        "path": "iDB_ShredderSequencerStim.Stim.WithholdRevFeedback"
+      }
+    },
+    "harnessOnly": [],
+    "_harnessOnly": "EMPTY AS A POSITIVE CLAIM, NOT AS A SILENCE. Every signal this submission names occupies real controller storage - the eight published Stim members included, which live in iDB_ShredderSequencerStim - so there is no signal for which 'occupies no PLC storage' is true. Contrast the hopper set, whose eleven harnessOnly entries were mirror tags. If a later merge introduces mirror-resident signals here, this list stops being empty and the claim must be re-made."
+  },
+  "enumeration": {
+    "_source": "gen/test-project001/shredder-sequencer/assertion-enumeration.yaml, ISSUE 1, STAMPED. 24 clauses, 43 assertions, 46 coverage units, 27 When / 16 Never. Every field below was extracted from that file MECHANICALLY (.scratch/shr_vectors.py) and every one of the 43 IDs was RECOMPUTED from the normalised_text it claims to come from, using the same algorithm as Harness.Results.AssertionId (trim, collapse whitespace, strip ONE trailing '.' or ';', SHA-256, first six hex). 43 of 43 recomputed identically, 0 mismatches. Nothing here was hand-copied, because a hand-copied hash is exactly what gate 3g exists to catch.",
+    "_ordinalsAreNotCited": "The yaml's forms_by_ordinal map is display-only and it says so; the forms below are keyed on the STAMPED IDs, which is what gate 3e needs.",
+    "enumerator": "assertion-enumerator",
+    "_enumerator": "TRANSCRIBED VERBATIM, IN THE ROLE FORM THE ENUMERATION ITSELF USES, AND IT COSTS TWO GATES. The enumeration's own enumerator_vocabulary block predicted this: it had no session id available and recorded that against a vector author stamped in the INSTANCE form, gate 3d returns NotComparable, which is NOT CHECKED and never a pass. Measured against the built comparison (Harness.Results.Tests/AgentIdentityVocabularyTests.cs:91) an instance identity against a role identity IS NotComparable. This lane did NOT downgrade its own identity to the role form to manufacture a pass - see this document's _authorship. THE REPAIR IS THE COORDINATOR'S: stamp enumerator, blockAuthor and vector author in ONE vocabulary.",
+    "bounds": {
+      "pre_start_sounder_time": "10 s",
+      "discharge_conveyor_timeout": "10 s",
+      "shredder_reverse_run_time": "6 s",
+      "shredder_spin_down_pause": "8 s",
+      "infeed_restart_delay": "5 s",
+      "infeed_to_upstream_enable_delay": "3 s",
+      "reversal_retry_pause_time": "4 s",
+      "reversal_count_threshold": "5 overcurrent events",
+      "reversal_window_time": "180 s (3 minutes)",
+      "motor_run_confirm_time": "*** UNSPECIFIED for three of REQ-063's four declared instances ***"
+    },
+    "_bounds": "TRANSCRIBED VERBATIM from the enumeration's `bounds:` table, INCLUDING motor_run_confirm_time's UNSPECIFIED sentence, which is the honest value of that row and not a placeholder. Section 2.5's comparison is ordinal, so any tidying of that string here would show up as a bound the table does not contain, reported Unknown - which is the correct outcome and the reason it is left alone.",
+    "clauses": [
+      "REQ-001",
+      "REQ-002",
+      "REQ-003",
+      "REQ-004",
+      "REQ-005",
+      "REQ-006",
+      "REQ-007",
+      "REQ-008",
+      "REQ-009",
+      "REQ-010",
+      "REQ-011",
+      "REQ-012",
+      "REQ-013",
+      "REQ-014",
+      "REQ-015",
+      "REQ-016",
+      "REQ-023",
+      "REQ-024",
+      "REQ-025",
+      "REQ-026",
+      "REQ-027",
+      "REQ-028",
+      "REQ-062",
+      "REQ-063"
+    ],
+    "assertions": [
+      "REQ-001:ea01a5",
+      "REQ-001:2b9f96",
+      "REQ-002:ca3de9",
+      "REQ-003:8febac",
+      "REQ-003:045ab4",
+      "REQ-004:b6006f",
+      "REQ-004:0f72e0",
+      "REQ-005:d60678",
+      "REQ-006:e1a073",
+      "REQ-006:4ad10a",
+      "REQ-007:70a275",
+      "REQ-008:42e4f5",
+      "REQ-009:7af452",
+      "REQ-010:a298e4",
+      "REQ-011:7adda5",
+      "REQ-011:71f815",
+      "REQ-012:3dc2ce",
+      "REQ-012:4c5d5a",
+      "REQ-013:bef9f5",
+      "REQ-013:5eebb6",
+      "REQ-013:f21ed8",
+      "REQ-014:22fa99",
+      "REQ-014:944f88",
+      "REQ-015:d11333",
+      "REQ-015:40c609",
+      "REQ-016:73cb29",
+      "REQ-016:5a9a28",
+      "REQ-016:52d63c",
+      "REQ-023:d9f51c",
+      "REQ-024:f6a85d",
+      "REQ-025:5c6fe9",
+      "REQ-026:dc4fd2",
+      "REQ-027:229d37",
+      "REQ-027:f8f777",
+      "REQ-027:99d80f",
+      "REQ-028:bda7cd",
+      "REQ-028:567ac6",
+      "REQ-028:3e10c1",
+      "REQ-028:3f419e",
+      "REQ-062:1fac64",
+      "REQ-062:605eb7",
+      "REQ-062:8bb4d8",
+      "REQ-063:f94e84"
+    ],
+    "forms": {
+      "REQ-001:ea01a5": "When",
+      "REQ-001:2b9f96": "When",
+      "REQ-002:ca3de9": "Never",
+      "REQ-003:8febac": "When",
+      "REQ-003:045ab4": "Never",
+      "REQ-004:b6006f": "When",
+      "REQ-004:0f72e0": "Never",
+      "REQ-005:d60678": "When",
+      "REQ-006:e1a073": "When",
+      "REQ-006:4ad10a": "Never",
+      "REQ-007:70a275": "When",
+      "REQ-008:42e4f5": "Never",
+      "REQ-009:7af452": "Never",
+      "REQ-010:a298e4": "When",
+      "REQ-011:7adda5": "When",
+      "REQ-011:71f815": "Never",
+      "REQ-012:3dc2ce": "When",
+      "REQ-012:4c5d5a": "Never",
+      "REQ-013:bef9f5": "When",
+      "REQ-013:5eebb6": "Never",
+      "REQ-013:f21ed8": "Never",
+      "REQ-014:22fa99": "When",
+      "REQ-014:944f88": "When",
+      "REQ-015:d11333": "When",
+      "REQ-015:40c609": "Never",
+      "REQ-016:73cb29": "When",
+      "REQ-016:5a9a28": "Never",
+      "REQ-016:52d63c": "When",
+      "REQ-023:d9f51c": "When",
+      "REQ-024:f6a85d": "When",
+      "REQ-025:5c6fe9": "When",
+      "REQ-026:dc4fd2": "Never",
+      "REQ-027:229d37": "When",
+      "REQ-027:f8f777": "When",
+      "REQ-027:99d80f": "Never",
+      "REQ-028:bda7cd": "When",
+      "REQ-028:567ac6": "When",
+      "REQ-028:3e10c1": "When",
+      "REQ-028:3f419e": "When",
+      "REQ-062:1fac64": "Never",
+      "REQ-062:605eb7": "When",
+      "REQ-062:8bb4d8": "Never",
+      "REQ-063:f94e84": "When"
+    },
+    "normalisedTexts": {
+      "REQ-001:ea01a5": "WHEN the start pushbutton DI3_SYS_CycleStart is pressed momentarily while the plant is stopped and DI15_SYS_DownstreamRunning is true THEN the plant start sequence begins, evidenced by DQ10_SYS_PreStartSounder becoming asserted",
+      "REQ-001:2b9f96": "WHEN DI3_SYS_CycleStart is released after the momentary press that began the start sequence THEN the start sequence continues and DQ10_SYS_PreStartSounder remains asserted for the remainder of the specified pre-start sounder time",
+      "REQ-002:ca3de9": "NEVER the plant start sequence issues a further equipment run command while DI15_SYS_DownstreamRunning is false",
+      "REQ-003:8febac": "WHEN the plant start sequence begins THEN DQ10_SYS_PreStartSounder is asserted FOR the specified pre-start sounder time",
+      "REQ-003:045ab4": "NEVER any plant equipment run command output is asserted less than the specified pre-start sounder time after the plant start sequence begins",
+      "REQ-004:b6006f": "WHEN the specified pre-start sounder time has elapsed after the plant start sequence began THEN DQ5_DIS_Run is asserted",
+      "REQ-004:0f72e0": "NEVER DQ2_SHR_RunRev is asserted during a start sequence before DI10_DIS_Running has been observed true",
+      "REQ-005:d60678": "WHEN DI10_DIS_Running is observed true during a start sequence THEN DQ2_SHR_RunRev is asserted FOR the specified shredder reverse run time",
+      "REQ-006:e1a073": "WHEN the specified shredder reverse run time has elapsed THEN DQ2_SHR_RunRev is de-asserted",
+      "REQ-006:4ad10a": "NEVER DQ1_SHR_RunFwd is asserted less than the specified spin-down pause after DQ2_SHR_RunRev is de-asserted",
+      "REQ-007:70a275": "WHEN the specified spin-down pause has elapsed after the start sequence's reverse run THEN DQ1_SHR_RunFwd is asserted",
+      "REQ-008:42e4f5": "NEVER DQ4_IFC_Run is asserted following a start command until DI8_HPR_LevelHigh has been observed false",
+      "REQ-009:7af452": "NEVER DQ4_IFC_Run is asserted less than the specified infeed restart delay after DI8_HPR_LevelHigh is first observed false in a start sequence",
+      "REQ-010:a298e4": "WHEN the specified infeed restart delay has elapsed after DI8_HPR_LevelHigh was observed false in a start sequence THEN DQ4_IFC_Run is asserted",
+      "REQ-011:7adda5": "WHEN DQ4_IFC_Run has been asserted for the specified infeed-to-upstream enable delay THEN DQ9_SYS_EnableUpstream is asserted",
+      "REQ-011:71f815": "NEVER DQ9_SYS_EnableUpstream is asserted less than the specified infeed-to-upstream enable delay after DQ4_IFC_Run is asserted",
+      "REQ-012:3dc2ce": "WHEN the stop pushbutton DI4_SYS_CycleStop is pressed while the plant is running THEN every plant equipment run command output is de-asserted",
+      "REQ-012:4c5d5a": "NEVER a plant equipment run command output remains asserted at any observation after another plant equipment run command output has been de-asserted in response to the stop pushbutton",
+      "REQ-013:bef9f5": "WHEN DI15_SYS_DownstreamRunning goes false while the plant is running THEN every plant equipment run command output is de-asserted",
+      "REQ-013:5eebb6": "NEVER a plant equipment run command output remains asserted at any observation after another plant equipment run command output has been de-asserted in response to loss of DI15_SYS_DownstreamRunning",
+      "REQ-013:f21ed8": "NEVER any plant equipment run command output is asserted on DI15_SYS_DownstreamRunning returning true, until DI3_SYS_CycleStart is pressed again",
+      "REQ-014:22fa99": "WHEN DI8_HPR_LevelHigh becomes true while DQ4_IFC_Run is asserted THEN DQ4_IFC_Run is de-asserted",
+      "REQ-014:944f88": "WHEN DI8_HPR_LevelHigh becomes true while DQ1_SHR_RunFwd is asserted and no other stop condition is present THEN DQ1_SHR_RunFwd remains asserted",
+      "REQ-015:d11333": "WHEN DI8_HPR_LevelHigh has been false for the specified infeed restart delay while the plant is running THEN DQ4_IFC_Run is asserted",
+      "REQ-015:40c609": "NEVER DQ4_IFC_Run is asserted less than the specified infeed restart delay after DI8_HPR_LevelHigh goes false",
+      "REQ-016:73cb29": "WHEN DQ4_IFC_Run has been re-asserted after a hopper-high stop for the specified infeed-to-upstream enable delay THEN DQ9_SYS_EnableUpstream is asserted",
+      "REQ-016:5a9a28": "NEVER DQ9_SYS_EnableUpstream is asserted less than the specified infeed-to-upstream enable delay after DQ4_IFC_Run is re-asserted following a hopper-high stop",
+      "REQ-016:52d63c": "WHEN DQ4_IFC_Run is de-asserted because DI8_HPR_LevelHigh has become true THEN DQ9_SYS_EnableUpstream is de-asserted",
+      "REQ-023:d9f51c": "WHEN an overcurrent event occurs while DQ1_SHR_RunFwd is asserted THEN DQ1_SHR_RunFwd is de-asserted",
+      "REQ-024:f6a85d": "WHEN an overcurrent event occurs while DQ4_IFC_Run is asserted THEN DQ4_IFC_Run is de-asserted",
+      "REQ-025:5c6fe9": "WHEN an overcurrent event occurs while the pusher is enabled and away from the parked position THEN the pusher returns to the parked position, evidenced by DI12_PSH_HomeLimit becoming true",
+      "REQ-026:dc4fd2": "NEVER DQ2_SHR_RunRev is asserted less than the specified reversal retry pause time after the overcurrent stop",
+      "REQ-027:229d37": "WHEN the specified reversal retry pause time has elapsed after an overcurrent stop THEN DQ2_SHR_RunRev is asserted",
+      "REQ-027:f8f777": "WHEN the recovery reverse run has completed after an overcurrent event and DI8_HPR_LevelHigh is false THEN the sequence continues through the forward start to the infeed start, evidenced by DQ4_IFC_Run being asserted again",
+      "REQ-027:99d80f": "NEVER the pre-start phase is repeated as part of the recovery that follows an overcurrent event, either by asserting DQ10_SYS_PreStartSounder or by de-asserting and re-asserting DQ5_DIS_Run",
+      "REQ-028:bda7cd": "WHEN the specified reversal count threshold of overcurrent events has been reached with no more than the specified reversal window time between successive events THEN every plant equipment run command output is de-asserted",
+      "REQ-028:567ac6": "WHEN the specified reversal count threshold of overcurrent events has been reached within the specified reversal window THEN the shredder-blocked alarm is raised",
+      "REQ-028:3e10c1": "WHEN fewer than the specified threshold of overcurrent events have accumulated and the plant then runs for the full specified reversal window time with no further overcurrent event THEN the accumulated count is cleared, evidenced by a subsequent run of one fewer than the threshold not stopping the plant",
+      "REQ-028:3f419e": "WHEN successive overcurrent events each occur less than the specified reversal window time after the previous one THEN the count continues to accumulate and the plant is stopped on the event that reaches the specified threshold, however long the whole run of events has lasted",
+      "REQ-062:1fac64": "NEVER any plant equipment run command output is asserted on DI1_SYS_ControlHealthy returning true after an E-stop, until DI3_SYS_CycleStart is pressed again",
+      "REQ-062:605eb7": "WHEN DI3_SYS_CycleStart is pressed after an E-stop recovery THEN the start-up sequence runs from its first step, evidenced by DQ10_SYS_PreStartSounder being asserted for the specified pre-start sounder time before any plant equipment run command output is asserted",
+      "REQ-062:8bb4d8": "NEVER any plant equipment run command output is asserted after a PLC power cycle that interrupted a running plant, until DI3_SYS_CycleStart is pressed again",
+      "REQ-063:f94e84": "WHEN the motor's run command has been asserted for the specified motor run-confirm time without its running feedback becoming true THEN every plant equipment run command output is de-asserted"
+    },
+    "_requiredObservations": "response_signal MERGED WITH also_requires_observation_of, per the yaml, for every one of the 43. *** THE MERGE IS NOT OPTIONAL AND WEAKENING IT WOULD HAVE BEEN THE DEFECT OF THIS WHOLE RUN. *** The enumeration states its purpose at REQ-012's own note - the multi-output obligation sits inside ONE assertion naming every output, 'which is what stops a vector observing one output and passing'. Transcribing only response_signal would have made 25 more assertions appear coverable by this slot. It would also have been undetectable, because the submission supplies this map. Stated so a reader can check the arithmetic rather than take it.",
+    "requiredObservations": {
+      "REQ-001:ea01a5": [
+        "DI15_SYS_DownstreamRunning",
+        "DI3_SYS_CycleStart",
+        "DQ10_SYS_PreStartSounder"
+      ],
+      "REQ-001:2b9f96": [
+        "DI3_SYS_CycleStart",
+        "DQ10_SYS_PreStartSounder"
+      ],
+      "REQ-002:ca3de9": [
+        "DI15_SYS_DownstreamRunning",
+        "DQ1_SHR_RunFwd",
+        "DQ2_SHR_RunRev",
+        "DQ4_IFC_Run",
+        "DQ5_DIS_Run"
+      ],
+      "REQ-003:8febac": [
+        "DI3_SYS_CycleStart",
+        "DQ10_SYS_PreStartSounder"
+      ],
+      "REQ-003:045ab4": [
+        "DQ10_SYS_PreStartSounder",
+        "DQ1_SHR_RunFwd",
+        "DQ2_SHR_RunRev",
+        "DQ4_IFC_Run",
+        "DQ5_DIS_Run"
+      ],
+      "REQ-004:b6006f": [
+        "DQ10_SYS_PreStartSounder",
+        "DQ5_DIS_Run"
+      ],
+      "REQ-004:0f72e0": [
+        "DI10_DIS_Running",
+        "DQ2_SHR_RunRev",
+        "DQ5_DIS_Run"
+      ],
+      "REQ-005:d60678": [
+        "DI10_DIS_Running",
+        "DQ2_SHR_RunRev"
+      ],
+      "REQ-006:e1a073": [
+        "DQ2_SHR_RunRev"
+      ],
+      "REQ-006:4ad10a": [
+        "DQ1_SHR_RunFwd",
+        "DQ2_SHR_RunRev"
+      ],
+      "REQ-007:70a275": [
+        "DQ1_SHR_RunFwd",
+        "DQ2_SHR_RunRev"
+      ],
+      "REQ-008:42e4f5": [
+        "DI3_SYS_CycleStart",
+        "DI8_HPR_LevelHigh",
+        "DQ4_IFC_Run"
+      ],
+      "REQ-009:7af452": [
+        "DI8_HPR_LevelHigh",
+        "DQ4_IFC_Run"
+      ],
+      "REQ-010:a298e4": [
+        "DI8_HPR_LevelHigh",
+        "DQ4_IFC_Run"
+      ],
+      "REQ-011:7adda5": [
+        "DQ4_IFC_Run",
+        "DQ9_SYS_EnableUpstream"
+      ],
+      "REQ-011:71f815": [
+        "DQ4_IFC_Run",
+        "DQ9_SYS_EnableUpstream"
+      ],
+      "REQ-012:3dc2ce": [
+        "DI4_SYS_CycleStop",
+        "DQ1_SHR_RunFwd",
+        "DQ2_SHR_RunRev",
+        "DQ4_IFC_Run",
+        "DQ5_DIS_Run"
+      ],
+      "REQ-012:4c5d5a": [
+        "DI4_SYS_CycleStop",
+        "DQ1_SHR_RunFwd",
+        "DQ2_SHR_RunRev",
+        "DQ4_IFC_Run",
+        "DQ5_DIS_Run"
+      ],
+      "REQ-013:bef9f5": [
+        "DI15_SYS_DownstreamRunning",
+        "DQ1_SHR_RunFwd",
+        "DQ2_SHR_RunRev",
+        "DQ4_IFC_Run",
+        "DQ5_DIS_Run"
+      ],
+      "REQ-013:5eebb6": [
+        "DI15_SYS_DownstreamRunning",
+        "DQ1_SHR_RunFwd",
+        "DQ2_SHR_RunRev",
+        "DQ4_IFC_Run",
+        "DQ5_DIS_Run"
+      ],
+      "REQ-013:f21ed8": [
+        "DI15_SYS_DownstreamRunning",
+        "DI3_SYS_CycleStart",
+        "DQ1_SHR_RunFwd",
+        "DQ2_SHR_RunRev",
+        "DQ4_IFC_Run",
+        "DQ5_DIS_Run"
+      ],
+      "REQ-014:22fa99": [
+        "DI8_HPR_LevelHigh",
+        "DQ4_IFC_Run"
+      ],
+      "REQ-014:944f88": [
+        "DI8_HPR_LevelHigh",
+        "DQ1_SHR_RunFwd"
+      ],
+      "REQ-015:d11333": [
+        "DI8_HPR_LevelHigh",
+        "DQ4_IFC_Run"
+      ],
+      "REQ-015:40c609": [
+        "DI8_HPR_LevelHigh",
+        "DQ4_IFC_Run"
+      ],
+      "REQ-016:73cb29": [
+        "DI8_HPR_LevelHigh",
+        "DQ4_IFC_Run",
+        "DQ9_SYS_EnableUpstream"
+      ],
+      "REQ-016:5a9a28": [
+        "DI8_HPR_LevelHigh",
+        "DQ4_IFC_Run",
+        "DQ9_SYS_EnableUpstream"
+      ],
+      "REQ-016:52d63c": [
+        "DI8_HPR_LevelHigh",
+        "DQ4_IFC_Run",
+        "DQ9_SYS_EnableUpstream"
+      ],
+      "REQ-023:d9f51c": [
+        "DQ1_SHR_RunFwd"
+      ],
+      "REQ-024:f6a85d": [
+        "DQ4_IFC_Run"
+      ],
+      "REQ-025:5c6fe9": [
+        "DI12_PSH_HomeLimit"
+      ],
+      "REQ-026:dc4fd2": [
+        "DQ1_SHR_RunFwd",
+        "DQ2_SHR_RunRev"
+      ],
+      "REQ-027:229d37": [
+        "DQ1_SHR_RunFwd",
+        "DQ2_SHR_RunRev"
+      ],
+      "REQ-027:f8f777": [
+        "DI8_HPR_LevelHigh",
+        "DQ1_SHR_RunFwd",
+        "DQ2_SHR_RunRev",
+        "DQ4_IFC_Run"
+      ],
+      "REQ-027:99d80f": [
+        "DQ10_SYS_PreStartSounder",
+        "DQ5_DIS_Run"
+      ],
+      "REQ-028:bda7cd": [
+        "DQ1_SHR_RunFwd",
+        "DQ2_SHR_RunRev",
+        "DQ4_IFC_Run",
+        "DQ5_DIS_Run"
+      ],
+      "REQ-028:567ac6": [
+        "DQ1_SHR_RunFwd",
+        "UNNAMED_IN_REGISTER"
+      ],
+      "REQ-028:3e10c1": [
+        "DQ1_SHR_RunFwd",
+        "DQ2_SHR_RunRev"
+      ],
+      "REQ-028:3f419e": [
+        "DQ1_SHR_RunFwd",
+        "DQ2_SHR_RunRev"
+      ],
+      "REQ-062:1fac64": [
+        "DI1_SYS_ControlHealthy",
+        "DI3_SYS_CycleStart",
+        "DQ1_SHR_RunFwd",
+        "DQ2_SHR_RunRev",
+        "DQ4_IFC_Run",
+        "DQ5_DIS_Run"
+      ],
+      "REQ-062:605eb7": [
+        "DI3_SYS_CycleStart",
+        "DQ10_SYS_PreStartSounder",
+        "DQ1_SHR_RunFwd",
+        "DQ2_SHR_RunRev",
+        "DQ4_IFC_Run",
+        "DQ5_DIS_Run"
+      ],
+      "REQ-062:8bb4d8": [
+        "DI3_SYS_CycleStart",
+        "DQ1_SHR_RunFwd",
+        "DQ2_SHR_RunRev",
+        "DQ4_IFC_Run",
+        "DQ5_DIS_Run"
+      ],
+      "REQ-063:f94e84": [
+        "DI10_DIS_Running",
+        "DI5_SHR_RunFwdFB",
+        "DI6_SHR_RunRevFB",
+        "DI9_IFC_Running",
+        "DQ1_SHR_RunFwd",
+        "DQ2_SHR_RunRev",
+        "DQ4_IFC_Run",
+        "DQ5_DIS_Run"
+      ]
+    },
+    "assertionBounds": {
+      "REQ-001:ea01a5": [],
+      "REQ-001:2b9f96": [
+        "pre_start_sounder_time"
+      ],
+      "REQ-002:ca3de9": [],
+      "REQ-003:8febac": [
+        "pre_start_sounder_time"
+      ],
+      "REQ-003:045ab4": [
+        "pre_start_sounder_time"
+      ],
+      "REQ-004:b6006f": [
+        "pre_start_sounder_time"
+      ],
+      "REQ-004:0f72e0": [],
+      "REQ-005:d60678": [
+        "shredder_reverse_run_time"
+      ],
+      "REQ-006:e1a073": [
+        "shredder_reverse_run_time"
+      ],
+      "REQ-006:4ad10a": [
+        "shredder_spin_down_pause"
+      ],
+      "REQ-007:70a275": [
+        "shredder_spin_down_pause"
+      ],
+      "REQ-008:42e4f5": [],
+      "REQ-009:7af452": [
+        "infeed_restart_delay"
+      ],
+      "REQ-010:a298e4": [
+        "infeed_restart_delay"
+      ],
+      "REQ-011:7adda5": [
+        "infeed_to_upstream_enable_delay"
+      ],
+      "REQ-011:71f815": [
+        "infeed_to_upstream_enable_delay"
+      ],
+      "REQ-012:3dc2ce": [],
+      "REQ-012:4c5d5a": [],
+      "REQ-013:bef9f5": [],
+      "REQ-013:5eebb6": [],
+      "REQ-013:f21ed8": [],
+      "REQ-014:22fa99": [],
+      "REQ-014:944f88": [],
+      "REQ-015:d11333": [
+        "infeed_restart_delay"
+      ],
+      "REQ-015:40c609": [
+        "infeed_restart_delay"
+      ],
+      "REQ-016:73cb29": [
+        "infeed_to_upstream_enable_delay"
+      ],
+      "REQ-016:5a9a28": [
+        "infeed_to_upstream_enable_delay"
+      ],
+      "REQ-016:52d63c": [],
+      "REQ-023:d9f51c": [],
+      "REQ-024:f6a85d": [],
+      "REQ-025:5c6fe9": [],
+      "REQ-026:dc4fd2": [
+        "reversal_retry_pause_time"
+      ],
+      "REQ-027:229d37": [
+        "reversal_retry_pause_time"
+      ],
+      "REQ-027:f8f777": [],
+      "REQ-027:99d80f": [],
+      "REQ-028:bda7cd": [
+        "reversal_count_threshold",
+        "reversal_window_time"
+      ],
+      "REQ-028:567ac6": [
+        "reversal_count_threshold",
+        "reversal_window_time"
+      ],
+      "REQ-028:3e10c1": [
+        "reversal_count_threshold",
+        "reversal_window_time"
+      ],
+      "REQ-028:3f419e": [
+        "reversal_count_threshold",
+        "reversal_window_time"
+      ],
+      "REQ-062:1fac64": [],
+      "REQ-062:605eb7": [
+        "pre_start_sounder_time"
+      ],
+      "REQ-062:8bb4d8": [],
+      "REQ-063:f94e84": [
+        "motor_run_confirm_time"
+      ]
+    }
+  },
+  "_conflictEdges": "OMITTED - never [] and never null, which contract section 2.7 distinguishes deliberately. [] would be the EARNED claim that a conflict graph ran and found nothing, and no graph has been run: computing one needs the whole-program storage picture and a writer analysis this lane did not perform. Gates 8 and 8c are therefore NOT CHECKED, which is the correct reading - a blacklist compared against an absent graph is a blacklist nobody checked - and the blacklist above is add-only over nothing rather than add-only over a computed floor. computedConflicts is likewise absent and must stay absent; it is never emitted, and somebody 'fixing' that omission would restore a bare-name graph with no provenance.",
+  "_deploymentOmitted": "deployment is OMITTED, so gate 11 is NOT CHECKED, and that is the honest state rather than a gap. Nothing is deployed: the merged multi-slot binding does not exist, the copy layer has not been regenerated, the head is not called from Main, and no import has happened - so there is no importStamp for a layoutSetAfterImport to equal. Absent is NOT the same as s7Objects: [], which would be the claim that no classic-S7comm path reaches a data block, and this lane cannot make that claim about a program it has not seen deployed.",
+  "vectors": [
+    {
+      "id": "VS-SHR-001",
+      "slot": "SHR",
+      "index": 0,
+      "author": "ee055079-868d-48bc-aa0a-7516e8688d29/lad-coder-shrvectors",
+      "clause": "REQ-004",
+      "assertion": "REQ-004:b6006f",
+      "assertionForm": "When",
+      "_scenario": "PRESTART_THEN_DISCHARGE. The head holds the plant idle-but-healthy for 5 s, presses cycle-start for 1 s, and the sequencer leaves the idle step. The pre-start siren then runs its full 10 s (DB_Settings.PreStartSounderTime = 10.0) before the discharge conveyor is commanded at t = 15 s. The modelled discharge contactor confirms 2 s later, inside the 10 s DischargeConveyorTimeout, so the sequence advances and the discharge command stays asserted for the rest of the scenario. The hopper is commanded HIGH for the whole scenario (HopperHighAt 0, HopperClearAt at the scenario end), which holds the infeed restart timer off and keeps the infeed and upstream-enable outputs out of this vector entirely - isolation, not convenience. No stop lever is set and StopAt is at the scenario end, so no commanded stop fires.",
+      "_timeline": "ms from the start of the scenario, which is the instant the 45 s head cleardown finishes: 0 idle - 5000 cycle-start pressed - 5000..15000 DQ10_SYS_PreStartSounder asserted (10 s) - 15000 DQ5_DIS_Run asserted - 17000 discharge running confirmed - 17000..32000 reverse step (the motor block's own ReverseDelay = 8.0 s entry pause, then 1 s to confirmed reverse, then 6 s of confirmed reverse run) - ~34000 running step - 60000 scenario ends. DQ5 is asserted from 15000 to 60000, DQ10 from 5000 to 15000.",
+      "inputs": {
+        "SHR.PreStartHold": "5000",
+        "SHR.StartPressWidth": "1000",
+        "SHR.DischargeConfirmDelay": "2000",
+        "SHR.RevFeedbackDelay": "1000",
+        "SHR.FwdFeedbackDelay": "2000",
+        "SHR.HopperHighAt": "0",
+        "SHR.HopperClearAt": "60000",
+        "SHR.StopAt": "60000",
+        "SHR.ArmAt": "15000",
+        "SHR.ArmUntil": "60000",
+        "SHR.EndAt": "60000",
+        "SHR.StopByButton": "false",
+        "SHR.StopByDownstreamLoss": "false",
+        "SHR.StopByUnhealthy": "false",
+        "SHR.WithholdDischargeConfirm": "false",
+        "SHR.WithholdRevFeedback": "false",
+        "SHR.WithholdFwdFeedback": "false",
+        "SHR.InjectMotorFault": "false",
+        "SHR.ResetMode": "never",
+        "SHR.ResetAt": "0"
+      },
+      "startBool": "iDB_ShredderSequencerStim.Stim.Start",
+      "_startBool": "The binding's declared startCondition, verbatim. It is deliberately not a vectorTarget - the copy layer emits it as its own rung and refuses a signal bound as both.",
+      "expectations": [
+        {
+          "signal": "DQ10_SYS_PreStartSounder",
+          "nature": "PersistentState",
+          "mode": "Sampled",
+          "windowScans": 429,
+          "expected": "true",
+          "temporalShape": "atSomePoint",
+          "_why": "429 scans is the 10 s the siren is commanded for, at 23.33 ms. The floor a sampled declaration must clear is 9 scans (PC-Client-Modbus-Spec-Draft-final.txt section 12a derivation 1, floor_p99 = 201/23.33 = 8.6, ceil 9); the worst poll gap ever measured is 95 scans. 429 clears both. temporalShape atSomePoint, AND THE CHOICE IS FORCED RATHER THAN PREFERRED. This binding declares no `armedBy` on any signal, so every retained frame carries WindowState.Unknown, and docs/notes/observation-window-shapes.md section 2's accusation rule then makes throughout, becomesAndHolds and atNoPoint all return Inconclusive on any mixed series. The head's mandatory tail cleardown guarantees a mixed series for every commanded state - it returns the block to inert before it raises completion, which is required - and atEnd would read the value AFTER that cleardown, which is false for every output here. atSomePoint is the ONE shape that can conclude in this slot as it is bound. *** WHAT THAT COSTS IS STATED RATHER THAN SMOOTHED: it establishes OCCURRENCE and says NOTHING ABOUT ORDER OR TIMING. *** The repair is `armedBy` on the binding, which is not this lane's field."
+        },
+        {
+          "signal": "DQ5_DIS_Run",
+          "nature": "PersistentState",
+          "mode": "Sampled",
+          "windowScans": 1929,
+          "expected": "true",
+          "temporalShape": "atSomePoint",
+          "_why": "1929 scans is the 45 s from the discharge command to the scenario end. Same floor, cleared by over 200x. temporalShape atSomePoint, AND THE CHOICE IS FORCED RATHER THAN PREFERRED. This binding declares no `armedBy` on any signal, so every retained frame carries WindowState.Unknown, and docs/notes/observation-window-shapes.md section 2's accusation rule then makes throughout, becomesAndHolds and atNoPoint all return Inconclusive on any mixed series. The head's mandatory tail cleardown guarantees a mixed series for every commanded state - it returns the block to inert before it raises completion, which is required - and atEnd would read the value AFTER that cleardown, which is false for every output here. atSomePoint is the ONE shape that can conclude in this slot as it is bound. *** WHAT THAT COSTS IS STATED RATHER THAN SMOOTHED: it establishes OCCURRENCE and says NOTHING ABOUT ORDER OR TIMING. *** The repair is `armedBy` on the binding, which is not this lane's field."
+        }
+      ],
+      "_gate3h": "The cited assertion depends on exactly DQ5_DIS_Run and DQ10_SYS_PreStartSounder (response_signal merged with also_requires_observation_of). Both are expected on above. This is one of only TWO assertions in the whole 43 for which that is true in this slot - see _observabilityShortfall.",
+      "settlingCondition": "DQ5_DIS_Run and DQ10_SYS_PreStartSounder have both held their recorded value across 43 consecutive observed scans (1.0 s at comp=1) at the close of the index, by which point the head's last commanded transition - the tail cleardown driving the step back to idle - is at least 643 scans (15 s, one full DisarmDwell) behind. THE COMPLETION SIGNAL SHR.ScenarioDone IS DELIBERATELY NOT PART OF THIS CONDITION: it is raised by the head's NETWORK 15 at TailEnd, which is the head's own opinion that its index finished, and contract section 5 refuses that as evidence about the observation.",
+      "settlingUnchangedForScans": 43,
+      "settlingSignals": [
+        "DQ5_DIS_Run",
+        "DQ10_SYS_PreStartSounder"
+      ],
+      "maxDurationScans": 7000,
+      "_maxDurationScans": "The index is 45 s of head cleardown (three 15 s dwells) + 60 s of scenario + 45 s of tail cleardown = 150 s = 6429 scans at 23.33 ms; 7000 carries 13% margin on the index itself. The WALL-CLOCK backstop is computed from it by section 12a derivation 4 and is not restated here, because derivation 4's third term (2216 ms, the worst round trip in 2000) must not be trimmed and a number copied into a vector is a number that gets trimmed.",
+      "completionSignal": "SHR.ScenarioDone",
+      "completionValue": 1,
+      "_completion": "A Bool result source in one register, so 1 fits its element and section 2.6's range question is answered by the element rather than by a range written here. It is NOT the settling condition.",
+      "blacklist": [
+        {
+          "block": "FB_HopperBlockageStim",
+          "reason": "MEASURED COLLISION, NOT A PRECAUTION. This slot's head needs DB_Input.Test[0,1,3,4,5,6,7,8,10,15] and writes every one with the pass-through idiom; FB_HopperBlockageStim writes Test[0,5,6,8] with NO pass-through on any (recorded in harness-binding.json _slotContention, scanned per-index out of the IR because converter reachable-state reports DB_Input.Test at whole-array granularity). Idle it drives all four low, and the heads run in sequence ahead of the input map, so whichever runs last in the sweep wins. Test[5] and Test[6] are the shredder running feedbacks this slot's whole timeline is built on."
+        },
+        {
+          "block": "FB_PusherStim",
+          "reason": "It passes through on all 8 of its own indices, so the Test[] array is safe - but this head's NETWORK 26 writes DB_Controls.PusherMode with a PLAIN MOVE and no pass-through, and the pusher head and block both read that member. Two lanes driving one operator-mode member is last-writer-wins, and the pusher-quiet assumption behind this slot's PreStartSounder reading is exactly what it breaks."
+        },
+        {
+          "block": "FB_HopperBlockageMonitor",
+          "reason": "It consumes Hopper_Level_High and the shredder running feedbacks, all three of which this head commands, so running it concurrently means this slot's stimulus is driving that block's plant model. Coupling through plant-model state that the reference graph does not see, which is contract section 7's own case."
+        },
+        {
+          "block": "FB_PusherControl",
+          "reason": "It consumes hopper-high as an auto-mode cycle trigger and it consumes this block's PusherParkCmd, PusherCycleInhibitCmd and PusherModeCmd. Same plant-model coupling, and it is additionally the source of IO.PusherJogPreStartSounder, the second term of the signal SHR-001 asserts on."
+        }
+      ],
+      "compressionFactor": 1,
+      "assertedBehaviours": [
+        "The commanded state of ten members of the shared input-injection array DB_Input.Test[0,1,3,4,5,6,7,8,10,15], each written with the pass-through idiom so the head drives them only while its own index runs (FB_ShredderSequencerStim NETWORK 25).",
+        "A momentary operator cycle-start press, held for a commanded width so it cannot fall between two scans, beginning after a commanded idle-but-healthy hold measured from the start of the scenario (NETWORK 21).",
+        "A hopper high-level sensor that is high between two commanded instants and clear outside them, so a window at or past the scenario end is how a timeline says the hopper never goes high (NETWORK 23).",
+        "THREE CLOSED-LOOP MODELLED CONTACTORS: forward-running, reverse-running and discharge-conveyor-running feedbacks, each timed from the moment the PLC actually drives the corresponding output buffer member, after a pull-in delay the vector chooses, with drop-out modelled as instantaneous (NETWORK 24).",
+        "The operator pusher mode held at 0 for the whole index, which keeps the pusher parked and jog-blocked (NETWORK 26). *** THIS IS A DECLARED PLANT ASSUMPTION, NOT A DERIVATION *** - nothing here proves the pusher stays quiet, and it fails if the pusher slot runs concurrently.",
+        "A six-phase cleardown around the scenario - disarm, reset, verify, head and tail - with the plant held stopped and every fault source held clear throughout (generated NETWORKS 1-17, with the disarm lever at NETWORK 18)."
+      ],
+      "kills": "AN IMPLEMENTATION THAT NEVER COMMANDS THE DISCHARGE CONVEYOR AT ALL - the pre-start step runs, the siren sounds, and the sequence either stalls at the pre-start step or jumps straight to the shredder, so material would be shredded onto a stationary discharge belt. That mutant reads DQ5_DIS_Run false in every retained frame and this vector returns Disagreed, while its sibling expectation on DQ10 still passes - which is what makes the failure diagnostic rather than merely red. It also kills the inverse mutant, a sequence that starts the discharge conveyor and never drives the siren, on the DQ10 expectation. *** WHAT IT DOES NOT KILL, STATED BECAUSE THE ASSERTION IT CITES IS A TIMING ASSERTION AND THIS VECTOR IS NOT: *** a block that asserts DQ5_DIS_Run one scan after the start press, before the siren has run, satisfies atSomePoint on both signals and PASSES. That defect is REQ-003:045ab4's - a Never - and it is inadmissible in this slot for the reason in _observabilityShortfall. This vector has NOT been run against either mutant; no wave has been spent on this slot and the mutants are argued from the IR, not measured.",
+      "boundsUsed": {
+        "pre_start_sounder_time": "10 s"
+      },
+      "_boundsUsed": "Transcribed from the enumeration's bounds table verbatim. The enumeration's assertionBounds entry for REQ-004:b6006f is [pre_start_sounder_time], so this is the declared-and-matching case, not the empty claim."
+    },
+    {
+      "id": "VS-SHR-002",
+      "slot": "SHR",
+      "index": 1,
+      "author": "ee055079-868d-48bc-aa0a-7516e8688d29/lad-coder-shrvectors",
+      "clause": "REQ-011",
+      "assertion": "REQ-011:7adda5",
+      "assertionForm": "When",
+      "_scenario": "HOPPER_CLEARS_THEN_INFEED_THEN_UPSTREAM. The same start, but the hopper is commanded high from the start of the scenario until t = 45 s, which is comfortably after the sequence has reached its running step at about t = 34 s. The hopper then reads clear, the 5 s InfeedRestartDelay runs, the infeed conveyor is commanded at t = 50 s, and the 3 s InfeedToUpstreamEnableDelay runs on top of it so upstream is enabled at t = 53 s. Both outputs are then asserted for the remaining 22 s of the scenario. No stop lever is set.",
+      "_timeline": "ms from the start of the scenario: 0 idle, hopper HIGH - 5000 cycle-start pressed - 15000 discharge commanded - ~34000 running step reached, infeed restart timer held off by the high hopper - 45000 hopper reads clear, restart timer starts - 50000 DQ4_IFC_Run asserted - 53000 DQ9_SYS_EnableUpstream asserted - 75000 scenario ends. DQ4 is asserted from 50000 to 75000, DQ9 from 53000 to 75000.",
+      "inputs": {
+        "SHR.PreStartHold": "5000",
+        "SHR.StartPressWidth": "1000",
+        "SHR.DischargeConfirmDelay": "2000",
+        "SHR.RevFeedbackDelay": "1000",
+        "SHR.FwdFeedbackDelay": "2000",
+        "SHR.HopperHighAt": "0",
+        "SHR.HopperClearAt": "45000",
+        "SHR.StopAt": "75000",
+        "SHR.ArmAt": "53000",
+        "SHR.ArmUntil": "75000",
+        "SHR.EndAt": "75000",
+        "SHR.StopByButton": "false",
+        "SHR.StopByDownstreamLoss": "false",
+        "SHR.StopByUnhealthy": "false",
+        "SHR.WithholdDischargeConfirm": "false",
+        "SHR.WithholdRevFeedback": "false",
+        "SHR.WithholdFwdFeedback": "false",
+        "SHR.InjectMotorFault": "false",
+        "SHR.ResetMode": "never",
+        "SHR.ResetAt": "0"
+      },
+      "startBool": "iDB_ShredderSequencerStim.Stim.Start",
+      "_startBool": "The same start bool as VS-SHR-001: contract section 6 requires exactly one per slot, and this is the binding's declared startCondition.",
+      "expectations": [
+        {
+          "signal": "DQ4_IFC_Run",
+          "nature": "PersistentState",
+          "mode": "Sampled",
+          "windowScans": 1071,
+          "expected": "true",
+          "temporalShape": "atSomePoint",
+          "_why": "1071 scans is the 25 s from the infeed command to the scenario end, at 23.33 ms. Floor 9 scans; worst measured gap 95. temporalShape atSomePoint, AND THE CHOICE IS FORCED RATHER THAN PREFERRED. This binding declares no `armedBy` on any signal, so every retained frame carries WindowState.Unknown, and docs/notes/observation-window-shapes.md section 2's accusation rule then makes throughout, becomesAndHolds and atNoPoint all return Inconclusive on any mixed series. The head's mandatory tail cleardown guarantees a mixed series for every commanded state - it returns the block to inert before it raises completion, which is required - and atEnd would read the value AFTER that cleardown, which is false for every output here. atSomePoint is the ONE shape that can conclude in this slot as it is bound. *** WHAT THAT COSTS IS STATED RATHER THAN SMOOTHED: it establishes OCCURRENCE and says NOTHING ABOUT ORDER OR TIMING. *** The repair is `armedBy` on the binding, which is not this lane's field."
+        },
+        {
+          "signal": "DQ9_SYS_EnableUpstream",
+          "nature": "PersistentState",
+          "mode": "Sampled",
+          "windowScans": 943,
+          "expected": "true",
+          "temporalShape": "atSomePoint",
+          "_why": "943 scans is the 22 s from the upstream enable to the scenario end. Same floor. temporalShape atSomePoint, AND THE CHOICE IS FORCED RATHER THAN PREFERRED. This binding declares no `armedBy` on any signal, so every retained frame carries WindowState.Unknown, and docs/notes/observation-window-shapes.md section 2's accusation rule then makes throughout, becomesAndHolds and atNoPoint all return Inconclusive on any mixed series. The head's mandatory tail cleardown guarantees a mixed series for every commanded state - it returns the block to inert before it raises completion, which is required - and atEnd would read the value AFTER that cleardown, which is false for every output here. atSomePoint is the ONE shape that can conclude in this slot as it is bound. *** WHAT THAT COSTS IS STATED RATHER THAN SMOOTHED: it establishes OCCURRENCE and says NOTHING ABOUT ORDER OR TIMING. *** The repair is `armedBy` on the binding, which is not this lane's field."
+        }
+      ],
+      "_gate3h": "REQ-011:7adda5 depends on exactly DQ9_SYS_EnableUpstream and DQ4_IFC_Run, and both are expected on. AMB-14's relational case is satisfied honestly here rather than by observing the response alone: the assertion RELATES the two, and observing only the enable would test neither the infeed nor the relation.",
+      "settlingCondition": "DQ4_IFC_Run and DQ9_SYS_EnableUpstream have both held their recorded value across 43 consecutive observed scans (1.0 s at comp=1) at the close of the index, by which point the tail cleardown's step-to-idle transition is at least 643 scans (15 s, one full DisarmDwell) behind. SHR.ScenarioDone is deliberately not part of this condition, for the same reason.",
+      "settlingUnchangedForScans": 43,
+      "settlingSignals": [
+        "DQ4_IFC_Run",
+        "DQ9_SYS_EnableUpstream"
+      ],
+      "maxDurationScans": 7700,
+      "_maxDurationScans": "45 s head + 75 s scenario + 45 s tail = 165 s = 7072 scans at 23.33 ms; 7700 carries 9% margin. Same note on derivation 4's backstop as VS-SHR-001.",
+      "completionSignal": "SHR.ScenarioDone",
+      "completionValue": 1,
+      "blacklist": [
+        {
+          "block": "FB_HopperBlockageStim",
+          "reason": "MEASURED COLLISION, NOT A PRECAUTION. This slot's head needs DB_Input.Test[0,1,3,4,5,6,7,8,10,15] and writes every one with the pass-through idiom; FB_HopperBlockageStim writes Test[0,5,6,8] with NO pass-through on any (recorded in harness-binding.json _slotContention, scanned per-index out of the IR because converter reachable-state reports DB_Input.Test at whole-array granularity). Idle it drives all four low, and the heads run in sequence ahead of the input map, so whichever runs last in the sweep wins. Test[5] and Test[6] are the shredder running feedbacks this slot's whole timeline is built on."
+        },
+        {
+          "block": "FB_PusherStim",
+          "reason": "It passes through on all 8 of its own indices, so the Test[] array is safe - but this head's NETWORK 26 writes DB_Controls.PusherMode with a PLAIN MOVE and no pass-through, and the pusher head and block both read that member. Two lanes driving one operator-mode member is last-writer-wins, and the pusher-quiet assumption behind this slot's PreStartSounder reading is exactly what it breaks."
+        },
+        {
+          "block": "FB_HopperBlockageMonitor",
+          "reason": "It consumes Hopper_Level_High and the shredder running feedbacks, all three of which this head commands, so running it concurrently means this slot's stimulus is driving that block's plant model. Coupling through plant-model state that the reference graph does not see, which is contract section 7's own case."
+        },
+        {
+          "block": "FB_PusherControl",
+          "reason": "It consumes hopper-high as an auto-mode cycle trigger and it consumes this block's PusherParkCmd, PusherCycleInhibitCmd and PusherModeCmd. Same plant-model coupling, and it is additionally the source of IO.PusherJogPreStartSounder, the second term of the signal SHR-001 asserts on."
+        }
+      ],
+      "compressionFactor": 1,
+      "assertedBehaviours": [
+        "The commanded state of ten members of the shared input-injection array DB_Input.Test[0,1,3,4,5,6,7,8,10,15], each written with the pass-through idiom so the head drives them only while its own index runs (FB_ShredderSequencerStim NETWORK 25).",
+        "A momentary operator cycle-start press, held for a commanded width so it cannot fall between two scans, beginning after a commanded idle-but-healthy hold measured from the start of the scenario (NETWORK 21).",
+        "A hopper high-level sensor that is high between two commanded instants and clear outside them, so a window at or past the scenario end is how a timeline says the hopper never goes high (NETWORK 23).",
+        "THREE CLOSED-LOOP MODELLED CONTACTORS: forward-running, reverse-running and discharge-conveyor-running feedbacks, each timed from the moment the PLC actually drives the corresponding output buffer member, after a pull-in delay the vector chooses, with drop-out modelled as instantaneous (NETWORK 24).",
+        "The operator pusher mode held at 0 for the whole index, which keeps the pusher parked and jog-blocked (NETWORK 26). *** THIS IS A DECLARED PLANT ASSUMPTION, NOT A DERIVATION *** - nothing here proves the pusher stays quiet, and it fails if the pusher slot runs concurrently.",
+        "A six-phase cleardown around the scenario - disarm, reset, verify, head and tail - with the plant held stopped and every fault source held clear throughout (generated NETWORKS 1-17, with the disarm lever at NETWORK 18)."
+      ],
+      "kills": "AN IMPLEMENTATION THAT NEVER ENABLES UPSTREAM - the plant recovers from a full hopper, the infeed restarts, and the upstream process is never told it may feed, so the plant runs empty. That mutant reads DQ9_SYS_EnableUpstream false in every retained frame and returns Disagreed while DQ4 still passes. It also kills a mutant whose hopper gate is latched rather than level-driven, so clearing the hopper never restarts the infeed: DQ4 then reads false throughout, and BOTH expectations go red, which distinguishes it from the first mutant. *** WHAT IT DOES NOT KILL: *** a block that enables upstream in the SAME instant as the infeed, with no delay at all. That is REQ-011:71f815 - the enumeration's own note says A1 is satisfied by an early enable that is still asserted at t = 3 s, which is why the two assertions exist separately - and it is a Never, which this slot cannot verify. The most valuable half of REQ-011 is therefore NOT covered here, and this vector must not be read as covering the clause. Not run against either mutant; argued from the IR.",
+      "boundsUsed": {
+        "infeed_to_upstream_enable_delay": "3 s"
+      },
+      "_boundsUsed": "Verbatim from the bounds table. assertionBounds for REQ-011:7adda5 is [infeed_to_upstream_enable_delay]. NOTE that this vector's timeline ALSO depends on infeed_restart_delay (the 5 s from hopper-clear to the infeed command), and that bound is NOT declared here because the CITED ASSERTION does not depend on it - section 2.5's comparison is against the assertion's own bounds, and declaring a bound the assertion does not depend on is a different error from omitting one it does."
+    }
+  ],
+  "_observabilityShortfall": "*** THE PRINCIPAL FINDING OF THIS RUN, AND IT IS ARITHMETIC RATHER THAN OPINION. 41 OF THE 43 ASSERTIONS CANNOT BE CITED BY ANY VECTOR AGAINST THIS SLOT AS IT IS BOUND, AND NOT ONE OF THE FOUR CAUSES IS REPAIRABLE BY A VECTOR AUTHOR. *** CAUSE 1 - THE PHYSICAL OUTPUTS THE SPECIFICATION IS WRITTEN IN ARE MOSTLY NOT PUBLISHED. Of the six DQ names the enumeration cites, this binding publishes four (DQ5_DIS_Run, DQ4_IFC_Run, DQ9_SYS_EnableUpstream, DQ10_SYS_PreStartSounder) and CANNOT publish two: FC_ControlMain NETWORK 7 takes DQ1_SHR_RunFwd and DQ2_SHR_RunRev from iDB_MotorFwdRevSystem_Shredder.IO.RunFwd and .RunRev, which are not in resultSources. DQ1 appears in 22 of the 43 assertions' required observations and DQ2 in 22. CAUSE 2 - NO INPUT IS PUBLISHED AT ALL. The enumeration's assertions require observing DI8_HPR_LevelHigh (11 times), DI3_SYS_CycleStart (8), DI15_SYS_DownstreamRunning (5), DI10_DIS_Running (3), DI4_SYS_CycleStop (2), and DI1/DI5/DI6/DI9/DI12 once each. The binding publishes none of them, although eight of the ten exist as members of iDB_ShredderSequencer.IO and are INSIDE the binding's own declared --scope prefix. Gate 3h is a set difference and it is not negotiable: AMB-14's whole point is that a relational assertion whose second signal is never observed is untested while everything reports green. CAUSE 3 - EVERY `Never` IS INADMISSIBLE, ALL 16 OF THEM. F-3 refuses a SAMPLED observation of a NEVER assertion - the refusal is live in Harness.Loop.LoopRun's own caveat text - so a Never needs Latched, Latched needs a generated latch (Transient + ArmedBy) or a genuine instrumenting block, and this binding declares neither. Its three latchedBy entries name the block under test and a block inside the stimulated loop, which section 2.8 rules is a value under test rather than an instrument. CAUSE 4 - NO ARM WINDOW, SO ONLY ONE TEMPORAL SHAPE CAN CONCLUDE. With no armedBy, every retained frame is WindowState.Unknown, and the accusation rule in docs/notes/observation-window-shapes.md section 2 turns throughout, becomesAndHolds and atNoPoint into Inconclusive on any mixed series - and the head's mandatory tail cleardown makes EVERY commanded state a mixed series by construction. That is why both vectors here use atSomePoint, and why neither can say anything about ORDER. *** WHAT WOULD FIX MOST OF IT, AND IT IS ONE ARTIFACT: *** ten more result sources on the binding - iDB_MotorFwdRevSystem_Shredder.IO.RunFwd and .RunRev, and iDB_ShredderSequencer.IO.CycleStart, .CycleStop, .DownstreamRunning, .SystemHealthy, .HopperLevelHigh, .DischargeConvRunning, .ShredderRunFwdFB and .ShredderRunRevFB - each with an inertRest, plus Transient and ArmedBy (SHR.Armed is already published) on the signals a Never has to be read from. Every one of those is derivable from the corpus. NONE of them is this lane's field: inertRest is section 2.8b's and the observability declaration is declaredBy's, and this lane was instructed not to touch either. DI9_IFC_Running would still be missing - the sequencer does not consume it - so REQ-063's infeed instance stays unreachable through this slot however the binding grows.",
+  "_unreachable": "*** THE UNREACHABLE-CANDIDATE BUCKET LIST, BY ASSERTION ID. THESE ARE CITED AS UNREACHABLE, NOT AS SATISFIED, AND THE BUCKETING IS THE ENGINEER'S CALL, NOT THIS LANE'S. *** ELEVEN assertions trigger on an overcurrent event that no stimulus can produce: REQ-023:d9f51c, REQ-024:f6a85d, REQ-025:5c6fe9, REQ-026:dc4fd2, REQ-027:229d37, REQ-027:f8f777, REQ-027:99d80f, REQ-028:bda7cd, REQ-028:567ac6, REQ-028:3e10c1, REQ-028:3f419e. THE MEASURED REASON: FB_ShredderSequencer NETWORK 12 gates both OvercurrentMediumTimer and OvercurrentHighTimer on 'AND NOT AlwaysTrue', a permanently false placeholder the block's own OvercurrentTripped comment declares - so OvercurrentTripped can never be true, the only transition into step 60 (N12's third MOVE) can never fire, and with it die all three of N13's transitions, N3's window timer, N4's reversal counter, N5's ShredderBlockedFault seal and the step-60 term of PusherModeForceOff in N14. IT IS DEAD TWICE OVER: even with the placeholder removed, DB_Settings.OvercurrentSetpointMedium/High and the two delays are deliberately unconfigured (Q-11: this prototype panel carries no analog current channel), and IO.ShredderMotorCurrent is a Real while MirrorValueType carries Bool, Int and Time only, so the analog input cannot be commanded through the mirror even after the detection is armed. *** NOT ONE VECTOR IN THIS SET ASSERTS THAT iDB_ShredderSequencer.IO.ShredderBlockedFault IS CLEAR, AND THAT IS THE POINT. *** N5 makes it a compile-time-constant false, so ANY assertion of the form 'the shredder-blocked fault is clear' would pass forever, vacuously, and it would pass more convincingly than the pusher's equivalent because the surrounding sequence really does run. A green over it would be the single most misleading output this slot can produce. The signal is published in the binding and carries a specName so a reader can see it, and its _specName says in terms that no vector may cite it. REQ-028:567ac6 CARRIES A SECOND, INDEPENDENT BLOCK: its response_signal is the literal UNNAMED_IN_REGISTER. FINDING-2 records that the register names no tag for any annunciation bit. It is uncitable even if the overcurrent path were armed, and hard rule 3 forbids inventing a name to make the citation join. The repair is to the REGISTER, never to the enumeration and never to a vector.",
+  "_alsoBlockedButNotUnreachable": "KEPT SEPARATE FROM _unreachable BECAUSE THE REPAIRS ARE DIFFERENT AND A READER WHO CONFLATES THEM WILL FIX THE WRONG THING. (a) REQ-012:4c5d5a and REQ-013:5eebb6 are SIMULTANEITY claims - 'at the same time' - and contract section 4.1 says a same-scan coincidence is unobservable by sampling at all. That is UNTESTABLE-ON-RIG in shape, it is not a defect in the block, and the enumeration already named both. (b) The other 28 are blocked by _observabilityShortfall's four causes, which are BINDING repairs: they are not untestable, they are unobservable as currently bound, and calling them UNTESTABLE-ON-RIG would freeze a fixable gap into a bucket. Section 7's own limit applies - UNTESTABLE-ON-RIG should be nearly empty, and a large one is a finding to chase rather than a bucket to fill.",
+  "_coverage": "NO PERCENTAGE IS AN AVAILABLE OUTPUT FROM THIS DOCUMENT, AND THAT IS THE ENUMERATION'S OWN RULE, NOT MODESTY. A coverage figure needs all four bucket counts and the oldest deferral's age, and OUT-OF-SCOPE, DEFERRED and UNTESTABLE-ON-RIG all belong to whoever signs off the architecture at gate 1. What IS an available output is the numerator: 2 of 43 assertions are CITED by this set, over 2 of 46 coverage units, across 2 of 24 clauses (REQ-004 and REQ-011). The 41 uncited are listed and reasoned above; none is silently dropped. Note the coverage-unit arithmetic does not move here - neither cited assertion is REQ-063:f94e84, the only one carrying declared instances.",
+  "_decompositionDisputes": "RAISED AS THE FIRST PARTY TO HAVE READ THIS ENUMERATION AGAINST THE IMPLEMENTATION. THREE, AND ONLY THE FIRST IS A DISAGREEMENT. DISPUTE 1 - REQ-063's BOUND IS ONE NAME DOING FOUR JOBS, AND THE ONE INSTANCE THAT IS TESTABLE IS THE ONE THE NAME IS WRONG FOR. assertionBounds gives REQ-063:f94e84 the single bound motor_run_confirm_time, whose table row is the sentence 'UNSPECIFIED for three of REQ-063's four declared instances'. But the clause declares FOUR instances and the DischargeConveyor one has a real, distinct, named bound - discharge_conveyor_timeout = 10 s, already in the same table - implemented and live in FB_ShredderSequencer NETWORK 8. As it stands a vector for that instance must declare boundsUsed against a row that says UNSPECIFIED, which is true of three instances and false of the one being tested; declaring the real bound instead is refused as a bound the assertion does not depend on. THE PROPOSED REPAIR IS TO assertionBounds, NOT TO ANY ASSERTION TEXT AND NOT TO ANY ID: make the bound instance-qualified, so the DischargeConveyor unit depends on discharge_conveyor_timeout and the other three on the UNSPECIFIED row. That moves zero hashes. FINDING-3 already says the substance; this is the mechanical consequence it does not draw, and it bites the moment cause 1 and cause 2 above are repaired and REQ-063 becomes citable. DISPUTE 2 - NOT A DISPUTE, A CONFIRMATION FROM THE IMPLEMENTATION SIDE. AMB-SEQ-04 says a plant that stops everything while still telling upstream to feed passes every assertion in the file. It does, and the block makes it concrete rather than hypothetical: FB_ShredderSequencer NETWORK 11 drives IO.EnableUpstream purely from UpstreamEnableTimer.Q, whose IN is InfeedRunning, whose own timer IN is 'IO.Step = 50 AND NOT IO.HopperLevelHigh'. A stop drives Step to 0, so the enable does in fact drop - but by side effect of the step condition, with no stop term anywhere in its own rung. The hole AMB-SEQ-04 names is real AND the as-built block happens to be right for a reason no assertion states. That is the worst combination for a later edit. DISPUTE 3 - NOT A DISPUTE. AMB-SEQ-07 asks what the fifth overcurrent event does, and AMB-SEQ-08 asks whether a start-sequence reverse counts. NEITHER CAN BE SETTLED FROM THIS IMPLEMENTATION IN EITHER DIRECTION, because N4 counts entries into step 60 and step 60 is unreachable - so the block has no observable answer to give and a reader must not take its silence for one. Recorded because 'the code does X' is the usual way these get closed, and here it would be closing them on a network that never executes.",
+  "_whatThisSetDoesNotEstablish": "SAID PLAINLY, BECAUSE A TWO-VECTOR GREEN IS EASY TO OVER-READ. Both vectors use temporalShape atSomePoint, which establishes that a signal WAS asserted somewhere in the retained series and says NOTHING about when, in what order, or for how long. So this set does not establish: that the pre-start siren runs before any equipment starts (REQ-003:045ab4, a Never); that the discharge conveyor's FEEDBACK gates the sequence rather than its own command (REQ-004:0f72e0, a Never); that upstream is not enabled early (REQ-011:71f815, a Never, and the enumeration's own note explains that REQ-011 A1 is SATISFIED by the early-enable defect); or anything at all about stopping, re-starting, hopper recovery, the two-tier pusher split, or the fault-abort paths. THE MOST DEFECT-PRONE LOGIC IN THIS BLOCK - the REQ-012/013/040 split where downstream loss must inhibit the cycle without taking hand-jog away - IS COMPLETELY UNCOVERED, because every assertion over it requires observing DQ1_SHR_RunFwd, DQ2_SHR_RunRev or a DI, and because IO.PusherCycleInhibitCmd and IO.PusherModeCmd have no specification name to cite at all.",
+  "_verifierStatus": "STEP 0 OF THE design-for-testability SKILL, DONE THIS RUN RATHER THAN TAKEN FROM ITS TABLE. Confirmed present by reading the source: SubmissionGate.cs carries gate 3h as a set difference over AssertionEnumeration.RequiredObservationsOf (:1393); AssertionId.Compute/Normalise/HashOf are as the skill describes and were reimplemented here and agreed on all 43 IDs; ExpectationDocument.TemporalShape IS mapped (SubmissionDocument.cs:849), so writing temporalShape is NOT a gate-0b refusal - the sequencing note in observation-window-shapes.md section 7 has been satisfied; BindingDocument carries SpecName (:889), Transient (:919), ArmedBy (:954) and Encoding (:971); AgentIdentity's cross-vocabulary NotComparable is pinned by AgentIdentityVocabularyTests.cs:91; gate 0b excludes underscore-prefixed annotations by leaf name, which is why this document's _ keys are admissible. *** THE GATE ITSELF WAS NOT RUN. *** 'dotnet run --project src/harness/Harness.Gate -- check' was not executed: this dispatch forbids Portal, rig, socket and download work, and while a Harness.Gate build touches none of those, running it was outside what was authorised and no result from it is claimed here. NO GATE IN THIS DOCUMENT IS REPORTED AS PASSED. Every status above is derived by reading the verifier's source against this content, which is weaker than running it and is labelled as such."
+}
