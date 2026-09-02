@@ -3029,3 +3029,59 @@ Not done under FI-88 because FI-88 needed only a BLOCK-NAME set, which it now re
 `BLOCK <KIND> <Name>` header line — cheaper, and immune to this whichever way it is resolved. That
 choice is pinned by `SignalSetUdtExpansionTests.MultiInstanceOfASidecarCarryingBlock_IsStillNotOpaque`,
 which fails the day anyone re-keys the discriminator on `_fbInterfaces`.
+
+---
+
+## FI-93 — nine tests have been red since the reference corpus was widened, and a red suite is a disabled suite
+
+**Measured 2026-09-03**, while establishing a baseline before merging an unrelated converter change.
+
+`dotnet test src/converter/converter.sln` reports **9 failed / 1801 passed**, and the nine have
+nothing to do with whatever change is in flight:
+
+```
+NeighbourTests      × 4
+ServedAreaTests     × 4
+ReachableStateTests × 1
+```
+
+**One cause, and it is entirely mechanical.** The committed reference project was widened from a
+37-register Modbus window to 1024:
+
+```
+ir/test-project001/FB_Comms_ModbusServer.ir:31   MB_HOLD_REG := P#M1000.0 WORD 1024
+ir/test-project001/FB_Comms_ModbusServer.ir:39   constant P#M1000.0 WORD 1024 = 22 Any
+```
+
+while the fixtures still assert the old number:
+
+```
+Converter.Tests/ServedAreaTests.cs:147   Assert.Equal(37, report.Registers);
+Converter.Tests/ServedAreaTests.cs:164   Assert.Equal("P#M1000.0 WORD 37", report.ReadableText);
+```
+
+The tests are **correct about what they check and wrong about the value**; the corpus moved and they
+did not move with it.
+
+### Why this is worth an entry rather than a quiet fix
+
+**A suite that is permanently red cannot report a regression.** Every one of these nine is a
+*corpus-sweep* test — the kind that exists to notice when committed data drifts away from what the
+tools assume. That is precisely the class this repo leans on hardest: `signal-set`'s no-op proof,
+`interface-check`'s inlining tripwire and `drift-check`'s whole purpose are all corpus sweeps. Nine
+of them have been reporting failure for long enough that the correct baseline is now *"the same nine
+that fail anyway"* — which is a sentence that has to be said out loud before every merge, and which
+silently widens to ten the first time someone breaks a tenth.
+
+This is the same hazard the repo already recorded as **"a warning is not a gate — if a check detects
+it and only warns, it gets skimmed."** A permanently-failing test is weaker than a warning: it has
+been pre-skimmed.
+
+### The fix, and the one judgement in it
+
+Mechanically it is a fixture update: 37 → 1024 in the four `ServedAreaTests` expectations, and the
+derived counts in `NeighbourTests` and `ReachableStateTests`. **The judgement is whether the widened
+corpus is the intended long-term reference**, because these tests double as the record of what the
+reference project *is*. Re-pointing them ratifies the widening; leaving them red does not preserve
+the old value, it only stops anyone finding out. Decide that, then update in one commit — and do not
+land any other change in it, so the diff reads as a ratification and not as a repair.
