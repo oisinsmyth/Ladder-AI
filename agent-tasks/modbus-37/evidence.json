@@ -1,0 +1,896 @@
+{
+  "schema": "ladder-ai/agent-evidence/1",
+  "task": "Reconcile GenProject1 (the test-project001 Green-tier reference project) to the committed ir/test-project001/FB_Comms_ModbusServer.ir, whose MB_HOLD_REG operand reads P#M1000.0 WORD 37 while the live project served WORD 35. Owner ruling: the IR is authoritative, so the project moves to the IR. NO .ir FILE WAS EDITED BY THIS RUN - the IR was already correct; what was missing was the import.",
+  "kind": "modify",
+  "manual": true,
+  "manualReason": "No skill covers this stage. It is NOT gen-block-modify-fix: no IR is authored or edited. It is the deferred back half of a fix that already ran on 2026-08-14, whose own telemetry row (gen/test-project001/telemetry.log, 2026-08-14T10:05) declares 'COMPILE GATE NOT RUN - Portal fenced ... this block is not done' and 'a re-export is owed after the import'. This run pays that owed import. Flagged per docs/evidence/stage-S6.md's convention: if the fenced-Portal deferral recurs, 'pay an owed import and re-run the third leg' is a plausible small skill.",
+  "files": [
+    {
+      "path": "ir/test-project001/FB_Comms_ModbusServer.ir",
+      "ir_hash": "1CE779A0D530A7F0E973C534031C6CF52F423ADB4D264A09C662C7DCECD0F481",
+      "note": "UNCHANGED by this run. The hash is not a record of an edit - it is the identity of the content that was imported into the project."
+    }
+  ],
+  "checks": [
+    {
+      "tool": "converter preflight",
+      "command": "converter preflight ir/test-project001/FB_Comms_ModbusServer.ir --project ir/test-project001 --json",
+      "exit": 0,
+      "note": "CLEAN. The one finding is review:harness-scope with gates=false - FB 9000 sits in the declared 9000-9999 harness band. Informational, not a gate.",
+      "json": {
+        "files": [
+          {
+            "filePath": "C:\\Users\\User\\Desktop\\AI Ladder Project\\ir\\test-project001\\FB_Comms_ModbusServer.ir",
+            "name": "FB_Comms_ModbusServer",
+            "findings": [
+              {
+                "check": "review:harness-scope",
+                "description": "Harness: FB 9000 is inside the reserved harness band 9000-9999 (declared docs/notes/test-environment-build-plan.md, 2026-08-13). 0 C-001/C-201 finding(s) reported without gating.",
+                "gates": false
+              }
+            ]
+          }
+        ],
+        "indexWarnings": [],
+        "corpus": {
+          "projectDir": "C:\\Users\\User\\Desktop\\AI Ladder Project\\ir\\test-project001",
+          "projectFileCount": 43,
+          "batchFileCount": 1,
+          "projectContributedNothing": false,
+          "blockNameCount": 18,
+          "tagRootNameCount": 145,
+          "typeNameCount": 5,
+          "memberBodyCount": 23,
+          "calleeInterfaceCount": 18,
+          "harnessCorpusFileCount": 43
+        }
+      }
+    },
+    {
+      "tool": "converter diff (round-trip invariance - substitute for --only)",
+      "command": "converter diff ir/test-project001/FB_Comms_ModbusServer.ir C:\\temp\\confirm-ir\\FB_Comms_ModbusServer.ir --json",
+      "exit": 0,
+      "note": "DECLARED, NOT OMITTED, AND DELIBERATELY NOT THE --only FORM. `--only` asks 'did anything change outside the named networks' and needs a before/after pair of .ir files. This run edited no .ir, so no such pair exists and --only would have nothing to compare. What is compared instead is strictly stronger: the COMMITTED .ir against the .ir re-derived by `converter to-ir` from TIA's OWN post-import re-export of the block. --only would have proved the commit consistent with itself; this proves the commit consistent with what the TIA project now actually holds, which is the thing the run was for. Result: hasAnyChange=false, 1 of 1 network Identical, header unchanged, invarianceViolations []. The two files are additionally BYTE-identical (`cmp` exit 0).",
+      "json": {
+        "blockName": "FB_Comms_ModbusServer",
+        "blockNameMismatch": false,
+        "otherBlockName": "FB_Comms_ModbusServer",
+        "hasAnyChange": false,
+        "header": {
+          "changed": false,
+          "titleChanged": false,
+          "titleBefore": "Modbus TCP Server",
+          "titleAfter": "Modbus TCP Server",
+          "commentChanged": false,
+          "commentBefore": "Serves this PLC's harness mirror to a Modbus TCP client. The server listens passively on TCP port 503 and accepts a connection from any client address, exposing 37 holding registers starting at MW1000 - the mirror the harness copy layer maintains, whose registers 0 and 1 are the build stamp, whose next two are the free-running scan counter, and whose tail carries the block-under-test observations and the harness violation latches. The span is the width the copy layer's register map needs rather than a round number, and it is widened whenever that map grows; counting signals does not give it, because a duration is 32 bits and so takes two registers. The exposed span is exactly the mirror: a register past the end returns an exception rather than a zero, so a client reading beyond what the copy layer maintains is told so instead of being handed a value that looks like data. Comms block - it carries no equipment logic and writes no plant tag. The holding-register area is given as an area pointer over marker memory, which is the form a register area in %M takes; it is bit memory rather than a data block because a data block can carry an optimized memory layout, which this server cannot read. DISCONNECT is taken from the server's own disconnect bit, which nothing in this program writes, so the connection stays up once made. Nothing here is retentive: the connection settings come back from their start values on every warm restart.",
+          "commentAfter": "Serves this PLC's harness mirror to a Modbus TCP client. The server listens passively on TCP port 503 and accepts a connection from any client address, exposing 37 holding registers starting at MW1000 - the mirror the harness copy layer maintains, whose registers 0 and 1 are the build stamp, whose next two are the free-running scan counter, and whose tail carries the block-under-test observations and the harness violation latches. The span is the width the copy layer's register map needs rather than a round number, and it is widened whenever that map grows; counting signals does not give it, because a duration is 32 bits and so takes two registers. The exposed span is exactly the mirror: a register past the end returns an exception rather than a zero, so a client reading beyond what the copy layer maintains is told so instead of being handed a value that looks like data. Comms block - it carries no equipment logic and writes no plant tag. The holding-register area is given as an area pointer over marker memory, which is the form a register area in %M takes; it is bit memory rather than a data block because a data block can carry an optimized memory layout, which this server cannot read. DISCONNECT is taken from the server's own disconnect bit, which nothing in this program writes, so the connection stays up once made. Nothing here is retentive: the connection settings come back from their start values on every warm restart.",
+          "interfaceChanged": false,
+          "interfaceCommentChanged": false
+        },
+        "summary": {
+          "total": 1,
+          "changed": 0,
+          "added": 0,
+          "removed": 0,
+          "moved": 0,
+          "identical": 1
+        },
+        "networks": [
+          {
+            "number": 1,
+            "kind": "Identical",
+            "title": "Serve The Harness Mirror",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          }
+        ],
+        "allowedNetworks": [],
+        "invarianceViolations": [],
+        "headerChangeAllowed": false,
+        "hasUnclaimedHeaderChange": false,
+        "hasNonGatingCommentChange": false,
+        "declaredInsertAt": null,
+        "movesAreDeclared": false,
+        "unchangedRemainder": 1,
+        "hasInvarianceViolation": false
+      }
+    },
+    {
+      "tool": "openness-cli sanity-check",
+      "command": "openness-cli sanity-check \"C:\\Users\\User\\Desktop\\AI Ladder Project\\GenProject1\\GenProject1.ap20\" --json",
+      "exit": 0,
+      "note": "THE HARD RULE 4 GATE. Text form of the same run reads: 'BLOCKS: 36  INCONSISTENT: 0  DUPLICATE NUMBERS: 0' and 'TYPES: 7  INCONSISTENT: 0', OVERALL: HEALTHY. Device compile is state=Warning with errors=0, scope=station (hardware + program) - a PASS. KEYED ON ERRORS, NEVER ON STATE: the single warning is a pre-existing standing hardware warning, and a check on state==Success would mark this project unhealthy permanently.",
+      "json": {
+        "healthy": true,
+        "nothingExamined": false,
+        "totalBlocks": 36,
+        "inconsistentBlocks": [],
+        "totalTypes": 7,
+        "inconsistentTypes": [],
+        "duplicateBlockNumbers": [],
+        "deviceCompiles": [
+          {
+            "device": "S7-1200 station_1/PLC1 6ES7 214-1AG40-0XB0",
+            "state": "Warning",
+            "errors": 0,
+            "warnings": 1
+          }
+        ]
+      }
+    },
+    {
+      "tool": "openness-cli sanity-check (first run, immediately post-import)",
+      "exit": 9,
+      "transient": "The ordinary post-import dependent-block cascade. Reported 'BLOCKS: 36  INCONSISTENT: 3' naming FB_Comms_ModbusServer (just imported), iDB_Comms_ModbusServer (its instance DB) and Main (its caller) - the block plus exactly its dependents, no unrelated object. By the next invocation all three flags were gone; WHAT CLEARED THEM WAS NOT ISOLATED (this run's station compile is the obvious candidate but was not tested in isolation, and the tool's own hint text says a device compile does NOT clear them). Recorded as unexplained rather than attributed. The passing sanity-check above is the same command re-run. Device compile was already errors=0 on this run. Context, not a gate."
+    },
+    {
+      "tool": "openness-cli compile-all",
+      "exit": 14,
+      "transient": "EXIT 14 = EXAMINED NOTHING, WHICH IS NEVER A PASS AND IS NOT CLAIMED AS ONE. Run to clear the three cascade flags per sanity-check's own advice line; by the time it ran the flags were already gone - by what, this run did not establish - so it compiled nothing and proves nothing. Recorded because it ran, not because it gated. The gate is the sanity-check above. Worth noting it contradicts the tool's own hint text ('a device compile does NOT clear these') - see the report."
+    }
+  ],
+  "thirdLeg": {
+    "_what": "NOT A GATE AND DELIBERATELY NOT IN checks[]. drift-check exits 1 here BY DESIGN and will keep doing so: three divergences remain that are not this run's to fix. Putting it in checks[] would fail the verifier for something that is not a failure of this work. The raw JSON is carried here so the numbers are still the tool's own.",
+    "commandBefore": "converter drift-check --project ir/test-project001 --exports C:\\temp\\lad-drift-before --complete --json",
+    "commandAfter": "converter drift-check --project ir/test-project001 --exports C:\\temp\\lad-drift-after --complete --json",
+    "exitBefore": 1,
+    "exitAfter": 1,
+    "summaryBefore": "4 drifted, 37 match, 2 skipped, 2 export-only, 0 error, 0 pairing-failure",
+    "summaryAfter": "3 drifted, 38 match, 2 skipped, 2 export-only, 0 error, 0 pairing-failure",
+    "statusDelta": "EXACTLY ONE object changed status across all 41 compared, verified by diffing the two sorted per-object status lists rather than by reading the summary: FB_Comms_ModbusServer DRIFTED -> MATCH. DB_PLC, FC_HarnessCopyLayer and iDB_HopperBlockageStim remain DRIFTED, unchanged and untouched.",
+    "scopeLimitation": "NEITHER RUN PASSED --tagtables, SO THIS IS NOT A COMPLETE ANSWER. DefaultTagTable and HarnessMirror came back SKIPPED (no paired export) in both runs. HarnessMirror is where the register map that this whole finding is about actually lives, so the third leg as run has never compared it. Kept identical before and after on purpose so the baseline stays comparable - the gap is declared, not closed.",
+    "before": {
+      "entries": [
+        {
+          "name": "DB_Alarms",
+          "irPath": "ir/test-project001\\DB_Alarms.ir",
+          "xmlPath": "C:\\temp\\lad-drift-before\\DB_Alarms.xml",
+          "status": "Match",
+          "detail": null,
+          "fromTia": true
+        },
+        {
+          "name": "DB_AnalogInput",
+          "irPath": "ir/test-project001\\DB_AnalogInput.ir",
+          "xmlPath": "C:\\temp\\lad-drift-before\\DB_AnalogInput.xml",
+          "status": "Match",
+          "detail": null,
+          "fromTia": true
+        },
+        {
+          "name": "DB_Controls",
+          "irPath": "ir/test-project001\\DB_Controls.ir",
+          "xmlPath": "C:\\temp\\lad-drift-before\\DB_Controls.xml",
+          "status": "Match",
+          "detail": null,
+          "fromTia": true
+        },
+        {
+          "name": "DB_Input",
+          "irPath": "ir/test-project001\\DB_Input.ir",
+          "xmlPath": "C:\\temp\\lad-drift-before\\DB_Input.xml",
+          "status": "Match",
+          "detail": null,
+          "fromTia": true
+        },
+        {
+          "name": "DB_Output",
+          "irPath": "ir/test-project001\\DB_Output.ir",
+          "xmlPath": "C:\\temp\\lad-drift-before\\DB_Output.xml",
+          "status": "Match",
+          "detail": null,
+          "fromTia": true
+        },
+        {
+          "name": "DB_PLC",
+          "irPath": "ir/test-project001\\DB_PLC.ir",
+          "xmlPath": "C:\\temp\\lad-drift-before\\DB_PLC.xml",
+          "status": "Drifted",
+          "detail": "semantic divergence between .ir and committed export",
+          "fromTia": true
+        },
+        {
+          "name": "DB_Settings",
+          "irPath": "ir/test-project001\\DB_Settings.ir",
+          "xmlPath": "C:\\temp\\lad-drift-before\\DB_Settings.xml",
+          "status": "Match",
+          "detail": null,
+          "fromTia": true
+        },
+        {
+          "name": "DefaultTagTable",
+          "irPath": "ir/test-project001\\DefaultTagTable.ir",
+          "xmlPath": null,
+          "status": "Skipped",
+          "detail": "no paired export",
+          "fromTia": null
+        },
+        {
+          "name": "FB_Comms_ModbusServer",
+          "irPath": "ir/test-project001\\FB_Comms_ModbusServer.ir",
+          "xmlPath": "C:\\temp\\lad-drift-before\\FB_Comms_ModbusServer.xml",
+          "status": "Drifted",
+          "detail": "semantic divergence between .ir and committed export",
+          "fromTia": true
+        },
+        {
+          "name": "FB_HarnessViolationLatch",
+          "irPath": "ir/test-project001\\FB_HarnessViolationLatch.ir",
+          "xmlPath": "C:\\temp\\lad-drift-before\\FB_HarnessViolationLatch.xml",
+          "status": "Match",
+          "detail": null,
+          "fromTia": true
+        },
+        {
+          "name": "FB_HopperBlockageMonitor",
+          "irPath": "ir/test-project001\\FB_HopperBlockageMonitor.ir",
+          "xmlPath": "C:\\temp\\lad-drift-before\\FB_HopperBlockageMonitor.xml",
+          "status": "Match",
+          "detail": null,
+          "fromTia": true
+        },
+        {
+          "name": "FB_HopperBlockageStim",
+          "irPath": "ir/test-project001\\FB_HopperBlockageStim.ir",
+          "xmlPath": "C:\\temp\\lad-drift-before\\FB_HopperBlockageStim.xml",
+          "status": "Match",
+          "detail": null,
+          "fromTia": true
+        },
+        {
+          "name": "FB_HxBoolEcho",
+          "irPath": "ir/test-project001\\FB_HxBoolEcho.ir",
+          "xmlPath": "C:\\temp\\lad-drift-before\\FB_HxBoolEcho.xml",
+          "status": "Match",
+          "detail": null,
+          "fromTia": true
+        },
+        {
+          "name": "FB_HxDwellTimer",
+          "irPath": "ir/test-project001\\FB_HxDwellTimer.ir",
+          "xmlPath": "C:\\temp\\lad-drift-before\\FB_HxDwellTimer.xml",
+          "status": "Match",
+          "detail": null,
+          "fromTia": true
+        },
+        {
+          "name": "FB_HxIntStep",
+          "irPath": "ir/test-project001\\FB_HxIntStep.ir",
+          "xmlPath": "C:\\temp\\lad-drift-before\\FB_HxIntStep.xml",
+          "status": "Match",
+          "detail": null,
+          "fromTia": true
+        },
+        {
+          "name": "FB_HxSealLatch",
+          "irPath": "ir/test-project001\\FB_HxSealLatch.ir",
+          "xmlPath": "C:\\temp\\lad-drift-before\\FB_HxSealLatch.xml",
+          "status": "Match",
+          "detail": null,
+          "fromTia": true
+        },
+        {
+          "name": "FB_MotorFwdRevSystem",
+          "irPath": "ir/test-project001\\FB_MotorFwdRevSystem.ir",
+          "xmlPath": "C:\\temp\\lad-drift-before\\FB_MotorFwdRevSystem.xml",
+          "status": "Match",
+          "detail": null,
+          "fromTia": true
+        },
+        {
+          "name": "FB_PusherControl",
+          "irPath": "ir/test-project001\\FB_PusherControl.ir",
+          "xmlPath": "C:\\temp\\lad-drift-before\\FB_PusherControl.xml",
+          "status": "Match",
+          "detail": null,
+          "fromTia": true
+        },
+        {
+          "name": "FB_ShredderSequencer",
+          "irPath": "ir/test-project001\\FB_ShredderSequencer.ir",
+          "xmlPath": "C:\\temp\\lad-drift-before\\FB_ShredderSequencer.xml",
+          "status": "Match",
+          "detail": null,
+          "fromTia": true
+        },
+        {
+          "name": "FC_AlarmsMain",
+          "irPath": "ir/test-project001\\FC_AlarmsMain.ir",
+          "xmlPath": "C:\\temp\\lad-drift-before\\FC_AlarmsMain.xml",
+          "status": "Match",
+          "detail": null,
+          "fromTia": true
+        },
+        {
+          "name": "FC_ControlMain",
+          "irPath": "ir/test-project001\\FC_ControlMain.ir",
+          "xmlPath": "C:\\temp\\lad-drift-before\\FC_ControlMain.xml",
+          "status": "Match",
+          "detail": null,
+          "fromTia": true
+        },
+        {
+          "name": "FC_HarnessCopyLayer",
+          "irPath": "ir/test-project001\\FC_HarnessCopyLayer.ir",
+          "xmlPath": "C:\\temp\\lad-drift-before\\FC_HarnessCopyLayer.xml",
+          "status": "Drifted",
+          "detail": "semantic divergence between .ir and committed export",
+          "fromTia": true
+        },
+        {
+          "name": "FC_Inputs",
+          "irPath": "ir/test-project001\\FC_Inputs.ir",
+          "xmlPath": "C:\\temp\\lad-drift-before\\FC_Inputs.xml",
+          "status": "Match",
+          "detail": null,
+          "fromTia": true
+        },
+        {
+          "name": "FC_Outputs",
+          "irPath": "ir/test-project001\\FC_Outputs.ir",
+          "xmlPath": "C:\\temp\\lad-drift-before\\FC_Outputs.xml",
+          "status": "Match",
+          "detail": null,
+          "fromTia": true
+        },
+        {
+          "name": "HarnessMirror",
+          "irPath": "ir/test-project001\\HarnessMirror.ir",
+          "xmlPath": null,
+          "status": "Skipped",
+          "detail": "no paired export",
+          "fromTia": null
+        },
+        {
+          "name": "Main",
+          "irPath": "ir/test-project001\\Main.ir",
+          "xmlPath": "C:\\temp\\lad-drift-before\\Main.xml",
+          "status": "Match",
+          "detail": null,
+          "fromTia": true
+        },
+        {
+          "name": "MotorFwdRevIOSet",
+          "irPath": "ir/test-project001\\MotorFwdRevIOSet.ir",
+          "xmlPath": "C:\\temp\\lad-drift-before\\MotorFwdRevIOSet.xml",
+          "status": "Match",
+          "detail": null,
+          "fromTia": true
+        },
+        {
+          "name": "MotorIOSet",
+          "irPath": null,
+          "xmlPath": "C:\\temp\\lad-drift-before\\MotorIOSet.xml",
+          "status": "ExportOnly",
+          "detail": "no paired .ir in project dir",
+          "fromTia": null
+        },
+        {
+          "name": "MotorVSDIOSet",
+          "irPath": null,
+          "xmlPath": "C:\\temp\\lad-drift-before\\MotorVSDIOSet.xml",
+          "status": "ExportOnly",
+          "detail": "no paired .ir in project dir",
+          "fromTia": null
+        },
+        {
+          "name": "OB100",
+          "irPath": "ir/test-project001\\OB100.ir",
+          "xmlPath": "C:\\temp\\lad-drift-before\\OB100.xml",
+          "status": "Match",
+          "detail": null,
+          "fromTia": true
+        },
+        {
+          "name": "UDT_HopperBlockageIO",
+          "irPath": "ir/test-project001\\UDT_HopperBlockageIO.ir",
+          "xmlPath": "C:\\temp\\lad-drift-before\\UDT_HopperBlockageIO.xml",
+          "status": "Match",
+          "detail": null,
+          "fromTia": true
+        },
+        {
+          "name": "UDT_HopperBlockageStim",
+          "irPath": "ir/test-project001\\UDT_HopperBlockageStim.ir",
+          "xmlPath": "C:\\temp\\lad-drift-before\\UDT_HopperBlockageStim.xml",
+          "status": "Match",
+          "detail": null,
+          "fromTia": true
+        },
+        {
+          "name": "UDT_PusherIO",
+          "irPath": "ir/test-project001\\UDT_PusherIO.ir",
+          "xmlPath": "C:\\temp\\lad-drift-before\\UDT_PusherIO.xml",
+          "status": "Match",
+          "detail": null,
+          "fromTia": true
+        },
+        {
+          "name": "UDT_ShredderSequencerIO",
+          "irPath": "ir/test-project001\\UDT_ShredderSequencerIO.ir",
+          "xmlPath": "C:\\temp\\lad-drift-before\\UDT_ShredderSequencerIO.xml",
+          "status": "Match",
+          "detail": null,
+          "fromTia": true
+        },
+        {
+          "name": "iDB_Comms_ModbusServer",
+          "irPath": "ir/test-project001\\iDB_Comms_ModbusServer.ir",
+          "xmlPath": "C:\\temp\\lad-drift-before\\iDB_Comms_ModbusServer.xml",
+          "status": "Match",
+          "detail": null,
+          "fromTia": true
+        },
+        {
+          "name": "iDB_HarnessViolationLatch",
+          "irPath": "ir/test-project001\\iDB_HarnessViolationLatch.ir",
+          "xmlPath": "C:\\temp\\lad-drift-before\\iDB_HarnessViolationLatch.xml",
+          "status": "Match",
+          "detail": null,
+          "fromTia": true
+        },
+        {
+          "name": "iDB_HopperBlockageMonitor",
+          "irPath": "ir/test-project001\\iDB_HopperBlockageMonitor.ir",
+          "xmlPath": "C:\\temp\\lad-drift-before\\iDB_HopperBlockageMonitor.xml",
+          "status": "Match",
+          "detail": null,
+          "fromTia": true
+        },
+        {
+          "name": "iDB_HopperBlockageStim",
+          "irPath": "ir/test-project001\\iDB_HopperBlockageStim.ir",
+          "xmlPath": "C:\\temp\\lad-drift-before\\iDB_HopperBlockageStim.xml",
+          "status": "Drifted",
+          "detail": "semantic divergence between .ir and committed export",
+          "fromTia": true
+        },
+        {
+          "name": "iDB_HxBoolEcho",
+          "irPath": "ir/test-project001\\iDB_HxBoolEcho.ir",
+          "xmlPath": "C:\\temp\\lad-drift-before\\iDB_HxBoolEcho.xml",
+          "status": "Match",
+          "detail": null,
+          "fromTia": true
+        },
+        {
+          "name": "iDB_HxDwellTimer",
+          "irPath": "ir/test-project001\\iDB_HxDwellTimer.ir",
+          "xmlPath": "C:\\temp\\lad-drift-before\\iDB_HxDwellTimer.xml",
+          "status": "Match",
+          "detail": null,
+          "fromTia": true
+        },
+        {
+          "name": "iDB_HxIntStep",
+          "irPath": "ir/test-project001\\iDB_HxIntStep.ir",
+          "xmlPath": "C:\\temp\\lad-drift-before\\iDB_HxIntStep.xml",
+          "status": "Match",
+          "detail": null,
+          "fromTia": true
+        },
+        {
+          "name": "iDB_HxSealLatch",
+          "irPath": "ir/test-project001\\iDB_HxSealLatch.ir",
+          "xmlPath": "C:\\temp\\lad-drift-before\\iDB_HxSealLatch.xml",
+          "status": "Match",
+          "detail": null,
+          "fromTia": true
+        },
+        {
+          "name": "iDB_MotorFwdRevSystem_Shredder",
+          "irPath": "ir/test-project001\\iDB_MotorFwdRevSystem_Shredder.ir",
+          "xmlPath": "C:\\temp\\lad-drift-before\\iDB_MotorFwdRevSystem_Shredder.xml",
+          "status": "Match",
+          "detail": null,
+          "fromTia": true
+        },
+        {
+          "name": "iDB_PusherControl",
+          "irPath": "ir/test-project001\\iDB_PusherControl.ir",
+          "xmlPath": "C:\\temp\\lad-drift-before\\iDB_PusherControl.xml",
+          "status": "Match",
+          "detail": null,
+          "fromTia": true
+        },
+        {
+          "name": "iDB_ShredderSequencer",
+          "irPath": "ir/test-project001\\iDB_ShredderSequencer.ir",
+          "xmlPath": "C:\\temp\\lad-drift-before\\iDB_ShredderSequencer.xml",
+          "status": "Match",
+          "detail": null,
+          "fromTia": true
+        }
+      ],
+      "comparedCount": 41,
+      "examinedNothing": false,
+      "tiaExportCount": 41,
+      "nonTiaExportCount": 0,
+      "comparedNothingFromTia": false,
+      "projectDir": "ir/test-project001",
+      "exportsDir": "C:\\temp\\lad-drift-before",
+      "hasDrift": true
+    },
+    "after": {
+      "entries": [
+        {
+          "name": "DB_Alarms",
+          "irPath": "C:\\Users\\User\\Desktop\\AI Ladder Project\\ir\\test-project001\\DB_Alarms.ir",
+          "xmlPath": "C:\\temp\\lad-drift-after\\DB_Alarms.xml",
+          "status": "Match",
+          "detail": null,
+          "fromTia": true
+        },
+        {
+          "name": "DB_AnalogInput",
+          "irPath": "C:\\Users\\User\\Desktop\\AI Ladder Project\\ir\\test-project001\\DB_AnalogInput.ir",
+          "xmlPath": "C:\\temp\\lad-drift-after\\DB_AnalogInput.xml",
+          "status": "Match",
+          "detail": null,
+          "fromTia": true
+        },
+        {
+          "name": "DB_Controls",
+          "irPath": "C:\\Users\\User\\Desktop\\AI Ladder Project\\ir\\test-project001\\DB_Controls.ir",
+          "xmlPath": "C:\\temp\\lad-drift-after\\DB_Controls.xml",
+          "status": "Match",
+          "detail": null,
+          "fromTia": true
+        },
+        {
+          "name": "DB_Input",
+          "irPath": "C:\\Users\\User\\Desktop\\AI Ladder Project\\ir\\test-project001\\DB_Input.ir",
+          "xmlPath": "C:\\temp\\lad-drift-after\\DB_Input.xml",
+          "status": "Match",
+          "detail": null,
+          "fromTia": true
+        },
+        {
+          "name": "DB_Output",
+          "irPath": "C:\\Users\\User\\Desktop\\AI Ladder Project\\ir\\test-project001\\DB_Output.ir",
+          "xmlPath": "C:\\temp\\lad-drift-after\\DB_Output.xml",
+          "status": "Match",
+          "detail": null,
+          "fromTia": true
+        },
+        {
+          "name": "DB_PLC",
+          "irPath": "C:\\Users\\User\\Desktop\\AI Ladder Project\\ir\\test-project001\\DB_PLC.ir",
+          "xmlPath": "C:\\temp\\lad-drift-after\\DB_PLC.xml",
+          "status": "Drifted",
+          "detail": "semantic divergence between .ir and committed export",
+          "fromTia": true
+        },
+        {
+          "name": "DB_Settings",
+          "irPath": "C:\\Users\\User\\Desktop\\AI Ladder Project\\ir\\test-project001\\DB_Settings.ir",
+          "xmlPath": "C:\\temp\\lad-drift-after\\DB_Settings.xml",
+          "status": "Match",
+          "detail": null,
+          "fromTia": true
+        },
+        {
+          "name": "DefaultTagTable",
+          "irPath": "C:\\Users\\User\\Desktop\\AI Ladder Project\\ir\\test-project001\\DefaultTagTable.ir",
+          "xmlPath": null,
+          "status": "Skipped",
+          "detail": "no paired export",
+          "fromTia": null
+        },
+        {
+          "name": "FB_Comms_ModbusServer",
+          "irPath": "C:\\Users\\User\\Desktop\\AI Ladder Project\\ir\\test-project001\\FB_Comms_ModbusServer.ir",
+          "xmlPath": "C:\\temp\\lad-drift-after\\FB_Comms_ModbusServer.xml",
+          "status": "Match",
+          "detail": null,
+          "fromTia": true
+        },
+        {
+          "name": "FB_HarnessViolationLatch",
+          "irPath": "C:\\Users\\User\\Desktop\\AI Ladder Project\\ir\\test-project001\\FB_HarnessViolationLatch.ir",
+          "xmlPath": "C:\\temp\\lad-drift-after\\FB_HarnessViolationLatch.xml",
+          "status": "Match",
+          "detail": null,
+          "fromTia": true
+        },
+        {
+          "name": "FB_HopperBlockageMonitor",
+          "irPath": "C:\\Users\\User\\Desktop\\AI Ladder Project\\ir\\test-project001\\FB_HopperBlockageMonitor.ir",
+          "xmlPath": "C:\\temp\\lad-drift-after\\FB_HopperBlockageMonitor.xml",
+          "status": "Match",
+          "detail": null,
+          "fromTia": true
+        },
+        {
+          "name": "FB_HopperBlockageStim",
+          "irPath": "C:\\Users\\User\\Desktop\\AI Ladder Project\\ir\\test-project001\\FB_HopperBlockageStim.ir",
+          "xmlPath": "C:\\temp\\lad-drift-after\\FB_HopperBlockageStim.xml",
+          "status": "Match",
+          "detail": null,
+          "fromTia": true
+        },
+        {
+          "name": "FB_HxBoolEcho",
+          "irPath": "C:\\Users\\User\\Desktop\\AI Ladder Project\\ir\\test-project001\\FB_HxBoolEcho.ir",
+          "xmlPath": "C:\\temp\\lad-drift-after\\FB_HxBoolEcho.xml",
+          "status": "Match",
+          "detail": null,
+          "fromTia": true
+        },
+        {
+          "name": "FB_HxDwellTimer",
+          "irPath": "C:\\Users\\User\\Desktop\\AI Ladder Project\\ir\\test-project001\\FB_HxDwellTimer.ir",
+          "xmlPath": "C:\\temp\\lad-drift-after\\FB_HxDwellTimer.xml",
+          "status": "Match",
+          "detail": null,
+          "fromTia": true
+        },
+        {
+          "name": "FB_HxIntStep",
+          "irPath": "C:\\Users\\User\\Desktop\\AI Ladder Project\\ir\\test-project001\\FB_HxIntStep.ir",
+          "xmlPath": "C:\\temp\\lad-drift-after\\FB_HxIntStep.xml",
+          "status": "Match",
+          "detail": null,
+          "fromTia": true
+        },
+        {
+          "name": "FB_HxSealLatch",
+          "irPath": "C:\\Users\\User\\Desktop\\AI Ladder Project\\ir\\test-project001\\FB_HxSealLatch.ir",
+          "xmlPath": "C:\\temp\\lad-drift-after\\FB_HxSealLatch.xml",
+          "status": "Match",
+          "detail": null,
+          "fromTia": true
+        },
+        {
+          "name": "FB_MotorFwdRevSystem",
+          "irPath": "C:\\Users\\User\\Desktop\\AI Ladder Project\\ir\\test-project001\\FB_MotorFwdRevSystem.ir",
+          "xmlPath": "C:\\temp\\lad-drift-after\\FB_MotorFwdRevSystem.xml",
+          "status": "Match",
+          "detail": null,
+          "fromTia": true
+        },
+        {
+          "name": "FB_PusherControl",
+          "irPath": "C:\\Users\\User\\Desktop\\AI Ladder Project\\ir\\test-project001\\FB_PusherControl.ir",
+          "xmlPath": "C:\\temp\\lad-drift-after\\FB_PusherControl.xml",
+          "status": "Match",
+          "detail": null,
+          "fromTia": true
+        },
+        {
+          "name": "FB_ShredderSequencer",
+          "irPath": "C:\\Users\\User\\Desktop\\AI Ladder Project\\ir\\test-project001\\FB_ShredderSequencer.ir",
+          "xmlPath": "C:\\temp\\lad-drift-after\\FB_ShredderSequencer.xml",
+          "status": "Match",
+          "detail": null,
+          "fromTia": true
+        },
+        {
+          "name": "FC_AlarmsMain",
+          "irPath": "C:\\Users\\User\\Desktop\\AI Ladder Project\\ir\\test-project001\\FC_AlarmsMain.ir",
+          "xmlPath": "C:\\temp\\lad-drift-after\\FC_AlarmsMain.xml",
+          "status": "Match",
+          "detail": null,
+          "fromTia": true
+        },
+        {
+          "name": "FC_ControlMain",
+          "irPath": "C:\\Users\\User\\Desktop\\AI Ladder Project\\ir\\test-project001\\FC_ControlMain.ir",
+          "xmlPath": "C:\\temp\\lad-drift-after\\FC_ControlMain.xml",
+          "status": "Match",
+          "detail": null,
+          "fromTia": true
+        },
+        {
+          "name": "FC_HarnessCopyLayer",
+          "irPath": "C:\\Users\\User\\Desktop\\AI Ladder Project\\ir\\test-project001\\FC_HarnessCopyLayer.ir",
+          "xmlPath": "C:\\temp\\lad-drift-after\\FC_HarnessCopyLayer.xml",
+          "status": "Drifted",
+          "detail": "semantic divergence between .ir and committed export",
+          "fromTia": true
+        },
+        {
+          "name": "FC_Inputs",
+          "irPath": "C:\\Users\\User\\Desktop\\AI Ladder Project\\ir\\test-project001\\FC_Inputs.ir",
+          "xmlPath": "C:\\temp\\lad-drift-after\\FC_Inputs.xml",
+          "status": "Match",
+          "detail": null,
+          "fromTia": true
+        },
+        {
+          "name": "FC_Outputs",
+          "irPath": "C:\\Users\\User\\Desktop\\AI Ladder Project\\ir\\test-project001\\FC_Outputs.ir",
+          "xmlPath": "C:\\temp\\lad-drift-after\\FC_Outputs.xml",
+          "status": "Match",
+          "detail": null,
+          "fromTia": true
+        },
+        {
+          "name": "HarnessMirror",
+          "irPath": "C:\\Users\\User\\Desktop\\AI Ladder Project\\ir\\test-project001\\HarnessMirror.ir",
+          "xmlPath": null,
+          "status": "Skipped",
+          "detail": "no paired export",
+          "fromTia": null
+        },
+        {
+          "name": "Main",
+          "irPath": "C:\\Users\\User\\Desktop\\AI Ladder Project\\ir\\test-project001\\Main.ir",
+          "xmlPath": "C:\\temp\\lad-drift-after\\Main.xml",
+          "status": "Match",
+          "detail": null,
+          "fromTia": true
+        },
+        {
+          "name": "MotorFwdRevIOSet",
+          "irPath": "C:\\Users\\User\\Desktop\\AI Ladder Project\\ir\\test-project001\\MotorFwdRevIOSet.ir",
+          "xmlPath": "C:\\temp\\lad-drift-after\\MotorFwdRevIOSet.xml",
+          "status": "Match",
+          "detail": null,
+          "fromTia": true
+        },
+        {
+          "name": "MotorIOSet",
+          "irPath": null,
+          "xmlPath": "C:\\temp\\lad-drift-after\\MotorIOSet.xml",
+          "status": "ExportOnly",
+          "detail": "no paired .ir in project dir",
+          "fromTia": null
+        },
+        {
+          "name": "MotorVSDIOSet",
+          "irPath": null,
+          "xmlPath": "C:\\temp\\lad-drift-after\\MotorVSDIOSet.xml",
+          "status": "ExportOnly",
+          "detail": "no paired .ir in project dir",
+          "fromTia": null
+        },
+        {
+          "name": "OB100",
+          "irPath": "C:\\Users\\User\\Desktop\\AI Ladder Project\\ir\\test-project001\\OB100.ir",
+          "xmlPath": "C:\\temp\\lad-drift-after\\OB100.xml",
+          "status": "Match",
+          "detail": null,
+          "fromTia": true
+        },
+        {
+          "name": "UDT_HopperBlockageIO",
+          "irPath": "C:\\Users\\User\\Desktop\\AI Ladder Project\\ir\\test-project001\\UDT_HopperBlockageIO.ir",
+          "xmlPath": "C:\\temp\\lad-drift-after\\UDT_HopperBlockageIO.xml",
+          "status": "Match",
+          "detail": null,
+          "fromTia": true
+        },
+        {
+          "name": "UDT_HopperBlockageStim",
+          "irPath": "C:\\Users\\User\\Desktop\\AI Ladder Project\\ir\\test-project001\\UDT_HopperBlockageStim.ir",
+          "xmlPath": "C:\\temp\\lad-drift-after\\UDT_HopperBlockageStim.xml",
+          "status": "Match",
+          "detail": null,
+          "fromTia": true
+        },
+        {
+          "name": "UDT_PusherIO",
+          "irPath": "C:\\Users\\User\\Desktop\\AI Ladder Project\\ir\\test-project001\\UDT_PusherIO.ir",
+          "xmlPath": "C:\\temp\\lad-drift-after\\UDT_PusherIO.xml",
+          "status": "Match",
+          "detail": null,
+          "fromTia": true
+        },
+        {
+          "name": "UDT_ShredderSequencerIO",
+          "irPath": "C:\\Users\\User\\Desktop\\AI Ladder Project\\ir\\test-project001\\UDT_ShredderSequencerIO.ir",
+          "xmlPath": "C:\\temp\\lad-drift-after\\UDT_ShredderSequencerIO.xml",
+          "status": "Match",
+          "detail": null,
+          "fromTia": true
+        },
+        {
+          "name": "iDB_Comms_ModbusServer",
+          "irPath": "C:\\Users\\User\\Desktop\\AI Ladder Project\\ir\\test-project001\\iDB_Comms_ModbusServer.ir",
+          "xmlPath": "C:\\temp\\lad-drift-after\\iDB_Comms_ModbusServer.xml",
+          "status": "Match",
+          "detail": null,
+          "fromTia": true
+        },
+        {
+          "name": "iDB_HarnessViolationLatch",
+          "irPath": "C:\\Users\\User\\Desktop\\AI Ladder Project\\ir\\test-project001\\iDB_HarnessViolationLatch.ir",
+          "xmlPath": "C:\\temp\\lad-drift-after\\iDB_HarnessViolationLatch.xml",
+          "status": "Match",
+          "detail": null,
+          "fromTia": true
+        },
+        {
+          "name": "iDB_HopperBlockageMonitor",
+          "irPath": "C:\\Users\\User\\Desktop\\AI Ladder Project\\ir\\test-project001\\iDB_HopperBlockageMonitor.ir",
+          "xmlPath": "C:\\temp\\lad-drift-after\\iDB_HopperBlockageMonitor.xml",
+          "status": "Match",
+          "detail": null,
+          "fromTia": true
+        },
+        {
+          "name": "iDB_HopperBlockageStim",
+          "irPath": "C:\\Users\\User\\Desktop\\AI Ladder Project\\ir\\test-project001\\iDB_HopperBlockageStim.ir",
+          "xmlPath": "C:\\temp\\lad-drift-after\\iDB_HopperBlockageStim.xml",
+          "status": "Drifted",
+          "detail": "semantic divergence between .ir and committed export",
+          "fromTia": true
+        },
+        {
+          "name": "iDB_HxBoolEcho",
+          "irPath": "C:\\Users\\User\\Desktop\\AI Ladder Project\\ir\\test-project001\\iDB_HxBoolEcho.ir",
+          "xmlPath": "C:\\temp\\lad-drift-after\\iDB_HxBoolEcho.xml",
+          "status": "Match",
+          "detail": null,
+          "fromTia": true
+        },
+        {
+          "name": "iDB_HxDwellTimer",
+          "irPath": "C:\\Users\\User\\Desktop\\AI Ladder Project\\ir\\test-project001\\iDB_HxDwellTimer.ir",
+          "xmlPath": "C:\\temp\\lad-drift-after\\iDB_HxDwellTimer.xml",
+          "status": "Match",
+          "detail": null,
+          "fromTia": true
+        },
+        {
+          "name": "iDB_HxIntStep",
+          "irPath": "C:\\Users\\User\\Desktop\\AI Ladder Project\\ir\\test-project001\\iDB_HxIntStep.ir",
+          "xmlPath": "C:\\temp\\lad-drift-after\\iDB_HxIntStep.xml",
+          "status": "Match",
+          "detail": null,
+          "fromTia": true
+        },
+        {
+          "name": "iDB_HxSealLatch",
+          "irPath": "C:\\Users\\User\\Desktop\\AI Ladder Project\\ir\\test-project001\\iDB_HxSealLatch.ir",
+          "xmlPath": "C:\\temp\\lad-drift-after\\iDB_HxSealLatch.xml",
+          "status": "Match",
+          "detail": null,
+          "fromTia": true
+        },
+        {
+          "name": "iDB_MotorFwdRevSystem_Shredder",
+          "irPath": "C:\\Users\\User\\Desktop\\AI Ladder Project\\ir\\test-project001\\iDB_MotorFwdRevSystem_Shredder.ir",
+          "xmlPath": "C:\\temp\\lad-drift-after\\iDB_MotorFwdRevSystem_Shredder.xml",
+          "status": "Match",
+          "detail": null,
+          "fromTia": true
+        },
+        {
+          "name": "iDB_PusherControl",
+          "irPath": "C:\\Users\\User\\Desktop\\AI Ladder Project\\ir\\test-project001\\iDB_PusherControl.ir",
+          "xmlPath": "C:\\temp\\lad-drift-after\\iDB_PusherControl.xml",
+          "status": "Match",
+          "detail": null,
+          "fromTia": true
+        },
+        {
+          "name": "iDB_ShredderSequencer",
+          "irPath": "C:\\Users\\User\\Desktop\\AI Ladder Project\\ir\\test-project001\\iDB_ShredderSequencer.ir",
+          "xmlPath": "C:\\temp\\lad-drift-after\\iDB_ShredderSequencer.xml",
+          "status": "Match",
+          "detail": null,
+          "fromTia": true
+        }
+      ],
+      "comparedCount": 41,
+      "examinedNothing": false,
+      "tiaExportCount": 41,
+      "nonTiaExportCount": 0,
+      "comparedNothingFromTia": false,
+      "projectDir": "C:\\Users\\User\\Desktop\\AI Ladder Project\\ir\\test-project001",
+      "exportsDir": "C:\\temp\\lad-drift-after",
+      "hasDrift": true
+    }
+  },
+  "findings": {
+    "orderingTrap": "*** READ THIS BEFORE TOUCHING FC_HarnessCopyLayer. *** Mirror registers 35 and 36 (%MW1070 / %MW1072) carry HX_HBA_L008 and HX_HBA_L009, the phase-armed observation latches declared at %M1071.0 and %M1073.0 in ir/test-project001/HarnessMirror.ir. Their ONLY writer is FC_HarnessCopyLayer NETWORK 8, 'Result latches - slot HBA'. The live project does not have that network: 7 compile units against the .ir's 8, and grep HX_HBA_L008 over the live export returns 0. So before this run nothing wrote 35-36 and nothing served them - DORMANT, not a live defect. After this run the server serves 37 while the copy layer still writes only 0-34, so 35-36 go on the wire as zeros: same dormancy, one half closer to correct, no regression. THE DEFECT GOES LIVE IF FC_HarnessCopyLayer IS IMPORTED WITHOUT THIS BLOCK - the latches would then be written and silently not served, with no import error, no compile error and no drift finding, which is precisely the silent failure the 2026-08-14 widening existed to prevent. Import this block first, or both together. That block is explicitly out of this run's scope and was not touched.",
+    "notDriftButAnOwedImport": "The live block was a faithful copy of commit 92fa300, not an edit somebody made in TIA. Traced commit by commit: 763cdf6 operand 8 / comment 8 (consistent - the mirror really was 8 registers); 319ad5e operand 31, comment still 8; 92fa300 operand 35, comment still 8; 65d3d5f operand 37, comment repaired. The live block's network comment read '8 words' because it was left behind through TWO widenings, and the live BLOCK comment carried a third and fourth figure - 'exposing 35 holding registers' and 'The span is 31 rather than a round number'. Four numbers, not three. All four now read 37 in TIA.",
+    "restorePoint": "GenProject1/ is gitignored (.gitignore:57), so git is not a restore point for it and the only other copy on disk was 'AI Ladder Project BACKUP 2026-08-07'. Pre-import copy taken to C:\\Users\\User\\Desktop\\GenProject1-restore-2026-08-23-pre-modbus-import and VERIFIED rather than trusted: 39 of 39 files, every SHA-256 identical to source (diff of the two sorted hash manifests, exit 0). GenProject1.ap20 = 7690b94d632da59bbc37b16768a2be9b117b54767cc7b18f2afdc67fba9eb257.",
+    "reExportConfirmation": "Confirmed from TIA's OWN re-export, not from an exit code. C:\\temp\\confirm\\FB_Comms_ModbusServer.xml: ConstantValue = 'P#M1000.0 WORD 37'; network comment 'covers 37 words from M1000.0'; block comment 'exposing 37 holding registers'; grep '8 words' returns 0 matches; grep 'span is 31' returns 0 matches. Round-tripped through converter to-ir: readable call line 31 reads WORD 37 and sidecar line 39 reads 'constant P#M1000.0 WORD 37 = 22 Any'.",
+    "memoryLayout": "openness-cli block-layout reads LAYOUT: Optimized after the import, matching the .ir's MEMORYLAYOUT Optimized and the pre-import live value. No --set Standard re-assertion was made or needed: this corpus's harness surface is the %M mirror, not a DB read over classic S7 (telemetry.log 2026-08-14T02:35 records s7Objects [] as the earned claim). Read, not assumed.",
+    "goldenHarness": "dotnet test tests/golden/GoldenHarness.sln -> Failed: 0, Passed: 194, Skipped: 0, Total: 194. Unmoved, as expected: the run changes the TIA project, and golden reads simatic-ml/. Checked rather than assumed that this is not a forbidden rebuild - GoldenHarness.sln contains exactly one project, GoldenHarness.Tests, with no openness-cli reference anywhere in the solution."
+  }
+}

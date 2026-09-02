@@ -1,0 +1,645 @@
+{
+  "schema": "ladder-ai/agent-evidence/1",
+  "task": "Widen the Modbus served window on test-project001 from P#M1000.0 WORD 37 to WORD 1024 so the mirror can carry more than one conformance slot; regenerate the copy layer to the resulting build stamp, import, compile-gate, redeploy the rig, confirm width and stamp on the wire, and re-derive the submission. COMPLETE. NO WAVE WAS RUN (withheld by dispatch).",
+  "kind": "modify",
+  "skill": "gen-block-modify-purpose",
+  "_skillRouting": "Entered via gen-block-modify-purpose because the served width IS this block's purpose and the change deliberately retires the block comment's 'the exposed span is exactly the mirror' invariant. MECHANICALLY FIX-SHAPED and needed no --allow-header: no interface member changed, no network added/removed/moved, no rename, no title change. The header delta is COMMENT-ONLY, which docs/notes/modification-choreography.md rules does not gate - and its worked precedent for that ruling is this very block. NO GATE-1 ARCHITECTURE ITEM EXISTS; the dispatch is the authorization, noted rather than silently passed. The device half (restore point, import, compile gate, redeploy, probes, re-derive) is NOT covered by any skill and was done MANUALLY to the same contract.",
+  "files": [
+    {
+      "path": "ir/test-project001/FB_Comms_ModbusServer.ir",
+      "ir_hash": "3D986F70F6274A0962283530205A5A4208FDBC243EC43A06E4A2A50E829AB891",
+      "note": "The widened block. Four lines moved: readable MB_SERVER operand (line 31), sidecar constant (line 39), NETWORK 1 comment, block comment. Both width-bearing lines move together, which is what served-area reconciles. THIS FILE IS WHAT WAS IMPORTED AND DEPLOYED."
+    },
+    {
+      "path": "gen/test-project001/hopper-blockage-alarm/harness-binding.json",
+      "note": "declaredRegisters 37 -> 1024 plus its _declaredRegistersNote. NO ir_hash: not an IR object, so converter ir-hash does not key it. LISTED RATHER THAN OMITTED per the lad-coder contract. Covered by NO CLAIM - no claim kind reserves a gen/ artifact, the registry gap row 8 recorded for tag tables. Declared, not laundered."
+    },
+    {
+      "path": "C:/temp/widen/stage/test-project001/FC_HarnessCopyLayer.ir",
+      "ir_hash": "9BEC1B4E1F826F9A0279476222FF60DD5A26E14707CFB7E31AF31561B6A7A4C1",
+      "note": "THE REGENERATED COPY LAYER THAT WAS IMPORTED AND DEPLOYED, carrying build stamp 16#79B22CE9. Listed with an absolute STAGED path, not a repo path, because it is deliberately not written back into ir/ - its only delta from the committed file is the per-deployment stamp constant, which row 9 established is not repo state. It is listed so the block-edit claim on FC_HarnessCopyLayer joins to the work it actually reserved; omitting it left the reservation and the work disagreeing, which the checker caught."
+    }
+  ],
+  "_notCommitted": "FC_HarnessCopyLayer was regenerated and DEPLOYED but deliberately NOT written back into ir/. Its only delta is the per-deployment build-stamp constant, which row 9 established is not repo state. The committed ir/test-project001/FC_HarnessCopyLayer.ir still carries 16#B8BCB7CB and is intentionally stale with respect to the device. Staged copy: C:/temp/widen/stage/test-project001/.",
+  "claims": [
+    {
+      "kind": "block-edit",
+      "value": "FB_Comms_ModbusServer",
+      "agent": "ee055079-868d-48bc-aa0a-7516e8688d29/lad-coder-widen",
+      "purpose": "Widen the Modbus served window from 37 to 1024 registers (MB_HOLD_REG area pointer + sidecar + block/network comments)",
+      "result": "Acquired",
+      "exit": 0,
+      "store": "C:\\ProgramData\\Ladder-AI\\claims\\test-project001",
+      "_held": "STILL HELD at hand-back."
+    },
+    {
+      "kind": "block-edit",
+      "value": "FC_HarnessCopyLayer",
+      "agent": "ee055079-868d-48bc-aa0a-7516e8688d29/lad-coder-widen",
+      "purpose": "Regenerate the copy layer so its build-stamp constant matches the widened 1024-register map hash (16#0444D18E -> 16#0C0B762C); import and redeploy",
+      "result": "Acquired",
+      "exit": 0,
+      "store": "C:\\ProgramData\\Ladder-AI\\claims\\test-project001",
+      "_held": "STILL HELD at hand-back.",
+      "_note": "REFUSED on first attempt (HeldByAnother, lad-coder-rigprep). The coordinator verified row 9 and released that single claim by kind+value; re-acquired here. The purpose text names 16#0C0B762C, the 3-object stamp; the coordinator subsequently ruled the comms block into the stamp basis and the DEPLOYED stamp is 16#79B22CE9. The claim text is left as written at acquisition rather than back-edited."
+    }
+  ],
+  "checks": [
+    {
+      "tool": "converter claim --kind block-edit --value FB_Comms_ModbusServer",
+      "exit": 0,
+      "json": {
+        "result": "Acquired",
+        "store": "C:\\ProgramData\\Ladder-AI\\claims\\test-project001"
+      }
+    },
+    {
+      "tool": "converter claim --kind block-edit --value FC_HarnessCopyLayer (first attempt)",
+      "exit": 1,
+      "transient": "REFUSED, HeldByAnother - lad-coder-rigprep held it from row 9, which handed back holding. Superseded by the successful re-acquisition below after the coordinator verified row 9 and released that one claim by kind+value (not --all). Recorded because it is why this task ran in two parts.",
+      "json": {
+        "result": "HeldByAnother",
+        "holder": "ee055079-868d-48bc-aa0a-7516e8688d29/lad-coder-rigprep"
+      }
+    },
+    {
+      "tool": "converter claim --kind block-edit --value FC_HarnessCopyLayer (re-acquired)",
+      "exit": 0,
+      "json": {
+        "result": "Acquired",
+        "store": "C:\\ProgramData\\Ladder-AI\\claims\\test-project001"
+      }
+    },
+    {
+      "tool": "openness-cli export-all --tagtables (RESTORE POINT, hard rule 5)",
+      "exit": 0,
+      "json": {
+        "outDir": "C:\\temp\\widen\\restore-point-widen",
+        "exported": 52,
+        "refused": 0,
+        "failed": 0,
+        "complete": true,
+        "tagTablesIncluded": true,
+        "safeForDriftCheckComplete": true,
+        "filesOnDisk": 52,
+        "secondLeg": "FULL COPY of GenProject1/ to C:/temp/widen/restore-point-widen-project, verified with `diff -r` -> EXIT 0, ZERO LINES of output.",
+        "_scope": "PROJECT-LEVEL baseline. Per docs/notes/2026-08-21-restore-point-deviation.md this is NOT a #4(b) restore point: it captures blocks and the project, not the controller's retentive data or DB actual values. The download reset those, as it always does. The owner deviation of 2026-08-21 applies unchanged."
+      }
+    },
+    {
+      "tool": "converter preflight",
+      "exit": 0,
+      "json": {
+        "files": [
+          {
+            "filePath": "ir/test-project001/FB_Comms_ModbusServer.ir",
+            "name": "FB_Comms_ModbusServer",
+            "findings": [
+              {
+                "check": "review:harness-scope",
+                "description": "Harness: FB 9000 is inside the reserved harness band 9000-9999 (declared docs/notes/test-environment-build-plan.md, 2026-08-13). 0 C-001/C-201 finding(s) reported without gating.",
+                "gates": false
+              }
+            ]
+          }
+        ],
+        "indexWarnings": [],
+        "corpus": {
+          "projectDir": "ir/test-project001",
+          "projectFileCount": 43,
+          "batchFileCount": 1,
+          "projectContributedNothing": false,
+          "blockNameCount": 18,
+          "tagRootNameCount": 145,
+          "typeNameCount": 5,
+          "memberBodyCount": 23,
+          "calleeInterfaceCount": 18,
+          "harnessCorpusFileCount": 43
+        }
+      },
+      "_note": "THE REQUIRED GATE, PASSING, on the block this task edited. Zero gating findings - the one entry is review:harness-scope with gates=false (FB 9000 sits in the declared 9000-9999 harness band), identical to what the same block returned before this edit. The two exit-1 preflight entries below are the STAGED PAIR and its CONTROL: they carry FC_HarnessCopyLayer's pre-existing C-103, are marked transient, and neither is offered as this gate."
+    },
+    {
+      "tool": "converter preflight (staged pair, as imported)",
+      "exit": 1,
+      "transient": "Exit 1 on FC_HarnessCopyLayer's review:C-103 (network 6, SCOIL on HX_HBA_Ran with no matching RCOIL). PROVEN PRE-EXISTING by the control run below, which returns the IDENTICAL three findings on the untouched committed block. Not introduced by this run and not a gate this run failed. FB_Comms_ModbusServer itself is CLEAN (one non-gating harness-scope note).",
+      "json": {
+        "files": [
+          {
+            "filePath": "C:/temp/widen/stage/test-project001/FB_Comms_ModbusServer.ir",
+            "name": "FB_Comms_ModbusServer",
+            "findings": [
+              {
+                "check": "review:harness-scope",
+                "description": "Harness: FB 9000 is inside the reserved harness band 9000-9999 (declared docs/notes/test-environment-build-plan.md, 2026-08-13). 0 C-001/C-201 finding(s) reported without gating.",
+                "gates": false
+              }
+            ]
+          },
+          {
+            "filePath": "C:/temp/widen/stage/test-project001/FC_HarnessCopyLayer.ir",
+            "name": "FC_HarnessCopyLayer",
+            "findings": [
+              {
+                "check": "review:C-103",
+                "description": "network 6: [Warn] Set coil (SCOIL) on 'HX_HBA_Ran' has no matching Reset (RCOIL) in this block; if this is the deliberate external-set/internal-reset reusable-FB pattern, that is the documented C-103 exception — confirm the intent comment.",
+                "gates": true
+              },
+              {
+                "check": "review:harness-scope",
+                "description": "Harness: FC 9001 is inside the reserved harness band 9000-9999 (declared docs/notes/test-environment-build-plan.md, 2026-08-13). 1 C-001/C-201 finding(s) reported without gating.",
+                "gates": false
+              },
+              {
+                "check": "review:harness-scope",
+                "description": "C-201 [Error] 'FC_HarnessCopyLayer' has no header comment.",
+                "gates": false
+              }
+            ]
+          }
+        ],
+        "indexWarnings": [],
+        "corpus": {
+          "projectDir": "ir/test-project001",
+          "projectFileCount": 43,
+          "batchFileCount": 2,
+          "projectContributedNothing": false,
+          "blockNameCount": 18,
+          "tagRootNameCount": 145,
+          "typeNameCount": 5,
+          "memberBodyCount": 23,
+          "calleeInterfaceCount": 18,
+          "harnessCorpusFileCount": 45
+        }
+      }
+    },
+    {
+      "tool": "converter preflight (CONTROL: committed untouched FC_HarnessCopyLayer)",
+      "exit": 1,
+      "transient": "The control that establishes the above as pre-existing. Same three findings, same gating C-103. A finding identical on the control is not one this run caused.",
+      "json": {
+        "files": [
+          {
+            "filePath": "ir/test-project001/FC_HarnessCopyLayer.ir",
+            "name": "FC_HarnessCopyLayer",
+            "findings": [
+              {
+                "check": "review:C-103",
+                "description": "network 6: [Warn] Set coil (SCOIL) on 'HX_HBA_Ran' has no matching Reset (RCOIL) in this block; if this is the deliberate external-set/internal-reset reusable-FB pattern, that is the documented C-103 exception — confirm the intent comment.",
+                "gates": true
+              },
+              {
+                "check": "review:harness-scope",
+                "description": "Harness: FC 9001 is inside the reserved harness band 9000-9999 (declared docs/notes/test-environment-build-plan.md, 2026-08-13). 1 C-001/C-201 finding(s) reported without gating.",
+                "gates": false
+              },
+              {
+                "check": "review:harness-scope",
+                "description": "C-201 [Error] 'FC_HarnessCopyLayer' has no header comment.",
+                "gates": false
+              }
+            ]
+          }
+        ],
+        "indexWarnings": [],
+        "corpus": {
+          "projectDir": "ir/test-project001",
+          "projectFileCount": 43,
+          "batchFileCount": 1,
+          "projectContributedNothing": false,
+          "blockNameCount": 18,
+          "tagRootNameCount": 145,
+          "typeNameCount": 5,
+          "memberBodyCount": 23,
+          "calleeInterfaceCount": 18,
+          "harnessCorpusFileCount": 43
+        }
+      }
+    },
+    {
+      "tool": "converter diff --only 1 (invariance, comms block)",
+      "exit": 0,
+      "json": {
+        "blockName": "FB_Comms_ModbusServer",
+        "blockNameMismatch": false,
+        "otherBlockName": "FB_Comms_ModbusServer",
+        "hasAnyChange": true,
+        "header": {
+          "changed": true,
+          "titleChanged": false,
+          "titleBefore": "Modbus TCP Server",
+          "titleAfter": "Modbus TCP Server",
+          "commentChanged": true,
+          "commentBefore": "Serves this PLC's harness mirror to a Modbus TCP client. The server listens passively on TCP port 503 and accepts a connection from any client address, exposing 37 holding registers starting at MW1000 - the mirror the harness copy layer maintains, whose registers 0 and 1 are the build stamp, whose next two are the free-running scan counter, and whose tail carries the block-under-test observations and the harness violation latches. The span is the width the copy layer's register map needs rather than a round number, and it is widened whenever that map grows; counting signals does not give it, because a duration is 32 bits and so takes two registers. The exposed span is exactly the mirror: a register past the end returns an exception rather than a zero, so a client reading beyond what the copy layer maintains is told so instead of being handed a value that looks like data. Comms block - it carries no equipment logic and writes no plant tag. The holding-register area is given as an area pointer over marker memory, which is the form a register area in %M takes; it is bit memory rather than a data block because a data block can carry an optimized memory layout, which this server cannot read. DISCONNECT is taken from the server's own disconnect bit, which nothing in this program writes, so the connection stays up once made. Nothing here is retentive: the connection settings come back from their start values on every warm restart.",
+          "commentAfter": "Serves this PLC's harness mirror to a Modbus TCP client. The server listens passively on TCP port 503 and accepts a connection from any client address, exposing 1024 holding registers starting at MW1000 - M1000 to M3047, the window the harness copy layer's mirror sits in, whose registers 0 and 1 are the build stamp, whose next two are the free-running scan counter, and whose tail carries the block-under-test observations and the harness violation latches. The span is a fixed window sized to carry several test slots at once rather than an exact fit to today's register map: batching slots into one wave is the only way to raise throughput here, because this server accepts one connection at a time and concurrent waves are therefore impossible. It is deliberately wider than the mirror the copy layer currently maintains, and that is a change from the earlier exact fit, made with its cost known: a register past the maintained mirror now reads as zero instead of returning an exception, so an out-of-range read no longer announces itself on the wire, and a disagreement between a register map and this window has to be caught where the map is derived instead of by the server at run time. Comms block - it carries no equipment logic and writes no plant tag. The holding-register area is given as an area pointer over marker memory, which is the form a register area in %M takes; it is bit memory rather than a data block because a data block can carry an optimized memory layout, which this server cannot read. DISCONNECT is taken from the server's own disconnect bit, which nothing in this program writes, so the connection stays up once made. Nothing here is retentive: the connection settings come back from their start values on every warm restart.",
+          "interfaceChanged": false,
+          "interfaceCommentChanged": false
+        },
+        "summary": {
+          "total": 1,
+          "changed": 1,
+          "added": 0,
+          "removed": 0,
+          "moved": 0,
+          "identical": 0
+        },
+        "networks": [
+          {
+            "number": 1,
+            "kind": "Changed",
+            "title": "Serve The Harness Mirror",
+            "beforeText": "NETWORK 1 \"Serve The Harness Mirror\"\n  COMMENT \"Runs the Modbus TCP server on every scan. The holding-register area covers 37 words from M1000.0, which is the whole of the harness mirror. A zero remote address with no active connection establishment makes the server passive: it listens on the local port and accepts whichever client connects. NDR, DR and ERROR are left unconnected - what reads this server's behaviour reads the mirror registers. STATUS is written back into the instance so the last connection status code can be read there.\"\n  MB_SERVER(MbServer, EN := TRUE, DISCONNECT := MbServer.DISCONNECT, MB_HOLD_REG := P#M1000.0 WORD 37, CONNECT := Comms, NDR => OPEN, DR => OPEN, ERROR => OPEN, STATUS => MbServer.STATUS)\n",
+            "afterText": "NETWORK 1 \"Serve The Harness Mirror\"\n  COMMENT \"Runs the Modbus TCP server on every scan. The holding-register area covers 1024 words from M1000.0 - M1000 to M3047 - which is the window the harness mirror sits in rather than the mirror's own width: the copy layer maintains only the leading part of it, and the rest reads as zero. A zero remote address with no active connection establishment makes the server passive: it listens on the local port and accepts whichever client connects. NDR, DR and ERROR are left unconnected - what reads this server's behaviour reads the mirror registers. STATUS is written back into the instance so the last connection status code can be read there.\"\n  MB_SERVER(MbServer, EN := TRUE, DISCONNECT := MbServer.DISCONNECT, MB_HOLD_REG := P#M1000.0 WORD 1024, CONNECT := Comms, NDR => OPEN, DR => OPEN, ERROR => OPEN, STATUS => MbServer.STATUS)\n",
+            "movedFrom": null
+          }
+        ],
+        "allowedNetworks": [
+          1
+        ],
+        "invarianceViolations": [],
+        "headerChangeAllowed": false,
+        "hasUnclaimedHeaderChange": false,
+        "hasNonGatingCommentChange": true,
+        "declaredInsertAt": null,
+        "movesAreDeclared": false,
+        "unchangedRemainder": 0,
+        "hasInvarianceViolation": false
+      },
+      "_note": "Exit 0, and READ THE DENOMINATOR: 'UNCHANGED REMAINDER: 0 network(s) proven identical outside --only - NOTHING WAS PROVEN.' This block has ONE network and it is the changed one, so the invariance claim has an empty remainder and carries no information. Quoted as the required gate, NOT as proof. The invariance evidence that DOES carry information is the post-import round trip below. Also 'HEADER COMMENT CHANGED (does not gate)' - block comment only; --allow-header NOT passed and not needed."
+    },
+    {
+      "tool": "converter served-area",
+      "exit": 0,
+      "json": {
+        "derived": true,
+        "area": "M",
+        "baseByte": 1000,
+        "registers": 1024,
+        "block": "FB_Comms_ModbusServer",
+        "file": "ir/test-project001\\FB_Comms_ModbusServer.ir",
+        "readableLine": 31,
+        "sidecarLine": 39,
+        "readableText": "P#M1000.0 WORD 1024",
+        "sidecarText": "P#M1000.0 WORD 1024",
+        "denominator": "served area: base 1000, 1024 register(s), derived from ir/test-project001\\FB_Comms_ModbusServer.ir:31 + sidecar ir/test-project001\\FB_Comms_ModbusServer.ir:39",
+        "filesScanned": 43,
+        "blocksScanned": 18,
+        "cannotSee": "WHAT THIS CANNOT SEE: whether the block it read is the block on the controller. It reads the program corpus, never the CPU — a corpus stale with respect to the device derives a confident, agreed, WRONG number and is indistinguishable from a fresh one. This says only that a binding cannot disagree with the program that was staged."
+      },
+      "_note": "derived=true at 1024 with readable (line 31) and sidecar (line 39) AGREEING. Its own cannotSee caveat applies - corpus, not CPU. The CPU half was closed separately by harness-mirror-read below, which measured 1024 on the wire."
+    },
+    {
+      "tool": "converter neighbours --base 1000 --registers 1024",
+      "exit": 0,
+      "json": {
+        "verb": "neighbours",
+        "derived": true,
+        "area": {
+          "baseByte": 1000,
+          "bytes": 2048,
+          "registers": 1024,
+          "topByteExclusive": 3048
+        },
+        "scanned": {
+          "files": 43,
+          "tagTables": 2,
+          "blocks": 18,
+          "otherObjects": 23,
+          "unparseable": 0
+        },
+        "excluded": {
+          "belowBase": 3,
+          "atOrAboveTop": 0,
+          "nonMarkerPointers": 0,
+          "areaDeclarations": 1,
+          "boundedByAddressAlone": 0
+        },
+        "neighbourCount": 26,
+        "containers": [
+          "HarnessMirror"
+        ],
+        "highestOccupiedEndByteExclusive": 1074,
+        "_note": "26 neighbours, ALL HarnessMirror tags. areaDeclarations:1 is the comms block's own pointer, excluded because it declares exactly this window. excluded.belowBase:3 = %M0.7, %M1.0, %M1.2 - CPU system/clock memory in bytes 0-1, not a collision. atOrAboveTop:0. Highest occupied byte 1073, so registers 37..1023 (bytes 1074..3047) are unoccupied headroom."
+      }
+    },
+    {
+      "tool": "harness-run --generate-only (STAMP BASIS MEASUREMENT, three runs, no device, no import)",
+      "exit": 4,
+      "transient": "Exit 4 = IR produced, submission NotAdmissible on gate 0c (the submission's map derivation predated this task's binding change). Expected, and closed by the post-redeploy re-derive below, whose submission gate passes 31/31. Context, not a required gate.",
+      "json": {
+        "method": "Identical submission and binding; only declaredRegisters and the --program set vary.",
+        "run1_control_37_3obj": {
+          "mapHash": "1aab384c...",
+          "buildStamp": "16#0444D18E",
+          "_validates": "Reproduces row 9's DEPLOYED stamp, map hash and width EXACTLY. This is what makes the other two runs' numbers trustworthy rather than merely produced."
+        },
+        "run2_widened_1024_3obj": {
+          "mapHash": "a9566946...",
+          "buildStamp": "16#0C0B762C"
+        },
+        "run3_widened_1024_4obj": {
+          "mapHash": "a9566946...",
+          "buildStamp": "16#79B22CE9",
+          "_note": "THE DEPLOYED ONE. Adds FB_Comms_ModbusServer to the stamp basis per the coordinator's ruling."
+        },
+        "finding": "declaredRegisters is a RegisterMap.MapHash input (Harness.Map/MirrorGeometry.cs states it, contrasting reservations which are not), so widening moves the build stamp. The generated FC_HarnessCopyLayer.ir differs in EXACTLY ONE LINE between every pair - the stamp constant - and HarnessMirror.ir is BYTE-IDENTICAL across all three. Map hash is a function of the binding alone; --program feeds only the stamp.",
+        "consequenceAvoided": "Deploying the comms block WITHOUT regenerating the copy layer would have put the old stamp on the wire while harness-run --verify computes the new one and 'refuses any mismatch' - a rig that looks deployed and fails the wave's first fence, after spending a CPU stop."
+      }
+    },
+    {
+      "tool": "converter served-area --project <each of the 4 program objects> (STAMP BASIS, question c)",
+      "exit": 0,
+      "json": {
+        "FB_HopperBlockageMonitor": "exit 2 NOT DERIVED - no MB_SERVER call",
+        "FB_HopperBlockageStim": "exit 2 NOT DERIVED - no MB_SERVER call",
+        "FB_HarnessViolationLatch": "exit 2 NOT DERIVED - no MB_SERVER call",
+        "FB_Comms_ModbusServer": "exit 0 derived=true registers=1024",
+        "_reading": "ONLY the comms block derives. So a --program list without it can only return exit 2, and exit 2 is never a pass - which is exactly why `harness-batch plan --neighbours derive` refused on this lane. Confirms the coordinator's trace of ServedAreaProbe.Derive by measurement."
+      }
+    },
+    {
+      "tool": "converter to-xml (staged pair -> SimaticML)",
+      "exit": 0,
+      "json": {
+        "converted": 2,
+        "widthReachedTheXml": "P#M1000.0 WORD 1024",
+        "_why": "to-xml rebuilds the operand FROM THE SIDECAR, so this confirms the sidecar edit - not the readable line - is what reaches the PLC."
+      }
+    },
+    {
+      "tool": "openness-cli sanity-check --json (BEFORE baseline, pre-import)",
+      "exit": 0,
+      "json": {
+        "healthy": true,
+        "nothingExamined": false,
+        "totalBlocks": 42,
+        "totalTypes": 8,
+        "inconsistentBlocks": [],
+        "inconsistentTypes": []
+      },
+      "_note": "healthy=true, 42 blocks / 8 types, 0 inconsistent of each. This baseline is what ESTABLISHES the 4 post-import inconsistencies as caused by this import rather than pre-existing - the before-measurement rows 7 and 8 lacked."
+    },
+    {
+      "tool": "openness-cli import-all (both objects)",
+      "exit": 0,
+      "json": {
+        "groupPath": "S7-1200 station_1/PLC1 6ES7 214-1AG40-0XB0",
+        "complete": true,
+        "imported": 2,
+        "failed": 0,
+        "rejected": 0,
+        "passes": 1,
+        "entries": [
+          {
+            "name": "FB_Comms_ModbusServer",
+            "kind": "Block",
+            "path": "C:\\temp\\widen\\xml\\FB_Comms_ModbusServer.xml",
+            "outcome": "Imported",
+            "pass": 1,
+            "detail": null
+          },
+          {
+            "name": "FC_HarnessCopyLayer",
+            "kind": "Block",
+            "path": "C:\\temp\\widen\\xml\\FC_HarnessCopyLayer.xml",
+            "outcome": "Imported",
+            "pass": 1,
+            "detail": null
+          }
+        ]
+      }
+    },
+    {
+      "tool": "openness-cli sanity-check (run 1, post-import)",
+      "exit": 9,
+      "transient": "Ordinary post-import dependent cascade: BLOCKS 42 INCONSISTENT 4 (iDB_Comms_ModbusServer, Main, FB_Comms_ModbusServer, FC_HarnessCopyLayer - the two imported plus their two dependents), TYPES 8 INCONSISTENT 0. Cleared by the per-block compiles below and superseded by run 2. TENTH observation of this clearing; this run carries a before-baseline, so causation is established.",
+      "json": {
+        "BLOCKS": 42,
+        "INCONSISTENT": 4,
+        "TYPES": 8,
+        "TYPES_INCONSISTENT": 0,
+        "inconsistent": [
+          "iDB_Comms_ModbusServer",
+          "Main",
+          "FB_Comms_ModbusServer",
+          "FC_HarnessCopyLayer"
+        ],
+        "deviceCompiles": "Warning (errors=0, warnings=1) scope=station"
+      }
+    },
+    {
+      "tool": "openness-cli compile --block (x4, dependency order)",
+      "exit": 0,
+      "json": {
+        "FB_Comms_ModbusServer": {
+          "state": "Warning",
+          "errors": 0,
+          "warnings": 1,
+          "consistentAfterCompile": true
+        },
+        "iDB_Comms_ModbusServer": {
+          "state": "Warning",
+          "errors": 0,
+          "warnings": 1,
+          "consistentAfterCompile": true
+        },
+        "FC_HarnessCopyLayer": {
+          "state": "Warning",
+          "errors": 0,
+          "warnings": 1,
+          "consistentAfterCompile": true
+        },
+        "Main": {
+          "state": "Warning",
+          "errors": 0,
+          "warnings": 1,
+          "consistentAfterCompile": true
+        },
+        "_keying": "KEYED ON ERRORS, NOT STATE. errors=0 on all four; the single warning is the standing hardware one that makes every compile in this project non-Success."
+      }
+    },
+    {
+      "tool": "openness-cli sanity-check --json (THE COMPILE GATE, hard rule 4, run 2)",
+      "exit": 0,
+      "json": {
+        "healthy": true,
+        "nothingExamined": false,
+        "totalBlocks": 42,
+        "totalTypes": 8,
+        "inconsistentBlocks": [],
+        "inconsistentTypes": []
+      },
+      "_theTwoLines": "BLOCKS: 42  INCONSISTENT: 0  DUPLICATE NUMBERS: 0   /   TYPES: 8  INCONSISTENT: 0",
+      "_overall": "OVERALL: HEALTHY",
+      "_deviceSection": "S7-1200 station_1/PLC1 6ES7 214-1AG40-0XB0: Warning (errors=0, warnings=1) scope=station (hardware + program). DIFFED against the pre-import baseline and run 1 - CHARACTER-IDENTICAL. No new device error is hiding behind the familiar one. Baseline to beat (42/0, 8/0) MET."
+    },
+    {
+      "tool": "converter diff (ROUND TRIP: staged IR vs TIA's own post-import re-export)",
+      "exit": 0,
+      "json": {
+        "FB_Comms_ModbusServer": "1 network(s): 0 changed, 1 identical",
+        "FC_HarnessCopyLayer": "8 network(s): 0 changed, 8 identical",
+        "_why": "THIS is the invariance evidence that carries information for a one-network block, where diff --only's remainder is empty. It proves TIA changed nothing on import."
+      }
+    },
+    {
+      "tool": "LAST FREE CHECKPOINT: re-export and grep the width/stamp BEFORE the download",
+      "exit": 0,
+      "json": {
+        "widthOnTheBlockTiaHolds": "P#M1000.0 WORD 1024",
+        "stampOnTheCopyLayerTiaHolds": "79B22CE9",
+        "_why": "The standing Modbus-server discipline (memory: project_rig_redeploy_preauthorised) says stop at the last free checkpoint and export the Modbus server block back out to confirm its area width, because an error before the download is free and after it costs a download. Both correct, so the download proceeded."
+      }
+    },
+    {
+      "tool": "download-probe --to-folder (NON-DESTRUCTIVE, reaches the download's OWN compile)",
+      "exit": 0,
+      "json": {
+        "state": "Success",
+        "errors": 0,
+        "_why": "A download compiles the program before transferring, and that compile is measurably NOT the same as --block / device / compile-all / sanity-check - it has failed on a project where all four reported clean. Run first because it is free."
+      }
+    },
+    {
+      "tool": "openness-cli block-layout (READ-ONLY, 4 instance DBs)",
+      "exit": 0,
+      "json": {
+        "iDB_Comms_ModbusServer": "Optimized",
+        "iDB_HopperBlockageMonitor": "Optimized",
+        "iDB_HarnessViolationLatch": "Optimized",
+        "iDB_HopperBlockageStim": "Optimized"
+      },
+      "_decision": "MEASURED FIRST, THEN DECIDED. `--set Standard --yes` was instructed and deliberately NOT run. (1) UNCHANGED - identical to row 9's measurement, so the import reverted nothing and there was no revert to repair. (2) The instruction's trigger - 'any block a PC-side harness reads over classic S7' - is met by NOTHING here: the mirror is %M bit memory served over Modbus, and test-environment-contract.md:1630 is explicit that it 'is not a data block at all. Bit memory has no MemoryLayout attribute, so there is nothing to revert.' (3) Neither imported object is a DB - an FC carries no layout at all. (4) I HOLD NO CLAIM on three of these four DBs; --set is a destructive edit and running it outside my reservation is what the registry exists to prevent. (5) --set destroys retained data, and iDB_HarnessViolationLatch's alarm latch deliberately survives a power cycle. `--expect Standard` was also not run: it would exit 15 by asserting an expectation that is wrong here, since Optimized is the correct state. Same call row 9 and the previous three lanes made on the same measurement."
+    },
+    {
+      "tool": "rig-read --marker 1000 --length 16 (BEFORE the redeploy)",
+      "exit": 0,
+      "json": {
+        "cpuState": "Running (8)",
+        "rawBytes": "04 44 D1 8E 00 4D D1 80 00 00 00 01 00 26 00 00",
+        "buildStampOnWire": "16#0444D18E",
+        "scanCounter": 5099904,
+        "_identity": "The device-guard ALLOWED the read. The identity check reports declared=True matched=False: the allowlist declares serial 'S C-U2A1BR3S' but an S7-1200 over classic S7comm reports only its ORDER CODE ('6ES7 214-1AG40-0XB0'), which is model-level, not unit-level. So unit identity was NOT positively confirmed. What DOES tie this device to this project is the stamp: the wire carried 16#0444D18E, exactly what row 9 deployed. Stated, not glossed."
+      }
+    },
+    {
+      "tool": "download-probe --options Software --disruptive (THE REDEPLOY)",
+      "exit": 0,
+      "json": {
+        "transferVerdict": "SoftwareLoaded",
+        "softwareLoaded": true,
+        "transferHeadline": "WAS ANYTHING TRANSFERRED? *** YES — 60 ITEM(S) WERE REPORTED LOADED BY NAME (state=Success). ***",
+        "devicePath": "S7-1200 station_1/PLC1 6ES7 214-1AG40-0XB0",
+        "downloadTarget": "PN/IE / TAP-Windows Adapter V9 #2 / 1 X1 [no configured address]",
+        "verdict": "Download completed: state=Success, errors=0, warnings=0.  WAS ANYTHING TRANSFERRED? *** YES — 60 ITEM(S) WERE REPORTED LOADED BY NAME (state=Success). ***",
+        "options": "Software",
+        "disruptive": true,
+        "policyMode": "Disruptive",
+        "disruptiveAllowances": [
+          "StopModules -> StopAll",
+          "DataBlockReinitialization -> StopPlcAndReinitialize",
+          "OverwriteSystemData -> Overwrite",
+          "StartModules -> StartModule"
+        ],
+        "deniedSelections": [
+          "ResetModule -> DeleteAll",
+          "InitializeMemory -> AcceptAll"
+        ],
+        "exitCode": 0,
+        "loadedObjectCount": 60
+      },
+      "_note": "Pre-authorised (memory: project_rig_redeploy_preauthorised). Stops the CPU and resets all retentive values. Restore point captured and verified beforehand."
+    },
+    {
+      "tool": "rig-read --marker 1000 --length 16 (AFTER the redeploy)",
+      "exit": 0,
+      "json": {
+        "cpuState": "Running (8)",
+        "rawBytes": "79 B2 2C E9 00 00 19 DE 00 00 00 00 00 00 00 00",
+        "buildStampOnWire": "16#79B22CE9",
+        "scanCounter": 6622,
+        "counterFell": "5,099,904 -> 6,622. The counter FELL, which is the CPU stop/restart the download took, and is how the download is known to have LANDED rather than been skipped.",
+        "mirrorInert": "All result registers zero. The pre-deploy read showed residual non-zero values from the earlier wave (r4:r5=1, r6=38); they are gone, which independently confirms the retentive reset."
+      }
+    },
+    {
+      "tool": "harness-mirror-read --declared-registers 1024 (WIDTH ON THE WIRE)",
+      "exit": 0,
+      "json": {
+        "result": "the area is EXACTLY 1024 register(s) wide (0..1023), measured from BOTH sides",
+        "declaredSide": "9 paged FC03 reads covering 0..1023, all answered",
+        "edge": "r1024 AND r1025 REFUSED BY THE SERVER - Modbus exception code 2 (Illegal Data Address), a response and not a timeout - so the area is NOT wider than declared",
+        "buildStampOverModbus": "16#79B22CE9",
+        "scanAdvance": "15,941 -> 17,843 over a measured 4,111 ms. The copy layer is EXECUTING over Modbus, not a stale value in memory.",
+        "_why": "THE ONE PROBE THAT CAN CONFIRM THE WIDENING REACHED THE WIRE. rig-read --marker addresses %M directly and NEVER consults MB_HOLD_REG, so the S7 path is structurally incapable of answering this. This closes served-area's stated cannotSee gap: corpus says 1024, CPU says 1024.",
+        "_notSeen": "The tool prints it and it is repeated here: 9 transactions are 9 separate moments on a live mirror, so the readout is a REASSEMBLY, not a snapshot. It measures reachability, which is per-register and survives that."
+      }
+    },
+    {
+      "tool": "converter reachable-state / conflict-graph --signals (derivation artifacts, REGENERATED)",
+      "exit": 0,
+      "json": {
+        "conflictEdges": [],
+        "signalsExamined": 21,
+        "signalsResolved": 21,
+        "signalsUnresolved": 0,
+        "corpus": "43 project file(s); 0 unparseable",
+        "_earnedZero": "edges [] over 21 of 21 resolved - an earned zero, not an empty examination.",
+        "_form": "--signals (one STORAGE PATH per line), NOT --submission, which exits 2 NOT DERIVED on this lane because 10 of 16 submission signal names have no declared join. Recorded as a trap by the previous lane."
+      }
+    },
+    {
+      "tool": "harness-gate derive (THE RE-DERIVE, run AFTER the redeploy)",
+      "exit": 0,
+      "json": {
+        "submissionIn": "submission-v7-full.json (23 vectors - the one the clean 23/23 wave ran against; NOT v6, which has 22)",
+        "out": "C:/Users/User/AppData/Local/Temp/hba-derive/submission-v8-widen-derived.json",
+        "computed": [
+          "map",
+          "deployment"
+        ],
+        "attributed": [
+          "map.storage",
+          "conflictEdges"
+        ],
+        "byRule": [
+          "runtimeCompression"
+        ],
+        "withheld": [],
+        "comparedMap": "every signal and mode the submission's map claims is provided by the binding, over 6 signal(s)",
+        "comparedDeployment": "all 60 object(s) the submission's deployment names appear in the download's load manifest, read off 60 loaded object(s)",
+        "_order": "Run AFTER the download, deliberately: the deployment field derives from THIS download's load manifest, and a re-derive taken before would cite the previous one."
+      }
+    },
+    {
+      "tool": "harness-run --generate-only (THE SUBMISSION GATE, on the re-derived submission)",
+      "exit": 0,
+      "json": {
+        "submissionGate": "AdmissibleSubjectToJudgement",
+        "gatesRun": 31,
+        "refused": 0,
+        "couldNotRun": 0,
+        "buildStamp": "16#79B22CE9",
+        "_closure": "THE STAMP THE HARNESS RECOMPUTES AT LAUNCH EQUALS THE STAMP ON THE WIRE. That is the end-to-end proof the rig is ready: a wave will compute 16#79B22CE9, read 16#79B22CE9 off the device, and pass its stamp fence."
+      }
+    },
+    {
+      "tool": "socket / process clearance at hand-back",
+      "exit": 0,
+      "json": {
+        "secondIndependentConnect": "A SECOND harness-mirror-read connected and completed (exit 0, same 1024 verdict, same stamp, counter 107,490 -> 108,492). MB_SERVER accepts ONE connection, so the second connect succeeding IS the proof the first released it.",
+        "harnessProcesses": "none alive (tasklist)",
+        "socketsToRig": "none (netstat filtered on 10.10.10.10)",
+        "portal": "5 processes, SELF-LAUNCHED ORPHANS: 0 - unchanged from the pre-task reading. PID 4376 still holds GenProject1 with a UI; PID 2220 holds a Live Runs project and was never touched. portal-close was NOT run.",
+        "waveRun": "NO. Withheld by dispatch."
+      }
+    }
+  ],
+  "_whatIDidNotVerify": [
+    "THE WAVE. No wave was run, by instruction, so nothing here says anything about whether the block under test behaves correctly at the new width. vectorsRan and conclusiveAboutTheBlock are UNKNOWN for this configuration, not zero.",
+    "That any slot BEYOND the first can actually use the new headroom. The window is 1024 and the map still allocates 37 (control 6, vectors 21, results 10); no second slot has been mapped, generated or run. The widening removes a ceiling - it does not demonstrate anything above the old one.",
+    "Unit-level device identity. The allowlist declares a serial the CPU will not report over classic S7comm, so the guard matched on a model-level order code. The stamp continuity (16#0444D18E before, matching row 9's deployment) is the real tie and it is circumstantial.",
+    "The retentive %M extent of the deployed program. MirrorGeometry requires RetentiveBytes to be stated rather than defaulted. Base 1000 is unchanged by this task so placement is no worse than before, but I did not measure the extent, and I removed a sentence asserting it from the draft block comment rather than write an unmeasured claim into the IR.",
+    "Whether the 4-object stamp basis is COMPLETE. It closes the comms-block hole the coordinator identified, but the coverage line still reads 'NO STAGED CORPUS WAS SUPPLIED, so there is no denominator and this run CANNOT say what it did not hash'. FC_HarnessCopyLayer itself - the block that WRITES the mirror - is still outside the stamp, and is self-referential (it carries the stamp constant), so it cannot simply be added. Flagged, not acted on."
+  ]
+}

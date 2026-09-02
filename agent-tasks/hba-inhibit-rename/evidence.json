@@ -1,0 +1,1289 @@
+{
+  "schema": "ladder-ai/agent-evidence/1",
+  "task": "AR-HBA-01: rename the inhibit/stop demand interface member HopperBlockStopReq -> HopperBlockedInhibit across UDT_HopperBlockageIO and every dependent in test-project001, closing the 19-day spec/implementation divergence D1",
+  "kind": "modify",
+  "skill": "gen-block-modify-purpose",
+  "files": [
+    {
+      "path": "ir/test-project001/UDT_HopperBlockageIO.ir",
+      "note": "no ir_hash: `converter ir-hash` keys CODE BLOCKS only, and this file is a UDT. Listed rather than omitted - omitting it would break the claim join on its own reservation."
+    },
+    {
+      "path": "ir/test-project001/FB_HopperBlockageMonitor.ir",
+      "ir_hash": "0196B1D2FA08B22DC323E82EF88A81FD3A04DAFF5C6FB1E1D8A92C7F1420355F"
+    },
+    {
+      "path": "ir/test-project001/iDB_HopperBlockageMonitor.ir",
+      "note": "no ir_hash: `converter ir-hash` keys CODE BLOCKS only, and this file is a DB. Listed rather than omitted - omitting it would break the claim join on its own reservation."
+    },
+    {
+      "path": "ir/test-project001/FC_ControlMain.ir",
+      "ir_hash": "B735205D95657279B015DA8E3076EC7DEA2B0210C9AC78ACA0AFF50A3D6D66D6"
+    },
+    {
+      "path": "ir/test-project001/FB_HarnessViolationLatch.ir",
+      "ir_hash": "0B04882EDAF9F50F77B61DC6FE27F5C95FCB260B010D42D23421763A3B4D84FF"
+    },
+    {
+      "path": "ir/test-project001/FC_HarnessCopyLayer.ir",
+      "ir_hash": "7D74B9BDAEB6D28D05C30C319974F54C843E04DD8AC74A685AF7A207B6C51972"
+    },
+    {
+      "path": "ir/test-project001/HarnessMirror.ir",
+      "note": "no ir_hash: `converter ir-hash` keys CODE BLOCKS only, and this file is a tag table. Listed rather than omitted - omitting it would break the claim join on its own reservation."
+    }
+  ],
+  "claims": [
+    {
+      "kind": "block-edit",
+      "value": "UDT_HopperBlockageIO",
+      "agent": "ee055079-868d-48bc-aa0a-7516e8688d29/lad-coder"
+    },
+    {
+      "kind": "block-edit",
+      "value": "FB_HopperBlockageMonitor",
+      "agent": "ee055079-868d-48bc-aa0a-7516e8688d29/lad-coder"
+    },
+    {
+      "kind": "block-edit",
+      "value": "iDB_HopperBlockageMonitor",
+      "agent": "ee055079-868d-48bc-aa0a-7516e8688d29/lad-coder"
+    },
+    {
+      "kind": "block-edit",
+      "value": "FC_ControlMain",
+      "agent": "ee055079-868d-48bc-aa0a-7516e8688d29/lad-coder"
+    },
+    {
+      "kind": "block-edit",
+      "value": "FB_HarnessViolationLatch",
+      "agent": "ee055079-868d-48bc-aa0a-7516e8688d29/lad-coder"
+    },
+    {
+      "kind": "block-edit",
+      "value": "FC_HarnessCopyLayer",
+      "agent": "ee055079-868d-48bc-aa0a-7516e8688d29/lad-coder"
+    }
+  ],
+  "checks": [
+    {
+      "tool": "converter preflight UDT_HopperBlockageIO",
+      "exit": 0,
+      "json": {
+        "files": [
+          {
+            "filePath": "ir/test-project001/UDT_HopperBlockageIO.ir",
+            "name": "UDT_HopperBlockageIO",
+            "findings": []
+          }
+        ],
+        "indexWarnings": [],
+        "corpus": {
+          "projectDir": "ir/test-project001",
+          "projectFileCount": 43,
+          "batchFileCount": 1,
+          "projectContributedNothing": false,
+          "blockNameCount": 18,
+          "tagRootNameCount": 145,
+          "typeNameCount": 5,
+          "memberBodyCount": 23,
+          "calleeInterfaceCount": 18,
+          "harnessCorpusFileCount": 43
+        }
+      }
+    },
+    {
+      "tool": "converter preflight FB_HopperBlockageMonitor",
+      "exit": 0,
+      "json": {
+        "files": [
+          {
+            "filePath": "ir/test-project001/FB_HopperBlockageMonitor.ir",
+            "name": "FB_HopperBlockageMonitor",
+            "findings": []
+          }
+        ],
+        "indexWarnings": [],
+        "corpus": {
+          "projectDir": "ir/test-project001",
+          "projectFileCount": 43,
+          "batchFileCount": 1,
+          "projectContributedNothing": false,
+          "blockNameCount": 18,
+          "tagRootNameCount": 145,
+          "typeNameCount": 5,
+          "memberBodyCount": 23,
+          "calleeInterfaceCount": 18,
+          "harnessCorpusFileCount": 43
+        }
+      }
+    },
+    {
+      "tool": "converter preflight iDB_HopperBlockageMonitor",
+      "exit": 0,
+      "json": {
+        "files": [
+          {
+            "filePath": "ir/test-project001/iDB_HopperBlockageMonitor.ir",
+            "name": "iDB_HopperBlockageMonitor",
+            "findings": []
+          }
+        ],
+        "indexWarnings": [],
+        "corpus": {
+          "projectDir": "ir/test-project001",
+          "projectFileCount": 43,
+          "batchFileCount": 1,
+          "projectContributedNothing": false,
+          "blockNameCount": 18,
+          "tagRootNameCount": 145,
+          "typeNameCount": 5,
+          "memberBodyCount": 23,
+          "calleeInterfaceCount": 18,
+          "harnessCorpusFileCount": 43
+        }
+      }
+    },
+    {
+      "tool": "converter preflight FC_ControlMain",
+      "exit": 0,
+      "json": {
+        "files": [
+          {
+            "filePath": "ir/test-project001/FC_ControlMain.ir",
+            "name": "FC_ControlMain",
+            "findings": []
+          }
+        ],
+        "indexWarnings": [],
+        "corpus": {
+          "projectDir": "ir/test-project001",
+          "projectFileCount": 43,
+          "batchFileCount": 1,
+          "projectContributedNothing": false,
+          "blockNameCount": 18,
+          "tagRootNameCount": 145,
+          "typeNameCount": 5,
+          "memberBodyCount": 23,
+          "calleeInterfaceCount": 18,
+          "harnessCorpusFileCount": 43
+        }
+      }
+    },
+    {
+      "tool": "converter preflight FB_HarnessViolationLatch",
+      "exit": 0,
+      "json": {
+        "files": [
+          {
+            "filePath": "ir/test-project001/FB_HarnessViolationLatch.ir",
+            "name": "FB_HarnessViolationLatch",
+            "findings": [
+              {
+                "check": "review:harness-scope",
+                "description": "Harness: FB 9003 is inside the reserved harness band 9000-9999 (declared docs/notes/test-environment-build-plan.md, 2026-08-13). 0 C-001/C-201 finding(s) reported without gating.",
+                "gates": false
+              }
+            ]
+          }
+        ],
+        "indexWarnings": [],
+        "corpus": {
+          "projectDir": "ir/test-project001",
+          "projectFileCount": 43,
+          "batchFileCount": 1,
+          "projectContributedNothing": false,
+          "blockNameCount": 18,
+          "tagRootNameCount": 145,
+          "typeNameCount": 5,
+          "memberBodyCount": 23,
+          "calleeInterfaceCount": 18,
+          "harnessCorpusFileCount": 43
+        }
+      }
+    },
+    {
+      "tool": "converter preflight FC_HarnessCopyLayer",
+      "exit": 1,
+      "json": {
+        "files": [
+          {
+            "filePath": "ir/test-project001/FC_HarnessCopyLayer.ir",
+            "name": "FC_HarnessCopyLayer",
+            "findings": [
+              {
+                "check": "review:C-103",
+                "description": "network 6: [Warn] Set coil (SCOIL) on 'HX_HBA_Ran' has no matching Reset (RCOIL) in this block; if this is the deliberate external-set/internal-reset reusable-FB pattern, that is the documented C-103 exception \u2014 confirm the intent comment.",
+                "gates": true
+              },
+              {
+                "check": "review:harness-scope",
+                "description": "Harness: FC 9001 is inside the reserved harness band 9000-9999 (declared docs/notes/test-environment-build-plan.md, 2026-08-13). 1 C-001/C-201 finding(s) reported without gating.",
+                "gates": false
+              },
+              {
+                "check": "review:harness-scope",
+                "description": "C-201 [Error] 'FC_HarnessCopyLayer' has no header comment.",
+                "gates": false
+              }
+            ]
+          }
+        ],
+        "indexWarnings": [],
+        "corpus": {
+          "projectDir": "ir/test-project001",
+          "projectFileCount": 43,
+          "batchFileCount": 1,
+          "projectContributedNothing": false,
+          "blockNameCount": 18,
+          "tagRootNameCount": 145,
+          "typeNameCount": 5,
+          "memberBodyCount": 23,
+          "calleeInterfaceCount": 18,
+          "harnessCorpusFileCount": 43
+        }
+      },
+      "note": "PRE-EXISTING, NOT INTRODUCED, AND DELIBERATELY LEFT RED RATHER THAN RELABELLED. The one gating finding is C-103 on NETWORK 6 (SCOIL HX_HBA_Ran with no matching RCOIL). NETWORK 6 is byte-identical before and after this change (converter diff --only 1 7 8 exit 0 proves it is outside the changed set). CONTROL RUN: `converter preflight` on the AS-BUILT copy layer against the AS-BUILT corpus reports the same finding word-for-word and also exits 1. The same finding is recorded verbatim in commits 084b778 and a8df733. It is NOT marked `transient` (it was not superseded) and NOT `deferred` (it ran), because neither field is true of it - so this file goes RED on exactly this line and says why."
+    },
+    {
+      "tool": "converter preflight HarnessMirror",
+      "exit": 0,
+      "json": {
+        "files": [
+          {
+            "filePath": "ir/test-project001/HarnessMirror.ir",
+            "name": "HarnessMirror",
+            "findings": [
+              {
+                "check": "review:harness-scope",
+                "description": "Harness: 26 harness / 0 plant / 0 unclassified of 26 tag(s); decided PER TAG from referencing blocks, never from the table name. Corpus: 43 file(s), all parsed. 26 C-001/C-201 finding(s) reported without gating.",
+                "gates": false
+              },
+              {
+                "check": "review:harness-scope",
+                "description": "C-001 [Error] Tag 'HX_ProgramVersion' (%MD1000) is not at a physical-IO address, so C-001's variables layer applies: short PascalCase, underscore-free. It is neither.",
+                "gates": false
+              },
+              {
+                "check": "review:harness-scope",
+                "description": "C-001 [Error] Tag 'HX_ScanCount' (%MD1004) is not at a physical-IO address, so C-001's variables layer applies: short PascalCase, underscore-free. It is neither.",
+                "gates": false
+              },
+              {
+                "check": "review:harness-scope",
+                "description": "C-001 [Error] Tag 'HX_HBA_Start' (%M1009.0) is not at a physical-IO address, so C-001's variables layer applies: short PascalCase, underscore-free. It is neither.",
+                "gates": false
+              },
+              {
+                "check": "review:harness-scope",
+                "description": "C-001 [Error] Tag 'HX_HBA_Ran' (%M1011.0) is not at a physical-IO address, so C-001's variables layer applies: short PascalCase, underscore-free. It is neither.",
+                "gates": false
+              },
+              {
+                "check": "review:harness-scope",
+                "description": "C-001 [Error] Tag 'HX_HBA_V000' (%MW1012) is not at a physical-IO address, so C-001's variables layer applies: short PascalCase, underscore-free. It is neither.",
+                "gates": false
+              },
+              {
+                "check": "review:harness-scope",
+                "description": "C-001 [Error] Tag 'HX_HBA_V001' (%MW1014) is not at a physical-IO address, so C-001's variables layer applies: short PascalCase, underscore-free. It is neither.",
+                "gates": false
+              },
+              {
+                "check": "review:harness-scope",
+                "description": "C-001 [Error] Tag 'HX_HBA_V002' (%MW1016) is not at a physical-IO address, so C-001's variables layer applies: short PascalCase, underscore-free. It is neither.",
+                "gates": false
+              },
+              {
+                "check": "review:harness-scope",
+                "description": "C-001 [Error] Tag 'HX_HBA_V003' (%MD1018) is not at a physical-IO address, so C-001's variables layer applies: short PascalCase, underscore-free. It is neither.",
+                "gates": false
+              },
+              {
+                "check": "review:harness-scope",
+                "description": "C-001 [Error] Tag 'HX_HBA_V005' (%MD1022) is not at a physical-IO address, so C-001's variables layer applies: short PascalCase, underscore-free. It is neither.",
+                "gates": false
+              },
+              {
+                "check": "review:harness-scope",
+                "description": "C-001 [Error] Tag 'HX_HBA_V007' (%MD1026) is not at a physical-IO address, so C-001's variables layer applies: short PascalCase, underscore-free. It is neither.",
+                "gates": false
+              },
+              {
+                "check": "review:harness-scope",
+                "description": "C-001 [Error] Tag 'HX_HBA_V009' (%MD1030) is not at a physical-IO address, so C-001's variables layer applies: short PascalCase, underscore-free. It is neither.",
+                "gates": false
+              },
+              {
+                "check": "review:harness-scope",
+                "description": "C-001 [Error] Tag 'HX_HBA_V011' (%MD1034) is not at a physical-IO address, so C-001's variables layer applies: short PascalCase, underscore-free. It is neither.",
+                "gates": false
+              },
+              {
+                "check": "review:harness-scope",
+                "description": "C-001 [Error] Tag 'HX_HBA_V013' (%MD1038) is not at a physical-IO address, so C-001's variables layer applies: short PascalCase, underscore-free. It is neither.",
+                "gates": false
+              },
+              {
+                "check": "review:harness-scope",
+                "description": "C-001 [Error] Tag 'HX_HBA_V015' (%MD1042) is not at a physical-IO address, so C-001's variables layer applies: short PascalCase, underscore-free. It is neither.",
+                "gates": false
+              },
+              {
+                "check": "review:harness-scope",
+                "description": "C-001 [Error] Tag 'HX_HBA_V017' (%MD1046) is not at a physical-IO address, so C-001's variables layer applies: short PascalCase, underscore-free. It is neither.",
+                "gates": false
+              },
+              {
+                "check": "review:harness-scope",
+                "description": "C-001 [Error] Tag 'HX_HBA_V019' (%MD1050) is not at a physical-IO address, so C-001's variables layer applies: short PascalCase, underscore-free. It is neither.",
+                "gates": false
+              },
+              {
+                "check": "review:harness-scope",
+                "description": "C-001 [Error] Tag 'HX_HBA_R000' (%M1055.0) is not at a physical-IO address, so C-001's variables layer applies: short PascalCase, underscore-free. It is neither.",
+                "gates": false
+              },
+              {
+                "check": "review:harness-scope",
+                "description": "C-001 [Error] Tag 'HX_HBA_R001' (%M1057.0) is not at a physical-IO address, so C-001's variables layer applies: short PascalCase, underscore-free. It is neither.",
+                "gates": false
+              },
+              {
+                "check": "review:harness-scope",
+                "description": "C-001 [Error] Tag 'HX_HBA_R002' (%M1059.0) is not at a physical-IO address, so C-001's variables layer applies: short PascalCase, underscore-free. It is neither.",
+                "gates": false
+              },
+              {
+                "check": "review:harness-scope",
+                "description": "C-001 [Error] Tag 'HX_HBA_R003' (%M1061.0) is not at a physical-IO address, so C-001's variables layer applies: short PascalCase, underscore-free. It is neither.",
+                "gates": false
+              },
+              {
+                "check": "review:harness-scope",
+                "description": "C-001 [Error] Tag 'HX_HBA_R004' (%M1063.0) is not at a physical-IO address, so C-001's variables layer applies: short PascalCase, underscore-free. It is neither.",
+                "gates": false
+              },
+              {
+                "check": "review:harness-scope",
+                "description": "C-001 [Error] Tag 'HX_HBA_R005' (%M1065.0) is not at a physical-IO address, so C-001's variables layer applies: short PascalCase, underscore-free. It is neither.",
+                "gates": false
+              },
+              {
+                "check": "review:harness-scope",
+                "description": "C-001 [Error] Tag 'HX_HBA_R006' (%M1067.0) is not at a physical-IO address, so C-001's variables layer applies: short PascalCase, underscore-free. It is neither.",
+                "gates": false
+              },
+              {
+                "check": "review:harness-scope",
+                "description": "C-001 [Error] Tag 'HX_HBA_R007' (%M1069.0) is not at a physical-IO address, so C-001's variables layer applies: short PascalCase, underscore-free. It is neither.",
+                "gates": false
+              },
+              {
+                "check": "review:harness-scope",
+                "description": "C-001 [Error] Tag 'HX_HBA_L008' (%M1071.0) is not at a physical-IO address, so C-001's variables layer applies: short PascalCase, underscore-free. It is neither.",
+                "gates": false
+              },
+              {
+                "check": "review:harness-scope",
+                "description": "C-001 [Error] Tag 'HX_HBA_L009' (%M1073.0) is not at a physical-IO address, so C-001's variables layer applies: short PascalCase, underscore-free. It is neither.",
+                "gates": false
+              }
+            ]
+          }
+        ],
+        "indexWarnings": [],
+        "corpus": {
+          "projectDir": "ir/test-project001",
+          "projectFileCount": 43,
+          "batchFileCount": 1,
+          "projectContributedNothing": false,
+          "blockNameCount": 18,
+          "tagRootNameCount": 145,
+          "typeNameCount": 5,
+          "memberBodyCount": 23,
+          "calleeInterfaceCount": 18,
+          "harnessCorpusFileCount": 43
+        }
+      }
+    },
+    {
+      "tool": "converter diff --only (FB_HopperBlockageMonitor) --only 6 --allow-header",
+      "exit": 0,
+      "json": {
+        "blockName": "FB_HopperBlockageMonitor",
+        "blockNameMismatch": false,
+        "otherBlockName": "FB_HopperBlockageMonitor",
+        "hasAnyChange": true,
+        "header": {
+          "changed": true,
+          "titleChanged": false,
+          "titleBefore": "Hopper-Blockage Monitor",
+          "titleAfter": "Hopper-Blockage Monitor",
+          "commentChanged": false,
+          "commentBefore": "Supervises the shredder hopper high-level sensor: raises a latched hopper-blockage alarm (and a stop/inhibit demand) when the hopper stays (debounced-)high for a cumulative threshold of time while the plant is running, i.e. the shredder/pusher is not clearing it (S6 request #1, REQ-HBA-001..007). Purely supervisory - it commands no motion and writes no shared tag; the alarm and the stop demand are exposed on its own IO interface and wired to annunciation / the actual stop at a separate integration step (Q-HBA-05). Cumulative timing is pause-and-resume (NEW-HBA-01): losing PlantRunning freezes the elapsed and resumes, so 60 s of blockage need not be contiguous. Built from a plain TON, never TONR (C-406), plus a banked up-accumulator compared against the threshold (see NETWORK 3-4). The alarm latch lives in the RETAIN interface and deliberately survives a power cycle (C-124 carve-out, NEW-HBA-04) - like the sequencer's DischargeConveyorTimeoutFault, a blockage needing a human still needs FaultReset after a restart; all transient timing state is non-retentive and self-clears at startup (NEW-HBA-06, no OB100 edit). Tunables BlockedTimeThreshold (T#60S) and ClearDebounceTime (T#2S) are this instance's own settings (C-307), not shared DB members.",
+          "commentAfter": "Supervises the shredder hopper high-level sensor: raises a latched hopper-blockage alarm (and a stop/inhibit demand) when the hopper stays (debounced-)high for a cumulative threshold of time while the plant is running, i.e. the shredder/pusher is not clearing it (S6 request #1, REQ-HBA-001..007). Purely supervisory - it commands no motion and writes no shared tag; the alarm and the stop demand are exposed on its own IO interface and wired to annunciation / the actual stop at a separate integration step (Q-HBA-05). Cumulative timing is pause-and-resume (NEW-HBA-01): losing PlantRunning freezes the elapsed and resumes, so 60 s of blockage need not be contiguous. Built from a plain TON, never TONR (C-406), plus a banked up-accumulator compared against the threshold (see NETWORK 3-4). The alarm latch lives in the RETAIN interface and deliberately survives a power cycle (C-124 carve-out, NEW-HBA-04) - like the sequencer's DischargeConveyorTimeoutFault, a blockage needing a human still needs FaultReset after a restart; all transient timing state is non-retentive and self-clears at startup (NEW-HBA-06, no OB100 edit). Tunables BlockedTimeThreshold (T#60S) and ClearDebounceTime (T#2S) are this instance's own settings (C-307), not shared DB members.",
+          "interfaceChanged": true,
+          "interfaceCommentChanged": false
+        },
+        "summary": {
+          "total": 6,
+          "changed": 1,
+          "added": 0,
+          "removed": 0,
+          "moved": 0,
+          "identical": 5
+        },
+        "networks": [
+          {
+            "number": 1,
+            "kind": "Identical",
+            "title": "Confirmed-Clear Debounce",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 2,
+            "kind": "Identical",
+            "title": "Blockage-Present Qualifier And Run Gate",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 3,
+            "kind": "Identical",
+            "title": "Cumulative Blockage-Elapsed Accumulator",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 4,
+            "kind": "Identical",
+            "title": "Cumulative Persistence Timer",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 5,
+            "kind": "Identical",
+            "title": "Hopper-Blocked Alarm Latch (RETAIN - Survives Power Cycle)",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 6,
+            "kind": "Changed",
+            "title": "Stop / Inhibit Demand",
+            "beforeText": "NETWORK 6 \"Stop / Inhibit Demand\"\n  COMMENT \"The FB emits a stop/inhibit demand on its own interface (Q-HBA-05) and writes no shared output - integration wires this demand to the actual stop and the alarm to annunciation at a separate step (out of gen-block-new scope, converter-diff-enforced). Kept a distinct member from the alarm so the two can be routed independently.\"\n  COIL IO.HopperBlockStopReq := IO.HopperBlockedAlarm\n",
+            "afterText": "NETWORK 6 \"Stop / Inhibit Demand\"\n  COMMENT \"The FB emits a stop/inhibit demand on its own interface (Q-HBA-05) and writes no shared output - integration wires this demand to the actual stop and the alarm to annunciation at a separate step (out of gen-block-new scope, converter-diff-enforced). Kept a distinct member from the alarm so the two can be routed independently.\"\n  COIL IO.HopperBlockedInhibit := IO.HopperBlockedAlarm\n",
+            "movedFrom": null
+          }
+        ],
+        "allowedNetworks": [
+          6
+        ],
+        "invarianceViolations": [],
+        "headerChangeAllowed": true,
+        "hasUnclaimedHeaderChange": false,
+        "hasNonGatingCommentChange": false,
+        "declaredInsertAt": null,
+        "movesAreDeclared": false,
+        "unchangedRemainder": 5,
+        "hasInvarianceViolation": false
+      }
+    },
+    {
+      "tool": "converter diff --only (FC_ControlMain) --only 8",
+      "exit": 0,
+      "json": {
+        "blockName": "FC_ControlMain",
+        "blockNameMismatch": false,
+        "otherBlockName": "FC_ControlMain",
+        "hasAnyChange": true,
+        "header": {
+          "changed": false,
+          "titleChanged": false,
+          "titleBefore": "Control Main",
+          "titleAfter": "Control Main",
+          "commentChanged": false,
+          "commentBefore": "Control area-Main (C-109): every cross-instance fact in the project lives here (C-127) - buffer-to-instance input wiring, the sequencer/motor/pusher calls in dependency order (sequencer decides, motor and pusher obey within the same scan), inter-instance command wiring, and the buffer output map. No working logic beyond wiring, with two documented extras (C-606): the In_Cycle lamp OR (owner ruling 2026-07-16, REQ-069 - field feedbacks, not commands) and the soft-start fault-reset pass-through to DQ11 (panel provides the output; Q-14 records the open control-on question).",
+          "commentAfter": "Control area-Main (C-109): every cross-instance fact in the project lives here (C-127) - buffer-to-instance input wiring, the sequencer/motor/pusher calls in dependency order (sequencer decides, motor and pusher obey within the same scan), inter-instance command wiring, and the buffer output map. No working logic beyond wiring, with two documented extras (C-606): the In_Cycle lamp OR (owner ruling 2026-07-16, REQ-069 - field feedbacks, not commands) and the soft-start fault-reset pass-through to DQ11 (panel provides the output; Q-14 records the open control-on question).",
+          "interfaceChanged": false,
+          "interfaceCommentChanged": false
+        },
+        "summary": {
+          "total": 9,
+          "changed": 1,
+          "added": 0,
+          "removed": 0,
+          "moved": 0,
+          "identical": 8
+        },
+        "networks": [
+          {
+            "number": 1,
+            "kind": "Identical",
+            "title": "Sequencer Input Wiring",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 2,
+            "kind": "Identical",
+            "title": "Call Sequencer",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 3,
+            "kind": "Identical",
+            "title": "MotorFwdRevSystem Wiring",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 4,
+            "kind": "Identical",
+            "title": "Call Shredder Motor",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 5,
+            "kind": "Identical",
+            "title": "PusherControl Wiring",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 6,
+            "kind": "Identical",
+            "title": "Call Pusher",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 7,
+            "kind": "Identical",
+            "title": "Output Mapping",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 8,
+            "kind": "Changed",
+            "title": "Hopper-Blockage Monitor Input Wiring",
+            "beforeText": "NETWORK 8 \"Hopper-Blockage Monitor Input Wiring\"\n  COMMENT \"Integration of the hopper-blockage supervisor (S6 request #1). Appended after the output map to keep NETWORK 1-7 byte-identical (S7 invariance discipline); functionally safe - this FB's outputs feed only FC_AlarmsMain's annunciation, never NETWORK 7's buffer output map, so its scan position relative to NETWORK 7 is immaterial. PlantRunning is the confirmed shredder-running feedback, either direction (REQ-069 honesty - field feedback, not command). The FB's HopperBlockStopReq stop demand is deliberately left unwired for now (owner scope call - alarm-only integration).\"\n  COIL iDB_HopperBlockageMonitor.IO.HopperLevelHigh := DB_Input.Hopper_Level_High\n  COIL iDB_HopperBlockageMonitor.IO.PlantRunning := DB_Input.Shredder_Run_Fwd_FB OR DB_Input.Shredder_Run_Rev_FB\n  COIL iDB_HopperBlockageMonitor.IO.FaultReset := DB_Controls.FaultReset\n",
+            "afterText": "NETWORK 8 \"Hopper-Blockage Monitor Input Wiring\"\n  COMMENT \"Integration of the hopper-blockage supervisor (S6 request #1). Appended after the output map to keep NETWORK 1-7 byte-identical (S7 invariance discipline); functionally safe - this FB's outputs feed only FC_AlarmsMain's annunciation, never NETWORK 7's buffer output map, so its scan position relative to NETWORK 7 is immaterial. PlantRunning is the confirmed shredder-running feedback, either direction (REQ-069 honesty - field feedback, not command). The FB's HopperBlockedInhibit stop demand is deliberately left unwired for now (owner scope call - alarm-only integration).\"\n  COIL iDB_HopperBlockageMonitor.IO.HopperLevelHigh := DB_Input.Hopper_Level_High\n  COIL iDB_HopperBlockageMonitor.IO.PlantRunning := DB_Input.Shredder_Run_Fwd_FB OR DB_Input.Shredder_Run_Rev_FB\n  COIL iDB_HopperBlockageMonitor.IO.FaultReset := DB_Controls.FaultReset\n",
+            "movedFrom": null
+          },
+          {
+            "number": 9,
+            "kind": "Identical",
+            "title": "Call Hopper-Blockage Monitor",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          }
+        ],
+        "allowedNetworks": [
+          8
+        ],
+        "invarianceViolations": [],
+        "headerChangeAllowed": false,
+        "hasUnclaimedHeaderChange": false,
+        "hasNonGatingCommentChange": false,
+        "declaredInsertAt": null,
+        "movesAreDeclared": false,
+        "unchangedRemainder": 8,
+        "hasInvarianceViolation": false
+      }
+    },
+    {
+      "tool": "converter diff --only (FB_HarnessViolationLatch) --only 4",
+      "exit": 0,
+      "json": {
+        "blockName": "FB_HarnessViolationLatch",
+        "blockNameMismatch": false,
+        "otherBlockName": "FB_HarnessViolationLatch",
+        "hasAnyChange": true,
+        "header": {
+          "changed": false,
+          "titleChanged": false,
+          "titleBefore": "Harness Violation Latches",
+          "titleAfter": "Harness Violation Latches",
+          "commentChanged": false,
+          "commentBefore": "Latches the four states the requirement register forbids outright, so that a forbidden state lasting a single scan is still there to be read a hundred milliseconds later. A forbidden state cannot be sampled: a sampler that looks a hundred times still looks between scans, and a miss reports as a pass rather than as an error - so a latch is the only admissible instrument for a claim of the form 'this never happens', not a convenience. Everything here is computed from what the monitored block already publishes on its own interface and from the stimulus model's own phase; nothing reaches inside the monitored block and nothing writes to it. The latches are armed by the stimulus model's observation window rather than running free from the start of the run, because every run legitimately begins by driving the monitor through a clear-down, and a free-running latch would fill from that and read violated whatever the monitor did. They are cleared when the harness drops the start bool, which is the same point the start echo is cleared.",
+          "commentAfter": "Latches the four states the requirement register forbids outright, so that a forbidden state lasting a single scan is still there to be read a hundred milliseconds later. A forbidden state cannot be sampled: a sampler that looks a hundred times still looks between scans, and a miss reports as a pass rather than as an error - so a latch is the only admissible instrument for a claim of the form 'this never happens', not a convenience. Everything here is computed from what the monitored block already publishes on its own interface and from the stimulus model's own phase; nothing reaches inside the monitored block and nothing writes to it. The latches are armed by the stimulus model's observation window rather than running free from the start of the run, because every run legitimately begins by driving the monitor through a clear-down, and a free-running latch would fill from that and read violated whatever the monitor did. They are cleared when the harness drops the start bool, which is the same point the start echo is cleared.",
+          "interfaceChanged": false,
+          "interfaceCommentChanged": false
+        },
+        "summary": {
+          "total": 6,
+          "changed": 1,
+          "added": 0,
+          "removed": 0,
+          "moved": 0,
+          "identical": 5
+        },
+        "networks": [
+          {
+            "number": 1,
+            "kind": "Identical",
+            "title": "Reset Seen Since The Alarm Was Raised",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 2,
+            "kind": "Identical",
+            "title": "Alarm De-Asserted With No Reset Behind It",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 3,
+            "kind": "Identical",
+            "title": "Alarm Held Clear By A Standing Reset",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 4,
+            "kind": "Changed",
+            "title": "The Two Outputs Disagreeing",
+            "beforeText": "NETWORK 4 \"The Two Outputs Disagreeing\"\n  COMMENT \"The stop demand and the alarm are required to agree, and the two directions are latched separately because one latch on their inequality could not say which way round it went. Note what this pair does not constrain: it is satisfied by both outputs moving together at the wrong moment, so it is evidence about the relation and about nothing else - what pins the pair to the plant is the timing assertions, not these.\"\n  SCOIL InhibitLowWhileAlarmHigh := iDB_HopperBlockageMonitor.IO.HopperBlockedAlarm AND NOT iDB_HopperBlockageMonitor.IO.HopperBlockStopReq AND iDB_HopperBlockageStim.Stim.Armed\n  SCOIL InhibitHighWhileAlarmLow := iDB_HopperBlockageMonitor.IO.HopperBlockStopReq AND NOT iDB_HopperBlockageMonitor.IO.HopperBlockedAlarm AND iDB_HopperBlockageStim.Stim.Armed\n",
+            "afterText": "NETWORK 4 \"The Two Outputs Disagreeing\"\n  COMMENT \"The stop demand and the alarm are required to agree, and the two directions are latched separately because one latch on their inequality could not say which way round it went. Note what this pair does not constrain: it is satisfied by both outputs moving together at the wrong moment, so it is evidence about the relation and about nothing else - what pins the pair to the plant is the timing assertions, not these.\"\n  SCOIL InhibitLowWhileAlarmHigh := iDB_HopperBlockageMonitor.IO.HopperBlockedAlarm AND NOT iDB_HopperBlockageMonitor.IO.HopperBlockedInhibit AND iDB_HopperBlockageStim.Stim.Armed\n  SCOIL InhibitHighWhileAlarmLow := iDB_HopperBlockageMonitor.IO.HopperBlockedInhibit AND NOT iDB_HopperBlockageMonitor.IO.HopperBlockedAlarm AND iDB_HopperBlockageStim.Stim.Armed\n",
+            "movedFrom": null
+          },
+          {
+            "number": 5,
+            "kind": "Identical",
+            "title": "Previous Alarm State",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 6,
+            "kind": "Identical",
+            "title": "Clear For The Next Run",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          }
+        ],
+        "allowedNetworks": [
+          4
+        ],
+        "invarianceViolations": [],
+        "headerChangeAllowed": false,
+        "hasUnclaimedHeaderChange": false,
+        "hasNonGatingCommentChange": false,
+        "declaredInsertAt": null,
+        "movesAreDeclared": false,
+        "unchangedRemainder": 5,
+        "hasInvarianceViolation": false
+      }
+    },
+    {
+      "tool": "converter diff --only (FC_HarnessCopyLayer) --only 1 7 8",
+      "exit": 0,
+      "json": {
+        "blockName": "FC_HarnessCopyLayer",
+        "blockNameMismatch": false,
+        "otherBlockName": "FC_HarnessCopyLayer",
+        "hasAnyChange": true,
+        "header": {
+          "changed": false,
+          "titleChanged": false,
+          "titleBefore": "Harness copy layer",
+          "titleAfter": "Harness copy layer",
+          "commentChanged": false,
+          "commentBefore": null,
+          "commentAfter": null,
+          "interfaceChanged": false,
+          "interfaceCommentChanged": false
+        },
+        "summary": {
+          "total": 8,
+          "changed": 3,
+          "added": 0,
+          "removed": 0,
+          "moved": 0,
+          "identical": 5
+        },
+        "networks": [
+          {
+            "number": 1,
+            "kind": "Changed",
+            "title": "Program version",
+            "beforeText": "NETWORK 1 \"Program version\"\n  MOVE(EN := TRUE, IN := 16#33434A68) => HX_ProgramVersion\n",
+            "afterText": "NETWORK 1 \"Program version\"\n  MOVE(EN := TRUE, IN := 16#B8BCB7CB) => HX_ProgramVersion\n",
+            "movedFrom": null
+          },
+          {
+            "number": 2,
+            "kind": "Identical",
+            "title": "Free-running scan counter",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 3,
+            "kind": "Identical",
+            "title": "Vector in - slot HBA - Int",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 4,
+            "kind": "Identical",
+            "title": "Vector in - slot HBA - Time",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 5,
+            "kind": "Identical",
+            "title": "Start bool - slot HBA",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 6,
+            "kind": "Identical",
+            "title": "Start echo - slot HBA",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 7,
+            "kind": "Changed",
+            "title": "Results out - slot HBA - Bool",
+            "beforeText": "NETWORK 7 \"Results out - slot HBA - Bool\"\n  COIL HX_HBA_R000 := iDB_HopperBlockageMonitor.IO.HopperBlockedAlarm\n  COIL HX_HBA_R001 := iDB_HopperBlockageMonitor.IO.HopperBlockStopReq\n  COIL HX_HBA_R002 := iDB_HopperBlockageStim.Stim.Armed\n  COIL HX_HBA_R003 := iDB_HopperBlockageStim.Stim.ScenarioDone\n  COIL HX_HBA_R004 := iDB_HarnessViolationLatch.AlarmFellWithoutReset\n  COIL HX_HBA_R005 := iDB_HarnessViolationLatch.AlarmLowUnderHeldReset\n  COIL HX_HBA_R006 := iDB_HarnessViolationLatch.InhibitLowWhileAlarmHigh\n  COIL HX_HBA_R007 := iDB_HarnessViolationLatch.InhibitHighWhileAlarmLow\n",
+            "afterText": "NETWORK 7 \"Results out - slot HBA - Bool\"\n  COIL HX_HBA_R000 := iDB_HopperBlockageMonitor.IO.HopperBlockedAlarm\n  COIL HX_HBA_R001 := iDB_HopperBlockageMonitor.IO.HopperBlockedInhibit\n  COIL HX_HBA_R002 := iDB_HopperBlockageStim.Stim.Armed\n  COIL HX_HBA_R003 := iDB_HopperBlockageStim.Stim.ScenarioDone\n  COIL HX_HBA_R004 := iDB_HarnessViolationLatch.AlarmFellWithoutReset\n  COIL HX_HBA_R005 := iDB_HarnessViolationLatch.AlarmLowUnderHeldReset\n  COIL HX_HBA_R006 := iDB_HarnessViolationLatch.InhibitLowWhileAlarmHigh\n  COIL HX_HBA_R007 := iDB_HarnessViolationLatch.InhibitHighWhileAlarmLow\n",
+            "movedFrom": null
+          },
+          {
+            "number": 8,
+            "kind": "Changed",
+            "title": "Result latches - slot HBA",
+            "beforeText": "NETWORK 8 \"Result latches - slot HBA\"\n  SCOIL HX_HBA_L008 := HX_HBA_Start AND iDB_HopperBlockageStim.Stim.Armed AND iDB_HopperBlockageMonitor.IO.HopperBlockedAlarm\n  SCOIL HX_HBA_L009 := HX_HBA_Start AND iDB_HopperBlockageStim.Stim.Armed AND iDB_HopperBlockageMonitor.IO.HopperBlockStopReq\n  RCOIL HX_HBA_L008 := NOT HX_HBA_Start\n  RCOIL HX_HBA_L009 := NOT HX_HBA_Start\n",
+            "afterText": "NETWORK 8 \"Result latches - slot HBA\"\n  SCOIL HX_HBA_L008 := HX_HBA_Start AND iDB_HopperBlockageStim.Stim.Armed AND iDB_HopperBlockageMonitor.IO.HopperBlockedAlarm\n  SCOIL HX_HBA_L009 := HX_HBA_Start AND iDB_HopperBlockageStim.Stim.Armed AND iDB_HopperBlockageMonitor.IO.HopperBlockedInhibit\n  RCOIL HX_HBA_L008 := NOT HX_HBA_Start\n  RCOIL HX_HBA_L009 := NOT HX_HBA_Start\n",
+            "movedFrom": null
+          }
+        ],
+        "allowedNetworks": [
+          1,
+          7,
+          8
+        ],
+        "invarianceViolations": [],
+        "headerChangeAllowed": false,
+        "hasUnclaimedHeaderChange": false,
+        "hasNonGatingCommentChange": false,
+        "declaredInsertAt": null,
+        "movesAreDeclared": false,
+        "unchangedRemainder": 5,
+        "hasInvarianceViolation": false
+      }
+    },
+    {
+      "tool": "openness-cli import-all (GenProject1, 7 objects, tag table -> type -> blocks)",
+      "exit": 0,
+      "json": {
+        "groupPath": "S7-1200 station_1/PLC1 6ES7 214-1AG40-0XB0",
+        "complete": true,
+        "imported": 7,
+        "failed": 0,
+        "rejected": 0,
+        "passes": 3,
+        "entries": [
+          {
+            "name": "HarnessMirror",
+            "kind": "TagTable",
+            "path": "C:\\Users\\User\\AppData\\Local\\Temp\\hba-xml\\HarnessMirror.xml",
+            "outcome": "Imported",
+            "pass": 1,
+            "detail": null
+          },
+          {
+            "name": "UDT_HopperBlockageIO",
+            "kind": "Type",
+            "path": "C:\\Users\\User\\AppData\\Local\\Temp\\hba-xml\\UDT_HopperBlockageIO.xml",
+            "outcome": "Imported",
+            "pass": 1,
+            "detail": null
+          },
+          {
+            "name": "FB_HarnessViolationLatch",
+            "kind": "Block",
+            "path": "C:\\Users\\User\\AppData\\Local\\Temp\\hba-xml\\FB_HarnessViolationLatch.xml",
+            "outcome": "Imported",
+            "pass": 1,
+            "detail": null
+          },
+          {
+            "name": "FB_HopperBlockageMonitor",
+            "kind": "Block",
+            "path": "C:\\Users\\User\\AppData\\Local\\Temp\\hba-xml\\FB_HopperBlockageMonitor.xml",
+            "outcome": "Imported",
+            "pass": 1,
+            "detail": null
+          },
+          {
+            "name": "FC_ControlMain",
+            "kind": "Block",
+            "path": "C:\\Users\\User\\AppData\\Local\\Temp\\hba-xml\\FC_ControlMain.xml",
+            "outcome": "Imported",
+            "pass": 1,
+            "detail": null
+          },
+          {
+            "name": "FC_HarnessCopyLayer",
+            "kind": "Block",
+            "path": "C:\\Users\\User\\AppData\\Local\\Temp\\hba-xml\\FC_HarnessCopyLayer.xml",
+            "outcome": "Imported",
+            "pass": 1,
+            "detail": null
+          },
+          {
+            "name": "iDB_HopperBlockageMonitor",
+            "kind": "Block",
+            "path": "C:\\Users\\User\\AppData\\Local\\Temp\\hba-xml\\iDB_HopperBlockageMonitor.xml",
+            "outcome": "Imported",
+            "pass": 1,
+            "detail": null
+          }
+        ]
+      }
+    },
+    {
+      "tool": "openness-cli sanity-check (run 1, post-import)",
+      "exit": 9,
+      "transient": "the ordinary post-import dependent cascade: 8 blocks + 1 type flagged inconsistent (the 6 imported blocks plus FC_AlarmsMain and Main, plus UDT_HopperBlockageIO). Cleared before run 2; the passing sanity-check below is the gate.",
+      "json": {
+        "exit": 9,
+        "totalBlocks": 42,
+        "inconsistentBlocksReported": 8,
+        "totalTypes": 8,
+        "inconsistentTypesReported": 1,
+        "text": "OVERALL: ISSUES FOUND / BLOCKS: 42  INCONSISTENT: 8 / TYPES: 8  INCONSISTENT: 1",
+        "note": "text capture only - run 1 was taken without --json"
+      }
+    },
+    {
+      "tool": "openness-cli sanity-check (run 2 - THE COMPILE GATE, hard rule 4)",
+      "exit": 0,
+      "json": {
+        "healthy": true,
+        "nothingExamined": false,
+        "totalBlocks": 42,
+        "inconsistentBlocks": [],
+        "totalTypes": 8,
+        "inconsistentTypes": [],
+        "duplicateBlockNumbers": [],
+        "deviceCompiles": [
+          {
+            "device": "S7-1200 station_1/PLC1 6ES7 214-1AG40-0XB0",
+            "state": "Warning",
+            "errors": 0,
+            "warnings": 1
+          }
+        ]
+      },
+      "note": "VERBATIM: 'OVERALL: HEALTHY' / 'BLOCKS: 42  INCONSISTENT: 0  DUPLICATE NUMBERS: 0' / 'TYPES: 8  INCONSISTENT: 0' / station scope 'Warning (errors=0, warnings=1)'. Keyed on errors, never on state - the one warning is the pre-existing hardware warning present on the BEFORE baseline too."
+    },
+    {
+      "tool": "converter drift-check --project ir/test-project001 --exports simatic-ml/test-project001",
+      "exit": 0,
+      "json": {
+        "entries": [
+          {
+            "name": "DB_Alarms",
+            "irPath": "ir/test-project001\\DB_Alarms.ir",
+            "xmlPath": "simatic-ml/test-project001\\DB_Alarms.xml",
+            "status": "Match",
+            "detail": null,
+            "fromTia": true
+          },
+          {
+            "name": "DB_AnalogInput",
+            "irPath": "ir/test-project001\\DB_AnalogInput.ir",
+            "xmlPath": "simatic-ml/test-project001\\DB_AnalogInput.xml",
+            "status": "Match",
+            "detail": null,
+            "fromTia": true
+          },
+          {
+            "name": "DB_Controls",
+            "irPath": "ir/test-project001\\DB_Controls.ir",
+            "xmlPath": "simatic-ml/test-project001\\DB_Controls.xml",
+            "status": "Match",
+            "detail": null,
+            "fromTia": true
+          },
+          {
+            "name": "DB_Input",
+            "irPath": "ir/test-project001\\DB_Input.ir",
+            "xmlPath": "simatic-ml/test-project001\\DB_Input.xml",
+            "status": "Match",
+            "detail": null,
+            "fromTia": true
+          },
+          {
+            "name": "DB_Output",
+            "irPath": "ir/test-project001\\DB_Output.ir",
+            "xmlPath": "simatic-ml/test-project001\\DB_Output.xml",
+            "status": "Match",
+            "detail": null,
+            "fromTia": true
+          },
+          {
+            "name": "DB_PLC",
+            "irPath": "ir/test-project001\\DB_PLC.ir",
+            "xmlPath": "simatic-ml/test-project001\\DB_PLC.xml",
+            "status": "Match",
+            "detail": null,
+            "fromTia": true
+          },
+          {
+            "name": "DB_Settings",
+            "irPath": "ir/test-project001\\DB_Settings.ir",
+            "xmlPath": "simatic-ml/test-project001\\DB_Settings.xml",
+            "status": "Match",
+            "detail": null,
+            "fromTia": true
+          },
+          {
+            "name": "DefaultTagTable",
+            "irPath": "ir/test-project001\\DefaultTagTable.ir",
+            "xmlPath": "simatic-ml/test-project001\\DefaultTagTable.xml",
+            "status": "Match",
+            "detail": null,
+            "fromTia": true
+          },
+          {
+            "name": "FB_Comms_ModbusServer",
+            "irPath": "ir/test-project001\\FB_Comms_ModbusServer.ir",
+            "xmlPath": null,
+            "status": "Skipped",
+            "detail": "no paired export",
+            "fromTia": null
+          },
+          {
+            "name": "FB_HarnessViolationLatch",
+            "irPath": "ir/test-project001\\FB_HarnessViolationLatch.ir",
+            "xmlPath": null,
+            "status": "Skipped",
+            "detail": "no paired export",
+            "fromTia": null
+          },
+          {
+            "name": "FB_HopperBlockageMonitor",
+            "irPath": "ir/test-project001\\FB_HopperBlockageMonitor.ir",
+            "xmlPath": "simatic-ml/test-project001\\FB_HopperBlockageMonitor.xml",
+            "status": "Match",
+            "detail": null,
+            "fromTia": true
+          },
+          {
+            "name": "FB_HopperBlockageStim",
+            "irPath": "ir/test-project001\\FB_HopperBlockageStim.ir",
+            "xmlPath": null,
+            "status": "Skipped",
+            "detail": "no paired export",
+            "fromTia": null
+          },
+          {
+            "name": "FB_HxBoolEcho",
+            "irPath": "ir/test-project001\\FB_HxBoolEcho.ir",
+            "xmlPath": null,
+            "status": "Skipped",
+            "detail": "no paired export",
+            "fromTia": null
+          },
+          {
+            "name": "FB_HxDwellTimer",
+            "irPath": "ir/test-project001\\FB_HxDwellTimer.ir",
+            "xmlPath": null,
+            "status": "Skipped",
+            "detail": "no paired export",
+            "fromTia": null
+          },
+          {
+            "name": "FB_HxIntStep",
+            "irPath": "ir/test-project001\\FB_HxIntStep.ir",
+            "xmlPath": null,
+            "status": "Skipped",
+            "detail": "no paired export",
+            "fromTia": null
+          },
+          {
+            "name": "FB_HxSealLatch",
+            "irPath": "ir/test-project001\\FB_HxSealLatch.ir",
+            "xmlPath": null,
+            "status": "Skipped",
+            "detail": "no paired export",
+            "fromTia": null
+          },
+          {
+            "name": "FB_MotorFwdRevSystem",
+            "irPath": "ir/test-project001\\FB_MotorFwdRevSystem.ir",
+            "xmlPath": "simatic-ml/test-project001\\FB_MotorFwdRevSystem.xml",
+            "status": "Match",
+            "detail": null,
+            "fromTia": true
+          },
+          {
+            "name": "FB_PusherControl",
+            "irPath": "ir/test-project001\\FB_PusherControl.ir",
+            "xmlPath": "simatic-ml/test-project001\\FB_PusherControl.xml",
+            "status": "Match",
+            "detail": null,
+            "fromTia": true
+          },
+          {
+            "name": "FB_ShredderSequencer",
+            "irPath": "ir/test-project001\\FB_ShredderSequencer.ir",
+            "xmlPath": "simatic-ml/test-project001\\FB_ShredderSequencer.xml",
+            "status": "Match",
+            "detail": null,
+            "fromTia": true
+          },
+          {
+            "name": "FC_AlarmsMain",
+            "irPath": "ir/test-project001\\FC_AlarmsMain.ir",
+            "xmlPath": "simatic-ml/test-project001\\FC_AlarmsMain.xml",
+            "status": "Match",
+            "detail": null,
+            "fromTia": true
+          },
+          {
+            "name": "FC_ControlMain",
+            "irPath": "ir/test-project001\\FC_ControlMain.ir",
+            "xmlPath": "simatic-ml/test-project001\\FC_ControlMain.xml",
+            "status": "Match",
+            "detail": null,
+            "fromTia": true
+          },
+          {
+            "name": "FC_HarnessCopyLayer",
+            "irPath": "ir/test-project001\\FC_HarnessCopyLayer.ir",
+            "xmlPath": null,
+            "status": "Skipped",
+            "detail": "no paired export",
+            "fromTia": null
+          },
+          {
+            "name": "FC_Inputs",
+            "irPath": "ir/test-project001\\FC_Inputs.ir",
+            "xmlPath": "simatic-ml/test-project001\\FC_Inputs.xml",
+            "status": "Match",
+            "detail": null,
+            "fromTia": true
+          },
+          {
+            "name": "FC_Outputs",
+            "irPath": "ir/test-project001\\FC_Outputs.ir",
+            "xmlPath": "simatic-ml/test-project001\\FC_Outputs.xml",
+            "status": "Match",
+            "detail": null,
+            "fromTia": true
+          },
+          {
+            "name": "HarnessMirror",
+            "irPath": "ir/test-project001\\HarnessMirror.ir",
+            "xmlPath": null,
+            "status": "Skipped",
+            "detail": "no paired export",
+            "fromTia": null
+          },
+          {
+            "name": "Main",
+            "irPath": "ir/test-project001\\Main.ir",
+            "xmlPath": "simatic-ml/test-project001\\Main.xml",
+            "status": "Match",
+            "detail": null,
+            "fromTia": true
+          },
+          {
+            "name": "MotorFwdRevIOSet",
+            "irPath": "ir/test-project001\\MotorFwdRevIOSet.ir",
+            "xmlPath": "simatic-ml/test-project001\\MotorFwdRevIOSet.xml",
+            "status": "Match",
+            "detail": null,
+            "fromTia": true
+          },
+          {
+            "name": "OB100",
+            "irPath": "ir/test-project001\\OB100.ir",
+            "xmlPath": "simatic-ml/test-project001\\OB100.xml",
+            "status": "Match",
+            "detail": null,
+            "fromTia": true
+          },
+          {
+            "name": "UDT_HopperBlockageIO",
+            "irPath": "ir/test-project001\\UDT_HopperBlockageIO.ir",
+            "xmlPath": "simatic-ml/test-project001\\UDT_HopperBlockageIO.xml",
+            "status": "Match",
+            "detail": null,
+            "fromTia": true
+          },
+          {
+            "name": "UDT_HopperBlockageStim",
+            "irPath": "ir/test-project001\\UDT_HopperBlockageStim.ir",
+            "xmlPath": null,
+            "status": "Skipped",
+            "detail": "no paired export",
+            "fromTia": null
+          },
+          {
+            "name": "UDT_PusherIO",
+            "irPath": "ir/test-project001\\UDT_PusherIO.ir",
+            "xmlPath": "simatic-ml/test-project001\\UDT_PusherIO.xml",
+            "status": "Match",
+            "detail": null,
+            "fromTia": true
+          },
+          {
+            "name": "UDT_ShredderSequencerIO",
+            "irPath": "ir/test-project001\\UDT_ShredderSequencerIO.ir",
+            "xmlPath": "simatic-ml/test-project001\\UDT_ShredderSequencerIO.xml",
+            "status": "Match",
+            "detail": null,
+            "fromTia": true
+          },
+          {
+            "name": "iDB_Comms_ModbusServer",
+            "irPath": "ir/test-project001\\iDB_Comms_ModbusServer.ir",
+            "xmlPath": null,
+            "status": "Skipped",
+            "detail": "no paired export",
+            "fromTia": null
+          },
+          {
+            "name": "iDB_HarnessViolationLatch",
+            "irPath": "ir/test-project001\\iDB_HarnessViolationLatch.ir",
+            "xmlPath": null,
+            "status": "Skipped",
+            "detail": "no paired export",
+            "fromTia": null
+          },
+          {
+            "name": "iDB_HopperBlockageMonitor",
+            "irPath": "ir/test-project001\\iDB_HopperBlockageMonitor.ir",
+            "xmlPath": "simatic-ml/test-project001\\iDB_HopperBlockageMonitor.xml",
+            "status": "Match",
+            "detail": null,
+            "fromTia": true
+          },
+          {
+            "name": "iDB_HopperBlockageStim",
+            "irPath": "ir/test-project001\\iDB_HopperBlockageStim.ir",
+            "xmlPath": null,
+            "status": "Skipped",
+            "detail": "no paired export",
+            "fromTia": null
+          },
+          {
+            "name": "iDB_HxBoolEcho",
+            "irPath": "ir/test-project001\\iDB_HxBoolEcho.ir",
+            "xmlPath": null,
+            "status": "Skipped",
+            "detail": "no paired export",
+            "fromTia": null
+          },
+          {
+            "name": "iDB_HxDwellTimer",
+            "irPath": "ir/test-project001\\iDB_HxDwellTimer.ir",
+            "xmlPath": null,
+            "status": "Skipped",
+            "detail": "no paired export",
+            "fromTia": null
+          },
+          {
+            "name": "iDB_HxIntStep",
+            "irPath": "ir/test-project001\\iDB_HxIntStep.ir",
+            "xmlPath": null,
+            "status": "Skipped",
+            "detail": "no paired export",
+            "fromTia": null
+          },
+          {
+            "name": "iDB_HxSealLatch",
+            "irPath": "ir/test-project001\\iDB_HxSealLatch.ir",
+            "xmlPath": null,
+            "status": "Skipped",
+            "detail": "no paired export",
+            "fromTia": null
+          },
+          {
+            "name": "iDB_MotorFwdRevSystem_Shredder",
+            "irPath": "ir/test-project001\\iDB_MotorFwdRevSystem_Shredder.ir",
+            "xmlPath": "simatic-ml/test-project001\\iDB_MotorFwdRevSystem_Shredder.xml",
+            "status": "Match",
+            "detail": null,
+            "fromTia": true
+          },
+          {
+            "name": "iDB_PusherControl",
+            "irPath": "ir/test-project001\\iDB_PusherControl.ir",
+            "xmlPath": "simatic-ml/test-project001\\iDB_PusherControl.xml",
+            "status": "Match",
+            "detail": null,
+            "fromTia": true
+          },
+          {
+            "name": "iDB_ShredderSequencer",
+            "irPath": "ir/test-project001\\iDB_ShredderSequencer.ir",
+            "xmlPath": "simatic-ml/test-project001\\iDB_ShredderSequencer.xml",
+            "status": "Match",
+            "detail": null,
+            "fromTia": true
+          }
+        ],
+        "comparedCount": 26,
+        "examinedNothing": false,
+        "tiaExportCount": 26,
+        "nonTiaExportCount": 0,
+        "comparedNothingFromTia": false,
+        "projectDir": "ir/test-project001",
+        "exportsDir": "simatic-ml/test-project001",
+        "hasDrift": false
+      },
+      "note": "BEFORE the corpus refresh this was exit 1, 4 drifted (the four objects named in the dispatch). After re-exporting those four from TIA: 0 drifted, 26 compared - a non-empty denominator."
+    }
+  ],
+  "notes": {
+    "claim-refused": "`converter claim --kind block-edit --value HarnessMirror` was REFUSED, exit 1, result NotInCorpus: 'a tag is addressable but is not an editable object, and is deliberately not accepted here'. There is no claim kind that reserves a TAG TABLE, so HarnessMirror.ir is edited under no reservation. It carries no NUMBER, so the checker's every-edited-block-back-to-a-claim gate does not cover it either - reported here rather than left silent.",
+    "harness-ir-hand-written-lines": 0,
+    "harness-generation": "FC_HarnessCopyLayer.ir and HarnessMirror.ir were REGENERATED, not hand-edited: `harness-run --generate-only --emit`. Fixed point measured - regenerating from the promoted tree reproduces both files byte-identically.",
+    "gate-1": "NO SIGNED TIER-(c) MANIFEST ITEM EXISTS for this delta. gen/test-project001/hopper-blockage-alarm/architecture.md still names HopperBlockStopReq in six places and predates AR-HBA-01. Proceeded on the dispatch's explicit naming of the delta and the blast radius; flagged for engineer ratification.",
+    "interface-delta-confirmed-from-tia": "NOT GATED HERE BECAUSE `converter compare`'s CORRECT ANSWER IS exit 1 (DIFFERS), and an exit-1 check would red this file for a result that is the expected one. Recorded as the evidence it is. `converter compare` of the previously-committed export against the fresh TIA re-export: UDT_HopperBlockageIO = exactly 2 differences, one of them ATTR-DIFFERS /Document/SW.Types.PlcStruct/AttributeList/Interface/Sections/Section[@Name='None']/Member[7]/@Name : 'HopperBlockStopReq' -> 'HopperBlockedInhibit', the other the header comment text. Nothing else in the type changed - no member added, removed, retyped or reordered. This is the mechanical proof of the interface delta that `converter diff` cannot give, being block-only. FC_ControlMain = exactly 1 difference, the NETWORK 8 comment text, with MemoryLayout compared on both sides (Optimized -> Optimized).",
+    "export-corpus-was-stale-by-one-prior-change": "\ud83d\udd34 THE REFRESHED EXPORTS CARRY TWO CHANGES' WORTH OF DELTA, NOT ONE, AND THAT IS NOT THIS RUN'S DOING. `converter compare` on FB_HopperBlockageMonitor and iDB_HopperBlockageMonitor reports Member[11] and Member[12] ADDED - those are FaultResetMem and FaultResetEdge from the AR-HBA-05 repair (e413e34, 2026-09-01 09:04), which deliberately did NOT re-export. So simatic-ml/ was already one change behind before this run started. Refreshing was not optional: drift-check was going to report these four objects DRIFTED either way, and ExportDriftDetectorTests asserts the drifted set equals a documented baseline. After the refresh: 0 drifted, 26 compared, and both ExportDriftDetectorTests (5/5) and CopyLayerAgainstRealTiaExportTests (7/7) pass.",
+    "build-stamp-and-map-hash": "MAP HASH: UNCHANGED. RegisterMap.MapHash's canonical form hashes geometry (total/retentive bytes, base byte, declared registers), the version/scan/start/echo/vector/result region bases and lengths, the per-slot register counts and the slot ids. NO SIGNAL NAME IS AN INPUT, and this rename moved no width and no register: mirror stays 37 [control 6, vectors 21, results 10], latches 2, every %M address identical. BUILD STAMP: MOVED, 16#33434A68 -> 16#B8BCB7CB. BuildStamp.Derive appends `r=<tag>:<type>` per result source and the full IR text of every program object; both changed. SEPARATE PRE-EXISTING FINDING: a control regeneration from the git-HEAD tree emits 16#2819B312, not the committed 16#33434A68 - so the committed stamp was ALREADY stale before this run, and the deployed rig carries a third value again (16#E0B172A9 per the binding's own note)."
+  }
+}

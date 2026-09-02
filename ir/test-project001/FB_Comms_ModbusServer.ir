@@ -4,7 +4,7 @@ NUMBER 9000
 LANGUAGE LAD
 MEMORYLAYOUT Optimized
 TITLE "Modbus TCP Server"
-COMMENT "Serves this PLC's harness mirror to a Modbus TCP client. The server listens passively on TCP port 503 and accepts a connection from any client address, exposing 37 holding registers starting at MW1000 - the mirror the harness copy layer maintains, whose registers 0 and 1 are the build stamp, whose next two are the free-running scan counter, and whose tail carries the block-under-test observations and the harness violation latches. The span is the width the copy layer's register map needs rather than a round number, and it is widened whenever that map grows; counting signals does not give it, because a duration is 32 bits and so takes two registers. The exposed span is exactly the mirror: a register past the end returns an exception rather than a zero, so a client reading beyond what the copy layer maintains is told so instead of being handed a value that looks like data. Comms block - it carries no equipment logic and writes no plant tag. The holding-register area is given as an area pointer over marker memory, which is the form a register area in %M takes; it is bit memory rather than a data block because a data block can carry an optimized memory layout, which this server cannot read. DISCONNECT is taken from the server's own disconnect bit, which nothing in this program writes, so the connection stays up once made. Nothing here is retentive: the connection settings come back from their start values on every warm restart."
+COMMENT "Serves this PLC's harness mirror to a Modbus TCP client. The server listens passively on TCP port 503 and accepts a connection from any client address, exposing 1024 holding registers starting at MW1000 - M1000 to M3047, the window the harness copy layer's mirror sits in, whose registers 0 and 1 are the build stamp, whose next two are the free-running scan counter, and whose tail carries the block-under-test observations and the harness violation latches. The span is a fixed window sized to carry several test slots at once rather than an exact fit to today's register map: batching slots into one wave is the only way to raise throughput here, because this server accepts one connection at a time and concurrent waves are therefore impossible. It is deliberately wider than the mirror the copy layer currently maintains, and that is a change from the earlier exact fit, made with its cost known: a register past the maintained mirror now reads as zero instead of returning an exception, so an out-of-range read no longer announces itself on the wire, and a disagreement between a register map and this window has to be caught where the map is derived instead of by the server at run time. Comms block - it carries no equipment logic and writes no plant tag. The holding-register area is given as an area pointer over marker memory, which is the form a register area in %M takes; it is bit memory rather than a data block because a data block can carry an optimized memory layout, which this server cannot read. DISCONNECT is taken from the server's own disconnect bit, which nothing in this program writes, so the connection stays up once made. Nothing here is retentive: the connection settings come back from their start values on every warm restart."
 
 INTERFACE
   INPUT
@@ -27,8 +27,8 @@ INTERFACE
   CONSTANT
 
 NETWORK 1 "Serve The Harness Mirror"
-  COMMENT "Runs the Modbus TCP server on every scan. The holding-register area covers 37 words from M1000.0, which is the whole of the harness mirror. A zero remote address with no active connection establishment makes the server passive: it listens on the local port and accepts whichever client connects. NDR, DR and ERROR are left unconnected - what reads this server's behaviour reads the mirror registers. STATUS is written back into the instance so the last connection status code can be read there."
-  MB_SERVER(MbServer, EN := TRUE, DISCONNECT := MbServer.DISCONNECT, MB_HOLD_REG := P#M1000.0 WORD 37, CONNECT := Comms, NDR => OPEN, DR => OPEN, ERROR => OPEN, STATUS => MbServer.STATUS)
+  COMMENT "Runs the Modbus TCP server on every scan. The holding-register area covers 1024 words from M1000.0 - M1000 to M3047 - which is the window the harness mirror sits in rather than the mirror's own width: the copy layer maintains only the leading part of it, and the rest reads as zero. A zero remote address with no active connection establishment makes the server passive: it listens on the local port and accepts whichever client connects. NDR, DR and ERROR are left unconnected - what reads this server's behaviour reads the mirror registers. STATUS is written back into the instance so the last connection status code can be read there."
+  MB_SERVER(MbServer, EN := TRUE, DISCONNECT := MbServer.DISCONNECT, MB_HOLD_REG := P#M1000.0 WORD 1024, CONNECT := Comms, NDR => OPEN, DR => OPEN, ERROR => OPEN, STATUS => MbServer.STATUS)
 
 SIDECAR
 NETWORK 1
@@ -36,7 +36,7 @@ NETWORK 1
   access MbServer.DISCONNECT = 21 LocalVariable
   access Comms = 23 LocalVariable
   access MbServer.STATUS = 24 LocalVariable
-  constant P#M1000.0 WORD 37 = 22 Any
+  constant P#M1000.0 WORD 1024 = 22 Any
   fixedshape 0
     fixedshapeuid = 25
     instruction = MB_SERVER

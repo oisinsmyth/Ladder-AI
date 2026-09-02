@@ -1,0 +1,259 @@
+{
+  "schema": "ladder-ai/agent-evidence/1",
+  "task": "hba-reset-edge - bring FB_HopperBlockageMonitor's FaultReset handling forward to AR-HBA-05 / AR-HBA-07: edge-triggered acknowledgement (constructed rising edge, new FaultResetEdge/FaultResetMem statics) that leaves the persistence accumulator untouched. NETWORKs 3/4/5 changed; 1/2/6 proven identical.",
+  "kind": "modify",
+  "skill": "gen-block-modify-purpose",
+  "files": [
+    {
+      "path": "ir/test-project001/FB_HopperBlockageMonitor.ir",
+      "ir_hash": "E4E2C2E77F7CDC408CF0BF7F46769FB4A2E8CF1AD3267CEAED389E5F7147017B"
+    },
+    {
+      "path": "ir/test-project001/iDB_HopperBlockageMonitor.ir",
+      "note": "instance DB - ir-hash keys code blocks only, so no hash key; listed so the block-edit claim on it joins."
+    }
+  ],
+  "claims": [
+    {
+      "kind": "block-edit",
+      "value": "FB_HopperBlockageMonitor",
+      "agent": "ee055079-868d-48bc-aa0a-7516e8688d29/lad-coder"
+    },
+    {
+      "kind": "block-edit",
+      "value": "iDB_HopperBlockageMonitor",
+      "agent": "ee055079-868d-48bc-aa0a-7516e8688d29/lad-coder"
+    }
+  ],
+  "checks": [
+    {
+      "tool": "converter preflight (as-built, BEFORE the edit)",
+      "exit": 0,
+      "note": "baseline: the block carried ZERO findings before this run, so any finding after it would be attributable to this edit.",
+      "json": {
+        "files": [
+          {
+            "filePath": "ir/test-project001/FB_HopperBlockageMonitor.ir",
+            "name": "FB_HopperBlockageMonitor",
+            "findings": []
+          }
+        ],
+        "indexWarnings": [],
+        "corpus": {
+          "projectDir": "ir/test-project001",
+          "projectFileCount": 43,
+          "batchFileCount": 1,
+          "projectContributedNothing": false,
+          "blockNameCount": 18,
+          "tagRootNameCount": 145,
+          "typeNameCount": 5,
+          "memberBodyCount": 23,
+          "calleeInterfaceCount": 18,
+          "harnessCorpusFileCount": 43
+        }
+      }
+    },
+    {
+      "tool": "converter preflight",
+      "exit": 0,
+      "json": {
+        "files": [
+          {
+            "filePath": "ir/test-project001/FB_HopperBlockageMonitor.ir",
+            "name": "FB_HopperBlockageMonitor",
+            "findings": []
+          },
+          {
+            "filePath": "ir/test-project001/iDB_HopperBlockageMonitor.ir",
+            "name": "iDB_HopperBlockageMonitor",
+            "findings": []
+          }
+        ],
+        "indexWarnings": [],
+        "corpus": {
+          "projectDir": "ir/test-project001",
+          "projectFileCount": 43,
+          "batchFileCount": 2,
+          "projectContributedNothing": false,
+          "blockNameCount": 18,
+          "tagRootNameCount": 145,
+          "typeNameCount": 5,
+          "memberBodyCount": 23,
+          "calleeInterfaceCount": 18,
+          "harnessCorpusFileCount": 43
+        }
+      }
+    },
+    {
+      "tool": "converter diff --only 3 4 5 --allow-header",
+      "exit": 0,
+      "json": {
+        "blockName": "FB_HopperBlockageMonitor",
+        "blockNameMismatch": false,
+        "otherBlockName": "FB_HopperBlockageMonitor",
+        "hasAnyChange": true,
+        "header": {
+          "changed": true,
+          "titleChanged": false,
+          "titleBefore": "Hopper-Blockage Monitor",
+          "titleAfter": "Hopper-Blockage Monitor",
+          "commentChanged": false,
+          "commentBefore": "Supervises the shredder hopper high-level sensor: raises a latched hopper-blockage alarm (and a stop/inhibit demand) when the hopper stays (debounced-)high for a cumulative threshold of time while the plant is running, i.e. the shredder/pusher is not clearing it (S6 request #1, REQ-HBA-001..007). Purely supervisory - it commands no motion and writes no shared tag; the alarm and the stop demand are exposed on its own IO interface and wired to annunciation / the actual stop at a separate integration step (Q-HBA-05). Cumulative timing is pause-and-resume (NEW-HBA-01): losing PlantRunning freezes the elapsed and resumes, so 60 s of blockage need not be contiguous. Built from a plain TON, never TONR (C-406), plus a banked up-accumulator compared against the threshold (see NETWORK 3-4). The alarm latch lives in the RETAIN interface and deliberately survives a power cycle (C-124 carve-out, NEW-HBA-04) - like the sequencer's DischargeConveyorTimeoutFault, a blockage needing a human still needs FaultReset after a restart; all transient timing state is non-retentive and self-clears at startup (NEW-HBA-06, no OB100 edit). Tunables BlockedTimeThreshold (T#60S) and ClearDebounceTime (T#2S) are this instance's own settings (C-307), not shared DB members.",
+          "commentAfter": "Supervises the shredder hopper high-level sensor: raises a latched hopper-blockage alarm (and a stop/inhibit demand) when the hopper stays (debounced-)high for a cumulative threshold of time while the plant is running, i.e. the shredder/pusher is not clearing it (S6 request #1, REQ-HBA-001..007). Purely supervisory - it commands no motion and writes no shared tag; the alarm and the stop demand are exposed on its own IO interface and wired to annunciation / the actual stop at a separate integration step (Q-HBA-05). Cumulative timing is pause-and-resume (NEW-HBA-01): losing PlantRunning freezes the elapsed and resumes, so 60 s of blockage need not be contiguous. Built from a plain TON, never TONR (C-406), plus a banked up-accumulator compared against the threshold (see NETWORK 3-4). The alarm latch lives in the RETAIN interface and deliberately survives a power cycle (C-124 carve-out, NEW-HBA-04) - like the sequencer's DischargeConveyorTimeoutFault, a blockage needing a human still needs FaultReset after a restart; all transient timing state is non-retentive and self-clears at startup (NEW-HBA-06, no OB100 edit). Tunables BlockedTimeThreshold (T#60S) and ClearDebounceTime (T#2S) are this instance's own settings (C-307), not shared DB members.",
+          "interfaceChanged": true,
+          "interfaceCommentChanged": false
+        },
+        "summary": {
+          "total": 6,
+          "changed": 3,
+          "added": 0,
+          "removed": 0,
+          "moved": 0,
+          "identical": 3
+        },
+        "networks": [
+          {
+            "number": 1,
+            "kind": "Identical",
+            "title": "Confirmed-Clear Debounce",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 2,
+            "kind": "Identical",
+            "title": "Blockage-Present Qualifier And Run Gate",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 3,
+            "kind": "Changed",
+            "title": "Cumulative Blockage-Elapsed Accumulator",
+            "beforeText": "NETWORK 3 \"Cumulative Blockage-Elapsed Accumulator\"\n  COMMENT \"Banks cumulative high-and-running time across plant-stop pauses (NEW-HBA-01), replacing the former countdown budget (F1/F2/S1 fix, 2026-07-20). AccumulatedElapsed has two provably-disjoint writers, so there is no same-scan race and no next-scan cleanup (the F2/S1 root cause is gone): it is reset to T#0S on a genuine confirmed clear (NOT HighQualified) or on FaultReset, and otherwise banked up by the just-ended segment's elapsed only on a real plant-stop pause (PauseEdge AND HighQualified AND NOT FaultReset - i.e. the hopper is still blocked but the plant stopped). PauseEdge is a constructed falling edge (C-404); it and the bank read PersistenceTimer.ET from before NETWORK 4's TON re-evaluates this scan, so the ET captured is the just-completed segment's, with no separate held-value register needed.\"\n  COIL PauseEdge := NOT BlockActive AND BlockActiveMem\n  COIL BlockActiveMem := BlockActive\n  MOVE(EN := NOT HighQualified OR IO.FaultReset, IN := ZeroTime) => AccumulatedElapsed\n  ADD(EN := PauseEdge AND HighQualified AND NOT IO.FaultReset, IN1 := PersistenceTimer.ET, IN2 := AccumulatedElapsed) => AccumulatedElapsed\n",
+            "afterText": "NETWORK 3 \"Cumulative Blockage-Elapsed Accumulator\"\n  COMMENT \"Banks cumulative high-and-running time across plant-stop pauses (NEW-HBA-01). AccumulatedElapsed has two writers that can never fire in the same scan: it goes back to T#0S once the hopper is no longer qualified high (a confirmed clear), and it is otherwise banked up by the just-ended segment's elapsed when the plant stops with the hopper still blocked. An operator FaultReset appears nowhere here: acknowledging an alarm says nothing about the hopper, so it neither discards nor freezes the accumulated evidence (REQ-HBA-005). PauseEdge is the falling edge of BlockActive, taken against the previous-scan copy that the coil below it then updates - the two coils must stay in this order or the edge never fires. Both PauseEdge and the bank read PersistenceTimer.ET before NETWORK 4 re-evaluates the timer this scan, so the elapsed banked is the just-completed segment's, with no separate held-value register needed.\"\n  COIL PauseEdge := NOT BlockActive AND BlockActiveMem\n  COIL BlockActiveMem := BlockActive\n  MOVE(EN := NOT HighQualified, IN := ZeroTime) => AccumulatedElapsed\n  ADD(EN := PauseEdge AND HighQualified, IN1 := PersistenceTimer.ET, IN2 := AccumulatedElapsed) => AccumulatedElapsed\n",
+            "movedFrom": null
+          },
+          {
+            "number": 4,
+            "kind": "Changed",
+            "title": "Cumulative Persistence Timer",
+            "beforeText": "NETWORK 4 \"Cumulative Persistence Timer (TON, C-406)\"\n  COMMENT \"Plain TON, never TONR (C-406), times the current contiguous high-and-running segment; FaultReset in its IN forces the current segment back to zero so a reset clears the in-progress time too (F1: reset is history-independent). CumulativeElapsed = AccumulatedElapsed (banked pauses) + this segment's live ET is the total cumulative high-and-running time, compared against BlockedTimeThreshold in NETWORK 5. PT is BlockedTimeThreshold only so a single contiguous segment's ET can itself reach the threshold; the trip is the comparison, not the timer's own Q.\"\n  TON(PersistenceTimer, IN := BlockActive AND NOT IO.FaultReset, PT := IO.BlockedTimeThreshold)\n  ADD(EN := TRUE, IN1 := AccumulatedElapsed, IN2 := PersistenceTimer.ET) => CumulativeElapsed\n",
+            "afterText": "NETWORK 4 \"Cumulative Persistence Timer\"\n  COMMENT \"Times the current contiguous high-and-running segment, and adds the banked pause time to it: CumulativeElapsed is the total cumulative high-and-running time that NETWORK 5 compares against BlockedTimeThreshold. The timer runs on the blockage-and-running condition alone - an operator FaultReset does not stop, freeze or rewind the segment in progress (REQ-HBA-005). PT is BlockedTimeThreshold only so that a single uninterrupted segment can itself reach the threshold; the trip is the comparison in NETWORK 5, never the timer's own Q.\"\n  TON(PersistenceTimer, IN := BlockActive, PT := IO.BlockedTimeThreshold)\n  ADD(EN := TRUE, IN1 := AccumulatedElapsed, IN2 := PersistenceTimer.ET) => CumulativeElapsed\n",
+            "movedFrom": null
+          },
+          {
+            "number": 5,
+            "kind": "Changed",
+            "title": "Hopper-Blocked Alarm Latch (RETAIN - Survives Power Cycle)",
+            "beforeText": "NETWORK 5 \"Hopper-Blocked Alarm Latch (RETAIN - Survives Power Cycle)\"\n  COMMENT \"Latched fault (C-123): set when cumulative high-and-running time reaches BlockedTimeThreshold (CumulativeElapsed >= threshold), held until FaultReset. FaultReset gates the whole rung (AND NOT FaultReset) so a reset clears the latch regardless of the trip's current state (F1 fix - the old rung let a still-true trip defeat the reset); paired with NETWORK 3/4 zeroing the accumulator and current segment, a reset requires a fresh full accumulation before re-alarming, identically whether the trip was contiguous or post-pause. Lives in the RETAIN interface and deliberately survives a power cycle (C-124 carve-out, NEW-HBA-04) - a blockage needing a human still needs acknowledgement after a restart, like the sequencer's DischargeConveyorTimeoutFault. Fail-safe: the stop demand below stays asserted until acknowledged.\"\n  COIL IO.HopperBlockedAlarm := (CumulativeElapsed >= IO.BlockedTimeThreshold OR IO.HopperBlockedAlarm) AND NOT IO.FaultReset\n",
+            "afterText": "NETWORK 5 \"Hopper-Blocked Alarm Latch (RETAIN - Survives Power Cycle)\"\n  COMMENT \"Latches the hopper-blockage alarm when the cumulative high-and-running time reaches BlockedTimeThreshold, and holds it until an operator acknowledges. The acknowledgement is the moment FaultReset goes true, not the fact that it is true: a reset left on, wired on or stuck on clears the latch once and cannot hold the alarm off afterwards (REQ-HBA-005). Because the reset leaves the accumulated evidence alone, the latch re-evaluates on the very next scan against that same evidence - a hopper still blocked past the threshold re-alarms at once, whether or not the plant is running, while a hopper whose evidence has been discarded stays quiet. The reset pulse is taken against the previous-scan copy that the coil below it then updates - the two coils must stay in this order or the pulse never fires. The latch lives in the RETAIN interface and survives a power cycle: a blockage that needed a human still needs acknowledging after a restart, and the stop demand below stays asserted until it gets one.\"\n  COIL FaultResetEdge := IO.FaultReset AND NOT FaultResetMem\n  COIL FaultResetMem := IO.FaultReset\n  COIL IO.HopperBlockedAlarm := (CumulativeElapsed >= IO.BlockedTimeThreshold OR IO.HopperBlockedAlarm) AND NOT FaultResetEdge\n",
+            "movedFrom": null
+          },
+          {
+            "number": 6,
+            "kind": "Identical",
+            "title": "Stop / Inhibit Demand",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          }
+        ],
+        "allowedNetworks": [
+          3,
+          4,
+          5
+        ],
+        "invarianceViolations": [],
+        "headerChangeAllowed": true,
+        "hasUnclaimedHeaderChange": false,
+        "hasNonGatingCommentChange": false,
+        "declaredInsertAt": null,
+        "movesAreDeclared": false,
+        "unchangedRemainder": 3,
+        "hasInvarianceViolation": false
+      }
+    },
+    {
+      "tool": "openness-cli import",
+      "exit": 0,
+      "text": "TYPE  NUMBER  NAME                       LANGUAGE  SAFETY  CONSISTENT    PATH                                      \n----  ------  -------------------------  --------  ------  ------------  ------------------------------------------\nFB    50      FB_HopperBlockageMonitor   LAD               INCONSISTENT  S7-1200 station_1/PLC1 6ES7 214-1AG40-0XB0\nDB    51      iDB_HopperBlockageMonitor  DB                INCONSISTENT  S7-1200 station_1/PLC1 6ES7 214-1AG40-0XB0"
+    },
+    {
+      "tool": "openness-cli compile --block FB_HopperBlockageMonitor",
+      "exit": 0,
+      "text": "STATE: Warning\nERRORS: 0  WARNINGS: 4\nNOTE: compiler reported ErrorCount=0, WarningCount=1 - these disagree with the messages above and are not reliable; counts shown are from the message tree.\nCONSISTENT: yes  (re-read after the compile; TIA will export this item)\n\n[Warning] PLC1 6ES7 214-1AG40-0XB0: \n[Success] Program blocks: \n[Success] FB_HopperBlockageMonitor (FB50): Block was successfully compiled.\n[Warning] General warnings: \n[Warning] Inputs or outputs are used that do not exist in the configured hardware.\n[Warning] Compiling finished (errors: 0; warnings: 1)\n\nPASSED WITH WARNINGS: 0 errors, so this is a pass. State is Warning, which is reported and not decisive - a pre-existing hardware warning anywhere in the project returns a non-Success state on a perfectly clean block. Read the messages above before treating the warnings as noise."
+    },
+    {
+      "tool": "openness-cli compile --block iDB_HopperBlockageMonitor",
+      "exit": 0,
+      "text": "STATE: Warning\nERRORS: 0  WARNINGS: 4\nNOTE: compiler reported ErrorCount=0, WarningCount=1 - these disagree with the messages above and are not reliable; counts shown are from the message tree.\nCONSISTENT: yes  (re-read after the compile; TIA will export this item)\n\n[Warning] PLC1 6ES7 214-1AG40-0XB0: \n[Success] Program blocks: \n[Success] iDB_HopperBlockageMonitor (DB51): Block was successfully compiled.\n[Warning] General warnings: \n[Warning] Inputs or outputs are used that do not exist in the configured hardware.\n[Warning] Compiling finished (errors: 0; warnings: 1)\n\nPASSED WITH WARNINGS: 0 errors, so this is a pass. State is Warning, which is reported and not decisive - a pre-existing hardware warning anywhere in the project returns a non-Success state on a perfectly clean block. Read the messages above before treating the warnings as noise."
+    },
+    {
+      "tool": "openness-cli sanity-check (run 1, post-import)",
+      "exit": 9,
+      "transient": "the post-import dependent-block cascade - 4 callers/readers of the changed FB and iDB flagged inconsistent by the import and cleared by the per-block compiles that follow. Context, not a gate; the passing run below is the gate.",
+      "text": "OVERALL: ISSUES FOUND\nBLOCKS: 42  INCONSISTENT: 4  DUPLICATE NUMBERS: 0\nTYPES: 8  INCONSISTENT: 0\n\nInconsistent blocks:\n  S7-1200 station_1/PLC1 6ES7 214-1AG40-0XB0/FC_ControlMain (LAD)\n  S7-1200 station_1/PLC1 6ES7 214-1AG40-0XB0/FC_AlarmsMain (LAD)\n  S7-1200 station_1/PLC1 6ES7 214-1AG40-0XB0/FB_HarnessViolationLatch (LAD)\n  S7-1200 station_1/PLC1 6ES7 214-1AG40-0XB0/FC_HarnessCopyLayer (LAD)\n  -> a device compile does NOT clear these, and re-running sanity-check will not either.\n     clear with: openness-cli compile <project> --block <name>   (per block, in dependency order)\n\nDevice compiles:\n  S7-1200 station_1/PLC1 6ES7 214-1AG40-0XB0: Warning (errors=0, warnings=1)  scope=station (hardware + program)\n  -> a non-Success STATE with errors=0 is a PASS. The verdict keys on errors, never on state:\n     one pre-existing hardware warning anywhere in the project makes every compile non-Success."
+    },
+    {
+      "tool": "openness-cli compile --block FC_ControlMain",
+      "exit": 0,
+      "text": "STATE: Warning\nERRORS: 0  WARNINGS: 4\nNOTE: compiler reported ErrorCount=0, WarningCount=1 - these disagree with the messages above and are not reliable; counts shown are from the message tree.\nCONSISTENT: yes  (re-read after the compile; TIA will export this item)\n\n[Warning] PLC1 6ES7 214-1AG40-0XB0: \n[Warning] General warnings: \n[Warning] Inputs or outputs are used that do not exist in the configured hardware.\n[Information] Program blocks: \n[Information] No block was compiled. All blocks are up-to-date.\n[Warning] Compiling finished (errors: 0; warnings: 1)\n\nPASSED WITH WARNINGS: 0 errors, so this is a pass. State is Warning, which is reported and not decisive - a pre-existing hardware warning anywhere in the project returns a non-Success state on a perfectly clean block. Read the messages above before treating the warnings as noise."
+    },
+    {
+      "tool": "openness-cli compile --block FC_AlarmsMain",
+      "exit": 0,
+      "text": "STATE: Warning\nERRORS: 0  WARNINGS: 4\nNOTE: compiler reported ErrorCount=0, WarningCount=1 - these disagree with the messages above and are not reliable; counts shown are from the message tree.\nCONSISTENT: yes  (re-read after the compile; TIA will export this item)\n\n[Warning] PLC1 6ES7 214-1AG40-0XB0: \n[Warning] General warnings: \n[Warning] Inputs or outputs are used that do not exist in the configured hardware.\n[Information] Program blocks: \n[Information] No block was compiled. All blocks are up-to-date.\n[Warning] Compiling finished (errors: 0; warnings: 1)\n\nPASSED WITH WARNINGS: 0 errors, so this is a pass. State is Warning, which is reported and not decisive - a pre-existing hardware warning anywhere in the project returns a non-Success state on a perfectly clean block. Read the messages above before treating the warnings as noise."
+    },
+    {
+      "tool": "openness-cli compile --block FB_HarnessViolationLatch",
+      "exit": 0,
+      "text": "STATE: Warning\nERRORS: 0  WARNINGS: 4\nNOTE: compiler reported ErrorCount=0, WarningCount=1 - these disagree with the messages above and are not reliable; counts shown are from the message tree.\nCONSISTENT: yes  (re-read after the compile; TIA will export this item)\n\n[Warning] PLC1 6ES7 214-1AG40-0XB0: \n[Warning] General warnings: \n[Warning] Inputs or outputs are used that do not exist in the configured hardware.\n[Information] Program blocks: \n[Information] No block was compiled. All blocks are up-to-date.\n[Warning] Compiling finished (errors: 0; warnings: 1)\n\nPASSED WITH WARNINGS: 0 errors, so this is a pass. State is Warning, which is reported and not decisive - a pre-existing hardware warning anywhere in the project returns a non-Success state on a perfectly clean block. Read the messages above before treating the warnings as noise."
+    },
+    {
+      "tool": "openness-cli compile --block FC_HarnessCopyLayer",
+      "exit": 0,
+      "text": "STATE: Warning\nERRORS: 0  WARNINGS: 4\nNOTE: compiler reported ErrorCount=0, WarningCount=1 - these disagree with the messages above and are not reliable; counts shown are from the message tree.\nCONSISTENT: yes  (re-read after the compile; TIA will export this item)\n\n[Warning] PLC1 6ES7 214-1AG40-0XB0: \n[Warning] General warnings: \n[Warning] Inputs or outputs are used that do not exist in the configured hardware.\n[Information] Program blocks: \n[Information] No block was compiled. All blocks are up-to-date.\n[Warning] Compiling finished (errors: 0; warnings: 1)\n\nPASSED WITH WARNINGS: 0 errors, so this is a pass. State is Warning, which is reported and not decisive - a pre-existing hardware warning anywhere in the project returns a non-Success state on a perfectly clean block. Read the messages above before treating the warnings as noise."
+    },
+    {
+      "tool": "openness-cli sanity-check",
+      "exit": 0,
+      "json": {
+        "healthy": true,
+        "nothingExamined": false,
+        "totalBlocks": 42,
+        "inconsistentBlocks": [],
+        "totalTypes": 8,
+        "inconsistentTypes": [],
+        "duplicateBlockNumbers": [],
+        "deviceCompiles": [
+          {
+            "device": "S7-1200 station_1/PLC1 6ES7 214-1AG40-0XB0",
+            "state": "Warning",
+            "errors": 0,
+            "warnings": 1
+          }
+        ]
+      },
+      "text": "OVERALL: HEALTHY\nBLOCKS: 42  INCONSISTENT: 0  DUPLICATE NUMBERS: 0\nTYPES: 8  INCONSISTENT: 0\n\nDevice compiles:\n  S7-1200 station_1/PLC1 6ES7 214-1AG40-0XB0: Warning (errors=0, warnings=1)  scope=station (hardware + program)\n  -> a non-Success STATE with errors=0 is a PASS. The verdict keys on errors, never on state:\n     one pre-existing hardware warning anywhere in the project makes every compile non-Success."
+    },
+    {
+      "tool": "converter review --project",
+      "exit": 0,
+      "text": "FILE: ir/test-project001/FB_HopperBlockageMonitor.ir\n  BLOCK: FB_HopperBlockageMonitor\n  SCOPE: plant content - FB 50 is outside the reserved harness band 9000-9999, so this is plant content and every rule gates\n\n  C-001: checked, clean\n  C-003: checked, clean\n  C-005: checked, clean\n  C-103: checked, clean\n  C-118: checked, clean\n  C-121: checked, clean\n  C-119: checked, clean\n  C-120: checked, clean\n  C-603: not applicable (this block references no Step register, so it has no stepped-sequence phase condition for C-603 to read)\n  C-122: checked, clean\n  C-125: checked, clean\n  C-201: checked, clean\n  C-301: checked, clean\n  C-501: checked, clean\n  C-406: checked, clean\n  C-408: checked, clean\n  C-410: checked, clean\n  C-102: checked, vacuous (cannot fire against current IR capability)\n  C-401: checked, vacuous (cannot fire against current IR capability)\n  C-404: checked, vacuous (cannot fire against current IR capability)\n\n\nSUMMARY: 1 file(s), 0 finding(s) (0 error, 0 warn)\nHARNESS-SCOPE: 0 finding(s) reported and NOT gated, across 0 harness-generated object(s); 0 object(s) could not be classified and gate as plant\nUNCHECKED: 0 rule(s) not judged"
+    },
+    {
+      "tool": "openness-cli block-layout --expect Optimized (after import)",
+      "exit": 0,
+      "text": "BLOCK: FB_HopperBlockageMonitor  (S7-1200 station_1/PLC1 6ES7 214-1AG40-0XB0)\nTYPE: FB\nLAYOUT: Optimized\nNOTE: an OPTIMIZED block is invisible to classic S7comm - a PC-side reader sees no such block\n  at all, and fails at the first data read rather than at connect."
+    },
+    {
+      "tool": "converter diff (round trip: TIA re-export -> to-ir -> diff vs edited IR)",
+      "exit": 0,
+      "text": "SUMMARY: 6 network(s): 0 changed, 0 added, 0 removed, 0 moved, 6 identical\nHEADER changed: interface",
+      "note": "6 of 6 networks identical. The only header delta is an empty CONSTANT section TIA emits and the readable IR does not; every member, type and comment came back byte-identical (verified by diffing the INTERFACE sections directly)."
+    }
+  ]
+}
