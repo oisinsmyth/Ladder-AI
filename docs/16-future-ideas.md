@@ -2732,3 +2732,66 @@ list that `harness-gate check` prints.
 **Also worth fixing beside it:** when the loop stops at `NotAdmissible`, it reports counts
 (`0 refused, 1 could not run`) but not WHICH gate. Naming it costs one line and removes the need to
 re-run `harness-gate check` by hand to find out.
+
+## FI-88 — a UDT-typed STATIC member used 251 times reports `unused`, and the binding scaffold goes blind
+
+**Measured 2026-09-02, on a real program, while choosing which blocks a conformance harness could
+reach.** `converter signal-set` was run over eight function blocks in one project. On five of them a
+UDT-typed `STATIC` member — in each case the block's **principal caller-visible interface** — came
+back as a single unexpanded row:
+
+```
+member = <name>   type = "UDT_<name>"   direction = unused   writers = []   readers = []
+```
+
+while the same run expanded that block's TIMER instances and its global-DB references normally.
+**`partial: false`, `examinedNothing: false`, exit 0** — a confident, complete answer.
+
+It is wrong. Counting references in executable lines only, with comment and declaration lines
+excluded:
+
+| member | references in its own block | reported |
+|---|---|---|
+| block A's settings type | 3 | **expands correctly** |
+| block B's interface type | 56 | `unused`, no writers, no readers |
+| block C's interface type | 136 | `unused`, no writers, no readers |
+| block D's interface type | **251** | `unused`, no writers, no readers |
+
+🔴 **THIS IS THE BIT-SLICE DEFECT'S FAMILY, AND THE SAME SENTENCE APPLIES.** `signal-set`'s stated
+reader is a GENERATOR, which is why that command gates on PARTIAL rather than warning — "a generator
+never sees a warning line". **This defect does not produce a partial.** It produces a confident
+`unused` for the busiest member in the block, and `harness-binding` scaffolded from it finds no
+drivable input and no observable output on the block's whole interface.
+
+**Practical cost, measured:** of eight function blocks in that program, exactly **two** could be
+harnessed. The other six were excluded on the strength of this output. That is a testing capability
+lost to a tooling defect, and from the outside it is indistinguishable from "those blocks have no
+observable interface".
+
+### What was ruled OUT, so the next reader does not re-test it
+
+Four hypotheses were tested against the corpus and each is refuted by a counterexample:
+
+- **Nested UDTs or arrays inside the type** — the smallest non-expanding type is 19 lines with zero
+  nested type references and zero array declarations, structurally identical to a 17-line type that
+  expands.
+- **An inline `COMMENT` on the declaration line** — a non-expanding member declared
+  `<name> : "UDT_X" RETAIN SETPOINT`, with no comment, has the byte-identical form to an expanding one.
+- **The declaration section** — every member compared, expanding and not, is `STATIC`.
+- **Whether the member is used at all** — inverted, in fact: the member used 251 times fails and the
+  member used 3 times succeeds.
+
+**The root cause is NOT established here and is deliberately not guessed at.** What is established is
+the symptom, its scale, and that the four obvious explanations are wrong.
+
+### Why it matters beyond one project
+
+Two consumers read this graph. `harness-binding` is the one that fails visibly — it emits a scaffold
+with nothing in it. `cross-check` reads the same `ProjectUsageGraph`, so a multi-writer or
+undriven-signal question asked about one of these members gets the same confident silence, and there
+the answer looks like a clean result rather than an empty one.
+
+**Regression test to write with the fix:** a block whose principal interface is a UDT-typed STATIC
+member referenced from many networks must report that member's leaves with their real directions and
+writer sites — with a control on a UDT-typed member of the same shape that IS already expanding, so
+the fix cannot be "expand everything" and cannot regress the working case.
