@@ -1,0 +1,1766 @@
+{
+  "schema": "ladder-ai/agent-evidence/1",
+  "task": "Hard-rule-4 compile gate on nine harness objects in test-project001 / GenProject1, all committed at eba7033: NEW UDT_PusherStim, UDT_ShredderSequencerStim, FB_PusherStim (FB9001), FB_ShredderSequencerStim (FB9004), FC_HarnessStimArbiter (FC9002), iDB_PusherStim (DB9001), iDB_ShredderSequencerStim (DB9004); MODIFIED FB_HopperBlockageStim (networks 21/22) and Main. Import + compile ONLY - no download, no rig, no wave. NO IR WAS WRITTEN OR EDITED BY THIS RUN.",
+  "kind": "modify",
+  "manual": true,
+  "_manualReason": "No pipeline skill covers a standalone compile gate on already-authored, already-committed IR. The docs/15 skills are authoring stages; this run wrote no IR, so gen-block-new and the gen-block-modify pair would each have been the wrong contract. Run MANUALLY to the same gate discipline they impose.",
+  "_kindReason": "'modify' selects the STRICTER gate set. Seven of the nine objects are new, but two are modifications of blocks already in the project, so the run is declared against the gate set that DEMANDS an invariance diff rather than the one that waives it.",
+  "_diffSemantics": "The diff gates here are ROUND-TRIP diffs (committed IR vs TIA's own re-export), not before/after authoring diffs. This run authored nothing, so there is no before-version of its own to diff against; the invariance question it CAN answer, and the one the gate is for, is whether TIA altered anything on the way in. Stated here so the entries are not mistaken for the authoring lanes' own invariance proofs.",
+  "_claimsProvenance": "*** THIS RUN ACQUIRED NO CLAIMS, AND NONE MAY BE RELEASED ON ITS BEHALF. *** It edited no IR, so it needed none; block-edit on these objects would have been refused anyway, three other lanes holding them. The claims declared above are the AUTHORING lanes' live reservations, declared with their TRUE holder ids so the join is checkable against the shared store. 'lad-coder-compilegate' appears in none of them, deliberately. The dispatcher's usual release-after-green step DOES NOT APPLY to this evidence file: releasing these would drop reservations belonging to lad-coder-pusherslot, lad-coder-shredderslot and lad-coder-arbitration, which are still theirs to release.",
+  "_notClaimed": "UDT_ShredderSequencerStim.ir carries NO claim of any kind in the shared store. It is a TYPE with no NUMBER line, so the checker does not gate it - but it is a real gap and is reported rather than papered over: the shredder lane reserved FB9004 and DB9004 and never reserved its UDT, while the pusher lane did reserve UDT_PusherStim.",
+  "files": [
+    {
+      "path": "ir/test-project001/UDT_PusherStim.ir"
+    },
+    {
+      "path": "ir/test-project001/UDT_ShredderSequencerStim.ir"
+    },
+    {
+      "path": "ir/test-project001/FB_PusherStim.ir",
+      "ir_hash": "8EFA5A526F11360E03382B02C4C1AAC67EFF5720621FDD2A79D6EA7278FE8001"
+    },
+    {
+      "path": "ir/test-project001/FB_ShredderSequencerStim.ir",
+      "ir_hash": "863B998C4D73B2FAA17E089CC1D435237C8B66C6BBB4096B97F94F3775BEA84F"
+    },
+    {
+      "path": "ir/test-project001/FC_HarnessStimArbiter.ir",
+      "ir_hash": "C1A3C3CA407341FB4545C869EF8FC2D2747BE9711C1E453130BC57AD4A8DBB0B"
+    },
+    {
+      "path": "ir/test-project001/iDB_PusherStim.ir"
+    },
+    {
+      "path": "ir/test-project001/iDB_ShredderSequencerStim.ir"
+    },
+    {
+      "path": "ir/test-project001/FB_HopperBlockageStim.ir",
+      "ir_hash": "BDC585B116D0CEDDA0E390F3DF8567BD8837E2C7DE17E49410B6C34DFE961003"
+    },
+    {
+      "path": "ir/test-project001/Main.ir",
+      "ir_hash": "ACEF469D7420F2AB554B318B6D50B7CD987F94A1C61FAF231B4A37D732C12B9B"
+    }
+  ],
+  "claims": [
+    {
+      "kind": "block-number",
+      "value": "FB9001",
+      "agent": "ee055079-868d-48bc-aa0a-7516e8688d29/lad-coder-pusherslot"
+    },
+    {
+      "kind": "block-number",
+      "value": "DB9001",
+      "agent": "ee055079-868d-48bc-aa0a-7516e8688d29/lad-coder-pusherslot"
+    },
+    {
+      "kind": "block-edit",
+      "value": "UDT_PusherStim",
+      "agent": "ee055079-868d-48bc-aa0a-7516e8688d29/lad-coder-pusherslot"
+    },
+    {
+      "kind": "block-edit",
+      "value": "Main",
+      "agent": "ee055079-868d-48bc-aa0a-7516e8688d29/lad-coder-pusherslot"
+    },
+    {
+      "kind": "block-number",
+      "value": "FB9004",
+      "agent": "ee055079-868d-48bc-aa0a-7516e8688d29/lad-coder-shredderslot"
+    },
+    {
+      "kind": "block-number",
+      "value": "DB9004",
+      "agent": "ee055079-868d-48bc-aa0a-7516e8688d29/lad-coder-shredderslot"
+    },
+    {
+      "kind": "block-number",
+      "value": "FC9002",
+      "agent": "ee055079-868d-48bc-aa0a-7516e8688d29/lad-coder-arbitration"
+    },
+    {
+      "kind": "block-edit",
+      "value": "FB_HopperBlockageStim",
+      "agent": "ee055079-868d-48bc-aa0a-7516e8688d29/lad-coder-arbitration"
+    }
+  ],
+  "checks": [
+    {
+      "tool": "openness-cli export-all --tagtables (RESTORE POINT, taken first)",
+      "exit": 0,
+      "json": {
+        "outDir": "C:\\Users\\User\\Desktop\\gate-2026-09-02\\export-before",
+        "complete": true,
+        "tagTablesIncluded": true,
+        "safeForDriftCheckComplete": true,
+        "exported": 52,
+        "refused": 0,
+        "failed": 0,
+        "_entriesElided": "52 entries omitted for length; the raw file is C:\\Users\\User\\Desktop\\gate-2026-09-02\\export-before.json"
+      }
+    },
+    {
+      "tool": "diff -r GenProject1 <file-level restore copy> (RESTORE POINT half 2)",
+      "exit": 0,
+      "json": {
+        "copyPath": "C:\\Users\\User\\Desktop\\gate-2026-09-02\\GenProject1-restore-pre-import",
+        "recursiveDiffSilent": true,
+        "approxBytes": 6815744
+      }
+    },
+    {
+      "tool": "openness-cli sanity-check (BASELINE, BEFORE any import)",
+      "exit": 0,
+      "json": {
+        "_verbatim": [
+          "OVERALL: HEALTHY",
+          "BLOCKS: 42  INCONSISTENT: 0  DUPLICATE NUMBERS: 0",
+          "TYPES: 8  INCONSISTENT: 0",
+          "S7-1200 station_1/PLC1 6ES7 214-1AG40-0XB0: Warning (errors=0, warnings=1)  scope=station (hardware + program)"
+        ]
+      }
+    },
+    {
+      "tool": "converter preflight (9 objects)",
+      "exit": 0,
+      "json": {
+        "files": [
+          {
+            "filePath": "ir/test-project001/UDT_PusherStim.ir",
+            "name": "UDT_PusherStim",
+            "findings": []
+          },
+          {
+            "filePath": "ir/test-project001/UDT_ShredderSequencerStim.ir",
+            "name": "UDT_ShredderSequencerStim",
+            "findings": []
+          },
+          {
+            "filePath": "ir/test-project001/FB_PusherStim.ir",
+            "name": "FB_PusherStim",
+            "findings": [
+              {
+                "check": "review:harness-scope",
+                "description": "Harness: FB 9001 is inside the reserved harness band 9000-9999 (declared docs/notes/test-environment-build-plan.md, 2026-08-13). 0 C-001/C-201 finding(s) reported without gating.",
+                "gates": false
+              }
+            ]
+          },
+          {
+            "filePath": "ir/test-project001/FB_ShredderSequencerStim.ir",
+            "name": "FB_ShredderSequencerStim",
+            "findings": [
+              {
+                "check": "review:harness-scope",
+                "description": "Harness: FB 9004 is inside the reserved harness band 9000-9999 (declared docs/notes/test-environment-build-plan.md, 2026-08-13). 0 C-001/C-201 finding(s) reported without gating.",
+                "gates": false
+              }
+            ]
+          },
+          {
+            "filePath": "ir/test-project001/FC_HarnessStimArbiter.ir",
+            "name": "FC_HarnessStimArbiter",
+            "findings": [
+              {
+                "check": "review:harness-scope",
+                "description": "Harness: FC 9002 is inside the reserved harness band 9000-9999 (declared docs/notes/test-environment-build-plan.md, 2026-08-13). 0 C-001/C-201 finding(s) reported without gating.",
+                "gates": false
+              }
+            ]
+          },
+          {
+            "filePath": "ir/test-project001/iDB_PusherStim.ir",
+            "name": "iDB_PusherStim",
+            "findings": [
+              {
+                "check": "review:harness-scope",
+                "description": "Harness: DB 9001 is inside the reserved harness band 9000-9999 (declared docs/notes/test-environment-build-plan.md, 2026-08-13). 0 C-001/C-201 finding(s) reported without gating.",
+                "gates": false
+              }
+            ]
+          },
+          {
+            "filePath": "ir/test-project001/iDB_ShredderSequencerStim.ir",
+            "name": "iDB_ShredderSequencerStim",
+            "findings": [
+              {
+                "check": "review:harness-scope",
+                "description": "Harness: DB 9004 is inside the reserved harness band 9000-9999 (declared docs/notes/test-environment-build-plan.md, 2026-08-13). 0 C-001/C-201 finding(s) reported without gating.",
+                "gates": false
+              }
+            ]
+          },
+          {
+            "filePath": "ir/test-project001/FB_HopperBlockageStim.ir",
+            "name": "FB_HopperBlockageStim",
+            "findings": [
+              {
+                "check": "review:harness-scope",
+                "description": "Harness: FB 9002 is inside the reserved harness band 9000-9999 (declared docs/notes/test-environment-build-plan.md, 2026-08-13). 0 C-001/C-201 finding(s) reported without gating.",
+                "gates": false
+              }
+            ]
+          },
+          {
+            "filePath": "ir/test-project001/Main.ir",
+            "name": "Main",
+            "findings": []
+          }
+        ],
+        "indexWarnings": [],
+        "corpus": {
+          "projectDir": "ir/test-project001/",
+          "projectFileCount": 50,
+          "batchFileCount": 9,
+          "projectContributedNothing": false,
+          "blockNameCount": 21,
+          "tagRootNameCount": 147,
+          "typeNameCount": 7,
+          "memberBodyCount": 27,
+          "calleeInterfaceCount": 21,
+          "harnessCorpusFileCount": 50
+        }
+      }
+    },
+    {
+      "tool": "converter to-xml --project --out <staging> (9 objects; deliberately NOT import-all over ir/)",
+      "exit": 0,
+      "json": {
+        "converted": 9,
+        "outDir": "C:\\Users\\User\\Desktop\\gate-2026-09-02\\staging",
+        "wroteBesideInput": false,
+        "_note": "No .xml existed beside the .ir in ir/test-project001/ at all, so the stale-sidecar trap could not have fired here; the staging directory was used anyway."
+      }
+    },
+    {
+      "tool": "openness-cli import 1/5 FC (risky construct, imported ALONE first)",
+      "exit": 0,
+      "json": {
+        "objects": [
+          "FC_HarnessStimArbiter"
+        ],
+        "group": "S7-1200 station_1/PLC1 6ES7 214-1AG40-0XB0",
+        "consistentOnArrival": false,
+        "_note": "INCONSISTENT on arrival is the normal post-import state; the per-item compiles below resolve it."
+      }
+    },
+    {
+      "tool": "openness-cli import 2/5 UDTs --type",
+      "exit": 0,
+      "json": {
+        "objects": [
+          "UDT_PusherStim",
+          "UDT_ShredderSequencerStim"
+        ],
+        "group": "S7-1200 station_1/PLC1 6ES7 214-1AG40-0XB0",
+        "consistentOnArrival": false,
+        "_note": "INCONSISTENT on arrival is the normal post-import state; the per-item compiles below resolve it."
+      }
+    },
+    {
+      "tool": "openness-cli import 3/5 FBs",
+      "exit": 0,
+      "json": {
+        "objects": [
+          "FB_PusherStim",
+          "FB_ShredderSequencerStim",
+          "FB_HopperBlockageStim"
+        ],
+        "group": "S7-1200 station_1/PLC1 6ES7 214-1AG40-0XB0",
+        "consistentOnArrival": false,
+        "_note": "INCONSISTENT on arrival is the normal post-import state; the per-item compiles below resolve it."
+      }
+    },
+    {
+      "tool": "openness-cli import 4/5 instance DBs",
+      "exit": 0,
+      "json": {
+        "objects": [
+          "iDB_PusherStim",
+          "iDB_ShredderSequencerStim"
+        ],
+        "group": "S7-1200 station_1/PLC1 6ES7 214-1AG40-0XB0",
+        "consistentOnArrival": false,
+        "_note": "INCONSISTENT on arrival is the normal post-import state; the per-item compiles below resolve it."
+      }
+    },
+    {
+      "tool": "openness-cli import 5/5 OB",
+      "exit": 0,
+      "json": {
+        "objects": [
+          "Main"
+        ],
+        "group": "S7-1200 station_1/PLC1 6ES7 214-1AG40-0XB0",
+        "consistentOnArrival": false,
+        "_note": "INCONSISTENT on arrival is the normal post-import state; the per-item compiles below resolve it."
+      }
+    },
+    {
+      "tool": "openness-cli compile --block FC_HarnessStimArbiter (per-item gate)",
+      "exit": 0,
+      "json": {
+        "state": "Warning",
+        "errors": 0,
+        "warnings": 1,
+        "consistentAfterCompile": true,
+        "messages": [
+          {
+            "state": "Warning",
+            "description": "",
+            "path": "PLC1 6ES7 214-1AG40-0XB0"
+          },
+          {
+            "state": "Success",
+            "description": "",
+            "path": "Program blocks"
+          },
+          {
+            "state": "Success",
+            "description": "Block was successfully compiled.",
+            "path": "FC_HarnessStimArbiter (FC9002)"
+          },
+          {
+            "state": "Warning",
+            "description": "",
+            "path": "General warnings"
+          },
+          {
+            "state": "Warning",
+            "description": "Inputs or outputs are used that do not exist in the configured hardware.",
+            "path": null
+          },
+          {
+            "state": "Warning",
+            "description": "Compiling finished (errors: 0; warnings: 1)",
+            "path": null
+          }
+        ]
+      }
+    },
+    {
+      "tool": "openness-cli compile --type UDT_PusherStim (per-item gate)",
+      "exit": 0,
+      "json": {
+        "state": "Warning",
+        "errors": 0,
+        "warnings": 1,
+        "consistentAfterCompile": true,
+        "messages": [
+          {
+            "state": "Warning",
+            "description": "",
+            "path": "PLC1 6ES7 214-1AG40-0XB0"
+          },
+          {
+            "state": "Success",
+            "description": "",
+            "path": "PLC data types"
+          },
+          {
+            "state": "Success",
+            "description": "The data type was successfully updated.",
+            "path": "UDT_PusherStim (UDT)"
+          },
+          {
+            "state": "Warning",
+            "description": "",
+            "path": "General warnings"
+          },
+          {
+            "state": "Warning",
+            "description": "Inputs or outputs are used that do not exist in the configured hardware.",
+            "path": null
+          },
+          {
+            "state": "Warning",
+            "description": "Compiling finished (errors: 0; warnings: 1)",
+            "path": null
+          }
+        ]
+      }
+    },
+    {
+      "tool": "openness-cli compile --type UDT_ShredderSequencerStim (per-item gate)",
+      "exit": 0,
+      "json": {
+        "state": "Warning",
+        "errors": 0,
+        "warnings": 1,
+        "consistentAfterCompile": true,
+        "messages": [
+          {
+            "state": "Warning",
+            "description": "",
+            "path": "PLC1 6ES7 214-1AG40-0XB0"
+          },
+          {
+            "state": "Success",
+            "description": "",
+            "path": "PLC data types"
+          },
+          {
+            "state": "Success",
+            "description": "The data type was successfully updated.",
+            "path": "UDT_ShredderSequencerStim (UDT)"
+          },
+          {
+            "state": "Warning",
+            "description": "",
+            "path": "General warnings"
+          },
+          {
+            "state": "Warning",
+            "description": "Inputs or outputs are used that do not exist in the configured hardware.",
+            "path": null
+          },
+          {
+            "state": "Warning",
+            "description": "Compiling finished (errors: 0; warnings: 1)",
+            "path": null
+          }
+        ]
+      }
+    },
+    {
+      "tool": "openness-cli compile --block FB_PusherStim (per-item gate)",
+      "exit": 0,
+      "json": {
+        "state": "Warning",
+        "errors": 0,
+        "warnings": 1,
+        "consistentAfterCompile": true,
+        "messages": [
+          {
+            "state": "Warning",
+            "description": "",
+            "path": "PLC1 6ES7 214-1AG40-0XB0"
+          },
+          {
+            "state": "Success",
+            "description": "",
+            "path": "Program blocks"
+          },
+          {
+            "state": "Success",
+            "description": "Block was successfully compiled.",
+            "path": "FB_PusherStim (FB9001)"
+          },
+          {
+            "state": "Warning",
+            "description": "",
+            "path": "General warnings"
+          },
+          {
+            "state": "Warning",
+            "description": "Inputs or outputs are used that do not exist in the configured hardware.",
+            "path": null
+          },
+          {
+            "state": "Warning",
+            "description": "Compiling finished (errors: 0; warnings: 1)",
+            "path": null
+          }
+        ]
+      }
+    },
+    {
+      "tool": "openness-cli compile --block FB_ShredderSequencerStim (per-item gate)",
+      "exit": 0,
+      "json": {
+        "state": "Warning",
+        "errors": 0,
+        "warnings": 1,
+        "consistentAfterCompile": true,
+        "messages": [
+          {
+            "state": "Warning",
+            "description": "",
+            "path": "PLC1 6ES7 214-1AG40-0XB0"
+          },
+          {
+            "state": "Success",
+            "description": "",
+            "path": "Program blocks"
+          },
+          {
+            "state": "Success",
+            "description": "Block was successfully compiled.",
+            "path": "FB_ShredderSequencerStim (FB9004)"
+          },
+          {
+            "state": "Warning",
+            "description": "",
+            "path": "General warnings"
+          },
+          {
+            "state": "Warning",
+            "description": "Inputs or outputs are used that do not exist in the configured hardware.",
+            "path": null
+          },
+          {
+            "state": "Warning",
+            "description": "Compiling finished (errors: 0; warnings: 1)",
+            "path": null
+          }
+        ]
+      }
+    },
+    {
+      "tool": "openness-cli compile --block FB_HopperBlockageStim (per-item gate)",
+      "exit": 0,
+      "json": {
+        "state": "Warning",
+        "errors": 0,
+        "warnings": 1,
+        "consistentAfterCompile": true,
+        "messages": [
+          {
+            "state": "Warning",
+            "description": "",
+            "path": "PLC1 6ES7 214-1AG40-0XB0"
+          },
+          {
+            "state": "Success",
+            "description": "",
+            "path": "Program blocks"
+          },
+          {
+            "state": "Success",
+            "description": "Block was successfully compiled.",
+            "path": "FB_HopperBlockageStim (FB9002)"
+          },
+          {
+            "state": "Warning",
+            "description": "",
+            "path": "General warnings"
+          },
+          {
+            "state": "Warning",
+            "description": "Inputs or outputs are used that do not exist in the configured hardware.",
+            "path": null
+          },
+          {
+            "state": "Warning",
+            "description": "Compiling finished (errors: 0; warnings: 1)",
+            "path": null
+          }
+        ]
+      }
+    },
+    {
+      "tool": "openness-cli compile --block iDB_PusherStim (per-item gate)",
+      "exit": 0,
+      "json": {
+        "state": "Warning",
+        "errors": 0,
+        "warnings": 1,
+        "consistentAfterCompile": true,
+        "messages": [
+          {
+            "state": "Warning",
+            "description": "",
+            "path": "PLC1 6ES7 214-1AG40-0XB0"
+          },
+          {
+            "state": "Success",
+            "description": "",
+            "path": "Program blocks"
+          },
+          {
+            "state": "Success",
+            "description": "Block was successfully compiled.",
+            "path": "iDB_PusherStim (DB9001)"
+          },
+          {
+            "state": "Warning",
+            "description": "",
+            "path": "General warnings"
+          },
+          {
+            "state": "Warning",
+            "description": "Inputs or outputs are used that do not exist in the configured hardware.",
+            "path": null
+          },
+          {
+            "state": "Warning",
+            "description": "Compiling finished (errors: 0; warnings: 1)",
+            "path": null
+          }
+        ]
+      }
+    },
+    {
+      "tool": "openness-cli compile --block iDB_ShredderSequencerStim (per-item gate)",
+      "exit": 0,
+      "json": {
+        "state": "Warning",
+        "errors": 0,
+        "warnings": 1,
+        "consistentAfterCompile": true,
+        "messages": [
+          {
+            "state": "Warning",
+            "description": "",
+            "path": "PLC1 6ES7 214-1AG40-0XB0"
+          },
+          {
+            "state": "Success",
+            "description": "",
+            "path": "Program blocks"
+          },
+          {
+            "state": "Success",
+            "description": "Block was successfully compiled.",
+            "path": "iDB_ShredderSequencerStim (DB9004)"
+          },
+          {
+            "state": "Warning",
+            "description": "",
+            "path": "General warnings"
+          },
+          {
+            "state": "Warning",
+            "description": "Inputs or outputs are used that do not exist in the configured hardware.",
+            "path": null
+          },
+          {
+            "state": "Warning",
+            "description": "Compiling finished (errors: 0; warnings: 1)",
+            "path": null
+          }
+        ]
+      }
+    },
+    {
+      "tool": "openness-cli compile --block Main (per-item gate)",
+      "exit": 0,
+      "json": {
+        "state": "Warning",
+        "errors": 0,
+        "warnings": 1,
+        "consistentAfterCompile": true,
+        "messages": [
+          {
+            "state": "Warning",
+            "description": "",
+            "path": "PLC1 6ES7 214-1AG40-0XB0"
+          },
+          {
+            "state": "Success",
+            "description": "",
+            "path": "Program blocks"
+          },
+          {
+            "state": "Success",
+            "description": "Block was successfully compiled.",
+            "path": "Main (OB1)"
+          },
+          {
+            "state": "Warning",
+            "description": "",
+            "path": "General warnings"
+          },
+          {
+            "state": "Warning",
+            "description": "Inputs or outputs are used that do not exist in the configured hardware.",
+            "path": null
+          },
+          {
+            "state": "Warning",
+            "description": "Compiling finished (errors: 0; warnings: 1)",
+            "path": null
+          }
+        ]
+      }
+    },
+    {
+      "tool": "openness-cli sanity-check (run 1, post-import)",
+      "exit": 9,
+      "transient": "The ordinary post-import dependent cascade. The baseline taken BEFORE this import was 0 inconsistent, so the two named dependents are ESTABLISHED as caused by this import rather than assumed. Superseded by the passing run below. This exit 9 is the inconsistency report, not the pre-existing PLC-password/certificate exit-9 shape.",
+      "json": {
+        "_verbatim": [
+          "OVERALL: ISSUES FOUND",
+          "BLOCKS: 47  INCONSISTENT: 2  DUPLICATE NUMBERS: 0",
+          "TYPES: 10  INCONSISTENT: 0"
+        ],
+        "namedDependents": [
+          "FB_HarnessViolationLatch",
+          "FC_HarnessCopyLayer"
+        ]
+      }
+    },
+    {
+      "tool": "openness-cli compile --block FB_HarnessViolationLatch (cascade dependent)",
+      "exit": 0,
+      "json": {
+        "state": "Warning",
+        "errors": 0,
+        "warnings": 1,
+        "consistentAfterCompile": true,
+        "messages": [
+          {
+            "state": "Warning",
+            "description": "",
+            "path": "PLC1 6ES7 214-1AG40-0XB0"
+          },
+          {
+            "state": "Warning",
+            "description": "",
+            "path": "General warnings"
+          },
+          {
+            "state": "Warning",
+            "description": "Inputs or outputs are used that do not exist in the configured hardware.",
+            "path": null
+          },
+          {
+            "state": "Information",
+            "description": "",
+            "path": "Program blocks"
+          },
+          {
+            "state": "Information",
+            "description": "No block was compiled. All blocks are up-to-date.",
+            "path": null
+          },
+          {
+            "state": "Warning",
+            "description": "Compiling finished (errors: 0; warnings: 1)",
+            "path": null
+          }
+        ]
+      }
+    },
+    {
+      "tool": "openness-cli compile --block FC_HarnessCopyLayer (cascade dependent)",
+      "exit": 0,
+      "json": {
+        "state": "Warning",
+        "errors": 0,
+        "warnings": 1,
+        "consistentAfterCompile": true,
+        "messages": [
+          {
+            "state": "Warning",
+            "description": "",
+            "path": "PLC1 6ES7 214-1AG40-0XB0"
+          },
+          {
+            "state": "Warning",
+            "description": "",
+            "path": "General warnings"
+          },
+          {
+            "state": "Warning",
+            "description": "Inputs or outputs are used that do not exist in the configured hardware.",
+            "path": null
+          },
+          {
+            "state": "Information",
+            "description": "",
+            "path": "Program blocks"
+          },
+          {
+            "state": "Information",
+            "description": "No block was compiled. All blocks are up-to-date.",
+            "path": null
+          },
+          {
+            "state": "Warning",
+            "description": "Compiling finished (errors: 0; warnings: 1)",
+            "path": null
+          }
+        ]
+      }
+    },
+    {
+      "tool": "openness-cli sanity-check (THE GATE, run 2)",
+      "exit": 0,
+      "json": {
+        "_verbatim": [
+          "OVERALL: HEALTHY",
+          "BLOCKS: 47  INCONSISTENT: 0  DUPLICATE NUMBERS: 0",
+          "TYPES: 10  INCONSISTENT: 0",
+          "S7-1200 station_1/PLC1 6ES7 214-1AG40-0XB0: Warning (errors=0, warnings=1)  scope=station (hardware + program)"
+        ]
+      }
+    },
+    {
+      "tool": "openness-cli sanity-check --json (THE GATE, run 3, machine-readable)",
+      "exit": 0,
+      "json": {
+        "healthy": true,
+        "nothingExamined": false,
+        "totalBlocks": 47,
+        "inconsistentBlocks": [],
+        "totalTypes": 10,
+        "inconsistentTypes": [],
+        "duplicateBlockNumbers": [],
+        "deviceCompiles": [
+          {
+            "device": "S7-1200 station_1/PLC1 6ES7 214-1AG40-0XB0",
+            "state": "Warning",
+            "errors": 0,
+            "warnings": 1
+          }
+        ]
+      }
+    },
+    {
+      "tool": "converter diff (round trip, sent vs re-exported) FC_HarnessStimArbiter",
+      "exit": 0,
+      "json": {
+        "blockName": "FC_HarnessStimArbiter",
+        "blockNameMismatch": false,
+        "otherBlockName": "FC_HarnessStimArbiter",
+        "hasAnyChange": false,
+        "header": {
+          "changed": false,
+          "titleChanged": false,
+          "titleBefore": "Harness Stimulus Arbitration Layer",
+          "titleAfter": "Harness Stimulus Arbitration Layer",
+          "commentChanged": false,
+          "commentBefore": "Owns the resting state of the two things every stimulus head shares, and owns nothing else: the input map's test-injection array, and the plant's single operator fault-reset line. It runs once, ahead of every head, and releases both, so a head finds on a line it does not own either that line's released value or what another head wrote in this same scan. THE RELEASED VALUE IS THE INERT VALUE FOR WHOEVER READS THAT INDEX, which is not the same thing as zero: an index whose reader treats HIGH as its quiet state is released HIGH, because a zero there asserts a stop or a motion demand of its own. Each released value is taken from the block that consumes the index; an index no block reads is released low and said here to be undetermined. Heads keep their own writes. While a head is not authoritative it passes a line through unchanged, and this release is what that pass-through rests on, so a head added later needs one rung per index and no knowledge of its neighbours. The operator fault-reset line belongs to the harness while this program is loaded: it is released every scan, so a press at an operator station does not reach the control. That suits a bench rig with no operator station and suits nothing else.",
+          "commentAfter": "Owns the resting state of the two things every stimulus head shares, and owns nothing else: the input map's test-injection array, and the plant's single operator fault-reset line. It runs once, ahead of every head, and releases both, so a head finds on a line it does not own either that line's released value or what another head wrote in this same scan. THE RELEASED VALUE IS THE INERT VALUE FOR WHOEVER READS THAT INDEX, which is not the same thing as zero: an index whose reader treats HIGH as its quiet state is released HIGH, because a zero there asserts a stop or a motion demand of its own. Each released value is taken from the block that consumes the index; an index no block reads is released low and said here to be undetermined. Heads keep their own writes. While a head is not authoritative it passes a line through unchanged, and this release is what that pass-through rests on, so a head added later needs one rung per index and no knowledge of its neighbours. The operator fault-reset line belongs to the harness while this program is loaded: it is released every scan, so a press at an operator station does not reach the control. That suits a bench rig with no operator station and suits nothing else.",
+          "interfaceChanged": false,
+          "interfaceCommentChanged": false
+        },
+        "summary": {
+          "total": 4,
+          "changed": 0,
+          "added": 0,
+          "removed": 0,
+          "moved": 0,
+          "identical": 4
+        },
+        "networks": [
+          {
+            "number": 1,
+            "kind": "Identical",
+            "title": "Release The Injection Enable",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 2,
+            "kind": "Identical",
+            "title": "Release The Indexes Whose Inert State Is Low",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 3,
+            "kind": "Identical",
+            "title": "Release The Indexes Whose Inert State Is High",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 4,
+            "kind": "Identical",
+            "title": "Release The Shared Plant Reset Line",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          }
+        ],
+        "allowedNetworks": [],
+        "invarianceViolations": [],
+        "headerChangeAllowed": false,
+        "hasUnclaimedHeaderChange": false,
+        "hasNonGatingCommentChange": false,
+        "declaredInsertAt": null,
+        "movesAreDeclared": false,
+        "unchangedRemainder": 4,
+        "hasInvarianceViolation": false,
+        "_what": "ROUND TRIP, sent vs returned: the committed IR against TIA's OWN re-export, converted back with to-ir. hasAnyChange=false is the proof that TIA altered nothing - not networks, not the interface, not the comments."
+      }
+    },
+    {
+      "tool": "converter diff (round trip, sent vs re-exported) FB_PusherStim",
+      "exit": 0,
+      "json": {
+        "blockName": "FB_PusherStim",
+        "blockNameMismatch": false,
+        "otherBlockName": "FB_PusherStim",
+        "hasAnyChange": false,
+        "header": {
+          "changed": false,
+          "titleChanged": false,
+          "titleBefore": "Pusher Stimulus Head",
+          "titleAfter": "Pusher Stimulus Head",
+          "commentChanged": false,
+          "commentBefore": "Drives the plant the pusher control block sees, to a timeline the harness commands, so a conformance index exercises it against a machine that behaves to order. Networks 1 to 17 are the generated index shell - the clock, the seven phases, the two cleardowns, the arming window and the outcome bookkeeping - and networks 18 to 21 are this head's own: the commanded timeline, the cleardown rest state, the presentation to the plant, and the arbitration of the one fault-reset line two heads share. AN INDEX IS: a head cleardown that puts the block into a known state with nothing latched, then the scenario, then a tail cleardown that repeats it so the NEXT index starts clean rather than from whatever this one left standing. The cleardown exists because this block latches - a blocked fault, two travel-timeout faults, a both-switches fault, a pressure hold and a step that is not idle all survive until something clears them, and an index that did not start by clearing them would be reading the previous one. THE DISARM LEVER IS THE COMMANDED MODE, NOT THE FITTED SETTING: outside the scenario the head presents mode 0, the ram at home, and every other input inert, which aborts any cycle in flight to Retract and then to Idle, stops both supervision timers, and lets the reset pulse land on a plant that cannot re-create the causes it is clearing. Fitted is deliberately never written - it is a retentive commissioning setting, not a test input, and a head that wrote it would leave the pusher disabled if an index were interrupted mid-cleardown. EACH OF THE TEN COMMANDED SIGNALS IS A TWO-EDGE TIMELINE and nothing more: an initial level, a time it leaves that level, and a time it returns. That is deliberately not a library of named scenario shapes - the head does not know what any scenario is for, so a scenario the vector author has not written yet needs no change here. STALENESS: the block's own advancing quantities are its five timers and its per-cycle pressure-trip counter, and every one of them is fed from a commanded signal that this head can move, so none is silently frozen - with ONE stated exception, the trip counter, which a two-edge pressure timeline can advance at most once per scenario and therefore cannot drive to its threshold; the blocked-fault path is out of reach of this head as it stands. One further latch does not clear at all: the block's pump cold-start guard is set by the first demand and has no reset anywhere, so the first index after a CPU restart is the only one that meets it unset. It is not observable at rest once the pump run-on time has expired, which is why the cleardown dwell is longer than that time and why the guard is not counted as a standing cause. This head writes only test-injection members, operator command bits and the fault-reset line; it writes no output, no setting and nothing the block under test produces, and it is called only from the cyclic program.",
+          "commentAfter": "Drives the plant the pusher control block sees, to a timeline the harness commands, so a conformance index exercises it against a machine that behaves to order. Networks 1 to 17 are the generated index shell - the clock, the seven phases, the two cleardowns, the arming window and the outcome bookkeeping - and networks 18 to 21 are this head's own: the commanded timeline, the cleardown rest state, the presentation to the plant, and the arbitration of the one fault-reset line two heads share. AN INDEX IS: a head cleardown that puts the block into a known state with nothing latched, then the scenario, then a tail cleardown that repeats it so the NEXT index starts clean rather than from whatever this one left standing. The cleardown exists because this block latches - a blocked fault, two travel-timeout faults, a both-switches fault, a pressure hold and a step that is not idle all survive until something clears them, and an index that did not start by clearing them would be reading the previous one. THE DISARM LEVER IS THE COMMANDED MODE, NOT THE FITTED SETTING: outside the scenario the head presents mode 0, the ram at home, and every other input inert, which aborts any cycle in flight to Retract and then to Idle, stops both supervision timers, and lets the reset pulse land on a plant that cannot re-create the causes it is clearing. Fitted is deliberately never written - it is a retentive commissioning setting, not a test input, and a head that wrote it would leave the pusher disabled if an index were interrupted mid-cleardown. EACH OF THE TEN COMMANDED SIGNALS IS A TWO-EDGE TIMELINE and nothing more: an initial level, a time it leaves that level, and a time it returns. That is deliberately not a library of named scenario shapes - the head does not know what any scenario is for, so a scenario the vector author has not written yet needs no change here. STALENESS: the block's own advancing quantities are its five timers and its per-cycle pressure-trip counter, and every one of them is fed from a commanded signal that this head can move, so none is silently frozen - with ONE stated exception, the trip counter, which a two-edge pressure timeline can advance at most once per scenario and therefore cannot drive to its threshold; the blocked-fault path is out of reach of this head as it stands. One further latch does not clear at all: the block's pump cold-start guard is set by the first demand and has no reset anywhere, so the first index after a CPU restart is the only one that meets it unset. It is not observable at rest once the pump run-on time has expired, which is why the cleardown dwell is longer than that time and why the guard is not counted as a standing cause. This head writes only test-injection members, operator command bits and the fault-reset line; it writes no output, no setting and nothing the block under test produces, and it is called only from the cyclic program.",
+          "interfaceChanged": false,
+          "interfaceCommentChanged": false
+        },
+        "summary": {
+          "total": 21,
+          "changed": 0,
+          "added": 0,
+          "removed": 0,
+          "moved": 0,
+          "identical": 21
+        },
+        "networks": [
+          {
+            "number": 1,
+            "kind": "Identical",
+            "title": "Index Latch",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 2,
+            "kind": "Identical",
+            "title": "Index Timer",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 3,
+            "kind": "Identical",
+            "title": "Elapsed Index Time",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 4,
+            "kind": "Identical",
+            "title": "Cleardown Dwells",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 5,
+            "kind": "Identical",
+            "title": "Index Phase Boundaries",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 6,
+            "kind": "Identical",
+            "title": "Scenario Elapsed Time",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 7,
+            "kind": "Identical",
+            "title": "Index Phases",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 8,
+            "kind": "Identical",
+            "title": "Reset Windows",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 9,
+            "kind": "Identical",
+            "title": "Drive The Fault Reset",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 10,
+            "kind": "Identical",
+            "title": "Latched Cause Standing",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 11,
+            "kind": "Identical",
+            "title": "Arrival Inert Check",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 12,
+            "kind": "Identical",
+            "title": "Head Cleardown Outcome",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 13,
+            "kind": "Identical",
+            "title": "Recovery Outcome",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 14,
+            "kind": "Identical",
+            "title": "Observation Window",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 15,
+            "kind": "Identical",
+            "title": "Index Complete",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 16,
+            "kind": "Identical",
+            "title": "Re-Arm For The Next Index",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 17,
+            "kind": "Identical",
+            "title": "Published Phase",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 18,
+            "kind": "Identical",
+            "title": "Commanded Plant Timeline",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 19,
+            "kind": "Identical",
+            "title": "Cleardown Rest State - The Disarm Lever",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 20,
+            "kind": "Identical",
+            "title": "Present The Commanded Plant",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 21,
+            "kind": "Identical",
+            "title": "Fault Reset Line Arbitration",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          }
+        ],
+        "allowedNetworks": [],
+        "invarianceViolations": [],
+        "headerChangeAllowed": false,
+        "hasUnclaimedHeaderChange": false,
+        "hasNonGatingCommentChange": false,
+        "declaredInsertAt": null,
+        "movesAreDeclared": false,
+        "unchangedRemainder": 21,
+        "hasInvarianceViolation": false,
+        "_what": "ROUND TRIP, sent vs returned: the committed IR against TIA's OWN re-export, converted back with to-ir. hasAnyChange=false is the proof that TIA altered nothing - not networks, not the interface, not the comments."
+      }
+    },
+    {
+      "tool": "converter diff (round trip, sent vs re-exported) FB_ShredderSequencerStim",
+      "exit": 0,
+      "json": {
+        "blockName": "FB_ShredderSequencerStim",
+        "blockNameMismatch": false,
+        "otherBlockName": "FB_ShredderSequencerStim",
+        "hasAnyChange": false,
+        "header": {
+          "changed": false,
+          "titleChanged": false,
+          "titleBefore": "Shredder Sequencer Stimulus Head",
+          "titleAfter": "Shredder Sequencer Stimulus Head",
+          "commentChanged": false,
+          "commentBefore": "Presents a commanded plant to FB_ShredderSequencer so a conformance index exercises the sequencer against equipment that behaves to order. NETWORKS 1-17 ARE GENERATED - they are the index shell emitted by Harness.Map.StimShellGenerator from this slot's declared spec, and they are mechanism: the index latch and clock, three head and three tail cleardown phases, the scenario, the reset request, the latched-cause check and the four outcomes it publishes, the observation window, completion and re-arm. NETWORKS 18-27 ARE AUTHORED, because each is a claim about the plant rather than mechanism - what the equipment does when the PLC commands it. Phase codes published as Stim.Phase are positional: 1 head disarm, 2 head reset, 3 head verify, 4 scenario, 5 tail disarm, 6 tail reset, 7 tail verify, 0 between indexes; never decode them against another head's. THE FEEDBACK MODEL IS CLOSED-LOOP AND THAT IS NOT A REFINEMENT: the shredder motor block latches a fail-to-run ten seconds after it commands a contactor that does not confirm, and that fault aborts three of the sequencer's step transitions, so a feedback timeline that ignored what the motor was actually commanded would inject aborts no vector asked for. Each modelled contactor answers the output the PLC is really driving, after a delay the vector chooses. THE FAULT RESET IS ARBITRATED, NOT DRIVEN: DB_Controls.FaultReset is one coil shared with the hopper head, the pusher head, the motor block and the pusher block, so the shell publishes a request and Network 19 passes another head's value through whenever this index is not running. Every test-injection member is written the same way, for the same reason. THE STALENESS QUESTION, ANSWERED: the sequencer's dwell timers all key on Step, which this head moves, so every one of them advances; its two staleness-sensitive elements do NOT - ReversalWindowTimer watches for the absence of new reversals and ReversalCount counts entries into Step 60 - and nothing this head can present will move either, because Step 60 is unreachable in the as-built block. That is a property of the block under test, not of this head, and it is recorded here so a green is never read as coverage of them. This head drives the sequencer's inputs and nothing else: it writes the input buffer's own test-injection members, the operator pusher mode, and the operator fault reset.",
+          "commentAfter": "Presents a commanded plant to FB_ShredderSequencer so a conformance index exercises the sequencer against equipment that behaves to order. NETWORKS 1-17 ARE GENERATED - they are the index shell emitted by Harness.Map.StimShellGenerator from this slot's declared spec, and they are mechanism: the index latch and clock, three head and three tail cleardown phases, the scenario, the reset request, the latched-cause check and the four outcomes it publishes, the observation window, completion and re-arm. NETWORKS 18-27 ARE AUTHORED, because each is a claim about the plant rather than mechanism - what the equipment does when the PLC commands it. Phase codes published as Stim.Phase are positional: 1 head disarm, 2 head reset, 3 head verify, 4 scenario, 5 tail disarm, 6 tail reset, 7 tail verify, 0 between indexes; never decode them against another head's. THE FEEDBACK MODEL IS CLOSED-LOOP AND THAT IS NOT A REFINEMENT: the shredder motor block latches a fail-to-run ten seconds after it commands a contactor that does not confirm, and that fault aborts three of the sequencer's step transitions, so a feedback timeline that ignored what the motor was actually commanded would inject aborts no vector asked for. Each modelled contactor answers the output the PLC is really driving, after a delay the vector chooses. THE FAULT RESET IS ARBITRATED, NOT DRIVEN: DB_Controls.FaultReset is one coil shared with the hopper head, the pusher head, the motor block and the pusher block, so the shell publishes a request and Network 19 passes another head's value through whenever this index is not running. Every test-injection member is written the same way, for the same reason. THE STALENESS QUESTION, ANSWERED: the sequencer's dwell timers all key on Step, which this head moves, so every one of them advances; its two staleness-sensitive elements do NOT - ReversalWindowTimer watches for the absence of new reversals and ReversalCount counts entries into Step 60 - and nothing this head can present will move either, because Step 60 is unreachable in the as-built block. That is a property of the block under test, not of this head, and it is recorded here so a green is never read as coverage of them. This head drives the sequencer's inputs and nothing else: it writes the input buffer's own test-injection members, the operator pusher mode, and the operator fault reset.",
+          "interfaceChanged": false,
+          "interfaceCommentChanged": false
+        },
+        "summary": {
+          "total": 26,
+          "changed": 0,
+          "added": 0,
+          "removed": 0,
+          "moved": 0,
+          "identical": 26
+        },
+        "networks": [
+          {
+            "number": 1,
+            "kind": "Identical",
+            "title": "Index Latch",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 2,
+            "kind": "Identical",
+            "title": "Index Timer",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 3,
+            "kind": "Identical",
+            "title": "Elapsed Index Time",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 4,
+            "kind": "Identical",
+            "title": "Cleardown Dwells",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 5,
+            "kind": "Identical",
+            "title": "Index Phase Boundaries",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 6,
+            "kind": "Identical",
+            "title": "Scenario Elapsed Time",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 7,
+            "kind": "Identical",
+            "title": "Index Phases",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 8,
+            "kind": "Identical",
+            "title": "Reset Windows",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 9,
+            "kind": "Identical",
+            "title": "Drive The Fault Reset",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 10,
+            "kind": "Identical",
+            "title": "Latched Cause Standing",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 11,
+            "kind": "Identical",
+            "title": "Arrival Inert Check",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 12,
+            "kind": "Identical",
+            "title": "Head Cleardown Outcome",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 13,
+            "kind": "Identical",
+            "title": "Recovery Outcome",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 14,
+            "kind": "Identical",
+            "title": "Observation Window",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 15,
+            "kind": "Identical",
+            "title": "Index Complete",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 16,
+            "kind": "Identical",
+            "title": "Re-Arm For The Next Index",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 17,
+            "kind": "Identical",
+            "title": "Published Phase",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 18,
+            "kind": "Identical",
+            "title": "Disarm Lever",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 19,
+            "kind": "Identical",
+            "title": "Arbitrate The Shared Fault Reset",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 20,
+            "kind": "Identical",
+            "title": "Scenario Event Times",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 21,
+            "kind": "Identical",
+            "title": "Commanded Operator Buttons",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 22,
+            "kind": "Identical",
+            "title": "Commanded Plant Permissions",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 23,
+            "kind": "Identical",
+            "title": "Commanded Hopper Level And Motor Fault",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 24,
+            "kind": "Identical",
+            "title": "Modelled Contactor Response",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 25,
+            "kind": "Identical",
+            "title": "Force The Monitored Inputs",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 26,
+            "kind": "Identical",
+            "title": "Hold The Pusher Parked",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          }
+        ],
+        "allowedNetworks": [],
+        "invarianceViolations": [],
+        "headerChangeAllowed": false,
+        "hasUnclaimedHeaderChange": false,
+        "hasNonGatingCommentChange": false,
+        "declaredInsertAt": null,
+        "movesAreDeclared": false,
+        "unchangedRemainder": 26,
+        "hasInvarianceViolation": false,
+        "_what": "ROUND TRIP, sent vs returned: the committed IR against TIA's OWN re-export, converted back with to-ir. hasAnyChange=false is the proof that TIA altered nothing - not networks, not the interface, not the comments."
+      }
+    },
+    {
+      "tool": "converter diff (round trip, sent vs re-exported) FB_HopperBlockageStim",
+      "exit": 0,
+      "json": {
+        "blockName": "FB_HopperBlockageStim",
+        "blockNameMismatch": false,
+        "otherBlockName": "FB_HopperBlockageStim",
+        "hasAnyChange": false,
+        "header": {
+          "changed": false,
+          "titleChanged": false,
+          "titleBefore": "Hopper-Blockage Stimulus Model",
+          "titleAfter": "Hopper-Blockage Stimulus Model",
+          "commentChanged": false,
+          "commentBefore": "Drives the three sensor signals the hopper-blockage monitor consumes - hopper high, plant running, operator reset - to a timeline the harness commands, so a conformance run exercises the monitor against a plant that behaves to order. A run is a clear-down that puts the monitor into a known unalarmed state, optionally a pre-boundary phase that leaves it part-way through its persistence window before the CPU is stopped and restarted, then the scenario itself, and once the harness has acknowledged the result by dropping the start bool, a trailing clear-down that repeats the reset so the NEXT run starts from a known unalarmed state rather than from whatever the previous scenario left standing - suppressed across a stop/restart boundary, where clearing would destroy the latched alarm the startup scenarios exist to observe. The clear-down exists because the monitor's alarm is latched and retentive and can only be cleared by a reset edge, so a scenario that did not start by clearing it would be reading the previous run. The scenario's shape comes from the tens digit of Profile and its durations from P1 to P4; six shapes cover every scenario the vector set asks for, because the scenarios differ in WHICH of the two driven signals drops and WHEN, never in anything else. The model publishes Armed so that observation latches are armed by its own phase - a latch running free from the start of the run would refill from the clear-down and read true no matter what the monitor did. It publishes its own threshold belief rather than reading the monitor's, so a reset placed at the threshold crossing stays a stimulus decision. This block drives the monitor's inputs and nothing else: it writes no plant tag, reads nothing the monitor writes, and is called only from the cyclic program.",
+          "commentAfter": "Drives the three sensor signals the hopper-blockage monitor consumes - hopper high, plant running, operator reset - to a timeline the harness commands, so a conformance run exercises the monitor against a plant that behaves to order. A run is a clear-down that puts the monitor into a known unalarmed state, optionally a pre-boundary phase that leaves it part-way through its persistence window before the CPU is stopped and restarted, then the scenario itself, and once the harness has acknowledged the result by dropping the start bool, a trailing clear-down that repeats the reset so the NEXT run starts from a known unalarmed state rather than from whatever the previous scenario left standing - suppressed across a stop/restart boundary, where clearing would destroy the latched alarm the startup scenarios exist to observe. The clear-down exists because the monitor's alarm is latched and retentive and can only be cleared by a reset edge, so a scenario that did not start by clearing it would be reading the previous run. The scenario's shape comes from the tens digit of Profile and its durations from P1 to P4; six shapes cover every scenario the vector set asks for, because the scenarios differ in WHICH of the two driven signals drops and WHEN, never in anything else. The model publishes Armed so that observation latches are armed by its own phase - a latch running free from the start of the run would refill from the clear-down and read true no matter what the monitor did. It publishes its own threshold belief rather than reading the monitor's, so a reset placed at the threshold crossing stays a stimulus decision. This block drives the monitor's inputs and nothing else: it writes no plant tag, reads nothing the monitor writes, and is called only from the cyclic program.",
+          "interfaceChanged": false,
+          "interfaceCommentChanged": false
+        },
+        "summary": {
+          "total": 24,
+          "changed": 0,
+          "added": 0,
+          "removed": 0,
+          "moved": 0,
+          "identical": 24
+        },
+        "networks": [
+          {
+            "number": 1,
+            "kind": "Identical",
+            "title": "Run Latch",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 2,
+            "kind": "Identical",
+            "title": "Run Timer",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 3,
+            "kind": "Identical",
+            "title": "Elapsed Run Time",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 4,
+            "kind": "Identical",
+            "title": "Phase Constants",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 5,
+            "kind": "Identical",
+            "title": "Scenario Start Offset",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 6,
+            "kind": "Identical",
+            "title": "Scenario Elapsed Time",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 7,
+            "kind": "Identical",
+            "title": "Timeline Shape",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 8,
+            "kind": "Identical",
+            "title": "Segment Boundaries",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 9,
+            "kind": "Identical",
+            "title": "Phases",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 10,
+            "kind": "Identical",
+            "title": "Pre-Boundary Complete",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 11,
+            "kind": "Identical",
+            "title": "Hopper Level By Shape",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 12,
+            "kind": "Identical",
+            "title": "Running Feedback By Shape",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 13,
+            "kind": "Identical",
+            "title": "Commanded Hopper Level",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 14,
+            "kind": "Identical",
+            "title": "Commanded Running Feedback",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 15,
+            "kind": "Identical",
+            "title": "Reset Pulse Windows",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 16,
+            "kind": "Identical",
+            "title": "Reset Sources",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 17,
+            "kind": "Identical",
+            "title": "Commanded Operator Reset",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 18,
+            "kind": "Identical",
+            "title": "Observation Window",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 19,
+            "kind": "Identical",
+            "title": "Scenario Complete",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 20,
+            "kind": "Identical",
+            "title": "Re-Arm For The Next Run",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 21,
+            "kind": "Identical",
+            "title": "Force The Monitored Inputs",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 22,
+            "kind": "Identical",
+            "title": "Hold The Reverse Feedback Clear",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 23,
+            "kind": "Identical",
+            "title": "Trailing Clear-Down Pending",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 24,
+            "kind": "Identical",
+            "title": "Trailing Clear-Down Window",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          }
+        ],
+        "allowedNetworks": [],
+        "invarianceViolations": [],
+        "headerChangeAllowed": false,
+        "hasUnclaimedHeaderChange": false,
+        "hasNonGatingCommentChange": false,
+        "declaredInsertAt": null,
+        "movesAreDeclared": false,
+        "unchangedRemainder": 24,
+        "hasInvarianceViolation": false,
+        "_what": "ROUND TRIP, sent vs returned: the committed IR against TIA's OWN re-export, converted back with to-ir. hasAnyChange=false is the proof that TIA altered nothing - not networks, not the interface, not the comments."
+      }
+    },
+    {
+      "tool": "converter diff (round trip, sent vs re-exported) Main",
+      "exit": 0,
+      "json": {
+        "blockName": "Main",
+        "blockNameMismatch": false,
+        "otherBlockName": "Main",
+        "hasAnyChange": false,
+        "header": {
+          "changed": false,
+          "titleChanged": false,
+          "titleBefore": "\"Main Program Sweep (Cycle)\"",
+          "titleAfter": "\"Main Program Sweep (Cycle)\"",
+          "commentChanged": false,
+          "commentBefore": "Cyclic program sweep. The order of these calls is the program: commanded stimulus heads first, because for a commanded input a head is the field and the input map below must find this scan's commanded state; then the input map, the control, the alarms and the output map; then the harness instrumentation, which observes what this scan's control produced; then the Modbus server, last, so the whole wire-to-marker-memory transfer happens with no other block touching those registers in between. THE ORDER OF THE THREE HEADS IS LOAD-BEARING AND MUST NOT BE CHANGED WITHOUT READING THIS. The heads share the injection array and the plant reset line, and the release above gives both a rest value each scan so that a head which is not running can hand a neighbour's value on instead of driving a default of its own. TWO OF THE THREE HEADS DO EXACTLY THAT AND THE FIRST DOES NOT: FB_HopperBlockageStim runs a trailing cleardown AFTER its own index has finished - a window defined as CleardownPending AND NOT Start AND NOT Running, so it is asserted precisely when that head reads as idle - and throughout it that head DRIVES test members 5, 6 and 8 and the reset line low rather than passing them through. The pusher and shredder heads write three of those same four lines. So the hopper head is placed FIRST, where a head whose index is genuinely running overwrites that drive; placed after either of the others it would wipe a running index's commanded plant for about five seconds, and no gate would say so. THAT PLACEMENT IS ALSO WHAT MAKES THE MULTI-WRITER ON THE RESET LINE SOUND: four blocks write it - the release, then the three heads - and they are safe only because they are TOTALLY ORDERED here, each later writer carrying the earlier value forward as its own pass-through term, with the only consumer running after all four. Reorder them and that argument does not survive. What is NOT ordered, deliberately, is the pusher head against the shredder head: neither asserts anything while its own index is idle, so between those two either order gives the same program. One scheduling consequence follows and is worth knowing before a multi-slot wave is timed: a hopper trailing cleardown that overlaps another slot's index is overwritten by it, so that cleardown does not happen - the heads must be given the trailing window between slots rather than being started back to back. Each network's own comment carries the reason it sits where it sits.",
+          "commentAfter": "Cyclic program sweep. The order of these calls is the program: commanded stimulus heads first, because for a commanded input a head is the field and the input map below must find this scan's commanded state; then the input map, the control, the alarms and the output map; then the harness instrumentation, which observes what this scan's control produced; then the Modbus server, last, so the whole wire-to-marker-memory transfer happens with no other block touching those registers in between. THE ORDER OF THE THREE HEADS IS LOAD-BEARING AND MUST NOT BE CHANGED WITHOUT READING THIS. The heads share the injection array and the plant reset line, and the release above gives both a rest value each scan so that a head which is not running can hand a neighbour's value on instead of driving a default of its own. TWO OF THE THREE HEADS DO EXACTLY THAT AND THE FIRST DOES NOT: FB_HopperBlockageStim runs a trailing cleardown AFTER its own index has finished - a window defined as CleardownPending AND NOT Start AND NOT Running, so it is asserted precisely when that head reads as idle - and throughout it that head DRIVES test members 5, 6 and 8 and the reset line low rather than passing them through. The pusher and shredder heads write three of those same four lines. So the hopper head is placed FIRST, where a head whose index is genuinely running overwrites that drive; placed after either of the others it would wipe a running index's commanded plant for about five seconds, and no gate would say so. THAT PLACEMENT IS ALSO WHAT MAKES THE MULTI-WRITER ON THE RESET LINE SOUND: four blocks write it - the release, then the three heads - and they are safe only because they are TOTALLY ORDERED here, each later writer carrying the earlier value forward as its own pass-through term, with the only consumer running after all four. Reorder them and that argument does not survive. What is NOT ordered, deliberately, is the pusher head against the shredder head: neither asserts anything while its own index is idle, so between those two either order gives the same program. One scheduling consequence follows and is worth knowing before a multi-slot wave is timed: a hopper trailing cleardown that overlaps another slot's index is overwritten by it, so that cleardown does not happen - the heads must be given the trailing window between slots rather than being started back to back. Each network's own comment carries the reason it sits where it sits.",
+          "interfaceChanged": false,
+          "interfaceCommentChanged": false
+        },
+        "summary": {
+          "total": 15,
+          "changed": 0,
+          "added": 0,
+          "removed": 0,
+          "moved": 0,
+          "identical": 15
+        },
+        "networks": [
+          {
+            "number": 1,
+            "kind": "Identical",
+            "title": "Harness Stimulus Arbitration Layer",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 2,
+            "kind": "Identical",
+            "title": "Hopper-Blockage Stimulus Model",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 3,
+            "kind": "Identical",
+            "title": "Pusher Stimulus Head",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 4,
+            "kind": "Identical",
+            "title": "Shredder Sequencer Stimulus Head",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 5,
+            "kind": "Identical",
+            "title": "Input Mapping",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 6,
+            "kind": "Identical",
+            "title": "Control",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 7,
+            "kind": "Identical",
+            "title": "Alarms",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 8,
+            "kind": "Identical",
+            "title": "Output Mapping",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 9,
+            "kind": "Identical",
+            "title": "Harness Violation Latches",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 10,
+            "kind": "Identical",
+            "title": "Harness Mirror Copy Layer",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 11,
+            "kind": "Identical",
+            "title": "Modbus Server",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 12,
+            "kind": "Identical",
+            "title": "Corpus Block - Bool Echo",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 13,
+            "kind": "Identical",
+            "title": "Corpus Block - Dwell Timer",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 14,
+            "kind": "Identical",
+            "title": "Corpus Block - Int Sum",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 15,
+            "kind": "Identical",
+            "title": "Corpus Block - Sealed Latches",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          }
+        ],
+        "allowedNetworks": [],
+        "invarianceViolations": [],
+        "headerChangeAllowed": false,
+        "hasUnclaimedHeaderChange": false,
+        "hasNonGatingCommentChange": false,
+        "declaredInsertAt": null,
+        "movesAreDeclared": false,
+        "unchangedRemainder": 15,
+        "hasInvarianceViolation": false,
+        "_what": "ROUND TRIP, sent vs returned: the committed IR against TIA's OWN re-export, converted back with to-ir. hasAnyChange=false is the proof that TIA altered nothing - not networks, not the interface, not the comments."
+      }
+    },
+    {
+      "tool": "openness-cli block-layout --expect Optimized iDB_PusherStim",
+      "exit": 0,
+      "json": {
+        "name": "iDB_PusherStim",
+        "path": "S7-1200 station_1/PLC1 6ES7 214-1AG40-0XB0",
+        "type": "DB",
+        "layout": "Optimized",
+        "previousLayout": null,
+        "requestedLayout": null,
+        "isSet": false,
+        "changed": false,
+        "verified": true
+      }
+    },
+    {
+      "tool": "openness-cli block-layout --expect Optimized iDB_ShredderSequencerStim",
+      "exit": 0,
+      "json": {
+        "name": "iDB_ShredderSequencerStim",
+        "path": "S7-1200 station_1/PLC1 6ES7 214-1AG40-0XB0",
+        "type": "DB",
+        "layout": "Optimized",
+        "previousLayout": null,
+        "requestedLayout": null,
+        "isSet": false,
+        "changed": false,
+        "verified": true
+      }
+    }
+  ]
+}
