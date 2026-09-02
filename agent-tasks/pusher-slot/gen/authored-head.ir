@@ -1,0 +1,65 @@
+BLOCK FB FB_PusherStim
+ROOTID 0
+NUMBER 9001
+LANGUAGE LAD
+TITLE "Pusher Stimulus Head"
+COMMENT "Drives the plant the pusher control block sees, to a timeline the harness commands, so a conformance index exercises it against a machine that behaves to order. Networks 1 to 17 are the generated index shell - the clock, the seven phases, the two cleardowns, the arming window and the outcome bookkeeping - and networks 18 to 21 are this head's own: the commanded timeline, the cleardown rest state, the presentation to the plant, and the arbitration of the one fault-reset line two heads share. AN INDEX IS: a head cleardown that puts the block into a known state with nothing latched, then the scenario, then a tail cleardown that repeats it so the NEXT index starts clean rather than from whatever this one left standing. The cleardown exists because this block latches - a blocked fault, two travel-timeout faults, a both-switches fault, a pressure hold and a step that is not idle all survive until something clears them, and an index that did not start by clearing them would be reading the previous one. THE DISARM LEVER IS THE COMMANDED MODE, NOT THE FITTED SETTING: outside the scenario the head presents mode 0, the ram at home, and every other input inert, which aborts any cycle in flight to Retract and then to Idle, stops both supervision timers, and lets the reset pulse land on a plant that cannot re-create the causes it is clearing. Fitted is deliberately never written - it is a retentive commissioning setting, not a test input, and a head that wrote it would leave the pusher disabled if an index were interrupted mid-cleardown. EACH OF THE TEN COMMANDED SIGNALS IS A TWO-EDGE TIMELINE and nothing more: an initial level, a time it leaves that level, and a time it returns. That is deliberately not a library of named scenario shapes - the head does not know what any scenario is for, so a scenario the vector author has not written yet needs no change here. STALENESS: the block's own advancing quantities are its five timers and its per-cycle pressure-trip counter, and every one of them is fed from a commanded signal that this head can move, so none is silently frozen - with ONE stated exception, the trip counter, which a two-edge pressure timeline can advance at most once per scenario and therefore cannot drive to its threshold; the blocked-fault path is out of reach of this head as it stands. One further latch does not clear at all: the block's pump cold-start guard is set by the first demand and has no reset anywhere, so the first index after a CPU restart is the only one that meets it unset. It is not observable at rest once the pump run-on time has expired, which is why the cleardown dwell is longer than that time and why the guard is not counted as a standing cause. This head writes only test-injection members, operator command bits and the fault-reset line; it writes no output, no setting and nothing the block under test produces, and it is called only from the cyclic program."
+
+INTERFACE
+  INPUT
+  OUTPUT
+  STATIC
+    Stim : "UDT_PusherStim" COMMENT "Caller interface. The harness copy layer writes the command members before an index and reads the published ones while it runs."
+@@STIM_MEMBERS@@
+    Running : Bool COMMENT "An index is under way: set by Start and held until the index reaches its end, so the harness dropping the start bool part-way through cannot truncate one and produce a short index that still looks complete."
+    RunTimer : TON_TIME VERSION 1.0 SETPOINT
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool
+    RunT : Time COMMENT "Time since the index started, copied out of the index timer so every phase compares against a plain value."
+    ScenT : Time COMMENT "Time since the start of the scenario - that is, since the head cleardown finished. Every commanded edge, arm time and reset time is measured against this and never against the index timer."
+    DisarmDwell : Time COMMENT "How long each disarm phase holds the plant inert. Long enough for the block's pressure hold to release and for its pump run-on to expire, so a block that is merely settling is not read as a block that is stuck."
+    ResetDwell : Time COMMENT "How long each reset phase pulses the fault reset. Many scans wide, so a pulse cannot fall between two scans and be missed."
+    VerifyDwell : Time COMMENT "How long each verify phase looks at whether the causes actually cleared. It runs with the plant still inert, so anything still standing is standing because the block held it."
+    HeadDisarmEnd : Time COMMENT "End of the head disarm phase, measured from the start of the index."
+    HeadResetEnd : Time COMMENT "End of the head reset phase."
+    HeadEnd : Time COMMENT "End of the head cleardown, and therefore the instant the scenario starts."
+    ScenarioEnd : Time COMMENT "End of the scenario."
+    TailDisarmEnd : Time COMMENT "End of the tail disarm phase."
+    TailResetEnd : Time COMMENT "End of the tail reset phase."
+    TailEnd : Time COMMENT "End of the whole index."
+    ResetPulseEnd : Time COMMENT "End of the reset pulse the scenario itself asks for."
+    InHeadDisarm : Bool COMMENT "The head disarm phase is running."
+    InHeadReset : Bool COMMENT "The head reset phase is running."
+    InHeadVerify : Bool COMMENT "The head verify phase is running."
+    InScenario : Bool COMMENT "The scenario itself is running. It is the only phase in which the commanded timeline reaches the plant."
+    InTailDisarm : Bool COMMENT "The tail disarm phase is running."
+    InTailReset : Bool COMMENT "The tail reset phase is running."
+    InTailVerify : Bool COMMENT "The tail verify phase is running."
+    ResetPulse : Bool COMMENT "A cleardown reset pulse is asserted."
+    ScenarioReset : Bool COMMENT "The reset the scenario itself asked for is asserted, whichever mode asked for it."
+    CauseStanding : Bool COMMENT "At least one thing the block latches is standing right now."
+    TlHopper : Bool COMMENT "The commanded hopper high-level sensor, timeline only - before the scenario gates it."
+    TlManualCycle : Bool COMMENT "The commanded manual-cycle button, timeline only."
+    TlJogExtend : Bool COMMENT "The commanded jog-extend button, timeline only."
+    TlJogRetract : Bool COMMENT "The commanded jog-retract button, timeline only."
+    TlHome : Bool COMMENT "The commanded home limit switch, timeline only."
+    TlFullTravel : Bool COMMENT "The commanded full-travel limit switch, timeline only."
+    TlHighPressure : Bool COMMENT "The commanded high-pressure switch, timeline only."
+    TlPackRunning : Bool COMMENT "The commanded power-pack running feedback, timeline only."
+    TlHealthy : Bool COMMENT "The commanded control-circuit healthy input, timeline only. Dropping it is the hard stop tier: it forces the pusher mode to zero, which parks the ram and blocks jogging."
+    TlDownstream : Bool COMMENT "The commanded downstream-running input, timeline only. Dropping it is the soft stop tier: it inhibits cycles and aborts one in flight, while hand-jog stays available."
+    CmdHopper : Bool COMMENT "The hopper high-level sensor as the plant will actually see it - the timeline inside the scenario, the rest state outside it."
+    CmdManualCycle : Bool COMMENT "The manual-cycle button as the plant will actually see it."
+    CmdJogExtend : Bool COMMENT "The jog-extend button as the plant will actually see it."
+    CmdJogRetract : Bool COMMENT "The jog-retract button as the plant will actually see it."
+    CmdHome : Bool COMMENT "The home limit switch as the plant will actually see it. Held true outside the scenario, because the rest state this head commands is a ram parked at home."
+    CmdFullTravel : Bool COMMENT "The full-travel limit switch as the plant will actually see it."
+    CmdHighPressure : Bool COMMENT "The high-pressure switch as the plant will actually see it."
+    CmdPackRunning : Bool COMMENT "The power-pack running feedback as the plant will actually see it."
+    CmdHealthy : Bool COMMENT "The control-circuit healthy input as the plant will actually see it. Held true outside the scenario, or the sequencer would force the pusher to mode zero for reasons no vector asked for."
+    CmdDownstream : Bool COMMENT "The downstream-running input as the plant will actually see it. Held true outside the scenario, for the same reason."
+    CmdMode : Int COMMENT "The operator pusher mode as the plant will actually see it. Zero outside the scenario, which is the disarm lever."
+  CONSTANT
+

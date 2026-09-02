@@ -1,0 +1,211 @@
+== MULTI-WRITER PATHS (C-308: >1 writer - the AI judges legit S/R pairs vs conflicts) ==
+  DB_Controls.FaultReset: FB_HopperBlockageStim N21 (assign), FB_PusherStim N21 (assign), FB_ShredderSequencerStim N19 (assign), FC_HarnessStimArbiter N4 (reset)
+  DB_Controls.PusherMode: FB_PusherStim N20 (write), FB_ShredderSequencerStim N26 (write)
+  DB_Input.Test[0]: FB_HopperBlockageStim N21 (assign), FB_PusherStim N20 (assign), FB_ShredderSequencerStim N25 (assign), FC_HarnessStimArbiter N1 (reset)
+  DB_Input.Test[10]: FB_ShredderSequencerStim N25 (assign), FC_HarnessStimArbiter N2 (reset)
+  DB_Input.Test[11]: FB_PusherStim N20 (assign), FC_HarnessStimArbiter N2 (reset)
+  DB_Input.Test[12]: FB_PusherStim N20 (assign), FC_HarnessStimArbiter N3 (assign)
+  DB_Input.Test[13]: FB_PusherStim N20 (assign), FC_HarnessStimArbiter N2 (reset)
+  DB_Input.Test[14]: FB_PusherStim N20 (assign), FC_HarnessStimArbiter N2 (reset)
+  DB_Input.Test[15]: FB_PusherStim N20 (assign), FB_ShredderSequencerStim N25 (assign), FC_HarnessStimArbiter N3 (assign)
+  DB_Input.Test[1]: FB_PusherStim N20 (assign), FB_ShredderSequencerStim N25 (assign), FC_HarnessStimArbiter N3 (assign)
+  DB_Input.Test[3]: FB_ShredderSequencerStim N25 (assign), FC_HarnessStimArbiter N2 (reset)
+  DB_Input.Test[4]: FB_ShredderSequencerStim N25 (assign), FC_HarnessStimArbiter N2 (reset)
+  DB_Input.Test[5]: FB_HopperBlockageStim N21 (assign), FB_ShredderSequencerStim N25 (assign), FC_HarnessStimArbiter N2 (reset)
+  DB_Input.Test[6]: FB_HopperBlockageStim N22 (reset), FB_ShredderSequencerStim N25 (assign), FC_HarnessStimArbiter N2 (reset)
+  DB_Input.Test[7]: FB_ShredderSequencerStim N25 (assign), FC_HarnessStimArbiter N2 (reset)
+  DB_Input.Test[8]: FB_HopperBlockageStim N21 (assign), FB_PusherStim N20 (assign), FB_ShredderSequencerStim N25 (assign), FC_HarnessStimArbiter N2 (reset)
+  FB_HarnessViolationLatch.AlarmFellWithoutReset: FB_HarnessViolationLatch N2 (set), FB_HarnessViolationLatch N6 (reset)  [block-local to FB_HarnessViolationLatch - not a cross-block conflict; also addressable as iDB_HarnessViolationLatch.AlarmFellWithoutReset]
+  FB_HarnessViolationLatch.AlarmLowUnderHeldReset: FB_HarnessViolationLatch N3 (set), FB_HarnessViolationLatch N6 (reset)  [block-local to FB_HarnessViolationLatch - not a cross-block conflict; also addressable as iDB_HarnessViolationLatch.AlarmLowUnderHeldReset]
+  FB_HarnessViolationLatch.InhibitHighWhileAlarmLow: FB_HarnessViolationLatch N4 (set), FB_HarnessViolationLatch N6 (reset)  [block-local to FB_HarnessViolationLatch - not a cross-block conflict; also addressable as iDB_HarnessViolationLatch.InhibitHighWhileAlarmLow]
+  FB_HarnessViolationLatch.InhibitLowWhileAlarmHigh: FB_HarnessViolationLatch N4 (set), FB_HarnessViolationLatch N6 (reset)  [block-local to FB_HarnessViolationLatch - not a cross-block conflict; also addressable as iDB_HarnessViolationLatch.InhibitLowWhileAlarmHigh]
+  FB_HarnessViolationLatch.ResetSinceRaise: FB_HarnessViolationLatch N1 (set), FB_HarnessViolationLatch N1 (reset)  [block-local to FB_HarnessViolationLatch - not a cross-block conflict; also addressable as iDB_HarnessViolationLatch.ResetSinceRaise]
+  FB_HopperBlockageMonitor.AccumulatedElapsed: FB_HopperBlockageMonitor N3 (write), FB_HopperBlockageMonitor N3 (write)  [block-local to FB_HopperBlockageMonitor - not a cross-block conflict; also addressable as iDB_HopperBlockageMonitor.AccumulatedElapsed]
+  FB_HopperBlockageStim.CleardownPending: FB_HopperBlockageStim N23 (set), FB_HopperBlockageStim N23 (reset)  [block-local to FB_HopperBlockageStim - not a cross-block conflict]
+  FB_HopperBlockageStim.Offset: FB_HopperBlockageStim N5 (write), FB_HopperBlockageStim N5 (write)  [block-local to FB_HopperBlockageStim - not a cross-block conflict; also addressable as iDB_HopperBlockageStim.Offset]
+  FB_HopperBlockageStim.PreBoundaryDone: FB_HopperBlockageStim N10 (set), FB_HopperBlockageStim N20 (reset)  [block-local to FB_HopperBlockageStim - not a cross-block conflict; also addressable as iDB_HopperBlockageStim.PreBoundaryDone]
+  FB_HopperBlockageStim.ScenarioT: FB_HopperBlockageStim N6 (write), FB_HopperBlockageStim N6 (write)  [block-local to FB_HopperBlockageStim - not a cross-block conflict; also addressable as iDB_HopperBlockageStim.ScenarioT]
+  FB_HopperBlockageStim.Stim.ScenarioDone: FB_HopperBlockageStim N19 (set), FB_HopperBlockageStim N20 (reset)  [block-local to FB_HopperBlockageStim - not a cross-block conflict; also addressable as iDB_HopperBlockageStim.Stim.ScenarioDone]
+  FB_HxIntStep.StepSum: FB_HxIntStep N1 (write), FB_HxIntStep N1 (write)  [block-local to FB_HxIntStep - not a cross-block conflict; also addressable as iDB_HxIntStep.StepSum]
+  FB_MotorFwdRevSystem.CycleDelay: FB_MotorFwdRevSystem N1 (set), FB_MotorFwdRevSystem N1 (reset), FB_MotorFwdRevSystem N1 (reset)  [block-local to FB_MotorFwdRevSystem; also addressable as iDB_MotorFwdRevSystem_Shredder.CycleDelay]  [*** ALSO WRITTEN FROM OUTSIDE FB_MotorFwdRevSystem, THROUGH THE INSTANCE DB: OB100 N3 (reset) - same storage, different spelling, so this IS cross-block contention]
+  FB_MotorFwdRevSystem.HandPosEdge: FB_MotorFwdRevSystem N5 (assign), FB_MotorFwdRevSystem N5 (assign)  [block-local to FB_MotorFwdRevSystem - not a cross-block conflict; also addressable as iDB_MotorFwdRevSystem_Shredder.HandPosEdge]
+  FB_MotorFwdRevSystem.IO.HandStartSignal: FB_MotorFwdRevSystem N3 (reset), FB_MotorFwdRevSystem N4 (reset)  [block-local to FB_MotorFwdRevSystem; also addressable as iDB_MotorFwdRevSystem_Shredder.IO.HandStartSignal]  [*** ALSO WRITTEN FROM OUTSIDE FB_MotorFwdRevSystem, THROUGH THE INSTANCE DB: OB100 N3 (reset) - same storage, different spelling, so this IS cross-block contention]
+  FB_MotorFwdRevSystem.IO.HrsRun: FB_MotorFwdRevSystem N13 (write), FB_MotorFwdRevSystem N13 (write)  [block-local to FB_MotorFwdRevSystem - not a cross-block conflict; also addressable as iDB_MotorFwdRevSystem_Shredder.IO.HrsRun]
+  FB_MotorFwdRevSystem.IO.StopMotor: FB_MotorFwdRevSystem N8 (set), FB_MotorFwdRevSystem N8 (reset)  [block-local to FB_MotorFwdRevSystem; also addressable as iDB_MotorFwdRevSystem_Shredder.IO.StopMotor]  [*** ALSO WRITTEN FROM OUTSIDE FB_MotorFwdRevSystem, THROUGH THE INSTANCE DB: OB100 N3 (reset) - same storage, different spelling, so this IS cross-block contention]
+  FB_MotorFwdRevSystem.IO.Telemetry: FB_MotorFwdRevSystem N14 (write), FB_MotorFwdRevSystem N14 (write), FB_MotorFwdRevSystem N14 (write), FB_MotorFwdRevSystem N14 (write), FB_MotorFwdRevSystem N14 (write)  [block-local to FB_MotorFwdRevSystem - not a cross-block conflict; also addressable as iDB_MotorFwdRevSystem_Shredder.IO.Telemetry]
+  FB_MotorFwdRevSystem.Pasue: FB_MotorFwdRevSystem N1 (set), FB_MotorFwdRevSystem N1 (set), FB_MotorFwdRevSystem N1 (reset), FB_MotorFwdRevSystem N1 (reset)  [block-local to FB_MotorFwdRevSystem; also addressable as iDB_MotorFwdRevSystem_Shredder.Pasue]  [*** ALSO WRITTEN FROM OUTSIDE FB_MotorFwdRevSystem, THROUGH THE INSTANCE DB: OB100 N3 (reset) - same storage, different spelling, so this IS cross-block contention]
+  FB_MotorFwdRevSystem.StartTimer: FB_MotorFwdRevSystem N1 (set), FB_MotorFwdRevSystem N1 (set), FB_MotorFwdRevSystem N1 (reset)  [block-local to FB_MotorFwdRevSystem - not a cross-block conflict]
+  FB_MotorFwdRevSystem.Time: FB_MotorFwdRevSystem N7 (write), FB_MotorFwdRevSystem N7 (write), FB_MotorFwdRevSystem N7 (write), FB_MotorFwdRevSystem N7 (write), FB_MotorFwdRevSystem N7 (write)  [block-local to FB_MotorFwdRevSystem - not a cross-block conflict]
+  FB_PusherControl.IO.Step: FB_PusherControl N7 (write), FB_PusherControl N7 (write), FB_PusherControl N8 (write), FB_PusherControl N8 (write), FB_PusherControl N8 (write), FB_PusherControl N8 (write), FB_PusherControl N9 (write), FB_PusherControl N10 (write), FB_PusherControl N10 (write), FB_PusherControl N14 (write)  [block-local to FB_PusherControl; also addressable as iDB_PusherControl.IO.Step]  [*** ALSO WRITTEN FROM OUTSIDE FB_PusherControl, THROUGH THE INSTANCE DB: OB100 N2 (write) - same storage, different spelling, so this IS cross-block contention]
+  FB_PusherControl.PressureTripCount: FB_PusherControl N5 (write), FB_PusherControl N5 (write)  [block-local to FB_PusherControl; also addressable as iDB_PusherControl.PressureTripCount]  [*** ALSO WRITTEN FROM OUTSIDE FB_PusherControl, THROUGH THE INSTANCE DB: OB100 N2 (write) - same storage, different spelling, so this IS cross-block contention]
+  FB_PusherControl.Time: FB_PusherControl N3 (write), FB_PusherControl N3 (write), FB_PusherControl N3 (write), FB_PusherControl N3 (write), FB_PusherControl N3 (write), FB_PusherControl N3 (write), FB_PusherControl N3 (write)  [block-local to FB_PusherControl - not a cross-block conflict]
+  FB_PusherStim.CmdMode: FB_PusherStim N19 (write), FB_PusherStim N19 (write)  [block-local to FB_PusherStim - not a cross-block conflict]
+  FB_PusherStim.ScenT: FB_PusherStim N6 (write), FB_PusherStim N6 (write)  [block-local to FB_PusherStim - not a cross-block conflict]
+  FB_PusherStim.Stim.ArrivedDirty: FB_PusherStim N11 (set), FB_PusherStim N16 (reset)  [block-local to FB_PusherStim - not a cross-block conflict]
+  FB_PusherStim.Stim.InertAtEnd: FB_PusherStim N13 (set), FB_PusherStim N13 (reset), FB_PusherStim N16 (reset)  [block-local to FB_PusherStim - not a cross-block conflict]
+  FB_PusherStim.Stim.InertAtStart: FB_PusherStim N12 (set), FB_PusherStim N12 (reset), FB_PusherStim N16 (reset)  [block-local to FB_PusherStim - not a cross-block conflict]
+  FB_PusherStim.Stim.Phase: FB_PusherStim N17 (write), FB_PusherStim N17 (write), FB_PusherStim N17 (write), FB_PusherStim N17 (write), FB_PusherStim N17 (write), FB_PusherStim N17 (write), FB_PusherStim N17 (write), FB_PusherStim N17 (write)  [block-local to FB_PusherStim - not a cross-block conflict]
+  FB_PusherStim.Stim.RecoverFailed: FB_PusherStim N13 (set), FB_PusherStim N16 (reset)  [block-local to FB_PusherStim - not a cross-block conflict]
+  FB_PusherStim.Stim.ScenarioDone: FB_PusherStim N15 (set), FB_PusherStim N16 (reset)  [block-local to FB_PusherStim - not a cross-block conflict]
+  FB_ShredderSequencer.IO.PusherModeCmd: FB_ShredderSequencer N14 (write), FB_ShredderSequencer N14 (write)  [block-local to FB_ShredderSequencer - not a cross-block conflict; also addressable as iDB_ShredderSequencer.IO.PusherModeCmd]
+  FB_ShredderSequencer.IO.Step: FB_ShredderSequencer N6 (write), FB_ShredderSequencer N7 (write), FB_ShredderSequencer N7 (write), FB_ShredderSequencer N8 (write), FB_ShredderSequencer N8 (write), FB_ShredderSequencer N8 (write), FB_ShredderSequencer N9 (write), FB_ShredderSequencer N9 (write), FB_ShredderSequencer N9 (write), FB_ShredderSequencer N10 (write), FB_ShredderSequencer N10 (write), FB_ShredderSequencer N10 (write), FB_ShredderSequencer N12 (write), FB_ShredderSequencer N12 (write), FB_ShredderSequencer N12 (write), FB_ShredderSequencer N13 (write), FB_ShredderSequencer N13 (write), FB_ShredderSequencer N13 (write)  [block-local to FB_ShredderSequencer; also addressable as iDB_ShredderSequencer.IO.Step]  [*** ALSO WRITTEN FROM OUTSIDE FB_ShredderSequencer, THROUGH THE INSTANCE DB: OB100 N1 (write) - same storage, different spelling, so this IS cross-block contention]
+  FB_ShredderSequencer.ReversalCount: FB_ShredderSequencer N4 (write), FB_ShredderSequencer N4 (write)  [block-local to FB_ShredderSequencer; also addressable as iDB_ShredderSequencer.ReversalCount]  [*** ALSO WRITTEN FROM OUTSIDE FB_ShredderSequencer, THROUGH THE INSTANCE DB: OB100 N1 (write) - same storage, different spelling, so this IS cross-block contention]
+  FB_ShredderSequencer.Time: FB_ShredderSequencer N2 (write), FB_ShredderSequencer N2 (write), FB_ShredderSequencer N2 (write), FB_ShredderSequencer N2 (write), FB_ShredderSequencer N2 (write), FB_ShredderSequencer N2 (write), FB_ShredderSequencer N2 (write), FB_ShredderSequencer N2 (write), FB_ShredderSequencer N2 (write), FB_ShredderSequencer N2 (write)  [block-local to FB_ShredderSequencer - not a cross-block conflict]
+  FB_ShredderSequencerStim.ScenT: FB_ShredderSequencerStim N6 (write), FB_ShredderSequencerStim N6 (write)  [block-local to FB_ShredderSequencerStim - not a cross-block conflict; also addressable as iDB_ShredderSequencerStim.ScenT]
+  FB_ShredderSequencerStim.Stim.ArrivedDirty: FB_ShredderSequencerStim N11 (set), FB_ShredderSequencerStim N16 (reset)  [block-local to FB_ShredderSequencerStim - not a cross-block conflict; also addressable as iDB_ShredderSequencerStim.Stim.ArrivedDirty]
+  FB_ShredderSequencerStim.Stim.InertAtEnd: FB_ShredderSequencerStim N13 (set), FB_ShredderSequencerStim N13 (reset), FB_ShredderSequencerStim N16 (reset)  [block-local to FB_ShredderSequencerStim - not a cross-block conflict; also addressable as iDB_ShredderSequencerStim.Stim.InertAtEnd]
+  FB_ShredderSequencerStim.Stim.InertAtStart: FB_ShredderSequencerStim N12 (set), FB_ShredderSequencerStim N12 (reset), FB_ShredderSequencerStim N16 (reset)  [block-local to FB_ShredderSequencerStim - not a cross-block conflict; also addressable as iDB_ShredderSequencerStim.Stim.InertAtStart]
+  FB_ShredderSequencerStim.Stim.Phase: FB_ShredderSequencerStim N17 (write), FB_ShredderSequencerStim N17 (write), FB_ShredderSequencerStim N17 (write), FB_ShredderSequencerStim N17 (write), FB_ShredderSequencerStim N17 (write), FB_ShredderSequencerStim N17 (write), FB_ShredderSequencerStim N17 (write), FB_ShredderSequencerStim N17 (write)  [block-local to FB_ShredderSequencerStim - not a cross-block conflict; also addressable as iDB_ShredderSequencerStim.Stim.Phase]
+  FB_ShredderSequencerStim.Stim.RecoverFailed: FB_ShredderSequencerStim N13 (set), FB_ShredderSequencerStim N16 (reset)  [block-local to FB_ShredderSequencerStim - not a cross-block conflict; also addressable as iDB_ShredderSequencerStim.Stim.RecoverFailed]
+  FB_ShredderSequencerStim.Stim.ScenarioDone: FB_ShredderSequencerStim N15 (set), FB_ShredderSequencerStim N16 (reset)  [block-local to FB_ShredderSequencerStim - not a cross-block conflict; also addressable as iDB_ShredderSequencerStim.Stim.ScenarioDone]
+  HX_HBA_L008: FC_HarnessCopyLayer N8 (set), FC_HarnessCopyLayer N8 (reset)
+  HX_HBA_L009: FC_HarnessCopyLayer N8 (set), FC_HarnessCopyLayer N8 (reset)
+  iDB_MotorFwdRevSystem_Shredder.IO.FaultFB: FC_ControlMain N3 (assign), OB100 N3 (reset)
+  iDB_MotorFwdRevSystem_Shredder.IO.RecentStart: FC_ControlMain N3 (assign), OB100 N3 (reset)
+== DEAD MEMBERS (dead-wiring: no writer and/or no reader - global-DB + FB interface-UDT) ==
+  DB_Alarms.ShredderAlarm0 [global-db]: written-but-never-consumed; writers: FC_AlarmsMain N1, FC_AlarmsMain N2, FC_AlarmsMain N3, FC_AlarmsMain N4, FC_AlarmsMain N5, FC_AlarmsMain N6, FC_AlarmsMain N7, FC_AlarmsMain N8, FC_AlarmsMain N9, FC_AlarmsMain N10
+  DB_AnalogInput.ShredderMotorCurrent [global-db]: consumed-but-never-written; readers: FC_ControlMain N1
+  DB_Input.Pusher_Local_Remote [global-db]: written-but-never-consumed; writers: FC_Inputs N2
+  DB_Input.SpareDI [global-db]: written-but-never-consumed; writers: FC_Inputs N1, FC_Inputs N2
+  DB_Output.SpareDQ [global-db]: consumed-but-never-written; readers: FC_Outputs N2
+  DB_Output.Test [global-db]: consumed-but-never-written; readers: FC_Outputs N1, FC_Outputs N2
+  DB_PLC.Simulation [global-db]: written-but-never-consumed; writers: OB100 N4
+  DB_Settings.DischargeConveyorTimeout [global-db]: consumed-but-never-written; readers: FB_ShredderSequencer N2
+  DB_Settings.InfeedRestartDelay [global-db]: consumed-but-never-written; readers: FB_ShredderSequencer N2
+  DB_Settings.InfeedToUpstreamEnableDelay [global-db]: consumed-but-never-written; readers: FB_ShredderSequencer N2
+  DB_Settings.OvercurrentHighDelay [global-db]: consumed-but-never-written; readers: FB_ShredderSequencer N2
+  DB_Settings.OvercurrentMediumDelay [global-db]: consumed-but-never-written; readers: FB_ShredderSequencer N2
+  DB_Settings.OvercurrentSetpointHigh [global-db]: unused (no writer, no reader)
+  DB_Settings.OvercurrentSetpointMedium [global-db]: unused (no writer, no reader)
+  DB_Settings.OvercurrentSpinUpAllowance [global-db]: consumed-but-never-written; readers: FB_ShredderSequencer N2
+  DB_Settings.PreStartSounderTime [global-db]: consumed-but-never-written; readers: FB_ShredderSequencer N2
+  DB_Settings.PressureClearResumeDelay [global-db]: consumed-but-never-written; readers: FC_ControlMain N5
+  DB_Settings.PressureTripConfirmTime [global-db]: consumed-but-never-written; readers: FC_ControlMain N5
+  DB_Settings.PressureTripCountThreshold [global-db]: consumed-but-never-written; readers: FC_ControlMain N5
+  DB_Settings.PusherEndTravelHoldTime [global-db]: consumed-but-never-written; readers: FC_ControlMain N5
+  DB_Settings.PusherEndTravelTimeout [global-db]: consumed-but-never-written; readers: FC_ControlMain N5
+  DB_Settings.PusherFitted [global-db]: consumed-but-never-written; readers: FC_ControlMain N5
+  DB_Settings.PusherJogWarningTime [global-db]: consumed-but-never-written; readers: FC_ControlMain N5
+  DB_Settings.PusherParkedTimeout [global-db]: consumed-but-never-written; readers: FC_ControlMain N5
+  DB_Settings.PusherPumpRunOnTime [global-db]: consumed-but-never-written; readers: FC_ControlMain N5
+  DB_Settings.ReversalCountThreshold [global-db]: consumed-but-never-written; readers: FB_ShredderSequencer N5
+  DB_Settings.ReversalRetryPauseTime [global-db]: consumed-but-never-written; readers: FB_ShredderSequencer N2
+  DB_Settings.ReversalWindowTime [global-db]: consumed-but-never-written; readers: FB_ShredderSequencer N2
+  DB_Settings.ShredderReverseRunTime [global-db]: consumed-but-never-written; readers: FB_ShredderSequencer N2
+  FB_HopperBlockageMonitor.IO.BlockedTimeThreshold [interface]: consumed-but-never-written; readers: FB_HopperBlockageMonitor N4, FB_HopperBlockageMonitor N5
+  FB_HopperBlockageMonitor.IO.ClearDebounceTime [interface]: consumed-but-never-written; readers: FB_HopperBlockageMonitor N1
+  FB_HopperBlockageMonitor.ZeroTime [interface]: consumed-but-never-written; readers: FB_HopperBlockageMonitor N3
+  FB_HopperBlockageStim.Stim.ModelThreshold [interface]: consumed-but-never-written; readers: FB_HopperBlockageStim N15, FB_HopperBlockageStim N16
+  FB_HxBoolEcho.EchoCommand [interface]: consumed-but-never-written; readers: FB_HxBoolEcho N1, FB_HxBoolEcho N1
+  FB_HxBoolEcho.EchoInverse [interface]: written-but-never-consumed; writers: FB_HxBoolEcho N1
+  FB_HxBoolEcho.EchoReset [interface]: consumed-but-never-written; readers: FB_HxBoolEcho N1, FB_HxBoolEcho N1
+  FB_HxBoolEcho.EchoResponse [interface]: written-but-never-consumed; writers: FB_HxBoolEcho N1
+  FB_HxDwellTimer.DwellCommand [interface]: consumed-but-never-written; readers: FB_HxDwellTimer N1
+  FB_HxDwellTimer.DwellDone [interface]: written-but-never-consumed; writers: FB_HxDwellTimer N2
+  FB_HxDwellTimer.DwellElapsed [interface]: written-but-never-consumed; writers: FB_HxDwellTimer N2
+  FB_HxDwellTimer.DwellPreset [interface]: consumed-but-never-written; readers: FB_HxDwellTimer N1, FB_HxDwellTimer N2
+  FB_HxDwellTimer.DwellPresetEcho [interface]: written-but-never-consumed; writers: FB_HxDwellTimer N2
+  FB_HxDwellTimer.DwellReset [interface]: consumed-but-never-written; readers: FB_HxDwellTimer N1
+  FB_HxIntStep.StepIncrement [interface]: consumed-but-never-written; readers: FB_HxIntStep N1
+  FB_HxIntStep.StepInput [interface]: consumed-but-never-written; readers: FB_HxIntStep N1
+  FB_HxIntStep.StepOverThreshold [interface]: written-but-never-consumed; writers: FB_HxIntStep N2
+  FB_HxIntStep.StepReset [interface]: consumed-but-never-written; readers: FB_HxIntStep N1, FB_HxIntStep N1
+  FB_HxIntStep.StepThreshold [interface]: consumed-but-never-written; readers: FB_HxIntStep N2
+  FB_HxSealLatch.SealClear [interface]: consumed-but-never-written; readers: FB_HxSealLatch N1, FB_HxSealLatch N2
+  FB_HxSealLatch.SealTrigger [interface]: consumed-but-never-written; readers: FB_HxSealLatch N1, FB_HxSealLatch N2
+  FB_MotorFwdRevSystem.HandNegEdge [interface]: unused (no writer, no reader)
+  FB_MotorFwdRevSystem.IO.Alarm [interface]: unused (no writer, no reader)
+  FB_MotorFwdRevSystem.IO.EnableUPSTime [interface]: consumed-but-never-written; readers: FB_MotorFwdRevSystem N7
+  FB_MotorFwdRevSystem.IO.FTTime [interface]: consumed-but-never-written; readers: FB_MotorFwdRevSystem N7
+  FB_MotorFwdRevSystem.IO.HandReverse [interface]: written-but-never-consumed; writers: FC_ControlMain N3
+  FB_MotorFwdRevSystem.IO.Name [interface]: unused (no writer, no reader)
+  FB_MotorFwdRevSystem.IO.ReverseDelay [interface]: consumed-but-never-written; readers: FB_MotorFwdRevSystem N7
+  FB_MotorFwdRevSystem.IO.ReverseIgnoreFT [interface]: consumed-but-never-written; readers: FB_MotorFwdRevSystem N7
+  FB_MotorFwdRevSystem.IO.Shutdown [interface]: consumed-but-never-written; readers: FB_MotorFwdRevSystem N2, FB_MotorFwdRevSystem N2, FB_MotorFwdRevSystem N8, FB_MotorFwdRevSystem N8, FB_MotorFwdRevSystem N8
+  FB_MotorFwdRevSystem.IO.ShutdownTime [interface]: consumed-but-never-written; readers: FB_MotorFwdRevSystem N7
+  FB_MotorFwdRevSystem.IO.Telemetry [interface]: written-but-never-consumed; writers: FB_MotorFwdRevSystem N14, FB_MotorFwdRevSystem N14, FB_MotorFwdRevSystem N14, FB_MotorFwdRevSystem N14, FB_MotorFwdRevSystem N14
+  FB_MotorFwdRevSystem.NegitiveSignalEdge [interface]: unused (no writer, no reader)
+  FB_MotorFwdRevSystem.RisingEdgeFlags [interface]: unused (no writer, no reader)
+  FB_PusherControl.IO.AutoStartSignal [interface]: unused (no writer, no reader)
+  FB_ShredderSequencer.IO.AutoStartSignal [interface]: unused (no writer, no reader)
+  FB_ShredderSequencer.IO.InCycle [interface]: written-but-never-consumed; writers: FB_ShredderSequencer N15
+  FB_ShredderSequencer.IO.ShredderMotorCurrent [interface]: written-but-never-consumed; writers: FC_ControlMain N1
+  FB_ShredderSequencerStim.Stim.ArmAt [interface]: consumed-but-never-written; readers: FB_ShredderSequencerStim N14
+  FB_ShredderSequencerStim.Stim.ArmUntil [interface]: consumed-but-never-written; readers: FB_ShredderSequencerStim N14
+  FB_ShredderSequencerStim.Stim.Armed [interface]: written-but-never-consumed; writers: FB_ShredderSequencerStim N14
+  FB_ShredderSequencerStim.Stim.ArrivedDirty [interface]: written-but-never-consumed; writers: FB_ShredderSequencerStim N11, FB_ShredderSequencerStim N16
+  FB_ShredderSequencerStim.Stim.DischargeConfirmDelay [interface]: consumed-but-never-written; readers: FB_ShredderSequencerStim N24
+  FB_ShredderSequencerStim.Stim.EndAt [interface]: consumed-but-never-written; readers: FB_ShredderSequencerStim N5
+  FB_ShredderSequencerStim.Stim.FwdFeedbackDelay [interface]: consumed-but-never-written; readers: FB_ShredderSequencerStim N24
+  FB_ShredderSequencerStim.Stim.HopperClearAt [interface]: consumed-but-never-written; readers: FB_ShredderSequencerStim N23
+  FB_ShredderSequencerStim.Stim.HopperHighAt [interface]: consumed-but-never-written; readers: FB_ShredderSequencerStim N23
+  FB_ShredderSequencerStim.Stim.InertAtEnd [interface]: written-but-never-consumed; writers: FB_ShredderSequencerStim N13, FB_ShredderSequencerStim N13, FB_ShredderSequencerStim N16
+  FB_ShredderSequencerStim.Stim.InertAtStart [interface]: written-but-never-consumed; writers: FB_ShredderSequencerStim N12, FB_ShredderSequencerStim N12, FB_ShredderSequencerStim N16
+  FB_ShredderSequencerStim.Stim.InjectMotorFault [interface]: consumed-but-never-written; readers: FB_ShredderSequencerStim N23
+  FB_ShredderSequencerStim.Stim.Phase [interface]: written-but-never-consumed; writers: FB_ShredderSequencerStim N17, FB_ShredderSequencerStim N17, FB_ShredderSequencerStim N17, FB_ShredderSequencerStim N17, FB_ShredderSequencerStim N17, FB_ShredderSequencerStim N17, FB_ShredderSequencerStim N17, FB_ShredderSequencerStim N17
+  FB_ShredderSequencerStim.Stim.PreStartHold [interface]: consumed-but-never-written; readers: FB_ShredderSequencerStim N20, FB_ShredderSequencerStim N21
+  FB_ShredderSequencerStim.Stim.RecoverFailed [interface]: written-but-never-consumed; writers: FB_ShredderSequencerStim N13, FB_ShredderSequencerStim N16
+  FB_ShredderSequencerStim.Stim.ResetAt [interface]: consumed-but-never-written; readers: FB_ShredderSequencerStim N5, FB_ShredderSequencerStim N8
+  FB_ShredderSequencerStim.Stim.ResetMode [interface]: consumed-but-never-written; readers: FB_ShredderSequencerStim N8, FB_ShredderSequencerStim N8
+  FB_ShredderSequencerStim.Stim.RevFeedbackDelay [interface]: consumed-but-never-written; readers: FB_ShredderSequencerStim N24
+  FB_ShredderSequencerStim.Stim.Start [interface]: consumed-but-never-written; readers: FB_ShredderSequencerStim N1, FB_ShredderSequencerStim N16, FB_ShredderSequencerStim N16, FB_ShredderSequencerStim N16, FB_ShredderSequencerStim N16, FB_ShredderSequencerStim N16
+  FB_ShredderSequencerStim.Stim.StartPressWidth [interface]: consumed-but-never-written; readers: FB_ShredderSequencerStim N20
+  FB_ShredderSequencerStim.Stim.StopAt [interface]: consumed-but-never-written; readers: FB_ShredderSequencerStim N20
+  FB_ShredderSequencerStim.Stim.StopByButton [interface]: consumed-but-never-written; readers: FB_ShredderSequencerStim N21
+  FB_ShredderSequencerStim.Stim.StopByDownstreamLoss [interface]: consumed-but-never-written; readers: FB_ShredderSequencerStim N22
+  FB_ShredderSequencerStim.Stim.StopByUnhealthy [interface]: consumed-but-never-written; readers: FB_ShredderSequencerStim N22
+  FB_ShredderSequencerStim.Stim.WithholdDischargeConfirm [interface]: consumed-but-never-written; readers: FB_ShredderSequencerStim N24
+  FB_ShredderSequencerStim.Stim.WithholdFwdFeedback [interface]: consumed-but-never-written; readers: FB_ShredderSequencerStim N24
+  FB_ShredderSequencerStim.Stim.WithholdRevFeedback [interface]: consumed-but-never-written; readers: FB_ShredderSequencerStim N24
+== PHYSICAL-IO REFERENCES (C-304: logic touches IO only in Map FCs - AI excludes those) ==
+  FC_Inputs: DI10_DIS_Running (read)
+  FC_Inputs: DI11_PSH_PowerPackRunning (read)
+  FC_Inputs: DI12_PSH_HomeLimit (read)
+  FC_Inputs: DI13_PSH_FullTravelLimit (read)
+  FC_Inputs: DI14_PSH_HighPressure (read)
+  FC_Inputs: DI15_SYS_DownstreamRunning (read)
+  FC_Inputs: DI16_PSH_LocalRemote (read)
+  FC_Inputs: DI17_SPR_2 (read)
+  FC_Inputs: DI18_SPR_3 (read)
+  FC_Inputs: DI19_SPR_4 (read)
+  FC_Inputs: DI1_SYS_ControlHealthy (read)
+  FC_Inputs: DI20_SPR_5 (read)
+  FC_Inputs: DI21_SPR_6 (read)
+  FC_Inputs: DI22_SPR_7 (read)
+  FC_Inputs: DI2_SPR_1 (read)
+  FC_Inputs: DI3_SYS_CycleStart (read)
+  FC_Inputs: DI4_SYS_CycleStop (read)
+  FC_Inputs: DI5_SHR_RunFwdFB (read)
+  FC_Inputs: DI6_SHR_RunRevFB (read)
+  FC_Inputs: DI7_SYS_MotorFault (read)
+  FC_Inputs: DI8_HPR_LevelHigh (read)
+  FC_Inputs: DI9_IFC_Running (read)
+  FC_Outputs: DQ10_SYS_PreStartSounder (write)
+  FC_Outputs: DQ11_SHR_FaultReset (write)
+  FC_Outputs: DQ12_SPR_1 (write)
+  FC_Outputs: DQ13_SPR_2 (write)
+  FC_Outputs: DQ14_SPR_3 (write)
+  FC_Outputs: DQ15_SPR_4 (write)
+  FC_Outputs: DQ16_SPR_5 (write)
+  FC_Outputs: DQ17_SPR_6 (write)
+  FC_Outputs: DQ18_SPR_7 (write)
+  FC_Outputs: DQ1_SHR_RunFwd (write)
+  FC_Outputs: DQ2_SHR_RunRev (write)
+  FC_Outputs: DQ3_PSH_RunPowerPack (write)
+  FC_Outputs: DQ4_IFC_Run (write)
+  FC_Outputs: DQ5_DIS_Run (write)
+  FC_Outputs: DQ6_PSH_Extend (write)
+  FC_Outputs: DQ7_PSH_Retract (write)
+  FC_Outputs: DQ8_SYS_InCycle (write)
+  FC_Outputs: DQ9_SYS_EnableUpstream (write)
+== SIBLING REFERENCES (C-127: a reusable equipment FB must contain none) ==
+  FB_HarnessViolationLatch: iDB refs: iDB_HopperBlockageMonitor, iDB_HopperBlockageStim
+  FB_PusherStim: iDB refs: iDB_PusherControl
+  FB_ShredderSequencerStim: iDB refs: iDB_MotorFwdRevSystem_Shredder, iDB_ShredderSequencer
+  FC_AlarmsMain: iDB refs: iDB_HopperBlockageMonitor, iDB_MotorFwdRevSystem_Shredder, iDB_PusherControl, iDB_ShredderSequencer
+  FC_ControlMain: calls: FB_HopperBlockageMonitor, FB_MotorFwdRevSystem, FB_PusherControl, FB_ShredderSequencer; iDB refs: iDB_HopperBlockageMonitor, iDB_MotorFwdRevSystem_Shredder, iDB_PusherControl, iDB_ShredderSequencer
+  FC_HarnessCopyLayer: iDB refs: iDB_HarnessViolationLatch, iDB_HopperBlockageMonitor, iDB_HopperBlockageStim
+  Main: calls: FB_Comms_ModbusServer, FB_HarnessViolationLatch, FB_HopperBlockageStim, FB_HxBoolEcho, FB_HxDwellTimer, FB_HxIntStep, FB_HxSealLatch, FB_PusherStim, FB_ShredderSequencerStim, FC_AlarmsMain, FC_ControlMain, FC_HarnessCopyLayer, FC_HarnessStimArbiter, FC_Inputs, FC_Outputs; iDB refs: iDB_Comms_ModbusServer, iDB_HarnessViolationLatch, iDB_HopperBlockageStim, iDB_HxBoolEcho, iDB_HxDwellTimer, iDB_HxIntStep, iDB_HxSealLatch, iDB_PusherStim, iDB_ShredderSequencerStim
+  OB100: iDB refs: iDB_MotorFwdRevSystem_Shredder, iDB_PusherControl, iDB_ShredderSequencer
+REACHABILITY: 21 of 21 code block(s) reachable from 2 OB(s)
+SUMMARY: 63 multi-writer, 94 dead-member, 40 io-ref, 8 block(s) with sibling refs

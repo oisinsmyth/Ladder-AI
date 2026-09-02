@@ -1,0 +1,173 @@
+{
+  "blockName": "Main",
+  "blockNameMismatch": false,
+  "otherBlockName": "Main",
+  "hasAnyChange": true,
+  "header": {
+    "changed": true,
+    "titleChanged": false,
+    "titleBefore": "\u0022Main Program Sweep (Cycle)\u0022",
+    "titleAfter": "\u0022Main Program Sweep (Cycle)\u0022",
+    "commentChanged": true,
+    "commentBefore": null,
+    "commentAfter": "Cyclic program sweep. The order of these calls is the program: commanded stimulus heads first, because for a commanded input a head is the field and the input map below must find this scan\u0027s commanded state; then the input map, the control, the alarms and the output map; then the harness instrumentation, which observes what this scan\u0027s control produced; then the Modbus server, last, so the whole wire-to-marker-memory transfer happens with no other block touching those registers in between. THE THREE HEADS ARE DELIBERATELY UNORDERED AMONG THEMSELVES: they share the injection array and the reset line, and every one of them writes those by passing a neighbour\u0027s value through rather than driving a default, which the release at the top of the sweep makes order-independent. What IS ordered is the release before every head and every head before the input map. Each network\u0027s own comment carries the reason it sits where it sits.",
+    "interfaceChanged": false,
+    "interfaceCommentChanged": false
+  },
+  "summary": {
+    "total": 15,
+    "changed": 0,
+    "added": 3,
+    "removed": 0,
+    "moved": 12,
+    "identical": 0
+  },
+  "networks": [
+    {
+      "number": 1,
+      "kind": "Added",
+      "title": "Harness Stimulus Arbitration Layer",
+      "beforeText": null,
+      "afterText": "NETWORK 1 \u0022Harness Stimulus Arbitration Layer\u0022\n  COMMENT \u0022Releases the two things every stimulus head shares - the input map\u0027s test-injection array and the plant\u0027s single operator fault-reset line - to their inert values, once, before any head runs. IT MUST BE FIRST AND THAT IS NOT COSMETIC. Every head below owns the lines its own scenario needs and passes the rest through unchanged, which is what stops an idle head from wiping a running neighbour; but a pass-through with no rest value underneath it is a self-hold, so without this release a line would carry whatever the last head to drive it left, on every scan after it. The injection enable is the sharpest case: no head clears it - each ORs itself in over this release - so a sweep with this block missing, or placed after any head, latches injection on permanently and the input map never returns to the field for the life of the CPU. Placed after a head it is worse still: it would wipe that head\u0027s own assertion in the same scan it was made.\u0022\n  CALL FC_HarnessStimArbiter(EN := TRUE)\n",
+      "movedFrom": null
+    },
+    {
+      "number": 2,
+      "kind": "Moved",
+      "title": "Hopper-Blockage Stimulus Model",
+      "beforeText": "NETWORK 1 \u0022Hopper-Blockage Stimulus Model\u0022\n  COMMENT \u0022Advances the commanded timeline the hopper-blockage monitor is tested against and presents it to the input buffer\u0027s test members. It runs ahead of the input map because for a commanded input the model is the field: the map that follows chooses between the terminal and the test member, and it must find this scan\u0027s commanded state rather than the previous scan\u0027s. Outside a run it drives nothing and the map reads the field.\u0022\n  CALL FB_HopperBlockageStim(iDB_HopperBlockageStim, EN := TRUE)\n",
+      "afterText": "NETWORK 2 \u0022Hopper-Blockage Stimulus Model\u0022\n  COMMENT \u0022Advances the commanded timeline the hopper-blockage monitor is tested against and presents it to the input buffer\u0027s test members. It runs ahead of the input map because for a commanded input the model is the field: the map that follows chooses between the terminal and the test member, and it must find this scan\u0027s commanded state rather than the previous scan\u0027s. Outside a run it drives nothing and the map reads the field.\u0022\n  CALL FB_HopperBlockageStim(iDB_HopperBlockageStim, EN := TRUE)\n",
+      "movedFrom": 1
+    },
+    {
+      "number": 3,
+      "kind": "Added",
+      "title": "Pusher Stimulus Head",
+      "beforeText": null,
+      "afterText": "NETWORK 3 \u0022Pusher Stimulus Head\u0022\n  COMMENT \u0022Advances the commanded timeline the pusher control block is tested against and presents it to the input buffer\u0027s test members and to the operator command bits the pusher is wired from. Same placement reasoning as the model above: for a commanded input the head is the field, so it must run ahead of the input map. It shares the injection array and the reset line with the heads either side of it and writes both by the pass-through idiom: while its own index is running the commanded value owns each line, and while it is not, whatever a neighbouring head wrote in this same scan is handed on unchanged. Its position among the heads is therefore NOT load-bearing - the arbitration layer above gives those lines a rest value at the top of every scan, which is what makes the pass-throughs order-independent - but its position ahead of the input map is, because for a commanded input a head is the field.\u0022\n  CALL FB_PusherStim(iDB_PusherStim, EN := TRUE)\n",
+      "movedFrom": null
+    },
+    {
+      "number": 4,
+      "kind": "Added",
+      "title": "Shredder Sequencer Stimulus Head",
+      "beforeText": null,
+      "afterText": "NETWORK 4 \u0022Shredder Sequencer Stimulus Head\u0022\n  COMMENT \u0022Advances the commanded timeline FB_ShredderSequencer is tested against and presents it to the input buffer\u0027s test members and to the operator pusher mode. Same placement reasoning as the two heads above - a commanded input reaches the control through the map, so a head must run ahead of the map - and the same pass-through idiom on every shared line. Until this call existed the block was in the program and reachable from nothing: it would import, compile and never run, while its slot\u0027s start echo still reported the slot commanded, which is the shape that costs a wave rather than announcing itself.\u0022\n  CALL FB_ShredderSequencerStim(iDB_ShredderSequencerStim, EN := TRUE)\n",
+      "movedFrom": null
+    },
+    {
+      "number": 5,
+      "kind": "Moved",
+      "title": "Input Mapping",
+      "beforeText": "NETWORK 2 \u0022Input Mapping\u0022\n  CALL FC_Inputs(EN := TRUE)\n",
+      "afterText": "NETWORK 5 \u0022Input Mapping\u0022\n  CALL FC_Inputs(EN := TRUE)\n",
+      "movedFrom": 2
+    },
+    {
+      "number": 6,
+      "kind": "Moved",
+      "title": "Control",
+      "beforeText": "NETWORK 3 \u0022Control\u0022\n  CALL FC_ControlMain(EN := TRUE)\n",
+      "afterText": "NETWORK 6 \u0022Control\u0022\n  CALL FC_ControlMain(EN := TRUE)\n",
+      "movedFrom": 3
+    },
+    {
+      "number": 7,
+      "kind": "Moved",
+      "title": "Alarms",
+      "beforeText": "NETWORK 4 \u0022Alarms\u0022\n  CALL FC_AlarmsMain(EN := TRUE)\n",
+      "afterText": "NETWORK 7 \u0022Alarms\u0022\n  CALL FC_AlarmsMain(EN := TRUE)\n",
+      "movedFrom": 4
+    },
+    {
+      "number": 8,
+      "kind": "Moved",
+      "title": "Output Mapping",
+      "beforeText": "NETWORK 5 \u0022Output Mapping\u0022\n  CALL FC_Outputs(EN := TRUE)\n",
+      "afterText": "NETWORK 8 \u0022Output Mapping\u0022\n  CALL FC_Outputs(EN := TRUE)\n",
+      "movedFrom": 5
+    },
+    {
+      "number": 9,
+      "kind": "Moved",
+      "title": "Harness Violation Latches",
+      "beforeText": "NETWORK 6 \u0022Harness Violation Latches\u0022\n  COMMENT \u0022Latches the states the requirement register forbids outright. It runs after the control so it sees the outputs this scan\u0027s control produced, and before the copy layer so a state that lasted one scan is already latched when the mirror is written - a forbidden state that had to survive until the next scan to be published would be a forbidden state the harness could miss.\u0022\n  CALL FB_HarnessViolationLatch(iDB_HarnessViolationLatch, EN := TRUE)\n",
+      "afterText": "NETWORK 9 \u0022Harness Violation Latches\u0022\n  COMMENT \u0022Latches the states the requirement register forbids outright. It runs after the control so it sees the outputs this scan\u0027s control produced, and before the copy layer so a state that lasted one scan is already latched when the mirror is written - a forbidden state that had to survive until the next scan to be published would be a forbidden state the harness could miss.\u0022\n  CALL FB_HarnessViolationLatch(iDB_HarnessViolationLatch, EN := TRUE)\n",
+      "movedFrom": 6
+    },
+    {
+      "number": 10,
+      "kind": "Moved",
+      "title": "Harness Mirror Copy Layer",
+      "beforeText": "NETWORK 7 \u0022Harness Mirror Copy Layer\u0022\n  COMMENT \u0022Publishes the build stamp, advances the scan counter, copies the commanded scenario out of the mirror into the stimulus model and the monitored block\u0027s outputs back into it. It runs after the control so the observations it publishes are the ones this scan\u0027s control produced, and before the server below so the client is served a mirror this scan wrote rather than one being written while it is read. The commanded scenario it copies in is acted on by the model at the top of the next scan, which is the one place a scan of latency is spent and the only place it can be.\u0022\n  CALL FC_HarnessCopyLayer(EN := TRUE)\n",
+      "afterText": "NETWORK 10 \u0022Harness Mirror Copy Layer\u0022\n  COMMENT \u0022Publishes the build stamp, advances the scan counter, copies the commanded scenario out of the mirror into the stimulus model and the monitored block\u0027s outputs back into it. It runs after the control so the observations it publishes are the ones this scan\u0027s control produced, and before the server below so the client is served a mirror this scan wrote rather than one being written while it is read. The commanded scenario it copies in is acted on by the model at the top of the next scan, which is the one place a scan of latency is spent and the only place it can be.\u0022\n  CALL FC_HarnessCopyLayer(EN := TRUE)\n",
+      "movedFrom": 7
+    },
+    {
+      "number": 11,
+      "kind": "Moved",
+      "title": "Modbus Server",
+      "beforeText": "NETWORK 8 \u0022Modbus Server\u0022\n  COMMENT \u0022Serves the harness mirror in marker memory to a Modbus TCP client. It runs last so the whole transfer between the wire and marker memory happens with no other block touching those registers in between: what the client reads is the mirror exactly as this scan left it, and what the client writes is in place before the next scan reads it.\u0022\n  CALL FB_Comms_ModbusServer(iDB_Comms_ModbusServer, EN := TRUE)\n",
+      "afterText": "NETWORK 11 \u0022Modbus Server\u0022\n  COMMENT \u0022Serves the harness mirror in marker memory to a Modbus TCP client. It runs last so the whole transfer between the wire and marker memory happens with no other block touching those registers in between: what the client reads is the mirror exactly as this scan left it, and what the client writes is in place before the next scan reads it.\u0022\n  CALL FB_Comms_ModbusServer(iDB_Comms_ModbusServer, EN := TRUE)\n",
+      "movedFrom": 8
+    },
+    {
+      "number": 12,
+      "kind": "Moved",
+      "title": "Corpus Block - Bool Echo",
+      "beforeText": "NETWORK 9 \u0022Corpus Block - Bool Echo\u0022\n  COMMENT \u0022Test material for the tooling campaign, not plant logic. It reads and writes members of its own instance DB and nothing else, so it touches none of the marker registers the server above transfers and the network order of everything before it is unaffected. Placement after the copy layer rather than before it is latency-neutral and was checked rather than assumed: before the layer the block computes from the previous scan\u0027s commanded inputs and the layer publishes the result immediately, after it the block computes from this scan\u0027s inputs and the layer publishes on the next scan - two scans from command to observation either way.\u0022\n  CALL FB_HxBoolEcho(iDB_HxBoolEcho, EN := TRUE)\n",
+      "afterText": "NETWORK 12 \u0022Corpus Block - Bool Echo\u0022\n  COMMENT \u0022Test material for the tooling campaign, not plant logic. It reads and writes members of its own instance DB and nothing else, so it touches none of the marker registers the server above transfers and the network order of everything before it is unaffected. Placement after the copy layer rather than before it is latency-neutral and was checked rather than assumed: before the layer the block computes from the previous scan\u0027s commanded inputs and the layer publishes the result immediately, after it the block computes from this scan\u0027s inputs and the layer publishes on the next scan - two scans from command to observation either way.\u0022\n  CALL FB_HxBoolEcho(iDB_HxBoolEcho, EN := TRUE)\n",
+      "movedFrom": 9
+    },
+    {
+      "number": 13,
+      "kind": "Moved",
+      "title": "Corpus Block - Dwell Timer",
+      "beforeText": "NETWORK 10 \u0022Corpus Block - Dwell Timer\u0022\n  COMMENT \u0022Test material for the tooling campaign, not plant logic. Same placement reasoning as the network above, and the same isolation: it touches only its own instance DB, including its own timer instance.\u0022\n  CALL FB_HxDwellTimer(iDB_HxDwellTimer, EN := TRUE)\n",
+      "afterText": "NETWORK 13 \u0022Corpus Block - Dwell Timer\u0022\n  COMMENT \u0022Test material for the tooling campaign, not plant logic. Same placement reasoning as the network above, and the same isolation: it touches only its own instance DB, including its own timer instance.\u0022\n  CALL FB_HxDwellTimer(iDB_HxDwellTimer, EN := TRUE)\n",
+      "movedFrom": 10
+    },
+    {
+      "number": 14,
+      "kind": "Moved",
+      "title": "Corpus Block - Int Sum",
+      "beforeText": "NETWORK 11 \u0022Corpus Block - Int Sum\u0022\n  COMMENT \u0022Test material for the tooling campaign, not plant logic. Same placement reasoning as the networks above, and the same isolation: it touches only its own instance DB.\u0022\n  CALL FB_HxIntStep(iDB_HxIntStep, EN := TRUE)\n",
+      "afterText": "NETWORK 14 \u0022Corpus Block - Int Sum\u0022\n  COMMENT \u0022Test material for the tooling campaign, not plant logic. Same placement reasoning as the networks above, and the same isolation: it touches only its own instance DB.\u0022\n  CALL FB_HxIntStep(iDB_HxIntStep, EN := TRUE)\n",
+      "movedFrom": 11
+    },
+    {
+      "number": 15,
+      "kind": "Moved",
+      "title": "Corpus Block - Sealed Latches",
+      "beforeText": "NETWORK 12 \u0022Corpus Block - Sealed Latches\u0022\n  COMMENT \u0022Test material for the tooling campaign, not plant logic. Same placement reasoning as the networks above, and the same isolation: it touches only its own instance DB. Its two outputs are seals the block holds itself; they are values under test and not harness instrumentation, so an expectation on either is sampled against a copy-layer coil rather than declared latched.\u0022\n  CALL FB_HxSealLatch(iDB_HxSealLatch, EN := TRUE)\n",
+      "afterText": "NETWORK 15 \u0022Corpus Block - Sealed Latches\u0022\n  COMMENT \u0022Test material for the tooling campaign, not plant logic. Same placement reasoning as the networks above, and the same isolation: it touches only its own instance DB. Its two outputs are seals the block holds itself; they are values under test and not harness instrumentation, so an expectation on either is sampled against a copy-layer coil rather than declared latched.\u0022\n  CALL FB_HxSealLatch(iDB_HxSealLatch, EN := TRUE)\n",
+      "movedFrom": 12
+    }
+  ],
+  "allowedNetworks": [
+    1,
+    3,
+    4
+  ],
+  "invarianceViolations": [
+    2,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15
+  ],
+  "headerChangeAllowed": true,
+  "hasUnclaimedHeaderChange": false,
+  "hasNonGatingCommentChange": true,
+  "declaredInsertAt": 4,
+  "movesAreDeclared": false,
+  "unchangedRemainder": 0,
+  "hasInvarianceViolation": true
+}

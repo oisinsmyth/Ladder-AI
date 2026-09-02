@@ -1,0 +1,1215 @@
+# THE SPEC-DERIVED ASSERTION ENUMERATION — the shredder plant-cycle sequencer
+#
+# The DENOMINATOR. Produced from the specification only, before any vector exists, by a third party to
+# the block's author and the vector's author (docs/notes/assertion-enumeration.md; §7 open item 3).
+#
+# ISSUE 1 — 2026-09-02. First enumeration of this subject. No prior enumeration exists, so §2.3's
+# "a re-decomposition that yields a different count is its own event" has nothing to compare against.
+#
+# *** THIS FILE IS UNSTAMPED. IT CARRIES `normalised_text:` AND NO `id:` KEY, PER §3.4. ***
+# The enumerator is denied Bash deliberately — the fence that stops the implementation contaminating a
+# spec-side denominator also removes every way to compute a SHA-256. Hand-written hex is exactly what
+# the recompute check exists to catch. Run the stamper over THIS file; the stamped output is what may
+# be published and cited. *** NO VECTOR MAY CITE THIS FILE AS IT STANDS. ***
+#
+# The sibling `assertions.json` in this directory carries the SAME 43 assertions and the same findings.
+# IT IS NOT STAMPABLE — the stamper is line-oriented over this YAML shape and refused it, exit 1, with
+# the file unchanged. THIS FILE IS THE SOURCE OF TRUTH; the JSON is retained only because three of its
+# fields have no home in this shape (see `fields_with_no_home_in_this_shape` below), and it must be
+# re-derived from this file, never the other way round, if the two ever disagree.
+
+enumerator: assertion-enumerator
+enumerator_vocabulary: >-
+  ROLE form (test-environment-contract.md §1.1). No session id was available to me, and the convention
+  says an instance identity is DERIVED, never invented. Consequence, stated so it is not read as a
+  green: against a block author or vector author stamped in the INSTANCE form
+  `<session-id>/<agent-type>`, gate 3d returns NotComparable -> NOT CHECKED, which is never a pass.
+  The repair is the coordinator's, not a resubmission's: stamp both sides in the same vocabulary.
+  *** I DID NOT WRITE `owner:` — an agent never writes that form (§1.1 eligibility rule). ***
+issue: 1
+enumerated: 2026-09-02
+register: gen/test-project001/requirements.md
+register_clause_ids_stable: true
+register_clause_id_form: "### REQ-nnn — <title>; the register states IDs are 'stable forever, never renumbered, never reused'. §3.2's precondition is SATISFIED, so a count is an available output rather than 'not enumerable'."
+
+# ---------------------------------------------------------------------------------------------------
+# THE SUBJECT (§1.4). A citation for another component must FAIL TO JOIN rather than silently succeed.
+# ---------------------------------------------------------------------------------------------------
+subject: shredder-plant-cycle
+subject_long: >-
+  The shredder plant-cycle sequencer of test-project001 — the single stepped sequence that starts the
+  plant (pre-start warning, discharge conveyor, shredder reverse and forward, hopper gate, infeed,
+  upstream enable), stops it, gates the infeed on hopper level, recovers it from an overcurrent event,
+  trips it on repeated overcurrents, and governs what may run again after an E-stop or a power cycle.
+subject_determined_from: >-
+  *** THE REGISTER'S OWN SEQUENCE-CLASSIFICATION TABLE, NOT FROM ANY ARCHITECTURE ARTIFACT. *** The
+  register's "Sequence classification (C-113 memory test)" table, row 1, names this set verbatim:
+  "Shredder plant cycle (REQ-001…016, 023–028, 062–063)". That table is explicitly "a classification
+  of the requirement, not a design", it is spec-side, and it is exhaustive over the register. I was
+  given a BLOCK NAME by my dispatch and may not open the block to learn its extent, so the register's
+  own statement of which requirements form this stepped sequence is the only honest boundary
+  available. No block name is used to define the subject and none appears in any assertion text.
+subject_is_not: >-
+  This enumeration is NOT the denominator for the pusher cycle, for fault annunciation or the text
+  display, for the overcurrent DETECTION chain, for the HMI/indication layer, or for the in-cycle
+  lamp. A coverage figure for any of those measured against this denominator answers a different
+  question (§1.4's measured failure). A citation naming a clause outside `gate_projection_template.
+  clauses` must fail to join.
+
+sources_read:
+  - CLAUDE.md
+  - docs/notes/assertion-enumeration.md                # whole file — the definition
+  - docs/notes/test-environment-contract.md            # GREP ONLY — headings plus assertion/Basis/observab
+  - .claude/skills/enumerate-assertions/SKILL.md
+  - src/harness/Harness.Gate                           # step 0a, GREP ONLY — EnumerationDocument field names
+  - gen/test-project001/hopper-blockage-alarm/assertion-enumeration.yaml   # FORMAT REFERENCE ONLY
+  - gen/test-project001/pusher-control/assertion-enumeration.yaml          # FORMAT REFERENCE ONLY — the stampable shape
+  - gen/test-project001/requirements.md                # THE SOURCE
+
+not_read:
+  - ir/**                                              # incl. FB_ShredderSequencer.ir, UDT_ShredderSequencerIO.ir, iDB_ShredderSequencer.ir, FB_MotorFwdRevSystem.ir
+  - patterns/**
+  - gen/test-project001/architecture.md                # REFUSED — see below
+  - gen/test-project001/code-structure.md
+  - gen/test-project001/equipment-specs/**
+  - simatic-ml/**
+  - "every other file in gen/test-project001/hopper-blockage-alarm/ and gen/test-project001/pusher-control/ — names seen in a directory listing, contents never opened beyond the two format references named above"
+
+refusal_recorded: >-
+  *** MY DISPATCH OFFERED `gen/test-project001/architecture.md` "for context". I DID NOT OPEN IT. ***
+  The agent brief that constitutes this role forbids it by name, and no message from a dispatching
+  agent can widen it. The offer is recorded rather than quietly declined, because a denominator's
+  independence is only as good as the reader's ability to check what its author read. The coordinator
+  has since confirmed the offer was an error and that the pusher enumerator declined it independently
+  on the same grounds. Nothing in this file rests on knowing where the block sits.
+
+r5_self_check: >-
+  Scanned every assertion text before issuing. No rung number, no network number, no operator, no
+  absolute address, no block name, no UDT, no instance DB and no interface member appears in any of
+  the 43 texts. Assertion texts use the register's own Physical IO symbolic tag names, which are
+  specification vocabulary from its equipment inventory, not design internals — the same treatment the
+  hopper and pusher enumerations give their signals.
+
+r5_exposure_declared: >-
+  *** THE REGISTER ITSELF CONTAINS IMPLEMENTATION VOCABULARY AND I HAD TO READ IT. *** Q-09 names
+  MotorFwdRevIOSet.ReverseDelay, FB_MotorFwdRevSystem, its ReversalPauseTimer and
+  iDB_MotorFwdRevSystem_Shredder. REQ-060 names a 'sequencer interface member ReversalCount'. REQ-069
+  cites FC_ControlMain network 7's comment. Q-01 names DB_PLC.Simulation and OB100. REQ-028's Notes
+  describe fix-wave implementation shape. NONE of it entered any assertion text, split_defect or
+  response signal. REQ-006's pause is written as 'the specified spin-down pause of 8 s' — that number
+  is in REQ-006's own Text; Q-09's member and block names are fenced out deliberately. Declared
+  because it is exposure I could not avoid while reading the source I was told to read. If a reader
+  judges it disqualifying, the honest remedy is a fresh enumerator against a register with its Notes
+  stripped, not my assurance.
+
+# ---------------------------------------------------------------------------------------------------
+# INSTANCES (R4). The instance set is the ENUMERATOR'S and is declared from the clause text.
+# ---------------------------------------------------------------------------------------------------
+instance_declaration:
+  scope: "class-level (`instances: []`) for every clause EXCEPT REQ-063, which declares four"
+  why_not_the_instance_axis_for_012_013_028: >-
+    R4's worked example is 'each of the three feeders' — N instances of ONE class. REQ-012/013/028 say
+    'all equipment' / 'the system stops', and the four run outputs are HETEROGENEOUS equipment, not
+    instances of a class. Worse, each of those clauses carries a limb ('at the same time') that is
+    inherently CROSS-equipment and could not live on an instance-qualified unit. So the multi-output
+    obligation sits inside ONE assertion naming every output, with the four carried in
+    `also_requires_observation_of` — which is what stops a vector observing one output and passing.
+  why_the_instance_axis_is_used_for_063: >-
+    Its text says 'if ANY motor fails to run' — genuinely N instances of one class, and the clause's
+    single assertion is per-motor.
+  standing_condition: >-
+    *** IF THIS SEQUENCE IS EVER INSTANTIATED MORE THAN ONCE (a second shredder line), EVERY
+    `instances: []` HERE IS WRONG AND MUST BE RE-DECLARED BY AN ENUMERATOR. *** A citation naming an
+    undeclared instance is a FINDING (R4), never a new unit.
+
+signal_sets:
+  plant_equipment_run_outputs: "DQ5_DIS_Run, DQ2_SHR_RunRev, DQ1_SHR_RunFwd, DQ4_IFC_Run"
+  definition: "The four run-command outputs the plant-cycle sequence issues, per the register's Physical IO table. Where an assertion says 'every plant equipment run command output', this is the set, and all four are carried in that assertion's `also_requires_observation_of`."
+  deliberately_excluded_upstream_enable: "DQ9_SYS_EnableUpstream is an enable to upstream plant, not plant equipment. Whether 'stops all equipment' obliges it to drop is UNSTATED — AMB-SEQ-04."
+  deliberately_excluded_power_pack: "DQ3_PSH_RunPowerPack is pusher subject; REQ-031's run-on and REQ-030's prior-and-during rule make its stop behaviour a pusher-cycle question — AMB-SEQ-05."
+
+# ---------------------------------------------------------------------------------------------------
+# BOUNDS (§1.2a and AMB-19). Clauses refer to this table BY NAME where a number would otherwise enter
+# a hashed sentence. *** EVERY BOUND STATES ITS KIND. ***
+# ---------------------------------------------------------------------------------------------------
+bounds:
+  pre_start_sounder_time:            "10 s"
+  discharge_conveyor_timeout:        "10 s"
+  shredder_reverse_run_time:         "6 s"
+  shredder_spin_down_pause:          "8 s"
+  infeed_restart_delay:              "5 s"
+  infeed_to_upstream_enable_delay:   "3 s"
+  reversal_retry_pause_time:         "4 s"
+  reversal_count_threshold:          "5 overcurrent events"
+  reversal_window_time:              "180 s (3 minutes)"
+  motor_run_confirm_time:            "*** UNSPECIFIED for three of REQ-063's four declared instances ***"
+
+bounds_kind_vocabulary: >-
+  §1.2a names two bound kinds — maximum age and update cadence — and both are about the staleness of a
+  SAMPLED value. Neither describes a sequencer's bounds, which are step durations and step
+  precedences. Rather than leave the kind ambiguous, which §1.2a forbids, three kinds are used here
+  and the kind is written into every assertion's own sentence: DURATION-OF-RESPONSE ('is asserted FOR
+  the specified ...'), MINIMUM-ELAPSED-BEFORE ('NEVER ... less than the specified ... after ...'), and
+  MAXIMUM-ELAPSED-UNTIL (a confirm window). Raised as AMB-SEQ-09 as a method question, not adopted as
+  a general rule.
+
+bounds_provenance:
+  pre_start_sounder_time:          "SPEC-STATED. FuncDesc §Start sequence — 'Sound pre-start siren (10s)'. Start value 10.0 matches. Kind: DURATION-OF-RESPONSE for REQ-003 A1 and MINIMUM-ELAPSED-BEFORE for REQ-003 A2, which is why both limbs exist."
+  discharge_conveyor_timeout:      "*** NO SPEC NUMBER. *** The register says the confirm-window duration 'is not stated in either source'; 10 s is a site-practice default signed off by the owner 2026-07-16 (fix-wave-1 §1, Q-02). Kind: MAXIMUM-ELAPSED-UNTIL. Legitimate spec-side provenance, but a signed default rather than a restricted figure, and a citing vector must record it via boundsUsed."
+  shredder_reverse_run_time:       "SPEC-STATED. FuncDesc §Start sequence — 'Start shredder reverse, run for 6s'. Start value 6.0 matches. Kind: DURATION-OF-RESPONSE."
+  shredder_spin_down_pause:        "SPEC-STATED. FuncDesc §Start sequence — 'Stop shredder, pause for 8s'. *** NO DB_Settings MEMBER EXISTS *** — the register says so itself beneath its Settings table. Q-09 located a home for the value; that location is implementation and is fenced out of every assertion text. The NUMBER is REQ-006's own. Kind: MINIMUM-ELAPSED-BEFORE."
+  infeed_restart_delay:            "SPEC-STATED. FuncDesc — 'Time delay 5s' (REQ-009) and 'Delay 5s' (REQ-015). Start value 5.0 matches. One number in the source, presumed one setting — the register's own words. Kind: MINIMUM-ELAPSED-BEFORE."
+  infeed_to_upstream_enable_delay: "SPEC-STATED and owner-confirmed. Q-07 RESOLVED 2026-07-17 ('Confirm'), holding 3 s over the SpecSheet's conflated 6 s narrative. Kind: MINIMUM-ELAPSED-BEFORE."
+  reversal_retry_pause_time:       "SPEC-STATED. FuncDesc §Shredder Overcurrent Control — 'Pause for 4s'. Start value 4.0 matches. Kind: MINIMUM-ELAPSED-BEFORE."
+  reversal_count_threshold:        "SPEC-STATED. 'If 5 overcurrent events occur in 3 minutes'. Kind: a COUNT within a scope, not a duration; the scope is the load-bearing half and it is the re-arming window below."
+  reversal_window_time:            "SPEC-STATED, with its SEMANTICS owner-ruled 2026-07-17 (owner-questions B-5): RE-ARMING, not fixed-from-first. Every reversal restarts the 180 s clock; the count clears only after a full clean 180 s. Kind: MINIMUM-ELAPSED-BEFORE, re-arming. REQ-028 A3 and A4 are the two halves of that ruling."
+  motor_run_confirm_time:          "*** NO BOUND FOR THREE OF FOUR INSTANCES. *** REQ-063 says 'after a preset time' and routes the question to Q-02, whose resolution covers five settings, none of which is a shredder or infeed run-confirm timeout. Only discharge_conveyor_timeout exists. Per §1.2a the honest output is THE CLAUSE STATES NO BOUND for the other three, and no plausible number is supplied here. See FINDING-3."
+
+bounds_not_derived_from_any_apparatus: >-
+  §1.2a's second rule, checked explicitly. No bound above was corroborated against a round-trip
+  latency, a poll interval, or anything a test rig measured. Every one comes from the register's own
+  text or its recorded owner rulings, and the one that rests on a commissioning sign-off rather than a
+  restricted figure says so. A retune of discharge_conveyor_timeout changes REQ-063 A1's truth condition
+  on one instance while moving zero IDs — which is AMB-19, and the bounds-currency gate is what
+  catches it.
+
+# ---------------------------------------------------------------------------------------------------
+denominator:
+  clauses_in_subject: 24
+  clauses_yielding_assertions: 24
+  clauses_not_decomposable: 0
+  assertions: 43
+  coverage_units: 46
+  coverage_unit_arithmetic: "42 class-level assertions x 1, plus REQ-063 A1 x 4 declared instances = 46"
+
+forms_summary: {When: 27, Never: 16}
+
+decomposition_judgements_declared:
+  - id: J1
+    what: "A LOWER-BOUND ASSERTION IS WRITTEN WHEREVER A CLAUSE STATES A DELAY AS AN ORDERING PRECONDITION — BUT NOT WHERE THE BOUND IS MERELY A RESPONSE'S DURATION."
+    why: >-
+      R3 says a bound qualifies a response rather than splitting it, and that is right where the only
+      defect is a wrong number. It is NOT right where the response can arrive EARLY: an arrival
+      assertion is satisfied MORE easily by an under-scaled preset, not less. The hopper enumeration
+      hit exactly this at its fifth issue and it took a vector author to find it. So REQ-003, REQ-006,
+      REQ-009, REQ-011, REQ-015, REQ-016 and REQ-026 each carry a 'does not happen before' limb as its
+      own assertion, with the under-scaled preset named as the isolating defect. The line is
+      spec-derived rather than a taste: where the clause states the delay as a PRECONDITION for the
+      next action ('3 s after', '5 s delay follows ... before', 'pauses for 8 s before'), both limbs
+      exist; where the number is simply how long a response is held (REQ-005's 6 s reverse run), R3
+      holds and there is ONE assertion. This is the single largest contributor to the count.
+  - id: J2
+    what: "AN ORDERING PROHIBITION IS WRITTEN AS `NEVER`, NOT AS A SAMPLED `WHEN`."
+    why: >-
+      A sequencer's most valuable assertions are about what must not happen out of order, and an early
+      event has no trigger to hang a WHEN on. Writing one as a WHEN would be declaring a form that
+      makes the assertion easier to verify than it is — F-3's hole, and gate 3e compares every
+      citation's declared form against what this file states. Sixteen of the 43 are NEVER and each is
+      the form the clause ASSERTS, not the form convenient to a verifier.
+  - id: J3
+    what: "EACH CLAUSE IS DECOMPOSED FROM ITS OWN TEXT, EVEN WHERE TWO CLAUSES DESCRIBE ONE STEP."
+    why: >-
+      The register's source document had already separated each sequence step onto its own line, and
+      the register gave each line its own REQ — REQ-009 IS the delay and REQ-010 IS the start that
+      follows it. So the delay's lower-bound limb lives under REQ-009 and the arrival under REQ-010,
+      rather than both being pulled into one clause. That is why the assertions-per-clause ratio here
+      is low; see `ratios`.
+  - id: J4
+    what: "THE NEGATIVE CASE IS WRITTEN ONLY WHERE THE SPEC STATES ONE."
+    why: >-
+      R1 calls the negative case the one most often lost, and says to write it WHERE THE SPEC STATES
+      ONE. REQ-001 states no negative, so no 'never self-starts' assertion was invented under it —
+      REQ-062 and Q-08 state that obligation and it is enumerated there, under REQ-062 A1/A3 and
+      REQ-013 A3. Inventing it under REQ-001 as well would have put three assertions with one shared
+      defect into the denominator.
+
+# ---------------------------------------------------------------------------------------------------
+# REFUSALS AND FINDINGS. *** NOTHING WAS SILENTLY DROPPED AND NOTHING WAS SOFTENED TO FILL A ROW. ***
+# Note the shape difference from the pusher lane: no clause here yielded ZERO assertions, so
+# `not_decomposable` is empty. REFUSAL-1 is a LIMB of a clause that DID yield an assertion, so it
+# lives under `partially_mined` where a reader will find it beside the limb that was mined.
+# ---------------------------------------------------------------------------------------------------
+not_decomposable: []
+
+refusals_and_findings:
+  - id: REFUSAL-1
+    clause: REQ-063
+    severity: MEDIUM
+    limb: "'the fault sequence occurs'"
+    refusal: "*** NOT DECOMPOSED. NOT SOFTENED INTO A VAGUE ASSERTION TO FILL A ROW. ***"
+    why: >-
+      'The fault sequence' is a DEFINITE reference to something the register never defines. It appears
+      nowhere else — no clause, no section, no glossary entry and no owner ruling says what a fault
+      sequence consists of. It is not a synonym for the stop, because the clause names the stop
+      separately in the same sentence, right after it. Any assertion I wrote for it would be my
+      invention of a behaviour wearing a REQ id, which is precisely how a denominator stops being
+      spec-derived.
+    what_would_settle_it: >-
+      One clause defining the fault sequence, or a ruling that the phrase is rhetorical and the
+      clause's only obligations are the stop (enumerated as REQ-063 A1) and REQ-057's annunciation.
+      Either answer costs nothing; the current state is a requirement nobody can test.
+    consequence_if_ruled_substantive: "At least one new assertion PER INSTANCE — new UNCLASSIFIED units and their own reported event (§2.3), never absorbed as a classification change."
+
+  - id: REFUSAL-2
+    clause: REQ-029
+    severity: LOW-MEDIUM
+    status: "OUT OF SUBJECT here. Recorded because it is the out-of-subject clause most likely to be ruled back in — it is the one that LOOKS like a sequencer step."
+    limb: "'Overcurrent is ignored for approximately 2–3 s at shredder startup'"
+    refusal: "NO BOUND WRITTEN. If this clause is ruled in-subject it must be re-worded before it can be enumerated."
+    why: >-
+      Two defects in one bound. It is a RANGE ('2–3 s') and it is hedged ('approximately'), so there is
+      no value an assertion can be written against — a 2.9 s window and a 3.4 s window are
+      indistinguishable under it. And §1.2a requires a bound to state its KIND; this one does not. The
+      register's Settings table resolves the value to 3.0 'within the stated range', which is a
+      commissioning choice, not a specification. Writing 3 s into an assertion would promote a start
+      value into a requirement.
+    what_would_settle_it: "A single specified number with its kind, in the clause."
+
+  - id: FINDING-2
+    severity: HIGH
+    scope: "register-wide; bites REQ-028 A2 in this enumeration"
+    what: >-
+      *** THE REGISTER NAMES NO TAG FOR ANY ANNUNCIATION BIT. *** REQ-028 and REQ-052…059 all say an
+      annunciation bit 'exists (grep-verified)' and not one of them says what it is called. The only
+      names live inside the design, which R5 forbids the enumerator to use and which I did not go
+      looking for.
+    consequence: >-
+      REQ-028 A2 is enumerated with `response_signal: UNNAMED_IN_REGISTER` and CANNOT satisfy the
+      response-signal check. Every assertion in the not-yet-existing fault-annunciation enumeration
+      will hit the same wall. This is not a decomposition problem — the assertion is perfectly
+      falsifiable — it is a register gap that makes a whole class of assertion uncitable.
+    what_must_not_happen: >-
+      A vector author must NOT invent or look up a name to make the citation work. *** THE REPAIR IS
+      TO THE REGISTER OR THE HARNESS BINDING, NEVER TO THIS FILE. *** An enumerator inventing an
+      alarm-bit name would be breaking hard rule 3 to make a citation go green, which is the request
+      this role exists to refuse.
+    what_would_settle_it: "The register's equipment inventory gains an annunciation row per alarm, the way it already has one per physical IO point."
+
+  - id: FINDING-3
+    severity: HIGH
+    clause: REQ-063
+    what: >-
+      *** THE 'PRESET TIME' EXISTS FOR ONE OF FOUR MOTORS. *** The Settings table carries
+      DischargeConveyorTimeout = 10.0 and nothing whatever for the infeed or for either shredder
+      direction. REQ-063's Notes route the question to Q-02, and Q-02's resolution covers five
+      settings, none of which is a shredder or infeed run-confirm timeout.
+    consequence: >-
+      Three of REQ-063's four declared coverage units have no bound to be tested against. Per §1.2a no
+      number was supplied here; the assertion says 'the specified motor run-confirm time' and the
+      bounds table says UNSPECIFIED for those three.
+    why_it_is_not_merely_untidy: >-
+      This is the clause that stops the plant when a motor does not start. Without a preset the
+      obligation has no failure point, so an implementation that waits forever satisfies it vacuously
+      — and REQ-057's 'identify which motor' compounds it, being itself marked proposed.
+    what_would_settle_it: "Three numbers, or one ruling that a single shared confirm window applies to all four."
+
+partially_mined:
+  - clause: REQ-025
+    in_subject_limb: "The overcurrent event demands the pusher return to parked — enumerated as REQ-025 A1, because REQ-025 sits in the register's plant-cycle row and its TRIGGER is this sequencer's own overcurrent event."
+    out_of_subject_limb: "How the ram executes the return, and REQ-043's pusher-disabled case."
+    destination: "the pusher-cycle enumeration"
+    destination_status: "*** EXISTS — gen/test-project001/pusher-control/assertion-enumeration.yaml, stamped. REQ-025 is enumerated there too, as REQ-025:c86768. *** Recorded as an OVERLAP, not a gap: two enumerations decompose the same clause under different subjects, mine at the plant observable and the pusher lane's at the ram. That is legitimate per §1.4 — each is decomposed from its own subject — but a coverage report that sums the two would double-count REQ-025. Named so nobody does."
+  - clause: REQ-028
+    in_subject_limb: "The trip cause, the stop, and the two halves of the re-arming window (A1, A3, A4), plus the RAISING of the alarm condition (A2)."
+    out_of_subject_limb: "The display annunciation of 'shredder blocked'."
+    destination: "REQ-058, in a fault-annunciation enumeration"
+    destination_status: "*** DOES NOT EXIST. THIS IS A GAP, NOT A TIDY EXCLUSION. ***"
+  - clause: REQ-063
+    in_subject_limb: "'the shredder system stops completely' — enumerated as REQ-063 A1, per motor instance."
+    out_of_subject_limb: "'the fault sequence occurs' — see REFUSAL-1, which is a refusal and not a destination; and REQ-057's identify-which-motor annunciation."
+    destination: "a fault-annunciation enumeration"
+    destination_status: "*** DOES NOT EXIST — A GAP *** — and REFUSAL-1's limb has no destination at all, because nothing in the register defines it."
+
+considered_and_out_of_subject:
+  - clauses: "REQ-017, REQ-018, REQ-019, REQ-020, REQ-021, REQ-022, REQ-029"
+    limb: "The overcurrent DETECTION function — what an overcurrent event IS (017), machine-type selection and per-type setpoints (018/019), per-motor detection (020), the medium and high level definitions (021/022), the spin-up suppression window (029)."
+    finding: >-
+      Absent from the register's plant-cycle row. These define the EVENT; REQ-023…028 define this
+      sequencer's RESPONSE to it, and those ARE enumerated here, taking 'an overcurrent event occurs'
+      as a spec-named trigger. Destination: an enumeration for the overcurrent-detection function.
+      *** DOES NOT EXIST — A GAP *** — and compounding it, Q-11 (owner, 2026-07-17) records that this
+      prototype panel carries no analog current channel, so REQ-017…022 are owner-DISARMED pending an
+      AI-hardware build. Nothing is excluded to nowhere quietly. REQ-029 is flagged separately at
+      REFUSAL-2 as the one most likely to be ruled back in.
+  - clauses: "REQ-030…REQ-051"
+    limb: "The pusher cycle — the register's sequence-classification row 2, a SECOND stepped sequence with its own memory test."
+    finding: "Destination: gen/test-project001/pusher-control/assertion-enumeration.yaml. *** EXISTS AND IS STAMPED. *** The only out-of-subject destination in this file that is not a gap."
+  - clauses: "REQ-052…REQ-059"
+    limb: "Fault ANNUNCIATION — row 3, classified combinational."
+    finding: "Destination: a fault-annunciation enumeration. *** DOES NOT EXIST — A GAP. *** REQ-028's alarm limb IS mined here because its cause sits in a plant-cycle clause; REQ-058's display half is not."
+  - clauses: "REQ-060, REQ-064…REQ-069"
+    limb: "HMI indication, hour clocks, machine-type display, changeover, in-cycle lamp — row 4, combinational."
+    finding: "Destination: an HMI/indication enumeration. *** DOES NOT EXIST — A GAP. ***"
+  - clause: REQ-061
+    limb: "E-stop stops everything."
+    finding: >-
+      Hardwired safety circuit. Register class `out-of-scope`. *** NOT ENUMERATED, NOT DESCRIBED, NOT
+      DECOMPOSED — CLAUDE.md hard rule 2. *** No `NEVER` in this file refers to it, and no destination
+      is offered, because a safety function has none in this pipeline. The only thing carried across is
+      the register's own statement that the PLC-visible fact is the healthy feedback
+      DI1_SYS_ControlHealthy — an ordinary control input, used by REQ-062, which the register classes
+      `control` and which is enumerated here.
+
+# ---------------------------------------------------------------------------------------------------
+# AMBIGUITIES AND CONTRADICTIONS — raised, never resolved here.
+# Routed to whoever signs off the architecture at gate 1, by analogy with §4.3 (§7 open item 2 says
+# the dispute channel has no home; this is an analogy, not a ruling).
+# ---------------------------------------------------------------------------------------------------
+ambiguities_open:
+
+  - id: AMB-SEQ-03
+    severity: HIGH
+    kind: "*** THE NEAREST THING TO AN INTERNAL CONTRADICTION IN THIS REGISTER — REQ-027 versus Q-01 / doc 06 C-128. ***"
+    what: >-
+      Q-01's recorded resolution states, without qualification: 'A fresh, explicit start command always
+      re-runs the FULL start-up sequence from the top; NO MID-SEQUENCE RESUME.' REQ-027 requires
+      precisely a mid-sequence resume — 'the startup sequence resumes from point 5'.
+    why_it_is_probably_not_a_true_contradiction: >-
+      C-128's sentence is about what a fresh START COMMAND does, and REQ-027's resume is not triggered
+      by a start command. Q-08's wording even leaves room for it: 'unless there is a documented
+      exception', and REQ-027 is a documented exception.
+    why_it_still_has_to_be_raised: >-
+      The SCOPE of 'no mid-sequence resume' is stated nowhere. Read narrowly (start commands only)
+      REQ-027 stands and its three assertions are correct. Read broadly (this sequencer never resumes
+      mid-sequence, full stop) REQ-027 is disarmed and three assertions here are wrong.
+    what_i_did: >-
+      *** I DID NOT PICK A READING. *** REQ-027's assertions take its own words verbatim. If the broad
+      reading is ruled, REQ-027 A1/A2/A3 are REMOVED rather than reworded, so the cost is three fewer
+      units and no dangled citation.
+    who_must_rule: "the gate-1 architecture signer"
+
+  - id: AMB-SEQ-07
+    severity: HIGH
+    kind: "An ordering the register never states, between two clauses that both fire on the same event."
+    clause: "REQ-026 / REQ-027 versus REQ-028"
+    what: >-
+      *** WHAT HAPPENS ON THE FIFTH OVERCURRENT EVENT IS UNSTATED, AND THE TWO ANSWERS DIFFER BY ONE
+      REVERSAL OF A BLOCKED MACHINE. *** REQ-023…027 say every overcurrent event stops the plant,
+      pauses 4 s and resumes via a reverse run. REQ-028 says the fifth stops the system and alarms.
+      The register never says whether the fifth event does both — pause, reverse, then trip — or trips
+      immediately instead of recovering.
+    why_it_matters_to_the_denominator: >-
+      REQ-027 A1's trigger as written ('the specified pause has elapsed after an overcurrent stop')
+      covers the fifth event too, so as it stands this enumeration asserts that the fifth event DOES
+      reverse. That is a reading, and it is recorded here rather than buried inside a trigger.
+    would_settle_it: "One clause in REQ-028 saying whether the trip pre-empts the recovery."
+    who_must_rule: "the gate-1 architecture signer"
+
+  - id: AMB-SEQ-08
+    severity: MEDIUM-HIGH
+    kind: "Two source documents counting two different things, with the settings named after the wrong one."
+    clause: "REQ-005 versus REQ-028"
+    what: >-
+      *** DOES THE START SEQUENCE'S OWN REVERSE RUN COUNT AS A REVERSAL? *** REQ-005 makes a reverse
+      run a normal part of every start. REQ-028 counts 'overcurrent events', but the SpecSheet phrasing
+      the register quotes counts reversals ('if shredder reverses 5 times within 3 minutes'), and both
+      settings are named for reversals, not overcurrents.
+    why_it_matters: >-
+      If start-sequence reverses count, a plant started and stopped a few times inside three minutes
+      trips on nothing at all. If they do not, the two source phrasings disagree and the register's own
+      precedence rule (FuncDesc primary) resolves it toward overcurrent events.
+    what_i_did: >-
+      Wrote 'overcurrent events' into REQ-028's assertion texts, per the register's own stated
+      precedence, and raised this rather than resolving it silently.
+
+  - id: AMB-SEQ-01
+    severity: HIGH
+    kind: "An assertion resting on a presupposition rather than on a stated claim."
+    clause: REQ-016
+    what: >-
+      REQ-016 A3 (upstream de-asserts when the infeed stops on hopper high) rests on the presupposition
+      carried by REQ-016's own word 're-enabled'. NO CLAUSE STATES IT OUTRIGHT.
+    what_i_did: >-
+      Enumerated it, and flagged it here. Omitting it makes the operationally worst defect in that
+      recovery path — upstream feeding a stopped belt — uncatchable while every other assertion reads
+      green, which is §1.4's exact failure mode. A reader may judge this an inference too far. If it is
+      ruled out the assertion is REMOVED and the count falls to 42.
+    who_must_rule: "the gate-1 architecture signer"
+
+  - id: AMB-SEQ-02
+    severity: MEDIUM
+    kind: "Two observables inside one NEVER."
+    clause: REQ-027
+    what: >-
+      REQ-027 A3 names two observables in one sentence. The single claim is 'the steps before the
+      reverse-run step are not repeated'; the two named observables are how a repeat would show. They
+      are not separable — a defect that re-enters at the top produces BOTH, and no plausible defect
+      produces one alone.
+    what_i_did: "Kept it as one assertion and declared the judgement. If a reader disagrees, the repair is to SPLIT into two (count 44), never to drop the claim."
+
+  - id: AMB-SEQ-10
+    severity: MEDIUM
+    kind: "A trigger with no stated persistence, against a floor that says one-scan events are unobservable."
+    clause: REQ-013
+    what: >-
+      'Loss of downstream available' states no minimum duration. A one-scan dropout is structurally
+      unobservable (contract §4.1) and it is unstated whether it must stop the plant at all. REQ-013's
+      assertions say 'goes false', taking the clause verbatim, which means a vector cannot distinguish
+      a correct filter from a missing one.
+    would_settle_it: "A debounce ruling, which would also decide whether REQ-002 A1 needs one."
+
+  - id: AMB-SEQ-04
+    severity: MEDIUM
+    kind: "A hole named because it is invisible from the assertion list."
+    clause: "REQ-012 and REQ-013"
+    what: >-
+      Whether DQ9_SYS_EnableUpstream must drop when 'all equipment' stops is unstated, so it is
+      excluded from `plant_equipment_run_outputs` and NO assertion currently requires it. *** MEANING A
+      PLANT THAT STOPS EVERYTHING WHILE STILL TELLING UPSTREAM TO FEED PASSES EVERY ASSERTION IN THIS
+      FILE. *** Named so the hole is visible rather than assumed covered.
+
+  - id: AMB-SEQ-05
+    severity: MEDIUM
+    kind: "A conflict visible only from the plant-cycle side."
+    clause: "REQ-012 / REQ-013 versus REQ-030 / REQ-031"
+    what: >-
+      The pusher power pack is excluded from the stop set. REQ-031's run-on and REQ-030's
+      prior-and-during rule mean a stop-all that cuts the power pack may conflict with parking the ram.
+      The register does not reconcile them. Pusher-subject, and the pusher lane raised the mirror image
+      of this as its own AMB-PSH-03 ('stops' has no defined meaning for a ram mid-stroke) — *** TWO
+      INDEPENDENT ENUMERATORS REACHED THE SAME HOLE FROM OPPOSITE SIDES, WHICH IS THE STRONGEST
+      EVIDENCE AVAILABLE THAT IT IS REAL. ***
+
+  - id: AMB-SEQ-06
+    severity: MEDIUM
+    kind: "A declared instance boundary that a citation could dispute."
+    clause: REQ-063
+    what: >-
+      The pusher power pack is a fifth motor with a running feedback (DI11_PSH_PowerPackRunning) and is
+      NOT in this clause's declared instance set. Declared OUT with a destination rather than left
+      ambiguous, because an undeclared instance a citation names is a FINDING, not a new unit (R4). Its
+      supervision is conditioned by REQ-043 ('does not look for pusher switch feedback' when disabled)
+      and belongs to the pusher subject.
+
+  - id: AMB-SEQ-09
+    severity: LOW
+    kind: "A METHOD observation, raised rather than adopted."
+    what: >-
+      §1.2a's two bound kinds are both about sampled-value staleness and neither describes a
+      sequencer's bounds. Three kinds were used here and written into every assertion's sentence. Raised
+      as a method question — whether the definition should carry a sequencer vocabulary — rather than
+      adopted as a general rule by an enumerator.
+
+# ---------------------------------------------------------------------------------------------------
+ratios:
+  assertions_per_clause: {REQ-001: 2, REQ-002: 1, REQ-003: 2, REQ-004: 2, REQ-005: 1, REQ-006: 2, REQ-007: 1, REQ-008: 1, REQ-009: 1, REQ-010: 1, REQ-011: 2, REQ-012: 2, REQ-013: 3, REQ-014: 2, REQ-015: 2, REQ-016: 3, REQ-023: 1, REQ-024: 1, REQ-025: 1, REQ-026: 1, REQ-027: 3, REQ-028: 4, REQ-062: 3, REQ-063: 1}
+  mean_over_clauses_yielding_assertions: 1.79
+  mean_over_all_in_subject_clauses: 1.79
+  min: 1
+  max: 4
+  judged: false
+  note: >-
+    No corpus norm exists (§7 open item 4). Reported, never judged. *** THE COMPARISON A READER WILL
+    MAKE ANYWAY IS TO THE HOPPER SET AT 3.38, AND 1.79 IS HALF OF IT — SO HERE IS THE REASON RATHER
+    THAN A DEFENCE. *** That register is ONE behaviour re-decomposed over five issues under thirteen
+    rulings, so its clauses are long and multi-limbed. This register took a restricted document that had
+    ALREADY separated each sequence step onto its own line and gave each line its own REQ — REQ-009 IS
+    a delay and REQ-010 IS the start that follows it. The clause granularity is finer, so the per-clause
+    count is lower, and the two numbers are not measuring the same thing (J3). The pusher lane, working
+    the same register under a different subject, independently landed at 1.76 — which is the more
+    meaningful comparison and it is close. Three data points are still not a norm.
+  shape_check: >-
+    What would be the real warning sign is the SHAPE of the distribution, not its mean, because attack
+    2 is splitting the easy clauses finely and leaving the hard one whole. Reported: the four largest
+    clauses here are REQ-013 (3), REQ-016 (3), REQ-027 (3) and REQ-028 (4) — recovery, re-entry,
+    restart-inhibit and the counting window. Those are the hard ones, which is the opposite of attack 2.
+
+# ---------------------------------------------------------------------------------------------------
+# THE GATE'S PROJECTION. Keys are ORDINALS because this file is unstamped; the stamper rekeys them to
+# `REQ-nnn:<hash>`. A submission built from the ordinal keys would be REFUSED by shape, correctly.
+# *** `forms_by_ordinal` MUST BE RE-KEYED TO THE STAMPED IDS OR GATE 3e REPORTS NOT CHECKED, ***
+# and a form that cannot be compared is never a passing one.
+# ---------------------------------------------------------------------------------------------------
+gate_projection_template:
+  subject: shredder-plant-cycle
+  clauses: [REQ-001, REQ-002, REQ-003, REQ-004, REQ-005, REQ-006, REQ-007, REQ-008, REQ-009, REQ-010, REQ-011, REQ-012, REQ-013, REQ-014, REQ-015, REQ-016, REQ-023, REQ-024, REQ-025, REQ-026, REQ-027, REQ-028, REQ-062, REQ-063]
+  assertions: "PENDING STAMP — 43 entries, to be computed from `normalised_text` scoped to the clause"
+  enumerator: assertion-enumerator
+
+forms_by_ordinal:
+  REQ-001.A1: When
+  REQ-001.A2: When
+  REQ-002.A1: Never
+  REQ-003.A1: When
+  REQ-003.A2: Never
+  REQ-004.A1: When
+  REQ-004.A2: Never
+  REQ-005.A1: When
+  REQ-006.A1: When
+  REQ-006.A2: Never
+  REQ-007.A1: When
+  REQ-008.A1: Never
+  REQ-009.A1: Never
+  REQ-010.A1: When
+  REQ-011.A1: When
+  REQ-011.A2: Never
+  REQ-012.A1: When
+  REQ-012.A2: Never
+  REQ-013.A1: When
+  REQ-013.A2: Never
+  REQ-013.A3: Never
+  REQ-014.A1: When
+  REQ-014.A2: When
+  REQ-015.A1: When
+  REQ-015.A2: Never
+  REQ-016.A1: When
+  REQ-016.A2: Never
+  REQ-016.A3: When
+  REQ-023.A1: When
+  REQ-024.A1: When
+  REQ-025.A1: When
+  REQ-026.A1: Never
+  REQ-027.A1: When
+  REQ-027.A2: When
+  REQ-027.A3: Never
+  REQ-028.A1: When
+  REQ-028.A2: When
+  REQ-028.A3: When
+  REQ-028.A4: When
+  REQ-062.A1: Never
+  REQ-062.A2: When
+  REQ-062.A3: Never
+  REQ-063.A1: When
+
+ordinals_are_display_only: >-
+  *** A `Basis` CITATION IN ORDINAL FORM IS REJECTED BY SHAPE. *** The ordinals above exist so the
+  stamper can re-key the forms map; they are never citable. Ordering within a clause is APPEND-ONLY
+  from here on — new assertions are appended, never inserted, never reordered (§3.3), because a reorder
+  moves no ID, no text and fires no gate while silently retargeting every ordinal that appears in prose.
+
+fields_with_no_home_in_this_shape: >-
+  Declared rather than dropped, as asked. THREE things in the sibling `assertions.json` do not map onto
+  the shape the stamper parses, and the JSON is retained for them: (1) `gate_verification_step_0a` —
+  my step-0a record of what I found by grepping Harness.Gate (EnumerationDocument carries Forms,
+  Enumerator, RequiredObservations and AssertionBounds, and still carries NO per-assertion response
+  signal, so attack 5's set-difference remains NOT CHECKED); (2) `signal_provenance` — the per-tag
+  provenance table, of which only the two load-bearing entries survive here, as
+  `signal_sets` and the DI4_SYS_CycleStop polarity note on REQ-012 A1; (3) `candidates_the_gate_1_
+  signer_will_be_tempted_by`, reproduced verbatim in `buckets_not_assigned_here` below so it is not
+  lost. Additionally, `required_observations` was a LIST in the JSON and is a comma-joined STRING here,
+  matching the shape the stamper accepted from the pusher lane — same content, different encoding.
+  *** NO ASSERTION TEXT, NO CLAUSE TEXT, NO SPLIT DEFECT, NO FORM AND NO FINDING DIFFERS BETWEEN THE
+  TWO FILES. *** The decomposition is unchanged; only the container is.
+
+buckets_not_assigned_here: >-
+  OUT-OF-SCOPE and UNTESTABLE-ON-RIG belong to whoever signs off the architecture at gate 1 (§4.3) —
+  never to the block's author, never to a vector's author, and not to the enumerator either. DEFERRED
+  needs an owner and a date. UNCLASSIFIED is never written: it is
+  enumerated - (COVERED u OUT-OF-SCOPE u DEFERRED u UNTESTABLE-ON-RIG), computed across two artifacts.
+  *** ALL 46 COVERAGE UNITS ARE UNCLASSIFIED TODAY, BECAUSE NO CLASSIFICATION ARTIFACT EXISTS. THE
+  GATE SHOULD FAIL UNTIL ONE DOES. *** No percentage is an available output from this file: a coverage
+  figure needs all four bucket counts and the oldest deferral's age, and there are none.
+  *** THE BUCKET-SHAPED ASSERTIONS, NAMED FOR THE SIGNER AND DECIDED BY THE SIGNER: *** REQ-023 A1,
+  REQ-024 A1, REQ-025 A1, REQ-026 A1, REQ-027 A1/A2/A3 and REQ-028 A1/A2/A3/A4 all trigger on an
+  overcurrent event this prototype panel cannot produce (Q-11 — no analog channel); and REQ-012 A2 and
+  REQ-013 A2 are simultaneity claims the contract says sampling cannot verify (§4.1). That is 13 of
+  43, and they are the hard ones. *** THAT IS EXACTLY THE SHAPE OF ATTACK 3, WHICH IS WHY THE
+  ASSIGNMENT IS NOT MINE. *** §7's own limit applies: UNTESTABLE-ON-RIG should be nearly empty, and a
+  large one is a finding to chase, not a bucket to fill.
+
+clauses:
+
+  REQ-001:
+    title: "Start command"
+    clause_text: "The plant start sequence is commanded by pressing the start pushbutton."
+    instances: []
+    split_reasoning: "R1 gives one trigger (the press); Q-06's recorded ruling — 'momentary ... the start sequence latches on its own once triggered' — adds a second claim with its own trigger, the release. Two."
+    negative_case_note: "R1 requires the negative case WHERE THE SPEC STATES ONE. REQ-001 states none; REQ-062 and Q-08 do, and the never-self-starts assertions live there rather than being invented here. See J4."
+    assertions:
+      - ordinal: A1
+        form: When
+        text: "WHEN the start pushbutton DI3_SYS_CycleStart is pressed momentarily while the plant is stopped and DI15_SYS_DownstreamRunning is true THEN the plant start sequence begins, evidenced by DQ10_SYS_PreStartSounder becoming asserted"
+        normalised_text: "WHEN the start pushbutton DI3_SYS_CycleStart is pressed momentarily while the plant is stopped and DI15_SYS_DownstreamRunning is true THEN the plant start sequence begins, evidenced by DQ10_SYS_PreStartSounder becoming asserted"
+        id: REQ-001:ea01a5
+        response_signal: DQ10_SYS_PreStartSounder
+        also_requires_observation_of: "DI3_SYS_CycleStart, DI15_SYS_DownstreamRunning"
+        bounds_depended_on: "[]"
+        split_defect: "The press is not edge-detected or not latched, so a momentary press does nothing at all and the plant cannot be started. A2's antecedent never arises, so A2 stays true."
+        why_the_sounder_is_the_observable: "REQ-003 states the siren sounds BEFORE ANY EQUIPMENT STARTS, so the sounder is the spec's own first observable of a sequence having begun. Spec-derived, not a peek at how the sequence is built."
+      - ordinal: A2
+        form: When
+        text: "WHEN DI3_SYS_CycleStart is released after the momentary press that began the start sequence THEN the start sequence continues and DQ10_SYS_PreStartSounder remains asserted for the remainder of the specified pre-start sounder time"
+        normalised_text: "WHEN DI3_SYS_CycleStart is released after the momentary press that began the start sequence THEN the start sequence continues and DQ10_SYS_PreStartSounder remains asserted for the remainder of the specified pre-start sounder time"
+        id: REQ-001:2b9f96
+        response_signal: DQ10_SYS_PreStartSounder
+        also_requires_observation_of: "DI3_SYS_CycleStart"
+        bounds_depended_on: "[pre_start_sounder_time]"
+        split_defect: "The start is LEVEL-driven rather than latched, so releasing the button drops the sequence back to idle and the plant only runs while somebody holds the button in. A1 stays true — the sequence did begin."
+        provenance: "Q-06, owner ruling 2026-07-17: 'Ok momentary, this the default in most systems.'"
+
+  REQ-002:
+    title: "Downstream confirmed before start"
+    clause_text: "The start sequence proceeds only with downstream confirmed running / available."
+    instances: []
+    split_reasoning: "'Only with' is a prohibition with no natural trigger — one NEVER. The positive limb (it DOES proceed when downstream is confirmed) is REQ-001 A1's response and is not restated; each clause is decomposed from its own text (J3)."
+    assertions:
+      - ordinal: A1
+        form: Never
+        text: "NEVER the plant start sequence issues a further equipment run command while DI15_SYS_DownstreamRunning is false"
+        normalised_text: "NEVER the plant start sequence issues a further equipment run command while DI15_SYS_DownstreamRunning is false"
+        id: REQ-002:ca3de9
+        response_signal: DQ5_DIS_Run
+        also_requires_observation_of: "DQ2_SHR_RunRev, DQ1_SHR_RunFwd, DQ4_IFC_Run, DI15_SYS_DownstreamRunning"
+        bounds_depended_on: "[]"
+        split_defect: "Sole assertion of the clause. Its own defect is a start sequence that samples downstream ONCE at the press and then runs to completion regardless — so downstream lost two seconds into the pre-start siren still gets a fully started plant feeding into stopped equipment."
+        relation_to_REQ_013: "Consistent, not duplicated. REQ-013 says a loss STOPS a running plant; this says a loss must not let the start sequence ADVANCE. A defect can satisfy one and not the other."
+
+  REQ-003:
+    title: "Pre-start siren"
+    clause_text: "The pre-start siren sounds for 10 s before any equipment starts."
+    instances: []
+    split_reasoning: "R2 — two distinct observable responses to one trigger: the sounder is driven, AND equipment is held off. A defect produces one without the other. The 10 s is a qualifier of each (R3), not a third assertion."
+    assertions:
+      - ordinal: A1
+        form: When
+        text: "WHEN the plant start sequence begins THEN DQ10_SYS_PreStartSounder is asserted FOR the specified pre-start sounder time"
+        normalised_text: "WHEN the plant start sequence begins THEN DQ10_SYS_PreStartSounder is asserted FOR the specified pre-start sounder time"
+        id: REQ-003:8febac
+        response_signal: DQ10_SYS_PreStartSounder
+        also_requires_observation_of: "DI3_SYS_CycleStart"
+        bounds_depended_on: "[pre_start_sounder_time]"
+        bound_kind: "DURATION-OF-RESPONSE, stated in the sentence by the word FOR"
+        split_defect: "The sounder is driven for the wrong duration — a one-second chirp, or continuously for the whole run. A2 stays true: equipment can still be correctly withheld until the sequence's own timer expires."
+      - ordinal: A2
+        form: Never
+        text: "NEVER any plant equipment run command output is asserted less than the specified pre-start sounder time after the plant start sequence begins"
+        normalised_text: "NEVER any plant equipment run command output is asserted less than the specified pre-start sounder time after the plant start sequence begins"
+        id: REQ-003:045ab4
+        response_signal: DQ5_DIS_Run
+        also_requires_observation_of: "DQ2_SHR_RunRev, DQ1_SHR_RunFwd, DQ4_IFC_Run, DQ10_SYS_PreStartSounder"
+        bounds_depended_on: "[pre_start_sounder_time]"
+        bound_kind: "MINIMUM-ELAPSED-BEFORE, stated in the sentence"
+        split_defect: "*** THE WARNING IS DEFEATED WITHOUT BEING ABSENT. *** The sounder runs its full 10 s while the discharge conveyor starts alongside it, so the siren annunciates a plant that is already moving and the entire point of a pre-start warning — that nobody is near the machine when it starts — is gone. A1 stays true throughout."
+        why_never_and_not_when: "The claim is a prohibition on an EARLY event, and an early event has no trigger to hang a WHEN on. Declaring this one `When` would be the F-3 mistake: the falsifying observation is an output appearing at a moment nobody scheduled a check for. See J2."
+
+  REQ-004:
+    title: "Discharge conveyor first, confirmed"
+    clause_text: "The discharge conveyor starts first and its running feedback is confirmed before the sequence continues."
+    instances: []
+    split_reasoning: "Two limbs with independent defects — the conveyor is started, and the sequence does not continue until its FEEDBACK confirms. A block can do the first perfectly and advance on its own command instead of the feedback."
+    assertions:
+      - ordinal: A1
+        form: When
+        text: "WHEN the specified pre-start sounder time has elapsed after the plant start sequence began THEN DQ5_DIS_Run is asserted"
+        normalised_text: "WHEN the specified pre-start sounder time has elapsed after the plant start sequence began THEN DQ5_DIS_Run is asserted"
+        id: REQ-004:b6006f
+        response_signal: DQ5_DIS_Run
+        also_requires_observation_of: "DQ10_SYS_PreStartSounder"
+        bounds_depended_on: "[pre_start_sounder_time]"
+        split_defect: "The discharge conveyor is never commanded, or another machine is started first, so material would be shredded onto a stationary discharge belt. A2 stays true — nothing advanced past an unconfirmed conveyor because nothing advanced at all."
+      - ordinal: A2
+        form: Never
+        text: "NEVER DQ2_SHR_RunRev is asserted during a start sequence before DI10_DIS_Running has been observed true"
+        normalised_text: "NEVER DQ2_SHR_RunRev is asserted during a start sequence before DI10_DIS_Running has been observed true"
+        id: REQ-004:0f72e0
+        response_signal: DQ2_SHR_RunRev
+        also_requires_observation_of: "DI10_DIS_Running, DQ5_DIS_Run"
+        bounds_depended_on: "[]"
+        split_defect: "*** THE SEQUENCE ADVANCES ON ITS OWN COMMAND RATHER THAN ON THE FEEDBACK. *** Every step then looks correct on a healthy plant, and the interlock fails only on the day the discharge conveyor does not actually start — the one day it mattered. A1 stays true."
+        why_this_observable: "'Confirmed before the sequence continues' — the next thing the sequence does is REQ-005's reverse run, so the shredder's reverse command is the observable that must not appear early."
+
+  REQ-005:
+    title: "Shredder reverse run at start"
+    clause_text: "The shredder starts in reverse and runs for 6 s."
+    instances: []
+    split_reasoning: "ONE assertion, by R3. 'Starts in reverse' and 'runs for 6 s' are not independently falsifiable — a block that never commands reverse falsifies both, and no defect gives the 6 s without the command. The REMOVAL of the command at 6 s is REQ-006's claim, not this one. This is the case J1's line deliberately leaves whole."
+    assertions:
+      - ordinal: A1
+        form: When
+        text: "WHEN DI10_DIS_Running is observed true during a start sequence THEN DQ2_SHR_RunRev is asserted FOR the specified shredder reverse run time"
+        normalised_text: "WHEN DI10_DIS_Running is observed true during a start sequence THEN DQ2_SHR_RunRev is asserted FOR the specified shredder reverse run time"
+        id: REQ-005:d60678
+        response_signal: DQ2_SHR_RunRev
+        also_requires_observation_of: "DI10_DIS_Running"
+        bounds_depended_on: "[shredder_reverse_run_time]"
+        bound_kind: "DURATION-OF-RESPONSE, stated in the sentence by the word FOR"
+        split_defect: "Sole assertion of the clause. Its own defect is the reverse step being skipped or under-scaled — the shredder goes straight to forward against whatever is still in the chamber, or reverses for a burst too short to clear it."
+
+  REQ-006:
+    title: "Spin-down pause after reverse"
+    clause_text: "The shredder stops after the reverse run and pauses for 8 s (motor spin-down) before the forward start."
+    instances: []
+    split_reasoning: "Two limbs, two defects: the reverse command is REMOVED, and the forward command is WITHHELD for 8 s afterwards. A block can drop reverse correctly and apply forward immediately — exactly what the spin-down pause exists to prevent — so the second limb needs its own assertion (J1)."
+    assertions:
+      - ordinal: A1
+        form: When
+        text: "WHEN the specified shredder reverse run time has elapsed THEN DQ2_SHR_RunRev is de-asserted"
+        normalised_text: "WHEN the specified shredder reverse run time has elapsed THEN DQ2_SHR_RunRev is de-asserted"
+        id: REQ-006:e1a073
+        response_signal: DQ2_SHR_RunRev
+        also_requires_observation_of: "[]"
+        bounds_depended_on: "[shredder_reverse_run_time]"
+        split_defect: "The reverse command is left asserted into the forward step, so both direction commands stand at once. A2 stays true — the forward command may still be correctly delayed by the full pause."
+      - ordinal: A2
+        form: Never
+        text: "NEVER DQ1_SHR_RunFwd is asserted less than the specified spin-down pause after DQ2_SHR_RunRev is de-asserted"
+        normalised_text: "NEVER DQ1_SHR_RunFwd is asserted less than the specified spin-down pause after DQ2_SHR_RunRev is de-asserted"
+        id: REQ-006:4ad10a
+        response_signal: DQ1_SHR_RunFwd
+        also_requires_observation_of: "DQ2_SHR_RunRev"
+        bounds_depended_on: "[shredder_spin_down_pause]"
+        bound_kind: "MINIMUM-ELAPSED-BEFORE, stated in the sentence"
+        split_defect: "*** PLUGGING. *** The pause is absent or under-scaled, so forward is applied while the rotor is still turning in reverse. A1 stays true: the reverse command was dropped exactly on time."
+        scope_note: "Written against ANY reverse-to-forward transition, not only the start sequence's, so it also governs REQ-027's overcurrent recovery — where this defect is most likely to appear and where nothing else would catch it."
+
+  REQ-007:
+    title: "Shredder forward start"
+    clause_text: "The shredder starts in the forward direction after the spin-down pause."
+    instances: []
+    split_reasoning: "One trigger, one response. Mutual exclusion of the two directions is not restated — REQ-006 A2 already forbids forward arriving before reverse has been dropped and the pause served, which covers concurrency without a second assertion."
+    assertions:
+      - ordinal: A1
+        form: When
+        text: "WHEN the specified spin-down pause has elapsed after the start sequence's reverse run THEN DQ1_SHR_RunFwd is asserted"
+        normalised_text: "WHEN the specified spin-down pause has elapsed after the start sequence's reverse run THEN DQ1_SHR_RunFwd is asserted"
+        id: REQ-007:70a275
+        response_signal: DQ1_SHR_RunFwd
+        also_requires_observation_of: "DQ2_SHR_RunRev"
+        bounds_depended_on: "[shredder_spin_down_pause]"
+        split_defect: "Sole assertion of the clause. Its own defect is the sequence stalling after the pause — the shredder reverses, stops, and never runs forward, leaving the plant with the discharge conveyor running and nothing shredding."
+
+  REQ-008:
+    title: "Hopper-not-high gate before infeed"
+    clause_text: "The sequence confirms the shredder hopper level is not high before starting the infeed."
+    instances: []
+    split_reasoning: "A gate with no natural trigger — one NEVER. Distinct from REQ-014, which is about STOPPING an already-running infeed; this is about never starting one into a hopper that is already full."
+    assertions:
+      - ordinal: A1
+        form: Never
+        text: "NEVER DQ4_IFC_Run is asserted following a start command until DI8_HPR_LevelHigh has been observed false"
+        normalised_text: "NEVER DQ4_IFC_Run is asserted following a start command until DI8_HPR_LevelHigh has been observed false"
+        id: REQ-008:42e4f5
+        response_signal: DQ4_IFC_Run
+        also_requires_observation_of: "DI8_HPR_LevelHigh, DI3_SYS_CycleStart"
+        bounds_depended_on: "[]"
+        split_defect: "Sole assertion of the clause. Its own defect is a start sequence with no hopper gate: starting onto an already-full hopper, the infeed runs and is then stopped again by REQ-014's dynamic gate — a bump-start that adds material to a hopper already at high level, and one REQ-014's assertions cannot catch because REQ-014 behaves perfectly."
+
+  REQ-009:
+    title: "Delay after hopper-clear confirm"
+    clause_text: "A 5 s delay follows the hopper-not-high confirmation before the infeed conveyor starts."
+    instances: []
+    split_reasoning: "The clause states only the LOWER bound — a delay that must elapse first. The positive limb (after the delay the infeed starts) is REQ-010's own text and is enumerated there. One each, no duplication (J3)."
+    assertions:
+      - ordinal: A1
+        form: Never
+        text: "NEVER DQ4_IFC_Run is asserted less than the specified infeed restart delay after DI8_HPR_LevelHigh is first observed false in a start sequence"
+        normalised_text: "NEVER DQ4_IFC_Run is asserted less than the specified infeed restart delay after DI8_HPR_LevelHigh is first observed false in a start sequence"
+        id: REQ-009:7af452
+        response_signal: DQ4_IFC_Run
+        also_requires_observation_of: "DI8_HPR_LevelHigh"
+        bounds_depended_on: "[infeed_restart_delay]"
+        bound_kind: "MINIMUM-ELAPSED-BEFORE, stated in the sentence"
+        split_defect: "Sole assertion of the clause. Its own defect is the delay being absent or under-scaled, so the infeed starts the instant the level sensor drops out — and on a marginal level the sensor chatters, so the infeed chatters with it."
+
+  REQ-010:
+    title: "Infeed conveyor start"
+    clause_text: "The infeed conveyor starts."
+    instances: []
+    split_reasoning: "One response, one assertion. The clause states no feedback-confirm obligation — REQ-004 states one for the discharge conveyor and this clause does not, so none is invented. Failure-to-run is REQ-063's."
+    assertions:
+      - ordinal: A1
+        form: When
+        text: "WHEN the specified infeed restart delay has elapsed after DI8_HPR_LevelHigh was observed false in a start sequence THEN DQ4_IFC_Run is asserted"
+        normalised_text: "WHEN the specified infeed restart delay has elapsed after DI8_HPR_LevelHigh was observed false in a start sequence THEN DQ4_IFC_Run is asserted"
+        id: REQ-010:a298e4
+        response_signal: DQ4_IFC_Run
+        also_requires_observation_of: "DI8_HPR_LevelHigh"
+        bounds_depended_on: "[infeed_restart_delay]"
+        split_defect: "Sole assertion of the clause. Its own defect is the sequence never reaching the infeed step — the plant starts, the shredder runs forward, and nothing is ever fed to it."
+
+  REQ-011:
+    title: "Upstream enable after infeed"
+    clause_text: "Upstream is enabled 3 s after the infeed conveyor starts."
+    instances: []
+    split_reasoning: "*** THE TWO-SIDED BOUND — THE PATTERN THE HOPPER REGISTER LEARNED THE HARD WAY AT ITS FIFTH ISSUE. *** 'Enabled 3 s after' asserts both that the enable arrives and that it does not arrive sooner. A1 catches an enable that never comes; A2 catches one that comes at once — and A1 is SATISFIED by an early enable that is still asserted at t=3 s, so A1 structurally cannot catch it. Two assertions (J1)."
+    assertions:
+      - ordinal: A1
+        form: When
+        text: "WHEN DQ4_IFC_Run has been asserted for the specified infeed-to-upstream enable delay THEN DQ9_SYS_EnableUpstream is asserted"
+        normalised_text: "WHEN DQ4_IFC_Run has been asserted for the specified infeed-to-upstream enable delay THEN DQ9_SYS_EnableUpstream is asserted"
+        id: REQ-011:7adda5
+        response_signal: DQ9_SYS_EnableUpstream
+        also_requires_observation_of: "DQ4_IFC_Run"
+        bounds_depended_on: "[infeed_to_upstream_enable_delay]"
+        bound_kind: "MINIMUM-ELAPSED-BEFORE, stated in the sentence"
+        split_defect: "Upstream is never enabled, so the plant runs empty and the upstream process is never told it may feed. A2 stays true — an output that never asserts never asserts early."
+      - ordinal: A2
+        form: Never
+        text: "NEVER DQ9_SYS_EnableUpstream is asserted less than the specified infeed-to-upstream enable delay after DQ4_IFC_Run is asserted"
+        normalised_text: "NEVER DQ9_SYS_EnableUpstream is asserted less than the specified infeed-to-upstream enable delay after DQ4_IFC_Run is asserted"
+        id: REQ-011:71f815
+        response_signal: DQ9_SYS_EnableUpstream
+        also_requires_observation_of: "DQ4_IFC_Run"
+        bounds_depended_on: "[infeed_to_upstream_enable_delay]"
+        bound_kind: "MINIMUM-ELAPSED-BEFORE, stated in the sentence"
+        split_defect: "*** THE DELAY IS ABSENT AND A1 STILL PASSES. *** Upstream is enabled in the same instant as the infeed command, so material arrives on a belt that has not reached speed. At t=3 s the enable is asserted exactly as A1 requires, so the defective block satisfies A1 — which is precisely why this assertion must exist separately."
+
+  REQ-012:
+    title: "Stop pushbutton stops all"
+    clause_text: "Pressing the stop pushbutton stops all equipment at the same time."
+    instances: []
+    split_reasoning: "Two limbs with different defects: everything stops, and everything stops TOGETHER. A staged shutdown — the obvious implementation, the start sequence run backwards — satisfies the first entirely and violates the second."
+    assertions:
+      - ordinal: A1
+        form: When
+        text: "WHEN the stop pushbutton DI4_SYS_CycleStop is pressed while the plant is running THEN every plant equipment run command output is de-asserted"
+        normalised_text: "WHEN the stop pushbutton DI4_SYS_CycleStop is pressed while the plant is running THEN every plant equipment run command output is de-asserted"
+        id: REQ-012:3dc2ce
+        response_signal: DQ1_SHR_RunFwd
+        also_requires_observation_of: "DQ5_DIS_Run, DQ2_SHR_RunRev, DQ4_IFC_Run, DI4_SYS_CycleStop"
+        bounds_depended_on: "[]"
+        split_defect: "One output is missed — most plausibly the discharge conveyor, on the reasoning that it ought to run on and clear — so a stop leaves a machine turning that the operator believes is stopped. A2 stays true: the three that do stop can still stop together."
+        polarity_note: "'Is pressed' is deliberate. REQ-012's Notes record the field device as a normally-closed pushbutton and rule that polarity handling is implementation, so no signal LEVEL appears in this text (R5)."
+      - ordinal: A2
+        form: Never
+        text: "NEVER a plant equipment run command output remains asserted at any observation after another plant equipment run command output has been de-asserted in response to the stop pushbutton"
+        normalised_text: "NEVER a plant equipment run command output remains asserted at any observation after another plant equipment run command output has been de-asserted in response to the stop pushbutton"
+        id: REQ-012:4c5d5a
+        response_signal: DQ1_SHR_RunFwd
+        also_requires_observation_of: "DQ5_DIS_Run, DQ2_SHR_RunRev, DQ4_IFC_Run, DI4_SYS_CycleStop"
+        bounds_depended_on: "[]"
+        split_defect: "*** THE STOP IS A SEQUENCE RATHER THAN AN EVENT. *** The plant is walked down in reverse order — infeed, then shredder, then discharge — a sensible-looking implementation that is not what the clause asks for. A1 stays true: everything does stop, eventually."
+        observability_note: "'At the same time' is a SIMULTANEITY claim, and contract §4.1 says a same-scan coincidence is unobservable by sampling. Stated as the form the assertion IS, not the form convenient to verify (F-3, J2). Whether it is verifiable on the rig is the gate-1 signer's UNTESTABLE-ON-RIG call and is explicitly NOT made here."
+
+  REQ-013:
+    title: "Downstream loss stops all"
+    clause_text: "Loss of downstream available stops all equipment at the same time."
+    instances: []
+    split_reasoning: "R1 — a distinct trigger from REQ-012, and a defect can route the two stops down different paths (a button wired to a hard cut, a downstream loss to a controlled shutdown), so both limbs repeat under this trigger. A3 is Q-08's recorded ruling, about what must NOT happen when downstream comes back."
+    assertions:
+      - ordinal: A1
+        form: When
+        text: "WHEN DI15_SYS_DownstreamRunning goes false while the plant is running THEN every plant equipment run command output is de-asserted"
+        normalised_text: "WHEN DI15_SYS_DownstreamRunning goes false while the plant is running THEN every plant equipment run command output is de-asserted"
+        id: REQ-013:bef9f5
+        response_signal: DQ1_SHR_RunFwd
+        also_requires_observation_of: "DQ5_DIS_Run, DQ2_SHR_RunRev, DQ4_IFC_Run, DI15_SYS_DownstreamRunning"
+        bounds_depended_on: "[]"
+        split_defect: "Downstream loss stops only the infeed — treated as a feed problem rather than a plant stop — so the shredder keeps running and keeps discharging into stopped downstream equipment. A2 and A3 stay true."
+      - ordinal: A2
+        form: Never
+        text: "NEVER a plant equipment run command output remains asserted at any observation after another plant equipment run command output has been de-asserted in response to loss of DI15_SYS_DownstreamRunning"
+        normalised_text: "NEVER a plant equipment run command output remains asserted at any observation after another plant equipment run command output has been de-asserted in response to loss of DI15_SYS_DownstreamRunning"
+        id: REQ-013:5eebb6
+        response_signal: DQ1_SHR_RunFwd
+        also_requires_observation_of: "DQ5_DIS_Run, DQ2_SHR_RunRev, DQ4_IFC_Run, DI15_SYS_DownstreamRunning"
+        bounds_depended_on: "[]"
+        split_defect: "The downstream-loss stop is a graceful staged shutdown while the stop button is a hard cut — so REQ-012 A2 passes and this one fails. Two triggers reaching the same outputs by different paths is the ordinary shape of a stepped sequencer, which is why R1 requires the repeat rather than letting REQ-012 A2 stand for both."
+        observability_note: "Same simultaneity caveat as REQ-012 A2. Stated as the form it IS."
+      - ordinal: A3
+        form: Never
+        text: "NEVER any plant equipment run command output is asserted on DI15_SYS_DownstreamRunning returning true, until DI3_SYS_CycleStart is pressed again"
+        normalised_text: "NEVER any plant equipment run command output is asserted on DI15_SYS_DownstreamRunning returning true, until DI3_SYS_CycleStart is pressed again"
+        id: REQ-013:f21ed8
+        response_signal: DQ5_DIS_Run
+        also_requires_observation_of: "DQ2_SHR_RunRev, DQ1_SHR_RunFwd, DQ4_IFC_Run, DI15_SYS_DownstreamRunning, DI3_SYS_CycleStart"
+        bounds_depended_on: "[]"
+        split_defect: "*** AUTO-RESTART ON RECOVERY — AN UNATTENDED PLANT STARTING ITSELF. *** A1 and A2 stay true throughout: the plant stopped, and stopped together. The register records this defect class as having ACTUALLY OCCURRED in this project — Q-01 cites a traced auto-resume as the concrete evidence behind the C-128 ruling — which is the strongest possible argument for it being its own assertion."
+        provenance: "Q-08, owner ruling 2026-07-17: 'Yes always always always require a manual restart unless their is a documented exception.' REQ-013's own Notes route restart-on-recovery behaviour to Q-08."
+
+  REQ-014:
+    title: "Hopper high stops infeed only"
+    clause_text: "When the shredder hopper is at high level, the infeed conveyor stops. The shredder itself keeps running."
+    instances: []
+    split_reasoning: "R2 — one trigger, two responses a defect separates trivially: wiring hopper-high into the general plant stop produces the second failure while the first still looks correct."
+    assertions:
+      - ordinal: A1
+        form: When
+        text: "WHEN DI8_HPR_LevelHigh becomes true while DQ4_IFC_Run is asserted THEN DQ4_IFC_Run is de-asserted"
+        normalised_text: "WHEN DI8_HPR_LevelHigh becomes true while DQ4_IFC_Run is asserted THEN DQ4_IFC_Run is de-asserted"
+        id: REQ-014:22fa99
+        response_signal: DQ4_IFC_Run
+        also_requires_observation_of: "DI8_HPR_LevelHigh"
+        bounds_depended_on: "[]"
+        split_defect: "The hopper gate is applied only at the start (REQ-008) and not while running, so a hopper filling during normal operation is never relieved and the infeed keeps feeding it. A2 stays true — the shredder is certainly still running."
+        distinct_from_REQ_008: "REQ-008 forbids ever STARTING the infeed into a high hopper; this requires STOPPING a running one. A block can have either without the other."
+      - ordinal: A2
+        form: When
+        text: "WHEN DI8_HPR_LevelHigh becomes true while DQ1_SHR_RunFwd is asserted and no other stop condition is present THEN DQ1_SHR_RunFwd remains asserted"
+        normalised_text: "WHEN DI8_HPR_LevelHigh becomes true while DQ1_SHR_RunFwd is asserted and no other stop condition is present THEN DQ1_SHR_RunFwd remains asserted"
+        id: REQ-014:944f88
+        response_signal: DQ1_SHR_RunFwd
+        also_requires_observation_of: "DI8_HPR_LevelHigh"
+        bounds_depended_on: "[]"
+        split_defect: "*** THE BLOCKAGE CAN THEN NEVER CLEAR. *** Hopper-high is treated as a plant fault and stops the shredder too, so the machine that would have chewed through the backlog is the one that stops — and the hopper stays high indefinitely. A1 stays true and looks entirely correct. Corroborated by the register's own SpecSheet citation: 'Shredder continues to run until blockage is cleared'."
+
+  REQ-015:
+    title: "Infeed restart on hopper clear"
+    clause_text: "After the hopper is no longer at high level, plus a 5 s delay, the infeed conveyor restarts."
+    instances: []
+    split_reasoning: "The two-sided bound again (J1): it restarts (A1), and it does not restart early (A2). An immediate restart satisfies A1 at t=5 s, so A1 cannot catch it."
+    assertions:
+      - ordinal: A1
+        form: When
+        text: "WHEN DI8_HPR_LevelHigh has been false for the specified infeed restart delay while the plant is running THEN DQ4_IFC_Run is asserted"
+        normalised_text: "WHEN DI8_HPR_LevelHigh has been false for the specified infeed restart delay while the plant is running THEN DQ4_IFC_Run is asserted"
+        id: REQ-015:d11333
+        response_signal: DQ4_IFC_Run
+        also_requires_observation_of: "DI8_HPR_LevelHigh"
+        bounds_depended_on: "[infeed_restart_delay]"
+        bound_kind: "MINIMUM-ELAPSED-BEFORE, stated in the sentence"
+        split_defect: "*** THE INFEED STOPS AND NEVER COMES BACK. *** The hopper-high stop is latched rather than level-driven, so clearing the hopper leaves the plant running with nothing being fed, and an operator must restart the whole plant to recover from a routine, expected event. A2 stays true."
+      - ordinal: A2
+        form: Never
+        text: "NEVER DQ4_IFC_Run is asserted less than the specified infeed restart delay after DI8_HPR_LevelHigh goes false"
+        normalised_text: "NEVER DQ4_IFC_Run is asserted less than the specified infeed restart delay after DI8_HPR_LevelHigh goes false"
+        id: REQ-015:40c609
+        response_signal: DQ4_IFC_Run
+        also_requires_observation_of: "DI8_HPR_LevelHigh"
+        bounds_depended_on: "[infeed_restart_delay]"
+        bound_kind: "MINIMUM-ELAPSED-BEFORE, stated in the sentence"
+        split_defect: "The recovery delay is absent, so on a hopper sitting at the sensor's trip point the infeed cycles on and off with every flicker of the level switch. A1 stays true — the infeed does restart, just far too eagerly."
+
+  REQ-016:
+    title: "Upstream re-enable after infeed restart"
+    clause_text: "Upstream is re-enabled 3 s after the infeed restarts."
+    instances: []
+    split_reasoning: "The two-sided bound (A1/A2) under a DIFFERENT trigger from REQ-011 — hopper recovery rather than plant start — which R1 makes its own pair. A3 is the clause's presupposition: 're-enabled' asserts it had been disabled, and nothing else in the register states that."
+    assertions:
+      - ordinal: A1
+        form: When
+        text: "WHEN DQ4_IFC_Run has been re-asserted after a hopper-high stop for the specified infeed-to-upstream enable delay THEN DQ9_SYS_EnableUpstream is asserted"
+        normalised_text: "WHEN DQ4_IFC_Run has been re-asserted after a hopper-high stop for the specified infeed-to-upstream enable delay THEN DQ9_SYS_EnableUpstream is asserted"
+        id: REQ-016:73cb29
+        response_signal: DQ9_SYS_EnableUpstream
+        also_requires_observation_of: "DQ4_IFC_Run, DI8_HPR_LevelHigh"
+        bounds_depended_on: "[infeed_to_upstream_enable_delay]"
+        bound_kind: "MINIMUM-ELAPSED-BEFORE, stated in the sentence"
+        split_defect: "The re-enable path exists only in the start sequence, so upstream is enabled once at start and never again after a hopper recovery — the plant recovers but upstream is never told it may resume. REQ-011 A1 stays true, which is the point: a start-only implementation passes every REQ-011 assertion."
+      - ordinal: A2
+        form: Never
+        text: "NEVER DQ9_SYS_EnableUpstream is asserted less than the specified infeed-to-upstream enable delay after DQ4_IFC_Run is re-asserted following a hopper-high stop"
+        normalised_text: "NEVER DQ9_SYS_EnableUpstream is asserted less than the specified infeed-to-upstream enable delay after DQ4_IFC_Run is re-asserted following a hopper-high stop"
+        id: REQ-016:5a9a28
+        response_signal: DQ9_SYS_EnableUpstream
+        also_requires_observation_of: "DQ4_IFC_Run, DI8_HPR_LevelHigh"
+        bounds_depended_on: "[infeed_to_upstream_enable_delay]"
+        bound_kind: "MINIMUM-ELAPSED-BEFORE, stated in the sentence"
+        split_defect: "The recovery path re-enables upstream immediately while the start path correctly waits 3 s, so REQ-011 A2 passes and this fails. Material arrives on an infeed belt that has just restarted from rest, into a hopper that was full seconds ago."
+      - ordinal: A3
+        form: When
+        text: "WHEN DQ4_IFC_Run is de-asserted because DI8_HPR_LevelHigh has become true THEN DQ9_SYS_EnableUpstream is de-asserted"
+        normalised_text: "WHEN DQ4_IFC_Run is de-asserted because DI8_HPR_LevelHigh has become true THEN DQ9_SYS_EnableUpstream is de-asserted"
+        id: REQ-016:52d63c
+        response_signal: DQ9_SYS_EnableUpstream
+        also_requires_observation_of: "DQ4_IFC_Run, DI8_HPR_LevelHigh"
+        bounds_depended_on: "[]"
+        split_defect: "*** UPSTREAM KEEPS FEEDING A STOPPED INFEED. *** The hopper-high stop drops the infeed but leaves upstream enabled, so material keeps arriving at a stationary belt for as long as the hopper stays high. A1 and A2 stay true — upstream was enabled and never disabled, so it is trivially 'enabled 3 s after the restart'."
+        provenance_is_a_presupposition: "*** FLAGGED, NOT HIDDEN — AMB-SEQ-01. *** No clause says in so many words that upstream is disabled on hopper high; REQ-016's own word 're-enabled' presupposes it. Enumerated because omitting it makes the operationally worst defect in this recovery path uncatchable while every other assertion reads green — §1.4's exact failure mode. If ruled out, this assertion is REMOVED and the count falls to 42."
+
+  REQ-023:
+    title: "Overcurrent stops the shredder"
+    clause_text: "When the shredder is running forward and an overcurrent event occurs, the shredder stops."
+    instances: []
+    split_reasoning: "One trigger, one response, one assertion. The register split the three overcurrent responses into three clauses itself (023 shredder, 024 infeed, 025 pusher), so R2's work is already done at clause level and each is decomposed from its own text."
+    trigger_dependency: "'An overcurrent event occurs' is a spec-named event whose DEFINITION is REQ-017, out of subject. This enumeration takes the event as given. That a vector currently cannot produce it on this prototype panel (Q-11 — no analog channel) is a BUCKET question for the gate-1 signer, never a reason to omit the assertion. The denominator is spec-side."
+    assertions:
+      - ordinal: A1
+        form: When
+        text: "WHEN an overcurrent event occurs while DQ1_SHR_RunFwd is asserted THEN DQ1_SHR_RunFwd is de-asserted"
+        normalised_text: "WHEN an overcurrent event occurs while DQ1_SHR_RunFwd is asserted THEN DQ1_SHR_RunFwd is de-asserted"
+        id: REQ-023:d9f51c
+        response_signal: DQ1_SHR_RunFwd
+        also_requires_observation_of: "[]"
+        bounds_depended_on: "[]"
+        split_defect: "Sole assertion of the clause. Its own defect is an overcurrent response that is annunciation-only — the count increments, the alarm path works, and the motor is never actually stopped."
+
+  REQ-024:
+    title: "Overcurrent stops the infeed"
+    clause_text: "On the same overcurrent event, the infeed stops."
+    instances: []
+    split_reasoning: "One assertion; its own clause because the register gave it one, and a defect isolates it cleanly from REQ-023."
+    assertions:
+      - ordinal: A1
+        form: When
+        text: "WHEN an overcurrent event occurs while DQ4_IFC_Run is asserted THEN DQ4_IFC_Run is de-asserted"
+        normalised_text: "WHEN an overcurrent event occurs while DQ4_IFC_Run is asserted THEN DQ4_IFC_Run is de-asserted"
+        id: REQ-024:f6a85d
+        response_signal: DQ4_IFC_Run
+        also_requires_observation_of: "[]"
+        bounds_depended_on: "[]"
+        split_defect: "Sole assertion of the clause. Its own defect is the overcurrent stopping the shredder but not the infeed, so REQ-027's reverse-run recovery runs while fresh material is still being loaded on top of the jam it is trying to clear."
+
+  REQ-025:
+    title: "Overcurrent parks the pusher"
+    clause_text: "On the same overcurrent event, the pusher returns to parked."
+    instances: []
+    split_reasoning: "One assertion, stated at the plant-observable level (the parked limit switch) rather than at the solenoid outputs, because HOW the ram gets home is the pusher-cycle subject. See `partially_mined` — the pusher lane enumerates this clause too, under its own subject, and a coverage report must not sum the two."
+    assertions:
+      - ordinal: A1
+        form: When
+        text: "WHEN an overcurrent event occurs while the pusher is enabled and away from the parked position THEN the pusher returns to the parked position, evidenced by DI12_PSH_HomeLimit becoming true"
+        normalised_text: "WHEN an overcurrent event occurs while the pusher is enabled and away from the parked position THEN the pusher returns to the parked position, evidenced by DI12_PSH_HomeLimit becoming true"
+        id: REQ-025:5c6fe9
+        response_signal: DI12_PSH_HomeLimit
+        also_requires_observation_of: "[]"
+        bounds_depended_on: "[] — the clause states no time limit, and none was invented (§1.2a). The pusher lane raised the same gap as its AMB-PSH-10."
+        split_defect: "Sole assertion of the clause. Its own defect is the overcurrent stop freezing the pusher where it stands, leaving the ram extended into the chamber — so REQ-027's reverse-run recovery turns the rotor against an obstruction the recovery was never meant to include, and the next overcurrent is guaranteed."
+        enabled_precondition: "'While the pusher is enabled' carries REQ-042/043 — an engineering control disables the pusher entirely, and a disabled pusher drives no outputs. Written as a trigger condition rather than a separate assertion because REQ-025 states one response."
+
+  REQ-026:
+    title: "Post-overcurrent pause"
+    clause_text: "After the overcurrent stop, pause for 4 s."
+    instances: []
+    split_reasoning: "The clause states a lower bound only — a pause that must elapse. What happens AFTER it is REQ-027's text and is enumerated there (J3). One assertion."
+    assertions:
+      - ordinal: A1
+        form: Never
+        text: "NEVER DQ2_SHR_RunRev is asserted less than the specified reversal retry pause time after the overcurrent stop"
+        normalised_text: "NEVER DQ2_SHR_RunRev is asserted less than the specified reversal retry pause time after the overcurrent stop"
+        id: REQ-026:dc4fd2
+        response_signal: DQ2_SHR_RunRev
+        also_requires_observation_of: "DQ1_SHR_RunFwd"
+        bounds_depended_on: "[reversal_retry_pause_time]"
+        bound_kind: "MINIMUM-ELAPSED-BEFORE, stated in the sentence"
+        split_defect: "Sole assertion of the clause. Its own defect is the recovery reversing immediately on the trip, with no pause for the rotor to come to rest — a direct reversal under load on a motor that has just been drawing enough current to trip."
+
+  REQ-027:
+    title: "Auto-resume via reverse run"
+    clause_text: "After the pause, the startup sequence resumes from the reverse-run step (REQ-005) - i.e. the shredder reverses to clear the jam, then restarts forward through the normal sequence."
+    instances: []
+    split_reasoning: "*** THE RE-ENTRY CLAUSE, AND IT CARRIES THREE INDEPENDENT CLAIMS. *** A1 — the recovery starts at all. A2 — it re-enters the NORMAL sequence and runs all the way back to feeding, not merely to a spinning shredder. A3 — it resumes FROM the reverse-run step, so the steps before it are not repeated. Each has a defect the other two survive, and A2 is the one a stepped implementation most often gets wrong."
+    standing_caveat: "*** ALL THREE ARE CONDITIONAL ON AMB-SEQ-03. *** If C-128's 'no mid-sequence resume' is ruled to govern this clause, REQ-027 is disarmed and A1/A2/A3 are REMOVED rather than reworded, so no citation dangles."
+    assertions:
+      - ordinal: A1
+        form: When
+        text: "WHEN the specified reversal retry pause time has elapsed after an overcurrent stop THEN DQ2_SHR_RunRev is asserted"
+        normalised_text: "WHEN the specified reversal retry pause time has elapsed after an overcurrent stop THEN DQ2_SHR_RunRev is asserted"
+        id: REQ-027:229d37
+        response_signal: DQ2_SHR_RunRev
+        also_requires_observation_of: "DQ1_SHR_RunFwd"
+        bounds_depended_on: "[reversal_retry_pause_time]"
+        split_defect: "The recovery never starts — the overcurrent stop is terminal and the plant sits waiting for an operator, turning a routine self-clearing jam into a call-out. A2's antecedent never arises; A3 stays true, since a sequence that never resumes never repeats anything."
+      - ordinal: A2
+        form: When
+        text: "WHEN the recovery reverse run has completed after an overcurrent event and DI8_HPR_LevelHigh is false THEN the sequence continues through the forward start to the infeed start, evidenced by DQ4_IFC_Run being asserted again"
+        normalised_text: "WHEN the recovery reverse run has completed after an overcurrent event and DI8_HPR_LevelHigh is false THEN the sequence continues through the forward start to the infeed start, evidenced by DQ4_IFC_Run being asserted again"
+        id: REQ-027:f8f777
+        response_signal: DQ4_IFC_Run
+        also_requires_observation_of: "DQ1_SHR_RunFwd, DQ2_SHR_RunRev, DI8_HPR_LevelHigh"
+        bounds_depended_on: "[]"
+        split_defect: "*** THE RECOVERY LANDS SOMEWHERE THAT IS NOT THE SEQUENCE. *** The block reverses, pauses, starts forward — and stops there, because the recovery was written as its own little routine rather than as a re-entry into the running sequence. The shredder turns, the discharge conveyor runs, and nothing is fed again until somebody restarts the plant. A1 and A3 both stay true, and on a short observation the plant looks perfectly recovered."
+        why_the_infeed_is_the_observable: "'Restarts forward through the NORMAL sequence' — the normal sequence's remaining steps after the forward start are the hopper gate, the 5 s delay, the infeed start and the upstream enable. The infeed command is the first observable that distinguishes a genuine re-entry from a routine that merely gets the shredder turning."
+      - ordinal: A3
+        form: Never
+        text: "NEVER the pre-start phase is repeated as part of the recovery that follows an overcurrent event, either by asserting DQ10_SYS_PreStartSounder or by de-asserting and re-asserting DQ5_DIS_Run"
+        normalised_text: "NEVER the pre-start phase is repeated as part of the recovery that follows an overcurrent event, either by asserting DQ10_SYS_PreStartSounder or by de-asserting and re-asserting DQ5_DIS_Run"
+        id: REQ-027:99d80f
+        response_signal: DQ10_SYS_PreStartSounder
+        also_requires_observation_of: "DQ5_DIS_Run"
+        bounds_depended_on: "[]"
+        split_defect: "The recovery re-enters the sequence at the TOP instead of at the reverse-run step, so every jam — and a blocking shredder can jam several times a minute — re-sounds the 10 s pre-start siren and drops and restarts the discharge conveyor. A1 and A2 stay true: it does resume, and it does reach the infeed. It just costs 25 s and a siren every time, and an operator learns to ignore the siren."
+        one_claim_two_observables: "*** DECLARED, NOT HIDDEN — AMB-SEQ-02. *** The single claim is 'the steps before the reverse-run step are not repeated'; the two named observables are how a repeat would show. They are not separable — a defect that re-enters at the top produces both, and no plausible defect produces one alone. If a reader disagrees, the repair is to SPLIT into two assertions (count 44), never to drop the claim."
+        reading_note: "Rests on reading 'resumes from point 5' as excluding points 1-4. The register quotes the source's own numbering and its point 5 is the reverse-run step, so the exclusion is what the words say. Recorded so the reading is visible rather than assumed."
+
+  REQ-028:
+    title: "Reversal-count trip"
+    clause_text: "If 5 overcurrent events occur within 3 minutes, the system stops and an alarm is raised. Window semantics RESOLVED (owner ruling, 2026-07-17, owner-questions B-5): re-arming, not fixed-from-first. The count only clears after the plant runs clean for the full 180 s with no new reversal; every reversal restarts the 180 s clock; the count keeps accumulating across any run of reversals each less than 180 s apart, however long that run lasts in total."
+    instances: []
+    split_reasoning: "Four. A1 the trip and its stop; A2 the alarm (R2 — a second response to the same trigger, and a defect can stop the plant silently); A3 the count CLEARING after a clean window; A4 the count ACCUMULATING across a long run of events. A3 and A4 are the two halves of the owner's re-arming ruling and they fail to different defects — a count that never clears versus a window that never re-arms."
+    assertions:
+      - ordinal: A1
+        form: When
+        text: "WHEN the specified reversal count threshold of overcurrent events has been reached with no more than the specified reversal window time between successive events THEN every plant equipment run command output is de-asserted"
+        normalised_text: "WHEN the specified reversal count threshold of overcurrent events has been reached with no more than the specified reversal window time between successive events THEN every plant equipment run command output is de-asserted"
+        id: REQ-028:bda7cd
+        response_signal: DQ1_SHR_RunFwd
+        also_requires_observation_of: "DQ5_DIS_Run, DQ2_SHR_RunRev, DQ4_IFC_Run"
+        bounds_depended_on: "[reversal_count_threshold, reversal_window_time]"
+        split_defect: "The trip does not stop the plant — the count is kept and displayed but the recovery loop simply continues, so a shredder that cannot clear its jam reverses indefinitely. A2, A3 and A4 stay true."
+      - ordinal: A2
+        form: When
+        text: "WHEN the specified reversal count threshold of overcurrent events has been reached within the specified reversal window THEN the shredder-blocked alarm is raised"
+        normalised_text: "WHEN the specified reversal count threshold of overcurrent events has been reached within the specified reversal window THEN the shredder-blocked alarm is raised"
+        id: REQ-028:567ac6
+        response_signal: UNNAMED_IN_REGISTER
+        also_requires_observation_of: "DQ1_SHR_RunFwd"
+        bounds_depended_on: "[reversal_count_threshold, reversal_window_time]"
+        split_defect: "The plant stops with nothing annunciated, so an operator finds a dead plant and no reason for it — the single hardest fault to diagnose on a machine that stops itself. A1 stays true."
+        response_signal_unavailable: "*** SEE FINDING-2. *** The register states the annunciation bit EXISTS ('grep-verified') but never names a tag for it, here or at REQ-058, and the only name available is inside the design, which R5 forbids me to use and which I did not go looking for. This assertion is ENUMERATED BUT NOT YET CITABLE with a response signal. A vector author MUST NOT invent a name to make the citation work; that is a register dispute for the gate-1 signer."
+      - ordinal: A3
+        form: When
+        text: "WHEN fewer than the specified threshold of overcurrent events have accumulated and the plant then runs for the full specified reversal window time with no further overcurrent event THEN the accumulated count is cleared, evidenced by a subsequent run of one fewer than the threshold not stopping the plant"
+        normalised_text: "WHEN fewer than the specified threshold of overcurrent events have accumulated and the plant then runs for the full specified reversal window time with no further overcurrent event THEN the accumulated count is cleared, evidenced by a subsequent run of one fewer than the threshold not stopping the plant"
+        id: REQ-028:3e10c1
+        response_signal: DQ1_SHR_RunFwd
+        also_requires_observation_of: "DQ2_SHR_RunRev"
+        bounds_depended_on: "[reversal_count_threshold, reversal_window_time]"
+        split_defect: "*** THE COUNT NEVER CLEARS. *** It is retentive across clean running, so a machine that reverses twice a day trips on its fifth reversal a fortnight later, with no jam present and nothing in the recent history to explain it. A1 and A4 stay true — five rapid events still trip, and a run of close events still accumulates."
+      - ordinal: A4
+        form: When
+        text: "WHEN successive overcurrent events each occur less than the specified reversal window time after the previous one THEN the count continues to accumulate and the plant is stopped on the event that reaches the specified threshold, however long the whole run of events has lasted"
+        normalised_text: "WHEN successive overcurrent events each occur less than the specified reversal window time after the previous one THEN the count continues to accumulate and the plant is stopped on the event that reaches the specified threshold, however long the whole run of events has lasted"
+        id: REQ-028:3f419e
+        response_signal: DQ1_SHR_RunFwd
+        also_requires_observation_of: "DQ2_SHR_RunRev"
+        bounds_depended_on: "[reversal_count_threshold, reversal_window_time]"
+        split_defect: "*** THE DEFECT THIS PROJECT ACTUALLY SHIPPED. *** One fixed 180 s window measured from the FIRST event, so a shredder reversing every 150 s — a genuinely blocked machine — never trips, because events 1 and 5 are ten minutes apart. A1 stays true: five events inside one 180 s window do stop the plant, so a vector exercising only the fast case covers the clause and misses this entirely. The register records it as 'a genuine functional defect', found and fixed 2026-07-17; enumerating it separately is what keeps it findable."
+        provenance: "The owner's B-5 re-arming ruling, quoted in REQ-028's own Text."
+
+  REQ-062:
+    title: "No auto-restart after E-stop recovery"
+    clause_text: "After E-stop recovery (all E-stops reset), the plant does not restart by itself - a fresh start command is required, upon which the start-up procedure runs."
+    instances: []
+    split_reasoning: "Three. A1 the prohibition (nothing runs on recovery alone); A2 the positive (the fresh command runs the start-up procedure FROM THE TOP, per Q-01's 'no mid-sequence resume'); A3 the same prohibition under the power-cycle trigger, which Q-01 and C-128 rule equivalent — R1, a distinct trigger, and a distinct defect (retentive step memory rather than a latched recovery path)."
+    hard_rule_2_note: "*** This clause is register-class `control` and is enumerated at the PLC-VISIBLE HEALTHY FEEDBACK ONLY. The safety function itself is REQ-061, which is not enumerated, described or decomposed anywhere in this artifact. ***"
+    assertions:
+      - ordinal: A1
+        form: Never
+        text: "NEVER any plant equipment run command output is asserted on DI1_SYS_ControlHealthy returning true after an E-stop, until DI3_SYS_CycleStart is pressed again"
+        normalised_text: "NEVER any plant equipment run command output is asserted on DI1_SYS_ControlHealthy returning true after an E-stop, until DI3_SYS_CycleStart is pressed again"
+        id: REQ-062:1fac64
+        response_signal: DQ5_DIS_Run
+        also_requires_observation_of: "DQ2_SHR_RunRev, DQ1_SHR_RunFwd, DQ4_IFC_Run, DI1_SYS_ControlHealthy, DI3_SYS_CycleStart"
+        bounds_depended_on: "[]"
+        split_defect: "The sequence's position survives the loss of the healthy signal and is simply re-enabled on recovery, so resetting the E-stops restarts the plant with nobody's hand on a button — the failure the whole C-128 rule exists to prevent. A2 and A3 stay true."
+      - ordinal: A2
+        form: When
+        text: "WHEN DI3_SYS_CycleStart is pressed after an E-stop recovery THEN the start-up sequence runs from its first step, evidenced by DQ10_SYS_PreStartSounder being asserted for the specified pre-start sounder time before any plant equipment run command output is asserted"
+        normalised_text: "WHEN DI3_SYS_CycleStart is pressed after an E-stop recovery THEN the start-up sequence runs from its first step, evidenced by DQ10_SYS_PreStartSounder being asserted for the specified pre-start sounder time before any plant equipment run command output is asserted"
+        id: REQ-062:605eb7
+        response_signal: DQ10_SYS_PreStartSounder
+        also_requires_observation_of: "DQ5_DIS_Run, DQ2_SHR_RunRev, DQ1_SHR_RunFwd, DQ4_IFC_Run, DI3_SYS_CycleStart"
+        bounds_depended_on: "[pre_start_sounder_time]"
+        split_defect: "*** MID-SEQUENCE RESUME. *** The start command picks the sequence up where it left off, so a plant that was feeding when the E-stop was hit goes straight back to feeding — no siren, no discharge-conveyor confirmation, no reverse-run. A1 stays true: nothing ran until somebody pressed the button. It just ran the wrong thing when they did."
+        provenance: "Q-01, owner ruling 2026-07-17, generalised into doc 06 C-128: 'A fresh, explicit start command always re-runs the FULL start-up sequence from the top; no mid-sequence resume.'"
+      - ordinal: A3
+        form: Never
+        startup: true
+        text: "NEVER any plant equipment run command output is asserted after a PLC power cycle that interrupted a running plant, until DI3_SYS_CycleStart is pressed again"
+        normalised_text: "NEVER any plant equipment run command output is asserted after a PLC power cycle that interrupted a running plant, until DI3_SYS_CycleStart is pressed again"
+        id: REQ-062:8bb4d8
+        response_signal: DQ5_DIS_Run
+        also_requires_observation_of: "DQ2_SHR_RunRev, DQ1_SHR_RunFwd, DQ4_IFC_Run, DI3_SYS_CycleStart"
+        bounds_depended_on: "[]"
+        split_defect: "Retentive sequence state survives the power cycle, so power returning to an unattended plant restarts it. A1 stays true — an E-stop recovery path can be handled correctly while the power-up path is not, because they are different events reaching the same state by different routes."
+        provenance: "Q-01's resolution, recorded in the register: 'a PLC power cycle is treated the same as an E-Stop for this purpose', generalised into doc 06 C-128."
+        startup_note: "Tagged STARTUP as a SCHEDULING attribute per §4.2 — it says WHERE the assertion runs (a disruptive boundary), not which bucket it is in. It is still COVERED or DEFERRED like any other, and STARTUP is not a fifth bucket. §7 open item 1 is unconfirmed; flagged, not resolved here."
+
+  REQ-063:
+    title: "Motor failed to run stops the system"
+    clause_text: "If any motor fails to run after a preset time, the fault sequence occurs and the shredder system stops completely."
+    instances: [DischargeConveyor, ShredderForward, ShredderReverse, InfeedConveyor]
+    instance_rationale: >-
+      R4 — 'if ANY motor fails to run' declares a set, and the enumerator declares it FROM THE CLAUSE
+      TEXT, never from what anybody writes a vector for (attack 8). The four are the motors this
+      sequence commands and whose running feedbacks the register's Physical IO table lists:
+      DQ5_DIS_Run with DI10_DIS_Running, DQ1_SHR_RunFwd with DI5_SHR_RunFwdFB, DQ2_SHR_RunRev with
+      DI6_SHR_RunRevFB, and DQ4_IFC_Run with DI9_IFC_Running. Forward and reverse are separate
+      instances because they are separately commanded and separately confirmed at different points in
+      the sequence, and REQ-057 asks which motor. *** ALL FOUR ARE IN THE DENOMINATOR WHETHER OR NOT
+      ANYTHING EVER CITES THEM. ***
+    instance_deliberately_not_declared: "The pusher power pack (DQ3_PSH_RunPowerPack with DI11_PSH_PowerPackRunning) is a fifth running feedback in the register but its supervision is conditioned by REQ-043 and belongs to the pusher subject. Declared OUT with that destination rather than left ambiguous — AMB-SEQ-06."
+    split_reasoning: "ONE assertion. The clause names two responses, but only one of them is decomposable — see REFUSAL-1 for 'the fault sequence occurs', which is enumerated NOWHERE because the register defines it nowhere."
+    assertions:
+      - ordinal: A1
+        form: When
+        text: "WHEN the motor's run command has been asserted for the specified motor run-confirm time without its running feedback becoming true THEN every plant equipment run command output is de-asserted"
+        normalised_text: "WHEN the motor's run command has been asserted for the specified motor run-confirm time without its running feedback becoming true THEN every plant equipment run command output is de-asserted"
+        id: REQ-063:f94e84
+        response_signal: DQ1_SHR_RunFwd
+        also_requires_observation_of: "DQ5_DIS_Run, DQ2_SHR_RunRev, DQ4_IFC_Run, DI10_DIS_Running, DI5_SHR_RunFwdFB, DI6_SHR_RunRevFB, DI9_IFC_Running"
+        bounds_depended_on: "[motor_run_confirm_time]"
+        bound_kind: "MAXIMUM-ELAPSED-UNTIL, stated in the sentence"
+        split_defect: "Sole assertion of the clause. Its own defect is the sequence waiting forever on a feedback that will never arrive — the plant hangs mid-sequence with some machines running and no fault, which on the DischargeConveyor instance means the shredder is never started, and on the InfeedConveyor instance means the plant runs without ever feeding."
+        bound_unspecified_for_three_of_four_instances: "*** SEE FINDING-3. *** Only DischargeConveyor has a preset in the register (discharge_conveyor_timeout, itself a signed commissioning default rather than a restricted figure). No infeed or shredder run-confirm timeout exists anywhere in the register. Per §1.2a the honest output is that the clause states no bound for those three, and none is invented here."

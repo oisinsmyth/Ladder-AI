@@ -1,0 +1,28 @@
+{
+  "files": [
+    {
+      "filePath": "ir/test-project001/FB_HopperBlockageStim.ir",
+      "name": "FB_HopperBlockageStim",
+      "findings": [
+        {
+          "check": "review:harness-scope",
+          "description": "Harness: FB 9002 is inside the reserved harness band 9000-9999 (declared docs/notes/test-environment-build-plan.md, 2026-08-13). 0 C-001/C-201 finding(s) reported without gating.",
+          "gates": false
+        }
+      ]
+    }
+  ],
+  "indexWarnings": [],
+  "corpus": {
+    "projectDir": "ir/test-project001",
+    "projectFileCount": 50,
+    "batchFileCount": 1,
+    "projectContributedNothing": false,
+    "blockNameCount": 21,
+    "tagRootNameCount": 147,
+    "typeNameCount": 7,
+    "memberBodyCount": 27,
+    "calleeInterfaceCount": 21,
+    "harnessCorpusFileCount": 50
+  }
+}

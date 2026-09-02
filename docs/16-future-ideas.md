@@ -2528,8 +2528,9 @@ a gate rather than as an observation.
 
 ## FI-84 — the readable IR cannot express an INTERLEAVED pair of instruction kinds
 
-**Raised 2026-08-27.** Status: **Raised.** Found while deriving a specification from an implemented
-block — i.e. by reading a real network closely, not by exercising the converter.
+**Raised 2026-08-27.** Status: **NARROWED 2026-09-02 — the headline above is overstated; read the
+correction at the end of this entry before acting on it.** Found while deriving a specification from
+an implemented block — i.e. by reading a real network closely, not by exercising the converter.
 
 `ir/SPEC.md` requires each instruction kind to appear as **one contiguous run**, in a fixed relative
 order between kinds, and states plainly that listed order **is** execution order: *"it mirrors real
@@ -2569,6 +2570,92 @@ kinds it would have to serialise — a loud failure being far better than a sile
 is cheaper and is the house style; the first is what ADR-0010 actually asks for, since a construct
 the AI cannot express is a block the AI can never safely regenerate.
 
+### 🔴 CORRECTION, 2026-09-02 — the pairing IS expressible, and IS machine-verified
+
+Recorded rather than rewritten: the entry above stood for six days and was cited to scope other
+work, so what it got wrong matters as much as what it got right.
+
+**"The readable IR cannot express interleaved instruction kinds" is FALSE as written.** `ir/SPEC.md`
+carries a dedicated section — *"Index-paired `MUL`/`CONVERT` batches (the 'HMI Times' idiom)"* — which
+states the disambiguating rule outright: pairing is **by index within each kind's run**, so the *i*-th
+`CONVERT`'s `EN := ENO` is gated by the *i*-th `MUL`, **not** by the textually preceding line. That
+section landed in `ea70afa` on **2026-07-16 — six weeks BEFORE this finding was raised.** The global
+"listed order *is* execution order" sentence quoted above is locally overridden here, and the local
+rule governs.
+
+**The pairing is also verified, not merely documented.** Checked on `FB_PusherControl` NETWORK 3, the
+concrete case this entry describes:
+
+- The sidecar derived from the committed TIA export wires `mul[i].eno → convert[i].en` for all seven
+  branches, each MUL fed independently from the rail — no MUL chains from another.
+- That block is stored **sidecar-less**, and `converter to-ir --no-sidecar` refuses unless the derived
+  form is proven semantically equivalent to the export. So index-pairing was verified **by the tool at
+  store time** for this block, not assumed by a reader.
+- `SidecarSynthesizerFidelityTests.TwoIndependentMulConvertChainsInterleaved_SynthesizedSidecar_PreservesLogic`
+  is the regression fixture, described in-source as the one that would catch a regression back to
+  batching.
+
+**Consequence for readers and vector authors: the concern does not apply.** All seven of that
+network's presets are determinable from the readable IR — 500 / 5000 / 60000 / 2000 / 30000 / 1000 /
+5000 ms. Withholding timing assertions on this ground would be over-caution against a question that
+has been answered. A trap worth naming: `PumpRunOnTime × 1000 = 5000 ms` is index 6, the LAST `MUL`,
+so the naive misreading and the truth **coincide for exactly that one preset** — which is what makes
+the wrong reading feel confirmed when spot-checked.
+
+**What survives, and is still worth keeping this entry for:**
+
+1. **The disambiguating rule is positional and unenforced at read time.** Nothing in `to-ir` refuses
+   or flags a hypothetically crossed wiring; the readable text would look identical.
+2. **SPEC's global statement locally misleads** any reader who does not reach the override — which is
+   exactly how this finding was raised in the first place, by a careful reader.
+3. **Depth-first branch execution remains unmeasured on a controller.** The seven branches share one
+   TEMP, so correctness needs each branch to complete before the next MUL overwrites it. Note its
+   shape: if that is false the block is **already broken in service**, so no choice of reading
+   rescues a vector.
+4. 🔴 **THE REVISIT TRIGGER STILL BINDS FOR WRITES.** Reads and vector authoring are clear. Reordering,
+   re-rendering or regenerating such a network is NOT — the index convention is precisely what a
+   reorder would silently break, with no compile error.
+
 **Verdict / revisit trigger:** Open. 🔴 **Revisit BEFORE any tool regenerates, re-renders or
 round-trips a network containing more than one instruction kind** — that is the operation this makes
 unsafe, and it is an operation the pipeline performs routinely.
+
+---
+
+## FI-85 — `converter diff --insert` silently keeps only the LAST value when repeated
+
+**Raised 2026-09-02.** Status: **Raised.** Found by a lane proving invariance on a multi-point
+insertion into `Main`, not by exercising the converter deliberately.
+
+A revision that inserts networks at three positions is a normal shape: an OB gaining an arbiter at
+network 1 and two stimulus heads at 3 and 4. The natural invocation is
+
+```
+converter diff --only 1 --only 3 --only 4 --insert 1 --insert 3 --insert 4
+```
+
+`--only` accumulates. **`--insert` does not** — it overwrites, so the run reported
+`declaredInsertAt: 4`, `movesAreDeclared: false` and **twelve** `invarianceViolations`, every one of
+them an artefact of the two undeclared insertions renumbering everything below them.
+
+🔴 **THE DANGEROUS HALF IS THE RENDERING, NOT THE ARITHMETIC.** The text-mode summary for that exact
+invocation **reads like a pass.** Only the exit code and the `--json` fields say otherwise. This is
+the project's standing "a warning is not a gate" failure shape, and it is worse here than usual
+because the tool is being used specifically to PROVE something: an agent reaching for `diff --insert`
+has already decided the run is its evidence, so a summary that looks green is exactly the thing it
+will paste into an `evidence.json`.
+
+**The workaround used, and it is sound but expensive:** prove invariance as a CHAIN of single-point
+insertions, each hop declaring one `--insert`, with every stage emitted by the same generator from
+the same call list rather than hand-built, and the final hop's "new" side being the committed
+deliverable rather than a staging copy. Three insertions cost three gated runs plus two staging
+artifacts. It also leaves OB-shaped files named `Main` lying in a scratch tree, which is its own
+small hazard if a `--program` glob ever reaches them.
+
+**Fix shape, not yet chosen:** either `--insert` accumulates like `--only` (the obvious repair, and
+what every caller already expects), or a repeated `--insert` is a hard REFUSAL naming the collision —
+the house style, and better than silently honouring one of them. Either way the text summary must
+not render a violation-bearing run as a pass.
+
+**Verdict / revisit trigger:** Open. Revisit before the next multi-point insertion is gated —
+realistically the merged multi-slot `Main`, which is exactly this shape again.

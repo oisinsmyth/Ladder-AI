@@ -1,0 +1,34 @@
+evidence                       : agent-tasks/pusher-slot/evidence.json
+task                           : Build the MECHANISM for a second conformance slot (PSH) in test-project001 with FB_PusherControl as the block under test: a stimulus head, its type and instance, the OB call that reaches it, and a harness binding at gen/test-project001/pusher-control/harness-binding.json. No vectors, no enumeration, no Portal, no rig, no socket. REVISED on the coordinator's mid-task instruction: the pass-through idiom now covers ALL EIGHT of the head's DB_Input.Test[] writes, not the two that collided with the deployed hopper head, so an idle head is transparent to every index a neighbouring slot needs - the shredder lane measured that a clobbered Test[15] leaves its sequencer unable to leave step 0 at all. SECOND REVISION: Main regenerated with the full call order - FC_HarnessStimArbiter first, then the three stimulus heads, then the input map - so the arbiter's per-scan release lands ahead of every head and FB_ShredderSequencerStim, which was committed and called from nowhere, now runs. THIRD REVISION, on a blind reviewer's C-608 finding: the header this lane wrote claimed the three heads are unordered among themselves, and that was FALSE - FB_HopperBlockageStim drives test members 5, 6 and 8 and the reset line low throughout a trailing cleardown whose own condition is NOT Running, so it asserts while reading as idle. The header now states that the ordering IS load-bearing and why, the dropped ObCallOrder is restored in its true narrow form (hopper before each of the other two; the other two free against each other), and the same false claim is removed from networks 20 and 21 of FB_PusherStim. Its reset rung also now states its Running guard explicitly rather than inheriting it through three networks - behaviour-identical, locally readable.
+kind                           : modify
+skill                          : manual run
+files touched                  : 4
+hashes recomputed here         : 2
+no hash (DB/UDT/tag table)     : 2
+gates recorded                 : 7
+claims declared                : 4
+claims confirmed in store      : 4
+claims joined to files on disk : 4 of 4 joinable
+claim kinds NOT joinable       : none
+edited blocks covered by claim : 4 of 3 that carry a NUMBER
+claims store root              : C:\ProgramData\Ladder-AI\claims
+store consulted / holds        : C:\ProgramData\Ladder-AI\claims\test-project001 / 11
+deferred (declared, not run)   : 1
+transient (ran, superseded)    : 0
+PROBLEMS                       : 0
+
+--- listed without a hash, and correctly so (ir-hash keys code blocks) ---
+  ir/test-project001/UDT_PusherStim.ir (TYPE)
+  ir/test-project001/iDB_PusherStim.ir (DB)
+
+--- DEFERRED, declared rather than missing ---
+  openness-cli sanity-check
+      THE DISPATCH FORBADE IT, IN THOSE WORDS: no import, no compile, no openness-cli of any kind, no harness-run, no download - the dispatcher serialises all Portal and rig work itself, because two Openness sessions on one project is unsupported and MB_SERVER accepts one connection. This lane's contract ends at authored IR plus a clean preflight. NOTHING HERE HAS BEEN COMPILED. Preflight is a static filter in front of the compile gate and is not a substitute for it (hard rule 4), so this evidence file is correctly NOT a pass: the gate is named, and named as not run, rather than left out.
+
+This is NOT a pass. A deferred gate is one that did not run, and the run is
+incomplete until it does. What the declaration buys is that this report names
+WHICH gate and WHY, instead of reading identically to one quietly left out.
+
+VERIFIED: every recorded gate passed and every hash still matches.
+This says the gates ran and the files are what the agent said they were.
+It says NOTHING about whether the logic is correct - that is the review.

@@ -1,0 +1,318 @@
+{
+  "_README": [
+    "THE SPEC-DERIVED ASSERTION ENUMERATION - the pusher. This is the coverage DENOMINATOR.",
+    "*** UNSTAMPED. EVERY assertion carries `normalisedText` and NO `id`, per assertion-enumeration.md 3.4. ***",
+    "The enumerator is denied Bash deliberately - the fence that keeps the implementation out of a spec-side",
+    "denominator also removes every way to compute a SHA-256. Hand-written hex is exactly what gate 3g",
+    "(IdsRecompute) exists to catch, so none was written. *** NO VECTOR MAY CITE THIS FILE AS IT STANDS. ***",
+    "STAMP `assertion-enumeration.yaml` IN THIS DIRECTORY, NOT THIS FILE. EnumerationStamper is line-oriented",
+    "over that YAML shape and refuses anything else; this JSON is the projection and the findings, not the",
+    "stamper's input. Once stamped, rekey `forms`, `normalisedTexts`, `requiredObservations` and",
+    "`assertionBounds` from ordinals to REQ-nnn:<hash> and fill `gateProjection.assertions`.",
+    "A citation in the display-ordinal form (REQ-046.A3) is REJECTED BY SHAPE - the ordinals below are display only."
+  ],
+
+  "enumerator": "assertion-enumerator",
+  "enumeratorVocabulary": "ROLE form (test-environment-contract.md 1.1). No session id was available and an instance identity is DERIVED, never invented. Against a counterparty stamped `<session-id>/<agent-type>` gate 3d returns NotComparable -> NOT CHECKED, which is never a pass. The repair is the coordinator's: stamp both sides in one vocabulary. An agent never writes the `owner:` form and none was written.",
+  "blockAuthor": "UNKNOWN - not disclosed to me. I therefore could not myself perform the refusal check 'the enumerator is the block's author'. I assert only that I am a fresh context that read no implementation artifact; the comparison is the gate's and the coordinator's.",
+  "vectorAuthor": "UNKNOWN - none exists yet. This enumeration precedes every vector, which is the point.",
+  "issue": 1,
+  "enumerated": "2026-09-02",
+  "register": "gen/test-project001/requirements.md",
+  "registerClauseIdsStable": true,
+  "registerClauseIdForm": "### REQ-nnn - <title>. The register states IDs are 'stable forever, never renumbered, never reused'. 3.2's precondition is SATISFIED, so a number is an available output.",
+  "sourceOfTruth": "gen/test-project001/pusher-control/assertion-enumeration.yaml",
+
+  "subject": "pusher",
+  "subjectLong": "The pusher control function of test-project001 - the hydraulic power pack, the extend and retract solenoids, the parked and end-travel limit switches, the high-pressure switch, the pusher cycle and its modes, hand jog, the engineering pusher enable, and the four pusher-specific faults.",
+  "subjectDeterminedFrom": "THE REGISTER'S OWN SECTION HEADINGS AND CLAUSE TEXT, NOT FROM ANY ARCHITECTURE ARTIFACT: 'Shredder pusher' (REQ-030..044), 'Pusher sequence' (REQ-045..051), 'Pusher faults' (REQ-052..055), plus REQ-025 whose own Text names the pusher as the responder. No block name defines the subject and none appears in any assertion text.",
+  "subjectIsNot": "NOT the denominator for the plant start sequence, the stop sequence, the hopper high-level control of the infeed, the overcurrent detection chain, the display/HMI layer, or the in-cycle lamp. A coverage figure for any of those measured here answers a different question (1.4's measured failure).",
+
+  "filesRead": [
+    "CLAUDE.md",
+    "docs/notes/assertion-enumeration.md",
+    "docs/notes/test-environment-contract.md (1, 1.1, 2.4, 3 - not the whole file)",
+    ".claude/skills/enumerate-assertions/SKILL.md",
+    "src/harness/Harness.Gate/SubmissionDocument.cs",
+    "src/harness/Harness.Results/SubmissionGate.cs (grep only, gate names)",
+    "src/harness/Harness.Results/EnumerationStamper.cs",
+    "gen/test-project001/hopper-blockage-alarm/assertion-enumeration.yaml (FORMAT REFERENCE ONLY)",
+    "gen/test-project001/requirements.md (THE SOURCE)"
+  ],
+  "filesNotRead": [
+    "ir/** - including FB_PusherControl.ir, UDT_PusherIO.ir, iDB_PusherControl.ir and every export of them",
+    "patterns/**",
+    "gen/test-project001/architecture.md",
+    "gen/test-project001/code-structure.md",
+    "gen/test-project001/equipment-specs/**",
+    "simatic-ml/**"
+  ],
+  "refusalRecorded": "MY DISPATCH OFFERED gen/test-project001/architecture.md 'for context on where the block sits'. I DID NOT OPEN IT - the agent brief constituting this role forbids it by name and no dispatching message widens it. Recorded rather than quietly declined, because a denominator's independence is only as good as a reader's ability to check what its author read. Nothing here rests on knowing where the block sits.",
+  "r5SelfCheck": "PASS. Scanned all 44 texts: no rung number, no operator, no absolute address, no block name, no internal tag, no interface member. Texts are in the SPECIFICATION's vocabulary ('the extend solenoid output', 'the parked limit switch'); the register's own equipment-inventory tag names appear only in responseSignal and requiredObservations, which is where a vector needs them and where R5 does not reach.",
+  "hardRule2": "No F-block, F-runtime group or safety-instrumented function is enumerated, described or decomposed here. REQ-061 (E-stop, hardwired) is named as out of subject and nothing more. Every NEVER below is an ordinary control interlock.",
+
+  "denominator": {
+    "clausesInSubject": 27,
+    "clausesYieldingAssertions": 25,
+    "clausesNotDecomposable": 2,
+    "assertions": 44,
+    "declaredInstancesPerClause": 1,
+    "coverageUnits": 44
+  },
+
+  "instanceDeclaration": {
+    "scope": "class-level for every clause (instances: [])",
+    "rationale": "No clause text names a set, and the register's equipment inventory carries exactly one pusher - one power pack, one extend solenoid, one retract solenoid, one parked switch, one end-travel switch, one pressure switch. A single instance is the whole set, so instance shrinkage (attack 8) has no surface here.",
+    "standingCondition": "IF A SECOND PUSHER IS EVER PLACED, THIS DECLARATION IS WRONG AND MUST BE RE-DECLARED BY AN ENUMERATOR. A citation naming an undeclared instance is a FINDING (R4), never a new unit."
+  },
+
+  "bounds": {
+    "pressure_trip_confirm_time": "0.5 s",
+    "pressure_clear_resume_delay": "5 s",
+    "pressure_trip_count_threshold": "5 trips within one pusher cycle",
+    "end_travel_hold_time": "approximately 2 s",
+    "jog_warning_time": "1 s",
+    "pusher_end_travel_timeout": "60 s",
+    "pusher_parked_timeout": "30 s",
+    "pump_run_on_time": "5 s"
+  },
+  "boundKinds": {
+    "pressure_trip_confirm_time": "MINIMUM PERSISTENCE - the condition must hold continuously for at least this long before the response is owed. SPEC-STATED.",
+    "pressure_clear_resume_delay": "MINIMUM DELAY between the clearing event and the resume. SPEC-STATED.",
+    "pressure_trip_count_threshold": "COUNT within a scope, not a duration. The scope ('the same cycle') is the load-bearing half. SPEC-STATED.",
+    "end_travel_hold_time": "MINIMUM DWELL before the retract stroke begins. SPEC-STATED BUT APPROXIMATE - see AMB-PSH-05.",
+    "jog_warning_time": "MINIMUM LEAD TIME between the warning starting and movement being permitted. SPEC-STATED.",
+    "pusher_end_travel_timeout": "MAXIMUM ELAPSED DRIVE TIME before the fault is owed. *** NO SPEC NUMBER *** - 60 s is a Q-02 commissioning default, owner sign-off 2026-07-16.",
+    "pusher_parked_timeout": "MAXIMUM ELAPSED DRIVE TIME. *** NO SPEC NUMBER *** - Q-02, 2026-07-16.",
+    "pump_run_on_time": "*** NO SPEC NUMBER *** - Q-02, 2026-07-16. NO ASSERTION DEPENDS ON IT: REQ-031's clause states no duration and 1.2a forbids importing one the specification does not state. Listed only so the table is complete."
+  },
+  "boundsWarning": "THREE OF EIGHT BOUNDS REST ENTIRELY ON A Q-02 COMMISSIONING SIGN-OFF, NOT ON EITHER SOURCE DOCUMENT. That is a legitimate spec-side provenance (a recorded owner decision) and explicitly NOT a number derived from the test apparatus, which 1.2a forbids. Recorded because retuning any of them changes REQ-054's and REQ-055's truth conditions while moving zero IDs - AMB-19, caught by gate 3i.",
+
+  "decompositionJudgements": [
+    {
+      "id": "J1",
+      "rule": "SPLIT ON DIRECTION ONLY WHERE THE CLAUSE ITSELF NAMES BOTH DIRECTIONS.",
+      "why": "Extend and retract are two distinct observable outputs, so R2 would license splitting every pusher clause in two and an asymmetric defect is nameable for nearly all of them - which is attack 2 wearing a rule as a costume. The line drawn is spec-derived: REQ-030 says 'the extend or retract solenoids' and REQ-038 says 'a jog button for each direction', so those split; REQ-039, REQ-040 and REQ-043 speak generically, so those do not. An asymmetric defect still falsifies the single generic assertion - nothing is lost from the denominator, only from its size.",
+      "appliedTo": ["REQ-030 split", "REQ-038 split", "REQ-039 not split", "REQ-040 not split", "REQ-043 not split"]
+    },
+    {
+      "id": "J2",
+      "rule": "A LOWER-BOUND ASSERTION IS WRITTEN WHEREVER A CLAUSE STATES A DELAY, DWELL OR TIMEOUT.",
+      "why": "R3 says a bound qualifies a response rather than splitting it, and that is right where the only defect is the number being wrong. It is not right where the response can arrive EARLY: an arrival or WITHIN assertion is satisfied MORE easily by an under-scaled preset, not less. The hopper enumeration hit this exactly at its issue 5 (REQ-HBA-002 A3) and it took a vector author to find it. This is the single largest contributor to the count of 44 and it is a judgement.",
+      "appliedTo": ["REQ-032 A3", "REQ-041 A2", "REQ-046 A3", "REQ-047 A2", "REQ-048 A3", "REQ-054 A2", "REQ-055 A2"]
+    },
+    {
+      "id": "J3",
+      "rule": "A CLAUSE THAT DECLARES A VOCABULARY RATHER THAN A BEHAVIOUR YIELDS NO ASSERTION.",
+      "why": "REQ-033 and REQ-053 state no observable consequence not already stated by a sibling. Manufacturing one would be inventing a reading. Both are named under notDecomposable with destinations, because 1.4's measured failure is a clause QUOTED in the file that produced no assertion and read as covered."
+    },
+    {
+      "id": "J4",
+      "rule": "AN ANNUNCIATION CLAUSE IS MINED FOR ITS RAISE LIMB; ITS DISPLAY LIMB IS OUT OF SUBJECT.",
+      "why": "'annunciated on the display' is an obligation on the HMI layer. Every such limb is recorded as partially mined with a named destination - and that destination DOES NOT EXIST, so it reads as the gap it is rather than as a tidy exclusion. NOTHING IS EXCLUDED TO NOWHERE WITHOUT SAYING SO."
+    }
+  ],
+
+  "notDecomposable": [
+    {
+      "clause": "REQ-033",
+      "title": "Three pusher modes",
+      "clauseText": "The pusher has three modes of operation: off, automatic, manual.",
+      "why": "A DECLARATION OF VOCABULARY, NOT A STATEMENT ABOUT OBSERVABLE BEHAVIOUR. Nothing here can be falsified by an implementation defect on its own; the observable content of each mode is stated by REQ-034, REQ-035, REQ-036 and REQ-037, all enumerated. Two readings were considered and both refused as invention: an exclusivity claim ('in exactly one mode at a time'), which the clause does not state; and a completeness claim ('no fourth mode'), on which Q-15 has already ruled by making hand/jog a facility within manual.",
+      "destinations": ["REQ-034", "REQ-035", "REQ-036", "REQ-037", "REQ-038"],
+      "destinationStatus": "ALL ENUMERATED IN THIS ARTIFACT",
+      "whatWouldChangeIt": "A ruling that mode selection is exclusive, or that an out-of-range mode value has a defined behaviour. Either yields assertions; neither is stated today."
+    },
+    {
+      "clause": "REQ-053",
+      "title": "Fault: pusher blocked",
+      "clauseText": "Too many pusher high pressures in one cycle (pusher blocked) is a fault, annunciated on the display.",
+      "why": "Both limbs live elsewhere. The RAISE limb is REQ-048's own Text and is enumerated as REQ-048 A2 and A3; restating it here would put two assertions with one shared defect into the denominator - inflation with no new falsifiable claim. The DISPLAY limb is out of subject.",
+      "destinations": {
+        "raiseLimb": "REQ-048 A2 / A3 - IN THIS ARTIFACT, ENUMERATED",
+        "displayLimb": "an HMI / text-display enumeration - *** DOES NOT EXIST. THIS IS A GAP, NOT AN EXCLUSION. ***"
+      }
+    }
+  ],
+
+  "partiallyMined": [
+    { "clause": "REQ-043", "limb": "'and does not look for pusher switch feedback'", "treatment": "no separate assertion - its only observable consequence is the absence of pusher faults", "destination": "REQ-044 A1", "destinationStatus": "IN THIS ARTIFACT, ENUMERATED" },
+    { "clause": "REQ-044", "limb": "'or visible on the screen'", "destination": "an HMI / text-display enumeration", "destinationStatus": "*** DOES NOT EXIST - A GAP ***" },
+    { "clause": "REQ-052", "limb": "'annunciated on the display'", "destination": "an HMI / text-display enumeration", "destinationStatus": "*** DOES NOT EXIST - A GAP ***" },
+    { "clause": "REQ-054", "limb": "'annunciated on the display'", "destination": "an HMI / text-display enumeration", "destinationStatus": "*** DOES NOT EXIST - A GAP ***" }
+  ],
+
+  "consideredAndOutOfSubject": [
+    { "clause": "REQ-012", "finding": "THE PUSHER IS EQUIPMENT, SO THIS CLAUSE CARRIES A PUSHER OBLIGATION - AND IT IS NOT ENUMERABLE AS WRITTEN. 'Stops' has no defined meaning for a hydraulic ram mid-stroke: drop both solenoids and leave it (REQ-039's jog semantics) or retract to parked (REQ-037's off semantics)? Opposite implementations; the clause chooses neither. NOT turned into a vague assertion. See AMB-PSH-03." },
+    { "clause": "REQ-013", "finding": "Identical to REQ-012. AMB-PSH-03." },
+    { "clause": "REQ-014", "finding": "Checked deliberately because it is the 1.4 shape: REQ-014's SOURCE quote carries 'stop infeed conveyor and perform 1 cycle of the pusher' while its TEXT carries only the infeed limb. The dropped pusher limb SURVIVES at REQ-034, which is enumerated, so nothing is lost. Recorded so a later reader need not re-derive it." },
+    { "clause": "REQ-061", "finding": "E-stop, hardwired safety circuit, register class out-of-scope. NOT ENUMERATED, NOT DESCRIBED, NOT DECOMPOSED - CLAUDE.md hard rule 2." },
+    { "clause": "REQ-062", "finding": "No auto-restart after E-stop recovery. Plant-level, states no pusher-specific obligation. Destination: a plant-sequence enumeration, which does not exist." },
+    { "clause": "REQ-063", "finding": "Motor failed to run stops the shredder system. Plant-level. Same destination, same status." },
+    { "clause": "REQ-069", "finding": "The in-cycle lamp reads the pusher power-pack running feedback, but the obligation is on the lamp. Out of subject. Destination: an HMI/indication enumeration, which does not exist." }
+  ],
+
+  "clauses": {
+    "REQ-025": { "title": "Overcurrent parks the pusher", "instances": [], "assertions": [
+      { "ordinal": "A1", "form": "When", "normalisedText": "WHEN an overcurrent event occurs THEN the pusher returns to the parked position", "responseSignal": "DI12_PSH_HomeLimit", "requiredObservations": ["DI12_PSH_HomeLimit", "DQ7_PSH_Retract"], "boundsDependedOn": [], "splitDefect": "Sole assertion. Its own defect is an overcurrent response that stops the shredder and the infeed and leaves the ram wherever it stood, extended into the chamber the machine is trying to clear." }
+    ]},
+    "REQ-030": { "title": "Power pack before and during movement", "instances": [], "noteOnTheTwoAdverbs": "'prior to' and 'during' are not split - one continuous prohibition is falsified by an early energise AND by a mid-stroke pump loss, so no defect isolates one adverb.", "assertions": [
+      { "ordinal": "A1", "form": "Never", "normalisedText": "NEVER the extend solenoid output is energised while the hydraulic power pack is not running", "responseSignal": "DQ6_PSH_Extend", "requiredObservations": ["DQ6_PSH_Extend", "DI11_PSH_PowerPackRunning"], "boundsDependedOn": [], "splitDefect": "The power-pack interlock is applied to the retract path only, so an extend command drives the solenoid against a dead pump. A2 stays true. J1 - the clause names both directions." },
+      { "ordinal": "A2", "form": "Never", "normalisedText": "NEVER the retract solenoid output is energised while the hydraulic power pack is not running", "responseSignal": "DQ7_PSH_Retract", "requiredObservations": ["DQ7_PSH_Retract", "DI11_PSH_PowerPackRunning"], "boundsDependedOn": [], "splitDefect": "The interlock is applied to the extend path only, so the ram cannot be brought home against a dead pump. A1 stays true." }
+    ]},
+    "REQ-031": { "title": "Power pack run-on", "instances": [], "assertions": [
+      { "ordinal": "A1", "form": "When", "normalisedText": "WHEN the pusher transitions from the push stroke to the retract stroke THEN the power pack run command remains continuously asserted across the transition", "responseSignal": "DQ3_PSH_RunPowerPack", "requiredObservations": ["DQ3_PSH_RunPowerPack", "DQ6_PSH_Extend", "DQ7_PSH_Retract"], "boundsDependedOn": [], "boundsNote": "POSITIVE EMPTY CLAIM - the clause states no run-on duration and the 5 s default has no source-document number (Q-02), so none is imported (1.2a).", "splitDefect": "Sole assertion. Its own defect is a pump command derived from whichever solenoid is active, so it drops for the gap between de-energising extend and energising retract and the hydraulic motor stalls mid-cycle." }
+    ]},
+    "REQ-032": { "title": "Pusher cycle definition", "instances": [], "assertions": [
+      { "ordinal": "A1", "form": "When", "normalisedText": "WHEN a pusher cycle is initiated with the pusher at the parked position THEN the extend solenoid output is energised", "responseSignal": "DQ6_PSH_Extend", "requiredObservations": ["DQ6_PSH_Extend", "DI12_PSH_HomeLimit"], "boundsDependedOn": [], "splitDefect": "No stroke is produced on a cycle trigger, or the retract solenoid is driven instead. A2, A3, A4 stay true - each is conditioned on a stroke that has already happened." },
+      { "ordinal": "A2", "form": "When", "normalisedText": "WHEN the pusher reaches the end-travel limit during a cycle THEN the retract stroke subsequently begins", "responseSignal": "DQ7_PSH_Retract", "requiredObservations": ["DQ7_PSH_Retract", "DI13_PSH_FullTravelLimit"], "boundsDependedOn": [], "splitDefect": "The cycle stalls at end travel and the retract stroke never begins, leaving the ram fully extended. A3 stays true - a ram that never retracts has trivially not retracted early." },
+      { "ordinal": "A3", "form": "When", "normalisedText": "WHEN the pusher reaches the end-travel limit during a cycle THEN the retract stroke does not begin until at least the specified end-travel hold time has elapsed since the end-travel limit was reached", "responseSignal": "DQ7_PSH_Retract", "requiredObservations": ["DQ7_PSH_Retract", "DI13_PSH_FullTravelLimit"], "boundsDependedOn": ["end_travel_hold_time"], "splitDefect": "The dwell is absent or the preset under-scaled, so the ram reverses the instant it reaches end travel and the pause that lets the load fall into the shredder never happens. A2 stays true - it did retract. J2: AN ARRIVAL ASSERTION CANNOT CATCH AN UNDER-SCALED PRESET; IT IS SATISFIED MORE EASILY BY ONE." },
+      { "ordinal": "A4", "form": "When", "normalisedText": "WHEN the pusher reaches the parked limit on the retract stroke THEN the retract solenoid output is de-energised", "responseSignal": "DQ7_PSH_Retract", "requiredObservations": ["DQ7_PSH_Retract", "DI12_PSH_HomeLimit"], "boundsDependedOn": [], "splitDefect": "The retract drive is not removed at the parked limit, so the ram is held hard against its home stop at full hydraulic pressure for as long as the logic is left there. A1, A2, A3 stay true." }
+    ]},
+    "REQ-034": { "title": "Auto mode: cycle on hopper high", "instances": [], "assertions": [
+      { "ordinal": "A1", "form": "When", "normalisedText": "WHEN the hopper high-level input becomes true while the pusher mode is automatic THEN a pusher cycle is performed", "responseSignal": "DQ6_PSH_Extend", "requiredObservations": ["DQ6_PSH_Extend", "DI8_HPR_LevelHigh", "DB_Controls.PusherMode"], "boundsDependedOn": [], "splitDefect": "Sole assertion. Its own defect is a hopper-high that stops the infeed and never initiates a pusher cycle, so the blockage the pusher exists to clear is never cleared mechanically. Nothing here constrains REPETITION (AMB-PSH-06) or the other modes (AMB-PSH-04)." }
+    ]},
+    "REQ-035": { "title": "Manual mode: HMI cycle button", "instances": [], "assertions": [
+      { "ordinal": "A1", "form": "When", "normalisedText": "WHEN the HMI manual cycle command is asserted while the pusher mode is manual THEN a pusher cycle is performed", "responseSignal": "DQ6_PSH_Extend", "requiredObservations": ["DQ6_PSH_Extend", "DB_Controls.PusherManualCycleCmd", "DB_Controls.PusherMode"], "boundsDependedOn": [], "splitDefect": "Sole assertion. Its own defect is a manual cycle command not read, or read only while the plant sequence is running, so the operator cannot exercise the ram on a stopped machine." }
+    ]},
+    "REQ-036": { "title": "Manual mode: remote pushbutton", "instances": [], "triggerSignalStatus": "*** PROPOSED - NO TAG EXISTS. *** The register names no digital input for a remote pusher cycle button; DI16_PSH_LocalRemote is a selector with undefined semantics (Q-03, open). Enumerated regardless - see AMB-PSH-13.", "assertions": [
+      { "ordinal": "A1", "form": "When", "normalisedText": "WHEN the remote pusher cycle pushbutton input is asserted while the pusher mode is manual THEN a pusher cycle is performed", "responseSignal": "DQ6_PSH_Extend", "requiredObservations": ["DQ6_PSH_Extend", "the remote pusher cycle pushbutton input (NO TAG EXISTS)", "DB_Controls.PusherMode"], "boundsDependedOn": [], "splitDefect": "Sole assertion. Its own defect is that only the HMI trigger is implemented and the remote button does nothing - which REQ-035's assertion cannot detect, because it drives the other trigger." }
+    ]},
+    "REQ-037": { "title": "Off mode: retract to home", "instances": [], "rulingApplied": "Q-16, owner ruling recorded 2026-07-16, which NARROWS this clause: mid-cycle Off still retracts and parks; an idle ram off home no longer self-parks on selecting Off. Both assertions are written against the clause AS NARROWED, and that narrowing is the register's own, not mine.", "assertions": [
+      { "ordinal": "A1", "form": "When", "normalisedText": "WHEN the pusher mode is selected off while a pusher cycle is in progress THEN the pusher retracts to the parked position", "responseSignal": "DQ7_PSH_Retract", "requiredObservations": ["DQ7_PSH_Retract", "DI12_PSH_HomeLimit", "DB_Controls.PusherMode"], "boundsDependedOn": [], "splitDefect": "Selecting off is latched until the cycle finishes, so the ram completes a full extend-hold-retract after the operator has switched the pusher off. A2 stays true." },
+      { "ordinal": "A2", "form": "Never", "normalisedText": "NEVER the pusher moves in response to the selection of off mode while it is idle and away from the parked position", "responseSignal": "DQ7_PSH_Retract", "requiredObservations": ["DQ7_PSH_Retract", "DQ6_PSH_Extend", "DI12_PSH_HomeLimit", "DB_Controls.PusherMode"], "boundsDependedOn": [], "splitDefect": "An idle ram left off home self-parks the moment off is selected - an unwarned hydraulic movement with nobody expecting it, which is what Q-16's ruling removed. A1 stays true; the mid-cycle case is a different trigger." }
+    ]},
+    "REQ-038": { "title": "Hand control: jog per direction", "instances": [], "rulingApplied": "Q-15, owner ruling 2026-07-17 - 'Hand = Manual, this is true always'. Hand jog is a facility WITHIN manual mode, not a fourth mode, so both triggers are scoped to manual.", "assertions": [
+      { "ordinal": "A1", "form": "When", "normalisedText": "WHEN the jog-extend command is asserted while the pusher mode is manual THEN the pusher moves in the extend direction", "responseSignal": "DQ6_PSH_Extend", "requiredObservations": ["DQ6_PSH_Extend", "DB_Controls.PusherJogExtendCmd", "DB_Controls.PusherMode"], "boundsDependedOn": [], "splitDefect": "Only one jog direction is implemented, or the two are transposed, so the extend button does nothing while the retract button works. A2 stays true. J1 - the clause names a button for EACH direction." },
+      { "ordinal": "A2", "form": "When", "normalisedText": "WHEN the jog-retract command is asserted while the pusher mode is manual THEN the pusher moves in the retract direction", "responseSignal": "DQ7_PSH_Retract", "requiredObservations": ["DQ7_PSH_Retract", "DB_Controls.PusherJogRetractCmd", "DB_Controls.PusherMode"], "boundsDependedOn": [], "splitDefect": "Only the extend jog is implemented, so a commissioning engineer can drive the ram out by hand and not back. A1 stays true." }
+    ]},
+    "REQ-039": { "title": "Jog is hold-to-move", "instances": [], "noteOnGrain": "One assertion, not two per direction, per J1 - the clause speaks of 'the jog button' generically. An asymmetric latch on one direction still falsifies it.", "assertions": [
+      { "ordinal": "A1", "form": "Never", "normalisedText": "NEVER the pusher continues to move under jog after the jog command that started the movement has been released", "responseSignal": "DQ6_PSH_Extend", "requiredObservations": ["DQ6_PSH_Extend", "DQ7_PSH_Retract", "DB_Controls.PusherJogExtendCmd", "DB_Controls.PusherJogRetractCmd"], "boundsDependedOn": [], "splitDefect": "Sole assertion, catching two defects nothing else does: a LATCHED jog, where one press runs the ram to the limit and the operator cannot stop it part way; and an automatic return to parked on release, which is movement after release and is what 'stops WHERE IT IS' forbids." }
+    ]},
+    "REQ-040": { "title": "Jog independent of shredder", "instances": [], "noteOnGrain": "One assertion per J1 - the clause speaks of 'hand jogging' generically and asserts the ABSENCE of an interlock, not a per-direction behaviour.", "assertions": [
+      { "ordinal": "A1", "form": "When", "normalisedText": "WHEN a jog command is asserted while the shredder is not running THEN the pusher moves in the commanded direction", "responseSignal": "DQ6_PSH_Extend", "requiredObservations": ["DQ6_PSH_Extend", "DQ7_PSH_Retract", "DI5_SHR_RunFwdFB", "DI6_SHR_RunRevFB"], "boundsDependedOn": [], "splitDefect": "Sole assertion. Its own defect is a jog interlocked on the shredder running, so the ram cannot be exercised on a stopped machine - the one case the hand control was asked for." }
+    ]},
+    "REQ-041": { "title": "Jog pre-start warning", "instances": [], "sharedOutputWarning": "The sounder is also REQ-003's 10 s plant pre-start output. A vector observing the sounder ALONE cannot attribute it to this clause - AMB-PSH-08. Every assertion here carries the jog command as a co-observation.", "assertions": [
+      { "ordinal": "A1", "form": "When", "normalisedText": "WHEN a jog command is asserted with the pusher at rest THEN the pre-start sounder is energised", "responseSignal": "DQ10_SYS_PreStartSounder", "requiredObservations": ["DQ10_SYS_PreStartSounder", "DB_Controls.PusherJogExtendCmd", "DB_Controls.PusherJogRetractCmd"], "boundsDependedOn": [], "splitDefect": "The jog moves the ram with no audible warning at all. A2 stays true if the movement is nonetheless delayed; A3 is conditioned on a sounder that never came on." },
+      { "ordinal": "A2", "form": "When", "normalisedText": "WHEN a jog command is asserted with the pusher at rest THEN the pusher does not move until at least the specified jog warning time has elapsed since the pre-start sounder was energised", "responseSignal": "DQ6_PSH_Extend", "requiredObservations": ["DQ6_PSH_Extend", "DQ7_PSH_Retract", "DQ10_SYS_PreStartSounder", "DB_Controls.PusherJogExtendCmd", "DB_Controls.PusherJogRetractCmd"], "boundsDependedOn": ["jog_warning_time"], "splitDefect": "The sounder and the solenoid are energised in the same evaluation, so the warning has zero lead and the ram is already moving when the siren starts. A1 and A3 stay true. J2 - the whole purpose of the warning is the LEAD, and only a lower-bound assertion carries it." },
+      { "ordinal": "A3", "form": "When", "normalisedText": "WHEN the pusher is transitioning under a jog command THEN the pre-start sounder remains energised for the whole of the movement", "responseSignal": "DQ10_SYS_PreStartSounder", "requiredObservations": ["DQ10_SYS_PreStartSounder", "DQ6_PSH_Extend", "DQ7_PSH_Retract"], "boundsDependedOn": [], "splitDefect": "The sounder is a one-shot of the warning time and drops while the ram is still travelling, so the audible warning covers the second before the hazard and none of the hazard itself. A1 and A2 stay true." }
+    ]},
+    "REQ-042": { "title": "Engineering pusher enable/disable", "instances": [], "noteOnGrain": "One assertion. The DISABLED-state behaviour is REQ-043 and REQ-044 and is not restated; what is left, and what nothing else carries, is the ENABLE direction.", "assertions": [
+      { "ordinal": "A1", "form": "When", "normalisedText": "WHEN the engineering pusher-enable control is returned to enabled after a period disabled THEN the pusher resumes normal operation", "responseSignal": "DQ3_PSH_RunPowerPack", "requiredObservations": ["DQ3_PSH_RunPowerPack", "DQ6_PSH_Extend", "DB_Settings.PusherFitted"], "boundsDependedOn": [], "splitDefect": "The disable is latched rather than followed, so once disabled the pusher never comes back short of a power cycle. EVERY REQ-043 AND REQ-044 ASSERTION STAYS TRUE, because they only constrain the disabled state - the one-way failure is invisible to all three." }
+    ]},
+    "REQ-043": { "title": "Disabled pusher: no outputs, no feedback supervision", "instances": [], "thirdLimb": "'does not look for pusher switch feedback' yields no separate assertion - its only observable consequence is the absence of pusher faults, which is REQ-044 A1. Recorded, not dropped.", "assertions": [
+      { "ordinal": "A1", "form": "Never", "normalisedText": "NEVER the power pack run command is asserted while the pusher is disabled by the engineering enable control", "responseSignal": "DQ3_PSH_RunPowerPack", "requiredObservations": ["DQ3_PSH_RunPowerPack", "DB_Settings.PusherFitted"], "boundsDependedOn": [], "splitDefect": "The disable reaches the solenoid outputs but not the pump command, so a test machine with no pusher fitted runs its hydraulic pack on every cycle attempt. A2 stays true." },
+      { "ordinal": "A2", "form": "Never", "normalisedText": "NEVER an extend or retract solenoid output is asserted while the pusher is disabled by the engineering enable control", "responseSignal": "DQ6_PSH_Extend", "requiredObservations": ["DQ6_PSH_Extend", "DQ7_PSH_Retract", "DB_Settings.PusherFitted"], "boundsDependedOn": [], "splitDefect": "The disable reaches the pump command but not the solenoids. A1 stays true. One assertion for both solenoids per J1 - the clause says 'the solenoids' generically." }
+    ]},
+    "REQ-044": { "title": "Disabled pusher: no pusher faults", "instances": [], "vectorNote": "*** A CITING VECTOR SHOULD EXERCISE ALL FOUR PUSHER FAULTS *** (REQ-052, REQ-053, REQ-054, REQ-055). Suppressing three of four falsifies this assertion, but a vector exercising one would not detect it. Attack 5 - judgement, not a mechanical check.", "assertions": [
+      { "ordinal": "A1", "form": "Never", "normalisedText": "NEVER a pusher fault is raised while the pusher is disabled by the engineering enable control", "responseSignal": "the pusher fault annunciation - *** NO TAG NAMED IN THE REGISTER, see AMB-PSH-14 ***", "requiredObservations": ["the pusher fault annunciation (NO TAG NAMED)", "DB_Settings.PusherFitted"], "boundsDependedOn": [], "splitDefect": "Sole assertion. Its own defect is a disable that suppresses the outputs but not the supervision, so a machine with no pusher fitted annunciates an end-travel timeout on every cycle attempt and the operator learns to ignore pusher faults." }
+    ]},
+    "REQ-045": { "title": "Park after pre-start", "instances": [], "negativeCaseNotWritten": "The implied negative - a pusher already at parked does not move - is not stated and its observable is a non-event indistinguishable from an idle machine. Not enumerated; recorded so the omission is visible.", "assertions": [
+      { "ordinal": "A1", "form": "When", "normalisedText": "WHEN the pre-start warning phase completes with the pusher away from the parked position THEN the pusher transitions to the parked position", "responseSignal": "DQ7_PSH_Retract", "requiredObservations": ["DQ7_PSH_Retract", "DI12_PSH_HomeLimit"], "boundsDependedOn": [], "splitDefect": "Sole assertion. Its own defect is a start sequence that proceeds with the ram left extended from a previous run, so the first cycle of the shift starts from an unknown position and REQ-032's cycle definition is entered from the wrong end." }
+    ]},
+    "REQ-046": { "title": "High-pressure hold while pushing", "instances": [], "assertions": [
+      { "ordinal": "A1", "form": "When", "normalisedText": "WHEN the high-pressure switch is continuously active for longer than the specified pressure-trip confirm time while the pusher is on the push stroke THEN the extend solenoid output is de-energised", "responseSignal": "DQ6_PSH_Extend", "requiredObservations": ["DQ6_PSH_Extend", "DI14_PSH_HighPressure"], "boundsDependedOn": ["pressure_trip_confirm_time"], "splitDefect": "The pressure switch is not read on the push stroke at all, so the ram stalls against the blockage at full hydraulic pressure until something else times it out. A2 and A3 stay true." },
+      { "ordinal": "A2", "form": "When", "normalisedText": "WHEN the high-pressure switch is continuously active for longer than the specified pressure-trip confirm time while the pusher is on the push stroke THEN the pusher holds its position and the retract solenoid output is not asserted", "responseSignal": "DQ7_PSH_Retract", "requiredObservations": ["DQ7_PSH_Retract", "DQ6_PSH_Extend", "DI14_PSH_HighPressure"], "boundsDependedOn": ["pressure_trip_confirm_time"], "splitDefect": "The pressure trip is treated as an abort and the ram retracts immediately, so REQ-047's resume-from-existing-position can never occur and REQ-048's five-trip count can never accumulate within one cycle. A1 stays true - pushing did stop. R2: two responses, one trigger." },
+      { "ordinal": "A3", "form": "When", "normalisedText": "WHEN the high-pressure switch is active for less than the specified pressure-trip confirm time while the pusher is on the push stroke THEN the extend solenoid output is not de-energised", "responseSignal": "DQ6_PSH_Extend", "requiredObservations": ["DQ6_PSH_Extend", "DI14_PSH_HighPressure"], "boundsDependedOn": ["pressure_trip_confirm_time"], "splitDefect": "The confirm filter is absent, so a momentary pressure spike as the ram first meets the load stops every push and the cycle crawls to an end-travel timeout. A1 and A2 stay true. R1 - the trigger's NEGATIVE case, which the clause states explicitly with 'MORE THAN 0.5 s'." }
+    ]},
+    "REQ-047": { "title": "Resume push after pressure clears", "instances": [], "fourthLimb": "'and the cycle continues' yields no separate assertion - once the push resumes, REQ-032 A2/A3/A4 govern the remainder and a defect there falsifies them, not this clause.", "assertions": [
+      { "ordinal": "A1", "form": "When", "normalisedText": "WHEN the high-pressure switch has been continuously inactive for the specified pressure-clear resume delay following a pressure hold THEN the extend solenoid output is re-asserted", "responseSignal": "DQ6_PSH_Extend", "requiredObservations": ["DQ6_PSH_Extend", "DI14_PSH_HighPressure"], "boundsDependedOn": ["pressure_clear_resume_delay"], "splitDefect": "The push never resumes and the cycle stalls in the hold state indefinitely on a blockage that cleared itself. A2 and A3 stay true - nothing resumed early and nothing went home first." },
+      { "ordinal": "A2", "form": "When", "normalisedText": "WHEN the high-pressure switch clears following a pressure hold THEN the extend solenoid output is not re-asserted before the specified pressure-clear resume delay has elapsed since the switch cleared", "responseSignal": "DQ6_PSH_Extend", "requiredObservations": ["DQ6_PSH_Extend", "DI14_PSH_HighPressure"], "boundsDependedOn": ["pressure_clear_resume_delay"], "splitDefect": "The resume delay is absent or under-scaled, so the ram immediately re-loads the blockage and hammers it - the delay exists to give the shredder time to swallow what was already delivered. A1 and A3 stay true. J2." },
+      { "ordinal": "A3", "form": "When", "normalisedText": "WHEN the push resumes following a pressure hold THEN the pusher resumes from the position at which it held, without first returning to the parked position", "responseSignal": "DQ7_PSH_Retract", "requiredObservations": ["DQ7_PSH_Retract", "DQ6_PSH_Extend", "DI12_PSH_HomeLimit"], "boundsDependedOn": [], "splitDefect": "The resume is implemented as abort-and-restart - the ram retracts to parked and begins a fresh stroke - so every pressure event costs a full return and REQ-048's 'five times on the same cycle' counts strokes rather than trips within one, quietly disarming the blocked fault. A1 and A2 stay true: pushing did resume, and late enough." }
+    ]},
+    "REQ-048": { "title": "Pressure-trip count: return and fault", "instances": [], "assertions": [
+      { "ordinal": "A1", "form": "When", "normalisedText": "WHEN the high-pressure switch has produced the specified pressure-trip count of confirmed trips within one pusher cycle THEN the pusher returns to the parked position", "responseSignal": "DQ7_PSH_Retract", "requiredObservations": ["DQ7_PSH_Retract", "DI12_PSH_HomeLimit", "DI14_PSH_HighPressure"], "boundsDependedOn": ["pressure_trip_count_threshold", "pressure_trip_confirm_time"], "splitDefect": "The count raises the fault but leaves the ram where it stopped, extended into a chamber that must then be cleared by hand with the ram in the way. A2 and A3 stay true. *** SEE AMB-PSH-01 - THIS ASSERTION AND REQ-050 A1 ARE IN TENSION AND THE TENSION IS THE REGISTER'S. ***" },
+      { "ordinal": "A2", "form": "When", "normalisedText": "WHEN the high-pressure switch has produced the specified pressure-trip count of confirmed trips within one pusher cycle THEN the pusher-blocked fault is raised", "responseSignal": "the pusher-blocked fault annunciation - *** NO TAG NAMED IN THE REGISTER, see AMB-PSH-14 ***", "requiredObservations": ["the pusher-blocked fault annunciation (NO TAG NAMED)", "DI14_PSH_HighPressure"], "boundsDependedOn": ["pressure_trip_count_threshold", "pressure_trip_confirm_time"], "splitDefect": "The ram parks silently on the fifth trip with nothing annunciated, so the operator sees an idle pusher and is given no reason for it. A1 and A3 stay true. R2 - two responses to one trigger." },
+      { "ordinal": "A3", "form": "When", "normalisedText": "WHEN fewer than the specified pressure-trip count of confirmed trips have occurred within the current pusher cycle THEN the pusher-blocked fault is not raised", "responseSignal": "the pusher-blocked fault annunciation - *** NO TAG NAMED IN THE REGISTER, see AMB-PSH-14 ***", "requiredObservations": ["the pusher-blocked fault annunciation (NO TAG NAMED)", "DI14_PSH_HighPressure"], "boundsDependedOn": ["pressure_trip_count_threshold"], "splitDefect": "*** THE TRIP COUNTER IS NOT CLEARED AT THE START OF EACH CYCLE, SO TRIPS ACCUMULATE ACROSS CYCLES AND A LATER CYCLE RAISES THE BLOCKED FAULT ON ITS FIRST PRESSURE EVENT. *** 'On the same cycle' is the load-bearing phrase of this clause and nothing else in 44 assertions carries it. Also catches an off-by-one threshold. A1 and A2 stay true - both are conditioned on the count having been reached." }
+    ]},
+    "REQ-049": { "title": "Blocked fault spares the shredder", "instances": [], "subjectNote": "The response signal is a SHREDDER output. The obligation is on the pusher fault's propagation, so the clause is in subject; a citation for the shredder's own start/stop behaviour is NOT this assertion.", "assertions": [
+      { "ordinal": "A1", "form": "Never", "normalisedText": "NEVER the shredder is stopped as a consequence of the pusher-blocked fault", "responseSignal": "DQ1_SHR_RunFwd", "requiredObservations": ["DQ1_SHR_RunFwd", "the pusher-blocked fault annunciation (NO TAG NAMED)"], "boundsDependedOn": [], "splitDefect": "Sole assertion. Its own defect is a pusher-blocked fault wired into the common plant stop chain, so a hydraulic blockage in an auxiliary takes the whole shredder down and the plant loses a shift for a fault the spec explicitly said to tolerate." }
+    ]},
+    "REQ-050": { "title": "Blocked lockout until reset", "instances": [], "readingTaken": "'activating' is read as INITIATING A NEW CYCLE, not as any solenoid output. *** THAT IS A CHOICE, FORCED, AND IT IS AMB-PSH-01. *** The alternative reading makes REQ-048 A1 unsatisfiable, and an enumeration must not contain two assertions no implementation can both satisfy.", "assertions": [
+      { "ordinal": "A1", "form": "Never", "normalisedText": "NEVER a pusher cycle is initiated while a pusher-blocked fault is latched and has not been reset since it was raised", "responseSignal": "DQ6_PSH_Extend", "requiredObservations": ["DQ6_PSH_Extend", "the pusher-blocked fault annunciation (NO TAG NAMED)", "DB_Controls.FaultReset"], "boundsDependedOn": [], "splitDefect": "The blocked fault annunciates but nothing inhibits the next trigger, so the ram keeps re-attempting a stroke into a blockage that has already defeated it five times. A2 stays true. See AMB-PSH-07 on whether a held reset defeats this." },
+      { "ordinal": "A2", "form": "When", "normalisedText": "WHEN the fault reset command is asserted after a pusher-blocked fault THEN the pusher is able to be cycled again", "responseSignal": "DQ6_PSH_Extend", "requiredObservations": ["DQ6_PSH_Extend", "DB_Controls.FaultReset"], "boundsDependedOn": [], "splitDefect": "The lockout is one-way - once a blocked fault has occurred the pusher never runs again short of a power cycle and the operator's reset button does nothing. A1 stays true throughout, which is exactly why a lockout assertion alone cannot catch it. R1 - 'until the fault has been reset' states both sides." }
+    ]},
+    "REQ-051": { "title": "Pressure ignored on retract", "instances": [], "readingTaken": "'Ignored' is read as TOTAL - no effect on the stroke and no effect on the count. A judgement; the narrower reading (the stroke only) would drop A2.", "assertions": [
+      { "ordinal": "A1", "form": "Never", "normalisedText": "NEVER the retract solenoid output is de-energised as a consequence of the high-pressure switch activating during the retract stroke", "responseSignal": "DQ7_PSH_Retract", "requiredObservations": ["DQ7_PSH_Retract", "DI14_PSH_HighPressure"], "boundsDependedOn": [], "splitDefect": "The pressure logic is stroke-blind, so ordinary back pressure on the return stalls the ram part way home, it never reaches the parked switch, and REQ-055's parked timeout fires on a healthy machine. A2 stays true." },
+      { "ordinal": "A2", "form": "Never", "normalisedText": "NEVER a high-pressure activation occurring during the retract stroke contributes to the pressure-trip count that raises the pusher-blocked fault", "responseSignal": "the pusher-blocked fault annunciation - *** NO TAG NAMED IN THE REGISTER, see AMB-PSH-14 ***", "requiredObservations": ["the pusher-blocked fault annunciation (NO TAG NAMED)", "DI14_PSH_HighPressure", "DQ7_PSH_Retract"], "boundsDependedOn": ["pressure_trip_count_threshold"], "splitDefect": "The retract stroke correctly does not stop on pressure, but the trips are still counted, so a cycle with normal return pressure reaches the five-trip threshold and raises a blocked fault for a blockage that never happened. A1 stays true - this is the half of 'ignored' that leaves no trace on the stroke itself." }
+    ]},
+    "REQ-052": { "title": "Fault: both pusher switches", "instances": [], "rigNote": "*** Reaching this trigger requires both limit inputs true simultaneously, which the physical machine cannot produce. A candidate for the gate-1 signer's UNTESTABLE-ON-RIG bucket. NOT ASSIGNED HERE (4.3). ***", "assertions": [
+      { "ordinal": "A1", "form": "When", "normalisedText": "WHEN the parked limit switch and the end-travel limit switch are both true at the same time THEN the both-switches pusher fault is raised", "responseSignal": "the both-pusher-switches fault annunciation - *** NO TAG NAMED IN THE REGISTER, see AMB-PSH-14 ***", "requiredObservations": ["the both-pusher-switches fault annunciation (NO TAG NAMED)", "DI12_PSH_HomeLimit", "DI13_PSH_FullTravelLimit"], "boundsDependedOn": [], "splitDefect": "Sole assertion. Its own defect is that the impossible-combination check is simply not implemented, so a welded, shorted or miswired limit switch is invisible and every position-dependent decision in the cycle acts on a state that cannot be true." }
+    ]},
+    "REQ-054": { "title": "Fault: end-travel timeout", "instances": [], "assertions": [
+      { "ordinal": "A1", "form": "When", "normalisedText": "WHEN the pusher has been driving on the push stroke for longer than the specified end-travel timeout without the end-travel limit switch making THEN the end-travel-timeout fault is raised", "responseSignal": "the end-travel-timeout fault annunciation - *** NO TAG NAMED IN THE REGISTER, see AMB-PSH-14 ***", "requiredObservations": ["the end-travel-timeout fault annunciation (NO TAG NAMED)", "DI13_PSH_FullTravelLimit", "DQ6_PSH_Extend"], "boundsDependedOn": ["pusher_end_travel_timeout"], "splitDefect": "There is no travel supervision at all, so a ram that has lost hydraulic pressure, or a limit switch failed open, leaves the cycle waiting forever with nothing annunciated. A2 stays true. *** SEE AMB-PSH-02 - WHETHER THIS TIMER PAUSES DURING A REQ-046 PRESSURE HOLD IS UNSTATED, AND THE ANSWER DECIDES WHETHER REQ-048 IS REACHABLE AT ALL. ***" },
+      { "ordinal": "A2", "form": "When", "normalisedText": "WHEN the pusher reaches the end-travel limit before the specified end-travel timeout has elapsed THEN the end-travel-timeout fault is not raised", "responseSignal": "the end-travel-timeout fault annunciation - *** NO TAG NAMED IN THE REGISTER, see AMB-PSH-14 ***", "requiredObservations": ["the end-travel-timeout fault annunciation (NO TAG NAMED)", "DI13_PSH_FullTravelLimit", "DQ6_PSH_Extend"], "boundsDependedOn": ["pusher_end_travel_timeout"], "splitDefect": "The supervision timer is not reset on arrival at the limit, or the timeout preset is under-scaled, so a perfectly healthy cycle annunciates a travel fault on every stroke and the fault stops meaning anything. A1 stays true. J2 - an under-scaled timeout is caught only from this side." }
+    ]},
+    "REQ-055": { "title": "Fault: parked timeout", "instances": [], "assertions": [
+      { "ordinal": "A1", "form": "When", "normalisedText": "WHEN the pusher has been driving on the retract stroke for longer than the specified parked timeout without the parked limit switch making THEN the parked-timeout fault is raised", "responseSignal": "the parked-timeout fault annunciation - *** NO TAG NAMED IN THE REGISTER, see AMB-PSH-14 ***", "requiredObservations": ["the parked-timeout fault annunciation (NO TAG NAMED)", "DI12_PSH_HomeLimit", "DQ7_PSH_Retract"], "boundsDependedOn": ["pusher_parked_timeout"], "splitDefect": "Only the end-travel stroke is supervised, so a ram that cannot get home sits part way out with nothing annunciated and the next cycle starts from a position the logic believes is parked. REQ-054's assertions stay true - they watch the other stroke." },
+      { "ordinal": "A2", "form": "When", "normalisedText": "WHEN the pusher reaches the parked limit before the specified parked timeout has elapsed THEN the parked-timeout fault is not raised", "responseSignal": "the parked-timeout fault annunciation - *** NO TAG NAMED IN THE REGISTER, see AMB-PSH-14 ***", "requiredObservations": ["the parked-timeout fault annunciation (NO TAG NAMED)", "DI12_PSH_HomeLimit", "DQ7_PSH_Retract"], "boundsDependedOn": ["pusher_parked_timeout"], "splitDefect": "The retract supervision timer is not reset on arrival home, or the 30 s preset is under-scaled against a slow return, so every normal cycle ends in a parked-timeout fault. A1 stays true. J2." }
+    ]}
+  },
+
+  "ambiguitiesOpen": [
+    { "id": "AMB-PSH-01", "severity": "HIGH", "kind": "*** INTERNAL CONTRADICTION - REQ-048 versus REQ-050 ***", "what": "REQ-048 says that on the fifth pressure trip 'the pusher RETURNS TO PARKED and a pusher-blocked fault is raised'. REQ-050 says that 'after a pusher-blocked fault, the pusher is LOCKED OUT FROM ACTIVATING until the fault has been reset'. Taken in the order REQ-048 states them, the lockout is in force at the instant the return-to-parked is commanded. ON THE STRICT READING THE RAM IS STRANDED MID-STROKE BY ITS OWN FAULT AND REQ-048's OWN RESPONSE IS UNREACHABLE.", "readings": "(a) 'activating' means initiating a NEW cycle; the commanded return completes and only the next cycle is inhibited. (b) 'activating' means any solenoid output; the return never happens and REQ-048's first response is dead text.", "whatIDid": "Took (a) into REQ-050 A1's trigger, using the clause's own word scoped to cycle initiation, because writing (b) would have put two MUTUALLY FALSIFYING assertions into one denominator. That is a choice and it is recorded as one. If the ruling goes to (b), REQ-050 A1's text moves and re-hashes and REQ-048 A1 must be withdrawn.", "whoMustRule": "the gate-1 architecture signer" },
+    { "id": "AMB-PSH-02", "severity": "HIGH", "kind": "*** A REQUIREMENT PARTLY UNREACHABLE UNDER ANOTHER - REQ-046/047/048 versus REQ-054 ***", "what": "REQ-046 holds the push indefinitely while pressure is high, REQ-047 resumes 5 s after it clears, REQ-048 allows five such trips before declaring the pusher blocked. REQ-054 faults the pusher for exceeding the end-travel timeout. Worked: four pressure events each held 6 s and resumed after 5 s spend 44 s stationary before any push time is counted, against a 60 s timeout (Q-02's number, not the spec's). SO ON A GENUINELY BLOCKED CYCLE, REQ-054's END-TRAVEL FAULT FIRES BEFORE REQ-048's FIFTH TRIP IS REACHED, AND THE PUSHER-BLOCKED FAULT - THE ONE THAT NAMES THE ACTUAL CONDITION - RARELY OR NEVER ANNUNCIATES.", "whatIsUnstated": "Whether the end-travel supervision timer PAUSES during a REQ-046 pressure hold. Under 'pauses' the two requirements compose; under 'runs free' REQ-048 and REQ-053 are largely unreachable and the operator is told the wrong thing about a blocked machine.", "whatIDid": "Neither reading was taken into any assertion text. REQ-054 A1's trigger uses the clause's own wording and is silent on the pause. A ruling toward 'pauses' costs one further assertion, one UNCLASSIFIED unit, and no dangled citation.", "whoMustRule": "the gate-1 architecture signer, and it may need the owner" },
+    { "id": "AMB-PSH-03", "severity": "HIGH", "kind": "A pusher obligation that exists and cannot be decomposed", "clause": "REQ-012 and REQ-013", "what": "'Stops all equipment at the same time' covers the pusher and states no meaning for stopping a hydraulic ram mid-stroke. Drop-in-place and retract-to-parked are opposite implementations and both are defensible from other clauses in this register (REQ-039 stops in place; REQ-037 retracts to parked). NOT ENUMERATED, AND SAID SO RATHER THAN LEFT EMPTY. Left as it stands, the pusher's stop behaviour is in no denominator anywhere.", "wouldSettleIt": "One clause added to REQ-012 naming the pusher's stop behaviour. It then yields one or two assertions here." },
+    { "id": "AMB-PSH-04", "severity": "HIGH", "kind": "The register-wide form of the mode-exclusivity hole", "what": "REQ-034 says 'IN AUTOMATIC MODE, a pusher cycle is triggered by hopper high level'; REQ-035 says 'IN MANUAL MODE, the operator can trigger a cycle with the HMI button'. NEITHER CLAUSE STATES A NEGATIVE, SO NOTHING IN THIS ENUMERATION FORBIDS AN IMPLEMENTATION THAT CYCLES ON HOPPER HIGH REGARDLESS OF MODE, OR THAT HONOURS THE HMI BUTTON IN AUTOMATIC AND IN OFF. R1 says the negative case is the one most often lost and says to write it WHERE THE SPEC STATES ONE. This spec does not, and inventing it is how a denominator stops being spec-derived.", "consequenceIfLeft": "An operator pressing the HMI cycle button with the mode selector at OFF gets a stroke of a ram the machine says is switched off. Nothing in 44 assertions catches that.", "wouldSettleIt": "One line in the register: each mode's trigger set is exclusive to that mode. Zero re-hashes here; adds three or four assertions.", "whoMustRule": "the gate-1 architecture signer" },
+    { "id": "AMB-PSH-05", "severity": "MEDIUM", "kind": "A bound stated as an approximation", "what": "REQ-032's end-travel dwell is 'approximately 2 s'. The register does use explicit ranges when it means them (REQ-029's 'approximately 2-3 s'), so 'approximately' here states no tolerance. REQ-032 A3 asserts the dwell is not cut short and how short is short is undecided.", "whatIDid": "Wrote the assertion against 'the specified end-travel hold time' and put the number only in the bounds table, so a ruling on tolerance costs zero re-hashes." },
+    { "id": "AMB-PSH-06", "severity": "MEDIUM", "kind": "One trigger, two readings, opposite plant behaviour", "clause": "REQ-034", "what": "On a hopper that goes high at t=0 and stays high through t=300 s: reading (a) EDGE - exactly one cycle at t=0 and no more however long the level stays high; reading (b) LEVEL - a cycle at t=0 and another each time the previous completes, until the level clears. Both are ordinary designs and (b) is arguably what a shredder hopper wants. The clause chooses neither.", "whatIDid": "REQ-034 A1 asserts only that A cycle is performed on the transition to high, which BOTH readings satisfy. No assertion constrains repetition. A ruling toward (a) owes one further assertion at a cost of one UNCLASSIFIED unit." },
+    { "id": "AMB-PSH-07", "severity": "MEDIUM", "kind": "Edge or level, on a reset", "clause": "REQ-050", "what": "'until the fault has been reset' does not say whether the reset is an edge or a level. A level-sensitive lockout release with a stuck-on or HMI-latched reset leaves the pusher permanently un-locked-out, so REQ-050 A1's protection is silently absent whenever the reset bit is held. The hopper register carried the mirror image of this (REQ-HBA-005 A4) and it needed its own assertion.", "whatIDid": "Wrote REQ-050 A1 as 'has not been reset SINCE IT WAS RAISED' and did not add a held-reset assertion, because the clause supplies no basis for one. A ruling that the reset is edge-triggered owes one NEVER assertion here." },
+    { "id": "AMB-PSH-08", "severity": "MEDIUM", "kind": "A shared output, two requirements, no way to tell them apart", "what": "REQ-041's jog warning and REQ-003's 10 s plant pre-start drive the SAME sounder output, so a vector observing the sounder alone cannot attribute it. Every REQ-041 assertion therefore carries the jog command in requiredObservations - the AMB-14 shape, which the wire format now supports." },
+    { "id": "AMB-PSH-09", "severity": "MEDIUM", "kind": "A warning with no stated re-arming rule", "clause": "REQ-041 x REQ-039", "what": "REQ-039 makes jog hold-to-move, so an operator inching a ram taps the button. REQ-041 requires 1 s of siren before movement. Worked: press at t=0, siren from t=0, movement from t=1.0, release at t=1.4, press again at t=1.6 - does movement resume at t=1.6, or at t=2.6 after a fresh warning? The first makes the warning defeatable by tapping; the second makes inching unusable. The clause says neither.", "whatIDid": "REQ-041 A2's trigger is 'a jog command asserted WITH THE PUSHER AT REST', which is the clause's own scope and is silent on re-arming." },
+    { "id": "AMB-PSH-10", "severity": "LOW", "kind": "A requirement with no stated bound where one is implied", "clause": "REQ-025", "what": "'The pusher returns to parked' on an overcurrent event states no time limit, so an implementation that begins the return and takes arbitrarily long satisfies it. No bound was invented (1.2a)." },
+    { "id": "AMB-PSH-11", "severity": "LOW", "kind": "Nothing stops the power pack", "clause": "REQ-031", "what": "REQ-030 requires the pack running during movement and REQ-031 requires a run-on across the transition. NO CLAUSE IN THE REGISTER SAYS THE PACK EVER STOPS. An implementation running it continuously satisfies every pusher assertion here. Not enumerated because no clause states it; raised because the omission is invisible from the assertion list." },
+    { "id": "AMB-PSH-12", "severity": "LOW", "kind": "A dangling reference in the register", "what": "Q-16's resolution cites 'both pre-warned per NEW-4'. THERE IS NO NEW-4 IN THIS REGISTER. REQ-037 A2's provenance rests on Q-16, whose own justification points at a row that does not exist. Reported as a register defect, not worked around." },
+    { "id": "AMB-PSH-13", "severity": "LOW", "kind": "A trigger signal that does not exist", "clause": "REQ-036", "what": "The remote cycle pushbutton is PROPOSED - no digital input tag exists and Q-03 is open on what DI16_PSH_LocalRemote even means. THE ASSERTION IS ENUMERATED ANYWAY. Dropping a spec obligation because no tag exists yet is denominator shrinkage; the honest destination is a bucket the gate-1 signer assigns, not an omission the enumerator makes (4.3)." },
+    { "id": "AMB-PSH-14", "severity": "MEDIUM", "kind": "Response signals this enumeration cannot name", "what": "The register says an annunciation bit for each pusher fault 'exists in the corpus alarm word (grep-verified)' and NAMES NONE OF THEM. Ten assertions (REQ-044 A1, REQ-048 A2/A3, REQ-049 A1, REQ-051 A2, REQ-052 A1, REQ-054 A1/A2, REQ-055 A1/A2) have a response signal I can describe and cannot name. THE REPAIR IS TO THE REGISTER OR THE HARNESS BINDING, NEVER TO THIS FILE - an enumerator inventing an alarm-bit name would be breaking hard rule 3 to make a citation work, which is the request this role exists to refuse." }
+  ],
+
+  "ratios": {
+    "assertionsPerClause": { "REQ-025": 1, "REQ-030": 2, "REQ-031": 1, "REQ-032": 4, "REQ-033": 0, "REQ-034": 1, "REQ-035": 1, "REQ-036": 1, "REQ-037": 2, "REQ-038": 2, "REQ-039": 1, "REQ-040": 1, "REQ-041": 3, "REQ-042": 1, "REQ-043": 2, "REQ-044": 1, "REQ-045": 1, "REQ-046": 3, "REQ-047": 3, "REQ-048": 3, "REQ-049": 1, "REQ-050": 2, "REQ-051": 2, "REQ-052": 1, "REQ-053": 0, "REQ-054": 2, "REQ-055": 2 },
+    "meanOverClausesYieldingAssertions": 1.76,
+    "meanOverAllInSubjectClauses": 1.63,
+    "min": 1,
+    "max": 4,
+    "formsSummary": { "When": 33, "Never": 11 },
+    "judged": false,
+    "note": "No corpus norm exists (7 open item 4). Reported, never judged. The only other enumeration in this repo is the hopper set at 3.38 assertions per clause, and IT IS NOT A NORM AND MUST NOT BE USED AS ONE: it is one register of eight clauses at its fifth issue after thirteen rulings, with long multi-limbed clauses. This is a first-pass register of 27 short pusher clauses, many a single sentence with one trigger and one response, so a lower ratio is what the source shape predicts rather than evidence of a coarse reading. Two data points are not a norm."
+  },
+
+  "gateProjection": {
+    "subject": "pusher",
+    "clauses": ["REQ-025", "REQ-030", "REQ-031", "REQ-032", "REQ-034", "REQ-035", "REQ-036", "REQ-037", "REQ-038", "REQ-039", "REQ-040", "REQ-041", "REQ-042", "REQ-043", "REQ-044", "REQ-045", "REQ-046", "REQ-047", "REQ-048", "REQ-049", "REQ-050", "REQ-051", "REQ-052", "REQ-054", "REQ-055"],
+    "assertions": "<44 computed IDs - PENDING STAMP, see _README>",
+    "enumerator": "assertion-enumerator",
+    "formsByOrdinal": {
+      "REQ-025.A1": "When",
+      "REQ-030.A1": "Never", "REQ-030.A2": "Never",
+      "REQ-031.A1": "When",
+      "REQ-032.A1": "When", "REQ-032.A2": "When", "REQ-032.A3": "When", "REQ-032.A4": "When",
+      "REQ-034.A1": "When",
+      "REQ-035.A1": "When",
+      "REQ-036.A1": "When",
+      "REQ-037.A1": "When", "REQ-037.A2": "Never",
+      "REQ-038.A1": "When", "REQ-038.A2": "When",
+      "REQ-039.A1": "Never",
+      "REQ-040.A1": "When",
+      "REQ-041.A1": "When", "REQ-041.A2": "When", "REQ-041.A3": "When",
+      "REQ-042.A1": "When",
+      "REQ-043.A1": "Never", "REQ-043.A2": "Never",
+      "REQ-044.A1": "Never",
+      "REQ-045.A1": "When",
+      "REQ-046.A1": "When", "REQ-046.A2": "When", "REQ-046.A3": "When",
+      "REQ-047.A1": "When", "REQ-047.A2": "When", "REQ-047.A3": "When",
+      "REQ-048.A1": "When", "REQ-048.A2": "When", "REQ-048.A3": "When",
+      "REQ-049.A1": "Never",
+      "REQ-050.A1": "Never", "REQ-050.A2": "When",
+      "REQ-051.A1": "Never", "REQ-051.A2": "Never",
+      "REQ-052.A1": "When",
+      "REQ-054.A1": "When", "REQ-054.A2": "When",
+      "REQ-055.A1": "When", "REQ-055.A2": "When"
+    },
+    "rekeyingNote": "The ordinal keys above are DISPLAY ONLY and a submission built from them would be REFUSED by shape - correctly. After stamping, rekey to REQ-nnn:<hash> from the stamper's output."
+  },
+
+  "bucketsNotAssignedHere": "OUT-OF-SCOPE and UNTESTABLE-ON-RIG belong to whoever signs off the architecture at gate 1 (4.3) - never to the block's author, never to a vector's author, and not to the enumerator either. DEFERRED needs an owner and a date. UNCLASSIFIED is never written: it is enumerated - (COVERED u OUT-OF-SCOPE u DEFERRED u UNTESTABLE-ON-RIG), computed across two artifacts. *** ALL 44 ARE UNCLASSIFIED TODAY, BECAUSE NO CLASSIFICATION ARTIFACT EXISTS, AND THE GATE SHOULD FAIL UNTIL ONE DOES. *** Two assertions are visibly bucket-shaped and are NOT assigned by me: REQ-036 A1 (its trigger signal does not exist) and REQ-052 A1 (it requires both limit switches true at once, which the machine cannot produce). Named for the signer, decided by the signer.",
+
+  "noCoveragePercentageIsAvailable": "A percentage is not an available output from this artifact: it requires all four bucket counts and the oldest deferral's age, and no classification artifact exists (5 row 6). The correct output today is 'denominator = 44 coverage units; classification not yet performed'."
+}

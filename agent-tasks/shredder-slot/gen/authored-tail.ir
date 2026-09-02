@@ -1,0 +1,55 @@
+
+NETWORK 18 "Disarm Lever"
+  COMMENT "The one bit every cleardown phase depends on. A cleardown assumes nothing can create or re-create a latched cause while it runs, and this block can re-create two of the three: the discharge timeout re-arms whenever Step reaches 20 without a confirm, and the motor's fail-to-run re-arms whenever a contactor is commanded without feedback. Holding this true through all six cleardown phases is what stops the reset pulse landing on a cause that is being re-set underneath it - which would leave no cleardown in the block ever working, in green."
+  COIL Disarmed := Running AND NOT InScenario
+
+NETWORK 19 "Arbitrate The Shared Fault Reset"
+  COMMENT "DB_Controls.FaultReset is ONE coil and four things want it: this head, the hopper head, the pusher head, and the operator. The generated shell publishes a request rather than driving the line, and this rung is the arbitration: while this index runs the request wins, and at every other moment whatever another head wrote passes through unchanged. Without the pass-through term this head would drive the line low on every scan it is idle, and because the heads run in sequence ahead of the input map, the last one in the sweep would silently disable the reset of every slot before it."
+  COIL DB_Controls.FaultReset := Running AND Stim.ResetRequest OR NOT Running AND DB_Controls.FaultReset
+
+NETWORK 20 "Scenario Event Times"
+  COMMENT "The two derived instants the drives below compare against, computed once here so no rung adds a duration inside a condition. The stop flag is written above the addition because the readable IR groups statements by kind in one contiguous run and a coil may not follow an arithmetic instruction; neither reads the other, so the order carries no meaning beyond that."
+  COIL StopFired := InScenario AND ScenT >= Stim.StopAt
+  ADD(EN := TRUE, IN1 := Stim.PreStartHold, IN2 := Stim.StartPressWidth) => StartPressEnd
+
+NETWORK 21 "Commanded Operator Buttons"
+  COMMENT "The start press is a window rather than an edge, so it cannot fall between two scans and be missed. The stop button is asserted by the scenario's own lever AND through every cleardown phase, which is how the plant is held at Step 0 while the latches are cleared: it aborts every step to Idle through the sequencer's own stop transitions rather than through anything this head reaches inside the block."
+  COIL CmdCycleStart := InScenario AND ScenT >= Stim.PreStartHold AND ScenT < StartPressEnd
+  COIL CmdCycleStop := Disarmed OR InScenario AND Stim.StopByButton AND StopFired
+
+NETWORK 22 "Commanded Plant Permissions"
+  COMMENT "Downstream running and control-circuit healthy are the other two stop reasons, each on its own lever so a vector names the reason it wants without a code table. Both are held TRUE through the cleardown: the cleardown already stops the plant with the button, and leaving these low as well would make a cleardown indistinguishable from a downstream-loss or unhealthy-circuit scenario. The unhealthy lever reaches the motor block too, so a vector using it is asserting about two blocks. Each negated pair sits at the rail-most position of its AND chain because only the first operand of a chain may be a compound expression - a branch point can occur nowhere else in a series chain."
+  COIL CmdDownstream := Disarmed OR NOT (Stim.StopByDownstreamLoss AND StopFired) AND InScenario
+  COIL CmdHealthy := Disarmed OR NOT (Stim.StopByUnhealthy AND StopFired) AND InScenario
+
+NETWORK 23 "Commanded Hopper Level And Motor Fault"
+  COMMENT "The hopper is high between its two commanded instants and clear outside them; a window at or past the scenario end is how a timeline says it never goes high. The field motor-fault input is the only route by which a vector raises the motor's fault deliberately rather than as a side effect of a withheld feedback, and it is held clear through the cleardown so the motor's own latch can actually be reset."
+  COIL CmdHopperHigh := InScenario AND ScenT >= Stim.HopperHighAt AND ScenT < Stim.HopperClearAt
+  COIL CmdMotorFault := InScenario AND Stim.InjectMotorFault AND StopFired
+
+NETWORK 24 "Modelled Contactor Response"
+  COMMENT "The plant answering the PLC. Each timer starts when the PLC actually drives the output and its Q is the feedback the field would return, so the delay is a contactor pull-in time the vector chooses rather than a fixed instant that happens to line up. Reading the OUTPUT BUFFER rather than the motor block's own coil is deliberate: the buffer is what a field device would be wired to. Drop-out is modelled as instantaneous - a TON resets the moment its input falls - because a lagging drop would present a feedback the PLC is no longer commanding, which is exactly what the motor block latches as a fail-to-stop. Each response is gated on the scenario, so through every cleardown phase all three feedbacks read clear and neither the fail-to-run nor the fail-to-stop detector can re-arm."
+  TON(FwdRespTimer, IN := InScenario AND DB_Output.Run_Shredder_Fwd AND NOT Stim.WithholdFwdFeedback, PT := Stim.FwdFeedbackDelay)
+  TON(RevRespTimer, IN := InScenario AND DB_Output.Run_Shredder_Rev AND NOT Stim.WithholdRevFeedback, PT := Stim.RevFeedbackDelay)
+  TON(DischargeRespTimer, IN := InScenario AND DB_Output.Run_Discharge_Conv AND NOT Stim.WithholdDischargeConfirm, PT := Stim.DischargeConfirmDelay)
+  COIL CmdRunFwdFB := FwdRespTimer.Q
+  COIL CmdRunRevFB := RevRespTimer.Q
+  COIL CmdDischargeRunning := DischargeRespTimer.Q
+
+NETWORK 25 "Force The Monitored Inputs"
+  COMMENT "Presents the commanded plant to the input map through the input buffer's own test-injection members, which is the facility the map already provides: with the flag set the map ignores the physical terminal and takes each input from its test member. EVERY RUNG PASSES THROUGH WHEN THIS INDEX IS NOT RUNNING, and that is not defensive style - it is required. Test[] is one array shared by every stimulus head in the program, all of them run ahead of the input map, and a plain coil would drive another slot's commanded input low on every scan this one is idle; whichever head ran last in the sweep would win and the others would be silently disarmed. Test[0] is the map's own injection enable and is shared the same way. Outside an index every one of these passes through and the map reads the field."
+  COIL DB_Input.Test[0] := Running OR NOT Running AND DB_Input.Test[0]
+  COIL DB_Input.Test[1] := Running AND CmdHealthy OR NOT Running AND DB_Input.Test[1]
+  COIL DB_Input.Test[3] := Running AND CmdCycleStart OR NOT Running AND DB_Input.Test[3]
+  COIL DB_Input.Test[4] := Running AND CmdCycleStop OR NOT Running AND DB_Input.Test[4]
+  COIL DB_Input.Test[5] := Running AND CmdRunFwdFB OR NOT Running AND DB_Input.Test[5]
+  COIL DB_Input.Test[6] := Running AND CmdRunRevFB OR NOT Running AND DB_Input.Test[6]
+  COIL DB_Input.Test[7] := Running AND CmdMotorFault OR NOT Running AND DB_Input.Test[7]
+  COIL DB_Input.Test[8] := Running AND CmdHopperHigh OR NOT Running AND DB_Input.Test[8]
+  COIL DB_Input.Test[10] := Running AND CmdDischargeRunning OR NOT Running AND DB_Input.Test[10]
+  COIL DB_Input.Test[15] := Running AND CmdDownstream OR NOT Running AND DB_Input.Test[15]
+
+NETWORK 26 "Hold The Pusher Parked"
+  COMMENT "The sequencer's PreStartSounder output is its own step-10 siren OR the pusher's jog warning, and its PusherModeCmd passes the operator mode straight through whenever no hard stop is forcing mode 0. Holding the operator mode at 0 for the whole index is what keeps the pusher parked and jog-blocked, so the siren this slot observes is the sequencer's and not the pusher's. IT IS A DECLARED PLANT ASSUMPTION, NOT A DERIVATION: nothing here proves the pusher stays quiet, and if the pusher slot ever runs concurrently with this one the assumption fails - which is why PreStartSounder's resting value is declared excluded in this slot's binding rather than given a number."
+  MOVE(EN := Running, IN := 0) => DB_Controls.PusherMode
+

@@ -1,0 +1,49 @@
+{
+  "files": [
+    {
+      "filePath": "ir/test-project001/FB_PusherStim.ir",
+      "name": "FB_PusherStim",
+      "findings": [
+        {
+          "check": "review:harness-scope",
+          "description": "Harness: FB 9001 is inside the reserved harness band 9000-9999 (declared docs/notes/test-environment-build-plan.md, 2026-08-13). 0 C-001/C-201 finding(s) reported without gating.",
+          "gates": false
+        }
+      ]
+    },
+    {
+      "filePath": "ir/test-project001/UDT_PusherStim.ir",
+      "name": "UDT_PusherStim",
+      "findings": []
+    },
+    {
+      "filePath": "ir/test-project001/iDB_PusherStim.ir",
+      "name": "iDB_PusherStim",
+      "findings": [
+        {
+          "check": "review:harness-scope",
+          "description": "Harness: DB 9001 is inside the reserved harness band 9000-9999 (declared docs/notes/test-environment-build-plan.md, 2026-08-13). 0 C-001/C-201 finding(s) reported without gating.",
+          "gates": false
+        }
+      ]
+    },
+    {
+      "filePath": "ir/test-project001/Main.ir",
+      "name": "Main",
+      "findings": []
+    }
+  ],
+  "indexWarnings": [],
+  "corpus": {
+    "projectDir": "ir/test-project001",
+    "projectFileCount": 50,
+    "batchFileCount": 4,
+    "projectContributedNothing": false,
+    "blockNameCount": 21,
+    "tagRootNameCount": 147,
+    "typeNameCount": 7,
+    "memberBodyCount": 27,
+    "calleeInterfaceCount": 21,
+    "harnessCorpusFileCount": 50
+  }
+}

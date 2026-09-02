@@ -1,0 +1,140 @@
+{
+  "uncheckedRuleCount": 0,
+  "uncheckedRules": [],
+  "harnessScopedFindingCount": 0,
+  "harnessObjectCount": 1,
+  "unclassifiedObjectCount": 0,
+  "files": [
+    {
+      "filePath": "ir/test-project001/FC_HarnessStimArbiter.ir",
+      "blockName": "FC_HarnessStimArbiter",
+      "fileError": null,
+      "harnessClass": "Harness",
+      "harnessBasis": "FC 9002 is inside the reserved harness band 9000-9999 (declared docs/notes/test-environment-build-plan.md, 2026-08-13)",
+      "harnessScopedFindings": [],
+      "ruleStatuses": [
+        {
+          "ruleId": "C-001",
+          "status": "CheckedHarnessScope",
+          "findingCount": 0,
+          "reason": "0 further finding(s) reported under HARNESS-SCOPE and NOT gated - this content is harness-generated, and doc 06\u0027s naming conventions govern content authored for the plant"
+        },
+        {
+          "ruleId": "C-003",
+          "status": "Checked",
+          "findingCount": 0,
+          "reason": null
+        },
+        {
+          "ruleId": "C-005",
+          "status": "Checked",
+          "findingCount": 0,
+          "reason": null
+        },
+        {
+          "ruleId": "C-103",
+          "status": "Checked",
+          "findingCount": 0,
+          "reason": null
+        },
+        {
+          "ruleId": "C-118",
+          "status": "Checked",
+          "findingCount": 0,
+          "reason": null
+        },
+        {
+          "ruleId": "C-121",
+          "status": "Checked",
+          "findingCount": 0,
+          "reason": null
+        },
+        {
+          "ruleId": "C-119",
+          "status": "Checked",
+          "findingCount": 0,
+          "reason": null
+        },
+        {
+          "ruleId": "C-120",
+          "status": "Checked",
+          "findingCount": 0,
+          "reason": null
+        },
+        {
+          "ruleId": "C-603",
+          "status": "NotApplicable",
+          "findingCount": 0,
+          "reason": "this block references no Step register, so it has no stepped-sequence phase condition for C-603 to read"
+        },
+        {
+          "ruleId": "C-122",
+          "status": "Checked",
+          "findingCount": 0,
+          "reason": null
+        },
+        {
+          "ruleId": "C-125",
+          "status": "Checked",
+          "findingCount": 0,
+          "reason": null
+        },
+        {
+          "ruleId": "C-201",
+          "status": "CheckedHarnessScope",
+          "findingCount": 0,
+          "reason": "0 further finding(s) reported under HARNESS-SCOPE and NOT gated - this content is harness-generated, and doc 06\u0027s naming conventions govern content authored for the plant"
+        },
+        {
+          "ruleId": "C-301",
+          "status": "Checked",
+          "findingCount": 0,
+          "reason": null
+        },
+        {
+          "ruleId": "C-501",
+          "status": "Checked",
+          "findingCount": 0,
+          "reason": null
+        },
+        {
+          "ruleId": "C-406",
+          "status": "Checked",
+          "findingCount": 0,
+          "reason": null
+        },
+        {
+          "ruleId": "C-408",
+          "status": "Checked",
+          "findingCount": 0,
+          "reason": null
+        },
+        {
+          "ruleId": "C-410",
+          "status": "Checked",
+          "findingCount": 0,
+          "reason": null
+        },
+        {
+          "ruleId": "C-102",
+          "status": "CheckedVacuous",
+          "findingCount": 0,
+          "reason": null
+        },
+        {
+          "ruleId": "C-401",
+          "status": "CheckedVacuous",
+          "findingCount": 0,
+          "reason": null
+        },
+        {
+          "ruleId": "C-404",
+          "status": "CheckedVacuous",
+          "findingCount": 0,
+          "reason": null
+        }
+      ],
+      "findings": []
+    }
+  ]
+}

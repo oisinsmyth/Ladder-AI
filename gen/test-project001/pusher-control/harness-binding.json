@@ -1,0 +1,376 @@
+{
+  "_generatedBy": "converter harness-binding - the MECHANICALLY DERIVABLE half only. Nothing here is a claim about the plant or about a specification; those are listed in `unresolvedHoles` and are the coordinator's to write.",
+  "_derivedFrom": "ir/test-project001 (46 file(s)). Types and RETAIN from the typed signal inventory; direction and the writer/reader sites from ProjectUsageGraph - the same producers `signal-set`, `candidate-scan` and `undriven-scan` answer from, so this document cannot disagree with them. Modbus window: served area: base 1000, 1024 register(s), derived from ir/test-project001\\FB_Comms_ModbusServer.ir:31 + sidecar ir/test-project001\\FB_Comms_ModbusServer.ir:39",
+  "unresolvedHoles": [
+    {
+      "field": "specName",
+      "paths": [
+        "iDB_PusherStim.Stim.ArmAt",
+        "iDB_PusherStim.Stim.ArmUntil",
+        "iDB_PusherStim.Stim.DownstreamEdge1",
+        "iDB_PusherStim.Stim.DownstreamEdge2",
+        "iDB_PusherStim.Stim.DownstreamInitial",
+        "iDB_PusherStim.Stim.EndAt",
+        "iDB_PusherStim.Stim.FullTravelEdge1",
+        "iDB_PusherStim.Stim.FullTravelEdge2",
+        "iDB_PusherStim.Stim.FullTravelInitial",
+        "iDB_PusherStim.Stim.HealthyEdge1",
+        "iDB_PusherStim.Stim.HealthyEdge2",
+        "iDB_PusherStim.Stim.HealthyInitial",
+        "iDB_PusherStim.Stim.HighPressureEdge1",
+        "iDB_PusherStim.Stim.HighPressureEdge2",
+        "iDB_PusherStim.Stim.HighPressureInitial",
+        "iDB_PusherStim.Stim.HomeEdge1",
+        "iDB_PusherStim.Stim.HomeEdge2",
+        "iDB_PusherStim.Stim.HomeInitial",
+        "iDB_PusherStim.Stim.HopperEdge1",
+        "iDB_PusherStim.Stim.HopperEdge2",
+        "iDB_PusherStim.Stim.HopperInitial",
+        "iDB_PusherStim.Stim.JogExtendEdge1",
+        "iDB_PusherStim.Stim.JogExtendEdge2",
+        "iDB_PusherStim.Stim.JogExtendInitial",
+        "iDB_PusherStim.Stim.JogRetractEdge1",
+        "iDB_PusherStim.Stim.JogRetractEdge2",
+        "iDB_PusherStim.Stim.JogRetractInitial",
+        "iDB_PusherStim.Stim.ManualCycleEdge1",
+        "iDB_PusherStim.Stim.ManualCycleEdge2",
+        "iDB_PusherStim.Stim.ManualCycleInitial",
+        "iDB_PusherStim.Stim.Mode",
+        "iDB_PusherStim.Stim.PackRunningEdge1",
+        "iDB_PusherStim.Stim.PackRunningEdge2",
+        "iDB_PusherStim.Stim.PackRunningInitial",
+        "iDB_PusherStim.Stim.ResetAt",
+        "iDB_PusherStim.Stim.ResetMode",
+        "iDB_PusherStim.Stim.Start",
+        "iDB_PusherStim.Stim.Armed",
+        "iDB_PusherStim.Stim.ArrivedDirty",
+        "iDB_PusherStim.Stim.InertAtEnd",
+        "iDB_PusherStim.Stim.InertAtStart",
+        "iDB_PusherStim.Stim.Phase",
+        "iDB_PusherStim.Stim.RecoverFailed",
+        "iDB_PusherStim.Stim.ResetRequest",
+        "iDB_PusherStim.Stim.ScenarioDone",
+        "iDB_PusherControl.IO.Blocked",
+        "iDB_PusherControl.IO.BothSwitchesFault",
+        "iDB_PusherControl.IO.Cycling",
+        "iDB_PusherControl.IO.Enable",
+        "iDB_PusherControl.IO.EndTravelTimeoutFault",
+        "iDB_PusherControl.IO.Extend",
+        "iDB_PusherControl.IO.JogPreStartSounder",
+        "iDB_PusherControl.IO.ParkedTimeoutFault",
+        "iDB_PusherControl.IO.Retract",
+        "iDB_PusherControl.IO.RunPowerPack",
+        "iDB_PusherControl.IO.Step"
+      ],
+      "missing": "the specification's own name for each of these signals",
+      "resolvedBy": "the coordinator. It is a spec<->code TRANSLATION and the corpus contains only one of the two sides. Absent, gate 5 reports NOT CHECKED and nothing joins what a vector cites to what the copy layer carries.",
+      "_notResolvedBy": "NOT RESOLVED BY THE BLOCK AUTHOR, DELIBERATELY. It is the translation between what a vector cites and what the copy layer carries, and the vector side is being written in parallel by a third party this lane must not read. Filling it from the IR member names would be this lane inventing the other party's vocabulary and then agreeing with itself."
+    },
+    {
+      "field": "encoding",
+      "paths": [
+        "iDB_PusherStim.Stim.Mode",
+        "iDB_PusherStim.Stim.ResetMode"
+      ],
+      "missing": "whether the cited values for these are SYMBOLS needing a table, or numbers written as themselves",
+      "resolvedBy": "the coordinator, transcribing the specification's own table and CITING the line (`source`, e.g. `md:132-143`). Without it an encoded value is indistinguishable from a number somebody invented. If the cited text IS the value, leave `encoding` absent — that is the positive claim `no table`.",
+      "_notResolvedBy": "NOT RESOLVED. UDT_PusherStim states what Mode and ResetMode MEAN (0/1/2 in each case, in the members' own comments), but an encoding is the mapping from the SYMBOLS a vector cites to those numbers, and no symbol vocabulary exists on this side. If the vectors cite the numbers themselves, `whenNumeric: Literal` with no table is the answer - and that is still the coordinator's sentence, not this lane's."
+    },
+    {
+      "field": "inertRest",
+      "paths": [
+        "iDB_PusherStim.Stim.Armed",
+        "iDB_PusherStim.Stim.ArrivedDirty",
+        "iDB_PusherStim.Stim.InertAtEnd",
+        "iDB_PusherStim.Stim.InertAtStart",
+        "iDB_PusherStim.Stim.Phase",
+        "iDB_PusherStim.Stim.RecoverFailed",
+        "iDB_PusherStim.Stim.ResetRequest",
+        "iDB_PusherStim.Stim.ScenarioDone",
+        "iDB_PusherControl.IO.Blocked",
+        "iDB_PusherControl.IO.BothSwitchesFault",
+        "iDB_PusherControl.IO.Cycling",
+        "iDB_PusherControl.IO.Enable",
+        "iDB_PusherControl.IO.EndTravelTimeoutFault",
+        "iDB_PusherControl.IO.Extend",
+        "iDB_PusherControl.IO.JogPreStartSounder",
+        "iDB_PusherControl.IO.ParkedTimeoutFault",
+        "iDB_PusherControl.IO.Retract",
+        "iDB_PusherControl.IO.RunPowerPack",
+        "iDB_PusherControl.IO.Step"
+      ],
+      "missing": "what each of these reads when the plant is at rest",
+      "resolvedBy": "the coordinator. It is a claim about the PLANT, and a hard-coded zero is wrong in both directions. `excluded: true` with a `basis` is the other admissible answer; the slot-level `assumedZeroRest` escape needs `assumedZeroRestBasis` beside it.",
+      "_notResolvedBy": "NOT RESOLVED, AND NOT ESCAPED WITH assumedZeroRest EITHER. Every resting value here would be a claim about what the block reads at rest, and nothing has measured one: this slot has never run. The head is designed so that the answer should be zero for all 30 registers - the tail cleardown runs INSIDE the index, so the block is already verified inert before the start bool falls - but 'should be' is the reasoning, not the measurement, and the register that reads 0 because nothing ever wrote it is exactly the failure the inert check exists to catch. Resolve it from the first wave's own idle sample, the way the hopper slot's basis was."
+    },
+    {
+      "field": "declaredBy",
+      "paths": [
+        "binding"
+      ],
+      "missing": "who authored this binding",
+      "resolvedBy": "the coordinator, and it must NOT be the block's author: gate 5c exists because a party who decides both what the block does and what can be observed of it is the correlated reading this pipeline breaks. A tool cannot sign for a person.",
+      "_notResolvedBy": "NOT RESOLVED, AND THIS IS THE ONE FIELD THIS LANE MUST NOT FILL. Gate 5c exists because a party who decides both what the block does and what can be observed of it is the correlated reading the pipeline breaks. FB_PusherStim, UDT_PusherStim, iDB_PusherStim and the regenerated Main were all written by lad-coder, so lad-coder signing this document would make the gate compare a party against itself. It needs the coordinator's own signature."
+    },
+    {
+      "field": "retentiveBytes",
+      "paths": [
+        "binding"
+      ],
+      "missing": "the program's retentive %M extent",
+      "resolvedBy": "the engineer. It is a property of the PROGRAM, not of the CPU, and it is an input to the map hash and therefore to the build stamp. Nothing in an IR corpus states it.",
+      "_notResolvedBy": "NOT RESOLVED, and the deployed hopper binding does not resolve it either (its retentiveBytes is null). It is a property of the PROGRAM's retentive %M extent, which no IR corpus states, and it feeds the map hash and therefore the build stamp - so a guess here changes a stamp that is supposed to identify a download."
+    }
+  ],
+  "_blockIdentity": "TRANSCRIBED, NOT CHOSEN. This slot joins the mirror that is already deployed rather than standing up a second one: ir/test-project001/FC_HarnessCopyLayer.ir declares `BLOCK FC FC_HarnessCopyLayer` and `NUMBER 9001`, and ir/test-project001/HarnessMirror.ir declares `TAGTABLE HarnessMirror` whose every tag is prefixed HX_. A SECOND copy layer is not an option and the reason is in the comms block: FB_Comms_ModbusServer serves ONE window, and converter served-area refuses a corpus holding two MB_SERVER calls because which one serves the mirror is then not derivable. So blockNumber 9001 is NOT claimed by this lane - it is the number the existing block already holds.",
+  "blockName": "FC_HarnessCopyLayer",
+  "blockNumber": 9001,
+  "tagTableName": "HarnessMirror",
+  "tagPrefix": "HX_",
+  "_baseByte": "EMITTED BY THE SCAFFOLD from `converter served-area`, which reads it off ir/test-project001/FB_Comms_ModbusServer.ir NETWORK 1: `MB_HOLD_REG := P#M1000.0 WORD 1024`. Not narrowed here, and it must not be: the window on the wire is 1024 registers whatever this map allocates, and a binding declaring less would have the client and the server disagree about where the mirror ends.",
+  "baseByte": 1000,
+  "declaredRegisters": 1024,
+  "slots": [
+    {
+      "slotId": "PSH",
+      "_registerOrder": "RESOLVED, and the resolution is that there is nothing to transcribe. The hole exists so that a re-order cannot silently move signals to different registers on a redeploy; that risk needs a PREVIOUS deployment of this slot, and there is none - ir/test-project001/HarnessMirror.ir carries HX_HBA_* tags and not one HX_PSH_* tag, so no PSH register has ever been on the wire and no client mirror is written against an older layout. This scaffold's ordinal-by-tag order is therefore the FIRST order, not a re-ordering of one. Once it is deployed this annotation stops being true and the deployed order becomes the thing to transcribe.",
+      "_startCondition": "DERIVED FROM THE EMITTED SHELL, not chosen: network 1 of FB_PusherStim reads `COIL Running := (Stim.Start OR Running) AND NOT Stim.ScenarioDone`, so this member and no other is what starts an index. It is REMOVED FROM vectorTargets above and appears only here: the copy layer refuses a generation in which one signal is both a vector target and the start condition, because the start bool is written by the control band and a vector register writing it too would be two writers of one line.",
+      "startCondition": "iDB_PusherStim.Stim.Start",
+      "vectorTargets": [
+        {
+          "tag": "iDB_PusherStim.Stim.ArmAt",
+          "type": "Time"
+        },
+        {
+          "tag": "iDB_PusherStim.Stim.ArmUntil",
+          "type": "Time"
+        },
+        {
+          "tag": "iDB_PusherStim.Stim.DownstreamEdge1",
+          "type": "Time"
+        },
+        {
+          "tag": "iDB_PusherStim.Stim.DownstreamEdge2",
+          "type": "Time"
+        },
+        {
+          "tag": "iDB_PusherStim.Stim.DownstreamInitial",
+          "type": "Bool"
+        },
+        {
+          "tag": "iDB_PusherStim.Stim.EndAt",
+          "type": "Time"
+        },
+        {
+          "tag": "iDB_PusherStim.Stim.FullTravelEdge1",
+          "type": "Time"
+        },
+        {
+          "tag": "iDB_PusherStim.Stim.FullTravelEdge2",
+          "type": "Time"
+        },
+        {
+          "tag": "iDB_PusherStim.Stim.FullTravelInitial",
+          "type": "Bool"
+        },
+        {
+          "tag": "iDB_PusherStim.Stim.HealthyEdge1",
+          "type": "Time"
+        },
+        {
+          "tag": "iDB_PusherStim.Stim.HealthyEdge2",
+          "type": "Time"
+        },
+        {
+          "tag": "iDB_PusherStim.Stim.HealthyInitial",
+          "type": "Bool"
+        },
+        {
+          "tag": "iDB_PusherStim.Stim.HighPressureEdge1",
+          "type": "Time"
+        },
+        {
+          "tag": "iDB_PusherStim.Stim.HighPressureEdge2",
+          "type": "Time"
+        },
+        {
+          "tag": "iDB_PusherStim.Stim.HighPressureInitial",
+          "type": "Bool"
+        },
+        {
+          "tag": "iDB_PusherStim.Stim.HomeEdge1",
+          "type": "Time"
+        },
+        {
+          "tag": "iDB_PusherStim.Stim.HomeEdge2",
+          "type": "Time"
+        },
+        {
+          "tag": "iDB_PusherStim.Stim.HomeInitial",
+          "type": "Bool"
+        },
+        {
+          "tag": "iDB_PusherStim.Stim.HopperEdge1",
+          "type": "Time"
+        },
+        {
+          "tag": "iDB_PusherStim.Stim.HopperEdge2",
+          "type": "Time"
+        },
+        {
+          "tag": "iDB_PusherStim.Stim.HopperInitial",
+          "type": "Bool"
+        },
+        {
+          "tag": "iDB_PusherStim.Stim.JogExtendEdge1",
+          "type": "Time"
+        },
+        {
+          "tag": "iDB_PusherStim.Stim.JogExtendEdge2",
+          "type": "Time"
+        },
+        {
+          "tag": "iDB_PusherStim.Stim.JogExtendInitial",
+          "type": "Bool"
+        },
+        {
+          "tag": "iDB_PusherStim.Stim.JogRetractEdge1",
+          "type": "Time"
+        },
+        {
+          "tag": "iDB_PusherStim.Stim.JogRetractEdge2",
+          "type": "Time"
+        },
+        {
+          "tag": "iDB_PusherStim.Stim.JogRetractInitial",
+          "type": "Bool"
+        },
+        {
+          "tag": "iDB_PusherStim.Stim.ManualCycleEdge1",
+          "type": "Time"
+        },
+        {
+          "tag": "iDB_PusherStim.Stim.ManualCycleEdge2",
+          "type": "Time"
+        },
+        {
+          "tag": "iDB_PusherStim.Stim.ManualCycleInitial",
+          "type": "Bool"
+        },
+        {
+          "tag": "iDB_PusherStim.Stim.Mode",
+          "type": "Int"
+        },
+        {
+          "tag": "iDB_PusherStim.Stim.PackRunningEdge1",
+          "type": "Time"
+        },
+        {
+          "tag": "iDB_PusherStim.Stim.PackRunningEdge2",
+          "type": "Time"
+        },
+        {
+          "tag": "iDB_PusherStim.Stim.PackRunningInitial",
+          "type": "Bool"
+        },
+        {
+          "tag": "iDB_PusherStim.Stim.ResetAt",
+          "type": "Time"
+        },
+        {
+          "tag": "iDB_PusherStim.Stim.ResetMode",
+          "type": "Int"
+        }
+      ],
+      "resultSources": [
+        {
+          "tag": "iDB_PusherControl.IO.Blocked",
+          "type": "Bool"
+        },
+        {
+          "tag": "iDB_PusherControl.IO.BothSwitchesFault",
+          "type": "Bool"
+        },
+        {
+          "tag": "iDB_PusherControl.IO.Cycling",
+          "type": "Bool"
+        },
+        {
+          "tag": "iDB_PusherControl.IO.Enable",
+          "type": "Bool"
+        },
+        {
+          "tag": "iDB_PusherControl.IO.EndTravelTimeoutFault",
+          "type": "Bool"
+        },
+        {
+          "tag": "iDB_PusherControl.IO.Extend",
+          "type": "Bool"
+        },
+        {
+          "tag": "iDB_PusherControl.IO.JogPreStartSounder",
+          "type": "Bool"
+        },
+        {
+          "tag": "iDB_PusherControl.IO.ParkedTimeoutFault",
+          "type": "Bool"
+        },
+        {
+          "tag": "iDB_PusherControl.IO.Retract",
+          "type": "Bool"
+        },
+        {
+          "tag": "iDB_PusherControl.IO.RunPowerPack",
+          "type": "Bool"
+        },
+        {
+          "tag": "iDB_PusherControl.IO.Step",
+          "type": "Int"
+        },
+        {
+          "tag": "iDB_PusherStim.Stim.Armed",
+          "type": "Bool"
+        },
+        {
+          "tag": "iDB_PusherStim.Stim.ArrivedDirty",
+          "type": "Bool",
+          "latchedBy": "FB_PusherStim",
+          "_latchEvidence": "FB_PusherStim N11 SETCOIL, FB_PusherStim N16 RESETCOIL; no other writer in this corpus"
+        },
+        {
+          "tag": "iDB_PusherStim.Stim.InertAtEnd",
+          "type": "Bool",
+          "latchedBy": "FB_PusherStim",
+          "_latchEvidence": "FB_PusherStim N13 SETCOIL, FB_PusherStim N13 RESETCOIL, FB_PusherStim N16 RESETCOIL; no other writer in this corpus"
+        },
+        {
+          "tag": "iDB_PusherStim.Stim.InertAtStart",
+          "type": "Bool",
+          "latchedBy": "FB_PusherStim",
+          "_latchEvidence": "FB_PusherStim N12 SETCOIL, FB_PusherStim N12 RESETCOIL, FB_PusherStim N16 RESETCOIL; no other writer in this corpus"
+        },
+        {
+          "tag": "iDB_PusherStim.Stim.Phase",
+          "type": "Int"
+        },
+        {
+          "tag": "iDB_PusherStim.Stim.RecoverFailed",
+          "type": "Bool",
+          "latchedBy": "FB_PusherStim",
+          "_latchEvidence": "FB_PusherStim N13 SETCOIL, FB_PusherStim N16 RESETCOIL; no other writer in this corpus"
+        },
+        {
+          "tag": "iDB_PusherStim.Stim.ResetRequest",
+          "type": "Bool"
+        },
+        {
+          "tag": "iDB_PusherStim.Stim.ScenarioDone",
+          "type": "Bool",
+          "latchedBy": "FB_PusherStim",
+          "_latchEvidence": "FB_PusherStim N15 SETCOIL, FB_PusherStim N16 RESETCOIL; no other writer in this corpus"
+        }
+      ]
+    }
+  ],
+  "_resolvedByLadCoder": "Three of the scaffold's eight holes are resolved above and each is a TRANSCRIPTION or a DERIVATION, never a decision: the copy layer's identity (read off the two committed harness artifacts), the start condition (read off the emitted shell's own network 1, and removed from vectorTargets so it is not written twice), and the register order (there is no earlier order, which is checkable against HarnessMirror.ir). The five that remain are named above with the reason this lane is the wrong party to answer them. THE DOCUMENT IS THEREFORE STILL REFUSED BY GATE 0b, which is the correct state for it: the mechanism is built, the claims about the spec and the plant are not made."
+}

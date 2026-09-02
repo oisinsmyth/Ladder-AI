@@ -1,0 +1,2439 @@
+{
+  "schema": "ladder-ai/agent-evidence/1",
+  "task": "Build the MECHANISM for a third conformance slot (SHR) in test-project001 with FB_ShredderSequencer as the block under test: stimulus head, its instance DB, the slot plumbing, and gen/test-project001/shredder-sequencer/harness-binding.json.",
+  "kind": "new",
+  "manual": true,
+  "_manual": "NO SKILL COVERS THIS STAGE. docs/15's skills cover analysis/design/build/check of PLANT blocks; standing up a conformance slot is not one of them. Done manually, to the same contract: claims before writing, mechanical gates, raw tool JSON, findings reported rather than worked around.",
+  "_lineCount": "🔴 HAND-WRITTEN HARNESS MECHANISM IR: 0 LINES. The head's index shell - networks 1-17, the index latch and clock, the six cleardown phases, the scenario, the reset request, the latched-cause check, the four published outcomes, the observation window, completion and re-arm - is 81 lines emitted by Harness.Map.StimShellGenerator. The whole of UDT_ShredderSequencerStim.ir is emitted by StimUdtGenerator (12 members derived from the rungs, 17 declared). The whole of iDB_ShredderSequencerStim.ir is emitted by InstanceDbGenerator. The FB's own Stim struct member list (29 lines) is PROJECTED from the generated UDT by the assembler, not typed. HAND-WRITTEN PLANT-MODEL IR: 126 lines - 71 of header and interface (the generator emits no header, no interface and no statics, by design) and 55 of networks 18-26. Those 9 networks are the four obligations StimShellGenerator names as the author's: the disarm lever (N18), the shared-reset arbitration (N19), the scenario timeline (N20-N23), the closed-loop contactor model (N24), the drives (N25) and the pusher assumption (N26). Every one is a claim about what the equipment does, which is the mechanism/plant-claim line, not a generator gap. Comments are the generator's fifth obligation and are authored throughout. TOTAL 236 lines.",
+  "_route": "Harness.Map was called DIRECTLY through a small driver at agent-tasks/shredder-slot/gen, adapted from the pusher lane's rather than invented a second time. Not `harness-run --generate-only`: that path also runs LoopRun.Generate, which GENERATES THE COPY LAYER AND MIRROR, and emitting those from a single-slot binding would produce a mirror carrying SHR and not HBA - deleting a deployed, passing slot. Measured before switching routes: a --generate-only run against this binding was correctly REFUSED by this document's own reservedRegions ('the mirror's version region [0..1] enters reserved registers [0..1]' and four more), and a second run with the reservation stripped emitted a copy layer and mirror into a scratch directory only - NEITHER WAS EVER WRITTEN TO ir/, and both were discarded. The driver opens no socket, touches no Portal, adds nothing to harness.sln and generates only the shell, the type and the instance DB.",
+  "files": [
+    {
+      "path": "ir/test-project001/FB_ShredderSequencerStim.ir",
+      "ir_hash": "863B998C4D73B2FAA17E089CC1D435237C8B66C6BBB4096B97F94F3775BEA84F"
+    },
+    {
+      "path": "ir/test-project001/UDT_ShredderSequencerStim.ir"
+    },
+    {
+      "path": "ir/test-project001/iDB_ShredderSequencerStim.ir"
+    }
+  ],
+  "_files": "The three generated/assembled objects. UDT_ShredderSequencerStim.ir and iDB_ShredderSequencerStim.ir carry no ir_hash because ir-hash keys CODE BLOCKS only - a TYPE and a DB report an error and a null hash - so they are listed without one, which is the documented shape. gen/test-project001/shredder-sequencer/harness-binding.json is deliberately NOT listed: it is JSON, not IR, there is no hashable-artifact class for it in this schema, and listing it would produce a 'no ir_hash recorded' failure that says nothing true. It is checked instead by the two scripts named under _selfCheck.",
+  "claims": [
+    {
+      "kind": "block-number",
+      "value": "FB9004",
+      "agent": "ee055079-868d-48bc-aa0a-7516e8688d29/lad-coder-shredderslot",
+      "purpose": "Shredder-sequencer conformance slot: stimulus head FB (generated shell + authored plant model)"
+    },
+    {
+      "kind": "block-number",
+      "value": "DB9004",
+      "agent": "ee055079-868d-48bc-aa0a-7516e8688d29/lad-coder-shredderslot",
+      "purpose": "Shredder-sequencer conformance slot: instance DB of the stimulus head FB9004"
+    },
+    {
+      "kind": "block-number",
+      "value": "FC9000",
+      "agent": "ee055079-868d-48bc-aa0a-7516e8688d29/lad-coder-shredderslot",
+      "purpose": "Shredder-sequencer conformance slot: generated slot FC (calls the head then the sequencer)"
+    }
+  ],
+  "_claims": "🔴 ALL THREE ARE STILL HELD AT HAND-BACK - nothing was released. FB9004 joins FB_ShredderSequencerStim.ir and DB9004 joins iDB_ShredderSequencerStim.ir, both on their NUMBER lines. UDT_ShredderSequencerStim.ir carries no NUMBER and a new type cannot be claimed at all, so it is named rather than joined - the documented shape. 🔴 CONSCIOUSLY DECLARED PROBLEM: FC9000 WILL NOT JOIN, because no file carries it. It is SUPERSEDED - allocated for a generated slot FC, and the binding then deliberately declares none, because SlotFcGenerator emits `CALL <head>` then `CALL <block under test>` and that would execute FB_ShredderSequencer a SECOND time per scan on top of FC_ControlMain.ir:29, double-accruing every TON in it. It is declared rather than dropped because it is a live reservation the dispatcher must release; this lane may not release its own.",
+  "checks": [
+    {
+      "tool": "converter preflight",
+      "exit": 0,
+      "json": {
+        "files": [
+          {
+            "filePath": "ir/test-project001/FB_ShredderSequencerStim.ir",
+            "name": "FB_ShredderSequencerStim",
+            "findings": [
+              {
+                "check": "review:harness-scope",
+                "description": "Harness: FB 9004 is inside the reserved harness band 9000-9999 (declared docs/notes/test-environment-build-plan.md, 2026-08-13). 0 C-001/C-201 finding(s) reported without gating.",
+                "gates": false
+              }
+            ]
+          },
+          {
+            "filePath": "ir/test-project001/UDT_ShredderSequencerStim.ir",
+            "name": "UDT_ShredderSequencerStim",
+            "findings": []
+          },
+          {
+            "filePath": "ir/test-project001/iDB_ShredderSequencerStim.ir",
+            "name": "iDB_ShredderSequencerStim",
+            "findings": [
+              {
+                "check": "review:harness-scope",
+                "description": "Harness: DB 9004 is inside the reserved harness band 9000-9999 (declared docs/notes/test-environment-build-plan.md, 2026-08-13). 0 C-001/C-201 finding(s) reported without gating.",
+                "gates": false
+              }
+            ]
+          }
+        ],
+        "indexWarnings": [],
+        "corpus": {
+          "projectDir": "ir/test-project001",
+          "projectFileCount": 49,
+          "batchFileCount": 3,
+          "projectContributedNothing": false,
+          "blockNameCount": 20,
+          "tagRootNameCount": 147,
+          "typeNameCount": 7,
+          "memberBodyCount": 27,
+          "calleeInterfaceCount": 20,
+          "harnessCorpusFileCount": 49
+        }
+      }
+    },
+    {
+      "tool": "converter review (conventions, doc 06)",
+      "exit": 0,
+      "json": {
+        "uncheckedRuleCount": 0,
+        "uncheckedRules": [],
+        "harnessScopedFindingCount": 0,
+        "harnessObjectCount": 2,
+        "unclassifiedObjectCount": 1,
+        "files": [
+          {
+            "filePath": "ir/test-project001/FB_ShredderSequencerStim.ir",
+            "blockName": "FB_ShredderSequencerStim",
+            "fileError": null,
+            "harnessClass": "Harness",
+            "harnessBasis": "FB 9004 is inside the reserved harness band 9000-9999 (declared docs/notes/test-environment-build-plan.md, 2026-08-13)",
+            "harnessScopedFindings": [],
+            "ruleStatuses": [
+              {
+                "ruleId": "C-001",
+                "status": "CheckedHarnessScope",
+                "findingCount": 0,
+                "reason": "0 further finding(s) reported under HARNESS-SCOPE and NOT gated - this content is harness-generated, and doc 06's naming conventions govern content authored for the plant"
+              },
+              {
+                "ruleId": "C-003",
+                "status": "Checked",
+                "findingCount": 0,
+                "reason": null
+              },
+              {
+                "ruleId": "C-005",
+                "status": "Checked",
+                "findingCount": 0,
+                "reason": null
+              },
+              {
+                "ruleId": "C-103",
+                "status": "Checked",
+                "findingCount": 0,
+                "reason": null
+              },
+              {
+                "ruleId": "C-118",
+                "status": "Checked",
+                "findingCount": 0,
+                "reason": null
+              },
+              {
+                "ruleId": "C-121",
+                "status": "Checked",
+                "findingCount": 0,
+                "reason": null
+              },
+              {
+                "ruleId": "C-119",
+                "status": "Checked",
+                "findingCount": 0,
+                "reason": null
+              },
+              {
+                "ruleId": "C-120",
+                "status": "Checked",
+                "findingCount": 0,
+                "reason": null
+              },
+              {
+                "ruleId": "C-603",
+                "status": "NotApplicable",
+                "findingCount": 0,
+                "reason": "this block references no Step register, so it has no stepped-sequence phase condition for C-603 to read"
+              },
+              {
+                "ruleId": "C-122",
+                "status": "Checked",
+                "findingCount": 0,
+                "reason": null
+              },
+              {
+                "ruleId": "C-125",
+                "status": "Checked",
+                "findingCount": 0,
+                "reason": null
+              },
+              {
+                "ruleId": "C-201",
+                "status": "CheckedHarnessScope",
+                "findingCount": 0,
+                "reason": "0 further finding(s) reported under HARNESS-SCOPE and NOT gated - this content is harness-generated, and doc 06's naming conventions govern content authored for the plant"
+              },
+              {
+                "ruleId": "C-301",
+                "status": "Checked",
+                "findingCount": 0,
+                "reason": null
+              },
+              {
+                "ruleId": "C-501",
+                "status": "Checked",
+                "findingCount": 0,
+                "reason": null
+              },
+              {
+                "ruleId": "C-406",
+                "status": "Checked",
+                "findingCount": 0,
+                "reason": null
+              },
+              {
+                "ruleId": "C-408",
+                "status": "Checked",
+                "findingCount": 0,
+                "reason": null
+              },
+              {
+                "ruleId": "C-410",
+                "status": "Checked",
+                "findingCount": 0,
+                "reason": null
+              },
+              {
+                "ruleId": "C-102",
+                "status": "CheckedVacuous",
+                "findingCount": 0,
+                "reason": null
+              },
+              {
+                "ruleId": "C-401",
+                "status": "CheckedVacuous",
+                "findingCount": 0,
+                "reason": null
+              },
+              {
+                "ruleId": "C-404",
+                "status": "CheckedVacuous",
+                "findingCount": 0,
+                "reason": null
+              }
+            ],
+            "findings": []
+          },
+          {
+            "filePath": "ir/test-project001/UDT_ShredderSequencerStim.ir",
+            "blockName": "UDT_ShredderSequencerStim",
+            "fileError": null,
+            "harnessClass": "Unclassified",
+            "harnessBasis": "'UDT_ShredderSequencerStim' is a PLC data type: a UDT carries NO number, so the reserved band 9000-9999 has nothing to read, and its NAME is the only other table-level property — which is exactly what must not be load-bearing. No derivable property distinguishes a harness-generated UDT from a plant one, so this is UNCLASSIFIED and every finding gates",
+            "harnessScopedFindings": [],
+            "ruleStatuses": [
+              {
+                "ruleId": "C-001",
+                "status": "Checked",
+                "findingCount": 0,
+                "reason": null
+              },
+              {
+                "ruleId": "C-003",
+                "status": "Checked",
+                "findingCount": 0,
+                "reason": null
+              },
+              {
+                "ruleId": "C-005",
+                "status": "Checked",
+                "findingCount": 0,
+                "reason": null
+              },
+              {
+                "ruleId": "C-201",
+                "status": "Checked",
+                "findingCount": 0,
+                "reason": null
+              },
+              {
+                "ruleId": "C-406",
+                "status": "Checked",
+                "findingCount": 0,
+                "reason": null
+              },
+              {
+                "ruleId": "C-102",
+                "status": "NotApplicable",
+                "findingCount": 0,
+                "reason": "a TYPE file has no networks/instructions"
+              },
+              {
+                "ruleId": "C-103",
+                "status": "NotApplicable",
+                "findingCount": 0,
+                "reason": "a TYPE file has no coils"
+              },
+              {
+                "ruleId": "C-118",
+                "status": "NotApplicable",
+                "findingCount": 0,
+                "reason": "C-118 places a Step register relative to a BLOCK's interface UDT; a TYPE file is that UDT, it has no interface of its own"
+              },
+              {
+                "ruleId": "C-119",
+                "status": "NotApplicable",
+                "findingCount": 0,
+                "reason": "a TYPE file has no step logic"
+              },
+              {
+                "ruleId": "C-120",
+                "status": "NotApplicable",
+                "findingCount": 0,
+                "reason": "a TYPE file has no step logic"
+              },
+              {
+                "ruleId": "C-603",
+                "status": "NotApplicable",
+                "findingCount": 0,
+                "reason": "a TYPE file may DECLARE the Step member, but it holds no condition that reads one and no network comment to state a range intent in"
+              },
+              {
+                "ruleId": "C-121",
+                "status": "NotApplicable",
+                "findingCount": 0,
+                "reason": "a TYPE file has no networks"
+              },
+              {
+                "ruleId": "C-122",
+                "status": "NotApplicable",
+                "findingCount": 0,
+                "reason": "a TYPE file has no timer calls"
+              },
+              {
+                "ruleId": "C-125",
+                "status": "NotApplicable",
+                "findingCount": 0,
+                "reason": "a TYPE file has no timer calls or coils"
+              },
+              {
+                "ruleId": "C-301",
+                "status": "NotApplicable",
+                "findingCount": 0,
+                "reason": "a TYPE file has no networks"
+              },
+              {
+                "ruleId": "C-401",
+                "status": "NotApplicable",
+                "findingCount": 0,
+                "reason": "a TYPE file has no networks/instructions"
+              },
+              {
+                "ruleId": "C-404",
+                "status": "NotApplicable",
+                "findingCount": 0,
+                "reason": "a TYPE file has no networks/instructions"
+              },
+              {
+                "ruleId": "C-408",
+                "status": "NotApplicable",
+                "findingCount": 0,
+                "reason": "a TYPE file has no comparisons"
+              },
+              {
+                "ruleId": "C-410",
+                "status": "NotApplicable",
+                "findingCount": 0,
+                "reason": "a TYPE file declares members only — it calls no timer, so nothing here can wire a timer's IN to its own Q"
+              },
+              {
+                "ruleId": "C-501",
+                "status": "NotApplicable",
+                "findingCount": 0,
+                "reason": "a TYPE file has no networks writing alarm-word bits"
+              }
+            ],
+            "findings": []
+          },
+          {
+            "filePath": "ir/test-project001/iDB_ShredderSequencerStim.ir",
+            "blockName": "iDB_ShredderSequencerStim",
+            "fileError": null,
+            "harnessClass": "Harness",
+            "harnessBasis": "DB 9004 is inside the reserved harness band 9000-9999 (declared docs/notes/test-environment-build-plan.md, 2026-08-13)",
+            "harnessScopedFindings": [],
+            "ruleStatuses": [
+              {
+                "ruleId": "C-003",
+                "status": "Checked",
+                "findingCount": 0,
+                "reason": null
+              },
+              {
+                "ruleId": "C-001",
+                "status": "CheckedHarnessScope",
+                "findingCount": 0,
+                "reason": "0 further finding(s) reported under HARNESS-SCOPE and NOT gated - this content is harness-generated, and doc 06's naming conventions govern content authored for the plant"
+              },
+              {
+                "ruleId": "C-005",
+                "status": "Checked",
+                "findingCount": 0,
+                "reason": null
+              },
+              {
+                "ruleId": "C-201",
+                "status": "CheckedHarnessScope",
+                "findingCount": 0,
+                "reason": "0 further finding(s) reported under HARNESS-SCOPE and NOT gated - this content is harness-generated, and doc 06's naming conventions govern content authored for the plant"
+              },
+              {
+                "ruleId": "C-103",
+                "status": "NotApplicable",
+                "findingCount": 0,
+                "reason": "DB-kind file has no networks/coils"
+              },
+              {
+                "ruleId": "C-118",
+                "status": "NotApplicable",
+                "findingCount": 0,
+                "reason": "DB-kind file has no interface UDT / step logic"
+              },
+              {
+                "ruleId": "C-119",
+                "status": "NotApplicable",
+                "findingCount": 0,
+                "reason": "DB-kind file has no step logic"
+              },
+              {
+                "ruleId": "C-120",
+                "status": "NotApplicable",
+                "findingCount": 0,
+                "reason": "DB-kind file has no step logic"
+              },
+              {
+                "ruleId": "C-603",
+                "status": "NotApplicable",
+                "findingCount": 0,
+                "reason": "DB-kind file declares data only — it has no conditions over a step register, and no network comment to state a range intent in"
+              },
+              {
+                "ruleId": "C-121",
+                "status": "NotApplicable",
+                "findingCount": 0,
+                "reason": "DB-kind file has no networks"
+              },
+              {
+                "ruleId": "C-122",
+                "status": "NotApplicable",
+                "findingCount": 0,
+                "reason": "DB-kind file has no networks/timers"
+              },
+              {
+                "ruleId": "C-125",
+                "status": "NotApplicable",
+                "findingCount": 0,
+                "reason": "DB-kind file has no networks/timers/fault coils"
+              },
+              {
+                "ruleId": "C-301",
+                "status": "NotApplicable",
+                "findingCount": 0,
+                "reason": "DB-kind file has no networks"
+              },
+              {
+                "ruleId": "C-501",
+                "status": "NotApplicable",
+                "findingCount": 0,
+                "reason": "DB-kind file has no networks"
+              },
+              {
+                "ruleId": "C-406",
+                "status": "Checked",
+                "findingCount": 0,
+                "reason": null
+              },
+              {
+                "ruleId": "C-408",
+                "status": "NotApplicable",
+                "findingCount": 0,
+                "reason": "DB-kind file has no networks/instructions"
+              },
+              {
+                "ruleId": "C-410",
+                "status": "NotApplicable",
+                "findingCount": 0,
+                "reason": "DB-kind file declares timer instances but makes no timer CALL, so no IN expression exists here to read a timer's own Q back"
+              },
+              {
+                "ruleId": "C-102",
+                "status": "NotApplicable",
+                "findingCount": 0,
+                "reason": "DB-kind file has no networks/instructions"
+              },
+              {
+                "ruleId": "C-401",
+                "status": "NotApplicable",
+                "findingCount": 0,
+                "reason": "DB-kind file has no networks/instructions"
+              },
+              {
+                "ruleId": "C-404",
+                "status": "NotApplicable",
+                "findingCount": 0,
+                "reason": "DB-kind file has no networks/instructions"
+              }
+            ],
+            "findings": []
+          }
+        ]
+      }
+    },
+    {
+      "tool": "converter tagstatus (hard rule 3: every tag the head and the binding name)",
+      "exit": 0,
+      "json": {
+        "names": [
+          {
+            "name": "iDB_ShredderSequencer.IO.Step",
+            "root": "iDB_ShredderSequencer",
+            "status": "EXISTS",
+            "detail": null,
+            "exists": true,
+            "blocking": false
+          },
+          {
+            "name": "iDB_ShredderSequencer.IO.RunDischargeConv",
+            "root": "iDB_ShredderSequencer",
+            "status": "EXISTS",
+            "detail": null,
+            "exists": true,
+            "blocking": false
+          },
+          {
+            "name": "iDB_ShredderSequencer.IO.RunInfeedConv",
+            "root": "iDB_ShredderSequencer",
+            "status": "EXISTS",
+            "detail": null,
+            "exists": true,
+            "blocking": false
+          },
+          {
+            "name": "iDB_ShredderSequencer.IO.EnableUpstream",
+            "root": "iDB_ShredderSequencer",
+            "status": "EXISTS",
+            "detail": null,
+            "exists": true,
+            "blocking": false
+          },
+          {
+            "name": "iDB_ShredderSequencer.IO.PreStartSounder",
+            "root": "iDB_ShredderSequencer",
+            "status": "EXISTS",
+            "detail": null,
+            "exists": true,
+            "blocking": false
+          },
+          {
+            "name": "iDB_ShredderSequencer.IO.MotorReverseCmd",
+            "root": "iDB_ShredderSequencer",
+            "status": "EXISTS",
+            "detail": null,
+            "exists": true,
+            "blocking": false
+          },
+          {
+            "name": "iDB_ShredderSequencer.IO.MotorAutoStartCmd",
+            "root": "iDB_ShredderSequencer",
+            "status": "EXISTS",
+            "detail": null,
+            "exists": true,
+            "blocking": false
+          },
+          {
+            "name": "iDB_ShredderSequencer.IO.MotorPreStartDoneCmd",
+            "root": "iDB_ShredderSequencer",
+            "status": "EXISTS",
+            "detail": null,
+            "exists": true,
+            "blocking": false
+          },
+          {
+            "name": "iDB_ShredderSequencer.IO.MotorStartArm",
+            "root": "iDB_ShredderSequencer",
+            "status": "EXISTS",
+            "detail": null,
+            "exists": true,
+            "blocking": false
+          },
+          {
+            "name": "iDB_ShredderSequencer.IO.PusherParkCmd",
+            "root": "iDB_ShredderSequencer",
+            "status": "EXISTS",
+            "detail": null,
+            "exists": true,
+            "blocking": false
+          },
+          {
+            "name": "iDB_ShredderSequencer.IO.PusherCycleInhibitCmd",
+            "root": "iDB_ShredderSequencer",
+            "status": "EXISTS",
+            "detail": null,
+            "exists": true,
+            "blocking": false
+          },
+          {
+            "name": "iDB_ShredderSequencer.IO.PusherModeCmd",
+            "root": "iDB_ShredderSequencer",
+            "status": "EXISTS",
+            "detail": null,
+            "exists": true,
+            "blocking": false
+          },
+          {
+            "name": "iDB_ShredderSequencer.IO.DischargeConveyorTimeoutFault",
+            "root": "iDB_ShredderSequencer",
+            "status": "EXISTS",
+            "detail": null,
+            "exists": true,
+            "blocking": false
+          },
+          {
+            "name": "iDB_ShredderSequencer.IO.ShredderBlockedFault",
+            "root": "iDB_ShredderSequencer",
+            "status": "EXISTS",
+            "detail": null,
+            "exists": true,
+            "blocking": false
+          },
+          {
+            "name": "iDB_ShredderSequencer.IO.InCycle",
+            "root": "iDB_ShredderSequencer",
+            "status": "EXISTS",
+            "detail": null,
+            "exists": true,
+            "blocking": false
+          },
+          {
+            "name": "iDB_MotorFwdRevSystem_Shredder.IO.FaultActive",
+            "root": "iDB_MotorFwdRevSystem_Shredder",
+            "status": "EXISTS",
+            "detail": null,
+            "exists": true,
+            "blocking": false
+          },
+          {
+            "name": "DB_Controls.FaultReset",
+            "root": "DB_Controls",
+            "status": "EXISTS",
+            "detail": null,
+            "exists": true,
+            "blocking": false
+          },
+          {
+            "name": "DB_Controls.PusherMode",
+            "root": "DB_Controls",
+            "status": "EXISTS",
+            "detail": null,
+            "exists": true,
+            "blocking": false
+          },
+          {
+            "name": "DB_Input.Test",
+            "root": "DB_Input",
+            "status": "EXISTS",
+            "detail": null,
+            "exists": true,
+            "blocking": false
+          },
+          {
+            "name": "DB_Input.Cycle_Start",
+            "root": "DB_Input",
+            "status": "EXISTS",
+            "detail": null,
+            "exists": true,
+            "blocking": false
+          },
+          {
+            "name": "DB_Input.Cycle_Stop",
+            "root": "DB_Input",
+            "status": "EXISTS",
+            "detail": null,
+            "exists": true,
+            "blocking": false
+          },
+          {
+            "name": "DB_Input.Control_Healthy",
+            "root": "DB_Input",
+            "status": "EXISTS",
+            "detail": null,
+            "exists": true,
+            "blocking": false
+          },
+          {
+            "name": "DB_Input.Downstream_Running",
+            "root": "DB_Input",
+            "status": "EXISTS",
+            "detail": null,
+            "exists": true,
+            "blocking": false
+          },
+          {
+            "name": "DB_Input.Discharge_Conv_Running",
+            "root": "DB_Input",
+            "status": "EXISTS",
+            "detail": null,
+            "exists": true,
+            "blocking": false
+          },
+          {
+            "name": "DB_Input.Hopper_Level_High",
+            "root": "DB_Input",
+            "status": "EXISTS",
+            "detail": null,
+            "exists": true,
+            "blocking": false
+          },
+          {
+            "name": "DB_Input.Shredder_Run_Fwd_FB",
+            "root": "DB_Input",
+            "status": "EXISTS",
+            "detail": null,
+            "exists": true,
+            "blocking": false
+          },
+          {
+            "name": "DB_Input.Shredder_Run_Rev_FB",
+            "root": "DB_Input",
+            "status": "EXISTS",
+            "detail": null,
+            "exists": true,
+            "blocking": false
+          },
+          {
+            "name": "DB_Input.Motor_Fault",
+            "root": "DB_Input",
+            "status": "EXISTS",
+            "detail": null,
+            "exists": true,
+            "blocking": false
+          },
+          {
+            "name": "DB_Output.Run_Shredder_Fwd",
+            "root": "DB_Output",
+            "status": "EXISTS",
+            "detail": null,
+            "exists": true,
+            "blocking": false
+          },
+          {
+            "name": "DB_Output.Run_Shredder_Rev",
+            "root": "DB_Output",
+            "status": "EXISTS",
+            "detail": null,
+            "exists": true,
+            "blocking": false
+          },
+          {
+            "name": "DB_Output.Run_Discharge_Conv",
+            "root": "DB_Output",
+            "status": "EXISTS",
+            "detail": null,
+            "exists": true,
+            "blocking": false
+          }
+        ],
+        "indexWarnings": []
+      }
+    },
+    {
+      "tool": "converter served-area (baseByte / declaredRegisters, DERIVED not typed)",
+      "exit": 0,
+      "json": {
+        "derived": true,
+        "area": "M",
+        "baseByte": 1000,
+        "registers": 1024,
+        "block": "FB_Comms_ModbusServer",
+        "file": "ir/test-project001\\FB_Comms_ModbusServer.ir",
+        "readableLine": 31,
+        "sidecarLine": 39,
+        "readableText": "P#M1000.0 WORD 1024",
+        "sidecarText": "P#M1000.0 WORD 1024",
+        "denominator": "served area: base 1000, 1024 register(s), derived from ir/test-project001\\FB_Comms_ModbusServer.ir:31 + sidecar ir/test-project001\\FB_Comms_ModbusServer.ir:39",
+        "filesScanned": 49,
+        "blocksScanned": 20,
+        "cannotSee": "WHAT THIS CANNOT SEE: whether the block it read is the block on the controller. It reads the program corpus, never the CPU — a corpus stale with respect to the device derives a confident, agreed, WRONG number and is indistinguishable from a fresh one. This says only that a binding cannot disagree with the program that was staged."
+      }
+    },
+    {
+      "tool": "converter harness-binding (scaffold, scoped - the independent derivation of the signal set)",
+      "exit": 0,
+      "json": {
+        "project": "ir/test-project001",
+        "filesScanned": 49,
+        "stimulusBlock": "FB_ShredderSequencerStim",
+        "stimulusInstance": "iDB_ShredderSequencerStim",
+        "observedBlocks": [
+          "FB_ShredderSequencer"
+        ],
+        "scopes": [
+          "iDB_ShredderSequencer.IO",
+          "iDB_ShredderSequencerStim.Stim"
+        ],
+        "slotId": "SHR",
+        "vectorTargets": [
+          {
+            "tag": "iDB_ShredderSequencerStim.Stim.ArmAt",
+            "type": "Time",
+            "irType": "Time",
+            "registerWidth": 2,
+            "latchedBy": null,
+            "latchEvidence": "no writer in this corpus",
+            "writers": [],
+            "readers": [
+              "FB_ShredderSequencerStim N14"
+            ]
+          },
+          {
+            "tag": "iDB_ShredderSequencerStim.Stim.ArmUntil",
+            "type": "Time",
+            "irType": "Time",
+            "registerWidth": 2,
+            "latchedBy": null,
+            "latchEvidence": "no writer in this corpus",
+            "writers": [],
+            "readers": [
+              "FB_ShredderSequencerStim N14"
+            ]
+          },
+          {
+            "tag": "iDB_ShredderSequencerStim.Stim.DischargeConfirmDelay",
+            "type": "Time",
+            "irType": "Time",
+            "registerWidth": 2,
+            "latchedBy": null,
+            "latchEvidence": "no writer in this corpus",
+            "writers": [],
+            "readers": [
+              "FB_ShredderSequencerStim N24"
+            ]
+          },
+          {
+            "tag": "iDB_ShredderSequencerStim.Stim.EndAt",
+            "type": "Time",
+            "irType": "Time",
+            "registerWidth": 2,
+            "latchedBy": null,
+            "latchEvidence": "no writer in this corpus",
+            "writers": [],
+            "readers": [
+              "FB_ShredderSequencerStim N5"
+            ]
+          },
+          {
+            "tag": "iDB_ShredderSequencerStim.Stim.FwdFeedbackDelay",
+            "type": "Time",
+            "irType": "Time",
+            "registerWidth": 2,
+            "latchedBy": null,
+            "latchEvidence": "no writer in this corpus",
+            "writers": [],
+            "readers": [
+              "FB_ShredderSequencerStim N24"
+            ]
+          },
+          {
+            "tag": "iDB_ShredderSequencerStim.Stim.HopperClearAt",
+            "type": "Time",
+            "irType": "Time",
+            "registerWidth": 2,
+            "latchedBy": null,
+            "latchEvidence": "no writer in this corpus",
+            "writers": [],
+            "readers": [
+              "FB_ShredderSequencerStim N23"
+            ]
+          },
+          {
+            "tag": "iDB_ShredderSequencerStim.Stim.HopperHighAt",
+            "type": "Time",
+            "irType": "Time",
+            "registerWidth": 2,
+            "latchedBy": null,
+            "latchEvidence": "no writer in this corpus",
+            "writers": [],
+            "readers": [
+              "FB_ShredderSequencerStim N23"
+            ]
+          },
+          {
+            "tag": "iDB_ShredderSequencerStim.Stim.InjectMotorFault",
+            "type": "Bool",
+            "irType": "Bool",
+            "registerWidth": 1,
+            "latchedBy": null,
+            "latchEvidence": "no writer in this corpus",
+            "writers": [],
+            "readers": [
+              "FB_ShredderSequencerStim N23"
+            ]
+          },
+          {
+            "tag": "iDB_ShredderSequencerStim.Stim.PreStartHold",
+            "type": "Time",
+            "irType": "Time",
+            "registerWidth": 2,
+            "latchedBy": null,
+            "latchEvidence": "no writer in this corpus",
+            "writers": [],
+            "readers": [
+              "FB_ShredderSequencerStim N20",
+              "FB_ShredderSequencerStim N21"
+            ]
+          },
+          {
+            "tag": "iDB_ShredderSequencerStim.Stim.ResetAt",
+            "type": "Time",
+            "irType": "Time",
+            "registerWidth": 2,
+            "latchedBy": null,
+            "latchEvidence": "no writer in this corpus",
+            "writers": [],
+            "readers": [
+              "FB_ShredderSequencerStim N5",
+              "FB_ShredderSequencerStim N8"
+            ]
+          },
+          {
+            "tag": "iDB_ShredderSequencerStim.Stim.ResetMode",
+            "type": "Int",
+            "irType": "Int",
+            "registerWidth": 1,
+            "latchedBy": null,
+            "latchEvidence": "no writer in this corpus",
+            "writers": [],
+            "readers": [
+              "FB_ShredderSequencerStim N8"
+            ]
+          },
+          {
+            "tag": "iDB_ShredderSequencerStim.Stim.RevFeedbackDelay",
+            "type": "Time",
+            "irType": "Time",
+            "registerWidth": 2,
+            "latchedBy": null,
+            "latchEvidence": "no writer in this corpus",
+            "writers": [],
+            "readers": [
+              "FB_ShredderSequencerStim N24"
+            ]
+          },
+          {
+            "tag": "iDB_ShredderSequencerStim.Stim.Start",
+            "type": "Bool",
+            "irType": "Bool",
+            "registerWidth": 1,
+            "latchedBy": null,
+            "latchEvidence": "no writer in this corpus",
+            "writers": [],
+            "readers": [
+              "FB_ShredderSequencerStim N1",
+              "FB_ShredderSequencerStim N16"
+            ]
+          },
+          {
+            "tag": "iDB_ShredderSequencerStim.Stim.StartPressWidth",
+            "type": "Time",
+            "irType": "Time",
+            "registerWidth": 2,
+            "latchedBy": null,
+            "latchEvidence": "no writer in this corpus",
+            "writers": [],
+            "readers": [
+              "FB_ShredderSequencerStim N20"
+            ]
+          },
+          {
+            "tag": "iDB_ShredderSequencerStim.Stim.StopAt",
+            "type": "Time",
+            "irType": "Time",
+            "registerWidth": 2,
+            "latchedBy": null,
+            "latchEvidence": "no writer in this corpus",
+            "writers": [],
+            "readers": [
+              "FB_ShredderSequencerStim N20"
+            ]
+          },
+          {
+            "tag": "iDB_ShredderSequencerStim.Stim.StopByButton",
+            "type": "Bool",
+            "irType": "Bool",
+            "registerWidth": 1,
+            "latchedBy": null,
+            "latchEvidence": "no writer in this corpus",
+            "writers": [],
+            "readers": [
+              "FB_ShredderSequencerStim N21"
+            ]
+          },
+          {
+            "tag": "iDB_ShredderSequencerStim.Stim.StopByDownstreamLoss",
+            "type": "Bool",
+            "irType": "Bool",
+            "registerWidth": 1,
+            "latchedBy": null,
+            "latchEvidence": "no writer in this corpus",
+            "writers": [],
+            "readers": [
+              "FB_ShredderSequencerStim N22"
+            ]
+          },
+          {
+            "tag": "iDB_ShredderSequencerStim.Stim.StopByUnhealthy",
+            "type": "Bool",
+            "irType": "Bool",
+            "registerWidth": 1,
+            "latchedBy": null,
+            "latchEvidence": "no writer in this corpus",
+            "writers": [],
+            "readers": [
+              "FB_ShredderSequencerStim N22"
+            ]
+          },
+          {
+            "tag": "iDB_ShredderSequencerStim.Stim.WithholdDischargeConfirm",
+            "type": "Bool",
+            "irType": "Bool",
+            "registerWidth": 1,
+            "latchedBy": null,
+            "latchEvidence": "no writer in this corpus",
+            "writers": [],
+            "readers": [
+              "FB_ShredderSequencerStim N24"
+            ]
+          },
+          {
+            "tag": "iDB_ShredderSequencerStim.Stim.WithholdFwdFeedback",
+            "type": "Bool",
+            "irType": "Bool",
+            "registerWidth": 1,
+            "latchedBy": null,
+            "latchEvidence": "no writer in this corpus",
+            "writers": [],
+            "readers": [
+              "FB_ShredderSequencerStim N24"
+            ]
+          },
+          {
+            "tag": "iDB_ShredderSequencerStim.Stim.WithholdRevFeedback",
+            "type": "Bool",
+            "irType": "Bool",
+            "registerWidth": 1,
+            "latchedBy": null,
+            "latchEvidence": "no writer in this corpus",
+            "writers": [],
+            "readers": [
+              "FB_ShredderSequencerStim N24"
+            ]
+          }
+        ],
+        "resultSources": [
+          {
+            "tag": "iDB_ShredderSequencer.IO.DischargeConveyorTimeoutFault",
+            "type": "Bool",
+            "irType": "Bool",
+            "registerWidth": 1,
+            "latchedBy": null,
+            "latchEvidence": "written by FB_ShredderSequencer N8, all plain coils — not a latch",
+            "writers": [
+              "FB_ShredderSequencer N8"
+            ],
+            "readers": [
+              "FB_ShredderSequencer N8",
+              "FB_ShredderSequencerStim N10",
+              "FC_AlarmsMain N9"
+            ]
+          },
+          {
+            "tag": "iDB_ShredderSequencer.IO.EnableUpstream",
+            "type": "Bool",
+            "irType": "Bool",
+            "registerWidth": 1,
+            "latchedBy": null,
+            "latchEvidence": "written by FB_ShredderSequencer N11, all plain coils — not a latch",
+            "writers": [
+              "FB_ShredderSequencer N11"
+            ],
+            "readers": [
+              "FC_ControlMain N7"
+            ]
+          },
+          {
+            "tag": "iDB_ShredderSequencer.IO.InCycle",
+            "type": "Bool",
+            "irType": "Bool",
+            "registerWidth": 1,
+            "latchedBy": null,
+            "latchEvidence": "written by FB_ShredderSequencer N15, all plain coils — not a latch",
+            "writers": [
+              "FB_ShredderSequencer N15"
+            ],
+            "readers": []
+          },
+          {
+            "tag": "iDB_ShredderSequencer.IO.MotorAutoStartCmd",
+            "type": "Bool",
+            "irType": "Bool",
+            "registerWidth": 1,
+            "latchedBy": null,
+            "latchEvidence": "written by FB_ShredderSequencer N14, all plain coils — not a latch",
+            "writers": [
+              "FB_ShredderSequencer N14"
+            ],
+            "readers": [
+              "FC_ControlMain N3"
+            ]
+          },
+          {
+            "tag": "iDB_ShredderSequencer.IO.MotorPreStartDoneCmd",
+            "type": "Bool",
+            "irType": "Bool",
+            "registerWidth": 1,
+            "latchedBy": null,
+            "latchEvidence": "written by FB_ShredderSequencer N14, all plain coils — not a latch",
+            "writers": [
+              "FB_ShredderSequencer N14"
+            ],
+            "readers": [
+              "FC_ControlMain N3"
+            ]
+          },
+          {
+            "tag": "iDB_ShredderSequencer.IO.MotorReverseCmd",
+            "type": "Bool",
+            "irType": "Bool",
+            "registerWidth": 1,
+            "latchedBy": null,
+            "latchEvidence": "written by FB_ShredderSequencer N14, all plain coils — not a latch",
+            "writers": [
+              "FB_ShredderSequencer N14"
+            ],
+            "readers": [
+              "FC_ControlMain N3"
+            ]
+          },
+          {
+            "tag": "iDB_ShredderSequencer.IO.MotorStartArm",
+            "type": "Bool",
+            "irType": "Bool",
+            "registerWidth": 1,
+            "latchedBy": null,
+            "latchEvidence": "written by FB_ShredderSequencer N14, all plain coils — not a latch",
+            "writers": [
+              "FB_ShredderSequencer N14"
+            ],
+            "readers": [
+              "FC_ControlMain N3"
+            ]
+          },
+          {
+            "tag": "iDB_ShredderSequencer.IO.PreStartSounder",
+            "type": "Bool",
+            "irType": "Bool",
+            "registerWidth": 1,
+            "latchedBy": null,
+            "latchEvidence": "written by FB_ShredderSequencer N15, all plain coils — not a latch",
+            "writers": [
+              "FB_ShredderSequencer N15"
+            ],
+            "readers": [
+              "FC_ControlMain N7"
+            ]
+          },
+          {
+            "tag": "iDB_ShredderSequencer.IO.PusherCycleInhibitCmd",
+            "type": "Bool",
+            "irType": "Bool",
+            "registerWidth": 1,
+            "latchedBy": null,
+            "latchEvidence": "written by FB_ShredderSequencer N14, all plain coils — not a latch",
+            "writers": [
+              "FB_ShredderSequencer N14"
+            ],
+            "readers": [
+              "FC_ControlMain N5"
+            ]
+          },
+          {
+            "tag": "iDB_ShredderSequencer.IO.PusherModeCmd",
+            "type": "Int",
+            "irType": "Int",
+            "registerWidth": 1,
+            "latchedBy": null,
+            "latchEvidence": "written by FB_ShredderSequencer N14, all plain coils — not a latch",
+            "writers": [
+              "FB_ShredderSequencer N14"
+            ],
+            "readers": [
+              "FC_ControlMain N5"
+            ]
+          },
+          {
+            "tag": "iDB_ShredderSequencer.IO.PusherParkCmd",
+            "type": "Bool",
+            "irType": "Bool",
+            "registerWidth": 1,
+            "latchedBy": null,
+            "latchEvidence": "written by FB_ShredderSequencer N14, all plain coils — not a latch",
+            "writers": [
+              "FB_ShredderSequencer N14"
+            ],
+            "readers": [
+              "FC_ControlMain N5"
+            ]
+          },
+          {
+            "tag": "iDB_ShredderSequencer.IO.RunDischargeConv",
+            "type": "Bool",
+            "irType": "Bool",
+            "registerWidth": 1,
+            "latchedBy": null,
+            "latchEvidence": "written by FB_ShredderSequencer N15, all plain coils — not a latch",
+            "writers": [
+              "FB_ShredderSequencer N15"
+            ],
+            "readers": [
+              "FC_ControlMain N7"
+            ]
+          },
+          {
+            "tag": "iDB_ShredderSequencer.IO.RunInfeedConv",
+            "type": "Bool",
+            "irType": "Bool",
+            "registerWidth": 1,
+            "latchedBy": null,
+            "latchEvidence": "written by FB_ShredderSequencer N11, all plain coils — not a latch",
+            "writers": [
+              "FB_ShredderSequencer N11"
+            ],
+            "readers": [
+              "FC_ControlMain N7"
+            ]
+          },
+          {
+            "tag": "iDB_ShredderSequencer.IO.ShredderBlockedFault",
+            "type": "Bool",
+            "irType": "Bool",
+            "registerWidth": 1,
+            "latchedBy": null,
+            "latchEvidence": "written by FB_ShredderSequencer N5, all plain coils — not a latch",
+            "writers": [
+              "FB_ShredderSequencer N5"
+            ],
+            "readers": [
+              "FB_ShredderSequencer N13",
+              "FB_ShredderSequencer N5",
+              "FB_ShredderSequencer N6",
+              "FB_ShredderSequencerStim N10",
+              "FC_AlarmsMain N8"
+            ]
+          },
+          {
+            "tag": "iDB_ShredderSequencer.IO.Step",
+            "type": "Int",
+            "irType": "Int",
+            "registerWidth": 1,
+            "latchedBy": null,
+            "latchEvidence": "written by FB_ShredderSequencer N10, FB_ShredderSequencer N12, FB_ShredderSequencer N13, FB_ShredderSequencer N6, FB_ShredderSequencer N7, FB_ShredderSequencer N8, FB_ShredderSequencer N9, OB100 N1, all plain coils — not a latch",
+            "writers": [
+              "FB_ShredderSequencer N10",
+              "FB_ShredderSequencer N12",
+              "FB_ShredderSequencer N13",
+              "FB_ShredderSequencer N6",
+              "FB_ShredderSequencer N7",
+              "FB_ShredderSequencer N8",
+              "FB_ShredderSequencer N9",
+              "OB100 N1"
+            ],
+            "readers": [
+              "FB_ShredderSequencer N10",
+              "FB_ShredderSequencer N11",
+              "FB_ShredderSequencer N12",
+              "FB_ShredderSequencer N13",
+              "FB_ShredderSequencer N14",
+              "FB_ShredderSequencer N15",
+              "FB_ShredderSequencer N3",
+              "FB_ShredderSequencer N4",
+              "FB_ShredderSequencer N6",
+              "FB_ShredderSequencer N7",
+              "FB_ShredderSequencer N8",
+              "FB_ShredderSequencer N9"
+            ]
+          },
+          {
+            "tag": "iDB_ShredderSequencerStim.Stim.Armed",
+            "type": "Bool",
+            "irType": "Bool",
+            "registerWidth": 1,
+            "latchedBy": null,
+            "latchEvidence": "written by FB_ShredderSequencerStim N14, all plain coils — not a latch",
+            "writers": [
+              "FB_ShredderSequencerStim N14"
+            ],
+            "readers": []
+          },
+          {
+            "tag": "iDB_ShredderSequencerStim.Stim.ArrivedDirty",
+            "type": "Bool",
+            "irType": "Bool",
+            "registerWidth": 1,
+            "latchedBy": "FB_ShredderSequencerStim",
+            "latchEvidence": "FB_ShredderSequencerStim N11 SETCOIL, FB_ShredderSequencerStim N16 RESETCOIL; no other writer in this corpus",
+            "writers": [
+              "FB_ShredderSequencerStim N11",
+              "FB_ShredderSequencerStim N16"
+            ],
+            "readers": []
+          },
+          {
+            "tag": "iDB_ShredderSequencerStim.Stim.InertAtEnd",
+            "type": "Bool",
+            "irType": "Bool",
+            "registerWidth": 1,
+            "latchedBy": "FB_ShredderSequencerStim",
+            "latchEvidence": "FB_ShredderSequencerStim N13 SETCOIL, FB_ShredderSequencerStim N13 RESETCOIL, FB_ShredderSequencerStim N16 RESETCOIL; no other writer in this corpus",
+            "writers": [
+              "FB_ShredderSequencerStim N13",
+              "FB_ShredderSequencerStim N16"
+            ],
+            "readers": []
+          },
+          {
+            "tag": "iDB_ShredderSequencerStim.Stim.InertAtStart",
+            "type": "Bool",
+            "irType": "Bool",
+            "registerWidth": 1,
+            "latchedBy": "FB_ShredderSequencerStim",
+            "latchEvidence": "FB_ShredderSequencerStim N12 SETCOIL, FB_ShredderSequencerStim N12 RESETCOIL, FB_ShredderSequencerStim N16 RESETCOIL; no other writer in this corpus",
+            "writers": [
+              "FB_ShredderSequencerStim N12",
+              "FB_ShredderSequencerStim N16"
+            ],
+            "readers": []
+          },
+          {
+            "tag": "iDB_ShredderSequencerStim.Stim.Phase",
+            "type": "Int",
+            "irType": "Int",
+            "registerWidth": 1,
+            "latchedBy": null,
+            "latchEvidence": "written by FB_ShredderSequencerStim N17, all plain coils — not a latch",
+            "writers": [
+              "FB_ShredderSequencerStim N17"
+            ],
+            "readers": []
+          },
+          {
+            "tag": "iDB_ShredderSequencerStim.Stim.RecoverFailed",
+            "type": "Bool",
+            "irType": "Bool",
+            "registerWidth": 1,
+            "latchedBy": "FB_ShredderSequencerStim",
+            "latchEvidence": "FB_ShredderSequencerStim N13 SETCOIL, FB_ShredderSequencerStim N16 RESETCOIL; no other writer in this corpus",
+            "writers": [
+              "FB_ShredderSequencerStim N13",
+              "FB_ShredderSequencerStim N16"
+            ],
+            "readers": []
+          },
+          {
+            "tag": "iDB_ShredderSequencerStim.Stim.ResetRequest",
+            "type": "Bool",
+            "irType": "Bool",
+            "registerWidth": 1,
+            "latchedBy": null,
+            "latchEvidence": "written by FB_ShredderSequencerStim N9, all plain coils — not a latch",
+            "writers": [
+              "FB_ShredderSequencerStim N9"
+            ],
+            "readers": [
+              "FB_ShredderSequencerStim N19"
+            ]
+          },
+          {
+            "tag": "iDB_ShredderSequencerStim.Stim.ScenarioDone",
+            "type": "Bool",
+            "irType": "Bool",
+            "registerWidth": 1,
+            "latchedBy": "FB_ShredderSequencerStim",
+            "latchEvidence": "FB_ShredderSequencerStim N15 SETCOIL, FB_ShredderSequencerStim N16 RESETCOIL; no other writer in this corpus",
+            "writers": [
+              "FB_ShredderSequencerStim N15",
+              "FB_ShredderSequencerStim N16"
+            ],
+            "readers": [
+              "FB_ShredderSequencerStim N1"
+            ]
+          }
+        ],
+        "excluded": [
+          {
+            "path": "iDB_ShredderSequencerStim.CauseStanding",
+            "type": "Bool",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencerStim.CmdCycleStart",
+            "type": "Bool",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencerStim.CmdCycleStop",
+            "type": "Bool",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencerStim.CmdDischargeRunning",
+            "type": "Bool",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencerStim.CmdDownstream",
+            "type": "Bool",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencerStim.CmdHealthy",
+            "type": "Bool",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencerStim.CmdHopperHigh",
+            "type": "Bool",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencerStim.CmdMotorFault",
+            "type": "Bool",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencerStim.CmdRunFwdFB",
+            "type": "Bool",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencerStim.CmdRunRevFB",
+            "type": "Bool",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencerStim.DisarmDwell",
+            "type": "Time",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencerStim.Disarmed",
+            "type": "Bool",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencerStim.DischargeRespTimer.ET",
+            "type": "Time",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencerStim.DischargeRespTimer.IN",
+            "type": "Bool",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencerStim.DischargeRespTimer.PT",
+            "type": "Time",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencerStim.DischargeRespTimer.Q",
+            "type": "Bool",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencerStim.FwdRespTimer.ET",
+            "type": "Time",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencerStim.FwdRespTimer.IN",
+            "type": "Bool",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencerStim.FwdRespTimer.PT",
+            "type": "Time",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencerStim.FwdRespTimer.Q",
+            "type": "Bool",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencerStim.HeadDisarmEnd",
+            "type": "Time",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencerStim.HeadEnd",
+            "type": "Time",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencerStim.HeadResetEnd",
+            "type": "Time",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencerStim.InHeadDisarm",
+            "type": "Bool",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencerStim.InHeadReset",
+            "type": "Bool",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencerStim.InHeadVerify",
+            "type": "Bool",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencerStim.InScenario",
+            "type": "Bool",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencerStim.InTailDisarm",
+            "type": "Bool",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencerStim.InTailReset",
+            "type": "Bool",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencerStim.InTailVerify",
+            "type": "Bool",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencerStim.ResetDwell",
+            "type": "Time",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencerStim.ResetPulse",
+            "type": "Bool",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencerStim.ResetPulseEnd",
+            "type": "Time",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencerStim.RevRespTimer.ET",
+            "type": "Time",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencerStim.RevRespTimer.IN",
+            "type": "Bool",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencerStim.RevRespTimer.PT",
+            "type": "Time",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencerStim.RevRespTimer.Q",
+            "type": "Bool",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencerStim.RunT",
+            "type": "Time",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencerStim.RunTimer.ET",
+            "type": "Time",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencerStim.RunTimer.IN",
+            "type": "Bool",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencerStim.RunTimer.PT",
+            "type": "Time",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencerStim.RunTimer.Q",
+            "type": "Bool",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencerStim.Running",
+            "type": "Bool",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencerStim.ScenT",
+            "type": "Time",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencerStim.ScenarioEnd",
+            "type": "Time",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencerStim.ScenarioReset",
+            "type": "Bool",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencerStim.StartPressEnd",
+            "type": "Time",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencerStim.Stim.ResetRequest",
+            "type": "Bool",
+            "direction": "both",
+            "reason": "ReadWriteContention",
+            "detail": "read AND written by its own block — offered as an observation, never driven"
+          },
+          {
+            "path": "iDB_ShredderSequencerStim.Stim.ScenarioDone",
+            "type": "Bool",
+            "direction": "both",
+            "reason": "ReadWriteContention",
+            "detail": "read AND written by its own block — offered as an observation, never driven"
+          },
+          {
+            "path": "iDB_ShredderSequencerStim.StopFired",
+            "type": "Bool",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencerStim.TailDisarmEnd",
+            "type": "Time",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencerStim.TailEnd",
+            "type": "Time",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencerStim.TailResetEnd",
+            "type": "Time",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencerStim.VerifyDwell",
+            "type": "Time",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencer.DischargeConveyorTimeoutMS",
+            "type": "DInt",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencer.DischargeStartTimer.ET",
+            "type": "Time",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencer.DischargeStartTimer.IN",
+            "type": "Bool",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencer.DischargeStartTimer.PT",
+            "type": "Time",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencer.DischargeStartTimer.Q",
+            "type": "Bool",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencer.IO.AutoStartSignal",
+            "type": "Bool",
+            "direction": "unused",
+            "reason": "Unused",
+            "detail": "declared and neither read nor written in this corpus"
+          },
+          {
+            "path": "iDB_ShredderSequencer.IO.CycleStart",
+            "type": "Bool",
+            "direction": "read",
+            "reason": "ObservedInput",
+            "detail": "an input of an OBSERVED block — the stimulus model drives it, not the harness"
+          },
+          {
+            "path": "iDB_ShredderSequencer.IO.CycleStop",
+            "type": "Bool",
+            "direction": "read",
+            "reason": "ObservedInput",
+            "detail": "an input of an OBSERVED block — the stimulus model drives it, not the harness"
+          },
+          {
+            "path": "iDB_ShredderSequencer.IO.DischargeConvRunning",
+            "type": "Bool",
+            "direction": "read",
+            "reason": "ObservedInput",
+            "detail": "an input of an OBSERVED block — the stimulus model drives it, not the harness"
+          },
+          {
+            "path": "iDB_ShredderSequencer.IO.DownstreamRunning",
+            "type": "Bool",
+            "direction": "read",
+            "reason": "ObservedInput",
+            "detail": "an input of an OBSERVED block — the stimulus model drives it, not the harness"
+          },
+          {
+            "path": "iDB_ShredderSequencer.IO.FaultReset",
+            "type": "Bool",
+            "direction": "read",
+            "reason": "ObservedInput",
+            "detail": "an input of an OBSERVED block — the stimulus model drives it, not the harness"
+          },
+          {
+            "path": "iDB_ShredderSequencer.IO.HopperLevelHigh",
+            "type": "Bool",
+            "direction": "read",
+            "reason": "ObservedInput",
+            "detail": "an input of an OBSERVED block — the stimulus model drives it, not the harness"
+          },
+          {
+            "path": "iDB_ShredderSequencer.IO.MotorFaultActive",
+            "type": "Bool",
+            "direction": "read",
+            "reason": "ObservedInput",
+            "detail": "an input of an OBSERVED block — the stimulus model drives it, not the harness"
+          },
+          {
+            "path": "iDB_ShredderSequencer.IO.OperatorPusherMode",
+            "type": "Int",
+            "direction": "read",
+            "reason": "ObservedInput",
+            "detail": "an input of an OBSERVED block — the stimulus model drives it, not the harness"
+          },
+          {
+            "path": "iDB_ShredderSequencer.IO.PusherJogPreStartSounder",
+            "type": "Bool",
+            "direction": "read",
+            "reason": "ObservedInput",
+            "detail": "an input of an OBSERVED block — the stimulus model drives it, not the harness"
+          },
+          {
+            "path": "iDB_ShredderSequencer.IO.ShredderMotorCurrent",
+            "type": "Real",
+            "direction": "unused",
+            "reason": "Unused",
+            "detail": "declared and neither read nor written in this corpus"
+          },
+          {
+            "path": "iDB_ShredderSequencer.IO.ShredderRunFwdFB",
+            "type": "Bool",
+            "direction": "read",
+            "reason": "ObservedInput",
+            "detail": "an input of an OBSERVED block — the stimulus model drives it, not the harness"
+          },
+          {
+            "path": "iDB_ShredderSequencer.IO.ShredderRunRevFB",
+            "type": "Bool",
+            "direction": "read",
+            "reason": "ObservedInput",
+            "detail": "an input of an OBSERVED block — the stimulus model drives it, not the harness"
+          },
+          {
+            "path": "iDB_ShredderSequencer.IO.SystemHealthy",
+            "type": "Bool",
+            "direction": "read",
+            "reason": "ObservedInput",
+            "detail": "an input of an OBSERVED block — the stimulus model drives it, not the harness"
+          },
+          {
+            "path": "iDB_ShredderSequencer.InfeedRestartDelayMS",
+            "type": "DInt",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencer.InfeedRestartTimer.ET",
+            "type": "Time",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencer.InfeedRestartTimer.IN",
+            "type": "Bool",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencer.InfeedRestartTimer.PT",
+            "type": "Time",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencer.InfeedRestartTimer.Q",
+            "type": "Bool",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencer.InfeedRunning",
+            "type": "Bool",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencer.InfeedToUpstreamEnableDelayMS",
+            "type": "DInt",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencer.OvercurrentAbortPauseTimer.ET",
+            "type": "Time",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencer.OvercurrentAbortPauseTimer.IN",
+            "type": "Bool",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencer.OvercurrentAbortPauseTimer.PT",
+            "type": "Time",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencer.OvercurrentAbortPauseTimer.Q",
+            "type": "Bool",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencer.OvercurrentHighDelayMS",
+            "type": "DInt",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencer.OvercurrentHighTimer.ET",
+            "type": "Time",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencer.OvercurrentHighTimer.IN",
+            "type": "Bool",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencer.OvercurrentHighTimer.PT",
+            "type": "Time",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencer.OvercurrentHighTimer.Q",
+            "type": "Bool",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencer.OvercurrentMediumDelayMS",
+            "type": "DInt",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencer.OvercurrentMediumTimer.ET",
+            "type": "Time",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencer.OvercurrentMediumTimer.IN",
+            "type": "Bool",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencer.OvercurrentMediumTimer.PT",
+            "type": "Time",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencer.OvercurrentMediumTimer.Q",
+            "type": "Bool",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencer.OvercurrentSpinUpAllowanceMS",
+            "type": "DInt",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencer.OvercurrentTripped",
+            "type": "Bool",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencer.PreStartSounderTimeMS",
+            "type": "DInt",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencer.PreStartTimer.ET",
+            "type": "Time",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencer.PreStartTimer.IN",
+            "type": "Bool",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencer.PreStartTimer.PT",
+            "type": "Time",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencer.PreStartTimer.Q",
+            "type": "Bool",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencer.PusherModeForceOff",
+            "type": "Bool",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencer.ReversalCount",
+            "type": "Int",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencer.ReversalRetryPauseTimeMS",
+            "type": "DInt",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencer.ReversalStepEdge",
+            "type": "Bool",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencer.ReversalStepEdgeMem",
+            "type": "Bool",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencer.ReversalWindowTimeMS",
+            "type": "DInt",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencer.ReversalWindowTimer.ET",
+            "type": "Time",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencer.ReversalWindowTimer.IN",
+            "type": "Bool",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencer.ReversalWindowTimer.PT",
+            "type": "Time",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencer.ReversalWindowTimer.Q",
+            "type": "Bool",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencer.ReverseRunTimer.ET",
+            "type": "Time",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencer.ReverseRunTimer.IN",
+            "type": "Bool",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencer.ReverseRunTimer.PT",
+            "type": "Time",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencer.ReverseRunTimer.Q",
+            "type": "Bool",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencer.ShredderReverseRunTimeMS",
+            "type": "DInt",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencer.SpinUpTimer.ET",
+            "type": "Time",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencer.SpinUpTimer.IN",
+            "type": "Bool",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencer.SpinUpTimer.PT",
+            "type": "Time",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencer.SpinUpTimer.Q",
+            "type": "Bool",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencer.StopCmd",
+            "type": "Bool",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencer.UpstreamEnableTimer.ET",
+            "type": "Time",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencer.UpstreamEnableTimer.IN",
+            "type": "Bool",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencer.UpstreamEnableTimer.PT",
+            "type": "Time",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          },
+          {
+            "path": "iDB_ShredderSequencer.UpstreamEnableTimer.Q",
+            "type": "Bool",
+            "direction": "-",
+            "reason": "OutOfScope",
+            "detail": "outside the --scope filters"
+          }
+        ],
+        "holes": [
+          {
+            "field": "specName",
+            "paths": [
+              "iDB_ShredderSequencerStim.Stim.ArmAt",
+              "iDB_ShredderSequencerStim.Stim.ArmUntil",
+              "iDB_ShredderSequencerStim.Stim.DischargeConfirmDelay",
+              "iDB_ShredderSequencerStim.Stim.EndAt",
+              "iDB_ShredderSequencerStim.Stim.FwdFeedbackDelay",
+              "iDB_ShredderSequencerStim.Stim.HopperClearAt",
+              "iDB_ShredderSequencerStim.Stim.HopperHighAt",
+              "iDB_ShredderSequencerStim.Stim.InjectMotorFault",
+              "iDB_ShredderSequencerStim.Stim.PreStartHold",
+              "iDB_ShredderSequencerStim.Stim.ResetAt",
+              "iDB_ShredderSequencerStim.Stim.ResetMode",
+              "iDB_ShredderSequencerStim.Stim.RevFeedbackDelay",
+              "iDB_ShredderSequencerStim.Stim.Start",
+              "iDB_ShredderSequencerStim.Stim.StartPressWidth",
+              "iDB_ShredderSequencerStim.Stim.StopAt",
+              "iDB_ShredderSequencerStim.Stim.StopByButton",
+              "iDB_ShredderSequencerStim.Stim.StopByDownstreamLoss",
+              "iDB_ShredderSequencerStim.Stim.StopByUnhealthy",
+              "iDB_ShredderSequencerStim.Stim.WithholdDischargeConfirm",
+              "iDB_ShredderSequencerStim.Stim.WithholdFwdFeedback",
+              "iDB_ShredderSequencerStim.Stim.WithholdRevFeedback",
+              "iDB_ShredderSequencerStim.Stim.Armed",
+              "iDB_ShredderSequencerStim.Stim.ArrivedDirty",
+              "iDB_ShredderSequencerStim.Stim.InertAtEnd",
+              "iDB_ShredderSequencerStim.Stim.InertAtStart",
+              "iDB_ShredderSequencerStim.Stim.Phase",
+              "iDB_ShredderSequencerStim.Stim.RecoverFailed",
+              "iDB_ShredderSequencerStim.Stim.ResetRequest",
+              "iDB_ShredderSequencerStim.Stim.ScenarioDone",
+              "iDB_ShredderSequencer.IO.DischargeConveyorTimeoutFault",
+              "iDB_ShredderSequencer.IO.EnableUpstream",
+              "iDB_ShredderSequencer.IO.InCycle",
+              "iDB_ShredderSequencer.IO.MotorAutoStartCmd",
+              "iDB_ShredderSequencer.IO.MotorPreStartDoneCmd",
+              "iDB_ShredderSequencer.IO.MotorReverseCmd",
+              "iDB_ShredderSequencer.IO.MotorStartArm",
+              "iDB_ShredderSequencer.IO.PreStartSounder",
+              "iDB_ShredderSequencer.IO.PusherCycleInhibitCmd",
+              "iDB_ShredderSequencer.IO.PusherModeCmd",
+              "iDB_ShredderSequencer.IO.PusherParkCmd",
+              "iDB_ShredderSequencer.IO.RunDischargeConv",
+              "iDB_ShredderSequencer.IO.RunInfeedConv",
+              "iDB_ShredderSequencer.IO.ShredderBlockedFault",
+              "iDB_ShredderSequencer.IO.Step"
+            ],
+            "missing": "the specification's own name for each of these signals",
+            "resolvedBy": "the coordinator. It is a spec<->code TRANSLATION and the corpus contains only one of the two sides. Absent, gate 5 reports NOT CHECKED and nothing joins what a vector cites to what the copy layer carries."
+          },
+          {
+            "field": "encoding",
+            "paths": [
+              "iDB_ShredderSequencerStim.Stim.ResetMode"
+            ],
+            "missing": "whether the cited values for these are SYMBOLS needing a table, or numbers written as themselves",
+            "resolvedBy": "the coordinator, transcribing the specification's own table and CITING the line (`source`, e.g. `md:132-143`). Without it an encoded value is indistinguishable from a number somebody invented. If the cited text IS the value, leave `encoding` absent — that is the positive claim `no table`."
+          },
+          {
+            "field": "inertRest",
+            "paths": [
+              "iDB_ShredderSequencerStim.Stim.Armed",
+              "iDB_ShredderSequencerStim.Stim.ArrivedDirty",
+              "iDB_ShredderSequencerStim.Stim.InertAtEnd",
+              "iDB_ShredderSequencerStim.Stim.InertAtStart",
+              "iDB_ShredderSequencerStim.Stim.Phase",
+              "iDB_ShredderSequencerStim.Stim.RecoverFailed",
+              "iDB_ShredderSequencerStim.Stim.ResetRequest",
+              "iDB_ShredderSequencerStim.Stim.ScenarioDone",
+              "iDB_ShredderSequencer.IO.DischargeConveyorTimeoutFault",
+              "iDB_ShredderSequencer.IO.EnableUpstream",
+              "iDB_ShredderSequencer.IO.InCycle",
+              "iDB_ShredderSequencer.IO.MotorAutoStartCmd",
+              "iDB_ShredderSequencer.IO.MotorPreStartDoneCmd",
+              "iDB_ShredderSequencer.IO.MotorReverseCmd",
+              "iDB_ShredderSequencer.IO.MotorStartArm",
+              "iDB_ShredderSequencer.IO.PreStartSounder",
+              "iDB_ShredderSequencer.IO.PusherCycleInhibitCmd",
+              "iDB_ShredderSequencer.IO.PusherModeCmd",
+              "iDB_ShredderSequencer.IO.PusherParkCmd",
+              "iDB_ShredderSequencer.IO.RunDischargeConv",
+              "iDB_ShredderSequencer.IO.RunInfeedConv",
+              "iDB_ShredderSequencer.IO.ShredderBlockedFault",
+              "iDB_ShredderSequencer.IO.Step"
+            ],
+            "missing": "what each of these reads when the plant is at rest",
+            "resolvedBy": "the coordinator. It is a claim about the PLANT, and a hard-coded zero is wrong in both directions. `excluded: true` with a `basis` is the other admissible answer; the slot-level `assumedZeroRest` escape needs `assumedZeroRestBasis` beside it."
+          },
+          {
+            "field": "startCondition",
+            "paths": [
+              "slots[SHR]"
+            ],
+            "missing": "the member the harness drives to start one index, if there is one",
+            "resolvedBy": "the coordinator. 🔴 ABSENT IS NOT AN ABSENCE HERE — a null `startCondition` is the POSITIVE claim `this slot has no start gate` (D37). The corpus cannot tell a block that has no start bool from one whose start bool nobody has named, so neither answer is emitted."
+          },
+          {
+            "field": "blockName + blockNumber + tagTableName + tagPrefix",
+            "paths": [
+              "binding"
+            ],
+            "missing": "the identity of the COPY LAYER this binding will generate, which does not exist yet",
+            "resolvedBy": "the coordinator. `blockNumber` must come from `converter claim --kind block-number --allocate --floor 9000` (the harness band), never from a number chosen here. A blank `blockNumber` is refused by CopyLayerGenerator rather than defaulted to 0."
+          },
+          {
+            "field": "declaredBy",
+            "paths": [
+              "binding"
+            ],
+            "missing": "who authored this binding",
+            "resolvedBy": "the coordinator, and it must NOT be the block's author: gate 5c exists because a party who decides both what the block does and what can be observed of it is the correlated reading this pipeline breaks. A tool cannot sign for a person."
+          },
+          {
+            "field": "registerOrder",
+            "paths": [
+              "slots[SHR].vectorTargets",
+              "slots[SHR].resultSources"
+            ],
+            "missing": "confirmation that the scaffold's ordinal-by-tag order is the order to deploy in",
+            "resolvedBy": "the coordinator. A corpus states which members exist, never which register each belongs in. If a layer is already deployed, transcribe ITS order — a re-order moves signals to different registers with nothing to flag it."
+          },
+          {
+            "field": "retentiveBytes",
+            "paths": [
+              "binding"
+            ],
+            "missing": "the program's retentive %M extent",
+            "resolvedBy": "the engineer. It is a property of the PROGRAM, not of the CPU, and it is an input to the map hash and therefore to the build stamp. Nothing in an IR corpus states it."
+          }
+        ],
+        "refusals": [],
+        "servedBaseByte": 1000,
+        "servedRegisters": 1024,
+        "servedDenominator": "served area: base 1000, 1024 register(s), derived from ir/test-project001\\FB_Comms_ModbusServer.ir:31 + sidecar ir/test-project001\\FB_Comms_ModbusServer.ir:39",
+        "requiredRegisters": 56,
+        "counts": {
+          "vectorTargets": 21,
+          "resultSources": 23,
+          "excluded": 125,
+          "holes": 8,
+          "refusals": 0
+        },
+        "scope": "Derived",
+        "examinedNothing": false,
+        "refused": false,
+        "partial": false,
+        "warnings": []
+      }
+    },
+    {
+      "tool": "converter ir-hash",
+      "exit": 0,
+      "json": {
+        "hashes": [
+          {
+            "file": "ir/test-project001/FB_ShredderSequencerStim.ir",
+            "hash": "863B998C4D73B2FAA17E089CC1D435237C8B66C6BBB4096B97F94F3775BEA84F",
+            "error": null
+          }
+        ]
+      }
+    },
+    {
+      "tool": "openness-cli sanity-check (the compile gate)",
+      "deferred": "The dispatch forbids this lane Portal, the rig and the socket - no import, no compile, no openness-cli, no download - because the coordinator serialises all of it. The authorisation granted mid-task covered `harness-run --generate-only` only, and was then itself withdrawn. NOTHING WAS COMPILED, and nothing here should be read as if it had been. THE HEAD HAS NEVER BEEN IMPORTED INTO TIA: preflight is a static filter and is explicitly not the compile gate."
+    }
+  ],
+  "_scaffoldCrossCheck": "🔴 THE SCAFFOLD IS NOW A REAL CROSS-CHECK RATHER THAN A REFUSAL, AND THIS LANE'S EARLIER CONCLUSION WAS WRONG. It first reported a bootstrap CYCLE - the scaffolder refuses without an existing head, the head is generated from a binding - and concluded the escape was that the binding is JSON rather than IR. The real escape is ORDER: the head needs only a declared spec, so write the spec, generate the head, then scaffold. With the head on disk the scoped scaffold returns exit 0, 0 REFUSALS, 21 vector targets, 23 result sources and requiredRegisters 56. The hand-authored binding declares 44 signals and 56 registers - THE SAME TOTALS - with two deliberate differences the scaffolder cannot make: it lists Stim.Start as a vector target because it does not write `startCondition` and so cannot know Start IS the start condition (a signal bound as both is refused by the copy layer), and it cannot propose iDB_MotorFwdRevSystem_Shredder.IO.FaultActive, which is outside both --scope prefixes and is this lane's boundary decision. Unscoped the scaffold returns 125 excluded rows, so the two --scope flags are load-bearing.",
+  "_generatorFindings": "TWO, both reported rather than worked around. (1) StimShellGenerator S9 emits a PLAIN COIL on whatever `uutReset` names, so a head pointed at a SHARED plant reset coil is last-writer-wins against every other head - the same collision class this lane measured on DB_Input.Test[], one level down and inside generated mechanism where a head author cannot fix it. On this corpus every block's own reset input is overwritten from the single DB_Controls.FaultReset by FC_ControlMain, so EVERY multi-slot program here has a shared reset. Worked around the way the pusher lane did, by publishing Stim.ResetRequest and arbitrating in an authored rung (head N19) - which means the generator still cannot express it. (2) LoopCli exits to usage when --submission is absent, so the only production caller of these generators requires the VECTOR AUTHOR's document to generate the BLOCK AUTHOR's head - cross-party coupling the fence exists to prevent. Both are why the direct-library route exists.",
+  "_slotContention": "🔴 THE FINDING THAT MATTERS MOST, AND THIS HEAD IS BUILT FOR IT. DB_Input.Test[] is one shared array and DB_Controls.FaultReset one shared coil; every head writes them from Main ahead of FC_Inputs, so the last head in the sweep wins. Measured: FB_HopperBlockageStim writes Test[0,5,6,8] with NO pass-through on any, so idle it drives all four low; FB_PusherStim now passes through on all 8 of its indices (repaired by the pusher lane after this finding). This head needs Test[0,1,3,4,5,6,7,8,10,15] and uses `COIL DB_Input.Test[n] := Running AND <commanded> OR NOT Running AND DB_Input.Test[n]` on EVERY one, plus the same idiom on DB_Controls.FaultReset in N19. Test[15] is decisive: FB_ShredderSequencer N6 will not leave step 0 without IO.DownstreamRunning. FOUR REPAIRS REMAIN IN FB_HopperBlockageStim N21/N22 and are not this lane's to make. Tooling gap alongside it: `converter reachable-state` reports DB_Input.Test at WHOLE-ARRAY granularity, so it can neither prove index-level disjointness nor name a colliding index; the per-index picture was scanned by hand.",
+  "_selfCheck": "Two scripts, and the second is the one that matters. .scratch/validate_binding.py checks the binding against the schema in src/harness/Harness.Gate/BindingDocument.cs: 44 signals, 56 mirror value registers, every key a real schema property, every resultSource carrying an inertRest with exactly one of value/excluded and a basis on every exclusion, no inertRest expressed as an IR TIME literal, startCondition not also a vectorTarget. ONE problem and it is the deliberate one: binding.unresolvedHoles, which gate 0b must refuse. .scratch/verify_head.py reads the binding's declared head spec BACK OUT OF THE EMITTED RUNGS in FB_ShredderSequencerStim.ir - watchdog, dwell, uutReset and its single-writer property, all seven phase bits and ends in order, the cause list, the outcome bits, the cycleEdges/CycleCounted correspondence, and every stim-instance signal against the GENERATED UDT's real members: 26 networks, 29 UDT members, 7 phases matched, PROBLEMS 0. It compares the document against the artifact rather than against the driver's Spec.cs, because comparing two declarations only ever proves two declarations agree.",
+  "_notVerified": "Said plainly. (1) NOTHING WAS COMPILED and nothing was imported - the head has never been through TIA, and preflight is explicitly not that gate. (2) The head has never RUN: no wave, no rig, no socket, so the plant model is unexercised and the closed-loop feedback timing is reasoned from the motor block's FTTime, not observed. (3) THE CALL SITE IS NOT WIRED - FB_ShredderSequencerStim is not CALLed from Main, so as it stands it would import, compile and do nothing. This lane deliberately did not edit Main because the concurrent pusher lane is regenerating that OB through CyclicObGenerator and two lanes writing one object is the collision this project has already had twice. (4) Gate 0b, gate 5c and the map allocator have not seen the binding in its final form. (5) The register layout was not allocated; 56 is arithmetic over the declared types, corroborated by the scaffold's own requiredRegisters. (6) The pusher lane's register footprint is unknown here and unreserved.",
+  "_processNote": "One self-inflicted incident, recorded because it nearly cost the deliverable. A patch script opened the binding with io.open(path, 'w') and then threw a UnicodeEncodeError on a surrogate escape - 'w' TRUNCATES BEFORE THE WRITE CAN FAIL, so the file was left at 0 bytes and had to be rebuilt from scratch. Nothing was lost because the content was reconstructible, but the pattern is a foot-gun: write to a temp and os.replace, which is what the later patches do."
+}

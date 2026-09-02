@@ -1,0 +1,237 @@
+BLOCK FB FB_PusherStim
+ROOTID 0
+NUMBER 9001
+LANGUAGE LAD
+TITLE "Pusher Stimulus Head"
+COMMENT "Drives the plant the pusher control block sees, to a timeline the harness commands, so a conformance index exercises it against a machine that behaves to order. Networks 1 to 17 are the generated index shell - the clock, the seven phases, the two cleardowns, the arming window and the outcome bookkeeping - and networks 18 to 21 are this head's own: the commanded timeline, the cleardown rest state, the presentation to the plant, and the arbitration of the one fault-reset line two heads share. AN INDEX IS: a head cleardown that puts the block into a known state with nothing latched, then the scenario, then a tail cleardown that repeats it so the NEXT index starts clean rather than from whatever this one left standing. The cleardown exists because this block latches - a blocked fault, two travel-timeout faults, a both-switches fault, a pressure hold and a step that is not idle all survive until something clears them, and an index that did not start by clearing them would be reading the previous one. THE DISARM LEVER IS THE COMMANDED MODE, NOT THE FITTED SETTING: outside the scenario the head presents mode 0, the ram at home, and every other input inert, which aborts any cycle in flight to Retract and then to Idle, stops both supervision timers, and lets the reset pulse land on a plant that cannot re-create the causes it is clearing. Fitted is deliberately never written - it is a retentive commissioning setting, not a test input, and a head that wrote it would leave the pusher disabled if an index were interrupted mid-cleardown. EACH OF THE TEN COMMANDED SIGNALS IS A TWO-EDGE TIMELINE and nothing more: an initial level, a time it leaves that level, and a time it returns. That is deliberately not a library of named scenario shapes - the head does not know what any scenario is for, so a scenario the vector author has not written yet needs no change here. STALENESS: the block's own advancing quantities are its five timers and its per-cycle pressure-trip counter, and every one of them is fed from a commanded signal that this head can move, so none is silently frozen - with ONE stated exception, the trip counter, which a two-edge pressure timeline can advance at most once per scenario and therefore cannot drive to its threshold; the blocked-fault path is out of reach of this head as it stands. One further latch does not clear at all: the block's pump cold-start guard is set by the first demand and has no reset anywhere, so the first index after a CPU restart is the only one that meets it unset. It is not observable at rest once the pump run-on time has expired, which is why the cleardown dwell is longer than that time and why the guard is not counted as a standing cause. This head writes only test-injection members, operator command bits and the fault-reset line; it writes no output, no setting and nothing the block under test produces, and it is called only from the cyclic program."
+
+INTERFACE
+  INPUT
+  OUTPUT
+  STATIC
+    Stim : "UDT_PusherStim" COMMENT "Caller interface. The harness copy layer writes the command members before an index and reads the published ones while it runs."
+      Start : Bool
+      ScenarioDone : Bool
+      EndAt : Time
+      ResetAt : Time
+      ResetMode : Int
+      ResetRequest : Bool
+      ArrivedDirty : Bool
+      InertAtStart : Bool
+      RecoverFailed : Bool
+      InertAtEnd : Bool
+      Armed : Bool
+      ArmAt : Time
+      ArmUntil : Time
+      Phase : Int
+      Mode : Int
+      HopperInitial : Bool
+      HopperEdge1 : Time
+      HopperEdge2 : Time
+      ManualCycleInitial : Bool
+      ManualCycleEdge1 : Time
+      ManualCycleEdge2 : Time
+      JogExtendInitial : Bool
+      JogExtendEdge1 : Time
+      JogExtendEdge2 : Time
+      JogRetractInitial : Bool
+      JogRetractEdge1 : Time
+      JogRetractEdge2 : Time
+      HomeInitial : Bool
+      HomeEdge1 : Time
+      HomeEdge2 : Time
+      FullTravelInitial : Bool
+      FullTravelEdge1 : Time
+      FullTravelEdge2 : Time
+      HighPressureInitial : Bool
+      HighPressureEdge1 : Time
+      HighPressureEdge2 : Time
+      PackRunningInitial : Bool
+      PackRunningEdge1 : Time
+      PackRunningEdge2 : Time
+      HealthyInitial : Bool
+      HealthyEdge1 : Time
+      HealthyEdge2 : Time
+      DownstreamInitial : Bool
+      DownstreamEdge1 : Time
+      DownstreamEdge2 : Time
+    Running : Bool COMMENT "An index is under way: set by Start and held until the index reaches its end, so the harness dropping the start bool part-way through cannot truncate one and produce a short index that still looks complete."
+    RunTimer : TON_TIME VERSION 1.0 SETPOINT
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool
+    RunT : Time COMMENT "Time since the index started, copied out of the index timer so every phase compares against a plain value."
+    ScenT : Time COMMENT "Time since the start of the scenario - that is, since the head cleardown finished. Every commanded edge, arm time and reset time is measured against this and never against the index timer."
+    DisarmDwell : Time COMMENT "How long each disarm phase holds the plant inert. Long enough for the block's pressure hold to release and for its pump run-on to expire, so a block that is merely settling is not read as a block that is stuck."
+    ResetDwell : Time COMMENT "How long each reset phase pulses the fault reset. Many scans wide, so a pulse cannot fall between two scans and be missed."
+    VerifyDwell : Time COMMENT "How long each verify phase looks at whether the causes actually cleared. It runs with the plant still inert, so anything still standing is standing because the block held it."
+    HeadDisarmEnd : Time COMMENT "End of the head disarm phase, measured from the start of the index."
+    HeadResetEnd : Time COMMENT "End of the head reset phase."
+    HeadEnd : Time COMMENT "End of the head cleardown, and therefore the instant the scenario starts."
+    ScenarioEnd : Time COMMENT "End of the scenario."
+    TailDisarmEnd : Time COMMENT "End of the tail disarm phase."
+    TailResetEnd : Time COMMENT "End of the tail reset phase."
+    TailEnd : Time COMMENT "End of the whole index."
+    ResetPulseEnd : Time COMMENT "End of the reset pulse the scenario itself asks for."
+    InHeadDisarm : Bool COMMENT "The head disarm phase is running."
+    InHeadReset : Bool COMMENT "The head reset phase is running."
+    InHeadVerify : Bool COMMENT "The head verify phase is running."
+    InScenario : Bool COMMENT "The scenario itself is running. It is the only phase in which the commanded timeline reaches the plant."
+    InTailDisarm : Bool COMMENT "The tail disarm phase is running."
+    InTailReset : Bool COMMENT "The tail reset phase is running."
+    InTailVerify : Bool COMMENT "The tail verify phase is running."
+    ResetPulse : Bool COMMENT "A cleardown reset pulse is asserted."
+    ScenarioReset : Bool COMMENT "The reset the scenario itself asked for is asserted, whichever mode asked for it."
+    CauseStanding : Bool COMMENT "At least one thing the block latches is standing right now."
+    TlHopper : Bool COMMENT "The commanded hopper high-level sensor, timeline only - before the scenario gates it."
+    TlManualCycle : Bool COMMENT "The commanded manual-cycle button, timeline only."
+    TlJogExtend : Bool COMMENT "The commanded jog-extend button, timeline only."
+    TlJogRetract : Bool COMMENT "The commanded jog-retract button, timeline only."
+    TlHome : Bool COMMENT "The commanded home limit switch, timeline only."
+    TlFullTravel : Bool COMMENT "The commanded full-travel limit switch, timeline only."
+    TlHighPressure : Bool COMMENT "The commanded high-pressure switch, timeline only."
+    TlPackRunning : Bool COMMENT "The commanded power-pack running feedback, timeline only."
+    TlHealthy : Bool COMMENT "The commanded control-circuit healthy input, timeline only. Dropping it is the hard stop tier: it forces the pusher mode to zero, which parks the ram and blocks jogging."
+    TlDownstream : Bool COMMENT "The commanded downstream-running input, timeline only. Dropping it is the soft stop tier: it inhibits cycles and aborts one in flight, while hand-jog stays available."
+    CmdHopper : Bool COMMENT "The hopper high-level sensor as the plant will actually see it - the timeline inside the scenario, the rest state outside it."
+    CmdManualCycle : Bool COMMENT "The manual-cycle button as the plant will actually see it."
+    CmdJogExtend : Bool COMMENT "The jog-extend button as the plant will actually see it."
+    CmdJogRetract : Bool COMMENT "The jog-retract button as the plant will actually see it."
+    CmdHome : Bool COMMENT "The home limit switch as the plant will actually see it. Held true outside the scenario, because the rest state this head commands is a ram parked at home."
+    CmdFullTravel : Bool COMMENT "The full-travel limit switch as the plant will actually see it."
+    CmdHighPressure : Bool COMMENT "The high-pressure switch as the plant will actually see it."
+    CmdPackRunning : Bool COMMENT "The power-pack running feedback as the plant will actually see it."
+    CmdHealthy : Bool COMMENT "The control-circuit healthy input as the plant will actually see it. Held true outside the scenario, or the sequencer would force the pusher to mode zero for reasons no vector asked for."
+    CmdDownstream : Bool COMMENT "The downstream-running input as the plant will actually see it. Held true outside the scenario, for the same reason."
+    CmdMode : Int COMMENT "The operator pusher mode as the plant will actually see it. Zero outside the scenario, which is the disarm lever."
+  CONSTANT
+
+NETWORK 1 "Index Latch"
+  COIL Running := (Stim.Start OR Running) AND NOT Stim.ScenarioDone
+
+NETWORK 2 "Index Timer"
+  TON(RunTimer, IN := Running, PT := T#10M)
+
+NETWORK 3 "Elapsed Index Time"
+  MOVE(EN := TRUE, IN := RunTimer.ET) => RunT
+
+NETWORK 4 "Cleardown Dwells"
+  MOVE(EN := TRUE, IN := T#8S) => DisarmDwell
+  MOVE(EN := TRUE, IN := T#8S) => ResetDwell
+  MOVE(EN := TRUE, IN := T#8S) => VerifyDwell
+
+NETWORK 5 "Index Phase Boundaries"
+  MOVE(EN := TRUE, IN := DisarmDwell) => HeadDisarmEnd
+  ADD(EN := TRUE, IN1 := HeadDisarmEnd, IN2 := ResetDwell) => HeadResetEnd
+  ADD(EN := TRUE, IN1 := HeadResetEnd, IN2 := VerifyDwell) => HeadEnd
+  ADD(EN := TRUE, IN1 := HeadEnd, IN2 := Stim.EndAt) => ScenarioEnd
+  ADD(EN := TRUE, IN1 := ScenarioEnd, IN2 := DisarmDwell) => TailDisarmEnd
+  ADD(EN := TRUE, IN1 := TailDisarmEnd, IN2 := ResetDwell) => TailResetEnd
+  ADD(EN := TRUE, IN1 := TailResetEnd, IN2 := VerifyDwell) => TailEnd
+  ADD(EN := TRUE, IN1 := Stim.ResetAt, IN2 := ResetDwell) => ResetPulseEnd
+
+NETWORK 6 "Scenario Elapsed Time"
+  MOVE(EN := RunT < HeadEnd, IN := T#0S) => ScenT
+  SUB(EN := RunT >= HeadEnd, IN1 := RunT, IN2 := HeadEnd) => ScenT
+
+NETWORK 7 "Index Phases"
+  COIL InHeadDisarm := Running AND RunT < HeadDisarmEnd
+  COIL InHeadReset := Running AND RunT >= HeadDisarmEnd AND RunT < HeadResetEnd
+  COIL InHeadVerify := Running AND RunT >= HeadResetEnd AND RunT < HeadEnd
+  COIL InScenario := Running AND RunT >= HeadEnd AND RunT < ScenarioEnd
+  COIL InTailDisarm := Running AND RunT >= ScenarioEnd AND RunT < TailDisarmEnd
+  COIL InTailReset := Running AND RunT >= TailDisarmEnd AND RunT < TailResetEnd
+  COIL InTailVerify := Running AND RunT >= TailResetEnd AND RunT < TailEnd
+
+NETWORK 8 "Reset Windows"
+  COIL ResetPulse := InHeadReset OR InTailReset
+  COIL ScenarioReset := Stim.ResetMode = 2 OR Stim.ResetMode = 1 AND ScenT >= Stim.ResetAt AND ScenT < ResetPulseEnd
+
+NETWORK 9 "Drive The Fault Reset"
+  COIL Stim.ResetRequest := ResetPulse OR InScenario AND ScenarioReset
+
+NETWORK 10 "Latched Cause Standing"
+  COIL CauseStanding := iDB_PusherControl.IO.Blocked OR iDB_PusherControl.IO.EndTravelTimeoutFault OR iDB_PusherControl.IO.ParkedTimeoutFault OR iDB_PusherControl.IO.BothSwitchesFault OR iDB_PusherControl.PressureHold OR iDB_PusherControl.IO.Cycling
+
+NETWORK 11 "Arrival Inert Check"
+  SCOIL Stim.ArrivedDirty := InHeadDisarm AND CauseStanding
+
+NETWORK 12 "Head Cleardown Outcome"
+  SCOIL Stim.InertAtStart := InHeadVerify AND NOT CauseStanding
+  RCOIL Stim.InertAtStart := InHeadVerify AND CauseStanding
+
+NETWORK 13 "Recovery Outcome"
+  SCOIL Stim.RecoverFailed := InTailVerify AND CauseStanding
+  SCOIL Stim.InertAtEnd := InTailVerify AND NOT CauseStanding
+  RCOIL Stim.InertAtEnd := InTailVerify AND CauseStanding
+
+NETWORK 14 "Observation Window"
+  COIL Stim.Armed := InScenario AND ScenT >= Stim.ArmAt AND ScenT < Stim.ArmUntil
+
+NETWORK 15 "Index Complete"
+  SCOIL Stim.ScenarioDone := Running AND RunT >= TailEnd
+
+NETWORK 16 "Re-Arm For The Next Index"
+  RCOIL Stim.ArrivedDirty := NOT Stim.Start AND NOT Running
+  RCOIL Stim.InertAtStart := NOT Stim.Start AND NOT Running
+  RCOIL Stim.RecoverFailed := NOT Stim.Start AND NOT Running
+  RCOIL Stim.InertAtEnd := NOT Stim.Start AND NOT Running
+  RCOIL Stim.ScenarioDone := NOT Stim.Start AND NOT Running
+
+NETWORK 17 "Published Phase"
+  MOVE(EN := TRUE, IN := 0) => Stim.Phase
+  MOVE(EN := InHeadDisarm, IN := 1) => Stim.Phase
+  MOVE(EN := InHeadReset, IN := 2) => Stim.Phase
+  MOVE(EN := InHeadVerify, IN := 3) => Stim.Phase
+  MOVE(EN := InScenario, IN := 4) => Stim.Phase
+  MOVE(EN := InTailDisarm, IN := 5) => Stim.Phase
+  MOVE(EN := InTailReset, IN := 6) => Stim.Phase
+  MOVE(EN := InTailVerify, IN := 7) => Stim.Phase
+
+NETWORK 18 "Commanded Plant Timeline"
+  COMMENT "Each commanded signal is a two-edge timeline and nothing more: it holds its initial level until Edge1, takes the opposite level from Edge1 until Edge2, and returns to its initial level at Edge2. Both edge times are measured from the start of the scenario, so a timeline says nothing about the cleardowns on either side of it. Setting Edge1 equal to Edge2 is how a timeline says the signal never changes - it collapses to the initial level for the whole scenario, whichever level that is - and setting both at or past the scenario end says the same thing with the change scheduled after everything has finished. One shape per signal, written once and identically ten times, so a reader who has understood one rung has understood the network."
+  COIL TlHopper := (ScenT < Stim.HopperEdge1 OR ScenT >= Stim.HopperEdge2) AND Stim.HopperInitial OR NOT Stim.HopperInitial AND ScenT >= Stim.HopperEdge1 AND ScenT < Stim.HopperEdge2
+  COIL TlManualCycle := (ScenT < Stim.ManualCycleEdge1 OR ScenT >= Stim.ManualCycleEdge2) AND Stim.ManualCycleInitial OR NOT Stim.ManualCycleInitial AND ScenT >= Stim.ManualCycleEdge1 AND ScenT < Stim.ManualCycleEdge2
+  COIL TlJogExtend := (ScenT < Stim.JogExtendEdge1 OR ScenT >= Stim.JogExtendEdge2) AND Stim.JogExtendInitial OR NOT Stim.JogExtendInitial AND ScenT >= Stim.JogExtendEdge1 AND ScenT < Stim.JogExtendEdge2
+  COIL TlJogRetract := (ScenT < Stim.JogRetractEdge1 OR ScenT >= Stim.JogRetractEdge2) AND Stim.JogRetractInitial OR NOT Stim.JogRetractInitial AND ScenT >= Stim.JogRetractEdge1 AND ScenT < Stim.JogRetractEdge2
+  COIL TlHome := (ScenT < Stim.HomeEdge1 OR ScenT >= Stim.HomeEdge2) AND Stim.HomeInitial OR NOT Stim.HomeInitial AND ScenT >= Stim.HomeEdge1 AND ScenT < Stim.HomeEdge2
+  COIL TlFullTravel := (ScenT < Stim.FullTravelEdge1 OR ScenT >= Stim.FullTravelEdge2) AND Stim.FullTravelInitial OR NOT Stim.FullTravelInitial AND ScenT >= Stim.FullTravelEdge1 AND ScenT < Stim.FullTravelEdge2
+  COIL TlHighPressure := (ScenT < Stim.HighPressureEdge1 OR ScenT >= Stim.HighPressureEdge2) AND Stim.HighPressureInitial OR NOT Stim.HighPressureInitial AND ScenT >= Stim.HighPressureEdge1 AND ScenT < Stim.HighPressureEdge2
+  COIL TlPackRunning := (ScenT < Stim.PackRunningEdge1 OR ScenT >= Stim.PackRunningEdge2) AND Stim.PackRunningInitial OR NOT Stim.PackRunningInitial AND ScenT >= Stim.PackRunningEdge1 AND ScenT < Stim.PackRunningEdge2
+  COIL TlHealthy := (ScenT < Stim.HealthyEdge1 OR ScenT >= Stim.HealthyEdge2) AND Stim.HealthyInitial OR NOT Stim.HealthyInitial AND ScenT >= Stim.HealthyEdge1 AND ScenT < Stim.HealthyEdge2
+  COIL TlDownstream := (ScenT < Stim.DownstreamEdge1 OR ScenT >= Stim.DownstreamEdge2) AND Stim.DownstreamInitial OR NOT Stim.DownstreamInitial AND ScenT >= Stim.DownstreamEdge1 AND ScenT < Stim.DownstreamEdge2
+
+NETWORK 19 "Cleardown Rest State - The Disarm Lever"
+  COMMENT "What the plant looks like outside the scenario, which is the whole of the disarm lever the shell cannot supply. Mode zero is the lever: it drops the block's own enable, so no cycle can launch and no jog is possible, and it aborts any cycle already in flight to Retract. The ram is told it is at home, which is what lets that abort finish at idle instead of sitting in Retract until the parked-travel timeout invents a fault the index never asked for. The high-pressure switch and the full-travel switch are held clear so neither the pressure hold nor the both-switches fault can be re-created while the reset pulse is trying to clear them, and the power-pack feedback is held clear so nothing can be commanded to move. The healthy and downstream inputs are held TRUE rather than false, which is the one place the rest state is not simply zero: they are healthy-high signals, and leaving them low would make the sequencer force the pusher off and inhibit its cycles in every index, for a reason no vector asked for and none could see."
+  COIL CmdHopper := InScenario AND TlHopper
+  COIL CmdManualCycle := InScenario AND TlManualCycle
+  COIL CmdJogExtend := InScenario AND TlJogExtend
+  COIL CmdJogRetract := InScenario AND TlJogRetract
+  COIL CmdFullTravel := InScenario AND TlFullTravel
+  COIL CmdHighPressure := InScenario AND TlHighPressure
+  COIL CmdPackRunning := InScenario AND TlPackRunning
+  COIL CmdHome := InScenario AND TlHome OR NOT InScenario
+  COIL CmdHealthy := InScenario AND TlHealthy OR NOT InScenario
+  COIL CmdDownstream := InScenario AND TlDownstream OR NOT InScenario
+  MOVE(EN := InScenario, IN := Stim.Mode) => CmdMode
+  MOVE(EN := NOT InScenario, IN := 0) => CmdMode
+
+NETWORK 20 "Present The Commanded Plant"
+  COMMENT "Presents the commanded plant through the input buffer's own test-injection members, which is the facility the input map already provides: with the injection flag set the map ignores the physical terminal and takes each input from its test member. EVERY ONE OF THESE EIGHT WRITES IS A PASS-THROUGH, AND THAT IS THE WHOLE POINT OF THE NETWORK. The injection layer is shared: several stimulus heads run in one sweep, each drives the indexes its own block depends on, and the last head to run wins every index it touches. A head that drove an index to a default while idle would therefore not merely fail to help its neighbours - it would overwrite them, and the neighbour whose scenario needed that index would find it low for reasons no vector asked for and none could see. Measured by the shredder lane, and decisive there: its sequencer will not leave step 0 without the downstream-running input, so a head that clobbered index 15 while idle made a whole slot unable to start a cycle at all. So each rung says the same thing twice over - while this index is running the commanded value owns the line, and while it is not, whatever another head wrote this scan is passed back unchanged. Reordering the heads does not substitute for this; it only moves which slot is broken. WHAT MAKES THE IDIOM WELL FOUNDED IS NOT IN THIS BLOCK. On its own a pass-through is a self-hold: an index no other head writes would keep whatever this head last commanded, and an index NO head drives would keep whatever the last head to drive it left - which made a slot's plant depend on which slot ran before it. FC_HarnessStimArbiter supplies the missing half. It runs once ahead of every head and releases the whole injection array and the reset line to their inert values, so what these rungs pass through is either another head's write from this same scan or nothing at all, never residue from an earlier one. ONE NEIGHBOUR BREAKS THAT CONTRACT AND IT IS WHY THIS HEAD IS NOT FIRST: the hopper head drives test members 5, 6 and 8 low throughout the trailing cleardown that follows each of its indexes, and that window's own condition is NOT Running, so it asserts while reading as idle. Index 8 is shared with this head. Running after it means a live index here overwrites that drive; running before it would mean the commanded hopper level of a live index here was driven low for several seconds. The two blocks are a pair and neither is correct alone: without the release these rungs are self-holds, and without these rungs the release is a head clobbering its neighbours. In particular NOTHING here clears the injection enable - index 0 is ORed in by every head that wants it and cleared only by that release, so a program of heads with no arbiter ahead of them would latch injection on for the life of the CPU and never give the map back to the field. The operator mode is moved only while an index is running, because outside one it belongs to whoever is operating the machine. The three operator command bits do NOT get that treatment and cannot: a coil has no conditional form, so while this program is loaded the manual-cycle and jog buttons belong to this head whether or not it is running. That is acceptable on a bench rig with no operator station and is not acceptable anywhere else."
+  COIL DB_Input.Test[0] := Running OR NOT Running AND DB_Input.Test[0]
+  COIL DB_Input.Test[1] := Running AND CmdHealthy OR NOT Running AND DB_Input.Test[1]
+  COIL DB_Input.Test[8] := Running AND CmdHopper OR NOT Running AND DB_Input.Test[8]
+  COIL DB_Input.Test[11] := Running AND CmdPackRunning OR NOT Running AND DB_Input.Test[11]
+  COIL DB_Input.Test[12] := Running AND CmdHome OR NOT Running AND DB_Input.Test[12]
+  COIL DB_Input.Test[13] := Running AND CmdFullTravel OR NOT Running AND DB_Input.Test[13]
+  COIL DB_Input.Test[14] := Running AND CmdHighPressure OR NOT Running AND DB_Input.Test[14]
+  COIL DB_Input.Test[15] := Running AND CmdDownstream OR NOT Running AND DB_Input.Test[15]
+  COIL DB_Controls.PusherManualCycleCmd := Running AND CmdManualCycle
+  COIL DB_Controls.PusherJogExtendCmd := Running AND CmdJogExtend
+  COIL DB_Controls.PusherJogRetractCmd := Running AND CmdJogRetract
+  MOVE(EN := Running, IN := CmdMode) => DB_Controls.PusherMode
+
+NETWORK 21 "Fault Reset Line Arbitration"
+  COMMENT "The plant has ONE operator fault-reset line and two stimulus heads that need it, and the line reaches the pusher through the control area rather than through the input map, so there is no test member to inject on. The index shell above therefore publishes this head's reset as a REQUEST instead of driving the line itself, and this rung is the arbiter: while this index is running the request owns the line, and while it is not, whatever the earlier head wrote this scan is passed through unchanged. THIS RUNG DEPENDS ON RUNNING AFTER THE HOPPER HEAD, and the dependency is not the one it looks like. It is not that an earlier head might still be asserting - a head that is running is entitled to the line. It is that the hopper head asserts during a window whose own condition is NOT Running: its trailing cleardown, which follows every completed hopper index for several seconds and DRIVES this line rather than passing it through. So for that window the pass-through contract has a hole in it, and this head is placed after it, where a genuinely running index overwrites the drive. Ahead of it, an index of this slot would have its reset driven low for the length of that window with nothing to say so. The release at the top of the sweep is still what makes the rung well founded at all - without a rest value it degenerates into a latch - but a rest value does not make ordering free while one head still drives while idle. A further head is added by copying this rung, which is what the shredder head does, and it goes after the hopper head for the same reason this one does."
+  COIL DB_Controls.FaultReset := Running AND Stim.ResetRequest OR NOT Running AND DB_Controls.FaultReset

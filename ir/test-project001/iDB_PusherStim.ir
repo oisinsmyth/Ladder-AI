@@ -1,0 +1,8 @@
+DB iDB_PusherStim
+  ROOTID 0
+  NUMBER 9001
+  INSTANCEOF FB_PusherStim
+  COMMENT "Single instance of the pusher stimulus head. Every command member is written by the harness before an index and left at its type default here, because a defaulted scenario would run rather than refuse: a zero EndAt ends the scenario at the instant it starts, and a zero edge time is a signal that has already changed."
+  INPUT
+  OUTPUT
+  MEMBERS

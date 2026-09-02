@@ -1,0 +1,47 @@
+BLOCK FC FC_HarnessStimArbiter
+ROOTID 0
+NUMBER 9002
+LANGUAGE LAD
+TITLE "Harness Stimulus Arbitration Layer"
+COMMENT "Owns the resting state of the two things every stimulus head shares, and owns nothing else: the input map's test-injection array, and the plant's single operator fault-reset line. It runs once, ahead of every head, and releases both, so a head finds on a line it does not own either that line's released value or what another head wrote in this same scan. THE RELEASED VALUE IS THE INERT VALUE FOR WHOEVER READS THAT INDEX, which is not the same thing as zero: an index whose reader treats HIGH as its quiet state is released HIGH, because a zero there asserts a stop or a motion demand of its own. Each released value is taken from the block that consumes the index; an index no block reads is released low and said here to be undetermined. Heads keep their own writes. While a head is not authoritative it passes a line through unchanged, and this release is what that pass-through rests on, so a head added later needs one rung per index and no knowledge of its neighbours. The operator fault-reset line belongs to the harness while this program is loaded: it is released every scan, so a press at an operator station does not reach the control. That suits a bench rig with no operator station and suits nothing else."
+
+INTERFACE
+  INPUT
+  OUTPUT
+  CONSTANT
+
+NETWORK 1 "Release The Injection Enable"
+  COMMENT "The map's injection flag, released low and ORed in by each head, so it is set whenever any head is running and clear on the scan after the last one finishes. While it is clear the map reads the field."
+  COIL DB_Input.Test[0] := NOT AlwaysTrue
+
+NETWORK 2 "Release The Indexes Whose Inert State Is Low"
+  COMMENT "Every test member whose reader is undisturbed by a zero: feedback from a stopped drive, a fault contact with nothing standing, a pushbutton nobody is pressing, a level below its trip. THESE ARE BUFFER VALUES, NOT FIELD VALUES. The map absorbs field polarity ahead of the buffer - the cycle-stop pushbutton is wired normally closed and the map negates that terminal - and it takes the test member unnegated, so a test member carries the buffer's own active-high meaning: the stop button's inert value is low, meaning nobody is commanding a stop. Seven of these are released low because no block in this program reads them - the six spare digital inputs, and the pusher local/remote selector. For those seven the inert value is undetermined, and a consumer added later needs it derived before this release can be trusted."
+  COIL DB_Input.Test[2] := NOT AlwaysTrue
+  COIL DB_Input.Test[3] := NOT AlwaysTrue
+  COIL DB_Input.Test[4] := NOT AlwaysTrue
+  COIL DB_Input.Test[5] := NOT AlwaysTrue
+  COIL DB_Input.Test[6] := NOT AlwaysTrue
+  COIL DB_Input.Test[7] := NOT AlwaysTrue
+  COIL DB_Input.Test[8] := NOT AlwaysTrue
+  COIL DB_Input.Test[9] := NOT AlwaysTrue
+  COIL DB_Input.Test[10] := NOT AlwaysTrue
+  COIL DB_Input.Test[11] := NOT AlwaysTrue
+  COIL DB_Input.Test[13] := NOT AlwaysTrue
+  COIL DB_Input.Test[14] := NOT AlwaysTrue
+  COIL DB_Input.Test[16] := NOT AlwaysTrue
+  COIL DB_Input.Test[17] := NOT AlwaysTrue
+  COIL DB_Input.Test[18] := NOT AlwaysTrue
+  COIL DB_Input.Test[19] := NOT AlwaysTrue
+  COIL DB_Input.Test[20] := NOT AlwaysTrue
+  COIL DB_Input.Test[21] := NOT AlwaysTrue
+  COIL DB_Input.Test[22] := NOT AlwaysTrue
+
+NETWORK 3 "Release The Indexes Whose Inert State Is High"
+  COMMENT "The three indexes whose quiet state is high, each taken from the rung that reads it. The control-circuit healthy contact and the downstream-running contact both feed the sequencer's stop-all condition, which asserts on the absence of either: released low they present an unhealthy circuit and a stopped downstream, abort every step to idle, and demand a fresh start press before anything runs again. The healthy contact reaches the shredder motor on the same terms. The pusher home-limit switch is the parked position, and the pusher's repark request fires on its absence with no mode or enable term anywhere on that path: released low it sends the ram out on a repark and latches a parked-travel timeout half a minute later. The full-travel switch in the network above is released low to match, a ram reading both switches at once being a fault the pusher raises by itself."
+  COIL DB_Input.Test[1] := AlwaysTrue
+  COIL DB_Input.Test[12] := AlwaysTrue
+  COIL DB_Input.Test[15] := AlwaysTrue
+
+NETWORK 4 "Release The Shared Plant Reset Line"
+  COMMENT "The plant's one operator fault-reset line. It has no test member to inject on, so each head drives it from its own published request and this releases it: a head asserting its request owns the line, a head that is not passes it through, and with no head asserting, the line reads clear. Its writers are totally ordered by the sweep, each later one carrying the previous value as a pass-through term, and the control that consumes the line runs after all of them."
+  COIL DB_Controls.FaultReset := NOT AlwaysTrue

@@ -1,0 +1,81 @@
+NETWORK 1 "Index Latch"
+  COIL Running := (Stim.Start OR Running) AND NOT Stim.ScenarioDone
+
+NETWORK 2 "Index Timer"
+  TON(RunTimer, IN := Running, PT := T#10M)
+
+NETWORK 3 "Elapsed Index Time"
+  MOVE(EN := TRUE, IN := RunTimer.ET) => RunT
+
+NETWORK 4 "Cleardown Dwells"
+  MOVE(EN := TRUE, IN := T#15S) => DisarmDwell
+  MOVE(EN := TRUE, IN := T#15S) => ResetDwell
+  MOVE(EN := TRUE, IN := T#15S) => VerifyDwell
+
+NETWORK 5 "Index Phase Boundaries"
+  MOVE(EN := TRUE, IN := DisarmDwell) => HeadDisarmEnd
+  ADD(EN := TRUE, IN1 := HeadDisarmEnd, IN2 := ResetDwell) => HeadResetEnd
+  ADD(EN := TRUE, IN1 := HeadResetEnd, IN2 := VerifyDwell) => HeadEnd
+  ADD(EN := TRUE, IN1 := HeadEnd, IN2 := Stim.EndAt) => ScenarioEnd
+  ADD(EN := TRUE, IN1 := ScenarioEnd, IN2 := DisarmDwell) => TailDisarmEnd
+  ADD(EN := TRUE, IN1 := TailDisarmEnd, IN2 := ResetDwell) => TailResetEnd
+  ADD(EN := TRUE, IN1 := TailResetEnd, IN2 := VerifyDwell) => TailEnd
+  ADD(EN := TRUE, IN1 := Stim.ResetAt, IN2 := ResetDwell) => ResetPulseEnd
+
+NETWORK 6 "Scenario Elapsed Time"
+  MOVE(EN := RunT < HeadEnd, IN := T#0S) => ScenT
+  SUB(EN := RunT >= HeadEnd, IN1 := RunT, IN2 := HeadEnd) => ScenT
+
+NETWORK 7 "Index Phases"
+  COIL InHeadDisarm := Running AND RunT < HeadDisarmEnd
+  COIL InHeadReset := Running AND RunT >= HeadDisarmEnd AND RunT < HeadResetEnd
+  COIL InHeadVerify := Running AND RunT >= HeadResetEnd AND RunT < HeadEnd
+  COIL InScenario := Running AND RunT >= HeadEnd AND RunT < ScenarioEnd
+  COIL InTailDisarm := Running AND RunT >= ScenarioEnd AND RunT < TailDisarmEnd
+  COIL InTailReset := Running AND RunT >= TailDisarmEnd AND RunT < TailResetEnd
+  COIL InTailVerify := Running AND RunT >= TailResetEnd AND RunT < TailEnd
+
+NETWORK 8 "Reset Windows"
+  COIL ResetPulse := InHeadReset OR InTailReset
+  COIL ScenarioReset := Stim.ResetMode = 2 OR Stim.ResetMode = 1 AND ScenT >= Stim.ResetAt AND ScenT < ResetPulseEnd
+
+NETWORK 9 "Drive The Fault Reset"
+  COIL Stim.ResetRequest := ResetPulse OR InScenario AND ScenarioReset
+
+NETWORK 10 "Latched Cause Standing"
+  COIL CauseStanding := iDB_ShredderSequencer.IO.DischargeConveyorTimeoutFault OR iDB_ShredderSequencer.IO.ShredderBlockedFault OR iDB_MotorFwdRevSystem_Shredder.IO.FaultActive
+
+NETWORK 11 "Arrival Inert Check"
+  SCOIL Stim.ArrivedDirty := InHeadDisarm AND CauseStanding
+
+NETWORK 12 "Head Cleardown Outcome"
+  SCOIL Stim.InertAtStart := InHeadVerify AND NOT CauseStanding
+  RCOIL Stim.InertAtStart := InHeadVerify AND CauseStanding
+
+NETWORK 13 "Recovery Outcome"
+  SCOIL Stim.RecoverFailed := InTailVerify AND CauseStanding
+  SCOIL Stim.InertAtEnd := InTailVerify AND NOT CauseStanding
+  RCOIL Stim.InertAtEnd := InTailVerify AND CauseStanding
+
+NETWORK 14 "Observation Window"
+  COIL Stim.Armed := InScenario AND ScenT >= Stim.ArmAt AND ScenT < Stim.ArmUntil
+
+NETWORK 15 "Index Complete"
+  SCOIL Stim.ScenarioDone := Running AND RunT >= TailEnd
+
+NETWORK 16 "Re-Arm For The Next Index"
+  RCOIL Stim.ArrivedDirty := NOT Stim.Start AND NOT Running
+  RCOIL Stim.InertAtStart := NOT Stim.Start AND NOT Running
+  RCOIL Stim.RecoverFailed := NOT Stim.Start AND NOT Running
+  RCOIL Stim.InertAtEnd := NOT Stim.Start AND NOT Running
+  RCOIL Stim.ScenarioDone := NOT Stim.Start AND NOT Running
+
+NETWORK 17 "Published Phase"
+  MOVE(EN := TRUE, IN := 0) => Stim.Phase
+  MOVE(EN := InHeadDisarm, IN := 1) => Stim.Phase
+  MOVE(EN := InHeadReset, IN := 2) => Stim.Phase
+  MOVE(EN := InHeadVerify, IN := 3) => Stim.Phase
+  MOVE(EN := InScenario, IN := 4) => Stim.Phase
+  MOVE(EN := InTailDisarm, IN := 5) => Stim.Phase
+  MOVE(EN := InTailReset, IN := 6) => Stim.Phase
+  MOVE(EN := InTailVerify, IN := 7) => Stim.Phase

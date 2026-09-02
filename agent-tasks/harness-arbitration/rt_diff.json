@@ -1,0 +1,68 @@
+{
+  "blockName": "FC_HarnessStimArbiter",
+  "blockNameMismatch": false,
+  "otherBlockName": "FC_HarnessStimArbiter",
+  "hasAnyChange": false,
+  "header": {
+    "changed": false,
+    "titleChanged": false,
+    "titleBefore": "Harness Stimulus Arbitration Layer",
+    "titleAfter": "Harness Stimulus Arbitration Layer",
+    "commentChanged": false,
+    "commentBefore": "Owns the resting state of the two things every stimulus head shares, and owns nothing else: the input map\u0027s test-injection array, and the plant\u0027s single operator fault-reset line. It runs once, ahead of every head, and releases both, so a head finds on a line it does not own either that line\u0027s released value or what another head wrote in this same scan. THE RELEASED VALUE IS THE INERT VALUE FOR WHOEVER READS THAT INDEX, which is not the same thing as zero: an index whose reader treats HIGH as its quiet state is released HIGH, because a zero there asserts a stop or a motion demand of its own. Each released value is taken from the block that consumes the index; an index no block reads is released low and said here to be undetermined. Heads keep their own writes. While a head is not authoritative it passes a line through unchanged, and this release is what that pass-through rests on, so a head added later needs one rung per index and no knowledge of its neighbours. The operator fault-reset line belongs to the harness while this program is loaded: it is released every scan, so a press at an operator station does not reach the control. That suits a bench rig with no operator station and suits nothing else.",
+    "commentAfter": "Owns the resting state of the two things every stimulus head shares, and owns nothing else: the input map\u0027s test-injection array, and the plant\u0027s single operator fault-reset line. It runs once, ahead of every head, and releases both, so a head finds on a line it does not own either that line\u0027s released value or what another head wrote in this same scan. THE RELEASED VALUE IS THE INERT VALUE FOR WHOEVER READS THAT INDEX, which is not the same thing as zero: an index whose reader treats HIGH as its quiet state is released HIGH, because a zero there asserts a stop or a motion demand of its own. Each released value is taken from the block that consumes the index; an index no block reads is released low and said here to be undetermined. Heads keep their own writes. While a head is not authoritative it passes a line through unchanged, and this release is what that pass-through rests on, so a head added later needs one rung per index and no knowledge of its neighbours. The operator fault-reset line belongs to the harness while this program is loaded: it is released every scan, so a press at an operator station does not reach the control. That suits a bench rig with no operator station and suits nothing else.",
+    "interfaceChanged": false,
+    "interfaceCommentChanged": false
+  },
+  "summary": {
+    "total": 4,
+    "changed": 0,
+    "added": 0,
+    "removed": 0,
+    "moved": 0,
+    "identical": 4
+  },
+  "networks": [
+    {
+      "number": 1,
+      "kind": "Identical",
+      "title": "Release The Injection Enable",
+      "beforeText": null,
+      "afterText": null,
+      "movedFrom": null
+    },
+    {
+      "number": 2,
+      "kind": "Identical",
+      "title": "Release The Indexes Whose Inert State Is Low",
+      "beforeText": null,
+      "afterText": null,
+      "movedFrom": null
+    },
+    {
+      "number": 3,
+      "kind": "Identical",
+      "title": "Release The Indexes Whose Inert State Is High",
+      "beforeText": null,
+      "afterText": null,
+      "movedFrom": null
+    },
+    {
+      "number": 4,
+      "kind": "Identical",
+      "title": "Release The Shared Plant Reset Line",
+      "beforeText": null,
+      "afterText": null,
+      "movedFrom": null
+    }
+  ],
+  "allowedNetworks": [],
+  "invarianceViolations": [],
+  "headerChangeAllowed": false,
+  "hasUnclaimedHeaderChange": false,
+  "hasNonGatingCommentChange": false,
+  "declaredInsertAt": null,
+  "movesAreDeclared": false,
+  "unchangedRemainder": 4,
+  "hasInvarianceViolation": false
+}

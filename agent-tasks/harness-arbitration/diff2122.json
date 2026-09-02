@@ -1,0 +1,231 @@
+{
+  "blockName": "FB_HopperBlockageStim",
+  "blockNameMismatch": false,
+  "otherBlockName": "FB_HopperBlockageStim",
+  "hasAnyChange": true,
+  "header": {
+    "changed": false,
+    "titleChanged": false,
+    "titleBefore": "Hopper-Blockage Stimulus Model",
+    "titleAfter": "Hopper-Blockage Stimulus Model",
+    "commentChanged": false,
+    "commentBefore": "Drives the three sensor signals the hopper-blockage monitor consumes - hopper high, plant running, operator reset - to a timeline the harness commands, so a conformance run exercises the monitor against a plant that behaves to order. A run is a clear-down that puts the monitor into a known unalarmed state, optionally a pre-boundary phase that leaves it part-way through its persistence window before the CPU is stopped and restarted, then the scenario itself, and once the harness has acknowledged the result by dropping the start bool, a trailing clear-down that repeats the reset so the NEXT run starts from a known unalarmed state rather than from whatever the previous scenario left standing - suppressed across a stop/restart boundary, where clearing would destroy the latched alarm the startup scenarios exist to observe. The clear-down exists because the monitor\u0027s alarm is latched and retentive and can only be cleared by a reset edge, so a scenario that did not start by clearing it would be reading the previous run. The scenario\u0027s shape comes from the tens digit of Profile and its durations from P1 to P4; six shapes cover every scenario the vector set asks for, because the scenarios differ in WHICH of the two driven signals drops and WHEN, never in anything else. The model publishes Armed so that observation latches are armed by its own phase - a latch running free from the start of the run would refill from the clear-down and read true no matter what the monitor did. It publishes its own threshold belief rather than reading the monitor\u0027s, so a reset placed at the threshold crossing stays a stimulus decision. This block drives the monitor\u0027s inputs and nothing else: it writes no plant tag, reads nothing the monitor writes, and is called only from the cyclic program.",
+    "commentAfter": "Drives the three sensor signals the hopper-blockage monitor consumes - hopper high, plant running, operator reset - to a timeline the harness commands, so a conformance run exercises the monitor against a plant that behaves to order. A run is a clear-down that puts the monitor into a known unalarmed state, optionally a pre-boundary phase that leaves it part-way through its persistence window before the CPU is stopped and restarted, then the scenario itself, and once the harness has acknowledged the result by dropping the start bool, a trailing clear-down that repeats the reset so the NEXT run starts from a known unalarmed state rather than from whatever the previous scenario left standing - suppressed across a stop/restart boundary, where clearing would destroy the latched alarm the startup scenarios exist to observe. The clear-down exists because the monitor\u0027s alarm is latched and retentive and can only be cleared by a reset edge, so a scenario that did not start by clearing it would be reading the previous run. The scenario\u0027s shape comes from the tens digit of Profile and its durations from P1 to P4; six shapes cover every scenario the vector set asks for, because the scenarios differ in WHICH of the two driven signals drops and WHEN, never in anything else. The model publishes Armed so that observation latches are armed by its own phase - a latch running free from the start of the run would refill from the clear-down and read true no matter what the monitor did. It publishes its own threshold belief rather than reading the monitor\u0027s, so a reset placed at the threshold crossing stays a stimulus decision. This block drives the monitor\u0027s inputs and nothing else: it writes no plant tag, reads nothing the monitor writes, and is called only from the cyclic program.",
+    "interfaceChanged": false,
+    "interfaceCommentChanged": false
+  },
+  "summary": {
+    "total": 24,
+    "changed": 2,
+    "added": 0,
+    "removed": 0,
+    "moved": 0,
+    "identical": 22
+  },
+  "networks": [
+    {
+      "number": 1,
+      "kind": "Identical",
+      "title": "Run Latch",
+      "beforeText": null,
+      "afterText": null,
+      "movedFrom": null
+    },
+    {
+      "number": 2,
+      "kind": "Identical",
+      "title": "Run Timer",
+      "beforeText": null,
+      "afterText": null,
+      "movedFrom": null
+    },
+    {
+      "number": 3,
+      "kind": "Identical",
+      "title": "Elapsed Run Time",
+      "beforeText": null,
+      "afterText": null,
+      "movedFrom": null
+    },
+    {
+      "number": 4,
+      "kind": "Identical",
+      "title": "Phase Constants",
+      "beforeText": null,
+      "afterText": null,
+      "movedFrom": null
+    },
+    {
+      "number": 5,
+      "kind": "Identical",
+      "title": "Scenario Start Offset",
+      "beforeText": null,
+      "afterText": null,
+      "movedFrom": null
+    },
+    {
+      "number": 6,
+      "kind": "Identical",
+      "title": "Scenario Elapsed Time",
+      "beforeText": null,
+      "afterText": null,
+      "movedFrom": null
+    },
+    {
+      "number": 7,
+      "kind": "Identical",
+      "title": "Timeline Shape",
+      "beforeText": null,
+      "afterText": null,
+      "movedFrom": null
+    },
+    {
+      "number": 8,
+      "kind": "Identical",
+      "title": "Segment Boundaries",
+      "beforeText": null,
+      "afterText": null,
+      "movedFrom": null
+    },
+    {
+      "number": 9,
+      "kind": "Identical",
+      "title": "Phases",
+      "beforeText": null,
+      "afterText": null,
+      "movedFrom": null
+    },
+    {
+      "number": 10,
+      "kind": "Identical",
+      "title": "Pre-Boundary Complete",
+      "beforeText": null,
+      "afterText": null,
+      "movedFrom": null
+    },
+    {
+      "number": 11,
+      "kind": "Identical",
+      "title": "Hopper Level By Shape",
+      "beforeText": null,
+      "afterText": null,
+      "movedFrom": null
+    },
+    {
+      "number": 12,
+      "kind": "Identical",
+      "title": "Running Feedback By Shape",
+      "beforeText": null,
+      "afterText": null,
+      "movedFrom": null
+    },
+    {
+      "number": 13,
+      "kind": "Identical",
+      "title": "Commanded Hopper Level",
+      "beforeText": null,
+      "afterText": null,
+      "movedFrom": null
+    },
+    {
+      "number": 14,
+      "kind": "Identical",
+      "title": "Commanded Running Feedback",
+      "beforeText": null,
+      "afterText": null,
+      "movedFrom": null
+    },
+    {
+      "number": 15,
+      "kind": "Identical",
+      "title": "Reset Pulse Windows",
+      "beforeText": null,
+      "afterText": null,
+      "movedFrom": null
+    },
+    {
+      "number": 16,
+      "kind": "Identical",
+      "title": "Reset Sources",
+      "beforeText": null,
+      "afterText": null,
+      "movedFrom": null
+    },
+    {
+      "number": 17,
+      "kind": "Identical",
+      "title": "Commanded Operator Reset",
+      "beforeText": null,
+      "afterText": null,
+      "movedFrom": null
+    },
+    {
+      "number": 18,
+      "kind": "Identical",
+      "title": "Observation Window",
+      "beforeText": null,
+      "afterText": null,
+      "movedFrom": null
+    },
+    {
+      "number": 19,
+      "kind": "Identical",
+      "title": "Scenario Complete",
+      "beforeText": null,
+      "afterText": null,
+      "movedFrom": null
+    },
+    {
+      "number": 20,
+      "kind": "Identical",
+      "title": "Re-Arm For The Next Run",
+      "beforeText": null,
+      "afterText": null,
+      "movedFrom": null
+    },
+    {
+      "number": 21,
+      "kind": "Changed",
+      "title": "Force The Monitored Inputs",
+      "beforeText": "NETWORK 21 \u0022Force The Monitored Inputs\u0022\n  COMMENT \u0022Presents the commanded plant to the input map through the input buffer\u0027s own test-injection members, which is the facility the input map already provides: with the test flag set the map ignores the physical terminal and takes each input from its test member. Only the flag and the two inputs this model commands are written, and only while a run is under way or the trailing clear-down after it is running - at every other time the flag is low and every input comes from the field exactly as it otherwise would. THE TRAILING CLEAR-DOWN IS WHY THE FLAG OUTLASTS THE RUN: its reset has to land on a hopper this model is still driving low, because a reset landing on a released input can be fighting the very cause it is trying to clear. The two commanded inputs need no such term - they are ANDed with the run, so outside a run they are already low, which is exactly the stopped plant and clear hopper the clear-down wants. The operator reset is written directly because it is not a field input and does not pass through the map.\u0022\n  COIL DB_Input.Test[0] := Running OR InTrailingCleardown\n  COIL DB_Input.Test[5] := Running AND Stim.Run\n  COIL DB_Input.Test[8] := Running AND Stim.Hopper\n  COIL DB_Controls.FaultReset := TrailingReset OR Running AND Stim.FaultReset\n",
+      "afterText": "NETWORK 21 \u0022Force The Monitored Inputs\u0022\n  COMMENT \u0022Presents the commanded plant to the input map through the input buffer\u0027s own test-injection members: with the flag set the map takes each input from its test member instead of from the physical terminal. Every rung here passes through while this model is not driving, so a line this model does not own carries whatever head does own it, and the arbitration layer ahead of every head is what a pass-through rests on when no head owns a line at all. The flag itself is combined rather than owned - this model ORs itself in, and the flag is set whenever any head wants injection. The model stays authoritative through the trailing clear-down as well as the run, holding the two commanded inputs low there, so the clear-down\u0027s reset lands on a hopper this model is still driving low. The operator reset is written directly, being a control line rather than a field input that reaches the block through the map.\u0022\n  COIL DB_Input.Test[0] := Running OR InTrailingCleardown OR DB_Input.Test[0]\n  COIL DB_Input.Test[5] := Running AND Stim.Run OR NOT Running AND NOT InTrailingCleardown AND DB_Input.Test[5]\n  COIL DB_Input.Test[8] := Running AND Stim.Hopper OR NOT Running AND NOT InTrailingCleardown AND DB_Input.Test[8]\n  COIL DB_Controls.FaultReset := TrailingReset OR Running AND Stim.FaultReset OR NOT Running AND NOT InTrailingCleardown AND DB_Controls.FaultReset\n",
+      "movedFrom": null
+    },
+    {
+      "number": 22,
+      "kind": "Changed",
+      "title": "Hold The Reverse Feedback Clear",
+      "beforeText": "NETWORK 22 \u0022Hold The Reverse Feedback Clear\u0022\n  COMMENT \u0022The model commands one running feedback, and the plant-running condition the monitor sees is the forward feedback or the reverse one. The reverse feedback\u0027s test member is therefore held clear for the whole run, and through the trailing clear-down that follows it, rather than left at whatever it happened to contain, so that the commanded stop is a stop and not merely the forward feedback going low. It extends across the clear-down for the same reason the injection flag does: a clear-down that let this member float could present a running plant to the monitor while the reset is trying to clear it.\u0022\n  RCOIL DB_Input.Test[6] := Running OR InTrailingCleardown\n",
+      "afterText": "NETWORK 22 \u0022Hold The Reverse Feedback Clear\u0022\n  COMMENT \u0022The plant-running condition the monitor sees is the forward feedback or the reverse one, and this model commands only the forward. The reverse feedback\u0027s test member is therefore held low for the whole run and through the trailing clear-down that follows it, so a commanded stop is a stop rather than the forward feedback alone going low. Outside those phases it passes through on the same contract as the network above.\u0022\n  COIL DB_Input.Test[6] := NOT Running AND NOT InTrailingCleardown AND DB_Input.Test[6]\n",
+      "movedFrom": null
+    },
+    {
+      "number": 23,
+      "kind": "Identical",
+      "title": "Trailing Clear-Down Pending",
+      "beforeText": null,
+      "afterText": null,
+      "movedFrom": null
+    },
+    {
+      "number": 24,
+      "kind": "Identical",
+      "title": "Trailing Clear-Down Window",
+      "beforeText": null,
+      "afterText": null,
+      "movedFrom": null
+    }
+  ],
+  "allowedNetworks": [
+    21,
+    22
+  ],
+  "invarianceViolations": [],
+  "headerChangeAllowed": false,
+  "hasUnclaimedHeaderChange": false,
+  "hasNonGatingCommentChange": false,
+  "declaredInsertAt": null,
+  "movesAreDeclared": false,
+  "unchangedRemainder": 22,
+  "hasInvarianceViolation": false
+}

@@ -1,0 +1,364 @@
+{
+  "_what": "SLOT FRAGMENT for a third conformance slot, SHR, whose block under test is FB_ShredderSequencer.",
+  "_authorship": "Authored by ee055079-868d-48bc-aa0a-7516e8688d29/lad-coder-shredderslot, 2026-09-02.",
+  "_generatedBy": "🔴 THE HEAD, ITS TYPE AND ITS INSTANCE DB WERE GENERATED FROM agent-tasks/shredder-slot/gen/Spec.cs, NOT FROM THIS DOCUMENT. Harness.Map was called directly (StimShellGenerator, StimUdtGenerator, InstanceDbGenerator), because harness-run --generate-only also generates the copy layer and the mirror, and a one-slot binding must never emit those - it would produce a mirror carrying SHR and not HBA. So the `generate` subtree below is A DECLARATION OF THE SAME SPEC IN A SECOND PLACE and the two can drift. They are not checked against each other, which would only prove two documents agree: they are checked against THE EMITTED RUNGS by .scratch/validate_binding.py, which reads uutReset, watchdog, dwell, the phase bits and ends, the causes and the outcome bits back out of ir/test-project001/FB_ShredderSequencerStim.ir. A divergence is a failing check, not a note somebody has to remember.",
+  "_bootstrapOrder": "🔴 A CORRECTION TO THIS LANE'S OWN EARLIER CONCLUSION. It first reported a bootstrap CYCLE - `converter harness-binding` refuses without an existing head (measured: exit 1, 'a block not written yet'), while the head is generated from a binding - and concluded the only escape was that the binding is JSON rather than IR. THAT WAS WRONG. The head needs only a DECLARED SPEC, not a binding, so the real order is: write the spec, generate the head, THEN scaffold the binding from it. Measured after the head existed: `converter harness-binding --stimulus FB_ShredderSequencerStim --slot SHR --observe FB_ShredderSequencer --instance iDB_ShredderSequencerStim --scope iDB_ShredderSequencer.IO --scope iDB_ShredderSequencerStim.Stim` returns exit 0 with 0 REFUSALS, 21 vector targets, 23 result sources and requiredRegisters 56. Unscoped it returns 125 excluded rows, so the two --scope flags are load-bearing.",
+  "_scaffoldAgreement": "This document was hand-authored BEFORE the head existed and then checked against that scaffold. They agree on 44 signals and on 56 required registers. TWO DELIBERATE DIFFERENCES, both of which the scaffold cannot make: (1) the scaffold lists iDB_ShredderSequencerStim.Stim.Start as a vectorTarget, because it does not write `startCondition` and so cannot know Start IS the start condition - a signal bound as both is refused by the copy layer, so this document declares it as the startCondition and keeps it out of vectorTargets; (2) this document adds iDB_MotorFwdRevSystem_Shredder.IO.FaultActive as a result source, which is outside both --scope prefixes and is the boundary decision recorded under _boundary.",
+
+  "declaredBy": "lad-coder-shredderslot",
+  "_declaredBy": "🔴 THIS IS A PLACEHOLDER AND GATE 5c SHOULD REFUSE IT. BindingDocument.DeclaredBy exists so the party who decides WHAT MAY BE OBSERVED of a block is not the party who wrote the block. This slot's head is authored by a lad-coder lane and FB_ShredderSequencer was also authored by a lad-coder lane, so declaring this lane here makes the observability map and the block correlated - exactly the reading gate 5c exists to break. The coordinator must re-declare it before any submission is adjudicated. Listed under unresolvedHoles.",
+
+  "blockName": "FC_HarnessCopyLayer",
+  "blockNumber": 9001,
+  "tagTableName": "HarnessMirror",
+  "tagPrefix": "HX_",
+  "baseByte": 1000,
+  "declaredRegisters": 1024,
+  "_servedArea": "baseByte and declaredRegisters are DERIVED, not typed: `converter served-area --project ir/test-project001 --json` returns derived=true, area M, baseByte 1000, registers 1024, from ir/test-project001/FB_Comms_ModbusServer.ir:31 (readable `P#M1000.0 WORD 1024`) and its sidecar at :39, which agree. That tool's own caveat applies unchanged - it read the corpus, not the CPU.",
+
+  "reservedRegions": [
+    {
+      "register": 0,
+      "length": 37,
+      "owner": "slot HBA (hopper-blockage) - HX_ProgramVersion/HX_ScanCount/HX_HBA_* per ir/test-project001/HarnessMirror.ir, 37 registers, the width MB_HOLD_REG carried before the 1024 widening"
+    }
+  ],
+  "_reservedRegions": "🔴 DECLARED BECAUSE THIS DOCUMENT IS A FRAGMENT, AND IT HAS ALREADY FIRED. The copy layer and the mirror tag table are PROGRAM-WIDE, one object each; the allocator lays out whatever slots the document it is given contains, starting at register 0. MEASURED: generating from this file alone is REFUSED with `the mirror's version region [0..1] enters reserved registers [0..1]` and four more like it, because the PROGRAM-WIDE version, scan-counter, start-bool and start-echo regions are laid from register 0, which is inside slot HBA's band. That refusal is correct and it is also the proof that a one-slot fragment CANNOT be laid out against an occupied area by declaring the neighbour. ReservedRegion guards against a FOREIGN neighbour (a virtual panel); it is not a way to compose two slots. The fix is the merge named in unresolvedHoles.",
+
+  "slots": [
+    {
+      "slotId": "SHR",
+
+      "_boundary": "🔴 THE SLOT BOUNDARY IS FB_ShredderSequencer ALONE AS THE BLOCK UNDER TEST, WITH iDB_MotorFwdRevSystem_Shredder UNAVOIDABLY INSIDE THE STIMULATED LOOP. Reasons, each checkable in the corpus: (1) 11 of the sequencer's 13 live inputs are commandable - 9 through the input map's own test-injection members (FC_Inputs writes each DB_Input member as `NOT Test[0] AND <terminal> OR Test[n]`) and 2 by direct write to DB_Controls. (2) IO.MotorFaultActive is NOT commandable by anything: FC_ControlMain.ir:22 writes it from iDB_MotorFwdRevSystem_Shredder.IO.FaultActive every scan, immediately before the CALL at :29, so a stimulus write is overwritten before the block reads it. Moving it means moving the motor FB. (3) MotorFaultActive gates the abort transition in THREE of the seven step networks (N9 step 30, N10 step 40, N12 step 50), so three of this block's transitions are functions of a second block's fail-to-run and fail-to-stop timers (FTTime = 10.0 s, masked ReverseIgnoreFT = 12.0 s around a reversal, per iDB_MotorFwdRevSystem_Shredder.ir:19,39). (4) IO.PusherJogPreStartSounder is produced by FB_PusherControl and reaches IO.PreStartSounder (N15), so PreStartSounder is a TWO-BLOCK signal and the second block is the concurrent lane's subject. CONSEQUENCE, stated rather than hidden: the motor's FaultActive is published as a result source below so the one uncontrolled input is at least VISIBLE. An uncontrolled input that is also unobserved is what turns a green into a lie.",
+
+      "startCondition": "iDB_ShredderSequencerStim.Stim.Start",
+      "_startCondition": "The slot's own start bool, driven by the copy layer's start rung. Deliberately NOT a vectorTarget - the copy layer emits it as its own network and the generation refuses a signal that is both. The scaffolder lists it as a vectorTarget because it does not write startCondition and therefore cannot know; this document does know.",
+
+      "assumedZeroRest": false,
+      "_assumedZeroRest": "NOT taken. SlotBindingDocument.AssumedZeroRest is a named migration escape for a slot already deployed against the old hardcoded zero; this slot has never run, so using it here would be borrowing an exemption written for somebody else's problem. Every result source below declares its own inertRest, and the ones that are not derivable from the corpus declare `excluded` with a basis rather than a guessed zero.",
+
+      "vectorTargets": [
+        {
+          "tag": "iDB_ShredderSequencerStim.Stim.EndAt",
+          "type": "Time",
+          "_role": "Shell member (StimShellGenerator S5/S7 read it as the InScenario phase duration). Scenario length, measured from the end of the head cleardown."
+        },
+        {
+          "tag": "iDB_ShredderSequencerStim.Stim.ResetMode",
+          "type": "Int",
+          "_role": "Shell member. S8 emits `COIL ScenarioReset := Stim.ResetMode = 2 OR Stim.ResetMode = 1 AND ScenT >= Stim.ResetAt AND ScenT < ResetPulseEnd`, so 0 = never reset inside the scenario, 1 = one pulse at ResetAt, 2 = held true throughout. NO `encoding` IS DECLARED: absent means the cited text IS the value, so a vector cites 0/1/2 directly. A symbolic table here would be a claim about a specification that does not exist for this slot yet, and inventing one is exactly what harness-binding refuses to do."
+        },
+        {
+          "tag": "iDB_ShredderSequencerStim.Stim.ResetAt",
+          "type": "Time",
+          "_role": "Shell member. When the in-scenario reset pulse starts under ResetMode 1, measured from the start of the scenario."
+        },
+        {
+          "tag": "iDB_ShredderSequencerStim.Stim.ArmAt",
+          "type": "Time",
+          "_role": "Shell member. S15 emits `COIL Stim.Armed := InScenario AND ScenT >= Stim.ArmAt AND ScenT < Stim.ArmUntil`."
+        },
+        {
+          "tag": "iDB_ShredderSequencerStim.Stim.ArmUntil",
+          "type": "Time",
+          "_role": "Shell member. End of the observation window."
+        },
+
+        {
+          "tag": "iDB_ShredderSequencerStim.Stim.PreStartHold",
+          "type": "Time",
+          "_role": "PLANT MODEL. How long the head holds the plant idle-but-healthy at the start of the scenario before it presses CycleStart. Gives a vector a settled Step 0 to depart from."
+        },
+        {
+          "tag": "iDB_ShredderSequencerStim.Stim.StartPressWidth",
+          "type": "Time",
+          "_role": "PLANT MODEL. How long DB_Input.Test[3] (Cycle_Start) is held. Many scans wide, so the press cannot fall between two scans."
+        },
+        {
+          "tag": "iDB_ShredderSequencerStim.Stim.DischargeConfirmDelay",
+          "type": "Time",
+          "_role": "PLANT MODEL. Delay from the sequencer commanding RunDischargeConv to the head asserting Discharge_Conv_Running (Test[10]). Compared against DB_Settings.DischargeConveyorTimeout = 10.0 s, this is the knob that decides whether step 20 advances to 30 or times out to 0 with DischargeConveyorTimeoutFault latched."
+        },
+        {
+          "tag": "iDB_ShredderSequencerStim.Stim.RevFeedbackDelay",
+          "type": "Time",
+          "_role": "PLANT MODEL. Delay from DB_Output.Run_Shredder_Rev to Shredder_Run_Rev_FB (Test[6]). CLOSED LOOP ON PURPOSE: the motor FB latches FTR if a command stands unconfirmed for FTTime = 10.0 s (FB_MotorFwdRevSystem N9), so an open-loop feedback timeline would trip a fault this slot does not command."
+        },
+        {
+          "tag": "iDB_ShredderSequencerStim.Stim.FwdFeedbackDelay",
+          "type": "Time",
+          "_role": "PLANT MODEL. Delay from DB_Output.Run_Shredder_Fwd to Shredder_Run_Fwd_FB (Test[5]). Same closed-loop reasoning; this is what lets step 40 reach step 50 at a commanded moment."
+        },
+        {
+          "tag": "iDB_ShredderSequencerStim.Stim.HopperHighAt",
+          "type": "Time",
+          "_role": "PLANT MODEL. When Hopper_Level_High (Test[8]) is asserted, from the start of the scenario. Holds InfeedRestartTimer off, which is what gates RunInfeedConv and then EnableUpstream in step 50 (N11)."
+        },
+        {
+          "tag": "iDB_ShredderSequencerStim.Stim.HopperClearAt",
+          "type": "Time",
+          "_role": "PLANT MODEL. When the hopper reads clear again. The InfeedRestartDelay = 5.0 s and InfeedToUpstreamEnableDelay = 3.0 s chain runs from here."
+        },
+        {
+          "tag": "iDB_ShredderSequencerStim.Stim.StopAt",
+          "type": "Time",
+          "_role": "PLANT MODEL. When the commanded stop event fires, from the start of the scenario. WHICH stop it is comes from the three Bool levers below, not from an encoded Int - so no value table has to be invented."
+        },
+
+        {
+          "tag": "iDB_ShredderSequencerStim.Stim.StopByButton",
+          "type": "Bool",
+          "_role": "PLANT MODEL LEVER. The stop at StopAt is the operator stop button (Test[4]). This is the only stop reason that also forces PusherModeCmd to 0 via PusherModeForceOff (N14), so it is separable from the other two by observation."
+        },
+        {
+          "tag": "iDB_ShredderSequencerStim.Stim.StopByDownstreamLoss",
+          "type": "Bool",
+          "_role": "PLANT MODEL LEVER. The stop at StopAt is loss of Downstream_Running (Test[15]). REQ-040's discriminating case: it must raise PusherCycleInhibitCmd and must NOT force PusherModeCmd to 0."
+        },
+        {
+          "tag": "iDB_ShredderSequencerStim.Stim.StopByUnhealthy",
+          "type": "Bool",
+          "_role": "PLANT MODEL LEVER. The stop at StopAt is loss of Control_Healthy (Test[1]). Also reaches the motor FB (FC_ControlMain.ir:35), so this lever moves two blocks and a vector using it is asserting about both."
+        },
+        {
+          "tag": "iDB_ShredderSequencerStim.Stim.WithholdDischargeConfirm",
+          "type": "Bool",
+          "_role": "PLANT MODEL LEVER. Never assert Discharge_Conv_Running, whatever DischargeConfirmDelay says. The clean way to reach the step-20 timeout without depending on a duration comparison."
+        },
+        {
+          "tag": "iDB_ShredderSequencerStim.Stim.WithholdRevFeedback",
+          "type": "Bool",
+          "_role": "PLANT MODEL LEVER. Never confirm reverse running. NOTE FOR WHOEVER WRITES VECTORS AGAINST IT: this does not merely stall step 30, it drives the motor FB to latch FTR after FTTime and therefore raises MotorFaultActive, which aborts the step. The observable outcome is a two-block outcome and the motor's FaultActive is published below for exactly that reason."
+        },
+        {
+          "tag": "iDB_ShredderSequencerStim.Stim.WithholdFwdFeedback",
+          "type": "Bool",
+          "_role": "PLANT MODEL LEVER. Never confirm forward running. Same two-block caveat as the reverse lever."
+        },
+        {
+          "tag": "iDB_ShredderSequencerStim.Stim.InjectMotorFault",
+          "type": "Bool",
+          "_role": "PLANT MODEL LEVER. Assert the field Motor_Fault DI (Test[7]) at StopAt. This is the ONLY route by which a vector can raise IO.MotorFaultActive deliberately rather than as a side effect of a withheld feedback: FB_MotorFwdRevSystem N11 ORs IO.FaultFB straight into IO.FaultActive."
+        }
+      ],
+
+      "resultSources": [
+        {
+          "tag": "iDB_ShredderSequencer.IO.Step",
+          "type": "Int",
+          "inertRest": { "value": "0", "basis": "Derived from the block, not assumed: every step network carries `MOVE(EN := StopCmd AND IO.Step = n, IN := 0) => IO.Step` (N7-N13) and the only exit from 0 is N6, which requires IO.CycleStart. With no start pressed the block rests at 0 on any field state." },
+          "_note": "🔴 THE PRINCIPAL OBSERVABLE, AND IT IS SAMPLED, NOT LATCHED. An Int cannot be latched by the copy layer's SCOIL machinery, so a step the plant passes THROUGH quickly is not observable at all. Step 40 is the sharp case: N10 exits it on the scan ShredderRunFwdFB arrives, so a head that confirms forward running promptly can make step 40 last a single scan and a sampling client will never see it. See unresolvedHoles."
+        },
+        {
+          "tag": "iDB_ShredderSequencer.IO.RunDischargeConv",
+          "type": "Bool",
+          "inertRest": { "value": "false", "basis": "N15: pure function of Step (20/30/40/50/60). Step rests at 0, so this rests false." }
+        },
+        {
+          "tag": "iDB_ShredderSequencer.IO.RunInfeedConv",
+          "type": "Bool",
+          "inertRest": { "value": "false", "basis": "N11: InfeedRunning := InfeedRestartTimer.Q, whose IN is `IO.Step = 50 AND NOT IO.HopperLevelHigh`. Step rests at 0, so the timer never accrues and this rests false." }
+        },
+        {
+          "tag": "iDB_ShredderSequencer.IO.EnableUpstream",
+          "type": "Bool",
+          "inertRest": { "value": "false", "basis": "N11: UpstreamEnableTimer.Q, whose IN is InfeedRunning, which rests false by the row above." }
+        },
+        {
+          "tag": "iDB_ShredderSequencer.IO.PreStartSounder",
+          "type": "Bool",
+          "inertRest": { "excluded": true, "basis": "NOT DERIVABLE FROM THIS BLOCK. N15 is `IO.Step = 10 OR IO.PusherJogPreStartSounder`, and the second term is produced by FB_PusherControl, which is outside this slot's boundary and is the concurrent lane's subject. Its resting value is a claim about the pusher and this document does not get to make it. The head holds the operator pusher mode at 0 for the whole index (its NETWORK 26), which is a declared assumption that the pusher stays quiet - not a proof, which is why this stays excluded." }
+        },
+        {
+          "tag": "iDB_ShredderSequencer.IO.MotorReverseCmd",
+          "type": "Bool",
+          "inertRest": { "value": "false", "basis": "N14: `IO.Step = 30`. Step rests at 0." }
+        },
+        {
+          "tag": "iDB_ShredderSequencer.IO.MotorAutoStartCmd",
+          "type": "Bool",
+          "inertRest": { "value": "false", "basis": "N14: Step in {30,40,50}. Step rests at 0." }
+        },
+        {
+          "tag": "iDB_ShredderSequencer.IO.MotorPreStartDoneCmd",
+          "type": "Bool",
+          "inertRest": { "value": "false", "basis": "N14: Step in {20,30,40,50,60}. Step rests at 0." }
+        },
+        {
+          "tag": "iDB_ShredderSequencer.IO.MotorStartArm",
+          "type": "Bool",
+          "inertRest": { "value": "false", "basis": "N14: `IO.Step = 10`. Step rests at 0." }
+        },
+        {
+          "tag": "iDB_ShredderSequencer.IO.PusherParkCmd",
+          "type": "Bool",
+          "inertRest": { "value": "false", "basis": "N14: `IO.Step >= 20 AND IO.Step <= 40`. Step rests at 0." }
+        },
+        {
+          "tag": "iDB_ShredderSequencer.IO.PusherCycleInhibitCmd",
+          "type": "Bool",
+          "inertRest": { "excluded": true, "basis": "NOT DERIVABLE FROM THE CORPUS. N14 mirrors StopCmd, and N1 is `IO.CycleStop OR NOT IO.DownstreamRunning OR NOT IO.SystemHealthy` - all three field inputs. On a bench rig with nothing wired to DI1/DI15 the resting value is TRUE, on a live plant it is FALSE, and which one this rig presents is a fact about the rig that the IR cannot state. Declaring 0 here is precisely the hardcoded zero InertRestDocument exists to stop." }
+        },
+        {
+          "tag": "iDB_ShredderSequencer.IO.PusherModeCmd",
+          "type": "Int",
+          "inertRest": { "excluded": true, "basis": "NOT DERIVABLE. N14 selects between 0 and IO.OperatorPusherMode, which FC_ControlMain.ir:25 takes from DB_Controls.PusherMode - an HMI/operator surface (DB_Controls block comment, C-306) written by nothing in this program outside a running index. Its resting value is whatever the operator last set." }
+        },
+        {
+          "tag": "iDB_ShredderSequencer.IO.DischargeConveyorTimeoutFault",
+          "type": "Bool",
+          "latchedBy": "FB_ShredderSequencer",
+          "inertRest": { "excluded": true, "basis": "LATCHED AND RETENTIVE. N8 seals it (`... OR IO.DischargeConveyorTimeoutFault AND NOT IO.FaultReset`) and it lives in IO, which iDB_ShredderSequencer declares RETAIN SETPOINT, so it survives a CPU restart. Its value before an index is whatever the last one left; the head's own cleardown is what clears it, which is why it is a declared cause rather than an assumed zero." }
+        },
+        {
+          "tag": "iDB_ShredderSequencer.IO.ShredderBlockedFault",
+          "type": "Bool",
+          "latchedBy": "FB_ShredderSequencer",
+          "inertRest": { "excluded": true, "basis": "Same latch-and-retain reasoning as the row above (N5 seals it). ⚠️ It is additionally UNREACHABLE in the as-built block - see this document's _subjectDefects." }
+        },
+        {
+          "tag": "iDB_ShredderSequencer.IO.InCycle",
+          "type": "Bool",
+          "inertRest": { "value": "false", "basis": "N15: `IO.Step <> 0`. Step rests at 0." }
+        },
+        {
+          "tag": "iDB_MotorFwdRevSystem_Shredder.IO.FaultActive",
+          "type": "Bool",
+          "latchedBy": "FB_MotorFwdRevSystem",
+          "inertRest": { "excluded": true, "basis": "LATCHED. FB_MotorFwdRevSystem N11 seals it until IO.FaultReset, and IO is RETAIN on this instance too." },
+          "_note": "🔴 NOT AN OUTPUT OF THE BLOCK UNDER TEST, AND PUBLISHED DELIBERATELY. It is the one input of FB_ShredderSequencer that no vector can command (see _boundary), and it gates three of the seven step transitions. Publishing it means a vector that observes an unexpected abort can tell whether the motor faulted; without it that abort is indistinguishable from a sequencer defect. It is outside both --scope prefixes, so the scaffolder does not and cannot propose it."
+        },
+        {
+          "tag": "iDB_ShredderSequencerStim.Stim.Phase",
+          "type": "Int",
+          "inertRest": { "value": "0", "basis": "Shell S18 emits `MOVE(EN := TRUE, IN := 0) => Stim.Phase` first and overwrites it only while a phase bit is set; every phase bit requires Running." },
+          "_note": "Phase codes are POSITIONAL - 1..7 in the order declared under generate.stimHead.phases, and 0 between indexes. StimShellGenerator's own obligation list requires this mapping to be published with the head; it is published here and in the head's block comment."
+        },
+        {
+          "tag": "iDB_ShredderSequencerStim.Stim.ResetRequest",
+          "type": "Bool",
+          "inertRest": { "value": "false", "basis": "Shell S9 drives it from `ResetPulse OR InScenario AND ScenarioReset`; every term requires Running." },
+          "_note": "Published so a reader can tell a block that ignored a reset from a head that never asked for one. It is the head's REQUEST: NETWORK 19 of the head, which is authored, is what actually drives DB_Controls.FaultReset, and only while this index runs."
+        },
+        {
+          "tag": "iDB_ShredderSequencerStim.Stim.Armed",
+          "type": "Bool",
+          "inertRest": { "value": "false", "basis": "Shell S15 requires InScenario, which requires Running." }
+        },
+        {
+          "tag": "iDB_ShredderSequencerStim.Stim.ScenarioDone",
+          "type": "Bool",
+          "inertRest": { "value": "false", "basis": "Shell S17 emits `RCOIL Stim.ScenarioDone := NOT Stim.Start AND NOT Running`, so it is cleared at re-arm and rests false." }
+        },
+        {
+          "tag": "iDB_ShredderSequencerStim.Stim.ArrivedDirty",
+          "type": "Bool",
+          "inertRest": { "value": "false", "basis": "Declared in outcomeBits, so shell S17 clears it at re-arm." },
+          "_note": "Shell S11: a latched cause was already standing when this index began. Reads on the block's hygiene between indexes, not on the block's function."
+        },
+        {
+          "tag": "iDB_ShredderSequencerStim.Stim.InertAtStart",
+          "type": "Bool",
+          "inertRest": { "value": "false", "basis": "Declared in outcomeBits, so shell S17 clears it at re-arm." },
+          "_note": "Shell S12: the head cleardown actually cleared every declared cause before the scenario ran. False means the scenario ran against a block that was not clean, so its result says nothing."
+        },
+        {
+          "tag": "iDB_ShredderSequencerStim.Stim.RecoverFailed",
+          "type": "Bool",
+          "inertRest": { "value": "false", "basis": "Declared in outcomeBits, so shell S17 clears it at re-arm." },
+          "_note": "Shell S13: the tail cleardown did NOT clear a declared cause. A green here is only as good as the causes list."
+        },
+        {
+          "tag": "iDB_ShredderSequencerStim.Stim.InertAtEnd",
+          "type": "Bool",
+          "inertRest": { "value": "false", "basis": "Declared in outcomeBits, so shell S17 clears it at re-arm." },
+          "_note": "Shell S13: the tail cleardown left the block inert, so the next index starts clean."
+        }
+      ],
+
+      "generate": {
+        "_what": "🔴 THE SPEC THE HEAD WAS GENERATED FROM, RESTATED IN THE SCHEMA THAT EXISTS FOR IT. The generation itself ran from agent-tasks/shredder-slot/gen/Spec.cs - see this document's _generatedBy for why, and for the check that keeps the two from drifting. NO SLOT FC IS DECLARED, and that is a decision, not an omission - see _noSlotFc.",
+        "_noSlotFc": "🔴 SlotFcGenerator emits an FC whose whole content is CALL <head> then CALL <block under test>. THAT SHAPE IS WRONG FOR THIS SLOT: FB_ShredderSequencer is integrated plant logic already called from FC_ControlMain.ir:29, with its entire input wiring in FC_ControlMain N1. A slot FC calling it a second time would execute the block twice per scan - every TON in it would accrue twice and a step transition could fire twice in one sweep. The head is therefore called from Main (OB1) ahead of FC_Inputs, exactly as FB_HopperBlockageStim is at Main.ir N1. 🔴 AN EARLIER VERSION OF THIS NOTE CALLED THAT ONE NETWORK THE ONLY HARNESS PLUMBING NO GENERATOR CAN PRODUCE. THAT WAS WRONG AND IS RETRACTED: Harness.Map.CyclicObGenerator emits the whole OB including its block comment, and the concurrent pusher lane regenerates Main.ir with it. This lane deliberately did NOT, because two lanes regenerating one OB is two agents editing one object; the call site is reported to the coordinator instead. ProgramGenerator's cyclicOb is separately not the answer for a NEW OB: the one generated on 2026-08-27 had to be deleted because it starts a second MB_SERVER on the rig's own port and connection ID.",
+
+        "stimHead": {
+          "headName": "FB_ShredderSequencerStim",
+          "uutReset": "Stim.ResetRequest",
+          "_uutReset": "🔴 A PUBLISHED REQUEST, NOT THE LINE - AND THE REASON IS A GENERATOR FINDING THIS LANE IS REPORTING. The sequencer's own reset input iDB_ShredderSequencer.IO.FaultReset is unusable: FC_ControlMain.ir:23 overwrites it from DB_Controls.FaultReset every scan, after this head runs and immediately before the CALL at :29. DB_Controls.FaultReset itself is unusable too: StimShellGenerator S9 emits a PLAIN COIL on whatever uutReset names, so three heads pointed at one shared plant coil is last-writer-wins - the same collision class this lane measured on DB_Input.Test[], one level down, inside generated mechanism where a head author cannot fix it. The head therefore publishes Stim.ResetRequest and FB_ShredderSequencerStim NETWORK 19, which is AUTHORED, arbitrates onto DB_Controls.FaultReset with the pass-through idiom. Adopted from the concurrent pusher lane, which hit this first.",
+          "watchdog": "T#10M",
+          "_watchdog": "Longer than any index this head can run: the longest declared plant constant in the loop is DB_Settings.ReversalWindowTime = 180.0 s, and a full index is three head dwells + the scenario + three tail dwells.",
+          "dwell": "T#15S",
+          "_dwell": "DERIVED, not picked. A cleardown dwell must outlast every settling constant a cleardown has to wait out, and the longest ones in this loop are DB_Settings.DischargeConveyorTimeout = 10.0 s, DB_Settings.PreStartSounderTime = 10.0 s and iDB_MotorFwdRevSystem_Shredder.IO.FTTime = 10.0 s. 15 s is the smallest round number above all three. It is a claim about the plant and it is stated as one.",
+
+          "phases": [
+            { "bit": "InHeadDisarm",  "end": "HeadDisarmEnd", "duration": "DisarmDwell", "kind": "Disarm" },
+            { "bit": "InHeadReset",   "end": "HeadResetEnd",  "duration": "ResetDwell",  "kind": "Reset" },
+            { "bit": "InHeadVerify",  "end": "HeadEnd",       "duration": "VerifyDwell", "kind": "Verify" },
+            { "bit": "InScenario",    "end": "ScenarioEnd",   "duration": "Stim.EndAt",  "kind": "Scenario" },
+            { "bit": "InTailDisarm",  "end": "TailDisarmEnd", "duration": "DisarmDwell", "kind": "Disarm" },
+            { "bit": "InTailReset",   "end": "TailResetEnd",  "duration": "ResetDwell",  "kind": "Reset" },
+            { "bit": "InTailVerify",  "end": "TailEnd",       "duration": "VerifyDwell", "kind": "Verify" }
+          ],
+          "_phases": "Ordered, and the order is load-bearing. StimShellGenerator S5 accumulates each boundary from the previous one, S7 derives membership from consecutive boundaries, S6 takes HeadEnd as the scenario's zero and S16 completes the index at TailEnd - so HeadEnd MUST be the last head phase's end and TailEnd the last phase's end overall. Phase codes published as Stim.Phase are 1..7 in this order.",
+
+          "causes": [
+            "iDB_ShredderSequencer.IO.DischargeConveyorTimeoutFault",
+            "iDB_ShredderSequencer.IO.ShredderBlockedFault",
+            "iDB_MotorFwdRevSystem_Shredder.IO.FaultActive"
+          ],
+          "_causes": "Every latched cause reachable in this loop. The first two are sealed in FB_ShredderSequencer N8 and N5 and live in a RETAIN SETPOINT UDT, so they survive a restart. The third is the motor's, sealed in FB_MotorFwdRevSystem N11, and it is listed because it gates three of the sequencer's step transitions - a head that cleared the sequencer's own faults and left the motor's standing would run every scenario into an immediate abort. iDB_MotorFwdRevSystem_Shredder.IO.FTR and .FTS are deliberately NOT listed separately: N11 makes FaultActive true whenever either stands, so they are covered. ⚠️ WHAT THIS LIST CANNOT COVER: IO.Step is itself retentive and is not a Bool, so CauseStanding cannot see a block left parked in a non-zero step. That is covered instead by the Step register's own inertRest above.",
+
+          "cycleEdges": [],
+          "_cycleEdges": "EMPTY, AND SAID SO RATHER THAN LEFT TO BE INFERRED. FB_ShredderSequencer publishes no one-scan counting edge on its interface. Its only internal edge, ReversalStepEdge (N4), counts entries into step 60, which is unreachable - see _subjectDefects. StimShellGenerator therefore omits S14 entirely and Stim.CycleCounted is never published; VECTORS MUST NOT ASSERT ON IT. The generator reports this as an obligation on every run rather than letting an empty list pass silently.",
+
+          "outcomeBits": [
+            "Stim.ArrivedDirty",
+            "Stim.InertAtStart",
+            "Stim.RecoverFailed",
+            "Stim.InertAtEnd",
+            "Stim.ScenarioDone"
+          ],
+          "_outcomeBits": "Exactly the set StimShellGenerator.BitsTheShellSets computes for a spec with no cycle edges. It is checked against the emitted rungs rather than trusted, so a missing one is a refusal and not a bit that never clears."
+        },
+
+        "stimUdt": {
+          "typeName": "UDT_ShredderSequencerStim",
+          "comment": "Command and published state of the shredder-sequencer stimulus head. The harness writes the command members before an index starts and reads the published ones while it runs. The head presents a commanded plant to FB_ShredderSequencer through the input map's own test-injection members, so the sequencer sees equipment that behaves to a timeline rather than to a field. THE FEEDBACK MEMBERS ARE CLOSED-LOOP BY DESIGN: the shredder motor block latches a fail-to-run ten seconds after it commands a contactor that does not confirm, and that fault aborts three of the sequencer's step transitions, so a feedback timeline that ignored what the motor was actually commanded would inject aborts no vector asked for. Each modelled contactor answers the output the PLC is really driving, after a delay the vector chooses. Every time is a duration measured from the start of the scenario, which is the instant the head cleardown finishes, never from Start.",
+          "_members": "The exact member list is in agent-tasks/shredder-slot/gen/Spec.cs and the GENERATED result is ir/test-project001/UDT_ShredderSequencerStim.ir - 12 members derived from the emitted rungs and 17 declared. TWO OF THE DECLARED ONES ARE DECLARED BECAUSE THE GENERATOR REFUSED TO GUESS: `ResetMode` and `Phase` are only ever written by an integer LITERAL, and an integer literal proves an integer and not its WIDTH - SInt, USInt, Byte, Int, UInt, DInt and Word all satisfy every rung the shell emits. Both are `Int` because this document mirrors both as MirrorValueType.Int, a 16-bit word at a word address, so the width is FORCED by this document's own signal list rather than chosen. The generator also reports that no member carries a start value, which is deliberate: a defaulted scenario must refuse rather than run."
+        }
+      }
+    }
+  ],
+
+  "generateProgram": {
+    "_what": "The program-level half. ONLY the head's instance DB is declared: the cyclic OB is deliberately not generated here (see slots[0].generate._noSlotFc) and the comms FB already exists and is deployed.",
+    "instanceDbs": [
+      {
+        "dbName": "iDB_ShredderSequencerStim",
+        "dbNumber": 9004,
+        "fb": "FB_ShredderSequencerStim",
+        "members": "projectedFromFb",
+        "_members": "projectedFromFb, not leftToTia. The two differ over exactly the presets: projection drops every start value unless a preset declares one, and this head declares none - a defaulted scenario must refuse rather than run. It also puts the structure in the IR where a reviewer can read it, which is the shape iDB_HopperBlockageStim already has. GENERATED: InstanceDbGenerator reported `INHERITED START VALUES: (none - earned zero, computed from the FB own text)`.",
+        "comment": "Single instance of the shredder-sequencer stimulus head. Every command member is written by the harness before an index and left at its type default here, because a defaulted scenario must refuse rather than run: a zero EndAt ends the scenario at the instant it starts, and a zero feedback delay is a contactor that answers before it was asked.",
+        "presets": []
+      }
+    ],
+    "_instanceDbs": "Block number 9004 is held under claim `block-number DB9004` by ee055079-868d-48bc-aa0a-7516e8688d29/lad-coder-shredderslot in C:\\ProgramData\\Ladder-AI\\claims\\test-project001."
+  },
+
+  "unresolvedHoles": [
+    "MERGE REQUIRED BEFORE ANY COPY-LAYER GENERATION, AND IT IS MEASURED, NOT ARGUED. This document declares ONE slot while blockName/tagTableName name PROGRAM-WIDE objects. Generating from it alone is REFUSED by the reservation above - `the mirror's version region [0..1] enters reserved registers [0..1]` and four more - because the program-wide version, scan-counter, start-bool and start-echo regions are laid from register 0, inside slot HBA's band. It must be merged with gen/test-project001/hopper-blockage-alarm/harness-binding.json and the pusher lane's document into ONE multi-slot binding (Harness.Map.Tests.MultiSlotBindingTests is the supported shape) before harness-run is pointed at it. The coordinator owns that merge.",
+    "declaredBy IS A PLACEHOLDER. The observability authority must be re-declared by the coordinator: this lane authored both the head and (as a lad-coder lane) the block under test, so gate 5c has no genuine second operand. See _declaredBy.",
+    "specName IS ABSENT ON ALL 44 SIGNALS. There is no specification for this slot yet - the assertion enumeration is being produced independently and this lane is fenced from reading it. Absent is 'NOT CHECKED' and never 'the same as tag'; inventing spec names would be the exact defect MirroredSignalDocument.SpecName was added to close. The coordinator fills these once the enumeration exists.",
+    "quiescenceScans IS UNDECLARED, WHICH MEANS 1, AND 1 IS ALMOST CERTAINLY WRONG. The inert check will decide this slot is quiescent after a single scan. This head's dwells are 15 s each and its scenario runs to whatever EndAt says, so the settle after a download is seconds, not a scan. Slot HBA declares 2300. A number here is a claim about how long THIS head takes to settle and cannot be derived from the corpus; it needs one measured run.",
+    "retentiveBytes IS UNDECLARED. It is the retentive %M extent for the 0.1b non-retentive assertion and it is a hardware-configuration fact, not an IR fact. Not derivable from ir/test-project001.",
+    "registerOrder IS UNDECLARED - the scaffolder names it as a hole and this document does not fill it. The layout is the allocator's, and it can only be settled by the merged multi-slot document.",
+    "THE PUSHER LANE'S REGISTER FOOTPRINT IS UNDECLARED IN reservedRegions. A concurrent lane is building a pusher slot against the same 1024-register window and this lane cannot know its extent. Two lanes each declaring only the OTHER known neighbour is not disjointness; the merge above is what actually settles it.",
+    "THE CALL SITE IS NOT WIRED. FB_ShredderSequencerStim must be CALLed from Main (OB1) ahead of FC_Inputs, and this lane deliberately did not add it: the concurrent pusher lane regenerates Main.ir through CyclicObGenerator and two lanes writing one OB is two agents editing one object. The head is inert until that call exists - it will import and compile and do nothing, which is the failure mode that reads as a slot that simply never fires.",
+    "NO PER-STEP VISIT LATCH EXISTS. IO.Step is an Int and the copy layer latches only Bools, so a step the plant passes through in one scan is unobservable at any sampling rate. Step 40 is the concrete case: FB_ShredderSequencer N10 leaves it on the scan the forward-running feedback arrives. Observing 'the sequence passed through step 40' needs a small authored latch block in the shape of FB_HarnessViolationLatch, which no generator emits."
+  ],
+  "_unresolvedHoles": "🔴 THIS KEY IS NOT AN ANNOTATION AND GATE 0b REFUSES IT ON PURPOSE. It is here so this document cannot be deployed while the holes stand.",
+
+  "_slotContention": "🔴 THE INJECTION LAYER IS SHARED AND THIS HEAD IS BUILT FOR IT. DB_Input.Test[] is one array and DB_Controls.FaultReset is one coil; every stimulus head writes them from Main ahead of FC_Inputs, so the last head in the sweep wins. Measured on the corpus: FB_HopperBlockageStim writes Test[0,5,6,8] with NO pass-through on any, so idle it drives all four low; FB_PusherStim now passes through on all 8 of its indices. This head needs Test[0,1,3,4,5,6,7,8,10,15] and uses the pass-through idiom `COIL DB_Input.Test[n] := Running AND <commanded> OR NOT Running AND DB_Input.Test[n]` on EVERY ONE of them, plus on DB_Controls.FaultReset in its NETWORK 19. Test[15] is the decisive index: FB_ShredderSequencer N6 will not leave step 0 without IO.DownstreamRunning. FOUR REPAIRS REMAIN IN FB_HopperBlockageStim N21/N22, which are not this lane's to make. ⚠️ `converter reachable-state` reports DB_Input.Test at WHOLE-ARRAY granularity, so it can neither prove index-level disjointness nor name a colliding index; the per-index picture was scanned out of the IR by hand.",
+
+  "_subjectDefects": "🔴 WHAT MAKES FB_ShredderSequencer AN AWKWARD CONFORMANCE SUBJECT. (1) STEP 60 IS UNREACHABLE. The only transition into it (N12) requires OvercurrentTripped, which requires OvercurrentMediumTimer.Q or OvercurrentHighTimer.Q, and BOTH timers are gated `AND NOT AlwaysTrue` - a permanently false placeholder the block's own OvercurrentTripped comment declares. So step 60, all three of N13's transitions, the whole reversal-counting family (N3, N4, N5, ReversalCount, ReversalWindowTimer, ShredderBlockedFault) and the step-60 term of PusherModeForceOff (N14) are dead code that no stimulus can reach. That is 5 of 15 networks wholly or partly unexercisable, and a slot reporting green over them is reporting green over code that never ran. (2) IT IS DEAD TWICE OVER: even with the placeholder removed, DB_Settings.OvercurrentSetpointMedium/High and OvercurrentMediumDelay/HighDelay are deliberately unconfigured (no AI hardware, Q-11/Q-04), so the detection has no numbers either. (3) IO.ShredderMotorCurrent IS A Real, AND MirrorValueType HAS NO Real - Bool, Int and Time only - so the analog input cannot be commanded through the mirror at all even after the detection is armed. (4) IO.AutoStartSignal IS UNWIRED (`direction: unused`, confirmed by `converter signal-set`), so a C-115 vocabulary member sits in the interface with no writer and no reader. (5) THE BLOCK'S OWN INTERFACE IS RETAIN SETPOINT, so Step and both fault latches survive a CPU restart - which is why the head needs a real cleardown and why three of its outcome bits exist."
+}

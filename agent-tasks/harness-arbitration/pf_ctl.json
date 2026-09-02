@@ -1,0 +1,33 @@
+{
+  "files": [
+    {
+      "filePath": "C:/Users/User/AppData/Local/Temp/arb/ctl/FB_HopperBlockageStim.ir",
+      "name": "FB_HopperBlockageStim",
+      "findings": [
+        {
+          "check": "review:C-103",
+          "description": "network 22: [Warn] Reset coil (RCOIL) on \u0027DB_Input.Test[6]\u0027 has no matching Set (SCOIL) in this block; if this is the deliberate external-set/internal-reset reusable-FB pattern, that is the documented C-103 exception \u2014 confirm the intent comment.",
+          "gates": true
+        },
+        {
+          "check": "review:harness-scope",
+          "description": "Harness: FB 9002 is inside the reserved harness band 9000-9999 (declared docs/notes/test-environment-build-plan.md, 2026-08-13). 0 C-001/C-201 finding(s) reported without gating.",
+          "gates": false
+        }
+      ]
+    }
+  ],
+  "indexWarnings": [],
+  "corpus": {
+    "projectDir": "ir/test-project001",
+    "projectFileCount": 50,
+    "batchFileCount": 1,
+    "projectContributedNothing": false,
+    "blockNameCount": 21,
+    "tagRootNameCount": 147,
+    "typeNameCount": 7,
+    "memberBodyCount": 27,
+    "calleeInterfaceCount": 21,
+    "harnessCorpusFileCount": 51
+  }
+}

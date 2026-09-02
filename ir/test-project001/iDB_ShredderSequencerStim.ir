@@ -1,0 +1,94 @@
+DB iDB_ShredderSequencerStim
+  ROOTID 0
+  NUMBER 9004
+  INSTANCEOF FB_ShredderSequencerStim
+  COMMENT "Single instance of the shredder-sequencer stimulus head. Every command member is written by the harness before an index and left at its type default here, because a defaulted scenario must refuse rather than run: a zero EndAt ends the scenario at the instant it starts, and a zero feedback delay is a contactor that answers before it was asked."
+  INPUT
+  OUTPUT
+  MEMBERS
+    Stim : "UDT_ShredderSequencerStim"
+      Start : Bool
+      ScenarioDone : Bool
+      EndAt : Time
+      ResetAt : Time
+      ResetMode : Int
+      ResetRequest : Bool
+      ArrivedDirty : Bool
+      InertAtStart : Bool
+      RecoverFailed : Bool
+      InertAtEnd : Bool
+      Armed : Bool
+      ArmAt : Time
+      ArmUntil : Time
+      Phase : Int
+      PreStartHold : Time
+      StartPressWidth : Time
+      DischargeConfirmDelay : Time
+      RevFeedbackDelay : Time
+      FwdFeedbackDelay : Time
+      HopperHighAt : Time
+      HopperClearAt : Time
+      StopAt : Time
+      StopByButton : Bool
+      StopByDownstreamLoss : Bool
+      StopByUnhealthy : Bool
+      WithholdDischargeConfirm : Bool
+      WithholdRevFeedback : Bool
+      WithholdFwdFeedback : Bool
+      InjectMotorFault : Bool
+    Running : Bool
+    RunTimer : TON_TIME VERSION 1.0 SETPOINT
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool
+    RunT : Time
+    ScenT : Time
+    DisarmDwell : Time
+    ResetDwell : Time
+    VerifyDwell : Time
+    ResetPulseEnd : Time
+    ResetPulse : Bool
+    ScenarioReset : Bool
+    CauseStanding : Bool
+    InHeadDisarm : Bool
+    InHeadReset : Bool
+    InHeadVerify : Bool
+    InScenario : Bool
+    InTailDisarm : Bool
+    InTailReset : Bool
+    InTailVerify : Bool
+    HeadDisarmEnd : Time
+    HeadResetEnd : Time
+    HeadEnd : Time
+    ScenarioEnd : Time
+    TailDisarmEnd : Time
+    TailResetEnd : Time
+    TailEnd : Time
+    Disarmed : Bool
+    StartPressEnd : Time
+    StopFired : Bool
+    CmdCycleStart : Bool
+    CmdCycleStop : Bool
+    CmdDownstream : Bool
+    CmdHealthy : Bool
+    CmdHopperHigh : Bool
+    CmdMotorFault : Bool
+    CmdRunFwdFB : Bool
+    CmdRunRevFB : Bool
+    CmdDischargeRunning : Bool
+    FwdRespTimer : TON_TIME VERSION 1.0 SETPOINT
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool
+    RevRespTimer : TON_TIME VERSION 1.0 SETPOINT
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool
+    DischargeRespTimer : TON_TIME VERSION 1.0 SETPOINT
+      PT : Time
+      ET : Time
+      IN : Bool
+      Q : Bool

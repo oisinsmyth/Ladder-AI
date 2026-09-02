@@ -1,0 +1,851 @@
+{
+ "schema": "ladder-ai/agent-evidence/1",
+ "task": "Harness-owned stimulus arbitration layer for test-project001. NEW FC_HarnessStimArbiter (FC9002) owns the resting state of the shared injection array DB_Input.Test[0..22] and of the shared plant reset line DB_Controls.FaultReset, releasing each index to THE INERT VALUE FOR ITS READER rather than uniformly to zero. FB_HopperBlockageStim NETWORKs 21 and 22 repaired to the same pass-through contract. Second pass: folded in the coordinator's per-index dispatch and a blind lad-reader review.",
+ "kind": "modify",
+ "manual": true,
+ "_skill": "NO SKILL COVERS THIS STAGE and none was used. gen-block-new codes one gate-1 architecture manifest item and no manifest item exists for this block; gen-block-modify-fix repairs one named defect in one existing block. This run is one new block plus a two-network repair that only means anything together. Done manually to the same contract: claim before writing, touch only the named networks, prove the remainder identical with diff --only, record every gate raw.",
+ "files": [
+  {
+   "path": "ir/test-project001/FC_HarnessStimArbiter.ir",
+   "ir_hash": "C1A3C3CA407341FB4545C869EF8FC2D2747BE9711C1E453130BC57AD4A8DBB0B",
+   "_note": "NEW. 42 lines, every one hand-written. Four networks, 24 rungs, no interface. Every rung is a PLAIN COIL off AlwaysTrue (%M1.2, the CPU system-memory always-true bit) or its negation - no set or reset coil anywhere in the block."
+  },
+  {
+   "path": "ir/test-project001/FB_HopperBlockageStim.ir",
+   "ir_hash": "BDC585B116D0CEDDA0E390F3DF8567BD8837E2C7DE17E49410B6C34DFE961003",
+   "_note": "MODIFIED. NETWORKs 21 and 22 only. No interface change, no network added, removed or moved. diff --only 21 22 passed WITHOUT --allow-header and WITHOUT --insert."
+  }
+ ],
+ "_scope_widened_after_the_claim_was_taken": "DECLARED, NOT SLIPPED. The block-edit claim's purpose text says 'NETWORK 21 only' and the delivered change touches 21 AND 22. NETWORK 22 was the block's only set/reset mechanism (RCOIL DB_Input.Test[6]); C-403 is error severity and requires every S/R-written bit to appear in the startup-reset block, and OB100 does not name it. Converting it to the plain coil the rest of the contract already uses is behaviourally identical - while authoritative both write 0, while idle both leave this scan's value standing - and it removes an error-severity violation from a deployed block rather than leaving it beside a rewrite of the same resource. The claim is held by this agent and no other lane holds FB_HopperBlockageStim, so the widening collides with nobody; it is recorded here because a purpose text that understates the work is how scope drift starts.",
+ "_hand_written_line_count": {
+  "FC_HarnessStimArbiter.ir": 42,
+  "FB_HopperBlockageStim.ir NETWORKs 21 + 22": 7,
+  "total": 49,
+  "generated": 0,
+  "_why": "NO GENERATOR EMITS THIS BLOCK. Harness.Map holds CopyLayerGenerator, SlotFcGenerator, StimShellGenerator, StimUdtGenerator, InstanceDbGenerator, CommsFbGenerator, CyclicObGenerator, LaneGenerator and ProgramGenerator, and not one emits an arbitration or injection-rest block. Reported as a generator gap rather than hand-written quietly. NOTE the gap got HARDER this pass, not easier: a generator can derive the index list mechanically, but the inert VALUE per index is a claim about the plant read off the consuming rung, so a generator would have to take it as declared input and refuse where it is undeclared."
+ },
+ "claims": [
+  {
+   "kind": "block-number",
+   "value": "FC9002",
+   "agent": "ee055079-868d-48bc-aa0a-7516e8688d29/lad-coder-arbitration",
+   "_held": true,
+   "purpose": "FC_HarnessStimArbiter - harness-owned arbitration layer: owner of the REST STATE of the shared stimulus injection array DB_Input.Test[0..22] and of the shared plant reset line DB_Controls.FaultReset, run once ahead of every stimulus head"
+  },
+  {
+   "kind": "block-edit",
+   "value": "FB_HopperBlockageStim",
+   "agent": "ee055079-868d-48bc-aa0a-7516e8688d29/lad-coder-arbitration",
+   "_held": true,
+   "purpose": "NETWORK 21 only: repair the head to the arbitration contract - OR-accumulate the injection enable and pass through every index and the shared reset line while this head is not authoritative. SEE _scope_widened_after_the_claim_was_taken: NETWORK 22 was also changed."
+  }
+ ],
+ "_claims_not_taken": [
+  {
+   "kind": "block-edit",
+   "value": "OB100",
+   "_why_not": "NOT NEEDED, AND THAT IS THE FINDING RATHER THAN AN OMISSION. The review directed a claim on OB100 to satisfy C-403's startup-reset clause for 24 reset-coil-written bits. C-403's FIRST clause is that plain coils are used wherever possible and set/reset only where genuinely unavoidable; the startup-reset obligation attaches only to bits written by an S/R mechanism. Rewriting every release as a plain coil off AlwaysTrue satisfies the first clause, leaves no S/R mechanism to register, and removes the obligation instead of discharging it. Verified: zero RCOIL/SCOIL on any Test[] index or on FaultReset anywhere in ir/test-project001. OB100 is untouched and was never opened."
+  },
+  {
+   "kind": "block-edit",
+   "value": "Main",
+   "_why_not": "Not needed this pass. The blocker reported at the first hand-back was cleared by the pusher lane, which wired FC_HarnessStimArbiter in at NETWORK 1 ahead of all three heads and made arbiter-first a checked ObCallOrder constraint in the generator. cross-check now reports REACHABILITY: 21 of 21 code blocks reachable from 2 OBs. Main was never opened for writing by this agent, in either pass."
+  }
+ ],
+ "checks": [
+  {
+   "tool": "converter claim (FC9002 block-number --allocate --type FC, FB_HopperBlockageStim block-edit)",
+   "exit": 0,
+   "_note": "Both Acquired, both still held at hand-back. Each echoed the shared store root with the project name appended by the tool, so it ended in the project name under the ProgramData claims root and not in a worktree-local store. FC9002 was ALLOCATED rather than picked: FC9000 is held by the shredder lane and FC9001 is FC_HarnessCopyLayer."
+  },
+  {
+   "tool": "converter preflight (NEW BLOCK FC_HarnessStimArbiter)",
+   "exit": 0,
+   "json": {
+    "files": [
+     {
+      "filePath": "ir/test-project001/FC_HarnessStimArbiter.ir",
+      "name": "FC_HarnessStimArbiter",
+      "findings": [
+       {
+        "check": "review:harness-scope",
+        "description": "Harness: FC 9002 is inside the reserved harness band 9000-9999 (declared docs/notes/test-environment-build-plan.md, 2026-08-13). 0 C-001/C-201 finding(s) reported without gating.",
+        "gates": false
+       }
+      ]
+     }
+    ],
+    "indexWarnings": [],
+    "corpus": {
+     "projectDir": "ir/test-project001",
+     "projectFileCount": 50,
+     "batchFileCount": 1,
+     "projectContributedNothing": false,
+     "blockNameCount": 21,
+     "tagRootNameCount": 147,
+     "typeNameCount": 7,
+     "memberBodyCount": 27,
+     "calleeInterfaceCount": 21,
+     "harnessCorpusFileCount": 50
+    }
+   },
+   "_note": "CLEAN. Zero findings; the single entry is the non-gating harness-scope note recording that FC 9002 sits in the reserved 9000-9999 band. The 24 gating C-103 findings reported at the first hand-back are GONE, and not by exemption: the construct that raised them was replaced. See _c103_disposition."
+  },
+  {
+   "tool": "converter preflight (MODIFIED BLOCK FB_HopperBlockageStim)",
+   "exit": 0,
+   "json": {
+    "files": [
+     {
+      "filePath": "ir/test-project001/FB_HopperBlockageStim.ir",
+      "name": "FB_HopperBlockageStim",
+      "findings": [
+       {
+        "check": "review:harness-scope",
+        "description": "Harness: FB 9002 is inside the reserved harness band 9000-9999 (declared docs/notes/test-environment-build-plan.md, 2026-08-13). 0 C-001/C-201 finding(s) reported without gating.",
+        "gates": false
+       }
+      ]
+     }
+    ],
+    "indexWarnings": [],
+    "corpus": {
+     "projectDir": "ir/test-project001",
+     "projectFileCount": 50,
+     "batchFileCount": 1,
+     "projectContributedNothing": false,
+     "blockNameCount": 21,
+     "tagRootNameCount": 147,
+     "typeNameCount": 7,
+     "memberBodyCount": 27,
+     "calleeInterfaceCount": 21,
+     "harnessCorpusFileCount": 50
+    }
+   },
+   "_note": "CLEAN, and CLEANER THAN THE BLOCK IT REPLACES. Zero findings against the as-built's one C-103 (NETWORK 22's reset coil on DB_Input.Test[6]). This modification removes a pre-existing finding and introduces none."
+  },
+  {
+   "tool": "converter preflight (CONTROL: the as-built FB_HopperBlockageStim at git HEAD)",
+   "exit": 1,
+   "json": {
+    "files": [
+     {
+      "filePath": "C:/Users/User/AppData/Local/Temp/arb/ctl/FB_HopperBlockageStim.ir",
+      "name": "FB_HopperBlockageStim",
+      "findings": [
+       {
+        "check": "review:C-103",
+        "description": "network 22: [Warn] Reset coil (RCOIL) on 'DB_Input.Test[6]' has no matching Set (SCOIL) in this block; if this is the deliberate external-set/internal-reset reusable-FB pattern, that is the documented C-103 exception — confirm the intent comment.",
+        "gates": true
+       },
+       {
+        "check": "review:harness-scope",
+        "description": "Harness: FB 9002 is inside the reserved harness band 9000-9999 (declared docs/notes/test-environment-build-plan.md, 2026-08-13). 0 C-001/C-201 finding(s) reported without gating.",
+        "gates": false
+       }
+      ]
+     }
+    ],
+    "indexWarnings": [],
+    "corpus": {
+     "projectDir": "ir/test-project001",
+     "projectFileCount": 50,
+     "batchFileCount": 1,
+     "projectContributedNothing": false,
+     "blockNameCount": 21,
+     "tagRootNameCount": 147,
+     "typeNameCount": 7,
+     "memberBodyCount": 27,
+     "calleeInterfaceCount": 21,
+     "harnessCorpusFileCount": 51
+    }
+   },
+   "_note": "The control, and it is the one gate here that is deliberately RED. It shows the as-built block carrying a C-103 on NETWORK 22 that the modified block no longer carries. Recorded as a failing gate rather than quietly dropped: the delta between this and the entry above is the evidence that the repair improved the block's static standing rather than merely preserving it."
+  },
+  {
+   "tool": "converter diff --only 21 22 (THE INVARIANCE GATE)",
+   "exit": 0,
+   "json": {
+    "blockName": "FB_HopperBlockageStim",
+    "blockNameMismatch": false,
+    "otherBlockName": "FB_HopperBlockageStim",
+    "hasAnyChange": true,
+    "header": {
+     "changed": false,
+     "titleChanged": false,
+     "titleBefore": "Hopper-Blockage Stimulus Model",
+     "titleAfter": "Hopper-Blockage Stimulus Model",
+     "commentChanged": false,
+     "commentBefore": "Drives the three sensor signals the hopper-blockage monitor consumes - hopper high, plant running, operator reset - to a timeline the harness commands, so a conformance run exercises the monitor against a plant that behaves to order. A run is a clear-down that puts the monitor into a known unalarmed state, optionally a pre-boundary phase that leaves it part-way through its persistence window before the CPU is stopped and restarted, then the scenario itself, and once the harness has acknowledged the result by dropping the start bool, a trailing clear-down that repeats the reset so the NEXT run starts from a known unalarmed state rather than from whatever the previous scenario left standing - suppressed across a stop/restart boundary, where clearing would destroy the latched alarm the startup scenarios exist to observe. The clear-down exists because the monitor's alarm is latched and retentive and can only be cleared by a reset edge, so a scenario that did not start by clearing it would be reading the previous run. The scenario's shape comes from the tens digit of Profile and its durations from P1 to P4; six shapes cover every scenario the vector set asks for, because the scenarios differ in WHICH of the two driven signals drops and WHEN, never in anything else. The model publishes Armed so that observation latches are armed by its own phase - a latch running free from the start of the run would refill from the clear-down and read true no matter what the monitor did. It publishes its own threshold belief rather than reading the monitor's, so a reset placed at the threshold crossing stays a stimulus decision. This block drives the monitor's inputs and nothing else: it writes no plant tag, reads nothing the monitor writes, and is called only from the cyclic program.",
+     "commentAfter": "Drives the three sensor signals the hopper-blockage monitor consumes - hopper high, plant running, operator reset - to a timeline the harness commands, so a conformance run exercises the monitor against a plant that behaves to order. A run is a clear-down that puts the monitor into a known unalarmed state, optionally a pre-boundary phase that leaves it part-way through its persistence window before the CPU is stopped and restarted, then the scenario itself, and once the harness has acknowledged the result by dropping the start bool, a trailing clear-down that repeats the reset so the NEXT run starts from a known unalarmed state rather than from whatever the previous scenario left standing - suppressed across a stop/restart boundary, where clearing would destroy the latched alarm the startup scenarios exist to observe. The clear-down exists because the monitor's alarm is latched and retentive and can only be cleared by a reset edge, so a scenario that did not start by clearing it would be reading the previous run. The scenario's shape comes from the tens digit of Profile and its durations from P1 to P4; six shapes cover every scenario the vector set asks for, because the scenarios differ in WHICH of the two driven signals drops and WHEN, never in anything else. The model publishes Armed so that observation latches are armed by its own phase - a latch running free from the start of the run would refill from the clear-down and read true no matter what the monitor did. It publishes its own threshold belief rather than reading the monitor's, so a reset placed at the threshold crossing stays a stimulus decision. This block drives the monitor's inputs and nothing else: it writes no plant tag, reads nothing the monitor writes, and is called only from the cyclic program.",
+     "interfaceChanged": false,
+     "interfaceCommentChanged": false
+    },
+    "summary": {
+     "total": 24,
+     "changed": 2,
+     "added": 0,
+     "removed": 0,
+     "moved": 0,
+     "identical": 22
+    },
+    "networks": [
+     {
+      "number": 1,
+      "kind": "Identical",
+      "title": "Run Latch",
+      "beforeText": null,
+      "afterText": null,
+      "movedFrom": null
+     },
+     {
+      "number": 2,
+      "kind": "Identical",
+      "title": "Run Timer",
+      "beforeText": null,
+      "afterText": null,
+      "movedFrom": null
+     },
+     {
+      "number": 3,
+      "kind": "Identical",
+      "title": "Elapsed Run Time",
+      "beforeText": null,
+      "afterText": null,
+      "movedFrom": null
+     },
+     {
+      "number": 4,
+      "kind": "Identical",
+      "title": "Phase Constants",
+      "beforeText": null,
+      "afterText": null,
+      "movedFrom": null
+     },
+     {
+      "number": 5,
+      "kind": "Identical",
+      "title": "Scenario Start Offset",
+      "beforeText": null,
+      "afterText": null,
+      "movedFrom": null
+     },
+     {
+      "number": 6,
+      "kind": "Identical",
+      "title": "Scenario Elapsed Time",
+      "beforeText": null,
+      "afterText": null,
+      "movedFrom": null
+     },
+     {
+      "number": 7,
+      "kind": "Identical",
+      "title": "Timeline Shape",
+      "beforeText": null,
+      "afterText": null,
+      "movedFrom": null
+     },
+     {
+      "number": 8,
+      "kind": "Identical",
+      "title": "Segment Boundaries",
+      "beforeText": null,
+      "afterText": null,
+      "movedFrom": null
+     },
+     {
+      "number": 9,
+      "kind": "Identical",
+      "title": "Phases",
+      "beforeText": null,
+      "afterText": null,
+      "movedFrom": null
+     },
+     {
+      "number": 10,
+      "kind": "Identical",
+      "title": "Pre-Boundary Complete",
+      "beforeText": null,
+      "afterText": null,
+      "movedFrom": null
+     },
+     {
+      "number": 11,
+      "kind": "Identical",
+      "title": "Hopper Level By Shape",
+      "beforeText": null,
+      "afterText": null,
+      "movedFrom": null
+     },
+     {
+      "number": 12,
+      "kind": "Identical",
+      "title": "Running Feedback By Shape",
+      "beforeText": null,
+      "afterText": null,
+      "movedFrom": null
+     },
+     {
+      "number": 13,
+      "kind": "Identical",
+      "title": "Commanded Hopper Level",
+      "beforeText": null,
+      "afterText": null,
+      "movedFrom": null
+     },
+     {
+      "number": 14,
+      "kind": "Identical",
+      "title": "Commanded Running Feedback",
+      "beforeText": null,
+      "afterText": null,
+      "movedFrom": null
+     },
+     {
+      "number": 15,
+      "kind": "Identical",
+      "title": "Reset Pulse Windows",
+      "beforeText": null,
+      "afterText": null,
+      "movedFrom": null
+     },
+     {
+      "number": 16,
+      "kind": "Identical",
+      "title": "Reset Sources",
+      "beforeText": null,
+      "afterText": null,
+      "movedFrom": null
+     },
+     {
+      "number": 17,
+      "kind": "Identical",
+      "title": "Commanded Operator Reset",
+      "beforeText": null,
+      "afterText": null,
+      "movedFrom": null
+     },
+     {
+      "number": 18,
+      "kind": "Identical",
+      "title": "Observation Window",
+      "beforeText": null,
+      "afterText": null,
+      "movedFrom": null
+     },
+     {
+      "number": 19,
+      "kind": "Identical",
+      "title": "Scenario Complete",
+      "beforeText": null,
+      "afterText": null,
+      "movedFrom": null
+     },
+     {
+      "number": 20,
+      "kind": "Identical",
+      "title": "Re-Arm For The Next Run",
+      "beforeText": null,
+      "afterText": null,
+      "movedFrom": null
+     },
+     {
+      "number": 21,
+      "kind": "Changed",
+      "title": "Force The Monitored Inputs",
+      "beforeText": "NETWORK 21 \"Force The Monitored Inputs\"\n  COMMENT \"Presents the commanded plant to the input map through the input buffer's own test-injection members, which is the facility the input map already provides: with the test flag set the map ignores the physical terminal and takes each input from its test member. Only the flag and the two inputs this model commands are written, and only while a run is under way or the trailing clear-down after it is running - at every other time the flag is low and every input comes from the field exactly as it otherwise would. THE TRAILING CLEAR-DOWN IS WHY THE FLAG OUTLASTS THE RUN: its reset has to land on a hopper this model is still driving low, because a reset landing on a released input can be fighting the very cause it is trying to clear. The two commanded inputs need no such term - they are ANDed with the run, so outside a run they are already low, which is exactly the stopped plant and clear hopper the clear-down wants. The operator reset is written directly because it is not a field input and does not pass through the map.\"\n  COIL DB_Input.Test[0] := Running OR InTrailingCleardown\n  COIL DB_Input.Test[5] := Running AND Stim.Run\n  COIL DB_Input.Test[8] := Running AND Stim.Hopper\n  COIL DB_Controls.FaultReset := TrailingReset OR Running AND Stim.FaultReset\n",
+      "afterText": "NETWORK 21 \"Force The Monitored Inputs\"\n  COMMENT \"Presents the commanded plant to the input map through the input buffer's own test-injection members: with the flag set the map takes each input from its test member instead of from the physical terminal. Every rung here passes through while this model is not driving, so a line this model does not own carries whatever head does own it, and the arbitration layer ahead of every head is what a pass-through rests on when no head owns a line at all. The flag itself is combined rather than owned - this model ORs itself in, and the flag is set whenever any head wants injection. The model stays authoritative through the trailing clear-down as well as the run, holding the two commanded inputs low there, so the clear-down's reset lands on a hopper this model is still driving low. The operator reset is written directly, being a control line rather than a field input that reaches the block through the map.\"\n  COIL DB_Input.Test[0] := Running OR InTrailingCleardown OR DB_Input.Test[0]\n  COIL DB_Input.Test[5] := Running AND Stim.Run OR NOT Running AND NOT InTrailingCleardown AND DB_Input.Test[5]\n  COIL DB_Input.Test[8] := Running AND Stim.Hopper OR NOT Running AND NOT InTrailingCleardown AND DB_Input.Test[8]\n  COIL DB_Controls.FaultReset := TrailingReset OR Running AND Stim.FaultReset OR NOT Running AND NOT InTrailingCleardown AND DB_Controls.FaultReset\n",
+      "movedFrom": null
+     },
+     {
+      "number": 22,
+      "kind": "Changed",
+      "title": "Hold The Reverse Feedback Clear",
+      "beforeText": "NETWORK 22 \"Hold The Reverse Feedback Clear\"\n  COMMENT \"The model commands one running feedback, and the plant-running condition the monitor sees is the forward feedback or the reverse one. The reverse feedback's test member is therefore held clear for the whole run, and through the trailing clear-down that follows it, rather than left at whatever it happened to contain, so that the commanded stop is a stop and not merely the forward feedback going low. It extends across the clear-down for the same reason the injection flag does: a clear-down that let this member float could present a running plant to the monitor while the reset is trying to clear it.\"\n  RCOIL DB_Input.Test[6] := Running OR InTrailingCleardown\n",
+      "afterText": "NETWORK 22 \"Hold The Reverse Feedback Clear\"\n  COMMENT \"The plant-running condition the monitor sees is the forward feedback or the reverse one, and this model commands only the forward. The reverse feedback's test member is therefore held low for the whole run and through the trailing clear-down that follows it, so a commanded stop is a stop rather than the forward feedback alone going low. Outside those phases it passes through on the same contract as the network above.\"\n  COIL DB_Input.Test[6] := NOT Running AND NOT InTrailingCleardown AND DB_Input.Test[6]\n",
+      "movedFrom": null
+     },
+     {
+      "number": 23,
+      "kind": "Identical",
+      "title": "Trailing Clear-Down Pending",
+      "beforeText": null,
+      "afterText": null,
+      "movedFrom": null
+     },
+     {
+      "number": 24,
+      "kind": "Identical",
+      "title": "Trailing Clear-Down Window",
+      "beforeText": null,
+      "afterText": null,
+      "movedFrom": null
+     }
+    ],
+    "allowedNetworks": [
+     21,
+     22
+    ],
+    "invarianceViolations": [],
+    "headerChangeAllowed": false,
+    "hasUnclaimedHeaderChange": false,
+    "hasNonGatingCommentChange": false,
+    "declaredInsertAt": null,
+    "movesAreDeclared": false,
+    "unchangedRemainder": 22,
+    "hasInvarianceViolation": false
+   },
+   "_note": "24 networks: 2 changed (21, 22), 22 identical, 0 added, 0 removed, 0 MOVED. header.changed false, titleChanged false, commentChanged false, interfaceChanged false, interfaceCommentChanged false, invarianceViolations []. allowedNetworks [21, 22], unchangedRemainder 22. Neither --allow-header nor --insert was passed, so this stayed inside the fix profile."
+  },
+  {
+   "tool": "converter review (FC_HarnessStimArbiter)",
+   "exit": 0,
+   "json": {
+    "uncheckedRuleCount": 0,
+    "uncheckedRules": [],
+    "harnessScopedFindingCount": 0,
+    "harnessObjectCount": 1,
+    "unclassifiedObjectCount": 0,
+    "files": [
+     {
+      "filePath": "ir/test-project001/FC_HarnessStimArbiter.ir",
+      "blockName": "FC_HarnessStimArbiter",
+      "fileError": null,
+      "harnessClass": "Harness",
+      "harnessBasis": "FC 9002 is inside the reserved harness band 9000-9999 (declared docs/notes/test-environment-build-plan.md, 2026-08-13)",
+      "harnessScopedFindings": [],
+      "ruleStatuses": [
+       {
+        "ruleId": "C-001",
+        "status": "CheckedHarnessScope",
+        "findingCount": 0,
+        "reason": "0 further finding(s) reported under HARNESS-SCOPE and NOT gated - this content is harness-generated, and doc 06's naming conventions govern content authored for the plant"
+       },
+       {
+        "ruleId": "C-003",
+        "status": "Checked",
+        "findingCount": 0,
+        "reason": null
+       },
+       {
+        "ruleId": "C-005",
+        "status": "Checked",
+        "findingCount": 0,
+        "reason": null
+       },
+       {
+        "ruleId": "C-103",
+        "status": "Checked",
+        "findingCount": 0,
+        "reason": null
+       },
+       {
+        "ruleId": "C-118",
+        "status": "Checked",
+        "findingCount": 0,
+        "reason": null
+       },
+       {
+        "ruleId": "C-121",
+        "status": "Checked",
+        "findingCount": 0,
+        "reason": null
+       },
+       {
+        "ruleId": "C-119",
+        "status": "Checked",
+        "findingCount": 0,
+        "reason": null
+       },
+       {
+        "ruleId": "C-120",
+        "status": "Checked",
+        "findingCount": 0,
+        "reason": null
+       },
+       {
+        "ruleId": "C-603",
+        "status": "NotApplicable",
+        "findingCount": 0,
+        "reason": "this block references no Step register, so it has no stepped-sequence phase condition for C-603 to read"
+       },
+       {
+        "ruleId": "C-122",
+        "status": "Checked",
+        "findingCount": 0,
+        "reason": null
+       },
+       {
+        "ruleId": "C-125",
+        "status": "Checked",
+        "findingCount": 0,
+        "reason": null
+       },
+       {
+        "ruleId": "C-201",
+        "status": "CheckedHarnessScope",
+        "findingCount": 0,
+        "reason": "0 further finding(s) reported under HARNESS-SCOPE and NOT gated - this content is harness-generated, and doc 06's naming conventions govern content authored for the plant"
+       },
+       {
+        "ruleId": "C-301",
+        "status": "Checked",
+        "findingCount": 0,
+        "reason": null
+       },
+       {
+        "ruleId": "C-501",
+        "status": "Checked",
+        "findingCount": 0,
+        "reason": null
+       },
+       {
+        "ruleId": "C-406",
+        "status": "Checked",
+        "findingCount": 0,
+        "reason": null
+       },
+       {
+        "ruleId": "C-408",
+        "status": "Checked",
+        "findingCount": 0,
+        "reason": null
+       },
+       {
+        "ruleId": "C-410",
+        "status": "Checked",
+        "findingCount": 0,
+        "reason": null
+       },
+       {
+        "ruleId": "C-102",
+        "status": "CheckedVacuous",
+        "findingCount": 0,
+        "reason": null
+       },
+       {
+        "ruleId": "C-401",
+        "status": "CheckedVacuous",
+        "findingCount": 0,
+        "reason": null
+       },
+       {
+        "ruleId": "C-404",
+        "status": "CheckedVacuous",
+        "findingCount": 0,
+        "reason": null
+       }
+      ],
+      "findings": []
+     }
+    ]
+   },
+   "_note": "0 findings, uncheckedRuleCount 0 - every rule the runner knows was evaluated, so the green has a denominator."
+  },
+  {
+   "tool": "converter review (FB_HopperBlockageStim)",
+   "exit": 0,
+   "json": {
+    "uncheckedRuleCount": 0,
+    "uncheckedRules": [],
+    "harnessScopedFindingCount": 0,
+    "harnessObjectCount": 1,
+    "unclassifiedObjectCount": 0,
+    "files": [
+     {
+      "filePath": "ir/test-project001/FB_HopperBlockageStim.ir",
+      "blockName": "FB_HopperBlockageStim",
+      "fileError": null,
+      "harnessClass": "Harness",
+      "harnessBasis": "FB 9002 is inside the reserved harness band 9000-9999 (declared docs/notes/test-environment-build-plan.md, 2026-08-13)",
+      "harnessScopedFindings": [],
+      "ruleStatuses": [
+       {
+        "ruleId": "C-001",
+        "status": "CheckedHarnessScope",
+        "findingCount": 0,
+        "reason": "0 further finding(s) reported under HARNESS-SCOPE and NOT gated - this content is harness-generated, and doc 06's naming conventions govern content authored for the plant"
+       },
+       {
+        "ruleId": "C-003",
+        "status": "Checked",
+        "findingCount": 0,
+        "reason": null
+       },
+       {
+        "ruleId": "C-005",
+        "status": "Checked",
+        "findingCount": 0,
+        "reason": null
+       },
+       {
+        "ruleId": "C-103",
+        "status": "Checked",
+        "findingCount": 0,
+        "reason": null
+       },
+       {
+        "ruleId": "C-118",
+        "status": "Checked",
+        "findingCount": 0,
+        "reason": null
+       },
+       {
+        "ruleId": "C-121",
+        "status": "Checked",
+        "findingCount": 0,
+        "reason": null
+       },
+       {
+        "ruleId": "C-119",
+        "status": "Checked",
+        "findingCount": 0,
+        "reason": null
+       },
+       {
+        "ruleId": "C-120",
+        "status": "Checked",
+        "findingCount": 0,
+        "reason": null
+       },
+       {
+        "ruleId": "C-603",
+        "status": "NotApplicable",
+        "findingCount": 0,
+        "reason": "this block references no Step register, so it has no stepped-sequence phase condition for C-603 to read"
+       },
+       {
+        "ruleId": "C-122",
+        "status": "Checked",
+        "findingCount": 0,
+        "reason": null
+       },
+       {
+        "ruleId": "C-125",
+        "status": "Checked",
+        "findingCount": 0,
+        "reason": null
+       },
+       {
+        "ruleId": "C-201",
+        "status": "CheckedHarnessScope",
+        "findingCount": 0,
+        "reason": "0 further finding(s) reported under HARNESS-SCOPE and NOT gated - this content is harness-generated, and doc 06's naming conventions govern content authored for the plant"
+       },
+       {
+        "ruleId": "C-301",
+        "status": "Checked",
+        "findingCount": 0,
+        "reason": null
+       },
+       {
+        "ruleId": "C-501",
+        "status": "Checked",
+        "findingCount": 0,
+        "reason": null
+       },
+       {
+        "ruleId": "C-406",
+        "status": "Checked",
+        "findingCount": 0,
+        "reason": null
+       },
+       {
+        "ruleId": "C-408",
+        "status": "Checked",
+        "findingCount": 0,
+        "reason": null
+       },
+       {
+        "ruleId": "C-410",
+        "status": "Checked",
+        "findingCount": 0,
+        "reason": null
+       },
+       {
+        "ruleId": "C-102",
+        "status": "CheckedVacuous",
+        "findingCount": 0,
+        "reason": null
+       },
+       {
+        "ruleId": "C-401",
+        "status": "CheckedVacuous",
+        "findingCount": 0,
+        "reason": null
+       },
+       {
+        "ruleId": "C-404",
+        "status": "CheckedVacuous",
+        "findingCount": 0,
+        "reason": null
+       }
+      ],
+      "findings": []
+     }
+    ]
+   },
+   "_note": "0 findings, uncheckedRuleCount 0."
+  },
+  {
+   "tool": "converter tagstatus DB_Input.Test DB_Controls.FaultReset AlwaysTrue (THE HARD-RULE-3 GATE)",
+   "exit": 0,
+   "json": {
+    "names": [
+     {
+      "name": "DB_Input.Test",
+      "root": "DB_Input",
+      "status": "EXISTS",
+      "detail": null,
+      "exists": true,
+      "blocking": false
+     },
+     {
+      "name": "DB_Controls.FaultReset",
+      "root": "DB_Controls",
+      "status": "EXISTS",
+      "detail": null,
+      "exists": true,
+      "blocking": false
+     },
+     {
+      "name": "AlwaysTrue",
+      "root": "AlwaysTrue",
+      "status": "EXISTS",
+      "detail": null,
+      "exists": true,
+      "blocking": false
+     }
+    ],
+    "indexWarnings": []
+   },
+   "_note": "All three EXISTS, blocking false. Re-run this pass specifically because the rewrite introduced a NEW tag reference: AlwaysTrue, %M1.2, already in DefaultTagTable and already used as a contact throughout FC_Inputs and as `:= NOT AlwaysTrue` in FC_ControlMain. Nothing was invented."
+  },
+  {
+   "tool": "converter to-xml --project (synthesis pre-check)",
+   "exit": 0,
+   "_note": "Exit 0 - synthesizable to SimaticML, no UnsupportedConstructException. This pass ALSO removed the construct the reviewer flagged as first-of-its-kind: the block no longer contains a reset coil off a literal rail. Every rung is now an ordinary contact on %M1.2 feeding a coil, a shape this corpus already carries in FC_Inputs and FC_ControlMain. Standing measurement, unchanged: COIL x := FALSE is NOT available - FALSE is not a reserved sentinel in the IR (only TRUE is, IrParser.cs:1078) and preflight refuses it as an unresolved tag root, which is why the drive-low form is NOT AlwaysTrue."
+  },
+  {
+   "tool": "converter to-ir + converter diff (ROUND TRIP of the new block: IR -> XML -> IR)",
+   "exit": 0,
+   "json": {
+    "blockName": "FC_HarnessStimArbiter",
+    "blockNameMismatch": false,
+    "otherBlockName": "FC_HarnessStimArbiter",
+    "hasAnyChange": false,
+    "header": {
+     "changed": false,
+     "titleChanged": false,
+     "titleBefore": "Harness Stimulus Arbitration Layer",
+     "titleAfter": "Harness Stimulus Arbitration Layer",
+     "commentChanged": false,
+     "commentBefore": "Owns the resting state of the two things every stimulus head shares, and owns nothing else: the input map's test-injection array, and the plant's single operator fault-reset line. It runs once, ahead of every head, and releases both, so a head finds on a line it does not own either that line's released value or what another head wrote in this same scan. THE RELEASED VALUE IS THE INERT VALUE FOR WHOEVER READS THAT INDEX, which is not the same thing as zero: an index whose reader treats HIGH as its quiet state is released HIGH, because a zero there asserts a stop or a motion demand of its own. Each released value is taken from the block that consumes the index; an index no block reads is released low and said here to be undetermined. Heads keep their own writes. While a head is not authoritative it passes a line through unchanged, and this release is what that pass-through rests on, so a head added later needs one rung per index and no knowledge of its neighbours. The operator fault-reset line belongs to the harness while this program is loaded: it is released every scan, so a press at an operator station does not reach the control. That suits a bench rig with no operator station and suits nothing else.",
+     "commentAfter": "Owns the resting state of the two things every stimulus head shares, and owns nothing else: the input map's test-injection array, and the plant's single operator fault-reset line. It runs once, ahead of every head, and releases both, so a head finds on a line it does not own either that line's released value or what another head wrote in this same scan. THE RELEASED VALUE IS THE INERT VALUE FOR WHOEVER READS THAT INDEX, which is not the same thing as zero: an index whose reader treats HIGH as its quiet state is released HIGH, because a zero there asserts a stop or a motion demand of its own. Each released value is taken from the block that consumes the index; an index no block reads is released low and said here to be undetermined. Heads keep their own writes. While a head is not authoritative it passes a line through unchanged, and this release is what that pass-through rests on, so a head added later needs one rung per index and no knowledge of its neighbours. The operator fault-reset line belongs to the harness while this program is loaded: it is released every scan, so a press at an operator station does not reach the control. That suits a bench rig with no operator station and suits nothing else.",
+     "interfaceChanged": false,
+     "interfaceCommentChanged": false
+    },
+    "summary": {
+     "total": 4,
+     "changed": 0,
+     "added": 0,
+     "removed": 0,
+     "moved": 0,
+     "identical": 4
+    },
+    "networks": [
+     {
+      "number": 1,
+      "kind": "Identical",
+      "title": "Release The Injection Enable",
+      "beforeText": null,
+      "afterText": null,
+      "movedFrom": null
+     },
+     {
+      "number": 2,
+      "kind": "Identical",
+      "title": "Release The Indexes Whose Inert State Is Low",
+      "beforeText": null,
+      "afterText": null,
+      "movedFrom": null
+     },
+     {
+      "number": 3,
+      "kind": "Identical",
+      "title": "Release The Indexes Whose Inert State Is High",
+      "beforeText": null,
+      "afterText": null,
+      "movedFrom": null
+     },
+     {
+      "number": 4,
+      "kind": "Identical",
+      "title": "Release The Shared Plant Reset Line",
+      "beforeText": null,
+      "afterText": null,
+      "movedFrom": null
+     }
+    ],
+    "allowedNetworks": [],
+    "invarianceViolations": [],
+    "headerChangeAllowed": false,
+    "hasUnclaimedHeaderChange": false,
+    "hasNonGatingCommentChange": false,
+    "declaredInsertAt": null,
+    "movesAreDeclared": false,
+    "unchangedRemainder": 4,
+    "hasInvarianceViolation": false
+   },
+   "_note": "4 of 4 networks identical, header unchanged, invarianceViolations []. The block survives both converter directions byte-stably. THIS IS A STATIC ROUND TRIP AND IS NOT A SUBSTITUTE FOR THE COMPILE GATE - TIA has not seen this block."
+  },
+  {
+   "tool": "converter cross-check --project ir/test-project001",
+   "exit": 0,
+   "_note": "REACHABILITY: 21 of 21 code blocks reachable from 2 OBs - the arbiter now executes, the blocker from the first hand-back being cleared. DB_Controls.FaultReset reads: FB_HopperBlockageStim N21 (assign), FB_PusherStim N21 (assign), FB_ShredderSequencerStim N19 (assign), FC_HarnessStimArbiter N4 (assign) - four assigns, no set/reset pairing claimed. See _c308_disposition for why four writers are acceptable. Full text in crosscheck.txt beside this file."
+  },
+  {
+   "tool": "openness-cli import + compile - THE COMPILE GATE",
+   "deferred": "WITHHELD BY THE DISPATCH: 'NO PORTAL, NO RIG, NO SOCKET.' Nothing was imported, nothing compiled, no Portal process started, and openness-cli was not rebuilt in any configuration. THE CHANGE IS NOT DONE UNDER HARD RULE 4 and must not be presented to the engineer as finished. One construct here has never been through TIA on this corpus and the compile gate is where it gets tested: COIL <bool-array-element> := NOT AlwaysTrue, 20 instances. The negated-contact-to-coil shape itself is proven (FC_ControlMain NETWORK 3 carries three), but not onto a DB array element."
+  },
+  {
+   "tool": "openness-cli sanity-check <project> (block AND type consistency + compile health)",
+   "deferred": "Same withholding. Recorded separately because hard rule 4 names this command specifically as the gate and a bare whole-device compile explicitly as NOT the gate; evidence naming only 'compile' would understate which gate is missing."
+  }
+ ],
+ "_c103_disposition": "WITHDRAWN, NOT DEFENDED. The first hand-back justified 24 C-103 warnings as the documented cross-block set/reset exception. A blind review refuted that on four grounds and it is not carried forward: nothing SETs those bits (every head write is a plain assign, and no SCOIL on any of them exists in the project), the ruling's direction is set-outside/reset-inside-a-reusable-FB and this was the reverse, the ruling's safety rests on each setter touching only its own instance while this is one FC reaching into a global DB three FBs contend for, and the tool's own message scopes itself to the reusable-FB pattern. The disposition is not 'accept the warning' either. Rewriting the releases as plain coils removed every reset coil from the block, so there is now nothing for C-103 to report: preflight and review are both clean at zero findings. The same rewrite removed the block's C-403 exposure at the root, and removed the one pre-existing C-103 in FB_HopperBlockageStim NETWORK 22.",
+ "_c308_disposition": "DB_Controls.FaultReset has four writers and that is acceptable, but NOT because a reset pairs with an assign - doc 06 sanctions no such pairing, and after this pass there is no reset among them anyway. The justification is ORDERING: the four writers are totally ordered by OB1 network order (arbiter 1, hopper 2, pusher 3, shredder 4), each later writer's expression carries the previous value as a pass-through term so no write is lost, and the sole consumer FC_ControlMain runs after all four. THAT IS WHAT STOPS BEING TRUE IF OB1 IS REORDERED, which is why it is recorded here and stated in the block's own NETWORK 4 comment rather than left as a property a reader has to rediscover.",
+ "_deferred_review_findings": [
+  {
+   "finding": "F-4 (C-607) / F-6 (one-reading): `Running OR InTrailingCleardown` appears unnamed four times in FB_HopperBlockageStim, and the head's guard `NOT Running AND NOT InTrailingCleardown` diverges from the other two heads' `NOT Running`.",
+   "disposition": "NOT DONE THIS PASS, deliberately.",
+   "why": "The suggested repair is a named Static (`Authoritative`). Adding a static to FB_HopperBlockageStim is an INTERFACE change: it routes to gen-block-modify-purpose rather than the fix path, it resizes iDB_HopperBlockageStim, and it forces --allow-header on the invariance gate - the exact profile this run was scoped to avoid on a deployed block. Worth recording about the divergence itself: it is not two spellings of one contract. This head's authority window genuinely is wider than the other two, because it keeps driving through its trailing clear-down, so collapsing the guards to match would be wrong. What is left is the readability point, and that is real."
+  },
+  {
+   "finding": "F-5 (C-602): FB_HopperBlockageStim NETWORK 21's fault-reset rung is 3 OR-branches and 6 contacts, over the guide, with no applicable exception.",
+   "disposition": "NOT DONE THIS PASS.",
+   "why": "It is the same fix as F-4/F-6 - the named static is what shortens it - and carries the same interface-change routing."
+  },
+  {
+   "finding": "F-3 (C-204/C-602): comments carrying development history, past test results and argument-against-alternatives, and comment scale.",
+   "disposition": "DONE THIS PASS.",
+   "why": "Every comment in both blocks was rewritten to state what the structure achieves. Removed: the development record ('until this block existed neither had an owner'), the past test result ('in green', 'was measured to do exactly that'), the instruction to future maintainers ('do not tidy'), and the defence against a criticism ('rather than a defensive habit'). Arbiter header 366 words -> 213; FB_HopperBlockageStim NETWORK 21 311 -> 145."
+  }
+ ],
+ "_new_defect_found_not_fixed": {
+  "resource": "DB_Controls.PusherMode",
+  "class": "the same one this block was built for - a shared harness-written line with no rest owner",
+  "traced": "PusherMode is written only by MOVEs gated on a head's Running (pusher head NETWORK 20, shredder head NETWORK 26), so while no head runs it is a self-hold carrying the last value written. It is NOT part of the injection array and this arbiter does not release it. The path that makes it matter opened this pass: releasing Test[1] and Test[15] high clears the sequencer's stop-all, which clears PusherCycleInhibitCmd, and releasing Test[12] high satisfies the pusher's LaunchRequest term `IO.HomeLimit`. With HopperHighLevel driven high by a hopper scenario, the only remaining term holding a pusher cycle off during a hopper index is IO.Mode being 0 - which is to say, PusherMode's residue.",
+  "currently_masked_by": "The pusher head writes CmdMode 0 whenever it is Running and not InScenario, so the last value it leaves behind is 0. That is a property of one head's cleardown, not a guarantee of the layer.",
+  "proposed_fix": "MOVE(EN := TRUE, IN := 0) => DB_Controls.PusherMode, in this block, alongside the reset-line release.",
+  "why_not_done": "ASKING FOR A ROUTING DECISION RATHER THAN DEFERRING QUIETLY. It is outside the two resources this block was chartered and claimed for, it is the operator command surface rather than the injection layer, and the shredder head holds PusherMode at 0 for its whole index as a DECLARED plant assumption tied to an excluded-signal declaration in its binding - so changing who owns its rest state interacts with another lane's declared binding and should be decided by someone who can see both. One line to overrule."
+ },
+ "_behaviour_change_to_the_deployed_hba_slot": {
+  "retraction": "THE FIRST HAND-BACK'S CLAIM WAS STRONGER THAN WHAT NOW HOLDS AND IS WITHDRAWN. It said the deployed slot was bit-identical everywhere. With per-index inert release that is no longer true: Test[1], Test[12] and Test[15] now read HIGH during a hopper index where the deployed program has them at 0.",
+  "correction_absorbed": "The first argument was also necessary but not sufficient. The load-bearing fact, which the review supplied, is that Test[1] and Test[11..15] were ALREADY 0 in the deployed baseline - nothing wrote them and OB100 does not touch DB_Input.Test[] - so the pass-through repair changed nothing only because of that, not because of the pass-through form itself.",
+  "what_is_unchanged": "The slot's OBSERVED set, traced end to end. FB_HopperBlockageMonitor reads HopperLevelHigh (Test[8]), PlantRunning (Test[5] OR Test[6]) and FaultReset - all four owned by the hopper head itself. FB_HarnessViolationLatch reads only iDB_HopperBlockageStim.Stim.* and iDB_HopperBlockageMonitor.IO.*. None of Test[1], Test[12] or Test[15] reaches either by any path.",
+  "what_changes": "The plant around the slot. The sequencer's stop-all condition goes from asserted, via the absent healthy and downstream contacts, to clear; the pusher reads a parked ram instead of one away from home. On the currently deployed program neither can act: the sequencer needs a CycleStart press and Test[3] releases low, so Step stays 0, and PusherMode is 0 because the pusher head is not loaded. On the three-head program the residual dependency is PusherMode - see _new_defect_found_not_fixed.",
+  "verdict": "No observable change to the 23 vectors is predicted, and that prediction is a STATIC trace, not a wave. It has not been run, and this is the claim most worth re-testing on the first wave after deployment."
+ }
+}
