@@ -1478,8 +1478,11 @@ public static class LoopRun
         // result source, so the decode is the same either way.
         var value = ((final.Registers[register] & 1) == 1).ToString().ToLowerInvariant();
 
+        // e.Shape, not omitted: the series path one branch up has always passed it, and this path's
+        // silence is what let a Latched + atNoPoint expectation be judged by plain equality against its
+        // own FORBIDDEN value.
         return SeriesEvaluation.FromLatch(
-            assertionId, e.Signal, expected, value, final.Scan.Raw, accounting, signal.LatchSource);
+            assertionId, e.Signal, expected, value, final.Scan.Raw, accounting, signal.LatchSource, e.Shape);
     }
 
     /// <summary>

@@ -1,4 +1,4 @@
-﻿namespace Harness.Results;
+namespace Harness.Results;
 
 /// <summary>
 /// 🔴 <b>WHETHER AN OBSERVATION WAS TAKEN INSIDE THE WINDOW ITS OWN BINDING DECLARED FOR IT.</b>
@@ -737,27 +737,69 @@ public static class SeriesEvaluation
     /// fact about the artifact this harness emits and can be read out of the generated IR, where a
     /// HAND-AUTHORED one is a claim about a block the harness did not write and cannot inspect.
     /// </param>
+    /// <param name="shape">
+    /// 🔴 <b>THE SHAPE THE AUTHOR DECLARED, AND UNTIL 2026-09-02 THIS METHOD DID NOT TAKE IT.</b>
+    ///
+    /// <para>It took no shape, compared <c>latchValue == expected</c>, and built its
+    /// <see cref="ObservationWindow"/> without setting <see cref="ObservationWindow.Shape"/> — so every
+    /// <c>Latched</c> row printed <c>Unstated</c> in the result file no matter what its vector said. On
+    /// <see cref="TemporalShape.AtNoPoint"/> the declared value is the FORBIDDEN one, so that comparison
+    /// was <b>exactly inverted</b>: a latch reading the forbidden value was reported Held, and a latch
+    /// that never saw it was reported Disagreed.</para>
+    ///
+    /// <para><b>MEASURED, not theorised.</b> A wave on 2026-09-02 reported two <c>Latched</c> +
+    /// <c>atNoPoint</c> rows as failures whose latches had read exactly what the assertion required, and
+    /// one of them was the wave's strongest positive result — a seal-in correctly breaking. The blind
+    /// reviewer who found it put it as "the vector is right, the block is right, the evaluator is
+    /// wrong".</para>
+    ///
+    /// <para><b>Only <see cref="TemporalShape.AtNoPoint"/> changes behaviour.</b> Every other shape,
+    /// including <see cref="TemporalShape.Unstated"/>, keeps the equality fold it has always had — the
+    /// inversion is the one place the series path also treats as answered before every other branch
+    /// (<c>ForbiddenValue</c>), and widening beyond it would silently re-judge rows nobody has reported a
+    /// defect on.</para>
+    /// </param>
     public static AssertionOutcome FromLatch(
         string assertionId, string signal, string expected, string? latchValue, long scan,
-        SeriesAccounting series, Harness.Map.LatchSource source)
+        SeriesAccounting series, Harness.Map.LatchSource source,
+        TemporalShape shape = TemporalShape.Unstated)
     {
         ArgumentNullException.ThrowIfNull(series);
 
         if (latchValue is null)
             return AssertionOutcome.Compare(assertionId, signal, expected, null);
 
-        var agreed = string.Equals(latchValue, expected, StringComparison.Ordinal);
+        // *** THE FORBIDDEN-VALUE SHAPE INVERTS THE FOLD, exactly as it does on the series path. *** For
+        // AtNoPoint `expected` names what must NOT happen, so a latch that MATCHES it is an occurrence of
+        // the forbidden value and the assertion is Disagreed; a latch that does not match saw nothing and
+        // the assertion Held.
+        var matchesDeclared = string.Equals(latchValue, expected, StringComparison.Ordinal);
+        var agreed = shape == TemporalShape.AtNoPoint ? !matchesDeclared : matchesDeclared;
 
         var window = new ObservationWindow(
             ObservationSource.Latch, 1, 1, agreed ? 1 : 0,
             0, WindowWasDeclared: true, WindowState.InWindow, scan, scan, scan,
-            series.PollsObserved, series.DistinctFrames, series.RetainedFrames, series.Truncated);
+            series.PollsObserved, series.DistinctFrames, series.RetainedFrames, series.Truncated)
+        {
+            // Reported as well as obeyed: a row whose shape was dropped read `Unstated` in the result
+            // file, which is how the defect stayed invisible to everyone reading the output.
+            Shape = shape,
+        };
 
         return new AssertionOutcome(assertionId, signal, expected, latchValue,
             agreed ? AssertionState.Held : AssertionState.Disagreed)
         {
             Window = window,
-            Detail = source == Harness.Map.LatchSource.Generated
+            Detail = shape == TemporalShape.AtNoPoint
+                ? (agreed
+                    ? $"declared AT NO POINT and read from a latch: '{expected}' is the FORBIDDEN value and the latch did not "
+                      + "hold it, so the condition did not occur inside the armed window. ⚠️ A pass on this shape is produced by "
+                      + "SEEING NOTHING — here, by one latch bit standing for the whole window. It is only as strong as the claim "
+                      + "that this latch is set by everything that would constitute an occurrence."
+                    : $"declared AT NO POINT and read from a latch: '{expected}' is the FORBIDDEN value and the latch HELD it, so "
+                      + "the condition occurred at some point inside the armed window. An occurrence is positive evidence. This IS "
+                      + "a statement about the block.")
+                : source == Harness.Map.LatchSource.Generated
                 ? "read from the signal's own GENERATED latch register, in the copy layer's latch band. The latch is set inside the "
                   + "armed window and cleared only when the slot stops running an index, so it reports whether the condition occurred "
                   + "AT ANY POINT in the window rather than whether it happened to be true at the instant the harness last looked. "
