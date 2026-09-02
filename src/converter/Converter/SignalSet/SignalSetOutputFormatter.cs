@@ -34,6 +34,19 @@ public static class SignalSetOutputFormatter
         Section(sb, report, "interface", e => e.Origin == SignalDeclaration.Interface);
         Section(sb, report, "referenced", e => e.Origin != SignalDeclaration.Interface);
 
+        // Its own section, not a footnote on the rows above: these members ARE listed above, and what
+        // is missing is everything UNDERNEATH them. A reader who only sees the row sees a complete-
+        // looking scalar (FI-88).
+        if (report.OpaqueMembers.Count > 0)
+        {
+            sb.Append("\nopaque (").Append(report.OpaqueMembers.Count).Append(")\n");
+            foreach (var o in report.OpaqueMembers)
+            {
+                sb.Append("  ").Append(o.Path).Append(" : ").Append(o.Datatype).Append('\n')
+                    .Append("      ").Append(o.Reason).Append('\n');
+            }
+        }
+
         foreach (var warning in report.Warnings)
         {
             sb.Append("WARNING: ").Append(warning).Append('\n');
@@ -54,11 +67,21 @@ public static class SignalSetOutputFormatter
             }).Append('\n');
         }
 
-        if (report.Partial)
+        // WORDED BY CAUSE. This line used to say "could not be read" for every partial, which is FALSE
+        // of an opaque member: its file read fine, its TYPE could not be opened. The two need
+        // different actions (fix the corpus / supply the type), so they get different sentences.
+        if (report.Warnings.Count > 0)
         {
             sb.Append("PARTIAL - ").Append(report.Warnings.Count)
                 .Append(" file(s) could not be read, so this set is not a complete statement of the "
                         + "block's signals.\n");
+        }
+
+        if (report.OpaqueMembers.Count > 0)
+        {
+            sb.Append("PARTIAL - ").Append(report.OpaqueMembers.Count)
+                .Append(" member(s) have a type that could not be opened, so THEIR LEAVES ARE MISSING "
+                        + "from this set. The rows above are listed, but what is under them is not.\n");
         }
 
         return sb.ToString().TrimEnd('\n', '\r');
@@ -137,6 +160,15 @@ public static class SignalSetOutputFormatter
             scope = report.Scope.ToString(),
             examinedNothing = report.ExaminedNothing,
             partial = report.Partial,
+            // Beside `partial`, and not merely counted: a generator reading `partial: true` has to be
+            // able to say WHICH member it may not trust. Without the paths it can only distrust the
+            // whole document, which in practice means trusting it (FI-88).
+            opaqueMembers = report.OpaqueMembers.Select(o => new
+            {
+                path = o.Path,
+                datatype = o.Datatype,
+                reason = o.Reason,
+            }),
             warnings = report.Warnings,
         };
 

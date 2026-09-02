@@ -1,3 +1,5 @@
+using Converter.SignalInventory;
+
 namespace Converter.SignalSet;
 
 // What the SUBJECT BLOCK does with the signal — never what the project does with it. A harness binding
@@ -68,8 +70,18 @@ public sealed record SignalSetReport(
     string DirectionFilter,
     IReadOnlyList<SignalEntry> Entries,
     IReadOnlyList<string> Warnings,
-    SignalSetScope Scope = SignalSetScope.Scanned)
+    SignalSetScope Scope = SignalSetScope.Scanned,
+    // Null rather than an empty list only because a record's positional default must be a constant;
+    // read it through OpaqueMembers, never directly.
+    IReadOnlyList<OpaqueLeaf>? Opaque = null)
 {
+    /// <summary>
+    /// Members of this block's signal set whose TYPE could not be opened, so their leaves are missing
+    /// from the document (FI-88). Collected from the UNFILTERED entry set — a <c>--type</c> or
+    /// <c>--direction</c> filter must never be able to suppress the gate.
+    /// </summary>
+    public IReadOnlyList<OpaqueLeaf> OpaqueMembers => Opaque ?? Array.Empty<OpaqueLeaf>();
+
     // The count of the block's OWN interface members in the set, stated separately because the two
     // halves answer different questions and a single total hides which one is empty.
     public int InterfaceCount => Entries.Count(e => e.Origin == SignalDeclaration.Interface);
@@ -90,5 +102,15 @@ public sealed record SignalSetReport(
     // warnings and exits 0, which is right for a check a human reads; this document is the INPUT to a
     // harness binding, so the incompleteness is consumed by a generator that will never see the
     // warning. A detection that only warns on the path that reaches production gets skimmed.
-    public bool Partial => Warnings.Count > 0;
+    //
+    // 🔴 TWO CAUSES, ONE GATE, AND THEY ARE NOT THE SAME FACT (FI-88):
+    //   - a WARNING means a FILE could not be read, so members may be absent and referenced paths may
+    //     be misclassified `undeclared`;
+    //   - an OPAQUE MEMBER means a MEMBER'S TYPE could not be opened, so that member's leaves are
+    //     missing from a set that otherwise reads complete — the exact shape that reported a member
+    //     referenced 251 times as `unused`, at `partial: false` and exit 0.
+    // Neither may be a warning, for the same reason: signal-set's reader is a GENERATOR, and a
+    // generator never sees a warning line. The two are reported separately downstream because they
+    // demand different actions — fix the corpus, versus supply the missing type.
+    public bool Partial => Warnings.Count > 0 || OpaqueMembers.Count > 0;
 }

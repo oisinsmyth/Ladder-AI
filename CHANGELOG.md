@@ -1,5 +1,58 @@
 # Changelog
 
+## 2026-09-03
+
+**FI-88 — `signal-set` reported a UDT-typed STATIC used 251 times as `unused`; root cause established and step 1 fixed**
+
+Converter only. No IR, no PLC content, no Portal.
+
+- **Root cause, established rather than guessed.** `SignalInventory` expanded a member **iff** its
+  sub-members were PHYSICALLY INLINED in the block's own `.ir`, and never attempted type resolution —
+  it returned on every `TYPE ` file without parsing it and was never given a `TagTypeRegistry`. A
+  `.ir` round-tripped through TIA carries the inlined body and expands; one a generation pipeline
+  wrote does not. **The untested hypothesis FI-88 left standing — whether the file had been
+  round-tripped — was the right one**: the member that expanded came from a re-export, the ones that
+  did not came from the pipeline.
+- **The other half is NOT a bug and was not touched.** `ProjectUsageGraph.UsagesReaching`'s
+  descendant exclusion stays exactly as it is: once the member expands, the leaf keys match exactly
+  and nothing needs a descendant rule. Relaxing it would have traded a false `unused` for a false
+  `driven` — the direction that once turned 20 genuine undriven members into 168 driven ones.
+- **New `Converter/Ir/MemberExpansion.cs`** — one shared classifier for "how far does this member
+  open", replacing three copies of the decision. `InterfaceCheckRunner`'s elementary set and
+  `ElementTypeOf`, and `ProjectUsageGraph`'s IEC-instance set, now forward to it: one list, not two.
+- **The multi-instance discriminator reads the `BLOCK <KIND> <Name>` HEADER LINE, never
+  `TagTypeRegistry._fbInterfaces`** — that index silently omits every re-exported FB (filed as
+  FI-92), which would have made a multi-instance of a round-tripped block opaque: a false gate, on
+  exactly the corpora this repair serves. Pinned by a test.
+- **`signal-set` gates on two causes, reported separately.** A WARNING means a FILE could not be
+  read; an OPAQUE MEMBER means a MEMBER'S TYPE could not be opened, so its leaves are missing from a
+  set that reads complete. The opaque set is collected from the UNFILTERED entries so `--type` /
+  `--direction` cannot suppress the gate; `opaqueMembers[{path,datatype,reason}]` sits beside
+  `partial` in the JSON so a generator can say *which* member it may not trust; the reason names the
+  search root, the file count and that the scan does not recurse. Exit stays 1.
+- **Two branches added beyond the design**, both found by the corpus no-op proof rather than by
+  argument: the S7 system identifier types (`HW_ANY`, `CONN_OUC`, …) joined the elementary list, and
+  a `VERSION`-carrying declaration terminates as an instruction/library instance. `ir/test-project001`
+  declares `InterfaceId : HW_ANY` and `MbServer : MB_SERVER VERSION 5.3` with no inlined body, and
+  without these the gate fires on a healthy corpus — on a type whose definition lives in TIA's
+  libraries and can therefore never be supplied, i.e. a gate nobody can clear.
+- **Invariance is checked, not argued.** New `SignalInventoryTests` sweeps `ir/test-project001` for
+  opaque leaves with a stated denominator; `InterfaceCheckTests`'s corpus assertion was KEPT, renamed
+  to `RealCorpus_…_SoCommittedDataCannotExerciseTheCrossFileDescent`, and its comment rewritten — it
+  had called the descent "fixture-only" and "a branch nothing reaches", and FI-88 is the field
+  measurement that it decided whether six function blocks were testable.
+- **New `SignalSetUdtExpansionTests`** (16 tests) covers the fix, the inlined/non-inlined identity
+  control, the gate and its reason text, the CLI exit code, the multi-instance discriminator including
+  the sidecar trap and the shared-name tie-break, IEC and array terminators, the depth cap, and the
+  two false-green guards re-asserted on the NON-inlined path.
+- **Blast radius: none observed on committed data.** `signal-set`, `harness-binding`,
+  `candidate-scan` and `claims` all still exit 0 on `ir/test-project001`, and no new test failure
+  appeared (the 9 red tests in `ServedAreaTests` / `NeighbourTests` / `ReachableStateTests` are
+  pre-existing and were verified red before this change).
+- **Two follow-ups filed rather than done: FI-91** (`undriven-scan` and `cross-check` still expand
+  only inlined members, so they now disagree with `signal-set` about one corpus) and **FI-92**
+  (`TagTypeRegistry`'s swallowed sidecar throw).
+
 ## 2026-08-17
 
 **🛑 The staged development plan is SUSPENDED — docs marked, nothing else touched**

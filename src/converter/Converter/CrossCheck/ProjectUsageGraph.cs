@@ -486,13 +486,9 @@ public sealed class ProjectUsageGraph
     // thing does this name?").
     public static string StripSubscripts(string path) => TagPath.StripSubscripts(path);
 
-    private static readonly HashSet<string> IecInstanceTypes = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "TON_TIME", "TOF_TIME", "TONR_TIME", "TP_TIME",
-        "IEC_TIMER", "IEC_LTIMER",
-        "CTU_INT", "CTD_INT", "CTUD_INT", "IEC_COUNTER", "IEC_UCOUNTER",
-        "IEC_SCOUNTER", "IEC_DCOUNTER", "IEC_UDCOUNTER", "IEC_LCOUNTER",
-    };
+    // FORWARDED to MemberExpansion (FI-88) — one list, not two, so this graph and the signal
+    // inventory cannot disagree about what counts as instruction state.
+    private static readonly IReadOnlySet<string> IecInstanceTypes = MemberExpansion.IecInstanceTypes;
 
     // A multi-instance chain is bounded by how deeply FBs nest in practice; this only caps the
     // fixpoint loop so a malformed corpus with a type cycle cannot spin.
