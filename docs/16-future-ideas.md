@@ -2659,3 +2659,76 @@ not render a violation-bearing run as a pass.
 
 **Verdict / revisit trigger:** Open. Revisit before the next multi-point insertion is gated —
 realistically the merged multi-slot `Main`, which is exactly this shape again.
+
+## FI-86 — a wave that RAN writes no result file, because the renderer throws after the run
+
+**Measured 2026-09-02, on a real wave against the bench rig.** The loop connected, the verifying
+gateway matched the build stamp on the device, the copy layer deployed, an index executed, the
+mirror feed published 8 documents and the rig was released cleanly. Then:
+
+```
+Unhandled exception. System.InvalidOperationException: JsonSerializerOptions instance must
+specify a TypeInfoResolver setting before being marked as read-only.
+   at System.Text.Json.Nodes.JsonValueCustomized`1.WriteTo(...)
+   at Harness.Run.LoopCli.Render(LoopResult result) in src/harness/Harness.Run/LoopCli.cs:line 2087
+   at Harness.Run.LoopCli.Run(...) in src/harness/Harness.Run/LoopCli.cs:line 399
+```
+
+`--out` is written by `Render`, so **the file never appears** and the process exits non-zero on a
+run that succeeded. In the observed case the path still held a PREVIOUS run's result — a
+`NotAdmissible` one — so the only machine-readable artifact on disk described a wave that never
+happened, while the wave that did happen survived solely as console text.
+
+🔴 **This is worse than losing output.** The project's whole discipline is that a result package,
+not a transcript, is the evidence; `agent-tasks/*/evidence.json` cite result JSON by path. A reader
+finding a stale `NotAdmissible` file next to a green console log has no mechanical way to tell which
+describes the run, and the stale file is the one that looks authoritative. It is the same shape as
+the `compile-all --json` false-clean: the machine-readable half says something confident and wrong.
+
+**Where it is.** A `JsonValueCustomized<T>` inside the node tree — a `JsonValue.Create(someObject)`
+whose type needs a resolver — reaches `ToJsonString` with options that were marked read-only without
+one. The fix is either to stop putting a customised value into the tree (build the node from
+primitives) or to give the options a `TypeInfoResolver` before they are frozen.
+
+**What it does NOT affect:** the wave itself, the device, the mirror feed, or socket release. All
+four were clean. This is purely the report.
+
+**Regression test to write with the fix:** render a `LoopResult` from a run that RAN, over a slot
+that exited early, and assert the file is written and parses — the throwing path is only reachable
+once real per-index data is in the tree, which is why every earlier `--generate-only` run rendered
+fine and this was not caught until a wave ran.
+
+## FI-87 — gate 0c's verdict depends on the CALLER'S WORKING DIRECTORY, silently
+
+**Measured 2026-09-02.** The same submission and the same binding, checked twice, differ only in the
+directory the command was run from:
+
+```
+run from the directory holding the artifacts   -> VERDICT: ADMISSIBLE-SUBJECT-TO-JUDGEMENT
+                                                   28 checked, 0 refused, 0 not checked
+run from its parent, paths given as harness-x/  -> VERDICT: NOT ADMISSIBLE
+                                                   0c derived fields: NOT CHECKED
+```
+
+`harness-gate derive` records each derivable field's artifact as the path it was GIVEN — normally a
+bare filename, because it is usually run beside the artifacts. Gate 0c then re-opens that path to
+re-hash it, resolving it against the **process working directory** rather than against the
+submission's own location. From anywhere else the artifacts "could not be read", and 0c fails closed.
+
+🔴 **Failing closed is right; being invisible is not.** The message says the artifact could not be
+read, but not that it was looked for relative to the CWD, so the reader's natural conclusion is that
+the provenance is broken or the artifact is missing. It cost a wave cycle here: `harness-run` runs
+the same gate internally, so a loop launched from one directory up stops at `NotAdmissible` with
+`0 gate(s) refused, 1 could not run` and never names which — the loop's own summary omits the gate
+list that `harness-gate check` prints.
+
+**Two candidate fixes, and the second is the honest one:**
+
+1. Resolve a relative artifact path against the **submission file's directory**, which is what every
+   caller means. Cheap, and matches how the paths are written today.
+2. Have `derive` record an absolute path, or record the base it resolved against, so the submission
+   carries its own answer instead of depending on how it is later invoked.
+
+**Also worth fixing beside it:** when the loop stops at `NotAdmissible`, it reports counts
+(`0 refused, 1 could not run`) but not WHICH gate. Naming it costs one line and removes the need to
+re-run `harness-gate check` by hand to find out.
