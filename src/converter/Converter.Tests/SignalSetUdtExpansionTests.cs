@@ -1,4 +1,4 @@
-using Converter;
+﻿using Converter;
 using Converter.Ir;
 using Converter.SignalSet;
 using Converter.SimaticMl;
@@ -637,6 +637,72 @@ public class SignalSetUdtExpansionTests : IDisposable
 
         Assert.DoesNotContain(report.Entries, e => e.Member == "IO");
         Assert.NotEmpty(report.OpaqueMembers);
+        Assert.True(report.Partial);
+    }
+
+    // --------------------------------------- a sized string is elementary, not a type the corpus lacks
+
+    /// <summary>
+    /// 🔴 <b>A STRING'S DECLARED LENGTH IS NOT A TYPE ANY CORPUS CAN DEFINE, AND TREATING IT AS ONE
+    /// BUILT A GATE NOBODY COULD EVER CLEAR.</b>
+    ///
+    /// <para><b>MEASURED on a live corpus the first time this classifier met one.</b> `String[32]`
+    /// reached neither the elementary set - which holds bare `String` - nor the type registry, because
+    /// no corpus defines `String[32]` and none ever could. It fell through to Opaque, and two entirely
+    /// ordinary members took a whole block's run to partial, exit 1.</para>
+    ///
+    /// <para><b>Why that is the worst kind of gate:</b> at the exit code it is indistinguishable from
+    /// the real finding this gate exists for - a member whose type is genuinely absent - and the remedy
+    /// it names, add the type's .ir, cannot be carried out. A gate whose instruction cannot be followed
+    /// teaches its reader to ignore gates.</para>
+    /// </summary>
+    [Fact]
+    public void ASizedString_IsElementary_AndDoesNotGateTheRun()
+    {
+        var dir = NewDir();
+        Write(dir, "FB_Thing.ir", @"BLOCK FB FB_Thing
+ROOTID 0
+NUMBER 65
+LANGUAGE LAD
+
+INTERFACE
+  STATIC
+    Label : String[32]
+    Wide : WString[16]
+    Plain : String
+");
+
+        var report = Run(dir);
+
+        Assert.Empty(report.OpaqueMembers);
+        Assert.False(report.Partial);
+        Assert.Contains(report.Entries, x => x.Member == "Label");
+        Assert.Contains(report.Entries, x => x.Member == "Wide");
+    }
+
+    /// <summary>
+    /// THE CONTROL THAT KEEPS THE STRIP HONEST. Only `String` and `WString` shed a bracketed suffix. A
+    /// NAMED type that happens to carry one is still a named type, and if the corpus does not define it
+    /// the gate must still fire. Without this control, "strip anything in brackets" would quietly
+    /// disarm the gate for every unresolvable type spelled with a suffix.
+    /// </summary>
+    [Fact]
+    public void ABracketedSuffixOnANonStringType_StillGates()
+    {
+        var dir = NewDir();
+        Write(dir, "FB_Thing.ir", @"BLOCK FB FB_Thing
+ROOTID 0
+NUMBER 65
+LANGUAGE LAD
+
+INTERFACE
+  STATIC
+    Odd : ""UDT_NotHere[4]""
+");
+
+        var report = Run(dir);
+
+        Assert.Single(report.OpaqueMembers);
         Assert.True(report.Partial);
     }
 }

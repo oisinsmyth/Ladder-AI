@@ -1,4 +1,4 @@
-using Converter.SimaticMl;
+﻿using Converter.SimaticMl;
 
 namespace Converter.Ir;
 
@@ -324,6 +324,24 @@ public static class MemberExpansion
         if (version >= 0)
         {
             text = text[..version].Trim();
+        }
+
+        // 🔴 A STRING'S DECLARED LENGTH IS NOT PART OF ITS TYPE NAME, AND OMITTING THIS
+        // PRODUCED A GATE NOBODY COULD CLEAR. `String[32]` is an ELEMENTARY sized string: it has a
+        // length, not members. Without this strip it reaches neither the elementary set (which holds
+        // bare `String`) nor the type registry (no corpus defines `String[32]`, and none ever could),
+        // so it fell through to Opaque and made the whole run PARTIAL. MEASURED on a live corpus the
+        // moment this classifier first ran against one: two members of one block, exit 1, on a
+        // declaration that is completely ordinary and completely correct.
+        var bracket = text.IndexOf('[');
+        if (bracket > 0 && text.EndsWith("]", StringComparison.Ordinal))
+        {
+            var bare = text[..bracket].Trim();
+            if (bare.Equals("String", StringComparison.OrdinalIgnoreCase)
+                || bare.Equals("WString", StringComparison.OrdinalIgnoreCase))
+            {
+                text = bare;
+            }
         }
 
         return text.Trim('"');
