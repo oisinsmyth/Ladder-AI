@@ -4589,7 +4589,7 @@ from **"nothing was examined"** — in the text output, in `--json` (`counts`, `
 | exit | meaning |
 |---|---|
 | 0 | a complete signal set was derived |
-| 1 | **PARTIAL** — a file in the corpus could not be read, so the set is not a complete statement of the block's signals. Also the usage/argument refusal code, per the house convention |
+| 1 | **PARTIAL** — the set is not a complete statement of the block's signals. **Two causes, reported separately** (below). Also the usage/argument refusal code, per the house convention |
 | 2 | **NOTHING EXAMINED** — `--block` names no block in the corpus, or the origin/type/direction filters left zero rows |
 
 **Exit 2 is never a pass.** An emitter is not exempt from "empty is not clean": an empty document is
@@ -4603,6 +4603,39 @@ enumerated yet still cannot report a pass.
 inventory warnings and exits 0. That is right for a check a human reads; this document's reader is a
 generator that never sees a warning line, and a detection that only warns on the path to production
 gets skimmed.
+
+#### 🔴 PARTIAL has TWO causes and they need different actions (FI-88, 2026-09-03)
+
+| cause | what it means | what to do |
+|---|---|---|
+| **warning** | a FILE could not be read, so members may be absent and referenced paths may be misclassified `undeclared` | fix the corpus so it parses |
+| **opaque member** | a MEMBER'S TYPE could not be opened, so **that member's leaves are missing from a set that otherwise reads complete** — the row is listed, what is underneath it is not | supply the missing type in `--project` |
+
+The second is FI-88's own shape. On a real program a UDT-typed `STATIC` — one block's entire
+caller-visible interface, referenced **251 times** — came back as a single row reading
+`direction = unused, writers = [], readers = []`, at `partial: false` and exit 0. Six of eight
+function blocks were excluded from a conformance harness on that output. A member whose type cannot
+be opened is now that gate.
+
+- `--json` carries `opaqueMembers: [{path, datatype, reason}]` beside `partial`, so a generator
+  reading `partial: true` can say **which** member it may not trust rather than distrusting the whole
+  document (which in practice means trusting it).
+- The `reason` names the **search root**, the **file count**, and that the scan is
+  **TOP-DIRECTORY-ONLY with no recursion** — so "the type is one directory down" is distinguishable
+  from "the type does not exist".
+- **The opaque set is collected from the UNFILTERED entries**, before `--origin`/`--type`/
+  `--direction` apply. An opaque member is exactly the row a `--type` filter drops — its type is the
+  thing that did not resolve — so a filter must narrow what is REPORTED and never what is GATED on.
+- A member's type is resolved through the project's `TYPE` files, so a UDT-typed member with **no
+  inlined body** (what a generation pipeline emits; a TIA re-export inlines everything) expands to
+  its real leaves. A `TYPE ` file that is present but unparseable now raises a warning instead of
+  being skipped silently — "type absent" and "type present and broken" used to produce byte-identical
+  output.
+- **Not everything unopened is opaque.** A multi-instance (the datatype names a block in this
+  corpus), an IEC timer/counter, any declaration carrying a `VERSION` (an instruction or library
+  instance, whose definition lives in TIA's libraries and can never be an `.ir` file), and an
+  `Array[…] of` (one aggregate leaf — expanding it would lose the element index) all terminate as a
+  single leaf without gating.
 
 ### What it deliberately does not do
 

@@ -54,8 +54,21 @@ public static class SignalSetRunner
             .OrderBy(p => p, StringComparer.Ordinal)
             .ToList();
 
-        var entries = DeclaredInterface(graph, inventory, blockName, placements)
+        var unfiltered = DeclaredInterface(graph, inventory, blockName, placements)
             .Concat(ExternalReferences(graph, inventory, blockName))
+            .ToList();
+
+        // 🔴 THE OPAQUE SET IS TAKEN FROM THE UNFILTERED ENTRIES, BEFORE --origin/--type/--direction
+        // (FI-88). An opaque member is one whose leaves are MISSING, so it is precisely the entry a
+        // filter is most likely to drop — a `--type Bool` run over a block whose interface type could
+        // not be opened would otherwise return a clean, confident, empty-ish document. A filter must
+        // narrow what is REPORTED and never what is GATED on.
+        var inSet = new HashSet<string>(unfiltered.Select(e => e.Path), StringComparer.Ordinal);
+        var opaque = inventory.OpaqueLeaves
+            .Where(o => inSet.Contains(o.Path))
+            .ToList();
+
+        var entries = unfiltered
             .Where(e => MatchesOrigin(e, originFilter))
             .Where(e => typeFilter is null
                         || string.Equals(e.Type, typeFilter, StringComparison.OrdinalIgnoreCase))
@@ -69,7 +82,8 @@ public static class SignalSetRunner
         // as a scope fact, never as a clean result.
         return new SignalSetReport(projectDir, inventory.FilesScanned, blockName, originFilter,
             typeFilter, directionFilter, entries, warnings,
-            entries.Count == 0 ? SignalSetScope.NoSignalsInScope : SignalSetScope.Scanned);
+            entries.Count == 0 ? SignalSetScope.NoSignalsInScope : SignalSetScope.Scanned,
+            opaque);
     }
 
     // The block's own declared interface, read off the inventory rather than off the interface

@@ -2781,8 +2781,62 @@ Four hypotheses were tested against the corpus and each is refuted by a countere
 - **Whether the member is used at all** — inverted, in fact: the member used 251 times fails and the
   member used 3 times succeeds.
 
-**The root cause is NOT established here and is deliberately not guessed at.** What is established is
-the symptom, its scale, and that the four obvious explanations are wrong.
+The hypothesis those four left standing — **whether the `.ir` had been ROUND-TRIPPED THROUGH TIA** —
+was not tested at the time, and it is the right one. The member that expanded came from a re-export;
+the ones that did not came from the generation pipeline.
+
+### Root cause — ESTABLISHED 2026-09-03, two conditions, only one of them a bug
+
+**(a) Expansion was keyed on INLINED TEXT, and type resolution was never attempted.**
+`SignalInventory.CollectLeaves` expanded a member **iff** `DbMember.NestedMembers` was already
+populated, which happens only from indented child lines physically present in the block's own `.ir`.
+`SignalInventory.AddFile` returned on every `TYPE ` file without parsing it, and `SignalInventory`
+never received a `TagTypeRegistry` at all. So a `.ir` round-tripped from a TIA export carries the
+inlined body and expands; one an authoring pipeline wrote does not. That is the whole defect, and it
+explains every row in the table above — including why the 3-reference member worked and the
+251-reference member did not.
+
+**(b) `ProjectUsageGraph.UsagesReaching`'s descendant exclusion IS NOT A BUG AND WAS NOT TOUCHED.**
+Once (a) expands `IO : "UDT_X"` into `IO.Cmd`, `IO.Status`, …, those keys match EXACTLY; the struct
+root stops being a leaf and nothing is left needing a descendant rule. The exclusion is the guard
+against the shape that once turned 20 genuine undriven members into 168 driven ones, and relaxing it
+would have traded a false `unused` for a false `driven` — the worse direction.
+
+### Resolution — step 1 shipped 2026-09-03
+
+- **`Converter/Ir/MemberExpansion.cs`** — ONE shared classifier for "how far does this member open",
+  replacing three copies of the decision (`SignalInventory.CollectLeaves`,
+  `ProjectUsageGraph.CollectLeafPaths`, `InterfaceCheckRunner.Walk`). Decision order, first match
+  wins: inlined body → block name (multi-instance) → IEC instance → elementary → `Array[…] of`
+  (one aggregate leaf) → **resolve the named type through `TagTypeRegistry` (the fix)** → versioned
+  instruction/library instance → **opaque, which gates**.
+- **The multi-instance discriminator reads the `BLOCK <KIND> <Name>` header line, never
+  `TagTypeRegistry._fbInterfaces`** — that index is built with `ParseBlockWithoutSidecar`, which
+  throws on any file carrying a `SIDECAR` section and has the throw swallowed, so every RE-EXPORTED
+  FB is silently missing from it. Keying there would make a multi-instance of a round-tripped block
+  opaque: a false gate, for exactly the corpora this repair serves. Pinned by a test.
+- **`signal-set` now gates on `partial` for TWO causes, reported separately**: a WARNING means a FILE
+  could not be read; an OPAQUE MEMBER means a MEMBER'S TYPE could not be opened so its leaves are
+  missing from a set that reads complete. The opaque set is collected from the UNFILTERED entries, so
+  `--type`/`--direction` cannot suppress the gate, and `opaqueMembers[{path,datatype,reason}]` sits
+  beside `partial` in the JSON so a generator can say WHICH member it may not trust. The reason names
+  the search root, the file count, and that the scan is top-directory-only.
+- **Two branches were added beyond the design** while proving the change a no-op on
+  `ir/test-project001`, which declares `InterfaceId : HW_ANY` and `MbServer : MB_SERVER VERSION 5.3`
+  with no inlined body: the S7 system identifier types joined the elementary list (they are scalar
+  aliases with no members), and a `VERSION`-carrying declaration terminates as an instruction/library
+  instance. Without them the gate fires on a healthy committed corpus — and worse, on a type whose
+  definition lives in TIA's libraries and can therefore NEVER be supplied, i.e. a gate nobody can
+  clear.
+- **Invariance:** every UDT-typed interface member in the committed corpus is inlined, so the new
+  branch cannot execute against committed data. That is checked, not argued —
+  `SignalInventoryTests` sweeps the corpus for opaque leaves with a stated denominator, and
+  `InterfaceCheckTests.RealCorpus_…_SoCommittedDataCannotExerciseTheCrossFileDescent` states the
+  same limit from the other side.
+
+**Still open, filed separately: FI-91** (`undriven-scan` and `cross-check` carry the identical
+`NestedMembers`-only condition and were deliberately left alone) and **FI-92**
+(`TagTypeRegistry`'s swallowed sidecar throw).
 
 ### Why it matters beyond one project
 
@@ -2902,3 +2956,76 @@ reader would reach for first — one campaign, one submission, two subjects — 
 message about asserted behaviours that does not mention the real cause. The cheap fix is a named
 refusal: if the vectors span more than one subject and only one model is declared, say *that*,
 rather than reporting a fidelity excess.
+
+## FI-91 — `undriven-scan` and `cross-check` still expand only INLINED members, so they now disagree with `signal-set` about one corpus
+
+**Split out of FI-88 on 2026-09-03, deliberately not fixed with it.** FI-88's repair taught
+`SignalInventory` to open a member whose type is NAMED rather than inlined. Two walks in
+`ProjectUsageGraph` carry the identical `NestedMembers`-only condition and were left exactly as they
+were:
+
+- `CollectInstanceLeafPaths` — every leaf of every INSTANCE DB;
+- `CollectMultiInstanceLeafPaths` — every leaf of every MULTI-INSTANCE static.
+
+Both stop at a member with no inlined body and record it as one leaf.
+
+### What that costs, concretely
+
+On a `.ir` an authoring pipeline wrote (the FI-88 shape — a UDT-typed `STATIC` carrying the block's
+whole caller-visible interface, with the type in its own `TYPE` file):
+
+| command | what it reports about that interface |
+|---|---|
+| `signal-set` | its real leaves, with directions and writer sites (fixed) |
+| `undriven-scan` | **the whole interface as ONE member, undriven** — a single false row standing for N real ones |
+| `cross-check` | **cannot see the members at all** — no multi-writer, no dead-wiring question can be asked about them |
+
+🔴 **The two halves of one project now answer the same question differently**, which is the exact
+failure mode `cross-check` and `undriven-scan` contradicting each other over one corpus made findable
+in the first place. It is a SECOND defect with its own blast radius, not a loose end of the first:
+`undriven-scan`'s false row is the "a live member reads as dead" direction, and deleting on that
+advice is what FI-53 records as having nearly removed a plant's entire weighing path.
+
+**Cost to fix: about six lines**, now that `MemberExpansion.Classify` exists — both methods take the
+classifier instead of testing `NestedMembers` themselves, exactly as `SignalInventory.CollectLeaves`
+now does. What it needs beyond that is the same invariance proof FI-88 got: those two walks feed
+`undriven-scan`, `cross-check` and `trace`, and a change to what counts as a leaf changes every row
+they emit. Held out of FI-88's step 1 so the two blast radii could be measured separately.
+
+## FI-92 — `TagTypeRegistry` silently drops every RE-EXPORTED FB from its interface index
+
+**Found while building FI-88's multi-instance discriminator, 2026-09-03.**
+
+`TagTypeRegistry.FromFiles` indexes an FB's interface with:
+
+```csharp
+else if (text.StartsWith("BLOCK FB ", StringComparison.Ordinal))
+{
+    var fb = IrParser.ParseBlockWithoutSidecar(text);   // <- unconditional
+    fbInterfaces[fb.Name] = ...
+}
+```
+
+and `ParseBlockWithoutSidecar` **throws on any file carrying a `SIDECAR` section** — by design, and
+loudly, so that real round-trip data cannot be silently discarded in favour of synthesis. The throw
+is then caught by the best-effort `catch (IrFormatException)` a few lines below and discarded.
+
+**So the FB index contains exactly the blocks that have NOT been round-tripped through TIA, and
+nothing says so.** Every re-exported FB is absent. The registry's own `Resolve` fallback — "an
+instance DB's member tree is its FB's interface, and the FB is the source of truth for it", added
+2026-08-24 after TIA rejected a block with 12 compile errors over a mis-inferred `SrcType` — is
+therefore silently unavailable for precisely the corpora that HAVE been exported.
+
+**The fix is one branch**, and `IrParser.HasSidecarSection` already exists for it — the sibling call
+sites in `SignalInventory` and `InterfaceCheckRunner` both use it:
+
+```csharp
+var fb = IrParser.HasSidecarSection(text)
+    ? IrParser.ParseBlock(text).Block
+    : IrParser.ParseBlockWithoutSidecar(text);
+```
+
+Not done under FI-88 because FI-88 needed only a BLOCK-NAME set, which it now reads off the
+`BLOCK <KIND> <Name>` header line — cheaper, and immune to this whichever way it is resolved. That
+choice is pinned by `SignalSetUdtExpansionTests.MultiInstanceOfASidecarCarryingBlock_IsStillNotOpaque`,
+which fails the day anyone re-keys the discriminator on `_fbInterfaces`.

@@ -37,13 +37,10 @@ public static class InterfaceCheckRunner
     // Elementary types have no members to descend into, so a leaf of one of these is not "opaque".
     // Anything NOT here and NOT resolvable and NOT carrying inlined members is reported, which is the
     // fail-closed direction: a type this list forgets becomes a NOT CHECKED, never a silent pass.
-    private static readonly HashSet<string> Elementary = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "Bool", "Byte", "Word", "DWord", "LWord", "SInt", "USInt", "Int", "UInt", "DInt", "UDInt",
-        "LInt", "ULInt", "Real", "LReal", "Char", "WChar", "String", "WString", "Time", "LTime",
-        "S5Time", "Date", "Time_Of_Day", "TOD", "LTOD", "LTime_Of_Day", "DT", "Date_And_Time", "DTL",
-        "LDT", "Variant", "Any", "Pointer", "Void", "Timer", "Counter", "Block_FB", "Block_FC", "Block_DB",
-    };
+    //
+    // FORWARDED to MemberExpansion (FI-88) — one list, not two. Two copies is how this check and
+    // `signal-set` came to disagree about one corpus.
+    private static readonly IReadOnlySet<string> Elementary = MemberExpansion.Elementary;
 
     /// <summary>Run the check.</summary>
     /// <param name="requirementsSource">Where the required names came from, for the report header.</param>
@@ -261,7 +258,7 @@ public static class InterfaceCheckRunner
     // Depth cap: a UDT that (illegally) references itself would otherwise recurse forever. Reached only
     // by malformed input, and it is reported as an opaque member rather than silently truncating the
     // member set — a truncated set is exactly what makes a MISSING verdict unsound.
-    private const int MaxDepth = 12;
+    private const int MaxDepth = MemberExpansion.MaxDepth;
 
     private static void Walk(
         DbMember member,
@@ -316,27 +313,7 @@ public static class InterfaceCheckRunner
 
     // `Array[0..3] of "UDT_X"` -> `UDT_X`; `"UDT_X"` -> `UDT_X`. Quotes are stripped by TryGetUdt too,
     // but the elementary-type comparison happens here so it must see the bare name.
-    private static string ElementTypeOf(string? datatype)
-    {
-        var text = (datatype ?? string.Empty).Trim();
-        if (text.Length == 0)
-        {
-            return string.Empty;
-        }
-
-        var of = text.LastIndexOf(" of ", StringComparison.OrdinalIgnoreCase);
-        if (of >= 0)
-        {
-            text = text[(of + 4)..].Trim();
-        }
-
-        // A `TON_TIME VERSION 1.0` style suffix is not part of the type name.
-        var version = text.IndexOf(" VERSION ", StringComparison.OrdinalIgnoreCase);
-        if (version >= 0)
-        {
-            text = text[..version].Trim();
-        }
-
-        return text.Trim('"');
-    }
+    //
+    // FORWARDED to MemberExpansion (FI-88) — one implementation, not two.
+    private static string ElementTypeOf(string? datatype) => MemberExpansion.ElementTypeOf(datatype);
 }

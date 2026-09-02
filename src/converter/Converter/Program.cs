@@ -1782,10 +1782,27 @@ internal static class Program
         // warning that only prints on the path to production gets skimmed).
         if (report.Partial)
         {
-            Console.Error.WriteLine(
-                $"signal-set: {report.Warnings.Count} file(s) in {projectDir} could not be read, so this set "
-                + "is not a complete statement of '" + block + "'s signals. Do not bind against it until the "
-                + "corpus parses.");
+            // SPLIT BY CAUSE (FI-88). "Could not be read" is true of a warning and false of an opaque
+            // member — that one's file read fine, its declared TYPE could not be opened — and the two
+            // send whoever reads this to different places.
+            if (report.Warnings.Count > 0)
+            {
+                Console.Error.WriteLine(
+                    $"signal-set: {report.Warnings.Count} file(s) in {projectDir} could not be read, so this set "
+                    + "is not a complete statement of '" + block + "'s signals. Do not bind against it until the "
+                    + "corpus parses.");
+            }
+
+            if (report.OpaqueMembers.Count > 0)
+            {
+                Console.Error.WriteLine(
+                    $"signal-set: {report.OpaqueMembers.Count} member(s) of '{block}' declare a type that could "
+                    + "not be opened, so THEIR LEAVES ARE MISSING from this set — the rows are listed, what is "
+                    + "underneath them is not: "
+                    + string.Join("; ", report.OpaqueMembers.Select(o => $"{o.Path} : {o.Datatype}"))
+                    + ". Supply the missing type in --project and re-run.");
+            }
+
             return 1;
         }
 

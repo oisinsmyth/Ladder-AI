@@ -174,17 +174,23 @@ public class InterfaceCheckTests : IDisposable
     }
 
     /// <summary>
-    /// *** FOUND BY MUTATION, AND IT IS THE UNEXECUTED-BRANCH FAMILY. *** Disabling the
-    /// <c>TryGetUdt</c> descent entirely left ALL of the first sixteen tests green, including both
-    /// whole-corpus sweeps — because every UDT-typed interface member in <c>ir/test-project001</c>
-    /// carries its members INLINED in the block's own IR, so the cross-file resolution never runs.
-    /// A branch nothing reaches is a note about a branch.
+    /// *** FOUND BY MUTATION, AND THEN BY THE FIELD. *** Disabling the <c>TryGetUdt</c> descent
+    /// entirely left ALL of the first sixteen tests green, including both whole-corpus sweeps — because
+    /// every UDT-typed interface member in <c>ir/test-project001</c> carries its members INLINED in the
+    /// block's own IR, so the cross-file resolution never runs against committed data.
     ///
-    /// <para>The shape it exists for is real and simply absent from today's corpus: a member declared
-    /// with a named PLC data type and NO inlined body. This test is that shape. <b>It is also the
-    /// asserted absence</b> — <c>RealCorpus_EveryUdtTypedMember…</c> below pins that the corpus has no
-    /// such member today, so the day one appears, that test fails and demands this one be re-read
-    /// against real data rather than a fixture.</para>
+    /// <para>🔴 <b>THIS BRANCH WAS ONCE CALLED "FIXTURE-ONLY" AND "A BRANCH NOTHING REACHES". THAT WAS
+    /// WRONG, AND FI-88 IS THE MEASUREMENT THAT SAYS SO.</b> The shape is what a GENERATION PIPELINE
+    /// emits — a member declared with a named PLC data type and no inlined body — while a TIA re-export
+    /// inlines everything. On a real program the sibling walk in <c>SignalInventory</c> had no such
+    /// descent, so a UDT-typed <c>STATIC</c> referenced 251 times reported <c>unused</c> with no writers
+    /// and no readers, at exit 0; six of eight function blocks were judged unharnessable on that output.
+    /// This branch decided whether those blocks were testable. It is load-bearing.</para>
+    ///
+    /// <para><b>It is also the asserted absence</b> —
+    /// <c>RealCorpus_…_SoCommittedDataCannotExerciseTheCrossFileDescent</c> below pins that the corpus
+    /// has no such member today, so the day one appears, that test fails and demands this one be
+    /// re-read against real data rather than a fixture.</para>
     /// </summary>
     [Fact]
     public void AUdtTypedMemberWithNoInlinedBody_ResolvesThroughTheProjectsTypeDefinition()
@@ -222,12 +228,31 @@ public class InterfaceCheckTests : IDisposable
 
     /// <summary>
     /// The asserted absence that keeps the fixture above honest. <b>Every UDT-typed interface member in
-    /// the committed corpus carries its members inlined today</b>, which is why the cross-file descent
-    /// is unexercised by real data. When that stops being true this goes red and the resolution gets
-    /// checked against a real block instead of a hand-written one.
+    /// the committed corpus carries its members inlined today</b>, so no committed block can exercise
+    /// the cross-file descent. When that stops being true this goes red and the resolution gets checked
+    /// against a real block instead of a hand-written one.
+    ///
+    /// <para>🔴 <b>(i) THIS IS NOT A TEST ABOUT A FIXTURE-ONLY BRANCH.</b> It was described that way
+    /// until FI-88, and the description was refuted by measurement: on a real program the same descent,
+    /// missing from <c>SignalInventory</c>, reported a UDT-typed <c>STATIC</c> used 251 times as
+    /// <c>unused</c> with no writers and no readers, at <c>partial: false</c> and exit 0 — and six of
+    /// eight function blocks were excluded from a conformance harness on the strength of it. The branch
+    /// decided which blocks were testable.</para>
+    ///
+    /// <para>🔴 <b>(ii) WHAT THIS TEST STATES IS A LIMIT OF THE CORPUS, NOT A PROPERTY OF THE WORLD.</b>
+    /// Green here means only "no committed <c>.ir</c> happens to carry a named type with no inlined
+    /// body" — it says nothing about the <c>.ir</c> a generation pipeline writes tomorrow. So the
+    /// hand-written fixtures (<c>AUdtTypedMemberWithNoInlinedBody_…</c> here, and the whole of
+    /// <c>SignalSetUdtExpansionTests</c>) are the ONLY coverage the descent has. <b>They must not be
+    /// deleted as redundant with a real-corpus test that structurally cannot reach the branch.</b></para>
+    ///
+    /// <para>🔴 <b>(iii) AND IT IS THE INVARIANCE PROOF FOR FI-88'S REPAIR.</b> The repair adds a
+    /// cross-file descent to <c>SignalInventory</c> that can only fire where nothing was inlined. This
+    /// test, with <c>SignalInventoryTests</c> beside it, is what makes "so the change is a no-op on
+    /// committed data" a checked claim rather than an argument.</para>
     /// </summary>
     [Fact]
-    public void RealCorpus_EveryUdtTypedInterfaceMemberIsInlined_SoTheCrossFileDescentIsFixtureOnlyToday()
+    public void RealCorpus_EveryUdtTypedInterfaceMemberIsInlined_SoCommittedDataCannotExerciseTheCrossFileDescent()
     {
         var corpus = CorpusDir();
         var blocks = Directory.EnumerateFiles(corpus, "*.ir", SearchOption.TopDirectoryOnly)
