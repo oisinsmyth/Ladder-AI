@@ -2795,3 +2795,59 @@ the answer looks like a clean result rather than an empty one.
 member referenced from many networks must report that member's leaves with their real directions and
 writer sites — with a control on a UDT-typed member of the same shape that IS already expanding, so
 the fix cannot be "expand everything" and cannot regress the working case.
+
+## FI-89 — the loop MEASURES the scan period, reports that it disagrees with the constant, and no gate acts on it
+
+**Measured 2026-09-02.** A wave reported, in its own result file:
+
+```
+scanPeriod: { measured: true, millisecondsPerScan: 1.5508, scans: 230671,
+              windowSeconds: 357.726, compiledConstantMs: 24.931,
+              deltaFraction: -0.9378, disagreesWithConstant: true }
+```
+
+**The harness knew the constant was 16x wrong for the program it had just run, said so, and nothing
+consumed that.** `SubmissionGate.cs` computes gate 1b's whole band from the constant:
+
+```csharp
+var scenarioScans = (int)Math.Ceiling(endMs / WireTiming.ScanPeriodMs);
+var allowed = (int)Math.Ceiling(scenarioScans * BackstopMargin) + BackstopFixedOverheadScans;
+```
+
+with `WireTiming.ScanPeriodMs` a `const double`. For a 55 s scenario the gate's band is about
+[2206, 3809] scans; against the period actually measured on that build the scenario needs ~35,500.
+**So gate 1b would REFUSE a correctly-sized backstop and ADMIT one roughly fifteen times too short** —
+the spurious-`TIMED-OUT` direction the gate exists to prevent, and the constant's own documentation
+names that as the reason it takes the pessimistic figure.
+
+### 🔴 THIS IS NOT AN UNDISCOVERED HAZARD. IT IS A DOCUMENTED ONE COMING DUE, WITH NOTHING TO CATCH IT
+
+`WireTiming.ScanPeriodMs`'s own summary is emphatic and was right:
+
+> *"IT IS A PROPERTY OF THE PROGRAM, NOT OF THE CONTROLLER, AND THAT HAS ALREADY BEEN GOT WRONG
+> ONCE... **Re-measure this constant whenever the program under test changes materially**; nothing
+> about the CPU fixes it, and no figure taken against a different program may be substituted here."*
+
+The obligation is stated, the failure mode is stated, and the enforcement is a **comment**. The
+current value was measured against one program; a materially different one now runs, and the only
+thing that noticed was the loop's own telemetry, which no gate reads.
+
+**A second, smaller defect in the same place.** Gate 1b renders the constant to the reader as
+*"{scenarioScans} scans at the **measured** {WireTiming.ScanPeriodMs} ms period"*. It is not
+measured — it is compiled in. That is precisely the confusion the constant's docs record as having
+already happened once ("was quoted as a rig fact"), reproduced by the gate's own message.
+
+### The fix is not "update the constant", and that is the interesting part
+
+Re-pointing the constant re-judges **every submission already admitted against it**. On the day this
+was found, one slot's vectors were passing gate 1b with bounds sized to the old value; moving it
+would have refused them mid-campaign. So the repair has to be a migration, not an edit:
+
+1. **Carry the period as submission DATA, not as a compiled constant** — derived per program and
+   provenanced through `harness-gate derive` like `map` and `deployment`, so gate 0c can tell a
+   measured one from a typed one, and a stale one fails closed instead of silently converting.
+2. **Have the loop's own `disagreesWithConstant` reach a gate.** Today it is printed and dropped. A
+   run whose measured period disagrees with the one its bounds were validated against should say so
+   where the verdict is, not only in telemetry.
+3. Until either exists, gate 1b's pass means "the backstop is consistent with a figure from another
+   program", and the honest place for that sentence is the gate's own output.
