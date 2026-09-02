@@ -2851,3 +2851,54 @@ would have refused them mid-campaign. So the repair has to be a migration, not a
    where the verdict is, not only in telemetry.
 3. Until either exists, gate 1b's pass means "the backstop is consistent with a figure from another
    program", and the honest place for that sentence is the gate's own output.
+
+---
+
+## FI-90 — a submission may carry MANY enumerations and exactly ONE model, so a multi-subject campaign cannot pass gate 4
+
+**Found 2026-09-02**, building a second conformance slot for a second block in the same campaign.
+
+`SubmissionDocument` supports a multi-subject campaign on the enumeration side and only there:
+
+| field | shape | consequence |
+|---|---|---|
+| `Enumeration` | one | the single-subject shape, still correct for a single-subject campaign |
+| `Enumerations` | **`List<EnumerationDocument>`** | one per subject; `AssertionEnumerationSet` resolves citations and gate 3j reports a denominator **per subject, never summed** |
+| `Model` | **`ModelDocument?` — one** | *(no `Models`, and no per-vector model reference anywhere)* |
+
+`SubmissionGate.Fidelity(vectors, fidelity)` takes that single declaration and set-differences
+**every** vector's `assertedBehaviours` against **its** `Represents`. So the moment a submission
+carries vectors for two subjects, each modelled by its own stimulus block with its own fidelity
+declaration, gate 4 refuses every vector of whichever subject did not supply the model — not
+because the vectors are wrong, but because there is nowhere to put the second declaration.
+
+### Why this is the same defect the `Enumerations` list was added to fix, one artifact over
+
+`Enumerations`' own doc comment records the reasoning:
+
+> *"Until this existed a submission could hold exactly one, so a campaign with a valve enumeration
+> and a vessel enumeration had one option: merge them. After a merge a citation to a clause both
+> files declare is answered by whichever entry survived, and the denominator gate 3 reports is the
+> union of two denominators and therefore neither."*
+
+Every word of that transfers to the model. A merged `represents` set licenses each subject's
+vectors to assert behaviours **the other subject's model** claims, which is exactly the
+self-issued-licence failure gate 4b exists to prevent — and it would do so silently, since gate 4's
+pass is an exact string set difference with no notion of which model a behaviour came from.
+
+### It is not currently blocking, and that is worth stating precisely
+
+The sound workaround is **one submission per subject**, and it is not merely adequate — it is
+better on two counts:
+
+1. `scenarioEndInput` is also one string for the whole submission, resolved per vector by name. Two
+   slots have two differently-named end inputs, so a merged submission bounds one slot **by a flat
+   ceiling** (`byCeilingOnly`) while the other gets its own per-scenario bound. Split, each slot
+   gets the stronger per-scenario check.
+2. Coverage is already reported per subject and never summed, so nothing is lost by splitting.
+
+**So the item is not "we are blocked".** It is that the asymmetry is undocumented, and the shape a
+reader would reach for first — one campaign, one submission, two subjects — fails at gate 4 with a
+message about asserted behaviours that does not mention the real cause. The cheap fix is a named
+refusal: if the vectors span more than one subject and only one model is declared, say *that*,
+rather than reporting a fidelity excess.
