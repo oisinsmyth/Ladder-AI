@@ -3741,3 +3741,21 @@ pre-existing claim on the same block from an earlier dispatch, which is luck rat
 semantics are "this position and everything below it shifts". Until then, an insertion's real
 reservation is the `block-edit` claim on the whole block, and that should be said out loud in the
 skills rather than discovered at exit 1.
+
+### FI-102 addendum — it is THREE slots, not two, and it is the ONLY blocker
+
+**Corrected 2026-09-03, same day.** The entry above says two slots are blocked. A third was recorded
+separately as blocked for a different reason — an unsynthesizable dependency — and **that diagnosis
+was wrong.** The block converts cleanly with `--project`; what failed was a staging corpus assembled
+by pattern-matching the tool's error text, which added the one name the error mentioned and missed a
+**nested** type behind it. With the recursive closure staged, preflight exits 0 with zero findings.
+
+So the picture is simpler and better than recorded: **every remaining slot on that job nests other FB
+instances, every one therefore needs an instance DB the current emission cannot produce, and FI-102 is
+the single defect standing in front of all of them.** Fixing it unblocks all three at once.
+
+**The transferable lesson from the wrong diagnosis** — a dependency closure computed by matching error
+text is not a closure. The tool names one missing artifact at a time, and each name can hide another
+behind it, so the loop terminates on the first *shape* of error it stops matching rather than on
+completeness. Compute the closure from the artifacts themselves, recursively over every declared type,
+and use the tool to *verify* it rather than to *discover* it.
