@@ -3309,3 +3309,66 @@ Every slot in every wave set, on every deployment. No existing result is *wrong*
 slots in question did run, and their verdicts rest on their own observations — but **no existing
 result is evidenced against this failure mode either**, and several reports quote the echo as if it
 were.
+
+---
+
+## FI-98 — a wave can come back clean without the scenario ever opening, and nothing in the mirror can tell
+
+**Found 2026-09-03** by a model-fidelity declarer reading a generated stimulus head, and confirmed
+against `StimShellGenerator` rather than one job's IR — so this is a property of **every** head the
+generator emits, not of one block.
+
+Two independent gaps, same shape, and they compose:
+
+### (a) A degenerate scenario window produces a clean, complete-looking run
+
+The shell derives its scenario clock from the phase boundaries
+(`StimShellGenerator.cs:185-186`):
+
+```
+MOVE(EN := RunT <  HeadEnd, IN := T#0S)                   => ScenT
+SUB (EN := RunT >= HeadEnd, IN1 := RunT, IN2 := HeadEnd)  => ScenT
+```
+
+If a vector's commanded scenario end coincides with the head boundary — a zero `EndAt`, or a zero
+profile selector — **the scenario interval is empty and `InScenario` is never true**. Every drive is
+gated on it, so nothing is presented; every inert-rest register therefore reads exactly as declared;
+and the completion bit still latches off the clock. The run reports **ran, settled, inert, complete**.
+
+🔴 **It fails in the direction of looking successful**, which is the direction a gate cannot afford.
+
+### (b) There is no held record that the observation window ever opened
+
+`StimShellGenerator.cs:248` emits the arm term as a **live coil**:
+
+```
+COIL Stim.Armed := InScenario AND ScenT >= Stim.ArmAt AND ScenT < Stim.ArmUntil
+```
+
+Nothing latches it. So a window placed outside the interval where anything happens returns **false on
+every `*Raised` bit** — which is indistinguishable, register for register, from *"the block was
+exercised and did nothing"*. On a `NEVER`-form vector that is a **PASS**, and a pass earned by never
+looking.
+
+This is the same defect family as **FI-97**, where the start echo latches from the copy layer's own
+write and so cannot detect a slot that never ran. Together the mirror carries three things a reader
+takes as evidence of execution — the start echo, an inert-clean rest, and a latched completion bit —
+and **not one of them distinguishes a healthy run from a run that never happened.**
+
+### The fix is one bit, and it is the same bit in both cases
+
+**Latch the arm window.** A held `ArmedEver`, set from `Stim.Armed` and cleared only by the head
+cleardown, costs one static and one rung in the generated shell and makes every `atNoPoint` pass
+falsifiable: a green with `ArmedEver` false is not a pass, it is a wave that did not look. The same
+latch answers (a), because a window that never opened proves the scenario never opened.
+
+**Then gate on it.** A result package whose arm latch is false should refuse to report `Held` on any
+observation gated by that window. Today the loop would report a full green.
+
+### What this does and does not say about existing results
+
+It does **not** invalidate them: the waves run so far drove real stimuli and their `*Raised` bits went
+high, which is positive evidence that the windows did open. What it says is that **none of those runs
+was evidenced against this failure mode** — the passes are believed on the strength of other rows
+being non-trivially true, not because anything checked. A submission whose vectors are all `NEVER`
+form would have no such corroboration at all.
