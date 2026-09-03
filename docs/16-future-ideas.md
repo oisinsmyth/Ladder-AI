@@ -3085,3 +3085,61 @@ corpus is the intended long-term reference**, because these tests double as the 
 reference project *is*. Re-pointing them ratifies the widening; leaving them red does not preserve
 the old value, it only stops anyone finding out. Decide that, then update in one commit — and do not
 land any other change in it, so the diff reads as a ratification and not as a repair.
+
+---
+
+## FI-94 — `claim --allocate` hands back a number you already hold, for a DIFFERENT object, and calls it CLAIMED
+
+**Measured 2026-09-03**, reserving four block numbers for one new harness slot.
+
+A slot needs several numbers at once — a stimulus FB, its instance DB, a second instance DB for the
+block under test, and a slot FC. Allocating them is four calls differing only in `--type` and
+`--purpose`. The first call of each `--type` allocates correctly. **The second call of the same
+`--type` returns the number the first one got:**
+
+```
+converter claim … --kind block-number --allocate --type DB --purpose "…Stim - instance DB of …"
+  CLAIMED   claimed block-number 'DB9003' …
+
+converter claim … --kind block-number --allocate --type DB --purpose "…UnderTest - the block under test"
+  CLAIMED   already claimed by agent '<same>' at 2026-09-03T00:21:27Z - no change
+    value   DB9003
+```
+
+**Exit 0. The word `CLAIMED`.** Two different objects, one number, and the only thing in the request
+that distinguished them — `--purpose` — was not consulted.
+
+### Why this is worse than an ordinary bug
+
+The registry exists to stop exactly this. Its exit contract is *"0 acquired · 1 REFUSED — pick
+another and re-claim · 2 NOTHING WAS DECIDED"*, and a caller written to that contract reads 0 as
+"this number is mine and it is distinct from the last one I was given". Here 0 means "you already
+have one of these", which is a different sentence for a caller holding two objects.
+
+Downstream the collision is silent for a long time: two IR files carry the same `NUMBER`, and the
+first thing that notices is TIA, at import, replacing one object with the other **by number**. On
+the run that found this, the second bad allocation was worse still — the FC request came back with
+**the number of the copy layer that is currently deployed on the rig.**
+
+It survived only because the caller cross-checked the returned numbers against the corpus by hand
+before writing anything. Nothing in the tool prompted that check.
+
+### The shape of the fix
+
+The intent behind the current behaviour is almost certainly retry-safety: a re-run of the same
+allocation should not burn a second number. That is worth keeping, but the identity of an allocation
+is **(agent, kind, type, purpose)** and not (agent, kind, type) — the purpose is the only field that
+says *which object* is being reserved.
+
+1. `--allocate` should treat a candidate held by **anybody, including the caller under a different
+   purpose**, as taken, and move to the next free number.
+2. An exact repeat — same agent, same type, same purpose — keeps today's idempotent behaviour, which
+   is the retry case and is genuinely useful.
+3. If the tool will not consult the purpose, then returning an existing claim must **not** be
+   reported as `CLAIMED` at exit 0. It is a refusal to allocate, and the caller has to be able to see
+   the difference without diffing the value against its own records.
+
+Until then the safe pattern, and the one now in use: **verify the band against the corpus, then claim
+each number with an explicit `--value`.** Note that an explicit in-band `--value` is *"accepted and
+announced as accepted, not verified"*, so the verification is the caller's either way — which is the
+honest reading of the whole registry today.
