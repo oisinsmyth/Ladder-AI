@@ -3485,3 +3485,57 @@ them.** That is a real tax on every future change, paid in the one currency this
 the reader's willingness to believe a red result.
 
 The fix and its one judgement are unchanged from the entry above; it simply covers both solutions.
+
+---
+
+## FI-100 — a conflict graph built from `reachable-state` overstates slot conflict, because a closure conflates instance-internal storage with global
+
+**Measured 2026-09-03**, and it had already produced a wrong campaign plan before it was caught.
+
+Two conformance slots conflict when they contend for the same storage. The natural way to compute
+that is `converter reachable-state --block <B>` per candidate block, then intersect the closures
+pairwise. Done that way on one program: **9 of 21 pairs conflicted, density 0.429**, the graph
+contained a K4, and the conclusion drawn — *"four deployments, and that is a proven lower bound"* —
+was stated with confidence.
+
+**It is wrong, and by a factor of four.**
+
+A closure entry has one of two shapes, and they behave completely differently:
+
+| shape | example | where it lives |
+|---|---|---|
+| **instance-internal** | `FB_MotorDOL\|FTSTimer.Q` | inside whichever instance DB the block is placed in |
+| **global** | `DB_Controls.SupressEStopAct` | one location, shared by every reader |
+
+**A conformance slot gives its block under test a DEDICATED instance DB.** So when two blocks' closures
+both contain `FB_MotorDOL|FTSTimer.Q`, that is not contention — it is two different instances of the
+same type, in two different DBs, that cannot touch each other. Only the **global** entries can collide.
+
+On the program measured, of the 53 locations shared between two of those blocks, **52 were
+instance-internal and 1 was global.** Recomputing over globals only:
+
+- every conflict in the whole program reduced to **one location**;
+- three of the seven blocks touched **no global storage at all**;
+- and that one location is `direction=read` in every block that names it, with its **sole writer not
+  present in the harness bed at all**.
+
+**The slot-level conflict graph was empty.** The four-deployment plan collapsed to one bed, and the
+binding constraint turned out to be the register budget and the observability floor — neither of
+which the conflict analysis was looking at.
+
+### What to change
+
+1. **When computing slot conflict from `reachable-state`, filter to entries with no `|`.** An
+   instance-internal member is contention only if the two slots share an instance, which by
+   construction they do not.
+2. **Then check DIRECTION.** A shared global that both slots only read is not a conflict at all; a
+   conflict is a write collision. `converter signal-set` gives `direction` and `writers` per member,
+   and a writer that is not in the deployed program cannot collide with anything.
+3. **`converter conflict-graph` on real submissions remains the authority** — it resolves signals
+   through the binding's declared storage and so does not have this problem. The closure method is a
+   *planning* shortcut used before submissions exist, and this is the correction it needs.
+
+The transferable lesson is the one the repo already records elsewhere and which this entry is another
+instance of: **a number computed over the wrong denominator is not a conservative estimate, it is a
+wrong answer that happens to point the safe way.** Four deployments instead of one is not caution; it
+is three deployments of work created by an analysis nobody re-read.
