@@ -3614,3 +3614,130 @@ emits IR that preflight gates**, and it is only invisible because every head so 
    unconditional hold rather than an orphaned half-pair.
 4. Fix `S10` regardless — a generator that emits gating IR for a legal declaration is a defect on its
    own terms.
+
+---
+
+## FI-102 — an instance DB of a block that NESTS other FB instances cannot be created at all: import refuses it, and `create-instance-db` produces block number 0
+
+**Measured 2026-09-03**, standing up two new conformance slots. It stopped both, and there is
+currently no route past it.
+
+A conformance slot needs a **dedicated instance DB** for the block under test. Two ways exist to make
+one, and for a multi-instance block **both fail**.
+
+### Route 1 — import the converter's SimaticML
+
+```
+openness-cli import-all … → SUMMARY: 14 imported, 2 failed, 0 rejected, in 3 pass(es)
+FAILED: iDB_<BlockA>UnderTest   (EngineeringTargetInvocationException)
+FAILED: iDB_<BlockB>UnderTest   (EngineeringTargetInvocationException)
+  Cannot create the 'SW.Blocks.InstanceDB' object with Simatic ML ID '0'
+  at line number 4 at line position 4.
+```
+
+**The correlation is exact and it is not the ID.** Both failing files carry `<SW.Blocks.InstanceDB
+ID="0">` and a valid `<Number>` — and so does every file that imported cleanly. What separates them
+is what the FB *declares*:
+
+| block under test | FB-typed statics | its instance DB |
+|---|---:|---|
+| three blocks with flat interfaces | **0** | imported cleanly |
+| one nesting two motor instances | **2** | **refused** |
+| one nesting five instances | **5** | **refused** |
+
+Zero nested FB instances → imports. Any → refused. The retry loop in `import-all` made three passes
+and could not resolve it, which rules out ordering.
+
+### Route 2 — have Openness create it
+
+```
+openness-cli create-instance-db … --name iDB_<BlockA>UnderTest --instance-of FB_<BlockA>
+  → exit 17
+  create-instance-db abandoned: instance DB was created with invalid block number 0, so it was
+  not kept. A whole-device compile reports Success over an invalid-numbered block — only a
+  per-block compile reports 'has an invalid number' — so this is refused here rather than shipped.
+  PROJECT UNCHANGED.
+```
+
+**That refusal is correct and should not be relaxed** — it is the "key on errors, never on state"
+discipline working exactly as intended, and the message explains why a whole-device compile would
+have hidden it. But it leaves no route: the command offers no `--number`, so the number TIA assigns
+is the number you get, and for these blocks it is 0.
+
+### Why this is a hard blocker rather than an inconvenience
+
+The slot FC calls `FB_X, iDB_XUnderTest`. Without that instance the FC cannot compile, so the whole
+slot is undeployable. Two blocks — one of them the highest-yield remaining subject on its job — are
+blocked behind it, and **a nested FB instance is not exotic**: any equipment block that composes a
+motor or a valve has one.
+
+The project was rolled back to its previous healthy state (`BLOCKS: 20 INCONSISTENT: 0`,
+`TYPES: 52 INCONSISTENT: 0`) rather than left half-imported.
+
+### What to investigate, in order
+
+1. **Diff the converter's emitted XML for a nested instance DB against a TIA export of one.** The
+   converter README already records that *"an instance DB round-tripped from a TIA export cannot be
+   re-imported (Remanence on a multi-instance)"* — so the multi-instance shape is known to be
+   delicate on the round trip, and this is the same family reached from the generation side.
+2. **Give `create-instance-db` a `--number`.** If Openness will honour an explicitly-set block number
+   on creation, route 2 becomes viable immediately and is by far the cheaper fix — the block content
+   is projected by TIA from the FB, which is exactly what is wanted for an under-test instance.
+3. Failing both, the slot pattern needs a different answer for composed blocks, and that is a design
+   question rather than a bug: **every equipment block above the leaf level has this shape.**
+
+---
+
+## FI-103 — two silent contract traps: `diff --insert` is last-wins, and a `block-network` claim cannot express an INSERTION
+
+**Both found 2026-09-03** by an agent that read the implementation rather than trusting a dispatch,
+and the first of them was in a dispatch **I wrote**.
+
+### (a) `converter diff --insert` takes ONE value, and repeating it is silently last-wins
+
+`converter diff` matches networks on content, so an inserted network makes everything below it read
+as `Moved`, which gates. `--insert <n>` is the checked escape. Asked to insert **three** networks at
+position 5, the obvious form is:
+
+```
+converter diff … --only 4 5 6 7 --insert 5 --insert 6 --insert 7      # WRONG
+```
+
+`Program.cs RunDiff` holds a single `int? insertAt` and `case "--insert"` assigns it. So that parses
+as **`--insert 7`** — the wrong insertion point — **with no warning and no error**. The correct form
+is one flag:
+
+```
+converter diff … --only 4 5 6 7 --insert 5                            # right
+```
+
+`DiffModel.MovesAreDeclared` derives the magnitude itself (`shift = AddedCount - RemovedCount`) and
+then requires every `Moved` network to satisfy both `MovedFrom >= at` and `Number - MovedFrom ==
+shift`. **The flag supplies only the position; the count comes from the observed diff.** That is a
+good design and it is not discoverable from the flag's name.
+
+**Why it matters:** a wrong `--insert` does not fail loudly. It declares an insertion at a position
+where nothing was inserted, and the shift check then either passes for the wrong reason or gates with
+a message about moved networks that sends the reader hunting for a content change that does not
+exist. Repeating a scalar flag is a shape people reach for; **it should be a refusal, not last-wins.**
+
+### (b) A `block-network` claim cannot be taken for an insertion
+
+```
+converter claim --kind block-network --value Main:5
+  → exit 1, "Main already has a network 5"
+```
+
+The validator treats a `block-network` claim as reserving a position that **does not yet exist**. But
+an insertion is precisely a claim on a position that **does** exist, whose occupant is about to shift
+down. So the one operation most in need of a reservation — two agents inserting at the same position
+would corrupt each other's ordering — is the one that cannot be claimed.
+
+The exit contract says *"1 REFUSED — pick another and re-claim"*, and **for an insertion there is no
+other to pick**: position 5 is the position. The agent that hit this ended up covered only by a
+pre-existing claim on the same block from an earlier dispatch, which is luck rather than protection.
+
+**The fix is a kind, or a flag:** `block-network-insert`, or `--insert` on the existing kind, whose
+semantics are "this position and everything below it shifts". Until then, an insertion's real
+reservation is the `block-edit` claim on the whole block, and that should be said out loud in the
+skills rather than discovered at exit 1.
