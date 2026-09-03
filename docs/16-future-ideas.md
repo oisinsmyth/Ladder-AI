@@ -3539,3 +3539,78 @@ The transferable lesson is the one the repo already records elsewhere and which 
 instance of: **a number computed over the wrong denominator is not a conservative estimate, it is a
 wrong answer that happens to point the safe way.** Four deployments instead of one is not caution; it
 is three deployments of work created by an analysis nobody re-read.
+
+---
+
+## FI-101 — the IR has no boolean FALSE, so "hold this input off" is inexpressible, and one of the two attempts INVENTS A GLOBAL TAG
+
+**Reported by a slot author 2026-09-03 and reproduced here from a two-network probe**, not taken on
+trust.
+
+A stimulus model routinely needs to hold an input of the block under test inert. There are two
+obvious ways to write it and **neither is available**.
+
+### (a) `COIL x := FALSE` — accepted, and it invents a tag
+
+```
+NETWORK 1 "Hold it off"
+  COIL Flag := FALSE
+```
+
+`converter to-xml` **exits 0** and emits:
+
+```xml
+<Access Scope="GlobalVariable" UId="3"> … Name="FALSE" …
+```
+
+`TRUE` is the grammar's only boolean literal, so `FALSE` is parsed as an ordinary operand and
+resolved as a **global tag reference to a tag that does not exist**. No warning, no refusal.
+
+🔴 **This is the tooling manufacturing a hard-rule-3 violation.** Rule 3 forbids inventing tags; here
+the converter invents one from a token the author reasonably believed was a literal. And the failure
+is not inert: on a project that happens to contain a tag named `FALSE`, the rung would silently bind
+to it.
+
+**It is caught, but only one command downstream.** `converter preflight` reports
+`tag root 'FALSE' … does not resolve` with `gates: true`. Preflight is documented as *"a filter
+BEFORE the compile gate, never a substitute"* — an optional pre-check, not a step the conversion path
+requires. So the guarantee is "somebody ran the other command".
+
+**The inconsistency is the sharp part.** On the same day, `to-xml` **refused** to emit a block whose
+member types could not be resolved, saying so in terms: *"refusing to emit XML with unresolved member
+types. This file is destined for import."* Unresolved member type → refuse. Unresolved **tag root** →
+emit happily. Those should not differ, and the refusing branch is the right one.
+
+### (b) `RCOIL x := TRUE` — converts cleanly, then gates
+
+```
+NETWORK 1 "Hold it off"
+  RCOIL Flag := TRUE
+```
+
+`to-xml` exits 0 and the XML is correct. `preflight` then reports **C-103**, `gates: true`: a reset
+coil with no matching set coil in the block. The convention is right in general and wrong here — this
+is not half of a set/reset pair, it is an unconditional hold-low.
+
+### Why this matters beyond ergonomics
+
+**ADR-0010 is *no IR that the AI cannot change*.** An author who needs to hold an input off has three
+options today: emit an invented tag and hope somebody runs preflight; trip a gating convention check;
+or contrive a real timeline term that means something else, which is what the slot authors have been
+doing. All three are worse than the construct being expressible.
+
+A **fifth generator defect** falls straight out of it: `StimShellGenerator.S10` emits
+`COIL CauseStanding := FALSE` when a head declares an empty `causes` list — so **the generator itself
+emits IR that preflight gates**, and it is only invisible because every head so far declared causes.
+
+### The fix, smallest first
+
+1. **Add `FALSE` to the boolean literals** beside `TRUE`. One grammar entry; it is what every author
+   already believes is there.
+2. **Failing that, make `to-xml` refuse an unresolved tag root** rather than emitting a
+   `GlobalVariable` access for it — matching what it already does for unresolved member types, and
+   turning "somebody ran preflight" into a guarantee.
+3. **Narrow C-103** so an `RCOIL` whose condition is the literal `TRUE` is recognised as an
+   unconditional hold rather than an orphaned half-pair.
+4. Fix `S10` regardless — a generator that emits gating IR for a legal declaration is a defect on its
+   own terms.
