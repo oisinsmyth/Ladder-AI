@@ -1,4 +1,4 @@
-using System.Text.RegularExpressions;
+﻿using System.Text.RegularExpressions;
 using Harness.Wire;
 
 namespace Harness.Results;
@@ -1478,7 +1478,13 @@ public static class SubmissionGate
 
         var resolved = Resolved(vectors, enumerations);
         var consulted = resolved.Where(r => r.Enumeration is not null).Select(r => r.Enumeration!).Distinct().ToArray();
-        var boundless = consulted.Where(e => e.CarriesNoBounds).ToArray();
+
+        // 🔴 *** FI-99: `CarriesNoBounds` IS NO LONGER THE TEST — `AnswersTheBoundsQuestion` IS. *** An
+        // enumeration with an empty table and a signed, reasoned `boundsAbsence` HAS answered; it is let
+        // through to the per-vector findings, where the claim is checked against the submission's own
+        // contents and can come out as a pass or as either flavour of refusal. An enumeration whose table
+        // is empty with nothing accounting for it still stops here, exactly as before.
+        var boundless = consulted.Where(e => !e.AnswersTheBoundsQuestion).ToArray();
 
         if (enumerations.IsEmpty || consulted.Length == 0 || boundless.Length > 0)
         {
@@ -1488,10 +1494,25 @@ public static class SubmissionGate
                     ? $"the enumeration supplied no `bounds` table, so the number each of these {vectors.Count} vector(s) was written against"
                     : $"{boundless.Length} of the {consulted.Length} enumerations these vectors cite into supply no `bounds` table ({string.Join(", ", boundless.Select(e => AssertionEnumerationSet.DisplaySubject(e.Subject)))}), so the numbers their vectors were written against";
 
+            // A claim that was made and thrown away must say so HERE, at the refusal, and not only in a
+            // field nobody prints. Somebody who wrote `claimed: true` and gets a bare "supply the table"
+            // will supply a table they believe does not exist — or invent one, which is the failure mode
+            // FI-99 is about.
+            var rejected = boundless
+                .Select(e => e.BoundsAbsence)
+                .Where(a => a.WasRejected)
+                .Select(a => a.RejectedBecause)
+                .Distinct(StringComparer.Ordinal)
+                .ToArray();
+
             return GateResult.CouldNotRun(name, NotCheckedReason.AwaitingAnArtifactThatCouldExist, verifier,
                 $"{which} was compared against nothing. "
                 + "*** AN ABSENT TABLE IS NOT AN AGREEING ONE. *** This is AMB-19's channel wide open: a bound can be retuned, every assertion referring to it changes what it is true of, "
-                + "no assertion ID moves, and every other gate here stays green. Supply the enumeration's `bounds:` table as `enumeration.bounds`.");
+                + "no assertion ID moves, and every other gate here stays green. Supply the enumeration's `bounds:` table as `enumeration.bounds`. "
+                + (rejected.Length > 0
+                    ? "*** A `boundsAbsence` CLAIM WAS PRESENT AND WAS NOT COUNTED (FI-99): *** " + string.Join(" | ", rejected) + " "
+                    : "IF THIS SUBJECT GENUINELY HAS NOTHING TO TABULATE — a purely combinational block names no timing bound, tolerance, delay, timeout or settling time — say so POSITIVELY with "
+                      + "`enumeration.boundsAbsence: { claimed: true, by: <who>, because: <why> }` (FI-99). *** DO NOT INVENT A BOUND TO CLEAR THIS. *** "));
         }
 
         // *** THE EXPECTATION COMES FROM THE ENUMERATION AND NEVER FROM THE VECTOR. *** A vector claiming
@@ -1503,7 +1524,10 @@ public static class SubmissionGate
                 r.Vector.Id,
                 r.Vector.BoundsUsed,
                 r.Enumeration!.Bounds,
-                r.Enumeration.BoundsExpectationFor(r.Vector.Basis?.AssertionId)))
+                r.Enumeration.BoundsExpectationFor(r.Vector.Basis?.AssertionId),
+                // FI-99. Resolved rather than raw: the claim travels with the assertions from its own
+                // enumeration that falsify it, so the check never has to reach back for them.
+                r.Enumeration.ResolvedBoundsAbsence))
             .ToArray();
 
         // An unresolved citation has no third party to be compared against, so this gate did not examine it
@@ -1515,10 +1539,16 @@ public static class SubmissionGate
                 unresolvedBounds + " A bound can only be compared against the table the vector's own SUBJECT publishes, and until the citation resolves there is no such table.");
         }
 
-        var refused = findings.Where(f => f.PremiseOutOfDate).ToArray();
+        // *** `Refused` AND NOT `PremiseOutOfDate` (FI-99). *** Those were the same set until an
+        // enumeration could contradict its own absence claim — which refuses without the VECTOR's premise
+        // being wrong about anything, so it must not be filtered by a flag that means "the vector is
+        // wrong". Keying on the narrower flag here would have let a self-contradictory enumeration reach
+        // the PASS branch below.
+        var refused = findings.Where(f => f.Refused).ToArray();
         var undeclared = findings.Where(f => f.State == BoundsCurrencyState.NotDeclared).ToArray();
         var unverifiable = findings.Where(f => f.State == BoundsCurrencyState.NoBoundsClaimUnverified).ToArray();
         var noBounds = findings.Where(f => f.State == BoundsCurrencyState.NoBoundsCited).ToArray();
+        var claimedAbsent = findings.Where(f => f.State == BoundsCurrencyState.NoBoundsTableClaimed).ToArray();
 
         // The NOT-CHECKED group is reported FIRST and keeps its own status even when refusable vectors
         // were also found, because the two are different facts and the weaker one must not be dressed in
@@ -1549,7 +1579,7 @@ public static class SubmissionGate
 
             if (refused.Length > 0)
             {
-                parts.Add("AND, SEPARATELY, THESE WERE COMPARED AND DISAGREE — STALE, NOT FAILED, and not a defect in the block: "
+                parts.Add("AND, SEPARATELY, THESE WERE COMPARED AND DISAGREE — not a defect in the block: "
                     + string.Join(" | ", refused.Select(f => f.Detail)));
             }
 
@@ -1558,8 +1588,38 @@ public static class SubmissionGate
 
         if (refused.Length > 0)
         {
+            // 🔴 *** THE TWO FI-99 CONTRADICTIONS GET THEIR OWN SENTENCES, BECAUSE THEY HAVE DIFFERENT
+            // REPAIRS AND POINT AT DIFFERENT DOCUMENTS. *** An enumeration that contradicts itself is
+            // repaired in the enumeration; a vector citing a bound against a subject claimed to have none
+            // is repaired in the vector or by withdrawing the claim. Folding them into one line would
+            // reproduce, one field over, the defect this gate family exists to prevent: a finding that
+            // misnames the repair sends the reader to the wrong document with full confidence.
+            var byEnumeration = refused.Where(f => f.State == BoundsCurrencyState.BoundsAbsenceContradictedByEnumeration).ToArray();
+            var byVector = refused.Where(f => f.State == BoundsCurrencyState.BoundsAbsenceContradictedByVector).ToArray();
+            var disagreed = refused.Where(f => !f.ContradictsAnAbsenceClaim).ToArray();
+
+            var parts = new List<string>();
+
+            if (byEnumeration.Length > 0)
+            {
+                parts.Add("*** AN ENUMERATION CONTRADICTS ITS OWN `boundsAbsence` CLAIM (FI-99) — AN ENUMERATION DEFECT. *** "
+                    + string.Join(" | ", byEnumeration.Select(f => f.Detail))
+                    + " Every vector citing into that subject is refused with it: a self-contradictory authority cannot adjudicate any of them.");
+            }
+
+            if (byVector.Length > 0)
+            {
+                parts.Add($"*** {byVector.Length} VECTOR(S) CITE A BOUND AGAINST A SUBJECT CLAIMED TO HAVE NONE (FI-99) — A VECTOR DEFECT, and a different repair from the enumeration case above. *** "
+                    + string.Join(" | ", byVector.Select(f => f.Detail)));
+            }
+
+            if (disagreed.Length > 0)
+            {
+                parts.Add("COMPARED AND DISAGREEING — STALE, NEVER FAILED: " + string.Join(" | ", disagreed.Select(f => f.Detail)));
+            }
+
             return new GateResult(name, GateStatus.Checked, false, verifier,
-                string.Join(" | ", refused.Select(f => f.Detail))
+                string.Join(" ", parts)
                 + " *** THE BLOCK IS NOT ACCUSED OF ANYTHING HERE. Do NOT edit the block on the strength of this finding. ***");
         }
 
@@ -1574,9 +1634,22 @@ public static class SubmissionGate
             $"all {vectors.Count} vector(s) state which bound they were written against. "
             + (compared > 0
                 ? $"{compared} declared a value and every one matches the enumeration's current table ({string.Join("; ", agreed)}). "
-                : "NO VECTOR HERE DECLARED A VALUE, so no value was compared — the pass rests entirely on the verified no-bound claims below. ")
+                : "NO VECTOR HERE DECLARED A VALUE, so no value was compared — the pass rests entirely on the no-bound claims below, and the sentences below say for each whether it was VERIFIED against the enumeration's per-assertion relation or rests on a recorded absence CLAIM. ")
             + (noBounds.Length > 0
                 ? $"{noBounds.Length} positively state they were written against NO bound, and the enumeration confirms each cited assertion depends on none ({string.Join("; ", noBounds.Select(f => $"{f.VectorId} cites {f.CitedAssertion}"))}) — VERIFIED against the enumeration, not taken from the vector. "
+                : string.Empty)
+            // 🔴 *** THE THIRD KIND OF PASS SAYS OUT LOUD THAT IT IS NOT LIKE THE OTHER TWO (FI-99). ***
+            // `Current` rests on a comparison and `NoBoundsCited` on a third party's per-assertion
+            // relation. This one rests on a RECORDED CLAIM that no comparison established and none could,
+            // so the claimant and the reason are printed and the word CLAIM is used rather than VERIFIED.
+            // A green a reader cannot tell from an ordinary one is a green nobody ever goes and checks.
+            + (claimedAbsent.Length > 0
+                ? $"*** AND {claimedAbsent.Length} OF THEM PASS ON A CLAIM RATHER THAN ON A COMPARISON (FI-99), WHICH IS A WEAKER THING AND IS SAID SO HERE: *** "
+                  + string.Join("; ", claimedAbsent
+                        .Select(f => $"{f.VectorId} cites a subject whose enumeration supplies NO bounds table and claims it has none to supply — claimed by '{f.Absence.By}', because: \"{f.Absence.Because}\"")
+                        .Distinct(StringComparer.Ordinal))
+                  + ". NOTHING WAS COMPARED FOR THESE AND NOTHING COULD BE. What earns the pass is that the claim is FALSIFIABLE and this submission does not falsify it: no assertion in those enumerations names a bound and no vector cites one, "
+                  + "and either would have REFUSED. *** IF YOU DOUBT THE CLAIM, THE PARTY TO ASK IS NAMED. *** The alternative was to refuse a purely combinational subject for ever, leaving an invented bound as the only route through. "
                 : string.Empty)
             + "A retune of any specified value would now refuse this submission rather than silently changing what it tests.");
     }

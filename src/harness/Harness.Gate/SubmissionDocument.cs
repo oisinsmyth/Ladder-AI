@@ -295,6 +295,12 @@ public sealed class SubmissionDocument
         Collect(Map?.UnknownFields, "map", found);
         Collect(Enumeration?.UnknownFields, "enumeration", found);
 
+        // FI-99's block is a nested object and 0b has to reach INSIDE it, for the same reason the
+        // binding's `encoding` does: a misspelt `because` there would leave `claimed: true` standing with
+        // no reason, which this code correctly treats as NO CLAIM — so the author's positive claim would
+        // silently become a NOT CHECKED and nothing would say which key did it.
+        Collect(Enumeration?.BoundsAbsence?.UnknownFields, "enumeration.boundsAbsence", found);
+
         // The provenance block gets the same treatment as every other sub-document. It is the one whose
         // whole job is to be READ, so a key dropped in silence here is a derivation nobody checked.
         foreach (var (record, index) in (Derivation ?? new List<DerivationDocument>()).Select((d, i) => (d, i)))
@@ -303,7 +309,10 @@ public sealed class SubmissionDocument
         // *** EVERY ELEMENT, NOT JUST THE FIRST. *** A typo in the second subject's enumeration is exactly
         // as silently dropped as one in the first, and it is the one nobody would go looking for.
         foreach (var (enumeration, index) in (Enumerations ?? new List<EnumerationDocument>()).Select((e, i) => (e, i)))
+        {
             Collect(enumeration.UnknownFields, $"enumerations[{index}]", found);
+            Collect(enumeration.BoundsAbsence?.UnknownFields, $"enumerations[{index}].boundsAbsence", found);
+        }
 
         Collect(Model?.UnknownFields, "model", found);
         Collect(Deployment?.UnknownFields, "deployment", found);
@@ -618,6 +627,69 @@ public sealed class EnumerationDocument
     /// itself does: a claim verified against something its own author wrote is not verified.</para>
     /// </summary>
     public Dictionary<string, List<string>>? AssertionBounds { get; set; }
+
+    /// <summary>
+    /// 🔴 <b>THE ENUMERATION SAYING, POSITIVELY, THAT ITS SUBJECT HAS NO BOUNDS TO TABULATE — FI-99.
+    /// The only key that opens gate 3i's empty-table guard.</b>
+    ///
+    /// <para><b>Measured 2026-09-03.</b> A third-party enumeration of a block with 8 clauses and 17
+    /// assertions, every one carrying <c>assertion_bounds: []</c>, stating the emptiness as a claim and
+    /// not a silence — with the register rows and the block spec cited — and both vectors declaring
+    /// <c>boundsUsed: {}</c> in agreement. The submission was otherwise complete: <b>31 gates run, 0
+    /// refused, NOT ADMISSIBLE on a single NOT CHECKED</b>, because <c>bounds</c> is a <c>{name: value}</c>
+    /// map with no way to say <i>"this map is empty and that IS the answer"</i>. The prose carrying the
+    /// claim was not part of the contract and no gate read it.</para>
+    ///
+    /// <para><b>A purely combinational subject — an arbitration, a selection — has nothing to bound and
+    /// was permanently inadmissible</b>, with inventing a bound as the only escape. <i>A gate whose only
+    /// escape is a lie is worse than the gap it guards.</i></para>
+    ///
+    /// <para>🔴 <b>ALL THREE FIELDS ARE REQUIRED WHEN <c>claimed</c> IS TRUE, AND A CLAIM MISSING ONE IS
+    /// NOT A CLAIM</b> — it is treated as absent and the guard stays shut at <c>NoTable</c>. An unsigned,
+    /// unreasoned negative is exactly the silence this field exists to be distinguishable from.</para>
+    ///
+    /// <para><b>And the claim is FALSIFIABLE, which is the whole of why it is a fix and not a hole.</b>
+    /// Three things in the submission contradict it and each REFUSES: a non-empty <c>bounds</c> table
+    /// beside it, an <c>assertionBounds</c> entry naming a bound, or a vector declaring a non-empty
+    /// <c>boundsUsed</c>. The first two are ENUMERATION defects and the third is a VECTOR defect — they
+    /// are reported separately because they have different repairs.</para>
+    ///
+    /// <para><b>Absent is correct and remains the norm.</b> `{}` on both sides with nobody signing for it
+    /// is exactly as expensive as it was before FI-99.</para>
+    /// </summary>
+    public BoundsAbsenceDocument? BoundsAbsence { get; set; }
+}
+
+/// <summary>
+/// One <c>enumeration.boundsAbsence</c> block. <b>Three keys, all required together</b> — see
+/// <see cref="EnumerationDocument.BoundsAbsence"/> for why an unsigned or unreasoned claim is not one.
+/// </summary>
+public sealed class BoundsAbsenceDocument
+{
+    /// <summary>
+    /// Unknown keys here, folded into gate 0b like every other level. <b>A misspelt <c>because</c> would
+    /// otherwise silently downgrade a claim to a rejected one and the author would never learn why</b> —
+    /// which is the same class of silent drop 0b exists for.
+    /// </summary>
+    [JsonExtensionData]
+    public Dictionary<string, object?>? UnknownFields { get; set; }
+
+    /// <summary>Whether the absence is claimed. False, or the whole block absent, is no claim.</summary>
+    public bool Claimed { get; set; }
+
+    /// <summary>
+    /// WHO claims it — an agent or person identity. <b>Required.</b> Follows gate 4b (the fidelity list's
+    /// declarer) and gate 5c (the map's author): an unattributed claim is indistinguishable from one
+    /// written by the party it exculpates.
+    /// </summary>
+    public string? By { get; set; }
+
+    /// <summary>
+    /// WHY. <b>Required, and quoted verbatim in the gate's detail line</b>, because this is the one pass
+    /// in gate 3i that rests on a recorded claim rather than on a comparison, and a reader has to be able
+    /// to challenge it.
+    /// </summary>
+    public string? Because { get; set; }
 }
 
 public sealed class MapDocument

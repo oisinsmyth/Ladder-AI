@@ -32,8 +32,13 @@ namespace Harness.Results;
 public enum BoundsCurrencyState
 {
     /// <summary>
-    /// <b>The enumeration supplied no bounds table</b>, so there was nothing to compare against. NOT a
-    /// pass: the comparison did not happen.
+    /// <b>The enumeration supplied no bounds table AND NOBODY ACCOUNTED FOR THAT</b>, so there was
+    /// nothing to compare against. NOT a pass: the comparison did not happen.
+    ///
+    /// <para>🔴 <b>SINCE FI-99 THIS IS SPECIFICALLY THE UNSIGNED EMPTINESS.</b> An empty table with a
+    /// well-formed <c>boundsAbsence</c> claim behind it is <see cref="NoBoundsTableClaimed"/> instead —
+    /// and a claim missing its author or its reason lands back here, because a claim with neither is not
+    /// a claim.</para>
     /// </summary>
     NoTable,
 
@@ -78,7 +83,8 @@ public enum BoundsCurrencyState
 
     /// <summary>
     /// <b>THE VECTOR POSITIVELY CLAIMS IT WAS WRITTEN AGAINST NO BOUND, AND THE ENUMERATION CONFIRMS
-    /// IT.</b> The only pass besides <see cref="Current"/>.
+    /// IT.</b> A pass, and one of three — see also <see cref="Current"/> and
+    /// <see cref="NoBoundsTableClaimed"/>.
     ///
     /// <para><c>boundsUsed: {}</c> is a real and common claim: an assertion about a gating condition, an
     /// ordering, or a state that mentions no time and no threshold has no bound to cite. <b>It is
@@ -109,6 +115,196 @@ public enum BoundsCurrencyState
     /// block</b>, and reporting it as a disagreement would send somebody to edit correct logic.</para>
     /// </summary>
     BoundsOmitted,
+
+    // -------------------------------------------------------------------------------------------------
+    // THE ENUMERATION'S OWN POSITIVE CLAIM — `boundsAbsence` — AND ITS TWO CONTRADICTIONS. FI-99, added
+    // 2026-09-03.
+    //
+    // *** APPENDED, NEVER INSERTED, *** for the reason stated above the 2026-08-17 group: renumbering an
+    // enum is free right up until something has persisted an ordinal, and the day it is not free nothing
+    // announces it.
+    //
+    // The 2026-08-17 group above gave the VECTOR a way to say "no bound applies to me". This group gives
+    // the ENUMERATION the same right about the whole subject, and for the identical reason: a purely
+    // combinational block — an arbitration or a selection — has nothing to bound, so its enumeration's
+    // `bounds:` table is empty AS AN ANSWER. Until FI-99 that was indistinguishable from nobody writing
+    // one, so such a subject was permanently NOT CHECKED and the only escape was to invent a bound.
+    // -------------------------------------------------------------------------------------------------
+
+    /// <summary>
+    /// <b>THE ENUMERATION POSITIVELY CLAIMS THE SUBJECT HAS NO BOUNDS AT ALL, WITH AN AUTHOR AND A
+    /// REASON, AND NOTHING IN THE SUBMISSION CONTRADICTS IT.</b> A CHECKED PASS — the third besides
+    /// <see cref="Current"/> and <see cref="NoBoundsCited"/>.
+    ///
+    /// <para>🔴 <b>AND IT IS A DIFFERENT KIND OF PASS FROM THOSE TWO, WHICH IS WHY IT HAS ITS OWN STATE
+    /// AND ITS OWN SENTENCE IN THE GATE.</b> <see cref="Current"/> rests on a COMPARISON and
+    /// <see cref="NoBoundsCited"/> rests on a third party's per-assertion relation. This one rests on a
+    /// RECORDED HUMAN CLAIM — <c>boundsAbsence: {claimed, by, because}</c> — that no comparison
+    /// established and none could, because there is nothing to compare. Its whole defence is that it is
+    /// <b>falsifiable</b>: an assertion that names a bound, or a vector that cites one, contradicts it,
+    /// and the contradiction is a REFUSAL rather than a downgrade. A reader must be able to see that this
+    /// green is somebody's signature and go and argue with them, so the finding names the claimant and
+    /// quotes the reason.</para>
+    /// </summary>
+    NoBoundsTableClaimed,
+
+    /// <summary>
+    /// 🔴 <b>THE ENUMERATION CLAIMS THE SUBJECT HAS NO BOUNDS AND THE ENUMERATION'S OWN CONTENTS SAY
+    /// OTHERWISE.</b> A refusal, and an <b>ENUMERATION</b> defect — repair the enumeration.
+    ///
+    /// <para>Two ways to reach it, both self-contradiction by the same document: the <c>bounds:</c> table
+    /// is NOT empty while absence is claimed, or an assertion's <c>assertionBounds</c> entry names a
+    /// bound. Either way the claimant said "nothing here has a bound" and their own file names one.</para>
+    ///
+    /// <para><b>It is NOT <see cref="VectorBoundsCurrency.PremiseOutOfDate"/>, deliberately.</b> That flag
+    /// means <i>the VECTOR is wrong and the block is not accused</i>; here the vector is wrong about
+    /// nothing at all, and dressing this in a Stale verdict headlined "re-read the vector" would send the
+    /// reader to repair the one document that is innocent.</para>
+    /// </summary>
+    BoundsAbsenceContradictedByEnumeration,
+
+    /// <summary>
+    /// 🔴 <b>THE ENUMERATION CLAIMS THE SUBJECT HAS NO BOUNDS AND THIS VECTOR CITES ONE.</b> A refusal,
+    /// and a <b>VECTOR</b> defect — a different repair from
+    /// <see cref="BoundsAbsenceContradictedByEnumeration"/>, which is why it is a different state rather
+    /// than a shared one with two message shapes.
+    ///
+    /// <para>The vector declared a non-empty <c>boundsUsed</c> against a subject whose bounds table is
+    /// empty and claimed empty. Either the vector is citing a number nobody specified, or the absence
+    /// claim is false — and the gate cannot tell which, so it names both parties and refuses.</para>
+    ///
+    /// <para>It IS <see cref="VectorBoundsCurrency.PremiseOutOfDate"/> — reported as Stale, never a Fail
+    /// — for the reason every state here is: <b>it says nothing whatsoever about the block.</b></para>
+    /// </summary>
+    BoundsAbsenceContradictedByVector,
+}
+
+/// <summary>
+/// 🔴 <b>THE ENUMERATION'S POSITIVE CLAIM THAT ITS SUBJECT HAS NO BOUNDS TO TABULATE — FI-99, and the
+/// only thing that may open the <see cref="BoundsCurrencyState.NoTable"/> guard.</b>
+///
+/// <para><b>Measured 2026-09-03</b>, on a submission that was otherwise complete: 31 gates run, 0
+/// refused, NOT ADMISSIBLE on a single NOT CHECKED. A third-party enumeration of a block with 8 clauses
+/// and 17 assertions, every one of them carrying <c>assertion_bounds: []</c>, and prose in the file
+/// stating the emptiness as a claim rather than a silence. Both vectors declared <c>boundsUsed: {}</c>,
+/// agreeing with it. <b>The claim had already been made, in the right file, by the right party — and
+/// there was no field to put it in</b>, so the schema dropped it and the gate read a silence.</para>
+///
+/// <para><b>A block that is purely combinational — an arbitration, a selection — has nothing to bound,
+/// and was permanently inadmissible.</b> The only workaround was to INVENT a bound, which is the
+/// fabrication the surrounding rules exist to prevent. <i>A gate whose only escape is a lie is worse
+/// than the gap it guards.</i></para>
+///
+/// <para>🔴 <b>ALL THREE FIELDS ARE REQUIRED AND A CLAIM MISSING ONE IS NOT A CLAIM.</b> An unsigned or
+/// unreasoned assertion of a negative is exactly the silence this type exists to distinguish itself from
+/// — so <see cref="Of"/> does not throw and does not half-accept: it returns a <see cref="Rejected"/>
+/// claim, which <see cref="IsClaimed"/> reports as false and which therefore leaves the guard shut at
+/// <see cref="BoundsCurrencyState.NoTable"/>, exactly as before FI-99. The rejection REASON is carried so
+/// the author is told why their claim did not count, rather than watching it vanish.</para>
+///
+/// <para>Naming the claimant follows the precedent already set by gate 4b (the fidelity list's declarer)
+/// and gate 5c (the map's author): <b>name an authority, compare it, and report NOT CHECKED when there
+/// is none.</b> An unattributed claim is indistinguishable from one written by the party it exculpates.</para>
+/// </summary>
+public sealed record BoundsAbsenceClaim
+{
+    private static readonly IReadOnlyList<string> NoAssertions = Array.Empty<string>();
+
+    private BoundsAbsenceClaim(
+        bool claimed, string by, string because, string rejectedBecause, IReadOnlyList<string> contradictingAssertions)
+    {
+        IsClaimed = claimed;
+        By = by;
+        Because = because;
+        RejectedBecause = rejectedBecause;
+        ContradictingAssertions = contradictingAssertions;
+    }
+
+    /// <summary>
+    /// <b>Nobody claimed anything.</b> The overwhelmingly common case and the default everywhere: an
+    /// enumeration written before FI-99 carries this, and against it every path behaves exactly as it did
+    /// before FI-99 existed.
+    /// </summary>
+    public static readonly BoundsAbsenceClaim None =
+        new(false, string.Empty, string.Empty, string.Empty, NoAssertions);
+
+    /// <summary>True only for a WELL-FORMED claim — <c>claimed</c>, an author, and a reason.</summary>
+    public bool IsClaimed { get; }
+
+    /// <summary>Who claims the subject has no bounds. Non-empty exactly when <see cref="IsClaimed"/>.</summary>
+    public string By { get; }
+
+    /// <summary>Why. Quoted verbatim in the finding, because a pass resting on a claim must be arguable.</summary>
+    public string Because { get; }
+
+    /// <summary>
+    /// Why an attempted claim was not counted as one. Empty for <see cref="None"/> and for a good claim.
+    /// <b>Reported</b> — a rejected claim that vanished silently would be the same defect FI-99 fixes.
+    /// </summary>
+    public string RejectedBecause { get; }
+
+    /// <summary>
+    /// The enumeration's own assertions whose <c>assertionBounds</c> entry names a bound — <b>the
+    /// falsifying evidence from the claimant's own file.</b> Empty when nothing contradicts, or when
+    /// nothing was claimed.
+    /// </summary>
+    public IReadOnlyList<string> ContradictingAssertions { get; }
+
+    /// <summary>True when a well-formed claim is contradicted by the enumeration that made it.</summary>
+    public bool IsContradictedByEnumeration => IsClaimed && ContradictingAssertions.Count > 0;
+
+    /// <summary>True when somebody wrote <c>claimed: true</c> and it was not counted.</summary>
+    public bool WasRejected => RejectedBecause.Length > 0;
+
+    /// <summary>
+    /// A claim that does not count. <b>Not an exception</b>: a malformed claim is a real thing an author
+    /// wrote and the correct handling is to say so and fall back to the closed guard, not to abort the
+    /// whole submission read.
+    /// </summary>
+    public static BoundsAbsenceClaim Rejected(string rejectedBecause)
+    {
+        if (string.IsNullOrWhiteSpace(rejectedBecause))
+            throw new ArgumentException("A rejected claim must say WHY it was rejected.", nameof(rejectedBecause));
+
+        return new BoundsAbsenceClaim(false, string.Empty, string.Empty, rejectedBecause.Trim(), NoAssertions);
+    }
+
+    /// <summary>
+    /// Build the claim from what the document said. <paramref name="claimed"/> false is
+    /// <see cref="None"/>; true with a missing author or a missing reason is <see cref="Rejected"/>.
+    /// </summary>
+    /// <param name="contradictingAssertions">
+    /// Assertion IDs from the SAME enumeration whose bounds relation names a bound. Supplied by the
+    /// enumeration rather than computed here, because this type has no view of the assertions — see
+    /// <c>AssertionEnumeration.ResolvedBoundsAbsence</c>.
+    /// </param>
+    public static BoundsAbsenceClaim Of(
+        bool claimed, string? by, string? because, IReadOnlyList<string>? contradictingAssertions = null)
+    {
+        if (!claimed)
+            return None;
+
+        var hasBy = !string.IsNullOrWhiteSpace(by);
+        var hasBecause = !string.IsNullOrWhiteSpace(because);
+
+        if (!hasBy || !hasBecause)
+        {
+            var missing = !hasBy && !hasBecause ? "names neither WHO claims it nor WHY"
+                : !hasBy ? "names no `by` — nobody claims it"
+                : "gives no `because` — no reason is recorded";
+
+            return Rejected(
+                $"`boundsAbsence.claimed` is true but the claim {missing}. *** A CLAIM WITH NO AUTHOR OR NO REASON IS NOT A CLAIM, *** "
+                + "and it is treated as though it were absent: an unsigned, unreasoned assertion of a negative is precisely the silence "
+                + "this field exists to be distinguishable from. Supply BOTH `by` and `because`, or drop the field.");
+        }
+
+        return new BoundsAbsenceClaim(
+            true, by!.Trim(), because!.Trim(), string.Empty,
+            contradictingAssertions is null
+                ? NoAssertions
+                : contradictingAssertions.OrderBy(a => a, StringComparer.Ordinal).ToArray());
+    }
 }
 
 /// <summary>
@@ -202,10 +398,40 @@ public sealed record VectorBoundsCurrency(
     string? CitedAssertion = null)
 {
     /// <summary>
-    /// The two passes: every declared bound matched, or the vector positively declared none <b>and the
-    /// enumeration confirmed none was owed</b>. The other five are not passes.
+    /// The THREE passes: every declared bound matched; the vector positively declared none <b>and the
+    /// enumeration confirmed none was owed</b>; or <b>the enumeration positively claimed the subject has
+    /// no bounds at all, with an author and a reason, uncontradicted</b> (FI-99). The other seven states
+    /// are not passes.
     /// </summary>
-    public bool Checked => State is BoundsCurrencyState.Current or BoundsCurrencyState.NoBoundsCited;
+    public bool Checked => State is BoundsCurrencyState.Current
+        or BoundsCurrencyState.NoBoundsCited
+        or BoundsCurrencyState.NoBoundsTableClaimed;
+
+    /// <summary>
+    /// 🔴 <b>WHO CLAIMED THE SUBJECT HAS NO BOUNDS, AND WHY — carried so a
+    /// <see cref="BoundsCurrencyState.NoBoundsTableClaimed"/> pass can be CHALLENGED.</b>
+    ///
+    /// <para>That state is the only pass in this type that rests on a recorded claim rather than on a
+    /// comparison. A green whose basis is somebody's signature must print the signature, or it reads as
+    /// an ordinary green and nobody ever goes and checks it.</para>
+    /// </summary>
+    public BoundsAbsenceClaim Absence { get; init; } = BoundsAbsenceClaim.None;
+
+    /// <summary>
+    /// The two FI-99 contradictions. <b>They REFUSE, and they are not
+    /// <see cref="PremiseOutOfDate"/> uniformly</b> — the enumeration-side one is not the vector's fault
+    /// at all, and marking it as an out-of-date premise would headline the wrong repair.
+    /// </summary>
+    public bool ContradictsAnAbsenceClaim => State is BoundsCurrencyState.BoundsAbsenceContradictedByEnumeration
+        or BoundsCurrencyState.BoundsAbsenceContradictedByVector;
+
+    /// <summary>
+    /// <b>Every state that must REFUSE the submission</b>, as opposed to leaving it NOT CHECKED. Gate 3i
+    /// keys on this rather than on <see cref="PremiseOutOfDate"/>: those were the same set until FI-99,
+    /// and an enumeration contradicting its own absence claim refuses without the vector's premise being
+    /// wrong about anything.
+    /// </summary>
+    public bool Refused => PremiseOutOfDate || ContradictsAnAbsenceClaim;
 
     /// <summary>
     /// True when the vector's own premise about the bounds is wrong — <b>the states that must produce
@@ -218,7 +444,8 @@ public sealed record VectorBoundsCurrency(
     /// </summary>
     public bool PremiseOutOfDate => State is BoundsCurrencyState.Stale
         or BoundsCurrencyState.Unknown
-        or BoundsCurrencyState.BoundsOmitted;
+        or BoundsCurrencyState.BoundsOmitted
+        or BoundsCurrencyState.BoundsAbsenceContradictedByVector;
 
     /// <summary>
     /// The one-line reason a <see cref="PremiseOutOfDate"/> finding produces a Stale verdict, <b>stated
@@ -236,6 +463,16 @@ public sealed record VectorBoundsCurrency(
 
         BoundsCurrencyState.BoundsOmitted =>
             "THE VECTOR CLAIMS IT WAS WRITTEN AGAINST NO BOUND AND THE ENUMERATION SAYS ITS CITED ASSERTION DEPENDS ON ONE — it was written against a bound nobody looked at. Re-read the assertion against the bounds table and declare what it used.",
+
+        BoundsCurrencyState.BoundsAbsenceContradictedByVector =>
+            $"THE VECTOR CITES A BOUND AGAINST A SUBJECT '{Absence.By}' HAS CLAIMED HAS NONE (FI-99) — the enumeration's `boundsAbsence` says this subject tabulates no bound at all, and this vector's `boundsUsed` names one. Either the citation is wrong or the absence claim is; settle it with the claimant, then re-submit.",
+
+        // Stated rather than left to the default, so nothing falls through this switch silently. It is
+        // not a premise headline at all — this state is deliberately NOT PremiseOutOfDate, so nothing
+        // reaches here in normal operation — and if a caller does ask, the answer must not accuse the
+        // vector of anything.
+        BoundsCurrencyState.BoundsAbsenceContradictedByEnumeration =>
+            "THIS VECTOR'S PREMISE IS NOT AT FAULT (FI-99) — the ENUMERATION contradicts its own `boundsAbsence` claim, and the repair is to the enumeration. Do not re-read this vector on the strength of it.",
 
         _ => "THE VECTOR'S PREMISE ABOUT THE SPECIFIED BOUNDS WAS NOT ESTABLISHED.",
     };
@@ -275,6 +512,31 @@ public sealed record VectorBoundsCurrency(
             + "This is a vector written against a bound it did not look at — the strong form of the AMB-19 hole, not the silent one: it does not merely fail to record a number, it asserts that no number applies where the specification says one does. "
             + string.Join(" | ", Disagreements.Select(d => d.ToString()))
             + ". THE BLOCK IS NOT ACCUSED OF ANYTHING HERE. Re-read the cited assertion against the bounds table and declare the value it was written against.",
+
+        // FI-99. *** THIS DETAIL MUST NOT READ LIKE AN ORDINARY GREEN. *** It is the one pass in this
+        // type that rests on a recorded human claim rather than on a comparison, so it prints the
+        // claimant and quotes the reason: a reader has to be able to see WHOSE signature the pass is and
+        // go and argue with them. The falsifiability is stated too, because "we accepted a claim" and "we
+        // accepted a claim that nothing in this submission contradicts" are different strengths.
+        BoundsCurrencyState.NoBoundsTableClaimed =>
+            $"{VectorId}: the enumeration supplies NO bounds table AND POSITIVELY CLAIMS IT HAS NONE TO SUPPLY — claimed by '{Absence.By}', because: \"{Absence.Because}\". "
+            + "CHECKED — *** BUT ON A RECORDED CLAIM, NOT ON A COMPARISON. *** There is nothing to compare here and there never could be; what makes this a pass rather than a hole is that the claim is FALSIFIABLE and was not falsified: "
+            + "no assertion in this enumeration names a bound, and no vector cites one. Either would have REFUSED this submission. "
+            + "*** IF YOU DOUBT IT, THE PERSON TO ASK IS NAMED ABOVE *** — a purely combinational subject (an arbitration, a selection) genuinely has no timing bound, no tolerance, no delay, no timeout and no settling time, "
+            + "and refusing that would leave INVENTING one as the only route to admissibility, which is the fabrication this whole gate exists to prevent.",
+
+        BoundsCurrencyState.BoundsAbsenceContradictedByEnumeration =>
+            $"{VectorId}: *** THE ENUMERATION CONTRADICTS ITS OWN ABSENCE CLAIM. *** '{Absence.By}' claims this subject has no bounds (\"{Absence.Because}\"), and the same enumeration names {string.Join(", ", Absence.ContradictingAssertions)}. "
+            + "REFUSED, and *** THIS IS AN ENUMERATION DEFECT — THE REPAIR IS TO THE ENUMERATION AND NEVER TO THE VECTOR OR THE BLOCK. *** "
+            + "Either the subject does have bounds, in which case drop `boundsAbsence` and supply the `bounds:` table, or it does not, in which case those assertions' `assertionBounds` entries are wrong. "
+            + "The gate cannot pick, and picking for it in the passing direction is how a claim becomes a hole.",
+
+        BoundsCurrencyState.BoundsAbsenceContradictedByVector =>
+            $"{VectorId}: *** THIS VECTOR CITES A BOUND AGAINST A SUBJECT CLAIMED TO HAVE NONE. *** '{Absence.By}' claims this subject tabulates no bound (\"{Absence.Because}\"), and this vector's `boundsUsed` names "
+            + string.Join(", ", Disagreements.Select(d => $"'{d.Bound}' = '{d.DeclaredValue}'"))
+            + ". REFUSED, and *** THIS IS A VECTOR DEFECT — a different repair from an enumeration that contradicts itself. *** "
+            + "The vector was written against a number no table in this submission specifies, so nothing can ever find it stale. Either withdraw the citation (declare `boundsUsed: {}`) or take the absence claim up with its author. "
+            + "THE BLOCK IS NOT ACCUSED OF ANYTHING HERE.",
 
         _ => $"{VectorId}: unknown bounds-currency state.",
     };
@@ -334,7 +596,9 @@ public static class BoundsCurrencyCheck
     /// </param>
     /// <param name="specified">
     /// The enumeration's current bounds table. Null or empty yields
-    /// <see cref="BoundsCurrencyState.NoTable"/>, which is NOT a pass.
+    /// <see cref="BoundsCurrencyState.NoTable"/>, which is NOT a pass — <b>unless</b>
+    /// <paramref name="absence"/> carries a well-formed, uncontradicted claim that there is nothing to
+    /// tabulate (FI-99), which is the only thing that opens that guard.
     /// </param>
     /// <param name="expected">
     /// <b>What the ENUMERATION says the cited assertion's bounds are.</b> Required, and deliberately not
@@ -349,18 +613,46 @@ public static class BoundsCurrencyCheck
     /// live corpus, none of whose enumerations state the relation at all. Recorded at the site rather
     /// than left to be rediscovered.</para>
     /// </param>
+    /// <param name="absence">
+    /// 🔴 <b>THE ENUMERATION'S OWN CLAIM THAT ITS SUBJECT HAS NO BOUNDS TO TABULATE — FI-99, and the only
+    /// key that opens the <see cref="BoundsCurrencyState.NoTable"/> guard below.</b>
+    ///
+    /// <para><b>Optional, and the omitted value is the STRICT one</b> — unlike <paramref name="expected"/>,
+    /// whose default was left out because omitting it failed OPEN. <see cref="BoundsAbsenceClaim.None"/>
+    /// reproduces pre-FI-99 behaviour exactly: a caller who never learns this parameter exists gets the
+    /// closed guard, not a pass. There is no direction in which forgetting it can admit something.</para>
+    /// </param>
     public static VectorBoundsCurrency Evaluate(
         string vectorId,
         IReadOnlyDictionary<string, string>? declared,
         IReadOnlyDictionary<string, string>? specified,
-        AssertionBoundsExpectation expected)
+        AssertionBoundsExpectation expected,
+        BoundsAbsenceClaim? absence = null)
     {
         ArgumentNullException.ThrowIfNull(expected);
 
         var id = string.IsNullOrWhiteSpace(vectorId) ? "<unnamed vector>" : vectorId;
+        var claim = absence ?? BoundsAbsenceClaim.None;
 
         var none = Array.Empty<BoundsDisagreement>();
         var noNames = Array.Empty<string>();
+
+        // *** FALSIFIABILITY, LIMB 1 OF 3, AND IT IS CHECKED BEFORE ANYTHING ELSE BECAUSE IT IS THE
+        // FLATTEST CONTRADICTION AVAILABLE: *** a claim that the subject tabulates NO bound, sitting on
+        // top of a table that tabulates some. The claim is not "ignored when a table exists" — ignoring it
+        // would leave a false statement standing unchallenged in the document, which is how the next
+        // reader comes to believe it. It REFUSES, and it refuses as an ENUMERATION defect, because both
+        // halves of the contradiction were written by the enumeration.
+        if (claim.IsClaimed && specified is not null && specified.Count > 0)
+        {
+            var tabulated = specified.Keys.OrderBy(k => k, StringComparer.Ordinal).ToArray();
+
+            return new VectorBoundsCurrency(id, BoundsCurrencyState.BoundsAbsenceContradictedByEnumeration, none, noNames)
+            {
+                Absence = BoundsAbsenceClaim.Of(true, claim.By, claim.Because,
+                    claim.ContradictingAssertions.Concat(tabulated.Select(b => $"the `bounds` table entry '{b}'")).ToArray()),
+            };
+        }
 
         // The table is checked FIRST. With no table there is nothing to be current or stale against, and
         // reporting NotDeclared for a vector that did declare something would name the wrong repair.
@@ -369,8 +661,65 @@ public static class BoundsCurrencyCheck
         // with no bounds table is not an enumeration whose assertions have no bounds: it is one nobody
         // supplied a table for. Letting `boundsUsed: {}` pass against it would make "declare nothing on
         // both sides" the cheapest route through this gate.
+        //
+        // 🔴 *** THAT REASONING IS STILL RIGHT, AND SINCE FI-99 IT IS ALSO THE REASON THE GUARD SURVIVES
+        // AT ALL. *** What it could not tell apart was "nobody wrote a table" from "there is nothing to
+        // put in one", and for a purely combinational subject — an arbitration, a selection — the second
+        // is the truth. Measured 2026-09-03: an otherwise complete submission, 31 gates run, 0 refused,
+        // NOT ADMISSIBLE on this one NOT CHECKED, with the enumerator's positive claim written in prose
+        // no gate reads. The only escape available was to invent a bound, and A GATE WHOSE ONLY ESCAPE IS
+        // A LIE IS WORSE THAN THE GAP IT GUARDS.
+        //
+        // So the empty case splits, and the split is a KEY rather than a widening:
+        //   - no claim, or a claim missing its author or its reason  -> NoTable. UNCHANGED. Still shut.
+        //   - a claim with an author and a reason, uncontradicted    -> NoBoundsTableClaimed, a pass.
+        //   - a claim contradicted by this submission                -> a REFUSAL naming which side.
+        // `{}` on both sides with nobody signing for it remains exactly as expensive as it was.
         if (specified is null || specified.Count == 0)
-            return new VectorBoundsCurrency(id, BoundsCurrencyState.NoTable, none, noNames);
+        {
+            if (!claim.IsClaimed)
+                return new VectorBoundsCurrency(id, BoundsCurrencyState.NoTable, none, noNames) { Absence = claim };
+
+            // FALSIFIABILITY, LIMB 2: the claimant's own assertions name a bound. The enumeration said
+            // "nothing here has one" and its own per-assertion relation says otherwise. An ENUMERATION
+            // defect, and it outranks the vector-side check because a self-contradictory authority cannot
+            // adjudicate the vector.
+            if (claim.IsContradictedByEnumeration)
+            {
+                return new VectorBoundsCurrency(id, BoundsCurrencyState.BoundsAbsenceContradictedByEnumeration, none, noNames)
+                {
+                    Absence = claim,
+                };
+            }
+
+            // FALSIFIABILITY, LIMB 3: a vector cites a bound against a subject claimed to have none. A
+            // VECTOR defect — a different repair, hence a different state and a different sentence.
+            if (declared is { Count: > 0 })
+            {
+                var cited = declared
+                    .OrderBy(e => e.Key, StringComparer.Ordinal)
+                    .Select(e => new BoundsDisagreement(e.Key.Trim(), AssertionId.Normalise(e.Value), null))
+                    .ToArray();
+
+                return new VectorBoundsCurrency(id, BoundsCurrencyState.BoundsAbsenceContradictedByVector, cited, noNames)
+                {
+                    Absence = claim,
+                };
+            }
+
+            // *** SILENCE IS STILL SILENCE, EVEN UNDER A GOOD ABSENCE CLAIM. *** A vector that omits
+            // `boundsUsed` said nothing, and FI-99 gave the ENUMERATION a voice, not the vector. Reading
+            // an absent key as agreement with somebody else's claim is the absent-versus-empty collapse
+            // this file has now been repaired for twice; declaring `boundsUsed: {}` is a one-line, honest
+            // ask and it is what the measured case already did on both its vectors.
+            if (declared is null)
+                return new VectorBoundsCurrency(id, BoundsCurrencyState.NotDeclared, none, noNames) { Absence = claim };
+
+            return new VectorBoundsCurrency(id, BoundsCurrencyState.NoBoundsTableClaimed, none, noNames, expected.AssertionId)
+            {
+                Absence = claim,
+            };
+        }
 
         if (declared is null)
             return new VectorBoundsCurrency(id, BoundsCurrencyState.NotDeclared, none, noNames);

@@ -1090,6 +1090,115 @@ public class SubmissionGateTests
         Assert.Contains("AN ABSENT TABLE IS NOT AN AGREEING ONE", gate.Detail, StringComparison.Ordinal);
     }
 
+    // ---------------------------------------------------------------------------------------------
+    // FI-99 — `enumeration.boundsAbsence`: THE ENUMERATION'S OWN POSITIVE CLAIM THAT THERE IS NOTHING TO
+    // TABULATE. Measured 2026-09-03 on a submission that was otherwise complete: 31 gates run, 0 refused,
+    // NOT ADMISSIBLE on this one NOT CHECKED. A purely combinational subject has no timing bound, no
+    // tolerance, no delay, no timeout and no settling time — and the only escape available was to INVENT
+    // one, which is the fabrication this gate exists to prevent.
+    // ---------------------------------------------------------------------------------------------
+
+    /// <summary>An enumeration with an empty bounds table that CLAIMS there is nothing to put in one.</summary>
+    private static AssertionEnumeration EnumerationClaimingNoBounds(
+        BoundsAbsenceClaim? claim = null,
+        IReadOnlyDictionary<string, IReadOnlySet<string>>? assertionBounds = null) =>
+        EnumerationWithBounds(null, assertionBounds) with
+        {
+            BoundsAbsence = claim ?? BoundsAbsenceClaim.Of(true, "assertion-enumerator",
+                "not one of the eight clauses of this subject names a timing bound, a tolerance, a delay, a timeout or a settling time"),
+        };
+
+    [Fact]
+    public void FI99_An_enumeration_CLAIMING_it_has_no_bounds_lets_gate_3i_PASS_and_the_pass_SAYS_IT_RESTS_ON_A_CLAIM()
+    {
+        var report = Check(new[] { ClaimsNoBounds() }, enumeration: EnumerationClaimingNoBounds());
+        var gate = Gate(report, "3i bounds currency");
+
+        Assert.Equal(GateStatus.Checked, gate.Status);
+        Assert.True(gate.Passed);
+        Assert.Equal(SubmissionVerdict.AdmissibleSubjectToJudgement, report.Verdict);
+
+        // 🔴 *** AND IT MUST NOT READ LIKE AN ORDINARY GREEN. *** This is the only pass in this gate that
+        // rests on a recorded human claim rather than on a comparison, so it names the claimant, quotes
+        // the reason, and says out loud that nothing was compared.
+        Assert.Contains("PASS ON A CLAIM RATHER THAN ON A COMPARISON", gate.Detail, StringComparison.Ordinal);
+        Assert.Contains("assertion-enumerator", gate.Detail, StringComparison.Ordinal);
+        Assert.Contains("not one of the eight clauses", gate.Detail, StringComparison.Ordinal);
+        Assert.Contains("NOTHING WAS COMPARED FOR THESE", gate.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void FI99_A_claim_with_NO_AUTHOR_leaves_the_gate_NOT_CHECKED_and_SAYS_WHY_THE_CLAIM_DID_NOT_COUNT()
+    {
+        var report = Check(
+            new[] { ClaimsNoBounds() },
+            enumeration: EnumerationClaimingNoBounds(BoundsAbsenceClaim.Of(true, null, "there is nothing to bound")));
+
+        var gate = Gate(report, "3i bounds currency");
+
+        Assert.Equal(GateStatus.NotChecked, gate.Status);
+        Assert.False(gate.Passed);
+        Assert.Equal(SubmissionVerdict.NotAdmissible, report.Verdict);
+
+        // Somebody who wrote `claimed: true` and gets a bare "supply the table" will supply a table they
+        // believe does not exist — or invent one, which is the failure mode FI-99 is about.
+        Assert.Contains("A `boundsAbsence` CLAIM WAS PRESENT AND WAS NOT COUNTED", gate.Detail, StringComparison.Ordinal);
+        Assert.Contains("names no `by`", gate.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void FI99_The_NO_TABLE_refusal_now_POINTS_AT_the_honest_exit_instead_of_leaving_only_the_dishonest_one()
+    {
+        var gate = Gate(Check(new[] { ClaimsNoBounds() }, enumeration: EnumerationWithBounds(null)), "3i bounds currency");
+
+        Assert.Equal(GateStatus.NotChecked, gate.Status);
+        Assert.Contains("AN ABSENT TABLE IS NOT AN AGREEING ONE", gate.Detail, StringComparison.Ordinal);
+        Assert.Contains("boundsAbsence", gate.Detail, StringComparison.Ordinal);
+        Assert.Contains("DO NOT INVENT A BOUND TO CLEAR THIS", gate.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void FI99_An_enumeration_that_CONTRADICTS_ITS_OWN_CLAIM_is_REFUSED_as_an_ENUMERATION_defect()
+    {
+        var contradicting = EnumerationClaimingNoBounds(assertionBounds:
+            new Dictionary<string, IReadOnlySet<string>>(StringComparer.Ordinal)
+            {
+                [AssertionIdValue] = new HashSet<string>(StringComparer.Ordinal) { "dwell" },
+            });
+
+        var report = Check(new[] { ClaimsNoBounds() }, enumeration: contradicting);
+        var gate = Gate(report, "3i bounds currency");
+
+        Assert.Equal(GateStatus.Checked, gate.Status);
+        Assert.False(gate.Passed);
+        Assert.Equal(SubmissionVerdict.NotAdmissible, report.Verdict);
+
+        Assert.Contains("AN ENUMERATION CONTRADICTS ITS OWN `boundsAbsence` CLAIM", gate.Detail, StringComparison.Ordinal);
+        Assert.Contains("dwell", gate.Detail, StringComparison.Ordinal);
+        Assert.Contains(AssertionIdValue, gate.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void FI99_A_VECTOR_citing_a_bound_against_a_claimed_absence_is_REFUSED_as_a_VECTOR_defect()
+    {
+        // The vector declares `dwell = T#5S` against a subject whose enumeration says it tabulates
+        // nothing. Either the citation is wrong or the claim is, and the gate cannot pick — so it names
+        // both parties and refuses rather than guessing in the passing direction.
+        var report = Check(new[] { Vector(id: "V-cites") }, enumeration: EnumerationClaimingNoBounds());
+        var gate = Gate(report, "3i bounds currency");
+
+        Assert.Equal(GateStatus.Checked, gate.Status);
+        Assert.False(gate.Passed);
+        Assert.Equal(SubmissionVerdict.NotAdmissible, report.Verdict);
+
+        Assert.Contains("CITE A BOUND AGAINST A SUBJECT CLAIMED TO HAVE NONE", gate.Detail, StringComparison.Ordinal);
+        Assert.Contains("V-cites", gate.Detail, StringComparison.Ordinal);
+        Assert.Contains("THE BLOCK IS NOT ACCUSED OF ANYTHING HERE", gate.Detail, StringComparison.Ordinal);
+
+        // Two contradictions, two repairs. Naming the wrong one sends the reader to the wrong document.
+        Assert.DoesNotContain("AN ENUMERATION CONTRADICTS ITS OWN", gate.Detail, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void THE_OVER_FIRE_CONVERSE_a_submission_whose_bounds_are_DECLARED_AND_CURRENT_is_untouched_by_the_empty_claim_fix()
     {

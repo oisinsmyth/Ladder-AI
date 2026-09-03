@@ -385,7 +385,9 @@ Submission                    -- the top-level object the vectors are submitted 
   model               { id, represents, doesNotRepresent, validatedAgainstPlantData, compStable }
   enumeration         { clauses, assertions, forms, enumerator,      -- §3
                         normalisedTexts, requiredObservations, bounds,    -- §2.5 and §10's 3g/3h/3i
-                        assertionBounds }   -- assertion -> which bounds it depends on; [] means NONE
+                        assertionBounds,    -- assertion -> which bounds it depends on; [] means NONE
+                        boundsAbsence }     -- { claimed, by, because }: "this subject has NO bounds"
+                                            -- §2.5a, FI-99. ALL THREE FIELDS REQUIRED; falsifiable
   map                 { providedFor: signal -> [ modes ],          -- §4.3, HOW it is watched
                         storage:     signal -> { owner?, path },   -- §2.7, WHERE it lives
                         harnessOnly: [ signal ] }                  -- §2.7, occupies no PLC storage
@@ -660,7 +662,13 @@ This is the one table to read before omitting anything. Four treatments, and the
 | `boundsUsed: {}` — **present and EMPTY**, with `enumeration.assertionBounds` saying the cited assertion depends on none | **CHECKED — a pass** | 🔴 **A DIFFERENT CLAIM FROM ABSENCE, AND UNTIL 2026-08-17 THE SAME STATE.** Empty is the positive claim *"this assertion has no bound to cite"* — true of a gating condition, an ordering, a state naming no time and no threshold. Refusing it left **inventing a bound as the only way to pass**, which is the fabrication this gate exists to prevent. **VERIFIED, never taken:** the pass requires the *enumeration* to confirm it |
 | `boundsUsed: {}` with **no** `assertionBounds` entry for the cited assertion | ***NOT CHECKED*** | the claim is unverifiable, and *a declaration is a transferred responsibility, not a verification*. ***The repair is to the ENUMERATION*** — supply `assertionBounds` — **never to the vector**: adding a number to clear this is the fabrication |
 | `boundsUsed: {}` where `assertionBounds` **names a bound** | **REFUSED, reported as `STALE`** | the serious one: **a vector written against a bound nobody looked at.** Not merely a failure to record a number — an assertion that *no* number applies where the specification says one does. Still never a `FAIL`: it says nothing about the block |
-| `enumeration.bounds` | ***NOT CHECKED*** | a property of the **enumeration**; an absent table is not an agreeing one. **An absent table also outranks the empty claim** — declaring nothing on both sides is not a route through |
+| `enumeration.bounds` | ***NOT CHECKED*** | a property of the **enumeration**; an absent table is not an agreeing one. **An absent table also outranks the empty claim** — declaring nothing on both sides is not a route through. ⚠️ **Unless `enumeration.boundsAbsence` accounts for the emptiness — the one and only key that opens this guard (§2.5a, FI-99)** |
+| `enumeration.boundsAbsence` | ***optional; absent is the norm and changes nothing*** | `{}` on both sides with **nobody signing for it** is exactly as expensive as it was before FI-99 |
+| `boundsAbsence.claimed: true` **with an author and a reason**, empty `bounds`, no contradiction | **CHECKED — a pass, ON A CLAIM AND NOT ON A COMPARISON** | 🔴 the gate says so in its own detail line, names the claimant and quotes the reason. **A purely combinational subject — an arbitration, a selection — genuinely has no bound**, and refusing it left inventing one as the only route to admissibility |
+| `boundsAbsence.claimed: true` **missing `by` or `because`** | ***NOT CHECKED*** — the guard stays shut | ***A CLAIM WITH NO AUTHOR OR NO REASON IS NOT A CLAIM.*** It is treated as absent, and the gate **says which field was missing** rather than letting the claim vanish |
+| `boundsAbsence` beside a **non-empty** `bounds` table | **REFUSED** — an ***ENUMERATION*** defect | the flattest contradiction available. Not ignored: ignoring it would leave a false statement standing unchallenged in the document |
+| `boundsAbsence` where some `assertionBounds` entry **names a bound** | **REFUSED** — an ***ENUMERATION*** defect | the claimant's own file falsifies the claim. Every vector citing that subject is refused with it: a self-contradictory authority cannot adjudicate any of them |
+| `boundsAbsence` where some vector's `boundsUsed` is **non-empty** | **REFUSED, reported as `STALE`** — a ***VECTOR*** defect | a bound cited against a subject claimed to have none. Different repair from the two above, so it is reported separately. Never a `FAIL`: it says nothing about the block |
 | `enumeration.assertionBounds` | ***optional; absent affects only the empty claim*** | a submission that declares its bounds normally is **untouched** by its absence. An assertion **missing** from a relation that exists is an ABSENCE, not an assertion with no bounds |
 | a declared bound that **differs** from the table | **REFUSED, reported as `STALE`** | ***never `FAIL`*** — the block may be perfectly correct and the vector predates a retune. §2.5 |
 | a declared bound the table does **not contain** | **REFUSED, reported as `Unknown`** | a disagreement about which bounds *exist*, whose repair precedes any question about a value — so it outranks `Stale` |
@@ -745,6 +753,10 @@ enumeration
                            "REQ-HBA-004:9e21c7": [] }
                     [] = "this one depends on none"    -> a positive answer
                     key absent = nobody said           -> an ABSENCE
+
+  boundsAbsence     { claimed, by, because }  -> "this SUBJECT tabulates no bound at all"
+                    §2.5a, FI-99. ALL THREE REQUIRED when claimed is true.
+                    absent = the norm, and it changes nothing
 ```
 
 #### 🔴 `boundsUsed: {}` IS A CLAIM, NOT A SILENCE — AND IT IS VERIFIED, NOT ACCEPTED (2026-08-17)
@@ -780,6 +792,73 @@ check and a different gate. The relation is consulted **only** on the empty clai
 ***Carry the BARE VALUE on both sides.*** The enumeration's YAML writes provenance prose beside the
 number — `"T#60S  (Q-HBA-01, owner) — the SPECIFIED value"` — and these fields want `"T#60S"`. A
 mis-transcription then surfaces as a **loud STALE naming both strings**, never as a silent pass.
+
+### 2.5a `enumeration.boundsAbsence` — ***THE SUBJECT THAT HAS NO BOUNDS AT ALL.*** ADDED 2026-09-03 (FI-99)
+
+**Optional. Absent is the norm and changes nothing.**
+
+§2.5 above gave the **vector** a way to say *"no bound applies to me"*. This gives the **enumeration**
+the same right about the **whole subject**, for an identical reason and after an identical measurement.
+
+> **Measured 2026-09-03, on a submission that was otherwise complete: *31 gates run, 0 refused, and
+> NOT ADMISSIBLE on a single NOT CHECKED.***
+
+A third-party enumeration of a block with **8 clauses and 17 assertions**, every one of them carrying
+`assertion_bounds: []`, stating the emptiness **as a claim and not as a silence** — with the register
+rows and the block spec cited — and **both vectors declaring `boundsUsed: {}` in agreement with it**.
+The schema dropped the claim, because `bounds` is a `{name: value}` map with no way to express *"this
+map is empty and that IS the answer"*, and the prose carrying it was not part of this contract so no
+gate read it.
+
+**The gate could not tell *"nobody wrote a table"* from *"there is nothing to put in one"*, and for
+some subjects the second is the truth.** A purely combinational block — an arbitration, a selection —
+names no timing bound, no tolerance, no delay, no timeout and no settling time. Such a subject was
+**permanently inadmissible**, and the only workaround available under schedule pressure was to
+**invent a bound**.
+
+> *** A GATE WHOSE ONLY ESCAPE IS A LIE IS WORSE THAN THE GAP IT GUARDS. ***
+
+```yaml
+enumeration:
+  bounds: {}
+  boundsAbsence:
+    claimed: true
+    by: assertion-enumerator
+    because: "no clause of this subject names a timing bound, tolerance, delay, timeout or settling time"
+```
+
+#### 🔴 ALL THREE FIELDS ARE REQUIRED, AND A CLAIM MISSING ONE IS NOT A CLAIM
+
+A claim with **no author** or **no reason** is treated as **absent** — the guard stays shut and the
+result is `NOT CHECKED`, exactly as before FI-99. *An unsigned, unreasoned assertion of a negative is
+precisely the silence this field exists to be distinguishable from.* The gate **says which field was
+missing**: a rejected claim that vanished silently would be the same defect one field over.
+
+Naming the claimant follows the precedent of **gate 4b** (the fidelity list's declarer) and **gate 5c**
+(the map's author): *name an authority, compare it, and report `NOT CHECKED` when there is none.*
+
+#### 🔴 THE CLAIM IS FALSIFIABLE, AND THAT IS THE WHOLE OF WHY IT IS A FIX AND NOT A HOLE
+
+**Three things in the submission contradict it, and each REFUSES.** They are reported separately
+because they have different repairs:
+
+| what contradicts it | whose defect | outcome |
+|---|---|---|
+| the `bounds` table is **not empty** | ***ENUMERATION*** | **REFUSED.** Not ignored — ignoring a false statement leaves it standing for the next reader |
+| some `assertionBounds` entry **names a bound** | ***ENUMERATION*** | **REFUSED**, naming the assertion(s). Every vector citing that subject is refused with it: a self-contradictory authority cannot adjudicate any of them |
+| some vector's `boundsUsed` is **non-empty** | ***VECTOR*** | **REFUSED**, naming the vector(s), reported as `STALE` and never `FAIL` |
+
+**And the cheap route stays closed.** `bounds: {}` with `boundsUsed: {}` and **nobody signing for it**
+is exactly as expensive as it was before FI-99. A vector that omits `boundsUsed` altogether is still
+`NOT CHECKED` even under a good claim — **FI-99 gave the enumeration a voice, not the vector.**
+
+#### ⚠️ THE PASS IS WEAKER THAN THE OTHER TWO, AND THE GATE SAYS SO
+
+`Current` rests on a **comparison**; `NoBoundsCited` rests on the **third party's per-assertion
+relation**. This one rests on a **recorded human claim** that no comparison established and none could.
+The gate's detail line therefore **names the claimant, quotes the reason verbatim, and states that
+nothing was compared** — *a green a reader cannot tell from an ordinary one is a green nobody ever goes
+and checks.* If you doubt it, the party to ask is printed.
 
 #### 🔴 A mismatch is `STALE`, and it is NEVER `FAIL`
 
@@ -2053,7 +2132,7 @@ of saying so.
 | **3f citation shape** | the citation is the content-derived ID, never the **display ordinal** | reject. An ordinal is POSITIONAL, so inserting one assertion above it silently makes the citation name a different one |
 | **3g assertion IDs recompute** | every ID re-hashes from the `normalisedTexts` it claims to come from | reject. ***This recomputation is the ONLY reason a stamper is permitted to have no independence*** — without it a hand-written hex string is indistinguishable from a computed one. Absent texts are `NOT CHECKED` |
 | **3h required observations** (AMB-14) | every signal the cited assertion depends on appears in this vector's `Expectations` | reject, naming the unobserved signals. A relational assertion has more than one, and observing one tests neither the other nor the relation |
-| **3i bounds currency** (AMB-19, §2.5) | each `boundsUsed` value matches `enumeration.bounds`; an EMPTY `boundsUsed` is checked against `enumeration.assertionBounds` | ***refuse, reported as `STALE` and never `FAIL`***, ending *"Do NOT edit the block on the strength of this finding"*. A vector **saying nothing** is `NOT CHECKED` **and keeps that status beside a stale sibling**. A vector **claiming no bound** passes where the enumeration confirms it, is `NOT CHECKED` where nothing can confirm it (***repair the enumeration, never the vector***), and is refused where the enumeration names a bound |
+| **3i bounds currency** (AMB-19, §2.5; FI-99, §2.5a) | each `boundsUsed` value matches `enumeration.bounds`; an EMPTY `boundsUsed` is checked against `enumeration.assertionBounds`; an EMPTY `bounds` table is checked against `enumeration.boundsAbsence` | ***refuse, reported as `STALE` and never `FAIL`***, ending *"Do NOT edit the block on the strength of this finding"*. A vector **saying nothing** is `NOT CHECKED` **and keeps that status beside a stale sibling**. A vector **claiming no bound** passes where the enumeration confirms it, is `NOT CHECKED` where nothing can confirm it (***repair the enumeration, never the vector***), and is refused where the enumeration names a bound. An **empty table** is `NOT CHECKED` unless `boundsAbsence` accounts for it with an author and a reason — then it is a **pass ON A CLAIM**, which the detail line says out loud, and it is **refused** wherever the table, an `assertionBounds` entry or a vector's `boundsUsed` contradicts the claim |
 | **fidelity** | every asserted behaviour ∈ the model's fidelity declaration (M4) | reject with both sets shown |
 | **observability** | mode valid; signal in the map; window ≥ §12a's floor **at the run-time `comp`**; declaration predates the generating download | ***refuse the vector*** — §2.6's own rule |
 | **settling** | declaration exists; **is not the completion flag alone** | reject, citing phase 2's `Done`-at-10-ramps-to-15 |

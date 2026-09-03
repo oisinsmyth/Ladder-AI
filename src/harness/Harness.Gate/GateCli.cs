@@ -492,7 +492,18 @@ public static class GateCli
                 e => e.Key,
                 e => (IReadOnlySet<string>)e.Value.ToHashSet(StringComparer.Ordinal),
                 StringComparer.Ordinal),
-            enumeration?.Subject ?? string.Empty);
+            enumeration?.Subject ?? string.Empty,
+            // *** THE MALFORMED CLAIM SURVIVES THE PROJECTION TOO, AS A REJECTION AND NOT AS A NULL. ***
+            // `BoundsAbsenceClaim.Of` turns `claimed: true` with no `by` or no `because` into a REJECTED
+            // claim, which is not a claim — the guard stays shut — but which carries the reason, so the
+            // author is told why theirs did not count instead of watching it disappear. Collapsing it to
+            // None here would restore the silence FI-99 exists to remove.
+            enumeration?.BoundsAbsence is null
+                ? BoundsAbsenceClaim.None
+                : BoundsAbsenceClaim.Of(
+                    enumeration.BoundsAbsence.Claimed,
+                    enumeration.BoundsAbsence.By,
+                    enumeration.BoundsAbsence.Because));
 
     /// <summary>The model's fidelity declaration, off the document.</summary>
     public static FidelityDeclaration? ToFidelity(SubmissionDocument document) =>
