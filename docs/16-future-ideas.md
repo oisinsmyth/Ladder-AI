@@ -3463,3 +3463,25 @@ Then `NoTable` splits in two: *no table supplied* stays NOT CHECKED, and *emptin
 author and a reason* becomes a checked pass — and it is falsifiable, because a later assertion that
 does cite a bound contradicts a recorded claim rather than filling a silence. **The cheap route
 through the gate stays closed**: `{}` on its own still fails, exactly as today.
+
+### FI-93 addendum — it is fifteen, not nine, and they span two solutions
+
+**Measured 2026-09-03**, taking a baseline before merging an unrelated harness change.
+
+`dotnet test src/harness/harness.sln` reports **6 failed / 3115 passed**, on top of the converter
+solution's 9. The failing assemblies are `Harness.Map.Tests` (4) and `Harness.MirrorView.Tests` (2),
+and one is named **`CommsFbAgainstTheCommittedCorpusTests`** — the same shape as the converter's
+`ServedAreaTests` and `NeighbourTests`, and the same root cause: a **comparison against the committed
+reference corpus**, whose Modbus window was widened from 37 registers to 1024 while the fixtures kept
+the old figure.
+
+So the entry above understates it. **Fifteen tests are red across two solutions, from one corpus
+change**, and every one of them is a corpus-sweep test — the class this repo leans on hardest,
+because it is what notices when committed data drifts away from what the tools assume.
+
+The practical cost is now measurable rather than theoretical: **every agent that touched either
+solution today had to establish, by stashing and re-running, that its own change had not caused
+them.** That is a real tax on every future change, paid in the one currency this repo cannot spare —
+the reader's willingness to believe a red result.
+
+The fix and its one judgement are unchanged from the entry above; it simply covers both solutions.
