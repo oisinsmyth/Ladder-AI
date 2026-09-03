@@ -3254,3 +3254,58 @@ the axis is there; only the *join* is flat. Three shapes worth weighing:
 
 Until one of these exists, a block with repeated channels can bind only its singular observations,
 and the coverage it can earn is bounded by that rather than by its specification or its logic.
+
+---
+
+## FI-97 — the "start echo" is a loopback of the client's own write, so a slot that never ran reads as one that ran
+
+**Measured 2026-09-03** on a deployed copy layer, while adding a fourth conformance slot.
+
+The generated copy layer emits, per slot, two adjacent rungs:
+
+```
+NETWORK n   "Start bool - slot <S>"   COIL  <model>.Stim.Start := HX_<S>_Start
+NETWORK n+1 "Start echo - slot <S>"   SCOIL HX_<S>_Ran        := <model>.Stim.Start
+```
+
+**Both are inside the copy layer.** The echo latches from the bit the copy layer wrote one rung
+earlier, from the client's own mirror register. Nothing between them is the slot.
+
+So `HX_<S>_Ran` asserts when **the client wrote the start register and the copy layer executed** —
+and says nothing whatever about whether the slot's FC ran. A slot FC that is
+
+- never called from the cyclic OB,
+- called *after* the copy layer,
+- or present, called, and internally doing nothing,
+
+produces a mirror **indistinguishable** from a slot that ran correctly.
+
+### Why the name is the dangerous part
+
+`Ran` is the only signal in the mirror that looks like a liveness detector, and a reader reaches for
+it for exactly that. The generated network title — *"Start echo"* — reinforces it. What it actually
+carries is *"the copy layer saw your command"*, which is a loopback, and a loopback through the one
+component that is guaranteed to be running because it is what publishes the mirror.
+
+**This is not hypothetical.** The call-site obligation on a generated slot FC is documented as having
+already cost a wave and three hours when a slot deployed green and never ran — and this echo was
+present and reading normally throughout.
+
+### What would actually detect it
+
+The echo has to be latched by something **only the slot can drive**. The cheapest honest version is a
+rung inside the slot FC, or inside the stimulus head, that sets a bit the copy layer then publishes —
+so the chain is `slot ran → bit set → mirror`, with no path from the client's write to the bit. That
+costs one static and one rung per slot and turns a decorative register into the one thing the mirror
+currently cannot say.
+
+Failing that, **rename it.** `HX_<S>_CommandSeen` is honest about what it carries, and would stop a
+reader treating it as evidence of execution. A register that cannot mean what its name says is worse
+than an absent one, because absence prompts a question and a wrong name closes it.
+
+### Blast radius
+
+Every slot in every wave set, on every deployment. No existing result is *wrong* because of it — the
+slots in question did run, and their verdicts rest on their own observations — but **no existing
+result is evidenced against this failure mode either**, and several reports quote the echo as if it
+were.
