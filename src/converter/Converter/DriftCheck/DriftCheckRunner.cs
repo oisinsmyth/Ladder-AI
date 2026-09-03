@@ -21,6 +21,11 @@ public static class DriftCheckRunner
         var callees = Program.BuildCalleeRegistry(Array.Empty<string>(), projectDir);
         var tagTypes = Program.BuildTagTypeRegistry(Array.Empty<string>(), projectDir);
 
+        // FI-102. Same corpus, so an instance DB rebuilt here carries the same `Remanence` shape
+        // `to-xml` would emit — otherwise drift-check would compare a document TIA cannot import
+        // against the export of one it produced, and report the difference as drift in the .ir.
+        var instanceTypes = Program.BuildInstanceDbTypeResolution(Array.Empty<string>(), projectDir, tagTypes);
+
         var entries = new List<DriftEntry>();
 
         // PAIRING BY DECLARED OBJECT IDENTITY, NOT BY FILENAME (2026-08-14). Found against the live
@@ -67,7 +72,7 @@ public static class DriftCheckRunner
                 // yields an in-memory tree whose whitespace/text node shape differs from a file-loaded
                 // one, and XNode.DeepEquals (inside the Normalizer) is sensitive to that (the
                 // SynthesizeReadableVerified caveat). Comparing two parsed trees avoids a spurious mismatch.
-                built = XDocument.Parse(Program.BuildXmlFromIrText(irText, synthesize: false, callees, tagTypes).ToString());
+                built = XDocument.Parse(Program.BuildXmlFromIrText(irText, synthesize: false, callees, tagTypes, instanceTypes).ToString());
             }
             catch (Exception ex) when (ex is SimaticMlFormatException or UnsupportedConstructException
                                            or NonReducibleNetworkException or IrFormatException

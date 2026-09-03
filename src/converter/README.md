@@ -4760,10 +4760,50 @@ dotnet build   # from this directory (converter.sln)
 dotnet test
 ```
 
-### ⚠️ An instance DB round-tripped from a TIA export cannot be re-imported: `Remanence` on a multi-instance
+### ✅ FIXED 2026-09-03 (FI-102) — an instance DB round-tripped from a TIA export could not be re-imported: `Remanence` on a multi-instance
 
-**Measured 2026-08-21.** A TIA export of an instance DB, taken through `to-ir` and back through
-`to-xml`, is refused at import:
+🔴 **THE WORKAROUND BELOW IS RETIRED. Do not follow it.** "Do not import an instance DB" cost nothing
+while nothing needed one; two conformance slots then needed a **dedicated** instance DB for the block
+under test, which is not something TIA regenerates from the FB, and the workaround had no answer
+(`docs/16-future-ideas.md` FI-102). The diagnosis in this section was correct and is kept below,
+because it is what located the cause; what replaced the workaround is stated here.
+
+**What replaced it.** `DbSourceWriter.Write` now takes an `InstanceDbTypeResolution` — the corpus an
+instance DB's member types resolve against — and omits `Remanence` on a member whose datatype resolves
+to a **block name**, exactly as `BlockSourceWriter` already does for a block. The classifier is
+**`MemberExpansion.Classify` reused, not a second copy**: `MemberShape.MultiInstance` for a datatype
+that resolves to a block, `NamedTypeOpened` for one that resolves to a PLC data type, with block names
+read off each `.ir`'s `BLOCK <KIND> <Name>` header rather than from `TagTypeRegistry`'s FB index —
+which drops every sidecar-carrying FB, i.e. precisely the file a re-exported corpus is made of (FI-92).
+So the `--project` type resolution this section asked for is the plumbing that landed, and none of it
+is new analysis.
+
+`to-xml`, `drift-check` and `preflight` each build one from their own batch plus `--project`. A global
+DB is never asked — it cannot hold an FB instance. `sanitize` (XML→XML de-identification, no project
+argument, not an import path) is deliberately left on the corpus-free default and still re-emits the
+attribute; that is the one remaining place this shape can be produced.
+
+🔴 **WITH NO CORPUS THE CONVERSION REFUSES, and that is the deliberate half.** A member whose datatype
+resolves to neither a block nor a type — which is what `to-xml` **with no `--project` and no sibling
+file** looks like — throws `UnsupportedConstructException`, naming the DB, the member, the type, the
+search scope and the missing flag. Both alternatives are worse in the way this repo keeps paying for:
+emitting reproduces the defect and surfaces only at import, after convert/preflight/review have all
+passed; omitting always would silently change a UDT-typed member's retention on a document that imports
+and compiles clean. Same direction, and the same stated reason, as FI-71's `--allow-blind-types` gate.
+**One behaviour change to know about:** a hand-authored instance DB with a flat quoted UDT member (no
+inlined sub-members) that used to convert with no `--project` now refuses until one is given. Every
+instance DB in `ir/test-project001` inlines its structured members, so none is affected.
+
+⏳ **The import is UNVERIFIED here.** The converter cannot import; the emission is the whole of what
+changed. Proven offline: the attribute is absent on an FB-typed static and present on a UDT-typed one
+in the same DB, and every block and every DB in the committed corpus converts byte-identically with and
+without the resolution (`Converter.Tests/InstanceDbMultiInstanceRemanenceTests.cs`, both sweeps carrying
+their own denominators).
+
+---
+
+**The original diagnosis, kept. Measured 2026-08-21.** A TIA export of an instance DB, taken through
+`to-ir` and back through `to-xml`, was refused at import:
 
 ```
 iDB_<seq>_<inst>.<member>: The Openness import failed: The attribute 'Remanence' cannot be set.
@@ -4786,16 +4826,19 @@ resolution plumbed into the DB writer. **And a name-prefix test (`FB_…`) is no
 repo already rules that out for reachability, for the same reason: anything can be renamed into a
 prefix.
 
-**Workaround, and why it costs nothing today.** *Do not import an instance DB.* TIA regenerates an
+**The workaround — RETIRED 2026-09-03, and the sentence that retired it is "why it costs nothing
+*today*".** *Do not import an instance DB.* TIA regenerates an
 instance DB's contents from its FB, so importing the FB is sufficient — verified on the run that
 found this: four instance-DB imports failed, and the new member was nevertheless present in all four
 when read back out of the controller, with `compile-all` reporting 33 compiled / 0 errors and
 `sanity-check OVERALL: HEALTHY`.
 
-🔴 **The trap is that the corpus looks importable and is not.** `preflight`, `review` and `to-xml`
-all pass; only the import refuses. `import-all` fails closed (exit 13) and names the member, which is
-what stops it being silent — but a caller reading only "the FB imported" would not learn that the
-instance DBs did not.
+🔴 **The trap was that the corpus looked importable and was not.** `preflight`, `review` and `to-xml`
+all passed; only the import refused. `import-all` fails closed (exit 13) and names the member, which is
+what stopped it being silent — but a caller reading only "the FB imported" would not learn that the
+instance DBs did not. **`preflight` and `to-xml` now both hold the corpus and both refuse**, so the
+check that passes and the check that decides no longer disagree — which is the part of this worth
+carrying forward.
 
 ## 🔴 A dotted path split on `.` — the whole class, not the one splitter (2026-08-27)
 

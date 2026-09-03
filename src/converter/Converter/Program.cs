@@ -294,6 +294,10 @@ internal static class Program
         var callees = BuildCalleeRegistry(files, projectDir);
         var tagTypes = BuildTagTypeRegistry(files, projectDir);
 
+        // FI-102. Built for `to-xml` on the same corpus, so an instance DB's FB-typed static can be told
+        // from a UDT-typed one. `to-ir` never reaches it (it writes IR, not member XML).
+        var instanceTypes = BuildInstanceDbTypeResolution(files, projectDir, tagTypes);
+
         var blindRoots = WarnIfConvertingBlindToExternalTypes(mode, files, projectDir);
 
         // FI-71. The warning above was FI-57's remedy and it did not remedy: the same mistake has now
@@ -324,7 +328,7 @@ internal static class Program
                 }
                 else
                 {
-                    ConvertToXml(file, synthesize, callees, tagTypes, outDir);
+                    ConvertToXml(file, synthesize, callees, tagTypes, outDir, instanceTypes);
                 }
             }
             catch (Exception ex) when (ex is SimaticMlFormatException or UnsupportedConstructException or NonReducibleNetworkException or IrFormatException or UnsupportedSynthesisConstructException)
@@ -3269,12 +3273,44 @@ internal static class Program
         return TagTypeRegistry.FromFiles(paths);
     }
 
+    // FI-102. The corpus an instance DB's member types resolve against, so `DbSourceWriter` can tell a
+    // MULTI-INSTANCE static (no `Remanence` — TIA refuses it) from a UDT-typed one (which carries it).
+    // Same inputs as BuildTagTypeRegistry — the batch plus whatever `--project` named — because the
+    // question is the same question: what does this corpus define?
+    //
+    // 🔴 THE SEARCH SCOPE IS PART OF THE ANSWER, NOT DECORATION. A refusal quotes it verbatim, and
+    // "no --project was given" is the single most likely cause of one — so it is stated as the scope
+    // itself rather than left for the reader to infer from a type name they can see is real.
+    internal static InstanceDbTypeResolution BuildInstanceDbTypeResolution(
+        IEnumerable<string> files, string? projectDir, TagTypeRegistry tagTypes)
+    {
+        var paths = files.Where(File.Exists).ToList();
+        var batchCount = paths.Count;
+
+        string scope;
+        if (projectDir is not null && Directory.Exists(projectDir))
+        {
+            var projectFiles = Directory.EnumerateFiles(projectDir, "*.ir").ToList();
+            paths.AddRange(projectFiles);
+            scope = MemberExpansion.DescribeSearchScope(projectDir, projectFiles.Count)
+                + $", plus the {batchCount} file(s) named on this command line";
+        }
+        else
+        {
+            scope = $"the {batchCount} file(s) named on this command line — NO --project WAS GIVEN, so no "
+                + "corpus was searched at all";
+        }
+
+        return InstanceDbTypeResolution.FromCorpus(paths, tagTypes, scope);
+    }
+
     private static void ConvertToXml(
         string sourcePath, bool synthesize = false,
-        CalleeInterfaceRegistry? callees = null, TagTypeRegistry? tagTypes = null, string? outDir = null)
+        CalleeInterfaceRegistry? callees = null, TagTypeRegistry? tagTypes = null, string? outDir = null,
+        InstanceDbTypeResolution? instanceTypes = null)
     {
         var irText = File.ReadAllText(sourcePath);
-        var xml = BuildXmlFromIrText(irText, synthesize, callees, tagTypes);
+        var xml = BuildXmlFromIrText(irText, synthesize, callees, tagTypes, instanceTypes);
 
         var outPath = ResolveOutPath(sourcePath, ".xml", outDir);
         var overwrote = File.Exists(outPath);
@@ -3288,11 +3324,12 @@ internal static class Program
     // ConvertToXml's original: `--synthesize` OR a sidecar-less input derives the sidecar (ADR-0005);
     // a stored SIDECAR is used as-is. Parse/synthesis exceptions propagate to the caller.
     internal static XDocument BuildXmlFromIrText(
-        string irText, bool synthesize, CalleeInterfaceRegistry? callees, TagTypeRegistry? tagTypes)
+        string irText, bool synthesize, CalleeInterfaceRegistry? callees, TagTypeRegistry? tagTypes,
+        InstanceDbTypeResolution? instanceTypes = null)
     {
         if (irText.StartsWith("DB ", StringComparison.Ordinal))
         {
-            return DbSourceWriter.Write(DbIrParser.ParseDb(irText));
+            return DbSourceWriter.Write(DbIrParser.ParseDb(irText), instanceTypes);
         }
 
         if (irText.StartsWith("TYPE ", StringComparison.Ordinal))

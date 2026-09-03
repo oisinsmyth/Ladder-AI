@@ -1,4 +1,5 @@
 using System.Xml.Linq;
+using Converter.Ir;
 
 namespace Converter.SimaticMl;
 
@@ -10,14 +11,30 @@ namespace Converter.SimaticMl;
 /// </summary>
 public static class DbSourceWriter
 {
-    public static XDocument Write(DbSource db)
+    /// <param name="instanceTypes">
+    /// FI-102 (2026-09-03). The corpus this instance DB's member types resolve against — see
+    /// <see cref="InstanceDbTypeResolution"/> for the defect and the reasoning. Consulted ONLY for an
+    /// instance DB (a global DB cannot hold an FB instance; that is what an instance DB is), and only
+    /// for TOP-LEVEL Static members, which are the only ones this writer ever states
+    /// <c>Remanence</c> on.
+    ///
+    /// <para>🔴 <b><c>null</c> means "this caller has no corpus in hand", and it keeps the pre-FI-102
+    /// shape — which is WRONG for any instance DB nesting an FB instance.</b> It is left as the default
+    /// for the paths that are not headed for a controller (<c>sanitize</c>'s XML→XML de-identification,
+    /// and the writer's own unit tests). <b>Every path whose output can be imported passes one</b>:
+    /// <c>to-xml</c>, <c>drift-check</c> and <c>preflight</c> all build it from their batch plus
+    /// <c>--project</c>. Adding a fourth such path without one silently reintroduces FI-102.</para>
+    /// </param>
+    public static XDocument Write(DbSource db, InstanceDbTypeResolution? instanceTypes = null)
     {
         var nextAuxId = 100_000;
+        var isInstanceDb = db.InstanceOfName is not null;
 
         var staticSection = new XElement(DbInterfaceMembers.Ns + "Section", new XAttribute("Name", "Static"));
         foreach (var member in db.Members)
         {
-            staticSection.Add(DbInterfaceMembers.WriteMember(member));
+            staticSection.Add(DbInterfaceMembers.WriteMember(
+                member, omitRemanence: OmitRemanence(db, member, isInstanceDb, instanceTypes)));
         }
 
         // Input/Output/InOut: confirmed real 2026-07-13, `TomraControlInst1` — see DbModel.cs's own
@@ -58,7 +75,6 @@ public static class DbSourceWriter
         // difference rather than a cascade — that is diagnosis, this is the cure, and the two are
         // deliberately separate (a comparator taught to forgive a missing section would have HIDDEN
         // this instead, which is how the MemoryLayout hole survived a green drift-check).
-        var isInstanceDb = db.InstanceOfName is not null;
         var sectionsChildren = new List<XElement>();
         if (isInstanceDb || db.InputMembers is not null)
         {
@@ -117,6 +133,37 @@ public static class DbSourceWriter
             root);
 
         return new XDocument(document);
+    }
+
+    // FI-102 (2026-09-03). A MULTI-INSTANCE static of an instance DB never carries `Remanence` — TIA
+    // answers "The attribute 'Remanence' cannot be set" and refuses the whole InstanceDB object. The
+    // rule itself, and why neither the datatype string nor the member's NAME can decide it, lives in
+    // InstanceDbTypeResolution; this is only the placement of it.
+    //
+    // A GLOBAL DB IS NEVER ASKED. It cannot hold an FB instance — an instance DB is what that is — so
+    // there is nothing here for the corpus to decide, and asking would let an unresolvable UDT in a
+    // global DB refuse a conversion that TIA accepts today.
+    private static bool OmitRemanence(
+        DbSource db, DbMember member, bool isInstanceDb, InstanceDbTypeResolution? instanceTypes)
+    {
+        if (!isInstanceDb || instanceTypes is null)
+        {
+            return false;
+        }
+
+        var ruling = instanceTypes.RuleOn(member);
+        return ruling.Ruling switch
+        {
+            RemanenceRuling.Omit => true,
+            RemanenceRuling.Emit => false,
+
+            // Refuse rather than pick one. Both answers are wrong in a way nothing downstream would
+            // catch: emitting is FI-102 itself (rejected at import, after convert/preflight/review all
+            // passed), omitting silently changes a UDT member's retention on a document that imports
+            // and compiles clean.
+            _ => throw new UnsupportedConstructException(
+                $"instance DB '{db.Name}' member '{member.Name}' {ruling.Reason}"),
+        };
     }
 
     // Input/Output/InOut all share the same member shape (Static's own full shape minus the
