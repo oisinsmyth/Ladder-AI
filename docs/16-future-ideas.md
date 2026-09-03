@@ -3143,3 +3143,56 @@ Until then the safe pattern, and the one now in use: **verify the band against t
 each number with an explicit `--value`.** Note that an explicit in-band `--value` is *"accepted and
 announced as accepted, not verified"*, so the verification is the caller's either way — which is the
 honest reading of the whole registry today.
+
+---
+
+## FI-95 — the assertion enumerator cannot produce a large enumeration at all: `Write` only, one pass, no Edit
+
+**Measured 2026-09-03.** Four enumerations were dispatched in parallel against one program. Two
+completed. **The two largest subjects both died with `max_output_tokens`**, and both agents' final
+words were the same realisation:
+
+> *"Edit is disabled, so the file must be written whole in one call. Rewriting it compactly."*
+> *"Edit is unavailable, so the file must be written in one pass. Rewriting it complete and compact."*
+
+Neither survived the rewrite. One left a preamble and **zero clauses**; the other left a file
+declaring **56 assertions and containing 24**.
+
+### This is a configuration consequence, not an agent mistake
+
+`.claude/agents/assertion-enumerator.md` grants `Read, Grep, Glob, Write, Skill`. **`Bash` is denied
+deliberately and correctly** — the fence that keeps the implementation out of a spec-side denominator
+also removes every way to compute a SHA-256, which is why `harness-gate stamp` exists as a separate
+step. But `Edit` is absent too, and nothing about the independence argument requires that. The
+combination means **the entire artifact must fit in one model response**, and an enumeration's size
+scales with the subject's clause count — so the constraint bites hardest exactly where the denominator
+matters most.
+
+### Why the failure is quiet in the worst case
+
+Truncation mid-file is loud: the YAML is short and obviously incomplete. **The dangerous outcome is
+the near-miss** — a file that parses, looks finished, and overstates itself in `denominator:`.
+
+The good news, and it should be recorded as such: **`harness-gate stamp` catches it.** Exit 1, nothing
+written, and the message names both numbers:
+
+> *"the file declares 56 assertion(s) and this reader found 24. One of the two is wrong and neither
+> can be assumed, so nothing is stamped."*
+
+So an overstated denominator cannot become a false coverage figure. It makes the file unusable
+instead, which is the right failure — but it is caught one artifact downstream of where it was made.
+
+### Fixes, cheapest first
+
+1. **Grant `Edit`.** It breaks no fence: the independence argument is about *what the enumerator may
+   read* and *that it cannot compute an ID*, neither of which `Edit` touches. This alone removes the
+   ceiling.
+2. **Have the skill state a budget and the technique that meets it.** Both failed agents identified
+   the same fix unprompted — a legend near the top mapping short keys to the observability and caveat
+   paragraphs, cited per assertion instead of repeated. On a re-run with that instruction given up
+   front it is a routine job. The skill should say so rather than leaving each agent to discover it
+   at the point of failure.
+3. **Make partial enumeration a first-class, declarable outcome.** A `clauses_not_yet_enumerated:`
+   list with a reason per clause is an honest, usable artifact; a silently-short file is not. Today
+   the contract offers no way to say "this denominator is incomplete and here is exactly how", so an
+   agent that cannot fit the whole job has no correct move available to it.
