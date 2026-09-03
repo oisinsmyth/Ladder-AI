@@ -158,3 +158,9 @@ gen/_validation/MotorVSDSystem-purpose/answerkey/
 # is one `git add -A` from committing it - the same shape as the stray settings .bak found on
 # 2026-08-13.
 /Test Enviroment/
+
+# Editor workspace state. Obsidian records RECENTLY-OPENED FILE PATHS, and on this repo those
+# paths include live-run material - the job folder's own name and its block filenames - which
+# `Live Runs/` above keeps out of the index but which this file would carry back in by the side
+# door. Nothing here is project content and none of it should ever be committed.
+.obsidian/
