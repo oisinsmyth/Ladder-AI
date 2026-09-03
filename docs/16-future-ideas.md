@@ -3372,3 +3372,69 @@ high, which is positive evidence that the windows did open. What it says is that
 was evidenced against this failure mode** — the passes are believed on the strength of other rows
 being non-trivially true, not because anything checked. A submission whose vectors are all `NEVER`
 form would have no such corroboration at all.
+
+---
+
+## FI-99 — a subject that genuinely has NO bounds can never clear gate 3i, because "positively empty" has nowhere to go
+
+**Measured 2026-09-03** on a submission that was otherwise complete: **31 gates run, 0 refused, and
+NOT ADMISSIBLE on a single NOT CHECKED.**
+
+`BoundsCurrency.cs:372` is deliberate and its reasoning is right:
+
+```csharp
+// *** IT ALSO COMES BEFORE THE EMPTY CLAIM, AND THAT IS EMPTY-IS-NOT-CLEAN. *** An enumeration
+// with no bounds table is not an enumeration whose assertions have no bounds: it is one nobody
+// supplied a table for. Letting `boundsUsed: {}` pass against it would make "declare nothing on
+// both sides" the cheapest route through this gate.
+if (specified is null || specified.Count == 0)
+    return new VectorBoundsCurrency(id, BoundsCurrencyState.NoTable, none, noNames);
+```
+
+**The gate cannot distinguish "nobody wrote a table" from "there is nothing to put in one", and for
+some subjects the second is the truth.**
+
+### The case that exposed it
+
+A third-party enumeration of a block with 8 clauses and 17 assertions:
+
+- every one of the 17 carries `assertion_bounds: []`;
+- the file states the emptiness as a claim, not a silence —
+  *"EMPTY, AND THAT IS A POSITIVE CLAIM. NOT ONE OF THE EIGHT CLAUSES OF THIS SUBJECT NAMES A TIMING
+  BOUND, A TOLERANCE, A DELAY, A TIMEOUT OR A SETTLING TIME"*, with the register rows and the block
+  spec cited;
+- both vectors declare `boundsUsed: {}`, which agrees with it.
+
+So the enumerator did the work, reached a defensible negative, and **wrote it down** — and the
+submission schema drops it, because `enumeration.bounds` is a `{name: value}` map with no way to
+express *"this map is empty and that is the answer"*. The prose `bounds_note` that carries the claim
+is not part of the contract and no gate reads it.
+
+**Every other artifact in that submission was in order.** The only thing standing between it and
+admissibility was a claim that had already been made, in the right file, by the right party, with no
+field to put it in.
+
+### Why it will not go away on its own
+
+A block with no timing behaviour is not exotic — an arbitration or selection block that is purely
+combinational has nothing to bound. Any such subject is permanently inadmissible today, and the
+workaround available to an author under schedule pressure is to **invent a bound**, which is exactly
+the fabrication the surrounding rules exist to prevent. A gate whose only escape is a lie is worse
+than the gap it guards.
+
+### The fix, and it must not weaken the guard
+
+Add a way for the enumeration to state the negative **positively**, and require the reason:
+
+```yaml
+bounds: {}
+boundsAbsence:
+  claimed: true
+  by: assertion-enumerator
+  because: "no clause of this subject names a timing bound, tolerance, delay, timeout or settling time"
+```
+
+Then `NoTable` splits in two: *no table supplied* stays NOT CHECKED, and *emptiness claimed, with an
+author and a reason* becomes a checked pass — and it is falsifiable, because a later assertion that
+does cite a bound contradicts a recorded claim rather than filling a silence. **The cheap route
+through the gate stays closed**: `{}` on its own still fails, exactly as today.
