@@ -2,6 +2,52 @@
 
 ## 2026-09-03
 
+**FI-99 — a subject that genuinely has NO bounds can now clear gate 3i, by saying so positively and
+signing for it**
+
+Harness only (`src/harness/`). No IR, no PLC content, no Portal.
+
+- **The defect, measured.** A submission that was otherwise complete — **31 gates run, 0 refused** —
+  was NOT ADMISSIBLE on a single NOT CHECKED. A third-party enumeration of a block with 8 clauses and
+  17 assertions carried `assertion_bounds: []` on every one and stated the emptiness **as a claim, not
+  a silence**, with the register rows and the block spec cited; both vectors declared `boundsUsed: {}`
+  in agreement. The schema had nowhere to put the claim, so the gate read a silence. **A purely
+  combinational block — an arbitration, a selection — has nothing to bound and was permanently
+  inadmissible, with inventing a bound as the only escape.** *A gate whose only escape is a lie is
+  worse than the gap it guards.*
+- **New `enumeration.boundsAbsence: { claimed, by, because }`.** Carried through `SubmissionDocument`
+  → `GateCli.ToEnumeration` → `AssertionEnumeration.BoundsAbsence` → `BoundsCurrencyCheck.Evaluate`.
+  **All three fields are required**: `claimed: true` with no author or no reason **is not a claim**,
+  is treated as absent, and the gate says which field was missing rather than letting it vanish.
+- 🔴 **THE GUARD IS UNCHANGED WHERE NOBODY SIGNS FOR THE EMPTINESS.** `bounds: {}` with
+  `boundsUsed: {}` and no claim is exactly as expensive as it was; the empty-table comment in
+  `BoundsCurrency.cs` was **extended, not replaced**, and its reasoning is now the reason the guard
+  survives. A vector that omits `boundsUsed` altogether is still `NotDeclared` even under a good claim
+  — FI-99 gave the ENUMERATION a voice, not the vector.
+- **Three new states, appended and never inserted.** `NoBoundsTableClaimed` is a CHECKED PASS;
+  `BoundsAbsenceContradictedByEnumeration` and `BoundsAbsenceContradictedByVector` are REFUSALS. Gate
+  3i now keys its refusal set on a new `VectorBoundsCurrency.Refused` rather than on
+  `PremiseOutOfDate` — those were the same set until an enumeration could contradict itself **without
+  the vector's premise being wrong about anything**, and keying on the narrower flag would have let a
+  self-contradictory enumeration reach the pass branch.
+- 🔴 **The claim is FALSIFIABLE, and that is the whole of why it is a fix and not a hole.** Three
+  limbs, each refusing: a non-empty `bounds` table beside the claim, an `assertionBounds` entry naming
+  a bound (both ENUMERATION defects), and a vector citing a bound against the claimed-absent subject
+  (a VECTOR defect, reported as `STALE`, never `FAIL`). **The two sides get separate states and
+  separate sentences because they have different repairs** — a finding that misnames the repair sends
+  the reader to the wrong document with full confidence.
+- **The pass does not read like an ordinary green.** Gate 3i's detail line says it rests on a
+  **CLAIM and not on a comparison**, names the claimant, quotes the reason verbatim, and states that
+  nothing was compared. The machine-readable package emits `boundsAbsence` and a `refused` flag beside
+  `checked` for the same reason.
+- **Nothing else moved**, pinned by a test that runs a supplied-table submission with and without the
+  new argument and asserts identical state, agreed list and detail string. Gate 0b reaches inside the
+  new block, so a misspelt `becuase` is refused by path rather than silently downgrading the claim.
+- Docs: `docs/notes/test-environment-contract.md` **§2.5a** (new), its §2.4 field table, the §10 gate
+  table and the top-level schema listing; FI-99 marked IMPLEMENTED in `docs/16-future-ideas.md`.
+- Tests: **26 added** (`BoundsCurrencyTests`, `SubmissionGateTests`); `Harness.Results.Tests`
+  806 → 832, all green.
+
 **FI-88 — `signal-set` reported a UDT-typed STATIC used 251 times as `unused`; root cause established and step 1 fixed**
 
 Converter only. No IR, no PLC content, no Portal.

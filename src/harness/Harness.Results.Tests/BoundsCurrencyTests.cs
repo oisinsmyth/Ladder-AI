@@ -336,4 +336,379 @@ public class BoundsCurrencyTests
 
         Assert.Equal("<unnamed vector>", result.VectorId);
     }
+
+    // =================================================================================================
+    // FI-99 — `boundsAbsence`: THE ENUMERATION SAYING, POSITIVELY, THAT ITS SUBJECT HAS NO BOUNDS.
+    //
+    // Measured 2026-09-03. An otherwise complete submission — 31 gates run, 0 refused — was NOT
+    // ADMISSIBLE on a single NOT CHECKED, because a third-party enumeration of a purely combinational
+    // subject had reached a defensible negative, written it down in prose, and had no field to put it in.
+    // The only escape available was to INVENT a bound, which is the fabrication the surrounding rules
+    // exist to prevent. *** A GATE WHOSE ONLY ESCAPE IS A LIE IS WORSE THAN THE GAP IT GUARDS. ***
+    //
+    // 🔴 EVERY TEST BELOW IS ABOUT ONE OF TWO THINGS: that the GUARD IS STILL SHUT where nobody signed
+    // for the emptiness, and that where somebody did sign, THE SIGNATURE CAN BE FALSIFIED.
+    // =================================================================================================
+
+    private static readonly IReadOnlyDictionary<string, string> NoTable =
+        new Dictionary<string, string>(StringComparer.Ordinal);
+
+    /// <summary>A well-formed absence claim: claimed, an author, and a reason.</summary>
+    private static BoundsAbsenceClaim Claim(params string[] contradictingAssertions) =>
+        BoundsAbsenceClaim.Of(true, "assertion-enumerator",
+            "no clause of this subject names a timing bound, tolerance, delay, timeout or settling time",
+            contradictingAssertions);
+
+    // -------------------------------------------------------------------------------------------------
+    // 1. THE GUARD. The most important test in this file.
+    // -------------------------------------------------------------------------------------------------
+
+    /// <summary>
+    /// 🔴 <b>THE CHEAP ROUTE STAYS CLOSED.</b> `{}` on both sides, with nobody claiming anything, is
+    /// exactly as expensive as it was before FI-99: an enumeration with no bounds table is not an
+    /// enumeration whose assertions have no bounds, it is one nobody supplied a table for. If this test
+    /// ever goes green on a pass, the fix has become the hole.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]  // the table is an EMPTY map
+    [InlineData(false)] // the table is absent altogether
+    public void FI99_AN_EMPTY_TABLE_WITH_NO_CLAIM_IS_STILL_NO_TABLE_AND_STILL_NOT_CHECKED(bool emptyRatherThanNull)
+    {
+        var result = BoundsCurrencyCheck.Evaluate(
+            "V-1", Used(), emptyRatherThanNull ? NoTable : null, Says("REQ-1.a"), BoundsAbsenceClaim.None);
+
+        Assert.Equal(BoundsCurrencyState.NoTable, result.State);
+        Assert.False(result.Checked);
+        Assert.False(result.Refused);
+    }
+
+    /// <summary>Omitting the parameter entirely must be identical to passing <c>None</c> — the default fails CLOSED.</summary>
+    [Fact]
+    public void FI99_OMITTING_THE_ABSENCE_ARGUMENT_IS_THE_SAME_AS_CLAIMING_NOTHING()
+    {
+        var omitted = BoundsCurrencyCheck.Evaluate("V-1", Used(), NoTable, Says("REQ-1.a"));
+        var explicitly = BoundsCurrencyCheck.Evaluate("V-1", Used(), NoTable, Says("REQ-1.a"), BoundsAbsenceClaim.None);
+
+        Assert.Equal(BoundsCurrencyState.NoTable, omitted.State);
+        Assert.Equal(explicitly.State, omitted.State);
+    }
+
+    // -------------------------------------------------------------------------------------------------
+    // 2. THE PASS.
+    // -------------------------------------------------------------------------------------------------
+
+    [Fact]
+    public void FI99_An_EMPTY_TABLE_with_a_SIGNED_AND_REASONED_claim_is_a_CHECKED_PASS()
+    {
+        var result = BoundsCurrencyCheck.Evaluate("V-1", Used(), NoTable, Says("REQ-1.a"), Claim());
+
+        Assert.Equal(BoundsCurrencyState.NoBoundsTableClaimed, result.State);
+        Assert.True(result.Checked);
+        Assert.False(result.Refused);
+        Assert.False(result.PremiseOutOfDate);
+    }
+
+    /// <summary>
+    /// <b>The pass must not read like an ordinary green.</b> It rests on a recorded claim that no
+    /// comparison established and none could, so the claimant is named and the reason is quoted — a
+    /// reader has to be able to see whose signature the green is and go and argue with them.
+    /// </summary>
+    [Fact]
+    public void FI99_The_claimed_absence_pass_NAMES_THE_CLAIMANT_and_QUOTES_THE_REASON()
+    {
+        var detail = BoundsCurrencyCheck.Evaluate("V-1", Used(), NoTable, Says("REQ-1.a"), Claim()).Detail;
+
+        Assert.Contains("assertion-enumerator", detail, StringComparison.Ordinal);
+        Assert.Contains("no clause of this subject names a timing bound", detail, StringComparison.Ordinal);
+        Assert.Contains("ON A RECORDED CLAIM, NOT ON A COMPARISON", detail, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// <b>Silence is still silence, even under a good claim.</b> FI-99 gave the ENUMERATION a voice, not
+    /// the vector: an absent `boundsUsed` said nothing, and reading it as agreement with somebody else's
+    /// claim is the absent-versus-empty collapse this file has now been repaired for twice.
+    /// </summary>
+    [Fact]
+    public void FI99_A_vector_that_says_NOTHING_stays_NOT_DECLARED_even_under_a_valid_claim()
+    {
+        var result = BoundsCurrencyCheck.Evaluate("V-1", null, NoTable, Says("REQ-1.a"), Claim());
+
+        Assert.Equal(BoundsCurrencyState.NotDeclared, result.State);
+        Assert.False(result.Checked);
+    }
+
+    // -------------------------------------------------------------------------------------------------
+    // 3. A CLAIM WITH NO AUTHOR OR NO REASON IS NOT A CLAIM.
+    // -------------------------------------------------------------------------------------------------
+
+    [Theory]
+    [InlineData(null, "because there is nothing to bound")]
+    [InlineData("   ", "because there is nothing to bound")]
+    [InlineData("assertion-enumerator", null)]
+    [InlineData("assertion-enumerator", "   ")]
+    public void FI99_A_CLAIM_MISSING_ITS_AUTHOR_OR_ITS_REASON_IS_NOT_A_CLAIM_AND_THE_GUARD_STAYS_SHUT(
+        string? by, string? because)
+    {
+        var claim = BoundsAbsenceClaim.Of(true, by, because);
+
+        Assert.False(claim.IsClaimed);
+        Assert.True(claim.WasRejected);
+
+        // *** AND IT SAYS SO. *** A rejected claim that vanished silently would be the very defect FI-99
+        // fixes, one field over: the author would watch their positive claim become a NOT CHECKED with
+        // nothing naming the key that did it.
+        Assert.Contains("A CLAIM WITH NO AUTHOR OR NO REASON IS NOT A CLAIM", claim.RejectedBecause, StringComparison.Ordinal);
+
+        var result = BoundsCurrencyCheck.Evaluate("V-1", Used(), NoTable, Says("REQ-1.a"), claim);
+
+        Assert.Equal(BoundsCurrencyState.NoTable, result.State);
+        Assert.False(result.Checked);
+    }
+
+    [Fact]
+    public void FI99_claimed_FALSE_is_simply_no_claim_and_is_not_reported_as_a_rejection()
+    {
+        var claim = BoundsAbsenceClaim.Of(false, "assertion-enumerator", "a reason nobody asked for");
+
+        Assert.False(claim.IsClaimed);
+        Assert.False(claim.WasRejected);
+        Assert.Same(BoundsAbsenceClaim.None, claim);
+    }
+
+    // -------------------------------------------------------------------------------------------------
+    // 4, 5, 6. FALSIFIABILITY — the three ways the submission's own contents contradict the claim.
+    // -------------------------------------------------------------------------------------------------
+
+    /// <summary>
+    /// <b>Limb 2: the claimant's own assertions name a bound.</b> An ENUMERATION defect — the party who
+    /// said "nothing here has one" wrote the entry that names one.
+    /// </summary>
+    [Fact]
+    public void FI99_A_claim_CONTRADICTED_BY_ITS_OWN_ASSERTION_BOUNDS_is_REFUSED_and_NAMES_THE_ASSERTION()
+    {
+        var enumeration = AssertionEnumeration.Of(
+            new[] { "REQ-1" },
+            new[] { "REQ-1.a", "REQ-1.b" },
+            assertionBounds: new Dictionary<string, IReadOnlySet<string>>(StringComparer.Ordinal)
+            {
+                ["REQ-1.a"] = new HashSet<string>(StringComparer.Ordinal),
+                ["REQ-1.b"] = new HashSet<string>(StringComparer.Ordinal) { "persistence_threshold" },
+            },
+            boundsAbsence: Claim());
+
+        var result = BoundsCurrencyCheck.Evaluate(
+            "V-1", Used(), enumeration.Bounds, enumeration.BoundsExpectationFor("REQ-1.a"), enumeration.ResolvedBoundsAbsence);
+
+        Assert.Equal(BoundsCurrencyState.BoundsAbsenceContradictedByEnumeration, result.State);
+        Assert.False(result.Checked);
+        Assert.True(result.Refused);
+
+        // 🔴 NOT `PremiseOutOfDate`: that flag means the VECTOR is wrong, and this vector is wrong about
+        // nothing. Dressing it in a Stale verdict headlined "re-read the vector" would send the reader to
+        // repair the one document here that is innocent.
+        Assert.False(result.PremiseOutOfDate);
+
+        Assert.Contains("REQ-1.b", result.Detail, StringComparison.Ordinal);
+        Assert.Contains("persistence_threshold", result.Detail, StringComparison.Ordinal);
+        Assert.Contains("THIS IS AN ENUMERATION DEFECT", result.Detail, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// <b>Limb 3: a vector cites a bound against a subject claimed to have none.</b> A VECTOR defect, and
+    /// it is a DIFFERENT state from the enumeration case because it has a different repair — a finding
+    /// that misnames the repair sends the reader to the wrong document with full confidence.
+    /// </summary>
+    [Fact]
+    public void FI99_A_VECTOR_citing_a_bound_against_a_claimed_absence_is_REFUSED_and_NAMES_THE_VECTOR()
+    {
+        var result = BoundsCurrencyCheck.Evaluate(
+            "V-cites", Used(("persistence_threshold", "T#60S")), NoTable, Says("REQ-1.a"), Claim());
+
+        Assert.Equal(BoundsCurrencyState.BoundsAbsenceContradictedByVector, result.State);
+        Assert.False(result.Checked);
+        Assert.True(result.Refused);
+
+        // The vector IS wrong here, and the block is not accused — which is exactly what PremiseOutOfDate
+        // means, so this one carries it and produces a Stale verdict rather than a Fail.
+        Assert.True(result.PremiseOutOfDate);
+
+        Assert.Contains("V-cites", result.Detail, StringComparison.Ordinal);
+        Assert.Contains("persistence_threshold", result.Detail, StringComparison.Ordinal);
+        Assert.Contains("T#60S", result.Detail, StringComparison.Ordinal);
+        Assert.Contains("THIS IS A VECTOR DEFECT", result.Detail, StringComparison.Ordinal);
+        Assert.Contains("THE BLOCK IS NOT ACCUSED OF ANYTHING HERE", result.Detail, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// <b>The two contradictions must not be confusable</b>: each names its own side, and neither names
+    /// the other's repair.
+    /// </summary>
+    [Fact]
+    public void FI99_THE_TWO_CONTRADICTIONS_NAME_DIFFERENT_SIDES_AND_DIFFERENT_REPAIRS()
+    {
+        var byEnumeration = BoundsCurrencyCheck.Evaluate(
+            "V-1", Used(), NoTable, Says("REQ-1.a"), Claim("assertion 'REQ-1.b' as depending on persistence_threshold"));
+        var byVector = BoundsCurrencyCheck.Evaluate(
+            "V-1", Used(("persistence_threshold", "T#60S")), NoTable, Says("REQ-1.a"), Claim());
+
+        Assert.NotEqual(byEnumeration.State, byVector.State);
+
+        Assert.Contains("THIS IS AN ENUMERATION DEFECT", byEnumeration.Detail, StringComparison.Ordinal);
+        Assert.DoesNotContain("THIS IS A VECTOR DEFECT", byEnumeration.Detail, StringComparison.Ordinal);
+
+        Assert.Contains("THIS IS A VECTOR DEFECT", byVector.Detail, StringComparison.Ordinal);
+        Assert.DoesNotContain("THIS IS AN ENUMERATION DEFECT", byVector.Detail, StringComparison.Ordinal);
+    }
+
+    // -------------------------------------------------------------------------------------------------
+    // 6. A SUPPLIED TABLE.
+    // -------------------------------------------------------------------------------------------------
+
+    /// <summary>
+    /// 🔴 <b>THE DECISION, STATED IN THE NAME: a claim beside a NON-EMPTY table is REFUSED, not
+    /// ignored.</b> It is the flattest contradiction available — a claim that the subject tabulates NO
+    /// bound sitting on top of a table that tabulates some. Ignoring it would leave a false statement
+    /// standing unchallenged in the document, which is how the next reader comes to believe it.
+    /// </summary>
+    [Fact]
+    public void FI99_A_claim_beside_a_NON_EMPTY_TABLE_is_REFUSED_as_contradictory_rather_than_IGNORED()
+    {
+        var result = BoundsCurrencyCheck.Evaluate(
+            "V-1", Used(("persistence_threshold", "T#60S")), Table, NoRelation, Claim());
+
+        Assert.Equal(BoundsCurrencyState.BoundsAbsenceContradictedByEnumeration, result.State);
+        Assert.False(result.Checked);
+        Assert.True(result.Refused);
+        Assert.Contains("persistence_threshold", result.Detail, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// <b>The converse, and it is the one that proves the fix did not widen anything.</b> A supplied
+    /// table with NO claim behaves exactly as it did before FI-99 — same state, same agreed list, same
+    /// detail string — because that path is not reached by any of the new code.
+    /// </summary>
+    [Theory]
+    [InlineData("T#60S", BoundsCurrencyState.Current)]
+    [InlineData("T#90S", BoundsCurrencyState.Stale)]
+    public void FI99_A_SUPPLIED_TABLE_WITH_NO_CLAIM_BEHAVES_EXACTLY_AS_BEFORE(string used, BoundsCurrencyState expected)
+    {
+        var before = BoundsCurrencyCheck.Evaluate("V-1", Used(("persistence_threshold", used)), Table, NoRelation);
+        var after = BoundsCurrencyCheck.Evaluate("V-1", Used(("persistence_threshold", used)), Table, NoRelation, BoundsAbsenceClaim.None);
+
+        Assert.Equal(expected, before.State);
+        Assert.Equal(before.State, after.State);
+        Assert.Equal(before.Agreed, after.Agreed);
+        Assert.Equal(before.Detail, after.Detail);
+    }
+
+    // -------------------------------------------------------------------------------------------------
+    // THE PROJECTION. An enumeration that answers the bounds question, either way.
+    // -------------------------------------------------------------------------------------------------
+
+    [Fact]
+    public void FI99_An_enumeration_ANSWERS_THE_BOUNDS_QUESTION_by_supplying_a_table_OR_by_claiming_there_is_none()
+    {
+        var silent = AssertionEnumeration.Of(new[] { "REQ-1" }, new[] { "REQ-1.a" });
+        var tabulated = AssertionEnumeration.Of(new[] { "REQ-1" }, new[] { "REQ-1.a" }, bounds: Table);
+        var claimed = AssertionEnumeration.Of(new[] { "REQ-1" }, new[] { "REQ-1.a" }, boundsAbsence: Claim());
+        var rejected = AssertionEnumeration.Of(new[] { "REQ-1" }, new[] { "REQ-1.a" },
+            boundsAbsence: BoundsAbsenceClaim.Of(true, "somebody", null));
+
+        Assert.False(silent.AnswersTheBoundsQuestion);
+        Assert.True(tabulated.AnswersTheBoundsQuestion);
+        Assert.True(claimed.AnswersTheBoundsQuestion);
+
+        // *** A REJECTED CLAIM IS NOT AN ANSWER. *** This is the line between the fix and the hole: if a
+        // malformed claim counted, "claimed: true" alone would be the cheapest route through the gate.
+        Assert.False(rejected.AnswersTheBoundsQuestion);
+    }
+
+    [Fact]
+    public void FI99_The_RESOLVED_claim_carries_the_falsifying_assertions_from_its_own_enumeration()
+    {
+        var enumeration = AssertionEnumeration.Of(
+            new[] { "REQ-1" },
+            new[] { "REQ-1.a", "REQ-1.b" },
+            assertionBounds: new Dictionary<string, IReadOnlySet<string>>(StringComparer.Ordinal)
+            {
+                ["REQ-1.a"] = new HashSet<string>(StringComparer.Ordinal),
+                ["REQ-1.b"] = new HashSet<string>(StringComparer.Ordinal) { "persistence_threshold" },
+            },
+            boundsAbsence: Claim());
+
+        // Only the entry that NAMES a bound falsifies. An empty entry agrees with the claim, and counting
+        // it would refuse every honest enumeration this feature exists for.
+        var contradicting = Assert.Single(enumeration.ResolvedBoundsAbsence.ContradictingAssertions);
+
+        Assert.Contains("REQ-1.b", contradicting, StringComparison.Ordinal);
+        Assert.True(enumeration.ResolvedBoundsAbsence.IsContradictedByEnumeration);
+    }
+
+    // -------------------------------------------------------------------------------------------------
+    // 7. ROUND TRIP, AND GATE 0b.
+    // -------------------------------------------------------------------------------------------------
+
+    /// <summary>
+    /// The field has to survive the wire, and <b>gate 0b must not refuse it</b> — a new key the schema
+    /// does not map is exactly what 0b exists to name, so a field added to the contract and not to the
+    /// reader would refuse every submission that used it.
+    /// </summary>
+    [Fact]
+    public void FI99_boundsAbsence_ROUND_TRIPS_and_gate_0b_does_NOT_refuse_the_new_key()
+    {
+        const string json = """
+            {
+              "enumeration": {
+                "clauses": ["REQ-1"],
+                "assertions": ["REQ-1.a"],
+                "boundsAbsence": {
+                  "claimed": true,
+                  "by": "assertion-enumerator",
+                  "because": "not one of the eight clauses of this subject names a timing bound"
+                }
+              }
+            }
+            """;
+
+        var document = Harness.Gate.SubmissionDocument.Read(json);
+
+        Assert.Empty(document.UnknownFieldPaths());
+        Assert.True(document.Enumeration!.BoundsAbsence!.Claimed);
+        Assert.Equal("assertion-enumerator", document.Enumeration.BoundsAbsence.By);
+
+        // Out and back in again, through this solution's own writer.
+        var again = Harness.Gate.SubmissionDocument.Read(Harness.Gate.SubmissionDocument.Write(document));
+
+        Assert.Empty(again.UnknownFieldPaths());
+        Assert.Equal(document.Enumeration.BoundsAbsence.Because, again.Enumeration!.BoundsAbsence!.Because);
+
+        // And the projection into the checked type carries it as a real claim.
+        var projected = Harness.Gate.GateCli.ToEnumerationSet(again).Enumerations.Single();
+
+        Assert.True(projected.ResolvedBoundsAbsence.IsClaimed);
+        Assert.Equal("assertion-enumerator", projected.ResolvedBoundsAbsence.By);
+        Assert.True(projected.AnswersTheBoundsQuestion);
+    }
+
+    /// <summary>
+    /// <b>0b's scope reaches INSIDE the new block.</b> A misspelt <c>because</c> would leave
+    /// <c>claimed: true</c> standing with no reason — which this code correctly reads as NO CLAIM — so
+    /// the author's positive claim would silently become a NOT CHECKED and nothing would say which key
+    /// did it. That is precisely the silent drop 0b exists for.
+    /// </summary>
+    [Fact]
+    public void FI99_A_MISSPELT_KEY_INSIDE_boundsAbsence_IS_REFUSED_BY_GATE_0b()
+    {
+        const string json = """
+            {
+              "enumeration": {
+                "boundsAbsence": { "claimed": true, "by": "assertion-enumerator", "becuase": "typo" }
+              }
+            }
+            """;
+
+        var document = Harness.Gate.SubmissionDocument.Read(json);
+
+        Assert.Equal(new[] { "enumeration.boundsAbsence.becuase" }, document.UnknownFieldPaths());
+    }
 }

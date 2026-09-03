@@ -132,6 +132,50 @@ public sealed record AssertionEnumeration(
     /// </summary>
     public string Subject { get; init; } = string.Empty;
 
+    /// <summary>
+    /// 🔴 <b>THE ENUMERATION'S POSITIVE CLAIM THAT ITS SUBJECT HAS NO BOUNDS TO TABULATE — FI-99.</b>
+    ///
+    /// <para>An <b>INIT-ONLY PROPERTY WITH A DEFAULT rather than a positional member</b>, following
+    /// <see cref="Subject"/>: no existing construction site changes, and every enumeration written before
+    /// FI-99 carries <see cref="BoundsAbsenceClaim.None"/> and behaves exactly as it did.</para>
+    ///
+    /// <para><b>It is the enumeration's to make and nobody else's</b>, for the same reason
+    /// <c>AssertionBounds</c> is: a claim verified against something its own author wrote is not verified,
+    /// and the vector author must not be able to excuse their own missing citation.</para>
+    /// </summary>
+    public BoundsAbsenceClaim BoundsAbsence { get; init; } = BoundsAbsenceClaim.None;
+
+    /// <summary>
+    /// The assertions whose <c>assertionBounds</c> entry NAMES a bound — <b>the evidence that falsifies
+    /// <see cref="BoundsAbsence"/> out of the claimant's own file.</b> Empty is the earned zero here: an
+    /// enumeration stating no relation at all yields nothing, which is why the vector-side limb and the
+    /// table-side limb exist beside this one rather than instead of it.
+    /// </summary>
+    public IReadOnlyList<string> AssertionsNamingABound =>
+        AssertionBounds is null
+            ? Array.Empty<string>()
+            : AssertionBounds
+                .Where(e => e.Value.Count > 0)
+                .Select(e => $"assertion '{e.Key}' as depending on {string.Join(", ", e.Value.OrderBy(b => b, StringComparer.Ordinal))}")
+                .OrderBy(s => s, StringComparer.Ordinal)
+                .ToArray();
+
+    /// <summary>
+    /// <b>What gate 3i should judge the absence claim on</b> — the claim as written, carrying the
+    /// contradicting assertions computed from this same enumeration. Assembled here, beside the data that
+    /// decides it, for the same reason <see cref="BoundsExpectationFor"/> is.
+    /// </summary>
+    public BoundsAbsenceClaim ResolvedBoundsAbsence =>
+        BoundsAbsence.IsClaimed
+            ? BoundsAbsenceClaim.Of(true, BoundsAbsence.By, BoundsAbsence.Because, AssertionsNamingABound)
+            : BoundsAbsence;
+
+    /// <summary>
+    /// True when this enumeration has an answer about its bounds table — <b>either it supplied one, or it
+    /// positively claimed there is none to supply</b>. False is the state gate 3i reports as NOT CHECKED.
+    /// </summary>
+    public bool AnswersTheBoundsQuestion => !CarriesNoBounds || ResolvedBoundsAbsence.IsClaimed;
+
     public bool IsEmpty => Assertions.Count == 0 || Clauses.Count == 0;
 
     /// <summary>True when the enumeration is the flat projection and carries no forms at all.</summary>
@@ -158,6 +202,10 @@ public sealed record AssertionEnumeration(
     /// <summary>
     /// True when no bounds table was supplied, so AMB-19's comparison has nothing to compare against.
     /// <b>Not the same as a table that agrees with every vector.</b>
+    ///
+    /// <para>🔴 <b>AND SINCE FI-99 IT IS NOT THE SAME AS "THIS SUBJECT HAS NO BOUNDS" EITHER.</b> This
+    /// property is about the TABLE and says nothing about whether anybody accounted for its emptiness —
+    /// <see cref="AnswersTheBoundsQuestion"/> is the one gate 3i keys on.</para>
     /// </summary>
     public bool CarriesNoBounds => Bounds is null || Bounds.Count == 0;
 
@@ -211,7 +259,8 @@ public sealed record AssertionEnumeration(
         IReadOnlyDictionary<string, IReadOnlySet<string>>? requiredObservations = null,
         IReadOnlyDictionary<string, string>? bounds = null,
         IReadOnlyDictionary<string, IReadOnlySet<string>>? assertionBounds = null,
-        string subject = "") =>
+        string subject = "",
+        BoundsAbsenceClaim? boundsAbsence = null) =>
         new(clauses.ToHashSet(StringComparer.Ordinal),
             assertions.ToHashSet(StringComparer.Ordinal),
             forms ?? new Dictionary<string, AssertionForm>(StringComparer.Ordinal),
@@ -222,6 +271,7 @@ public sealed record AssertionEnumeration(
             assertionBounds)
         {
             Subject = subject ?? string.Empty,
+            BoundsAbsence = boundsAbsence ?? BoundsAbsenceClaim.None,
         };
 }
 

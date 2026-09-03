@@ -3377,6 +3377,31 @@ form would have no such corroboration at all.
 
 ## FI-99 — a subject that genuinely has NO bounds can never clear gate 3i, because "positively empty" has nowhere to go
 
+- **Status:** **IMPLEMENTED 2026-09-03** — same day it was raised. `enumeration.boundsAbsence`
+  (`{claimed, by, because}`) in `Harness.Gate/SubmissionDocument.cs`, carried to
+  `AssertionEnumeration.BoundsAbsence` and consumed by `BoundsCurrencyCheck.Evaluate`'s new `absence`
+  parameter. **The guard at `BoundsCurrency.cs`'s empty-table branch is UNCHANGED where nobody signs
+  for the emptiness** — the comment there is extended, not replaced, and is now the reason the guard
+  survives. Contract: `docs/notes/test-environment-contract.md` **§2.5a**.
+  - **New states** (appended, never inserted): `NoBoundsTableClaimed` — a **CHECKED PASS**;
+    `BoundsAbsenceContradictedByEnumeration` and `BoundsAbsenceContradictedByVector` — **REFUSALS**.
+  - **All three fields are required.** `claimed: true` with no `by` or no `because` is **not a claim**
+    and leaves `NoTable`/`NOT CHECKED`, with the gate saying which field was missing rather than
+    letting the claim vanish.
+  - 🔴 **The claim is FALSIFIABLE, in three limbs, and each REFUSES:** a non-empty `bounds` table
+    beside it (enumeration defect); an `assertionBounds` entry naming a bound (enumeration defect);
+    a vector declaring a non-empty `boundsUsed` (vector defect, reported as `STALE`). The two sides
+    are separate states with separate sentences **because they have different repairs**.
+  - **The pass says out loud that it rests on a CLAIM and not on a comparison**, names the claimant
+    and quotes the reason — a green a reader cannot tell from an ordinary one is a green nobody ever
+    goes and checks.
+  - **Nothing else moved.** A supplied table with no claim is byte-identical in state, agreed list and
+    detail string (pinned by a test that compares the two calls). Silence — an absent `boundsUsed` —
+    is still `NotDeclared` even under a good claim: FI-99 gave the ENUMERATION a voice, not the vector.
+  - Tests: 26 added across `BoundsCurrencyTests` and `SubmissionGateTests`, including the guard itself,
+    both malformed-claim shapes, all three falsifying limbs, the unchanged-supplied-table converse, and
+    a round trip proving gate 0b accepts `boundsAbsence` and still refuses a misspelt key inside it.
+
 **Measured 2026-09-03** on a submission that was otherwise complete: **31 gates run, 0 refused, and
 NOT ADMISSIBLE on a single NOT CHECKED.**
 

@@ -218,6 +218,11 @@ public static class ResultPackageBuilder
         //
         // NoBoundsCited is deliberately NOT here: it is a CHECKED pass, verified against the enumeration,
         // and caveating it would re-create under another name the refusal this state exists to remove.
+        // NoBoundsTableClaimed (FI-99) is not here either, and for the same reason — it is a CHECKED pass
+        // whose basis, the claimant and the reason, is printed inside its own Detail, so a reader meets it
+        // without a caveat repeating it. BoundsAbsenceContradictedByEnumeration IS here: it refuses
+        // without the VECTOR's premise being wrong, so nothing above turns it into a Stale verdict, and a
+        // package that reached this far with a self-contradictory enumeration must not read clean.
         if (declaration.BoundsCurrency is null)
         {
             caveats.Add(
@@ -226,7 +231,8 @@ public static class ResultPackageBuilder
         }
         else if (declaration.BoundsCurrency.State is BoundsCurrencyState.NotDeclared
                  or BoundsCurrencyState.NoTable
-                 or BoundsCurrencyState.NoBoundsClaimUnverified)
+                 or BoundsCurrencyState.NoBoundsClaimUnverified
+                 or BoundsCurrencyState.BoundsAbsenceContradictedByEnumeration)
         {
             caveats.Add("BOUNDS CURRENCY WAS NOT ESTABLISHED (AMB-19). " + declaration.BoundsCurrency.Detail);
         }

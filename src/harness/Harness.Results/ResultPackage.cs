@@ -195,8 +195,8 @@ public sealed record ResultPackage(
     /// </summary>
     IReadOnlyList<int>? CoRunners,
     ValidityStamp Stamp,
-    // AMB-19. Null means the question was not asked for this result; the STATES inside it are the
-    // answers, and five of the seven are not passes. See BoundsCurrencyCheck.
+    // AMB-19, and FI-99. Null means the question was not asked for this result; the STATES inside it are
+    // the answers, and SEVEN OF THE TEN ARE NOT PASSES. See BoundsCurrencyCheck.
     VectorBoundsCurrency? BoundsCurrency = null,
 
     /// <summary>

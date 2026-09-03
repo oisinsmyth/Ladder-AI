@@ -93,7 +93,7 @@ Contract §10's surface, in the order a submission meets it, with the **verifier
 | **3f** | **citation shape** | the citation is the content-derived ID (`<clause>:<six lowercase hex>`), **never the display ordinal** | `AssertionId`. An ordinal is **POSITIONAL** — inserting one assertion above it silently makes the citation name a different one | **CHECKED** |
 | **3g** | **assertion IDs recompute** | every ID re-hashes from the `normalisedTexts` it claims to come from | `AssertionId.Compute`. ***This recomputation is the ONLY reason the stamper is permitted to have no independence from the block or vector author*** — without it a hand-written or altered hex string is indistinguishable from a computed one, **and the omission is exactly what a compromised stamper would emit** | **CHECKED** *(NOT CHECKED without `enumeration.normalisedTexts`)* |
 | **3h** | **required observations (AMB-14)** | every signal the cited assertion depends on appears in this vector's `Expectations` | `AssertionEnumeration.RequiredObservationsOf` — set difference. **A relational assertion names more than one**: expect on one output, never observe the other, and the relation is untested while everything reports green | **CHECKED** *(NOT CHECKED without `enumeration.requiredObservations`)* |
-| **3i** | **bounds currency (AMB-19)** — contract **§2.5** | each vector's `boundsUsed` value matches `enumeration.bounds` | `BoundsCurrencyCheck`. ***A mismatch REFUSES and is reported as `STALE`, NEVER `FAIL`***; a vector declaring no bound is **NOT CHECKED and keeps that status beside a stale sibling** | **CHECKED** *(NOT CHECKED without `boundsUsed` or `enumeration.bounds`)* |
+| **3i** | **bounds currency (AMB-19)** — contract **§2.5**, **§2.5a** | each vector's `boundsUsed` value matches `enumeration.bounds` | `BoundsCurrencyCheck`. ***A mismatch REFUSES and is reported as `STALE`, NEVER `FAIL`***; a vector declaring no bound is **NOT CHECKED and keeps that status beside a stale sibling**. An empty `bounds` table is NOT CHECKED unless `boundsAbsence` signs for it (FI-99) | **CHECKED** *(NOT CHECKED without `boundsUsed`, or without `enumeration.bounds` and unsigned)* |
 | 4 | **fidelity (M4)** | asserted behaviours ⊆ the model's `Represents` | `Admissibility` — set difference | **CHECKED** |
 | 5 | **observability** | mode valid; signal in the map; window ≥ §12a derivation 1's floor **at the run-time `comp`**; declared before the generating download | ***`ObservabilityCheck` — A COMPUTATION.*** It was a caller-supplied `bool`; it is now derived from the vector's declared nature+mode, what the MAP provides, and the floor `harness-gate` computes from the wave set | **CHECKED** |
 | 6 | **settling exists, and is not the completion flag** | both halves | `Admissibility` | **CHECKED** |
@@ -226,9 +226,10 @@ the bounds table therefore **re-hashes nothing** — so a retune changes the tru
 assertion referring to the table while moving zero IDs. A vector written against the old bound goes
 on passing, because staleness keys on assertion **IDs** and not on bound **values**.
 
-🔴 **Read §2.5 rather than remembering this section**: the `boundsUsed: {}` ruling of 2026-08-17 — an
-empty bounds object is a **claim** that is verified, not a silence that is accepted — postdates
-everything this skill used to say here.
+🔴 **Read §2.5 and §2.5a rather than remembering this section.** Two rulings postdate it: `boundsUsed:
+{}` is a **verified claim**, not an accepted silence (2026-08-17); and `enumeration.boundsAbsence` lets
+the enumeration claim the **whole subject** has none — signed, reasoned, falsifiable, and `bounds: {}`
+unsigned still fails (FI-99, 2026-09-03).
 
 ### Gate 4 — fidelity (M4)
 Set-difference: every asserted behaviour must be in the model's `Represents`. **A model that claims
