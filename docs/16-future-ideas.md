@@ -3196,3 +3196,61 @@ instead, which is the right failure — but it is caught one artifact downstream
    list with a reason per clause is an honest, usable artifact; a silently-short file is not. Today
    the contract offers no way to say "this denominator is incomplete and here is exactly how", so an
    agent that cannot fit the whole job has no correct move available to it.
+
+---
+
+## FI-96 — an enumeration that parameterises an observation over a CHANNEL cannot join to a flat binding
+
+**Measured 2026-09-03**, wiring a new conformance slot to an enumeration written by a third party.
+
+Gate 3h joins a vector's citation to an observation by **string equality on `specName`**, and a
+`specName` must resolve to **exactly one** `resultSources` row — two rows sharing a name makes
+`ResultRegisterOf` ambiguous.
+
+Some blocks carry **repeated channels inside a single instance**: four request inputs and four
+granted flags on one block, one per asker. An enumerator working from the specification writes the
+obligation once and parameterises it, because that is what the specification says:
+
+```
+required_observations:
+  - "the per-asker granted flag, for this asker"          # cited by 8 assertions
+  - "the per-asker request input, for this asker"         # cited by 8
+  - "the per-asker granted flag, for all four positions"  # cited by 4
+```
+
+The binding, correctly, carries **four separate rows** — one per channel, each with its own tag and
+its own mirror register. **One phrase, four rows. The join cannot be made.** Setting the name on all
+four is ambiguous; setting it on one silently tests one channel and reads as if it tested the
+obligation.
+
+On the block that surfaced this, **seven of ten required observations are channel-parameterised, two
+are marked UNNAMED IN THE SPEC by the enumerator, and exactly one is singular and joinable.** A
+sibling block's enumerator independently flagged the same axis as its own biggest open question.
+
+### Why this is not the "unnamed member" problem, and why that matters
+
+It is easy to file this under the finding that dominates this program — specs describing behaviour
+without naming interface members — and it is **not that**. Here the enumeration is *right*, the
+binding is *right*, and they still cannot meet. Renaming members would not fix it; writing the
+enumeration four times would work but would inflate the denominator with four near-identical
+assertions and destroy the property that makes a spec-derived enumeration worth having.
+
+### What the fix has to preserve
+
+The instance axis already exists in the contract as a **multiplier on coverage units** — an
+enumeration declares `declared_instances` and reports `assertions × instances`. So the model knows
+the axis is there; only the *join* is flat. Three shapes worth weighing:
+
+1. **A channel-qualified `specName`** — the binding names `<phrase> [W]`, `<phrase> [X]`, … and the
+   vector cites the phrase plus the channel it drove. Keeps one row per name, keeps one assertion.
+   Needs a qualifier the gate understands rather than a naming convention nobody enforces.
+2. **A `serves`-style many-to-one map on observations.** The slot binding already carries `serves`
+   for the *slot* id — "the specification slot ids this ONE slot serves" — which is the same problem
+   solved one level up. An observation-level equivalent would be a small, precedented addition.
+3. **Rule that a channelled obligation is tested on one declared channel**, and make the binding say
+   *which*, so a pass reads "asker W was tested" and never "the obligation was tested". Cheapest, and
+   the only one of the three that is honest without any code change — but it must be **stated on the
+   artifact**, because the difference between those two sentences is the whole value of the gate.
+
+Until one of these exists, a block with repeated channels can bind only its singular observations,
+and the coverage it can earn is bounded by that rather than by its specification or its logic.
