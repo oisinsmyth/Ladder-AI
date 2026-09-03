@@ -30,13 +30,18 @@ public static class PreflightRunner
         var callees = Program.BuildCalleeRegistry(paths, projectDir);
         var tagTypes = Program.BuildTagTypeRegistry(paths, projectDir);
 
+        // FI-102. Preflight converts with the real writer, so it needs the real corpus too — an
+        // instance DB whose FB-typed static would be refused at import is exactly the finding a filter
+        // sitting BEFORE the compile gate exists to produce.
+        var instanceTypes = Program.BuildInstanceDbTypeResolution(paths, projectDir, tagTypes);
+
         // The harness scope is built over the batch AND the project export together, so a tag's
         // referrers are looked for in the whole corpus rather than only in the files being flown.
         // Preflight is a filter before the compile gate; a generated harness object drawing 20+
         // naming findings here is exactly the noise that gets a filter switched off.
         var harnessScope = HarnessScope.Build(paths.Concat(Directory.EnumerateFiles(projectDir, "*.ir")));
 
-        var files = paths.Select(path => PreflightFile(path, index, callees, tagTypes, harnessScope)).ToList();
+        var files = paths.Select(path => PreflightFile(path, index, callees, tagTypes, harnessScope, instanceTypes)).ToList();
 
         // THE DENOMINATOR (2026-08-23). Every one of the four walks above independently enumerates
         // projectDir, and every one of them decides a different class of finding, so each is asked
@@ -57,7 +62,8 @@ public static class PreflightRunner
     }
 
     private static FilePreflight PreflightFile(
-        string path, ProjectIndex index, CalleeInterfaceRegistry callees, TagTypeRegistry tagTypes, HarnessScope harnessScope)
+        string path, ProjectIndex index, CalleeInterfaceRegistry callees, TagTypeRegistry tagTypes,
+        HarnessScope harnessScope, InstanceDbTypeResolution instanceTypes)
     {
         var findings = new List<PreflightFinding>();
         string? name = null;
@@ -70,7 +76,7 @@ public static class PreflightRunner
             {
                 var db = DbIrParser.ParseDb(text);
                 name = db.Name;
-                CheckConvert(findings, "DB", () => DbSourceWriter.Write(db));
+                CheckConvert(findings, "DB", () => DbSourceWriter.Write(db, instanceTypes));
                 if (db.InstanceOfName is not null && !index.ResolvesAsBlock(db.InstanceOfName))
                 {
                     findings.Add(new PreflightFinding("instanceof", $"INSTANCEOF '{db.InstanceOfName}' does not resolve to any block in the project or batch."));

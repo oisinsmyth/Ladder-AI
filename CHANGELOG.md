@@ -2,6 +2,56 @@
 
 ## 2026-09-03
 
+**FI-102 — an instance DB of a block that NESTS other FB instances can now be emitted in the shape TIA
+accepts**
+
+Converter only (`src/converter/`). No IR, no PLC content, no Portal. PC-side tooling, normal software
+rules.
+
+- **The defect.** `to-xml` wrote `Remanence` on an instance DB's multi-instance static; TIA refuses it
+  — `Cannot create the 'SW.Blocks.InstanceDB' object …` / `The attribute 'Remanence' cannot be set` —
+  and rejects the whole object. **The correlation was exact over five blocks**: zero FB-typed statics
+  imported cleanly, two and five were both refused. It blocked two conformance slots, and the same
+  defect was already recorded in `src/converter/README.md` reached from the round-trip side.
+- **Why the block writer's guard did not reach it.** `BlockSourceWriter` derives its multi-instance
+  name set from the block's own CALL and fixed-shape statements. **An instance DB has no statements at
+  all**, so `DbSourceWriter` had nothing to derive from.
+- 🔴 **THE DATATYPE STRING CANNOT DECIDE IT AND NEITHER CAN THE NAME.** `IO : "UDT_Something" RETAIN`
+  and `Inner : "FB_Something"` are both quoted; the first legitimately carries `Remanence` and the
+  second must not. An `FB_` prefix test is inadmissible for the reason this repo already rejects it
+  elsewhere — **anything can be renamed into a prefix**. What separates them is which namespace the
+  name resolves in, which is a fact about `--project`.
+- **`MemberExpansion.Classify` REUSED, not copied.** FI-88's classifier already draws exactly this
+  line (`MemberShape.MultiInstance` vs `NamedTypeOpened`), and already sources block names from each
+  `.ir`'s `BLOCK <KIND> <Name>` header rather than from `TagTypeRegistry`'s FB index — which silently
+  drops every sidecar-carrying FB (FI-92), i.e. precisely the file a re-exported corpus is made of.
+  New `Converter/Ir/InstanceDbTypeResolution.cs` holds the rule; `DbSourceWriter.Write` takes one;
+  `to-xml`, `drift-check` and `preflight` each build one from their batch plus `--project`.
+- 🔴 **WITH NO CORPUS IT REFUSES — the loud failure, chosen over two quiet ones.** Emitting reproduces
+  the defect and surfaces only at import, after convert/preflight/review have all passed; omitting
+  always would strip a legitimate attribute off every UDT-typed member on a document that imports and
+  compiles clean. A member resolving to neither a block nor a type throws
+  `UnsupportedConstructException` naming the DB, the member, the type, **the search scope** and the
+  missing `--project`. Same direction as FI-71's `--allow-blind-types` gate.
+- **Behaviour change to know about:** a hand-authored instance DB with a flat quoted UDT member (no
+  inlined sub-members) that used to convert with no `--project` now refuses until one is given. No
+  instance DB in `ir/test-project001` is affected — all of them inline their structured members.
+- **Scoped deliberately.** A **global DB is never asked** (it cannot hold an FB instance). An **IEC
+  timer/counter keeps `Remanence`** — every real TIA export in the corpus states it, and
+  `TONR_TIME … RETAIN` is a retentive hours-run totaliser. A **fixed-shape instruction instance**
+  (`MB_SERVER`/`MB_MASTER`/`MB_COMM_LOAD`) does not, read off `FixedShapeInstructions` so that an FB
+  and its own instance DB cannot disagree about one member. `sanitize` (XML→XML, no project argument,
+  not an import path) is left on the corpus-free default.
+- **10 new tests**, `Converter.Tests/InstanceDbMultiInstanceRemanenceTests.cs`, on a Green fixture
+  corpus written for the purpose — `ir/test-project001` contains no multi-instance FB at all. The
+  sharpest is the differential: **the same member, same quoting, same name, emitted two different ways
+  depending only on whether the corpus declares `FB_Inner` as a block or as a type.** Two whole-corpus
+  sweeps prove the no-op — every block and every DB converts byte-identically with and without the
+  resolution — each with its own denominator so neither can pass by examining nothing.
+- ⏳ **The import itself is unverified here**: the converter cannot import, and the emission is the
+  whole of what changed. Route 2 of FI-102 (`create-instance-db`'s block number 0, no `--number`) is
+  untouched.
+
 **FI-99 — a subject that genuinely has NO bounds can now clear gate 3i, by saying so positively and
 signing for it**
 

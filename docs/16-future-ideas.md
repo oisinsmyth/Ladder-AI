@@ -3619,6 +3619,17 @@ emits IR that preflight gates**, and it is only invisible because every head so 
 
 ## FI-102 — an instance DB of a block that NESTS other FB instances cannot be created at all: import refuses it, and `create-instance-db` produces block number 0
 
+✅ **ROUTE 1 IS FIXED, 2026-09-03 — `converter to-xml` no longer emits `Remanence` on a multi-instance
+static, so the converter's SimaticML for a nested instance DB is emitted in the shape TIA accepts.**
+Route 2 (`create-instance-db` and its block number 0) is UNTOUCHED and still has no `--number`. See
+**Resolution** at the end of this entry; the diagnosis below stands as written, because it is what
+located the cause.
+
+⏳ **The import itself is UNVERIFIED here by design.** The converter cannot import, and the emission is
+the whole of what was changed. What is proven offline: the attribute is absent on an FB-typed static,
+present on a UDT-typed one, and every block and every DB in the committed corpus converts
+byte-identically. The engineer verifies by importing a real multi-instance instance DB.
+
 **Measured 2026-09-03**, standing up two new conformance slots. It stopped both, and there is
 currently no route past it.
 
@@ -3685,6 +3696,43 @@ The project was rolled back to its previous healthy state (`BLOCKS: 20 INCONSIST
    is projected by TIA from the FB, which is exactly what is wanted for an under-test instance.
 3. Failing both, the slot pattern needs a different answer for composed blocks, and that is a design
    question rather than a bug: **every equipment block above the leaf level has this shape.**
+
+### Resolution — step 1 was right, and it was the same defect the converter README already had
+
+**2026-09-03.** The diff in step 1 was not needed: `src/converter/README.md` already recorded the
+identical failure reached from the *round-trip* side, with the cause. `BlockSourceWriter` omits
+`Remanence` for a multi-instance via `WriteMember(…, omitRemanence:)`, deriving the multi-instance name
+set **from the block's own CALL and fixed-shape instruction statements**. An instance DB has no
+statements at all, so `DbSourceWriter` had nothing to derive from and emitted the attribute unguarded.
+
+**The discriminator has to be the corpus.** `IO : "UDT_Something" RETAIN` and `Inner : "FB_Something"`
+are both quoted names, and the first legitimately carries `Remanence` while the second must not; an
+`FB_` prefix test is inadmissible for the reason this repo already rejects it elsewhere — anything can
+be renamed into a prefix. What separates them is **which namespace the name resolves in**.
+
+**That resolution already existed and was reused rather than rebuilt.**
+`Converter/Ir/MemberExpansion.cs` (FI-88, the same day) classifies a member as
+`MemberShape.MultiInstance` when its datatype resolves to a **block name** and `NamedTypeOpened` when
+it resolves to a **PLC data type**, reading block names off each `.ir`'s `BLOCK <KIND> <Name>` header —
+deliberately not from `TagTypeRegistry`'s FB index, which silently drops every sidecar-carrying
+(re-exported) FB and would therefore misclassify a real multi-instance (FI-92).
+
+**What changed:** a new `Converter/Ir/InstanceDbTypeResolution.cs` holds the rule;
+`DbSourceWriter.Write` takes one and consults it for an instance DB's top-level Static members only;
+`to-xml`, `drift-check` and `preflight` each build one from their own batch plus `--project`. A global
+DB is never asked — it cannot hold an FB instance.
+
+🔴 **With no corpus, the conversion REFUSES.** Emitting `Remanence` reproduces this defect and surfaces
+only at import; omitting it always would strip a legitimate attribute off every UDT-typed member on a
+document that imports and compiles clean. One failure is loud with a named cause and one is a quiet
+wrong answer, so a member that resolves to **neither** a block nor a type is an
+`UnsupportedConstructException` naming the DB, the member, the type, the search scope and the missing
+`--project`. Same direction as FI-71's `--allow-blind-types` gate, and for the same stated reason: the
+output of `to-xml` is destined for import.
+
+**Residual, and it is Route 2.** `create-instance-db` still offers no `--number` and still produces
+block number 0 for these blocks, so having Openness build the instance remains impossible; the fix
+above makes the *import* route viable instead. Steps 2 and 3 of the investigation list stand.
 
 ---
 
