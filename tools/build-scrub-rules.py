@@ -81,6 +81,12 @@ MIN_GLOBAL_LENGTH = 8
 # every run so a later reader can see what it cost.
 ORDINARY_WORD_BLOB_THRESHOLD = 12
 
+# What a compiler, an interpreter or a build engine reads. A declared term embedded inside a token
+# in one of these is a term whose anchorless rule EDITS CODE, which is a different fact from being
+# embedded anywhere - job vocabulary lives in `.ir` and `.xml`, and those are deliberately absent.
+BUILD_SOURCE_EXT = (".cs", ".csproj", ".sln", ".props", ".targets", ".py", ".ps1",
+                    ".json", ".yml", ".yaml")
+
 SENTINEL_TEMPLATE = "QQSCRUBQQ%04dQQ"
 TERM_CLASSES = ("jobcode", "site", "site", "modelline", "block", "member", "pathstem")
 SPACED_CLASSES = ("site", "site", "modelline")
@@ -649,8 +655,51 @@ def main():
     # short declared term occurring only inside a larger token reads as absent there.
     token_blob = "\n".join(sorted(corpus_tokens)).lower()
 
+    # *** THE VOCABULARY A COMPILER RESOLVES, WHICH IS A DIFFERENT CORPUS FROM THE ONE ABOVE. ***
+    # HEAD only, and deliberately: the question this answers is "does the published artifact still
+    # build", and the build Gate 3 compares is HEAD's. A historical source blob cannot be scoped by
+    # extension anyway - `git cat-file --batch-all-objects` yields object ids, not paths.
+    source_tokens, source_files = set(), 0
+    for rel in git(repo, "ls-files").split("\n"):
+        if not rel.strip() or not rel.endswith(BUILD_SOURCE_EXT):
+            continue
+        try:
+            src = io.open(os.path.join(repo, rel), encoding="utf-8", errors="replace").read()
+        except OSError:
+            continue
+        source_files += 1
+        source_tokens.update(t.lower() for t in WORD_RUN.findall(src))
+        source_tokens.update(t.lower() for t in WIDE_RUN.findall(src))
+
+    def enclosing_tokens(v):
+        """Distinct corpus tokens that CONTAIN v without being v.
+
+        *** THIS IS NOT A PROXY FOR THE DAMAGE AN ANCHORLESS RULE DOES. IT IS THE DAMAGE. ***
+        A declared term is emitted `(?i)<term>` with no word boundary, so filter-repo rewrites the
+        term wherever it appears INCLUDING INSIDE A LARGER WORD. Every token in this set is one
+        the rewrite silently edits, and until now nothing counted them: the filter loop below gives
+        declared terms an unconditional `continue`, so they are the one population that reaches the
+        widest matcher in the tool having been measured by none of its breadth tests.
+
+        `token_blob` is one lowercased token per line, so the enclosing token is the line the hit
+        landed on. `start = pos + 1` rather than `pos + len(low)` because a term can occur twice in
+        one token; advancing by one keeps the walk linear over the blob either way."""
+        low = v.lower()
+        found, start = set(), 0
+        while True:
+            pos = token_blob.find(low, start)
+            if pos < 0:
+                return found
+            start = pos + 1
+            left = token_blob.rfind("\n", 0, pos) + 1
+            right = token_blob.find("\n", pos)
+            token = token_blob[left:right] if right >= 0 else token_blob[left:]
+            if token != low:
+                found.add(token)
+
     rules, withheld_short, withheld_green, wide, dead_variants = [], [], [], [], 0
     declared_emitted = 0
+    declared_breadth = []
     for v, key in sorted(candidates.items()):
         declared = key in klass_of
         if v not in blob_hits and not (declared and v.lower() in token_blob):
@@ -669,6 +718,10 @@ def main():
         if declared:
             rules.append((v, chosen[key], key))
             declared_emitted += 1
+            cut = sorted(enclosing_tokens(v) & source_tokens)
+            if cut:
+                declared_breadth.append((v, key, cut, v.lower() in source_tokens,
+                                         not WORD_RUN.fullmatch(v)))
             continue
 
         if len(v) < args.min_global_length:
@@ -700,6 +753,13 @@ def main():
     print("  wide (>%d files) - REPORT ONLY: %d  [emitted anyway; see the comment at the test]"
           % (ORDINARY_WORD_BLOB_THRESHOLD, len(wide)))
 
+    cuts_code = [r for r in declared_breadth if r[2] and not r[3]]
+    also_whole = [r for r in declared_breadth if r[2] and r[3]]
+    print("  declared terms editing source from INSIDE a token")
+    print("    and never matching one whole : %d  [GATES - see below]" % len(cuts_code))
+    print("    but also present whole       : %d  [report only; the rewrite is load-bearing there]"
+          % len(also_whole))
+
     if not rules:
         print("\nNOTHING EXAMINED: every variant was filtered out - no rule would be emitted.")
         print("EMPTY IS NOT CLEAN: this is a refusal, not a clean repository.")
@@ -712,6 +772,46 @@ def main():
     # collision is the owner's call: two identifiers they named separately would be rewritten to
     # one name, and no automatic choice here is better than telling them.
     findings.extend(collision_problems)
+
+    # *** REWRITING PART OF A SOURCE IDENTIFIER DE-IDENTIFIES NOTHING. ***
+    # A declared term is emitted `(?i)<term>` with no word boundary, chosen by declaredness alone
+    # (see rule_line). That is right for a term that occurs only inside larger JOB tokens - it is
+    # finding A8 in mirror image, and four terms need it. It is catastrophic for a term that occurs
+    # only inside larger SOURCE tokens: the rewrite cuts a symbol in half. Measured on this
+    # repository before this check existed, one three-character dotted term spanned a member access
+    # and collapsed `<var>.<Member>` into a single identifier in four files, taking three solutions
+    # from 5,894 passing tests to 2,196 - and the builder emitted it without a word, because
+    # declared terms take an unconditional `continue` past every breadth test in the filter loop.
+    #
+    # THE LINE IS "WHOLE SOMEWHERE IN SOURCE", NOT LENGTH, AND NOT DOTTEDNESS.
+    # Length does not separate the populations: measured here, a 3-character term and a legitimate
+    # 5-character job code both had ~12 enclosing tokens. Dottedness catches only the sharpest case.
+    # What separates them cleanly is whether the term is ever a source token IN ITS OWN RIGHT. If it
+    # is, the rewrite is doing real work in that file and the embedded hits ride along with it. If
+    # it is NEVER whole in source, every edit it makes there is to the inside of somebody else's
+    # identifier, and no amount of that hides a job code - the symbol being cut was not the secret.
+    #
+    # It gates rather than repairs, and that is not laziness. Both anchorings are wrong for one of
+    # the two populations, so there is no substitute to reach for; the fix is the `variants` column,
+    # which already parses and which REPLACES the auto-derivation, so naming the forms that should
+    # be rewritten is exactly how a dangerous bare form stops being emitted.
+    # The REPLACEMENT names the row, and the live term never appears. `invented` is the term list's
+    # own second column, so the owner reads this straight off the table they wrote - while the
+    # value itself is vocabulary this tool made up, which is safe to print anywhere. A record of a
+    # leak must not be a copy of it, and an unidentifiable finding is not a worklist.
+    # Grouped by ROW, not by variant: a row usually claims several written forms, and three
+    # findings for two decisions reads as a longer list than it is. The owner edits rows.
+    by_row = {}
+    for v, key, cut, whole, dotted in cuts_code:
+        n, forms, sep = by_row.get(key, (set(), 0, False))
+        by_row[key] = (n | set(cut), forms + 1, sep or dotted)
+    for key, (cut, forms, dotted) in sorted(by_row.items(), key=lambda kv: -len(kv[1][0])):
+        findings.append(
+            "term row '%s': %d variant(s)%s edit %d source token(s) from INSIDE and none of "
+            "them is a source token in its own right - an anchorless rule there cuts identifiers "
+            "in half and de-identifies nothing. Give that row an explicit `variants` cell naming "
+            "the forms that should be rewritten."
+            % (chosen[key], forms, " (one contains a SEPARATOR)" if dotted else "", len(cut)))
 
     # AB-1's trap 2: "a replacement can BE a leak" - one invented name in the 2026-08-27 run already
     # existed verbatim in the job's own IR. Choosing the vocabulary is part of the check.

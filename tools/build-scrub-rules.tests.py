@@ -885,6 +885,93 @@ def nothing_matching_is_exit_2_not_0(tmp):
     assert_in("EMPTY IS NOT CLEAN", out, "the principle must be named")
 
 
+# ---- CUTS: a declared term's anchorless rule editing source code from inside a token -------------
+# The four cases below are one discrimination, and each half has to be proved or the check is
+# unfalsifiable. A declared term is emitted `(?i)<term>` with no word boundary BECAUSE four real
+# terms occur only inside larger job tokens and a \b rule misses them (A8 in mirror image). The same
+# anchoring applied to a term that lives only inside larger SOURCE tokens cuts symbols in half: one
+# three-character dotted term spanned a member access in four files and took three solutions from
+# 5,894 passing tests to 2,196. Length does not separate those two populations - measured on the
+# real vocabulary, a 3-character term and a legitimate 5-character job code both had ~12 enclosing
+# tokens. Being whole in source somewhere does.
+
+def a_declared_term_that_only_cuts_source_tokens_GATES(tmp):
+    """The build-breaker's shape. `Pq` appears nowhere as a source token of its own - only inside
+    `PqValue` - so every edit its rule makes in Prog.cs is to the inside of somebody else's
+    identifier, and none of them hides anything. That is the case that must refuse."""
+    s = build(tmp, {"m": ONE_MAP},
+              TERMS_HEADER + "| Pq | Scrubbed | site | global | auto |\n",
+              {"doc.md": "AcmeWidgetUnit appears here\n",
+               "Prog.cs": "class C { int PqValue; }\n"})
+    code, out, _ = run_head(tmp, s)
+    assert_eq(code, EXIT_FINDING, "a declared term cutting only source tokens must gate (%s)" % out)
+    assert_in("cuts identifiers in half", out, "the finding must name the mechanism")
+    assert_in("Scrubbed", out, "the finding must name the ROW, by its invented replacement")
+    assert_eq(rules_of(tmp), [], "a refusal must write nothing")
+
+
+def a_declared_term_embedded_only_in_JOB_tokens_does_NOT_gate(tmp):
+    """*** THE A8 HALF, AND THE REASON THIS CANNOT GATE ON LENGTH OR ON EMBEDDING ALONE. ***
+
+    The same two-character term, embedded exactly as often - but in a .md file rather than build
+    source. The anchorless rule is doing precisely the job it was given an anchorless form for, and
+    a check that refuses here has re-broken A8 to fix its mirror image."""
+    s = build(tmp, {"m": ONE_MAP},
+              TERMS_HEADER + "| Pq | Scrubbed | site | global | auto |\n",
+              {"doc.md": "AcmeWidgetUnit and PqUnitTag appear here\n"})
+    code, out, err = run_head(tmp, s)
+    assert_eq(code, EXIT_OK, "embedding in NON-source must not gate (%s%s)" % (out, err))
+    assert any(l.split("==>")[0].endswith("Pq") for l in rules_of(tmp)), \
+        "the declared term got no rule - the cuts check is eating the A8 population"
+
+
+def a_declared_term_ALSO_whole_in_source_does_NOT_gate(tmp):
+    """The other escape, and it is a report rather than a refusal. Here `Pq` IS a source token in
+    its own right, so its rule is load-bearing in Prog.cs and the incidental hit inside `PqValue`
+    rides along with work that genuinely de-identifies. Gating this would refuse the ordinary case
+    of a job code that appears in a test fixture."""
+    s = build(tmp, {"m": ONE_MAP},
+              TERMS_HEADER + "| Pq | Scrubbed | site | global | auto |\n",
+              {"doc.md": "AcmeWidgetUnit appears here\n",
+               "Prog.cs": "class C { int PqValue; string s = \"Pq\"; }\n"})
+    code, out, err = run_head(tmp, s)
+    assert_eq(code, EXIT_OK, "whole-in-source must not gate (%s%s)" % (out, err))
+    assert_in("but also present whole", out, "the report-only population must be counted")
+
+
+def an_explicit_variants_cell_discharges_the_cuts_finding(tmp):
+    """*** THE ESCAPE HATCH, AND NOTHING IN THIS SUITE EXERCISED IT BEFORE. ***
+
+    The `variants` column has parsed since load_terms was written and every fixture said `auto`, so
+    the one column the new finding tells the owner to reach for had no test at all. A forced list
+    REPLACES the auto-derivation rather than adding to it - variants_for puts the literal key first
+    and a forced list does not put it back - which is exactly why naming the safe forms stops the
+    dangerous bare form being emitted. That behaviour is now pinned.
+
+    IT RUNS THE SAME FIXTURE TWICE, and that is the point rather than thoroughness. Asserting only
+    that the second run is clean passes just as happily when the check has been deleted - the first
+    version of this case survived a mutation that disabled the gate outright, proving an escape
+    hatch on a door that was already open. Refusing first and passing second is the only shape that
+    shows THE CELL is what changed the outcome."""
+    row = "| Pq | Scrubbed | site | global | %s |\n"
+    s = build(tmp, {"m": ONE_MAP}, TERMS_HEADER + row % "auto",
+              {"doc.md": "AcmeWidgetUnit and PqExplicitForm appear here\n",
+               "Prog.cs": "class C { int PqValue; }\n"})
+    code, out, _ = run_head(tmp, s)
+    assert_eq(code, EXIT_FINDING, "the fixture must gate BEFORE the variants cell (%s)" % out)
+
+    write(os.path.join(tmp, "sanitization", "scrub-terms.md"),
+          TERMS_HEADER + row % "PqExplicitForm")
+    code, out, err = run_head(tmp, s)
+    assert_eq(code, EXIT_OK, "an explicit variants cell must discharge the finding (%s%s)"
+              % (out, err))
+    needles = [l[len("regex:"):].split("==>")[0].replace("\\", "") for l in rules_of(tmp)]
+    assert "(?i)Pq" not in needles, \
+        "the bare short form was emitted anyway - a forced variants list must REPLACE the auto list"
+    assert any(n.endswith("PqExplicitForm") for n in needles), \
+        "the named variant got no rule - the forced list was ignored"
+
+
 for name, body in [
     ("emits the three artifacts", emits_three_files),
     ("A8: lower-concatenated variant matches a hyphenated directory",
@@ -935,6 +1022,14 @@ for name, body in [
     ("an empty term list does not crash", empty_term_list_is_exit_2),
     ("a malformed row is exit 2 and named", malformed_row_is_exit_2_and_named),
     ("nothing matching is exit 2, not 0", nothing_matching_is_exit_2_not_0),
+    ("CUTS: a declared term that only cuts source tokens GATES",
+     a_declared_term_that_only_cuts_source_tokens_GATES),
+    ("CUTS: embedded only in JOB tokens does NOT gate",
+     a_declared_term_embedded_only_in_JOB_tokens_does_NOT_gate),
+    ("CUTS: also whole in source does NOT gate",
+     a_declared_term_ALSO_whole_in_source_does_NOT_gate),
+    ("CUTS: an explicit variants cell discharges the finding",
+     an_explicit_variants_cell_discharges_the_cuts_finding),
 ]:
     case(name, body)
 
