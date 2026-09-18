@@ -6,7 +6,7 @@ Rev 8 (2026-09-18) — Phase 0 done, and Gate 3's build half made real. Rev 9 (2
 discharged; the builder's default scan mode is tested. Rev 10 (2026-09-18) — F4, F9, F11, F13
 discharged; the review backlog is closed. Rev 11 (2026-09-18) — FI-93 discharged; the red suite is
 ratified, 19 → 2. Rev 12 (2026-09-18) — Phase 5 built: CI, the demo, and an exclusion
-list that was wrong.** Scouting pass and phase
+list that was wrong. Rev 13 (2026-09-18) — the rewrite ran and Gate 3 refused it.** Scouting pass and phase
 plan for turning this repository into a public portfolio piece on GitHub, without the private
 repository ever becoming public and without any restricted identifier reaching a public remote.
 
@@ -53,7 +53,7 @@ this table, this table is current.
 | **1 — hygiene** | ✅ **DONE** | — |
 | **2 — the scrub tooling** | 🟢 **done bar one optional tool** | ✅ `verify-scrub.tests.py` **31 cases**. ✅ `capture-build-baseline.py` + 11 tests. ✅ **The review backlog is CLOSED** — all twelve findings discharged (rev 9, rev 10). `build-scrub-rules.tests.py` is **41 cases**, negative-tested **sixteen** ways, every mutation caught by its own guard. Only `check-staged-identifiers.py` (M-5) remains: a *new tool*, not a finding, and not on any critical path |
 | **2b — the red suite** | ✅ **DONE 2026-09-18** | **FI-93 discharged, rev 11.** 19 red tests → **2**. The 2 are one fact: `Main.ir` gained three networks and `Main.xml` was never re-exported; **one TIA re-export clears both** |
-| **3 — rewrite history** | ⬜ **not started** | the recipe is proven end to end, but the real run needs the `--path-glob` exclusion and the 253 SHA citations repaired |
+| **3 — rewrite history** | 🔴 **RAN 2026-09-18, GATE 3 REFUSED IT — rev 13** | The rewrite works: 1,346 commits, employer domain gone from every one, T1 0 / T2 0, instrument control 1719/1719. **Blocked on the term list, not the tooling:** 12 declared rows of 2–4 characters emit anchorless case-insensitive rules that make 840 substitutions in 37 files and break the build in 3 solutions. **Gate 2 decision — the `variants` column per row — then re-run (~7 min)** |
 | **4 — restructure** | ✅ **DONE** | — |
 | **5 — CI and demo** | 🟢 **BUILT 2026-09-18, rev 12** | `.github/workflows/ci.yml` + `nightly.yml`, `global.json` (SDK pinned), `demo/run-demo.py`, `tests/ci-baseline.json`. Every step rehearsed locally and green. **Gate 4 — CI green on a private repo — is the one thing left, and it needs the GitHub account (open item 2)** |
 | **6 — publish** | ⬜ **not started** | gated on 0, 3 and 5 |
@@ -68,6 +68,58 @@ this table, this table is current.
 - **The trial rewrite recipe, proven:** `clone --no-local` → `filter-repo --replace-text
   --replace-message @path-renames.args --mailmap` → delete all but the publishing branch →
   `reflog expire --all --expire=now && gc --prune=now` → verify. ~7 min rewrite, ~30 s verify.
+
+### Rev 13 — the rewrite ran, and Gate 3 refused the artifact
+
+**The rewrite executed end to end.** 1,346 commits in 234 s on a `--no-local --single-branch` clone,
+finished with `reflog expire && gc --prune=now`, branch renamed to `main`, no remote. **All 1,346
+author identities are now `@users.noreply.github.com`** — the employer domain is gone from every
+commit, which is the single largest identifier in the repository.
+
+**The de-identification itself is clean.** T1 declared **0**, T2 inferred whole-token **0**,
+instrument control **1,719 of 1,719**, all five must-survive controls intact. `unsearchableBlobs`
+fell **15 → 7** on the path exclusion.
+
+🔴 **AND GATE 3 REFUSED IT ANYWAY, ON THE BUILD HALF — the half that was decorative until rev 8.**
+Eight assemblies absent, two targets newly unbuildable, `Harness.Map.Tests` 451 → 442 with 9 new
+failures. **5,894 passing became 2,196.** Had the build comparison still been `os.path.isfile`, this
+artifact would have passed every identifier check and been publishable.
+
+**The cause: twelve rules whose needles are 2–4 characters, every one anchorless and
+case-insensitive.** They come from declared term rows, which bypass the length floor **by design** —
+finding F1 established that, because job codes are five characters and applying the floor discarded
+15 of 19 term rows. That bypass is right for a distinctive five-character job code and wrong for a
+two-character fragment. Measured: **840 substitutions across 37 tracked files**, 724 of them from the
+four 2-character rules.
+
+One of them is what broke the build. Rule #111 — three characters, dotted, anchorless — rewrote
+ordinary C#:
+
+```
+u.SampleKeys   ->   KSampleKeys
+```
+
+A property access on a variable. The needle matched across a token boundary, and `CS0103` followed in
+three solutions.
+
+**This is A8 in a third guise.** A8 was "the rule matches the wrong surface"; the quarantine that
+answers it — the 368 bare words, Phase 2 step 4 — filters **inferred map keys only**. A declared term
+passes the floor, the Green test and the breadth demotion untouched, so nothing in the pipeline
+looked at these twelve at all.
+
+**Stopped here, and this is Gate 2's business rather than a repair to make quietly.** *"The owner
+reviews and signs off the replacement list, item by item, before it touches anything."* Twelve rows
+of the term list cannot be applied as bare anchorless substrings; the `variants` column exists for
+exactly this, and which form each row should take is the owner's call, not a tooling decision.
+
+**The systemic fix is a builder gate**: a declared term short enough to match ordinary text, emitted
+anchorless, should be a **blocking finding** unless the row supplies explicit variants. The builder
+currently emits it without comment — the one class of rule it never questions.
+
+Two false positives in the same output, recorded so the next reader does not chase them: `QQSCRUBQQ`
+and `***REMOVED***` are reported as must-not-appear, and both are the **tooling's own documentation
+quoting those sentinels**. The same check reports them on the unscrubbed source too (3 and 6 there,
+12 and 27 now, the growth being this session's documentation).
 
 ### Rev 12 — Phase 5 built: CI, the demo, and an exclusion list that was wrong
 
