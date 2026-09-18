@@ -1,27 +1,117 @@
 # Ladder-AI
 
-AI-assisted Siemens LAD engineering via TIA Openness. Claude Code reads/writes a vendor-neutral IR; `openness-cli` is the only TIA touchpoint; a human reviews everything.
+**An AI system that programs Siemens PLCs — and, more to the point, an attempt to make that safe
+enough to mean it.**
 
-🛑 **The staged development plan is SUSPENDED (2026-08-17)** — time constraints and real application
-needs. No stage is active; stage progression, gate reviews and the build backlog are frozen where
-they stand. The hard rules, the data boundary and the already-proven tooling are **unaffected** and
-real jobs continue. Canonical notice: **`docs/03-development-plan.md`**.
+Ladder logic runs physical plant. A conveyor starts, a vessel fills, an interlock refuses. Code that
+is *nearly* right does not throw an exception; it moves a machine. So the interesting problem here
+was never "can a language model emit ladder logic" — it can — but **what has to be true before
+anybody should let it.**
 
-- Start here: `docs/00-README.md` (reading order for the design suite)
-- Claude Code operating manual: `CLAUDE.md`
-- Active stage: `docs/notes/stage-gates.md` — **none; suspended, see above**
+This repository is the answer I built: a vendor-neutral intermediate representation for LAD, a
+toolchain that round-trips it losslessly through TIA Portal, a set of sub-agents with enforced
+separation of duties, and — the part I would actually defend — a collection of gates designed on the
+assumption that *the model, the tools and their author will all be wrong at some point.*
 
-## Layout
+---
 
+## The design problem, stated honestly
+
+A generated block is not trustworthy because a model produced it carefully. It is trustworthy
+because something mechanical refused to let it through otherwise. Three ideas run through everything
+here:
+
+**1. Separation of duties, enforced rather than requested.**
+The orchestrating model may never author or read PLC content itself — that work is routed to
+dedicated sub-agents, with reads and writes separated. The agent that enumerates what a requirement
+*demands* never sees the implementation, so coverage cannot be made unfalsifiable by the author of
+the thing being measured.
+
+**2. Safety rails as mechanism, not instruction.**
+"Please check the compile" is not a gate. A named non-zero exit code is. Every check states the
+denominator it examined, and the house rule is **`EMPTY IS NOT CLEAN`** — exit 1 means *found
+something*, exit 2 means *examined nothing*, and **exit 2 is never a pass**. A check that looked at
+an empty directory must be louder than one that found a fault, because the first is the one that
+silently passes forever.
+
+**3. Facts, not verdicts.**
+Tools assemble evidence; people make calls. Where a tool cannot honestly decide, it refuses and says
+what it could not see — on every run, including the ones that pass.
+
+---
+
+## What is here
+
+| | |
+|---|---|
+| **`src/converter/`** | SimaticML ↔ IR, lossless, golden round-trip corpus, network-level invariance diffing. Pure in-process transformer — **builds and tests with no TIA Portal installed** |
+| **`src/openness-cli/`** | The only TIA Openness touchpoint: export, import, compile gate, consistency checks. Requires TIA Portal V20 |
+| **`src/harness/`** | Conformance-test harness — vector submission, observation windows, result packages |
+| **`.claude/`** | The agent architecture: 4 sub-agents and 14 skills that carry the operating rules |
+| **`docs/`** | The design suite — 12 ADRs, a risk register, audits, and a data-boundary regime |
+| **`tools/`** | Mechanical checks, each with its own test suite and a documented negative-test result |
+
+**Scale:** ~5,810 tests across 24 test projects; ~1,000 C# source files; 266 documents.
+
+---
+
+## What I would show a reviewer first
+
+**[`docs/notes/data-boundary-audit-backlog.md`](docs/notes/data-boundary-audit-backlog.md)** — a
+record of a leak of restricted identifiers into committed source, written while the cause was still
+open. It names its decision-maker, records what was deliberately *not* fixed and why, and opens with
+a rule I still think is right:
+
+> *A record of a leak must not be a copy of it.*
+
+It is the most persuasive document here precisely because it is not a success story.
+
+**[`tools/README.md`](tools/README.md)** — the de-identification pipeline built to publish this
+repository. Two deliberately independent tools: one emits rewrite rules, one decides whether a
+rewritten clone is clean. They share no derivation code, because if both computed their vocabulary
+the same way, a bug would produce a rule that misses something and then hunt for it the same wrong
+way and find nothing — *a confident, earned-looking zero over the wrong population.*
+
+The verifier carries a self-test: a synthetic object containing every search term, pushed through the
+same matcher the real corpus goes through. On its first run it reported that **1,505 of 1,719 terms
+could not match anything at all** — a bug in the tool, caught by the tool, on a run that had already
+printed a plausible-looking result. Nothing else would have found it.
+
+---
+
+## Running it
+
+**Without TIA Portal** — the converter is self-contained:
+
+```bash
+dotnet test src/converter/converter.sln
 ```
-CLAUDE.md                  Claude Code session instructions
-docs/                      design suite (01–13, adr/, notes/)
-src/openness-cli/          C# — the only Openness/TIA touchpoint
-src/converter/             SimaticML ↔ IR (lossless, golden-tested)
-ir/                        SPEC.md + exported blocks as IR, one file per block
-simatic-ml/                raw XML exports (normalized), evidence trail
-patterns/                  pattern library, one folder per pattern
-extract/                   Python extractors (alarms, IO, xref) + templates
-tests/golden/              reference project round-trip corpus
-tools/                     AHK leftovers, one-off scripts
-```
+
+**Everything else** needs TIA Portal V20 and a licensed `Siemens.Engineering.dll`, which cannot be
+redistributed. Those projects are excluded from CI for that reason, not because they are unfinished.
+
+---
+
+## Status
+
+**Active development is paused** (2026-08-17), for time constraints and competing real-world work.
+The staged plan is frozen rather than abandoned — exit criteria are not waived, and the hard rules,
+data boundary and built tooling are unaffected. `docs/03-development-plan.md` holds the canonical
+notice.
+
+What is here works and is tested. It is not a product, and it was never trying to be: it is domain
+tooling that requires a specific, expensive, licensed environment to run against real hardware.
+
+---
+
+## Licence
+
+MIT — see [`LICENSE`](LICENSE). The licence covers this repository's tooling and documentation. It
+grants nothing in respect of Siemens TIA Portal, the Openness API, or Siemens-shipped artwork, none
+of which are included here.
+
+---
+
+*Orientation for working inside the repository — the design suite's reading order, the operating
+rules and the document map — is in [`docs/00-README.md`](docs/00-README.md) and
+[`CLAUDE.md`](CLAUDE.md).*

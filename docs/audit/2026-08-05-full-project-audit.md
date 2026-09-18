@@ -475,7 +475,8 @@ fix list. Findings describe; the audit fixed nothing.
   fix is a source-side correction plus re-export, i.e. a `lad-coder` hand-off, which also touches the
   `ExportDriftDetectorTests` known-drift baseline.
 - **F-52 (low, accept) — pre-rename `GenProject1` paths persist in historical `CHANGELOG.md` entries.**
-  `CHANGELOG.md:325`, `:483`, plus `gen/test-project001/telemetry.log:4` (append-only by convention) and one
+  `CHANGELOG.md#2026-08-05` (cited as `:325`, `:483` before the 2026-09-17 table of contents shifted line
+  numbers), plus `gen/test-project001/telemetry.log:4` (append-only by convention) and one
   correct live-Portal-project reference. The paths were accurate when written and both files are point-in-time
   records. Logged so the next audit does not re-derive it.
 

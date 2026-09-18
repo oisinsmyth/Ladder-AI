@@ -1,5 +1,31 @@
 # Changelog
 
+Hand-maintained, newest first. One section per working day; each entry is a bold title plus what
+changed and why. Git does not generate this.
+
+**Cite this file by anchor, not by line number** — `CHANGELOG.md#2026-08-05`. Three audit records
+used line numbers and had to be corrected when this table of contents was added on 2026-09-17; an
+anchor survives anything that does not rename the heading.
+
+| Date | Entries | What it covers |
+|---|---|---|
+| [2026-09-03](#2026-09-03) | 3 | FI-102 nested-instance DB emit · FI-99 bounds absence · FI-88 UDT expansion |
+| [2026-08-17](#2026-08-17) | 1 | 🛑 the staged development plan SUSPENDED |
+| [2026-08-07](#2026-08-07) | 2 | multi-instance read half · `converter claim`/`claims` reservations |
+| [2026-08-06](#2026-08-06) | 3 | multi-instance FB call · C-501 checker corrections |
+| [2026-08-05](#2026-08-05) | 9 | the mechanical floor (FI-44/45) · four-rung spec pipeline · FI renumbering |
+| [2026-07-29](#2026-07-29) | 1 | HMI alarm-generation learnings |
+| [2026-07-20](#2026-07-20) | 6 | FI-25/FI-09/FI-17 tracks · tier A/B/C review mechanisation |
+| [2026-07-18](#2026-07-18) | 8 | `converter diff --only` · SidecarSynthesizer · C-001/C-408 mechanised |
+| [2026-07-17](#2026-07-17) | 2 | direction reset · scratch-project fix wave 1 |
+| [2026-07-16](#2026-07-16) | 12 | reviewer suite complete · tier-1 FI adoption (preflight/playbook/digest/telemetry) |
+| [2026-07-15](#2026-07-15) | 4 | open S6 · S4 gate signed · open S5 |
+| [2026-07-14](#2026-07-14) | 33 | open S4 · S3 gate signed · the S3 proofs · S2 gate signed |
+| [2026-07-13](#2026-07-13) | 3 | concurrent Portal sessions · block deletion · S1 item 25 |
+| [2026-07-12](#2026-07-12) | 14 | S1 items 20–24 |
+| [2026-07-11](#2026-07-11) | 7 | S1 items 7–10 |
+| [2026-07-10](#2026-07-10) | 6 | repo skeleton · ADR-0001 · S1 walking skeleton · reference project |
+
 ## 2026-09-03
 
 **FI-102 — an instance DB of a block that NESTS other FB instances can now be emitted in the shape TIA

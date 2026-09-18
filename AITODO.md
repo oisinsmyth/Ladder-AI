@@ -251,7 +251,8 @@ in the same commit* — for the third time, it did not.
   folded into a rolled-up "closed" count. The one thing it forbids is the opposite: a save that was
   possible and **failed** stops the terminate (`PortalCloseExecution.cs:167-173`). 🔴 **Never run
   against a live Portal.** The decision half is pure and unit-tested; the execution half has no live
-  evidence. Documented in `src/openness-cli/README.md` (`portal-close` section) and CLAUDE.md's index.
+  evidence. Documented in `src/openness-cli/docs/portal-process.md` (split out of that README on
+  2026-09-17) and CLAUDE.md's index.
 - ✅ **B5 — ANSWERED: `FB_CellSequence` is the third conformance lane. THE LANE IS NOT BLOCKED ON THE
   OWNER.** 🔴 **This line read *"Blocked on this and nothing else"* after the answer was given**, as did
   `docs/notes/owner-questions.md` and **six** places in `docs/notes/workbench-phase6-plan.md` —
