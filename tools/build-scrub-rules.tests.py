@@ -16,7 +16,7 @@ the corpus a content-only scan examines.
 Exit-2 cases are asserted as carefully as exit-0 ones, because exit 2 means NOTHING WAS EXAMINED
 and the one failure this tool must never have is reading as clean when it looked at nothing.
 """
-import io, os, shutil, subprocess, sys, tempfile
+import io, json, os, shutil, subprocess, sys, tempfile
 
 EXIT_OK = 0
 EXIT_FINDING = 1
@@ -78,13 +78,60 @@ def build(tmp, maps, terms, files=None):
     return os.path.join(tmp, "tools", "build-scrub-rules.py")
 
 
+def bury(tmp, rel, old, new):
+    """Rewrite a file so OLD survives ONLY in an earlier commit — the corpus history mode exists for.
+
+    *** THE EXACT OPPOSITE OF verify-scrub.tests.py's scrub(), AND THE DIFFERENCE IS THE POINT. ***
+    That helper amends, expires the reflog and prunes, so the old blob is GONE from the object
+    database. Here it must REMAIN in the object database while being absent from HEAD. So: edit,
+    and make a SECOND commit. Never amend, never gc.
+
+    Without this the suite structurally cannot test history mode. build() makes exactly one commit,
+    so the ODB and HEAD hold identical blobs and the two scan modes are handed the same corpus -
+    a `--scan history` case over that fixture would pass while proving nothing at all.
+    """
+    p = os.path.join(tmp, rel)
+    write(p, io.open(p, encoding="utf-8").read().replace(old, new))
+    git(tmp, "add", "-A")
+    git(tmp, "commit", "-m", "the identifier is gone from HEAD, not from history")
+
+
+# DEVNULL, never PIPE. `subprocess.call` with a PIPE nobody reads deadlocks as soon as the child
+# fills the buffer, and `git add` emits one CRLF warning per file.
+def git(tmp, *args):
+    return subprocess.call(["git"] + list(args), cwd=tmp,
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
+def git_out(tmp, *args):
+    return subprocess.run(["git"] + list(args), cwd=tmp, capture_output=True,
+                          text=True, errors="replace").stdout
+
+
 def run(tmp, script, *args):
-    proc = subprocess.Popen([sys.executable, script, "--repo", tmp, "--scan", "head"] + list(args),
+    """NO --scan IS INJECTED HERE.
+
+    It used to hard-code `--scan head`, and that single invisible word is the whole of finding F18:
+    every case in this file ran the mode that is NOT the default, and the mode that produces the
+    published artifact was entered by nothing. An override nobody can see at the call site is the
+    kind that survives a review. Each case now names its mode through run_head or run_history.
+    """
+    proc = subprocess.Popen([sys.executable, script, "--repo", tmp] + list(args),
                             stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=tmp)
     out, err = proc.communicate()
     return (proc.returncode,
             out.decode("utf-8", "replace"),
             err.decode("utf-8", "replace"))
+
+
+def run_head(tmp, script, *args):
+    return run(tmp, script, "--scan", "head", *args)
+
+
+def run_history(tmp, script, *args):
+    """The DEFAULT mode, named explicitly rather than left implicit — a case that relied on the
+    default would go quiet the moment somebody changed it."""
+    return run(tmp, script, "--scan", "history", *args)
 
 
 def rules_of(tmp):
@@ -115,12 +162,25 @@ ONE_MAP = '{"Names": {"AcmeWidgetUnit": "GenericWidgetUnit"}}'
 # --------------------------------------------------------------------------- permit
 
 def emits_three_files(tmp):
+    """FOUR artifacts, and each one NON-EMPTY.
+
+    Measured by mutation, 2026-09-18: this case asserted existence only, so a tool emitting four
+    empty files passed it - fourteen other cases went red and the one case NAMED for the artifacts
+    did not. And `path-renames.args` was not checked here or anywhere else: suppressing it entirely
+    turned 0 of 30 red, which is the same artifact whose total absence was defect F3.
+
+    The fixture carries an identifier in a PATH as well as in content, so the rename file has
+    something to contain; asserting non-empty on a file that is legitimately empty would be a
+    different kind of useless."""
     s = build(tmp, {"m": ONE_MAP}, TERMS_HEADER + "| ZZ1234 | JOB9001 | jobcode | global | auto |\n",
-              {"doc.md": "AcmeWidgetUnit is referenced here.\n"})
-    code, out, err = run(tmp, s)
+              {"doc.md": "AcmeWidgetUnit is referenced here.\n",
+               "gen/AcmeWidgetUnit/keep.md": "content\n"})
+    code, out, err = run_head(tmp, s)
     assert_eq(code, EXIT_OK, "exit (%s%s)" % (out, err))
-    for name in ("replace-text.txt", "replace-message.txt", "manifest.json"):
-        assert os.path.isfile(os.path.join(tmp, "sanitization", "scrub", name)), "missing " + name
+    for name in ("replace-text.txt", "replace-message.txt", "manifest.json", "path-renames.args"):
+        full = os.path.join(tmp, "sanitization", "scrub", name)
+        assert os.path.isfile(full), "missing " + name
+        assert os.path.getsize(full) > 0, "%s was written EMPTY - an empty rule set is not a run" % name
 
 
 def a8_lower_concatenated_variant_matches_a_hyphenated_directory(tmp):
@@ -128,7 +188,7 @@ def a8_lower_concatenated_variant_matches_a_hyphenated_directory(tmp):
     import re
     s = build(tmp, {"m": ONE_MAP}, TERMS_HEADER,
               {"gen/acmewidgetunit-bench/notes.md": "see gen/acmewidgetunit-bench/x\n"})
-    code, out, err = run(tmp, s)
+    code, out, err = run_head(tmp, s)
     assert_eq(code, EXIT_OK, "exit (%s%s)" % (out, err))
     pats = [re.compile(l.split("==>")[0][len("regex:"):]) for l in rules_of(tmp)]
     assert any(p.search("gen/acmewidgetunit-bench/notes.md") for p in pats), \
@@ -141,7 +201,7 @@ def path_only_occurrence_still_gets_a_rule(tmp):
     import re
     s = build(tmp, {"m": ONE_MAP}, TERMS_HEADER,
               {"gen/AcmeWidgetUnit/keep.md": "nothing identifying in here\n"})
-    code, out, err = run(tmp, s)
+    code, out, err = run_head(tmp, s)
     assert_eq(code, EXIT_OK, "exit (%s%s)" % (out, err))
     pats = [re.compile(l.split("==>")[0][len("regex:"):]) for l in rules_of(tmp)]
     assert any(p.search("gen/AcmeWidgetUnit/keep.md") for p in pats), \
@@ -153,7 +213,7 @@ def a_wide_variant_is_reported_but_still_emitted(tmp):
     import re
     files = dict(("doc%02d.md" % i, "AcmeWidgetUnit\n") for i in range(40))
     s = build(tmp, {"m": ONE_MAP}, TERMS_HEADER, files)
-    code, out, err = run(tmp, s)
+    code, out, err = run_head(tmp, s)
     assert_eq(code, EXIT_OK, "exit (%s%s)" % (out, err))
     assert_in("REPORT ONLY", out, "breadth must be reported")
     pats = [re.compile(l.split("==>")[0][len("regex:"):]) for l in rules_of(tmp)]
@@ -162,27 +222,53 @@ def a_wide_variant_is_reported_but_still_emitted(tmp):
 
 def every_line_carries_an_explicit_arrow(tmp):
     """filter-repo's default replacement is ***REMOVED***. A line without `==>` substitutes that
-    string into prose, silently, across the whole rewrite."""
-    s = build(tmp, {"m": ONE_MAP}, TERMS_HEADER, {"doc.md": "AcmeWidgetUnit\n"})
-    run(tmp, s)
+    string into prose, silently, across the whole rewrite.
+
+    Measured by mutation, 2026-09-18: this case SLEPT THROUGH THE REMOVAL OF `==>`. The emitter has
+    two branches - a case-insensitive one for DECLARED terms and a boundary-anchored one for
+    inferred map keys - and the old fixture produced no declared-term rule at all, so stripping the
+    arrow from the declared branch went unnoticed here and was caught, by luck, somewhere else.
+    A case named for "every line" must make every line exist. The declared term below therefore
+    OCCURS in the corpus, and both branches are asserted present."""
+    s = build(tmp, {"m": ONE_MAP},
+              TERMS_HEADER + "| AcmeDeclaredTerm | GenericDeclared | site | global | auto |\n",
+              {"doc.md": "AcmeWidgetUnit and AcmeDeclaredTerm both appear\n"})
+    code, out, err = run_head(tmp, s)
+    assert_eq(code, EXIT_OK, "exit (%s%s)" % (out, err))
     lines = rules_of(tmp)
     assert lines, "no rules emitted"
+    assert any(l.startswith("regex:(?i)") for l in lines), \
+        "no DECLARED-term rule emitted, so the case-insensitive branch is not under test here"
+    assert any(l.startswith("regex:\\b") for l in lines), \
+        "no inferred-key rule emitted, so the boundary-anchored branch is not under test here"
     for l in lines:
         assert "==>" in l, "line without an explicit replacement: %r" % l
         assert "REMOVED" not in l.split("==>", 1)[1], "default replacement leaked: %r" % l
 
 
 def longest_first_ordering_holds(tmp):
+    """Ordering matters because filter-repo applies rules in file order: a short rule that is a
+    prefix of a long one fires first and the long one never matches what is left.
+
+    Measured by mutation, 2026-09-18: this case DISCARDED the exit code and then asserted
+    `lens == sorted(lens, reverse=True)` over whatever came back. With the emitter mutated to write
+    an empty rule file it passed happily, because `[] == sorted([])` is true - a tool that exited 2
+    and wrote nothing satisfied a case named for its ordering. Both holes are closed below: the
+    exit code is checked, and there must be at least two rules for the ordering to be a claim at
+    all."""
     import re
     maps = '{"Names": {"AcmeWidgetUnit": "GenericWidgetUnit", ' \
            '"AcmeWidgetUnitExtended": "GenericWidgetUnitExtended"}}'
     s = build(tmp, {"m": maps}, TERMS_HEADER,
               {"doc.md": "AcmeWidgetUnit and AcmeWidgetUnitExtended\n"})
-    run(tmp, s)
+    code, out, err = run_head(tmp, s)
+    assert_eq(code, EXIT_OK, "exit (%s%s)" % (out, err))
     lens = []
     for l in rules_of(tmp):
         esc = l.split("==>")[0][len("regex:") + 2:-2]
         lens.append(len(re.sub(r"\\(.)", r"\1", esc)))
+    assert len(lens) >= 2, \
+        "fewer than two rules emitted, so ORDERING IS NOT UNDER TEST HERE: %r" % lens
     assert lens == sorted(lens, reverse=True), "not longest-first: %r" % lens
 
 
@@ -190,7 +276,7 @@ def a_bom_map_parses(tmp):
     """25 of the 43 real maps carry a BOM; plain utf-8 dies on them."""
     s = build(tmp, {}, TERMS_HEADER, {"doc.md": "AcmeWidgetUnit\n"})
     write(os.path.join(tmp, "sanitization", "m.map.json"), ONE_MAP, encoding="utf-8-sig")
-    code, out, err = run(tmp, s)
+    code, out, err = run_head(tmp, s)
     assert_eq(code, EXIT_OK, "a BOM'd map must parse (%s%s)" % (out, err))
     assert rules_of(tmp), "BOM'd map contributed no rules"
 
@@ -198,7 +284,7 @@ def a_bom_map_parses(tmp):
 def identity_mappings_are_dropped_and_counted(tmp):
     s = build(tmp, {"m": '{"Names": {"SameName": "SameName", "AcmeWidgetUnit": "GenericWidgetUnit"}}'},
               TERMS_HEADER, {"doc.md": "SameName AcmeWidgetUnit\n"})
-    code, out, _ = run(tmp, s)
+    code, out, _ = run_head(tmp, s)
     assert_eq(code, EXIT_OK, "exit")
     assert_in("no-ops", out, "identity drops must be counted")
     assert not any("SameName" in l.split("==>")[0] for l in rules_of(tmp)), \
@@ -209,26 +295,44 @@ def a_non_standard_section_contributes(tmp):
     """company/modelLine/identifiers are dropped by the C# loader and carry the site terms."""
     s = build(tmp, {"m": '{"company": {"AcmeHoldings": "GenericHoldings"}, "_purpose": "prose"}'},
               TERMS_HEADER, {"doc.md": "AcmeHoldings\n"})
-    code, out, _ = run(tmp, s)
+    code, out, _ = run_head(tmp, s)
     assert_eq(code, EXIT_OK, "exit")
     assert_in("company=1", out, "non-standard section must be counted as USED")
     assert rules_of(tmp), "non-standard section contributed no rule"
 
 
 def a_structured_section_is_counted_but_ignored(tmp):
+    """Counted AND ignored — the case asserted only the first half.
+
+    Measured by mutation, 2026-09-18: feeding structured sections into the vocabulary turned
+    0 of 30 red. The name of this case makes two claims and it tested one of them, so the half
+    that actually protects the output was unguarded.
+
+    A network comment is keyed `<block>#<n>` where n is the compile-unit index. That key is
+    uncomputable from a flat file, so a text rule built from it would match nothing at best and
+    something unintended at worst.
+
+    The key below is deliberately a PLAIN TOKEN and deliberately PRESENT in the corpus. The first
+    attempt at this repair used the realistic `<block>#1` form and stayed green under mutation,
+    because `#` is outside the token class, so the key could never be found in the corpus and no
+    rule could be emitted whether the section was ignored or not - a repair that was itself
+    vacuous, caught by re-running the detector rather than by reading it."""
     s = build(tmp, {"m": '{"Names": {"AcmeWidgetUnit": "GenericWidgetUnit"}, '
-                         '"NetworkComments": {"AcmeWidgetUnit#1": "text"}}'},
-              TERMS_HEADER, {"doc.md": "AcmeWidgetUnit\n"})
-    code, out, _ = run(tmp, s)
+                         '"Comments": {"AcmeStructuredKey": "text"}}'},
+              TERMS_HEADER, {"doc.md": "AcmeWidgetUnit AcmeStructuredKey\n"})
+    code, out, _ = run_head(tmp, s)
     assert_eq(code, EXIT_OK, "exit")
-    assert_in("networkcomments=1", out, "ignored sections must be counted, not silent")
+    assert_in("comments=1", out, "ignored sections must be counted, not silent")
+    assert not any("AcmeStructuredKey" in l for l in rules_of(tmp)), \
+        "a STRUCTURED section contributed vocabulary to the text pass - it is keyed on parsed XML " \
+        "structure and cannot be matched as text"
 
 
 def a_term_row_overrides_a_map_key(tmp):
     s = build(tmp, {"m": ONE_MAP},
               TERMS_HEADER + "| AcmeWidgetUnit | TermChosenName | block | global | auto |\n",
               {"doc.md": "AcmeWidgetUnit\n"})
-    code, out, _ = run(tmp, s)
+    code, out, _ = run_head(tmp, s)
     assert_eq(code, EXIT_OK, "exit")
     assert any("TermChosenName" in l for l in rules_of(tmp)), "term row did not override the map"
 
@@ -239,7 +343,7 @@ def green_present_variant_is_withheld(tmp):
     maps = '{"Names": {"AcmeWidgetUnit": "GenericWidgetUnit", "AcmeSurvivor": "GenericSurvivor"}}'
     s = build(tmp, {"m": maps}, TERMS_HEADER,
               {"doc.md": "AcmeWidgetUnit AcmeSurvivor\n", "ir/reference/x.ir": "AcmeWidgetUnit\n"})
-    code, out, _ = run(tmp, s, "--green", "ir/reference")
+    code, out, _ = run_head(tmp, s, "--green", "ir/reference")
     assert_eq(code, EXIT_OK, "exit (%s)" % out)
     assert any("AcmeSurvivor" in l.split("==>")[0] for l in rules_of(tmp)), \
         "the Green-absent key should still have been emitted"
@@ -259,7 +363,7 @@ def a_declared_short_term_is_emitted_anyway(tmp):
     s = build(tmp, {"m": ONE_MAP},
               TERMS_HEADER + "| ZZ123 | JOB1234 | jobcode | global | auto |\n",
               {"doc.md": "AcmeWidgetUnit and ZZ123 both appear\n"})
-    code, out, _ = run(tmp, s)
+    code, out, _ = run_head(tmp, s)
     assert_eq(code, EXIT_OK, "exit (%s)" % out)
     assert any("ZZ123" in l.split("==>")[0] for l in rules_of(tmp)), \
         "a 5-character DECLARED term got no rule - the length floor is eating the term list"
@@ -272,7 +376,7 @@ def a_declared_green_present_term_is_emitted_anyway(tmp):
     s = build(tmp, {"m": ONE_MAP},
               TERMS_HEADER + "| AcmeDeclared | GenericDeclared | site | global | auto |\n",
               {"doc.md": "AcmeDeclared\n", "ir/reference/x.ir": "AcmeDeclared\n"})
-    code, out, _ = run(tmp, s, "--green", "ir/reference")
+    code, out, _ = run_head(tmp, s, "--green", "ir/reference")
     assert_eq(code, EXIT_OK, "exit (%s)" % out)
     assert any("AcmeDeclared" in l.split("==>")[0] for l in rules_of(tmp)), \
         "a declared term was withheld by the Green test"
@@ -281,10 +385,176 @@ def a_declared_green_present_term_is_emitted_anyway(tmp):
 def a_short_key_is_withheld_and_counted(tmp):
     s = build(tmp, {"m": '{"Names": {"Pump": "Mover", "AcmeWidgetUnit": "GenericWidgetUnit"}}'},
               TERMS_HEADER, {"doc.md": "Pump AcmeWidgetUnit\n"})
-    code, out, _ = run(tmp, s)
+    code, out, _ = run_head(tmp, s)
     assert_eq(code, EXIT_OK, "exit")
     assert_in("under 8 chars", out, "short withholding must be counted")
     assert not any("Pump" in l.split("==>")[0] for l in rules_of(tmp)), "a 4-char key got a rule"
+
+
+# ------------------------------------------------------------------- scan history
+#
+# FINDING F18. Until these existed, every case in this file ran `--scan head` and the DEFAULT mode
+# - the one that produced the published artifact, 6,345 blobs and 119 rules - was entered by
+# nothing at all. The whole of `all_blobs`'s streaming reader, its missing-object guard, and the
+# second breadth pass were shipped unexecuted by any test.
+
+def an_identifier_only_in_an_old_commit(tmp):
+    """THE HEADLINE CASE, and the only one that proves the fixture works.
+
+    One repository, two modes, OPPOSITE VERDICTS: head sees a clean tree and refuses with exit 2,
+    history finds the identifier in a superseded blob and emits a rule. If these ever agree, the
+    fixture has stopped exercising history and every case below it is worthless - so the
+    disagreement is asserted, not assumed.
+
+    This is the tool's entire reason for defaulting to history, quoted from its own docstring: "a
+    key that occurs only in a commit from July is still in the artifact being published"."""
+    s = build(tmp, {"m": ONE_MAP}, TERMS_HEADER, {"doc.md": "AcmeWidgetUnit is here.\n"})
+    bury(tmp, "doc.md", "AcmeWidgetUnit", "nothing identifying")
+
+    head_code, head_out, _ = run_head(tmp, s)
+    assert_eq(head_code, EXIT_CANNOT_RUN,
+              "head must see a clean tree and refuse (%s)" % head_out)
+
+    hist_code, hist_out, hist_err = run_history(tmp, s)
+    assert_eq(hist_code, EXIT_OK, "history must find the buried identifier (%s%s)"
+              % (hist_out, hist_err))
+    assert any("AcmeWidgetUnit" in l.split("==>")[0] for l in rules_of(tmp)), \
+        "history mode emitted no rule for an identifier that survives only in an old commit"
+    assert head_code != hist_code, \
+        "THE TWO MODES AGREED. The fixture is not exercising history and this case proves nothing."
+
+
+def an_identifier_in_an_unreachable_object(tmp):
+    """`--batch-all-objects` reads the object database, not the commit graph.
+
+    A branch deleted without gc leaves its blobs unreachable but present, and they ship in a clone
+    only if packed - but the point stands for the ARTIFACT being judged. The control assertion is
+    what makes this case mean anything: without proving `rev-list --objects --all` cannot see the
+    object, it would pass just as well against a reachable one."""
+    s = build(tmp, {"m": ONE_MAP}, TERMS_HEADER, {"keep.md": "AcmeSurvivor\n"})
+    git(tmp, "checkout", "-q", "-b", "doomed")
+    write(os.path.join(tmp, "secret.md"), "AcmeWidgetUnit\n")
+    git(tmp, "add", "-A")
+    git(tmp, "commit", "-m", "on a branch about to be deleted")
+    git(tmp, "checkout", "-q", "-")
+    git(tmp, "branch", "-q", "-D", "doomed")
+
+    reachable = git_out(tmp, "rev-list", "--objects", "--all")
+    assert "secret.md" not in reachable, \
+        "CONTROL FAILED: the object is still reachable, so this case does not test unreachability"
+
+    code, out, err = run_history(tmp, s)
+    assert_eq(code, EXIT_OK, "exit (%s%s)" % (out, err))
+    assert any("AcmeWidgetUnit" in l.split("==>")[0] for l in rules_of(tmp)), \
+        "an unreachable object's identifier got no rule - the ODB walk is not reaching it"
+
+
+def a_non_utf8_blob_is_counted_unsearchable_not_clean(tmp):
+    """A BLOB NOBODY COULD SEARCH MUST NEVER BE COUNTED AS CLEAN - the script says so itself.
+    Exercises the UnicodeDecodeError arm, which only the history reader has."""
+    s = build(tmp, {"m": ONE_MAP}, TERMS_HEADER, {"doc.md": "AcmeWidgetUnit\n"})
+    with io.open(os.path.join(tmp, "blob.bin"), "wb") as fh:
+        fh.write(b"\xff\xfe\x00\x01 AcmeWidgetUnit \xc3\x28\xa0\xa1")
+    git(tmp, "add", "-A")
+    git(tmp, "commit", "-m", "a blob no text pass can read")
+
+    code, out, err = run_history(tmp, s)
+    assert_eq(code, EXIT_OK, "exit (%s%s)" % (out, err))
+    assert_in("unsearchable:", out, "the unsearchable count must be reported")
+    counted = int(out.split("unsearchable:")[1].split(")")[0].strip())
+    assert counted >= 1, "a non-UTF-8 blob was not counted as unsearchable (got %d)" % counted
+
+
+def a_corrupted_object_is_unsearchable_and_does_not_end_the_walk(tmp):
+    """DEFECT F6'S SITE. `git cat-file --batch` prints `<oid> missing` for an object it cannot
+    unpack, on stdout, WHILE EXITING 0. Breaking out of the loop there silently abandoned the rest
+    of history while leaving a non-zero scanned count, so the empty-is-not-clean guard never fired.
+
+    Measured for this fixture: a corrupted loose object produces exactly that line, and git still
+    streams every other object afterwards. The identifier lives in a DIFFERENT file so that the
+    run has something to find after the bad object."""
+    s = build(tmp, {"m": ONE_MAP}, TERMS_HEADER,
+              {"doc.md": "AcmeWidgetUnit\n", "spoil.md": "this blob gets corrupted\n"})
+    oid = git_out(tmp, "hash-object", "spoil.md").strip()
+    loose = os.path.join(tmp, ".git", "objects", oid[:2], oid[2:])
+    # NOT a silent skip. A case that quietly does nothing when its precondition fails is the exact
+    # shape of failure this suite exists to catch: it would keep printing PASS while testing
+    # nothing. Freshly committed objects are loose here; if a future git packs them on commit,
+    # this must say so out loud and be rewritten, not pass by default.
+    assert os.path.isfile(loose), \
+        "precondition failed: the object is packed, not loose, so nothing was corrupted and this " \
+        "case tested nothing"
+    os.chmod(loose, 0o600)          # git writes loose objects read-only
+    with io.open(loose, "wb") as fh:
+        fh.write(b"garbage-not-zlib")
+
+    code, out, err = run_history(tmp, s)
+    assert_eq(code, EXIT_OK, "the walk must continue past an unreadable object (%s%s)" % (out, err))
+    assert any("AcmeWidgetUnit" in l.split("==>")[0] for l in rules_of(tmp)), \
+        "the walk stopped at the corrupted object and never reached the identifier"
+
+
+def a_repository_with_no_blobs_is_exit_2(tmp):
+    """EMPTY IS NOT CLEAN, and until this run the guard that says so COULD NOT FIRE.
+
+    The path corpus was chained in with the blobs and is a str, never None, so `searched` was >= 1
+    no matter what the object database did and `if not searched` at main() was unreachable dead
+    code. A repository whose history holds not one blob reported "blobs scanned: 1" and carried on.
+
+    The fixture keeps the worktree free of tracked files by excluding through .git/info/exclude
+    rather than a tracked .gitignore - a tracked .gitignore would itself be a blob and defeat the
+    whole point."""
+    os.makedirs(os.path.join(tmp, "tools"))
+    shutil.copy(SCRIPT, os.path.join(tmp, "tools", "build-scrub-rules.py"))
+    write(os.path.join(tmp, "sanitization", "m.map.json"), ONE_MAP)
+    write(os.path.join(tmp, "sanitization", "scrub-terms.md"), TERMS_HEADER)
+    git(tmp, "init")
+    git(tmp, "config", "user.email", "t@t")
+    git(tmp, "config", "user.name", "t")
+    write(os.path.join(tmp, ".git", "info", "exclude"), "sanitization/\ntools/\n")
+    git(tmp, "commit", "--allow-empty", "-m", "a history with no blobs in it")
+    s = os.path.join(tmp, "tools", "build-scrub-rules.py")
+
+    code, out, _ = run_history(tmp, s)
+    assert_eq(code, EXIT_CANNOT_RUN, "a blobless history must refuse, not read as clean (%s)" % out)
+    assert_in("NOTHING EXAMINED", out, "exit 2 must say what it did not examine")
+    assert_in("blobs scanned (history)      : 0", out,
+              "the count must be honest: the path corpus is not a blob")
+
+
+def the_manifest_records_the_scan_mode(tmp):
+    """Provenance. An artifact that does not say which corpus produced it cannot be audited later,
+    and `head` and `history` produce legitimately different rule sets."""
+    s = build(tmp, {"m": ONE_MAP}, TERMS_HEADER, {"doc.md": "AcmeWidgetUnit\n"})
+    code, out, err = run_history(tmp, s)
+    assert_eq(code, EXIT_OK, "exit (%s%s)" % (out, err))
+    manifest = json.loads(io.open(
+        os.path.join(tmp, "sanitization", "scrub", "manifest.json"), encoding="utf-8").read())
+    assert_eq(manifest.get("scan"), "history", "the manifest must record the mode it ran in")
+
+
+def breadth_is_measured_at_head_even_when_scanning_history(tmp):
+    """The second scan at main()'s breadth line, which ONLY history mode runs.
+
+    Breadth asks "does this behave like an ordinary word rather than an identifier" by counting
+    distinct files. Counted over history a file edited thirty times contributes thirty blobs, so an
+    ordinary-looking count is manufactured by editing activity: measured on the real repository,
+    the same vocabulary demoted 8 variants at HEAD and 22 over history, and those 14 extra
+    demotions are rules NOT EMITTED.
+
+    Here one file carrying the identifier is revised well past the threshold. Every revision is a
+    separate blob in history; at HEAD it is still one file. The rule must survive."""
+    s = build(tmp, {"m": ONE_MAP}, TERMS_HEADER, {"doc.md": "AcmeWidgetUnit revision 0\n"})
+    for i in range(1, 20):
+        write(os.path.join(tmp, "doc.md"), "AcmeWidgetUnit revision %d\n" % i)
+        git(tmp, "add", "-A")
+        git(tmp, "commit", "-m", "revision %d" % i)
+
+    code, out, err = run_history(tmp, s)
+    assert_eq(code, EXIT_OK, "exit (%s%s)" % (out, err))
+    assert any("AcmeWidgetUnit" in l.split("==>")[0] for l in rules_of(tmp)), \
+        "breadth was counted over HISTORY: 20 revisions of one file demoted the identifier to " \
+        "an ordinary word and the rule was never emitted"
 
 
 # --------------------------------------------------------------------------- refuse
@@ -292,7 +562,7 @@ def a_short_key_is_withheld_and_counted(tmp):
 def non_injective_map_refuses(tmp):
     s = build(tmp, {"m": '{"Names": {"AcmeWidgetUnit": "Shared", "AcmeOtherUnit": "Shared"}}'},
               TERMS_HEADER, {"doc.md": "AcmeWidgetUnit AcmeOtherUnit\n"})
-    code, out, _ = run(tmp, s)
+    code, out, _ = run_head(tmp, s)
     assert_eq(code, EXIT_FINDING, "a collapse must be a finding")
     assert_in("NON-INJECTIVE", out, "the collapse must be named")
     assert_eq(rules_of(tmp), [], "a refusal must write nothing")
@@ -305,7 +575,7 @@ def tracked_term_list_refuses_before_reading(tmp):
                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     subprocess.call(["git", "commit", "-m", "oops"], cwd=tmp,
                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    code, out, err = run(tmp, s, "--terms", "terms.md")
+    code, out, err = run_head(tmp, s, "--terms", "terms.md")
     assert_eq(code, EXIT_REFUSED, "a tracked term list must refuse")
     assert_in("TRACKED BY GIT", err, "the refusal must say why")
 
@@ -318,7 +588,7 @@ def out_dir_in_tracked_space_refuses(tmp):
     `git add -A` from being committed. All three forms below defeated the old check."""
     s = build(tmp, {"m": ONE_MAP}, TERMS_HEADER, {"docs/keep.md": "x\n"})
     for target in ("docs", "docs/scrub-out", "tools/scrub-out"):
-        code, out, err = run(tmp, s, "--out", target)
+        code, out, err = run_head(tmp, s, "--out", target)
         assert_eq(code, EXIT_REFUSED, "--out %s must refuse" % target)
         assert_in("NOT ignored by git", err, "the refusal for %s must say why" % target)
         assert not os.path.isfile(os.path.join(tmp, target, "replace-text.txt")), \
@@ -329,14 +599,14 @@ def out_dir_in_tracked_space_refuses(tmp):
 
 def no_maps_is_exit_2(tmp):
     s = build(tmp, {}, TERMS_HEADER, {"doc.md": "x\n"})
-    code, out, _ = run(tmp, s)
+    code, out, _ = run_head(tmp, s)
     assert_eq(code, EXIT_CANNOT_RUN, "no maps must be exit 2")
     assert_in("NOTHING EXAMINED", out, "exit 2 must say so")
 
 
 def absent_term_list_is_exit_2(tmp):
     s = build(tmp, {"m": ONE_MAP}, None, {"doc.md": "AcmeWidgetUnit\n"})
-    code, out, _ = run(tmp, s)
+    code, out, _ = run_head(tmp, s)
     assert_eq(code, EXIT_CANNOT_RUN, "an absent term list must be exit 2, never a partial run")
     assert_in("MISS 44", out, "the message must say why the maps alone are not enough")
 
@@ -345,7 +615,7 @@ def empty_term_list_is_exit_2(tmp):
     """A header with no rows. Distinct message from an ABSENT list: a list that shrank to nothing
     and a list nobody supplied are different problems and must not read the same."""
     s = build(tmp, {"m": ONE_MAP}, TERMS_EMPTY, {"doc.md": "AcmeWidgetUnit\n"})
-    code, out, _ = run(tmp, s)
+    code, out, _ = run_head(tmp, s)
     assert_eq(code, EXIT_CANNOT_RUN, "a zero-row term list must be exit 2")
     assert_in("ZERO rows", out, "the empty case must name itself")
 
@@ -354,7 +624,7 @@ def malformed_row_is_exit_2_and_named(tmp):
     s = build(tmp, {"m": ONE_MAP},
               TERMS_HEADER + "| onlytwo | cells |\n| ZZ1 | J1 | notaclass | global | auto |\n",
               {"doc.md": "AcmeWidgetUnit\n"})
-    code, out, _ = run(tmp, s)
+    code, out, _ = run_head(tmp, s)
     assert_eq(code, EXIT_CANNOT_RUN, "a malformed row must refuse, not skip")
     assert_in("malformed row", out, "the bad row must be named")
     assert_eq(rules_of(tmp), [], "a refusal must write nothing")
@@ -363,7 +633,7 @@ def malformed_row_is_exit_2_and_named(tmp):
 def nothing_matching_is_exit_2_not_0(tmp):
     """EMPTY IS NOT CLEAN: every variant filtered out is a refusal, not a clean repository."""
     s = build(tmp, {"m": ONE_MAP}, TERMS_HEADER, {"doc.md": "nothing relevant here\n"})
-    code, out, _ = run(tmp, s)
+    code, out, _ = run_head(tmp, s)
     assert_eq(code, EXIT_CANNOT_RUN, "no surviving rule must be exit 2")
     assert_in("EMPTY IS NOT CLEAN", out, "the principle must be named")
 
@@ -386,6 +656,15 @@ for name, body in [
     ("a DECLARED Green-present term is emitted anyway",
      a_declared_green_present_term_is_emitted_anyway),
     ("a short key is withheld and counted", a_short_key_is_withheld_and_counted),
+    ("HISTORY: an identifier only in an old commit", an_identifier_only_in_an_old_commit),
+    ("HISTORY: an identifier in an unreachable object", an_identifier_in_an_unreachable_object),
+    ("HISTORY: a non-UTF-8 blob is unsearchable, not clean",
+     a_non_utf8_blob_is_counted_unsearchable_not_clean),
+    ("HISTORY: a corrupted object does not end the walk",
+     a_corrupted_object_is_unsearchable_and_does_not_end_the_walk),
+    ("HISTORY: a repository with no blobs is exit 2", a_repository_with_no_blobs_is_exit_2),
+    ("HISTORY: the manifest records the scan mode", the_manifest_records_the_scan_mode),
+    ("HISTORY: breadth is measured at head", breadth_is_measured_at_head_even_when_scanning_history),
     ("a non-injective map refuses", non_injective_map_refuses),
     ("a tracked term list refuses before reading", tracked_term_list_refuses_before_reading),
     ("--out in tracked space refuses", out_dir_in_tracked_space_refuses),

@@ -326,7 +326,7 @@ vocabulary the term list exists for.
 python tools/build-scrub-rules.tests.py
 ```
 
-21 cases, offline, each building a throwaway git repo and running the script unmodified as a child
+30 cases, offline, each building a throwaway git repo and running the script unmodified as a child
 process. The suite is slow (roughly half a minute per case on Windows) because of the temp-repo
 setup, not the script, which runs in well under a second.
 
@@ -354,6 +354,85 @@ direction and the four cannot-run paths, which a single disabled comparison does
 `subprocess.call` with a `PIPE` nobody reads blocks once the child fills the buffer, and `git add`
 emits one CRLF warning per file, so the 40-file case hung forever while every smaller case passed.
 Test harnesses in this directory use `DEVNULL` for exactly this reason.
+
+### F16–F19 discharged — the default mode was tested by nothing (2026-09-18)
+
+🔴 **Every case above ran `--scan head`. The default is `--scan history`, and it is the mode that
+produced the published artifact** — 6,413 blobs, 119 rules. One word inside the shared runner:
+
+```python
+proc = subprocess.Popen([sys.executable, script, "--repo", tmp, "--scan", "head"] + list(args), ...)
+```
+
+An override nobody can see at the call site is the kind that survives a review. `run()` no longer
+injects a mode; each case names its own through `run_head` or `run_history`.
+
+**The fixture could not have expressed the difference either.** `build()` makes exactly one commit,
+so the object database and HEAD held identical blobs — a `--scan history` case over that fixture
+would have passed while proving nothing. The new `bury()` helper is the **exact inverse** of
+`verify-scrub.tests.py`'s `scrub()`: that one amends and prunes so the old blob is *gone*; this one
+commits a second time so the old blob *remains* in the ODB while being absent from HEAD.
+
+Seven history cases. The load-bearing one is **`an identifier only in an old commit`**: one
+repository, two modes, **opposite verdicts** — head sees a clean tree and refuses with exit 2,
+history finds the buried identifier and emits a rule. The case asserts the disagreement, because if
+the modes ever agree the fixture has stopped exercising history and every case beside it is
+worthless. The others cover the unreachable-object walk (with a control proving
+`rev-list --objects --all` cannot see it), non-UTF-8 blobs, a corrupted loose object, the
+blobless-history refusal, manifest provenance, and the head-scoped breadth pass.
+
+#### Two defects in the history path, both found by planning the tests rather than by running them
+
+**The EMPTY-IS-NOT-CLEAN guard could not fire.** The path corpus was chained in with the blobs and
+is a `str`, never `None`, so `searched >= 1` unconditionally and `if not searched:` was unreachable
+dead code. A repository whose history holds not one blob reported `blobs scanned: 1` and carried on.
+Paths are now a `prelude` — scanned for vocabulary, not counted as blobs. Measured on this
+repository: **6414 → 6413, exactly one phantom blob removed, with all 119 rules byte-identical.**
+
+**`proc.wait()` discarded git's exit status.** A `git cat-file` that fails outright closes stdout
+immediately, so the walk ends after zero blobs and the caller receives a perfectly clean, perfectly
+empty corpus. It now raises `ScanFailed`, which `main()` turns into exit 2.
+
+*Recorded rather than faked:* **no fixture here induces a non-zero `cat-file` exit.** Removing
+`.git/objects`, and pointing `GIT_OBJECT_DIRECTORY` at nothing, both make the whole repository
+undiscoverable, so the builder refuses at exit 3 long before it scans. The guard is right and the
+case does not exist; saying so is better than a case that pretends to cover it.
+
+#### The vacuous assertions were derived, not guessed
+
+The five were never enumerated anywhere. Rather than pick five that "look weak", each behaviour a
+case claims was broken in turn and the suite watched for which case kept printing PASS — vacuity by
+measurement. Re-derived 2026-09-18, restoring byte-identical:
+
+| mutation | guard case | red | caught by its own guard |
+|---|---|---|---|
+| longest-first ordering reversed | longest-first ordering holds | 1 of 30 | yes |
+| identity mappings no longer dropped | identity mappings are dropped | 1 of 30 | yes |
+| term rows no longer override map keys | a term row overrides a map key | 1 of 30 | yes |
+| Green-present variants no longer withheld | a Green-present variant is withheld | 1 of 30 | yes |
+| structured sections no longer ignored | a structured section is counted but ignored | 1 of 30 | **was 0** |
+| every artifact written **empty** | emits the artifacts | 16 of 30 | **was no** |
+| `path-renames.args` never written | emits the artifacts | 1 of 30 | **was 0 of 30** |
+| `==>` dropped from declared-term rules | every line carries an explicit `==>` | 2 of 30 | **was no** |
+
+What that found:
+
+- **`path-renames.args` was checked by nothing at all.** Suppressing the whole file turned 0 of 30
+  red — the same artifact whose total absence was defect F3.
+- **`emits_three_files` asserted existence, never content.** Four empty files passed it; sixteen
+  other cases went red and the one case *named* for the artifacts did not.
+- **`longest_first_ordering_holds` discarded the exit code**, then asserted
+  `lens == sorted(lens, reverse=True)` — and `[] == sorted([])` is true, so a run that exited 2 and
+  wrote nothing satisfied it.
+- **`every_line_carries_an_explicit_arrow` slept through the removal of `==>`.** The emitter has two
+  branches and the fixture produced no declared-term rule, so it never saw the one that was broken.
+- **`a_structured_section_is_counted_but_ignored` tested only the "counted" half.**
+
+**One prediction was wrong and one repair was itself vacuous**, both worth recording. The ordering
+case *did* catch a reversed sort — it was weak in a different direction than expected. And the
+first repair to the structured-section case used the realistic `<block>#1` key form, which stayed
+green under mutation because `#` is outside the token class, so the key could never be found in the
+corpus whether the section was ignored or not. Caught by re-running the detector, not by reading it.
 
 ## `verify-scrub.py` — the Gate 3 oracle (2026-09-17)
 

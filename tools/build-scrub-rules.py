@@ -47,7 +47,6 @@ looks like a rule set and it scrubs some of what it names.
 import argparse
 import hashlib
 import io
-import itertools
 import json
 import os
 import re
@@ -241,6 +240,11 @@ def resolve_conflict(key, candidates, reference_blob):
     return sorted(candidates)[0], 4
 
 
+class ScanFailed(Exception):
+    """The corpus could not be read. Raised rather than returned so it cannot be mistaken for an
+    empty corpus - the two are the same value and opposite conclusions."""
+
+
 def all_blobs(repo, scan):
     """(identifier, text) for every blob. `history` walks the whole object database; `head` walks
     the worktree and says so. A blob that is not valid UTF-8 comes back as None so the caller can
@@ -294,7 +298,15 @@ def all_blobs(repo, scan):
                 yield name.decode("ascii"), None
     finally:
         stream.close()
-        proc.wait()
+        rc = proc.wait()
+    # THE EXIT CODE WAS DISCARDED HERE. A `git cat-file` that fails outright - an unreadable object
+    # database, a path that is not a repository - closes its stdout immediately, so the loop above
+    # ends after zero blobs and the caller receives a perfectly clean, perfectly empty corpus. In a
+    # tool whose whole doctrine is that empty is not clean, on the mode that produces the published
+    # artifact, that is the worst available failure: silent, confident, and indistinguishable from
+    # a repository with nothing to find.
+    if rc != 0:
+        raise ScanFailed("git cat-file exited %d and examined nothing" % rc)
 
 
 WORD_RUN = re.compile(r"[A-Za-z0-9_]+")
@@ -309,8 +321,14 @@ WORD_RUN = re.compile(r"[A-Za-z0-9_]+")
 WIDE_RUN = re.compile(r"[A-Za-z0-9_.@/-]+")
 
 
-def scan_stream(make_iter, needles):
-    """Blob-count per needle, STREAMING. Returns (counts, searched, unsearchable).
+def scan_stream(make_iter, needles, prelude=()):
+    """Blob-count per needle, STREAMING. Returns (counts, searched, unsearchable, seen).
+
+    `prelude` texts are scanned for counts and vocabulary but are NOT counted as blobs. The path
+    corpus is fed in that way, and the distinction is load-bearing rather than tidy: it used to be
+    chained in with the blobs, it is a str and never None, so `searched` was >= 1 no matter what
+    happened afterwards and the EMPTY-IS-NOT-CLEAN guard in main() COULD NOT FIRE. A run that read
+    not one blob still reported "blobs scanned: 1" and carried on.
 
     *** THREE OBVIOUS IMPLEMENTATIONS FAIL ON THIS CORPUS, ALL MEASURED ON THIS MACHINE. ***
 
@@ -338,20 +356,28 @@ def scan_stream(make_iter, needles):
                 complex_[n] = (parts, re.compile(r"\b" + re.escape(n) + r"\b"))
 
     counts, searched, unsearchable, seen = {}, 0, 0, set()
-    for text in make_iter():
-        if text is None:
-            unsearchable += 1
-            continue
-        searched += 1
+
+    def absorb(text):
         tokens = set(WORD_RUN.findall(text))
         # `seen` is the corpus vocabulary the declared-presence check and the collision check read,
         # so it uses the WIDE class: a needle containing a dot must be findable in it.
-        seen |= tokens | set(WIDE_RUN.findall(text))
+        seen.update(tokens)
+        seen.update(WIDE_RUN.findall(text))
         for token in simple.intersection(tokens):
             counts[token] = counts.get(token, 0) + 1
         for n, (parts, pat) in complex_.items():
             if all(p in tokens for p in parts) and pat.search(text):
                 counts[n] = counts.get(n, 0) + 1
+
+    for text in prelude:
+        if text is not None:
+            absorb(text)
+    for text in make_iter():
+        if text is None:
+            unsearchable += 1
+            continue
+        searched += 1
+        absorb(text)
     return counts, searched, unsearchable, seen
 
 
@@ -502,9 +528,13 @@ def main():
         ln.split(" ", 1)[1] for ln in git(repo, "rev-list", "--objects", "--all").split("\n")
         if " " in ln)
 
-    blob_hits, searched, unsearchable, corpus_tokens = scan_stream(
-        lambda: itertools.chain([all_paths],
-                                (text for _, text in all_blobs(repo, args.scan))), candidates)
+    try:
+        blob_hits, searched, unsearchable, corpus_tokens = scan_stream(
+            lambda: (text for _, text in all_blobs(repo, args.scan)), candidates,
+            prelude=[all_paths])
+    except ScanFailed as exc:
+        print("\nNOTHING EXAMINED: %s. EMPTY IS NOT CLEAN." % exc)
+        return 2
     green_hits, _, _, _ = scan_stream(
         lambda: iter([reference_blob.lower()]), [v.lower() for v in candidates])
 

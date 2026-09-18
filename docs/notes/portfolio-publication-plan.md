@@ -2,7 +2,8 @@
 
 **Opened 2026-09-17. Rev 2 — executable. Rev 3 — audited. Rev 4 — Phase 2 part-built. Rev 5 — builder
 reviewed and repaired. Rev 6 — the verifier and the trial rewrite. Rev 7 — the verifier's tests.
-Rev 8 (2026-09-18) — Phase 0 done, and Gate 3's build half made real.** Scouting pass and phase
+Rev 8 (2026-09-18) — Phase 0 done, and Gate 3's build half made real. Rev 9 (2026-09-18) — F16–F19
+discharged; the builder's default scan mode is tested.** Scouting pass and phase
 plan for turning this repository into a public portfolio piece on GitHub, without the private
 repository ever becoming public and without any restricted identifier reaching a public remote.
 
@@ -47,7 +48,7 @@ this table, this table is current.
 |---|---|---|
 | **0 — build baseline** | ✅ **DONE 2026-09-18** | SDK **8.0.425** installed; baseline captured to `sanitization/build-baseline.json` — **23 assemblies, 5,877 passed, 19 failed**, all 19 pre-existing and proven so at `446d450`. Gate 3's build half is now **mechanised, not merely recorded**: `--build-baseline` used to test `os.path.isfile` and compare nothing. Two targets still cannot build here and are recorded rather than hidden: `openness-cli` (no `Siemens.Engineering.dll`) and `Harness.RigRead` (no machine-local `Sharp7.dll`) |
 | **1 — hygiene** | ✅ **DONE** | — |
-| **2 — the scrub tooling** | 🟡 **mostly done** | ✅ `verify-scrub.tests.py` — **31 cases**, negative-tested six ways at rev 7 and **nine more** at rev 8 for the build comparison; both mutation runs found a wholly untested surface. ✅ `capture-build-baseline.py` + 11 tests. `check-staged-identifiers.py` (M-5) still **not written**; 8 review findings unfixed, **F18 the one that matters** |
+| **2 — the scrub tooling** | 🟡 **mostly done** | ✅ `verify-scrub.tests.py` — **31 cases**, negative-tested six ways at rev 7 and nine more at rev 8. ✅ `capture-build-baseline.py` + 11 tests. ✅ **F16–F19 discharged at rev 9**: `build-scrub-rules.tests.py` is **30 cases**, the default `--scan history` path is covered by 7 of them, and two latent defects in it were fixed. `check-staged-identifiers.py` (M-5) still **not written**; **4 review findings remain — F4, F9, F11, F13**, all of which change builder behaviour rather than coverage |
 | **3 — rewrite history** | ⬜ **not started** | the recipe is proven end to end, but the real run needs the `--path-glob` exclusion and the 253 SHA citations repaired |
 | **4 — restructure** | ✅ **DONE** | — |
 | **5 — CI and demo** | ⬜ **not started** | no `.github/`, no demo script |
@@ -63,6 +64,52 @@ this table, this table is current.
 - **The trial rewrite recipe, proven:** `clone --no-local` → `filter-repo --replace-text
   --replace-message @path-renames.args --mailmap` → delete all but the publishing branch →
   `reflog expire --all --expire=now && gc --prune=now` → verify. ~7 min rewrite, ~30 s verify.
+
+### Rev 9 — F16–F19 discharged: the builder's default mode was tested by nothing
+
+🔴 **Every one of the builder's 23 cases ran `--scan head`. The default is `--scan history`, and it
+is the mode that produced the published artifact** — 6,413 blobs, 119 rules. One word inside the
+shared runner did it, and an override nobody can see at the call site is the kind that survives a
+review. `run()` no longer injects a mode; each case names its own.
+
+**The fixture could not have expressed the difference either.** `build()` makes exactly one commit,
+so the object database and HEAD held identical blobs — a `--scan history` case over that fixture
+would have passed while proving nothing. The new `bury()` helper is the exact inverse of the
+verifier suite's `scrub()`: that one amends and prunes so the old blob is *gone*, this one commits
+again so it *remains* in the ODB while absent from HEAD.
+
+Seven history cases now exist. The load-bearing one is **one repository, two modes, opposite
+verdicts**: head sees a clean tree and refuses with exit 2, history finds the buried identifier and
+emits a rule — and the case asserts the *disagreement*, because if the modes ever agree the fixture
+has stopped exercising history and every case beside it is worthless.
+
+**Two defects in the history path, found by planning the tests rather than by running them.** The
+EMPTY-IS-NOT-CLEAN guard **could not fire**: the path corpus was chained in with the blobs and is a
+`str`, never `None`, so `searched >= 1` unconditionally and `if not searched:` was unreachable dead
+code — a repository whose history holds not one blob reported "blobs scanned: 1" and carried on.
+And `proc.wait()` discarded git's exit status, so a `cat-file` that failed outright handed back a
+perfectly clean, perfectly empty corpus. In the tool whose whole doctrine is that empty is not
+clean, on the one path no test entered.
+
+**The vacuous assertions were derived, not guessed.** The five were never enumerated anywhere, so
+rather than pick five that looked weak, each behaviour a case claims was broken in turn and the
+suite watched for which case kept printing PASS. That found `path-renames.args` **checked by
+nothing at all** (suppressing the whole file: 0 of 30 red — the artifact whose absence was F3);
+`emits_three_files` passing four **empty** files; `longest_first_ordering_holds` discarding the exit
+code and then asserting `[] == sorted([])`; `every_line_carries_an_explicit_arrow` sleeping through
+the removal of `==>` because its fixture exercised only one of the emitter's two branches; and the
+structured-section case testing "counted" while ignoring "ignored".
+
+**One prediction was wrong and one repair was itself vacuous.** The ordering case *did* catch a
+reversed sort — it was weak in a different direction than expected. And the first repair to the
+structured-section case used the realistic `<block>#1` key form, which stayed green under mutation
+because `#` is outside the token class, so the key could never be found in the corpus whether the
+section was ignored or not. Both were caught by re-running the detector, not by reading the code.
+
+**The control that licenses all of it**: the builder re-run over this repository emits
+`replace-text.txt`, `replace-message.txt` and `path-renames.args` **byte-identical** to before —
+119 rules, 22 rename pairs. The only changed number is `blobsScanned`, and running the pre-change
+builder against the same tree gives **6414 against 6413**: exactly one phantom blob removed.
 
 ### Rev 8 — Phase 0 done, and the half of Gate 3 that was decorative
 
@@ -142,9 +189,9 @@ one, and it was the second kind this suite existed to prevent.*
 
 ### What most changes the picture now
 
-1. **The remaining Phase 2 debt.** `check-staged-identifiers.py` (M-5) is unwritten and 8 review
-   findings are unfixed — **F18 above all**, since `--scan history` is the builder's default and the
-   path that produces the real artifact, and it has zero test coverage.
+1. **The remaining Phase 2 debt.** `check-staged-identifiers.py` (M-5) is unwritten, and **four**
+   review findings remain: **F4, F9, F11, F13**. F16–F19 were discharged 2026-09-18 (Rev 9); each
+   of the four left changes what the builder *emits*, so each needs its own artifact-diff control.
 2. **Restore `Sharp7.dll`.** One machine-local file keeps `Harness.RigRead` unbuildable. Copies
    survive in stale `bin/` folders from the previous machine, so this is likely a one-file fix —
    but its provenance should be confirmed rather than assumed, and the vendoring question the
@@ -316,8 +363,13 @@ Recorded so they meet the next pass rather than evaporating: **F4** the overlap 
 needle matching *inside* a replacement (the artifact is clean by luck, not by the check) · **F9**
 variant collisions are first-writer-wins, 5 live instances · **F11** map section class is discarded,
 so site/site keys never get their spaced form · **F13** rung-3 conflict votes are double-counted
-· **F16–F19** five vacuous test assertions, and **no test exercises `--scan history`**, the default
-path.
+· ~~**F16–F19** five vacuous test assertions, and **no test exercises `--scan history`**, the default
+path~~ — **DISCHARGED 2026-09-18, see Rev 9.**
+
+**Four remain open: F4, F9, F11, F13.** They change builder *behaviour* rather than test coverage,
+which is why they were not folded into the F16–F19 work: the control that proved that work changed
+nothing — 119 rules byte-identical before and after — could not have been run if the same commit
+had also altered what the builder emits.
 
 ---
 
