@@ -131,6 +131,35 @@ tooling that requires a specific, expensive, licensed environment to run against
 
 ---
 
+## A note on the history
+
+This repository was developed privately against private engineering projects. Publishing it meant removing
+every restricted identifier — job codes, site and company names, and the block, tag and DB names taken
+from live plant — from **all 1,350 commits**, not merely from the current files. Deleting them at the
+tip would have left every one of them one `git log` away.
+
+So the history was rewritten with `git-filter-repo`, and **every commit hash changed**. Documentation
+throughout this repo cites commits by their short hash — `80098e7`, `eba7033` and several hundred
+more. Those references are accurate about the work and **will not resolve here**: they name commits
+in the original private history. They are kept rather than rewritten because each one is load-bearing
+in an argument — several byte budgets, test baselines and design decisions are justified by pointing
+at the commit that caused them, and replacing those with prose would have removed the evidence to
+tidy the citation.
+
+The de-identification is not a search-and-replace. It is [two independent
+tools](tools/README.md) — one that derives the rewrite rules, one that decides whether the result is
+clean — which **share no derivation code on purpose**, because if both worked out their vocabulary
+the same way, a bug would produce a rule that misses something and then hunt for it the same wrong
+way and find nothing: a confident, earned-looking zero over the wrong population. The verifier is
+run in both directions on every pass: it must return zero on the rewritten clone **and** still fail
+the unscrubbed original.
+
+What it proves is narrower than it looks, and the tool says so on every run: **closure over a
+supplied vocabulary, not the absence of identifiers.** No string-matching gate can find a plant
+described precisely enough to be recognised without being named.
+
+---
+
 ## Licence
 
 MIT — see [`LICENSE`](LICENSE). The licence covers this repository's tooling and documentation. It

@@ -125,14 +125,26 @@ def scrub(tmp, rel, old, new):
 
     Amending and then expiring the reflog and pruning is what makes the old blob unreachable AND
     unreferenced, which is the state filter-repo leaves behind - its own recipe ends with exactly
-    `reflog expire --all --expire=now && gc --prune=now`."""
+    `reflog expire --all --expire=now && gc --prune=now`.
+
+    *** AND IT LEAVES A commit-map, WHICH THIS FIXTURE ALSO HAS TO LEAVE. *** The same lesson a
+    second time: a stand-in that reproduces only the part of the state somebody happened to think of
+    is a stand-in that passes a broken tool. .git/filter-repo/commit-map is how a rewritten clone
+    records which original commit each new one came from, and the canary's subject check reads it -
+    so a fixture without one is claiming to be a rewrite that cannot say what it rewrote."""
     p = os.path.join(tmp, rel)
+    before = subprocess.run(["git", "rev-parse", "HEAD"], cwd=tmp, capture_output=True,
+                            text=True).stdout.strip()
     text = io.open(p, encoding="utf-8").read().replace(old, new)
     write(p, text)
     git(tmp, "add", "-A")
     git(tmp, "commit", "--amend", "-m", "scrubbed")
     git(tmp, "reflog", "expire", "--all", "--expire=now")
     git(tmp, "gc", "--prune=now", "--quiet")
+    after = subprocess.run(["git", "rev-parse", "HEAD"], cwd=tmp, capture_output=True,
+                           text=True).stdout.strip()
+    write(os.path.join(tmp, ".git", "filter-repo", "commit-map"),
+          "old                                      new\n%s %s\n" % (before, after))
 
 
 def assert_eq(got, want, what):
@@ -197,12 +209,18 @@ def t3_decrease_GATES(tmp):
 # ----------------------------------------------------------------- the surfaces
 
 def residual_in_a_commit_message_only(tmp):
-    """A blob-only scan passes this repo."""
+    """A blob-only scan passes this repo.
+
+    THE COMMIT COMES BEFORE THE CANARY, and that ordering is the real procedure rather than a
+    convenience: the source repository reaches the exact state being published, THEN the canary is
+    recorded against it, then the rewrite runs. A canary recorded before a later commit describes a
+    tree that no longer exists, which the subject check now refuses - correctly, and it caught this
+    fixture doing it."""
     s = build(tmp, {"doc.md": "%s\n" % CONTROL})
-    canary(tmp, s)
     write(os.path.join(tmp, "doc.md"), "%s\nx\n" % CONTROL)
     git(tmp, "add", "-A")
     git(tmp, "commit", "-m", "mentions ZZ9999 in the message")
+    canary(tmp, s)
     code, out, _ = run(tmp, s)
     assert_eq(code, EXIT_FINDING, "a residual in a commit message must gate (%s)" % out)
 
@@ -490,6 +508,75 @@ def build_a_DUPLICATE_assembly_row_is_exit_2(tmp):
     assert_eq(code, EXIT_CANNOT_RUN, "an ambiguous capture must refuse (%s)" % out)
 
 
+# ------------------------------------------------- the canary's subject stamp (M-20)
+#
+# `make_canary` stamped subjectVersion, printed it, and NOTHING EVER COMPARED IT - while its own
+# docstring promised "a stale stamp reports UNVERIFIED rather than passing". Found while auditing the
+# pipeline immediately before the irreversible rewrite.
+#
+# It is not a neutral omission. The must-survive check passes when a control is seen AT LEAST as
+# often as recorded, so an ageing canary carries smaller expected counts and the gate gets WEAKER the
+# staler it is. The canary is the instrument, and an uncalibrated instrument reads clean.
+
+def a_canary_from_a_different_tree_is_exit_2(tmp):
+    """The plain case: record the canary, then move the repository on. Its counts now describe a
+    tree that no longer exists, and no commit-map relates the two."""
+    s = build(tmp, {"doc.md": "%s\n" % CONTROL})
+    canary(tmp, s)
+    write(os.path.join(tmp, "later.md"), "an ordinary commit after the canary\n")
+    git(tmp, "add", "-A")
+    git(tmp, "commit", "-m", "moves HEAD away from the stamp")
+    code, out, _ = run(tmp, s)
+    assert_eq(code, EXIT_CANNOT_RUN, "a canary from another tree must refuse (%s)" % out)
+    assert_in("UNVERIFIED", out, "the refusal must name what it could not establish")
+
+
+def a_canary_matching_the_rewritten_subject_PASSES(tmp):
+    """The other direction, and the one that keeps the check from being a blanket refusal. After a
+    real rewrite the clone's HEAD is a NEW hash the canary cannot possibly carry - so the check reads
+    filter-repo's commit-map to ask which ORIGINAL commit this one came from, and that is what must
+    match. Without this case, deleting the commit-map lookup entirely would still look correct."""
+    s = build(tmp, {"doc.md": "%s\nprefixZZ9999suffix\n" % CONTROL})
+    canary(tmp, s)
+    scrub(tmp, "doc.md", "prefixZZ9999suffix", "prefixJOB9999suffix")
+    code, out, _ = run(tmp, s)
+    assert_eq(code, EXIT_OK, "a canary matching the rewritten subject must pass (%s)" % out)
+
+
+def a_clone_rewritten_from_a_DIFFERENT_commit_is_exit_2(tmp):
+    """THE CASE THE COMMIT-MAP COMPARISON ACTUALLY GUARDS, and it was missing.
+
+    The plain different-tree case above has no commit-map, so it exercises the ABSENT-map branch and
+    leaves the comparison itself untested - mutation testing said so by disabling the comparison and
+    turning nothing red. Here the map exists and points somewhere else: the canary was recorded at A,
+    the repository moved to B, and the rewrite mapped B onto C. A rewrite of the wrong tree is
+    exactly the accident that produces a confident, meaningless earned zero."""
+    s = build(tmp, {"doc.md": "%s\nprefixZZ9999suffix\n" % CONTROL})
+    canary(tmp, s)                                    # stamped at A
+    write(os.path.join(tmp, "later.md"), "a commit the canary never saw\n")
+    git(tmp, "add", "-A")
+    git(tmp, "commit", "-m", "moves the subject to B")
+    scrub(tmp, "doc.md", "prefixZZ9999suffix", "prefixJOB9999suffix")   # map records B -> C
+    code, out, _ = run(tmp, s)
+    assert_eq(code, EXIT_CANNOT_RUN,
+              "a clone rewritten from a commit the canary never saw must refuse (%s)" % out)
+    assert_in("rewritten from", out, "the refusal must name the mismatch it found")
+
+
+def a_canary_with_no_subject_stamp_is_exit_2(tmp):
+    """A canary that cannot say which tree it describes is not a usable instrument."""
+    import json as _json
+    s = build(tmp, {"doc.md": "%s\n" % CONTROL})
+    canary(tmp, s)
+    path = os.path.join(tmp, "sanitization", "canary.json")
+    doc = _json.loads(io.open(path, encoding="utf-8").read())
+    doc.pop("subjectVersion", None)
+    write(path, _json.dumps(doc, indent=2))
+    code, out, _ = run(tmp, s)
+    assert_eq(code, EXIT_CANNOT_RUN, "a canary with no subject must refuse (%s)" % out)
+    assert_in("no subjectVersion", out, "the refusal must say what is missing")
+
+
 def instrument_control_is_reported(tmp):
     """Every needle must match itself in a synthetic object pushed through the same matcher. This
     is the check that caught 1,505 of 1,719 needles being unmatchable."""
@@ -536,6 +623,12 @@ for name, body in [
     ("malformed capture JSON is exit 2", build_malformed_json_is_exit_2),
     ("zero assemblies is exit 2", build_zero_assemblies_is_exit_2),
     ("a DUPLICATE assembly row is exit 2", build_a_DUPLICATE_assembly_row_is_exit_2),
+    ("SUBJECT: a canary from a different tree is exit 2", a_canary_from_a_different_tree_is_exit_2),
+    ("SUBJECT: a canary matching the rewritten subject PASSES",
+     a_canary_matching_the_rewritten_subject_PASSES),
+    ("SUBJECT: a clone rewritten from a DIFFERENT commit is exit 2",
+     a_clone_rewritten_from_a_DIFFERENT_commit_is_exit_2),
+    ("SUBJECT: a canary with no subject stamp is exit 2", a_canary_with_no_subject_stamp_is_exit_2),
     ("the instrument control is reported", instrument_control_is_reported),
 ]:
     case(name, body)

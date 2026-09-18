@@ -301,6 +301,67 @@ def green_corpus_blob(repo, corpora):
     return set(WORD.findall(b"\n".join(out)))
 
 
+def original_head(repo):
+    """Which commit of the SOURCE repository this rewritten clone's HEAD came from.
+
+    filter-repo writes `.git/filter-repo/commit-map` - two columns, old hash then new - so the clone
+    carries its own provenance. Returns None when the file is absent, which is the ordinary case for
+    a repository that has not been rewritten.
+    """
+    path = os.path.join(repo, ".git", "filter-repo", "commit-map")
+    if not os.path.isfile(path):
+        return None
+    head = run(repo, "rev-parse", "HEAD").strip()
+    if not head:
+        return None
+    for line in io.open(path, encoding="utf-8", errors="replace"):
+        parts = line.split()
+        if len(parts) == 2 and parts[1] == head:
+            return parts[0]
+    return None
+
+
+def subject_findings(repo, canary):
+    """M-20, ACTUALLY IMPLEMENTED. Returns a list of refusals; empty when the stamp checks out.
+
+    *** THE STAMP WAS WRITTEN AND PRINTED AND NEVER COMPARED. *** `make_canary` records
+    `subjectVersion`, its docstring promises that "a stale stamp reports UNVERIFIED rather than
+    passing", and no code did that - so a canary recorded against any older tree was accepted in
+    silence. That is not a neutral omission: the must-survive check passes when a control is seen AT
+    LEAST as often as recorded, so an ageing canary carries smaller expected counts and the gate gets
+    WEAKER the staler it is. A canary is the instrument; an uncalibrated instrument reads clean.
+
+    It could not be compared against the clone's own HEAD, which is a new hash the rewrite invented -
+    and that is presumably why it was left. filter-repo's `commit-map` closes exactly that gap: the
+    clone records which original commit each rewritten one came from, so the question "was this
+    canary recorded against the tree I actually rewrote" has an answer inside the clone.
+
+    When no commit-map exists the subject cannot be established either way, and that is REPORTED
+    rather than assumed - it is the difference between a verified stamp and an unexamined one.
+    """
+    stamped = (canary.get("subjectVersion") or "").strip()
+    if not stamped:
+        return ["the canary carries no subjectVersion, so there is no way to tell which tree its "
+                "counts describe (M-20). Re-record it with --make-canary on the source."]
+    origin = original_head(repo)
+    if origin is None:
+        # Not a rewritten clone, or the metadata was pruned. Say so; do not infer a pass from it.
+        here = run(repo, "rev-parse", "HEAD").strip()
+        if here and here == stamped:
+            return []
+        return ["the canary was recorded against %s and this repository's HEAD is %s, with no "
+                "filter-repo commit-map to relate them. The stamp is UNVERIFIED, which is not a "
+                "pass (M-20). Re-record the canary on the source at the exact HEAD being published, "
+                "or verify against the clone that rewrite produced."
+                % (stamped[:12], (here or "unknown")[:12])]
+    if origin != stamped:
+        return ["the canary was recorded against %s, but this clone was rewritten from %s. Its "
+                "counts describe a different tree, so a survivor count proves nothing about this "
+                "one (M-20: a stale declaration is UNVERIFIED, not a pass)."
+                % (stamped[:12], origin[:12])]
+    return []
+
+
 def make_canary(repo, maps_dir, terms_path, out_path, survive_texts, green):
     """Record the PRE-scrub state, so that afterwards a zero can be told apart from a nothing.
 
@@ -692,6 +753,7 @@ def main():
             cannot.append("the canary was recorded against different maps/terms than are on disk "
                           "now, so its counts describe a different vocabulary (M-20: a stale "
                           "declaration is UNVERIFIED, not a pass).")
+        cannot.extend(subject_findings(repo, canary))
         for text in canary.get("mustNotAppear", []):
             n = blob_all.count(text.lower().encode())
             if n:
