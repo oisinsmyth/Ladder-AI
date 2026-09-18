@@ -117,7 +117,7 @@ DISCHARGED** — verified by a live `drift-check` in this tree on 2026-08-23 (`0
 because they are the dated record of 2026-07-20, when they were true.
 
 ---
-
+
 
 ## Index — all 95 entries
 
@@ -211,7 +211,7 @@ Status is **derived mechanically** from each entry's own status bullet, inline s
 | FI-90 | a submission may carry MANY enumerations and exactly ONE model, so a multi-subject campa… | UNCLASSIFIED | [fi-82-93](future-ideas/fi-82-93.md) |
 | FI-91 | undriven-scan and cross-check still expand only INLINED members, so they now disagree wi… | UNCLASSIFIED | [fi-82-93](future-ideas/fi-82-93.md) |
 | FI-92 | TagTypeRegistry silently drops every RE-EXPORTED FB from its interface index | UNCLASSIFIED | [fi-82-93](future-ideas/fi-82-93.md) |
-| FI-93 | nine tests have been red since the reference corpus was widened, and a red suite is a di… | UNCLASSIFIED | [fi-82-93](future-ideas/fi-82-93.md) |
+| FI-93 | nine tests have been red since the reference corpus was widened, and a red suite is a di… | DISCHARGED 2026-09-18 — 17 of 19 ratified; 2 await a TIA re-export of Main | [fi-82-93](future-ideas/fi-82-93.md) |
 | FI-94 | claim --allocate hands back a number you already hold, for a DIFFERENT object, and calls… | UNCLASSIFIED | [fi-94-103](future-ideas/fi-94-103.md) |
 | FI-95 | the assertion enumerator cannot produce a large enumeration at all: Write only, one pass… | UNCLASSIFIED | [fi-94-103](future-ideas/fi-94-103.md) |
 | FI-96 | an enumeration that parameterises an observation over a CHANNEL cannot join to a flat bi… | UNCLASSIFIED | [fi-94-103](future-ideas/fi-94-103.md) |

@@ -47,59 +47,62 @@ public class CyclicObGeneratorTests
     // THE SHAPE, AGAINST THE ONE CYCLIC OB TIA HAS EXPORTED HERE
     // ---------------------------------------------------------------------------------------------
 
-    /// <summary>The header comment the corpus does not have. Invented, and stated once so the splice below and the generate call cannot drift apart.</summary>
-    private const string MainComment =
-        "Calls every block in the program once per scan, in the order they must run in. Synthetic test material.";
+    /// <summary>
+    /// The committed <c>Main.ir</c>'s own header comment, READ OUT OF THE FILE rather than invented
+    /// beside the generator — the same discipline <c>CommsFbAgainstTheCommittedCorpusTests.Quoted</c>
+    /// uses, and for the same reason: a constant typed here is a second home for a fact.
+    /// </summary>
+    private static string MainComment()
+    {
+        var line = File.ReadAllText(Path.Combine(IrDirectory, "Main.ir")).Replace("\r\n", "\n")
+            .Split('\n').First(l => l.StartsWith("COMMENT ", StringComparison.Ordinal));
+        var open = line.IndexOf('"', StringComparison.Ordinal);
+        return line[(open + 1)..line.LastIndexOf('"')];
+    }
 
     /// <summary>
     /// 🔴 <b>THE COMMITTED <c>Main.ir</c>, DECOMPOSED INTO A CALL LIST AND REGENERATED — AND THE ONLY
     /// DIFFERENCE FROM WHAT TIA EXPORTED IS THE ONE LINE C-201 REQUIRES AND THE CORPUS LACKS.</b>
     ///
-    /// <para>56 hand-typed lines — a header, TIA's two system parameters, and twelve networks — come back
-    /// from an ordered list of twelve calls and nothing else. <b>The declaration is read out of the file
+    /// <para>69 hand-typed lines — a header, TIA's two system parameters, and fifteen networks — come back
+    /// from an ordered list of fifteen calls and nothing else. <b>The declaration is read out of the file
     /// rather than typed beside the generator</b>, so this asserts a round trip and not an author's memory
     /// of one.</para>
     ///
-    /// <para>⚠️ <b>THIS TEST RATIFIED A BREACH FOR AS LONG AS IT WAS A PLAIN EQUALITY.</b> It compared the
-    /// generator against <c>Main.ir</c>, which carries NO header comment — so a generator that emitted none
-    /// either passed here and was then refused by <c>converter preflight</c> with
-    /// <c>[review:C-201] [Error] … has no header comment</c>. The corpus is the authority on TIA's SHAPE and
-    /// it is not the authority on the CONVENTIONS: those live in doc 06, and where the two disagree the
-    /// corpus does not win.</para>
+    /// <para>⚠️ <b>THIS TEST RATIFIED A BREACH FOR AS LONG AS IT WAS A PLAIN EQUALITY, AND THEN THE
+    /// BREACH WAS FIXED.</b> It used to compare the generator against a <c>Main.ir</c> that carried NO
+    /// header comment — so a generator emitting none passed here and was then refused by
+    /// <c>converter preflight</c> with <c>[review:C-201] [Error] … has no header comment</c>. The
+    /// answer at the time was to SPLICE the required line into the expected text rather than re-pin to
+    /// the generator's output, and to assert <c>DoesNotContain(… "COMMENT ")</c> so that the day the
+    /// corpus gained its own comment would be a failure with a reason instead of a confusing diff.</para>
     ///
-    /// <para><b>So it is not re-pinned to the new output.</b> The expected text is built by SPLICING the
-    /// one required line into the committed file at the position the generator must put it, and everything
-    /// on either side of that line is still asserted byte-for-byte against a block TIA produced. A second
-    /// divergence — a reordered header field, a lost escape, a changed system parameter — fails here
-    /// exactly as it did before, and the splice cannot hide one because it is a single known line at a
-    /// known index.</para>
+    /// <para>🔴 <b>That day came: <c>eba7033</c> gave <c>Main.ir</c> a header comment, and this test
+    /// failed exactly where its own assertion said it would.</b> The gap closed in the good direction —
+    /// the corpus is C-201 compliant now — so the splice is gone and this is a plain equality again,
+    /// which is what it always wanted to be. The comment is read out of the file rather than typed
+    /// here, so the two cannot drift apart a second time.</para>
     /// </summary>
     [Fact]
-    public void THE_COMMITTED_CYCLIC_OB_IS_REGENERATED_FROM_ITS_OWN_CALL_LIST_PLUS_THE_HEADER_COMMENT_IT_LACKS()
+    public void THE_COMMITTED_CYCLIC_OB_IS_REGENERATED_FROM_ITS_OWN_CALL_LIST()
     {
         var committed = File.ReadAllText(Path.Combine(IrDirectory, "Main.ir")).Replace("\r\n", "\n");
         var lines = committed.Split('\n').ToList();
 
-        // 🔴 THE CORPUS GAP, ASSERTED RATHER THAN ASSUMED. If Main.ir ever gains its own header comment the
-        // splice below would emit a SECOND one, and this line is what turns that into a failure with a
-        // reason instead of a confusing diff.
-        Assert.DoesNotContain(lines, l => l.StartsWith("COMMENT ", StringComparison.Ordinal));
-
-        var title = lines.FindIndex(l => l.StartsWith("TITLE ", StringComparison.Ordinal));
-        Assert.True(title >= 0, "the committed Main.ir has no TITLE line to splice after.");
-
-        lines.Insert(title + 1, $"COMMENT \"{MainComment}\"");
-        var expected = string.Join("\n", lines);
+        // 🔴 THE CONVENTION, STILL ASSERTED — only from the other side now. C-201 requires a header
+        // comment; the corpus has one; a generator that dropped it would fail here rather than pass and
+        // be caught downstream by preflight.
+        Assert.Contains(lines, l => l.StartsWith("COMMENT ", StringComparison.Ordinal));
 
         var result = CyclicObGenerator.Generate(
-            new CyclicObNaming("Main", 1, "ProgramCycle", "Main Program Sweep (Cycle)", MainComment),
+            new CyclicObNaming("Main", 1, "ProgramCycle", "Main Program Sweep (Cycle)", MainComment()),
             CallsOf(committed));
 
-        Assert.Equal(expected, result.Ir);
+        Assert.Equal(committed, result.Ir);
 
-        // And the delta really is ONE line — a splice that quietly matched a rewritten block would be the
+        // And the delta really is ZERO lines. A generator that matched a rewritten block would be the
         // re-pin this test exists not to be.
-        Assert.Equal(committed.Split('\n').Length + 1, result.Ir.Split('\n').Length);
+        Assert.Equal(committed.Split('\n').Length, result.Ir.Split('\n').Length);
     }
 
     /// <summary>

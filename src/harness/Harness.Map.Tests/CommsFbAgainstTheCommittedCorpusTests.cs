@@ -61,11 +61,17 @@ public class CommsFbAgainstTheCommittedCorpusTests
     }
 
     /// <summary>
-    /// The geometry the committed block serves: <c>P#M1000.0 WORD 37</c>. The retentive extent is
+    /// The geometry the committed block serves: <c>P#M1000.0 WORD 1024</c>. The retentive extent is
     /// synthetic — it is not stated in that file and nothing in this test depends on its value beyond
     /// being below the base.
+    ///
+    /// <para>🔴 <b>THIS SENTENCE WAS FALSE FOR SIXTEEN DAYS AND THE GENERATOR IS WHAT CAUGHT IT.</b>
+    /// It said 37 while the committed block said 1024, and all three tests here died inside
+    /// <c>CommsFbGenerator.CheckProse</c> — which compares any number in the block's own prose
+    /// against the geometry handed in, and refused the pair. That is the anti-drift mechanism working
+    /// exactly as designed, on a stale constant in its own test.</para>
     /// </summary>
-    private static MirrorGeometry Geometry() => MirrorGeometry.ForCpu1214C(16, baseByte: 1000, declaredRegisters: 37);
+    private static MirrorGeometry Geometry() => MirrorGeometry.ForCpu1214C(16, baseByte: 1000, declaredRegisters: 1024);
 
     private static CommsFbDeclaration Declaration() => new(
         new CommsFbNaming("FB_Comms_ModbusServer", 9000, Quoted("TITLE "), Quoted("COMMENT ")),
@@ -96,8 +102,8 @@ public class CommsFbAgainstTheCommittedCorpusTests
     {
         var wider = MirrorGeometry.ForCpu1214C(16, baseByte: 2000, declaredRegisters: 64);
 
-        // The committed prose states 37 registers at M1000.0, which this geometry contradicts — so the
-        // placeholders are used instead, which is the mechanism that stops prose falling behind.
+        // The committed prose states 1024 registers at M1000.0, which this geometry contradicts — so
+        // the placeholders are used instead, which is the mechanism that stops prose falling behind.
         var declaration = Declaration() with
         {
             Naming = Declaration().Naming with
@@ -153,8 +159,8 @@ public class CommsFbAgainstTheCommittedCorpusTests
             .Select(int.Parse)
             .ToList();
 
-        // The area pointer's own `WORD 37` contributes a 37 that is not a UId; the port line for STATUS
-        // legitimately carries wire UId 37 too. Compare only the lines that declare or cite one.
+        // The area pointer's own `WORD 1024` contributes a 1024 that is not a UId; the port line for
+        // STATUS legitimately carries wire UId 37 too. Compare only the lines that declare or cite one.
         var declaredOrCited = sidecar.Split('\n')
             .Where(l => l.TrimStart().StartsWith("access ", StringComparison.Ordinal)
                      || l.TrimStart().StartsWith("port ", StringComparison.Ordinal))

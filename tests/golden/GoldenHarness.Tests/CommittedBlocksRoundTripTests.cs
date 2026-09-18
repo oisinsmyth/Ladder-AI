@@ -141,6 +141,17 @@ public class CommittedBlocksRoundTripTests
         ["FB_HxDwellTimer"] = "FB 9011, hand-authored (b3f6736) Hx corpus — the TIMING and 32-BIT-WIDTH case: the only corpus block carrying Time values and a timer instance. The preset echo pins the mirror's word order, so a word swap shows as a wrong value instead of a plausible duration.",
         ["FB_HxIntStep"] = "FB 9012, hand-authored (b3f6736) Hx corpus — the 16-BIT ARITHMETIC and DISJOINT MULTI-WRITER case: StepSum is written by exactly two statements with provably disjoint enables, which is the shape `converter reachable-state` exists to adjudicate.",
         ["FB_HxSealLatch"] = "FB 9013, hand-authored (b3f6736) Hx corpus — the MEMORY / DOMINANCE case: two self-holding seals differing only in clear-dominant vs set-dominant. The pair discriminates wrong dominance, which a single latch cannot report.",
+
+        // ---- THE THREE-SLOT FOUNDATION, ADDED BY eba7033, ALLOWLISTED 2026-09-18 ------------------
+        // Three separate reasons below, deliberately. The rule this type exists for is that a shared
+        // reason across several names "stops being a decision and becomes furniture" — and these three
+        // arrived in one commit, which is exactly the circumstance that invites one reason for all of
+        // them. They occupy the reserved 9000-9999 harness band and the F-19 ruling ("do not export
+        // these seven") is the precedent: harness scaffolding is not deliverable logic and exporting
+        // it would put test furniture in the project's own corpus.
+        ["FC_HarnessStimArbiter"] = "FC 9002, hand-authored (eba7033), the ARBITER: owns the resting state of the two things every stimulus head shares — the input map's test-injection array and the plant reset line — and owns nothing else. It exists because two heads writing one shared resource with no adjudicator is the defect a three-slot layer would otherwise introduce silently; a second writer is a compile-time collision here rather than a race on the rig.",
+        ["FB_PusherStim"] = "FB 9001, hand-authored (eba7033), slot PSH: drives the plant FB_PusherControl sees, to a timeline the harness commands. It is the STIMULUS half of a conformance pair, so exporting it would commit a block whose only purpose is to lie to another block convincingly — test furniture, not program content.",
+        ["FB_ShredderSequencerStim"] = "FB 9004, hand-authored (eba7033), slot SHR: the second stimulus head, present so the arbiter above is exercised by genuine contention rather than by a single caller. Same category as FB_PusherStim and listed separately because the reason it EXISTS is different — one head cannot demonstrate arbitration.",
     };
 
     /// <summary>

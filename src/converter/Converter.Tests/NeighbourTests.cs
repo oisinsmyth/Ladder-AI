@@ -72,11 +72,33 @@ public class NeighbourTests : IDisposable
 
     private static string Corpus => Path.Combine(RepoRoot(), "ir", "test-project001");
 
-    /// <summary>The mirror's own area, exactly as the committed comms block serves it.</summary>
-    private static MarkerArea ServedArea => MarkerArea.OfRegisters(1000, 37);
+    /// <summary>
+    /// The mirror's own area, exactly as the committed comms block serves it — <b>1024 registers
+    /// since <c>80098e7</c>, widened 37 → 1024 and verified on the wire</b> (nine paged FC03 reads
+    /// answered 0..1023; r1024 refused with Modbus exception 2).
+    ///
+    /// <para>🔴 <b>THIS CONSTANT, NOT A COUNT, WAS THE DEFECT WHEN THE CORPUS MOVED.</b> It stayed at
+    /// 37 while the block went to 1024, so the block's own area pointer was no longer equal to the
+    /// area handed in — it stopped being a declaration and fell through into the neighbour list, and
+    /// the corpus test below reported 27 regions where it had reported 26. Raising that 26 to 27
+    /// would have been the wrong repair: it would have asserted that an area's own declaration counts
+    /// as an occupant of itself, which is the single thing <c>IsDeclarationOf</c> exists to prevent.
+    /// The 26 was right throughout. The input was stale.</para>
+    /// </summary>
+    private static MarkerArea ServedArea => MarkerArea.OfRegisters(1000, 1024);
 
-    /// <summary>A wider area, the shape a grown mirror would ask about.</summary>
+    /// <summary>A wider area, the shape a grown mirror would ask about. Deliberately left at 1024
+    /// even though the served area has now caught up with it: eight passing tests pin this width,
+    /// including a literal denominator string naming <c>%M1000..%M3047</c>.</summary>
     private static MarkerArea WideArea => MarkerArea.OfRegisters(1000, 1024);
+
+    /// <summary>
+    /// Strictly wider than what the block serves, which is the only thing
+    /// <c>APointerThatIsOnlyPartOfTheGivenAreaIsAClaimNotADeclaration</c> needs and the one property
+    /// <c>WideArea</c> lost when the corpus grew into it. Kept separate so that test's subject cannot
+    /// be dissolved again by a future widening without somebody noticing this constant.
+    /// </summary>
+    private static MarkerArea WiderThanServed => MarkerArea.OfRegisters(1000, 2048);
 
     private string Write(string file, string text)
     {
@@ -177,24 +199,30 @@ NETWORK 1 "One rung"
         var report = NeighbourRunner.Run(new[] { Corpus }, ServedArea);
 
         var declaration = Assert.Single(report.AreaDeclarations);
-        Assert.Equal("P#M1000.0 WORD 37", declaration.Address);
+        Assert.Equal("P#M1000.0 WORD 1024", declaration.Address);
         Assert.Contains("FB_Comms_ModbusServer", declaration.Owner, StringComparison.Ordinal);
         Assert.Equal(1000, declaration.StartByte);
-        Assert.Equal(74, declaration.ByteLength);
+        Assert.Equal(2048, declaration.ByteLength);
     }
 
     /// <summary>
     /// The same pointer against a WIDER area is a strict subset of it, and therefore a genuine claim
     /// — the area it was given is not the area it serves. Reported, not silently swallowed.
+    ///
+    /// <para>⚠️ <b>This test's subject was dissolved once already.</b> It used to run against
+    /// <c>WideArea</c> (1024), and when the committed block widened 37 → 1024 the pointer stopped
+    /// being a strict subset of that area and became exactly equal to it — so the case silently
+    /// inverted into the declaration case it was written to be the opposite of. It runs against
+    /// <c>WiderThanServed</c> now, which exists for no other reason.</para>
     /// </summary>
     [Fact]
     public void APointerThatIsOnlyPartOfTheGivenAreaIsAClaimNotADeclaration()
     {
-        var report = NeighbourRunner.Run(new[] { Corpus }, WideArea);
+        var report = NeighbourRunner.Run(new[] { Corpus }, WiderThanServed);
 
         Assert.True(report.Derived, report.Denominator);
         Assert.Empty(report.AreaDeclarations);
-        Assert.Contains(report.Neighbours, n => n.Address == "P#M1000.0 WORD 37" && n.ByteLength == 74);
+        Assert.Contains(report.Neighbours, n => n.Address == "P#M1000.0 WORD 1024" && n.ByteLength == 2048);
     }
 
     // =============================================================================================
@@ -713,7 +741,7 @@ NETWORK 1
     [Fact]
     public void CliDerivesTheRealCorpusAndNamesTheOwner()
     {
-        var (exit, output) = Cli("--project", Corpus, "--base", "1000", "--registers", "37");
+        var (exit, output) = Cli("--project", Corpus, "--base", "1000", "--registers", "1024");
 
         Assert.Equal(0, exit);
         Assert.Contains("neighbours: 26 region(s) derived from ", output, StringComparison.Ordinal);

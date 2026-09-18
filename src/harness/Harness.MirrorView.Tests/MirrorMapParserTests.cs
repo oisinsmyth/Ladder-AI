@@ -7,8 +7,9 @@ namespace Harness.MirrorView.Tests;
 ///
 /// <para>🔴 <b>THE WHOLE-ARTIFACT SWEEP IS THE POINT OF THE FIRST HALF OF THIS FILE.</b> A hand-written
 /// fixture only ever tests the shapes somebody thought of. The real <c>HarnessMirror.ir</c> is sitting
-/// in the repository, so the parser is run over it and every one of its 37 registers is required to be
-/// accounted for — the input you would otherwise have to guess is already here.</para>
+/// in the repository, so the parser is run over it and every one of its 37 maintained registers is
+/// required to be accounted for — the input you would otherwise have to guess is already here. The
+/// DECLARED window is 1024 and is deliberately wider; that mismatch is asserted, not tolerated.</para>
 /// </summary>
 public class MirrorMapParserTests
 {
@@ -44,27 +45,41 @@ public class MirrorMapParserTests
         var map = RealMap();
 
         Assert.Equal(1000, map.BaseByte);
-        Assert.Equal(37, map.DeclaredRegisters);
+        Assert.Equal(1024, map.DeclaredRegisters);
         Assert.Equal(26, map.Tags.Count);
     }
 
     /// <summary>
-    /// EVERY register in the declared area is named by a tag. Asserted rather than assumed, because an
-    /// unmapped register is a row the page must render as UNMAPPED, and the day one appears it should be
-    /// a decision somebody made rather than a surprise on the screen.
+    /// The maintained mirror is 37 contiguous registers inside a declared window of 1024, and the 987
+    /// registers between them are unmapped ON PURPOSE.
+    ///
+    /// <para>🔴 <b>THIS TEST USED TO ASSERT THAT EVERY DECLARED REGISTER WAS NAMED BY A TAG, AND THAT
+    /// INVARIANT WAS DELIBERATELY RETIRED.</b> Its wording was: "an unmapped register is a row the page
+    /// must render as UNMAPPED, and the day one appears it should be a decision somebody made rather
+    /// than a surprise on the screen." That day came, and it WAS a decision somebody made — the
+    /// committed comms block says so itself: <i>"deliberately wider than the mirror the copy layer
+    /// currently maintains… a register past the maintained mirror now reads as zero instead of
+    /// returning an exception"</i>. The window was widened to 1024 so one mirror can carry several
+    /// conformance slots in a single wave, and the exact-fit guard was the stated cost.</para>
+    ///
+    /// <para>So the gap is asserted rather than tolerated. A drift in the MAINTAINED mirror — a tag
+    /// added, dropped, resized or overlapped — still fails here, and a change to the declared window
+    /// fails too, which is the point: both halves of a deliberate mismatch are now written down.</para>
     /// </summary>
     [Fact]
-    public void EveryDeclaredRegister_IsCoveredByExactlyOneTag()
+    public void TheMaintainedMirrorIsContiguousAndDeliberatelyNarrowerThanTheDeclaredWindow()
     {
         var map = RealMap();
 
-        var uncovered = map.UnmappedRegisters;
-        Assert.True(uncovered.Count == 0,
-            "registers named by no tag: " + string.Join(", ", uncovered));
-
         var covered = map.Tags.SelectMany(t => Enumerable.Range(t.Register, t.RegisterCount)).ToList();
         Assert.Equal(37, covered.Count);
-        Assert.Equal(37, covered.Distinct().Count());
+        Assert.Equal(37, covered.Distinct().Count());          // no two tags overlap
+        Assert.Equal(0, covered.Min());
+        Assert.Equal(36, covered.Max());                       // contiguous 0..36, no hole inside it
+
+        Assert.Equal(1024, map.DeclaredRegisters);
+        Assert.Equal(987, map.UnmappedRegisters.Count);        // 1024 - 37, every one above the mirror
+        Assert.Equal(37, map.UnmappedRegisters.Min());
     }
 
     /// <summary>

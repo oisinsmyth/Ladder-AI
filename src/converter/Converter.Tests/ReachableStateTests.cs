@@ -420,7 +420,10 @@ public class ReachableStateTests : IDisposable
 
         Assert.True(report.Computed, report.NotComputedReason);
         Assert.Empty(report.NotComputedBlocks);
-        Assert.Equal(18, report.Blocks.Count);
+        // 18 → 21 on 2026-09-18, ratifying `eba7033`'s three-slot foundation: FB_PusherStim,
+        // FB_ShredderSequencerStim and FC_HarnessStimArbiter. Counted from the files, not arithmetic
+        // from the delta — and the two assertions either side already prove all 21 compute cleanly.
+        Assert.Equal(21, report.Blocks.Count);
         Assert.All(report.Blocks, b => Assert.NotEqual(string.Empty, b.Provenance));
     }
 

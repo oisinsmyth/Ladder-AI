@@ -240,9 +240,9 @@ person, once.
 
 ```
 ir/test-project001/FB_Comms_ModbusServer.ir:31
-  MB_SERVER(MbServer, EN := TRUE, ..., MB_HOLD_REG := P#M1000.0 WORD 37, ...)
+  MB_SERVER(MbServer, EN := TRUE, ..., MB_HOLD_REG := P#M1000.0 WORD 1024, ...)
 ir/test-project001/FB_Comms_ModbusServer.ir:39   (SIDECAR)
-  constant P#M1000.0 WORD 37 = 22 Any
+  constant P#M1000.0 WORD 1024 = 22 Any
 ```
 
 `to-xml` rebuilds the operand **from the sidecar**, so a readable line that drifted is invisible to
@@ -262,7 +262,7 @@ offset inside the byte, a missing sidecar, a file that would not parse, and a co
 **The denominator, printed on every run** — derived, refused or not:
 
 ```
-served area: base 1000, 37 register(s), derived from ir/test-project001\FB_Comms_ModbusServer.ir:31
+served area: base 1000, 1024 register(s), derived from ir/test-project001\FB_Comms_ModbusServer.ir:31
                                               + sidecar ir/test-project001\FB_Comms_ModbusServer.ir:39
 NOT DERIVED — 10 block(s) in 15 file(s) scanned, no MB_SERVER call
 ```
@@ -328,7 +328,7 @@ area. A claim that is only *part* of the given area is a genuine claim and is re
 **The denominator and the exclusions, printed on every run** — derived, refused or not:
 
 ```
-neighbours: 26 region(s) derived from 2 tag table(s) + 18 block(s) + 23 other object(s) in 43 file(s); 0 file(s) unparseable; area %M1000..%M1073 (base 1000, 37 register(s))
+neighbours: 26 region(s) derived from 2 tag table(s) + 21 block(s) + 27 other object(s) in 50 file(s); 0 file(s) unparseable; area %M1000..%M3047 (base 1000, 1024 register(s))
 excluded: 3 %M claim(s) below base 1000, 0 at or above %M1074; 0 area pointer(s) outside marker memory; 1 declaration(s) of the area itself. 0 claim(s) bounded by their address alone (a data type this verb does not know).
 
 NOT DERIVED — 1 tag table(s) + 0 block(s) + 0 other object(s) in 2 file(s) scanned; 1 of 2 file(s) would not parse, so the corpus is PARTIAL: …\FB_Broken.ir: would not parse (…); area …

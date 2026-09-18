@@ -159,16 +159,25 @@ public class CorpusCensusTests
         new("reference", IrFiles: 15, Exports: 15, Compared: 15, UnpairedIr: 0, ExportOnly: 0,
             Measured: "2026-08-23, `drift-check --project ir/reference --exports simatic-ml/reference` — SUMMARY: 1 drifted, 14 match, 0 skipped, 0 export-only, 0 error, 0 pairing-failure; COMPARED: 15."),
 
-        // 🔴 THE ROW THE "41" WAS WRONG ABOUT. 43 .ir, 26 .xml, 26 compared, 17 unpaired — and all 17
-        // unpaired are .ir-only, so the residue is ONE-DIRECTIONAL and ExportOnly is zero. The 17 break
+        // 🔴 THE ROW THE "41" WAS WRONG ABOUT. 50 .ir, 26 .xml, 26 compared, 24 unpaired — and all 24
+        // unpaired are .ir-only, so the residue is ONE-DIRECTIONAL and ExportOnly is zero. The 24 break
         // down, ENUMERATED FROM THE FILES rather than remembered (CommittedBlocksRoundTripTests' prose
-        // at :58-62 covers the same set): 8 BLOCKs — the 7 in that file's KnownMissingExports plus the
+        // covers the same set): 11 BLOCKs — the 10 in that file's KnownMissingExports plus the
         // sidecar-carrying FB_Comms_ModbusServer, which its population walk drops one method earlier —
-        // 1 tag table (HarnessMirror; DefaultTagTable IS paired and compared), 1 UDT
-        // (UDT_HopperBlockageStim), and 7 harness instance DBs (iDB_Hx* ×4, iDB_Comms_ModbusServer,
-        // iDB_HarnessViolationLatch, iDB_HopperBlockageStim).
-        new("test-project001", IrFiles: 43, Exports: 26, Compared: 26, UnpairedIr: 17, ExportOnly: 0,
-            Measured: "2026-08-23, `drift-check --project ir/test-project001 --exports simatic-ml/test-project001` — SUMMARY: 0 drifted, 26 match, 17 skipped, 0 export-only, 0 error, 0 pairing-failure; COMPARED: 26."),
+        // 1 tag table (HarnessMirror; DefaultTagTable IS paired and compared), 3 UDTs
+        // (UDT_HopperBlockageStim, UDT_PusherStim, UDT_ShredderSequencerStim), and 9 harness instance
+        // DBs (iDB_Hx* ×4, iDB_Comms_ModbusServer, iDB_HarnessViolationLatch, iDB_HopperBlockageStim,
+        // iDB_PusherStim, iDB_ShredderSequencerStim).
+        //
+        // 🔴 UP BY 7, RATIFIED 2026-09-18. `eba7033` added the three-slot foundation and the suite was
+        // never re-pointed, so this row sat 16 days behind the corpus it claims to measure. The seven:
+        // FC_HarnessStimArbiter, FB_PusherStim, FB_ShredderSequencerStim, their two UDTs and their two
+        // instance DBs. RE-MEASURED with drift-check, not arithmetic from the delta — which is how the
+        // "1 drifted" below was found, and it is Main: its .ir gained three networks and
+        // simatic-ml/test-project001/Main.xml was never re-exported. That is an OPEN DEBT needing a TIA
+        // session, tracked in FI-93, not a number to bump.
+        new("test-project001", IrFiles: 50, Exports: 26, Compared: 26, UnpairedIr: 24, ExportOnly: 0,
+            Measured: "2026-09-18, `drift-check --project ir/test-project001 --exports simatic-ml/test-project001` — SUMMARY: 1 drifted, 25 match, 24 skipped, 0 export-only, 0 error, 0 pairing-failure; COMPARED: 26. The 1 drifted is Main, awaiting a TIA re-export."),
     };
 
     public static IEnumerable<object[]> Projects() =>
@@ -338,7 +347,7 @@ public class CorpusCensusTests
     [Fact]
     public void TheRepoWideTotals_MatchTheRecordedCensus()
     {
-        const int ExpectedIr = 58;        // 15 reference + 43 test-project001
+        const int ExpectedIr = 65;        // 15 reference + 50 test-project001
         const int ExpectedExports = 41;   // 15 reference + 26 test-project001 — the real "41"
         const int ExpectedCompared = 41;  // every committed export pairs, in both projects
 

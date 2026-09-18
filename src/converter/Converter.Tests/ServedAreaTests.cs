@@ -13,7 +13,7 @@ namespace Converter.Tests;
 /// width; what nothing checked is whether that number is <b>true of the program</b>.</para>
 ///
 /// <para>The truth lives in the program in <b>two places that can silently disagree</b> — the
-/// readable <c>MB_HOLD_REG := P#M1000.0 WORD 37</c> and the sidecar constant backing it. `to-xml`
+/// readable <c>MB_HOLD_REG := P#M1000.0 WORD 1024</c> and the sidecar constant backing it. `to-xml`
 /// rebuilds from the sidecar, so a readable line that drifted is invisible until the rig serves a
 /// different area than the map was allocated against. Both are read here, and a disagreement is a
 /// refusal naming both lines.</para>
@@ -144,7 +144,7 @@ NETWORK 1 "One rung"
         Assert.True(report.Derived, report.Denominator);
         Assert.Equal("M", report.Area);
         Assert.Equal(1000, report.BaseByte);
-        Assert.Equal(37, report.Registers);
+        Assert.Equal(1024, report.Registers);
         Assert.Equal("FB_Comms_ModbusServer", report.BlockName);
         Assert.EndsWith("FB_Comms_ModbusServer.ir", report.File, StringComparison.Ordinal);
     }
@@ -161,8 +161,8 @@ NETWORK 1 "One rung"
 
         Assert.Equal(31, report.ReadableLine);
         Assert.Equal(39, report.SidecarLine);
-        Assert.Equal("P#M1000.0 WORD 37", report.ReadableText);
-        Assert.Equal("P#M1000.0 WORD 37", report.SidecarText);
+        Assert.Equal("P#M1000.0 WORD 1024", report.ReadableText);
+        Assert.Equal("P#M1000.0 WORD 1024", report.SidecarText);
     }
 
     /// <summary>The denominator, on the real corpus, in the shape the plan specified.</summary>
@@ -171,7 +171,7 @@ NETWORK 1 "One rung"
     {
         var report = ServedAreaRunner.Run(new[] { Corpus });
 
-        Assert.StartsWith("served area: base 1000, 37 register(s), derived from ", report.Denominator, StringComparison.Ordinal);
+        Assert.StartsWith("served area: base 1000, 1024 register(s), derived from ", report.Denominator, StringComparison.Ordinal);
         Assert.Contains(":31 + sidecar ", report.Denominator, StringComparison.Ordinal);
         Assert.EndsWith(":39", report.Denominator, StringComparison.Ordinal);
     }
@@ -390,7 +390,7 @@ NETWORK 1 "One rung"
         var (exit, output) = Cli("--project", Corpus);
 
         Assert.Equal(0, exit);
-        Assert.Contains("served area: base 1000, 37 register(s), derived from ", output, StringComparison.Ordinal);
+        Assert.Contains("served area: base 1000, 1024 register(s), derived from ", output, StringComparison.Ordinal);
     }
 
     [Fact]
