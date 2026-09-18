@@ -823,7 +823,7 @@
           {
             "name": "HarnessMirror",
             "kind": "TagTable",
-            "path": "C:\\Users\\User\\AppData\\Local\\Temp\\hba-xml\\HarnessMirror.xml",
+            "path": "C:\\Users\\<user>\\AppData\\Local\\Temp\\hba-xml\\HarnessMirror.xml",
             "outcome": "Imported",
             "pass": 1,
             "detail": null
@@ -831,7 +831,7 @@
           {
             "name": "UDT_HopperBlockageIO",
             "kind": "Type",
-            "path": "C:\\Users\\User\\AppData\\Local\\Temp\\hba-xml\\UDT_HopperBlockageIO.xml",
+            "path": "C:\\Users\\<user>\\AppData\\Local\\Temp\\hba-xml\\UDT_HopperBlockageIO.xml",
             "outcome": "Imported",
             "pass": 1,
             "detail": null
@@ -839,7 +839,7 @@
           {
             "name": "FB_HarnessViolationLatch",
             "kind": "Block",
-            "path": "C:\\Users\\User\\AppData\\Local\\Temp\\hba-xml\\FB_HarnessViolationLatch.xml",
+            "path": "C:\\Users\\<user>\\AppData\\Local\\Temp\\hba-xml\\FB_HarnessViolationLatch.xml",
             "outcome": "Imported",
             "pass": 1,
             "detail": null
@@ -847,7 +847,7 @@
           {
             "name": "FB_HopperBlockageMonitor",
             "kind": "Block",
-            "path": "C:\\Users\\User\\AppData\\Local\\Temp\\hba-xml\\FB_HopperBlockageMonitor.xml",
+            "path": "C:\\Users\\<user>\\AppData\\Local\\Temp\\hba-xml\\FB_HopperBlockageMonitor.xml",
             "outcome": "Imported",
             "pass": 1,
             "detail": null
@@ -855,7 +855,7 @@
           {
             "name": "FC_ControlMain",
             "kind": "Block",
-            "path": "C:\\Users\\User\\AppData\\Local\\Temp\\hba-xml\\FC_ControlMain.xml",
+            "path": "C:\\Users\\<user>\\AppData\\Local\\Temp\\hba-xml\\FC_ControlMain.xml",
             "outcome": "Imported",
             "pass": 1,
             "detail": null
@@ -863,7 +863,7 @@
           {
             "name": "FC_HarnessCopyLayer",
             "kind": "Block",
-            "path": "C:\\Users\\User\\AppData\\Local\\Temp\\hba-xml\\FC_HarnessCopyLayer.xml",
+            "path": "C:\\Users\\<user>\\AppData\\Local\\Temp\\hba-xml\\FC_HarnessCopyLayer.xml",
             "outcome": "Imported",
             "pass": 1,
             "detail": null
@@ -871,7 +871,7 @@
           {
             "name": "iDB_HopperBlockageMonitor",
             "kind": "Block",
-            "path": "C:\\Users\\User\\AppData\\Local\\Temp\\hba-xml\\iDB_HopperBlockageMonitor.xml",
+            "path": "C:\\Users\\<user>\\AppData\\Local\\Temp\\hba-xml\\iDB_HopperBlockageMonitor.xml",
             "outcome": "Imported",
             "pass": 1,
             "detail": null

@@ -20,7 +20,7 @@
       "json": {
         "files": [
           {
-            "filePath": "C:\\Users\\User\\Desktop\\AI Ladder Project\\ir\\test-project001\\FB_Comms_ModbusServer.ir",
+            "filePath": "C:\\Users\\<user>\\Desktop\\AI Ladder Project\\ir\\test-project001\\FB_Comms_ModbusServer.ir",
             "name": "FB_Comms_ModbusServer",
             "findings": [
               {
@@ -33,7 +33,7 @@
         ],
         "indexWarnings": [],
         "corpus": {
-          "projectDir": "C:\\Users\\User\\Desktop\\AI Ladder Project\\ir\\test-project001",
+          "projectDir": "C:\\Users\\<user>\\Desktop\\AI Ladder Project\\ir\\test-project001",
           "projectFileCount": 43,
           "batchFileCount": 1,
           "projectContributedNothing": false,
@@ -98,7 +98,7 @@
     },
     {
       "tool": "openness-cli sanity-check",
-      "command": "openness-cli sanity-check \"C:\\Users\\User\\Desktop\\AI Ladder Project\\GenProject1\\GenProject1.ap20\" --json",
+      "command": "openness-cli sanity-check \"C:\\Users\\<user>\\Desktop\\AI Ladder Project\\GenProject1\\GenProject1.ap20\" --json",
       "exit": 0,
       "note": "THE HARD RULE 4 GATE. Text form of the same run reads: 'BLOCKS: 36  INCONSISTENT: 0  DUPLICATE NUMBERS: 0' and 'TYPES: 7  INCONSISTENT: 0', OVERALL: HEALTHY. Device compile is state=Warning with errors=0, scope=station (hardware + program) - a PASS. KEYED ON ERRORS, NEVER ON STATE: the single warning is a pre-existing standing hardware warning, and a check on state==Success would mark this project unhealthy permanently.",
       "json": {
@@ -516,7 +516,7 @@
       "entries": [
         {
           "name": "DB_Alarms",
-          "irPath": "C:\\Users\\User\\Desktop\\AI Ladder Project\\ir\\test-project001\\DB_Alarms.ir",
+          "irPath": "C:\\Users\\<user>\\Desktop\\AI Ladder Project\\ir\\test-project001\\DB_Alarms.ir",
           "xmlPath": "C:\\temp\\lad-drift-after\\DB_Alarms.xml",
           "status": "Match",
           "detail": null,
@@ -524,7 +524,7 @@
         },
         {
           "name": "DB_AnalogInput",
-          "irPath": "C:\\Users\\User\\Desktop\\AI Ladder Project\\ir\\test-project001\\DB_AnalogInput.ir",
+          "irPath": "C:\\Users\\<user>\\Desktop\\AI Ladder Project\\ir\\test-project001\\DB_AnalogInput.ir",
           "xmlPath": "C:\\temp\\lad-drift-after\\DB_AnalogInput.xml",
           "status": "Match",
           "detail": null,
@@ -532,7 +532,7 @@
         },
         {
           "name": "DB_Controls",
-          "irPath": "C:\\Users\\User\\Desktop\\AI Ladder Project\\ir\\test-project001\\DB_Controls.ir",
+          "irPath": "C:\\Users\\<user>\\Desktop\\AI Ladder Project\\ir\\test-project001\\DB_Controls.ir",
           "xmlPath": "C:\\temp\\lad-drift-after\\DB_Controls.xml",
           "status": "Match",
           "detail": null,
@@ -540,7 +540,7 @@
         },
         {
           "name": "DB_Input",
-          "irPath": "C:\\Users\\User\\Desktop\\AI Ladder Project\\ir\\test-project001\\DB_Input.ir",
+          "irPath": "C:\\Users\\<user>\\Desktop\\AI Ladder Project\\ir\\test-project001\\DB_Input.ir",
           "xmlPath": "C:\\temp\\lad-drift-after\\DB_Input.xml",
           "status": "Match",
           "detail": null,
@@ -548,7 +548,7 @@
         },
         {
           "name": "DB_Output",
-          "irPath": "C:\\Users\\User\\Desktop\\AI Ladder Project\\ir\\test-project001\\DB_Output.ir",
+          "irPath": "C:\\Users\\<user>\\Desktop\\AI Ladder Project\\ir\\test-project001\\DB_Output.ir",
           "xmlPath": "C:\\temp\\lad-drift-after\\DB_Output.xml",
           "status": "Match",
           "detail": null,
@@ -556,7 +556,7 @@
         },
         {
           "name": "DB_PLC",
-          "irPath": "C:\\Users\\User\\Desktop\\AI Ladder Project\\ir\\test-project001\\DB_PLC.ir",
+          "irPath": "C:\\Users\\<user>\\Desktop\\AI Ladder Project\\ir\\test-project001\\DB_PLC.ir",
           "xmlPath": "C:\\temp\\lad-drift-after\\DB_PLC.xml",
           "status": "Drifted",
           "detail": "semantic divergence between .ir and committed export",
@@ -564,7 +564,7 @@
         },
         {
           "name": "DB_Settings",
-          "irPath": "C:\\Users\\User\\Desktop\\AI Ladder Project\\ir\\test-project001\\DB_Settings.ir",
+          "irPath": "C:\\Users\\<user>\\Desktop\\AI Ladder Project\\ir\\test-project001\\DB_Settings.ir",
           "xmlPath": "C:\\temp\\lad-drift-after\\DB_Settings.xml",
           "status": "Match",
           "detail": null,
@@ -572,7 +572,7 @@
         },
         {
           "name": "DefaultTagTable",
-          "irPath": "C:\\Users\\User\\Desktop\\AI Ladder Project\\ir\\test-project001\\DefaultTagTable.ir",
+          "irPath": "C:\\Users\\<user>\\Desktop\\AI Ladder Project\\ir\\test-project001\\DefaultTagTable.ir",
           "xmlPath": null,
           "status": "Skipped",
           "detail": "no paired export",
@@ -580,7 +580,7 @@
         },
         {
           "name": "FB_Comms_ModbusServer",
-          "irPath": "C:\\Users\\User\\Desktop\\AI Ladder Project\\ir\\test-project001\\FB_Comms_ModbusServer.ir",
+          "irPath": "C:\\Users\\<user>\\Desktop\\AI Ladder Project\\ir\\test-project001\\FB_Comms_ModbusServer.ir",
           "xmlPath": "C:\\temp\\lad-drift-after\\FB_Comms_ModbusServer.xml",
           "status": "Match",
           "detail": null,
@@ -588,7 +588,7 @@
         },
         {
           "name": "FB_HarnessViolationLatch",
-          "irPath": "C:\\Users\\User\\Desktop\\AI Ladder Project\\ir\\test-project001\\FB_HarnessViolationLatch.ir",
+          "irPath": "C:\\Users\\<user>\\Desktop\\AI Ladder Project\\ir\\test-project001\\FB_HarnessViolationLatch.ir",
           "xmlPath": "C:\\temp\\lad-drift-after\\FB_HarnessViolationLatch.xml",
           "status": "Match",
           "detail": null,
@@ -596,7 +596,7 @@
         },
         {
           "name": "FB_HopperBlockageMonitor",
-          "irPath": "C:\\Users\\User\\Desktop\\AI Ladder Project\\ir\\test-project001\\FB_HopperBlockageMonitor.ir",
+          "irPath": "C:\\Users\\<user>\\Desktop\\AI Ladder Project\\ir\\test-project001\\FB_HopperBlockageMonitor.ir",
           "xmlPath": "C:\\temp\\lad-drift-after\\FB_HopperBlockageMonitor.xml",
           "status": "Match",
           "detail": null,
@@ -604,7 +604,7 @@
         },
         {
           "name": "FB_HopperBlockageStim",
-          "irPath": "C:\\Users\\User\\Desktop\\AI Ladder Project\\ir\\test-project001\\FB_HopperBlockageStim.ir",
+          "irPath": "C:\\Users\\<user>\\Desktop\\AI Ladder Project\\ir\\test-project001\\FB_HopperBlockageStim.ir",
           "xmlPath": "C:\\temp\\lad-drift-after\\FB_HopperBlockageStim.xml",
           "status": "Match",
           "detail": null,
@@ -612,7 +612,7 @@
         },
         {
           "name": "FB_HxBoolEcho",
-          "irPath": "C:\\Users\\User\\Desktop\\AI Ladder Project\\ir\\test-project001\\FB_HxBoolEcho.ir",
+          "irPath": "C:\\Users\\<user>\\Desktop\\AI Ladder Project\\ir\\test-project001\\FB_HxBoolEcho.ir",
           "xmlPath": "C:\\temp\\lad-drift-after\\FB_HxBoolEcho.xml",
           "status": "Match",
           "detail": null,
@@ -620,7 +620,7 @@
         },
         {
           "name": "FB_HxDwellTimer",
-          "irPath": "C:\\Users\\User\\Desktop\\AI Ladder Project\\ir\\test-project001\\FB_HxDwellTimer.ir",
+          "irPath": "C:\\Users\\<user>\\Desktop\\AI Ladder Project\\ir\\test-project001\\FB_HxDwellTimer.ir",
           "xmlPath": "C:\\temp\\lad-drift-after\\FB_HxDwellTimer.xml",
           "status": "Match",
           "detail": null,
@@ -628,7 +628,7 @@
         },
         {
           "name": "FB_HxIntStep",
-          "irPath": "C:\\Users\\User\\Desktop\\AI Ladder Project\\ir\\test-project001\\FB_HxIntStep.ir",
+          "irPath": "C:\\Users\\<user>\\Desktop\\AI Ladder Project\\ir\\test-project001\\FB_HxIntStep.ir",
           "xmlPath": "C:\\temp\\lad-drift-after\\FB_HxIntStep.xml",
           "status": "Match",
           "detail": null,
@@ -636,7 +636,7 @@
         },
         {
           "name": "FB_HxSealLatch",
-          "irPath": "C:\\Users\\User\\Desktop\\AI Ladder Project\\ir\\test-project001\\FB_HxSealLatch.ir",
+          "irPath": "C:\\Users\\<user>\\Desktop\\AI Ladder Project\\ir\\test-project001\\FB_HxSealLatch.ir",
           "xmlPath": "C:\\temp\\lad-drift-after\\FB_HxSealLatch.xml",
           "status": "Match",
           "detail": null,
@@ -644,7 +644,7 @@
         },
         {
           "name": "FB_MotorFwdRevSystem",
-          "irPath": "C:\\Users\\User\\Desktop\\AI Ladder Project\\ir\\test-project001\\FB_MotorFwdRevSystem.ir",
+          "irPath": "C:\\Users\\<user>\\Desktop\\AI Ladder Project\\ir\\test-project001\\FB_MotorFwdRevSystem.ir",
           "xmlPath": "C:\\temp\\lad-drift-after\\FB_MotorFwdRevSystem.xml",
           "status": "Match",
           "detail": null,
@@ -652,7 +652,7 @@
         },
         {
           "name": "FB_PusherControl",
-          "irPath": "C:\\Users\\User\\Desktop\\AI Ladder Project\\ir\\test-project001\\FB_PusherControl.ir",
+          "irPath": "C:\\Users\\<user>\\Desktop\\AI Ladder Project\\ir\\test-project001\\FB_PusherControl.ir",
           "xmlPath": "C:\\temp\\lad-drift-after\\FB_PusherControl.xml",
           "status": "Match",
           "detail": null,
@@ -660,7 +660,7 @@
         },
         {
           "name": "FB_ShredderSequencer",
-          "irPath": "C:\\Users\\User\\Desktop\\AI Ladder Project\\ir\\test-project001\\FB_ShredderSequencer.ir",
+          "irPath": "C:\\Users\\<user>\\Desktop\\AI Ladder Project\\ir\\test-project001\\FB_ShredderSequencer.ir",
           "xmlPath": "C:\\temp\\lad-drift-after\\FB_ShredderSequencer.xml",
           "status": "Match",
           "detail": null,
@@ -668,7 +668,7 @@
         },
         {
           "name": "FC_AlarmsMain",
-          "irPath": "C:\\Users\\User\\Desktop\\AI Ladder Project\\ir\\test-project001\\FC_AlarmsMain.ir",
+          "irPath": "C:\\Users\\<user>\\Desktop\\AI Ladder Project\\ir\\test-project001\\FC_AlarmsMain.ir",
           "xmlPath": "C:\\temp\\lad-drift-after\\FC_AlarmsMain.xml",
           "status": "Match",
           "detail": null,
@@ -676,7 +676,7 @@
         },
         {
           "name": "FC_ControlMain",
-          "irPath": "C:\\Users\\User\\Desktop\\AI Ladder Project\\ir\\test-project001\\FC_ControlMain.ir",
+          "irPath": "C:\\Users\\<user>\\Desktop\\AI Ladder Project\\ir\\test-project001\\FC_ControlMain.ir",
           "xmlPath": "C:\\temp\\lad-drift-after\\FC_ControlMain.xml",
           "status": "Match",
           "detail": null,
@@ -684,7 +684,7 @@
         },
         {
           "name": "FC_HarnessCopyLayer",
-          "irPath": "C:\\Users\\User\\Desktop\\AI Ladder Project\\ir\\test-project001\\FC_HarnessCopyLayer.ir",
+          "irPath": "C:\\Users\\<user>\\Desktop\\AI Ladder Project\\ir\\test-project001\\FC_HarnessCopyLayer.ir",
           "xmlPath": "C:\\temp\\lad-drift-after\\FC_HarnessCopyLayer.xml",
           "status": "Drifted",
           "detail": "semantic divergence between .ir and committed export",
@@ -692,7 +692,7 @@
         },
         {
           "name": "FC_Inputs",
-          "irPath": "C:\\Users\\User\\Desktop\\AI Ladder Project\\ir\\test-project001\\FC_Inputs.ir",
+          "irPath": "C:\\Users\\<user>\\Desktop\\AI Ladder Project\\ir\\test-project001\\FC_Inputs.ir",
           "xmlPath": "C:\\temp\\lad-drift-after\\FC_Inputs.xml",
           "status": "Match",
           "detail": null,
@@ -700,7 +700,7 @@
         },
         {
           "name": "FC_Outputs",
-          "irPath": "C:\\Users\\User\\Desktop\\AI Ladder Project\\ir\\test-project001\\FC_Outputs.ir",
+          "irPath": "C:\\Users\\<user>\\Desktop\\AI Ladder Project\\ir\\test-project001\\FC_Outputs.ir",
           "xmlPath": "C:\\temp\\lad-drift-after\\FC_Outputs.xml",
           "status": "Match",
           "detail": null,
@@ -708,7 +708,7 @@
         },
         {
           "name": "HarnessMirror",
-          "irPath": "C:\\Users\\User\\Desktop\\AI Ladder Project\\ir\\test-project001\\HarnessMirror.ir",
+          "irPath": "C:\\Users\\<user>\\Desktop\\AI Ladder Project\\ir\\test-project001\\HarnessMirror.ir",
           "xmlPath": null,
           "status": "Skipped",
           "detail": "no paired export",
@@ -716,7 +716,7 @@
         },
         {
           "name": "Main",
-          "irPath": "C:\\Users\\User\\Desktop\\AI Ladder Project\\ir\\test-project001\\Main.ir",
+          "irPath": "C:\\Users\\<user>\\Desktop\\AI Ladder Project\\ir\\test-project001\\Main.ir",
           "xmlPath": "C:\\temp\\lad-drift-after\\Main.xml",
           "status": "Match",
           "detail": null,
@@ -724,7 +724,7 @@
         },
         {
           "name": "MotorFwdRevIOSet",
-          "irPath": "C:\\Users\\User\\Desktop\\AI Ladder Project\\ir\\test-project001\\MotorFwdRevIOSet.ir",
+          "irPath": "C:\\Users\\<user>\\Desktop\\AI Ladder Project\\ir\\test-project001\\MotorFwdRevIOSet.ir",
           "xmlPath": "C:\\temp\\lad-drift-after\\MotorFwdRevIOSet.xml",
           "status": "Match",
           "detail": null,
@@ -748,7 +748,7 @@
         },
         {
           "name": "OB100",
-          "irPath": "C:\\Users\\User\\Desktop\\AI Ladder Project\\ir\\test-project001\\OB100.ir",
+          "irPath": "C:\\Users\\<user>\\Desktop\\AI Ladder Project\\ir\\test-project001\\OB100.ir",
           "xmlPath": "C:\\temp\\lad-drift-after\\OB100.xml",
           "status": "Match",
           "detail": null,
@@ -756,7 +756,7 @@
         },
         {
           "name": "UDT_HopperBlockageIO",
-          "irPath": "C:\\Users\\User\\Desktop\\AI Ladder Project\\ir\\test-project001\\UDT_HopperBlockageIO.ir",
+          "irPath": "C:\\Users\\<user>\\Desktop\\AI Ladder Project\\ir\\test-project001\\UDT_HopperBlockageIO.ir",
           "xmlPath": "C:\\temp\\lad-drift-after\\UDT_HopperBlockageIO.xml",
           "status": "Match",
           "detail": null,
@@ -764,7 +764,7 @@
         },
         {
           "name": "UDT_HopperBlockageStim",
-          "irPath": "C:\\Users\\User\\Desktop\\AI Ladder Project\\ir\\test-project001\\UDT_HopperBlockageStim.ir",
+          "irPath": "C:\\Users\\<user>\\Desktop\\AI Ladder Project\\ir\\test-project001\\UDT_HopperBlockageStim.ir",
           "xmlPath": "C:\\temp\\lad-drift-after\\UDT_HopperBlockageStim.xml",
           "status": "Match",
           "detail": null,
@@ -772,7 +772,7 @@
         },
         {
           "name": "UDT_PusherIO",
-          "irPath": "C:\\Users\\User\\Desktop\\AI Ladder Project\\ir\\test-project001\\UDT_PusherIO.ir",
+          "irPath": "C:\\Users\\<user>\\Desktop\\AI Ladder Project\\ir\\test-project001\\UDT_PusherIO.ir",
           "xmlPath": "C:\\temp\\lad-drift-after\\UDT_PusherIO.xml",
           "status": "Match",
           "detail": null,
@@ -780,7 +780,7 @@
         },
         {
           "name": "UDT_ShredderSequencerIO",
-          "irPath": "C:\\Users\\User\\Desktop\\AI Ladder Project\\ir\\test-project001\\UDT_ShredderSequencerIO.ir",
+          "irPath": "C:\\Users\\<user>\\Desktop\\AI Ladder Project\\ir\\test-project001\\UDT_ShredderSequencerIO.ir",
           "xmlPath": "C:\\temp\\lad-drift-after\\UDT_ShredderSequencerIO.xml",
           "status": "Match",
           "detail": null,
@@ -788,7 +788,7 @@
         },
         {
           "name": "iDB_Comms_ModbusServer",
-          "irPath": "C:\\Users\\User\\Desktop\\AI Ladder Project\\ir\\test-project001\\iDB_Comms_ModbusServer.ir",
+          "irPath": "C:\\Users\\<user>\\Desktop\\AI Ladder Project\\ir\\test-project001\\iDB_Comms_ModbusServer.ir",
           "xmlPath": "C:\\temp\\lad-drift-after\\iDB_Comms_ModbusServer.xml",
           "status": "Match",
           "detail": null,
@@ -796,7 +796,7 @@
         },
         {
           "name": "iDB_HarnessViolationLatch",
-          "irPath": "C:\\Users\\User\\Desktop\\AI Ladder Project\\ir\\test-project001\\iDB_HarnessViolationLatch.ir",
+          "irPath": "C:\\Users\\<user>\\Desktop\\AI Ladder Project\\ir\\test-project001\\iDB_HarnessViolationLatch.ir",
           "xmlPath": "C:\\temp\\lad-drift-after\\iDB_HarnessViolationLatch.xml",
           "status": "Match",
           "detail": null,
@@ -804,7 +804,7 @@
         },
         {
           "name": "iDB_HopperBlockageMonitor",
-          "irPath": "C:\\Users\\User\\Desktop\\AI Ladder Project\\ir\\test-project001\\iDB_HopperBlockageMonitor.ir",
+          "irPath": "C:\\Users\\<user>\\Desktop\\AI Ladder Project\\ir\\test-project001\\iDB_HopperBlockageMonitor.ir",
           "xmlPath": "C:\\temp\\lad-drift-after\\iDB_HopperBlockageMonitor.xml",
           "status": "Match",
           "detail": null,
@@ -812,7 +812,7 @@
         },
         {
           "name": "iDB_HopperBlockageStim",
-          "irPath": "C:\\Users\\User\\Desktop\\AI Ladder Project\\ir\\test-project001\\iDB_HopperBlockageStim.ir",
+          "irPath": "C:\\Users\\<user>\\Desktop\\AI Ladder Project\\ir\\test-project001\\iDB_HopperBlockageStim.ir",
           "xmlPath": "C:\\temp\\lad-drift-after\\iDB_HopperBlockageStim.xml",
           "status": "Drifted",
           "detail": "semantic divergence between .ir and committed export",
@@ -820,7 +820,7 @@
         },
         {
           "name": "iDB_HxBoolEcho",
-          "irPath": "C:\\Users\\User\\Desktop\\AI Ladder Project\\ir\\test-project001\\iDB_HxBoolEcho.ir",
+          "irPath": "C:\\Users\\<user>\\Desktop\\AI Ladder Project\\ir\\test-project001\\iDB_HxBoolEcho.ir",
           "xmlPath": "C:\\temp\\lad-drift-after\\iDB_HxBoolEcho.xml",
           "status": "Match",
           "detail": null,
@@ -828,7 +828,7 @@
         },
         {
           "name": "iDB_HxDwellTimer",
-          "irPath": "C:\\Users\\User\\Desktop\\AI Ladder Project\\ir\\test-project001\\iDB_HxDwellTimer.ir",
+          "irPath": "C:\\Users\\<user>\\Desktop\\AI Ladder Project\\ir\\test-project001\\iDB_HxDwellTimer.ir",
           "xmlPath": "C:\\temp\\lad-drift-after\\iDB_HxDwellTimer.xml",
           "status": "Match",
           "detail": null,
@@ -836,7 +836,7 @@
         },
         {
           "name": "iDB_HxIntStep",
-          "irPath": "C:\\Users\\User\\Desktop\\AI Ladder Project\\ir\\test-project001\\iDB_HxIntStep.ir",
+          "irPath": "C:\\Users\\<user>\\Desktop\\AI Ladder Project\\ir\\test-project001\\iDB_HxIntStep.ir",
           "xmlPath": "C:\\temp\\lad-drift-after\\iDB_HxIntStep.xml",
           "status": "Match",
           "detail": null,
@@ -844,7 +844,7 @@
         },
         {
           "name": "iDB_HxSealLatch",
-          "irPath": "C:\\Users\\User\\Desktop\\AI Ladder Project\\ir\\test-project001\\iDB_HxSealLatch.ir",
+          "irPath": "C:\\Users\\<user>\\Desktop\\AI Ladder Project\\ir\\test-project001\\iDB_HxSealLatch.ir",
           "xmlPath": "C:\\temp\\lad-drift-after\\iDB_HxSealLatch.xml",
           "status": "Match",
           "detail": null,
@@ -852,7 +852,7 @@
         },
         {
           "name": "iDB_MotorFwdRevSystem_Shredder",
-          "irPath": "C:\\Users\\User\\Desktop\\AI Ladder Project\\ir\\test-project001\\iDB_MotorFwdRevSystem_Shredder.ir",
+          "irPath": "C:\\Users\\<user>\\Desktop\\AI Ladder Project\\ir\\test-project001\\iDB_MotorFwdRevSystem_Shredder.ir",
           "xmlPath": "C:\\temp\\lad-drift-after\\iDB_MotorFwdRevSystem_Shredder.xml",
           "status": "Match",
           "detail": null,
@@ -860,7 +860,7 @@
         },
         {
           "name": "iDB_PusherControl",
-          "irPath": "C:\\Users\\User\\Desktop\\AI Ladder Project\\ir\\test-project001\\iDB_PusherControl.ir",
+          "irPath": "C:\\Users\\<user>\\Desktop\\AI Ladder Project\\ir\\test-project001\\iDB_PusherControl.ir",
           "xmlPath": "C:\\temp\\lad-drift-after\\iDB_PusherControl.xml",
           "status": "Match",
           "detail": null,
@@ -868,7 +868,7 @@
         },
         {
           "name": "iDB_ShredderSequencer",
-          "irPath": "C:\\Users\\User\\Desktop\\AI Ladder Project\\ir\\test-project001\\iDB_ShredderSequencer.ir",
+          "irPath": "C:\\Users\\<user>\\Desktop\\AI Ladder Project\\ir\\test-project001\\iDB_ShredderSequencer.ir",
           "xmlPath": "C:\\temp\\lad-drift-after\\iDB_ShredderSequencer.xml",
           "status": "Match",
           "detail": null,
@@ -880,7 +880,7 @@
       "tiaExportCount": 41,
       "nonTiaExportCount": 0,
       "comparedNothingFromTia": false,
-      "projectDir": "C:\\Users\\User\\Desktop\\AI Ladder Project\\ir\\test-project001",
+      "projectDir": "C:\\Users\\<user>\\Desktop\\AI Ladder Project\\ir\\test-project001",
       "exportsDir": "C:\\temp\\lad-drift-after",
       "hasDrift": true
     }
@@ -888,7 +888,7 @@
   "findings": {
     "orderingTrap": "*** READ THIS BEFORE TOUCHING FC_HarnessCopyLayer. *** Mirror registers 35 and 36 (%MW1070 / %MW1072) carry HX_HBA_L008 and HX_HBA_L009, the phase-armed observation latches declared at %M1071.0 and %M1073.0 in ir/test-project001/HarnessMirror.ir. Their ONLY writer is FC_HarnessCopyLayer NETWORK 8, 'Result latches - slot HBA'. The live project does not have that network: 7 compile units against the .ir's 8, and grep HX_HBA_L008 over the live export returns 0. So before this run nothing wrote 35-36 and nothing served them - DORMANT, not a live defect. After this run the server serves 37 while the copy layer still writes only 0-34, so 35-36 go on the wire as zeros: same dormancy, one half closer to correct, no regression. THE DEFECT GOES LIVE IF FC_HarnessCopyLayer IS IMPORTED WITHOUT THIS BLOCK - the latches would then be written and silently not served, with no import error, no compile error and no drift finding, which is precisely the silent failure the 2026-08-14 widening existed to prevent. Import this block first, or both together. That block is explicitly out of this run's scope and was not touched.",
     "notDriftButAnOwedImport": "The live block was a faithful copy of commit 92fa300, not an edit somebody made in TIA. Traced commit by commit: 763cdf6 operand 8 / comment 8 (consistent - the mirror really was 8 registers); 319ad5e operand 31, comment still 8; 92fa300 operand 35, comment still 8; 65d3d5f operand 37, comment repaired. The live block's network comment read '8 words' because it was left behind through TWO widenings, and the live BLOCK comment carried a third and fourth figure - 'exposing 35 holding registers' and 'The span is 31 rather than a round number'. Four numbers, not three. All four now read 37 in TIA.",
-    "restorePoint": "GenProject1/ is gitignored (.gitignore:57), so git is not a restore point for it and the only other copy on disk was 'AI Ladder Project BACKUP 2026-08-07'. Pre-import copy taken to C:\\Users\\User\\Desktop\\GenProject1-restore-2026-08-23-pre-modbus-import and VERIFIED rather than trusted: 39 of 39 files, every SHA-256 identical to source (diff of the two sorted hash manifests, exit 0). GenProject1.ap20 = 7690b94d632da59bbc37b16768a2be9b117b54767cc7b18f2afdc67fba9eb257.",
+    "restorePoint": "GenProject1/ is gitignored (.gitignore:57), so git is not a restore point for it and the only other copy on disk was 'AI Ladder Project BACKUP 2026-08-07'. Pre-import copy taken to C:\\Users\\<user>\\Desktop\\GenProject1-restore-2026-08-23-pre-modbus-import and VERIFIED rather than trusted: 39 of 39 files, every SHA-256 identical to source (diff of the two sorted hash manifests, exit 0). GenProject1.ap20 = 7690b94d632da59bbc37b16768a2be9b117b54767cc7b18f2afdc67fba9eb257.",
     "reExportConfirmation": "Confirmed from TIA's OWN re-export, not from an exit code. C:\\temp\\confirm\\FB_Comms_ModbusServer.xml: ConstantValue = 'P#M1000.0 WORD 37'; network comment 'covers 37 words from M1000.0'; block comment 'exposing 37 holding registers'; grep '8 words' returns 0 matches; grep 'span is 31' returns 0 matches. Round-tripped through converter to-ir: readable call line 31 reads WORD 37 and sidecar line 39 reads 'constant P#M1000.0 WORD 37 = 22 Any'.",
     "memoryLayout": "openness-cli block-layout reads LAYOUT: Optimized after the import, matching the .ir's MEMORYLAYOUT Optimized and the pre-import live value. No --set Standard re-assertion was made or needed: this corpus's harness surface is the %M mirror, not a DB read over classic S7 (telemetry.log 2026-08-14T02:35 records s7Objects [] as the earned claim). Read, not assumed.",
     "goldenHarness": "dotnet test tests/golden/GoldenHarness.sln -> Failed: 0, Passed: 194, Skipped: 0, Total: 194. Unmoved, as expected: the run changes the TIA project, and golden reads simatic-ml/. Checked rather than assumed that this is not a forbidden rebuild - GoldenHarness.sln contains exactly one project, GoldenHarness.Tests, with no openness-cli reference anywhere in the solution."

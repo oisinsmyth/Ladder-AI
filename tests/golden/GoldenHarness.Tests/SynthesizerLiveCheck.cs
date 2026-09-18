@@ -31,7 +31,7 @@ namespace GoldenHarness;
 /// </summary>
 public static class SynthesizerLiveCheck
 {
-    private const string ProjectPath = @"C:\Users\User\Desktop\AI Ladder Project\SampleProject\SampleProject.ap20";
+    private const string ProjectPath = @"C:\Users\<user>\Desktop\AI Ladder Project\SampleProject\SampleProject.ap20";
     private const string Device = "S7-1200 station_1";
     private const string GroupPath = "S7-1200 station_1/PLC1 6ES7 214-1AG40-0XB0";
     private const string BlockName = "SynthesizerProbe";

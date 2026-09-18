@@ -76,6 +76,6 @@ def run(arm,src):
       %(arm,len(els),len(subpx),near,len(oc),len(small),ov,gap,
         "OK" if h1 else "FAIL",len(greens),len(accents),len(grad),len(shad),len(rad),len(anim)))
 for a in sys.argv[1:]:
-    p=r"C:\Users\User\Desktop\AI Ladder Project\research\experiment2"+"\\"+a
+    p=r"C:\Users\<user>\Desktop\AI Ladder Project\research\experiment2"+"\\"+a
     if os.path.isdir(p): run(a,p)
     else: print(a,"not ready")

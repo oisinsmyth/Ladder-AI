@@ -295,7 +295,7 @@ once.
 11. CONTINGENT ON THE DOWNLOAD-SEMANTICS RESEARCH
 --------------------------------------------------------------------------------
 
-Pending: `C:\Users\User\.claude\jobs\f24f6b1a\tmp\s7-1200-download-semantics.md`.
+Pending: `C:\Users\<user>\.claude\jobs\f24f6b1a\tmp\s7-1200-download-semantics.md`.
 
 THE QUESTION: can any useful class of code change reach a classic S7-1200 without stopping
 the CPU and without destroying live data?

@@ -90,7 +90,7 @@
   "canMyProbesSpeakToIt": "NO, AND THAT IS UNCHANGED BY THE DEPLOY. *** The arbiter is now LOADED AND EXECUTING - that much did change - but every probe here sampled a mirror AT REST with no index running, and the claim is about values DURING a hopper index, which only a wave produces. The three registers named are released HIGH by the arbiter's NETWORK 3; nothing in this run commanded a hopper index, so nothing observed them in the state under dispute. THE DEPLOY DOES NOT VALIDATE THE CLAIM AND MUST NOT BE PRESENTED AS DOING SO. ***",
   "whatWouldSettleIt": "The wave, launched by the coordinator against submission-v9-threeslot-derived.json. 23/23 confirms it; anything less is the finding. A static trace is not a wave."
  },
- "_theSubmissionToLaunchFrom": "C:/Users/User/AppData/Local/Temp/hba-derive/submission-v9-threeslot-derived.json",
+ "_theSubmissionToLaunchFrom": "C:/Users/<user>/AppData/Local/Temp/hba-derive/submission-v9-threeslot-derived.json",
  "checks": [
   {
    "tool": "converter claim --kind block-edit --value FC_HarnessCopyLayer (RE-ACQUIRED after the coordinator's release)",
@@ -131,7 +131,7 @@
    "tool": "file-level project copy + diff -r (RESTORE POINT leg 2, the verification)",
    "exit": 0,
    "json": {
-    "source": "C:/Users/User/Desktop/AI Ladder Project/GenProject1",
+    "source": "C:/Users/<user>/Desktop/AI Ladder Project/GenProject1",
     "copy": "C:/temp/deploy3/restore-point-project",
     "size": "5.1M",
     "verification": "diff -r -> EXIT 0, ZERO BYTES of output. Verified, not merely made.",
@@ -719,7 +719,7 @@
    "exit": 0,
    "json": {
     "submissionIn": "submission-v8-widen-derived.json (23 vectors)",
-    "out": "C:/Users/User/AppData/Local/Temp/hba-derive/submission-v9-threeslot-derived.json",
+    "out": "C:/Users/<user>/AppData/Local/Temp/hba-derive/submission-v9-threeslot-derived.json",
     "computed": [
      "map",
      "deployment"

@@ -1,6 +1,6 @@
 import sys,os,shutil,subprocess,re,json
 arm=sys.argv[1]; src=sys.argv[2]
-work=os.path.join(r"C:\Users\User\.claude\jobs\0755f2fb\tmp","m_"+arm)
+work=os.path.join(r"C:\Users\<user>\.claude\jobs\0755f2fb\tmp","m_"+arm)
 if os.path.isdir(work): shutil.rmtree(work)
 shutil.copytree(src,work)
 home=os.path.join(work,"home.html")

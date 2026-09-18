@@ -89,21 +89,21 @@
       "tool": "openness-cli export-all --tagtables (RESTORE POINT, taken first)",
       "exit": 0,
       "json": {
-        "outDir": "C:\\Users\\User\\Desktop\\gate-2026-09-02\\export-before",
+        "outDir": "C:\\Users\\<user>\\Desktop\\gate-2026-09-02\\export-before",
         "complete": true,
         "tagTablesIncluded": true,
         "safeForDriftCheckComplete": true,
         "exported": 52,
         "refused": 0,
         "failed": 0,
-        "_entriesElided": "52 entries omitted for length; the raw file is C:\\Users\\User\\Desktop\\gate-2026-09-02\\export-before.json"
+        "_entriesElided": "52 entries omitted for length; the raw file is C:\\Users\\<user>\\Desktop\\gate-2026-09-02\\export-before.json"
       }
     },
     {
       "tool": "diff -r GenProject1 <file-level restore copy> (RESTORE POINT half 2)",
       "exit": 0,
       "json": {
-        "copyPath": "C:\\Users\\User\\Desktop\\gate-2026-09-02\\GenProject1-restore-pre-import",
+        "copyPath": "C:\\Users\\<user>\\Desktop\\gate-2026-09-02\\GenProject1-restore-pre-import",
         "recursiveDiffSilent": true,
         "approxBytes": 6815744
       }
@@ -227,7 +227,7 @@
       "exit": 0,
       "json": {
         "converted": 9,
-        "outDir": "C:\\Users\\User\\Desktop\\gate-2026-09-02\\staging",
+        "outDir": "C:\\Users\\<user>\\Desktop\\gate-2026-09-02\\staging",
         "wroteBesideInput": false,
         "_note": "No .xml existed beside the .ir in ir/test-project001/ at all, so the stale-sidecar trap could not have fired here; the staging directory was used anyway."
       }

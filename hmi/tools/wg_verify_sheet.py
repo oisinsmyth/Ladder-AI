@@ -5,7 +5,7 @@ boxes would look exactly like "the library is bad" - the wrong conclusion from a
 """
 import base64, collections, io, re, struct
 
-PAGE = r"C:\Users\User\Desktop\AI Ladder Project\hmi\wincc-graphics-contact-sheet.html"
+PAGE = r"C:\Users\<user>\Desktop\AI Ladder Project\hmi\wincc-graphics-contact-sheet.html"
 
 if __name__ == "__main__":
     html = io.open(PAGE, encoding="utf-8").read()

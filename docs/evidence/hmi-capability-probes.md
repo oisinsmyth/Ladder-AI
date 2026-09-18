@@ -52,12 +52,12 @@ EXIT=0
       Tags / ZZ_AI_TestTag
 
 ==================== P1.7 delete a tag that two live bindings still reference ====================
-ARGS: hmi-delete C:\Users\User\Desktop\AI Ladder Project\JOB9002 - Tom White Waste - Scratch Copy\JOB9002 - Tom White Waste\JOB9002 - Tom White Waste_V20\JOB9002 - Tom White Waste_V20.ap20 --kind Tags --name ZZ_AI_TestTag --yes --timeout-connect 1500 --timeout-open 1800
+ARGS: hmi-delete C:\Users\<user>\Desktop\AI Ladder Project\JOB9002 - Tom White Waste - Scratch Copy\JOB9002 - Tom White Waste\JOB9002 - Tom White Waste_V20\JOB9002 - Tom White Waste_V20.ap20 --kind Tags --name ZZ_AI_TestTag --yes --timeout-connect 1500 --timeout-open 1800
 EXIT=0
   deleted Tags 'ZZ_AI_TestTag' [HmiTag] on HMI_1/HMI_RT_1; confirmed absent on re-read
 
 ==================== P1.7a read back the screen - are the bindings orphaned? ====================
-ARGS: hmi C:\Users\User\Desktop\AI Ladder Project\JOB9002 - Tom White Waste - Scratch Copy\JOB9002 - Tom White Waste\JOB9002 - Tom White Waste_V20\JOB9002 - Tom White Waste_V20.ap20 --screen ZZ_AI_TestScreen --timeout-connect 1500 --timeout-open 1800
+ARGS: hmi C:\Users\<user>\Desktop\AI Ladder Project\JOB9002 - Tom White Waste - Scratch Copy\JOB9002 - Tom White Waste\JOB9002 - Tom White Waste_V20\JOB9002 - Tom White Waste_V20.ap20 --screen ZZ_AI_TestScreen --timeout-connect 1500 --timeout-open 1800
 EXIT=0
   ... [8 line(s) elided -- listings of pre-existing project objects, redacted per docs/13] ...
     SCREEN  ZZ_AI_TestScreen  #0  1000x615  items=3
@@ -85,7 +85,7 @@ EXIT=8
   [Error] Compiling finished (errors: 2; warnings: 0)
 
 ==================== P1.6 delete a nonexistent object ====================
-ARGS: hmi-delete C:\Users\User\Desktop\AI Ladder Project\JOB9002 - Tom White Waste - Scratch Copy\JOB9002 - Tom White Waste\JOB9002 - Tom White Waste_V20\JOB9002 - Tom White Waste_V20.ap20 --kind Tags --name ZZ_AI_NoSuchTag --yes --timeout-connect 1500 --timeout-open 1800
+ARGS: hmi-delete C:\Users\<user>\Desktop\AI Ladder Project\JOB9002 - Tom White Waste - Scratch Copy\JOB9002 - Tom White Waste\JOB9002 - Tom White Waste_V20\JOB9002 - Tom White Waste_V20.ap20 --kind Tags --name ZZ_AI_NoSuchTag --yes --timeout-connect 1500 --timeout-open 1800
 EXIT=5
   openness-cli hmi-delete failed: HmiObjectNotFoundException: No Tags object named 'ZZ_AI_NoSuchTag' was found. List what exists with `openness-cli hmi-inventory <project> --kind Tags`.
 
@@ -95,7 +95,7 @@ EXIT=5
   openness-cli hmi-delete failed: HmiRefusedToDeleteRealObjectException: Refusing to delete 'MainScreen': this tool only deletes its own probe artifacts, whose names start with 'ZZ_AI_'. Pass --allow-any-name to override, which is never correct for unattended work and must be a deliberate, supervised choice.
 
 ==================== P1.2 delete a binding ====================
-ARGS: hmi-edit-screen C:\Users\User\Desktop\AI Ladder Project\JOB9002 - Tom White Waste - Scratch Copy\JOB9002 - Tom White Waste\JOB9002 - Tom White Waste_V20\JOB9002 - Tom White Waste_V20.ap20 --name ZZ_AI_TestScreen --delete-bind HmiText_2.Visible --yes --timeout-connect 1500 --timeout-open 1800
+ARGS: hmi-edit-screen C:\Users\<user>\Desktop\AI Ladder Project\JOB9002 - Tom White Waste - Scratch Copy\JOB9002 - Tom White Waste\JOB9002 - Tom White Waste_V20\JOB9002 - Tom White Waste_V20.ap20 --name ZZ_AI_TestScreen --delete-bind HmiText_2.Visible --yes --timeout-connect 1500 --timeout-open 1800
 EXIT=0
   EDITED screen 'ZZ_AI_TestScreen' on HMI_1/HMI_RT_1
     changes applied: 1
@@ -104,7 +104,7 @@ EXIT=0
     project saved: yes
 
 ==================== P1.3 delete an event handler ====================
-ARGS: hmi-edit-screen C:\Users\User\Desktop\AI Ladder Project\JOB9002 - Tom White Waste - Scratch Copy\JOB9002 - Tom White Waste\JOB9002 - Tom White Waste_V20\JOB9002 - Tom White Waste_V20.ap20 --name ZZ_AI_TestScreen --delete-event HmiButton_3:Tapped --yes --timeout-connect 1500 --timeout-open 1800
+ARGS: hmi-edit-screen C:\Users\<user>\Desktop\AI Ladder Project\JOB9002 - Tom White Waste - Scratch Copy\JOB9002 - Tom White Waste\JOB9002 - Tom White Waste_V20\JOB9002 - Tom White Waste_V20.ap20 --name ZZ_AI_TestScreen --delete-event HmiButton_3:Tapped --yes --timeout-connect 1500 --timeout-open 1800
 EXIT=0
   EDITED screen 'ZZ_AI_TestScreen' on HMI_1/HMI_RT_1
     changes applied: 1
@@ -113,7 +113,7 @@ EXIT=0
     project saved: yes
 
 ==================== P1.1 delete a screen item ====================
-ARGS: hmi-edit-screen C:\Users\User\Desktop\AI Ladder Project\JOB9002 - Tom White Waste - Scratch Copy\JOB9002 - Tom White Waste\JOB9002 - Tom White Waste_V20\JOB9002 - Tom White Waste_V20.ap20 --name ZZ_AI_TestScreen --delete-item HmiText_2 --yes --timeout-connect 1500 --timeout-open 1800
+ARGS: hmi-edit-screen C:\Users\<user>\Desktop\AI Ladder Project\JOB9002 - Tom White Waste - Scratch Copy\JOB9002 - Tom White Waste\JOB9002 - Tom White Waste_V20\JOB9002 - Tom White Waste_V20.ap20 --name ZZ_AI_TestScreen --delete-item HmiText_2 --yes --timeout-connect 1500 --timeout-open 1800
 EXIT=0
   EDITED screen 'ZZ_AI_TestScreen' on HMI_1/HMI_RT_1
     changes applied: 1
@@ -122,12 +122,12 @@ EXIT=0
     project saved: yes
 
 ==================== P1.4 delete the screen ====================
-ARGS: hmi-delete C:\Users\User\Desktop\AI Ladder Project\JOB9002 - Tom White Waste - Scratch Copy\JOB9002 - Tom White Waste\JOB9002 - Tom White Waste_V20\JOB9002 - Tom White Waste_V20.ap20 --kind Screens --name ZZ_AI_TestScreen --yes --timeout-connect 1500 --timeout-open 1800
+ARGS: hmi-delete C:\Users\<user>\Desktop\AI Ladder Project\JOB9002 - Tom White Waste - Scratch Copy\JOB9002 - Tom White Waste\JOB9002 - Tom White Waste_V20\JOB9002 - Tom White Waste_V20.ap20 --kind Screens --name ZZ_AI_TestScreen --yes --timeout-connect 1500 --timeout-open 1800
 EXIT=0
   deleted Screens 'ZZ_AI_TestScreen' [HmiScreen] on HMI_1/HMI_RT_1; confirmed absent on re-read
 
 ==================== P1.5 delete the tag table ====================
-ARGS: hmi-delete C:\Users\User\Desktop\AI Ladder Project\JOB9002 - Tom White Waste - Scratch Copy\JOB9002 - Tom White Waste\JOB9002 - Tom White Waste_V20\JOB9002 - Tom White Waste_V20.ap20 --kind TagTables --name ZZ_AI_TestTags --yes --timeout-connect 1500 --timeout-open 1800
+ARGS: hmi-delete C:\Users\<user>\Desktop\AI Ladder Project\JOB9002 - Tom White Waste - Scratch Copy\JOB9002 - Tom White Waste\JOB9002 - Tom White Waste_V20\JOB9002 - Tom White Waste_V20.ap20 --kind TagTables --name ZZ_AI_TestTags --yes --timeout-connect 1500 --timeout-open 1800
 EXIT=0
   deleted TagTables 'ZZ_AI_TestTags' [HmiTagTable] on HMI_1/HMI_RT_1; confirmed absent on re-read
 

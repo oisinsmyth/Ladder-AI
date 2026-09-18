@@ -382,7 +382,7 @@ flattening step removes, and section 2 shows it working.
   contact with a real spec rather than content I invented to exercise the format.
 
   ARTEFACTS: probe HTML and PNG are in the job scratch directory
-  (C:\Users\User\.claude\jobs\0755f2fb\tmp\), which is TRANSIENT and cleaned up with
+  (C:\Users\<user>\.claude\jobs\0755f2fb\tmp\), which is TRANSIENT and cleaned up with
   the job. The command in 2.1 and the approach in 2.3 reproduce both; nothing was
   written into the repo except this file.
 

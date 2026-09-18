@@ -1287,7 +1287,7 @@ do block-level Title now, then scope arithmetic support" → "Commit this, then 
 support. Plan mode please.") — the larger of the two remaining real gaps blocking `PlantAutoControl`'s
 8 dependency FBs (5 of 8 on `Mul`/`Convert`, vs. 1 of 8 on the already-known, separately-deferred
 FC/FB parameter-interface gap). Planned formally in plan mode per explicit request
-(`C:\Users\User\.claude\plans\quirky-gathering-ripple.md`).
+(`C:\Users\<user>\.claude\plans\quirky-gathering-ripple.md`).
 
 **Phase 0 grounding, mandatory before design per CLAUDE.md hard rule 3.** Fresh exports of
 `MotorDOL`/`EquipmentControlSystem`/`ShredderControlSystem` (scratch temp, deleted after use) — the plan itself
@@ -1399,7 +1399,7 @@ already-known FC/FB parameter-interface gap for the remaining 3.
 Picked up per the project owner's own explicit choice, via `AskUserQuestion`, between the two live
 candidates the S1 item 18 sweep left open: `TONR` (blocks 5 of 8 dependency FBs) over the FC/FB
 parameter-interface gap (blocks the remaining 3). Planned formally in plan mode
-(`C:\Users\User\.claude\plans\quirky-gathering-ripple.md`).
+(`C:\Users\<user>\.claude\plans\quirky-gathering-ripple.md`).
 
 **Phase 0 grounding, mandatory before design per CLAUDE.md hard rule 3.** Fresh exports of
 `MotorDOL`/`FilterUnitSystem` (scratch temp, deleted after use) — the two networks turned out

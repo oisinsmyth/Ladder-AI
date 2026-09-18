@@ -221,7 +221,7 @@ Stated plainly rather than left for someone to discover.
 
 1. **Non-local filesystems.** Atomicity rests on `File.Move` failing when the destination exists —
    solid on local NTFS, **not guaranteed on a network share or a sync-backed folder**. This machine
-   has OneDrive at `C:\Users\User\OneDrive` (the repo itself is on a plain local path, so the repo is
+   has OneDrive at `C:\Users\<user>\OneDrive` (the repo itself is on a plain local path, so the repo is
    unaffected), which makes it entirely plausible that someone points `--claims` at a synced folder.
    **Requirement if that is ever wanted: test it there first.** Until then the claims directory should
    be local.

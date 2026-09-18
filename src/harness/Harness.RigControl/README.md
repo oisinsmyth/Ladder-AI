@@ -48,7 +48,7 @@ extra line — it still refuses identically, and it **does not expand anything f
 
 ***THE PRINTED FORM WAS COPIED OUT OF THAT OUTPUT AND RUN*** — because *an error message's advice is
 a claim*, and an untested instruction is a guess offered to somebody already in trouble. It expanded
-to `C:\Users\User\.ladder\device-allowlist.json` and the fence advanced to `NotWriteEligible`.
+to `C:\Users\<user>\.ladder\device-allowlist.json` and the fence advanced to `NotWriteEligible`.
 It fires **only** when the path does not resolve: `%` is legal in a Windows filename, and a directory
 genuinely called `%TEMP%-not-a-variable` is left alone (there is a test that builds one on the real
 filesystem).

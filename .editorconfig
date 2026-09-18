@@ -1,0 +1,43 @@
+# EditorConfig — https://editorconfig.org
+#
+# This repo is CRLF in the working tree (core.autocrlf=true) and its tests byte-compare tool output,
+# so line endings are load-bearing rather than cosmetic. `.gitattributes` already pins the formats
+# that MUST materialise as LF regardless of platform (`*.ir`, `*.xml`, `hooks/*`); this file exists
+# so an editor does not undo that on save.
+
+root = true
+
+[*]
+charset = utf-8
+end_of_line = crlf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+
+# Tool-written formats that tests byte-compare. `.gitattributes` materialises these as LF on every
+# checkout; an editor saving CRLF into one produces a diff nobody asked for and a golden test that
+# fails for a reason unrelated to its subject.
+[*.{ir,xml}]
+end_of_line = lf
+
+# Executed by sh. With CRLF the shebang line fails and the gate silently stops firing — the same
+# class of silent-disable as the stale core.hooksPath repaired on 2026-09-17.
+[hooks/*]
+end_of_line = lf
+
+[*.cs]
+indent_size = 4
+
+[*.{py,ps1,psm1}]
+indent_size = 4
+
+[*.{json,yml,yaml}]
+indent_size = 2
+
+[*.md]
+indent_size = 2
+# Markdown uses two trailing spaces as a hard line break.
+trim_trailing_whitespace = false
+
+[Makefile]
+indent_style = tab

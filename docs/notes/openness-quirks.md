@@ -50,7 +50,7 @@ Needed because `openness-cli`'s cold-open path (`<project>` as a `.apNN` file, n
 already-open project name) requires an absolute path — a relative one throws
 `"The argument 'path' cannot be a relative path."`
 
-- JOB9002 scratch copy: `C:\Users\User\Desktop\AI Ladder Project\JOB9002 - Tom White Waste - Scratch
+- JOB9002 scratch copy: `C:\Users\<user>\Desktop\AI Ladder Project\JOB9002 - Tom White Waste - Scratch
   Copy\JOB9002 - Tom White Waste\JOB9002 - Tom White Waste_V20\JOB9002 - Tom White Waste_V20.ap20`
 
 ## Which S7-1200? Classic and G2 are different articles (migrated from CLAUDE.md 2026-08-21)

@@ -9,9 +9,9 @@ aesthetic question.
 """
 import base64, collections, io, os
 
-THUMBS = r"C:\Users\User\.claude\jobs\0755f2fb\tmp\wg_thumbs"
-SRC = r"C:\Users\User\.claude\jobs\0755f2fb\tmp\wg_extract"
-OUT = r"C:\Users\User\Desktop\AI Ladder Project\hmi\wincc-graphics-contact-sheet.html"
+THUMBS = r"C:\Users\<user>\.claude\jobs\0755f2fb\tmp\wg_thumbs"
+SRC = r"C:\Users\<user>\.claude\jobs\0755f2fb\tmp\wg_extract"
+OUT = r"C:\Users\<user>\Desktop\AI Ladder Project\hmi\wincc-graphics-contact-sheet.html"
 
 # Category -> (available in the full library, folders the sample came from)
 AVAILABLE = {

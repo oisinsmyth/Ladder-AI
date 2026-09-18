@@ -593,7 +593,7 @@
       "exit": 0,
       "json": {
         "submissionIn": "submission-v7-full.json (23 vectors - the one the clean 23/23 wave ran against; NOT v6, which has 22)",
-        "out": "C:/Users/User/AppData/Local/Temp/hba-derive/submission-v8-widen-derived.json",
+        "out": "C:/Users/<user>/AppData/Local/Temp/hba-derive/submission-v8-widen-derived.json",
         "computed": [
           "map",
           "deployment"

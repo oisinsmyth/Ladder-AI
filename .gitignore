@@ -129,6 +129,17 @@ research/graphics-probe/
 # installed regenerates it in one command; nobody without TIA has a licence to the artwork anyway.
 hmi/wincc-graphics-contact-sheet.html
 
+# HMI EXAMPLE BUILD OUTPUT, REGENERABLE (2026-09-17). 54 files: Portal export/import/compile logs
+# and rendered screen PNGs, all produced by the flatten/emit/import/compile loop from sources that
+# ARE committed beside them. Nothing tracked cites any of them.
+#
+# The PNGs are the reason this rule is worth having rather than tidy-mindedness: they are the 15
+# blobs `tools/verify-scrub.py` reports as UNSEARCHABLE, because an identifier rendered as pixels
+# is invisible to every text pass the scrub gate makes. Untracking them here takes them off the tip;
+# the Phase 3 rewrite additionally strips them from history with a `--path-glob` exclusion, which is
+# what removes that caveat from Gate 3 rather than merely documenting it.
+hmi/examples/*/build/
+
 # OS / editor
 Thumbs.db
 Desktop.ini

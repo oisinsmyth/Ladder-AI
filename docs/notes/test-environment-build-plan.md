@@ -728,7 +728,7 @@ The smallest program that can answer the wire questions:
 
 ### ✅ The PC side is built (2026-08-12)
 
-`C:\Users\User\.claude\jobs\f24f6b1a\tmp\modbus-spike\` — outside the repo, in no solution, not
+`C:\Users\<user>\.claude\jobs\f24f6b1a\tmp\modbus-spike\` — outside the repo, in no solution, not
 committed, every file headed `WRITTEN TO BE DELETED`. 52 tests pass, nothing was contacted.
 Raw sockets rather than NModbus, deliberately and for this experiment only: **a library that
 silently retries or splits a request would tear for reasons that have nothing to do with

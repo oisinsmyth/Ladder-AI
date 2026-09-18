@@ -35,7 +35,7 @@ runs instead — the failure direction is expensive, not cheap, so check what ca
 ---
 
 Work through `agent-tasks/<TASK FILE(S)>` in the Ladder-AI project
-(`C:\Users\User\Desktop\AI Ladder Project`). Read in this order, don't skip ahead:
+(`C:\Users\<user>\Desktop\AI Ladder Project`). Read in this order, don't skip ahead:
 
 1. **`CLAUDE.md` is already in your context — do not read it again.** It was injected with this
    prompt. Its hard rules override everything else here and in the task file — LAD only, never
