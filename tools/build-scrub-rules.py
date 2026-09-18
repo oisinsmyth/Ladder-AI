@@ -532,6 +532,42 @@ def main():
     print("conflicts resolved            : %d (rung1=%d rung2=%d rung3=%d rung4=%d)"
           % (sum(rungs[r] for r in (1, 2, 3, 4)), rungs[1], rungs[2], rungs[3], rungs[4]))
 
+    # *** TWO ROWS CAN DECLARE THE SAME TERM, AND THE THREE LINES BELOW ARE PLAIN ASSIGNMENTS. ***
+    # Row order decides which invented name a live identifier becomes, silently: no counter, no
+    # finding, nothing in the manifest. It is the SAME DEFECT AS F9 in a different dict - F9 was
+    # `candidates.setdefault` discarding a claim without saying so, and this is `chosen[...] = ...`
+    # overwriting one.
+    #
+    # It is live in the real term list, which is how it was found: one 5-character term is declared
+    # by two rows, as `site` and as `jobcode`, with different replacements. The surviving one is
+    # sensible and the discarded one is the bare token `None` - so today the last row happens to be
+    # the right one, and REORDERING THE TABLE WOULD REWRITE A SITE NAME TO `None` THROUGHOUT THE
+    # CORPUS with nothing said. A silent choice between two of the owner's own declarations is the
+    # owner's to make.
+    #
+    # Case-insensitive, because the emitted rule is: two rows differing only in capitalisation
+    # produce one `(?i)` rule, so they are the same declaration whatever the table looks like.
+    # Agreeing rows are reported rather than refused - a duplicate that changes nothing is a tidiness
+    # problem, and refusing it would be this tool deciding how the owner keeps their own list.
+    by_term, duplicate_terms = {}, []
+    for r in rows:
+        by_term.setdefault(r["live"].lower(), []).append(r)
+    redundant = 0
+    for low, these in sorted(by_term.items()):
+        if len(these) < 2:
+            continue
+        reps = sorted({r["invented"] for r in these})
+        if len(reps) == 1:
+            redundant += 1
+            continue
+        duplicate_terms.append(
+            "one %d-character term is declared by %d rows (%s) that DISAGREE on the replacement: "
+            "%s. The last row in the table silently wins. Delete a row or make them agree."
+            % (len(low), len(these), ", ".join(sorted(r["class"] for r in these)),
+               " vs ".join("'%s'" % r for r in reps)))
+    print("duplicate term rows           : %d agreeing (reported), %d DISAGREEING"
+          % (redundant, len(duplicate_terms)))
+
     # Explicit terms beat map-derived keys unconditionally, and are logged where they override.
     overrides = [r["live"] for r in rows if r["live"] in chosen]
     for r in rows:
@@ -772,6 +808,7 @@ def main():
     # collision is the owner's call: two identifiers they named separately would be rewritten to
     # one name, and no automatic choice here is better than telling them.
     findings.extend(collision_problems)
+    findings.extend(duplicate_terms)
 
     # *** REWRITING PART OF A SOURCE IDENTIFIER DE-IDENTIFIES NOTHING. ***
     # A declared term is emitted `(?i)<term>` with no word boundary, chosen by declaredness alone

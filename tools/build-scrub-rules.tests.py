@@ -885,6 +885,59 @@ def nothing_matching_is_exit_2_not_0(tmp):
     assert_in("EMPTY IS NOT CLEAN", out, "the principle must be named")
 
 
+def two_rows_declaring_the_same_term_DIFFERENTLY_gates(tmp):
+    """*** F9 AGAIN, IN A DIFFERENT DICT, AND LIVE IN THE REAL TERM LIST. ***
+
+    `chosen[r["live"]] = r["invented"]` is a plain assignment in row order, so a term declared twice
+    keeps whichever row is last - no counter, no finding, nothing in the manifest. F9 was the same
+    failure in `candidates.setdefault`. Found by measurement rather than by reading: the real list
+    declares one 5-character term as both `site` and `jobcode`, and the row that loses carries the
+    bare token `None` as its replacement. Reordering the table would have rewritten a site name to
+    `None` throughout the corpus in silence."""
+    s = build(tmp, {"m": ONE_MAP},
+              TERMS_HEADER + "| Zorbex | SiteAlpha | site | global | auto |\n"
+                             "| Zorbex | JOB7777 | jobcode | global | auto |\n",
+              {"doc.md": "AcmeWidgetUnit and Zorbex appear\n"})
+    code, out, _ = run_head(tmp, s)
+    assert_eq(code, EXIT_FINDING, "disagreeing duplicate rows must gate (%s)" % out)
+    assert_in("DISAGREE on the replacement", out, "the finding must name the relation")
+    assert_in("SiteAlpha", out, "both replacements must be named so the owner can pick")
+    assert_in("JOB7777", out, "both replacements must be named so the owner can pick")
+    assert_eq(rules_of(tmp), [], "a refusal must write nothing")
+
+
+def two_rows_declaring_the_same_term_IDENTICALLY_is_reported_not_refused(tmp):
+    """A duplicate that changes nothing is a tidiness problem, and refusing it would be this tool
+    deciding how the owner keeps their own table. It is counted so it cannot hide.
+
+    The fixture is a literally repeated row - the copy-paste shape - rather than two spellings of
+    one term. Two SPELLINGS that agree are a different situation and the existing NON-INJECTIVE
+    check already refuses them, because they are two distinct keys collapsing onto one replacement.
+    That refusal is loud and pre-dates this change, so it is left alone rather than folded in
+    here: this check exists to stop a SILENT choice, and there is nothing silent about it."""
+    s = build(tmp, {"m": ONE_MAP},
+              TERMS_HEADER + "| Zorbex | SiteAlpha | site | global | auto |\n"
+                             "| Zorbex | SiteAlpha | site | global | auto |\n",
+              {"doc.md": "AcmeWidgetUnit and Zorbex appear\n"})
+    code, out, err = run_head(tmp, s)
+    assert_eq(code, EXIT_OK, "agreeing duplicates must not gate (%s%s)" % (out, err))
+    assert_in("1 agreeing (reported)", out, "the redundant row must be counted")
+    assert "DISAGREE on the replacement" not in out, "agreement must not be reported as conflict"
+
+
+def duplicate_detection_is_CASE_INSENSITIVE(tmp):
+    """The emitted rule is `(?i)`, so two rows differing only in capitalisation ARE one declaration
+    however the table looks. Comparing them case-sensitively would let the disagreement through in
+    the one spelling somebody was most likely to use by accident."""
+    s = build(tmp, {"m": ONE_MAP},
+              TERMS_HEADER + "| Zorbex | SiteAlpha | site | global | auto |\n"
+                             "| zorbex | JOB7777 | jobcode | global | auto |\n",
+              {"doc.md": "AcmeWidgetUnit and Zorbex appear\n"})
+    code, out, _ = run_head(tmp, s)
+    assert_eq(code, EXIT_FINDING, "a case-only duplicate must still gate (%s)" % out)
+    assert_in("DISAGREE on the replacement", out, "the finding must name the relation")
+
+
 # ---- CUTS: a declared term's anchorless rule editing source code from inside a token -------------
 # The four cases below are one discrimination, and each half has to be proved or the check is
 # unfalsifiable. A declared term is emitted `(?i)<term>` with no word boundary BECAUSE four real
@@ -1022,6 +1075,11 @@ for name, body in [
     ("an empty term list does not crash", empty_term_list_is_exit_2),
     ("a malformed row is exit 2 and named", malformed_row_is_exit_2_and_named),
     ("nothing matching is exit 2, not 0", nothing_matching_is_exit_2_not_0),
+    ("DUPLICATE: two rows declaring the same term DIFFERENTLY gates",
+     two_rows_declaring_the_same_term_DIFFERENTLY_gates),
+    ("DUPLICATE: two rows declaring it IDENTICALLY is reported",
+     two_rows_declaring_the_same_term_IDENTICALLY_is_reported_not_refused),
+    ("DUPLICATE: detection is case-insensitive", duplicate_detection_is_CASE_INSENSITIVE),
     ("CUTS: a declared term that only cuts source tokens GATES",
      a_declared_term_that_only_cuts_source_tokens_GATES),
     ("CUTS: embedded only in JOB tokens does NOT gate",
