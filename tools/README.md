@@ -668,10 +668,11 @@ python tools/capture-build-baseline.py --repo . --out ci-capture.json --expect t
 ```
 
 **It is the whole test step of `.github/workflows/ci.yml`**, and deliberately not a loop over
-`*.sln`. That loop is what a CI script naturally becomes, and it would skip `src/hmi-cli`'s **161
-tests in silence** because that project belongs to no solution. This tool discovers orphans, records
-targets that cannot build, excludes assemblies MSBuild did not produce in the run, and refuses on an
-empty capture.
+`*.sln`. That loop is what a CI script naturally becomes, and it skipped `src/hmi-cli`'s **161 tests
+in silence** for as long as that project belonged to no solution. It has one now — and the orphan
+hunt stays anyway, because an orphan is made by forgetting rather than by deciding, so the tree is
+never reliably free of one. This tool discovers orphans, records targets that cannot build, excludes
+assemblies MSBuild did not produce in the run, and refuses on an empty capture.
 
 🔴 **NOTHING IS FILTERED OUT, and that was a change of mechanism.** The plan was to exclude the two
 known-failing tests by fully-qualified name. Measured: the failing case is **one parameter of a

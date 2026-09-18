@@ -210,8 +210,10 @@ def expect_the_known_2_do_NOT_gate(tmp):
 
 
 def expect_a_VANISHED_assembly_GATES(tmp):
-    """This is the orphan guard. src/hmi-cli is in no solution, so a CI that loops over *.sln drops
-    its 161 tests and reports green - the baseline names the assembly, so its absence is a finding."""
+    """This is the orphan guard, and the assembly it names is the one that taught it. src/hmi-cli
+    belonged to no solution, so a CI looping over *.sln dropped its 161 tests and reported green.
+    It has a solution now - but the guard is not about hmi-cli: the baseline names every assembly,
+    so ANY of them going missing is a finding, whoever drops it and however."""
     _, findings = gate([("A", 10, 0), ("HmiCli.Tests", 161, 0)], [("A", 10, 0)])
     assert findings and "HmiCli.Tests" in findings[0], \
         "a missing assembly must gate and name itself: %r" % findings

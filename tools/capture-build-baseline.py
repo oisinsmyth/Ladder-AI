@@ -20,9 +20,11 @@ no assembly row, exits 2 rather than writing a tidy empty capture that would lat
 another tidy empty capture and pass.
 
 ORPHAN PROJECTS ARE HUNTED DELIBERATELY. A test project belonging to no .sln is invisible to any
-loop over solutions, which is what a CI script naturally writes; src/hmi-cli's 161 tests are in
-exactly that position. Discovery here is by project file, and solution membership is recorded
-rather than assumed.
+loop over solutions, which is what a CI script naturally writes; src/hmi-cli's 161 tests sat in
+exactly that position until it was given a solution of its own. THE HUNT DID NOT RETIRE WITH IT -
+nobody decides to leave a project out of a solution, they forget to, so a tree is never reliably
+free of an orphan and the next one arrives just as quietly. Discovery here is by project file, and
+solution membership is recorded rather than assumed.
 
 The output names assemblies and counts. It carries no identifier and is safe to read, but it is
 written under sanitization/ by default because that is where this pipeline's working files live.

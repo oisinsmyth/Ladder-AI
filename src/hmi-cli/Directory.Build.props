@@ -1,0 +1,22 @@
+<Project>
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+
+    <!--
+      Pure file transformation — HTML/CSS in, SimaticML out — so net8.0 like the converter, not
+      net48 like openness-cli. Nothing here references Siemens.Engineering, and nothing here opens
+      a socket: hmi-cli hands its output to openness-cli, which owns the Portal session.
+
+      Warnings-as-errors matches every other solution tree in src/. This subtree was the ONLY one
+      without a Directory.Build.props, which is the whole reason it needed one: HmiCli.csproj set
+      the flag for itself and HmiCli.Tests.csproj never did, so half of a 161-test suite compiled
+      under looser rules than the code it tests and nothing said so.
+    -->
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+</Project>

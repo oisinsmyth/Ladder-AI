@@ -373,9 +373,13 @@ one, and it was the second kind this suite existed to prevent.*
    survive in stale `bin/` folders from the previous machine, so this is likely a one-file fix —
    but its provenance should be confirmed rather than assumed, and the vendoring question the
    project file itself calls open is still open.
-3. **Put `src/hmi-cli` in a solution, before CI is written rather than after.** Its 161 tests pass
-   and it belongs to no `.sln`, so the loop over solutions that Phase 5 would naturally write skips
-   them **silently** — and reports green.
+3. ~~**Put `src/hmi-cli` in a solution, before CI is written rather than after.**~~ ✅ **DONE
+   2026-09-18.** `src/hmi-cli/hmi-cli.sln` plus the `Directory.Build.props` that subtree was the
+   only one in `src/` to lack — so `HmiCli.Tests` had been compiling **without
+   `TreatWarningsAsErrors`** while the code it tests had it. 161 passing before and after, 0
+   warnings, and the full `--expect` capture gates clean at 23 assemblies / 5,894 passed. The
+   orphan hunt in `capture-build-baseline.py` is **kept**: an orphan is made by forgetting, not by
+   deciding, so the tree is never reliably free of one.
 
 ---
 
@@ -583,7 +587,7 @@ Settled. The plan assumes them and does not re-open them.
 | test files / test methods | 493 / ~5,810 `[Fact]`+`[Theory]` |
 | tracked markdown | 266 |
 | tracked `.ir` / `.xml` | 139 / 141 |
-| solutions | 6 under `src/` (`converter`, `openness-cli`, `harness`, `device-guard`, `download-feedback`, `wave-control`) + `tests/golden/GoldenHarness.sln`. `src/hmi-cli` has projects but **no `.sln`** |
+| solutions | 7 under `src/` (`converter`, `openness-cli`, `harness`, `device-guard`, `download-feedback`, `wave-control`, `hmi-cli`) + `tests/golden/GoldenHarness.sln`. `hmi-cli` had projects but **no `.sln`** until 2026-09-18 |
 | branches | 34 — **33 merged into `master`, 1 unmerged** (`wip-settling-2026-08-20`) |
 | stale worktrees | 22, all `prunable`, all pointing at the previous machine's path |
 | git remotes | **none configured** |

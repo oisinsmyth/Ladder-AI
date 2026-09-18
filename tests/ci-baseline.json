@@ -176,14 +176,13 @@
       "total": 301
     },
     {
-      "target": "src/hmi-cli/HmiCli.Tests/HmiCli.Tests.csproj",
+      "target": "src/hmi-cli/hmi-cli.sln",
       "assembly": "HmiCli.Tests",
       "passed": 161,
       "failed": 0,
       "skipped": 0,
       "total": 161,
-      "orphan": true,
-      "note": "In NO solution. A CI that iterates *.sln skips this silently."
+      "note": "Was the tree's only orphan - in no solution, so a CI looping over *.sln skipped these 161 tests in silence. src/hmi-cli/hmi-cli.sln now exists and the counts are unchanged, which is what made the move safe to record. The orphan DISCOVERY in capture-build-baseline.py stays regardless: the next orphan will arrive the same way this one did, by somebody forgetting."
     },
     {
       "target": "src/download-feedback/download-feedback.sln",

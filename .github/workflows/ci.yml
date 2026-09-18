@@ -71,9 +71,12 @@ jobs:
 
       # ONE COMMAND FOR THE WHOLE TEST SURFACE, and it is not a loop over *.sln.
       #
-      # capture-build-baseline.py discovers ORPHAN PROJECTS as well as solutions, which matters
-      # concretely: src/hmi-cli belongs to no .sln, so the loop a CI script naturally writes would
-      # skip its 161 tests in silence and report green. It also excludes assemblies MSBuild did not
+      # capture-build-baseline.py discovers ORPHAN PROJECTS as well as solutions. src/hmi-cli was
+      # this tree's only orphan - 161 tests the loop a CI script naturally writes would skip in
+      # silence - and it now has a solution of its own. THE DISCOVERY STAYS ANYWAY, and the reason
+      # is the one that made hmi-cli an orphan in the first place: nobody decides to leave a project
+      # out of a solution, they forget to put it in, so the tree is never reliably free of one and
+      # the next arrives without a word. It also excludes assemblies MSBuild did not
       # produce in this run, so a stale bin/ cannot be mistaken for a pass, and it refuses outright
       # on an empty capture.
       #
