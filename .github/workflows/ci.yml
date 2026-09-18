@@ -1,0 +1,116 @@
+# CI for Ladder-AI.
+#
+# WHAT IS DELIBERATELY NOT BUILT HERE, AND WHY. A silently missing project reads as rot; a visible,
+# explained exclusion reads as a decision. Two things cannot build on a hosted runner:
+#
+#   src/openness-cli/  (OpennessCli, OpennessCli.Tests, DownloadProbe)
+#       Reference Siemens.Engineering.dll, which ships with TIA Portal V20, is licensed, and cannot
+#       be redistributed. OpennessCli.Tests additionally reflects over the installed assembly at
+#       RUNTIME, so even a stub reference would not make it meaningful. These projects are not
+#       unfinished - they are unbuildable anywhere without a licensed engineering seat.
+#
+#   src/harness/Harness.RigRead
+#       Needs a machine-local Sharp7.dll. Its project file errors deliberately rather than degrading:
+#       "this project IS the device client and has nothing to build without it". Its vendoring is an
+#       open question (the csproj lists three options, one of them NuGet) and is not being settled
+#       inside a CI change, because it would alter the dependency of the code that talks to real
+#       hardware - verified against that binary, not a substitute.
+#
+# BOTH ARE RECORDED IN tests/ci-baseline.json UNDER cannotBuild, so the gate below notices if a THIRD
+# target joins them. An exclusion nothing checks is just an omission.
+#
+# Two Python gates are deliberately NOT run here, and that is also a decision:
+#   tools/check-agent-evidence.py <file>  - belongs at hand-back, not at commit or CI. An evidence
+#       file's hashes legitimately drift once a later commit touches the same block, so a CI run over
+#       agent-tasks/ would refuse work that was correct when it was done.
+#   tools/check-clause-currency.py        - needs a --register per request, and compares git DATES,
+#       which a shallow clone destroys.
+
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build-and-test:
+    # WINDOWS IS LOAD-BEARING, NOT A PREFERENCE. The working tree is CRLF (core.autocrlf=true) and
+    # several suites byte-compare tool output, while tools/check-file-budgets.py measures
+    # CRLF-equivalent bytes. On a Linux checkout both the budgets and the golden comparisons shift,
+    # and the numbers in tests/ci-baseline.json stop meaning what they say.
+    runs-on: windows-latest
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # global.json pins 8.0.425 - the SDK every recorded figure in this repo was measured on. All
+      # seven solution trees set TreatWarningsAsErrors=true, so an SDK carrying one new analyzer
+      # warning does not warn here, it fails the build.
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # FIRST, AND THE ORDER MATTERS. harness.sln does not contain Converter.csproj, but
+      # Harness.Map.Tests and Harness.Results.Tests spawn converter.exe from disk and treat its
+      # absence as "A FAILURE, NOT A REASON TO SKIP". Without this step they redden for a reason
+      # that has nothing to do with the commit.
+      - name: Build the converter (every other suite spawns it)
+        run: dotnet build -c Release src/converter/converter.sln --nologo
+
+      # tests/golden's ToolPaths.cs defaults to bin/Debug. A Release-only build without this points
+      # it at a path that does not exist, or worse, at a stale one.
+      - name: Point the golden harness at the Release binary
+        run: echo "CONVERTER_EXE=${{ github.workspace }}\src\converter\Converter\bin\Release\net8.0\converter.exe" >> $env:GITHUB_ENV
+
+      # ONE COMMAND FOR THE WHOLE TEST SURFACE, and it is not a loop over *.sln.
+      #
+      # capture-build-baseline.py discovers ORPHAN PROJECTS as well as solutions, which matters
+      # concretely: src/hmi-cli belongs to no .sln, so the loop a CI script naturally writes would
+      # skip its 161 tests in silence and report green. It also excludes assemblies MSBuild did not
+      # produce in this run, so a stale bin/ cannot be mistaken for a pass, and it refuses outright
+      # on an empty capture.
+      #
+      # --expect gates against the committed baseline: a lost assembly, a fallen pass count, a risen
+      # failure count or a new unbuildable target all fail. NOTHING IS FILTERED OUT. The two known
+      # failures run every time and are tolerated only because the baseline records exactly two - a
+      # third fails the build. (Filtering them by name was considered and rejected: the failing case
+      # is one parameter of a [Theory], so a name filter would have hidden 16 passing round-trips to
+      # suppress 1 failure.)
+      - name: Build, test and gate against the committed baseline
+        run: python tools/capture-build-baseline.py --repo . --out ci-capture.json --expect tests/ci-baseline.json
+
+      # The gate this repo already refuses commits on, run here without --staged so it measures the
+      # worktree. hooks/pre-commit is per-clone and was silently inert for weeks after a machine move
+      # because core.hooksPath pointed at the old path; a CI copy is the structural answer to that.
+      - name: Size ratchet on context-injected files
+        run: python tools/check-file-budgets.py
+
+      # The tools' own suites. Each is stdlib-only, offline, and already negative-tested.
+      # build-scrub-rules.tests.py is NOT here - 41 cases at ~30s each is ~20 minutes, which is wrong
+      # for a pull request. It runs in nightly.yml instead, and saying so beats dropping it quietly.
+      - name: Tooling self-tests
+        run: |
+          python tools/check-file-budgets.tests.py
+          python tools/check-doc-migration.tests.py
+          python tools/check-agent-evidence.tests.py
+          python tools/capture-build-baseline.tests.py
+          python tools/verify-scrub.tests.py
+
+      # The demo is a test, not a showpiece. --check asserts the result it claims, so it fails here
+      # rather than rotting into an example nobody runs.
+      - name: The demo asserts its own result
+        run: python demo/run-demo.py --check
+
+      - name: Upload the capture
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-capture
+          path: ci-capture.json

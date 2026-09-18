@@ -1,0 +1,18 @@
+{
+  "//": [
+    "PINNED, AND NOT AS HOUSEKEEPING. Every one of the seven solution trees sets",
+    "TreatWarningsAsErrors=true, so an SDK that ships one new analyzer warning does not warn here - it",
+    "FAILS THE BUILD. Without this file a CI runner picks whatever SDK it happens to carry, and the",
+    "first symptom is a red build on a commit that changed nothing.",
+    "",
+    "8.0.425 is the version every recorded figure in this repo was measured on: the build baseline's",
+    "23 assemblies and 5,894 passing tests, and the per-assembly counts tests/ci-baseline.json gates",
+    "against. Change it deliberately, re-capture the baseline in the same commit, and say what moved.",
+    "",
+    "latestPatch, not latestMinor: a patch cannot introduce an analyzer, and a minor can."
+  ],
+  "sdk": {
+    "version": "8.0.425",
+    "rollForward": "latestPatch"
+  }
+}

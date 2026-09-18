@@ -5,7 +5,8 @@ reviewed and repaired. Rev 6 — the verifier and the trial rewrite. Rev 7 — t
 Rev 8 (2026-09-18) — Phase 0 done, and Gate 3's build half made real. Rev 9 (2026-09-18) — F16–F19
 discharged; the builder's default scan mode is tested. Rev 10 (2026-09-18) — F4, F9, F11, F13
 discharged; the review backlog is closed. Rev 11 (2026-09-18) — FI-93 discharged; the red suite is
-ratified, 19 → 2.** Scouting pass and phase
+ratified, 19 → 2. Rev 12 (2026-09-18) — Phase 5 built: CI, the demo, and an exclusion
+list that was wrong.** Scouting pass and phase
 plan for turning this repository into a public portfolio piece on GitHub, without the private
 repository ever becoming public and without any restricted identifier reaching a public remote.
 
@@ -54,7 +55,7 @@ this table, this table is current.
 | **2b — the red suite** | ✅ **DONE 2026-09-18** | **FI-93 discharged, rev 11.** 19 red tests → **2**. The 2 are one fact: `Main.ir` gained three networks and `Main.xml` was never re-exported; **one TIA re-export clears both** |
 | **3 — rewrite history** | ⬜ **not started** | the recipe is proven end to end, but the real run needs the `--path-glob` exclusion and the 253 SHA citations repaired |
 | **4 — restructure** | ✅ **DONE** | — |
-| **5 — CI and demo** | ⬜ **not started** | no `.github/`, no demo script |
+| **5 — CI and demo** | 🟢 **BUILT 2026-09-18, rev 12** | `.github/workflows/ci.yml` + `nightly.yml`, `global.json` (SDK pinned), `demo/run-demo.py`, `tests/ci-baseline.json`. Every step rehearsed locally and green. **Gate 4 — CI green on a private repo — is the one thing left, and it needs the GitHub account (open item 2)** |
 | **6 — publish** | ⬜ **not started** | gated on 0, 3 and 5 |
 
 ### What is actually built and proven
@@ -67,6 +68,48 @@ this table, this table is current.
 - **The trial rewrite recipe, proven:** `clone --no-local` → `filter-repo --replace-text
   --replace-message @path-renames.args --mailmap` → delete all but the publishing branch →
   `reflog expire --all --expire=now && gc --prune=now` → verify. ~7 min rewrite, ~30 s verify.
+
+### Rev 12 — Phase 5 built: CI, the demo, and an exclusion list that was wrong
+
+🔴 **The exclusion list in Phase 5 step 2 was built from a grep and never verified.** It named
+`Harness.Device`, `Harness.Map` and `WaveControl.Cli` as TIA-gated. All three match
+`Siemens.Engineering` **only inside comments asserting they deliberately do not reference it** —
+`Harness.Map`'s reads *"no packages, no project references, no network, no Portal, no
+Siemens.Engineering."* Excluding them would have dropped **586 passing tests** for no reason. The
+real gated set is `src/openness-cli/` (licensed DLL) and `Harness.RigRead` (machine-local Sharp7,
+vendoring left open by ruling).
+
+**Three traps that would have made the first CI run red for reasons unrelated to the code.**
+`TreatWarningsAsErrors=true` in all seven solution trees with **no `global.json`** — a runner on a
+newer SDK turns one new analyzer warning into a build failure, so the SDK is now pinned to the
+8.0.425 every recorded figure was measured on. `harness.sln` **does not contain `Converter.csproj`**
+while two of its test projects spawn `converter.exe` from disk and call its absence *"A FAILURE, NOT
+A REASON TO SKIP"* — so CI builds the converter first. And `ToolPaths.cs` defaults to `bin/Debug`, so
+a Release-only build must set `CONVERTER_EXE`.
+
+**The mechanism for the two known failures changed, and the reason is measured.** The ruling was to
+exclude them by fully-qualified name. But the failing case is **one parameter of a `[Theory]`**, so a
+name filter matches the method — it would have hidden **16 passing round-trips to suppress 1
+failure**, which is the `continue-on-error` outcome the same ruling rejected. Instead nothing is
+filtered: every test runs, and `capture-build-baseline.py --expect` compares the result against
+`tests/ci-baseline.json`. The baseline records exactly two failures, so a **third fails the build**.
+
+**CI's whole test step is one command**, and not a loop over `*.sln` — that loop would skip
+`src/hmi-cli`'s 161 tests in silence, which is the trap this plan flagged at rev 8 and which the
+capture tool was already built to avoid.
+
+🔴 **A vacuous test, found by mutation again.** `a MISSING baseline is exit 2` asserted only the exit
+code, and its fixture never produced an assembly — so the run exited 2 at *"NOTHING EXAMINED"* and
+never reached the check at all. Disabling the guard turned 0 of 22 red. `--expect` is now validated
+**before** the build, which makes the case reachable and also means a typo refuses in a second rather
+than after five minutes.
+
+**The demo is `demo/run-demo.py`**, on the Green-tier `ir/reference` corpus: one block through six
+commands, then the whole corpus round-tripped. It reports **14 of 15**, and the exception is the point
+— `NodeStatusAlarms` is a seed artifact whose *answer key* is missing an `<Interface>`, so the single
+difference is an addition of TIA's own defaults. `--check` mode asserts that result, so the demo fails
+CI rather than rotting into an example nobody runs. It states on every run what it did not show:
+nothing here goes through TIA, so import and compile behaviour is uncovered.
 
 ### Rev 11 — the red suite ratified: 19 → 2
 
@@ -1021,7 +1064,13 @@ Should drive the README rather than be discovered by a reader:
    nowhere on master and their concepts appear in **zero** tracked files; deleting it would have
    lost ~650 lines with no other copy. Master has moved 21 commits on `LoopRun.cs` since, so it will
    not merge cleanly. It is a preservation branch and is doing its job.
-6. **Demo scope** — minimal round-trip, or also `preflight` / `tagstatus` / `cross-check`.
+6. ~~**Demo scope** — minimal round-trip, or also `preflight` / `tagstatus` / `cross-check`.~~
+   ✅ **CLOSED 2026-09-18 — the plan's own sequence, with one gap fixed.** `to-ir` → `digest` →
+   `review` → `diff --only` → `to-xml` → `compare`, then the whole corpus. **The `--only` is the fix:
+   the sequence as written used bare `diff`, which exits 0 unconditionally and proves nothing**, so
+   the demo would have shown a no-op and called it an invariance check. `preflight`/`tagstatus`/
+   `cross-check` were left out deliberately — `cross-check` alone emits hundreds of facts on a real
+   corpus, and a demo nobody finishes demonstrates less than a short one.
 7. **253 commit-SHA citations across 80 tracked markdown files** — re-map to new hashes, or
    re-describe. One decision, applied 80 times.
 

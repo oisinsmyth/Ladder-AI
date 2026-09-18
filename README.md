@@ -1,5 +1,8 @@
 # Ladder-AI
 
+<!-- The badge resolves once this is on GitHub; OWNER/REPO is filled in at publication. -->
+[![CI](https://github.com/OWNER/REPO/actions/workflows/ci.yml/badge.svg)](https://github.com/OWNER/REPO/actions/workflows/ci.yml)
+
 **An AI system that programs Siemens PLCs — and, more to the point, an attempt to make that safe
 enough to mean it.**
 
@@ -81,14 +84,38 @@ printed a plausible-looking result. Nothing else would have found it.
 
 ## Running it
 
-**Without TIA Portal** — the converter is self-contained:
+**The demo — one command, no TIA Portal, no PLC:**
+
+```bash
+python demo/run-demo.py
+```
+
+It walks one block through six commands — `to-ir`, `digest`, `review`, `diff --only`, `to-xml`,
+`compare` — printing the intermediate representation in full, then round-trips the whole reference
+corpus and reports the result.
+
+**That result is 14 of 15, and the exception is the interesting part.** `NodeStatusAlarms` is one of
+four seed artifacts committed with TIA's scaffolding trimmed, so the `<Interface>` element is missing
+from the *answer key*. `converter compare` localises exactly one difference and it is an addition of
+TIA's own defaults — the output is right and the key is incomplete. A demo that printed 15 of 15
+would be hiding that, and the number it hid would be the one worth reading.
+
+**What the demo does not show**, because nothing here goes through TIA: import and compile behaviour.
+A block that round-trips cleanly can still be refused on import — that is the class the `MemoryLayout`
+defect belonged to, where a DB round-tripped *equal and still wrong* and the first symptom was a
+runtime Modbus status code. The loop that catches it needs Portal exclusively and is deliberately
+not runnable here.
+
+**The tests:**
 
 ```bash
 dotnet test src/converter/converter.sln
 ```
 
 **Everything else** needs TIA Portal V20 and a licensed `Siemens.Engineering.dll`, which cannot be
-redistributed. Those projects are excluded from CI for that reason, not because they are unfinished.
+redistributed. Those projects are excluded from CI for that reason, not because they are unfinished —
+the exclusions are named, with their reasons, in `.github/workflows/ci.yml`, and the two targets that
+cannot build are recorded in `tests/ci-baseline.json` so CI notices if a third joins them.
 
 ---
 

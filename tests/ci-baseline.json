@@ -1,0 +1,240 @@
+{
+  "schema": "ladder-ai/build-baseline/1",
+  "capturedAt": "2026-09-18",
+  "capturedBy": "tools/capture-build-baseline.py (committed as the CI gate baseline)",
+  "commit": "9274c006bf1eb9554539832f9dd921ae7128c3b9",
+  "branch": "publication-prep",
+  "sdk": "8.0.425",
+  "configuration": "Release",
+  "note": "THE CI GATE BASELINE. tools/capture-build-baseline.py --expect compares a run against this file and fails on a LOSS: an assembly that did not run, a pass count that fell, a failure count that rose, or a target that used to build and does not. Gains are reported and do not gate. Keyed PER ASSEMBLY, never on the total - 10+5 and 5+10 sum the same while a project has moved. THE 2 RECORDED FAILURES ARE NOT FILTERED, EXCLUDED OR HIDDEN: they run every time, and the gate tolerates exactly this many. A third fails the build. Both are one fact - ir/test-project001/Main.ir gained three networks and simatic-ml/test-project001/Main.xml was never re-exported; one TIA Portal re-export clears both, after which they become a GAIN and this file gets re-captured in its own commit. See FI-93. The two unbuildable targets are recorded rather than omitted: openness-cli needs a licensed Siemens.Engineering.dll that cannot be redistributed, and Harness.RigRead needs a machine-local Sharp7.dll whose vendoring is an open question. Re-capture with: python tools/capture-build-baseline.py --out tests/ci-baseline.json",
+  "totals": {
+    "assemblies": 23,
+    "passed": 5894,
+    "failed": 2,
+    "skipped": 0,
+    "total": 5896
+  },
+  "assemblies": [
+    {
+      "target": "src/converter/converter.sln",
+      "assembly": "Converter.Tests",
+      "passed": 1820,
+      "failed": 0,
+      "skipped": 0,
+      "total": 1820
+    },
+    {
+      "target": "src/device-guard/device-guard.sln",
+      "assembly": "DeviceFetch.Tests",
+      "passed": 12,
+      "failed": 0,
+      "skipped": 0,
+      "total": 12
+    },
+    {
+      "target": "src/device-guard/device-guard.sln",
+      "assembly": "DeviceGuard.Tests",
+      "passed": 65,
+      "failed": 0,
+      "skipped": 0,
+      "total": 65
+    },
+    {
+      "target": "tests/golden/GoldenHarness.sln",
+      "assembly": "GoldenHarness.Tests",
+      "passed": 204,
+      "failed": 2,
+      "skipped": 0,
+      "total": 206
+    },
+    {
+      "target": "src/harness/harness.sln",
+      "assembly": "Harness.Batch.Tests",
+      "passed": 290,
+      "failed": 0,
+      "skipped": 0,
+      "total": 290
+    },
+    {
+      "target": "src/harness/harness.sln",
+      "assembly": "Harness.Cleanup.Tests",
+      "passed": 79,
+      "failed": 0,
+      "skipped": 0,
+      "total": 79
+    },
+    {
+      "target": "src/harness/harness.sln",
+      "assembly": "Harness.CmdInject.Loopback.Tests",
+      "passed": 7,
+      "failed": 0,
+      "skipped": 0,
+      "total": 7
+    },
+    {
+      "target": "src/harness/harness.sln",
+      "assembly": "Harness.CmdInject.Tests",
+      "passed": 128,
+      "failed": 0,
+      "skipped": 0,
+      "total": 128
+    },
+    {
+      "target": "src/harness/harness.sln",
+      "assembly": "Harness.Device.Tests",
+      "passed": 89,
+      "failed": 0,
+      "skipped": 0,
+      "total": 89
+    },
+    {
+      "target": "src/harness/harness.sln",
+      "assembly": "Harness.Loop.Tests",
+      "passed": 311,
+      "failed": 0,
+      "skipped": 0,
+      "total": 311
+    },
+    {
+      "target": "src/harness/harness.sln",
+      "assembly": "Harness.Map.Tests",
+      "passed": 451,
+      "failed": 0,
+      "skipped": 0,
+      "total": 451
+    },
+    {
+      "target": "src/harness/harness.sln",
+      "assembly": "Harness.MirrorRead.Tests",
+      "passed": 75,
+      "failed": 0,
+      "skipped": 0,
+      "total": 75
+    },
+    {
+      "target": "src/harness/harness.sln",
+      "assembly": "Harness.MirrorView.Tests",
+      "passed": 129,
+      "failed": 0,
+      "skipped": 0,
+      "total": 129
+    },
+    {
+      "target": "src/harness/harness.sln",
+      "assembly": "Harness.Results.Tests",
+      "passed": 832,
+      "failed": 0,
+      "skipped": 0,
+      "total": 832
+    },
+    {
+      "target": "src/harness/harness.sln",
+      "assembly": "Harness.RigControl.Tests",
+      "passed": 69,
+      "failed": 0,
+      "skipped": 0,
+      "total": 69
+    },
+    {
+      "target": "src/harness/harness.sln",
+      "assembly": "Harness.S7.Tests",
+      "passed": 206,
+      "failed": 0,
+      "skipped": 0,
+      "total": 206
+    },
+    {
+      "target": "src/harness/harness.sln",
+      "assembly": "Harness.Skeleton.Tests",
+      "passed": 71,
+      "failed": 0,
+      "skipped": 0,
+      "total": 71
+    },
+    {
+      "target": "src/harness/harness.sln",
+      "assembly": "Harness.Tests",
+      "passed": 19,
+      "failed": 0,
+      "skipped": 0,
+      "total": 19
+    },
+    {
+      "target": "src/harness/harness.sln",
+      "assembly": "Harness.Verify.Tests",
+      "passed": 64,
+      "failed": 0,
+      "skipped": 0,
+      "total": 64
+    },
+    {
+      "target": "src/harness/harness.sln",
+      "assembly": "Harness.Wire.Tests",
+      "passed": 301,
+      "failed": 0,
+      "skipped": 0,
+      "total": 301
+    },
+    {
+      "target": "src/hmi-cli/HmiCli.Tests/HmiCli.Tests.csproj",
+      "assembly": "HmiCli.Tests",
+      "passed": 161,
+      "failed": 0,
+      "skipped": 0,
+      "total": 161,
+      "orphan": true,
+      "note": "In NO solution. A CI that iterates *.sln skips this silently."
+    },
+    {
+      "target": "src/download-feedback/download-feedback.sln",
+      "assembly": "Ladder.Download.Tests",
+      "passed": 37,
+      "failed": 0,
+      "skipped": 0,
+      "total": 37
+    },
+    {
+      "target": "src/wave-control/wave-control.sln",
+      "assembly": "Ladder.Wave.Tests",
+      "passed": 474,
+      "failed": 0,
+      "skipped": 0,
+      "total": 474
+    }
+  ],
+  "cannotBuild": [
+    {
+      "target": "src/harness/harness.sln",
+      "exitCode": 1,
+      "errors": [
+        {
+          "code": "CS0246",
+          "project": "Harness.RigRead.csproj",
+          "example": "The type or namespace name 'Sharp7' could not be found (are you missing a using directive or an assembly reference?)"
+        }
+      ]
+    },
+    {
+      "target": "src/openness-cli/openness-cli.sln",
+      "exitCode": 1,
+      "errors": [
+        {
+          "code": "CS0246",
+          "project": "OpennessCli.csproj",
+          "example": "The type or namespace name 'Siemens' could not be found (are you missing a using directive or an assembly reference?)"
+        }
+      ]
+    }
+  ],
+  "unverifiedAssemblies": [
+    {
+      "target": "src/openness-cli/openness-cli.sln",
+      "assembly": "OpennessCli.Tests",
+      "passed": 809,
+      "failed": 24,
+      "skipped": 0,
+      "total": 833,
+      "reason": "MSBuild never reported building this assembly in this run, so --no-build ran a pre-existing artifact of unknown provenance"
+    }
+  ]
+}

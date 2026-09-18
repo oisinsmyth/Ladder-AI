@@ -161,6 +161,92 @@ def partition_unverified(rows, built):
     return fresh, unverified
 
 
+def load_expected(path):
+    """Read a committed baseline to gate against. Returns (by_assembly, doc); raises ValueError.
+
+    *** THIS IS A SECOND IMPLEMENTATION OF A COMPARISON THAT ALSO LIVES IN verify-scrub.py, AND THE
+    DUPLICATION IS DELIBERATE RATHER THAN OVERLOOKED. *** That one answers "did the scrub break a
+    test" during a history rewrite and needs a canary, a needle vocabulary and a clone. This one
+    answers "did this commit break a test" and must run on a CI runner with none of those. Wiring CI
+    through the scrub verifier to reuse thirty lines would drag the whole Gate 3 apparatus - and its
+    gitignored sanitization/ inputs, which a fresh clone does not have - into every pull request.
+
+    The rules are kept identical on purpose and the tests below mirror the eight already proven
+    against its twin. If you change one, change both: they are the same claim about the same file
+    format, and a divergence would mean a run could pass one gate and fail the other.
+    """
+    try:
+        doc = json.loads(io.open(path, encoding="utf-8-sig").read())
+    except Exception as exc:
+        raise ValueError("--expect '%s' is not readable JSON: %s" % (path, exc))
+    rows = doc.get("assemblies")
+    if not isinstance(rows, list):
+        raise ValueError("--expect '%s' carries no 'assemblies' list." % path)
+    by = {}
+    for row in rows:
+        if not isinstance(row, dict):
+            raise ValueError("--expect '%s' has a row that is not an object." % path)
+        name = row.get("assembly")
+        if not name:
+            raise ValueError("--expect '%s' has a row with no 'assembly' name." % path)
+        if name in by:
+            raise ValueError("--expect '%s' lists assembly '%s' twice - one of those rows is wrong "
+                             "and this tool cannot tell which." % (path, name))
+        try:
+            by[name] = (int(row["passed"]), int(row["failed"]))
+        except (KeyError, TypeError, ValueError):
+            raise ValueError("--expect '%s' row '%s' has no integer passed/failed." % (path, name))
+    return by, doc
+
+
+def compare_to_expected(expected, expected_doc, rows, cannot_build):
+    """Returns (printable lines, findings). Asymmetric, for the same reason its twin is.
+
+    A test that stopped passing is a regression. A test that started passing is not evidence of
+    anything and MUST NOT be able to cancel a loss elsewhere - so gains are reported and left alone,
+    and only losses gate. Keyed per assembly, never on the total: 10+5 before and 5+10 after nets to
+    zero while a whole project's tests have moved.
+    """
+    actual = {r["assembly"]: (r["passed"], r["failed"]) for r in rows}
+    lines, findings = [], []
+    shared = sorted(set(expected) & set(actual))
+    vanished = sorted(set(expected) - set(actual))
+    appeared = sorted(set(actual) - set(expected))
+
+    lines.append("baseline comparison        : %d assembly/assemblies compared against %s"
+                 % (len(shared), "the expected baseline"))
+    if appeared:
+        lines.append("  %d new assembly/assemblies (reported, does NOT gate): %s"
+                     % (len(appeared), ", ".join(appeared)))
+
+    if vanished:
+        findings.append("%d assembly/assemblies in the baseline did not run (%s). A test that no "
+                        "longer runs has not passed - it has stopped being asked."
+                        % (len(vanished), ", ".join(vanished)))
+    for name in shared:
+        was_p, was_f = expected[name]
+        now_p, now_f = actual[name]
+        if now_p < was_p:
+            findings.append("%s dropped from %d passing to %d." % (name, was_p, now_p))
+        if now_f > was_f:
+            findings.append("%s went from %d failing to %d." % (name, was_f, now_f))
+        if now_p > was_p:
+            lines.append("  %s gained %d pass(es) - reported, does NOT gate. If a known failure was "
+                         "fixed, re-capture the baseline so it cannot linger pretending to still be "
+                         "one." % (name, now_p - was_p))
+
+    was_gated = set(r.get("target") for r in expected_doc.get("cannotBuild", []) if isinstance(r, dict))
+    now_gated = set(r.get("target") for r in cannot_build if isinstance(r, dict))
+    newly = sorted(t for t in (now_gated - was_gated) if t)
+    if was_gated or now_gated:
+        lines.append("  targets that cannot build  : %d expected, %d now"
+                     % (len(was_gated), len(now_gated)))
+    if newly:
+        findings.append("%d target(s) built in the baseline and do not build now: %s"
+                        % (len(newly), ", ".join(newly)))
+    return lines, findings
+
+
 def parse_errors(text):
     """Distinct (code, project) build errors, so a refusal records a reason and not a wall."""
     found, order = {}, []
@@ -208,6 +294,9 @@ def main():
     ap.add_argument("--config", default="Release")
     ap.add_argument("--dotnet", default="dotnet")
     ap.add_argument("--note", default="")
+    ap.add_argument("--expect", default=None,
+                    help="a committed baseline to GATE against. Exit 1 if this run lost an assembly, "
+                         "lost a pass, gained a failure, or gained an unbuildable target.")
     args = ap.parse_args()
 
     root = os.path.abspath(args.repo)
@@ -222,6 +311,30 @@ def main():
               file=sys.stderr)
         return 3
     _, sdk = run([args.dotnet, "--version"], root)
+
+    # *** VALIDATED BEFORE THE BUILD, NOT AFTER IT. ***
+    # Two reasons, and the second one is why this moved. A bad --expect path should refuse in a
+    # second rather than after a five-minute build and test cycle. And while it was validated at the
+    # END, the case meant to guard it was VACUOUS: the fixture never produced an assembly, so the run
+    # exited 2 at "NOTHING EXAMINED" and never reached this check at all. The test asserted an exit
+    # code that a completely different refusal was producing. Found by mutating the guard and
+    # watching nothing turn red.
+    expected, expected_doc = None, None
+    if args.expect:
+        if not os.path.isfile(args.expect):
+            print("NOTHING COMPARED: --expect '%s' does not exist. A MISSING baseline is a refusal, "
+                  "not a silent downgrade to 'no gate'. EMPTY IS NOT CLEAN." % args.expect,
+                  file=sys.stderr)
+            return 2
+        try:
+            expected, expected_doc = load_expected(args.expect)
+        except ValueError as exc:
+            print("NOTHING COMPARED: %s EMPTY IS NOT CLEAN." % exc, file=sys.stderr)
+            return 2
+        if not expected:
+            print("NOTHING COMPARED: the expected baseline lists ZERO assemblies, so no test would "
+                  "be compared. An empty baseline is not a clean one.", file=sys.stderr)
+            return 2
 
     slns, projs = walk_projects(root)
     orphans = orphan_projects(root, slns, projs)
@@ -314,6 +427,26 @@ def main():
         print("  NOTE: %d test(s) already fail. That is fine for a baseline and is the POINT of "
               "one - what gates later is a RISE in this number, not the number itself."
               % t["failed"])
+
+    if not args.expect:
+        return 0
+
+    # ---- the gate ---------------------------------------------------------------------------------
+    # `expected` was read and validated before the build; by here it cannot be missing or malformed.
+    print()
+    gate_lines, findings = compare_to_expected(expected, expected_doc, rows, cannot_build)
+    for line in gate_lines:
+        print(line)
+    if findings:
+        print("\n--- BUILD GATE FAILED ---")
+        for f in findings:
+            print("  " + f)
+        print("\nA test that used to pass does not pass now. Fix it, or - if the change is "
+              "deliberate - re-capture %s in its own commit, saying what moved and why."
+              % args.expect)
+        return 1
+    print("\nBUILD GATE PASSED: no assembly lost, no pass lost, no new failure, no new "
+          "unbuildable target.")
     return 0
 
 

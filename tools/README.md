@@ -659,12 +659,64 @@ one it confirmed up to date, absent for one it never reached. Unverified assembl
 under `unverifiedAssemblies` and **not counted** — visible, because an omission the reader cannot see
 is indistinguishable from a tree that never had those tests.
 
+### `--expect` — the same comparison, wired to CI (2026-09-18)
+
+`capture-build-baseline.py --expect <baseline>` gates a run against a committed baseline:
+
+```
+python tools/capture-build-baseline.py --repo . --out ci-capture.json --expect tests/ci-baseline.json
+```
+
+**It is the whole test step of `.github/workflows/ci.yml`**, and deliberately not a loop over
+`*.sln`. That loop is what a CI script naturally becomes, and it would skip `src/hmi-cli`'s **161
+tests in silence** because that project belongs to no solution. This tool discovers orphans, records
+targets that cannot build, excludes assemblies MSBuild did not produce in the run, and refuses on an
+empty capture.
+
+🔴 **NOTHING IS FILTERED OUT, and that was a change of mechanism.** The plan was to exclude the two
+known-failing tests by fully-qualified name. Measured: the failing case is **one parameter of a
+`[Theory]`**, so a name filter matches the *method* — it would have hidden **16 passing round-trips to
+suppress 1 failure**, which is the `continue-on-error` outcome the ruling had explicitly rejected,
+arriving by a different door. Instead every test runs and the RESULT is compared: the baseline records
+exactly two failures, so a **third fails the build** and the two hide nothing.
+
+**This duplicates the comparison in `verify-scrub.py`, and the duplication is deliberate.** That one
+answers *"did the scrub break a test"* mid-rewrite and needs a canary, a needle vocabulary and a
+clone; this one answers *"did this commit break a test"* on a runner with none of those — and the
+gitignored `sanitization/` inputs a fresh clone does not have. The rules are kept identical on
+purpose; change one and change both.
+
+Negative-tested eight ways, 2026-09-18, restoring byte-identical — **every mutation caught by the case
+named for it**:
+
+| mutation | guard case | red |
+|---|---|---|
+| decrease-in-passes check disabled | a DECREASE in passes GATES | 3 of 22 |
+| failure-rise check disabled | a RISE in failures GATES | 1 of 22 |
+| vanished-assembly check disabled | a VANISHED assembly GATES | 1 of 22 |
+| per-assembly keying → totals only | a MOVE between assemblies GATES | 1 of 22 |
+| newly-unbuildable check disabled | a NEWLY UNBUILDABLE target GATES | 1 of 22 |
+| missing-baseline refusal → no gate | a MISSING baseline is exit 2 | 1 of 22 |
+| duplicate-row refusal disabled | a DUPLICATE row is refused | 1 of 22 |
+| unparseable JSON returns empty | malformed JSON is refused | 1 of 22 |
+
+🔴 **One of those was 0 of 22 on the first run, and the case was VACUOUS.** `a MISSING baseline is
+exit 2` asserted only the exit code, and its fixture never produced an assembly — so the run exited 2
+at *"NOTHING EXAMINED"* and never reached the `--expect` check at all. It was watching an entirely
+different refusal produce the same number. Two things fixed it: `--expect` is now validated **before**
+the build rather than after, which also means a typo refuses in a second instead of after five
+minutes; and the case asserts the reason, not the code.
+
 #### It has been executed, in both directions
 
 ```
 python tools/verify-scrub.tests.py           # 31 cases, ~50 s
-python tools/capture-build-baseline.tests.py # 11 cases, ~2 s, no SDK needed
+python tools/capture-build-baseline.tests.py # 22 cases, ~4 s, no SDK needed
 ```
+
+The `--expect` gate was also run against the real repository with five perturbed baselines — a lost
+pass, a new failure, an assembly that did not run, an equal-total move, and a target that used to
+build — and refused all five with a named finding.
 
 Negative-tested nine ways against the comparator, 2026-09-18 — mutate, run, restore byte-identical:
 

@@ -175,3 +175,9 @@ gen/_validation/MotorVSDSystem-purpose/answerkey/
 # `Live Runs/` above keeps out of the index but which this file would carry back in by the side
 # door. Nothing here is project content and none of it should ever be committed.
 .obsidian/
+
+# CI's working capture. The COMMITTED baseline it gates against is tests/ci-baseline.json, which is
+# tracked deliberately; this is the per-run output compared to it, regenerated every run and uploaded
+# as a workflow artifact. Committing it would put a machine-specific result where a ratified one
+# belongs, and the two would drift apart silently.
+ci-capture.json

@@ -1,0 +1,34 @@
+# The slow suite, separated from CI rather than dropped from it.
+#
+# tools/build-scrub-rules.tests.py is 41 cases and each one builds a throwaway git repository, which
+# costs roughly 30 seconds on Windows - about twenty minutes in total. That is the wrong shape for a
+# pull request and a perfectly reasonable shape for a nightly run.
+#
+# It is not optional coverage. That suite guards the tool which emits the git-filter-repo rules that
+# de-identify this repository before publication, and sixteen mutations of the builder are each
+# caught by exactly one of its cases. Moving it here keeps it running; deleting it to keep CI fast
+# would have traded the slowest gate for the most important one.
+
+name: Nightly (slow suites)
+
+on:
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+
+jobs:
+  slow-suites:
+    runs-on: windows-latest
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # Needs git and nothing else - no SDK, no network. Every case builds its own repository and
+      # sets its own identity, so no global git config is required.
+      - name: De-identification rule builder (41 cases, ~20 min)
+        run: python tools/build-scrub-rules.tests.py

@@ -13,7 +13,7 @@ rewrite an already-current DLL, so a re-run minutes later would have condemned e
 the repository. The signal that works is MSBuild's own `Project -> ...dll` line, which it prints
 for a project it rebuilt AND for one it confirmed up to date, and omits for one it never reached.
 """
-import importlib.util, io, os, shutil, subprocess, sys, tempfile
+import importlib.util, io, json, os, shutil, subprocess, sys, tempfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SCRIPT = os.path.join(ROOT, "tools", "capture-build-baseline.py")
@@ -157,6 +157,132 @@ def run_script(cwd, *args):
     return p.returncode, out.decode("utf-8", "replace")
 
 
+# ------------------------------------------------- the CI gate (--expect)
+#
+# These mirror, case for case, the eight already proven against verify-scrub.py's build comparison.
+# The duplication is deliberate and documented at load_expected(): the same claim about the same file
+# format, reachable from a CI runner that has none of Gate 3's inputs. If one set changes, both do.
+#
+# They drive compare_to_expected directly rather than through a build, because a case that needed the
+# SDK could not run on a machine without one - and the comparison is the part under test, not dotnet.
+
+def expected_doc(rows, cannot=None):
+    return {"assemblies": [{"assembly": a, "passed": p, "failed": f} for a, p, f in rows],
+            "cannotBuild": [{"target": t} for t in (cannot or [])]}
+
+
+def actual_rows(rows):
+    return [{"assembly": a, "passed": p, "failed": f} for a, p, f in rows]
+
+
+def gate(expect_rows, actual, expect_cannot=None, actual_cannot=None):
+    doc = expected_doc(expect_rows, expect_cannot)
+    by = {r["assembly"]: (r["passed"], r["failed"]) for r in doc["assemblies"]}
+    return cap.compare_to_expected(by, doc, actual_rows(actual),
+                                   [{"target": t} for t in (actual_cannot or [])])
+
+
+def expect_identical_passes(tmp):
+    _, findings = gate([("A", 10, 1), ("B", 5, 0)], [("A", 10, 1), ("B", 5, 0)])
+    assert not findings, "an identical run must pass: %r" % findings
+
+
+def expect_a_DECREASE_in_passes_GATES(tmp):
+    _, findings = gate([("A", 10, 0)], [("A", 9, 0)])
+    assert findings and "10 passing to 9" in findings[0], \
+        "a lost pass must gate and name the numbers: %r" % findings
+
+
+def expect_a_RISE_in_failures_GATES(tmp):
+    """THE CASE THE WHOLE CI GATE EXISTS FOR. Two known failures are tolerated by being recorded in
+    the baseline; a THIRD is a regression and must turn the build red."""
+    _, findings = gate([("GoldenHarness.Tests", 204, 2)], [("GoldenHarness.Tests", 203, 3)])
+    assert any("204 passing to 203" in f for f in findings), "the lost pass must gate: %r" % findings
+    assert any("2 failing to 3" in f for f in findings), "the third failure must gate: %r" % findings
+
+
+def expect_the_known_2_do_NOT_gate(tmp):
+    """The other half of the same case, and the one that keeps CI honest rather than merely green:
+    the 2 recorded failures are not excluded, not filtered and not hidden - they RUN, and the gate
+    tolerates exactly the recorded number."""
+    _, findings = gate([("GoldenHarness.Tests", 204, 2)], [("GoldenHarness.Tests", 204, 2)])
+    assert not findings, "the recorded known failures must not gate: %r" % findings
+
+
+def expect_a_VANISHED_assembly_GATES(tmp):
+    """This is the orphan guard. src/hmi-cli is in no solution, so a CI that loops over *.sln drops
+    its 161 tests and reports green - the baseline names the assembly, so its absence is a finding."""
+    _, findings = gate([("A", 10, 0), ("HmiCli.Tests", 161, 0)], [("A", 10, 0)])
+    assert findings and "HmiCli.Tests" in findings[0], \
+        "a missing assembly must gate and name itself: %r" % findings
+
+
+def expect_a_MOVE_between_assemblies_GATES_although_the_total_is_equal(tmp):
+    """10+5 before, 5+10 after: the totals agree exactly and a whole project's tests have moved."""
+    _, findings = gate([("A", 10, 0), ("B", 5, 0)], [("A", 5, 0), ("B", 10, 0)])
+    assert findings, "an equal-total move must still gate"
+
+
+def expect_a_GAIN_does_NOT_gate(tmp):
+    """A test that started passing is not evidence of anything and must never cancel a loss."""
+    lines, findings = gate([("A", 10, 0)], [("A", 12, 0), ("New.Tests", 3, 0)])
+    assert not findings, "gains and new assemblies must not gate: %r" % findings
+    assert any("does NOT gate" in l for l in lines), "the gain must still be reported: %r" % lines
+
+
+def expect_a_NEWLY_UNBUILDABLE_target_GATES(tmp):
+    """openness-cli and Harness.RigRead cannot build on a runner and are recorded as such. A target
+    that built in the baseline and does not now produces no assembly at all, so it leaves no row to
+    compare and no count to fall - it has to be caught on its own terms."""
+    _, findings = gate([("A", 10, 0)], [("A", 10, 0)],
+                       expect_cannot=["src/openness-cli/openness-cli.sln"],
+                       actual_cannot=["src/openness-cli/openness-cli.sln", "src/converter/converter.sln"])
+    assert findings and "converter.sln" in findings[-1], \
+        "a newly-unbuildable target must gate and name itself: %r" % findings
+    assert not any("openness-cli" in f for f in findings), \
+        "an ALREADY-gated target is not a new finding: %r" % findings
+
+
+def expect_a_MISSING_baseline_is_exit_2(tmp):
+    """*** THIS CASE WAS VACUOUS AND MUTATION TESTING IS WHAT SAID SO. ***
+
+    It asserted only `exit == 2`, and the fixture never produced an assembly - so the run exited 2 at
+    "NOTHING EXAMINED" and never reached the --expect check at all. Disabling that check turned
+    0 of 22 red: the case was watching a completely different refusal produce the same number.
+
+    Two things fixed it. The tool now validates --expect BEFORE the build, so this is reachable in a
+    fixture with no SDK; and the REASON is asserted, not just the code."""
+    write(os.path.join(tmp, "src", "a", "a.sln"), "x")
+    code, out = run_script(tmp, "--repo", tmp, "--out", os.path.join(tmp, "o.json"),
+                           "--expect", os.path.join(tmp, "typo.json"))
+    assert code == 2, "a missing --expect must refuse, got %d: %s" % (code, out)
+    assert "MISSING baseline is a refusal" in out, \
+        "the refusal must say the baseline path is missing, not merely refuse:\n%s" % out
+
+
+def expect_malformed_JSON_is_exit_2(tmp):
+    bad = os.path.join(tmp, "bad.json")
+    write(bad, "{ this is not json")
+    try:
+        cap.load_expected(bad)
+    except ValueError as exc:
+        assert "not readable JSON" in str(exc), "the refusal must name the parse failure: %s" % exc
+    else:
+        raise AssertionError("unparseable input must raise, never return empty")
+
+
+def expect_a_DUPLICATE_row_is_refused(tmp):
+    dupe = os.path.join(tmp, "dupe.json")
+    write(dupe, json.dumps({"assemblies": [{"assembly": "A", "passed": 1, "failed": 0},
+                                           {"assembly": "A", "passed": 9, "failed": 0}]}))
+    try:
+        cap.load_expected(dupe)
+    except ValueError as exc:
+        assert "twice" in str(exc), "the refusal must say what is ambiguous: %s" % exc
+    else:
+        raise AssertionError("an ambiguous baseline must refuse")
+
+
 def no_solution_and_no_orphan_test_is_exit_2(tmp):
     """EMPTY IS NOT CLEAN. A tidy empty capture compares equal to another tidy empty capture."""
     code, out = run_script(tmp, "--repo", tmp, "--out", os.path.join(tmp, "o.json"))
@@ -178,6 +304,18 @@ def a_missing_repo_is_exit_3(tmp):
 
 
 for name, body in [
+    ("EXPECT: an identical run passes", expect_identical_passes),
+    ("EXPECT: a DECREASE in passes GATES", expect_a_DECREASE_in_passes_GATES),
+    ("EXPECT: a RISE in failures GATES", expect_a_RISE_in_failures_GATES),
+    ("EXPECT: the known 2 do NOT gate", expect_the_known_2_do_NOT_gate),
+    ("EXPECT: a VANISHED assembly GATES", expect_a_VANISHED_assembly_GATES),
+    ("EXPECT: a MOVE between assemblies GATES although the total is equal",
+     expect_a_MOVE_between_assemblies_GATES_although_the_total_is_equal),
+    ("EXPECT: a GAIN does NOT gate", expect_a_GAIN_does_NOT_gate),
+    ("EXPECT: a NEWLY UNBUILDABLE target GATES", expect_a_NEWLY_UNBUILDABLE_target_GATES),
+    ("EXPECT: a MISSING baseline is exit 2", expect_a_MISSING_baseline_is_exit_2),
+    ("EXPECT: malformed JSON is refused", expect_malformed_JSON_is_exit_2),
+    ("EXPECT: a DUPLICATE row is refused", expect_a_DUPLICATE_row_is_refused),
     ("an up-to-date project still counts", an_up_to_date_project_still_counts),
     ("an assembly MSBuild never mentioned is NOT counted",
      an_assembly_msbuild_never_mentioned_is_NOT_counted),
