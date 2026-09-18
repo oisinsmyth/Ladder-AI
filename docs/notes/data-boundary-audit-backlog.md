@@ -187,3 +187,32 @@ C-124/C-128 with a **process description** — a named dwell time and a named me
 rather than with any identifier. It names no block, tag, equipment or site; it was not on the
 finding's file list; and it reads as the engineer's own batch-plant reasoning. **Flagged for the
 owner to rule on, not decided here** — this section exists to record that it was seen.
+
+### ✅ RULED AND DISCHARGED 2026-09-17 — it was a leak, and the vocabulary is generalised
+
+**Owner ruling: generalise the vocabulary, keep the reasoning.**
+
+The 2026-08-27 flag was right to hesitate and wrong on one point of fact. It records that the passage
+*"names no block, tag, equipment or site"* — true — and concludes it reads as the engineer's own
+reasoning. It does. But re-read against the `Live Runs` rule rather than against the identifier list,
+it fails: that rule bars **"a paraphrase specific enough to identify them"** and states that **"a
+lesson learned written in the job's own vocabulary is still a leak."** The passage named the live
+job's process step, its vessel type and a specific dwell time, plus the legacy job's equipment
+domain — four sites across C-124 and C-128. Together those describe a plant precisely enough that
+anyone in the industry would place it. **An identifier list is the wrong instrument for this class:
+it is looking for names, and this leak is made of nouns that are not names.**
+
+**What changed, by `AB-1`'s own method — SUBSTITUTE VOCABULARY, NEVER DELETE EXPLANATION:** the
+process step became a generic multi-hour irreversible phase, the measurement history became a generic
+one, the equipment domain became a generic size-reduction unit and main drive, and the per-equipment
+qualifier became a generic process unit. **Every clause, both amendments, all three conditions and
+the safety argument are untouched.** The rule still argues from a concrete case — the contrast that
+carries it, a long cycle destroyed by a two-second dip, survives intact — and the case now has a
+different name on it.
+
+**Residual check:** four matches remain repo-wide and all four are adjudicated non-leaks, three of
+them by this document's own 2026-08-27 list. Two are a Green-tier sandbox block name from
+`test-project001` (the *invented* vocabulary), one is a generic per-vessel alarm example already
+named in "Judged NOT leaks", and one is the ordinary English word *steeped* in an unrelated sentence
+about LLMs. **No mechanical check would have found this finding, and none would have cleared it
+either** — which is the whole reason it sat open for three weeks.

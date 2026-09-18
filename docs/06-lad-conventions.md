@@ -166,12 +166,13 @@ logic; reviewers err toward flagging, and "defensible" is not a pass.
   implies a carve-out C-403's own text doesn't currently spell out for `MotorDOL`'s own admitted
   content — worth folding back into C-403 itself later, not done here.)*
   **AMENDED 2026-08-07 — `Step` is not always transient, and this rule assumed it was.** On a
-  restartable sequence — a conveyor line, a shredder, anything that can be run again from the top at
-  no cost — `Step` genuinely is transient run-state and force-writing it to idle is right. **On a
-  sequence holding irreplaceable process state it is not.** A batch plant's step number *is the
-  batch*: force it to idle and a forty-hour steep, its weight latches and its whole moisture history
-  become unreconstructable, which is the loss the retentive-data design exists to prevent. Zeroing
-  it does not make the plant safer; it destroys product and tells the operator nothing.
+  restartable sequence — a conveyor line, a size-reduction unit, anything that can be run again from
+  the top at no cost — `Step` genuinely is transient run-state and force-writing it to idle is right.
+  **On a sequence holding irreplaceable process state it is not.** A batch plant's step number *is
+  the batch*: force it to idle and a multi-hour irreversible phase, its accumulated quantities and
+  its whole measurement history become unreconstructable, which is the loss the retentive-data design
+  exists to prevent. Zeroing it does not make the plant safer; it destroys product and tells the
+  operator nothing.
   **So: `Step` force-writes to idle where the sequence is restartable, and MAY be retained where the
   sequence holds state that cannot be reconstructed.** Where it is retained, three things are
   required and none of them is optional:
@@ -222,7 +223,7 @@ logic; reviewers err toward flagging, and "defensible" is not a pass.
   transition under C-123), never a default assumption.
   *Why:* owner ruling, 2026-07-17 (`docs/notes/owner-questions.md` D-1/B-2) — a demo-panel
   omission (no OB100, RETAIN `Step`/`RunFwd`/`RecentStart`) let a PLC power cycle mid-run silently
-  re-command the shredder motor, unwarned. Unwarned motion on power-up is exactly the hazard
+  re-command the main drive motor, unwarned. Unwarned motion on power-up is exactly the hazard
   E-Stop circuits exist to prevent; the same guarantee must hold on the PLC-logic side of the
   boundary. This makes explicit the outcome C-124's mechanism (force `Step` to idle at OB100)
   exists to guarantee, and generalizes REQ-062's per-project wording into a site-wide rule.
@@ -230,16 +231,16 @@ logic; reviewers err toward flagging, and "defensible" is not a pass.
   guarantee is universal.** As written this rule says two things at once:
   - **THE GUARANTEE — unchanged, and it is the whole point.** After a stop or power event, nothing
     moves without a **fresh, explicit operator command**. Never automatic, never on the release of
-    an E-stop, never as a side effect of power returning. That is what the shredder incident was
-    about and it is not negotiable on any plant.
+    an E-stop, never as a side effect of power returning. That is what the demo-panel incident above
+    was about and it is not negotiable on any plant.
   - **"FROM THE TOP" IS ONE MECHANISM FOR IT, not the guarantee itself.** Re-running the whole
     sequence from step one is the correct and cheap way to deliver it **where the sequence is
     restartable**. Where the sequence holds irreplaceable process state it is not: restarting a
-    forty-hour steep from the top after a two-second dip destroys the batch, and does so without
-    making anything safer.
+    multi-hour irreversible phase from the top after a two-second dip destroys the batch, and does
+    so without making anything safer.
   **So a MID-SEQUENCE RESUME is permitted where the sequence holds state that cannot be
   reconstructed — subject to all three of:**
-  1. **The fresh explicit operator command still happens**, per vessel or per unit, before anything
+  1. **The fresh explicit operator command still happens**, per process unit, before anything
      moves. The resume is *offered*; it is never taken automatically.
   2. **The full EQUIPMENT start-up still runs** for whatever is about to move — siren, permissives,
      staged starts. The sequence resumes at its step; a motor does not resume mid-start. **This is
