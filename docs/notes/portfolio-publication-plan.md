@@ -3,7 +3,8 @@
 **Opened 2026-09-17. Rev 2 — executable. Rev 3 — audited. Rev 4 — Phase 2 part-built. Rev 5 — builder
 reviewed and repaired. Rev 6 — the verifier and the trial rewrite. Rev 7 — the verifier's tests.
 Rev 8 (2026-09-18) — Phase 0 done, and Gate 3's build half made real. Rev 9 (2026-09-18) — F16–F19
-discharged; the builder's default scan mode is tested.** Scouting pass and phase
+discharged; the builder's default scan mode is tested. Rev 10 (2026-09-18) — F4, F9, F11, F13
+discharged; the review backlog is closed.** Scouting pass and phase
 plan for turning this repository into a public portfolio piece on GitHub, without the private
 repository ever becoming public and without any restricted identifier reaching a public remote.
 
@@ -48,7 +49,7 @@ this table, this table is current.
 |---|---|---|
 | **0 — build baseline** | ✅ **DONE 2026-09-18** | SDK **8.0.425** installed; baseline captured to `sanitization/build-baseline.json` — **23 assemblies, 5,877 passed, 19 failed**, all 19 pre-existing and proven so at `446d450`. Gate 3's build half is now **mechanised, not merely recorded**: `--build-baseline` used to test `os.path.isfile` and compare nothing. Two targets still cannot build here and are recorded rather than hidden: `openness-cli` (no `Siemens.Engineering.dll`) and `Harness.RigRead` (no machine-local `Sharp7.dll`) |
 | **1 — hygiene** | ✅ **DONE** | — |
-| **2 — the scrub tooling** | 🟡 **mostly done** | ✅ `verify-scrub.tests.py` — **31 cases**, negative-tested six ways at rev 7 and nine more at rev 8. ✅ `capture-build-baseline.py` + 11 tests. ✅ **F16–F19 discharged at rev 9**: `build-scrub-rules.tests.py` is **30 cases**, the default `--scan history` path is covered by 7 of them, and two latent defects in it were fixed. `check-staged-identifiers.py` (M-5) still **not written**; **4 review findings remain — F4, F9, F11, F13**, all of which change builder behaviour rather than coverage |
+| **2 — the scrub tooling** | 🟡 **nearly done** | ✅ `verify-scrub.tests.py` — **31 cases**, negative-tested six ways at rev 7 and nine more at rev 8. ✅ `capture-build-baseline.py` + 11 tests. ✅ **The review backlog is CLOSED** — all twelve findings discharged: F16–F19 at rev 9, F4/F9/F11/F13 at rev 10. `build-scrub-rules.tests.py` is **41 cases**, negative-tested **sixteen** ways with every mutation caught by its own guard. Only `check-staged-identifiers.py` (M-5) remains, and it is a new tool rather than a finding |
 | **3 — rewrite history** | ⬜ **not started** | the recipe is proven end to end, but the real run needs the `--path-glob` exclusion and the 253 SHA citations repaired |
 | **4 — restructure** | ✅ **DONE** | — |
 | **5 — CI and demo** | ⬜ **not started** | no `.github/`, no demo script |
@@ -64,6 +65,55 @@ this table, this table is current.
 - **The trial rewrite recipe, proven:** `clone --no-local` → `filter-repo --replace-text
   --replace-message @path-renames.args --mailmap` → delete all but the publishing branch →
   `reflog expire --all --expire=now && gc --prune=now` → verify. ~7 min rewrite, ~30 s verify.
+
+### Rev 10 — F4, F9, F11, F13 discharged: four defects that changed nothing
+
+The last four review findings, and the review backlog is now closed. Each changes what the builder
+*emits*, so each was expected to move the artifact. **None of them did** — and every one has a
+measured reason why not rather than a shrug:
+
+- **F13** — 20 duplicate-stem pairs exist, but only 3 keys have competing replacements and **rung 3
+  decides none of them**.
+- **F11** — 14 keys gain a section class, 4 would gain a spaced variant, and **all four are already
+  in the owner's term list** with a spaced class. The corpus happens not to expose the defect.
+- **F9** — **5 collisions**, every one the harmless same-replacement shape.
+- **F4** — **0 overlaps**. The artifact really was clean; it is now clean *by the check* rather than
+  by luck.
+
+🔴 **F9's recorded "5 live instances" was a number nobody kept the derivation of** — no run log, no
+manifest field, nothing in git. Counting claimants at the collision site gives **exactly 5**, and
+the method now lives in the tool and prints on every run. The figure was right; it had simply
+stopped being checkable.
+
+**The serious one was F9, and not for the reason its one-line summary gives.** `setdefault` kept
+whichever key sorted first and discarded the rest in silence. A losing key got the wrong replacement
+or **no rule at all** while being counted in no tally — the run's arithmetic balanced perfectly with
+a key missing. And a map key could squat a **declared** term's written form, which then lost its
+anchorless case-insensitive rule: **F1 reintroduced through a path neither of F1's guards covers.**
+
+**The trap in F11.** `klass_of` does not mean "this key's class", it means *the owner wrote this key
+down*, and three other decisions read it that way. Folding map keys into it would have promoted
+~1,390 inferred keys to declared status — bypassing the length floor and the Green test — a far
+larger change than the fix, wearing the costume of a one-line edit. A separate dict carries the
+section class and a case asserts the promotion did not happen.
+
+**What F4's substitution cannot do**, stated because it decides whether a run gates. An *equality*
+overlap against an inferred needle is fixable by suffixing. A *substring* overlap, or any overlap
+against a declared needle, is not: a declared rule is anchorless, and **no suffix removes a
+substring from a string**. Those gate and say to choose a replacement by hand, which is honest
+rather than a substitution that does not work.
+
+**`resolve_conflict` had never run past its first line.** Every fixture built a single map, so it
+returned rung 0 immediately and rungs 1–4 were unexecuted — which is how F13 sat in rung 3
+undisturbed. **Rung 2 was left alone deliberately**: it reads like a type confusion and is not, since
+**41 of 43 map stems are themselves keys** and the live run shows `rung2=1`.
+
+🔴 **A defect in the test harness, found by a mutation that made the suite VANISH rather than turn
+red.** `case()` caught only `AssertionError`, so an unexpected exception killed the run mid-way and
+printed no RESULT line at all — a harness unable to tell "one case failed" from "the run died".
+
+Sixteen mutations, every one caught by the case named for it, restoring byte-identical. Suite is
+**41 cases**.
 
 ### Rev 9 — F16–F19 discharged: the builder's default mode was tested by nothing
 
@@ -189,9 +239,9 @@ one, and it was the second kind this suite existed to prevent.*
 
 ### What most changes the picture now
 
-1. **The remaining Phase 2 debt.** `check-staged-identifiers.py` (M-5) is unwritten, and **four**
-   review findings remain: **F4, F9, F11, F13**. F16–F19 were discharged 2026-09-18 (Rev 9); each
-   of the four left changes what the builder *emits*, so each needs its own artifact-diff control.
+1. **The remaining Phase 2 debt is now one item.** `check-staged-identifiers.py` (M-5) is unwritten.
+   **The review backlog is closed** — all twelve findings discharged (Rev 9 and Rev 10), and M-5 is
+   a new tool rather than a finding.
 2. **Restore `Sharp7.dll`.** One machine-local file keeps `Harness.RigRead` unbuildable. Copies
    survive in stale `bin/` folders from the previous machine, so this is likely a one-file fix —
    but its provenance should be confirmed rather than assumed, and the vendoring question the
@@ -359,17 +409,16 @@ Rewrite ~7 min, verification ~30 s.
 
 ### Rev 5 — review findings NOT yet fixed
 
-Recorded so they meet the next pass rather than evaporating: **F4** the overlap check cannot see a
+Recorded so they meet the next pass rather than evaporating: ~~**F4** the overlap check cannot see a
 needle matching *inside* a replacement (the artifact is clean by luck, not by the check) · **F9**
 variant collisions are first-writer-wins, 5 live instances · **F11** map section class is discarded,
-so site/site keys never get their spaced form · **F13** rung-3 conflict votes are double-counted
+so site/site keys never get their spaced form · **F13** rung-3 conflict votes are
+double-counted~~ — **DISCHARGED 2026-09-18, see Rev 10.**
 · ~~**F16–F19** five vacuous test assertions, and **no test exercises `--scan history`**, the default
 path~~ — **DISCHARGED 2026-09-18, see Rev 9.**
 
-**Four remain open: F4, F9, F11, F13.** They change builder *behaviour* rather than test coverage,
-which is why they were not folded into the F16–F19 work: the control that proved that work changed
-nothing — 119 rules byte-identical before and after — could not have been run if the same commit
-had also altered what the builder emits.
+✅ **The review backlog is closed.** All twelve findings are discharged: F1, F2, F3, F5, F6, F12 on
+2026-09-17; F16–F19 at Rev 9; F4, F9, F11, F13 at Rev 10.
 
 ---
 

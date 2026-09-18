@@ -326,7 +326,7 @@ vocabulary the term list exists for.
 python tools/build-scrub-rules.tests.py
 ```
 
-30 cases, offline, each building a throwaway git repo and running the script unmodified as a child
+41 cases, offline, each building a throwaway git repo and running the script unmodified as a child
 process. The suite is slow (roughly half a minute per case on Windows) because of the temp-repo
 setup, not the script, which runs in well under a second.
 
@@ -433,6 +433,73 @@ case *did* catch a reversed sort — it was weak in a different direction than e
 first repair to the structured-section case used the realistic `<block>#1` key form, which stayed
 green under mutation because `#` is outside the token class, so the key could never be found in the
 corpus whether the section was ignored or not. Caught by re-running the detector, not by reading it.
+
+### F4, F9, F11, F13 discharged — four defects that changed nothing (2026-09-18)
+
+The last four review findings. Each changes what the builder *emits*, so each was expected to move
+the artifact. **None of them did** — and the interesting part is that every one has a measured
+reason why not, rather than a shrug.
+
+| | defect | consequence | why the artifact did not move |
+|---|---|---|---|
+| **F13** | the vote list is appended to once per **(section, key)**, not per file, so one map declaring a key in `names` *and* `tags` voted twice | rung 3 asks "how many maps agree" and was counting how often one map repeated itself — **one map could outvote two** | 20 duplicate-stem pairs exist, but only 3 keys have competing replacements and **rung 3 decides none of them** |
+| **F11** | the map **section** is in scope at the point the pair is stored and was thrown away | every map key reached `variants_for` as `"block"`, so **no map key could ever get a spaced form** — the only form prose writes a identifying name in | 14 keys gain a class, 4 would gain a spaced variant, and **all four are already in the owner's term list** with a spaced class |
+| **F9** | 🔴 `candidates.setdefault(v, key)` — first writer wins, **in silence** | a losing key got the wrong replacement or **no rule at all**, counted in no tally; and a map key could squat a **declared** term's form, which then lost its anchorless `(?i)` rule — **F1 reintroduced through a path neither guard covers** | **5 collisions**, all of them the harmless same-replacement shape |
+| **F4** | `replacements & searchable` — exact, case-sensitive, whole-string set intersection | cannot see a needle matching *inside* a replacement, **which is the case the emitter deliberately creates**: declared terms are emitted anchorless and case-insensitive by design | **0 overlaps**: the artifact really was clean, and is now clean *by the check* rather than by luck |
+
+**The 5 for F9 is the recorded figure, re-derived.** The review wrote down "5 live instances" and
+nobody kept the derivation — no run log, no manifest field, nothing. Counting claimants at the
+collision site gives **exactly 5**, and the method is now in the tool and printed on every run.
+
+**What F4's substitution can and cannot fix**, because it decides whether the run gates. An
+*equality* overlap against an inferred needle is fixable by suffixing: `\bGenericFoo\b` no longer
+matches `GenericFoo1`, because a digit is a word character and kills the right boundary. A
+*substring* overlap, or any overlap against a **declared** needle, is not — a declared rule is
+anchorless, so it still matches inside `GenericFoo1`, and **no suffix removes a substring from a
+string.** Those gate, and the message says to choose a replacement by hand. That is the honest
+answer rather than a substitution that does not work.
+
+**The trap in F11, and why `klass_of` was left alone.** It does not mean "this key's class". It
+means **the owner wrote this key down**, and three other decisions read it that way: a declared key
+bypasses the length floor, bypasses the Green test, and is emitted anchorless and case-insensitive.
+Giving map keys a class by folding them into `klass_of` would have promoted ~1,390 inferred keys to
+declared status — a far larger change than the fix, wearing the costume of a one-line edit. A
+separate dict carries the section class, and a case asserts the promotion did not happen.
+
+**`resolve_conflict` had never run past its first line.** Every fixture built a single map, so
+`len(candidates) == 1` always and the function returned rung 0 immediately. Rungs 1–4 — the whole
+ladder deciding which invented name a contested key gets — were unexecuted, which is how F13 sat in
+rung 3 undisturbed.
+
+**Rung 2 was left alone, for a measured reason.** `own = [c for c, stems in ... if key in stems]`
+reads like a type confusion — `stems` holds map filenames and `key` is a vocabulary key. It is not:
+the maps are named after the blocks they describe, **41 of 43 stems are themselves keys**, and the
+live run shows `rung2=1`. It means "a block's own map is authoritative for its own name".
+
+Negative-tested sixteen ways, 2026-09-18, restoring byte-identical — **every mutation caught by the
+case named for it**. The eight new ones:
+
+| mutation | guard case | red |
+|---|---|---|
+| F13: votes counted per occurrence again | one map cannot outvote two | 1 of 41 |
+| F13: rung 3 removed entirely | a real majority still wins at rung 3 | 2 of 41 |
+| F11: the section class is discarded again | a company key gets its spaced form | 1 of 41 |
+| F11: every section becomes spaced-eligible | a names key gets NO spaced form | 1 of 41 |
+| F9: a declared claimant no longer wins | a DECLARED term wins and keeps its anchorless rule | 1 of 41 |
+| F9: unresolved collisions no longer gate | different replacements GATES | 1 of 41 |
+| F4: overlap back to whole-string equality | a declared needle INSIDE a replacement GATES | 1 of 41 |
+| F4: auto-substitution disabled | an equality overlap is auto-substituted | 1 of 41 |
+
+🔴 **A defect in the harness, found by a mutation that made the suite VANISH rather than turn red.**
+`case()` caught only `AssertionError`, so a case raising anything else — an `IndexError` from
+parsing a rule line that no longer had the shape it assumed — killed the run mid-way and printed
+**no RESULT line at all**. A harness that cannot tell "one case failed" from "the run died" is the
+empty-is-not-clean failure wearing a test-runner costume. It now catches `Exception` and names the
+type.
+
+**Principle earned by F9, worth carrying:** *a silent resolution is worse than a wrong one.* All
+five collisions turned out to be harmless — and nothing in the tool could have told anyone that,
+which is the actual defect.
 
 ## `verify-scrub.py` — the Gate 3 oracle (2026-09-17)
 

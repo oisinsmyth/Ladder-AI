@@ -85,6 +85,17 @@ SENTINEL_TEMPLATE = "QQSCRUBQQ%04dQQ"
 TERM_CLASSES = ("jobcode", "site", "site", "modelline", "block", "member", "pathstem")
 SPACED_CLASSES = ("site", "site", "modelline")
 
+# The join between the two vocabularies above. EXTRA_NAMEY_SECTIONS names the map sections that
+# carry site, site and product-line terms; SPACED_CLASSES names the classes that get a spaced
+# variant. They describe the same thing from two directions and were never connected, so a company
+# name out of a map got `AcmeHoldings`, `acmeholdings`, `acme-holdings` and never `Acme Holdings`.
+#
+# THE DISTINCTION BETWEEN THE THREE VALUES HERE IS PRESENTATIONAL. Membership of SPACED_CLASSES is
+# the only thing any consumer tests, so all three could map to one class with no behavioural
+# difference; they are named honestly so the run log reads sensibly, not because a finer taxonomy
+# exists downstream.
+SECTION_CLASS = {"company": "site", "modelline": "modelline", "identifiers": "site"}
+
 
 def git(repo, *args):
     """Run git, return stdout as text. Never raises on a non-zero exit - callers decide."""
@@ -108,6 +119,7 @@ def load_maps(mapdir):
     stems, boms, used, ignored, dead = [], 0, {}, {}, []
     malformed = []
     pairs = {}          # key -> {replacement -> [map stems that say so]}
+    section_of = {}     # key -> {section names it was found under}
     for path in sorted(__import__("glob").glob(os.path.join(mapdir, "*.map.json"))):
         stem = os.path.basename(path)[: -len(".map.json")]
         stems.append(stem)
@@ -134,6 +146,11 @@ def load_maps(mapdir):
                                          % (stem, section, type(value).__name__))
                         continue
                     pairs.setdefault(key, {}).setdefault(value, []).append(stem)
+                    # THE SECTION WAS IN SCOPE HERE AND WAS THROWN AWAY. A key's section is the
+                    # only statement anyone makes about WHAT KIND OF NAME IT IS, and without it
+                    # every map key reached variants_for as "block" - so a identifying name never got
+                    # its spaced form, which is the only form prose actually writes it in.
+                    section_of.setdefault(key, set()).add(low)
             elif low in STRUCTURED_SECTIONS:
                 recognised += 1
                 ignored[low] = ignored.get(low, 0) + len(body)
@@ -141,7 +158,7 @@ def load_maps(mapdir):
                 ignored["UNKNOWN:" + section] = ignored.get("UNKNOWN:" + section, 0) + len(body)
         if recognised == 0:
             dead.append(stem)
-    return stems, boms, used, ignored, dead, pairs, malformed
+    return stems, boms, used, ignored, dead, pairs, malformed, section_of
 
 
 def load_terms(path):
@@ -231,11 +248,20 @@ def resolve_conflict(key, candidates, reference_blob):
               if re.search(r"\b" + re.escape(c) + r"\b", reference_blob, re.IGNORECASE)]
     if len(in_ref) == 1:
         return in_ref[0], 1
+    # Rung 2 reads "the block's own map is authoritative for its own name". It LOOKS like a type
+    # confusion - `stems` holds map filenames and `key` is a vocabulary key - and it is not: the maps
+    # are named after the blocks they describe, and 41 of 43 stems are themselves keys, so this fires
+    # routinely on the real corpus. Measured before touching it, because it reads like a bug.
     own = [c for c, stems in sorted(candidates.items()) if key in stems]
     if len(own) == 1:
         return own[0], 2
-    ranked = sorted(candidates.items(), key=lambda kv: (-len(kv[1]), kv[0]))
-    if len(ranked) > 1 and len(ranked[0][1]) > len(ranked[1][1]):
+    # *** DISTINCT SOURCES, NOT OCCURRENCES. *** `stems` is appended to once per (section, key), not
+    # once per file, so ONE map declaring the same key in both `names` and `tags` voted twice and
+    # could outvote two maps that each said so once. The list is deliberately left un-deduplicated
+    # at the point it is built - it records where each vote came from, which is worth keeping - and
+    # the collapse happens here, where the question being asked is "how many maps agree".
+    ranked = sorted(candidates.items(), key=lambda kv: (-len(set(kv[1])), kv[0]))
+    if len(ranked) > 1 and len(set(ranked[0][1])) > len(set(ranked[1][1])):
         return ranked[0][0], 3
     return sorted(candidates)[0], 4
 
@@ -437,7 +463,8 @@ def main():
         return 3
 
     # ---- Inputs ---------------------------------------------------------------------------------
-    stems, boms, used, ignored, dead, pairs, bad_values = load_maps(os.path.join(repo, args.maps))
+    stems, boms, used, ignored, dead, pairs, bad_values, section_of = load_maps(
+        os.path.join(repo, args.maps))
     rows, bad_rows = load_terms(os.path.join(repo, args.terms))
 
     print("maps read                     : %d" % len(stems))
@@ -507,15 +534,76 @@ def main():
     forced_variants = {r["live"]: r["variants"] for r in rows if r["variants"]}
     print("term rows overriding a map key: %d" % len(overrides))
 
+    # *** A SEPARATE DICT, AND THE SEPARATION IS THE WHOLE CARE OF THIS FIX. ***
+    # `klass_of` does not mean "this key's class". It means THE OWNER WROTE THIS KEY DOWN BY HAND,
+    # and three other decisions read it that way: `declared` bypasses the length floor and the Green
+    # test, and the emitted rule is anchorless and case-insensitive rather than \b-anchored. Folding
+    # map keys into it to give them a class would silently promote every one of ~1,390 inferred
+    # keys to declared status - a far larger change than the one being made, wearing the costume of
+    # a one-line fix.
+    section_class_of = {}
+    for key, sections in section_of.items():
+        for low in sorted(sections):
+            if low in SECTION_CLASS:
+                section_class_of[key] = SECTION_CLASS[low]
+                break
+    spaced_eligible = sum(1 for k in section_class_of if k in chosen)
+    print("map keys with a section class : %d  [spaced forms; NOT declared]" % spaced_eligible)
+
     if not chosen:
         print("\nNOTHING EXAMINED: no key survived derivation. EMPTY IS NOT CLEAN.")
         return 2
 
     # ---- Variants ---------------------------------------------------------------------------------
-    candidates = {}
+    # *** TWO KEYS CAN PRODUCE THE SAME WRITTEN FORM, AND THIS USED TO BE `candidates.setdefault`. ***
+    # setdefault keeps whichever key sorted first and discarded the rest IN SILENCE - no counter, no
+    # finding, nothing in the manifest. Three things followed, and the third is the serious one:
+    #
+    #   1. Partial collision: the variant was emitted with the WINNER's replacement, so two live
+    #      identifiers collapsed onto one invented name. The NON-INJECTIVE check cannot see this -
+    #      it reads `rules`, and the loser never reaches `rules`.
+    #   2. Total collision: the losing key got NO RULE AT ALL, and was counted in none of
+    #      withheld_short, withheld_green or dead_variants, because those are per-variant. The run's
+    #      own arithmetic balanced perfectly with a key missing.
+    #   3. A map key could squat a DECLARED term's variant. `declared` is evaluated on the winning
+    #      key, so that form was emitted with the narrow case-sensitive \b rule instead of the
+    #      anchorless (?i) one - silently reintroducing F1 through a path neither guard covers.
+    claims = {}
     for key in sorted(chosen):
-        for v in (forced_variants.get(key) or variants_for(key, klass_of.get(key, "block"))):
-            candidates.setdefault(v, key)
+        # A term row's class still wins: the owner's own statement about a key outranks the section
+        # a map happened to file it under.
+        klass = klass_of.get(key) or section_class_of.get(key, "block")
+        for v in (forced_variants.get(key) or variants_for(key, klass)):
+            claims.setdefault(v, []).append(key)
+
+    candidates = {}
+    collision_same, collision_declared, collision_problems = 0, 0, []
+    for v, keys in sorted(claims.items()):
+        if len(keys) == 1:
+            candidates[v] = keys[0]
+            continue
+        reps = {chosen[k] for k in keys}
+        declared = [k for k in keys if k in klass_of]
+        if len(reps) == 1:
+            # Harmless: whichever key claimed it, the text becomes the same thing. A declared
+            # claimant is still preferred so the rule keeps its anchorless, case-insensitive form.
+            candidates[v] = sorted(declared or keys)[0]
+            collision_same += 1
+        elif len(declared) == 1:
+            candidates[v] = declared[0]
+            collision_declared += 1
+        else:
+            # Both remaining shapes are the owner's to resolve, not this tool's. Emitting either
+            # choice maps two DISTINCT live identifiers onto one invented name, which is precisely
+            # what the NON-INJECTIVE gate exists to prevent and structurally cannot see from here.
+            candidates[v] = sorted(declared or keys)[0]
+            collision_problems.append(
+                "%d keys claim the same written form and disagree on the replacement%s"
+                % (len(keys), " - BOTH ARE DECLARED TERMS" if len(declared) > 1 else ""))
+    print("variant collisions            : %d  (%d harmless, %d resolved to a declared term, "
+          "%d unresolved)"
+          % (collision_same + collision_declared + len(collision_problems),
+             collision_same, collision_declared, len(collision_problems)))
 
     # ---- Occurrence scan --------------------------------------------------------------------------
     # ONE streaming pass. Nothing is retained: see scan_stream for the three implementations that
@@ -620,6 +708,11 @@ def main():
     # ---- Blocking checks --------------------------------------------------------------------------
     findings = []
 
+    # Collected while building `candidates`, long before this list existed. An unresolved variant
+    # collision is the owner's call: two identifiers they named separately would be rewritten to
+    # one name, and no automatic choice here is better than telling them.
+    findings.extend(collision_problems)
+
     # AB-1's trap 2: "a replacement can BE a leak" - one invented name in the 2026-08-27 run already
     # existed verbatim in the job's own IR. Choosing the vocabulary is part of the check.
     #
@@ -689,12 +782,78 @@ def main():
                             "a rename silently weakens a test that distinguished them."
                             % (len(keys), replacement))
 
+    # *** THIS WAS A WHOLE-STRING SET INTERSECTION, AND THE ARTIFACT WAS CLEAN BY LUCK. ***
+    # `replacements & searchable` fires only when a replacement is character-for-character identical
+    # to a needle. filter-repo does not apply rules that way: it applies them in file order, so what
+    # actually matters is whether one rule's needle MATCHES INSIDE another rule's replacement. Rule A
+    # rewrites X to GenericWidgetUnit; rule B then hunts WidgetUnit and finds it sitting in A's own
+    # output.
+    #
+    # And the case the old check could not see is the case the emitter deliberately creates: a
+    # DECLARED term is emitted ANCHORLESS and CASE-INSENSITIVE, by design, so it matches inside a
+    # word. The old check was also case-sensitive while those rules are (?i).
+    #
+    # So the predicate is evaluated with the semantics each rule will really have - the same
+    # construction the path-rename pass already uses - rather than with string equality.
+    def overlap_patterns(ruleset):
+        return [(v, rep, key,
+                 re.compile(re.escape(v), re.IGNORECASE) if key in klass_of
+                 else re.compile(r"\b" + re.escape(v) + r"\b"))
+                for v, rep, key in ruleset]
+
+    def find_overlaps(ruleset):
+        """Replacements that some OTHER rule's needle can match inside."""
+        hits = set()
+        for _, rep, key, _ in overlap_patterns(ruleset):
+            for v2, _, key2, pat in overlap_patterns(ruleset):
+                if v2 == rep and key2 == key:
+                    continue                    # a rule does not overlap itself
+                if pat.search(rep):
+                    hits.add(rep)
+                    break
+        return sorted(hits)
+
+    # Owner ruling 2026-09-18: auto-substitute, gate only if substitution fails - the same discipline
+    # the job-folder check already uses, and for the same reason. A substitute is re-checked against
+    # the job vocabulary and this repository, so it cannot itself be a leak, and the loop re-runs
+    # because a fresh replacement can overlap in its turn.
+    overlap_subs = {}
+    for _ in range(100):
+        overlapping = find_overlaps(rules)
+        if not overlapping:
+            break
+        progressed = False
+        for original in overlapping:
+            for suffix in range(1, 100):
+                candidate = "%s%d" % (original, suffix)
+                if (candidate not in job_tokens and candidate not in corpus_tokens
+                        and candidate not in {r for _, r, _ in rules}):
+                    rules = [(v, candidate if r == original else r, k) for v, r, k in rules]
+                    overlap_subs[original] = candidate
+                    progressed = True
+                    break
+            if progressed:
+                break
+        if not progressed:
+            break
+    remaining = find_overlaps(rules)
+    # Read by the manifest, and computed AFTER the substitution loop so it records what was actually
+    # emitted rather than what was proposed.
     replacements = {r for _, r, _ in rules}
-    searchable = {v for v, _, _ in rules}
-    overlap = replacements & searchable
-    if overlap:
-        findings.append("%d replacement(s) are themselves search terms. The scrub/verify loop "
-                        "cannot converge through them." % len(overlap))
+    print("replacement overlap check     : %d substituted, %d unresolved"
+          % (len(overlap_subs), len(remaining)))
+    if remaining:
+        # WHAT SUFFIXING CAN AND CANNOT FIX, because the difference decides whether this gates.
+        # An EQUALITY overlap against an inferred needle is fixable: `\bGenericFoo\b` no longer
+        # matches `GenericFoo1`, since a digit is a word character and kills the right boundary.
+        # A SUBSTRING overlap, or any overlap against a DECLARED needle, is not: a declared rule is
+        # anchorless and case-insensitive, so it still matches inside `GenericFoo1`, and no suffix
+        # removes a substring from a string. Those need a replacement the owner chooses.
+        findings.append("%d replacement(s) can be matched INSIDE by another rule's needle and no "
+                        "clean substitute exists - appending to a name cannot remove a substring "
+                        "from it. filter-repo applies rules in file order, so the second rule "
+                        "would rewrite the first one's output. Set an explicit replacement for "
+                        "these in the term list." % len(remaining))
 
     # The sentinel is a word-character run, so the token union settles it without re-reading a byte.
     # A pre-existing hit is a REFUSAL rather than a silent retry: if this shape already occurs, the

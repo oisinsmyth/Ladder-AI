@@ -34,11 +34,16 @@ def case(name, body):
     tmp = tempfile.mkdtemp()
     try:
         body(tmp)
-    except AssertionError as exc:
+    # Exception, not just AssertionError. A case that raises something unexpected - an IndexError
+    # from parsing a rule line that no longer has the shape it assumed - used to kill the whole run
+    # mid-way, so the suite printed NO RESULT LINE AT ALL. A harness that cannot tell "one case
+    # failed" from "the run died" is the empty-is-not-clean failure wearing a test-runner costume,
+    # and it was found by a mutation that made the suite vanish instead of turn red.
+    except Exception as exc:
         failed += 1
-        failures.append("%s: %s" % (name, exc))
+        failures.append("%s: %s: %s" % (name, type(exc).__name__, exc))
         print("FAIL  %s" % name)
-        print("      %s" % exc)
+        print("      %s: %s" % (type(exc).__name__, exc))
     else:
         passed += 1
         print("PASS  %s" % name)
@@ -557,6 +562,248 @@ def breadth_is_measured_at_head_even_when_scanning_history(tmp):
         "an ordinary word and the rule was never emitted"
 
 
+# --------------------------------------------------- replacement overlap (F4)
+#
+# The check was `replacements & searchable` - an exact, case-SENSITIVE, whole-string set
+# intersection. filter-repo does not apply rules that way: it applies them in file order, so what
+# matters is whether one rule's needle MATCHES INSIDE another rule's replacement.
+#
+# And the case the old check could not see is the case the emitter deliberately creates. A DECLARED
+# term is emitted anchorless and case-insensitive, on purpose, so it matches inside a word.
+
+def an_equality_overlap_is_auto_substituted(tmp):
+    """The shape the old check DID catch, now resolved rather than merely refused.
+
+    A suffix works here and only here: `\\bGenericThing\\b` stops matching `GenericThing1`, because
+    a digit is a word character and there is no longer a boundary after the name."""
+    maps = '{"Names": {"AcmeWidgetUnit": "GenericThing", "GenericThing": "SomethingElse"}}'
+    s = build(tmp, {"m": maps}, TERMS_HEADER,
+              {"doc.md": "AcmeWidgetUnit and GenericThing both appear\n"})
+    code, out, err = run_head(tmp, s)
+    assert_eq(code, EXIT_OK, "an equality overlap should be substituted, not refused (%s%s)"
+              % (out, err))
+    assert_in("replacement overlap check", out, "the check must report what it did")
+    line = [l for l in out.splitlines() if l.startswith("replacement overlap check")][0]
+    assert "0 substituted" not in line, "the overlap was not detected at all: %r" % line
+    assert_in("0 unresolved", line, "the substitution should have resolved it: %r" % line)
+
+
+def a_declared_needle_INSIDE_a_replacement_GATES(tmp):
+    """*** THE CASE THE OLD CHECK COULD NOT SEE, AND CANNOT BE SUBSTITUTED AWAY. ***
+
+    The declared term `Generic` is emitted anchorless and case-insensitive, so it matches inside
+    `GenericHolding` - the replacement chosen for another key. Whole-string intersection sees
+    nothing, because the two strings are not equal.
+
+    No suffix fixes this: appending to a name cannot remove a substring from it, and the anchorless
+    rule matches `GenericHolding1` just as happily. So this gates, and the message says to choose a
+    replacement by hand - which is the honest answer rather than a substitution that does not
+    work."""
+    s = build(tmp, {"m": '{"Names": {"AcmeWidgetUnit": "GenericHolding"}}'},
+              TERMS_HEADER + "| Generic | Scrubbed | site | global | auto |\n",
+              {"doc.md": "AcmeWidgetUnit and Generic both appear\n"})
+    code, out, _ = run_head(tmp, s)
+    assert_eq(code, EXIT_FINDING, "a needle matching inside a replacement must gate (%s)" % out)
+    assert_in("matched INSIDE", out, "the finding must name the actual relation")
+    assert_eq(rules_of(tmp), [], "a refusal must write nothing")
+
+
+# ------------------------------------------------------ variant collisions (F9)
+#
+# `candidates.setdefault(v, key)` kept whichever key sorted first and DISCARDED THE REST IN SILENCE.
+# Measured on the real corpus: 5 collisions, which is exactly the figure the review recorded and
+# which nothing in the tool had ever printed. All five happen to be harmless there; the defect is
+# that nobody could have known that.
+#
+# Every fixture below makes the two keys' own literal forms ABSENT from the corpus, so only the
+# shared variant survives. Otherwise each key emits its own literal rule too and the NON-INJECTIVE
+# gate fires first, which would test a different check entirely.
+
+def a_harmless_collision_is_counted_not_discarded(tmp):
+    """Two keys, one written form, the SAME replacement. Nothing goes wrong - and that is precisely
+    why it has to be counted: silence here is indistinguishable from silence over a collision that
+    collapses two identifiers."""
+    s = build(tmp, {"m": '{"Names": {"AcmeWidget": "GenericThing", "Acme_Widget": "GenericThing"}}'},
+              TERMS_HEADER, {"doc.md": "see acme-widget here\n"})
+    code, out, err = run_head(tmp, s)
+    assert_eq(code, EXIT_OK, "a same-replacement collision is harmless (%s%s)" % (out, err))
+    # The two keys share FOUR written forms - acmewidget, acme-widget, acme_widget, ACME_WIDGET -
+    # because split_camel normalises `_` and camel humps to the same parts. Assert the shape rather
+    # than a hard-coded total, but assert that SOMETHING was counted: zero here is the old silence.
+    line = [l for l in out.splitlines() if l.startswith("variant collisions")]
+    assert line, "no collision line printed at all:\n%s" % out
+    n = int(line[0].split(":")[1].split("(")[0].strip())
+    assert n >= 1, "a real collision was counted as zero: %r" % line[0]
+    assert_in("0 unresolved", line[0], "a same-replacement collision must not be a problem")
+
+
+def a_collision_with_DIFFERENT_replacements_GATES(tmp):
+    """THE CASE THE OLD CODE COULD NOT REACH. Two live identifiers, one written form, two different
+    invented names - so whichever is emitted, the other identifier is rewritten to a name that is
+    not its own. The NON-INJECTIVE gate exists to stop exactly this and cannot see it, because the
+    losing key never reaches `rules`."""
+    s = build(tmp, {"m": '{"Names": {"AcmeWidget": "GenericOne", "Acme_Widget": "GenericTwo"}}'},
+              TERMS_HEADER, {"doc.md": "see acme-widget here\n"})
+    code, out, _ = run_head(tmp, s)
+    assert_eq(code, EXIT_FINDING, "an unresolved collision must gate (%s)" % out)
+    assert_in("disagree on the replacement", out, "the finding must say what is wrong")
+    assert_eq(rules_of(tmp), [], "a refusal must write nothing")
+
+
+def a_DECLARED_term_wins_a_collision_and_keeps_its_anchorless_rule(tmp):
+    """*** THE SERIOUS CONSEQUENCE, ASSERTED. ***
+
+    `declared` is evaluated on whichever key WON the variant. A map key sorting ahead of a declared
+    term therefore took the form over, and it was emitted with the narrow case-sensitive `\\b` rule
+    instead of the anchorless `(?i)` one - silently reintroducing F1 through a path that neither the
+    length-floor guard nor the Green-test guard covers.
+
+    `AcmeWidget` (map) sorts before `Acme_Widget` (declared) and would have won."""
+    s = build(tmp, {"m": '{"Names": {"AcmeWidget": "GenericMap"}}'},
+              TERMS_HEADER + "| Acme_Widget | GenericTerm | site | global | auto |\n",
+              {"doc.md": "see acme-widget here\n"})
+    code, out, err = run_head(tmp, s)
+    assert_eq(code, EXIT_OK, "exit (%s%s)" % (out, err))
+    # re.escape escapes the hyphen, so the needle reads `acme\-widget` in the file. Compare with the
+    # escaping removed rather than against a literal that only looks right.
+    hit = [l for l in rules_of(tmp) if "acme-widget" in l.split("==>")[0].replace("\\", "")]
+    assert hit, "no rule for the contested form at all: %r" % rules_of(tmp)
+    assert all("GenericTerm" in l.split("==>", 1)[1] for l in hit), \
+        "a map key took a DECLARED term's written form: %r" % hit
+    assert all(l.startswith("regex:(?i)") for l in hit), \
+        "the declared term's form lost its anchorless case-insensitive rule: %r" % hit
+
+
+# ----------------------------------------------------------- section class (F11)
+#
+# A key's map SECTION is the only statement anyone makes about what kind of name it is, and
+# load_maps threw it away at the point it was read. Every map key therefore reached variants_for as
+# "block", which is not in SPACED_CLASSES, so NO MAP KEY COULD EVER GET A SPACED FORM - and a
+# spaced form is the only way a site or site name is written in prose.
+#
+# Measured on the real corpus after the fix: 14 keys gain a section class, 4 of them would gain a
+# spaced variant, and ALL FOUR are already in the owner's term list with a spaced class. So the
+# artifact does not move here. The defect is real and the corpus happens not to expose it - which
+# is why these cases carry the proof instead.
+
+def a_company_section_key_gets_its_spaced_form(tmp):
+    """THE F11 CASE. `AcmeHoldings` in a `company` section, written as `Acme Holdings` in prose."""
+    import re
+    s = build(tmp, {"m": '{"company": {"AcmeHoldings": "GenericHoldings"}}'},
+              TERMS_HEADER, {"doc.md": "the site is operated by Acme Holdings plc\n"})
+    code, out, err = run_head(tmp, s)
+    assert_eq(code, EXIT_OK, "exit (%s%s)" % (out, err))
+    pats = [re.compile(l.split("==>")[0][len("regex:"):]) for l in rules_of(tmp)]
+    assert any(p.search("the site is operated by Acme Holdings plc") for p in pats), \
+        "no emitted rule matches the SPACED form - the section class is being discarded again"
+
+
+def the_same_key_under_names_gets_NO_spaced_form(tmp):
+    """The control for the case above, and without it that case proves only that some rule matched.
+
+    A block name is not written with spaces in prose, so `names` must NOT produce a spaced form.
+    If this ever passes AND the case above passes, spaced forms are being handed out unconditionally
+    and the section class is once again doing nothing."""
+    import re
+    s = build(tmp, {"m": '{"Names": {"AcmeHoldings": "GenericHoldings"}}'},
+              TERMS_HEADER, {"doc.md": "AcmeHoldings and also Acme Holdings appear\n"})
+    code, out, err = run_head(tmp, s)
+    assert_eq(code, EXIT_OK, "exit (%s%s)" % (out, err))
+    pats = [re.compile(l.split("==>")[0][len("regex:"):]) for l in rules_of(tmp)]
+    assert any(p.search("AcmeHoldings") for p in pats), "the concatenated form must still match"
+    assert not any(p.search("operated by Acme Holdings plc") for p in pats), \
+        "a `names` key got a spaced form - the section class is not being consulted"
+
+
+def a_section_class_does_NOT_make_a_map_key_DECLARED(tmp):
+    """*** THE TRAP IN FIXING F11, ASSERTED. ***
+
+    `klass_of` does not mean "this key's class". It means THE OWNER WROTE THIS KEY DOWN, and three
+    other decisions read it that way: a declared key bypasses the length floor, bypasses the Green
+    test, and is emitted anchorless and case-insensitive. Giving map keys a class by putting them
+    into `klass_of` would have promoted ~1,390 inferred keys to declared status - a far larger
+    change than the fix, wearing the costume of a one-line edit.
+
+    `Pump` is four characters and lives in a `company` section. It must still be withheld by the
+    length floor, and the declared-row count must not move."""
+    s = build(tmp, {"m": '{"company": {"Pump": "Mover", "AcmeHoldings": "GenericHoldings"}}'},
+              TERMS_HEADER, {"doc.md": "Pump and Acme Holdings\n"})
+    code, out, _ = run_head(tmp, s)
+    assert_eq(code, EXIT_OK, "exit (%s)" % out)
+    assert_in("under 8 chars", out, "the length floor must still apply to a section-classed map key")
+    assert not any("Pump" in l.split("==>")[0] for l in rules_of(tmp)), \
+        "a section-classed map key bypassed the length floor - it was treated as DECLARED"
+    # The fixture's only term row does not occur in the corpus, so the declared count is ZERO and
+    # every emitted rule comes from the map. That is the assertion: a section-classed map key is
+    # counted as INFERRED, and a non-zero number here would mean the class had promoted it.
+    assert_in("from DECLARED term rows      : 0", out,
+              "a section-classed map key was counted as DECLARED (%s)" % out)
+
+
+# ------------------------------------------------------- conflict resolution (F13)
+#
+# Until these existed, `resolve_conflict` had NEVER RUN past its first line in any test. Every
+# fixture in this file built a single map, so `len(candidates) == 1` always and the function
+# returned rung 0 immediately. Rungs 1 through 4 - the entire ladder that decides which invented
+# name a contested key gets - were unexecuted, and F13 lived in rung 3 undisturbed.
+
+def one_map_cannot_outvote_two(tmp):
+    """F13. The vote list is appended to once per (SECTION, key), not once per FILE.
+
+    So a single map declaring the same key in `names`, `tags` and `company` cast three votes for
+    its own replacement and beat two maps that each said so once. Rung 3 asks "how many maps
+    agree", and it was counting how many times one map repeated itself.
+
+    alpha says GenericAaa three times over; beta and gamma each say GenericBbb once. Counting
+    occurrences: 3 to 2, alpha wins. Counting SOURCES: 1 to 2, and the two maps win."""
+    maps = {
+        "alpha": '{"Names": {"AcmeWidgetUnit": "GenericAaa"}, '
+                 ' "Tags": {"AcmeWidgetUnit": "GenericAaa"}, '
+                 ' "company": {"AcmeWidgetUnit": "GenericAaa"}}',
+        "beta": '{"Names": {"AcmeWidgetUnit": "GenericBbb"}}',
+        "gamma": '{"Names": {"AcmeWidgetUnit": "GenericBbb"}}',
+    }
+    s = build(tmp, maps, TERMS_HEADER, {"doc.md": "AcmeWidgetUnit\n"})
+    code, out, err = run_head(tmp, s)
+    assert_eq(code, EXIT_OK, "exit (%s%s)" % (out, err))
+    assert_in("rung3=1", out, "the two agreeing maps must win at rung 3 (%s)" % out)
+    assert any("GenericBbb" in l.split("==>", 1)[1] for l in rules_of(tmp)), \
+        "one map outvoted two by repeating itself across sections"
+
+
+def a_real_majority_still_wins_at_rung_3(tmp):
+    """The other direction, and the reason this is not just `len(set(...))` applied blindly: a
+    genuine majority of DISTINCT maps must still carry rung 3. Without this case, deleting rung 3
+    altogether would pass the case above."""
+    maps = {
+        "alpha": '{"Names": {"AcmeWidgetUnit": "GenericAaa"}}',
+        "beta": '{"Names": {"AcmeWidgetUnit": "GenericBbb"}}',
+        "gamma": '{"Names": {"AcmeWidgetUnit": "GenericBbb"}}',
+    }
+    s = build(tmp, maps, TERMS_HEADER, {"doc.md": "AcmeWidgetUnit\n"})
+    code, out, err = run_head(tmp, s)
+    assert_eq(code, EXIT_OK, "exit (%s%s)" % (out, err))
+    assert_in("rung3=1", out, "two distinct maps against one must resolve at rung 3 (%s)" % out)
+    assert any("GenericBbb" in l.split("==>", 1)[1] for l in rules_of(tmp)), \
+        "the genuine majority lost"
+
+
+def a_tie_falls_to_rung_4_and_is_reported(tmp):
+    """Rung 4 is arbitrary by design and the run log names what fell to it, so the arbitrariness
+    stays visible rather than looking like a decision."""
+    maps = {
+        "alpha": '{"Names": {"AcmeWidgetUnit": "GenericAaa"}}',
+        "beta": '{"Names": {"AcmeWidgetUnit": "GenericBbb"}}',
+    }
+    s = build(tmp, maps, TERMS_HEADER, {"doc.md": "AcmeWidgetUnit\n"})
+    code, out, err = run_head(tmp, s)
+    assert_eq(code, EXIT_OK, "exit (%s%s)" % (out, err))
+    assert_in("rung4=1", out, "an even split must fall to rung 4 and say so (%s)" % out)
+    manifest = json.loads(io.open(
+        os.path.join(tmp, "sanitization", "scrub", "manifest.json"), encoding="utf-8").read())
+    assert_eq(manifest.get("rung4Keys"), 1, "the manifest must record what fell to the arbitrary rung")
+
+
 # --------------------------------------------------------------------------- refuse
 
 def non_injective_map_refuses(tmp):
@@ -665,6 +912,21 @@ for name, body in [
     ("HISTORY: a repository with no blobs is exit 2", a_repository_with_no_blobs_is_exit_2),
     ("HISTORY: the manifest records the scan mode", the_manifest_records_the_scan_mode),
     ("HISTORY: breadth is measured at head", breadth_is_measured_at_head_even_when_scanning_history),
+    ("OVERLAP: an equality overlap is auto-substituted", an_equality_overlap_is_auto_substituted),
+    ("OVERLAP: a declared needle INSIDE a replacement GATES",
+     a_declared_needle_INSIDE_a_replacement_GATES),
+    ("COLLISION: a harmless collision is counted, not discarded",
+     a_harmless_collision_is_counted_not_discarded),
+    ("COLLISION: different replacements GATES", a_collision_with_DIFFERENT_replacements_GATES),
+    ("COLLISION: a DECLARED term wins and keeps its anchorless rule",
+     a_DECLARED_term_wins_a_collision_and_keeps_its_anchorless_rule),
+    ("SECTION: a company key gets its spaced form", a_company_section_key_gets_its_spaced_form),
+    ("SECTION: a names key gets NO spaced form", the_same_key_under_names_gets_NO_spaced_form),
+    ("SECTION: a section class does NOT make a map key declared",
+     a_section_class_does_NOT_make_a_map_key_DECLARED),
+    ("CONFLICT: one map cannot outvote two", one_map_cannot_outvote_two),
+    ("CONFLICT: a real majority still wins at rung 3", a_real_majority_still_wins_at_rung_3),
+    ("CONFLICT: a tie falls to rung 4 and is reported", a_tie_falls_to_rung_4_and_is_reported),
     ("a non-injective map refuses", non_injective_map_refuses),
     ("a tracked term list refuses before reading", tracked_term_list_refuses_before_reading),
     ("--out in tracked space refuses", out_dir_in_tracked_space_refuses),
