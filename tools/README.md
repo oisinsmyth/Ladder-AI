@@ -241,6 +241,225 @@ disabled size comparison does not affect.
 **End-to-end, the gate was observed refusing a real commit** — see the commit that introduced it.
 It replaces the earlier CLAUDE.md-only budget script, whose cases are ported here.
 
+## `build-scrub-rules.py` — the de-identification rule set for the public export (2026-09-17)
+
+The publication plan (`docs/notes/portfolio-publication-plan.md`) rewrites this repository's history
+into a public artifact. Its audit found that the obvious way to do that **looks right and is not**:
+a `\bCamelCase\b` rule scrubs the identifier out of prose and matches none of the lower-hyphenated
+directory names built from the same word, so the scrub reports success while the paths still carry
+it (finding **A8**). This emits the rule set instead of assembling it by hand.
+
+```
+python tools/build-scrub-rules.py [--repo .] [--maps sanitization]
+       [--terms sanitization/scrub-terms.md] [--out sanitization/scrub]
+       [--green <corpus> ...] [--job-folder <folder> ...]
+       [--scan history|head] [--min-global-length 8] [--name-collisions]
+```
+
+It emits `replace-text.txt`, `replace-message.txt`, `path-renames.args` and `manifest.json`. Last
+full-history run: **106 rules and 22 `--path-rename` pairs** covering 113 changed paths, over 6,345
+blobs. **It rewrites nothing** —
+`git-filter-repo` performs the rewrite and `verify-scrub.py` judges the result, deliberately as a
+separate script sharing no derivation code. If the emitter and the verifier computed their
+vocabulary the same way, a bug would produce a rule that misses X and then hunt for X the same wrong
+way and find nothing: a confident, earned-looking zero over the wrong population.
+
+Exit **0** rules emitted, **1** a blocking finding (non-injective map, unresolvable collision,
+pre-existing sentinel), **2** NOTHING EXAMINED (no maps, no term rows, no surviving rule), **3**
+REFUSED BEFORE READING ANYTHING (the term list is tracked, or `--out` is in tracked space). **On 1,
+2 and 3 nothing is written** — a partial rule set is the worst possible artifact, because it looks
+like a rule set and scrubs some of what it names.
+
+**What it deliberately does NOT do.** It does not decide whether a name identifies a site. The
+only mechanical filters are a length floor and membership of the already-sanitized Green corpora,
+and AB-1 measured roughly half of its own candidates as conventional names. So a conventional name
+absent from Green *will* be replaced, and a identifying name present in Green *will not*. Measured on
+the one identifier-bearing path the rules leave alone is Green-present. That is the documented cost
+of removing human adjudication, not a defect to file.
+
+⚠️ **A correction, recorded because the wrong version of it was published here first.** An earlier
+revision of this section claimed "92 of 93 identifier-bearing paths are matched", measured by
+applying the emitted regexes to path strings in Python. **That measurement was meaningless.**
+`--replace-text` rewrites blob *contents*; filter-repo never applies those regexes to a path. Paths
+are renamed only by `--path-rename`, which this tool did not emit at all until 2026-09-17. The claim
+was true about Python and false about the artifact — the most comfortable kind of wrong.
+
+### Three traps, all measured here rather than anticipated
+
+- **Breadth is a REPORT, not a filter.** Withholding a variant for appearing in many files looks
+  principled and is backwards — a path stem cited across thirty-eight files is wide *because it is
+  load-bearing*. Withholding on breadth left **77 of 93 identifier-bearing paths unmatched**.
+- **Path names are part of the corpus.** `git cat-file` never shows a path, so a content-only scan
+  calls a directory-only identifier dead and emits no rule for it.
+- **Breadth must be counted at HEAD, never over history.** Counted over history a file edited thirty
+  times contributes thirty blobs, manufacturing an ordinary-looking count out of editing activity:
+  8 variants at HEAD versus 22 over history, and those 14 were rules *not emitted*.
+
+On its first complete run the tool **refused**, having found that five replacements in the existing
+maps occur verbatim in the live job's own IR — AB-1's trap 2, *a replacement can itself be a leak*.
+Under the no-human ruling those now resolve deterministically and are re-checked against both the
+job folder and this repository.
+
+### Six defects found by an adversarial review, 2026-09-17, all fixed
+
+The review's headline was that a run **exited 0 — "98 rules, every check passed" — while emitting no
+rule for 18 of the 19 identifiers in the owner's own term list.** Every one of these was live in a
+shipped artifact:
+
+| | defect | consequence |
+|---|---|---|
+| **F1** | the length floor was applied to *declared* terms, not just inferred map keys | 15 of 19 term rows discarded, **including all four job codes** (five characters each); 11 of the 12 identifier occurrences in the tracked `.gitignore` survived every rule |
+| **F3** | **no `--path-rename` set was emitted at all** | every identifier-bearing directory and filename survived the rewrite, while path names were scanned, counted and turned into rules that could not touch them |
+| **F2** | `--out` tested *tracked*, not *ignored* | `--out docs/scrub-out` wrote the file naming every identifier into tracked space, one `git add -A` from a commit |
+| **F5** | a JSON `null` map value | the literal string `None` as a replacement, or a bare `TypeError` exiting 1 with none of the gate prose |
+| **F6** | `git cat-file` emits `<oid> missing`; the parser broke on it | **silently abandoned the rest of history** with a non-zero scanned count, so the empty-is-not-clean guard never fired |
+| **F12** | rows shorter than three cells were skipped before validation | the silent term-list shrink this design exists to prevent |
+
+**A declaration is not a candidate** is the principle F1 cost. The length floor and the Green test
+exist to stop a name *inferred* from a map colliding with ordinary code; neither reasoning survives
+contact with a term the owner wrote down by hand, and applying them anyway discarded exactly the
+vocabulary the term list exists for.
+
+### It has been executed, in both directions
+
+```
+python tools/build-scrub-rules.tests.py
+```
+
+21 cases, offline, each building a throwaway git repo and running the script unmodified as a child
+process. The suite is slow (roughly half a minute per case on Windows) because of the temp-repo
+setup, not the script, which runs in well under a second.
+
+The load-bearing case is **`A8: lower-concatenated variant matches a hyphenated directory`**,
+asserted on the string a rule must match rather than on the intent. Two further regressions are
+pinned because both were live defects during construction: `a path-only occurrence still gets a
+rule`, and `a wide variant is reported but still emitted`.
+
+Negative-tested five ways, all re-derived 2026-09-17 by mutating the script, running the suite and
+restoring it byte-identical:
+
+| comparison disabled | red |
+|---|---|
+| Green-membership test → `if False` | **1 of 21** |
+| lower-concatenated variant removed (the A8 fix) | **1 of 21** |
+| path names dropped from the corpus | **1 of 21** |
+| length floor → never withhold | **1 of 21** |
+| injectivity check disabled | **1 of 21** |
+
+One red per mutation is the intended shape here rather than a weak result: each guard has exactly
+one case watching it, and each has now been observed refusing. The remaining cases cover the permit
+direction and the four cannot-run paths, which a single disabled comparison does not affect.
+
+**A defect this suite did not catch, recorded because it was real.** The harness itself deadlocked:
+`subprocess.call` with a `PIPE` nobody reads blocks once the child fills the buffer, and `git add`
+emits one CRLF warning per file, so the 40-file case hung forever while every smaller case passed.
+Test harnesses in this directory use `DEVNULL` for exactly this reason.
+
+## `verify-scrub.py` — the Gate 3 oracle (2026-09-17)
+
+`build-scrub-rules.py` ends every run saying *"IT HAS PROVED NOTHING about the result."* This is the
+proof. It walks a `git-filter-repo`-rewritten clone and decides whether restricted identifiers survive.
+
+```
+python tools/verify-scrub.py --clone <rewritten clone> [--maps sanitization]
+       [--terms sanitization/scrub-terms.md] [--canary sanitization/canary.json]
+       [--build-baseline <file>] [--make-canary] [--fast] [--name-matches]
+```
+
+Exit **0** an EARNED zero · **1** a residual or damaged invariant · **2** NOTHING EXAMINED (any zero
+denominator, absent or stale canary, a broken instrument) · **3** refused before reading anything.
+~30 s over 14,291 objects.
+
+**It shares no derivation code with the builder, deliberately.** If the emitter and the verifier
+worked out their vocabulary the same way, a bug would produce a rule that misses X and then hunt for
+X the same wrong way and find nothing. So it re-derives its searches from the same raw inputs,
+**wider**: case-insensitive, no length floor, no Green exclusion, substring-capable, and it includes
+the 326 identity mappings the builder correctly drops as no-ops — *nothing to rewrite is not nothing
+to leak.*
+
+### The instrument control is the check without which the tool is unfalsifiable
+
+Every other check reports zero as good news, so the intolerable failure is a matcher that can never
+match. A synthetic object carrying every needle goes through the **same** `tokenise`/`residuals` the
+real corpus does; every needle must find itself, and anything less is exit 2.
+
+🔴 **It caught exactly that on its first run.** 1,505 of 1,719 needles could not match anything,
+because the tokeniser split on `[a-z0-9_]+` and most needles are dotted tag paths. The tool had
+already reported a plausible "50 residuals" over the 12% of its vocabulary that happened to be single
+words. **The canary did not catch it** — those counts use a different code path and stayed healthy
+throughout. Nothing else would have found it.
+
+### Three tiers, because a flat rule was unusable
+
+A flat "any hit fails" verdict produced 394 residuals: 317 identity mappings, 20 documented builder
+decisions, and **59 of the remaining 61 were the same identifier matched inside a longer one**. A
+gate that cries wolf 59 times out of 61 gets learned-ignored, which is its own false green.
+
+| tier | membership | gates on |
+|---|---|---|
+| **T1 DECLARED** | any term-list row | presence **anywhere**, embedded included |
+| **T2 INFERRED** | distinctive map keys | **whole-token** presence only |
+| **T3 ORDINARY** | identity mappings · Green-present · short | never on presence — **on a DECREASE** |
+
+T3's inversion is not a softening: a conventional name falling from 1,438 occurrences to 0 is the
+signature of a rule eating the already-clean corpus, and a flat rule cannot express that check at all.
+
+### What it deliberately cannot see, printed on every pass
+
+An identifier in **neither** input (the builder cannot rule it and this cannot hunt it — independence
+of *code* does not remove a shared dependence on *inputs*); the 15 binary blobs, byte-searched and
+**not OCR'd**; an identifier split by a line break or markup; and an **inferential** identification —
+a plant described precisely enough to be recognised without being named.
+
+### It has been run against a real rewrite, in both directions
+
+Exit 0 on the rewritten clone; **exit 1 on the unscrubbed source** (T1 10, T2 79). The second is the
+more important result. Proven recipe: `clone --no-local` → `filter-repo --replace-text
+--replace-message @path-renames.args --mailmap` → delete all but the publishing branch → `reflog
+expire --all --expire=now && gc --prune=now` → verify.
+
+**A leak the rewrite could not reach.** The final residual was a **branch name**: `filter-repo`
+renames paths, not refs. The remedy was a step this project had already written down and not
+performed. That is the gate earning its place rather than confirming its author.
+
+### It has been executed, in both directions
+
+```
+python tools/verify-scrub.tests.py
+```
+
+18 cases, ~30 s, offline. Each builds a throwaway git repo, copies the script in **unmodified** and
+runs it as a child process, through a real **pre-scrub → scrub → verify** cycle — the canary means
+nothing unless it was recorded against the unscrubbed repository.
+
+The five tier cases are the point of the file, because the three-tier model decides every verdict and
+was previously proven by nothing: a **T1 embedded-only hit gates**; a **T2 embedded-only hit does
+not** while a **whole-token one does**; **T3 presence does not gate** but a **T3 decrease does**.
+
+Negative-tested six ways, re-derived 2026-09-17 by mutating the script, running the suite and
+restoring it byte-identical:
+
+| comparison disabled | red |
+|---|---|
+| case-insensitive search → case-sensitive | **7 of 18** |
+| substring/embedded pass → whole-token only | **4 of 18** |
+| tree-entry path walk → skipped | **1 of 18** |
+| positive control (MUST-SURVIVE) → disabled | **1 of 18** |
+| T3 over-scrub decrease check → disabled | **1 of 18** |
+| non-ODB carrier scan → disabled | **1 of 18** |
+
+🔴 **The last row was 0 of 18 on the first run, and that is the most useful thing this exercise
+produced.** The whole `.git/config` / reflog / `packed-refs` surface could be deleted and every test
+still passed — the branch-name case reaches refs through `for-each-ref` and never touches those
+files, so a wholly untested surface looked covered. The case that now guards it plants a site
+name in a remote URL, which is how that leak actually arrives.
+
+**A fixture defect worth recording too.** Two cases failed at first against a *correct* tool, because
+the helper standing in for filter-repo edited a file and committed — leaving the old blob in the
+object database, which this gate walks. Editing and committing is not a scrub. The helper now amends,
+expires the reflog and prunes, which is the state filter-repo actually leaves and is literally the
+tail of its own recipe.
+
 ## Benchmarks
 
 `bench-machine.ps1` measures a machine on the axes that matter for this repo; `bench-compare.ps1`
