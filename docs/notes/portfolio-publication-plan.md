@@ -4,7 +4,8 @@
 reviewed and repaired. Rev 6 — the verifier and the trial rewrite. Rev 7 — the verifier's tests.
 Rev 8 (2026-09-18) — Phase 0 done, and Gate 3's build half made real. Rev 9 (2026-09-18) — F16–F19
 discharged; the builder's default scan mode is tested. Rev 10 (2026-09-18) — F4, F9, F11, F13
-discharged; the review backlog is closed.** Scouting pass and phase
+discharged; the review backlog is closed. Rev 11 (2026-09-18) — FI-93 discharged; the red suite is
+ratified, 19 → 2.** Scouting pass and phase
 plan for turning this repository into a public portfolio piece on GitHub, without the private
 repository ever becoming public and without any restricted identifier reaching a public remote.
 
@@ -47,9 +48,10 @@ this table, this table is current.
 
 | phase | state | what remains |
 |---|---|---|
-| **0 — build baseline** | ✅ **DONE 2026-09-18** | SDK **8.0.425** installed; baseline captured to `sanitization/build-baseline.json` — **23 assemblies, 5,877 passed, 19 failed**, all 19 pre-existing and proven so at `446d450`. Gate 3's build half is now **mechanised, not merely recorded**: `--build-baseline` used to test `os.path.isfile` and compare nothing. Two targets still cannot build here and are recorded rather than hidden: `openness-cli` (no `Siemens.Engineering.dll`) and `Harness.RigRead` (no machine-local `Sharp7.dll`) |
+| **0 — build baseline** | ✅ **DONE 2026-09-18** | SDK **8.0.425** installed; baseline captured to `sanitization/build-baseline.json` — **23 assemblies, now 5,894 passed / 2 failed** after rev 11's ratification (was 5,877 / 19). Gate 3's build half is now **mechanised, not merely recorded**: `--build-baseline` used to test `os.path.isfile` and compare nothing. Two targets still cannot build here and are recorded rather than hidden: `openness-cli` (no `Siemens.Engineering.dll`) and `Harness.RigRead` (no machine-local `Sharp7.dll`) |
 | **1 — hygiene** | ✅ **DONE** | — |
-| **2 — the scrub tooling** | 🟡 **nearly done** | ✅ `verify-scrub.tests.py` — **31 cases**, negative-tested six ways at rev 7 and nine more at rev 8. ✅ `capture-build-baseline.py` + 11 tests. ✅ **The review backlog is CLOSED** — all twelve findings discharged: F16–F19 at rev 9, F4/F9/F11/F13 at rev 10. `build-scrub-rules.tests.py` is **41 cases**, negative-tested **sixteen** ways with every mutation caught by its own guard. Only `check-staged-identifiers.py` (M-5) remains, and it is a new tool rather than a finding |
+| **2 — the scrub tooling** | 🟢 **done bar one optional tool** | ✅ `verify-scrub.tests.py` **31 cases**. ✅ `capture-build-baseline.py` + 11 tests. ✅ **The review backlog is CLOSED** — all twelve findings discharged (rev 9, rev 10). `build-scrub-rules.tests.py` is **41 cases**, negative-tested **sixteen** ways, every mutation caught by its own guard. Only `check-staged-identifiers.py` (M-5) remains: a *new tool*, not a finding, and not on any critical path |
+| **2b — the red suite** | ✅ **DONE 2026-09-18** | **FI-93 discharged, rev 11.** 19 red tests → **2**. The 2 are one fact: `Main.ir` gained three networks and `Main.xml` was never re-exported; **one TIA re-export clears both** |
 | **3 — rewrite history** | ⬜ **not started** | the recipe is proven end to end, but the real run needs the `--path-glob` exclusion and the 253 SHA citations repaired |
 | **4 — restructure** | ✅ **DONE** | — |
 | **5 — CI and demo** | ⬜ **not started** | no `.github/`, no demo script |
@@ -65,6 +67,36 @@ this table, this table is current.
 - **The trial rewrite recipe, proven:** `clone --no-local` → `filter-repo --replace-text
   --replace-message @path-renames.args --mailmap` → delete all but the publishing branch →
   `reflog expire --all --expire=now && gc --prune=now` → verify. ~7 min rewrite, ~30 s verify.
+
+### Rev 11 — the red suite ratified: 19 → 2
+
+`FI-93` recorded nine red tests and asked for a ruling rather than a repair: *"re-pointing them
+ratifies the widening; leaving them red does not preserve the old value, it only stops anyone finding
+out."* Ruled: the widened corpus **is** the intended long-term reference. Converter **1820/0**,
+harness **3121/0**, golden **204/2**, baseline **5,894 / 2**.
+
+**FI-93 was wrong three ways, each corrected by measurement.** There were **two** causes, not one —
+`eba7033` added three code blocks the same day as the Modbus widening, and that is what moved every
+census number. It was **nineteen**, not nine or fifteen — the four in `GoldenHarness.Tests` were
+recorded in no FI item, note or gate and surfaced only because `capture-build-baseline.py` measures
+all 23 assemblies at once. And its prescribed fix — *"37 → 1024 and the derived counts"* — **would
+have damaged two tests.**
+
+🔴 **The rule that mattered: FIX THE STALE INPUTS, NOT THE OBSERVED OUTPUTS.** `NeighbourTests`
+expects 26 and reported 27, and the 26 was *correct*: the 27th was the comms block's own area pointer
+falling out of `AreaDeclarations` because a helper constant still fed in 37. Raising it would have
+asserted that an area's own declaration counts as an occupant of itself — the single thing
+`IsDeclarationOf` exists to prevent.
+
+**Two tests had predicted their own failure and were right.** The cyclic-OB test asserted
+`DoesNotContain("COMMENT ")` so the day the corpus gained a header comment would be "a failure with a
+reason instead of a confusing diff"; it came, the gap closed in the good direction, and the splice is
+gone. And `EveryDeclaredRegister_IsCoveredByExactlyOneTag` said an unmapped register should be "a
+decision somebody made rather than a surprise on the screen" — it was, recorded in the block itself,
+so it now asserts declared 1024 / maintained 37 / exactly 987 unmapped.
+
+**The 2 that remain need Portal, not editing.** `Main.ir` gained three networks; `Main.xml` was never
+re-exported. One re-export clears both. Both escape hatches are blocked by design, correctly.
 
 ### Rev 10 — F4, F9, F11, F13 discharged: four defects that changed nothing
 
