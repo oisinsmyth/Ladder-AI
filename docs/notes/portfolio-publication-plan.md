@@ -69,6 +69,94 @@ this table, this table is current.
   --replace-message @path-renames.args --mailmap` → delete all but the publishing branch →
   `reflog expire --all --expire=now && gc --prune=now` → verify. ~7 min rewrite, ~30 s verify.
 
+### Rev 14 — Phase 2 closes, and the Phase 3 blocker shrinks from twelve rows to three decisions
+
+**Everything here was done without the owner, which was the brief.** Nothing below decides a term
+row; the point of it is to turn rev 13's prose blocker into a refusal the builder issues itself,
+with the evidence attached.
+
+**1. The builder could not see the fault that refused the artifact.** `rule_line` emits a declared
+term as `(?i)<term>` with no word boundary, decided by declaredness and nothing else — right, and
+four real terms need it. But the filter loop gives declared terms an unconditional `continue`
+**before the length floor, the Green test and the breadth report**, so they were the one population
+reaching the widest matcher in the tool having been measured by none of its breadth tests. It now
+measures them and refuses.
+
+🔴 **REV 13 OVERSTATED THE BLOCKER AND THIS CORRECTS IT.** It reported *"12 rows, 840 substitutions
+across 37 files, breaks the build"*, treating one figure as the cause of the other. Re-measured: the
+841 substitutions across 38 files are real and **nearly all land in `.ir`, `.xml` and `.md`**, where
+an anchorless rewrite is exactly the job. **Only one of the twelve touches build source at all.**
+
+**The discriminator, and what the obvious ones cost.** Length does not separate the populations — a
+3-character term had 12 enclosing tokens and a legitimate 5-character job code had 13. The Green
+corpus is blind here: `--green` defaults to the reference TIA project and does not cover `src/`.
+Dottedness catches only the sharpest case. What separates them is whether the term **is ever a
+source token in its own right**: if it is, its rule is doing real work and embedded hits ride along;
+if it never is, every edit it makes in source is to the inside of somebody else's identifier, and
+**no amount of that hides a job code — the symbol being cut was not the secret.**
+
+**2. The evidence for the Gate 2 decision**, swept across all 1,810 tracked files at HEAD. Rows are
+named by their **invented** replacement, which is what the term list's second column says; no live
+term appears.
+
+| row | class | len | whole-token files | embedded-only | in build source | verdict |
+|---|---|---|---|---|---|---|
+| `K5` | modelline | 2 | **0** | 3 | 0 | never a whole token |
+| `K7` | modelline | 2 | **0** | 3 | 0 | never a whole token |
+| `KS` | site | 3 (dotted) | **0** | 4 | **4** | 🔴 **GATES** |
+| `K15` | modelline | 3 | **0** | 14 | 1 | 🔴 **GATES** |
+| `K75` | modelline | 3 | **0** | 2 | 0 | never a whole token |
+| `K150` | modelline | 4 | 11 | 0 | 0 | present in its own right |
+| `JOB9001` | jobcode | 5 | 10 | 11 | 0 | present in its own right |
+| `JOB9002` | jobcode | 5 | 60 | 9 | 7 | present in its own right |
+| `JOB9003` | jobcode | 5 | 15 | 0 | 0 | present in its own right |
+| `JOB9004` | jobcode | 5 | 33 | 6 | 1 | present in its own right |
+
+**Not one term of 2–3 characters appears as a whole token anywhere in the repository.** They can
+only ever edit the insides of longer words. For `K5`, `K7` and `K75` that is plausibly the A8 case
+working as intended — a model designation inside a longer product name, in `.ir` and prose. For `KS`
+and `K15` it reaches build source, and the fix is a `variants` cell naming the longer forms that
+*should* be rewritten. **The `variants` column already exists and already parses** (`| live |
+invented | class | scope | variants |`, `;`-separated); a forced list **replaces** the auto-derived
+one, which is exactly how a dangerous bare form stops being emitted. Nothing needs building for the
+owner to act.
+
+**3. A third finding, and nothing was hunting for it.** While assembling the table above, the `site`
+row printed `None` in its invented column. Two rows declare the same 5-character term — as `site`
+and as `jobcode` — with different replacements, and `chosen[r["live"]] = r["invented"]` is a plain
+assignment in row order. **F9 again, one line earlier, in a different dict.** Today the lucky row is
+last, so the term becomes `JOB9003`. **Reorder the table and a site name becomes the literal token
+`None` throughout the corpus** — in prose, in `.ir` tag names, everywhere — with nothing printed and
+exit 0. It now gates, case-insensitively because the emitted rule is `(?i)`. Agreeing duplicates are
+reported rather than refused; the list has one of those too.
+
+**4. Phase 2 is closed: `check-staged-identifiers.py` (M-5) is built** — 16 cases, six mutations each
+reddening the case named for it, installed as the third block of `hooks/pre-commit`. Its subject is
+the **index**, not the working tree.
+
+🔴 **ITS FIRST REAL RUN REFUSED ITS OWN COMMIT, AND IT WAS RIGHT.** *This document* carried a live
+three-character declared term, quoted verbatim inside a fenced code block, as the worked example of
+what broke the build in Phase 3 — written eight commits earlier, in the document that explains the
+de-identification, while describing the rule that was rewriting that very term. It did not read as
+job content; it read as evidence. That is **verbatim the failure M-5 was filed for**, and the
+strongest available argument that the control had to be mechanical is that its author leaked while
+building it. The passage above is rewritten with an invented needle.
+
+One mutation was a **real bug found by its own case**: the corroboration that makes *"no staged
+paths"* safe to call clean asked `git diff --cached --quiet` while the path list asked
+`--diff-filter=ACMR`, so a commit that only **deleted** files was refused. A corroborating question
+asked in a different scope does not corroborate — it invents disagreement, and it invented it in the
+direction that refuses correct work.
+
+**5. `src/hmi-cli` has a solution** — and the `Directory.Build.props` that subtree was the only one
+in `src/` to lack, so `HmiCli.Tests` had been compiling **without `TreatWarningsAsErrors`** while the
+code it tests had it. 0 warnings, 161 passing before and after, full `--expect` capture green at 23
+assemblies / 5,894 passed. The orphan hunt stays: an orphan is made by forgetting, not by deciding.
+
+**Where that leaves Phase 3.** Still blocked, still on Gate 2, and now **three named decisions**
+instead of a paragraph — the duplicate row, `KS`, `K15`. After them the rewrite re-runs in about
+seven minutes. `build-scrub-rules.tests.py` is **48 cases**.
+
 ### Rev 13 — the rewrite ran, and Gate 3 refused the artifact
 
 **The rewrite executed end to end.** 1,346 commits in 234 s on a `--no-local --single-branch` clone,
@@ -1141,8 +1229,28 @@ Should drive the README rather than be discovered by a reader:
    the demo would have shown a no-op and called it an invariance check. `preflight`/`tagstatus`/
    `cross-check` were left out deliberately — `cross-check` alone emits hundreds of facts on a real
    corpus, and a demo nobody finishes demonstrates less than a short one.
-7. **253 commit-SHA citations across 80 tracked markdown files** — re-map to new hashes, or
-   re-describe. One decision, applied 80 times.
+7. ~~**253 commit-SHA citations across 80 tracked markdown files.**~~ ✅ **CLOSED 2026-09-18 — KEPT
+   AND EXPLAINED.** The figure under-scoped by 3×: measured, **768 occurrences, 288 distinct SHAs,
+   113 tracked files**, of which 40 are non-markdown and 33 SHAs are cited *only* outside markdown —
+   so a markdown-only repair would have missed them. Ruled: leave them. Each is load-bearing in an
+   argument — byte budgets and test baselines are justified by pointing at the commit that caused
+   them — and replacing them with prose removes the evidence to tidy the citation. `README.md` gains
+   a paragraph explaining the rewrite, which is itself of interest to this audience. The one
+   **machine-read** SHA, `tests/ci-baseline.json`'s `commit` field, is annotated as pre-rewrite
+   provenance; nothing reads it.
+
+8. 🔴 **THREE GATE 2 DECISIONS — the only thing standing between here and a Phase 3 artifact.**
+   The builder refuses until each is resolved and names them by their **invented** replacement, so
+   they can be discussed without the live terms being written down. Evidence per row: **Rev 14**.
+
+   | # | row | what to decide |
+   |---|---|---|
+   | a | `JOB9003` / `None` | Two rows declare the same 5-character term, as `jobcode` and as `site`, with different replacements. **Delete one, or make them agree.** The `None` replacement should not survive under any ordering. |
+   | b | `KS` | 3 characters, contains a separator, and its rule edits **6 build-source tokens from inside** while never being a source token itself. This is the one that broke the build. **Give the row a `variants` cell** naming the longer forms that should be rewritten. |
+   | c | `K15` | Same shape, 1 source token. 13 of its 14 embedded hits are outside build source and may well be legitimate. **A `variants` cell**, or a narrower scope. |
+
+   After these, `python tools/build-scrub-rules.py` should exit 0, and the rewrite re-runs in about
+   seven minutes. **Nothing else in the pipeline is waiting on anything.**
 
 ---
 
