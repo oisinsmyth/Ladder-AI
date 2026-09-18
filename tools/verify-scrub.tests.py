@@ -322,6 +322,174 @@ def build_baseline_absence_is_stated(tmp):
               "the missing build baseline must be stated")
 
 
+# ------------------------------------------------------- the build comparison
+#
+# These pin the half of Gate 3 that used to be decorative. `--build-baseline` tested
+# os.path.isfile and compared NOTHING: handing it any file at all removed the "says nothing about
+# whether the scrub broke a test" banner while verifying exactly as much as passing nothing. A gate
+# that greened on a file existing. Every case below would have passed against that version except
+# the ones that assert a finding - which is the point.
+
+def capture(tmp, name, rows, cannot=None):
+    """Write a build capture in the schema tools/capture-build-baseline.py emits."""
+    doc = {"schema": "ladder-ai/build-baseline/1",
+           "assemblies": [{"assembly": a, "passed": p, "failed": f, "total": p + f}
+                          for a, p, f in rows],
+           "cannotBuild": [{"target": t} for t in (cannot or [])]}
+    path = os.path.join(tmp, name)
+    write(path, __import__("json").dumps(doc, indent=2))
+    return path
+
+
+def clean_repo(tmp):
+    s = build(tmp, {"doc.md": "%s\n" % CONTROL})
+    canary(tmp, s)
+    return s
+
+
+def build_baseline_ALONE_still_says_it_proved_nothing(tmp):
+    """THE CASE THAT CAUGHT THE STUB. A baseline on its own is one half of a comparison, and the
+    old code let it silence the banner. Supplying a perfectly good baseline and nothing to compare
+    it against must still say, loudly, that no test was verified."""
+    s = clean_repo(tmp)
+    base = capture(tmp, "base.json", [("A.Tests", 10, 0)])
+    code, out, _ = run(tmp, s, "--build-baseline", base)
+    assert_eq(code, EXIT_OK, "a lone baseline is not itself a finding (%s)" % out)
+    assert_in("NOTHING ABOUT WHETHER THE SCRUB BROKE A TEST", out,
+              "a baseline with no --build-current must NOT silence the banner")
+
+
+def build_identical_captures_pass_and_are_reported(tmp):
+    s = clean_repo(tmp)
+    base = capture(tmp, "base.json", [("A.Tests", 10, 1), ("B.Tests", 5, 0)])
+    cur = capture(tmp, "cur.json", [("A.Tests", 10, 1), ("B.Tests", 5, 0)])
+    code, out, _ = run(tmp, s, "--build-baseline", base, "--build-current", cur)
+    assert_eq(code, EXIT_OK, "identical captures must pass (%s)" % out)
+    assert_in("build comparison", out, "the comparison must be reported, not assumed")
+    assert "NOTHING ABOUT WHETHER THE SCRUB BROKE A TEST" not in out, \
+        "with both halves present the banner must come down"
+
+
+def build_a_DECREASE_in_passes_GATES(tmp):
+    """The whole reason the comparison exists. AB-1 recorded a rename silently weakening a test."""
+    s = clean_repo(tmp)
+    base = capture(tmp, "base.json", [("A.Tests", 10, 0)])
+    cur = capture(tmp, "cur.json", [("A.Tests", 9, 0)])
+    code, out, _ = run(tmp, s, "--build-baseline", base, "--build-current", cur)
+    assert_eq(code, EXIT_FINDING, "a lost pass must gate (%s)" % out)
+    assert_in("10 passing to 9", out, "the finding must name the numbers")
+
+
+def build_a_RISE_in_failures_GATES(tmp):
+    s = clean_repo(tmp)
+    base = capture(tmp, "base.json", [("A.Tests", 10, 1)])
+    cur = capture(tmp, "cur.json", [("A.Tests", 10, 3)])
+    code, out, _ = run(tmp, s, "--build-baseline", base, "--build-current", cur)
+    assert_eq(code, EXIT_FINDING, "more failures must gate (%s)" % out)
+
+
+def build_a_VANISHED_assembly_GATES(tmp):
+    """A test that no longer runs has not passed - it has stopped being asked. The totals cannot
+    see this: the row simply is not there to be compared."""
+    s = clean_repo(tmp)
+    base = capture(tmp, "base.json", [("A.Tests", 10, 0), ("B.Tests", 5, 0)])
+    cur = capture(tmp, "cur.json", [("A.Tests", 10, 0)])
+    code, out, _ = run(tmp, s, "--build-baseline", base, "--build-current", cur)
+    assert_eq(code, EXIT_FINDING, "a missing assembly must gate (%s)" % out)
+    assert_in("B.Tests", out, "the finding must name the assembly that went missing")
+
+
+def build_a_MOVE_between_assemblies_GATES_although_the_total_is_equal(tmp):
+    """THE CASE A TOTAL-ONLY COMPARISON CANNOT MAKE. 10+5 before, 5+10 after: the totals agree
+    exactly and a whole project's tests have moved. Keyed per assembly, the loss is visible."""
+    s = clean_repo(tmp)
+    base = capture(tmp, "base.json", [("A.Tests", 10, 0), ("B.Tests", 5, 0)])
+    cur = capture(tmp, "cur.json", [("A.Tests", 5, 0), ("B.Tests", 10, 0)])
+    code, out, _ = run(tmp, s, "--build-baseline", base, "--build-current", cur)
+    assert_eq(code, EXIT_FINDING, "an equal-total move must still gate (%s)" % out)
+
+
+def build_a_GAIN_does_NOT_gate(tmp):
+    """A test that started passing is not evidence of anything, and must never be able to cancel
+    a loss elsewhere - but it is not itself a finding either."""
+    s = clean_repo(tmp)
+    base = capture(tmp, "base.json", [("A.Tests", 10, 0)])
+    cur = capture(tmp, "cur.json", [("A.Tests", 12, 0), ("NewSuite.Tests", 3, 0)])
+    code, out, _ = run(tmp, s, "--build-baseline", base, "--build-current", cur)
+    assert_eq(code, EXIT_OK, "gains and new assemblies must not gate (%s)" % out)
+    assert_in("does NOT gate", out, "the gain must still be reported")
+
+
+def build_a_NEWLY_UNBUILDABLE_target_GATES(tmp):
+    """A target that built before and does not now produces no assembly at all, so it leaves no
+    row to compare and no count to fall. It has to be caught on its own terms."""
+    s = clean_repo(tmp)
+    base = capture(tmp, "base.json", [("A.Tests", 10, 0)], cannot=["gated.sln"])
+    cur = capture(tmp, "cur.json", [("A.Tests", 10, 0)], cannot=["gated.sln", "broke.sln"])
+    code, out, _ = run(tmp, s, "--build-baseline", base, "--build-current", cur)
+    assert_eq(code, EXIT_FINDING, "a newly-unbuildable target must gate (%s)" % out)
+    assert_in("broke.sln", out, "the finding must name it")
+    assert "gated.sln" not in out.split("GATE FAILED")[-1], \
+        "a target that ALREADY could not build is not a new finding"
+
+
+def build_current_with_no_baseline_is_exit_2(tmp):
+    s = clean_repo(tmp)
+    cur = capture(tmp, "cur.json", [("A.Tests", 10, 0)])
+    code, out, _ = run(tmp, s, "--build-current", cur)
+    assert_eq(code, EXIT_CANNOT_RUN, "a capture with nothing to compare against is exit 2 (%s)" % out)
+
+
+def build_a_MISSING_baseline_path_is_exit_2_not_a_shrug(tmp):
+    """A typo in this path used to read exactly like a deliberate omission - the failure that
+    looks like the safe default, which is the family of bug this repo keeps finding."""
+    s = clean_repo(tmp)
+    cur = capture(tmp, "cur.json", [("A.Tests", 10, 0)])
+    code, out, _ = run(tmp, s, "--build-baseline",
+                       os.path.join(tmp, "typo.json"), "--build-current", cur)
+    assert_eq(code, EXIT_CANNOT_RUN, "a missing baseline path must refuse (%s)" % out)
+    # The REASON is asserted, not just the exit code. Mutation testing found that deleting the
+    # explicit guard still produced exit 2 - the loader fails to open the file a moment later - so
+    # the verdict is defended twice while the diagnostic was defended not at all. A refusal that
+    # says "not readable JSON" about a path that does not exist sends the reader somewhere else.
+    assert_in("MISSING baseline is a refusal", out,
+              "the refusal must say the path is missing, not merely refuse")
+
+
+def build_malformed_json_is_exit_2(tmp):
+    s = clean_repo(tmp)
+    bad = os.path.join(tmp, "bad.json")
+    write(bad, "{ this is not json")
+    cur = capture(tmp, "cur.json", [("A.Tests", 10, 0)])
+    code, out, _ = run(tmp, s, "--build-baseline", bad, "--build-current", cur)
+    assert_eq(code, EXIT_CANNOT_RUN, "unparseable input must refuse, never skip (%s)" % out)
+    # As above: swallowing the parse error and returning {} ALSO exits 2, via the zero-assemblies
+    # refusal. Same verdict, and a reason that would send the reader hunting for missing tests
+    # instead of a broken file. The message is the thing under test here.
+    assert_in("not readable JSON", out, "the refusal must name the parse failure as the cause")
+
+
+def build_zero_assemblies_is_exit_2(tmp):
+    """Two empty captures compare equal. EMPTY IS NOT CLEAN."""
+    s = clean_repo(tmp)
+    base = capture(tmp, "base.json", [])
+    cur = capture(tmp, "cur.json", [])
+    code, out, _ = run(tmp, s, "--build-baseline", base, "--build-current", cur)
+    assert_eq(code, EXIT_CANNOT_RUN, "an empty capture is not a clean one (%s)" % out)
+
+
+def build_a_DUPLICATE_assembly_row_is_exit_2(tmp):
+    """Two rows under one key: the tool cannot tell which is the truth, so it must not pick."""
+    s = clean_repo(tmp)
+    dupe = os.path.join(tmp, "dupe.json")
+    write(dupe, __import__("json").dumps({"assemblies": [
+        {"assembly": "A.Tests", "passed": 10, "failed": 0},
+        {"assembly": "A.Tests", "passed": 4, "failed": 0}]}))
+    cur = capture(tmp, "cur.json", [("A.Tests", 10, 0)])
+    code, out, _ = run(tmp, s, "--build-baseline", dupe, "--build-current", cur)
+    assert_eq(code, EXIT_CANNOT_RUN, "an ambiguous capture must refuse (%s)" % out)
+
+
 def instrument_control_is_reported(tmp):
     """Every needle must match itself in a synthetic object pushed through the same matcher. This
     is the check that caught 1,505 of 1,719 needles being unmatchable."""
@@ -351,6 +519,23 @@ for name, body in [
     ("not a git repo is exit 3", not_a_git_repo_is_exit_3),
     ("--fast says it did not examine history", fast_mode_says_it_did_not_examine_history),
     ("a missing build baseline is stated", build_baseline_absence_is_stated),
+    ("a build baseline ALONE still says it proved nothing",
+     build_baseline_ALONE_still_says_it_proved_nothing),
+    ("identical build captures pass and are reported",
+     build_identical_captures_pass_and_are_reported),
+    ("a DECREASE in passes GATES", build_a_DECREASE_in_passes_GATES),
+    ("a RISE in failures GATES", build_a_RISE_in_failures_GATES),
+    ("a VANISHED assembly GATES", build_a_VANISHED_assembly_GATES),
+    ("a MOVE between assemblies GATES although the total is equal",
+     build_a_MOVE_between_assemblies_GATES_although_the_total_is_equal),
+    ("a GAIN does NOT gate", build_a_GAIN_does_NOT_gate),
+    ("a NEWLY UNBUILDABLE target GATES", build_a_NEWLY_UNBUILDABLE_target_GATES),
+    ("--build-current with no baseline is exit 2", build_current_with_no_baseline_is_exit_2),
+    ("a MISSING baseline path is exit 2, not a shrug",
+     build_a_MISSING_baseline_path_is_exit_2_not_a_shrug),
+    ("malformed capture JSON is exit 2", build_malformed_json_is_exit_2),
+    ("zero assemblies is exit 2", build_zero_assemblies_is_exit_2),
+    ("a DUPLICATE assembly row is exit 2", build_a_DUPLICATE_assembly_row_is_exit_2),
     ("the instrument control is reported", instrument_control_is_reported),
 ]:
     case(name, body)

@@ -1,7 +1,8 @@
 # PORTFOLIO PUBLICATION PLAN — taking Ladder-AI public
 
 **Opened 2026-09-17. Rev 2 — executable. Rev 3 — audited. Rev 4 — Phase 2 part-built. Rev 5 — builder
-reviewed and repaired.** Scouting pass and phase
+reviewed and repaired. Rev 6 — the verifier and the trial rewrite. Rev 7 — the verifier's tests.
+Rev 8 (2026-09-18) — Phase 0 done, and Gate 3's build half made real.** Scouting pass and phase
 plan for turning this repository into a public portfolio piece on GitHub, without the private
 repository ever becoming public and without any restricted identifier reaching a public remote.
 
@@ -44,9 +45,9 @@ this table, this table is current.
 
 | phase | state | what remains |
 |---|---|---|
-| **0 — build baseline** | 🔴 **BLOCKED — and the blocker is now known precisely** | no .NET SDK. The ~5,810 tests across 24 projects have never run here, so no baseline exists. **This is the only reason Gate 3 is half-closed.** Attempted 2026-09-17: `winget` is present, but a machine-wide SDK install needs **admin**, and an unelevated session stalls on a UAC prompt it cannot display. **Unblock with one elevated command — `winget install Microsoft.DotNet.SDK.8` — then capture the baseline.** A no-admin install to `%USERPROFILE%\.dotnet` also works but leaves `dotnet` off PATH, which breaks every documented command in this repo |
+| **0 — build baseline** | ✅ **DONE 2026-09-18** | SDK **8.0.425** installed; baseline captured to `sanitization/build-baseline.json` — **23 assemblies, 5,877 passed, 19 failed**, all 19 pre-existing and proven so at `446d450`. Gate 3's build half is now **mechanised, not merely recorded**: `--build-baseline` used to test `os.path.isfile` and compare nothing. Two targets still cannot build here and are recorded rather than hidden: `openness-cli` (no `Siemens.Engineering.dll`) and `Harness.RigRead` (no machine-local `Sharp7.dll`) |
 | **1 — hygiene** | ✅ **DONE** | — |
-| **2 — the scrub tooling** | 🟡 **mostly done** | ✅ `verify-scrub.tests.py` written 2026-09-17 — **18 cases, negative-tested six ways**, and the mutation run found a whole untested surface (below). `check-staged-identifiers.py` (M-5) still **not written**; 8 review findings unfixed |
+| **2 — the scrub tooling** | 🟡 **mostly done** | ✅ `verify-scrub.tests.py` — **31 cases**, negative-tested six ways at rev 7 and **nine more** at rev 8 for the build comparison; both mutation runs found a wholly untested surface. ✅ `capture-build-baseline.py` + 11 tests. `check-staged-identifiers.py` (M-5) still **not written**; 8 review findings unfixed, **F18 the one that matters** |
 | **3 — rewrite history** | ⬜ **not started** | the recipe is proven end to end, but the real run needs the `--path-glob` exclusion and the 253 SHA citations repaired |
 | **4 — restructure** | ✅ **DONE** | — |
 | **5 — CI and demo** | ⬜ **not started** | no `.github/`, no demo script |
@@ -62,6 +63,50 @@ this table, this table is current.
 - **The trial rewrite recipe, proven:** `clone --no-local` → `filter-repo --replace-text
   --replace-message @path-renames.args --mailmap` → delete all but the publishing branch →
   `reflog expire --all --expire=now && gc --prune=now` → verify. ~7 min rewrite, ~30 s verify.
+
+### Rev 8 — Phase 0 done, and the half of Gate 3 that was decorative
+
+The SDK went in and the baseline was captured, which was the expected work. Three things were not
+expected, and each is the same shape: **a check that reported success without performing one.**
+
+🔴 **`--build-baseline` compared nothing.** It ran `os.path.isfile` and printed the path. Handing it
+any file at all removed the *"THIS RUN SAYS NOTHING ABOUT WHETHER THE SCRUB BROKE A TEST"* banner
+while verifying exactly as much as passing nothing. Had Phase 0 simply been completed as planned —
+capture a baseline, hand it over, watch the banner disappear — **Gate 3 would have been declared
+closed on a gate that greens on a file existing.** It now takes both halves and compares per
+assembly; a baseline alone keeps the banner up.
+
+**Keyed per assembly, never on the total**, because 10+5 before and 5+10 after nets to zero: a whole
+project's tests moved and a total-only check calls it clean. And what gates is **asymmetric** — a
+lost pass, a risen failure count, a vanished assembly and a newly-unbuildable target all gate, while
+gains are reported and left alone. A test that started passing is not evidence of anything and must
+never cancel a loss elsewhere.
+
+🔴 **The capture's own first run reported 809 passed / 24 failed out of a solution that does not
+build here.** `dotnet test --no-build` runs whatever is in `bin/`, and that DLL was three weeks old,
+from the previous machine. The failure runs in the direction that *manufactures* a finding: a fresh
+clone has no `bin/`, so the stale assembly is absent on the other side and reads as a whole test
+project destroyed by the scrub. Timestamps cannot answer this — an incremental build does not
+rewrite a current DLL, so the timestamp fix condemned everything. MSBuild's `Project -> ...dll` line
+is the signal: printed for a rebuild **and** for an up-to-date confirmation, absent for a project it
+never reached.
+
+🔴 **Two mutations turned 0 of 31 red**, and the reason is worth keeping. Deleting the missing-path
+refusal and the JSON parse refusal both still produced exit 2 — the loader fails to open the file a
+moment later, and an emptied capture trips the zero-assemblies refusal. **The verdict was defended
+twice over and the diagnostic not at all**, so a malformed capture would have reported *"listed ZERO
+assemblies"* and sent the reader hunting for missing tests. The cases now assert the reason.
+
+**All 19 baseline failures are pre-existing**, established by re-running the suites at `446d450`
+rather than by inspection — which mattered, because Phase 1 *did* rewrite `agent-tasks/**` JSON and
+two `.cs` files in `tests/golden`, and every failing test reads committed artifacts. They are corpus
+drift: `80098e7` widened the Modbus served window from 37 to 1024 registers and proved it on the
+controller, and the assertions counting against the corpus were never updated. **The tools are
+right; the tests are stale.**
+
+**`src/hmi-cli` belongs to no solution.** Its 161 tests pass, and the loop over `*.sln` that Phase 5
+would naturally write skips them silently. The capture hunts orphan projects deliberately for this
+reason and flags them in the output.
 
 ### Rev 7 — the verifier's tests, and what mutation testing found
 
@@ -84,15 +129,29 @@ one, and it was the second kind this suite existed to prevent.*
 
 ### The three things that would most change the picture
 
-1. **Install the .NET SDK.** It unblocks Phase 0, which is the *only* thing standing between the
-   current state and a complete Gate 3 — the verifier already prints, on every run, that without a
-   build baseline it says nothing about whether the scrub broke a test.
-2. **Write `verify-scrub.tests.py`.** The verifier has been exercised against a real rewrite, which
-   is stronger evidence than unit tests, but its tier behaviours are unpinned and the mutation
-   testing that caught defects in the builder has never been run against it. **This session twice
-   produced a tool that exited 0 while broken.**
-3. **Decide the `docs/06` C-124/C-128 ruling** (open item 3). It is the one identified leak class no
-   mechanical gate can reach, it has been open since `AB-1` flagged it, and it blocks Phase 6.
+*(All three were done on 2026-09-17/18 and are kept here as the record of what was chosen and why.)*
+
+1. ✅ **Install the .NET SDK.** Done 2026-09-18 — and the install itself was not the interesting
+   part. `winget` never reached the SDK: it stalled registering **its own package catalogue**
+   through a wedged MSIX deployment service, and the 3.44 MB that appeared to be .NET was
+   `source2.msix`. UAC was never the blocker. Microsoft's signed `.exe` bypasses that machinery
+   entirely.
+2. ✅ **Write `verify-scrub.tests.py`.** Done 2026-09-17, now **31 cases**.
+3. ✅ **Decide the `docs/06` C-124/C-128 ruling.** Ruled 2026-09-17 — generalise the vocabulary,
+   keep the reasoning.
+
+### What most changes the picture now
+
+1. **The remaining Phase 2 debt.** `check-staged-identifiers.py` (M-5) is unwritten and 8 review
+   findings are unfixed — **F18 above all**, since `--scan history` is the builder's default and the
+   path that produces the real artifact, and it has zero test coverage.
+2. **Restore `Sharp7.dll`.** One machine-local file keeps `Harness.RigRead` unbuildable. Copies
+   survive in stale `bin/` folders from the previous machine, so this is likely a one-file fix —
+   but its provenance should be confirmed rather than assumed, and the vendoring question the
+   project file itself calls open is still open.
+3. **Put `src/hmi-cli` in a solution, before CI is written rather than after.** Its 161 tests pass
+   and it belongs to no `.sln`, so the loop over solutions that Phase 5 would naturally write skips
+   them **silently** — and reports green.
 
 ---
 
@@ -304,7 +363,7 @@ Settled. The plan assumes them and does not re-open them.
 ### Toolchain on this machine
 
 ```
-.NET SDKs:        NONE      (runtimes 6.0.11, 8.0.26, 9.0.7 only)
+.NET SDKs:        8.0.425   INSTALLED 2026-09-18 (runtimes 6.0.11, 8.0.26, 9.0.7)
 TIA Portal:       not installed
 Python:           3.14.4,  pip 26.0.1
 git-filter-repo:  INSTALLED 2026-09-17 (a40bce548d2c)
@@ -312,9 +371,21 @@ git-filter-repo:  INSTALLED 2026-09-17 (a40bce548d2c)
                   NOT on git's PATH; prepend the Scripts dir or invoke the .exe directly
 ```
 
-**Nothing in this repo has been built or tested on this machine.** No scrub can be proven
-non-breaking until an SDK is present, and `AB-1` measured a case where a rename silently weakened a
-test assertion. Hence Phase 0.
+**Phase 0 is done (2026-09-18).** The baseline is `sanitization/build-baseline.json`: **23
+assemblies, 5,877 passed, 19 failed**, SDK 8.0.425, Release.
+
+`winget` never reached the SDK. It stalled registering its own package catalogue through the MSIX
+deployment service, which was itself wedged on a leftover package it had been failing to delete
+every six minutes for hours (`error 0x12C`, `ERROR_OPLOCK_NOT_GRANTED`). The SDK came from
+Microsoft's signed `.exe` instead, which touches none of that machinery. **UAC was never the
+blocker** — the install had not got that far.
+
+**All 19 failures are pre-existing**, verified by running the same suites at `446d450`, the commit
+before this branch: identical names, identical counts. They are corpus drift — `80098e7` widened the
+Modbus served window from 37 to 1024 registers and proved it on the controller, and the assertions
+counting against the corpus were never updated (37 → 1024, 18 → 21, 26 → 27). The tools are right
+and the tests are stale. `AB-1` measured a case where a rename silently weakened a test assertion,
+which is why this is a per-assembly baseline rather than a total.
 
 TIA-gated projects (reference `Siemens.Engineering`, **cannot build off a TIA machine**):
 `OpennessCli`, `OpennessCli.Tests`, `DownloadProbe`, `Harness.Device`, `Harness.Map`,
@@ -466,18 +537,32 @@ Each phase ends at a gate. Nothing crosses a gate without the named evidence. Ef
 **estimates for a focused operator**, not measurements; the Phase 2 and 3 figures are the
 load-bearing ones and the most uncertain.
 
-### Phase 0 — Make the machine able to verify · ~2–4 h
+### Phase 0 — Make the machine able to verify · ✅ DONE 2026-09-18
 
-1. Install the **.NET 8 SDK** (`net48` targeting pack is pointless without TIA; the TIA-gated
-   projects stay unbuildable here regardless).
-2. `git-filter-repo` — **already installed**; put its `Scripts` directory on `PATH` so `git
-   filter-repo` resolves.
-3. Build and test every non-TIA solution. **Record pass counts per assembly** — these are the
-   before-figures the scrub is measured against. Prior recorded figures for comparison:
-   converter 1,783 · harness 3,077 across 16 assemblies · openness-cli 871 (TIA-gated) ·
-   device-guard 65 + 12 · hmi-cli 161.
-4. Run `tools/check-file-budgets.py`.
-5. Record which projects are TIA-gated and therefore unverifiable here.
+1. ✅ **.NET 8 SDK 8.0.425** installed. The `net48` targeting packs turned out to be **already
+   present** — `openness-cli` reaches type resolution and fails only on `Siemens.Engineering`, so
+   the second risk this step anticipated does not exist.
+2. ✅ `git-filter-repo` already installed; `Scripts` still needs to be on `PATH`.
+3. ✅ Baseline captured **by script, not by hand** — `tools/capture-build-baseline.py`, run twice
+   and byte-comparable per assembly. 23 assemblies, 5,877 passed, 19 failed.
+4. ✅ `tools/check-file-budgets.py` passes.
+5. ✅ Unbuildable targets recorded in the capture itself under `cannotBuild`, with the error code
+   and the project that raised it.
+
+**Why the capture is a script.** Two captures either side of a rewrite are only comparable if they
+were taken the same way; one assembled by hand from a terminal scroll and another a week later
+differ in which solution was remembered and which orphan project was noticed, and every one of
+those differences reads downstream as a scrub that changed something.
+
+🔴 **The capture's first run was wrong, and wrong in the dangerous direction.** It reported
+`OpennessCli.Tests` at 809 passed / 24 failed **out of a solution that does not build here** —
+`dotnet test --no-build` runs whatever is in `bin/`, and that DLL was built on the previous machine
+three weeks earlier. A fresh clone has no `bin/` at all, so the stale assembly would be absent on
+the other side of the comparison and read as **a whole test project destroyed by the scrub**.
+Timestamps cannot detect this and trying was worse — an incremental build does not rewrite an
+already-current DLL, so a re-run condemns everything. The signal that works is MSBuild's own
+`Project -> ...dll` line, printed for a project it rebuilt *and* for one it confirmed up to date,
+absent for one it never reached.
 
 **Gate 0 — a recorded green baseline exists for every project that can build here.** Without it,
 "the scrub broke nothing" is an assertion, not a measurement.
@@ -631,6 +716,9 @@ green:**
 - [ ] `AB-1`'s 6-step check re-run against every job IR directory, reporting only the conventional
       residual, **with the compared-file count stated.**
 - [ ] Phase 0's baseline passes **unchanged** on the rewritten tree — same pass counts, per assembly.
+      Mechanised as of 2026-09-18: capture the clone with `tools/capture-build-baseline.py --repo
+      <clone> --out sanitization/build-current.json`, then pass **both** halves to `verify-scrub.py`.
+      A baseline alone keeps the "says nothing about whether the scrub broke a test" banner up.
 - [ ] `tools/check-file-budgets.py` passes with no ceiling raised.
 - [ ] **No git remote configured on *this* repository.** Confirmed, not assumed.
 

@@ -341,6 +341,95 @@ def make_canary(repo, maps_dir, terms_path, out_path, survive_texts, green):
     return doc
 
 
+def load_build_capture(path):
+    """Read one build capture. Returns (by_assembly, doc); raises ValueError with a sayable reason.
+
+    A capture is keyed BY ASSEMBLY and never by its total. A total-only comparison cannot tell
+    "1811 here and 202 there" from "202 here and 1811 there", so a rename that moves a whole
+    project's tests from one assembly to another nets to zero and passes - which is precisely the
+    accident this comparison exists to catch.
+
+    Every malformed input raises rather than returning something empty. A capture that failed to
+    parse and a capture of a repository with no tests are indistinguishable once both are {}, and
+    only one of them is a finding.
+    """
+    try:
+        doc = json.loads(io.open(path, encoding="utf-8-sig").read())
+    except Exception as exc:
+        raise ValueError("--build capture '%s' is not readable JSON: %s" % (path, exc))
+    rows = doc.get("assemblies")
+    if not isinstance(rows, list):
+        raise ValueError("--build capture '%s' carries no 'assemblies' list." % path)
+    by = {}
+    for row in rows:
+        if not isinstance(row, dict):
+            raise ValueError("--build capture '%s' has a row that is not an object." % path)
+        name = row.get("assembly")
+        if not name:
+            raise ValueError("--build capture '%s' has a row with no 'assembly' name." % path)
+        if name in by:
+            raise ValueError("--build capture '%s' lists assembly '%s' twice - one of those two "
+                             "rows is wrong and this tool cannot tell which." % (path, name))
+        try:
+            by[name] = (int(row["passed"]), int(row["failed"]))
+        except (KeyError, TypeError, ValueError):
+            raise ValueError("--build capture '%s' row '%s' has no integer passed/failed count."
+                             % (path, name))
+    return by, doc
+
+
+def compare_builds(base, cur, base_doc, cur_doc):
+    """Compare two captures. Returns (printable lines, findings).
+
+    WHAT GATES is asymmetric on purpose. A test that stopped passing is a scrub that broke
+    something; a test that started passing is not evidence of anything and must not be able to
+    cancel out a loss. So a DECREASE in passes, a RISE in failures, a whole assembly going
+    missing, and a target that used to build and now does not all gate - while new assemblies and
+    higher pass counts are reported and left alone.
+    """
+    lines, findings = [], []
+    shared = sorted(set(base) & set(cur))
+    vanished = sorted(set(base) - set(cur))
+    appeared = sorted(set(cur) - set(base))
+
+    fell = [(n, base[n][0], cur[n][0]) for n in shared if cur[n][0] < base[n][0]]
+    broke = [(n, base[n][1], cur[n][1]) for n in shared if cur[n][1] > base[n][1]]
+    rose = [n for n in shared if cur[n][0] > base[n][0]]
+
+    base_pass = sum(p for p, _ in base.values())
+    cur_pass = sum(p for p, _ in cur.values())
+    lines.append("build comparison           : %d assembly/assemblies compared, %d -> %d passed"
+                 % (len(shared), base_pass, cur_pass))
+    if appeared:
+        lines.append("  %d new assembly/assemblies not in the baseline (reported, does NOT gate): %s"
+                     % (len(appeared), ", ".join(appeared)))
+    if rose:
+        lines.append("  %d assembly/assemblies gained passes (reported, does NOT gate)" % len(rose))
+
+    if vanished:
+        findings.append("%d assembly/assemblies in the baseline are ABSENT after the scrub (%s). A "
+                        "test that no longer runs has not passed - it has stopped being asked."
+                        % (len(vanished), ", ".join(vanished)))
+    for name, before, after in fell:
+        findings.append("%s dropped from %d passing to %d. The scrub was not supposed to change "
+                        "behaviour." % (name, before, after))
+    for name, before, after in broke:
+        findings.append("%s went from %d failing to %d." % (name, before, after))
+
+    # A target that built before and does not now is a break the per-assembly numbers cannot show:
+    # it produces no assembly at all, so it leaves no row to compare and no count to fall.
+    base_gated = set(r.get("target") for r in base_doc.get("cannotBuild", []) if isinstance(r, dict))
+    cur_gated = set(r.get("target") for r in cur_doc.get("cannotBuild", []) if isinstance(r, dict))
+    newly_gated = sorted(t for t in (cur_gated - base_gated) if t)
+    if base_gated or cur_gated:
+        lines.append("  targets that cannot build  : %d before, %d after"
+                     % (len(base_gated), len(cur_gated)))
+    if newly_gated:
+        findings.append("%d target(s) built before the scrub and do not build after it: %s"
+                        % (len(newly_gated), ", ".join(newly_gated)))
+    return lines, findings
+
+
 def main():
     ap = argparse.ArgumentParser(description="Gate 3 oracle: is this rewritten clone clean?")
     ap.add_argument("--clone", default=".", help="the rewritten clone to judge")
@@ -354,8 +443,13 @@ def main():
     ap.add_argument("--green-baseline", default=None,
                     help="sha256 manifest of the Green corpora taken before the scrub")
     ap.add_argument("--build-baseline", default=None,
-                    help="per-assembly test pass counts from before the scrub. OPTIONAL, and its "
-                         "absence is stated loudly rather than assumed away.")
+                    help="per-assembly test pass counts from BEFORE the scrub, from "
+                         "tools/capture-build-baseline.py. OPTIONAL, and its absence is stated "
+                         "loudly rather than assumed away. On its own it proves nothing: pass "
+                         "--build-current too.")
+    ap.add_argument("--build-current", default=None,
+                    help="the same capture taken from the REWRITTEN clone. Compared per assembly "
+                         "against --build-baseline.")
     ap.add_argument("--make-canary", action="store_true",
                     help="record the PRE-scrub state instead of judging. Run this on the source "
                          "repository before the rewrite.")
@@ -655,13 +749,46 @@ def main():
                 findings.append("%d file(s) in the already-sanitized Green corpora changed. The "
                                 "scrub was not supposed to touch them." % changed)
 
-    # ---- the build baseline -------------------------------------------------------------------------
-    if args.build_baseline and os.path.isfile(args.build_baseline):
-        print("build baseline             : %s" % args.build_baseline)
-    else:
+    # ---- the build comparison -----------------------------------------------------------------------
+    # A BASELINE ALONE PROVES NOTHING, and the version of this tool that accepted one on its own
+    # said so anyway: it tested os.path.isfile, printed a tidy path line, dropped the warning
+    # banner, and verified exactly as much as a run with no baseline at all. A gate that greens on
+    # a file existing. Both halves, captured by the same script, or the banner stays up.
+    if args.build_current and not args.build_baseline:
+        cannot.append("--build-current was supplied with no --build-baseline. A capture with "
+                      "nothing to compare it against is not a measurement.")
+    elif not args.build_baseline:
         print("build baseline             : NOT SUPPLIED")
         print("  *** THIS RUN SAYS NOTHING ABOUT WHETHER THE SCRUB BROKE A TEST. *** It is not a "
               "full Gate 3 pass, whatever the residual count says.")
+    elif not os.path.isfile(args.build_baseline):
+        # A typo in this path used to read exactly like a deliberate omission, which is the whole
+        # family of bug this repo keeps finding: the failure that looks like the safe default.
+        cannot.append("--build-baseline '%s' does not exist. A MISSING baseline is a refusal, not "
+                      "a silent downgrade to 'not supplied'." % args.build_baseline)
+    elif not args.build_current:
+        print("build baseline             : %s" % args.build_baseline)
+        print("build current              : NOT SUPPLIED")
+        print("  *** THIS RUN SAYS NOTHING ABOUT WHETHER THE SCRUB BROKE A TEST. *** A baseline on "
+              "its own is one half of a comparison. Capture the rewritten clone with "
+              "tools/capture-build-baseline.py and pass it as --build-current.")
+    elif not os.path.isfile(args.build_current):
+        cannot.append("--build-current '%s' does not exist." % args.build_current)
+    else:
+        try:
+            base_by, base_doc = load_build_capture(args.build_baseline)
+            cur_by, cur_doc = load_build_capture(args.build_current)
+        except ValueError as exc:
+            cannot.append(str(exc))
+        else:
+            if not base_by or not cur_by:
+                cannot.append("a build capture listed ZERO assemblies, so NO TEST WAS COMPARED. "
+                              "An empty capture is not a clean one.")
+            else:
+                build_lines, build_findings = compare_builds(base_by, cur_by, base_doc, cur_doc)
+                for line in build_lines:
+                    print(line)
+                findings.extend(build_findings)
 
     if t1_hit:
         findings.append("%d DECLARED term(s) survive the rewrite. A declared term is not a "

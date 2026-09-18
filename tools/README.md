@@ -428,7 +428,7 @@ performed. That is the gate earning its place rather than confirming its author.
 python tools/verify-scrub.tests.py
 ```
 
-18 cases, ~30 s, offline. Each builds a throwaway git repo, copies the script in **unmodified** and
+31 cases, ~50 s, offline. Each builds a throwaway git repo, copies the script in **unmodified** and
 runs it as a child process, through a real **pre-scrub → scrub → verify** cycle — the canary means
 nothing unless it was recorded against the unscrubbed repository.
 
@@ -438,6 +438,10 @@ not** while a **whole-token one does**; **T3 presence does not gate** but a **T3
 
 Negative-tested six ways, re-derived 2026-09-17 by mutating the script, running the suite and
 restoring it byte-identical:
+
+*(Measured 2026-09-17, when the suite was 18 cases. The counts are left as they were taken rather
+than rescaled to today's 31 — a re-derived number and a remembered one should not be made to look
+alike.)*
 
 | comparison disabled | red |
 |---|---|
@@ -459,6 +463,88 @@ the helper standing in for filter-repo edited a file and committed — leaving t
 object database, which this gate walks. Editing and committing is not a scrub. The helper now amends,
 expires the reflog and prunes, which is the state filter-repo actually leaves and is literally the
 tail of its own recipe.
+
+### The build comparison — the half of Gate 3 that was decorative (2026-09-18)
+
+`verify-scrub.py` answers *"are there residual identifiers?"*. It never answered *"did the rewrite
+break anything?"*, and for a while it looked like it did:
+
+```python
+if args.build_baseline and os.path.isfile(args.build_baseline):
+    print("build baseline             : %s" % args.build_baseline)
+```
+
+🔴 **That parsed nothing and compared nothing.** Handing it any file at all removed the
+*"THIS RUN SAYS NOTHING ABOUT WHETHER THE SCRUB BROKE A TEST"* banner and verified exactly as much
+as passing nothing — **a gate that greened on a file existing.** It now takes both halves:
+
+```
+python tools/capture-build-baseline.py --out sanitization/build-baseline.json          # before
+python tools/capture-build-baseline.py --out sanitization/build-current.json --repo <clone>
+python tools/verify-scrub.py --clone <clone> \
+       --build-baseline sanitization/build-baseline.json \
+       --build-current  sanitization/build-current.json
+```
+
+A baseline **on its own keeps the banner up**, because one half of a comparison is not a
+measurement.
+
+**What gates is asymmetric on purpose.** A lost pass, a risen failure count, a vanished assembly and
+a target that used to build all gate; new assemblies and higher pass counts are reported and left
+alone. A test that started passing is not evidence of anything and **must never be able to cancel a
+loss elsewhere**.
+
+**Keyed per assembly, never on the total.** 10+5 before and 5+10 after nets to zero: a whole
+project's tests moved and a total-only check calls it clean. There is a case for exactly this.
+
+#### Two things the capture found about itself
+
+**It reported 809 passed / 24 failed out of a solution that does not build here.** `dotnet test
+--no-build` runs whatever is in `bin/`, and `OpennessCli.Tests.dll` was dated three weeks earlier —
+built on the previous machine, before this one had an SDK. Its own project was never attempted,
+because the project it depends on failed first. The error runs in the dangerous direction: **a fresh
+clone has no `bin/` at all**, so the stale assembly is absent on the other side and reads as a whole
+test project destroyed by the scrub.
+
+**Timestamps cannot answer this, and trying was worse.** An incremental build does not rewrite an
+already-current DLL, so a re-run minutes later condemns every assembly in the repository. The signal
+that works is MSBuild's own `Project -> ...dll` line: printed for a project it rebuilt **and** for
+one it confirmed up to date, absent for one it never reached. Unverified assemblies are recorded
+under `unverifiedAssemblies` and **not counted** — visible, because an omission the reader cannot see
+is indistinguishable from a tree that never had those tests.
+
+#### It has been executed, in both directions
+
+```
+python tools/verify-scrub.tests.py           # 31 cases, ~50 s
+python tools/capture-build-baseline.tests.py # 11 cases, ~2 s, no SDK needed
+```
+
+Negative-tested nine ways against the comparator, 2026-09-18 — mutate, run, restore byte-identical:
+
+| comparison disabled | red |
+|---|---|
+| decrease-in-passes check | **2 of 31** |
+| per-assembly keying → totals only | **2 of 31** |
+| vanished-assembly check | **1 of 31** |
+| failure-rise check | **1 of 31** |
+| newly-unbuildable-target check | **1 of 31** |
+| a lone baseline silences the banner (*the original stub*) | **1 of 31** |
+| duplicate-assembly refusal | **1 of 31** |
+| missing-baseline-path refusal | **1 of 31** |
+| unparseable-JSON refusal | **1 of 31** |
+
+🔴 **The last two rows were 0 of 31 on the first run.** Both mutations still produced exit 2 — the
+loader fails to open a missing file a moment later, and an emptied capture trips the zero-assemblies
+refusal. **The verdict was defended twice over and the diagnostic not at all**, so a malformed file
+would have reported *"listed ZERO assemblies"* and sent the reader hunting for missing tests. The
+cases now assert the reason, not only the exit code.
+
+**The baseline this repo starts from**: 23 assemblies, **5,877 passed, 19 failed**, SDK 8.0.425. All
+19 failures are pre-existing and were verified as such by running the same suites at the commit
+before this branch — identical names, identical counts. They are corpus drift: `80098e7` widened the
+Modbus served window from 37 to 1024 registers and proved it on the controller, and the assertions
+that count against the corpus were never updated. **The tools are right; the tests are stale.**
 
 ## Benchmarks
 
