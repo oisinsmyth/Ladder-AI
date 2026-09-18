@@ -51,9 +51,9 @@ this table, this table is current.
 |---|---|---|
 | **0 — build baseline** | ✅ **DONE 2026-09-18** | SDK **8.0.425** installed; baseline captured to `sanitization/build-baseline.json` — **23 assemblies, now 5,894 passed / 2 failed** after rev 11's ratification (was 5,877 / 19). Gate 3's build half is now **mechanised, not merely recorded**: `--build-baseline` used to test `os.path.isfile` and compare nothing. Two targets still cannot build here and are recorded rather than hidden: `openness-cli` (no `Siemens.Engineering.dll`) and `Harness.RigRead` (no machine-local `Sharp7.dll`) |
 | **1 — hygiene** | ✅ **DONE** | — |
-| **2 — the scrub tooling** | 🟢 **done bar one optional tool** | ✅ `verify-scrub.tests.py` **31 cases**. ✅ `capture-build-baseline.py` + 11 tests. ✅ **The review backlog is CLOSED** — all twelve findings discharged (rev 9, rev 10). `build-scrub-rules.tests.py` is **41 cases**, negative-tested **sixteen** ways, every mutation caught by its own guard. Only `check-staged-identifiers.py` (M-5) remains: a *new tool*, not a finding, and not on any critical path |
+| **2 — the scrub tooling** | ✅ **DONE 2026-09-18 — rev 14** | ✅ `verify-scrub.tests.py` **35 cases**. ✅ `capture-build-baseline.py` + 22 tests. ✅ **The review backlog is CLOSED** — all twelve findings discharged (rev 9, rev 10). `build-scrub-rules.tests.py` is **45 cases** after the declared-breadth gate. ✅ **`check-staged-identifiers.py` (M-5) is built** — 16 cases, six mutations, wired into `hooks/pre-commit`. **Nothing outstanding** |
 | **2b — the red suite** | ✅ **DONE 2026-09-18** | **FI-93 discharged, rev 11.** 19 red tests → **2**. The 2 are one fact: `Main.ir` gained three networks and `Main.xml` was never re-exported; **one TIA re-export clears both** |
-| **3 — rewrite history** | 🔴 **RAN 2026-09-18, GATE 3 REFUSED IT — rev 13** | The rewrite works: 1,346 commits, employer domain gone from every one, T1 0 / T2 0, instrument control 1719/1719. **Blocked on the term list, not the tooling:** 12 declared rows of 2–4 characters emit anchorless case-insensitive rules that make 840 substitutions in 37 files and break the build in 3 solutions. **Gate 2 decision — the `variants` column per row — then re-run (~7 min)** |
+| **3 — rewrite history** | 🔴 **RAN 2026-09-18, GATE 3 REFUSED IT — rev 13, rescoped rev 14** | The rewrite works: 1,346 commits, employer domain gone from every one, T1 0 / T2 0, instrument control 1719/1719. **Blocked on the term list, not the tooling** — and the blocker is now **2 rows, not 12**. Rev 13 conflated two facts: the 841 substitutions across 38 files are real but nearly all land in `.ir`/`.xml`/`.md`, where an anchorless rewrite is the job. The builder now refuses these itself and names them by their invented replacement. **Gate 2 decision — a `variants` cell on each of 2 rows — then re-run (~7 min)** |
 | **4 — restructure** | ✅ **DONE** | — |
 | **5 — CI and demo** | 🟢 **BUILT 2026-09-18, rev 12** | `.github/workflows/ci.yml` + `nightly.yml`, `global.json` (SDK pinned), `demo/run-demo.py`, `tests/ci-baseline.json`. Every step rehearsed locally and green. **Gate 4 — CI green on a private repo — is the one thing left, and it needs the GitHub account (open item 2)** |
 | **6 — publish** | ⬜ **not started** | gated on 0, 3 and 5 |
@@ -85,22 +85,35 @@ Eight assemblies absent, two targets newly unbuildable, `Harness.Map.Tests` 451 
 failures. **5,894 passing became 2,196.** Had the build comparison still been `os.path.isfile`, this
 artifact would have passed every identifier check and been publishable.
 
-**The cause: twelve rules whose needles are 2–4 characters, every one anchorless and
-case-insensitive.** They come from declared term rows, which bypass the length floor **by design** —
-finding F1 established that, because job codes are five characters and applying the floor discarded
-15 of 19 term rows. That bypass is right for a distinctive five-character job code and wrong for a
-two-character fragment. Measured: **840 substitutions across 37 tracked files**, 724 of them from the
-four 2-character rules.
+**The cause: declared term rows emitting anchorless, case-insensitive rules short enough to match
+ordinary text.** Declared rows bypass the length floor **by design** — finding F1 established that,
+because job codes are five characters and applying the floor discarded 15 of 19 term rows. That
+bypass is right for a distinctive five-character job code and wrong for a two- or three-character
+fragment.
 
-One of them is what broke the build. Rule #111 — three characters, dotted, anchorless — rewrote
-ordinary C#:
+🔴 **REV 14 CORRECTS THE SCOPE THIS PARAGRAPH ORIGINALLY CLAIMED.** It said twelve rows made 840
+substitutions across 37 files and broke the build, presenting one figure as the cause of the other.
+Re-measured: the 841 substitutions across 38 files are real, and nearly all of them land in `.ir`,
+`.xml` and `.md`, where an anchorless rewrite is precisely the job. **Only one of the twelve touches
+build source at all.** The builder now refuses that population by measurement rather than by length,
+and it names **two rows**, not twelve.
+
+One rule is what broke the build: three characters, dotted, anchorless. It matched across a token
+boundary in ordinary C# and collapsed a property access into a single identifier —
 
 ```
-u.SampleKeys   ->   KSampleKeys
+ab.SampleKeys   ->   KSampleKeys
 ```
 
-A property access on a variable. The needle matched across a token boundary, and `CS0103` followed in
-three solutions.
+— after which `CS0103` followed in three solutions.
+
+🔴 **THE NEEDLE ABOVE IS INVENTED** (`ab.S`, standing in for a real three-character declared
+term). The original text of this passage quoted the live one, and
+`tools/check-staged-identifiers.py` caught it on its first real run against this repository. That is
+exactly the failure M-5 documents: a job identifier written into a document as evidence for a
+technical claim, because that does not feel like job content, it feels like rigour. It was written
+by the same author who then built the check, which is the strongest argument available that the
+control had to be mechanical.
 
 **This is A8 in a third guise.** A8 was "the rule matches the wrong surface"; the quarantine that
 answers it — the 368 bare words, Phase 2 step 4 — filters **inferred map keys only**. A declared term
@@ -366,9 +379,10 @@ one, and it was the second kind this suite existed to prevent.*
 
 ### What most changes the picture now
 
-1. **The remaining Phase 2 debt is now one item.** `check-staged-identifiers.py` (M-5) is unwritten.
-   **The review backlog is closed** — all twelve findings discharged (Rev 9 and Rev 10), and M-5 is
-   a new tool rather than a finding.
+1. ~~**The remaining Phase 2 debt is now one item.**~~ ✅ **PHASE 2 IS CLOSED, 2026-09-18.**
+   `check-staged-identifiers.py` (M-5) is built, tested and installed in `hooks/pre-commit`. The
+   review backlog was already closed (Rev 9, Rev 10); M-5 was the last item and it was a new tool
+   rather than a finding.
 2. **Restore `Sharp7.dll`.** One machine-local file keeps `Harness.RigRead` unbuildable. Copies
    survive in stale `bin/` folders from the previous machine, so this is likely a one-file fix —
    but its provenance should be confirmed rather than assumed, and the vendoring question the

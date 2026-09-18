@@ -1,8 +1,9 @@
 #!/bin/sh
 #
-# Two refusals, both of them keyed on WHAT IS STAGED:
+# Three refusals, all of them keyed on WHAT IS STAGED:
 #   1. a context-injected file over its size budget;
-#   2. a change to tools/check-agent-evidence.py whose own self-tests do not pass.
+#   2. a change to tools/check-agent-evidence.py whose own self-tests do not pass;
+#   3. staged content carrying live-job vocabulary (M-5).
 #
 # This exists because CLAUDE.md grew 45,130 -> 96,245 bytes in eleven days and not one
 # commit in that span reduced it. Every byte of CLAUDE.md, the agent briefs and the skills
@@ -55,6 +56,30 @@ if ! python tools/check-agent-evidence.tests.py --staged-only; then
     echo "This commit changes the check that verifies sub-agent hand-backs, and a"
     echo "verifier nobody has watched REFUSE anything is one nobody should trust."
     echo "Fix the checker or the test. --no-verify is not the answer."
+    exit 1
+fi
+
+# M-5, THE COMMITTED-CONTENT BOUNDARY CHECK. Added 2026-09-18, and it is the only gate here that is
+# a governance control rather than a time saving. Live-job identifiers reached committed source in
+# 13 files across several lanes on the first day of live-job work - every lane had been told nothing
+# from the job folder is committed, and every lane honoured it for artifacts, then quoted job
+# identifiers into code comments as evidence for a technical claim. One lane caught its own and
+# correctly declined to rewrite another lane's, which is why the leak survived: a per-lane check
+# catches the lane's own work, only a repo-wide sweep catches the repo.
+#
+# IT BELONGS AT COMMIT TIME rather than in a later audit, and that is the whole of the deferral:
+# here the author still remembers whether the concrete case was load-bearing, and afterwards
+# somebody has to re-derive that intent from prose.
+#
+# It costs nothing on a clone that has never worked a live job - no vocabulary under sanitization/
+# and no live-job material on disk means it says so and exits 0. With live-job material on disk and
+# no vocabulary it REFUSES, because that combination is the exact situation it exists for.
+if ! python tools/check-staged-identifiers.py; then
+    echo ""
+    echo "COMMIT REFUSED: staged content carries live-job vocabulary, or the sweep could not run."
+    echo "Triage the worklist above - a hit is a question, not a verdict, and the usual answer is"
+    echo "to rewrite the sentence in invented vocabulary rather than delete the file. A 'lesson"
+    echo "learned' written in the job's own words is still a leak. --no-verify is not the answer."
     exit 1
 fi
 

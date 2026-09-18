@@ -125,7 +125,7 @@ wins silently.*
 `conflictEdges` was repaired), or a checked manifest of who-owns-which-key so a regenerate that drops
 a foreign key REFUSES instead of succeeding.
 
-### M-5. A committed-content boundary check
+### M-5. A committed-content boundary check ✅ BUILT 2026-09-18
 
 **What happened.** Live-job identifiers reached committed source in **13 files across several lanes**
 on the first day of live-job work. Every lane was told "nothing from the job folder is committed" and
@@ -139,6 +139,28 @@ work; only a repo-wide sweep catches the repo.**
 **Mechanise:** one grep over tracked files for the active job's vocabulary, run before any commit
 during a live run. Mechanically trivial; it is the only item here that is a governance control rather
 than a time saving, and it should be the first one built.
+
+**✅ `tools/check-staged-identifiers.py`, wired as the third block of `hooks/pre-commit`.** 16 cases,
+six mutations each reddening the case named for it, documented in `tools/README.md`.
+
+Two things the entry above got wrong, both worth recording because they are the difference between
+the tool as imagined and the tool as built:
+
+- **Not "over tracked files" — over the INDEX.** `git show :<path>`. Sweeping tracked files answers
+  a question about the working tree, which passes a leak that was staged and then tidied away and
+  refuses one that is only unstaged. The second is the kind of wrong that gets a hook switched off.
+- **Not "one grep" — tiered.** A flat any-hit rule produced 394 residuals on the first trial, of
+  which 317 were identity mappings and 59 of the remaining 61 were the same identifier seen inside
+  a longer one. A gate that cries wolf 59 times in 61 gets learned-ignored, and a gate people have
+  learned to ignore is worse than none because it reports green. It reuses the Gate 3 oracle's
+  T1/T2/T3 derivation rather than re-deriving a third vocabulary.
+
+**"Mechanically trivial" was the part that aged worst.** The matcher was; the *trigger* was not.
+`sanitization/` is git-ignored and machine-local, so the naive build refuses every commit in every
+clone that has never worked a live job — and the alternative, skipping quietly when the vocabulary
+is absent, is the failure this repository has already paid for once. The rule is now: no vocabulary
+**and** no live-job material is nothing to check; no vocabulary **with** live-job material on disk
+is exit 2.
 
 ### M-13. A stationarity claim needs a SERIES, and the inert basis is taken from ONE sample 🔴 BLOCKING A RUN TODAY
 

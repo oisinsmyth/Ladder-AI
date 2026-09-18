@@ -745,6 +745,75 @@ before this branch — identical names, identical counts. They are corpus drift:
 Modbus served window from 37 to 1024 registers and proved it on the controller, and the assertions
 that count against the corpus were never updated. **The tools are right; the tests are stale.**
 
+## `check-staged-identifiers.py` — the committed-content boundary check, M-5 (2026-09-18)
+
+```
+python tools/check-staged-identifiers.py [--name-terms]
+```
+
+**Its subject is the git INDEX, not the working tree** — `git show :<path>`, because that is what the
+commit will contain. A working-tree check passes a leak that was staged and then edited away, and
+refuses one that is only unstaged; the second kind of wrong is what gets a hook switched off.
+
+**Why it exists.** Live-job identifiers reached committed source in **13 files across several lanes**
+on the first day of live-job work. Every lane had been told nothing from the job folder is committed,
+and every lane honoured it *for artifacts* — then quoted job identifiers into code comments as
+evidence for a technical claim, because that does not feel like job content, it feels like rigour.
+One lane audited its own files, caught them, and correctly declined to rewrite another lane's, which
+is precisely why the leak survived: **a per-lane check catches the lane's own work; only a repo-wide
+sweep catches the repo.** It runs at commit time because that is the only moment the author still
+remembers whether the concrete case was load-bearing — afterwards, somebody re-derives intent from
+prose.
+
+**It is not Gate 3.** `verify-scrub.py` judges a rewritten clone's whole object database and decides
+whether something may be published. This asks a smaller question earlier, and its answer is a
+**worklist to triage, never a count to report**.
+
+**It shares `derive_needles` with the oracle, deliberately.** The rule that `verify-scrub.py` must
+not share derivation code with `build-scrub-rules.py` is about an *emitter* and *the judge of its
+output* — derive both the same way and a bug emits a rule that misses X, then hunts for X the same
+wrong way. Nothing of that shape applies here: this emits nothing, judges a different subject at a
+different moment, and a third derivation would buy no coverage while costing a third vocabulary to
+keep in step.
+
+**Tiers are the oracle's, minus one it cannot honestly apply.** T1 declared → reported anywhere,
+embedded or whole. T2 inferred → whole-token only (59 of 61 inferred hits in the first trial were
+the same identifier inside a longer one, and a check that cries wolf 59 times in 61 gets
+learned-ignored). **T3 is never reported here**: in the oracle it gates on a *fall* in its count
+between two corpora, and a staging area has no before and after.
+
+🔴 **The one judgement in the tool, and it is the trigger rather than the matcher.** `sanitization/`
+is git-ignored and machine-local, so a fresh clone has no vocabulary and never will. Refusing every
+commit there forever is a broken tool that teaches people `--no-verify`; going quiet is the other
+failure, and this repo has paid for it once — after a machine move `core.hooksPath` pointed at the
+previous machine's path and **both** existing gates sat inert for weeks reporting green. So the
+trigger is the dangerous state: no vocabulary **and** no live-job material → exit 0 saying so; no
+vocabulary **with** live-job material on disk → **exit 2**, which is the exact situation M-5 names.
+
+| exit | meaning |
+|---|---|
+| 0 | nothing staged carries the vocabulary — or there was genuinely nothing to examine, **corroborated with git rather than inferred from an empty list** |
+| 1 | found something, worklist follows — *or* a staged blob could not be searched at all |
+| 2 | **NOTHING WAS EXAMINED** while there was something to examine. EMPTY IS NOT CLEAN |
+| 3 | refused — the term list is tracked by git, so the identifier list has itself been committed |
+
+**The output names paths, tiers and counts, never the matched term.** A record of a leak must not be
+a copy of it, and this output gets pasted into notes. `--name-terms` is the watched-terminal
+exception, the same trade `build-scrub-rules.py --name-collisions` makes.
+
+**16 cases, and every guard was mutated.** Each of six mutations reddens exactly the case named for
+it: T1-embedded dropped, T2-embedded added, the live-run trigger disabled, unsearchable treated as
+clean, the corroborating question asked in the wrong scope, and the subject switched to the working
+tree. The fifth of those **was a real bug, found by its own case** — the corroboration originally
+asked `git diff --cached --quiet` while the path list asked `--diff-filter=ACMR`, so a commit that
+only *deleted* files produced zero paths, staged changes, and a refusal of a commit that adds
+nothing and cannot leak. A corroborating question asked in a different scope does not corroborate;
+it invents disagreement, and it invented it in the direction that refuses correct work.
+
+**Installed as the third block of `hooks/pre-commit`**, which needs `git config core.hooksPath hooks`
+once per clone. CI runs its self-tests; CI does **not** run the check itself, because CI has no
+`sanitization/` and no live-job material — there, its correct answer is the exit-0 one.
+
 ## Benchmarks
 
 `bench-machine.ps1` measures a machine on the axes that matter for this repo; `bench-compare.ps1`

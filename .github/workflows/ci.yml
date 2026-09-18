@@ -96,7 +96,7 @@ jobs:
         run: python tools/check-file-budgets.py
 
       # The tools' own suites. Each is stdlib-only, offline, and already negative-tested.
-      # build-scrub-rules.tests.py is NOT here - 41 cases at ~30s each is ~20 minutes, which is wrong
+      # build-scrub-rules.tests.py is NOT here - 45 cases at ~30s each is ~20 minutes, which is wrong
       # for a pull request. It runs in nightly.yml instead, and saying so beats dropping it quietly.
       - name: Tooling self-tests
         run: |
@@ -104,6 +104,7 @@ jobs:
           python tools/check-doc-migration.tests.py
           python tools/check-agent-evidence.tests.py
           python tools/capture-build-baseline.tests.py
+          python tools/check-staged-identifiers.tests.py
           python tools/verify-scrub.tests.py
 
       # The demo is a test, not a showpiece. --check asserts the result it claims, so it fails here
