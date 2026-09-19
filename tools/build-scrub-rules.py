@@ -1206,14 +1206,42 @@ def main():
             continue
         merged[after] = numbers
 
+    # *** AN ESCAPE, BECAUSE THE OBVIOUS REMEDY DOES NOT ALWAYS EXIST. *** The finding used to say
+    # "give one of them a replacement of its own", which assumes the two blocks have DISTINCT live
+    # names. They need not: measured here, a generated block and the answer key it was scored
+    # against carry one live name between them, so no replacement can separate them and the advice
+    # was unfollowable. A gate whose remedy cannot be performed is a gate that gets switched off.
+    #
+    # Accepted merges are listed by their RESULTING name with a reason, in a git-ignored file beside
+    # the maps. Every acceptance is printed on every run: an escape nobody sees is how a gate
+    # quietly stops gating, and the reason is there so the next reader can disagree with it.
+    accepted = {}
+    accept_path = os.path.join(repo, args.maps, "accepted-merges.txt")
+    if os.path.isfile(accept_path):
+        for line in io.open(accept_path, encoding="utf-8"):
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            name, _, why = line.partition("#")
+            accepted[name.strip()] = why.strip() or "NO REASON GIVEN"
+
     print("block-name merges             : %d created by the rewrite, %d pre-existing (reported, "
           "not ours)" % (len(merged), pre_existing))
     for after, numbers in sorted(merged.items()):
+        if after in accepted:
+            print("  ACCEPTED  '%s' (%d blocks): %s" % (after, len(numbers), accepted[after]))
+            continue
         findings.append(
             "the rewrite would give '%s' to %d blocks that disagree about their block NUMBER, so "
             "two distinct blocks end up with one name. The NON-INJECTIVE check cannot see this - "
             "only one rule is involved and the collision is with a name already in the corpus. "
-            "Give one of them a replacement of its own in the term list." % (after, len(numbers)))
+            "Give one of them a replacement of its own in the term list, or - if they share one "
+            "live name and no replacement can separate them - record the merge with its reason in "
+            "%s." % (after, len(numbers), os.path.join(args.maps, "accepted-merges.txt")))
+    stale = sorted(set(accepted) - set(merged))
+    if stale:
+        print("  %d accepted merge(s) no longer occur - the list is stale and should be trimmed: %s"
+              % (len(stale), ", ".join(stale)))
 
     # *** THIS WAS A WHOLE-STRING SET INTERSECTION, AND THE ARTIFACT WAS CLEAN BY LUCK. ***
     # `replacements & searchable` fires only when a replacement is character-for-character identical

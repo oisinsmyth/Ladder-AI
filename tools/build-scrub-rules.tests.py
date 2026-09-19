@@ -1111,6 +1111,38 @@ def a_rewrite_that_MERGES_two_blocks_GATES(tmp):
     assert_eq(rules_of(tmp), [], "a refusal must write nothing")
 
 
+def an_ACCEPTED_merge_does_not_gate_but_is_REPORTED(tmp):
+    """The escape, and the reason it needs one. The finding's advice - give one of them a
+    replacement of its own - assumes the two blocks have DISTINCT live names. They need not: a
+    generated block and the answer key it was scored against carry one live name between them, so
+    no replacement can separate them and the advice was unfollowable.
+
+    The acceptance is PRINTED on every run, with its reason. An escape nobody sees is how a gate
+    quietly stops gating, and the reason is there so the next reader can disagree with it."""
+    maps = '{"Names": {"AcmeWidgetUnit": "GenericWidgetUnit"}}'
+    files = {"a.ir": "BLOCK FB AcmeWidgetUnit\n  NUMBER 2\n",
+             "b.ir": "BLOCK FB GenericWidgetUnit\n  NUMBER 42\n"}
+    s = build(tmp, {"m": maps}, TERMS_HEADER, files)
+    write(os.path.join(tmp, "sanitization", "accepted-merges.txt"),
+          "# one per line\nGenericWidgetUnit # same FB, one a reimplementation of the other\n")
+    code, out, err = run_head(tmp, s)
+    assert_eq(code, EXIT_OK, "an accepted merge must not gate (%s%s)" % (out, err))
+    assert_in("ACCEPTED", out, "the acceptance must be reported, never silent")
+    assert_in("one a reimplementation", out, "the REASON must be printed so it can be disagreed with")
+
+
+def a_STALE_acceptance_is_reported(tmp):
+    """An allow-list that outlives its reason is an allow-list nobody rereads. A name on it that no
+    longer merges is reported so the list can be trimmed rather than accreting forever."""
+    s = build(tmp, {"m": ONE_MAP}, TERMS_HEADER,
+              {"doc.md": "AcmeWidgetUnit appears here\n"})
+    write(os.path.join(tmp, "sanitization", "accepted-merges.txt"),
+          "SomethingThatNeverMerges # left over from an earlier vocabulary\n")
+    code, out, err = run_head(tmp, s)
+    assert_eq(code, EXIT_OK, "exit (%s%s)" % (out, err))
+    assert_in("no longer occur", out, "a stale acceptance must be reported")
+
+
 def two_blocks_ALREADY_sharing_a_name_do_NOT_gate(tmp):
     """*** WHAT THE REWRITE MERGES, NOT WHAT IS ALREADY MERGED. ***
 
@@ -1430,6 +1462,9 @@ for name, body in [
     ("HEADS: dotted keys that DISAGREE about a head GATE",
      dotted_keys_that_DISAGREE_about_a_head_GATE),
     ("MERGE: a rewrite that MERGES two blocks GATES", a_rewrite_that_MERGES_two_blocks_GATES),
+    ("MERGE: an ACCEPTED merge does not gate but is REPORTED",
+     an_ACCEPTED_merge_does_not_gate_but_is_REPORTED),
+    ("MERGE: a STALE acceptance is reported", a_STALE_acceptance_is_reported),
     ("MERGE: two blocks ALREADY sharing a name do NOT gate",
      two_blocks_ALREADY_sharing_a_name_do_NOT_gate),
     ("MERGE: a block and its SANITIZED COUNTERPART do NOT gate",
