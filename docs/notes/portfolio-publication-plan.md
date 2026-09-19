@@ -53,10 +53,10 @@ this table, this table is current.
 | **1 — hygiene** | ✅ **DONE** | — |
 | **2 — the scrub tooling** | ✅ **DONE 2026-09-18 — rev 14** | ✅ `verify-scrub.tests.py` **35 cases**. ✅ `capture-build-baseline.py` + 22 tests. ✅ **The review backlog is CLOSED** — all twelve findings discharged (rev 9, rev 10). `build-scrub-rules.tests.py` is **45 cases** after the declared-breadth gate. ✅ **`check-staged-identifiers.py` (M-5) is built** — 16 cases, six mutations, wired into `hooks/pre-commit`. **Nothing outstanding** |
 | **2b — the red suite** | ✅ **DONE 2026-09-18** | **FI-93 discharged, rev 11.** 19 red tests → **2**. The 2 are one fact: `Main.ir` gained three networks and `Main.xml` was never re-exported; **one TIA re-export clears both** |
-| **3 — rewrite history** | ✅ **DONE 2026-09-19 — rev 16, EARNED ZERO** | **Gate 3 returns an EARNED ZERO over 1,366 commits, 6,386 blobs and 1,830 paths.** T1 0 / T2 0, over-scrub 0, instrument control 1719/1719, must-survive 5 of 5, build **5,894 → 5,894 — not one test lost**. Demo 14 + 1 known; budgets 19/0 over; IR verified through `lad-coder` (29,752 lines and 21,673 literals matching as multisets). Verifier stamp `subject=1c2de19518e0`. **It refused twice first, and both refusals were right** — see rev 16. Source untouched, no remote. **The clone is on disk and has never been pushed; publication is Phase 6** |
+| **3 — rewrite history** | ✅ **DONE 2026-09-19 — rev 16, EARNED ZERO** | **Gate 3 returns an EARNED ZERO over 1,366 commits, 6,386 blobs and 1,830 paths.** T1 0 / T2 0, over-scrub 0, instrument control 1719/1719, must-survive 5 of 5, build **5,894 → 5,894 — not one test lost**. Demo 14 + 1 known; budgets 19/0 over; IR verified through `lad-coder` (29,752 lines and 21,673 literals matching as multisets). Verifier stamp `subject=1c2de19518e0`. **It refused twice first, and both refusals were right** — see rev 16. Source untouched, no remote. ⚠️ **That stamp is NOT the published one.** The mailmap was rewritten afterwards to map both author identities, which required a fresh cycle; the artifact that went public carries stamp **`bb6d61c6544d`** over 1,367 commits / 6,387 blobs / 1,830 paths. Same gates, same earned zero, one commit later |
 | **4 — restructure** | ✅ **DONE** | — |
-| **5 — CI and demo** | 🟢 **BUILT 2026-09-18, rev 12** | `.github/workflows/ci.yml` + `nightly.yml`, `global.json` (SDK pinned), `demo/run-demo.py`, `tests/ci-baseline.json`. Every step rehearsed locally and green. **Gate 4 — CI green on a private repo — is the one thing left, and it needs the GitHub account (open item 2)** |
-| **6 — publish** | ⬜ **not started** | gated on 0, 3 and 5 |
+| **5 — CI and demo** | ✅ **DONE 2026-09-19 — Gate 4 GREEN, rev 17** | `.github/workflows/ci.yml` + `nightly.yml`, `global.json` (SDK pinned), `demo/run-demo.py`, `tests/ci-baseline.json`. **The first CI run on real GitHub hardware passed on the published sha** — 1 job, 11 steps, all success, ~9½ minutes. The step that matters is `capture-build-baseline.py --expect`, which fails on a lost assembly, a fallen pass count, a risen failure count *or* a third unbuildable target; it did none of those |
+| **6 — publish** | ✅ **DONE 2026-09-19 — rev 17** | Published to `github.com/oisinsmyth/Ladder-AI`. **Remote `main` = local clone `HEAD` = Gate 3's verdict stamp `bb6d61c6544d`.** Pushed private, CI confirmed green, then made public by the owner — the arrangement was chosen precisely so a mistake stayed recoverable. Steps 2 and 3 discharged: this repo still has **no remote at all**, and the publication is recorded in `data-boundary-audit-backlog.md` as an `AB-1` discharge **for the public artifact only** |
 
 ### What is actually built and proven
 
@@ -68,6 +68,71 @@ this table, this table is current.
 - **The trial rewrite recipe, proven:** `clone --no-local` → `filter-repo --replace-text
   --replace-message @path-renames.args --mailmap` → delete all but the publishing branch →
   `reflog expire --all --expire=now && gc --prune=now` → verify. ~7 min rewrite, ~30 s verify.
+
+### Rev 17 — ✅ PUBLISHED. Gate 4 green on the first run, and the thing that was checked is the thing that shipped
+
+**`github.com/oisinsmyth/Ladder-AI`, commit `bb6d61c6544d7096e62fb8459a66b2bfde648db4`.**
+
+```
+remote main    bb6d61c6544d7096e62fb8459a66b2bfde648db4
+local  HEAD    bb6d61c6544d7096e62fb8459a66b2bfde648db4
+verdict stamp  bb6d61c6544d
+```
+
+**All three agree, and that identity is the whole point.** A verifier that passes a rewrite and a
+push that publishes *a* rewrite are two facts about two artifacts unless something ties them
+together. Gate 3's stamp is the subject it examined; it is byte-identical to what is public.
+
+**The sequence, and why it was this way round.** Pushed to a **private** repo → CI ran → confirmed
+green → owner flipped it public. Chosen deliberately over publishing first and watching CI on the
+public repo: the only arrangement where a mistake is still recoverable. **The visibility flip was
+the owner's to make and was never automated.**
+
+**Gate 4, first run, on real GitHub hardware:** 1 job, 11 steps, all success, 9m 27s. The step that
+carries the gate is `capture-build-baseline.py --expect tests/ci-baseline.json`, which fails on a
+lost assembly, a fallen pass count, a risen failure count *or* a third unbuildable target — the two
+known failures and two unbuildable targets run every time and are tolerated **only because the
+baseline records exactly two of each**. One annotation, and it was infrastructure rather than code:
+Node 20 deprecation on four actions.
+
+**A measurement worth keeping, made while deciding whether to watch CI from here.** On a *public*
+repo, anonymously: run conclusion ✅, per-job and per-step conclusions ✅, annotations ✅ —
+**raw logs ❌ (API 403), and the web UI says "Sign in to view logs"**. So going public would have
+bought the ability to see *that* something failed and never *why*. **The case where you need the
+logs is exactly the case where anonymous access stops working**, which is an argument against
+publishing in order to gain observability.
+
+**The Node 20 fix, and the one-major trap.** Rather than bumping to latest, each action's
+`runs.using` was read at each tag. Minimum Node-24 majors: checkout v5, setup-dotnet v5,
+setup-python v6 — and **upload-artifact v6, because v5 is still Node 20.** A habitual one-major bump
+would have left the warning in place and looked like a fix. Latest was v7/v6/v7/v7 and was
+deliberately not taken: extra majors are behaviour changes this workflow would have to re-earn.
+⚠️ **These edits are in the source repo and are NOT in the published artifact** — reaching it needs
+another rewrite cycle.
+
+**Open item 9 was closed and grew four times in the closing.** It recorded one false Green claim in
+one file. Measuring it properly found the same assertion about **four** directories — including
+`docs/evidence`, 13 of 24 tracked files, 36 needles, 4 declared — all of them made by
+`docs/13-data-boundary.md`'s own approvals. **Nothing leaks:** Gate 3 returns T1 0 over exactly this
+content. The defect is the label, and a false *already sanitised* label is what licenses a copy into
+somewhere the scrub does not run. Now **AB-2**, with **M-22** as the fix: the builder's `--green`
+list has been a machine-readable tier register all along, none of the four was ever on it, and
+nothing ever compared the register to the prose.
+
+**🔴 M-5 REFUSED THE COMMIT THAT RECORDED ALL THIS, AND IT WAS RIGHT.** Writing `AB-2` up meant
+naming the directories, and two of them are **named after the live block they were derived from** —
+so an 11-character inferred identifier went into the audit backlog inside a directory path. That
+file's own header predicts this in its second paragraph: *"writing them down here would commit the
+very strings the finding is about, into a new committed file, in the name of recording that they
+are committed."* **A finding about false sanitisation labels, leaking while being recorded.** The
+two rows are now described by role, with the exact paths left in the Amber-access record where they
+already live. Triaged without printing the term — its length, tier and containing string were
+enough to pick the remedy, which is what `--name-terms` being off by default is for.
+
+**Also found while checking this:** `.gitignore` covered `scratch/`, `scratch-*/`, `.lane-*/` and
+`.scratch-*/` — and not `.scratch/`, which existed, holding an `.ir` file and real tool output. Two
+comments in that file describe this exact lesson, each written by someone who had just been bitten,
+and the base case was still the gap. Fixed.
 
 ### Rev 16 — ✅ PHASE 3 IS DONE. Gate 3 returns an EARNED ZERO on a complete artifact
 
@@ -1297,12 +1362,19 @@ Should drive the README rather than be discovered by a reader:
 
 ---
 
-## 7. Open items — must close before Phase 6
+## 7. Open items — *(the gating list; Phase 6 closed 2026-09-19 with items 1–8 discharged)*
 
 1. ~~**Licence.**~~ ✅ **CLOSED 2026-09-17 — MIT**, `LICENSE` written, with a note that it grants
    nothing in respect of Siemens TIA Portal, the Openness API or Siemens-shipped artwork.
-2. **GitHub account and repository name** — and with it **the exact GitHub noreply address** the
-   `--mailmap` maps the employer-domain author identity to. The trial rewrite used a placeholder.
+2. ~~**GitHub account and repository name**~~ ✅ **CLOSED 2026-09-19 — `oisinsmyth/Ladder-AI`**,
+   author `oisinsmyth <331246123+oisinsmyth@users.noreply.github.com>` (the **ID-prefixed** noreply
+   form, not the legacy `<login>@` one — both are valid, only this one reliably links a commit to
+   the account). **The mailmap needed TWO source identities, and the second is the easy one to
+   forget:** the employer address accounted for 2,678 author/committer lines, and the `ladder-ai`
+   placeholder used while preparing the publication accounted for **66 more**. Mapping only the
+   first would have published a history authored by two people, one of them a project name. Final
+   sweep over the published object database: **14,559 objects, 0 employer-domain occurrences,
+   1 distinct author address.**
 3. ~~**`docs/06-lad-conventions.md` C-124/C-128 process description.**~~ ✅ **CLOSED 2026-09-17 —
    ruled a leak, vocabulary generalised.** The `AB-1` flag was right to hesitate and wrong on one
    point: it checked the passage against the *identifier list*, which it passes, rather than against
@@ -1358,7 +1430,13 @@ Should drive the README rather than be discovered by a reader:
    and `.md`, **none in build source**. That is A8 working as intended, a model designation inside a
    longer product name. Gate 3's per-assembly build comparison is what confirms it.
 
-9. 🔴 **A TIER CLAIM THAT DOES NOT MATCH ITS CONTENTS — open, and not a publication blocker.**
+9. ⚠️ **A TIER CLAIM THAT DOES NOT MATCH ITS CONTENTS — wording FIXED 2026-09-19, and the item grew
+   four times when measured. Never a publication blocker.** ➜ **Now tracked as `AB-2` in
+   `data-boundary-audit-backlog.md`, with `M-22` as the durable fix.** The two rows below are what
+   this entry originally recorded; the real extent is four directories, because
+   `docs/13-data-boundary.md`'s own approvals make the same assertion about `gen/PlantAutoControl-bench`
+   (6 of 8 files) and `docs/evidence` (**13 of 24, 36 needles, 4 declared**). Corrections were
+   written to `spec.md` and to both approvals.
    `gen/_validation/MotorVSDSystem-purpose/spec.md` asserts the validation case is Green-tier,
    invented-names-only. Measured 2026-09-19 against the derived vocabulary:
 
@@ -1372,11 +1450,19 @@ Should drive the README rather than be discovered by a reader:
    says it. The risk is that a false *already sanitised* label is what lets content be copied
    somewhere the scrub does not run, which is the shape of the 13-file leak `M-5` was filed for.
 
-   Two pieces, and neither is a one-line fix:
-   - **the wording** in `spec.md` — `gen/` content, so a `lad-coder` dispatch rather than an inline
-     edit;
-   - **the practice** — a blind-validation case whose answer key is a byte copy of unsanitised bench
-     content. That is a question about how validation cases are built, not about one file.
+   Two pieces, and neither was a one-line fix:
+   - ✅ **the wording** — `spec.md`'s claim retracted by name and replaced with a measured data-tier
+     notice (`lad-coder` dispatch, as `gen/` content requires), and a correction note appended to
+     both 2026-07-20 approvals in `docs/13-data-boundary.md`. **Counts and paths only; no term is
+     named anywhere** — a record of a leak must not be a copy of it;
+   - 🔴 **the practice — still open, and it is the owner's call.** A blind-validation case whose
+     answer key is a byte copy of unsanitised bench content is a question about how validation
+     cases are *built*, not about one file.
+
+   **The one fact worth carrying out of this:** the scrub builder's `--green` list is already a
+   machine-readable tier register, and **none of the four directories has ever been on it.** A
+   register and a prose claim disagreed for two months and nothing in the repository ever compared
+   them — which is why `M-22` is a check and not a resolution to be more careful.
 
 ---
 

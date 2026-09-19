@@ -216,3 +216,93 @@ them by this document's own 2026-08-27 list. Two are a Green-tier sandbox block 
 named in "Judged NOT leaks", and one is the ordinary English word *steeped* in an unrelated sentence
 about LLMs. **No mechanical check would have found this finding, and none would have cleared it
 either** — which is the whole reason it sat open for three weeks.
+
+---
+
+## AB-2. Four directories documented as Green, and all four carry live vocabulary — 🔴 OPEN (found 2026-09-19)
+
+> **Status.** Found while closing open item 9 of the publication plan, which had recorded a single
+> false tier claim in one file. Measuring it properly found the same defect in three more places and
+> a common cause. **Not a publication blocker** and **nothing is leaking** — see *What is not wrong*
+> below. Decision-maker: project owner. Durable fix filed as **M-22**.
+
+**The finding.** `docs/13-data-boundary.md`'s two 2026-07-20 per-project approvals mandate
+sanitize-to-Green-first and then assert the outcome — *"Every downstream artifact stays Green and
+committable"*, *"every committed artifact ... is Green"*. `gen/_validation/MotorVSDSystem-purpose/spec.md`
+asserted the same thing in four words. Measured against this project's derived de-identification
+vocabulary, over tracked content at `HEAD`:
+
+| directory | tracked files carrying it | distinct hunted needles | of which DECLARED (T1) |
+|---|---|---|---|
+| `gen/_validation/MotorVSDSystem-purpose` | 3 of 10 | 1 | 0 |
+| the bench IR corpus under `ir/` | 2 of 35 | 14 | 2 |
+| its derived register under `gen/` | 6 of 8 | 3 | 1 |
+| `docs/evidence` | 13 of 24 | 36 | 4 |
+
+> 🔴 **Two rows are described rather than named, and the reason is this entry's own subject.** Those
+> two directories are **named after the live block they were derived from**, so their paths carry an
+> inferred (T2) identifier — writing them here would have committed the very string the finding is
+> about, into this file, in the name of recording that it is committed. That is the failure this
+> document's header predicts in its second paragraph, and **`M-5` refused the commit that tried it.**
+> The exact paths are in `docs/13-data-boundary.md`'s two 2026-07-20 approvals, which already name
+> the block and are the Amber-access record where that belongs.
+
+Per this document's own rule, **the terms are not listed**; the measurement is reproducible from the
+gitignored vocabulary with the scrub tooling.
+
+**What is NOT wrong, stated first because it changes how urgent this reads.** The *approvals* were
+correctly scoped and are not withdrawn — they authorised an Amber read in order to export and
+sanitize, and that is what happened. The published artifact is clean: Gate 3 returns **T1 0 / T2 0**
+over exactly this content, because the scrub rewrites it on the way out. No restricted data has left
+this machine. **The defect is the label, not the data.**
+
+**Why a label is worth an AB entry.** A false *already sanitised* mark is precisely what licenses a
+copy into somewhere the scrub does not run — into `patterns/`, a committed doc, a test fixture, a
+published artifact. That is the mechanism of **AB-1**, arriving by a different road: AB-1 was content
+that nobody checked; this is content that a document said had already been checked.
+
+**How it survived, and it is written in the entry that failed.** The second of the two approvals
+names its own enforcement: *"a map-key leakage grep before commit"*. That is a per-lane instrument, and AB-1's
+central finding is that **a per-lane check catches the lane's own work; only a repo-wide sweep
+catches the repo.** The control was the wrong shape, not carelessly applied — which is exactly why
+the answer is M-22 and not "be more careful".
+
+**The sharpest fact in the finding:** the tooling never believed the claim. The scrub builder's
+`--green` list is a machine-readable tier register, and **none of the four directories has ever been
+on it.** A register and a prose claim disagreed for two months and nothing ever compared them.
+
+**Remediated so far:** `spec.md`'s claim retracted and corrected (2026-09-19); a correction note
+appended to both approvals in `docs/13-data-boundary.md`. **Still open:** the practice question —
+a blind-validation answer key that is a byte-identical copy of unsanitised bench content is a
+question about how validation cases are *built*, not about any one file. Owner's call.
+
+---
+
+## PUBLICATION RECORD — 2026-09-19
+
+**Discharges `AB-1`'s deferral FOR THE PUBLIC ARTIFACT ONLY.** Phase 6 step 3 of
+`docs/notes/portfolio-publication-plan.md`.
+
+`Ladder-AI` was published to `github.com/oisinsmyth/Ladder-AI` at commit
+`bb6d61c6544d7096e62fb8459a66b2bfde648db4`. **Remote `main`, the local clone's `HEAD`, and Gate 3's
+verdict stamp are the same twelve hex characters** — what is public is the object graph the gate
+returned a zero over, not a rebuild of it.
+
+| gate | result |
+|---|---|
+| T1 DECLARED / T2 whole-token | **0 / 0** |
+| T3 over-scrub | 0 fell |
+| must-survive | 5 of 5 |
+| instrument control | 1,719 of 1,719 |
+| build | 23 assemblies, 5,894 → 5,894, cannotBuild 2 before / 2 after |
+| scope | 1,367 commits · 6,387 blobs · 1,830 paths · 7 unsearchable blobs |
+| final identity sweep | 14,559 objects · **0** employer-domain occurrences · **1** author address |
+| **Gate 4 — CI** | **green** on that exact sha; 11 steps, all success |
+
+**`M-5` REMAINS OPEN AND STILL GOVERNS THIS REPOSITORY.** Publishing a clean artifact says nothing
+about the working repo it was cut from: this repository continues to carry live-job material, and
+the pre-commit sweep is the control on it. The discharge above is scoped to the published artifact
+and to nothing else.
+
+Verified at the same time: this working repository has **no git remote at all**, so no push from
+here can reach the public repository by accident.
