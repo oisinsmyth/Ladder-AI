@@ -1087,6 +1087,59 @@ def a_dotted_rule_still_RENAMES_a_head_with_no_bare_rule(tmp):
         "the composite stopped being scrubbed - coverage paid for consistency: %r" % dotted
 
 
+# ---- MERGE: a replacement landing on a name the corpus already uses ------------------------------
+# NON-INJECTIVE looks for two RULES sharing a replacement. This is ONE rule whose replacement lands
+# on a name already in the repository, so the renamed block arrives on top of an existing one and
+# the distinction is gone. Found by a lad-coder verification of the rewritten IR, AFTER the
+# identifier half had returned an earned zero and the whole suite was at parity - no string gate
+# could have seen it, because every string involved was supposed to be there.
+#
+# The block NUMBER is the discriminator. Six replacements in the real vocabulary already exist as
+# block names and most are deliberate: the invented names were chosen to match the already-sanitized
+# bench corpus, so a live block and its counterpart are the same block wearing two names and agree
+# about their number. Only a disagreement about the number is a real loss.
+
+def a_rewrite_that_MERGES_two_blocks_GATES(tmp):
+    """Two different blocks - different numbers - ending up with one name."""
+    maps = '{"Names": {"AcmeWidgetUnit": "GenericWidgetUnit"}}'
+    s = build(tmp, {"m": maps}, TERMS_HEADER,
+              {"a.ir": "BLOCK FB AcmeWidgetUnit\n  NUMBER 2\n",
+               "b.ir": "BLOCK FB GenericWidgetUnit\n  NUMBER 42\n"})
+    code, out, _ = run_head(tmp, s)
+    assert_eq(code, EXIT_FINDING, "a rewrite that merges two blocks must gate (%s)" % out)
+    assert_in("disagree about their block NUMBER", out, "the finding must name the discriminator")
+    assert_eq(rules_of(tmp), [], "a refusal must write nothing")
+
+
+def two_blocks_ALREADY_sharing_a_name_do_NOT_gate(tmp):
+    """*** WHAT THE REWRITE MERGES, NOT WHAT IS ALREADY MERGED. ***
+
+    This corpus has two such pairs before any rule runs. Reporting them blames the scrub for the
+    repository it was handed, and a refusal nobody can act on is how a gate gets switched off. The
+    first version of this check reported three merges where there was one - the other two were
+    already there."""
+    maps = '{"Names": {"AcmeWidgetUnit": "GenericWidgetUnit"}}'
+    s = build(tmp, {"m": maps}, TERMS_HEADER,
+              {"doc.md": "AcmeWidgetUnit appears here\n",
+               "a.ir": "BLOCK FB SharedName\n  NUMBER 2\n",
+               "b.ir": "BLOCK FB SharedName\n  NUMBER 42\n"})
+    code, out, err = run_head(tmp, s)
+    assert_eq(code, EXIT_OK, "a PRE-EXISTING shared name must not gate (%s%s)" % (out, err))
+    assert_in("1 pre-existing", out, "the pre-existing merge must still be counted")
+
+
+def a_block_and_its_SANITIZED_COUNTERPART_do_NOT_gate(tmp):
+    """The ordinary, deliberate case: the invented vocabulary was chosen to match an already-clean
+    bench corpus, so the live block and its counterpart are one block wearing two names. They agree
+    about their number, and gating on that would refuse the intent of the whole map."""
+    maps = '{"Names": {"AcmeWidgetUnit": "GenericWidgetUnit"}}'
+    s = build(tmp, {"m": maps}, TERMS_HEADER,
+              {"live.ir": "BLOCK FB AcmeWidgetUnit\n  NUMBER 7\n",
+               "bench.ir": "BLOCK FB GenericWidgetUnit\n  NUMBER 7\n"})
+    code, out, err = run_head(tmp, s)
+    assert_eq(code, EXIT_OK, "same block, same number, must not gate (%s%s)" % (out, err))
+
+
 def a_member_that_NEVER_stands_alone_is_still_renamed(tmp):
     """*** THE MIRROR, AND THE BUG IT CATCHES COST 49 RULES. ***
 
@@ -1376,6 +1429,11 @@ for name, body in [
      a_head_the_maps_state_DIRECTLY_is_not_overridden),
     ("HEADS: dotted keys that DISAGREE about a head GATE",
      dotted_keys_that_DISAGREE_about_a_head_GATE),
+    ("MERGE: a rewrite that MERGES two blocks GATES", a_rewrite_that_MERGES_two_blocks_GATES),
+    ("MERGE: two blocks ALREADY sharing a name do NOT gate",
+     two_blocks_ALREADY_sharing_a_name_do_NOT_gate),
+    ("MERGE: a block and its SANITIZED COUNTERPART do NOT gate",
+     a_block_and_its_SANITIZED_COUNTERPART_do_NOT_gate),
     ("ALIGN: a member that NEVER stands alone is still renamed",
      a_member_that_NEVER_stands_alone_is_still_renamed),
     ("ALIGN: a GREEN head is still renamed inside the composite",

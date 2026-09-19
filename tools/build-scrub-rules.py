@@ -1150,6 +1150,71 @@ def main():
                             "a rename silently weakens a test that distinguished them."
                             % (len(keys), replacement))
 
+    # *** THE OTHER WAY TWO NAMES BECOME ONE, AND THE CHECK ABOVE STRUCTURALLY CANNOT SEE IT. ***
+    # NON-INJECTIVE looks for two RULES sharing a replacement. This is ONE rule whose replacement
+    # lands on a name the repository already uses: the renamed block arrives on top of an existing
+    # one and the distinction is gone. The substitution loops do check a CANDIDATE against
+    # corpus_tokens before adopting it; the replacement the maps state is checked against the job
+    # folder and nothing else.
+    #
+    # Found by a lad-coder verification of the rewritten IR, after the identifier half had returned
+    # an earned zero and the whole test suite was at parity. Two FBs - 19 networks and 32, block
+    # NUMBER 2 and 42 - ended up both declaring the same name.
+    #
+    # THE BLOCK NUMBER IS THE DISCRIMINATOR, and it is what keeps this quiet in the ordinary case.
+    # Six replacements here already exist as block names, and most are deliberate: the invented
+    # vocabulary was chosen to match the already-sanitized bench corpus, so a live block and its
+    # sanitized counterpart are the SAME block wearing two names and carry the same number. Only a
+    # collision between blocks that disagree about their number is a real loss of information, so
+    # only that gates - no allow-list to maintain, because the data already says which is which.
+    block_names = {}
+    for rel in git(repo, "ls-files", "*.ir").split("\n"):
+        if not rel.strip():
+            continue
+        try:
+            body = io.open(os.path.join(repo, rel), encoding="utf-8", errors="replace").read()
+        except OSError:
+            continue
+        decl = re.search(r"^BLOCK\s+(FB|FC|OB|DB)\s+(\S+)", body, re.M)
+        num = re.search(r"^\s*NUMBER\s+(\d+)", body, re.M)
+        if decl:
+            block_names.setdefault(decl.group(2), set()).add(
+                (decl.group(1), num.group(1) if num else "?"))
+
+    # *** WHAT THE REWRITE MERGES, NOT WHAT IS ALREADY MERGED. *** Two blocks can share a name
+    # before any rule runs - this corpus has two such pairs - and reporting those blames the scrub
+    # for the repository it was handed. It is the third time this session that a check had to learn
+    # the difference between a state and a change: mustNotAppear gated on presence rather than a
+    # rise, and M-5 gated on what a file contained rather than what a commit introduced. The shape
+    # is always the same, and so is the cost - a refusal nobody can act on.
+    renamed = {}
+    for name, sigs in block_names.items():
+        after = name
+        for needle, rep, key in rules:
+            pattern = (re.compile(re.escape(needle), re.IGNORECASE) if key in klass_of
+                       else re.compile(r"\b" + re.escape(needle) + r"\b"))
+            after = pattern.sub(rep, after)
+        renamed.setdefault(after, {})[name] = sigs
+
+    merged, pre_existing = {}, 0
+    for after, sources in renamed.items():
+        numbers = {num for sigs in sources.values() for _, num in sigs}
+        if len(numbers) < 2:
+            continue                                        # one block, or copies agreeing on it
+        if len(sources) < 2:
+            pre_existing += 1                               # already shared a name; not our doing
+            continue
+        merged[after] = numbers
+
+    print("block-name merges             : %d created by the rewrite, %d pre-existing (reported, "
+          "not ours)" % (len(merged), pre_existing))
+    for after, numbers in sorted(merged.items()):
+        findings.append(
+            "the rewrite would give '%s' to %d blocks that disagree about their block NUMBER, so "
+            "two distinct blocks end up with one name. The NON-INJECTIVE check cannot see this - "
+            "only one rule is involved and the collision is with a name already in the corpus. "
+            "Give one of them a replacement of its own in the term list." % (after, len(numbers)))
+
     # *** THIS WAS A WHOLE-STRING SET INTERSECTION, AND THE ARTIFACT WAS CLEAN BY LUCK. ***
     # `replacements & searchable` fires only when a replacement is character-for-character identical
     # to a needle. filter-repo does not apply rules that way: it applies them in file order, so what
