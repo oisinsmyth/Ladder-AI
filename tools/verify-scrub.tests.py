@@ -155,6 +155,38 @@ def assert_in(needle, hay, what):
     assert needle in hay, "%s: expected %r in:\n%s" % (what, needle, hay[:1500])
 
 
+# ------------------------------------------------------- mustNotAppear: a RISE, not a presence
+# *** THIS CHECK HAD NO TEST AT ALL, AND ITS FIRST CONTACT WITH A REAL ARTIFACT REFUSED ONE IT
+# SHOULD HAVE PASSED. *** The sentinel and filter-repo's default replacement must not be INTRODUCED
+# by a rewrite. They are also strings this repository legitimately contains, because it contains the
+# tool that defines them and the plan that explains them - 27 and 57 occurrences across history,
+# every one in the scrub tooling's own source or documentation. Gating on presence therefore made
+# Gate 3 structurally unpassable on its own repository, which is not a strict gate but a broken one.
+# Both real failure modes push the count UP, so a rise is the test and the canary keeps the before.
+
+def a_sentinel_INTRODUCED_by_the_rewrite_GATES(tmp):
+    """The failure the check exists for: a substitution that left its scaffolding behind."""
+    s = build(tmp, {"doc.md": "%s\nordinary text here\n" % CONTROL})
+    canary(tmp, s)
+    scrub(tmp, "doc.md", "ordinary text here", "leftover QQSCRUBQQ0000QQ scaffolding")
+    code, out, _ = run(tmp, s)
+    assert_eq(code, EXIT_FINDING, "a sentinel introduced by the rewrite must gate (%s)" % out)
+    assert_in("up from 0", out, "the finding must report the rise, not merely the presence")
+
+
+def a_sentinel_PRESENT_BEFORE_AND_AFTER_does_NOT_gate(tmp):
+    """The repository's own case. The string is in the tooling before the rewrite and still in it
+    afterwards; nothing was introduced, so there is nothing to report. A check that refuses here
+    can never pass on the repository it was written to protect."""
+    s = build(tmp, {"doc.md": "%s\nthe sentinel is QQSCRUBQQ0000QQ in this documentation\n"
+                              % CONTROL})
+    canary(tmp, s)
+    scrub(tmp, "doc.md", "this documentation", "these docs")
+    code, out, err = run(tmp, s)
+    assert_eq(code, EXIT_OK,
+              "an unchanged pre-existing count must not gate (%s%s)" % (out, err))
+
+
 # ----------------------------------------------------------------- the tier cases
 
 def t1_declared_embedded_only_GATES(tmp):
@@ -588,6 +620,10 @@ def instrument_control_is_reported(tmp):
 
 
 for name, body in [
+    ("MUSTNOTAPPEAR: a sentinel INTRODUCED by the rewrite GATES",
+     a_sentinel_INTRODUCED_by_the_rewrite_GATES),
+    ("MUSTNOTAPPEAR: present before AND after does NOT gate",
+     a_sentinel_PRESENT_BEFORE_AND_AFTER_does_NOT_gate),
     ("T1 declared, embedded-only, GATES", t1_declared_embedded_only_GATES),
     ("T2 inferred, embedded-only, does NOT gate", t2_inferred_embedded_only_does_NOT_gate),
     ("T2 inferred, whole-token, GATES", t2_inferred_whole_token_GATES),

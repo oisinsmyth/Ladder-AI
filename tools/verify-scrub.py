@@ -67,6 +67,7 @@ import sys
 WORD = re.compile(rb"[a-z0-9_.@/-]+")
 NAMEY_SECTIONS = ("names", "tags", "company", "modelline", "identifiers")
 REMOVED_DEFAULT = "***REMOVED***"
+SENTINEL_PREFIX = "QQSCRUBQQ"
 
 # Text carriers that live outside the object database. No git plumbing reaches them, so a gate that
 # only walks the ODB never looks. Measured on the source repo: packed-refs carries a branch name with
@@ -395,7 +396,16 @@ def make_canary(repo, maps_dir, terms_path, out_path, survive_texts, green):
         "mustVanishWhole": len(whole),
         "mustVanishEmbedded": len(embedded),
         "tier3Baseline": t3,
-        "mustNotAppear": ["QQSCRUBQQ", REMOVED_DEFAULT],
+        # *** A BEFORE-COUNT, NOT A LIST OF FORBIDDEN STRINGS. ***
+        # These two must not be INTRODUCED by the rewrite: a sentinel that survived a substitution,
+        # or a rule line missing its `==>` so filter-repo wrote its own default. They are also
+        # strings this repository legitimately contains, because it contains the tool that defines
+        # them and the plan that explains them - measured, 27 and 57 occurrences across history,
+        # every one in the scrub tooling's own source or documentation. Gating on PRESENCE made
+        # Gate 3 unpassable on its own repository, which is not a strict gate but a broken one.
+        # What both failure modes actually do is push the count UP, so the count is what is kept.
+        "mustNotAppear": [{"text": t, "baseline": blob.count(t.lower().encode())}
+                          for t in (SENTINEL_PREFIX, REMOVED_DEFAULT)],
     }
     io.open(out_path, "w", encoding="utf-8", newline="\n").write(
         json.dumps(doc, indent=2, sort_keys=True))
@@ -754,11 +764,19 @@ def main():
                           "now, so its counts describe a different vocabulary (M-20: a stale "
                           "declaration is UNVERIFIED, not a pass).")
         cannot.extend(subject_findings(repo, canary))
-        for text in canary.get("mustNotAppear", []):
+        for entry in canary.get("mustNotAppear", []):
+            # A bare string is a canary recorded before the baseline existed. Treating its baseline
+            # as 0 restores the old behaviour for it rather than crashing, and the subject check
+            # already refuses a canary that is stale in the way that matters.
+            text = entry["text"] if isinstance(entry, dict) else entry
+            baseline = entry.get("baseline", 0) if isinstance(entry, dict) else 0
             n = blob_all.count(text.lower().encode())
-            if n:
-                findings.append("'%s' appears %d time(s) - it must never appear in a finished "
-                                "artifact." % (text, n))
+            if n > baseline:
+                findings.append(
+                    "'%s' appears %d time(s), up from %d before the rewrite. The rewrite must not "
+                    "INTRODUCE it: a sentinel that survived a substitution, or a rule line missing "
+                    "its '==>' so filter-repo wrote its own default, both show up as a rise here."
+                    % (text, n, baseline))
 
         # ---- THE OVER-SCRUB DETECTOR -------------------------------------------------------------
         # T3 is the conventional vocabulary. Its presence never gates - that is the whole point of
