@@ -265,9 +265,15 @@ token in the corpus containing the term, which is the list the cell is chosen fr
 terminal only**, same trade as `--name-collisions`.
 
 The split matters more than it looks. A row whose candidate list is **empty** — every containing
-token is build-source collateral — has nothing to put in a `variants` cell at all, and its honest
-remedy is a narrower scope or no rule, not a cell. A row with candidates is a genuine editorial
-choice. The two look identical in the finding and are opposite in what they need.
+token is build-source collateral — has nothing to put in a `variants` cell at all: the term has no
+legitimate written form in this repository, so there is nothing here to de-identify and the rule is
+pure collateral. Its remedies are **delete the row**, or **give it a `variants` cell naming a form
+that does not occur here**, which keeps the owner's declaration on record while emitting no rule (an
+absent variant is dropped as dead). A row *with* candidates is a genuine editorial choice. The two
+look identical in the finding and need opposite treatments.
+
+⚠️ **`scope` is not a third option.** The column is parsed, stored and **read nowhere** — a dead
+column since `load_terms` was written. Reaching for it would look like a fix and do nothing.
 
 It emits `replace-text.txt`, `replace-message.txt`, `path-renames.args` and `manifest.json`. Last
 full-history run: **106 rules and 22 `--path-rename` pairs** covering 113 changed paths, over 6,345
