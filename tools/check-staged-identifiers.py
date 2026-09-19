@@ -107,21 +107,49 @@ def has_staged_changes(repo):
 
 
 def staged_paths(repo):
-    """Paths whose CONTENT this commit adds. -z because a path may contain anything but NUL.
+    """(new path, path to compare against in HEAD or None) for every path whose CONTENT this commit
+    adds. -z because a path may contain anything but NUL.
 
     Deletions are excluded: D leaves no blob in the index to read, and a path being removed carries
-    nothing into the commit. Renames report their new name, which is the one that gets committed."""
-    rc, out = git_bytes(repo, "diff", "--cached", "--name-only", "-z", "--diff-filter=ACMR")
+    nothing into the commit.
+
+    *** THE SECOND ELEMENT IS WHAT MAKES THIS GATE SURVIVABLE. *** The question is whether this
+    commit INTRODUCES live vocabulary, not whether the file contains any - and in this repository
+    almost every file under src/ and docs/ contains some, which is the entire reason the
+    publication scrub exists. Judging the whole staged blob refuses a one-line change to a file that
+    was already like that, for a reason its author did not cause and cannot fix in that commit. That
+    is the shape of gate people learn to pass with --no-verify.
+
+    A rename compares against its OLD path, so moving a file that was already carrying vocabulary is
+    not read as adding it. -M asks git to detect those; without it a rename arrives as an add and
+    the whole file reads as new."""
+    rc, out = git_bytes(repo, "diff", "--cached", "--name-status", "-z", "-M",
+                        "--diff-filter=ACMR")
     if rc != 0:
         return None
-    return [p.decode("utf-8", "replace") for p in out.split(b"\0") if p]
+    fields = [f.decode("utf-8", "replace") for f in out.split(b"\0") if f]
+    pairs, i = [], 0
+    while i < len(fields):
+        status = fields[i]
+        if status[:1] in ("R", "C") and i + 2 < len(fields):
+            pairs.append((fields[i + 2], fields[i + 1]))     # new path, old path
+            i += 3
+        elif i + 1 < len(fields):
+            pairs.append((fields[i + 1], fields[i + 1] if status[:1] == "M" else None))
+            i += 2
+        else:
+            break
+    return pairs
 
 
-def staged_blob(repo, path):
-    """The INDEX version of a path. None when it cannot be read as UTF-8 - never silently skipped."""
-    rc, out = git_bytes(repo, "show", ":" + path)
+def blob_at(repo, rev, path):
+    """One version of a path. `rev` is "" for the index. None when it cannot be read as UTF-8.
+
+    A missing object is b"" rather than None: a path that does not exist in HEAD contributes no
+    prior occurrences, which is a different fact from a blob nobody could search."""
+    rc, out = git_bytes(repo, "show", rev + ":" + path)
     if rc != 0:
-        return None
+        return b"" if rev else None
     try:
         out.decode("utf-8")
     except UnicodeDecodeError:
@@ -232,12 +260,7 @@ def main():
              len([n for n in hunted if tier[n] == "T2"])))
     print("instrument control    : %d of %d needles matched themselves" % (len(found), len(hunted)))
 
-    worklist, unsearchable = [], []
-    for path in paths:
-        blob = staged_blob(repo, path)
-        if blob is None:
-            unsearchable.append(path)
-            continue
+    def hits_in(blob):
         vocab = vs.tokenise([blob])
         whole, embedded = vs.residuals(vocab, hunted)
         raw = blob.lower()
@@ -247,11 +270,32 @@ def main():
         # T1 counts embedded: the owner named that string and meant it anywhere. T2 does not,
         # because an inferred key inside a longer one is usually a different identifier that merely
         # starts the same way - the asymmetry is the oracle's, and it is what makes this readable.
-        hits = sorted({n for n in whole if tier[n] in ("T1", "T2")}
-                      | {n for n in embedded if tier[n] == "T1"})
-        if hits:
-            worklist.append((path, hits))
+        return ({n for n in whole if tier[n] in ("T1", "T2")}
+                | {n for n in embedded if tier[n] == "T1"})
 
+    worklist, unsearchable, carried = [], [], 0
+    for path, prior_path in paths:
+        blob = blob_at(repo, "", path)
+        if blob is None:
+            unsearchable.append(path)
+            continue
+        staged_hits = hits_in(blob)
+        if not staged_hits:
+            continue
+        # *** WHAT THIS COMMIT INTRODUCES, NOT WHAT THE FILE CONTAINS. *** Subtracting the prior
+        # version is the difference between a gate that is kept and one that is switched off: almost
+        # every file under src/ and docs/ here already carries inferred vocabulary - that is what the
+        # publication scrub is for - so judging the whole blob refuses a one-line change for a reason
+        # its author did not cause and cannot fix in that commit.
+        prior = blob_at(repo, "HEAD", prior_path) if prior_path else b""
+        before = hits_in(prior) if prior else set()
+        introduced = sorted(staged_hits - before)
+        carried += len(staged_hits) - len(introduced)
+        if introduced:
+            worklist.append((path, introduced))
+
+    print("carried over          : %d needle(s) were already in the previous version of a staged "
+          "file\n                        and are NOT this commit's doing" % carried)
     print("unsearchable          : %d staged blob(s) were not valid UTF-8 %s"
           % (len(unsearchable), "(listed below)" if unsearchable else "- none"))
     for path in unsearchable:
@@ -262,7 +306,10 @@ def main():
             print("\nNO HIT IN WHAT COULD BE SEARCHED - but %d blob(s) could not be searched at "
                   "all.\nThat is not the same as clean. Look at them by hand." % len(unsearchable))
             return 1
-        print("\nCLEAN: no staged blob carries a T1 or T2 needle.")
+        print("\nCLEAN: this commit INTRODUCES no T1 or T2 needle.")
+        if carried:
+            print("It is not a claim that the staged files are clean - %d needle(s) were already "
+                  "there.\nThose are the publication scrub's problem, not this commit's." % carried)
         print("THIS PROVES CLOSURE OVER A VOCABULARY, not the absence of identifiers. An identifier "
               "nobody\nwrote down is invisible to it, and always will be.")
         return 0

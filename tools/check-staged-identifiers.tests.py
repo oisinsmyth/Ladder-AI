@@ -121,6 +121,50 @@ def a_staged_DECLARED_term_is_FOUND(tmp):
     assert_in("1 declared (T1)", out, "the tier must be reported")
 
 
+def a_PRE_EXISTING_hit_in_a_modified_file_is_NOT_reported(tmp):
+    """*** WHAT THIS COMMIT INTRODUCES, NOT WHAT THE FILE CONTAINS. ***
+
+    This is the difference between a gate that is kept and one that is switched off. Almost every
+    file under src/ and docs/ in the real repository already carries inferred vocabulary - that is
+    what the publication scrub exists for - so judging the whole staged blob refuses a one-line
+    change for a reason its author did not cause and cannot fix in that commit.
+
+    Found the hard way: the first version refused a three-line test fix, naming six needles that had
+    been in those files for months."""
+    s = build(tmp, MAPS, TERMS,
+              {"README.md": "nothing here\n",
+               "old.cs": "// QuadrantWidgetUnit was already here\n"})
+    write(os.path.join(tmp, "old.cs"),
+          "// QuadrantWidgetUnit was already here\nint x = 1;\n")
+    git(tmp, "add", "old.cs")
+    code, out, err = run(tmp, s)
+    assert_eq(code, EXIT_OK, "a pre-existing needle must not gate (%s%s)" % (out, err))
+    assert_in("carried over          : 1", out, "the carried needle must still be COUNTED")
+
+
+def a_NEWLY_INTRODUCED_hit_in_a_modified_file_IS_reported(tmp):
+    """The other half. The same file, the same commit shape - and this time the identifier is being
+    added, which is exactly the 13-files-across-several-lanes failure M-5 was filed for."""
+    s = build(tmp, MAPS, TERMS,
+              {"README.md": "nothing here\n", "old.cs": "// nothing of interest\n"})
+    write(os.path.join(tmp, "old.cs"), "// nothing of interest\n// measured against Zorbex\n")
+    git(tmp, "add", "old.cs")
+    code, out, err = run(tmp, s)
+    assert_eq(code, EXIT_FOUND, "a newly added needle must gate (%s%s)" % (out, err))
+    assert_in("old.cs", out, "the worklist must name the path")
+
+
+def a_RENAME_of_a_file_that_already_carried_vocabulary_is_NOT_reported(tmp):
+    """A rename compares against its OLD path. Without -M git reports it as an add, the whole file
+    reads as new, and moving a file becomes an accusation."""
+    s = build(tmp, MAPS, TERMS,
+              {"README.md": "nothing here\n",
+               "old.cs": "// QuadrantWidgetUnit has been here all along\n"})
+    git(tmp, "mv", "old.cs", "renamed.cs")
+    code, out, err = run(tmp, s)
+    assert_eq(code, EXIT_OK, "a pure rename must not gate (%s%s)" % (out, err))
+
+
 def the_TERM_ITSELF_is_NOT_printed_by_default(tmp):
     """*** A RECORD OF A LEAK MUST NOT BE A COPY OF IT. *** This output gets pasted into notes, and
     a checker that prints the site's name into every terminal it runs in has moved the leak
@@ -296,6 +340,12 @@ def the_instrument_control_is_REPORTED_every_run(tmp):
 
 for name, body in [
     ("a staged DECLARED term is FOUND", a_staged_DECLARED_term_is_FOUND),
+    ("INTRODUCED: a pre-existing hit in a modified file is NOT reported",
+     a_PRE_EXISTING_hit_in_a_modified_file_is_NOT_reported),
+    ("INTRODUCED: a newly added hit in a modified file IS reported",
+     a_NEWLY_INTRODUCED_hit_in_a_modified_file_IS_reported),
+    ("INTRODUCED: a rename of a file that already carried vocabulary is NOT reported",
+     a_RENAME_of_a_file_that_already_carried_vocabulary_is_NOT_reported),
     ("the term itself is NOT printed by default", the_TERM_ITSELF_is_NOT_printed_by_default),
     ("the SUBJECT is the index, not the working tree", the_SUBJECT_is_the_index_NOT_the_working_tree),
     ("a leak staged then edited away is STILL found", a_leak_STAGED_then_edited_away_is_STILL_FOUND),
