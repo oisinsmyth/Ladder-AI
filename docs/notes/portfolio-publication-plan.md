@@ -53,7 +53,7 @@ this table, this table is current.
 | **1 — hygiene** | ✅ **DONE** | — |
 | **2 — the scrub tooling** | ✅ **DONE 2026-09-18 — rev 14** | ✅ `verify-scrub.tests.py` **35 cases**. ✅ `capture-build-baseline.py` + 22 tests. ✅ **The review backlog is CLOSED** — all twelve findings discharged (rev 9, rev 10). `build-scrub-rules.tests.py` is **45 cases** after the declared-breadth gate. ✅ **`check-staged-identifiers.py` (M-5) is built** — 16 cases, six mutations, wired into `hooks/pre-commit`. **Nothing outstanding** |
 | **2b — the red suite** | ✅ **DONE 2026-09-18** | **FI-93 discharged, rev 11.** 19 red tests → **2**. The 2 are one fact: `Main.ir` gained three networks and `Main.xml` was never re-exported; **one TIA re-export clears both** |
-| **3 — rewrite history** | 🔴 **RAN 2026-09-18, GATE 3 REFUSED IT — rev 13, rescoped rev 14** | The rewrite works: 1,346 commits, employer domain gone from every one, T1 0 / T2 0, instrument control 1719/1719. **Blocked on the term list, not the tooling** — and the blocker is now **2 rows, not 12**. Rev 13 conflated two facts: the 841 substitutions across 38 files are real but nearly all land in `.ir`/`.xml`/`.md`, where an anchorless rewrite is the job. The builder now refuses these itself and names them by their invented replacement. **Gate 2 decision — a `variants` cell on each of 2 rows — then re-run (~7 min)** |
+| **3 — rewrite history** | 🟡 **UNBLOCKED 2026-09-19 — rev 15, ready to re-run** | The rewrite works: 1,346 commits, employer domain gone from every one, T1 0 / T2 0, instrument control 1719/1719. It was refused on the build half, and **that blocker is now closed** — all three Gate 2 decisions applied, `build-scrub-rules.py` exits 0 at **115 rules / 22 rename pairs / 0 rows cutting source**, and the rule that broke three solutions is out of the artifact. **Nothing is waiting on a decision. Re-run the rewrite (~7 min), then Gate 3 with both build halves** |
 | **4 — restructure** | ✅ **DONE** | — |
 | **5 — CI and demo** | 🟢 **BUILT 2026-09-18, rev 12** | `.github/workflows/ci.yml` + `nightly.yml`, `global.json` (SDK pinned), `demo/run-demo.py`, `tests/ci-baseline.json`. Every step rehearsed locally and green. **Gate 4 — CI green on a private repo — is the one thing left, and it needs the GitHub account (open item 2)** |
 | **6 — publish** | ⬜ **not started** | gated on 0, 3 and 5 |
@@ -68,6 +68,39 @@ this table, this table is current.
 - **The trial rewrite recipe, proven:** `clone --no-local` → `filter-repo --replace-text
   --replace-message @path-renames.args --mailmap` → delete all but the publishing branch →
   `reflog expire --all --expire=now && gc --prune=now` → verify. ~7 min rewrite, ~30 s verify.
+
+### Rev 15 — Gate 2 is closed, and the builder exits 0
+
+**All three decisions from Rev 14 are applied**, on evidence rather than judgement, and
+`build-scrub-rules.py` now emits: **115 rules, 22 `--path-rename` pairs, 0 rows editing source from
+inside a token.** The rule that took three solutions from 5,894 passing tests to 2,196 is gone from
+the artifact — nothing now rewrites inside a member access. The decisions and their reasons are in
+**Open item 8**.
+
+**Row (c) was not what the finding said it was.** `--explain-cuts` printed 11 candidate forms: one
+real, and **ten base64 blobs** in `hmi/comparison.html` and `hmi/brand-comparison.html` that happen
+to contain the term's three letters. The one real form already contained a **4-character** term that
+has its own row — and since rules are emitted longest-first, that row rewrites it first. The
+3-character row was redundant, not under-specified.
+
+🔴 **WHICH MEANS THE CHECK'S STATED REASON WAS WRONG, AND THE FIX IS THE POINT OF THIS REV.** The
+CUTS check measured each needle against the untouched corpus, so it named one build-source token as
+collateral that the longer rule had already made unreachable. Right verdict, wrong reason — and a
+gate that overstates its reason gets argued with, then disbelieved on the day it is right. The
+collateral computation now runs **after** filtering, against the finished needle set, rewriting each
+candidate token with every longer emitted rule before looking for the shorter needle in what
+remains. 52 cases.
+
+**Three guards refused this work before it succeeded, and none of the three came from reading code:**
+
+| refusal | what it caught |
+|---|---|
+| "expected exactly one row" | An invented replacement is **not unique** — two rows share one, being two spellings of a single site. The finding said `term row 'X'` and pointed at both. Findings now carry class and length, which disambiguate and disclose nothing |
+| "the sentinel is not absent" | The absent form I chose occurred **twice in the tree**, because I had committed it in a test fixture an hour earlier. A test string cannot double as production data |
+| variant-collision check | Both discharged rows given the **same** sentinel claimed one written form with two replacements. `claims` is built before dead variants are dropped, so an absent form collides exactly like a present one |
+
+**Phase 3 is unblocked.** The rewrite is a pure function of (source, rules) and re-runs in about
+seven minutes.
 
 ### Rev 14 — Phase 2 closes, and the Phase 3 blocker shrinks from twelve rows to three decisions
 
@@ -1239,18 +1272,26 @@ Should drive the README rather than be discovered by a reader:
    **machine-read** SHA, `tests/ci-baseline.json`'s `commit` field, is annotated as pre-rewrite
    provenance; nothing reads it.
 
-8. 🔴 **THREE GATE 2 DECISIONS — the only thing standing between here and a Phase 3 artifact.**
-   The builder refuses until each is resolved and names them by their **invented** replacement, so
-   they can be discussed without the live terms being written down. Evidence per row: **Rev 14**.
+8. ~~**Three Gate 2 decisions.**~~ ✅ **ALL THREE CLOSED 2026-09-19, and the builder exits 0** —
+   115 rules, 22 `--path-rename` pairs, **0 rows editing source from inside a token**. Decided on
+   the evidence in **Rev 14** and **Rev 15**; rows are named by their **invented** replacement, so
+   this record carries no live term.
 
-   | # | row | what to decide |
-   |---|---|---|
-   | a | `JOB9003` / `None` | Two rows declare the same 5-character term, as `jobcode` and as `site`, with different replacements. **Delete one, or make them agree.** The `None` replacement should not survive under any ordering. |
-   | b | `KS` | 3 characters, contains a separator, and its rule edits **6 build-source tokens from inside** while never being a source token itself. This is the one that broke the build. **Give the row a `variants` cell** naming the longer forms that should be rewritten. |
-   | c | `K15` | Same shape, 1 source token. 13 of its 14 embedded hits are outside build source and may well be legitimate. **A `variants` cell**, or a narrower scope. |
+   | # | row | decision | why |
+   |---|---|---|---|
+   | a | `JOB9003` / `None` | **row deleted** | Two rows declared one 5-character term with different replacements, resolved silently by row order. Both classes derive **identical** variants, so deleting the `site` row is lossless — and it removes a replacement (`None`) that one table re-ordering away becomes a site name in prose and `.ir` tag names |
+   | b | `KS` | **`variants` cell, absent form** | Every token containing the term, **in all of history**, is a build-source token its rule would corrupt. No legitimate written form exists here to de-identify, so there is nothing to put in a cell: it names an absent form, emitting no rule while keeping the declaration on record |
+   | c | `K15` | **`variants` cell, absent form** | The 3-character term is a **prefix** of a 4-character one with its own row. Rules run longest-first, so the longer rewrites first and already covers every genuine occurrence. Of the 11 candidate forms, **one** was real and contained the longer term; **ten** were base64 blobs in two `hmi/*.html` files |
 
-   After these, `python tools/build-scrub-rules.py` should exit 0, and the rewrite re-runs in about
-   seven minutes. **Nothing else in the pipeline is waiting on anything.**
+   🔴 **Each row's sentinel must be distinct.** Giving both discharged rows the same absent form made
+   them claim one written form with two replacements, and the variant-collision check refused it —
+   correctly, and for the F9 reason: `claims` is built *before* dead variants are dropped, so an
+   absent form collides exactly like a present one.
+
+   **What is still short and anchorless is deliberate**: `K150` (4 characters, a whole token in 11
+   files), and `K5`/`K7`/`K75`, which make 764 substitutions across 21 files — all in `.ir`, `.xml`
+   and `.md`, **none in build source**. That is A8 working as intended, a model designation inside a
+   longer product name. Gate 3's per-assembly build comparison is what confirms it.
 
 ---
 
