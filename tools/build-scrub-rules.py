@@ -849,6 +849,14 @@ def main():
     # own second column, so the owner reads this straight off the table they wrote - while the
     # value itself is vocabulary this tool made up, which is safe to print anywhere. A record of a
     # leak must not be a copy of it, and an unidentifiable finding is not a worklist.
+    #
+    # *** THE REPLACEMENT ALONE IS NOT UNIQUE, AND THE FIRST VERSION OF THIS ASSUMED IT WAS. ***
+    # Two rows in the real list share one invented name - two spellings of one site, which is
+    # legitimate and is exactly what a replacement is FOR - so `term row 'X'` picked out two rows
+    # and the worklist it produced could not be acted on without guessing. Found by a guard written
+    # to apply this check's own advice, which refused rather than editing the wrong row. The class
+    # and the term's LENGTH disambiguate without disclosing anything: the owner has the table open,
+    # and neither value is a character of the term.
     # Grouped by ROW, not by variant: a row usually claims several written forms, and three
     # findings for two decisions reads as a longer list than it is. The owner edits rows.
     by_row = {}
@@ -857,11 +865,12 @@ def main():
         by_row[key] = (n | set(cut), forms + 1, sep or dotted, allenc | set(enc))
     for key, (cut, forms, dotted, _enc) in sorted(by_row.items(), key=lambda kv: -len(kv[1][0])):
         findings.append(
-            "term row '%s': %d variant(s)%s edit %d source token(s) from INSIDE and none of "
-            "them is a source token in its own right - an anchorless rule there cuts identifiers "
-            "in half and de-identifies nothing. Give that row an explicit `variants` cell naming "
-            "the forms that should be rewritten."
-            % (chosen[key], forms, " (one contains a SEPARATOR)" if dotted else "", len(cut)))
+            "term row '%s' (%s, %d characters): %d variant(s)%s edit %d source token(s) from "
+            "INSIDE and none of them is a source token in its own right - an anchorless rule there "
+            "cuts identifiers in half and de-identifies nothing. Give that row an explicit "
+            "`variants` cell naming the forms that should be rewritten."
+            % (chosen[key], klass_of.get(key, "?"), len(key), forms,
+               " (one contains a SEPARATOR)" if dotted else "", len(cut)))
 
     # AB-1's trap 2: "a replacement can BE a leak" - one invented name in the 2026-08-27 run already
     # existed verbatim in the job's own IR. Choosing the vocabulary is part of the check.
@@ -1093,7 +1102,8 @@ def main():
                   "message.")
             for key, (cut, forms, dotted, enc) in sorted(by_row.items(),
                                                          key=lambda kv: -len(kv[1][0])):
-                print("\n  term row '%s'" % chosen[key])
+                print("\n  term row '%s' (%s, %d characters)"
+                      % (chosen[key], klass_of.get(key, "?"), len(key)))
                 print("    WOULD CORRUPT in build source (%d) - this is why the row gates:" % len(cut))
                 for token in sorted(cut):
                     print("        %s" % token)

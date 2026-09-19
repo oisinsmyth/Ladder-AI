@@ -960,6 +960,10 @@ def a_declared_term_that_only_cuts_source_tokens_GATES(tmp):
     assert_eq(code, EXIT_FINDING, "a declared term cutting only source tokens must gate (%s)" % out)
     assert_in("cuts identifiers in half", out, "the finding must name the mechanism")
     assert_in("Scrubbed", out, "the finding must name the ROW, by its invented replacement")
+    # An invented replacement is NOT unique - the real list has two rows sharing one, being two
+    # spellings of a single site. Class and length disambiguate them while disclosing nothing.
+    assert_in("(site, 2 characters)", out,
+              "the finding must carry enough to pick the row out when a replacement is shared")
     assert_eq(rules_of(tmp), [], "a refusal must write nothing")
 
 
@@ -992,6 +996,34 @@ def the_CUT_TOKENS_ARE_printed_with_the_flag(tmp):
     assert_in("pqunittag", out.lower(),
               "--explain-cuts must also print the NON-source forms - that is where variants come "
               "from, and a list of only the collateral cannot be chosen from")
+
+
+def a_variants_cell_of_only_ABSENT_forms_emits_no_rule_and_does_not_gate(tmp):
+    """*** THE REMEDY FOR A ROW WITH NOTHING TO SCRUB, AND THE README NOW RECOMMENDS IT. ***
+
+    Some rows gate with an EMPTY candidate list: every token containing the term is build-source
+    collateral, so the term has no legitimate written form in the repository and its rule is pure
+    damage. Deleting the row fixes it and throws away the owner's declaration. The alternative is a
+    `variants` cell naming a form that does not occur here - the forced list REPLACES the derived
+    one, the named form is dropped as dead, no rule is emitted, and the declaration stays on record
+    for the next corpus.
+
+    That is a real behaviour with three moving parts (forced list replaces; absent variant is
+    dropped; a row emitting nothing cannot reach the CUTS check), and a recommendation resting on
+    three untested interactions is a recommendation resting on nothing."""
+    s = build(tmp, {"m": ONE_MAP},
+              TERMS_HEADER + "| Pq | Scrubbed | site | global | QQ-NO-SCRUBBABLE-FORM-QQ |\n",
+              {"doc.md": "AcmeWidgetUnit appears here\n",
+               "Prog.cs": "class C { int PqValue; }\n"})
+    code, out, err = run_head(tmp, s)
+    assert_eq(code, EXIT_OK, "an absent-form variants cell must discharge the row (%s%s)"
+              % (out, err))
+    needles = [l[len("regex:"):].split("==>")[0].replace("\\", "") for l in rules_of(tmp)]
+    assert not any("Pq" in n for n in needles), \
+        "the row still emitted a rule - a forced list must REPLACE the derived one: %r" % needles
+    assert not any("QQ-NO-SCRUBBABLE-FORM-QQ" in n for n in needles), \
+        "an absent variant must be dropped as dead, not emitted: %r" % needles
+    assert_in("absent from this repository", out, "the drop must be counted, not silent")
 
 
 def a_declared_term_embedded_only_in_JOB_tokens_does_NOT_gate(tmp):
@@ -1113,6 +1145,8 @@ for name, body in [
     ("DUPLICATE: detection is case-insensitive", duplicate_detection_is_CASE_INSENSITIVE),
     ("CUTS: a declared term that only cuts source tokens GATES",
      a_declared_term_that_only_cuts_source_tokens_GATES),
+    ("CUTS: a variants cell of only ABSENT forms emits no rule and does not gate",
+     a_variants_cell_of_only_ABSENT_forms_emits_no_rule_and_does_not_gate),
     ("CUTS: the cut tokens are NOT printed without the flag",
      the_CUT_TOKENS_are_NOT_printed_without_the_flag),
     ("CUTS: the cut tokens ARE printed with --explain-cuts",
