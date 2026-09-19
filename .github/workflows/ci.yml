@@ -43,17 +43,26 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 45
 
+    # ACTION MAJORS ARE PINNED TO THE LOWEST ONE THAT RUNS NODE 24, not to latest. The first
+    # public CI run (2026-09-19) passed with one annotation: Node 20 is deprecated and these four
+    # actions were being forced onto Node 24 anyway. Measured each tag's `runs.using` rather than
+    # bumping by habit, because the obvious move is wrong in one case -
+    # UPLOAD-ARTIFACT@V5 IS STILL NODE 20; v6 is the first that is not. A one-major bump there
+    # would have left the warning in place and looked like a fix.
+    # Latest at the time was checkout v7 / setup-dotnet v6 / setup-python v7 / upload-artifact v7.
+    # Those are deliberately NOT taken: extra majors buy nothing here and each one is a
+    # behaviour change this workflow would have to re-earn.
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       # global.json pins 8.0.425 - the SDK every recorded figure in this repo was measured on. All
       # seven solution trees set TreatWarningsAsErrors=true, so an SDK carrying one new analyzer
       # warning does not warn here, it fails the build.
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v5
         with:
           global-json-file: global.json
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
@@ -114,7 +123,7 @@ jobs:
 
       - name: Upload the capture
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: build-capture
           path: ci-capture.json

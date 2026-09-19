@@ -1,8 +1,15 @@
 # The slow suite, separated from CI rather than dropped from it.
 #
-# tools/build-scrub-rules.tests.py is 41 cases and each one builds a throwaway git repository, which
-# costs roughly 30 seconds on Windows - about twenty minutes in total. That is the wrong shape for a
-# pull request and a perfectly reasonable shape for a nightly run.
+# tools/build-scrub-rules.tests.py is 66 cases and each one builds a throwaway git repository, which
+# costs roughly 30 seconds on Windows - a little over half an hour in total. That is the wrong shape
+# for a pull request and a perfectly reasonable shape for a nightly run.
+#
+# THE COUNT IS READ OFF THE SUITE, NOT REMEMBERED. It said 41 here until 2026-09-19, having grown
+# through the declared-breadth gate, the ordering-aware collateral work and the block-merge gate
+# without this line moving once. A stale figure in a comment is harmless; a stale figure next to
+# `timeout-minutes` is how a suite starts getting killed for taking exactly as long as it should.
+# At 66 cases the run sits around 33 minutes against a 60-minute timeout - still comfortable, and
+# now written down so the next reader can see the margin shrinking rather than discover it.
 #
 # It is not optional coverage. That suite guards the tool which emits the git-filter-repo rules that
 # de-identify this repository before publication, and sixteen mutations of the builder are each
@@ -21,10 +28,13 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 60
 
+    # Majors pinned to the lowest one running Node 24 - same reasoning, and the same measurement,
+    # as the header comment in ci.yml. Kept in step with it deliberately: two workflows drifting
+    # apart on their runtime is how one of them starts failing for a reason nobody is looking at.
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
