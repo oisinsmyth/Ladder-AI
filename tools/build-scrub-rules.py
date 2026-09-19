@@ -787,12 +787,6 @@ def main():
             if token != low:
                 found.add(token)
 
-    # Heads the maps name through a dotted key. Read before the filter loop because the floor
-    # consults it, and computed from `candidates` rather than from `rules` because the question is
-    # what the maps DECLARE, not what survived filtering.
-    dotted_heads = {v.split(".", 1)[0].lower() for v in candidates
-                    if "." in v and v.split(".", 1)[0]}
-
     rules, withheld_short, withheld_green, wide, dead_variants = [], [], [], [], 0
     declared_emitted = 0
     declared_variants, declared_breadth = [], []
@@ -817,19 +811,20 @@ def main():
             declared_variants.append((v, key))
             continue
 
-        # *** THE FLOOR ASKS A QUESTION A DOTTED KEY HAS ALREADY ANSWERED. ***
-        # It exists to stop a name INFERRED from a map colliding with ordinary code, on the reasoning
-        # that a short name might just be a word. A dotted key naming this head is the map stating
-        # outright that it is an identifier, so the inference the floor guards against is not being
-        # made. Applied anyway, it withheld the bare rule while the dotted rule containing the very
-        # same head sailed through - a dotted needle always clears the floor - so the head survived
-        # written alone and disagreed with itself written as a path. Measured: 48 of 55 divergences,
-        # and six live head names left standalone in a published artifact, invisible to every gate.
+        # *** THE FLOOR AND THE VERIFIER'S T3 TIER ARE THE SAME THRESHOLD, AND THAT IS DELIBERATE.
+        # MIN_GLOBAL_LENGTH is 8 here; derive_needles in verify-scrub.py files any needle under 8
+        # characters as T3, which never gates on presence. A short map key is therefore NEITHER
+        # SCRUBBED NOR HUNTED - the two tools agree, and the agreement is the design.
         #
-        # THE GREEN TEST STILL APPLIES BELOW, and that asymmetry is the point. The floor is a proxy
-        # for "this might be an ordinary word" and the map answers it; Green is evidence that the
-        # name IS in already-sanitized content, which no map entry can talk anyone out of.
-        if len(v) < args.min_global_length and v.lower() not in dotted_heads:
+        # An exemption was tried here and reverted, 2026-09-19, and the reasoning is kept because it
+        # is a trap worth not falling into twice. The argument was that a dotted key naming a head
+        # proves the head is an identifier, so the floor's guess about short names does not apply -
+        # which reads well, closes a real-looking gap, and is wrong: reading one half of a symmetric
+        # decision as an oversight. MEASURED COST: two conventional names wiped, one of them from
+        # 6,681 occurrences to ZERO, caught by the T3 over-scrub detector on the rewritten clone.
+        # Breadth cannot rescue it either - 8 of the 10 exempted heads were already over the wide
+        # threshold, so there is no line to draw.
+        if len(v) < args.min_global_length:
             withheld_short.append(v)
             continue
         if v.lower() in green_hits:

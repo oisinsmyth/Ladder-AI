@@ -1135,24 +1135,39 @@ def a_GREEN_head_is_still_renamed_inside_the_composite(tmp):
         "the composite stopped being scrubbed because its head was preserved: %r" % dotted
 
 
-def a_SHORT_head_named_by_a_dotted_key_bypasses_the_floor(tmp):
-    """The floor asks whether a short name might just be a word. A dotted key naming this head is
-    the map answering that outright, so the inference the floor guards against is not being made.
-    Applied anyway it withheld the bare rule while the dotted rule containing the same head sailed
-    through, and the head survived written alone - 48 of 55 divergences, and six live head names
-    left standing in a published artifact."""
+def a_SHORT_head_named_by_a_dotted_key_is_STILL_withheld(tmp):
+    """*** THE FLOOR AND THE VERIFIER'S T3 TIER ARE THE SAME THRESHOLD, AND THAT IS THE DESIGN. ***
+
+    MIN_GLOBAL_LENGTH is 8; derive_needles files any needle under 8 characters as T3, which never
+    gates on presence. A short map key is NEITHER SCRUBBED NOR HUNTED - the two tools agree.
+
+    An exemption was tried here and reverted, and this case exists so it is not tried again by
+    accident. The argument was that a dotted key naming a head proves the head is an identifier, so
+    the floor's guess about short names does not apply. It reads well, it closes a real-looking gap,
+    and it is one half of a symmetric decision mistaken for an oversight. MEASURED COST on the
+    rewritten clone: two conventional names wiped, one from 6,681 occurrences to ZERO, caught by the
+    T3 over-scrub detector. Breadth cannot rescue it - 8 of the 10 exempted heads were already over
+    the wide threshold.
+
+    The composite is still scrubbed. What is given up is renaming the head where it stands alone,
+    which is what the floor has always given up and what T3 has always declined to hunt.
+
+    Compared RAW, with the anchors intact: stripping backslashes to make a needle readable turns
+    `\\bAcme1\\b` into `bAcme1b`, which matches no sensible assertion."""
     maps = ('{"Names": {"Acme1": "Gen01"},'
             ' "Tags": {"Acme1.Flag": "Gen01.Flag"}}')
     s = build(tmp, {"m": maps}, TERMS_HEADER,
               {"doc.md": "Acme1 alone, and Acme1.Flag as a path\n"})
     code, out, err = run_head(tmp, s)
     assert_eq(code, EXIT_OK, "exit (%s%s)" % (out, err))
-    # Compared RAW, with the anchors intact. Stripping backslashes to make the needle readable also
-    # turns `\bAcme1\b` into `bAcme1b`, which matches no sensible assertion - the first version of
-    # this case failed against a tool that was doing exactly the right thing.
     needles = [l[len("regex:"):].split("==>")[0] for l in rules_of(tmp)]
-    assert r"\bAcme1\b" in needles, \
-        "the 5-character head named by a dotted key got no bare rule: %r" % needles
+    assert r"\bAcme1\b" not in needles, \
+        "a 5-character head got a bare rule - the floor exemption is back, and it wipes " \
+        "conventional names: %r" % needles
+    assert_in("withheld, under", out, "the withholding must be reported")
+    dotted = [l.split("==>", 1)[1] for l in rules_of(tmp) if "." in l.split("==>", 1)[1]]
+    assert dotted and all(d.startswith("Gen01") for d in dotted), \
+        "the composite stopped being scrubbed as well: %r" % dotted
 
 
 def a_substitution_propagates_INTO_dotted_replacements(tmp):
@@ -1365,8 +1380,8 @@ for name, body in [
      a_member_that_NEVER_stands_alone_is_still_renamed),
     ("ALIGN: a GREEN head is still renamed inside the composite",
      a_GREEN_head_is_still_renamed_inside_the_composite),
-    ("ALIGN: a SHORT head named by a dotted key bypasses the floor",
-     a_SHORT_head_named_by_a_dotted_key_bypasses_the_floor),
+    ("ALIGN: a SHORT head named by a dotted key is STILL withheld",
+     a_SHORT_head_named_by_a_dotted_key_is_STILL_withheld),
     ("ALIGN: a dotted rule PRESERVES a member nothing else renames",
      a_dotted_rule_PRESERVES_a_member_nothing_else_renames),
     ("ALIGN: a dotted rule still RENAMES a head with no bare rule",
