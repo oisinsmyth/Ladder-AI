@@ -742,7 +742,7 @@ def main():
 
     rules, withheld_short, withheld_green, wide, dead_variants = [], [], [], [], 0
     declared_emitted = 0
-    declared_breadth = []
+    declared_variants, declared_breadth = [], []
     for v, key in sorted(candidates.items()):
         declared = key in klass_of
         if v not in blob_hits and not (declared and v.lower() in token_blob):
@@ -761,16 +761,7 @@ def main():
         if declared:
             rules.append((v, chosen[key], key))
             declared_emitted += 1
-            enc = enclosing_tokens(v)
-            cut = sorted(enc & source_tokens)
-            if cut:
-                # The FULL enclosing set is carried alongside the source-only one because the two
-                # answer different questions and --explain-cuts needs both: `cut` is the collateral
-                # that makes this gate, while `enc` is where the owner picks the forms that belong
-                # in a `variants` cell. Recomputing it at print time would mean scanning again for
-                # a flag that is off by default.
-                declared_breadth.append((v, key, cut, v.lower() in source_tokens,
-                                         not WORD_RUN.fullmatch(v), sorted(enc)))
+            declared_variants.append((v, key))
             continue
 
         if len(v) < args.min_global_length:
@@ -801,6 +792,43 @@ def main():
     print("  withheld, present in Green   : %d  [map keys only]" % len(withheld_green))
     print("  wide (>%d files) - REPORT ONLY: %d  [emitted anyway; see the comment at the test]"
           % (ORDINARY_WORD_BLOB_THRESHOLD, len(wide)))
+
+    # *** THE RULE SET IS APPLIED LONGEST-FIRST, AND MEASURING EACH NEEDLE ALONE IGNORES THAT. ***
+    # Computed here rather than inside the loop above because it needs the FINISHED needle set: a
+    # token is only collateral if the shorter needle can still reach it after every LONGER rule has
+    # already rewritten that token, and until the loop ends there is no way to know which needles
+    # survive filtering.
+    #
+    # Measured on the real vocabulary: a 3-character modelline term is a PREFIX of a 4-character one
+    # that has its own row, so the longer rule fires first and the only build-source token the
+    # shorter one appeared to threaten was never reachable. The check named collateral that ordering
+    # already protects - the right verdict for that row, reached by a wrong reason, which is the
+    # kind of finding that gets argued with and then disbelieved when it is right.
+    #
+    # Longer rules are applied with their REAL replacements rather than a neutral placeholder, so a
+    # replacement that happens to re-create the shorter needle is not hidden here. That case is also
+    # what the F4 overlap check gates on, which is why this one can afford to simply report what the
+    # substitution actually produces.
+    rep_of = {v: rep for v, rep, _ in rules}
+    longest_first = sorted(rep_of, key=lambda s: (-len(s), s))
+
+    def reachable_after_longer_rules(token, v):
+        text = token.lower()
+        for w in longest_first:
+            if len(w) <= len(v):
+                break                                       # sorted longest-first: nothing shorter
+            text = text.replace(w.lower(), rep_of[w].lower())
+        return v.lower() in text
+
+    for v, key in declared_variants:
+        enc = enclosing_tokens(v)
+        # The FULL enclosing set is carried alongside the source-only one because the two answer
+        # different questions and --explain-cuts needs both: `cut` is the collateral that makes this
+        # gate, while `enc` is where the owner picks the forms for a `variants` cell.
+        cut = sorted(t for t in (enc & source_tokens) if reachable_after_longer_rules(t, v))
+        if cut:
+            declared_breadth.append((v, key, cut, v.lower() in source_tokens,
+                                     not WORD_RUN.fullmatch(v), sorted(enc)))
 
     cuts_code = [r for r in declared_breadth if r[2] and not r[3]]
     also_whole = [r for r in declared_breadth if r[2] and r[3]]

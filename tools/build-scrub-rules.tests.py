@@ -998,6 +998,31 @@ def the_CUT_TOKENS_ARE_printed_with_the_flag(tmp):
               "from, and a list of only the collateral cannot be chosen from")
 
 
+def a_token_a_LONGER_rule_rewrites_FIRST_is_not_collateral(tmp):
+    """*** RULES ARE APPLIED LONGEST-FIRST, SO MEASURING A NEEDLE ALONE OVERSTATES ITS REACH. ***
+
+    `PqV` is declared and IS a whole token in source, so its rule is load-bearing and it does not
+    gate. It is also longer than `Pq`, so it is emitted first and rewrites `PqValue` before the
+    shorter rule ever sees it - after which `Pq` matches nothing there at all.
+
+    Measured on the real vocabulary before this was fixed: a 3-character modelline term is a prefix
+    of a 4-character one with its own row, and the check named the one build-source token that
+    ordering had already made unreachable. It reached the right verdict for that row by the wrong
+    reason, which is the kind of finding that gets argued with - and then disbelieved on the day it
+    is right."""
+    maps = '{"Names": {"AcmeWidgetUnit": "GenericWidgetUnit"}}'
+    s = build(tmp, {"m": maps},
+              TERMS_HEADER + "| Pq | Scrubbed | site | global | auto |\n"
+                             "| PqV | Scrub2 | site | global | auto |\n",
+              {"doc.md": "AcmeWidgetUnit appears here\n",
+               "Prog.cs": "class C { int PqValue; string s = \"PqV\"; }\n"})
+    code, out, err = run_head(tmp, s)
+    assert_eq(code, EXIT_OK,
+              "a token a longer rule rewrites first is not collateral (%s%s)" % (out, err))
+    assert_in("and never matching one whole : 0", out,
+              "the shorter needle must contribute NO collateral once ordering is accounted for")
+
+
 def a_variants_cell_of_only_ABSENT_forms_emits_no_rule_and_does_not_gate(tmp):
     """*** THE REMEDY FOR A ROW WITH NOTHING TO SCRUB, AND THE README NOW RECOMMENDS IT. ***
 
@@ -1145,6 +1170,8 @@ for name, body in [
     ("DUPLICATE: detection is case-insensitive", duplicate_detection_is_CASE_INSENSITIVE),
     ("CUTS: a declared term that only cuts source tokens GATES",
      a_declared_term_that_only_cuts_source_tokens_GATES),
+    ("CUTS: a token a LONGER rule rewrites first is not collateral",
+     a_token_a_LONGER_rule_rewrites_FIRST_is_not_collateral),
     ("CUTS: a variants cell of only ABSENT forms emits no rule and does not gate",
      a_variants_cell_of_only_ABSENT_forms_emits_no_rule_and_does_not_gate),
     ("CUTS: the cut tokens are NOT printed without the flag",
