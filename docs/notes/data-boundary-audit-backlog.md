@@ -271,8 +271,34 @@ the answer is M-22 and not "be more careful".
 `--green` list is a machine-readable tier register, and **none of the four directories has ever been
 on it.** A register and a prose claim disagreed for two months and nothing ever compared them.
 
+### AB-2 addendum — M-22 was built, and it found a FIFTH directory on its first run
+
+**`gen/test-project001` — declared Green in `CLAUDE.md` itself, not in a forgotten note.** The
+Environment section reads "Green-tier throughout". Measured by `tools/check-green-claims.py`: a
+**5-character job code, DECLARED (T1), in three files**, plus an inferred map key in a fourth. It is
+the one corpus in this repository that everything treats as clean by construction, and it is on
+**both** `--green` lists — so unlike the four above, the tooling *did* believe this claim.
+
+Nothing was leaking: the scrub rewrites it and Gate 3 returns T1 0 on the published artifact. **The
+label was wrong, not the data** — the same finding as the four above, arrived at from the opposite
+direction.
+
+**✅ REMEDIATED by substitution, `AB-1`'s method — SUBSTITUTE VOCABULARY, NEVER DELETE
+EXPLANATION.** Six occurrences across four files, each replaced with the invented name the maps and
+term list already specify; every sentence, provenance clause and JSON field survived unchanged. The
+embedded occurrence was replaced as a whole token so it still reads as one identifier rather than a
+splice, and the map key's replacement is the name the rest of the sandbox already uses, so the
+document is now *consistent* with the corpus it describes instead of inconsistent with it. Performed
+through a `lad-coder` dispatch (`gen/` content, hard rule 8); diff verified here before commit.
+`check-green-claims.py` now exits 0.
+
+**What makes this the most useful thing in the entry:** a gate that only ever passes proves nothing,
+and this one refused on its first contact with the thing it was built for. The register would have
+been a nicely-documented no-op otherwise.
+
 **Remediated so far:** `spec.md`'s claim retracted and corrected (2026-09-19); a correction note
-appended to both approvals in `docs/13-data-boundary.md`. **Still open:** the practice question —
+appended to both approvals in `docs/13-data-boundary.md`; `gen/test-project001` sanitized as above.
+**Still open:** the practice question —
 a blind-validation answer key that is a byte-identical copy of unsanitised bench content is a
 question about how validation cases are *built*, not about any one file. Owner's call.
 

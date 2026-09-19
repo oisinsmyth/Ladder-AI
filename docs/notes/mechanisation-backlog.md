@@ -162,7 +162,7 @@ is absent, is the failure this repository has already paid for once. The rule is
 **and** no live-job material is nothing to check; no vocabulary **with** live-job material on disk
 is exit 2.
 
-### M-22. A GREEN CLAIM IS PROSE, AND NOTHING EVER COMPARED IT TO THE TOOL THAT KNOWS
+### M-22. A GREEN CLAIM IS PROSE, AND NOTHING EVER COMPARED IT TO THE TOOL THAT KNOWS ✅ BUILT 2026-09-19
 
 **What happened.** `docs/13-data-boundary.md` records two 2026-07-20 per-project approvals, both of
 which mandate *sanitize-to-Green-first* and then assert the outcome — "Every downstream artifact
@@ -200,8 +200,45 @@ the tool can enumerate, and prose that merely uses the word carries no authority
 move as `accepted-merges.txt`: an escape becomes safe once it must be *written down somewhere the
 gate reads*.
 
-**Status: filed 2026-09-19, not built.** Not a publication blocker — Gate 3 returns an earned zero
-over exactly this content, because the scrub rewrites it on the way out. Tracked as **AB-2**.
+**✅ `tools/check-green-claims.py` + the tracked register `tools/green-claims.txt`.** 20 cases, ten
+mutations, wired into CI — both the self-tests and the check itself. Documented in `tools/README.md`.
+
+**IT FIRED ON ITS FIRST CONTACT WITH THE REAL REPOSITORY**, which is the only way to know a gate is
+not decorative. `gen/test-project001` — declared "Green-tier throughout" in `CLAUDE.md`, not in some
+forgotten note — carried a **5-character job code (T1 DECLARED) in three files**, plus an inferred
+map key in a fourth. Nothing was leaking: the scrub rewrites it and Gate 3 returns T1 0 on the
+published artifact. **The label was wrong, not the data.** Remediated by substitution, AB-1's method.
+
+Three things the entry above got wrong, worth recording because they are the difference between the
+tool as imagined and the tool as built:
+
+- 🔴 **"assert it carries no T1/T2 needles" is not implementable as written, and both obvious
+  readings are wrong.** `derive_needles` demotes a needle to T3 when it appears in the Green
+  corpora. Pass them, and a directory's own content demotes its own needles — **the check passes
+  vacuously, always**. Pass nothing, and every Green corpus fails on conventional map keys it is
+  entitled to hold. The answer is **leave-one-out**: checking `D`, build the token set from every
+  *other* registered directory, so "is this conventional?" is answered by content that is not the
+  content under test. That one decision is the whole design and it is the case a naive
+  implementation fails.
+- **"assert the directory appears in the `--green` list" needed to be PREFIX, not equality**, and
+  bidirectional. Membership is `git ls-files <corpus>`, a prefix walk. Equality would report a
+  directory as undeclared while the scrub was in fact treating it as Green — a finding in the wrong
+  direction, which is the kind that gets a gate switched off. The reverse direction matters too: an
+  entry on the list that nothing declares is a **silent exemption**, because the list withholds a
+  rewrite rule for every term present in it.
+- **The "harder half" turned out not to need solving.** The entry worried about *finding* the claims
+  and proposed making a claim a declaration. That is exactly right, and once the register exists the
+  enumeration problem disappears entirely — there is nothing to find. What the entry did not
+  anticipate is the **third** check that falls out for free: the two `--green` defaults are
+  duplicated literals in two files with no shared constant, and **neither tool can report a
+  divergence about itself.**
+
+**One limit, named rather than papered over.** A claim about an **untracked** directory can never be
+checked — there is no content at `HEAD`. Two exist, both asserting the gitignored reference TIA
+project is Green. They are probably true and are deliberately left alone: editing a true sentence to
+satisfy a tool that cannot see its subject is worse than recording the limit.
+
+Tracked as **AB-2**.
 
 ### M-13. A stationarity claim needs a SERIES, and the inert basis is taken from ONE sample 🔴 BLOCKING A RUN TODAY
 

@@ -833,6 +833,93 @@ it invents disagreement, and it invented it in the direction that refuses correc
 once per clone. CI runs its self-tests; CI does **not** run the check itself, because CI has no
 `sanitization/` and no live-job material — there, its correct answer is the exit-0 one.
 
+## `check-green-claims.py` — the tier-claim check, M-22 (2026-09-19)
+
+```
+python tools/check-green-claims.py [--repo .] [--register tools/green-claims.txt]
+                                   [--maps sanitization] [--terms sanitization/scrub-terms.md]
+                                   [--name-terms]
+```
+
+**Its subject is the AGREEMENT between a label and the content it labels**, which is a question
+neither of the other two gates asks. `M-5` asks what a commit *introduces*, over the index. Gate 3
+asks whether a rewritten clone is clean. This asks whether a directory somebody called Green
+actually is. A file can be full of vocabulary and perfectly honest about it; a file can be clean and
+lying. Only the disagreement is a finding here.
+
+**Why it exists.** The scrub builder takes a `--green` list, and that list *is* a machine-readable
+tier register. Measured 2026-09-19: **four directories were asserted Green in prose — three of them
+by `docs/13-data-boundary.md`'s own per-project approvals, in the words "every committed artifact
+... is Green" — and not one had ever been on the list.** A register and a claim coexisted,
+disagreeing, for two months, because nothing in the repository ever compared them. That is `AB-2`.
+
+**It enumerates a declaration, not a word.** A grep for "Green" was measured here and rejected:
+**~33 directory assertions against ~55 incidental uses** ("the suite stays green", "greenfield"),
+the largest false-positive block sitting inside a Green-declared corpus. At 40% signal a gate gets
+learned-ignored. `tools/green-claims.txt` is the whole population, and it is **tracked** — unlike
+`sanitization/accepted-merges.txt`, which is the precedent for the pattern but not the location.
+
+🔴 **THE LEAVE-ONE-OUT RULE IS THE WHOLE DESIGN, and both obvious implementations are wrong.**
+`derive_needles` tiers a needle **T3** — conventional, report-only — when it appears in the Green
+corpora. Pass the Green corpora while checking a Green directory and **its own content demotes its
+own needles: the check passes vacuously, always, for free.** Pass nothing and every Green corpus
+fails on the conventional map keys it is *entitled* to contain. So when checking directory `D` the
+token set is built from every **other** registered directory. "Is this name conventional?" is
+answered by content that is not the content under test.
+
+**Two halves, and both are needed.** (1) every declared directory is covered by the `--green` list —
+**prefix**, because membership is `git ls-files <corpus>`; and (2) its tracked content at `HEAD`
+carries no T1 or T2 needle. (1) alone passes a directory somebody added to the list wrongly; (2)
+alone never notices that the register and the list have drifted apart. It also asserts the **two
+`--green` literals agree** — they are duplicated source with no shared constant, and the
+independence rule forbids *merging* them, not asking whether they say the same thing.
+
+| exit | meaning |
+|---|---|
+| 0 | every declared directory is covered by the list and carries no T1 or T2 needle |
+| 1 | found something, worklist follows — *or* a tracked blob could not be searched at all |
+| 2 | **NOTHING WAS EXAMINED** — no register, an empty one, no vocabulary during a live run, a corpus git could not list, or an instrument that cannot find its own needles. EMPTY IS NOT CLEAN |
+| 3 | refused — the term list is tracked by git, so the identifier list has itself been committed |
+
+Paths and counts only; `--name-terms` is the watched-terminal exception, the same trade `M-5` makes.
+
+### It has been executed, in both directions
+
+**It fired on its first contact with the real repository**, which is the only way to know a gate is
+not decorative: `gen/test-project001` — declared "Green-tier throughout" in `CLAUDE.md` — carried a
+**5-character job code (T1 DECLARED) in three files** and an inferred map key in a fourth. Nothing
+was leaking; the publication scrub rewrites it and Gate 3 returns T1 0 on the published artifact.
+**The label was wrong, not the data**, which is the entire class of finding this tool was built for.
+
+**20 cases, and every guard was mutated.** Ten mutations, **eight reddening exactly the case named
+for it**; the restore was proved byte-identical by sha256 each time. The two that reddened a second
+case are recorded rather than filed down:
+
+| mutation | red | note |
+|---|---|---|
+| leave-one-out disabled | 2 | the whole-token T2 case is *also* a leave-one-out guard — the guard is doubly covered, not the case vague |
+| `covered_by` equality instead of prefix | 2 | a stale entry is necessarily a *subdirectory* of a registered one, so its fixture depends on prefix matching. Intrinsic, not sloppy |
+| the other eight | 1 each | T1-embedded dropped · T2-embedded added · absent register read as empty · divergence check off · reverse direction off · unsearchable read as clean · live-run trigger off · terms printed without the flag |
+
+⚠️ **One limit worth naming rather than papering over.** A claim about an **untracked** directory can
+never be checked here — there is no content at `HEAD` to read. Two such claims exist
+(`patterns/motor-dol/pattern.md`, `docs/evidence/stage-S1.md`), both asserting the gitignored
+reference TIA project is Green. They are **probably true** — `docs/13`'s tier row says so outright —
+and they are deliberately **not** "fixed", because editing a true sentence to satisfy a tool that
+cannot see its subject is worse than recording the limit.
+
+**Wired into CI's tooling self-tests, and the check itself runs there too** — unlike
+`check-staged-identifiers.py`, which needs the vocabulary CI does not have. This one's *structural*
+half needs nothing but the repository, and that half is exactly what drifts silently. Not in
+`hooks/pre-commit`: its subject is tracked content at `HEAD`, not the index.
+
+⚠️ **The fix-then-verify loop needs a commit, and that surprises people.** Because the subject is
+`HEAD`, editing a file does not change what this tool sees — a working-tree fix re-runs with the
+identical finding until it is committed. That is the right subject (a claim is about what the
+repository *contains*, not about what is on one machine's disk), and it is the opposite of `M-5`,
+whose subject is the index precisely so it can refuse *before* the commit. To check a fix without
+committing to your branch, point `--repo` at a throwaway clone carrying it.
+
 ## Benchmarks
 
 `bench-machine.ps1` measures a machine on the axes that matter for this repo; `bench-compare.ps1`

@@ -464,9 +464,14 @@ def main():
                     help="explicit term list (job codes, site and site names)")
     ap.add_argument("--out", default="sanitization/scrub", help="output directory")
     ap.add_argument("--green", action="append", default=None,
-                    help="an already-sanitized corpus; repeatable. Rules are path-scoped to leave "
-                         "these alone, which is how an ordinary word that is also a map key is "
-                         "handled without a human.")
+                    help="an already-sanitized corpus; repeatable. A candidate variant occurring "
+                         "ANYWHERE in these is read as a conventional word and gets NO RULE AT "
+                         "ALL, repo-wide - which is how an ordinary word that is also a map key "
+                         "is handled without a human. NOT path-scoping: this text said 'rules are "
+                         "path-scoped to leave these alone' until 2026-09-19 and no emitted rule "
+                         "has ever carried a path predicate, because --replace-text never sees "
+                         "one. The consequence is the honest one recorded in tools/README.md - a "
+                         "name present in Green content is not replaced anywhere.")
     ap.add_argument("--job-folder", action="append", default=None,
                     help="a live-job folder; every replacement is grepped back against it")
     ap.add_argument("--scan", choices=("history", "head"), default="history")

@@ -114,7 +114,19 @@ jobs:
           python tools/check-agent-evidence.tests.py
           python tools/capture-build-baseline.tests.py
           python tools/check-staged-identifiers.tests.py
+          python tools/check-green-claims.tests.py
           python tools/verify-scrub.tests.py
+
+      # M-22. UNLIKE check-staged-identifiers.py, THE CHECK ITSELF RUNS HERE, and it is worth being
+      # clear about why the two differ. M-5 needs the vocabulary to say anything at all, and CI has
+      # no sanitization/, so there its only possible answer is the exit-0 one. This check has TWO
+      # halves: the content half needs the vocabulary and correctly reports that it did not run,
+      # but the STRUCTURAL half - every declared directory is covered by the --green list, and
+      # every --green entry has a written reason - needs nothing but the repository. That half is
+      # exactly what drifts silently, because the register and the list live in different files and
+      # nothing else compares them.
+      - name: Green claims match the tier register
+        run: python tools/check-green-claims.py
 
       # The demo is a test, not a showpiece. --check asserts the result it claims, so it fails here
       # rather than rotting into an example nobody runs.

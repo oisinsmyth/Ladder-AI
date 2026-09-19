@@ -15,6 +15,24 @@ Claude Code sends repo content and command output to Anthropic's API. Exported P
 | Red — confidentiality | Anything a site contract, NDA or commercial sensitivity would otherwise keep off a shared repo | Never in committed repo content. **Full working access inside `Live Runs/`** (see "Live runs" below) — the restriction there is on *retention*, not on access |
 | Red — safety | Safety program content: F-blocks, F-runtime groups, the safety program | **Never, everywhere, no exception** — `CLAUDE.md` hard rule 2, also enforced in tooling. `Live Runs/` does not change this |
 
+> 🔴 **A DIRECTORY IS GREEN IF AND ONLY IF IT IS LISTED IN `tools/green-claims.txt`. Prose carries
+> no authority — including prose in this document.** Added 2026-09-19 as the standing answer to
+> `AB-2`, where four directories were asserted Green in sentences (three of them in this file's own
+> per-project approvals) while **not one had ever been on the scrub builder's `--green` list**.
+> A machine-readable register and a prose claim coexisted, disagreeing, for two months because
+> nothing compared them.
+>
+> `tools/check-green-claims.py` now does, on every CI run: each declared directory must be covered
+> by that list **and** its tracked content must carry no declared or inferred vocabulary. Writing
+> "this is Green-tier" in a document declares nothing and is checked by nothing — the word is
+> load-bearing in ~55 innocent sentences here ("the suite stays green"), which is why the register
+> and not the word is the enumerator.
+>
+> **A claim about an UNTRACKED directory cannot be made this way and should not be made at all** —
+> there is no content at `HEAD` to check. The reference TIA project folder is the live case: the
+> *exports* from it (`ir/reference`, `simatic-ml/reference`) are registered and checkable; the
+> folder itself is gitignored and is Green by the tier row above, not by measurement.
+
 ## Decisions needed (record as ADR-0003 when made)
 
 1. Does workplace IT/management policy permit cloud AI on project data at all? In what form (commercial terms, data retention)?

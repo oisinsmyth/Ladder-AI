@@ -1,0 +1,40 @@
+# THE GREEN REGISTER (M-22) -- the only place a directory is DECLARED Green-tier.
+#
+# WHY THIS FILE EXISTS. Until 2026-09-19 a Green claim was a sentence. Four directories were
+# asserted Green in prose -- three of them by docs/13-data-boundary.md's own per-project approvals,
+# in the words "every committed artifact ... is Green" -- and NOT ONE of them had ever been on the
+# scrub builder's --green list. A machine-readable tier register and a prose tier claim coexisted,
+# disagreeing, for two months, and nothing in this repository ever compared them. That is AB-2.
+#
+# *** PROSE CARRIES NO AUTHORITY. A DIRECTORY IS GREEN IF AND ONLY IF IT IS LISTED HERE. ***
+# Writing "this is Green-tier" in a document declares nothing. The word is load-bearing in ~55
+# innocent sentences in this repo ("the suite stays green", "greenfield"), which is exactly why a
+# grep for it was measured and rejected as the enumerator: roughly 40% signal at best.
+#
+# WHAT LISTING ONE HERE ASSERTS, and what tools/check-green-claims.py then checks every run:
+#   1. the directory is covered by the --green list both scrub tools already hold, and
+#   2. its TRACKED CONTENT AT HEAD carries no live vocabulary -- no DECLARED (T1) term anywhere,
+#      no INFERRED (T2) map key as a whole token.
+# Both halves are needed. (1) alone passes a directory somebody added to the list wrongly; (2)
+# alone never notices the list and the register have drifted apart.
+#
+# FORMAT
+#   One directory per line, repo-relative, forward slashes, no trailing slash.
+#   Everything after a # is the REASON, and it is not optional decoration -- an escape nobody can
+#   read is how a gate quietly stops gating. Every entry is printed on every run so the next reader
+#   can disagree with it. An entry naming a directory with no tracked files is reported as STALE.
+#
+# *** ADDING AN ENTRY IS A DECISION, NOT A WAY TO GET A RUN THROUGH. *** There is no override flag.
+# If the checker refuses a directory, the answer is to sanitize the content or to stop calling it
+# Green -- never to delete the line. The four AB-2 directories are deliberately ABSENT from this
+# file: they are not Green, that is the finding, and they are recorded in
+# docs/notes/data-boundary-audit-backlog.md where a finding belongs.
+#
+# Tracked, unlike sanitization/accepted-merges.txt which is the precedent for the PATTERN but not
+# the LOCATION. This file names no identifier -- only directories that are asserted to contain none.
+
+ir/reference                # The purpose-built reference project. Green by construction, not by sanitization: docs/13-data-boundary.md's tier table names it as Green outright, and docs/13 (2026-07-xx) records the basis.
+simatic-ml/reference        # The SimaticML half of the same reference corpus -- the committed export set the golden round-trip grades against.
+ir/test-project001          # The S6 sandbox, a deliberate de-identification. CLAUDE.md's Environment section: "Green-tier throughout". The live Portal folder keeps its original name on disk and is NOT committed.
+simatic-ml/test-project001  # The SimaticML half of the sandbox. Same basis as ir/test-project001.
+gen/test-project001         # Pipeline artifacts generated FROM the sandbox -- requirements, architecture, conformance vectors, telemetry. Green because its input is.
