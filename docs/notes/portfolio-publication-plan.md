@@ -53,7 +53,7 @@ this table, this table is current.
 | **1 — hygiene** | ✅ **DONE** | — |
 | **2 — the scrub tooling** | ✅ **DONE 2026-09-18 — rev 14** | ✅ `verify-scrub.tests.py` **35 cases**. ✅ `capture-build-baseline.py` + 22 tests. ✅ **The review backlog is CLOSED** — all twelve findings discharged (rev 9, rev 10). `build-scrub-rules.tests.py` is **45 cases** after the declared-breadth gate. ✅ **`check-staged-identifiers.py` (M-5) is built** — 16 cases, six mutations, wired into `hooks/pre-commit`. **Nothing outstanding** |
 | **2b — the red suite** | ✅ **DONE 2026-09-18** | **FI-93 discharged, rev 11.** 19 red tests → **2**. The 2 are one fact: `Main.ir` gained three networks and `Main.xml` was never re-exported; **one TIA re-export clears both** |
-| **3 — rewrite history** | 🟡 **UNBLOCKED 2026-09-19 — rev 15, ready to re-run** | The rewrite works: 1,346 commits, employer domain gone from every one, T1 0 / T2 0, instrument control 1719/1719. It was refused on the build half, and **that blocker is now closed** — all three Gate 2 decisions applied, `build-scrub-rules.py` exits 0 at **115 rules / 22 rename pairs / 0 rows cutting source**, and the rule that broke three solutions is out of the artifact. **Nothing is waiting on a decision. Re-run the rewrite (~7 min), then Gate 3 with both build halves** |
+| **3 — rewrite history** | ✅ **DONE 2026-09-19 — rev 16, EARNED ZERO** | **Gate 3 returns an EARNED ZERO over 1,366 commits, 6,386 blobs and 1,830 paths.** T1 0 / T2 0, over-scrub 0, instrument control 1719/1719, must-survive 5 of 5, build **5,894 → 5,894 — not one test lost**. Demo 14 + 1 known; budgets 19/0 over; IR verified through `lad-coder` (29,752 lines and 21,673 literals matching as multisets). Verifier stamp `subject=1c2de19518e0`. **It refused twice first, and both refusals were right** — see rev 16. Source untouched, no remote. **The clone is on disk and has never been pushed; publication is Phase 6** |
 | **4 — restructure** | ✅ **DONE** | — |
 | **5 — CI and demo** | 🟢 **BUILT 2026-09-18, rev 12** | `.github/workflows/ci.yml` + `nightly.yml`, `global.json` (SDK pinned), `demo/run-demo.py`, `tests/ci-baseline.json`. Every step rehearsed locally and green. **Gate 4 — CI green on a private repo — is the one thing left, and it needs the GitHub account (open item 2)** |
 | **6 — publish** | ⬜ **not started** | gated on 0, 3 and 5 |
@@ -68,6 +68,71 @@ this table, this table is current.
 - **The trial rewrite recipe, proven:** `clone --no-local` → `filter-repo --replace-text
   --replace-message @path-renames.args --mailmap` → delete all but the publishing branch →
   `reflog expire --all --expire=now && gc --prune=now` → verify. ~7 min rewrite, ~30 s verify.
+
+### Rev 16 — ✅ PHASE 3 IS DONE. Gate 3 returns an EARNED ZERO on a complete artifact
+
+```
+T1 DECLARED      0        T3 over-scrub     0 fell        demo      14 + 1 known
+T2 whole-token   0        must-survive      5 of 5 ok     budgets   19, 0 over
+instrument control  1719 of 1719            build     23 assemblies, 5894 -> 5894
+```
+
+1,366 commits, 6,386 blobs, 1,830 paths. **Not one test lost.** Verifier stamp
+`subject=1c2de19518e0 objects=14554`; the source repo is untouched at `600d664` with no remote.
+
+**It refused twice before it passed, and both refusals were right.** The first found 8 broken tests
+and 2 declared residuals; the second found 2 conventional names wiped. Everything below came out of
+those two refusals.
+
+**Five defects in the builder, none visible to the identifier half:**
+
+| defect | how it showed |
+|---|---|
+| Substitution stopped at whole strings, so one live name left as two | 5 disagreements, 8 broken tests |
+| The length floor withheld heads a dotted rule was already renaming | 48 divergences (**reverted** — see below) |
+| A dotted rule renamed members nothing else renamed | the `IO`/`IOSignals` break |
+| `mustNotAppear` gated on presence | Gate 3 **structurally unpassable** on its own repository |
+| A replacement can land on a name the corpus already uses | two FBs under one name |
+
+🔴 **THE FLOOR EXEMPTION WAS MY MISREADING, AND THE OVER-SCRUB DETECTOR CAUGHT IT.**
+`MIN_GLOBAL_LENGTH = 8` and the verifier's `len(low) < 8 → T3` are **the same threshold**: a short
+map key is neither scrubbed nor hunted, and the two tools agree by design. I read one half of that
+symmetry as an oversight and closed a "leak" that was not one. Cost: two conventional names wiped,
+one from **6,681 occurrences to zero**. The detector had never fired before. Reverted; the case that
+asserted the exemption is **inverted rather than deleted**, because the argument for it will read
+just as well the next time somebody has it.
+
+**Three checks had to learn the same lesson — state versus change.** `mustNotAppear` gated on
+presence rather than a rise. M-5 gated on what a file *contained* rather than what a commit
+*introduced*, and refused a three-line fix over six needles that had been there for months. The
+merge gate reported three merges where there was one. Same shape, same cost, three different tools:
+**a refusal nobody can act on is how a gate gets switched off.**
+
+**What no string gate could see.** A `lad-coder` verification of the rewritten IR — run on *both*
+corpora and compared, because "a result from the clone alone proves nothing" — confirmed 139 files
+parse identically, 124 still convert, 29,752 IR lines and 21,673 literals match as multisets, and
+`MEMBER-NOT-FOUND: 0` against 190 resolved tag paths. It also found two FBs about to share one name.
+Every string involved was correct; **what was lost was a distinction, and a distinction is not a
+string.**
+
+`lad-reader` then established by **byte-identity** (`md5 9d8dca41…`) that the bench block *is* the
+answer key of a blind-validation case and the other file is the pipeline's generated attempt at it —
+the same FB. My gate had read differing block numbers and fingerprints as "structurally different",
+which an independent reimplementation of one specification produces **whatever the answer**: it asked
+a real question and answered it from a signal with no bearing on it. Recorded in
+`sanitization/accepted-merges.txt` with the evidence, printed on every run.
+
+**Three tests were edited to suit the transform, and that is said out loud rather than buried.**
+SimaticML stores tag paths componentised; the assertions hard-coded the joined form. The alternative
+was 49 T2 residuals — measured, not argued.
+
+🔴 **A TIER CLAIM THAT DOES NOT MATCH ITS CONTENTS.** `gen/_validation/MotorVSDSystem-purpose/spec.md`
+asserts Green-tier, invented-names-only. Measured: **3 of its 10 files carry live vocabulary**, and
+`ir/PlantAutoControl-bench` — which its answer key is a byte copy of — carries **14 distinct needles
+across 2 files, 2 of them declared site terms**. Neither directory is in the builder's `--green`
+list, so the *tooling* has never believed the claim; only the document does. Nothing leaks, because
+Gate 3 returns T1 0 over exactly this content. The risk is that a false "already sanitised" label is
+what lets content be copied somewhere the scrub does not run. **Open — see item 9.**
 
 ### Rev 15 — Gate 2 is closed, and the builder exits 0
 
@@ -1292,6 +1357,26 @@ Should drive the README rather than be discovered by a reader:
    files), and `K5`/`K7`/`K75`, which make 764 substitutions across 21 files — all in `.ir`, `.xml`
    and `.md`, **none in build source**. That is A8 working as intended, a model designation inside a
    longer product name. Gate 3's per-assembly build comparison is what confirms it.
+
+9. 🔴 **A TIER CLAIM THAT DOES NOT MATCH ITS CONTENTS — open, and not a publication blocker.**
+   `gen/_validation/MotorVSDSystem-purpose/spec.md` asserts the validation case is Green-tier,
+   invented-names-only. Measured 2026-09-19 against the derived vocabulary:
+
+   | path | files carrying live vocabulary | distinct needles | in `--green` |
+   |---|---|---|---|
+   | `gen/_validation/MotorVSDSystem-purpose` | 3 of 10 | 1 | no |
+   | `ir/PlantAutoControl-bench` — its answer key is a byte copy of this | 2 of 35 | 14, **2 declared** | no |
+
+   **Nothing leaks.** Gate 3 returns T1 0 over exactly this content, and the tooling has never
+   believed the claim — neither directory is in the builder's `--green` list, so only the document
+   says it. The risk is that a false *already sanitised* label is what lets content be copied
+   somewhere the scrub does not run, which is the shape of the 13-file leak `M-5` was filed for.
+
+   Two pieces, and neither is a one-line fix:
+   - **the wording** in `spec.md` — `gen/` content, so a `lad-coder` dispatch rather than an inline
+     edit;
+   - **the practice** — a blind-validation case whose answer key is a byte copy of unsanitised bench
+     content. That is a question about how validation cases are built, not about one file.
 
 ---
 
