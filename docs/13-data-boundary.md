@@ -210,6 +210,45 @@ Two standing exceptions to that rule, both recorded below: the per-project Amber
     register `gen/PlantAutoControl-bench/requirements.md`) is Green. Same genericization rule — no real
     JOB9002 name reaches any committed file, enforced by a map-key leakage grep before commit. Does
     **not** authorize production S7 modification of any real production block.
+  - 🔴 **CORRECTION 2026-09-19 — the two 2026-07-20 entries above claim an OUTCOME they did not
+    achieve. The approvals stand; the "every committed artifact is Green" sentences do not.**
+    Both entries mandate *sanitize-to-Green-first* and then assert the result: "Every downstream
+    artifact stays Green and committable" and "every committed artifact (`ir/PlantAutoControl-bench/`,
+    the sealed answer key under `docs/evidence/`, the derived register
+    `gen/PlantAutoControl-bench/requirements.md`) is Green". Measured against this project's derived
+    de-identification vocabulary, over **tracked content at `HEAD`** — which is what "committed"
+    means — **all four named directories carry live vocabulary**:
+
+    | directory | tracked files carrying it | distinct hunted needles | of which DECLARED (T1) |
+    |---|---|---|---|
+    | `gen/_validation/MotorVSDSystem-purpose` | 3 of 10 | 1 | 0 |
+    | `ir/PlantAutoControl-bench` | 2 of 35 | 14 | 2 |
+    | `gen/PlantAutoControl-bench` | 6 of 8 | 3 | 1 |
+    | `docs/evidence` | 13 of 24 | 36 | 4 |
+
+    **What is and is not being said.** The *approvals* were correctly scoped and are not withdrawn:
+    they authorized an Amber read to export and sanitize, and that is what happened. What is
+    corrected is the claim about the **output**. Read this as a candidate list, not a verdict —
+    `T2 INFERRED` gates on whole-token presence and a map key can legitimately be a conventional
+    word, so triage is still required (AB-1's rule). **The `T1 DECLARED` column is the hard part**:
+    the owner wrote those strings down as identifiers, and they are present in committed files that
+    three sentences in this document call Green.
+
+    **Nothing is leaking, and that is exactly why this is worth writing down.** The publication gate
+    (`tools/verify-scrub.py`) returns `T1 0 / T2 0` over the published artifact, because the scrub
+    rewrites this content on the way out. The hazard is not the data — it is the **label**. A false
+    *already sanitised* mark is what licenses a copy into somewhere the scrub does not run, which is
+    the shape of **AB-1** and the reason **M-5** exists.
+
+    **Why it was not caught at the time is stated in the entry itself**: the PlantAutoControl scope names
+    its own enforcement as "a map-key leakage grep before commit". That is a per-lane instrument, and
+    AB-1's finding is that a per-lane check catches the lane's own work while only a repo-wide sweep
+    catches the repo. The instrument was the wrong shape, not carelessly applied.
+
+    The terms are deliberately **not** listed: a record of a leak must not be a copy of it. Re-derive
+    with the scrub tooling. Tracked as **AB-2** in `docs/notes/data-boundary-audit-backlog.md`; the
+    durable fix is **M-22** in `docs/notes/mechanisation-backlog.md` — a Green claim should be
+    checkable by a tool, not asserted in prose.
   - **2026-08-07 — extended to the HMI device, read-only, for survey grounding.** Project owner's own
     explicit instruction, this session ("open up JOB9002 use the hmi in that for examples"), following
     `docs/notes/openness-hmi-api-survey.md`. Recorded because **every prior scope in this entry is

@@ -1,7 +1,39 @@
 # Purpose-change spec — MotorStarter (DOL) → VSD motor control
 
 **Stage:** `gen-spec-analysis`, performed manually-to-contract (no skill) for the
-`gen-block-modify-purpose` blind validation. **Green artifact** — invented names only.
+`gen-block-modify-purpose` blind validation.
+
+> 🔴 **Data tier — this case is NOT Green.** Corrected 2026-09-19. This document previously claimed
+> "**Green artifact** — invented names only"; **that claim was false** and is retracted here.
+>
+> Measured 2026-09-19 against this project's derived sanitization vocabulary: **3 of the 10 tracked
+> files under `gen/_validation/MotorVSDSystem-purpose/` carry live (unsanitized) vocabulary — 1 distinct
+> needle.** The answer key under `answerkey/` is a **byte-identical copy** of
+> `ir/PlantAutoControl-bench/MotorVSDSystem.ir` (md5 `9d8dca41764330b889ad9c2e4b2b3d91`), and that bench
+> directory carries live vocabulary in **2 of its 35 tracked files — 14 distinct needles, 2 of them
+> DECLARED (T1) terms**. Neither directory appears in the scrub builder's `--green` list, so the
+> tooling has never treated this content as Green — only this document did.
+>
+> **Treat this case as Amber** in the sense of `docs/13-data-boundary.md`: real project logic with
+> identifying data, usable *only after sanitization, or with explicit per-project approval*. The
+> approval it was produced under is recorded there (2026-07-20, the `gen-block-modify-purpose`
+> validation extension), and that entry's **sanitize-to-Green-first handling did not fully take** —
+> so the artifacts are covered by an approval, not made Green by one.
+>
+> **Consequence — this is about copying, not about reading.** These files must **not** be copied,
+> promoted or reused outside this repository — into `patterns/`, a committed doc, a test fixture, a
+> live-run folder, or anything published — without going through the scrub
+> (`tools/build-scrub-rules.py` / `tools/verify-scrub.py`). Nothing is leaking today: the
+> publication gate (Gate 3 in `tools/verify-scrub.py`) returns an earned zero over exactly this
+> content. The risk this correction addresses is a **false "already sanitised" label**, which is
+> what licenses a copy into somewhere the scrub does not run — the shape of AB-1 in
+> `docs/notes/data-boundary-audit-backlog.md`.
+>
+> The live terms themselves are deliberately **not** listed here, per that file's own rule: *a
+> record of a leak must not be a copy of it.* Re-derive them with the scrub tooling if needed.
+>
+> Nothing else in this document changes: the task, the REQs, the interface delta and the blindness
+> argument below are unaffected by this correction.
 
 ## Task for the generator
 

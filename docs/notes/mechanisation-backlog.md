@@ -162,6 +162,47 @@ is absent, is the failure this repository has already paid for once. The rule is
 **and** no live-job material is nothing to check; no vocabulary **with** live-job material on disk
 is exit 2.
 
+### M-22. A GREEN CLAIM IS PROSE, AND NOTHING EVER COMPARED IT TO THE TOOL THAT KNOWS
+
+**What happened.** `docs/13-data-boundary.md` records two 2026-07-20 per-project approvals, both of
+which mandate *sanitize-to-Green-first* and then assert the outcome — "Every downstream artifact
+stays Green and committable", "every committed artifact ... is Green". A third document,
+`gen/_validation/MotorVSDSystem-purpose/spec.md`, carried the same claim in four words: "**Green
+artifact** — invented names only". Measured 2026-09-19 against the derived vocabulary, over tracked
+content at `HEAD`, **all four directories those sentences name carry live vocabulary** — between 1
+and 36 distinct hunted needles each, and 7 `T1 DECLARED` across them. Counts and the full table are
+in the correction note appended to that approval block; the terms are not listed anywhere.
+
+**The part that makes this an M-item rather than a typo.** The tooling *already knew*. The scrub
+builder takes a `--green` list, and **not one of the four directories has ever been on it**. So a
+machine-readable tier register and a prose tier claim have coexisted, disagreeing, for two months,
+and **nothing in this repository has ever compared them**. The documents were not checked against
+the tool because there was no step at which that comparison happens.
+
+**Why M-5 does not cover this.** `check-staged-identifiers.py` would refuse a *new* commit that
+introduced this vocabulary, and that is the right job. But its subject is the **index**, and it asks
+*what does this commit introduce*. It cannot see content committed before it existed, and — more to
+the point — it has no opinion about a **claim**. A file can be full of vocabulary and perfectly
+honest about it; a file can be clean and lying. M-5 measures the content. This measures the
+**agreement between the content and the label**, which is a different question and the one that
+actually bit.
+
+**Mechanise.** A check that, for every directory a tracked document asserts to be Green:
+1. asserts the directory appears in the builder's `--green` list, and
+2. asserts it carries no `T1`/`T2` needles, reusing `derive_needles` rather than a third vocabulary.
+Both halves are needed: (1) alone passes a directory somebody added to the list wrongly, (2) alone
+never notices the register and the prose have drifted. Report paths and counts, never terms.
+
+**The harder half is finding the claims**, and it should not be a regex over the word "Green" — the
+word is load-bearing in fifty innocent sentences. The tractable shape is to invert it: make a Green
+claim a **declaration** (a marker file, or a line in one register) so that asserting Green is an act
+the tool can enumerate, and prose that merely uses the word carries no authority. That is the same
+move as `accepted-merges.txt`: an escape becomes safe once it must be *written down somewhere the
+gate reads*.
+
+**Status: filed 2026-09-19, not built.** Not a publication blocker — Gate 3 returns an earned zero
+over exactly this content, because the scrub rewrites it on the way out. Tracked as **AB-2**.
+
 ### M-13. A stationarity claim needs a SERIES, and the inert basis is taken from ONE sample 🔴 BLOCKING A RUN TODAY
 
 **What happened.** The resting state a wave's inert check is measured against was captured by a
