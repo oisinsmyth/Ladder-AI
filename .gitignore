@@ -35,6 +35,16 @@ scratch-*/
 # and it was right to say so rather than race.
 .lane-*/
 .scratch-*/
+# ...and the PLAINEST dot form of all, which both comments above walked straight past.
+# Measured 2026-09-19: `.scratch/` existed at the repo root, untracked and UNIGNORED, holding
+# an `.ir` file plus `tagstatus`/`claims`/`preflight` output from real work. `scratch/` was
+# covered, `scratch-*/` was covered, `.scratch-*/` was covered — and `.scratch/` matched none
+# of them, because `.scratch-*/` needs the hyphen. Three patterns written by people who had
+# each just been bitten, and the gap left behind was the base case.
+# THE LESSON IS NOT "ADD ANOTHER PATTERN". It is that a scratch directory is invented under
+# whatever name is convenient at the time, so the covering must be shaped like a family, not
+# like a list of the ones that have burned us.
+.scratch/
 *.plf
 *.backup
 
