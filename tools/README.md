@@ -253,8 +253,21 @@ it (finding **A8**). This emits the rule set instead of assembling it by hand.
 python tools/build-scrub-rules.py [--repo .] [--maps sanitization]
        [--terms sanitization/scrub-terms.md] [--out sanitization/scrub]
        [--green <corpus> ...] [--job-folder <folder> ...]
-       [--scan history|head] [--min-global-length 8] [--name-collisions]
+       [--scan history|head] [--min-global-length 8] [--name-collisions] [--explain-cuts]
 ```
+
+🔴 **`--explain-cuts` is the second flag that prints live identifiers, and it exists because one
+decision cannot be made without them.** When the CUTS check refuses a row, the finding names it only
+by its **invented** replacement — enough to find the row, and safe in any terminal, pipeline or
+pasted note. But choosing a `variants` cell *is* reading the written forms of the term, so this
+flag prints them: the tokens the rule would corrupt in build source, and separately every other
+token in the corpus containing the term, which is the list the cell is chosen from. **Watched
+terminal only**, same trade as `--name-collisions`.
+
+The split matters more than it looks. A row whose candidate list is **empty** — every containing
+token is build-source collateral — has nothing to put in a `variants` cell at all, and its honest
+remedy is a narrower scope or no rule, not a cell. A row with candidates is a genuine editorial
+choice. The two look identical in the finding and are opposite in what they need.
 
 It emits `replace-text.txt`, `replace-message.txt`, `path-renames.args` and `manifest.json`. Last
 full-history run: **106 rules and 22 `--path-rename` pairs** covering 113 changed paths, over 6,345

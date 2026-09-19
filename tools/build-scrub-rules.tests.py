@@ -963,6 +963,37 @@ def a_declared_term_that_only_cuts_source_tokens_GATES(tmp):
     assert_eq(rules_of(tmp), [], "a refusal must write nothing")
 
 
+def the_CUT_TOKENS_are_NOT_printed_without_the_flag(tmp):
+    """*** A RECORD OF A LEAK MUST NOT BE A COPY OF IT. *** The finding names the row by its
+    INVENTED replacement, which is safe vocabulary this tool made up, and stops there. A refusal
+    that printed the live forms would put them in every terminal, pipeline and pasted note that a
+    failing build touches - and this gate fires precisely on the terms nobody has sanitised yet."""
+    s = build(tmp, {"m": ONE_MAP},
+              TERMS_HEADER + "| Pq | Scrubbed | site | global | auto |\n",
+              {"doc.md": "AcmeWidgetUnit appears here\n",
+               "Prog.cs": "class C { int PqValue; }\n"})
+    code, out, _ = run_head(tmp, s)
+    assert_eq(code, EXIT_FINDING, "exit (%s)" % out)
+    assert "pqvalue" not in out.lower(), "the corrupted token was printed by default: %r" % out
+    assert_in("--explain-cuts", out, "the refusal must say how to see them")
+
+
+def the_CUT_TOKENS_ARE_printed_with_the_flag(tmp):
+    """The other half. A disclosure flag that discloses nothing is worse than no flag: the owner
+    reads the instruction, runs it, sees no more than before, and concludes the tool is broken -
+    or worse, that there is nothing there."""
+    s = build(tmp, {"m": ONE_MAP},
+              TERMS_HEADER + "| Pq | Scrubbed | site | global | auto |\n",
+              {"doc.md": "AcmeWidgetUnit and PqUnitTag appear\n",
+               "Prog.cs": "class C { int PqValue; }\n"})
+    code, out, _ = run_head(tmp, s, "--explain-cuts")
+    assert_eq(code, EXIT_FINDING, "the flag must not change the verdict (%s)" % out)
+    assert_in("pqvalue", out.lower(), "--explain-cuts must print what the rule would corrupt")
+    assert_in("pqunittag", out.lower(),
+              "--explain-cuts must also print the NON-source forms - that is where variants come "
+              "from, and a list of only the collateral cannot be chosen from")
+
+
 def a_declared_term_embedded_only_in_JOB_tokens_does_NOT_gate(tmp):
     """*** THE A8 HALF, AND THE REASON THIS CANNOT GATE ON LENGTH OR ON EMBEDDING ALONE. ***
 
@@ -1082,6 +1113,10 @@ for name, body in [
     ("DUPLICATE: detection is case-insensitive", duplicate_detection_is_CASE_INSENSITIVE),
     ("CUTS: a declared term that only cuts source tokens GATES",
      a_declared_term_that_only_cuts_source_tokens_GATES),
+    ("CUTS: the cut tokens are NOT printed without the flag",
+     the_CUT_TOKENS_are_NOT_printed_without_the_flag),
+    ("CUTS: the cut tokens ARE printed with --explain-cuts",
+     the_CUT_TOKENS_ARE_printed_with_the_flag),
     ("CUTS: embedded only in JOB tokens does NOT gate",
      a_declared_term_embedded_only_in_JOB_tokens_does_NOT_gate),
     ("CUTS: also whole in source does NOT gate",

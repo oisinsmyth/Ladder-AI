@@ -428,6 +428,13 @@ def main():
                     help="a live-job folder; every replacement is grepped back against it")
     ap.add_argument("--scan", choices=("history", "head"), default="history")
     ap.add_argument("--min-global-length", type=int, default=MIN_GLOBAL_LENGTH)
+    ap.add_argument("--explain-cuts", action="store_true",
+                    help="for each row the CUTS check refuses, print the actual tokens: what its "
+                         "rule would corrupt in build source, and every token in the corpus that "
+                         "contains the term, which is where the `variants` cell comes from. OFF BY "
+                         "DEFAULT and for the same reason as --name-collisions: these are live "
+                         "identifiers. Use it at a terminal you are watching, not in a pipeline, "
+                         "and do not paste the output into a document.")
     ap.add_argument("--name-collisions", action="store_true",
                     help="print the colliding strings themselves. OFF BY DEFAULT because this "
                          "output gets pasted into notes, and a record of a leak must not be a copy "
@@ -754,10 +761,16 @@ def main():
         if declared:
             rules.append((v, chosen[key], key))
             declared_emitted += 1
-            cut = sorted(enclosing_tokens(v) & source_tokens)
+            enc = enclosing_tokens(v)
+            cut = sorted(enc & source_tokens)
             if cut:
+                # The FULL enclosing set is carried alongside the source-only one because the two
+                # answer different questions and --explain-cuts needs both: `cut` is the collateral
+                # that makes this gate, while `enc` is where the owner picks the forms that belong
+                # in a `variants` cell. Recomputing it at print time would mean scanning again for
+                # a flag that is off by default.
                 declared_breadth.append((v, key, cut, v.lower() in source_tokens,
-                                         not WORD_RUN.fullmatch(v)))
+                                         not WORD_RUN.fullmatch(v), sorted(enc)))
             continue
 
         if len(v) < args.min_global_length:
@@ -839,10 +852,10 @@ def main():
     # Grouped by ROW, not by variant: a row usually claims several written forms, and three
     # findings for two decisions reads as a longer list than it is. The owner edits rows.
     by_row = {}
-    for v, key, cut, whole, dotted in cuts_code:
-        n, forms, sep = by_row.get(key, (set(), 0, False))
-        by_row[key] = (n | set(cut), forms + 1, sep or dotted)
-    for key, (cut, forms, dotted) in sorted(by_row.items(), key=lambda kv: -len(kv[1][0])):
+    for v, key, cut, whole, dotted, enc in cuts_code:
+        n, forms, sep, allenc = by_row.get(key, (set(), 0, False, set()))
+        by_row[key] = (n | set(cut), forms + 1, sep or dotted, allenc | set(enc))
+    for key, (cut, forms, dotted, _enc) in sorted(by_row.items(), key=lambda kv: -len(kv[1][0])):
         findings.append(
             "term row '%s': %d variant(s)%s edit %d source token(s) from INSIDE and none of "
             "them is a source token in its own right - an anchorless rule there cuts identifiers "
@@ -1069,6 +1082,35 @@ def main():
         print("\n--- GATE FAILED ---")
         for f in findings:
             print("  " + f)
+        if by_row and args.explain_cuts:
+            # *** THIS PRINTS LIVE IDENTIFIERS. *** It is the one place in this tool that does so
+            # on purpose, because the decision it supports cannot be made without them: choosing
+            # which written forms of a term should be rewritten IS reading those forms. The same
+            # trade as --name-collisions, with the same instruction - a watched terminal, not a
+            # pipeline, and nothing pasted into a document afterwards.
+            print("\n--- THE TOKENS BEHIND THOSE FINDINGS (--explain-cuts) ---")
+            print("LIVE IDENTIFIERS FOLLOW. Do not paste this into a note, an issue or a commit "
+                  "message.")
+            for key, (cut, forms, dotted, enc) in sorted(by_row.items(),
+                                                         key=lambda kv: -len(kv[1][0])):
+                print("\n  term row '%s'" % chosen[key])
+                print("    WOULD CORRUPT in build source (%d) - this is why the row gates:" % len(cut))
+                for token in sorted(cut):
+                    print("        %s" % token)
+                rest = [t for t in enc if t not in cut]
+                print("    every OTHER token in the corpus containing the term (%d) - the `variants`"
+                      % len(rest))
+                print("    cell is chosen from HERE, by keeping the ones that are job vocabulary:")
+                for token in rest:
+                    print("        %s" % token)
+            print("\n  A `variants` cell is `;`-separated and REPLACES the derived list rather than "
+                  "adding\n  to it, so a form you do not list gets no rule - which is exactly how "
+                  "the bare short\n  form above stops being emitted. List the forms that should be "
+                  "rewritten, and nothing else.")
+        elif by_row:
+            print("\n  Run again with --explain-cuts, at a terminal you are watching, to see the "
+                  "actual\n  tokens behind those findings and choose the `variants` cells from them.")
+
         print("\nNOTHING WAS WRITTEN. Do not raise --min-global-length to silence a refusal: the "
               "floor is what keeps a short ordinary word out of eighteen hundred files. Do not "
               "delete a term row to silence a collision: change the REPLACEMENT, and grep the new "
