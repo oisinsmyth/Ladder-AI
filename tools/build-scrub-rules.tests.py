@@ -998,6 +998,34 @@ def the_CUT_TOKENS_ARE_printed_with_the_flag(tmp):
               "from, and a list of only the collateral cannot be chosen from")
 
 
+def a_substitution_propagates_INTO_dotted_replacements(tmp):
+    """*** ONE LIVE NAME MUST NOT LEAVE THE REWRITE AS TWO. ***
+
+    `AcmeWidgetUnit` maps to `GenericThing`, and `AcmeWidgetUnit.Flag` maps to `GenericThing.Flag` -
+    the same invented head, written twice, which is exactly the shape a map's Names and Tags
+    sections produce. The overlap check then has to substitute `GenericThing`, because another
+    rule's needle matches inside it. If that substitution rewrites only the WHOLE replacement, the
+    bare rule starts saying `GenericThing1` while the dotted one still says `GenericThing`, and any
+    file that composes the dotted form from its parts ends up with halves that no longer agree.
+
+    This is not hypothetical and it is not caught by the identifier half of Gate 3. It reached a
+    published artifact: 5 disagreements, 8 broken converter tests, found only by the build
+    comparison."""
+    maps = ('{"Names": {"AcmeWidgetUnit": "GenericThing", "GenericThing": "SomethingElse"},'
+            ' "Tags": {"AcmeWidgetUnit.Flag": "GenericThing.Flag"}}')
+    s = build(tmp, {"m": maps}, TERMS_HEADER,
+              {"doc.md": "AcmeWidgetUnit and AcmeWidgetUnit.Flag and GenericThing all appear\n"})
+    code, out, err = run_head(tmp, s)
+    assert_eq(code, EXIT_OK, "exit (%s%s)" % (out, err))
+    reps = [l.split("==>", 1)[1] for l in rules_of(tmp)]
+    bare = [r for r in reps if r.startswith("GenericThing") and "." not in r]
+    dotted = [r for r in reps if r.startswith("GenericThing") and "." in r]
+    assert bare and dotted, "fixture did not produce both a bare and a dotted replacement: %r" % reps
+    heads = {r.split(".")[0] for r in dotted} | set(bare)
+    assert len(heads) == 1, \
+        "the substitution left the head spelled two ways - one live name, two invented: %r" % heads
+
+
 def a_token_a_LONGER_rule_rewrites_FIRST_is_not_collateral(tmp):
     """*** RULES ARE APPLIED LONGEST-FIRST, SO MEASURING A NEEDLE ALONE OVERSTATES ITS REACH. ***
 
@@ -1170,6 +1198,8 @@ for name, body in [
     ("DUPLICATE: detection is case-insensitive", duplicate_detection_is_CASE_INSENSITIVE),
     ("CUTS: a declared term that only cuts source tokens GATES",
      a_declared_term_that_only_cuts_source_tokens_GATES),
+    ("SUBST: a substitution propagates INTO dotted replacements",
+     a_substitution_propagates_INTO_dotted_replacements),
     ("CUTS: a token a LONGER rule rewrites first is not collateral",
      a_token_a_LONGER_rule_rewrites_FIRST_is_not_collateral),
     ("CUTS: a variants cell of only ABSENT forms emits no rule and does not gate",

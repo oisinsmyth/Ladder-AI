@@ -851,6 +851,32 @@ def main():
     findings.extend(collision_problems)
     findings.extend(duplicate_terms)
 
+    def substitute_replacements(ruleset, remap):
+        """Apply a replacement->replacement remap, INCLUDING inside DOTTED replacements.
+
+        *** REWRITING ONLY WHOLE REPLACEMENTS IS HOW ONE LIVE NAME LEAVES AS TWO. ***
+        A map's Tags section yields dotted replacements like `Head.Member`, whose components are the
+        same invented names the Names section yields on their own. Substitute only the whole string
+        and the bare rule renames `Head` to `Head1` while the dotted rule still says `Head` - so one
+        live identifier leaves the rewrite as two different invented names depending on whether it
+        was written alone or as part of a path. The NON-INJECTIVE check cannot see this: it looks
+        for several keys collapsing onto one name, and this is one key FANNING OUT.
+
+        Measured, and it reached a published artifact: 5 such disagreements broke 8 converter tests.
+        A DB fixture's member was rewritten to `FaultTripTimer1` by the bare rule while the map key
+        that looks it up became `FaultTripTimer` by the dotted one, and a lookup that had never
+        failed stopped finding anything. Nothing in the identifier half of Gate 3 could have caught
+        that - only the build half did, which is the argument for the build half in one sentence."""
+        def rewrite(rep):
+            if rep in remap:
+                return remap[rep]
+            if "." not in rep:
+                return rep
+            parts = rep.split(".")
+            return ".".join(remap.get(p, p) for p in parts) if any(p in remap for p in parts) \
+                else rep
+        return [(v, rewrite(r), k) for v, r, k in ruleset]
+
     # *** REWRITING PART OF A SOURCE IDENTIFIER DE-IDENTIFIES NOTHING. ***
     # A declared term is emitted `(?i)<term>` with no word boundary, chosen by declaredness alone
     # (see rule_line). That is right for a term that occurs only inside larger JOB tokens - it is
@@ -945,7 +971,7 @@ def main():
                         break
                 else:
                     unresolved.append(original)
-            rules = [(v, remap.get(r, r), k) for v, r, k in rules]
+            rules = substitute_replacements(rules, remap)
             print("  replacements auto-substituted: %d (collided with the job's own vocabulary)"
                   % len(remap))
             if args.name_collisions:
@@ -1015,7 +1041,7 @@ def main():
                 candidate = "%s%d" % (original, suffix)
                 if (candidate not in job_tokens and candidate not in corpus_tokens
                         and candidate not in {r for _, r, _ in rules}):
-                    rules = [(v, candidate if r == original else r, k) for v, r, k in rules]
+                    rules = substitute_replacements(rules, {original: candidate})
                     overlap_subs[original] = candidate
                     progressed = True
                     break
