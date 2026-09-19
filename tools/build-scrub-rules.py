@@ -164,7 +164,50 @@ def load_maps(mapdir):
                 ignored["UNKNOWN:" + section] = ignored.get("UNKNOWN:" + section, 0) + len(body)
         if recognised == 0:
             dead.append(stem)
-    return stems, boms, used, ignored, dead, pairs, malformed, section_of
+
+    # *** A DOTTED KEY DECLARES ITS HEAD, AND NOTHING WAS READING THAT. ***
+    # A `Tags` entry is a STRUCTURED rename - `X.Y -> A.B` says X becomes A and Y becomes B - and
+    # flattening it into one text substitution keeps only the whole-string claim. So a head declared
+    # ONLY in Tags got no rule of its own: written alone it was neither rewritten by the builder nor
+    # hunted by the verifier, because both treat the dotted key atomically. Measured on this
+    # repository, on an artifact that had already passed the identifier half of Gate 3: SIX live
+    # head names occur standalone in the corpus and survived the rewrite untouched, invisible to
+    # every gate in the pipeline.
+    #
+    # It is also why composed and decomposed forms disagreed - `X.Y` moved and `X` did not, so any
+    # file that builds the dotted form from its parts ended up with halves that no longer matched.
+    # One defect, two symptoms, and only the symptom that broke a test was visible.
+    #
+    # DERIVED ONLY WHERE THE DOTTED KEYS AGREE, AND NEVER OVER THE MAPS THEMSELVES. A head the maps
+    # state directly keeps what they say - an inference must not outrank a declaration. Where two
+    # dotted keys rename one head two different ways, that is returned rather than resolved: it is
+    # the same shape as the non-injective finding and equally the owner's to settle.
+    head_votes, head_sections = {}, {}
+    for key, reps in list(pairs.items()):
+        if "." not in key or not key.split(".", 1)[0]:
+            continue
+        khead = key.split(".", 1)[0]
+        for rep, saying in reps.items():
+            if "." in rep and rep.split(".", 1)[0]:
+                head_votes.setdefault(khead, {}).setdefault(rep.split(".", 1)[0], []).extend(saying)
+        head_sections.setdefault(khead, set()).update(section_of.get(key, ()))
+
+    derived, head_conflicts = 0, []
+    for khead, votes in sorted(head_votes.items()):
+        if khead in pairs:
+            continue                                        # the maps state this head themselves
+        if len(votes) > 1:
+            head_conflicts.append(khead)
+            continue
+        rep = list(votes)[0]
+        if rep == khead:
+            continue                                        # identity: nothing to rewrite
+        pairs[khead] = {rep: sorted(set(votes[rep]))}
+        section_of.setdefault(khead, set()).update(head_sections.get(khead, ()))
+        derived += 1
+
+    return (stems, boms, used, ignored, dead, pairs, malformed, section_of, derived,
+            head_conflicts)
 
 
 def load_terms(path):
@@ -476,8 +519,8 @@ def main():
         return 3
 
     # ---- Inputs ---------------------------------------------------------------------------------
-    stems, boms, used, ignored, dead, pairs, bad_values, section_of = load_maps(
-        os.path.join(repo, args.maps))
+    (stems, boms, used, ignored, dead, pairs, bad_values, section_of,
+     derived_heads, head_conflicts) = load_maps(os.path.join(repo, args.maps))
     rows, bad_rows = load_terms(os.path.join(repo, args.terms))
 
     print("maps read                     : %d" % len(stems))
@@ -486,6 +529,10 @@ def main():
     print("  sections IGNORED            : %s" % (", ".join("%s=%d" % kv for kv in sorted(ignored.items())) or "none"))
     if dead:
         print("  maps with NO recognised section: %d (%s)" % (len(dead), ", ".join(dead)))
+    print("  bare heads DERIVED from dotted keys: %d  [a dotted key declares its head]"
+          % derived_heads)
+    if head_conflicts:
+        print("  heads whose dotted keys DISAGREE  : %d" % len(head_conflicts))
     if bad_values:
         print("  entries DROPPED, value not a string: %d" % len(bad_values))
         for why in bad_values[:10]:
@@ -850,6 +897,16 @@ def main():
     # one name, and no automatic choice here is better than telling them.
     findings.extend(collision_problems)
     findings.extend(duplicate_terms)
+
+    # Two dotted keys that rename one head two different ways. Resolving it here would pick a winner
+    # for a live identifier on no authority at all, which is the same reason the variant-collision
+    # check hands its unresolved cases back rather than choosing.
+    if head_conflicts:
+        findings.append(
+            "%d head(s) shared by several dotted map keys are renamed INCONSISTENTLY by them. A "
+            "dotted key declares its head, so two keys disagreeing about one head means one live "
+            "name would leave the rewrite as two. Make the maps agree, or state the head directly "
+            "in a Names section, which outranks anything inferred." % len(head_conflicts))
 
     def substitute_replacements(ruleset, remap):
         """Apply a replacement->replacement remap, INCLUDING inside DOTTED replacements.

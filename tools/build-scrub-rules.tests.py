@@ -998,6 +998,59 @@ def the_CUT_TOKENS_ARE_printed_with_the_flag(tmp):
               "from, and a list of only the collateral cannot be chosen from")
 
 
+# ---- HEADS: a dotted key declares its head ------------------------------------------------------
+# A `Tags` entry is a STRUCTURED rename - `X.Y -> A.B` says X becomes A and Y becomes B - and
+# flattening it into one text substitution keeps only the whole-string claim. Measured on a real
+# artifact that had already passed the identifier half of Gate 3: six live head names occurred
+# STANDALONE in the corpus and survived untouched, because a head declared only in Tags was neither
+# rewritten by the builder nor hunted by the verifier. One defect, two symptoms - an un-scrubbed
+# identifier, and composed forms disagreeing with decomposed ones - and only the second broke a test.
+
+def a_head_declared_ONLY_by_a_dotted_key_gets_its_own_rule(tmp):
+    """The leak. `AcmeWidgetUnit` appears on its own in the corpus and the maps name it nowhere
+    except as the head of a dotted key, so before this it got no rule at all."""
+    maps = '{"Tags": {"AcmeWidgetUnit.Flag": "GenericWidgetUnit.Flag"}}'
+    s = build(tmp, {"m": maps}, TERMS_HEADER,
+              {"doc.md": "AcmeWidgetUnit alone, and AcmeWidgetUnit.Flag as a path\n"})
+    code, out, err = run_head(tmp, s)
+    assert_eq(code, EXIT_OK, "exit (%s%s)" % (out, err))
+    assert_in("bare heads DERIVED", out, "the derivation must be reported, not silent")
+    needles = [l[len("regex:"):].split("==>")[0].replace("\\", "") for l in rules_of(tmp)]
+    assert any(n.strip("b") == "AcmeWidgetUnit" or n == "\\bAcmeWidgetUnit\\b".replace("\\", "")
+               for n in needles), \
+        "the head got no rule of its own - a standalone occurrence survives: %r" % needles
+
+
+def a_head_the_maps_state_DIRECTLY_is_not_overridden(tmp):
+    """An inference must never outrank a declaration. The maps say this head becomes one thing and
+    a dotted key implies another; what the maps say wins, and nothing is derived."""
+    maps = ('{"Names": {"AcmeWidgetUnit": "GenericWidgetUnit"},'
+            ' "Tags": {"AcmeWidgetUnit.Flag": "SomethingElse.Flag"}}')
+    s = build(tmp, {"m": maps}, TERMS_HEADER,
+              {"doc.md": "AcmeWidgetUnit alone, and AcmeWidgetUnit.Flag as a path\n"})
+    code, out, err = run_head(tmp, s)
+    assert_eq(code, EXIT_OK, "exit (%s%s)" % (out, err))
+    reps = [l.split("==>", 1)[1] for l in rules_of(tmp)]
+    assert "GenericWidgetUnit" in reps, \
+        "the map's own statement about the head was not emitted: %r" % reps
+    assert "SomethingElse" not in reps, \
+        "an inference from a dotted key overrode what the maps state directly: %r" % reps
+
+
+def dotted_keys_that_DISAGREE_about_a_head_GATE(tmp):
+    """Two dotted keys renaming one head two ways. Picking a winner here would decide the fate of a
+    live identifier on no authority at all - the same reason the variant-collision check refuses
+    rather than choosing."""
+    maps = ('{"Tags": {"AcmeWidgetUnit.Flag": "GenericWidgetUnit.Flag",'
+            ' "AcmeWidgetUnit.Other": "DifferentUnit.Other"}}')
+    s = build(tmp, {"m": maps}, TERMS_HEADER,
+              {"doc.md": "AcmeWidgetUnit.Flag and AcmeWidgetUnit.Other both appear\n"})
+    code, out, _ = run_head(tmp, s)
+    assert_eq(code, EXIT_FINDING, "disagreeing dotted heads must gate (%s)" % out)
+    assert_in("renamed INCONSISTENTLY", out, "the finding must name the relation")
+    assert_eq(rules_of(tmp), [], "a refusal must write nothing")
+
+
 def a_substitution_propagates_INTO_dotted_replacements(tmp):
     """*** ONE LIVE NAME MUST NOT LEAVE THE REWRITE AS TWO. ***
 
@@ -1198,6 +1251,12 @@ for name, body in [
     ("DUPLICATE: detection is case-insensitive", duplicate_detection_is_CASE_INSENSITIVE),
     ("CUTS: a declared term that only cuts source tokens GATES",
      a_declared_term_that_only_cuts_source_tokens_GATES),
+    ("HEADS: a head declared ONLY by a dotted key gets its own rule",
+     a_head_declared_ONLY_by_a_dotted_key_gets_its_own_rule),
+    ("HEADS: a head the maps state DIRECTLY is not overridden",
+     a_head_the_maps_state_DIRECTLY_is_not_overridden),
+    ("HEADS: dotted keys that DISAGREE about a head GATE",
+     dotted_keys_that_DISAGREE_about_a_head_GATE),
     ("SUBST: a substitution propagates INTO dotted replacements",
      a_substitution_propagates_INTO_dotted_replacements),
     ("CUTS: a token a LONGER rule rewrites first is not collateral",
