@@ -180,6 +180,24 @@ gen/_validation/MotorVSDSystem-purpose/answerkey/
 # 2026-08-13.
 /Test Enviroment/
 
+# THE THIRD INSTANCE OF THE SHAPE THE TWO COMMENTS ABOVE EACH RECORD. Measured 2026-09-19: an
+# agent-task folder from a live-run dispatch sat UNTRACKED AND UNIGNORED while carrying the job's
+# own vocabulary - one `git add -A` from committing it, exactly like the settings `.bak` of
+# 2026-08-13 and `/Test Enviroment/` of 2026-08-14.
+#
+# What is different this time, and why this entry is still worth adding: `M-5`
+# (tools/check-staged-identifiers.py, third block of hooks/pre-commit) DOES refuse the commit, and
+# was observed refusing it. So the hole is covered - by a hook. `core.hooksPath` pointed at the old
+# machine's path for weeks after the last move and both gates sat inert reporting nothing, which is
+# the whole reason M-5 exists. A gate that travels with the clone and a rule that travels with the
+# file are not the same protection, and this is the cheaper half.
+#
+# THIS IGNORES, IT DOES NOT DECIDE. The work is real and unfinished: its one missing gate is the
+# Portal compile gate, correctly declared `deferred` rather than faked, and it cannot run because
+# TIA is not installed on this machine. Sanitize it, finish it or delete it - that is the owner's
+# call, and removing this line is how it comes back.
+agent-tasks/main-3slot-calls/
+
 # Editor workspace state. Obsidian records RECENTLY-OPENED FILE PATHS, and on this repo those
 # paths include live-run material - the job folder's own name and its block filenames - which
 # `Live Runs/` above keeps out of the index but which this file would carry back in by the side

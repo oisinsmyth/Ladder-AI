@@ -56,7 +56,7 @@ this table, this table is current.
 | **3 — rewrite history** | ✅ **DONE 2026-09-19 — rev 16, EARNED ZERO** | **Gate 3 returns an EARNED ZERO over 1,366 commits, 6,386 blobs and 1,830 paths.** T1 0 / T2 0, over-scrub 0, instrument control 1719/1719, must-survive 5 of 5, build **5,894 → 5,894 — not one test lost**. Demo 14 + 1 known; budgets 19/0 over; IR verified through `lad-coder` (29,752 lines and 21,673 literals matching as multisets). Verifier stamp `subject=1c2de19518e0`. **It refused twice first, and both refusals were right** — see rev 16. Source untouched, no remote. ⚠️ **That stamp is NOT the published one.** The mailmap was rewritten afterwards to map both author identities, which required a fresh cycle; the artifact that went public carries stamp **`bb6d61c6544d`** over 1,367 commits / 6,387 blobs / 1,830 paths. Same gates, same earned zero, one commit later |
 | **4 — restructure** | ✅ **DONE** | — |
 | **5 — CI and demo** | ✅ **DONE 2026-09-19 — Gate 4 GREEN, rev 17** | `.github/workflows/ci.yml` + `nightly.yml`, `global.json` (SDK pinned), `demo/run-demo.py`, `tests/ci-baseline.json`. **The first CI run on real GitHub hardware passed on the published sha** — 1 job, 11 steps, all success, ~9½ minutes. The step that matters is `capture-build-baseline.py --expect`, which fails on a lost assembly, a fallen pass count, a risen failure count *or* a third unbuildable target; it did none of those |
-| **6 — publish** | ✅ **DONE 2026-09-19 — rev 17** | Published to `github.com/oisinsmyth/Ladder-AI`. **Remote `main` = local clone `HEAD` = Gate 3's verdict stamp `bb6d61c6544d`.** Pushed private, CI confirmed green, then made public by the owner — the arrangement was chosen precisely so a mistake stayed recoverable. Steps 2 and 3 discharged: this repo still has **no remote at all**, and the publication is recorded in `data-boundary-audit-backlog.md` as an `AB-1` discharge **for the public artifact only** |
+| **6 — publish** | ✅ **DONE 2026-09-19 — rev 17, extended by rev 17a** | Published to `github.com/oisinsmyth/Ladder-AI`. **Currently at `6362bbc5acfc`** (rev 17a, a fast-forward carrying four more commits); first published at `bb6d61c6544d`. In both cases **remote `main` = local clone `HEAD` = Gate 3's verdict stamp.** Pushed private, CI confirmed green, then made public by the owner — the arrangement was chosen precisely so a mistake stayed recoverable. Steps 2 and 3 discharged: this repo still has **no remote at all**, and the publication is recorded in `data-boundary-audit-backlog.md` as an `AB-1` discharge **for the public artifact only** |
 
 ### What is actually built and proven
 
@@ -65,9 +65,88 @@ this table, this table is current.
 - **`verify-scrub.py`** — the Gate 3 oracle. Returns an **earned zero on a real `filter-repo`
   rewrite** while **still failing the unscrubbed source** (T1 10, T2 79). Its instrument control
   reports **1719 of 1719** needles matching themselves.
-- **The trial rewrite recipe, proven:** `clone --no-local` → `filter-repo --replace-text
-  --replace-message @path-renames.args --mailmap` → delete all but the publishing branch →
-  `reflog expire --all --expire=now && gc --prune=now` → verify. ~7 min rewrite, ~30 s verify.
+- **The rewrite recipe, proven — and TWO STEPS WERE MISSING FROM IT until rev 17a, both of which
+  cost a full cycle:**
+  1. **rebuild the rules** (`build-scrub-rules.py`, same `--green`/`--job-folder` as the manifest
+     records) and **diff them against the previous set** — identical rules are what make the push a
+     fast-forward instead of a public history rewrite;
+  2. 🔴 **re-record the canary at the exact HEAD being published** — `verify-scrub.py --make-canary`.
+     A canary from an older tree carries smaller must-survive counts, so it weakens the gate while
+     still printing `ok`. Gate 3 refuses it as NOTHING EXAMINED, correctly;
+  3. `clone --no-local --single-branch --branch <b>`;
+  4. `filter-repo --replace-text --replace-message <renames…> --mailmap` **plus 🔴
+     `--path-glob 'hmi/examples/*/build/*' --invert-paths`, which is NOT in the rule manifest
+     because it is a filter-repo argument rather than a rule.** Reconstructing this command from the
+     manifest alone silently produces a different history;
+  5. rename the branch to the publishing name **after** filter-repo (renaming first breaks its
+     reflog freshness check), then `reflog expire --all --expire=now && gc --prune=now`;
+  6. **check the published commit is an ancestor of the new HEAD before pushing** — and push without
+     `--force`, so git refuses too;
+  7. Gate 3 → stamp must equal the clone's `git rev-parse HEAD` → identity sweep → push.
+
+  `git-filter-repo` is a pip package here and its `Scripts/` directory is **not** on the shell PATH:
+  `git filter-repo` fails with *"not a git command"*. Invoke the exe by absolute path. ~7 min rewrite, ~30 s verify.
+
+### Rev 17a — the SECOND cycle, and the two things that tried to go wrong
+
+**`6362bbc5acfc`, a FAST-FORWARD over the published commit.** Four source commits (the `.gitignore`
+gap, the Node 24 action pins, and the `AB-2` / `M-22` documents) reached GitHub by re-running the
+whole cycle — the only route, because this repository's history carries the live vocabulary and the
+employer identities, which is why it has no remote.
+
+```
+push           bb6d61c..6362bbc      (no "+" — a fast-forward, not a forced update)
+remote main    6362bbc5acfc2773662ffb34cb94cc925e89a715
+verdict stamp  6362bbc5acfc
+CI             green, 11 steps, 0 annotations
+```
+
+**Zero annotations is the confirmation that the Node 24 pins worked** — the previous run's only
+annotation was the Node 20 deprecation, and it is gone.
+
+#### 🔴 Finding 1 — the invocation was reconstructed from the wrong artifact
+
+I rebuilt the `filter-repo` command from `sanitization/scrub/manifest.json`. **The manifest records
+the RULES; the path exclusion is a filter-repo ARGUMENT**, so it is not in there and cannot be. The
+result reproduced the published history byte-for-byte to commit **1014** and diverged at **1015**.
+
+Comparing every path that ever existed in each rewrite: **54 files in three directories** present in
+mine and absent from the published one, and **nothing** present in the published one missing from
+mine. 39 + 8 + 7 = 54 — exactly the count Phase 1 recorded, and the requirement is written in red in
+Phase 1's own result note. Adding `--path-glob 'hmi/examples/*/build/*' --invert-paths` closed it.
+
+**The ancestry gate is what caught this**, and it is worth keeping: it refuses to push unless the
+already-published commit comes out as an ancestor, so the failure mode was a refusal rather than a
+force-push over a public repository.
+
+#### 🔴 Finding 2 — a stale canary is a WEAKENING bug, not a bookkeeping one
+
+Gate 3 exited **2 — NOTHING EXAMINED**: the canary was recorded against `8a9db57` and the clone was
+rewritten from `e50265b`. Every substantive number was already green, which is precisely the trap.
+Re-recording raised **every** must-survive threshold:
+
+```
+C-001                       2893 -> 2895      converter preflight   1125 -> 1131
+NOTHING EXAMINED            1862 -> 1866      docs/06-lad-...md      749 ->  759
+EMPTY IS NOT CLEAN          3005 -> 3010
+```
+
+An older tree contains **fewer** occurrences of everything, so a stale canary carries **smaller**
+expected counts and the gate gets quietly weaker the staler it is — while still printing `ok` on
+all five. must-vanish (410/52) and the T3 denominator (341) were unchanged, as they should be with
+no new vocabulary.
+
+#### The by-product worth more than either finding
+
+The first 1,367 commits rewrote to **byte-identical SHAs**. The pipeline's determinism had been
+assumed; it is now measured, and it is what makes a fast-forward possible at all.
+
+#### One measurement, made while deciding whether to watch CI from here
+
+On a **public** repo, anonymously: run conclusion ✅, per-step conclusions ✅, annotations ✅ — **raw
+logs ❌ (API 403), and the web UI says "Sign in to view logs".** The case where the logs matter is
+exactly the case where anonymous access stops working, so publishing to gain observability buys a
+status icon and not a diagnosis.
 
 ### Rev 17 — ✅ PUBLISHED. Gate 4 green on the first run, and the thing that was checked is the thing that shipped
 

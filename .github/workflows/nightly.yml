@@ -40,5 +40,5 @@ jobs:
 
       # Needs git and nothing else - no SDK, no network. Every case builds its own repository and
       # sets its own identity, so no global git config is required.
-      - name: De-identification rule builder (41 cases, ~20 min)
+      - name: De-identification rule builder (66 cases, ~33 min)
         run: python tools/build-scrub-rules.tests.py

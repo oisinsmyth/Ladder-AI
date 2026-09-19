@@ -1,5 +1,25 @@
 # LIVE-PROJECT READINESS — read this first
 
+> 🛑 **STALE AS TO THIS MACHINE — 2026-09-19. NONE OF THE OPENNESS PATHS BELOW CAN RUN HERE.**
+> **TIA Portal is not installed on this computer.** Measured: `C:\Program Files\Siemens\` holds only
+> Automation License Manager; there is no `Automation\Portal V20` directory and no `TIAP20`
+> registry key. `Siemens.Engineering.dll` exists on disk **only** as stale copy-local build output
+> inside `src/openness-cli/**/bin/` — that is the *client*, not the installation, and building
+> against it would produce a binary that compiles and then fails on the first `GetProcesses()`.
+> `GenProject1.ap20` and the other project folders are all present and all unopenable.
+>
+> **Everything below was true on the machine it was measured on, and none of it is retracted.** The
+> capability record stands; what changed is the hardware under it. The banner exists because this
+> page is the first thing a reader opens and its one-line answer is a green tick — **a stale page
+> that reads as reassuring is worse than a missing one**, and nothing else in the tracked tree
+> records the move.
+>
+> Consequences, so they are not rediscovered one at a time: `openness-cli` and `Harness.RigRead`
+> are the two recorded `cannotBuild` targets; the two failing golden tests need **one TIA re-export
+> of `Main`** and cannot be fixed any other way (`converter to-xml` would compare the synthesizer
+> against itself — see commit `4ff6d80`); and any dispatched work whose compile gate is `deferred`
+> stays deferred until Portal exists again.
+
 **Written 2026-08-14, overnight, at the end of the hammer campaign.** The owner's ask was: *have the
 tooling ready to use in the morning on a live project.* This is the answer, and it is written to be
 **read once, quickly, before you start** — not to be complete.

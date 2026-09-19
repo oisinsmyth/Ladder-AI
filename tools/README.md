@@ -820,7 +820,7 @@ vocabulary **with** live-job material on disk → **exit 2**, which is the exact
 a copy of it, and this output gets pasted into notes. `--name-terms` is the watched-terminal
 exception, the same trade `build-scrub-rules.py --name-collisions` makes.
 
-**16 cases, and every guard was mutated.** Each of six mutations reddens exactly the case named for
+**19 cases, and every guard was mutated.** Each of six mutations reddens exactly the case named for
 it: T1-embedded dropped, T2-embedded added, the live-run trigger disabled, unsearchable treated as
 clean, the corroborating question asked in the wrong scope, and the subject switched to the working
 tree. The fifth of those **was a real bug, found by its own case** — the corroboration originally
