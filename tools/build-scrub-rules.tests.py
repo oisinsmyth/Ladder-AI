@@ -1051,6 +1051,110 @@ def dotted_keys_that_DISAGREE_about_a_head_GATE(tmp):
     assert_eq(rules_of(tmp), [], "a refusal must write nothing")
 
 
+def a_dotted_rule_PRESERVES_a_member_nothing_else_renames(tmp):
+    """A member carries no identity - the head already does - so renaming it buys nothing, and
+    renaming it inconsistently costs correctness. `Flag` is written on its own in this corpus and
+    no rule touches it there, so a dotted rule that renamed it to `Banner` would move one half of a
+    pair and leave the other. Measured: a DB fixture member stayed `IO` while the map key that
+    looks it up became `IOSignals`, and a lookup that had never failed stopped finding anything."""
+    maps = ('{"Names": {"AcmeWidgetUnit": "GenericWidgetUnit"},'
+            ' "Tags": {"AcmeWidgetUnit.Flag": "GenericWidgetUnit.Banner"}}')
+    s = build(tmp, {"m": maps}, TERMS_HEADER,
+              {"doc.md": "AcmeWidgetUnit.Flag as a path, and Flag written on its own\n"})
+    code, out, err = run_head(tmp, s)
+    assert_eq(code, EXIT_OK, "exit (%s%s)" % (out, err))
+    dotted = [l.split("==>", 1)[1] for l in rules_of(tmp) if "." in l.split("==>", 1)[1]]
+    assert dotted, "no dotted rule was emitted: %r" % rules_of(tmp)
+    assert all(d.endswith(".Flag") for d in dotted), \
+        "the member was renamed although nothing renames it standalone: %r" % dotted
+
+
+def a_dotted_rule_still_RENAMES_a_head_with_no_bare_rule(tmp):
+    """*** THE HALF THAT PAYS FOR THE OTHER ONE. ***
+
+    A head with no bare rule is usually deliberate, not missing - the Green test withholds a head
+    that appears in already-sanitized content so a conventional name is not rewritten where it
+    stands alone, while the composite is still a identifying tag path. Preserving the head anyway made
+    49 dotted rules inert and dropped T2 coverage from 79 of 81 needles to 30. Here the head simply
+    never occurs alone, so it gets no bare rule; the composite must still be scrubbed."""
+    maps = '{"Tags": {"AcmeWidgetUnit.Flag": "GenericWidgetUnit.Flag"}}'
+    s = build(tmp, {"m": maps}, TERMS_HEADER,
+              {"doc.md": "only AcmeWidgetUnit.Flag appears, never the head on its own\n"})
+    code, out, err = run_head(tmp, s)
+    assert_eq(code, EXIT_OK, "exit (%s%s)" % (out, err))
+    dotted = [l.split("==>", 1)[1] for l in rules_of(tmp) if "." in l.split("==>", 1)[1]]
+    assert dotted and all(d.startswith("GenericWidgetUnit") for d in dotted), \
+        "the composite stopped being scrubbed - coverage paid for consistency: %r" % dotted
+
+
+def a_member_that_NEVER_stands_alone_is_still_renamed(tmp):
+    """*** THE MIRROR, AND THE BUG IT CATCHES COST 49 RULES. ***
+
+    Preserving a component is only right when there is something to diverge FROM. `Flag` here occurs
+    only ever inside `AcmeWidgetUnit.Flag`, so renaming it in the composite cannot disagree with
+    anything and the map's rename is free coverage.
+
+    The first implementation asked "does this component stand alone" of the WORD token class, which
+    SPLITS ON THE DOT - so every component of every dotted key answered yes, using the dotted form
+    itself as proof that it was not only dotted. That preserved 49 components that never stand
+    alone, made their rules inert, and dropped T2 coverage from 79 of 81 needles to 30. WIDE_RUN
+    keeps the dot, so a name that only ever appears as `X.Y` is simply not in the set."""
+    maps = ('{"Names": {"AcmeWidgetUnit": "GenericWidgetUnit"},'
+            ' "Tags": {"AcmeWidgetUnit.Flag": "GenericWidgetUnit.Banner"}}')
+    s = build(tmp, {"m": maps}, TERMS_HEADER,
+              {"doc.md": "only AcmeWidgetUnit.Flag ever appears, never the member by itself\n"})
+    code, out, err = run_head(tmp, s)
+    assert_eq(code, EXIT_OK, "exit (%s%s)" % (out, err))
+    dotted = [l.split("==>", 1)[1] for l in rules_of(tmp) if "." in l.split("==>", 1)[1]]
+    assert dotted and all(d.endswith(".Banner") for d in dotted), \
+        "a member that never stands alone was preserved anyway - that is 49 rules of lost " \
+        "coverage wearing a consistency fix: %r" % dotted
+
+
+def a_GREEN_head_is_still_renamed_inside_the_composite(tmp):
+    """*** THE CASE THAT COST 49 RULES, AND THE FIRST TWO VERSIONS OF THIS CHECK COULD NOT SEE IT.
+
+    The Green test withholds a bare rule for a head that appears in already-sanitized content - a
+    conventional name must not be rewritten where it stands alone. The composite is still a site
+    tag path and must be scrubbed. So this head is standalone, has NO bare rule, and must STILL be
+    renamed inside the dotted form: exactly the combination that preserving heads would break, and
+    the one a fixture whose head never appears alone cannot exercise at all."""
+    maps = ('{"Names": {"AcmeWidgetUnit": "GenericWidgetUnit"},'
+            ' "Tags": {"AcmeWidgetUnit.Flag": "GenericWidgetUnit.Flag"}}')
+    s = build(tmp, {"m": maps}, TERMS_HEADER,
+              {"green/ref.md": "AcmeWidgetUnit is a conventional name in the clean corpus\n",
+               "doc.md": "AcmeWidgetUnit alone, and AcmeWidgetUnit.Flag as a path\n"})
+    code, out, err = run_head(tmp, s, "--green", "green")
+    assert_eq(code, EXIT_OK, "exit (%s%s)" % (out, err))
+    assert_in("withheld, present in Green", out, "the Green withholding must be reported")
+    bare = [l for l in rules_of(tmp)
+            if l.split("==>")[0].replace("\\", "").endswith("AcmeWidgetUnit")]
+    assert not bare, "a Green-present head got a bare rule - clean content will be rewritten"
+    dotted = [l.split("==>", 1)[1] for l in rules_of(tmp) if "." in l.split("==>", 1)[1]]
+    assert dotted and all(d.startswith("GenericWidgetUnit") for d in dotted), \
+        "the composite stopped being scrubbed because its head was preserved: %r" % dotted
+
+
+def a_SHORT_head_named_by_a_dotted_key_bypasses_the_floor(tmp):
+    """The floor asks whether a short name might just be a word. A dotted key naming this head is
+    the map answering that outright, so the inference the floor guards against is not being made.
+    Applied anyway it withheld the bare rule while the dotted rule containing the same head sailed
+    through, and the head survived written alone - 48 of 55 divergences, and six live head names
+    left standing in a published artifact."""
+    maps = ('{"Names": {"Acme1": "Gen01"},'
+            ' "Tags": {"Acme1.Flag": "Gen01.Flag"}}')
+    s = build(tmp, {"m": maps}, TERMS_HEADER,
+              {"doc.md": "Acme1 alone, and Acme1.Flag as a path\n"})
+    code, out, err = run_head(tmp, s)
+    assert_eq(code, EXIT_OK, "exit (%s%s)" % (out, err))
+    # Compared RAW, with the anchors intact. Stripping backslashes to make the needle readable also
+    # turns `\bAcme1\b` into `bAcme1b`, which matches no sensible assertion - the first version of
+    # this case failed against a tool that was doing exactly the right thing.
+    needles = [l[len("regex:"):].split("==>")[0] for l in rules_of(tmp)]
+    assert r"\bAcme1\b" in needles, \
+        "the 5-character head named by a dotted key got no bare rule: %r" % needles
+
+
 def a_substitution_propagates_INTO_dotted_replacements(tmp):
     """*** ONE LIVE NAME MUST NOT LEAVE THE REWRITE AS TWO. ***
 
@@ -1257,6 +1361,16 @@ for name, body in [
      a_head_the_maps_state_DIRECTLY_is_not_overridden),
     ("HEADS: dotted keys that DISAGREE about a head GATE",
      dotted_keys_that_DISAGREE_about_a_head_GATE),
+    ("ALIGN: a member that NEVER stands alone is still renamed",
+     a_member_that_NEVER_stands_alone_is_still_renamed),
+    ("ALIGN: a GREEN head is still renamed inside the composite",
+     a_GREEN_head_is_still_renamed_inside_the_composite),
+    ("ALIGN: a SHORT head named by a dotted key bypasses the floor",
+     a_SHORT_head_named_by_a_dotted_key_bypasses_the_floor),
+    ("ALIGN: a dotted rule PRESERVES a member nothing else renames",
+     a_dotted_rule_PRESERVES_a_member_nothing_else_renames),
+    ("ALIGN: a dotted rule still RENAMES a head with no bare rule",
+     a_dotted_rule_still_RENAMES_a_head_with_no_bare_rule),
     ("SUBST: a substitution propagates INTO dotted replacements",
      a_substitution_propagates_INTO_dotted_replacements),
     ("CUTS: a token a LONGER rule rewrites first is not collateral",

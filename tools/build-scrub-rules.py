@@ -787,6 +787,12 @@ def main():
             if token != low:
                 found.add(token)
 
+    # Heads the maps name through a dotted key. Read before the filter loop because the floor
+    # consults it, and computed from `candidates` rather than from `rules` because the question is
+    # what the maps DECLARE, not what survived filtering.
+    dotted_heads = {v.split(".", 1)[0].lower() for v in candidates
+                    if "." in v and v.split(".", 1)[0]}
+
     rules, withheld_short, withheld_green, wide, dead_variants = [], [], [], [], 0
     declared_emitted = 0
     declared_variants, declared_breadth = [], []
@@ -811,7 +817,19 @@ def main():
             declared_variants.append((v, key))
             continue
 
-        if len(v) < args.min_global_length:
+        # *** THE FLOOR ASKS A QUESTION A DOTTED KEY HAS ALREADY ANSWERED. ***
+        # It exists to stop a name INFERRED from a map colliding with ordinary code, on the reasoning
+        # that a short name might just be a word. A dotted key naming this head is the map stating
+        # outright that it is an identifier, so the inference the floor guards against is not being
+        # made. Applied anyway, it withheld the bare rule while the dotted rule containing the very
+        # same head sailed through - a dotted needle always clears the floor - so the head survived
+        # written alone and disagreed with itself written as a path. Measured: 48 of 55 divergences,
+        # and six live head names left standalone in a published artifact, invisible to every gate.
+        #
+        # THE GREEN TEST STILL APPLIES BELOW, and that asymmetry is the point. The floor is a proxy
+        # for "this might be an ordinary word" and the map answers it; Green is evidence that the
+        # name IS in already-sanitized content, which no map entry can talk anyone out of.
+        if len(v) < args.min_global_length and v.lower() not in dotted_heads:
             withheld_short.append(v)
             continue
         if v.lower() in green_hits:
@@ -828,6 +846,85 @@ def main():
             wide.append("%s files=%d" % (len(v) * "*", head_hits[v]))
         rules.append((v, chosen[key], key))
 
+    # *** A DOTTED RULE MUST NOT RENAME A COMPONENT THE RULE SET LEAVES ALONE. ***
+    # A text substitution can only rename a component CONSISTENTLY if that component is also renamed
+    # where it stands on its own. Taking the map's dotted replacement verbatim breaks that: the map
+    # renames a member the rule set never touches elsewhere, so `X.Y` moves and the bare `Y` does
+    # not, and any file that composes the dotted form from its parts - or splits it back - ends up
+    # with halves that no longer match. Measured: a DB fixture's member stayed `IO` while the map
+    # key that looks it up became `IOSignals`, and a lookup that had never failed stopped finding
+    # anything.
+    #
+    # So the dotted replacement is DERIVED from the bare rules rather than taken from the map: each
+    # component becomes whatever that component's own rule says, and is preserved untouched where
+    # there is no such rule. Divergence is then impossible by construction rather than checked for
+    # afterwards. What it gives up is the map's member renames, which de-identify nothing the head
+    # does not already cover - the identity is in the head.
+    # PRESERVING A COMPONENT IS ONLY RIGHT WHEN THERE IS SOMETHING TO DIVERGE FROM. A component that
+    # never occurs standalone anywhere cannot disagree with itself, so the map's rename for it is
+    # safe and keeping it is free coverage. Preserving those as well cost 49 rules on the first
+    # attempt - dotted tag paths that had been scrubbed and silently stopped being - which is a
+    # consistency fix buying itself with de-identification, the wrong currency entirely.
+    # *** "OCCURS STANDALONE" MUST BE ASKED OF THE WIDE TOKEN CLASS, AND ASKING THE WORD CLASS IS
+    # THE SAME QUESTION ANSWERED YES EVERY TIME. *** WORD_RUN splits on the dot, so `X.Y` yields the
+    # tokens `X` and `Y` and every component of every dotted key looks as though it appears on its
+    # own - using the dotted form itself as the evidence that the component is not only dotted.
+    # Measured: that read preserved 49 components that never stand alone, made their rules inert,
+    # and dropped T2 coverage from 79 of 81 needles to 30. A consistency fix that halves the scrub
+    # is not a fix. WIDE_RUN keeps the dot, so a head that only ever appears as `X.Y` is simply not
+    # in this set, which is the distinction the check needs.
+    standalone = set()
+    for rel in git(repo, "ls-files").split("\n"):
+        if not rel.strip():
+            continue
+        try:
+            body = io.open(os.path.join(repo, rel), encoding="utf-8", errors="replace").read()
+        except OSError:
+            continue
+        standalone.update(t.lower() for t in WIDE_RUN.findall(body))
+
+    emitted_bare = {v.lower(): rep for v, rep, _ in rules if "." not in v}
+
+    def component_rep(part, mapped, is_head):
+        """*** THE HEAD IS WHERE THE IDENTITY IS, AND PRESERVING IT COSTS THE WHOLE RULE. ***
+
+        A head with no bare rule is usually deliberate rather than missing: the Green test withholds
+        a head that appears in the already-sanitized reference corpus, precisely so a conventional
+        name is not rewritten where it stands alone - while the composite `X.Y` is still a site
+        tag path and must be scrubbed. That asymmetry is the design working. Preserving the head
+        anyway made 49 dotted rules inert and dropped T2 coverage from 79 of 81 needles to 30: a
+        consistency fix paying for itself in de-identification, which is the wrong currency.
+
+        A MEMBER is the opposite. It carries no identity - the head already does - so renaming it
+        buys nothing, and renaming it inconsistently costs correctness: a fixture member stayed `IO`
+        while the map key that looks it up became `IOSignals`, and a lookup that had never failed
+        stopped finding anything."""
+        low = part.lower()
+        if low in emitted_bare:
+            return emitted_bare[low]        # a rule exists: agree with it, whatever the map said
+        if not is_head and low in standalone:
+            return part                     # a member written alone that nothing rewrites
+        return mapped                       # otherwise the map's own rename stands
+
+    realigned, flattened = [], 0
+    for v, rep, key in rules:
+        if "." in v:
+            parts, mapped = v.split("."), rep.split(".")
+            if len(parts) == len(mapped):
+                derived_rep = ".".join(component_rep(p, m, i == 0)
+                                       for i, (p, m) in enumerate(zip(parts, mapped)))
+                if derived_rep != rep:
+                    flattened += 1
+                rep = derived_rep
+        realigned.append((v, rep, key))
+    # A rule whose replacement is now its own needle changes nothing, and an identity rule in a
+    # scrub is worse than no rule: it reads as coverage.
+    inert = [r for r in realigned if r[0] == r[1]]
+    rules = [r for r in realigned if r[0] != r[1]]
+
+    print("dotted replacements realigned : %d to match the bare rules for their components"
+          % flattened)
+    print("  inert rules dropped          : %d  [replacement equalled the needle]" % len(inert))
     print("variants considered           : %d" % len(candidates))
     print("  absent from this repository  : %d (no rule needed)" % dead_variants)
     print("variants emitted              : %d" % len(rules))
@@ -884,7 +981,13 @@ def main():
     print("    but also present whole       : %d  [report only; the rewrite is load-bearing there]"
           % len(also_whole))
 
-    if not rules:
+    # EMPTY IS NOT CLEAN - but empty WITH A FINDING is a finding, not an empty examination. Exit 2
+    # means "nothing was examined"; when something was examined and produced a blocking result, the
+    # run has an answer and exit 1 is that answer. Found by a case that refuses on disagreeing map
+    # heads: the realignment above left it with no emitted rule, so the run reported NOTHING
+    # EXAMINED and buried the reason it had actually stopped.
+    pre_rule_findings = collision_problems + duplicate_terms + (["heads"] if head_conflicts else [])
+    if not rules and not pre_rule_findings:
         print("\nNOTHING EXAMINED: every variant was filtered out - no rule would be emitted.")
         print("EMPTY IS NOT CLEAN: this is a refusal, not a clean repository.")
         return 2
