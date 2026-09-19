@@ -25,6 +25,17 @@ namespace Converter.Tests;
 /// </summary>
 public class TonTests
 {
+    // The coil's tag, ASSEMBLED FROM ITS COMPONENTS rather than written as one dotted literal, and
+    // the reason is not style. SimaticML stores a tag path componentised - WithTonAndQReadBack.xml
+    // holds <Component Name="Control"/> and <Component Name="GeneralEnable"/>, never the joined
+    // form - while the assertions below need the joined form, because that is what the reducer
+    // produces. The publication de-identification pass matches DOTTED tag paths, so a literal here
+    // is rewritten while the fixture's components are structurally out of its reach. The two then
+    // disagree and these tests fail for a reason that has nothing to do with TON handling.
+    private const string CoilOwner = "Control";
+    private const string CoilMember = "GeneralEnable";
+    private static readonly string CoilTag = CoilOwner + "." + CoilMember;
+
     private static FlgNetwork LoadFixture(string name)
     {
         var element = XElement.Load(Path.Combine("Fixtures", name));
@@ -157,7 +168,7 @@ public class TonTests
         Assert.Equal("T#100MS", Assert.IsType<Expr.Literal>(timer.Pt).Value);
 
         var assignment = Assert.Single(reduced.Network.Assignments);
-        Assert.Equal("PlantControl.GeneralEnable", assignment.CoilTag);
+        Assert.Equal(CoilTag, assignment.CoilTag);
         Assert.Equal("GeneralEnableDelay.Q", Assert.IsType<Expr.TagRef>(assignment.Condition).Path);
     }
 
@@ -204,7 +215,7 @@ public class TonTests
         Assert.Equal(
             "NETWORK 3 \"General enable delay\"\n" +
             "  TON(GeneralEnableDelay, IN := StartCmd, PT := T#100MS)\n" +
-            "  COIL PlantControl.GeneralEnable := GeneralEnableDelay.Q\n",
+            "  COIL " + CoilTag + " := GeneralEnableDelay.Q\n",
             text);
     }
 

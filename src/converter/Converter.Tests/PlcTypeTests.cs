@@ -295,17 +295,26 @@ public class PlcTypeTests
     public void Sanitize_RenamesTypeAndMembers()
     {
         var type = PlcTypeSourceParser.Parse(LoadFixture("PlcTypeSource.xml"));
+
+        // The tag keys are BUILT from the type name rather than written as dotted literals, and the
+        // reason is not style. SimaticML stores a tag path componentised - the fixture holds
+        // <Component Name="..."/> elements, never the joined form - while a key here is one string.
+        // The publication de-identification pass matches DOTTED tag paths, so it rewrites some of
+        // these literals and cannot touch the fixture's components; the keys then stop matching the
+        // type they are keyed on and the test fails for a reason that has nothing to do with the
+        // converter. Interpolating from the type name keeps both sides in step either way.
+        const string typeName = "TypeDOL";
         var map = new Converter.Sanitize.SanitizationMap
         {
-            Names = { ["TypeDOL"] = "MotorIOSet" },
+            Names = { [typeName] = "MotorIOSet" },
             Tags =
             {
-                ["MotorIOSet.Run"] = "MotorIOSet.Run",
-                ["MotorIOSet.FaultActive"] = "MotorIOSet.FaultActive",
-                ["TypeDOL.SpeedSetpoint"] = "MotorIOSet.SpeedSetpoint",
-                ["TypeDOL.RunHours"] = "MotorIOSet.RunHours",
-                ["TypeDOL.StatusWord"] = "MotorIOSet.StatusWord",
-                ["TypeDOL.EquipmentName"] = "MotorIOSet.EquipmentName",
+                [$"{typeName}.Run"] = "MotorIOSet.Run",
+                [$"{typeName}.FaultActive"] = "MotorIOSet.FaultActive",
+                [$"{typeName}.SpeedSetpoint"] = "MotorIOSet.SpeedSetpoint",
+                [$"{typeName}.RunHours"] = "MotorIOSet.RunHours",
+                [$"{typeName}.StatusWord"] = "MotorIOSet.StatusWord",
+                [$"{typeName}.EquipmentName"] = "MotorIOSet.EquipmentName",
             },
         };
 
