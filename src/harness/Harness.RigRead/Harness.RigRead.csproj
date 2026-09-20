@@ -33,25 +33,16 @@
     <ProjectReference Include="..\Harness.RigWrite\Harness.RigWrite.csproj" />
   </ItemGroup>
 
-  <PropertyGroup>
-    <!-- Same machine-local copy Harness.S7 uses; see that project file for the open vendoring question. -->
-    <Sharp7Path Condition="'$(Sharp7Path)' == ''">$(USERPROFILE)\.ladder\lib\Sharp7.dll</Sharp7Path>
-  </PropertyGroup>
-
-  <ItemGroup Condition="Exists('$(Sharp7Path)')">
-    <Reference Include="Sharp7">
-      <HintPath>$(Sharp7Path)</HintPath>
-      <Private>true</Private>
-    </Reference>
-  </ItemGroup>
-
   <!--
-    Unlike Harness.S7, this project cannot degrade gracefully without Sharp7: a client that cannot open
-    a socket is not a reduced version of this tool, it is nothing. Fail the build with the reason rather
-    than with a list of unresolved type names.
+    Sharp7 comes from NuGet as of 2026-09-20; the decision and its 🔴 binary-swap caveat are in
+    Directory.Packages.props. The ErrorMissingSharp7 target that used to live here is gone with it.
+    THAT TARGET WAS THE REASON THIS PROJECT WAS ONE OF THE TWO RECORDED cannotBuild TARGETS, and it
+    was right to exist: a client that cannot open a socket is not a reduced version of this tool, it
+    is nothing, so failing with a named reason beat failing with a list of unresolved type names.
+    With the dependency restorable on any machine there is no absence left for it to explain.
   -->
-  <Target Name="ErrorMissingSharp7" BeforeTargets="Build" Condition="!Exists('$(Sharp7Path)')">
-    <Error Text="Harness.RigRead needs Sharp7 at '$(Sharp7Path)' — this project IS the device client and has nothing to build without it. Override with -p:Sharp7Path=&lt;path&gt;." />
-  </Target>
+  <ItemGroup>
+    <PackageReference Include="Sharp7" />
+  </ItemGroup>
 
 </Project>

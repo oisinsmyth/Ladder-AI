@@ -1,12 +1,12 @@
 {
   "schema": "ladder-ai/build-baseline/1",
-  "capturedAt": "2026-09-18",
-  "capturedBy": "tools/capture-build-baseline.py (committed as the CI gate baseline)",
-  "commit": "9274c006bf1eb9554539832f9dd921ae7128c3b9",
+  "capturedAt": "2026-09-20",
+  "capturedBy": "tools/capture-build-baseline.py",
+  "commit": "38ce54e2b567338b9cc8be8e578bff25773ac5cb",
   "branch": "publication-prep",
   "sdk": "8.0.425",
   "configuration": "Release",
-  "note": "THE CI GATE BASELINE. tools/capture-build-baseline.py --expect compares a run against this file and fails on a LOSS: an assembly that did not run, a pass count that fell, a failure count that rose, or a target that used to build and does not. Gains are reported and do not gate. Keyed PER ASSEMBLY, never on the total - 10+5 and 5+10 sum the same while a project has moved. THE 2 RECORDED FAILURES ARE NOT FILTERED, EXCLUDED OR HIDDEN: they run every time, and the gate tolerates exactly this many. A third fails the build. Both are one fact - ir/test-project001/Main.ir gained three networks and simatic-ml/test-project001/Main.xml was never re-exported; one TIA Portal re-export clears both, after which they become a GAIN and this file gets re-captured in its own commit. See FI-93. The two unbuildable targets are recorded rather than omitted: openness-cli needs a licensed Siemens.Engineering.dll that cannot be redistributed, and Harness.RigRead needs a machine-local Sharp7.dll whose vendoring is an open question. Re-capture with: python tools/capture-build-baseline.py --out tests/ci-baseline.json PROVENANCE AFTER THE REWRITE: the commit field above names a commit in the ORIGINAL private history. Publication rewrites every hash to remove restricted identifiers, so it does not resolve in this repository and is kept as a record of which tree these counts were measured on. Nothing reads it - the gate compares assemblies and cannotBuild.",
+  "note": "Per-assembly counts for verify-scrub.py. Compare a post-rewrite capture against this one PER ASSEMBLY: a total-only comparison nets a loss in one assembly against a gain in another.",
   "totals": {
     "assemblies": 23,
     "passed": 5894,
@@ -181,8 +181,7 @@
       "passed": 161,
       "failed": 0,
       "skipped": 0,
-      "total": 161,
-      "note": "Was the tree's only orphan - in no solution, so a CI looping over *.sln skipped these 161 tests in silence. src/hmi-cli/hmi-cli.sln now exists and the counts are unchanged, which is what made the move safe to record. The orphan DISCOVERY in capture-build-baseline.py stays regardless: the next orphan will arrive the same way this one did, by somebody forgetting."
+      "total": 161
     },
     {
       "target": "src/download-feedback/download-feedback.sln",
@@ -202,17 +201,6 @@
     }
   ],
   "cannotBuild": [
-    {
-      "target": "src/harness/harness.sln",
-      "exitCode": 1,
-      "errors": [
-        {
-          "code": "CS0246",
-          "project": "Harness.RigRead.csproj",
-          "example": "The type or namespace name 'Sharp7' could not be found (are you missing a using directive or an assembly reference?)"
-        }
-      ]
-    },
     {
       "target": "src/openness-cli/openness-cli.sln",
       "exitCode": 1,

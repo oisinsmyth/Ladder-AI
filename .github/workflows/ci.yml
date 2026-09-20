@@ -9,15 +9,22 @@
 #       RUNTIME, so even a stub reference would not make it meaningful. These projects are not
 #       unfinished - they are unbuildable anywhere without a licensed engineering seat.
 #
-#   src/harness/Harness.RigRead
-#       Needs a machine-local Sharp7.dll. Its project file errors deliberately rather than degrading:
-#       "this project IS the device client and has nothing to build without it". Its vendoring is an
-#       open question (the csproj lists three options, one of them NuGet) and is not being settled
-#       inside a CI change, because it would alter the dependency of the code that talks to real
-#       hardware - verified against that binary, not a substitute.
+#   (src/harness/Harness.RigRead WAS the second exclusion and is not one any more - 2026-09-20.)
+#       It needed a machine-local Sharp7.dll and its project file errored deliberately rather than
+#       degrading. The vendoring question the comment here deferred has been settled by the owner:
+#       Sharp7 now comes from NuGet, pinned to 1.1.82 in Directory.Packages.props. harness.sln
+#       builds on a hosted runner, and cannotBuild in tests/ci-baseline.json is now ONE target.
+#       This paragraph is kept rather than deleted because the old text said the swap "would alter
+#       the dependency of the code that talks to real hardware - verified against that binary, not
+#       a substitute", and IT WAS RIGHT: the package binary is 44,544 bytes and the one it replaced
+#       was 57,288. No existing rig measurement transfers. See the 🔴 note in
+#       Directory.Packages.props. Nothing is lost today - TIA is not installed on the engineering
+#       machine, so no rig is reachable to measure against anyway.
 #
-# BOTH ARE RECORDED IN tests/ci-baseline.json UNDER cannotBuild, so the gate below notices if a THIRD
-# target joins them. An exclusion nothing checks is just an omission.
+# IT IS RECORDED IN tests/ci-baseline.json UNDER cannotBuild, so the gate below notices if a SECOND
+# target joins it. An exclusion nothing checks is just an omission. The count came down from two on
+# 2026-09-20 and the gate tightened with it automatically, which is the point of recording the set
+# rather than a number: what gates is "a target that is not on the list", not "more than two".
 #
 # Two Python gates are deliberately NOT run here, and that is also a decision:
 #   tools/check-agent-evidence.py <file>  - belongs at hand-back, not at commit or CI. An evidence

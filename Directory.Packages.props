@@ -47,4 +47,34 @@
     <PackageVersion Include="NModbus" Version="3.0.81" />
   </ItemGroup>
 
+  <!--
+    The S7 client, and THE OPEN VENDORING QUESTION IS NOW CLOSED (2026-09-20, owner's decision).
+    Sharp7 is a single-file, pure-C#, no-native-dependency S7 client, MIT, by Federico Barresi
+    (github.com/fbarresi/Sharp7). Three options were on the table since 2026-08-11 — vendor the DLL
+    under lib/, take it from NuGet, or vendor the single .cs source. NuGet won: auditable, versioned,
+    and it slots into the central package management this file already is, whereas a binary blob in
+    git is something nobody can diff and this repo has no precedent for one.
+
+    🔴 THIS IS A BINARY SWAP, NOT A LIKE-FOR-LIKE PIN, AND THE VERSION NUMBER HIDES THAT. The DLL
+    used here until today was 57,288 bytes, built for net48, obtained from a PRONETA download and
+    unblocked by hand at %USERPROFILE%\.ladder\lib\Sharp7.dll. The 1.1.82 PACKAGE ships net40 and
+    netstandard2.0 only, both 44,544 bytes, and neither is that file. Same version string, ~12.7 KB
+    apart, different hashes - measured, not assumed.
+
+    Why that is acceptable and what it costs. It is a PROVENANCE IMPROVEMENT: a signed package from
+    a named author under a stated licence beats a binary of unverifiable origin that arrived
+    zone-blocked from a tool installer, which is the concern that kept this question open for five
+    weeks. What it costs is that EVERY RIG MEASUREMENT IN THIS REPOSITORY WAS TAKEN AGAINST THE OLD
+    BINARY. None of them transfers. Nothing is lost today because no rig is reachable from this
+    machine (TIA is not installed - docs/notes/live-project-readiness.md), but before any device
+    behaviour is trusted again it must be RE-VERIFIED against this package, not inferred from the
+    old figures.
+
+    Pinned exactly, not floated: 1.1.84 exists and is deliberately not taken. Changing the client
+    that talks to real hardware is a decision, and it should be made once and on purpose.
+  -->
+  <ItemGroup>
+    <PackageVersion Include="Sharp7" Version="1.1.82" />
+  </ItemGroup>
+
 </Project>

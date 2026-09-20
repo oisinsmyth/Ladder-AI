@@ -6,12 +6,11 @@
     <AssemblyName>rig-control</AssemblyName>
 
     <!--
-      Same open question, same answer, as Harness.S7's project file: Sharp7 is not committed to this
-      repository, and the path is an overridable property defaulting to the machine-local copy. Do not
-      change it here without changing it there — two projects resolving the same DLL differently is a
-      way to build one half against a version the other has never seen.
+      Sharp7 now comes from NuGet, pinned centrally (2026-09-20). The warning this comment used to
+      carry — "two projects resolving the same DLL differently is a way to build one half against a
+      version the other has never seen" — is exactly what central package management makes
+      structurally impossible, which is a large part of why that option won.
     -->
-    <Sharp7Path Condition="'$(Sharp7Path)' == ''">$(USERPROFILE)\.ladder\lib\Sharp7.dll</Sharp7Path>
   </PropertyGroup>
 
   <!--
@@ -36,30 +35,25 @@
     <ProjectReference Include="..\Harness.S7\Harness.S7.csproj" />
   </ItemGroup>
 
-  <ItemGroup Condition="Exists('$(Sharp7Path)')">
-    <Reference Include="Sharp7">
-      <HintPath>$(Sharp7Path)</HintPath>
-      <Private>true</Private>
-    </Reference>
+  <ItemGroup>
+    <PackageReference Include="Sharp7" />
   </ItemGroup>
-
-  <PropertyGroup Condition="Exists('$(Sharp7Path)')">
-    <DefineConstants>$(DefineConstants);SHARP7</DefineConstants>
-  </PropertyGroup>
 
   <!--
-    Without Sharp7 the live transport is excluded and the composition root hands the CLI a factory
-    that throws with a named reason. The fence, the CLI, every gate and every exit code still build
-    and still test — which is the point: the safety-relevant half of this tool has no dependency on
-    being able to reach a device.
-  -->
-  <ItemGroup Condition="!Exists('$(Sharp7Path)')">
-    <Compile Remove="Sharp7RunTransition.cs" />
-  </ItemGroup>
+    SHARP7 IS NOW DEFINED UNCONDITIONALLY, and that is a real change rather than tidying. It used to
+    be set only when the machine-local DLL existed, so a build without it excluded
+    Sharp7RunTransition.cs and the composition root handed the CLI a factory that threw with a named
+    reason. The fence, the CLI and every exit code still built and tested — deliberately, because
+    the safety-relevant half of this tool must not depend on being able to reach a device.
 
-  <Target Name="WarnMissingSharp7" BeforeTargets="Build" Condition="!Exists('$(Sharp7Path)')">
-    <Message Importance="high"
-             Text="Harness.RigControl: Sharp7 not found at '$(Sharp7Path)' — this build has NO device transport. The fence and the CLI still build and test. Override with -p:Sharp7Path=&lt;path&gt;." />
-  </Target>
+    That property still holds and is still worth protecting; what has gone is the BUILD variation.
+    The live transport is now always compiled in, so "can this build reach a device" stops being a
+    question about which machine ran msbuild. It never should have been one: a #if that changes
+    which code exists is how two people run the same command and get tools that differ in what they
+    can do to a CPU.
+  -->
+  <PropertyGroup>
+    <DefineConstants>$(DefineConstants);SHARP7</DefineConstants>
+  </PropertyGroup>
 
 </Project>
