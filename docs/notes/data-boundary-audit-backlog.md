@@ -296,8 +296,57 @@ through a `lad-coder` dispatch (`gen/` content, hard rule 8); diff verified here
 and this one refused on its first contact with the thing it was built for. The register would have
 been a nicely-documented no-op otherwise.
 
+### AB-2 addendum 2 — the practice question, audited 2026-09-20. **Verdict: UNVERIFIED.**
+
+The open item was framed as a *data-tier* question. Audited as a **validity** question — could the
+blind generator have seen the answer key? — it comes back **neither cleared nor impeached**, and the
+reasons on both sides are worth keeping.
+
+**The hypothesis that prompted the audit was WRONG, and refuted on timing.** I suspected the tracked
+`ir/` twin of the quarantined key. It was added **8½ hours after the run commit**, in a separate
+later campaign; `git ls-tree` at the run commit returns zero entries for that directory. The
+duplicate is real and the quarantine is genuinely defeated by it *today* — but it did not exist on
+the day and cannot have been read then.
+
+**A different duplicate did exist, and nothing recorded it.** A byte-identical sanitized copy of the
+answer key sat in the gitignored `scratch/` directory from roughly an hour before the generated
+block was authored. `scratch/` is fenced from **commit**, exactly as `answerkey/` is — but the
+quarantine's stated goal, in its own commit message, was that the generator *"never be able to
+discover it in the tree"*, and **a gitignore does not remove a file from the tree.** The commit that
+created the quarantine discloses that `scratch/` held raw exports; it does not disclose that it also
+held a full copy of the key.
+
+**Why it is NOT impeached.** The output's shape is affirmative evidence against copying, and it is
+independent of any agent's self-report: the generator **missed a feature the key contains**,
+**avoided reproducing a defect the key has**, and logged a design question that could not arise if
+the key were visible.
+
+**Why it is NOT cleared.** `telemetry.log` — the only genuine run record — has **no field for
+readable scope and never did**. Its schema is `date | skill | wall_clock | portal_roundtrips |
+tokens | outcome | note`. Everything else is self-reported prose: the spec grants a three-file
+permission, the architecture note asserts the key "was never accessed". Neither records what the
+context actually contained.
+
+🔴 **The larger finding, which the audit was not sent to look for: THE SPEC WAS WRITTEN FROM THE
+ANSWER KEY, and says so** — the non-transcribed items were *"grounded from the answer key"*. So even
+under perfect generator blindness this measures *"can the skill reconstruct from a key-derived
+spec"*, not *"from an independent spec"*. Later bench re-runs logged exactly this circularity as
+**blocking**; this run logged no such caveat. **The pipeline got stricter after this result was
+banked**, which is the honest way to say the result predates the standard it is cited under.
+
+**Also flagged, not concluded:** the compile gate for this validation was claimed, **retracted fifty
+minutes later**, then claimed again, and no `sanity-check` output backing the final claim was found.
+Per hard rule 4 an assertion is not the gate. Cutting the other way: a record that publicly retracts
+its own overstatement is more credible on the claims it did not retract.
+
+**What this changes.** The practice question is no longer only about tiers. The durable fix is
+**M-23**: a validation case should declare its generator's readable scope somewhere a tool can check,
+because today that is unrecordable by construction. Deduplicating the key (so it exists once) and
+sanitizing the committed corpora remain worth doing; neither is urgent, and nothing leaks.
+
 **Remediated so far:** `spec.md`'s claim retracted and corrected (2026-09-19); a correction note
-appended to both approvals in `docs/13-data-boundary.md`; `gen/test-project001` sanitized as above.
+appended to both approvals in `docs/13-data-boundary.md`; `gen/test-project001` sanitized;
+the validity question audited and recorded above (2026-09-20).
 **Still open:** the practice question —
 a blind-validation answer key that is a byte-identical copy of unsanitised bench content is a
 question about how validation cases are *built*, not about any one file. Owner's call.

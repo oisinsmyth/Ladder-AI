@@ -240,6 +240,47 @@ satisfy a tool that cannot see its subject is worse than recording the limit.
 
 Tracked as **AB-2**.
 
+### M-23. A BLIND RUN'S BLINDNESS IS UNRECORDABLE, so no audit can ever clear one
+
+**What happened.** The `gen-block-modify-purpose` blind validation was audited 2026-09-20 to answer
+one question: could the generator have seen the answer key? The verdict was **UNVERIFIED — neither
+cleared nor impeached** (AB-2 addendum 2). Not because the audit was shallow, but because **the
+answer does not exist anywhere**: `gen/telemetry.log`'s schema is `date | skill | wall_clock |
+portal_roundtrips | tokens | outcome | note`, and there is no field for what the agent could read.
+There never was one.
+
+**The quarantine was a `.gitignore`, and that is a category error.** Ignoring a file fences it from
+**commit**. The quarantine's own commit message states the goal as the generator *"never being able
+to discover it in the tree"* — which is a **read** fence, and gitignore is not one. Measured: a
+byte-identical copy of the key sat in `scratch/` (also ignored, also present on disk) for about an
+hour before the generated block was authored.
+
+**Why this is not "be more careful".** Every artifact asserting blindness is self-reported by the
+agent whose blindness is in question — the spec grants a three-file permission, the architecture
+note asserts the key "was never accessed". That is the D6 shape the whole agent architecture exists
+to prevent: *the party being measured also supplies the measurement.* An assertion of independence
+from the party whose independence is at issue is worth exactly nothing, and the repo already knows
+this — it is why `assertion-enumerator` exists and never reads the implementation.
+
+**Mechanise.** A dispatched run should record its **readable scope as data, not as prose**:
+1. the case declares the paths the generator may read;
+2. the run records the paths it actually received — a context manifest, hashed;
+3. a checker asserts (2) ⊆ (1), and that no declared-quarantine path is byte-identical to anything
+   inside (1). **The second clause is the one that catches this case**, because the breach vector
+   here was not a path anybody listed — it was a *copy* of one, under a different name.
+
+**The hard part is (2)**, and it is worth saying plainly: nothing currently emits it, and a field an
+agent fills in about itself is the same self-report in a new location. The honest first version may
+only be able to record what the DISPATCHER passed, which is at least a different party.
+
+**Cheaper interim that is worth doing on its own:** make the answer key exist **once**. Today a
+quarantined key and a tracked corpus file are byte-identical, so editing the corpus silently changes
+a validation case's ground truth, and the quarantine is defeated by a file nobody thinks of as the
+key.
+
+**Status: filed 2026-09-20, not built.** Tracked as **AB-2**. Not a publication blocker and not a
+leak: Gate 3 returns an earned zero over all of this content.
+
 ### M-13. A stationarity claim needs a SERIES, and the inert basis is taken from ONE sample 🔴 BLOCKING A RUN TODAY
 
 **What happened.** The resting state a wave's inert check is measured against was captured by a
