@@ -124,6 +124,7 @@ jobs:
           python tools/check-green-claims.tests.py
           python tools/check-answer-keys.tests.py
           python tools/term_list.tests.py
+          python tools/check-readable-scope.tests.py
           python tools/verify-scrub.tests.py
 
       # M-22. UNLIKE check-staged-identifiers.py, THE CHECK ITSELF RUNS HERE, and it is worth being
@@ -145,6 +146,13 @@ jobs:
       # fresh clone HAS no scratch/ and no worktrees, and the step's output says how many it saw.
       - name: Answer keys are at their pins
         run: python tools/check-answer-keys.py
+
+      # M-23's buildable half. It runs here in full - it needs no vocabulary, only files and git.
+      # Its output carries a PERMANENT line saying the MotorVSDSystem-purpose case can never be cleared,
+      # because its quarantine is a void fence. That line is the point, not noise: the alternative
+      # was a check that fails forever, and a check nobody can keep green gets disabled.
+      - name: Validation cases declare what was readable
+        run: python tools/check-readable-scope.py
 
       # The demo is a test, not a showpiece. --check asserts the result it claims, so it fails here
       # rather than rotting into an example nobody runs.

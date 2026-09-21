@@ -300,7 +300,7 @@ satisfy a tool that cannot see its subject is worse than recording the limit.
 
 Tracked as **AB-2**.
 
-### M-23. A BLIND RUN'S BLINDNESS IS UNRECORDABLE, so no audit can ever clear one
+### M-23. A BLIND RUN'S BLINDNESS IS UNRECORDABLE, so no audit can ever clear one — ⚙️ STATIC HALF BUILT 2026-09-21
 
 **What happened.** The `gen-block-modify-purpose` blind validation was audited 2026-09-20 to answer
 one question: could the generator have seen the answer key? The verdict was **UNVERIFIED — neither
@@ -359,7 +359,35 @@ key.
 > The interim does **not** shrink M-23 by one inch. It makes ground truth immovable-in-silence; it
 > says nothing about what anybody could read, and its own clean verdict says so in those words.
 
-**Status: filed 2026-09-20, not built. Its cheap interim built 2026-09-21 (3-C).** Tracked as
+> ⚙️ **THE STATIC HALF IS BUILT — 2026-09-21.** `tools/readable-scope.txt` declares, per case, what
+> the generator was allowed to read and what was supposed to be hidden;
+> `tools/check-readable-scope.py` checks it. 16 self-tests, in CI.
+>
+> 🔴 **THE DESIGN ABOVE NAMES THE WRONG CLAUSE, AND BUILDING IT IS WHAT FOUND THAT OUT.** Clause 3
+> above says the catcher is *"no declared-quarantine path is byte-identical to anything inside
+> (1)"* — inside the **allowed set**. Measured against the real history: the vector was a copy in
+> `scratch/`, and **`scratch/` was never in the allowed set**, so that clause passes it. The
+> implemented clause is wider — *no byte-identical twin ANYWHERE in the readable tree* — and the
+> first self-test reconstructs the historical shape precisely to pin it, because a check that
+> cannot catch the case that motivated it is worse than none: it will be trusted.
+>
+> **`void` is the other thing building it forced.** On first contact with real data the checker
+> gated, correctly, on the one declared fence: 24 byte-identical twins and a **tracked** key. Both
+> findings are true and unfixable — the key is cited bench corpus. A check that fails forever gets
+> disabled, and "delete the declaration" is the wrong repair. So a case may declare a fence `void`:
+> twins are still reported every run, nothing gates, **and the verdict prints, permanently, that
+> the case CAN NEVER BE CLEARED.** It is a confession, not an exemption — downgrading to `void`
+> trades a red check for a standing public statement that the case's blindness is unprovable, which
+> is exactly what AB-2 concluded and what nothing previously recorded.
+>
+> **The hard half is untouched and stays open.** Without `--manifest` the run half examines
+> NOTHING and says so in those words. Nothing emits a context manifest, and an agent's own account
+> of what it read is the same self-report in a new location. What is now true that was not before:
+> the *scope* is written down, transcribed from the case's own spec rather than asserted, and the
+> quarantine's defeat is measured on every run instead of being rediscovered by an audit.
+
+**Status: filed 2026-09-20. STATIC HALF BUILT 2026-09-21; the manifest half remains open and is the
+part that would actually clear a run.** Its cheap interim built 2026-09-21 (3-C). Tracked as
 **AB-2**. Not a publication blocker and not a leak: Gate 3 returns an earned zero over all of this
 content.
 

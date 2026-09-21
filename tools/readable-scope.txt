@@ -1,0 +1,64 @@
+# THE READABLE-SCOPE REGISTER (M-23) -- what a validation case's generator was ALLOWED to read,
+# and what was supposed to be hidden from it.
+#
+# WHY THIS FILE EXISTS. A blind validation is only worth the blindness. Audited 2026-09-20, the
+# MotorVSDSystem-purpose run came back UNVERIFIED -- neither cleared nor impeached -- not because the
+# audit was shallow but because THE ANSWER DOES NOT EXIST ANYWHERE: `gen/telemetry.log`'s schema is
+# `date | skill | wall_clock | portal_roundtrips | tokens | outcome | note`, and there is no field
+# for what the agent could read. There never was one. Every artifact asserting blindness is
+# self-reported by the agent whose blindness is in question. That is AB-2 addendum 2.
+#
+# *** A QUARANTINE THAT IS A GITIGNORE IS NOT A READ FENCE. *** Ignoring a file fences it from
+# COMMIT. The original quarantine's own commit message stated the goal as the generator "never
+# being able to discover it in the tree" -- and a gitignore does not remove a file from the tree.
+# Measured: a byte-identical copy of the key sat in `scratch/` about an hour before the generated
+# block was authored, and a second, tracked twin exists in the bench corpus today.
+#
+# WHAT LISTING A CASE HERE ASSERTS, and what tools/check-readable-scope.py then checks:
+#   1. `allow` and `quarantine` do not overlap. A path that is both is a contradiction, not a rule.
+#   2. every declared path exists.
+#   3. 🔴 NO QUARANTINED FILE HAS A BYTE-IDENTICAL TWIN ANYWHERE IN THE TREE. This is the clause
+#      with teeth and it is WIDER than the one M-23 was filed with -- see the note below.
+#   4. a quarantined file that is TRACKED is reported as a VOID quarantine, because tracked content
+#      is readable by construction and no amount of directory naming changes that.
+#   5. with `--manifest`, that the paths a run actually received are a subset of `allow`.
+#
+# 🔴 THE FILED DESIGN WAS WRONG ABOUT WHICH CLAUSE CATCHES THE HISTORICAL CASE, and the correction
+# is the reason this register is shaped as it is. M-23 says the catching clause is "no
+# declared-quarantine path is byte-identical to anything inside the allowed set". Measured
+# 2026-09-21: the historical vector was a copy in `scratch/`, which was NEVER IN THE ALLOWED SET, so
+# that clause would have passed it. Only the wider form -- no twin ANYWHERE readable -- reaches it.
+# The narrow clause is still checked, as part of the wide one; it is simply not the one that works.
+#
+# WHAT THIS CANNOT DO, AND IT IS THE WHOLE OF M-23'S HARD HALF. It cannot tell you what an agent
+# ACTUALLY read. Nothing emits that today, and a field an agent fills in about itself is the same
+# self-report in a new location. Without a `--manifest` the run half examines NOTHING and says so.
+# A clean verdict here means the SCOPE IS COHERENT AND THE QUARANTINE IS NOT DUPLICATED. It has
+# never meant, and must never be read as, "the generator was blind".
+#
+# FORMAT
+#   case | allow | quarantine | void | repo-relative path        # reason
+#   A directory covers everything beneath it. Everything after # is the REASON and is not optional.
+#
+# THE THREE KINDS, and the difference between the last two is this tool's whole integrity:
+#   allow       the generator was permitted to read this. Transcribe it from the case's own spec;
+#               do not invent it.
+#   quarantine  the case ASSERTS this was hidden. A byte-identical twin anywhere, or tracked
+#               status, GATES - because the assertion is then demonstrably false.
+#   void        the case DECLARES the fence defeated and unrepairable. Twins are reported every
+#               run and do not gate; there is no false assertion left to refuse.
+#
+# *** `void` IS A CONFESSION, NOT AN EXEMPTION. *** Downgrading a `quarantine` to `void` to get a
+# run through buys nothing: it trades a failing check for a PERMANENT printed statement that the
+# case can never be cleared, by this tool or by any audit. The only way to remove that statement is
+# to stop declaring the fence void - which means actually building one.
+#
+# Tracked. This file names paths only.
+
+# --- MotorVSDSystem-purpose: the blind run AB-2 could not clear -----------------------------------------
+# The allow set is transcribed from the case's own spec.md, "Targets you may read (generator-visible)",
+# which grants exactly three files. Transcribed, not invented - if the spec changes, this must too.
+MotorVSDSystem-purpose | allow | gen/_validation/MotorVSDSystem-purpose/source/MotorStarter.ir        # the DOL baseline the generator was asked to modify
+MotorVSDSystem-purpose | allow | gen/_validation/MotorVSDSystem-purpose/deps/MotorVSDIOSet.ir         # the target IO struct type the block's IO member must be typed to
+MotorVSDSystem-purpose | allow | gen/_validation/MotorVSDSystem-purpose/deps/AnalogScale.ir           # a reusable linear-scaling FC to be CALLed for speed scaling
+MotorVSDSystem-purpose | void | ir/PlantAutoControl-bench/MotorVSDSystem.ir                           # THE ANSWER KEY, at its canonical home per tools/answer-keys.txt. 🔴 It is TRACKED, so this quarantine is VOID and the checker says so every run. Recorded anyway: a void fence that is measured beats a void fence that is assumed to hold.
