@@ -56,7 +56,7 @@ this table, this table is current.
 | **3 — rewrite history** | ✅ **DONE 2026-09-19 — rev 16, EARNED ZERO** | **Gate 3 returns an EARNED ZERO over 1,366 commits, 6,386 blobs and 1,830 paths.** T1 0 / T2 0, over-scrub 0, instrument control 1719/1719, must-survive 5 of 5, build **5,894 → 5,894 — not one test lost**. Demo 14 + 1 known; budgets 19/0 over; IR verified through `lad-coder` (29,752 lines and 21,673 literals matching as multisets). Verifier stamp `subject=1c2de19518e0`. **It refused twice first, and both refusals were right** — see rev 16. Source untouched, no remote. ⚠️ **That stamp is NOT the published one.** The mailmap was rewritten afterwards to map both author identities, which required a fresh cycle; the artifact that went public carries stamp **`bb6d61c6544d`** over 1,367 commits / 6,387 blobs / 1,830 paths. Same gates, same earned zero, one commit later |
 | **4 — restructure** | ✅ **DONE** | — |
 | **5 — CI and demo** | ✅ **DONE 2026-09-19 — Gate 4 GREEN, rev 17; both workflows green, rev 17b** | `.github/workflows/ci.yml` + `nightly.yml`, `global.json` (SDK pinned), `demo/run-demo.py`, `tests/ci-baseline.json`. CI has passed on **every** published sha. The step that matters is `capture-build-baseline.py --expect`, which fails on a lost assembly, a fallen pass count, a risen failure count *or* an unbuildable target that is not on the recorded list. **`Nightly (slow suites)` is now confirmed green on hosted hardware too** — the 66-case scrub-builder suite, kept out of CI at ~33 minutes. ⚠️ `cannotBuild` is **1**, not 2, since the Sharp7 decision (rev 17b); `openness-cli` is the sole exclusion and stays one until a licensed engineering seat exists |
-| **6 — publish** | ✅ **DONE 2026-09-19 — rev 17, extended by revs 17a and 17b** | Published to `github.com/oisinsmyth/Ladder-AI`. **Currently at `e8eb66af38af`** after **four cycles** — first `bb6d61c6544d`, then `6362bbc5acfc`, then `65a09157e920` (🔴 the one forced push, rev 17b), then this one. In every cycle **remote `main` = local clone `HEAD` = Gate 3's verdict stamp**, and every cycle earned its own zero rather than inheriting one. Pushed private, CI confirmed green, then made public by the owner — the arrangement was chosen precisely so a mistake stayed recoverable. Steps 2 and 3 discharged: this repo still has **no remote at all**, and the publication is recorded in `data-boundary-audit-backlog.md` as an `AB-1` discharge **for the public artifact only** |
+| **6 — publish** | ✅ **DONE 2026-09-19 — rev 17, extended by revs 17a and 17b, whose cycle table gained row 5 after the push that carried it** | Published to `github.com/oisinsmyth/Ladder-AI`. **Currently at `d9c304e2f39b`** after **five cycles** — first `bb6d61c6544d`, then `6362bbc5acfc`, then `65a09157e920` (🔴 the one forced push, rev 17b), then `e8eb66af38af`, then this one. In every cycle **remote `main` = local clone `HEAD` = Gate 3's verdict stamp**, and every cycle earned its own zero rather than inheriting one. Pushed private, CI confirmed green, then made public by the owner — the arrangement was chosen precisely so a mistake stayed recoverable. Steps 2 and 3 discharged: this repo still has **no remote at all**, and the publication is recorded in `data-boundary-audit-backlog.md` as an `AB-1` discharge **for the public artifact only** |
 
 ### What is actually built and proven
 
@@ -89,7 +89,7 @@ this table, this table is current.
 
 ### Rev 17b — cycles THREE and FOUR: a leak that was suppressing its own rewrite rule
 
-**Four cycles now, and the stamps are the spine of the record.** In every one, remote `main` = the
+**Five cycles now, and the stamps are the spine of the record.** In every one, remote `main` = the
 clone's `HEAD` = Gate 3's verdict stamp. That identity is the claim; everything else is how it was
 earned.
 
@@ -99,6 +99,29 @@ earned.
 | 2 | 09-19 | `e50265b` | `6362bbc5acfc` | 115 | fast-forward |
 | 3 | 09-19 | `38ce54e` | `65a09157e920` | **116** | 🔴 **forced** |
 | 4 | 09-20 | `967a1c0` | `e8eb66af38af` | 116 | fast-forward |
+| 5 | 09-21 | `70a091b` | `d9c304e2f39b` | 116 | fast-forward |
+
+**Cycle 5 published this section itself**, which is why the row above exists but its own narrative
+does not: the record can never contain the cycle that carried it. That recursion is permanent, and
+the honest way to live with it is to write the row in the *source* immediately after the push, so
+the next cycle carries it rather than a later reconstruction. This row was written that way.
+
+It was a boring cycle and that is the whole content: a docs-only commit, rules rebuilt
+**byte-identical** (`replace-text.txt` and `path-renames.args` both `IDENTICAL` against the previous
+set), one commit on top, fast-forward. **That is a measurement, not a formality** — it is the
+control for cycle 3. If the 115 → 116 move had been caused by anything other than editing
+Green-corpus content, a commit touching neither would have had no reason to hold the rule set still.
+
+The live remote was re-read before the push rather than trusted from the record: `origin/main`
+really was `e8eb66af38af`. The push was plain — **no `--force`, no `--force-with-lease`** — so git
+itself enforced the fast-forward instead of me asserting one.
+
+`CI` green on `d9c304e2f39b`, read **per step** rather than off the badge. Two steps carry new
+weight: *"Build, test and gate against the committed baseline"* is the first hosted-runner
+confirmation that the clean-room capture behind the Sharp7 move reproduces off this machine — so the
+NuGet package really does restore anywhere, rather than the build leaning on something
+machine-local. And *"Green claims match the tier register"* is `M-22` running in CI against a
+published artifact for the first time.
 
 #### 🔴 Cycle 3 — the rule set moved, and the reason is the best finding in this document
 
