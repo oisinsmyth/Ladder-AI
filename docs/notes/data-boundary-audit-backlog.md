@@ -346,10 +346,53 @@ sanitizing the committed corpora remain worth doing; neither is urgent, and noth
 
 **Remediated so far:** `spec.md`'s claim retracted and corrected (2026-09-19); a correction note
 appended to both approvals in `docs/13-data-boundary.md`; `gen/test-project001` sanitized;
-the validity question audited and recorded above (2026-09-20).
+the validity question audited and recorded above (2026-09-20); **the answer key deduplicated and
+pinned (3-C, 2026-09-21 — addendum 3 below).**
+
+### AB-2 addendum 3 — the key is pinned, 2026-09-21. **3-C, and the census was wrong.**
+
+The interim fix was scoped as *"a quarantined key and a tracked corpus file are byte-identical"*.
+Building the register took the census that sentence assumed, and **the census disagreed with it.**
+
+**There were four copies of that key, not two.** The tracked bench file, the quarantined
+`answerkey/` one, and **two more in gitignored `scratch/`** — one of them the very file addendum 2
+identified as the copy that existed on the day. Plus 22 checkouts of the same commit under
+`.claude/worktrees/`, which are not independent copies but are readable all the same.
+
+🔴 **A SECOND KEY HAD THE SAME DEFECT AND NOTHING HAD EVER MENTIONED IT.** The sealed
+`PlantAutoControl-bench` key — *"frozen, never edited, the ground truth"* — had its own gitignored
+working copy. It was found by the act of writing the register down, which is the argument for
+registers over prose in a single line. Nobody went looking for it; the format asked a question and
+the answer fell out.
+
+**"Exists once" turned out to be the wrong target, and that is the finding.** The canonical copy is
+**tracked reuse corpus that three other validation runs cite as ground truth**, so it can be neither
+deleted nor hidden; and deleting an ignored working copy does not stop the next one appearing. What
+is achievable — and what was built — is **one DECLARED copy, pinned by `sha256`, with every other
+copy counted out loud on every run.** The case's own duplicate was removed (verified byte-identical
+to the pin first, via a `lad-coder` dispatch, hard rule 8) and replaced by a pointer that states
+plainly that the quarantine is defeated and cannot be repaired.
+
+**What this does NOT do, stated because the opposite is the tempting reading:** it does not make the
+blind run any more verifiable. Ground truth can no longer move in silence. That is all. The
+checker's own clean verdict refuses the stronger claim in those words — *"THIS PROVES IDENTITY OVER
+A REGISTER, NOT BLINDNESS"* — because two of the three registered keys are readable corpus in plain
+sight, and no hash changes that. **M-23 is not one inch smaller.**
+
+**Deliberately not done:** the ignored working copies in `scratch/` were **not** deleted. Three
+reasons, in order of weight. A deletion is a one-off and the count is permanent, so the check is
+worth more than the tidy-up. `scratch/PlantAutoControl-green/` is half unique — its 35 `.xml` files exist
+nowhere else — so gutting its `.ir` half leaves a corpus that is neither one thing nor the other.
+And one of those copies is the physical evidence addendum 2's timing argument rests on; destroying
+it to improve a count would be destroying the record to improve the appearance of the record.
+The fence around `answerkey/` was also **not** narrowed to publish the pointer: it is a
+directory-level ignore, so the pointer is local-only, and weakening a quarantine's ignore rule to
+make a document more visible is the wrong trade when the tracked register already carries the story.
 **Still open:** the practice question —
 a blind-validation answer key that is a byte-identical copy of unsanitised bench content is a
-question about how validation cases are *built*, not about any one file. Owner's call.
+question about how validation cases are *built*, not about any one file. Owner's call. **3-C did
+not close this and was not meant to:** it pinned the file, and the practice question is about
+whether a case may take its ground truth from corpus the generator is entitled to read at all.
 
 ---
 

@@ -1,0 +1,44 @@
+# THE ANSWER-KEY REGISTER (3-C) -- where a validation case's GROUND TRUTH lives, and its pin.
+#
+# WHY THIS FILE EXISTS. A validation case grades a generated block against an answer key. Until
+# 2026-09-21 the key for MotorVSDSystem-purpose existed as FOUR byte-identical copies in the working
+# tree -- one tracked as ordinary reuse corpus, one inside the case's own quarantined answerkey/,
+# and two in gitignored scratch/ -- with NOTHING recording which one was authoritative and NOTHING
+# comparing them. Editing the bench corpus would have changed a validation case's ground truth
+# silently, and the case would still have graded, against a key that had moved. That is AB-2's
+# cheap half, and this is the fix.
+#
+# *** A COPY IS NOT A KEY. THE KEY IS THE PATH LISTED HERE, AT THE SHA LISTED HERE. ***
+# Any other file with the same bytes is a copy, however official its directory is named.
+#
+# WHAT LISTING ONE HERE ASSERTS, and what tools/check-answer-keys.py then checks every run:
+#   1. the canonical path still exists and still hashes to the declared sha256 -- THE PIN. This is
+#      the whole point: ground truth can now only move loudly.
+#   2. no OTHER TRACKED file carries the same bytes. A second tracked copy is a repository defect
+#      and gates, because git will happily let the two drift apart forever.
+#   3. byte-identical copies elsewhere in the WORKING TREE are counted and printed. They do NOT
+#      gate -- see below.
+#
+# *** WHY AN UNTRACKED COPY IS REPORTED AND NOT GATED. *** A gitignore does not remove a file from
+# the tree; that sentence is AB-2's central finding and deleting today's copy does not stop
+# tomorrow's. A count that is printed every run is a measurement. A deletion is a one-off. The
+# readable-scope question those copies actually belong to is M-23, which this tool is deliberately
+# NOT pretending to answer.
+#
+# FORMAT
+#   case | canonical repo-relative path | sha256          # reason
+#   Everything after a # is the REASON and it is not optional decoration. Every entry is printed on
+#   every run so the next reader can disagree with it.
+#   TRACKED-NESS IS DERIVED, NEVER DECLARED: the tool asks git. A declared flag would be one more
+#   thing that can go stale, and the answer is one `git ls-files` away.
+#
+# *** WHAT IS DELIBERATELY ABSENT. *** tests/golden/answer-keys/ is NOT here. Those are golden-test
+# expectations, and they do not have this failure mode: editing one breaks a test immediately and
+# loudly. A pin protects ground truth that NOTHING ELSE reads. Adding them would grow the register
+# without gating anything new.
+#
+# Tracked. This file names paths and hashes. It contains no identifier and no block content.
+
+MotorVSDSystem-purpose | ir/PlantAutoControl-bench/MotorVSDSystem.ir | aaa67a05084d60c57460bc86a16dfd43d99aaa873039d81569fe44c5980d3885   # The key for gen/_validation/MotorVSDSystem-purpose. CANONICAL HOME IS THE BENCH CORPUS, NOT THE CASE: three other runs cite this path as reuse ground truth ("its real interface is ground truth"), so it cannot be deleted or hidden. The case's own answerkey/ copy was removed and replaced with a pointer. RED: the quarantine this key sits behind IS DEFEATED AND CANNOT BE REPAIRED - the key is tracked, readable corpus. Any blindness claim for this case must be proved by readable scope (M-23), never by the existence of the answerkey/ directory.
+MotorVSDSystem-purpose-xml | gen/_validation/MotorVSDSystem-purpose/answerkey/MotorVSDSystem.xml | 9179faa06f2a66f3decf8e04b3ac109467b75b7d5a205211cf257d6446d2de58   # The SimaticML form of the same block, and the ONLY copy of it - it has no tracked twin, so it is canonical where it sits. UNTRACKED, therefore invisible to CI: the pin is checked only on a machine that has the file. Recorded anyway, because a key nobody wrote down is the thing this register exists to stop.
+PlantAutoControl-bench | docs/evidence/PlantAutoControl-answerkey/PlantAutoControl.ir | 8daa94f6e7b5a34aba3b7e317e3a3049c9867dfc3bd7e9f65910af6952b74236   # The sealed key for the PlantAutoControl-bench validation, frozen since 2026-08-05 and never edited. "Sealed" here means FROZEN AND NOT GIVEN TO THE GENERATOR - it does not mean hidden. It is tracked and readable, and one gitignored working copy exists.

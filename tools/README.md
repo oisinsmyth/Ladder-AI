@@ -920,6 +920,50 @@ repository *contains*, not about what is on one machine's disk), and it is the o
 whose subject is the index precisely so it can refuse *before* the commit. To check a fix without
 committing to your branch, point `--repo` at a throwaway clone carrying it.
 
+## `check-answer-keys.py` — the answer-key pin, 3-C (2026-09-21)
+
+```
+python tools/check-answer-keys.py [--repo .] [--register tools/answer-keys.txt]
+```
+
+**Its subject is IDENTITY, not vocabulary** — the one question the other three gates cannot ask.
+`M-5`, Gate 3 and `M-22` all ask *is there an identifier in here*. This asks *is this file still the
+file, and is it the only one*. **A key can be perfectly clean and still be the wrong bytes.**
+
+**Why it exists.** A validation case grades a generated block against an answer key. Measured
+2026-09-21: the key for `gen/_validation/MotorVSDSystem-purpose` existed as **four byte-identical
+copies** — one tracked as ordinary reuse corpus, one in the case's own quarantined `answerkey/`, two
+in gitignored `scratch/` — and **nothing recorded which was authoritative.** Editing the bench
+corpus would have moved a validation case's ground truth silently, and the case would still have
+graded, against a key that had moved.
+
+**The three checks, and only the first two gate:**
+
+| # | check | gates | why |
+|---|---|---|---|
+| 1 | **the pin** — the canonical path hashes to its declared `sha256` | ✅ | ground truth can now only move *loudly*. A tracked key that has vanished gates; an **untracked** one merely absent from this working tree does not, because it is gitignored and a fresh clone never had it |
+| 2 | **unique in the repository** — no other *tracked* path has the same bytes | ✅ | compared by git blob sha, which **is** the content hash. Two tracked copies will drift apart and nothing would then say which one graded |
+| 3 | **copies in the working tree** — counted and printed | ❌ | **a gitignore does not remove a file from the tree**, and deleting today's copy does not stop tomorrow's. A count printed every run beats a one-off deletion |
+
+**Check 3 is the one people argue with, so the reasoning is worth stating.** It is deliberately a
+*measurement*, not a gate. The question those copies really belong to — what could the agent
+**read** — is `M-23`, and this tool does not pretend to answer it. Its clean verdict says so in
+those words: *"THIS PROVES IDENTITY OVER A REGISTER, NOT BLINDNESS."* Two of the three registered
+keys are tracked, readable corpus sitting in plain sight, and no hash changes that.
+
+**The sweep filters by SIZE before hashing**, which is what makes it cheap enough to run every time;
+a same-size different-content decoy is a test case, because an optimisation nobody tests is a silent
+blind spot. `Live Runs/` is **never walked** — its paths are themselves vocabulary and this output
+gets pasted into notes.
+
+**It never reads content.** The files it hashes are LAD, and hard rule 8 says this program does not
+get to look at them. It hashes bytes and prints no line of any file it opens.
+
+**Wired into CI's tooling self-tests, and the check itself runs there in full** — unlike the two
+vocabulary gates, it needs no `sanitization/` at all, just files and `git ls-files`. It finds fewer
+working-tree copies on a runner than locally, which is correct rather than weaker: **a fresh clone
+has no `scratch/` and no worktrees**, and the step prints the count it saw.
+
 ## Benchmarks
 
 `bench-machine.ps1` measures a machine on the axes that matter for this repo; `bench-compare.ps1`

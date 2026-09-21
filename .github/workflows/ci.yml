@@ -122,6 +122,7 @@ jobs:
           python tools/capture-build-baseline.tests.py
           python tools/check-staged-identifiers.tests.py
           python tools/check-green-claims.tests.py
+          python tools/check-answer-keys.tests.py
           python tools/verify-scrub.tests.py
 
       # M-22. UNLIKE check-staged-identifiers.py, THE CHECK ITSELF RUNS HERE, and it is worth being
@@ -134,6 +135,15 @@ jobs:
       # nothing else compares them.
       - name: Green claims match the tier register
         run: python tools/check-green-claims.py
+
+      # 3-C. This one runs here IN FULL, unlike the two vocabulary checks above, because it needs no
+      # vocabulary at all - it hashes files and asks git which paths are tracked, and a clean clone
+      # has everything it needs. It is also the check with the most to say on a runner: the PIN and
+      # the tracked-duplicate halves are exactly the two that a reviewer cannot eyeball. The
+      # working-tree sweep finds less here than locally, which is correct and not a weakness - a
+      # fresh clone HAS no scratch/ and no worktrees, and the step's output says how many it saw.
+      - name: Answer keys are at their pins
+        run: python tools/check-answer-keys.py
 
       # The demo is a test, not a showpiece. --check asserts the result it claims, so it fails here
       # rather than rotting into an example nobody runs.

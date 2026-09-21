@@ -278,8 +278,30 @@ quarantined key and a tracked corpus file are byte-identical, so editing the cor
 a validation case's ground truth, and the quarantine is defeated by a file nobody thinks of as the
 key.
 
-**Status: filed 2026-09-20, not built.** Tracked as **AB-2**. Not a publication blocker and not a
-leak: Gate 3 returns an earned zero over all of this content.
+> ✅ **THE INTERIM IS BUILT — 3-C, 2026-09-21.** `tools/answer-keys.txt` declares each key's
+> canonical path and sha256; `tools/check-answer-keys.py` pins it, gates on a second **tracked**
+> copy, and prints every byte-identical copy it can find in the working tree. 17 self-tests, in CI.
+> **Three things the paragraph above got wrong, found by building it:**
+>
+> 1. **There were FOUR copies of that key, not two** — the tracked corpus file, the quarantined one,
+>    and two more in gitignored `scratch/`. The "cheaper interim" was scoped from a census nobody
+>    had taken.
+> 2. **A SECOND key had the same defect and is not mentioned anywhere above.** The sealed
+>    `PlantAutoControl-bench` key had its own gitignored working copy. Writing the register is what found
+>    it, which is the argument for registers over prose in one line.
+> 3. **"Exists once" is NOT ACHIEVABLE and aiming at it was the error.** The canonical copy is
+>    *tracked reuse corpus* that three other runs cite as ground truth, so it cannot be deleted or
+>    hidden — and deleting an ignored working copy does not stop the next one appearing. What was
+>    achievable, and is what got built, is **one DECLARED copy, pinned, with every other copy
+>    counted out loud every run.** The count is now 2 working copies for one key and 1 for the
+>    other, printed, rather than 0 asserted.
+>
+> The interim does **not** shrink M-23 by one inch. It makes ground truth immovable-in-silence; it
+> says nothing about what anybody could read, and its own clean verdict says so in those words.
+
+**Status: filed 2026-09-20, not built. Its cheap interim built 2026-09-21 (3-C).** Tracked as
+**AB-2**. Not a publication blocker and not a leak: Gate 3 returns an earned zero over all of this
+content.
 
 ### M-13. A stationarity claim needs a SERIES, and the inert basis is taken from ONE sample 🔴 BLOCKING A RUN TODAY
 
