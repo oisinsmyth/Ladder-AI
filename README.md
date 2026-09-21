@@ -1,7 +1,6 @@
 # Ladder-AI
 
-<!-- The badge resolves once this is on GitHub; OWNER/REPO is filled in at publication. -->
-[![CI](https://github.com/OWNER/REPO/actions/workflows/ci.yml/badge.svg)](https://github.com/OWNER/REPO/actions/workflows/ci.yml)
+[![CI](https://github.com/oisinsmyth/Ladder-AI/actions/workflows/ci.yml/badge.svg)](https://github.com/oisinsmyth/Ladder-AI/actions/workflows/ci.yml)
 
 **An AI system that programs Siemens PLCs — and, more to the point, an attempt to make that safe
 enough to mean it.**
@@ -135,8 +134,8 @@ tooling that requires a specific, expensive, licensed environment to run against
 
 This repository was developed privately against private engineering projects. Publishing it meant removing
 every restricted identifier — job codes, site and company names, and the block, tag and DB names taken
-from live plant — from **all 1,350 commits**, not merely from the current files. Deleting them at the
-tip would have left every one of them one `git log` away.
+from live plant — from **every commit in the history**, over 1,300 of them, not merely from the
+current files. Deleting them at the tip would have left every one of them one `git log` away.
 
 So the history was rewritten with `git-filter-repo`, and **every commit hash changed**. Documentation
 throughout this repo cites commits by their short hash — `80098e7`, `eba7033` and several hundred
