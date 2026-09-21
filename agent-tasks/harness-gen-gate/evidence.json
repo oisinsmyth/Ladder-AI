@@ -1,0 +1,488 @@
+{
+  "schema": "ladder-ai/agent-evidence/1",
+  "task": "Hard-rule-4 compile gate on the newly GENERATED harness artifacts (commits abf7145 and d61652c), which had never been through a TIA import or compile. Generated through the PRODUCTION caller (harness-run --generate-only, driven by a binding document), then imported into the TestEnviroment scratch project and compiled. Nothing in the repository was edited; the IR is generated, uncommitted, and lives outside the tracked tree.",
+  "kind": "new",
+  "manual": true,
+  "manualReason": "No pipeline skill covers this stage. It is not gen-block-new: no block was authored - every artifact is the output of a generator in src/harness/, driven by a declaration. The stage is 'take generated harness IR through import + compile', which docs/15 does not name.",
+  "files": [
+    {
+      "path": "C:/temp/hgen/testenviroment-harnessgen/FC_HgSyntheticSlot.ir",
+      "ir_hash": "205D242ADDF9459C79FDCDF18CB43CC8D015446766C16E85CE39DE3856B42D5B",
+      "note": "GENERATED slot FC, number 9100. Emitted by SlotFcGenerator via LaneGenerator via harness-run --generate-only --emit; copied from the emit directory into this corpus directory unchanged."
+    },
+    {
+      "path": "C:/temp/hgen/testenviroment-harnessgen/OB_HgSyntheticCycle.ir",
+      "ir_hash": "4E075ADBC7C5CADA1231F64FEB627DDC0AFF7DDD7D4FD6431264B2D6E9C90A66",
+      "note": "GENERATED cyclic OB, number 200. Emitted by CyclicObGenerator via ProgramGenerator."
+    },
+    {
+      "path": "C:/temp/hgen/testenviroment-harnessgen/iDB_HgSynthStim.ir",
+      "note": "GENERATED instance DB 9101, instance of FB_ValveStim, members PROJECTED from that FB's interface. No ir_hash: ir-hash keys code blocks only."
+    },
+    {
+      "path": "C:/temp/hgen/testenviroment-harnessgen/iDB_HgSynthUut.ir",
+      "note": "GENERATED instance DB 9102, instance of FB_Valve, members PROJECTED. No ir_hash: DB."
+    },
+    {
+      "path": "C:/temp/hgen/testenviroment-harnessgen/iDB_HgSynthComms.ir",
+      "note": "GENERATED instance DB 9103, instance of FB_Comms_ModbusServer, members LEFT TO TIA (an empty MEMBERS section). The generator REFUSED projectedFromFb here - see the prose report. No ir_hash: DB."
+    }
+  ],
+  "claims": [
+    {
+      "kind": "block-number",
+      "value": "FC9100",
+      "agent": "ee055079-868d-48bc-aa0a-7516e8688d29/lad-coder"
+    },
+    {
+      "kind": "block-number",
+      "value": "OB200",
+      "agent": "ee055079-868d-48bc-aa0a-7516e8688d29/lad-coder"
+    },
+    {
+      "kind": "block-number",
+      "value": "DB9101",
+      "agent": "ee055079-868d-48bc-aa0a-7516e8688d29/lad-coder"
+    },
+    {
+      "kind": "block-number",
+      "value": "DB9102",
+      "agent": "ee055079-868d-48bc-aa0a-7516e8688d29/lad-coder"
+    },
+    {
+      "kind": "block-number",
+      "value": "DB9103",
+      "agent": "ee055079-868d-48bc-aa0a-7516e8688d29/lad-coder"
+    }
+  ],
+  "checks": [
+    {
+      "tool": "converter preflight",
+      "exit": 1,
+      "command": "converter preflight <the five generated .ir> --project C:/temp/hgen/testenviroment-harnessgen --json",
+      "note": "*** THIS GATE FAILED AND IT IS REPORTED AS FAILED. *** One gating finding, and it is a GENERATOR DEFECT rather than an authoring slip: review:C-201 [Error] 'OB_HgSyntheticCycle' has no header comment. CyclicObGenerator emits no block COMMENT, and neither CyclicObNaming nor CyclicObDocument carries a field that could declare one, so NO binding document can produce a C-201-compliant cyclic OB. The other four files are CLEAN (the slot FC's identical C-201 breach is reported without gating because FC 9100 is inside the declared 9000-9999 harness band; an OB is excluded from that band, so its breach gates). TIA accepted and compiled the block regardless - this is a conventions failure, not an import failure.",
+      "json": {
+        "files": [
+          {
+            "filePath": "C:\\temp\\hgen\\testenviroment-harnessgen\\FC_HgSyntheticSlot.ir",
+            "name": "FC_HgSyntheticSlot",
+            "findings": [
+              {
+                "check": "review:harness-scope",
+                "description": "Harness: FC 9100 is inside the reserved harness band 9000-9999 (declared docs/notes/test-environment-build-plan.md, 2026-08-13). 1 C-001/C-201 finding(s) reported without gating.",
+                "gates": false
+              },
+              {
+                "check": "review:harness-scope",
+                "description": "C-201 [Error] 'FC_HgSyntheticSlot' has no header comment.",
+                "gates": false
+              }
+            ]
+          },
+          {
+            "filePath": "C:\\temp\\hgen\\testenviroment-harnessgen\\OB_HgSyntheticCycle.ir",
+            "name": "OB_HgSyntheticCycle",
+            "findings": [
+              {
+                "check": "review:C-201",
+                "description": "[Error] 'OB_HgSyntheticCycle' has no header comment.",
+                "gates": true
+              }
+            ]
+          },
+          {
+            "filePath": "C:\\temp\\hgen\\testenviroment-harnessgen\\iDB_HgSynthStim.ir",
+            "name": "iDB_HgSynthStim",
+            "findings": [
+              {
+                "check": "review:harness-scope",
+                "description": "Harness: DB 9101 is inside the reserved harness band 9000-9999 (declared docs/notes/test-environment-build-plan.md, 2026-08-13). 0 C-001/C-201 finding(s) reported without gating.",
+                "gates": false
+              }
+            ]
+          },
+          {
+            "filePath": "C:\\temp\\hgen\\testenviroment-harnessgen\\iDB_HgSynthUut.ir",
+            "name": "iDB_HgSynthUut",
+            "findings": [
+              {
+                "check": "review:harness-scope",
+                "description": "Harness: DB 9102 is inside the reserved harness band 9000-9999 (declared docs/notes/test-environment-build-plan.md, 2026-08-13). 0 C-001/C-201 finding(s) reported without gating.",
+                "gates": false
+              }
+            ]
+          },
+          {
+            "filePath": "C:\\temp\\hgen\\testenviroment-harnessgen\\iDB_HgSynthComms.ir",
+            "name": "iDB_HgSynthComms",
+            "findings": [
+              {
+                "check": "review:harness-scope",
+                "description": "Harness: DB 9103 is inside the reserved harness band 9000-9999 (declared docs/notes/test-environment-build-plan.md, 2026-08-13). 0 C-001/C-201 finding(s) reported without gating.",
+                "gates": false
+              }
+            ]
+          }
+        ],
+        "indexWarnings": [],
+        "corpus": {
+          "projectDir": "C:\\temp\\hgen\\testenviroment-harnessgen",
+          "projectFileCount": 130,
+          "batchFileCount": 5,
+          "projectContributedNothing": false,
+          "blockNameCount": 31,
+          "tagRootNameCount": 651,
+          "typeNameCount": 42,
+          "memberBodyCount": 93,
+          "calleeInterfaceCount": 31,
+          "harnessCorpusFileCount": 130
+        }
+      }
+    },
+    {
+      "tool": "openness-cli import (instance DBs)",
+      "exit": 0,
+      "command": "openness-cli import <TestEnviroment> --group \"S7-1200 station_1/PLC1 6ES7 214-1AG40-0XB0\" iDB_HgSynthStim.xml iDB_HgSynthUut.xml iDB_HgSynthComms.xml",
+      "note": "All three imported, numbers preserved 9101/9102/9103, each INCONSISTENT (the normal post-import state, cleared by the compiles below)."
+    },
+    {
+      "tool": "openness-cli import (slot FC)",
+      "exit": 0,
+      "note": "FC_HgSyntheticSlot imported as FC 9100, INCONSISTENT pending compile."
+    },
+    {
+      "tool": "openness-cli import (cyclic OB)",
+      "exit": 0,
+      "note": "OB_HgSyntheticCycle imported as OB 200, INCONSISTENT pending compile."
+    },
+    {
+      "tool": "openness-cli compile --block iDB_HgSynthStim",
+      "exit": 0,
+      "note": "[Success] iDB_HgSynthStim (DB9101): Block was successfully compiled. / CONSISTENT: yes. STATE: Warning with ERRORS: 0 - the project's one standing hardware warning ('Inputs or outputs are used that do not exist in the configured hardware'). Keyed on errors, never on state."
+    },
+    {
+      "tool": "openness-cli compile --block iDB_HgSynthUut",
+      "exit": 0,
+      "note": "[Success] iDB_HgSynthUut (DB9102): Block was successfully compiled. / CONSISTENT: yes. ERRORS: 0."
+    },
+    {
+      "tool": "openness-cli compile --block iDB_HgSynthComms",
+      "exit": 0,
+      "note": "[Success] iDB_HgSynthComms (DB9103): Block was successfully compiled. / CONSISTENT: yes. ERRORS: 0."
+    },
+    {
+      "tool": "openness-cli compile --block FC_HgSyntheticSlot",
+      "exit": 0,
+      "note": "[Success] FC_HgSyntheticSlot (FC9100): Block was successfully compiled. / CONSISTENT: yes. ERRORS: 0."
+    },
+    {
+      "tool": "openness-cli compile --block OB_HgSyntheticCycle",
+      "exit": 0,
+      "note": "[Success] OB_HgSyntheticCycle (OB200): Block was successfully compiled. / CONSISTENT: yes. ERRORS: 0."
+    },
+    {
+      "tool": "openness-cli compile --block Main",
+      "exit": 0,
+      "note": "The post-import dependent, compiled to clear the cascade. Reported 'No block was compiled. All blocks are up-to-date.', CONSISTENT: yes, ERRORS: 0 - the same observation rows 2-5 of agent-tasks/README.md recorded. Nothing in Main was edited."
+    },
+    {
+      "tool": "openness-cli sanity-check (run 1, post-import)",
+      "exit": 9,
+      "transient": "The ordinary post-import dependent-block cascade. It named exactly one inconsistent block, Main, which calls the harness set; run 2 below is the gate and reports INCONSISTENT: 0 on both lines.",
+      "note": "BLOCKS: 82  INCONSISTENT: 1 (Main)  |  TYPES: 42  INCONSISTENT: 0"
+    },
+    {
+      "tool": "openness-cli sanity-check (run 2) - THE COMPILE GATE",
+      "exit": 0,
+      "command": "openness-cli sanity-check \"...\\\\TestEnviroment.ap20\" --json",
+      "note": "BEFORE this run:  BLOCKS: 77  INCONSISTENT: 0  DUPLICATE NUMBERS: 0  /  TYPES: 42  INCONSISTENT: 0.  AFTER: BLOCKS: 82  INCONSISTENT: 0  DUPLICATE NUMBERS: 0  /  TYPES: 42  INCONSISTENT: 0. Five blocks added, both INCONSISTENT lines still zero. Station-scope device compile Warning errors=0 warnings=1 (the standing hardware warning; keyed on errors).",
+      "json": {
+        "healthy": true,
+        "nothingExamined": false,
+        "totalBlocks": 82,
+        "inconsistentBlocks": [],
+        "totalTypes": 42,
+        "inconsistentTypes": [],
+        "duplicateBlockNumbers": [],
+        "deviceCompiles": [
+          {
+            "device": "S7-1200 station_1/PLC1 6ES7 214-1AG40-0XB0",
+            "state": "Warning",
+            "errors": 0,
+            "warnings": 1
+          }
+        ]
+      }
+    },
+    {
+      "tool": "converter diff --only 1 (round trip, slot FC)",
+      "exit": 0,
+      "note": "Generated IR vs TIA's own re-export converted back to IR. INVARIANCE OK, header unchanged, UNCHANGED REMAINDER 2 network(s), 2 of 2 identical.",
+      "json": {
+        "blockName": "FC_HgSyntheticSlot",
+        "blockNameMismatch": false,
+        "otherBlockName": "FC_HgSyntheticSlot",
+        "hasAnyChange": false,
+        "header": {
+          "changed": false,
+          "titleChanged": false,
+          "titleBefore": "Harness slot",
+          "titleAfter": "Harness slot",
+          "commentChanged": false,
+          "commentBefore": null,
+          "commentAfter": null,
+          "interfaceChanged": false,
+          "interfaceCommentChanged": false
+        },
+        "summary": {
+          "total": 2,
+          "changed": 0,
+          "added": 0,
+          "removed": 0,
+          "moved": 0,
+          "identical": 2
+        },
+        "networks": [
+          {
+            "number": 1,
+            "kind": "Identical",
+            "title": "Advance The Synthetic Stimulus Model",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 2,
+            "kind": "Identical",
+            "title": "Run The Synthetic Block Under Test",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          }
+        ],
+        "allowedNetworks": [
+          1
+        ],
+        "invarianceViolations": [],
+        "headerChangeAllowed": false,
+        "hasUnclaimedHeaderChange": false,
+        "hasNonGatingCommentChange": false,
+        "declaredInsertAt": null,
+        "movesAreDeclared": false,
+        "unchangedRemainder": 2,
+        "hasInvarianceViolation": false
+      }
+    },
+    {
+      "tool": "converter diff --only 2 (round trip, slot FC)",
+      "exit": 0,
+      "note": "The complementary half, so every network is proven with a non-empty remainder rather than named into the exemption. INVARIANCE OK.",
+      "json": {
+        "blockName": "FC_HgSyntheticSlot",
+        "blockNameMismatch": false,
+        "otherBlockName": "FC_HgSyntheticSlot",
+        "hasAnyChange": false,
+        "header": {
+          "changed": false,
+          "titleChanged": false,
+          "titleBefore": "Harness slot",
+          "titleAfter": "Harness slot",
+          "commentChanged": false,
+          "commentBefore": null,
+          "commentAfter": null,
+          "interfaceChanged": false,
+          "interfaceCommentChanged": false
+        },
+        "summary": {
+          "total": 2,
+          "changed": 0,
+          "added": 0,
+          "removed": 0,
+          "moved": 0,
+          "identical": 2
+        },
+        "networks": [
+          {
+            "number": 1,
+            "kind": "Identical",
+            "title": "Advance The Synthetic Stimulus Model",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 2,
+            "kind": "Identical",
+            "title": "Run The Synthetic Block Under Test",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          }
+        ],
+        "allowedNetworks": [
+          2
+        ],
+        "invarianceViolations": [],
+        "headerChangeAllowed": false,
+        "hasUnclaimedHeaderChange": false,
+        "hasNonGatingCommentChange": false,
+        "declaredInsertAt": null,
+        "movesAreDeclared": false,
+        "unchangedRemainder": 2,
+        "hasInvarianceViolation": false
+      }
+    },
+    {
+      "tool": "converter diff --only 1 (round trip, cyclic OB)",
+      "exit": 0,
+      "note": "INVARIANCE OK, header unchanged, UNCHANGED REMAINDER 3 network(s), 3 of 3 identical.",
+      "json": {
+        "blockName": "OB_HgSyntheticCycle",
+        "blockNameMismatch": false,
+        "otherBlockName": "OB_HgSyntheticCycle",
+        "hasAnyChange": false,
+        "header": {
+          "changed": false,
+          "titleChanged": false,
+          "titleBefore": "\"Synthetic harness generation cycle\"",
+          "titleAfter": "\"Synthetic harness generation cycle\"",
+          "commentChanged": false,
+          "commentBefore": null,
+          "commentAfter": null,
+          "interfaceChanged": false,
+          "interfaceCommentChanged": false
+        },
+        "summary": {
+          "total": 3,
+          "changed": 0,
+          "added": 0,
+          "removed": 0,
+          "moved": 0,
+          "identical": 3
+        },
+        "networks": [
+          {
+            "number": 1,
+            "kind": "Identical",
+            "title": "Run The Synthetic Conformance Slot",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 2,
+            "kind": "Identical",
+            "title": "Serve The Synthetic Mirror",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 3,
+            "kind": "Identical",
+            "title": "Publish The Slot Into The Mirror",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          }
+        ],
+        "allowedNetworks": [
+          1
+        ],
+        "invarianceViolations": [],
+        "headerChangeAllowed": false,
+        "hasUnclaimedHeaderChange": false,
+        "hasNonGatingCommentChange": false,
+        "declaredInsertAt": null,
+        "movesAreDeclared": false,
+        "unchangedRemainder": 3,
+        "hasInvarianceViolation": false
+      }
+    },
+    {
+      "tool": "converter diff --only 2 3 (round trip, cyclic OB)",
+      "exit": 0,
+      "note": "The complementary half. INVARIANCE OK.",
+      "json": {
+        "blockName": "OB_HgSyntheticCycle",
+        "blockNameMismatch": false,
+        "otherBlockName": "OB_HgSyntheticCycle",
+        "hasAnyChange": false,
+        "header": {
+          "changed": false,
+          "titleChanged": false,
+          "titleBefore": "\"Synthetic harness generation cycle\"",
+          "titleAfter": "\"Synthetic harness generation cycle\"",
+          "commentChanged": false,
+          "commentBefore": null,
+          "commentAfter": null,
+          "interfaceChanged": false,
+          "interfaceCommentChanged": false
+        },
+        "summary": {
+          "total": 3,
+          "changed": 0,
+          "added": 0,
+          "removed": 0,
+          "moved": 0,
+          "identical": 3
+        },
+        "networks": [
+          {
+            "number": 1,
+            "kind": "Identical",
+            "title": "Run The Synthetic Conformance Slot",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 2,
+            "kind": "Identical",
+            "title": "Serve The Synthetic Mirror",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 3,
+            "kind": "Identical",
+            "title": "Publish The Slot Into The Mirror",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          }
+        ],
+        "allowedNetworks": [
+          2,
+          3
+        ],
+        "invarianceViolations": [],
+        "headerChangeAllowed": false,
+        "hasUnclaimedHeaderChange": false,
+        "hasNonGatingCommentChange": false,
+        "declaredInsertAt": null,
+        "movesAreDeclared": false,
+        "unchangedRemainder": 3,
+        "hasInvarianceViolation": false
+      }
+    },
+    {
+      "tool": "converter compare (sent vs returned XML, three instance DBs)",
+      "exit": 0,
+      "note": "iDB_HgSynthStim / iDB_HgSynthUut / iDB_HgSynthComms all EQUIVALENT - semantically identical after normalization. No UId noise at all on this set."
+    },
+    {
+      "tool": "converter compare --allow-silent-layout (sent vs returned XML, slot FC and cyclic OB)",
+      "exit": 0,
+      "note": "Both EQUIVALENT - semantically identical after normalization. The flag was required because the generators emit no MEMORYLAYOUT line; see the transient entry below."
+    },
+    {
+      "tool": "converter compare (slot FC and cyclic OB, WITHOUT --allow-silent-layout)",
+      "exit": 2,
+      "transient": "Superseded by the --allow-silent-layout run above, which is the passing gate. Recorded rather than dropped because the refusal is itself a finding: 'NOT COMPARED: only one document declares a MemoryLayout (Optimized); <the generated XML> states none.' The generators emit no MEMORYLAYOUT, so the confirm loop's own comparator refuses a generated block against its own re-export until the flag is passed.",
+      "note": "exit 2 = EXAMINED NOTHING, which is never a pass and is not being read as one."
+    }
+  ],
+  "postRunState": "THE SCRATCH PROJECT WAS RETURNED TO ITS PRE-RUN STATE. After the gate above was taken, all five generated blocks were deleted (openness-cli delete --yes, exit 0 each) and a third sanity-check reported BLOCKS: 77  INCONSISTENT: 0  DUPLICATE NUMBERS: 0 / TYPES: 42  INCONSISTENT: 0 - byte-for-byte the BEFORE baseline. They were removed rather than left because the generated OB is a second ProgramCycle OB that starts a second MB_SERVER instance on the same listening port (503) and the same connection ID (16#0010) as the one the bench rig already uses - the exact collision the generators own leftToTia obligation names - and a download to the rig is a pre-authorised routine step. The gate lines above are quoted verbatim and their raw --json is in this file; the live project can no longer be re-read for them. Regenerating is one command: the binding and submission fixtures are preserved at C:/temp/hgen/fixture/ and the emitted IR at C:/temp/hgen/testenviroment-harnessgen/."
+}
