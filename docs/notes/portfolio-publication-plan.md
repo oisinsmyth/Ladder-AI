@@ -55,8 +55,8 @@ this table, this table is current.
 | **2b — the red suite** | ✅ **DONE 2026-09-18** | **FI-93 discharged, rev 11.** 19 red tests → **2**. The 2 are one fact: `Main.ir` gained three networks and `Main.xml` was never re-exported; **one TIA re-export clears both** |
 | **3 — rewrite history** | ✅ **DONE 2026-09-19 — rev 16, EARNED ZERO** | **Gate 3 returns an EARNED ZERO over 1,366 commits, 6,386 blobs and 1,830 paths.** T1 0 / T2 0, over-scrub 0, instrument control 1719/1719, must-survive 5 of 5, build **5,894 → 5,894 — not one test lost**. Demo 14 + 1 known; budgets 19/0 over; IR verified through `lad-coder` (29,752 lines and 21,673 literals matching as multisets). Verifier stamp `subject=1c2de19518e0`. **It refused twice first, and both refusals were right** — see rev 16. Source untouched, no remote. ⚠️ **That stamp is NOT the published one.** The mailmap was rewritten afterwards to map both author identities, which required a fresh cycle; the artifact that went public carries stamp **`bb6d61c6544d`** over 1,367 commits / 6,387 blobs / 1,830 paths. Same gates, same earned zero, one commit later |
 | **4 — restructure** | ✅ **DONE** | — |
-| **5 — CI and demo** | ✅ **DONE 2026-09-19 — Gate 4 GREEN, rev 17** | `.github/workflows/ci.yml` + `nightly.yml`, `global.json` (SDK pinned), `demo/run-demo.py`, `tests/ci-baseline.json`. **The first CI run on real GitHub hardware passed on the published sha** — 1 job, 11 steps, all success, ~9½ minutes. The step that matters is `capture-build-baseline.py --expect`, which fails on a lost assembly, a fallen pass count, a risen failure count *or* a third unbuildable target; it did none of those |
-| **6 — publish** | ✅ **DONE 2026-09-19 — rev 17, extended by rev 17a** | Published to `github.com/oisinsmyth/Ladder-AI`. **Currently at `6362bbc5acfc`** (rev 17a, a fast-forward carrying four more commits); first published at `bb6d61c6544d`. In both cases **remote `main` = local clone `HEAD` = Gate 3's verdict stamp.** Pushed private, CI confirmed green, then made public by the owner — the arrangement was chosen precisely so a mistake stayed recoverable. Steps 2 and 3 discharged: this repo still has **no remote at all**, and the publication is recorded in `data-boundary-audit-backlog.md` as an `AB-1` discharge **for the public artifact only** |
+| **5 — CI and demo** | ✅ **DONE 2026-09-19 — Gate 4 GREEN, rev 17; both workflows green, rev 17b** | `.github/workflows/ci.yml` + `nightly.yml`, `global.json` (SDK pinned), `demo/run-demo.py`, `tests/ci-baseline.json`. CI has passed on **every** published sha. The step that matters is `capture-build-baseline.py --expect`, which fails on a lost assembly, a fallen pass count, a risen failure count *or* an unbuildable target that is not on the recorded list. **`Nightly (slow suites)` is now confirmed green on hosted hardware too** — the 66-case scrub-builder suite, kept out of CI at ~33 minutes. ⚠️ `cannotBuild` is **1**, not 2, since the Sharp7 decision (rev 17b); `openness-cli` is the sole exclusion and stays one until a licensed engineering seat exists |
+| **6 — publish** | ✅ **DONE 2026-09-19 — rev 17, extended by revs 17a and 17b** | Published to `github.com/oisinsmyth/Ladder-AI`. **Currently at `e8eb66af38af`** after **four cycles** — first `bb6d61c6544d`, then `6362bbc5acfc`, then `65a09157e920` (🔴 the one forced push, rev 17b), then this one. In every cycle **remote `main` = local clone `HEAD` = Gate 3's verdict stamp**, and every cycle earned its own zero rather than inheriting one. Pushed private, CI confirmed green, then made public by the owner — the arrangement was chosen precisely so a mistake stayed recoverable. Steps 2 and 3 discharged: this repo still has **no remote at all**, and the publication is recorded in `data-boundary-audit-backlog.md` as an `AB-1` discharge **for the public artifact only** |
 
 ### What is actually built and proven
 
@@ -86,6 +86,83 @@ this table, this table is current.
 
   `git-filter-repo` is a pip package here and its `Scripts/` directory is **not** on the shell PATH:
   `git filter-repo` fails with *"not a git command"*. Invoke the exe by absolute path. ~7 min rewrite, ~30 s verify.
+
+### Rev 17b — cycles THREE and FOUR: a leak that was suppressing its own rewrite rule
+
+**Four cycles now, and the stamps are the spine of the record.** In every one, remote `main` = the
+clone's `HEAD` = Gate 3's verdict stamp. That identity is the claim; everything else is how it was
+earned.
+
+| # | date | source HEAD | published stamp | rules | push |
+|---|---|---|---|---|---|
+| 1 | 09-19 | `8a9db57` | `bb6d61c6544d` | 115 | new branch |
+| 2 | 09-19 | `e50265b` | `6362bbc5acfc` | 115 | fast-forward |
+| 3 | 09-19 | `38ce54e` | `65a09157e920` | **116** | 🔴 **forced** |
+| 4 | 09-20 | `967a1c0` | `e8eb66af38af` | 116 | fast-forward |
+
+#### 🔴 Cycle 3 — the rule set moved, and the reason is the best finding in this document
+
+`M-22` found a live job code in `gen/test-project001`, a corpus `CLAUDE.md` calls "Green-tier
+throughout". Sanitizing it also removed a live **site-block name** from that corpus. Then this
+happened:
+
+> **The builder withholds a rewrite rule for any term present in Green content — repo-wide.**
+> So the leak had been **suppressing its own rewrite rule everywhere.** Removing it re-armed the
+> rule: 115 → 116.
+
+Corroborated independently by the canary: `tier3Baseline` 341 → 340, one term moving out of
+*conventional* and into *hunted*. **What was public until that moment carried a live name the scrub
+should have been rewriting**, which is why the force-push replaced a worse artifact rather than
+merely a different one.
+
+**The divergence was predicted before it was observed, then confirmed.** The rewrite is a pure
+function of (history, rules), so a changed rule set moves every SHA from the term's first appearance
+(2026-07-12) onward. The ancestry gate was switched from *refuse* to *report* for this one cycle
+only — and still refused an **unexpected** shape, because "the history changed" and "the history
+changed the way I predicted" are different claims.
+
+**Authorised on measured facts, not on convenience:** 0 forks, 0 stars, 0 watchers, 0 issues, repo
+two hours old. Pushed with `--force-with-lease` so git would still refuse if the remote had moved.
+Gate 3 returned its own earned zero first — 6,409 blobs, 1,373 commits, `cannotBuild` 2 before /
+2 after — and the identity sweep 14,612 objects, 0 employer-domain occurrences, 1 author.
+
+#### Cycle 4 — rules stable, so the push went back to being boring
+
+Rules rebuilt **byte-identical**, confirming the 115 → 116 move was caused specifically by editing
+Green-corpus content and nothing else. Fast-forward, 2 commits on top, 1,375 total. Gate 3 earned
+zero over 6,417 blobs; identity sweep 14,634 objects, 0, 1.
+
+**It carried the Sharp7 decision, and `cannotBuild` fell 2 → 1.** `harness.sln` now builds on a
+hosted runner. ⚠️ The version number hides a **binary swap** — the 1.1.82 package ships 44,544 bytes,
+the DLL it replaced was 57,288 — so **no existing rig measurement transfers**. Recorded in
+`Directory.Packages.props`, in `ci.yml`, and in the commit.
+
+**Two near-misses, both caught by tooling rather than by judgement:**
+
+- **The first baseline re-capture was contaminated by my own build.** Having hand-built
+  `harness.sln` first, MSBuild had nothing to do for part of the tree, and
+  `capture-build-baseline.py` correctly excluded what it had not seen built — silently dropping
+  `DeviceGuard.Tests` and 65 tests. Its stale-`bin` guard is the only reason a smaller, greener
+  baseline was not committed. Re-captured clean: 23 assemblies, 5,894 passed, nothing lost.
+- 🔴 **The obvious fix for that would have destroyed something irreplaceable.** Wiping every `bin/`
+  would have deleted `src/openness-cli/**/bin/Siemens.Engineering.dll` — six copies of a licensed
+  assembly that exist **only** as copy-local build output here, because no TIA install on this
+  machine can produce another. The clean excluded that tree, and the deletion set was checked for
+  Siemens DLLs before it ran.
+
+#### Both workflows are now green on real hardware
+
+`CI` and `Nightly (slow suites)` both pass on `e8eb66af38af`. The nightly is the **66-case
+scrub-builder suite**, deliberately kept out of CI at ~33 minutes — this is the first observed
+confirmation it runs green on a hosted runner, and the stale step name corrected in rev 17a is what
+made its result legible.
+
+#### What else these cycles carried
+
+`M-22` and its tracked register; the `AB-2` sanitization; the Sharp7 decision; and the **3-B audit**
+of the blind-validation run, whose verdict is **UNVERIFIED — neither cleared nor impeached** and
+whose durable fix is `M-23`. All recorded in `data-boundary-audit-backlog.md` and
+`mechanisation-backlog.md`; not repeated here.
 
 ### Rev 17a — the SECOND cycle, and the two things that tried to go wrong
 
@@ -1432,6 +1509,14 @@ Should drive the README rather than be discovered by a reader:
   backstop; a claims registry whose exit codes are a contract; a generator that refuses to emit a
   document with unresolved holes; `EMPTY IS NOT CLEAN` as a cross-cutting principle where exit 2
   means *examined nothing*.
+- **Gates that refused their own author, with the refusals kept.** Not a claim of care — a record of
+  it. The de-identification gate refused twice before it first passed; the pre-commit sweep refused a
+  write-up *of a leak finding* for naming a directory whose path carried the identifier; the tier
+  check refused on its first contact with real data, in the one corpus `CLAUDE.md` calls Green; the
+  ancestry gate refused a push that would have rewritten public history; and the baseline capture's
+  stale-artifact guard caught a re-capture silently missing 65 tests. **The single best finding in
+  the repository came out of one of those refusals** — a leaked identifier in a "clean" corpus was
+  *suppressing its own rewrite rule repo-wide*, so removing the leak re-armed the scrub.
 - **A lossless domain IR** with converter, golden round-trip corpus and network-level invariance
   diffing.
 - **Test discipline at scale** — ~5,810 tests across 24 test projects.
