@@ -56,7 +56,7 @@ this table, this table is current.
 | **3 — rewrite history** | ✅ **DONE 2026-09-19 — rev 16, EARNED ZERO** | **Gate 3 returns an EARNED ZERO over 1,366 commits, 6,386 blobs and 1,830 paths.** T1 0 / T2 0, over-scrub 0, instrument control 1719/1719, must-survive 5 of 5, build **5,894 → 5,894 — not one test lost**. Demo 14 + 1 known; budgets 19/0 over; IR verified through `lad-coder` (29,752 lines and 21,673 literals matching as multisets). Verifier stamp `subject=1c2de19518e0`. **It refused twice first, and both refusals were right** — see rev 16. Source untouched, no remote. ⚠️ **That stamp is NOT the published one.** The mailmap was rewritten afterwards to map both author identities, which required a fresh cycle; the artifact that went public carries stamp **`bb6d61c6544d`** over 1,367 commits / 6,387 blobs / 1,830 paths. Same gates, same earned zero, one commit later |
 | **4 — restructure** | ✅ **DONE** | — |
 | **5 — CI and demo** | ✅ **DONE 2026-09-19 — Gate 4 GREEN, rev 17; both workflows green, rev 17b** | `.github/workflows/ci.yml` + `nightly.yml`, `global.json` (SDK pinned), `demo/run-demo.py`, `tests/ci-baseline.json`. CI has passed on **every** published sha. The step that matters is `capture-build-baseline.py --expect`, which fails on a lost assembly, a fallen pass count, a risen failure count *or* an unbuildable target that is not on the recorded list. **`Nightly (slow suites)` is now confirmed green on hosted hardware too** — the 66-case scrub-builder suite, kept out of CI at ~33 minutes. ⚠️ `cannotBuild` is **1**, not 2, since the Sharp7 decision (rev 17b); `openness-cli` is the sole exclusion and stays one until a licensed engineering seat exists |
-| **6 — publish** | ✅ **DONE 2026-09-19 — rev 17, extended by revs 17a and 17b, whose cycle table gained row 5 after the push that carried it** | Published to `github.com/oisinsmyth/Ladder-AI`. **Currently at `d9c304e2f39b`** after **five cycles** — first `bb6d61c6544d`, then `6362bbc5acfc`, then `65a09157e920` (🔴 the one forced push, rev 17b), then `e8eb66af38af`, then this one. In every cycle **remote `main` = local clone `HEAD` = Gate 3's verdict stamp**, and every cycle earned its own zero rather than inheriting one. Pushed private, CI confirmed green, then made public by the owner — the arrangement was chosen precisely so a mistake stayed recoverable. Steps 2 and 3 discharged: this repo still has **no remote at all**, and the publication is recorded in `data-boundary-audit-backlog.md` as an `AB-1` discharge **for the public artifact only** |
+| **6 — publish** | ✅ **DONE 2026-09-19 — rev 17, extended by revs 17a and 17b, whose cycle table gained row 5 after the push that carried it** | Published to `github.com/oisinsmyth/Ladder-AI`. **Currently at `f03011d1c6d3`** after **six cycles** — first `bb6d61c6544d`, then `6362bbc5acfc`, then `65a09157e920` (🔴 the one forced push, rev 17b), then `e8eb66af38af`, then `d9c304e2f39b`, then this one. In every cycle **remote `main` = local clone `HEAD` = Gate 3's verdict stamp**, and every cycle earned its own zero rather than inheriting one. Pushed private, CI confirmed green, then made public by the owner — the arrangement was chosen precisely so a mistake stayed recoverable. Steps 2 and 3 discharged: this repo still has **no remote at all**, and the publication is recorded in `data-boundary-audit-backlog.md` as an `AB-1` discharge **for the public artifact only** |
 
 ### What is actually built and proven
 
@@ -89,7 +89,7 @@ this table, this table is current.
 
 ### Rev 17b — cycles THREE and FOUR: a leak that was suppressing its own rewrite rule
 
-**Five cycles now, and the stamps are the spine of the record.** In every one, remote `main` = the
+**Six cycles now, and the stamps are the spine of the record.** In every one, remote `main` = the
 clone's `HEAD` = Gate 3's verdict stamp. That identity is the claim; everything else is how it was
 earned.
 
@@ -100,6 +100,7 @@ earned.
 | 3 | 09-19 | `38ce54e` | `65a09157e920` | **116** | 🔴 **forced** |
 | 4 | 09-20 | `967a1c0` | `e8eb66af38af` | 116 | fast-forward |
 | 5 | 09-21 | `70a091b` | `d9c304e2f39b` | 116 | fast-forward |
+| 6 | 09-21 | `d6879e7` | `f03011d1c6d3` | **122** | fast-forward |
 
 **Cycle 5 published this section itself**, which is why the row above exists but its own narrative
 does not: the record can never contain the cycle that carried it. That recursion is permanent, and
@@ -122,6 +123,36 @@ confirmation that the clean-room capture behind the Sharp7 move reproduces off t
 NuGet package really does restore anywhere, rather than the build leaning on something
 machine-local. And *"Green claims match the tier register"* is `M-22` running in CI against a
 published artifact for the first time.
+
+#### Cycle 6 — the rule set moved AND the history did not, which is the distinction that matters
+
+**116 → 122 rules, and a clean fast-forward.** Cycle 3 is the reason that sentence needs saying: a
+changed rule set is *not* a changed history. Three terms were added to the list (six rules, once
+case and spacing variants are generated) and they **match nothing in 1,384 commits**, so the rewrite
+came back bit-identical up to the published commit. Cycle 3 diverged because a rule started
+*matching* something. The ancestry gate has now drawn that line correctly in both directions, which
+is worth more than either result on its own.
+
+🔴 **THE CYCLE STOPPED ITSELF, AND THE EXIT CODE WAS THE ONLY SIGNAL.** The rule rebuild returned
+**exit 2 — `NOTHING EXAMINED`** — because three new terms were given a `class` that does not exist.
+`build-scrub-rules.py` refused the whole file and left the previous rules in place rather than
+skipping the rows it could not parse, exactly as its own message says it must: *"a term list that
+silently shrinks is the failure this design exists to prevent."* Had it skipped them it would have
+emitted a **116-rule set indistinguishable from a correct one** — and the summary printed above the
+refusal is the same shape a good run prints. Nothing looked wrong. The exit code was the whole of
+the evidence.
+
+**It also exposed a disagreement between the two scrub tools, filed as `M-24`.**
+`verify-scrub.py`'s `derive_needles` **accepted all three malformed rows and tiered them T1** —
+measured: 1,722 needles either way, because it ignores the `class` column — while the builder
+refused the file outright. So three files were certified `T1=0` against a vocabulary the builder had
+never agreed to. Nothing was published wrong. But the two tools are meant to be independent in
+**judgement**, not to disagree about what their shared input file *means*, and the permissive one is
+the one handing out clean bills of health.
+
+What shipped: the cycle-5 record, `3-C`'s answer-key pin, the README badge fix, and the sanitized
+three-slot bundle. `CI` green per step, including **"Answer keys are at their pins"** — `3-C`'s gate
+running against a published artifact for the first time.
 
 #### 🔴 Cycle 3 — the rule set moved, and the reason is the best finding in this document
 

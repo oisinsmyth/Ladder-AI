@@ -162,6 +162,43 @@ is absent, is the failure this repository has already paid for once. The rule is
 **and** no live-job material is nothing to check; no vocabulary **with** live-job material on disk
 is exit 2.
 
+### M-24. THE BUILDER AND THE VERIFIER READ THE SAME TERM LIST WITH DIFFERENT STRICTNESS
+
+**What happened.** 2026-09-21, adding three terms to `sanitization/scrub-terms.md` with a `class`
+value that does not exist (`process`, `worklane` — the real set is `jobcode, site, site,
+modelline, block, member, pathstem`).
+
+**`build-scrub-rules.py` refused the whole run** — exit 2, `NOTHING EXAMINED`, all three lines
+named, previous rule set left untouched. Exactly right, and its own reason says why: *"a malformed
+row is refused rather than skipped: a term list that silently shrinks is the failure this design
+exists to prevent."* Had it skipped them, it would have emitted a **116-rule set indistinguishable
+from a correct one.**
+
+🔴 **`verify-scrub.py`'s `derive_needles` ACCEPTED all three and tiered them T1.** Same file, same
+rows, opposite verdicts. So between the edit and the rebuild, the verifier was hunting a vocabulary
+the builder had never agreed to — and I used that verifier, directly, to certify three files as
+`T1=0 T2=0` before the builder had accepted the rows those files were being cleared against.
+
+**Why it matters more than it looks.** The two tools are *deliberately* independent — that
+independence is the whole reason a verifier is worth running against a builder's output. But
+independence of JUDGEMENT is not licence to disagree about **what the input file means**. A row
+either is a term or it is not. Today the answer depends on which tool you ask, and the permissive
+one is the one that hands out clean bills of health.
+
+**The near-miss is the finding.** Nothing was published wrong: the builder's refusal stopped the
+cycle, and it stopped it *because of the exit code*, not because anything looked unusual — the
+printed summary above the refusal is the same shape a good run prints. **Exit 2 was the only signal
+there was.** Had that run been read as "rules unchanged, carry on", a publication would have gone
+out with a vocabulary three terms short of the one its own clearance checks had used.
+
+**Mechanise.** One parser for the term list, shared, refusing identically — the same move M-22 made
+by sharing `derive_needles` rather than hand-rolling a second vocabulary. Until then, the rule is:
+**a `T1=0` from the verifier means nothing until the builder has accepted the same term list**, and
+a builder exit of 2 invalidates every clearance taken since the last exit 0.
+
+**Status: filed 2026-09-21, not built.** Found by an error of mine, caught by the tool designed to
+catch it.
+
 ### M-22. A GREEN CLAIM IS PROSE, AND NOTHING EVER COMPARED IT TO THE TOOL THAT KNOWS ✅ BUILT 2026-09-19
 
 **What happened.** `docs/13-data-boundary.md` records two 2026-07-20 per-project approvals, both of
