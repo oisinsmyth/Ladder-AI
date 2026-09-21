@@ -32,6 +32,7 @@ EXIT_REFUSED = 3
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SCRIPT = os.path.join(ROOT, "tools", "verify-scrub.py")
+TERMLIB = os.path.join(ROOT, "tools", "term_list.py")
 
 # A string planted in every fixture so the positive control has something to hold on to. Without a
 # surviving must-survive entry the gate returns 2 by design, which would mask every other verdict.
@@ -85,6 +86,8 @@ def build(tmp, files, terms=TERMS, maps=MAPS):
     """A throwaway repo carrying the identifiers, with the script and sanitization inputs in it."""
     os.makedirs(os.path.join(tmp, "tools"))
     shutil.copy(SCRIPT, os.path.join(tmp, "tools", "verify-scrub.py"))
+    # M-24: the shared term-list parser must travel with any tool that reads the term list.
+    shutil.copy(TERMLIB, os.path.join(tmp, "tools", "term_list.py"))
     if maps is not None:
         write(os.path.join(tmp, "sanitization", "m.map.json"), maps)
     if terms is not None:

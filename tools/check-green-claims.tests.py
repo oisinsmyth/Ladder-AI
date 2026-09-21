@@ -26,6 +26,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 SCRIPT = os.path.join(HERE, "check-green-claims.py")
 ORACLE = os.path.join(HERE, "verify-scrub.py")
 BUILDER = os.path.join(HERE, "build-scrub-rules.py")
+TERMLIB = os.path.join(HERE, "term_list.py")
 
 EXIT_OK = 0
 EXIT_FOUND = 1
@@ -85,6 +86,8 @@ def build(tmp, maps=None, terms=None, content=None, register=None,
     shutil.copy(SCRIPT, os.path.join(tmp, "tools", "check-green-claims.py"))
     shutil.copy(ORACLE, os.path.join(tmp, "tools", "verify-scrub.py"))
     shutil.copy(BUILDER, os.path.join(tmp, "tools", "build-scrub-rules.py"))
+    # M-24: the shared term-list parser must travel with any tool that reads the term list.
+    shutil.copy(TERMLIB, os.path.join(tmp, "tools", "term_list.py"))
     for name, doc in (maps or {}).items():
         write(os.path.join(tmp, "sanitization", name + ".map.json"), doc)
     if terms is not None:

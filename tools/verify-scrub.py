@@ -56,6 +56,13 @@ import re
 import subprocess
 import sys
 
+# M-24. ONE term-list reader, shared with build-scrub-rules.py. This tool used to read the same file
+# with its own, laxer rules - two columns were enough and `class` was ignored - so it hunted rows the
+# builder had refused the whole file over. Independence of JUDGEMENT between builder and verifier is
+# the design; disagreeing about what a row MEANS was a defect. tools/term_list.py has the record.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from term_list import MalformedTermList, load_terms                 # noqa: E402
+
 # *** THE CHARACTER CLASS MUST COVER EVERY SEPARATOR A NEEDLE CAN CONTAIN. ***
 # The builder tokenises on [a-z0-9_]+ because it searches for word-bounded names. This tool cannot:
 # most of its needles are DOTTED TAG PATHS, and splitting on the dot means `owner.member` becomes
@@ -128,19 +135,17 @@ def derive_needles(maps_dir, terms_path, green_tokens=frozenset()):
                     tier[low] = "T3"
                 else:
                     tier.setdefault(low, "T2")
-    if os.path.isfile(terms_path):
-        for line in io.open(terms_path, encoding="utf-8"):
-            line = line.strip()
-            if not line.startswith("|") or line.startswith("|--"):
-                continue
-            cells = [c.strip() for c in line.strip("|").split("|")]
-            if len(cells) < 2 or cells[0].lower() in ("live", "term", "source"):
-                continue
-            if cells[0]:
-                low = cells[0].lower()
-                needles.add(low)
-                sources[low] = "term"
-                tier[low] = "T1"                            # a declaration outranks any inference
+    # M-24: the SHARED strict reader. A malformed row raises rather than being skipped - this tool
+    # is a library to three others, so it cannot print a worklist and exit 2 itself, but continuing
+    # would rebuild the exact defect: hunting a vocabulary the builder has refused to build from.
+    rows, bad = load_terms(terms_path)
+    if bad:
+        raise MalformedTermList(terms_path, bad)
+    for row in rows or []:
+        low = row["live"].lower()
+        needles.add(low)
+        sources[low] = "term"
+        tier[low] = "T1"                                    # a declaration outranks any inference
     return needles, sources, tier
 
 

@@ -53,6 +53,12 @@ import re
 import subprocess
 import sys
 
+# M-24. The term-list reader is SHARED with verify-scrub.py rather than duplicated here. The two
+# tools stay independent in judgement; they are no longer allowed to disagree about what a row in
+# sanitization/scrub-terms.md MEANS. See tools/term_list.py for the measurement that forced this.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from term_list import TERM_CLASSES, SPACED_CLASSES, load_terms      # noqa: E402
+
 # The seven sections the C# loader (src/converter/Converter/Sanitize/SanitizationMap.cs) knows.
 # Only the two NAMEY ones carry keys a text pass can look for; the rest are whole-value replacements
 # keyed on parsed XML structure - a network comment is keyed "<block>#<n>" where n is the
@@ -88,8 +94,8 @@ BUILD_SOURCE_EXT = (".cs", ".csproj", ".sln", ".props", ".targets", ".py", ".ps1
                     ".json", ".yml", ".yaml")
 
 SENTINEL_TEMPLATE = "QQSCRUBQQ%04dQQ"
-TERM_CLASSES = ("jobcode", "site", "site", "modelline", "block", "member", "pathstem")
-SPACED_CLASSES = ("site", "site", "modelline")
+# TERM_CLASSES and SPACED_CLASSES now come from term_list (imported above). They were defined here
+# AND read differently by the verifier, which is M-24.
 
 # The join between the two vocabularies above. EXTRA_NAMEY_SECTIONS names the map sections that
 # carry site, site and product-line terms; SPACED_CLASSES names the classes that get a spaced
@@ -208,42 +214,6 @@ def load_maps(mapdir):
 
     return (stems, boms, used, ignored, dead, pairs, malformed, section_of, derived,
             head_conflicts)
-
-
-def load_terms(path):
-    """The explicit term list: `| live | invented | class | scope | variants |`.
-
-    This carries what the maps do not - job codes, site and site names - and it is the half of
-    the vocabulary that found the 44 files the maps miss. A malformed row is exit 2, NEVER a skip:
-    a term list that silently shrinks is the failure mode this whole design is built around."""
-    rows, bad = [], []
-    if not os.path.isfile(path):
-        return None, []
-    for n, line in enumerate(io.open(path, encoding="utf-8"), 1):
-        line = line.strip()
-        if not line.startswith("|") or line.startswith("|--") or line.startswith("| ---"):
-            continue
-        cells = [c.strip() for c in line.strip("|").split("|")]
-        if cells[0].lower() in ("live", "term", "source"):
-            continue                                        # header row
-        if len(cells) < 5:
-            # Was `if len(cells) < 3: continue` above this - a row that lost columns to a typo was
-            # dropped without ever reaching `bad`, which is the exact silent shrink the docstring
-            # says must never happen. Every non-header table row now either parses or refuses.
-            bad.append((n, "needs 5 columns: live | invented | class | scope | variants, got %d"
-                        % len(cells)))
-            continue
-        live, invented, klass, scope, variants = cells[:5]
-        if not live or not invented:
-            bad.append((n, "live and invented are both required"))
-        elif klass.lower() not in TERM_CLASSES:
-            bad.append((n, "class must be one of %s" % ", ".join(TERM_CLASSES)))
-        else:
-            rows.append({"live": live, "invented": invented, "class": klass.lower(),
-                         "scope": scope or "global",
-                         "variants": None if variants.lower() in ("auto", "") else
-                                     [v.strip() for v in variants.split(";") if v.strip()]})
-    return rows, bad
 
 
 def split_camel(name):

@@ -123,6 +123,7 @@ jobs:
           python tools/check-staged-identifiers.tests.py
           python tools/check-green-claims.tests.py
           python tools/check-answer-keys.tests.py
+          python tools/term_list.tests.py
           python tools/verify-scrub.tests.py
 
       # M-22. UNLIKE check-staged-identifiers.py, THE CHECK ITSELF RUNS HERE, and it is worth being

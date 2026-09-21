@@ -162,7 +162,7 @@ is absent, is the failure this repository has already paid for once. The rule is
 **and** no live-job material is nothing to check; no vocabulary **with** live-job material on disk
 is exit 2.
 
-### M-24. THE BUILDER AND THE VERIFIER READ THE SAME TERM LIST WITH DIFFERENT STRICTNESS
+### M-24. THE BUILDER AND THE VERIFIER READ THE SAME TERM LIST WITH DIFFERENT STRICTNESS ✅ BUILT 2026-09-21
 
 **What happened.** 2026-09-21, adding three terms to `sanitization/scrub-terms.md` with a `class`
 value that does not exist (`process`, `worklane` — the real set is `jobcode, site, site,
@@ -196,7 +196,30 @@ by sharing `derive_needles` rather than hand-rolling a second vocabulary. Until 
 **a `T1=0` from the verifier means nothing until the builder has accepted the same term list**, and
 a builder exit of 2 invalidates every clearance taken since the last exit 0.
 
-**Status: filed 2026-09-21, not built.** Found by an error of mine, caught by the tool designed to
+> ✅ **BUILT THE SAME DAY.** `tools/term_list.py` is now the only reader of the term list, imported
+> by both tools; the builder's local copy is deleted and the verifier's lax inline loop is gone.
+> `derive_needles` **raises `MalformedTermList`** rather than skipping — it is a library to three
+> other tools, so it cannot print a worklist and exit 2 itself, but continuing would rebuild the
+> exact defect. 12 self-tests, in CI.
+>
+> **The shared surface is deliberately tiny:** it reads the table and says what is in it. No
+> variants, no rules, no tiers, no repository. Independence of *judgement* between builder and
+> verifier is the reason running one against the other proves anything, and that is untouched —
+> what is no longer permitted is disagreeing about what a row **means**, which is a fact about a
+> file rather than a judgement about a repository.
+>
+> **Two cases carry the whole point** and they run the real tools, not stubs: the verifier must
+> *raise* on a row the builder refuses, and one malformed file handed to both must be refused by
+> both. The second one failed on its first run — and correctly: the builder exited **3**, not 2,
+> refusing to write rules anywhere git can see, before it ever reached the parse. **The fixture was
+> wrong, not the tool**, and a test that had asserted "non-zero" would have passed while measuring
+> the wrong gate.
+>
+> One consequence worth knowing: a test fixture that copies a tool into a throwaway repo must now
+> copy `term_list.py` with it. Five copy sites updated. A missing parser does not degrade to the old
+> behaviour — the import fails loudly, which is the right failure.
+
+**Status: filed and BUILT 2026-09-21.** Found by an error of mine, caught by the tool designed to
 catch it.
 
 ### M-22. A GREEN CLAIM IS PROSE, AND NOTHING EVER COMPARED IT TO THE TOOL THAT KNOWS ✅ BUILT 2026-09-19

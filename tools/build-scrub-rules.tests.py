@@ -25,6 +25,7 @@ EXIT_REFUSED = 3
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SCRIPT = os.path.join(ROOT, "tools", "build-scrub-rules.py")
+TERMLIB = os.path.join(ROOT, "tools", "term_list.py")
 
 passed, failed, failures = 0, 0, []
 
@@ -68,6 +69,8 @@ def build(tmp, maps, terms, files=None):
     quiet = {"stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL, "cwd": tmp}
     os.makedirs(os.path.join(tmp, "tools"))
     shutil.copy(SCRIPT, os.path.join(tmp, "tools", "build-scrub-rules.py"))
+    # M-24: the shared term-list parser must travel with any tool that reads the term list.
+    shutil.copy(TERMLIB, os.path.join(tmp, "tools", "term_list.py"))
     for name, doc in maps.items():
         write(os.path.join(tmp, "sanitization", name + ".map.json"), doc)
     if terms is not None:
@@ -511,6 +514,8 @@ def a_repository_with_no_blobs_is_exit_2(tmp):
     whole point."""
     os.makedirs(os.path.join(tmp, "tools"))
     shutil.copy(SCRIPT, os.path.join(tmp, "tools", "build-scrub-rules.py"))
+    # M-24: the shared term-list parser must travel with any tool that reads the term list.
+    shutil.copy(TERMLIB, os.path.join(tmp, "tools", "term_list.py"))
     write(os.path.join(tmp, "sanitization", "m.map.json"), ONE_MAP)
     write(os.path.join(tmp, "sanitization", "scrub-terms.md"), TERMS_HEADER)
     git(tmp, "init")
