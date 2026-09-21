@@ -196,7 +196,16 @@ gen/_validation/MotorVSDSystem-purpose/answerkey/
 # Portal compile gate, correctly declared `deferred` rather than faked, and it cannot run because
 # TIA is not installed on this machine. Sanitize it, finish it or delete it - that is the owner's
 # call, and removing this line is how it comes back.
-agent-tasks/main-3slot-calls/
+#
+# ✅ DECIDED 2026-09-21: SANITIZE AND COMMIT. Owner's call. The rule is gone and the directory is
+# tracked. The comment above is kept rather than deleted because the THIRD-INSTANCE finding is the
+# durable part and it stays true - the folder did sit untracked and unignored while carrying the
+# job's vocabulary, and M-5 is still the only thing that refused it. What the sanitization pass then
+# found is worth carrying here too: the bundle held ~10.7 KB of real plant network text and a
+# process descriptor that was IN NO MAP AND NO TERM LIST, so no gate in this repository could ever
+# have hunted it. The descriptor is now a term (`sanitization/scrub-terms.md`); measured first at
+# zero occurrences in HEAD and across all 1,384 commits, so it arms against a future mistake rather
+# than a past one.
 
 # Editor workspace state. Obsidian records RECENTLY-OPENED FILE PATHS, and on this repo those
 # paths include live-run material - the job folder's own name and its block filenames - which

@@ -1,0 +1,224 @@
+{
+  "schema": "ladder-ai/agent-evidence/1",
+  "task": "JOB9004 OB Main: insert three conformance-slot CALL networks (FC_HarnessSharedWidgetSlot, FC_HarnessModelSlot, FC_HarnessPhaseSlot) as networks 5/6/7, ahead of the copy layer which moves 5 -> 8; repair the block comment's count and enumeration (five -> eight) and correct network 4's stale copy-layer claim. OFFLINE ONLY - no Portal, no import, no compile, no rig (the dispatcher holds the Portal lane).",
+  "kind": "modify",
+  "skill": "gen-block-modify-purpose",
+  "files": [
+    {
+      "path": "Live Runs/JOB9004/JOB9004 - Widget Line New Project/work-wgtlift/import-ir/Main.ir",
+      "ir_hash": "7743F336A34F82BD6DD411AE5172B959528725AD8E3526D18357D6F7EC709E30"
+    }
+  ],
+  "claims": [
+    {
+      "kind": "block-edit",
+      "value": "Main",
+      "agent": "<session-id>/lad-coder"
+    },
+    {
+      "kind": "block-network",
+      "value": "Main:5",
+      "agent": "<session-id>/lad-coder"
+    },
+    {
+      "kind": "block-network",
+      "value": "Main:6",
+      "agent": "<session-id>/lad-coder"
+    },
+    {
+      "kind": "block-network",
+      "value": "Main:7",
+      "agent": "<session-id>/lad-coder"
+    },
+    {
+      "kind": "block-network",
+      "value": "Main:8",
+      "agent": "<session-id>/lad-coder"
+    }
+  ],
+  "checks": [
+    {
+      "tool": "converter preflight",
+      "exit": 0,
+      "json": {
+        "files": [
+          {
+            "filePath": "Live Runs/JOB9004/JOB9004 - Widget Line New Project/work-wgtlift/import-ir/Main.ir",
+            "name": "Main",
+            "findings": []
+          }
+        ],
+        "indexWarnings": [],
+        "corpus": {
+          "projectDir": "Live Runs/JOB9004/JOB9004 - Widget Line New Project/work-wgtlift/import-ir",
+          "projectFileCount": 56,
+          "batchFileCount": 1,
+          "projectContributedNothing": false,
+          "blockNameCount": 22,
+          "tagRootNameCount": 258,
+          "typeNameCount": 19,
+          "memberBodyCount": 33,
+          "calleeInterfaceCount": 22,
+          "harnessCorpusFileCount": 56
+        }
+      }
+    },
+    {
+      "tool": "converter preflight (CONTROL, on the as-built pre-edit snapshot - establishes the clean result above is not inherited)",
+      "exit": 0,
+      "json": {
+        "files": [
+          {
+            "filePath": "Live Runs/JOB9004/JOB9004 - Widget Line New Project/work-wgtlift/3slot-final/Main-before.ir",
+            "name": "Main",
+            "findings": []
+          }
+        ],
+        "indexWarnings": [],
+        "corpus": {
+          "projectDir": "Live Runs/JOB9004/JOB9004 - Widget Line New Project/work-wgtlift/import-ir",
+          "projectFileCount": 56,
+          "batchFileCount": 1,
+          "projectContributedNothing": false,
+          "blockNameCount": 22,
+          "tagRootNameCount": 258,
+          "typeNameCount": 19,
+          "memberBodyCount": 33,
+          "calleeInterfaceCount": 22,
+          "harnessCorpusFileCount": 57
+        }
+      }
+    },
+    {
+      "tool": "converter diff --only 4 5 6 7 --insert 5",
+      "exit": 0,
+      "json": {
+        "blockName": "Main",
+        "blockNameMismatch": false,
+        "otherBlockName": "Main",
+        "hasAnyChange": true,
+        "header": {
+          "changed": true,
+          "titleChanged": false,
+          "titleBefore": "Main Program Sweep (Cycle)",
+          "titleAfter": "Main Program Sweep (Cycle)",
+          "commentChanged": true,
+          "commentBefore": "The cyclic program for the conformance test environment, as five calls and nothing else: the Modbus TCP server that carries the harness mirror to and from the test client, the motor conformance slot, the valve conformance slot, the queue conformance slot, and the copy layer that moves values between the mirror and the slots. There is no plant program in this project and there is no condition on any of the five calls, so every one of them runs on every scan. NOTHING HERE CAN MOVE ANYTHING IN THE FIELD, AND THE REASON IS THE SAME FOR ALL FIVE: not one block this program contains names an input, an output or a peripheral address anywhere in it. Every operand in every one of them is a member of an instance or a global data block, or one of the harness mirror tags, and every mirror tag is marker memory inside the served window. Each instance under test is reached by its own slot and its own stimulus model and by nothing else, and what a stimulus model observes is copied into marker memory and stops there. So no call in this block has a path to a terminal to begin with, and that is a fact about what these blocks address rather than about which values happen to be copied where - REGENERATING THE COPY LAYER, ADDING A SLOT OR CHANGING WHAT THE MIRROR CARRIES CANNOT MAKE IT FALSE. THIS PROGRAM EXISTS TO RUN CONFORMANCE SLOTS ON A BENCH CONTROLLER AND BELONGS TO THIS TEST PROJECT ALONE. THE ORDER OF THE FIVE IS WHAT MAKES THE MEASUREMENT MEAN ANYTHING. The server is first, so a client write has landed before the one block that reads the mirror runs and no block sits on the earlier side of it. ALL THREE SLOTS RUN NEXT AND ALL THREE SIT ON THE EARLIER SIDE OF THE COPY LAYER, so they meet the mirror on identical terms and a comparison between them is not a comparison of different latencies. The copy layer is last, so the results a client reads are the ones this scan finished reaching and nothing runs between it and the server at the top of the next scan. THE SINGLE SCAN OF LATENCY THIS ARRANGEMENT SPENDS IS ON THE COMMANDED SIDE, AND IT IS THE SAME ONE SCAN FOR EVERY SLOT THE COPY LAYER CARRIES: the vector registers and the start bit reach a stimulus model after that slot has already run, so a scenario the client writes takes effect on the following scan. The observed side spends none - what a slot produces is published in the same scan it is produced. Outcome windows are hundreds of scans long and their timings are all measured from the scan the observations were published in, so a commanded value arriving one scan later changes nothing that is measured. WHICH SLOTS THE COPY LAYER CARRIES IS NOT WRITTEN HERE, DELIBERATELY: the copy layer's own network titles name the slot each of its networks serves, they are the only record of it, and they change whenever a slot is added - a list copied into this header would go on being read as current long after it had stopped being so. A slot the copy layer carries no network for is commanded by nothing a client writes and publishes nothing a client reads; go and look before believing that of any of them. NO WORKING LOGIC BELONGS IN THIS BLOCK - it is the table of contents for the program and reads as one. Author: lad-coder, generated. Revision: 3.",
+          "commentAfter": "The cyclic program for the conformance test environment, as eight calls and nothing else: the Modbus TCP server that carries the harness mirror to and from the test client, the motor conformance slot, the valve conformance slot, the queue conformance slot, the shared widget conformance slot, the model conformance slot, the phase conformance slot, and the copy layer that moves values between the mirror and the slots. There is no plant program in this project and there is no condition on any of the eight calls, so every one of them runs on every scan. NOTHING HERE CAN MOVE ANYTHING IN THE FIELD, AND THE REASON IS THE SAME FOR ALL EIGHT: not one block this program contains names an input, an output or a peripheral address anywhere in it. Every operand in every one of them is a member of an instance or a global data block, or one of the harness mirror tags, and every mirror tag is marker memory inside the served window. Each instance under test is reached by its own slot and its own stimulus model and by nothing else, and what a stimulus model observes is copied into marker memory and stops there. So no call in this block has a path to a terminal to begin with, and that is a fact about what these blocks address rather than about which values happen to be copied where - REGENERATING THE COPY LAYER, ADDING A SLOT OR CHANGING WHAT THE MIRROR CARRIES CANNOT MAKE IT FALSE. THIS PROGRAM EXISTS TO RUN CONFORMANCE SLOTS ON A BENCH CONTROLLER AND BELONGS TO THIS TEST PROJECT ALONE. THE ORDER OF THE EIGHT IS WHAT MAKES THE MEASUREMENT MEAN ANYTHING. The server is first, so a client write has landed before the one block that reads the mirror runs and no block sits on the earlier side of it. ALL SIX SLOTS RUN NEXT AND ALL SIX SIT ON THE EARLIER SIDE OF THE COPY LAYER, so they meet the mirror on identical terms and a comparison between them is not a comparison of different latencies. The copy layer is last, so the results a client reads are the ones this scan finished reaching and nothing runs between it and the server at the top of the next scan. THE SINGLE SCAN OF LATENCY THIS ARRANGEMENT SPENDS IS ON THE COMMANDED SIDE, AND IT IS THE SAME ONE SCAN FOR EVERY SLOT THE COPY LAYER CARRIES: the vector registers and the start bit reach a stimulus model after that slot has already run, so a scenario the client writes takes effect on the following scan. The observed side spends none - what a slot produces is published in the same scan it is produced. Outcome windows are hundreds of scans long and their timings are all measured from the scan the observations were published in, so a commanded value arriving one scan later changes nothing that is measured. WHICH SLOTS THE COPY LAYER CARRIES IS NOT WRITTEN HERE, DELIBERATELY: the copy layer's own network titles name the slot each of its networks serves, they are the only record of it, and they change whenever a slot is added - a list copied into this header would go on being read as current long after it had stopped being so. A slot the copy layer carries no network for is commanded by nothing a client writes and publishes nothing a client reads; go and look before believing that of any of them. NO WORKING LOGIC BELONGS IN THIS BLOCK - it is the table of contents for the program and reads as one. Author: lad-coder, generated. Revision: 4.",
+          "interfaceChanged": false,
+          "interfaceCommentChanged": false
+        },
+        "summary": {
+          "total": 8,
+          "changed": 1,
+          "added": 3,
+          "removed": 0,
+          "moved": 1,
+          "identical": 3
+        },
+        "networks": [
+          {
+            "number": 1,
+            "kind": "Identical",
+            "title": "Serve The Harness Mirror",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 2,
+            "kind": "Identical",
+            "title": "Run The Motor Conformance Slot",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 3,
+            "kind": "Identical",
+            "title": "Run The Valve Conformance Slot",
+            "beforeText": null,
+            "afterText": null,
+            "movedFrom": null
+          },
+          {
+            "number": 4,
+            "kind": "Changed",
+            "title": "Run The Queue Conformance Slot",
+            "beforeText": "[REDACTED: live plant network text, 1864 characters, removed before commit - see sanitization/JOB9004-harness-vocab.md]",
+            "afterText": "[REDACTED: live plant network text, 1851 characters, removed before commit - see sanitization/JOB9004-harness-vocab.md]",
+            "movedFrom": null
+          },
+          {
+            "number": 5,
+            "kind": "Added",
+            "title": "Run The Shared Widget Conformance Slot",
+            "beforeText": null,
+            "afterText": "[REDACTED: live plant network text, 1805 characters, removed before commit - see sanitization/JOB9004-harness-vocab.md]",
+            "movedFrom": null
+          },
+          {
+            "number": 6,
+            "kind": "Added",
+            "title": "Run The Model Conformance Slot",
+            "beforeText": null,
+            "afterText": "[REDACTED: live plant network text, 1771 characters, removed before commit - see sanitization/JOB9004-harness-vocab.md]",
+            "movedFrom": null
+          },
+          {
+            "number": 7,
+            "kind": "Added",
+            "title": "Run The Phase Conformance Slot",
+            "beforeText": null,
+            "afterText": "[REDACTED: live plant network text, 1771 characters, removed before commit - see sanitization/JOB9004-harness-vocab.md]",
+            "movedFrom": null
+          },
+          {
+            "number": 8,
+            "kind": "Moved",
+            "title": "Maintain The Harness Mirror",
+            "beforeText": "[REDACTED: live plant network text, 843 characters, removed before commit - see sanitization/JOB9004-harness-vocab.md]",
+            "afterText": "[REDACTED: live plant network text, 843 characters, removed before commit - see sanitization/JOB9004-harness-vocab.md]",
+            "movedFrom": 5
+          }
+        ],
+        "allowedNetworks": [
+          4,
+          5,
+          6,
+          7
+        ],
+        "invarianceViolations": [],
+        "headerChangeAllowed": false,
+        "hasUnclaimedHeaderChange": false,
+        "hasNonGatingCommentChange": true,
+        "declaredInsertAt": 5,
+        "movesAreDeclared": true,
+        "unchangedRemainder": 3,
+        "hasInvarianceViolation": false
+      }
+    },
+    {
+      "tool": "converter review",
+      "exit": 0,
+      "json": {
+        "stdoutTail": [
+          "SUMMARY: 1 file(s), 0 finding(s) (0 error, 0 warn)",
+          "HARNESS-SCOPE: 0 finding(s) reported and NOT gated, across 0 harness-generated object(s); 1 object(s) could not be classified and gate as plant",
+          "UNCHECKED: 0 rule(s) not judged"
+        ]
+      }
+    },
+    {
+      "tool": "converter to-xml (synthesizability pre-check for the deferred import; the whole block re-derives)",
+      "exit": 0,
+      "json": {
+        "stdout": "Live Runs/JOB9004/JOB9004 - Widget Line New Project/work-wgtlift/import-ir/Main.ir -> Live Runs/JOB9004/JOB9004 - Widget Line New Project/work-wgtlift/3slot-final/xml\\Main.xml  (OVERWROTE an existing file; pass --out <dir> to write elsewhere)"
+      }
+    },
+    {
+      "tool": "openness-cli sanity-check (the compile gate)",
+      "deferred": "The dispatch is OFFLINE ONLY and the dispatcher holds the Portal lane - no TIA Portal, no import, no compile, no rig was permitted on this run. Nothing here has been compile-gated; hard rule 4 is NOT satisfied and this IR must not be presented as finished until an import + sanity-check run reports INCONSISTENT: 0 on BOTH the BLOCKS: and TYPES: lines with errors=0. converter to-xml exit 0 above establishes only that the block is synthesizable, which is a precondition for that gate and not the gate."
+    }
+  ]
+}
