@@ -14,11 +14,23 @@
 > that reads as reassuring is worse than a missing one**, and nothing else in the tracked tree
 > records the move.
 >
-> Consequences, so they are not rediscovered one at a time: `openness-cli` and `Harness.RigRead`
-> are the two recorded `cannotBuild` targets; the two failing golden tests need **one TIA re-export
-> of `Main`** and cannot be fixed any other way (`converter to-xml` would compare the synthesizer
-> against itself — see commit `4ff6d80`); and any dispatched work whose compile gate is `deferred`
-> stays deferred until Portal exists again.
+> Consequences, so they are not rediscovered one at a time: `openness-cli` is the **sole** recorded
+> `cannotBuild` target — **1, not 2**, since the Sharp7 decision of 2026-09-20 fixed
+> `Harness.RigRead`; the two failing golden tests need **one TIA re-export of `Main`** and cannot be
+> fixed any other way (`converter to-xml` would compare the synthesizer against itself — see commit
+> `4ff6d80`); and any dispatched work whose compile gate is `deferred` stays deferred.
+>
+> 🛑 **AND IT IS NOT A WAIT. OWNER'S DECISION, 2026-09-21: TIA PORTAL WILL NOT BE INSTALLED ON THIS
+> COMPUTER.** The paragraph above originally ended "until Portal exists again", and that phrasing
+> was wrong in the way that matters — it reads as a queue. **On this machine there is no queue.**
+> Every Openness path here is permanently unavailable, not pending: the two golden tests stay
+> failing and stay recorded in the baseline rather than hidden, and a `deferred` compile gate
+> deferred on this machine is deferred for good.
+>
+> **What follows from that, and it is the useful half:** any evidence bundle that *did* capture a
+> real import-and-compile gate is now irreplaceable rather than merely historical. That is why
+> `agent-tasks/harness-gen-gate/evidence.json` was committed on 2026-09-21 — 19 checks against a
+> live Portal, including a `preflight` that failed and said so. Nothing here can produce another.
 
 **Written 2026-08-14, overnight, at the end of the hammer campaign.** The owner's ask was: *have the
 tooling ready to use in the morning on a live project.* This is the answer, and it is written to be
