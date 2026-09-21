@@ -101,6 +101,16 @@ def run(cmd, cwd):
     return p.returncode, out.decode("utf-8", "replace")
 
 
+# *** A TEST NAME IS ARBITRARY TEXT AND STDOUT IS NOT ALWAYS UTF-8. ***
+# dotnet test's output is decoded with errors="replace", so a name can carry U+FFFD - and cp1252,
+# which is what Python picks for a PIPED stdout on Windows, CANNOT ENCODE U+FFFD. Printing one
+# raises UnicodeEncodeError and takes the whole capture down. Trading a failing gate for a crashing
+# one is strictly worse: the gate at least says what it found. Names are printed ASCII-safe; the
+# JSON keeps the original, because json.dump escapes rather than encodes.
+def printable(name):
+    return name.encode("ascii", "backslashreplace").decode("ascii")
+
+
 def parse_failed_tests(text):
     """Every failing test NAME dotnet test printed, in order, de-duplicated.
 
@@ -323,7 +333,8 @@ def capture_target(root, dotnet, target, config):
     # run with a baseline that already tolerates these; the names still belong in the log, because
     # the run that produced them is the only one that had them.
     if failures:
-        print("  [%d failing: %s]" % (len(failures), ", ".join(failures[:4])
+        print("  [%d failing: %s]" % (len(failures),
+                                      ", ".join(printable(f) for f in failures[:4])
                                       + (", ..." if len(failures) > 4 else "")), end="")
     print()
     return rows, cannot, built_assemblies(build_out), failures
@@ -506,7 +517,7 @@ def main():
         if failed_tests:
             print("\n  THE %d FAILING TEST(S) THIS RUN SAW, by name:" % len(failed_tests))
             for name in failed_tests:
-                print("      %s" % name)
+                print("      %s" % printable(name))
         else:
             print("\n  NO TEST NAME WAS CAPTURED. The counts moved but dotnet test printed no line "
                   "this\n  tool could match, so the name is genuinely unavailable rather than "

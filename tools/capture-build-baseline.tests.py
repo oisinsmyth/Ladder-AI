@@ -119,6 +119,24 @@ def the_FAILING_TEST_NAMES_are_captured(tmp):
                      "Some.Namespace.ClassName.Another_one(x: 1)"], names
 
 
+def a_NAME_WITH_UNDECODABLE_BYTES_does_not_crash_the_print(tmp):
+    """*** TRADING A FAILING GATE FOR A CRASHING ONE IS STRICTLY WORSE. ***
+
+    dotnet test's stdout is decoded with errors="replace", so a name can carry U+FFFD. Python picks
+    cp1252 for a PIPED stdout on Windows - which is what a CI runner has - and cp1252 CANNOT ENCODE
+    U+FFFD. Printing one raises UnicodeEncodeError and takes the whole capture down, turning a gate
+    that at least said what it found into one that says nothing. Observed for real in the cycle-8
+    Gate 3 run, on the two golden failures' parameterised names."""
+    hostile = 'Some.Test.With�_replacement(x: "�")'
+    safe = cap.printable(hostile)
+    safe.encode("cp1252")                       # the assertion: this is the call that used to throw
+    try:
+        hostile.encode("cp1252")
+        raise AssertionError("the raw name encoded cleanly - this test no longer guards anything")
+    except UnicodeEncodeError:
+        pass
+
+
 def a_PASSING_run_captures_no_names(tmp):
     text = ("Passed!  - Failed:     0, Passed:    10, Skipped:     0, Total:    10, "
             "Duration: 1 s - A.Tests.dll (net8.0)\n")
@@ -355,6 +373,8 @@ for name, body in [
     ("a failing assembly is parsed", a_failing_assembly_is_parsed),
     ("NAMES: the failing test names are captured", the_FAILING_TEST_NAMES_are_captured),
     ("NAMES: a passing run captures no names", a_PASSING_run_captures_no_names),
+    ("NAMES: an undecodable name does not crash the print",
+     a_NAME_WITH_UNDECODABLE_BYTES_does_not_crash_the_print),
     ("NAMES: the assembly summary line is not a test name",
      the_ASSEMBLY_SUMMARY_line_is_not_read_as_a_test_name),
     ("a multi-targeted assembly is folded, not duplicated",
