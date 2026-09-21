@@ -30,6 +30,18 @@
 # file: they are not Green, that is the finding, and they are recorded in
 # docs/notes/data-boundary-audit-backlog.md where a finding belongs.
 #
+# *** AND THEY ARE STAYING ABSENT -- decided 2026-09-21, AB-2 addendum 4. *** Sanitizing them so
+# they COULD be listed was measured and declined: two of them hold registered answer keys, so it
+# would move what two validation cases grade against and break both pins from tools/answer-keys.txt;
+# the sealed key's own block name and its corpus directory are referenced from NINE files under
+# src/converter/, including four test classes, so those names are an interface rather than merely
+# content; and docs/evidence is the record of work that happened, which
+# rewriting would falsify rather than de-identify. It would also buy NOTHING for the published
+# artifact -- the scrub already rewrites every one of those terms and Gate 3 has earned a zero over
+# the whole object database six cycles running -- while ADDING risk, because every Green directory
+# widens the surface on which a live term can suppress its own rewrite rule repo-wide. The full
+# measurements are in the addendum. Do not re-open this by adding a line here.
+#
 # Tracked, unlike sanitization/accepted-merges.txt which is the precedent for the PATTERN but not
 # the LOCATION. This file names no identifier -- only directories that are asserted to contain none.
 

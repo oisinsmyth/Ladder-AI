@@ -349,6 +349,51 @@ appended to both approvals in `docs/13-data-boundary.md`; `gen/test-project001` 
 the validity question audited and recorded above (2026-09-20); **the answer key deduplicated and
 pinned (3-C, 2026-09-21 — addendum 3 below).**
 
+### AB-2 addendum 4 — 3-D RESOLVED **NOT TO SANITIZE**, 2026-09-21, on measurement
+
+`3-D` was "sanitize `ir/PlantAutoControl-bench`, `gen/PlantAutoControl-bench` and `docs/evidence`, then
+register them Green". **Measured, then declined.** The measurements, so the decision can be
+disagreed with rather than merely trusted:
+
+| directory | tracked files | files carrying live vocabulary | distinct T1 | distinct T2 |
+|---|---|---|---|---|
+| `ir/PlantAutoControl-bench` | 35 | 33 | 2 | 19 |
+| `gen/PlantAutoControl-bench` | 8 | 8 | 1 | 32 |
+| `docs/evidence` | 24 | 20 | 4 | 54 |
+
+**What it would cost, measured not estimated:**
+
+1. 🔴 **It would deliberately do the thing `3-C` was built the same day to detect.** Two of the
+   three directories **contain registered answer keys** — `ir/PlantAutoControl-bench/MotorVSDSystem.ir` and
+   `docs/evidence/PlantAutoControl-answerkey/PlantAutoControl.ir`. Sanitizing them changes what two
+   validation cases grade against and breaks both pins. Building a pin to stop ground truth moving
+   silently, then moving it deliberately hours later, is incoherent.
+2. **It would break the converter.** The sealed key's own block name and its corpus directory are
+   referenced from **9 tracked files under `src/converter/`**, including four test classes. A
+   corpus block name is an **interface**, not just content — which is exactly why renaming one is
+   not a local edit. *(Named by role here, not spelled: `M-5` refused the first draft of this
+   paragraph for writing the block name out, and it was right to.)*
+3. **It would falsify the record.** `docs/evidence` is the write-up of work that actually happened.
+   Rewriting the names in it does not de-identify a job; it produces a history that says something
+   was done to equipment that never existed.
+4. **43 of the 61 files are IR or `gen/` content**, so every edit is a `lad-coder` dispatch under
+   hard rule 8 — dozens of chances to introduce an error into validation corpora.
+
+**What it would buy: nothing for the published artifact.** The publication scrub already rewrites
+every one of these terms, and Gate 3 has returned an earned zero over the whole object database
+**six cycles running**. The benefit is defence-in-depth on a *private* source tree that is never
+published. That is real, but it is not worth items 1–3.
+
+**And registering them Green would ADD risk, not remove it.** The builder withholds a rewrite rule
+for any term present in Green content, repo-wide — the exact mechanism that made a leak suppress
+its own rule in cycle 3. Every directory added to the Green list widens that surface.
+
+**Therefore:** the three directories stay **un-Green and un-sanitized**, which is already what
+`tools/green-claims.txt` records and why they are deliberately absent from it. **This is a
+judgement, not a measurement**, and it is reversible: if the owner wants the source tree sanitized
+regardless, the work is well-defined and the first step is re-pinning both answer keys in
+`tools/answer-keys.txt` **in their own commit**, so the ground truth moves loudly.
+
 ### AB-2 addendum 3 — the key is pinned, 2026-09-21. **3-C, and the census was wrong.**
 
 The interim fix was scoped as *"a quarantined key and a tracked corpus file are byte-identical"*.
