@@ -56,7 +56,7 @@ this table, this table is current.
 | **3 — rewrite history** | ✅ **DONE 2026-09-19 — rev 16, EARNED ZERO** | **Gate 3 returns an EARNED ZERO over 1,366 commits, 6,386 blobs and 1,830 paths.** T1 0 / T2 0, over-scrub 0, instrument control 1719/1719, must-survive 5 of 5, build **5,894 → 5,894 — not one test lost**. Demo 14 + 1 known; budgets 19/0 over; IR verified through `lad-coder` (29,752 lines and 21,673 literals matching as multisets). Verifier stamp `subject=1c2de19518e0`. **It refused twice first, and both refusals were right** — see rev 16. Source untouched, no remote. ⚠️ **That stamp is NOT the published one.** The mailmap was rewritten afterwards to map both author identities, which required a fresh cycle; the artifact that went public carries stamp **`bb6d61c6544d`** over 1,367 commits / 6,387 blobs / 1,830 paths. Same gates, same earned zero, one commit later |
 | **4 — restructure** | ✅ **DONE** | — |
 | **5 — CI and demo** | ✅ **DONE 2026-09-19 — Gate 4 GREEN, rev 17; both workflows green, rev 17b** | `.github/workflows/ci.yml` + `nightly.yml`, `global.json` (SDK pinned), `demo/run-demo.py`, `tests/ci-baseline.json`. CI has passed on **every** published sha. The step that matters is `capture-build-baseline.py --expect`, which fails on a lost assembly, a fallen pass count, a risen failure count *or* an unbuildable target that is not on the recorded list. **`Nightly (slow suites)` is now confirmed green on hosted hardware too** — the 66-case scrub-builder suite, kept out of CI at ~33 minutes. ⚠️ `cannotBuild` is **1**, not 2, since the Sharp7 decision (rev 17b); `openness-cli` is the sole exclusion and stays one **permanently as far as this machine is concerned — owner's decision 2026-09-21, TIA Portal will not be installed here.** The exclusion is a recorded, gated fact rather than a pending task, and `--expect` fails if an unbuildable target appears that is *not* on the list |
-| **6 — publish** | ✅ **DONE 2026-09-19 — rev 17, extended by revs 17a and 17b, whose cycle table gained row 5 after the push that carried it** | Published to `github.com/oisinsmyth/Ladder-AI`. **Currently at `f03011d1c6d3`** after **six cycles** — first `bb6d61c6544d`, then `6362bbc5acfc`, then `65a09157e920` (🔴 the one forced push, rev 17b), then `e8eb66af38af`, then `d9c304e2f39b`, then this one. In every cycle **remote `main` = local clone `HEAD` = Gate 3's verdict stamp**, and every cycle earned its own zero rather than inheriting one. Pushed private, CI confirmed green, then made public by the owner — the arrangement was chosen precisely so a mistake stayed recoverable. Steps 2 and 3 discharged: this repo still has **no remote at all**, and the publication is recorded in `data-boundary-audit-backlog.md` as an `AB-1` discharge **for the public artifact only** |
+| **6 — publish** | ✅ **DONE 2026-09-19 — rev 17, extended by revs 17a and 17b, whose cycle table gained row 5 after the push that carried it** | Published to `github.com/oisinsmyth/Ladder-AI`. **Currently at `88ff875ba74b`** after **seven cycles** — first `bb6d61c6544d`, then `6362bbc5acfc`, then `65a09157e920` (🔴 the one forced push, rev 17b), then `e8eb66af38af`, then `d9c304e2f39b`, then `f03011d1c6d3`, then this one. In every cycle **remote `main` = local clone `HEAD` = Gate 3's verdict stamp**, and every cycle earned its own zero rather than inheriting one. Pushed private, CI confirmed green, then made public by the owner — the arrangement was chosen precisely so a mistake stayed recoverable. Steps 2 and 3 discharged: this repo still has **no remote at all**, and the publication is recorded in `data-boundary-audit-backlog.md` as an `AB-1` discharge **for the public artifact only**. ⚠️ **CI is RED on the current stamp** and the cause is not yet known — the artifact itself passes the identical gate locally, Gate 3 and the identity sweep both passed, and cycle 7 below records exactly what is and is not established |
 
 ### What is actually built and proven
 
@@ -89,7 +89,7 @@ this table, this table is current.
 
 ### Rev 17b — cycles THREE and FOUR: a leak that was suppressing its own rewrite rule
 
-**Six cycles now, and the stamps are the spine of the record.** In every one, remote `main` = the
+**Seven cycles now, and the stamps are the spine of the record.** In every one, remote `main` = the
 clone's `HEAD` = Gate 3's verdict stamp. That identity is the claim; everything else is how it was
 earned.
 
@@ -101,6 +101,7 @@ earned.
 | 4 | 09-20 | `967a1c0` | `e8eb66af38af` | 116 | fast-forward |
 | 5 | 09-21 | `70a091b` | `d9c304e2f39b` | 116 | fast-forward |
 | 6 | 09-21 | `d6879e7` | `f03011d1c6d3` | **122** | fast-forward |
+| 7 | 09-21 | `bbd1fde` | `88ff875ba74b` | 122 | fast-forward · ⚠️ CI RED |
 
 **Cycle 5 published this section itself**, which is why the row above exists but its own narrative
 does not: the record can never contain the cycle that carried it. That recursion is permanent, and
@@ -123,6 +124,41 @@ confirmation that the clean-room capture behind the Sharp7 move reproduces off t
 NuGet package really does restore anywhere, rather than the build leaning on something
 machine-local. And *"Green claims match the tier register"* is `M-22` running in CI against a
 published artifact for the first time.
+
+#### ⚠️ Cycle 7 — every gate passed and CI went red anyway, and it is NOT yet explained
+
+Six commits, fast-forward, rules byte-identical at 122, Gate 3 an earned zero over 1,722 needles and
+6,452 blobs, identity sweep clean over 14,721 objects, stamp `88ff875ba74b` = clone `HEAD` = remote
+`main`. **And then CI failed**, on *"Build, test and gate against the committed baseline"*, with
+every later step skipped.
+
+**What is established, and it is most of the picture:**
+
+- **The artifact is sound.** The same command CI runs — `capture-build-baseline.py --expect` — was
+  run locally **against the published clone itself**, and returned `BUILD GATE PASSED`: 23
+  assemblies, 5,894 passed, 2 failed, no assembly lost, no new failure, no new unbuildable target.
+- **The capture matches the baseline exactly**, per assembly, with zero differences.
+- **No C# changed in these six commits**, and cycle 6 passed CI on an identical C# tree.
+- The workflow is structurally sound and the steps added this cycle all sit *after* the one that
+  failed.
+- This is a **test/build** failure, not a boundary failure. Gate 3 and the identity sweep are
+  independent of CI and both passed.
+
+**What is NOT established: which test failed.** The check annotation is bare — *"Process completed
+with exit code 1"* — and 🔴 **raw Actions logs are 403 to anonymous callers even on a public repo**,
+so the one artifact that would answer it is the one thing this machine cannot fetch. That limit was
+measured in cycle 1 and is now load-bearing in a way it was not then.
+
+**The hypothesis, held loosely: a flaky test on the hosted runner.** 5,896 tests run there,
+including process-race and timer-bearing suites. It is a hypothesis and it is labelled one — the
+honest position is that a green local run of the same command on the same bytes does not prove what
+happened on a different machine. **The next cycle is the experiment**: the same C# tree, a second
+CI run. Green means flake; red in the same place means systematic, and then the log must be read by
+someone who can authenticate.
+
+**Recorded rather than smoothed over.** Seven cycles, six clean, one red — and the row in the table
+above says `CI RED` rather than omitting the cycle. A publication record that only lists the cycles
+that went well is not a record.
 
 #### Cycle 6 — the rule set moved AND the history did not, which is the distinction that matters
 
