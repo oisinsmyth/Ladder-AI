@@ -149,6 +149,28 @@ with exit code 1"* — and 🔴 **raw Actions logs are 403 to anonymous callers 
 so the one artifact that would answer it is the one thing this machine cannot fetch. That limit was
 measured in cycle 1 and is now load-bearing in a way it was not then.
 
+> **UPDATE — the owner supplied the log, and it named the ASSEMBLY but not the test:**
+> *"Ladder.Wave.Tests dropped from 474 passing to 473. Ladder.Wave.Tests went from 0 failing to 1."*
+>
+> **It could not be reproduced.** The full 474-test assembly passes here three times under
+> twelve-way CPU load, and the assembly's only wall-clock assertion — a 150 ms bound, set
+> deliberately below the 200 ms retry budget it is distinguishing — completes in **under 1 ms**, a
+> 150× margin. So it is not load, and it is not the obvious suspect.
+>
+> 🔴 **THE REAL DEFECT WAS THAT THE NAME WAS UNRECOVERABLE AT ALL.**
+> `capture-build-baseline.py` ran `dotnet test`, parsed the summary line out of its stdout, and
+> **threw the rest away** — so the failing test's name never reached the log, and the raw log is
+> 403 anyway. A gate that says a test broke without saying WHICH cannot be acted on from the
+> machine that did not run it. Fixed: names are parsed in both logger spellings, printed at capture
+> time, listed by name in the `BUILD GATE FAILED` block, and recorded as `failedTests` in the JSON
+> the workflow already uploads.
+>
+> **That fix caught its own bug on its first real run**, which is the part worth keeping: it
+> recorded **26 names against a capture reporting 2 failures**, 24 of them from the stale
+> `openness-cli` artifact the tool deliberately excludes. Names are now filtered to targets that
+> contributed counted rows, and they agree with the total. A list that disagrees with the number
+> printed beside it is worse than no list.
+
 **The hypothesis, held loosely: a flaky test on the hosted runner.** 5,896 tests run there,
 including process-race and timer-bearing suites. It is a hypothesis and it is labelled one — the
 honest position is that a green local run of the same command on the same bytes does not prove what

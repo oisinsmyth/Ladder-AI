@@ -104,6 +104,35 @@ def a_failing_assembly_is_parsed(tmp):
     assert rows and rows[0]["failed"] == 9 and rows[0]["passed"] == 1811, rows
 
 
+def the_FAILING_TEST_NAMES_are_captured(tmp):
+    """*** THE NAME, WHICH THIS TOOL USED TO THROW AWAY. ***
+
+    A CI run on 2026-09-21 reported "Ladder.Wave.Tests went from 0 failing to 1" and the name was
+    unrecoverable: it had been parsed out of dotnet test's stdout and dropped. On a runner whose raw
+    logs are 403 to anonymous callers, that turned a one-line fix into an unanswerable question.
+    Both logger spellings are covered because which one appears depends on the version."""
+    text = ("  Failed Some.Namespace.ClassName.A_test_that_broke [12 ms]\n"
+            "  X Some.Namespace.ClassName.Another_one(x: 1) [3 ms]\n"
+            "  Passed Some.Namespace.ClassName.Fine [1 ms]\n")
+    names = cap.parse_failed_tests(text)
+    assert names == ["Some.Namespace.ClassName.A_test_that_broke",
+                     "Some.Namespace.ClassName.Another_one(x: 1)"], names
+
+
+def a_PASSING_run_captures_no_names(tmp):
+    text = ("Passed!  - Failed:     0, Passed:    10, Skipped:     0, Total:    10, "
+            "Duration: 1 s - A.Tests.dll (net8.0)\n")
+    assert cap.parse_failed_tests(text) == [], "a green run must not invent a failure"
+
+
+def the_ASSEMBLY_SUMMARY_line_is_not_read_as_a_test_name(tmp):
+    """`Failed!  - Failed: 2, ...` starts with the same word. Matching it would report the DLL as a
+    failing test and bury the real one."""
+    text = ("Failed!  - Failed:     2, Passed:   472, Skipped:     0, Total:   474, "
+            "Duration: 8 s - A.Tests.dll (net8.0)\n")
+    assert cap.parse_failed_tests(text) == [], cap.parse_failed_tests(text)
+
+
 def a_multi_targeted_assembly_is_folded_not_duplicated(tmp):
     """One assembly reported once per target framework. Two rows under one key would make the
     capture refuse to load, so they are summed and flagged."""
@@ -324,6 +353,10 @@ for name, body in [
     ("a partial build failure keeps the projects that DID build",
      a_partial_build_failure_keeps_the_projects_that_DID_build),
     ("a failing assembly is parsed", a_failing_assembly_is_parsed),
+    ("NAMES: the failing test names are captured", the_FAILING_TEST_NAMES_are_captured),
+    ("NAMES: a passing run captures no names", a_PASSING_run_captures_no_names),
+    ("NAMES: the assembly summary line is not a test name",
+     the_ASSEMBLY_SUMMARY_line_is_not_read_as_a_test_name),
     ("a multi-targeted assembly is folded, not duplicated",
      a_multi_targeted_assembly_is_folded_not_duplicated),
     ("build errors are deduped per code and project",

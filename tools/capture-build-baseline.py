@@ -50,6 +50,15 @@ ERROR_LINE = re.compile(r"\berror\s+([A-Z]+\d+)\s*:\s*(.*?)\s*(?:\[([^\]]*\.cspr
 #   Converter.Tests -> C:\...\bin\Release\net8.0\Converter.Tests.dll
 ARROW = re.compile(r"->\s+(\S.*?\.dll)\s*$", re.IGNORECASE)
 
+# *** THE NAME OF THE TEST THAT FAILED, WHICH THIS TOOL USED TO THROW AWAY. ***
+# Added 2026-09-21 after a CI run reported "Ladder.Wave.Tests went from 0 failing to 1" and the
+# name was UNRECOVERABLE: dotnet test's stdout was captured, the summary line parsed out of it, and
+# the rest discarded - so the one fact needed to act on the gate never reached the log, and raw
+# Actions logs are 403 to anonymous callers anyway. A gate that says a test broke without saying
+# WHICH is a gate you cannot act on from the machine that is not the one that ran it.
+# `dotnet test` prints failures two ways depending on logger and version.
+FAILED_TEST = re.compile(r"^\s*(?:Failed|X)\s+(\S+(?:\([^)]*\))?)\s*(?:\[.*\])?\s*$")
+
 SKIP_DIRS = {".git", "bin", "obj", "node_modules", "packages", "TestResults"}
 
 
@@ -90,6 +99,29 @@ def run(cmd, cwd):
         return 127, "could not launch %r: %s" % (cmd[0], exc)
     out, _ = p.communicate()
     return p.returncode, out.decode("utf-8", "replace")
+
+
+def parse_failed_tests(text):
+    """Every failing test NAME dotnet test printed, in order, de-duplicated.
+
+    Names are NOT joined to individual assemblies: the summary line and the failure lines are not
+    reliably interleaved per assembly across loggers, and a name attached to the WRONG assembly
+    would be worse than a name attached to none. They ARE filtered by TARGET by the caller, which
+    is sound because a target is one `dotnet test` invocation - see `counted_targets`. That filter
+    is not optional: the first run of this feature recorded 26 names against a capture reporting 2
+    failures, 24 of them from an excluded stale artifact.
+    """
+    names, seen = [], set()
+    for line in text.splitlines():
+        m = FAILED_TEST.match(line)
+        if not m:
+            continue
+        name = m.group(1)
+        if name.lower().endswith(".dll") or name in seen:
+            continue
+        seen.add(name)
+        names.append(name)
+    return names
 
 
 def parse_assemblies(text, target):
@@ -285,8 +317,16 @@ def capture_target(root, dotnet, target, config):
     sys.stdout.flush()
     _, test_out = run([dotnet, "test", "-c", config, "--no-build", target, "--nologo"], root)
     rows = parse_assemblies(test_out, target)
-    print(" %d assembly/assemblies" % len(rows))
-    return rows, cannot, built_assemblies(build_out)
+    failures = parse_failed_tests(test_out)
+    print(" %d assembly/assemblies" % len(rows), end="")
+    # PRINTED AT THE POINT OF CAPTURE, not only at the gate. The gate compares counts and may be
+    # run with a baseline that already tolerates these; the names still belong in the log, because
+    # the run that produced them is the only one that had them.
+    if failures:
+        print("  [%d failing: %s]" % (len(failures), ", ".join(failures[:4])
+                                      + (", ..." if len(failures) > 4 else "")), end="")
+    print()
+    return rows, cannot, built_assemblies(build_out), failures
 
 
 def main():
@@ -351,14 +391,19 @@ def main():
         return 2
 
     rows, cannot_build, built = [], [], set()
+    failed_by_target = {}
     for target in slns:
-        got, cannot, made = capture_target(root, args.dotnet, target, args.config)
+        got, cannot, made, failing = capture_target(root, args.dotnet, target, args.config)
         rows.extend(got)
         built |= made
+        if failing:
+            failed_by_target[target] = failing
         if cannot:
             cannot_build.append(cannot)
     for target in orphan_tests:
-        got, cannot, made = capture_target(root, args.dotnet, target, args.config)
+        got, cannot, made, failing = capture_target(root, args.dotnet, target, args.config)
+        if failing:
+            failed_by_target[target] = failing
         for row in got:
             row["orphan"] = True
             row["note"] = "In NO solution. A CI that iterates *.sln skips this silently."
@@ -368,6 +413,15 @@ def main():
             cannot_build.append(cannot)
 
     rows, unverified = partition_unverified(rows, built)
+
+    # *** THE NAMES MUST AGREE WITH THE COUNT. *** A target whose assemblies were all EXCLUDED -
+    # MSBuild never built them, so --no-build ran a leftover artifact - contributes no failures to
+    # the totals, and its names must not appear either. Measured on the first run of this feature:
+    # 26 names were recorded against a capture reporting 2 failures, 24 of them from a stale
+    # openness-cli artifact. A list that disagrees with the number beside it is worse than no list.
+    counted_targets = {r["target"] for r in rows}
+    failed_tests = [n for t, names in sorted(failed_by_target.items()) if t in counted_targets
+                    for n in names]
 
     if not rows:
         print("\nNOTHING EXAMINED: %d target(s) were built and tested and NOT ONE produced a "
@@ -382,6 +436,8 @@ def main():
         "schema": "ladder-ai/build-baseline/1",
         "capturedAt": time.strftime("%Y-%m-%d"),
         "capturedBy": "tools/capture-build-baseline.py",
+        # Recorded so a gate failure is ACTIONABLE from a machine that did not run it.
+        "failedTests": failed_tests,
         "commit": head.strip(),
         "branch": branch.strip(),
         "sdk": sdk.strip(),
@@ -443,6 +499,19 @@ def main():
         print("\n--- BUILD GATE FAILED ---")
         for f in findings:
             print("  " + f)
+        # *** THE NAMES, BECAUSE A COUNT IS NOT ACTIONABLE. *** This block exists because a CI run
+        # on 2026-09-21 reported "went from 0 failing to 1" and the name was nowhere: it had been
+        # parsed out of dotnet test's stdout and dropped. On a hosted runner whose raw logs are 403
+        # to anonymous callers, that made a one-line fix into an unanswerable question.
+        if failed_tests:
+            print("\n  THE %d FAILING TEST(S) THIS RUN SAW, by name:" % len(failed_tests))
+            for name in failed_tests:
+                print("      %s" % name)
+        else:
+            print("\n  NO TEST NAME WAS CAPTURED. The counts moved but dotnet test printed no line "
+                  "this\n  tool could match, so the name is genuinely unavailable rather than "
+                  "withheld - say so\n  rather than guessing, and re-run with the console logger "
+                  "at normal verbosity.")
         print("\nA test that used to pass does not pass now. Fix it, or - if the change is "
               "deliberate - re-capture %s in its own commit, saying what moved and why."
               % args.expect)
