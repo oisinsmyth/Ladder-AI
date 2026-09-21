@@ -135,6 +135,24 @@ def an_UNTRACKED_key_that_is_ABSENT_does_NOT_gate(root):
     assert "not a finding" in out, "should say plainly that it is not a finding"
 
 
+def NOT_ONE_key_present_and_nothing_to_report_is_NOTHING_EXAMINED(root):
+    """*** THIS TOOL FAILED ITS OWN RULE, IN CI, FOR AS LONG AS IT HAD BEEN WIRED THERE. ***
+
+    Measured 2026-09-21 against the PUBLISHED artifact: the scrub rewrites a FILENAME inside the
+    register's own prose while path-renames leaves the FILE alone, so every declared key resolved to
+    a path that does not exist. Each reported "absent - UNTRACKED - not a finding" and the tool
+    exited 0 having verified nothing. Tolerating ONE absent untracked key is right. Tolerating ALL
+    of them and printing CLEAN is a green check over an empty set."""
+    build(root,
+          tracked={"unrelated.txt": "x"},
+          register=("case-a | ignored/A.ir | %s   # not here\n"
+                    "case-b | ignored/B.ir | %s   # also not here\n" % (sha("a"), sha("b"))))
+    code, out = run(root)
+    assert_eq(code, EXIT_CANNOT_RUN, "exit")
+    assert "EMPTY IS NOT CLEAN" in out, out
+    assert "CLEAN:" not in out, "it must not print a clean verdict over an empty set"
+
+
 def an_UNTRACKED_key_that_is_PRESENT_is_still_pinned(root):
     build(root,
           tracked={"keys/A.ir": "alpha"},
@@ -279,6 +297,8 @@ for name, body in [
     ("PIN: a TRACKED key that is GONE gates", a_TRACKED_key_that_is_GONE_gates),
     ("PIN: an UNTRACKED key that is ABSENT does NOT gate",
      an_UNTRACKED_key_that_is_ABSENT_does_NOT_gate),
+    ("PIN: not one key present and nothing to report is NOTHING EXAMINED",
+     NOT_ONE_key_present_and_nothing_to_report_is_NOTHING_EXAMINED),
     ("PIN: an UNTRACKED key that is PRESENT is still pinned",
      an_UNTRACKED_key_that_is_PRESENT_is_still_pinned),
     ("UNIQUE: a SECOND TRACKED copy GATES", a_SECOND_TRACKED_copy_GATES),

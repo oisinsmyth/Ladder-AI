@@ -83,4 +83,31 @@ if ! python tools/check-staged-identifiers.py; then
     exit 1
 fi
 
+# THE TWO PATH REGISTERS, CHECKED AGAINST THE TREE THEY ACTUALLY DESCRIBE.
+#
+# Both name paths in the SOURCE tree. They were briefly wired into CI instead, which runs on the
+# PUBLISHED artifact - where the scrub has deliberately renamed things. Measured 2026-09-21: every
+# declared path resolved to nothing there, and one of the two checks reported that as "absent, not
+# a finding" and EXITED 0 HAVING VERIFIED NOTHING. Checking a source register against a rewritten
+# artifact tests the rewrite, not the claim.
+#
+# Here the subject is present, so a refusal means what it says. Both are cheap: they hash a handful
+# of declared files and walk the tree once, filtered by size.
+if ! python tools/check-answer-keys.py; then
+    echo ""
+    echo "COMMIT REFUSED: an answer key has moved off its pin, is duplicated in the repository, or"
+    echo "not one declared key is present. Ground truth moving quietly is the whole thing this"
+    echo "register exists to stop - decide which file is right and say so in tools/answer-keys.txt,"
+    echo "in a commit that does only that."
+    exit 1
+fi
+
+if ! python tools/check-readable-scope.py; then
+    echo ""
+    echo "COMMIT REFUSED: a validation case's declared readable scope is incoherent, or an ASSERTED"
+    echo "quarantine is defeated by a byte-identical twin. If the fence is genuinely gone, say so by"
+    echo "declaring it 'void' and accept what that costs - the case can then never be cleared."
+    exit 1
+fi
+
 exit 0

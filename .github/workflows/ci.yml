@@ -138,22 +138,18 @@ jobs:
       - name: Green claims match the tier register
         run: python tools/check-green-claims.py
 
-      # 3-C. This one runs here IN FULL, unlike the two vocabulary checks above, because it needs no
-      # vocabulary at all - it hashes files and asks git which paths are tracked, and a clean clone
-      # has everything it needs. It is also the check with the most to say on a runner: the PIN and
-      # the tracked-duplicate halves are exactly the two that a reviewer cannot eyeball. The
-      # working-tree sweep finds less here than locally, which is correct and not a weakness - a
-      # fresh clone HAS no scratch/ and no worktrees, and the step's output says how many it saw.
-      - name: Answer keys are at their pins
-        run: python tools/check-answer-keys.py
-
-      # M-23's buildable half. It runs here in full - it needs no vocabulary, only files and git.
-      # Its output carries a PERMANENT line saying the MotorVSDSystem-purpose case can never be cleared,
-      # because its quarantine is a void fence. That line is the point, not noise: the alternative
-      # was a check that fails forever, and a check nobody can keep green gets disabled.
-      - name: Validation cases declare what was readable
-        run: python tools/check-readable-scope.py
-
+      # 🔴 THE TWO PATH-REGISTER CHECKS ARE DELIBERATELY NOT HERE, AND THIS IS THE CORRECTION OF A
+      # REAL MISTAKE. tools/answer-keys.txt and tools/readable-scope.txt name paths IN THE SOURCE
+      # TREE. CI runs on the PUBLISHED artifact, whose whole purpose is that paths and identifiers
+      # have been rewritten. Measured 2026-09-21 on the artifact: the scrub rewrites a FILENAME
+      # inside a register's prose while path-renames leaves the FILE alone, so every declared path
+      # resolved to nothing. check-readable-scope.py reported it as a finding (correct - its subject
+      # was absent) and check-answer-keys.py reported "absent, not a finding" and EXITED 0 HAVING
+      # VERIFIED NOTHING - green here since the day it was added, proving nothing.
+      #
+      # CHECKING A SOURCE REGISTER AGAINST A REWRITTEN ARTIFACT TESTS THE REWRITE, NOT THE CLAIM.
+      # Both now run in hooks/pre-commit, against the tree they describe. What guards the artifact
+      # is Gate 3 and the identity sweep, which are built for it.
       # The demo is a test, not a showpiece. --check asserts the result it claims, so it fails here
       # rather than rotting into an example nobody runs.
       - name: The demo asserts its own result

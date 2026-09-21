@@ -214,6 +214,18 @@ def main():
                             "a validation case has been silently regraded."
                             % (case, rel_path, digest[:12], actual[:12]))
 
+    # ---- 1b. EMPTY IS NOT CLEAN, AND THIS TOOL FAILED ITS OWN RULE -------------------------------
+    # Measured 2026-09-21 on the PUBLISHED artifact: all three declared keys resolved to paths that
+    # do not exist there, because the scrub rewrites the FILENAME inside this register's text while
+    # path-renames does not rename the FILE. Every key reported "absent - UNTRACKED - not a finding"
+    # and the tool exited 0 HAVING VERIFIED NOTHING. It had been green in CI since the day it was
+    # added, proving nothing, which is precisely the failure this repository exists to refuse - in
+    # the tool written to refuse it. A per-entry tolerance is not wrong; tolerating EVERY entry is.
+    # The verdict for this is deferred to the end, deliberately. An early return here ALSO swallowed
+    # the case where the single declared key is tracked and has been DELETED - which is a finding,
+    # not an empty run, and its own test said so immediately. "Examined nothing" is only the right
+    # answer when there is also nothing to report.
+
     # ---- 2. UNIQUE IN THE REPOSITORY -------------------------------------------------------------
     print("\n--- 2. IS IT THE ONLY TRACKED COPY OF ITSELF? ---")
     for case, rel_path, digest, reason, line_no in entries:
@@ -264,6 +276,21 @@ def main():
         print("      %s" % (reason or "NO REASON GIVEN - that is itself a finding for a reader."))
 
     # ---- Verdict ---------------------------------------------------------------------------------
+    if not findings and not present:
+        # EMPTY IS NOT CLEAN, AND THIS TOOL FAILED ITS OWN RULE. Measured 2026-09-21 on the
+        # PUBLISHED artifact: all three declared keys resolved to paths that do not exist there,
+        # because the scrub rewrites a FILENAME inside this register's prose while path-renames
+        # leaves the FILE alone. Every key reported "absent - not a finding" and the tool exited 0
+        # HAVING VERIFIED NOTHING - green in CI since the day it was added. A per-entry tolerance
+        # for an absent untracked key is right; tolerating EVERY entry and calling it clean is not.
+        print("\nCANNOT RUN: %d key(s) declared, NOT ONE present in this tree, and nothing to "
+              "report." % len(entries))
+        print("EMPTY IS NOT CLEAN. This run verified no pin at all, and exiting 0 on it would be a")
+        print("green check over an empty set. If the keys are legitimately absent here - a")
+        print("rewritten artifact, or a tree this register does not describe - then this tool has")
+        print("nothing to say about it, and must say THAT rather than 'clean'.")
+        return EXIT_CANNOT_RUN
+
     if not findings:
         print("\nCLEAN: every declared key is at its pin, and every tracked one is the only tracked "
               "copy of itself.")
