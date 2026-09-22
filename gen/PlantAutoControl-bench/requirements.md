@@ -13,7 +13,7 @@ regenerate `PlantAutoControl` from; REQ IDs below are stable forever.
 - **Reverse-derived, NO independent source document.** This register was derived **entirely from
   the as-built `PlantAutoControl` logic** (`docs/evidence/PlantAutoControl-answerkey/PlantAutoControl.ir`,
   the sealed answer key). There is **no functional description, spec sheet, or other independent
-  source** behind it — unlike `gen/test-project001/requirements.md`, which had two site
+  source** behind it — unlike `gen/test-project001/requirements.md`, which had two supplied
   documents. This makes the register's own blindness **imperfect by construction**: every
   requirement here was read back out of code. The defense against circularity is therefore **not**
   source-derivation but the **abstraction discipline** in the S6-Killer-Plan protocol — each item
@@ -39,7 +39,7 @@ regenerate `PlantAutoControl` from; REQ IDs below are stable forever.
   not here). Those are other blocks or the hardwired safety circuit — out of scope for regeneration.
 - **Green / sanitized.** Every equipment, tag, DB, and instance name here is an invented name from
   the S6-Killer-Plan sanitization map (`docs/evidence/PlantAutoControl-answerkey/`,
-  `ir/PlantAutoControl-bench/`). No real site, site, job, or model identity appears. Work stays
+  `ir/PlantAutoControl-bench/`). No real site, job, or model identity appears. Work stays
   entirely in the invented-name namespace.
 - **Tag-status verification corpus:** `ir/PlantAutoControl-bench/` (the six given global DBs). Every
   `exists` mark below was grep-verified against those files when this register was written.

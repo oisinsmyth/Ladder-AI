@@ -240,7 +240,7 @@ fix list. Findings describe; the audit fixed nothing.
   and a live-job register. No `adr-0003-*.md` exists; `adr-0004:5` still records the slot as deliberately
   reserved.
 - **F-17 (medium) — recorded approval scope: the live-runs regime supersedes the per-project process without
-  saying what happens to the approvals that still name real site owners.** *(Prior F-19 scope-adequacy half,
+  saying what happens to the approvals that still name real organisations.** *(Prior F-19 scope-adequacy half,
   re-derived.)* The live-runs register (`docs/13:309–315`) is deliberately job-code-only and states that live
   runs *"do not follow"* the older Amber process — but does not say whether the existing named approvals are
   superseded, remain live in parallel, or are frozen. The 2026-07-29 entry (`:230–234`) records the precedent

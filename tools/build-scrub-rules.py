@@ -69,8 +69,8 @@ NAMEY_SECTIONS = ("names", "tags")
 
 # Sections that are NOT in the C# schema and are therefore SILENTLY DROPPED by the structured
 # sanitizer. Measured 2026-09-17: 15 entries across three of them, and they are exactly the
-# site, site and product-line vocabulary - the terms a map-driven pass would otherwise miss.
-# A text pass that ignores these ignores the only sections that name a site.
+# company, site and product-line vocabulary - the terms a map-driven pass would otherwise miss.
+# A text pass that ignores these ignores the only sections that name an organisation.
 EXTRA_NAMEY_SECTIONS = ("company", "modelline", "identifiers")
 
 # Prose keys that appear at a map's top level and are not vocabulary at all.
@@ -98,7 +98,7 @@ SENTINEL_TEMPLATE = "QQSCRUBQQ%04dQQ"
 # AND read differently by the verifier, which is M-24.
 
 # The join between the two vocabularies above. EXTRA_NAMEY_SECTIONS names the map sections that
-# carry site, site and product-line terms; SPACED_CLASSES names the classes that get a spaced
+# carry company, site and product-line terms; SPACED_CLASSES names the classes that get a spaced
 # variant. They describe the same thing from two directions and were never connected, so a company
 # name out of a map got `AcmeHoldings`, `acmeholdings`, `acme-holdings` and never `Acme Holdings`.
 #
@@ -106,7 +106,7 @@ SENTINEL_TEMPLATE = "QQSCRUBQQ%04dQQ"
 # the only thing any consumer tests, so all three could map to one class with no behavioural
 # difference; they are named honestly so the run log reads sensibly, not because a finer taxonomy
 # exists downstream.
-SECTION_CLASS = {"company": "site", "modelline": "modelline", "identifiers": "site"}
+SECTION_CLASS = {"company": "company", "modelline": "modelline", "identifiers": "site"}
 
 
 def git(repo, *args):
@@ -160,7 +160,7 @@ def load_maps(mapdir):
                     pairs.setdefault(key, {}).setdefault(value, []).append(stem)
                     # THE SECTION WAS IN SCOPE HERE AND WAS THROWN AWAY. A key's section is the
                     # only statement anyone makes about WHAT KIND OF NAME IT IS, and without it
-                    # every map key reached variants_for as "block" - so a identifying name never got
+                    # every map key reached variants_for as "block" - so an identifying name never got
                     # its spaced form, which is the only form prose actually writes it in.
                     section_of.setdefault(key, set()).add(low)
             elif low in STRUCTURED_SECTIONS:
@@ -359,7 +359,7 @@ WORD_RUN = re.compile(r"[A-Za-z0-9_]+")
 # A SECOND, WIDER RUN, used only to answer "does this declared term occur anywhere".
 # WORD_RUN strips dots, hyphens and slashes, so a declared term containing one can never be a
 # substring of a blob built from it - the check returns False for every dotted term no matter how
-# many times it occurs. Measured: a 3-character site term with a dot in it occurred 33 times in
+# many times it occurs. Measured: a 3-character company term with a dot in it occurred 33 times in
 # the corpus, got no rule, and survived the rewrite. It is the same shape of error as tokenising
 # needles too narrowly on the verifier side: THE TOKEN CLASS MUST COVER THE NEEDLE, not just the
 # language the corpus happens to be written in.
@@ -431,7 +431,7 @@ def main():
     ap.add_argument("--repo", default=".", help="repository root")
     ap.add_argument("--maps", default="sanitization", help="directory of *.map.json")
     ap.add_argument("--terms", default="sanitization/scrub-terms.md",
-                    help="explicit term list (job codes, site and site names)")
+                    help="explicit term list (job codes, site and company names)")
     ap.add_argument("--out", default="sanitization/scrub", help="output directory")
     ap.add_argument("--green", action="append", default=None,
                     help="an already-sanitized corpus; repeatable. A candidate variant occurring "
@@ -860,7 +860,7 @@ def main():
 
         A head with no bare rule is usually deliberate rather than missing: the Green test withholds
         a head that appears in the already-sanitized reference corpus, precisely so a conventional
-        name is not rewritten where it stands alone - while the composite `X.Y` is still a site
+        name is not rewritten where it stands alone - while the composite `X.Y` is still a restricted
         tag path and must be scrubbed. That asymmetry is the design working. Preserving the head
         anyway made 49 dotted rules inert and dropped T2 coverage from 79 of 81 needles to 30: a
         consistency fix paying for itself in de-identification, which is the wrong currency.
@@ -1035,7 +1035,7 @@ def main():
     # leak must not be a copy of it, and an unidentifiable finding is not a worklist.
     #
     # *** THE REPLACEMENT ALONE IS NOT UNIQUE, AND THE FIRST VERSION OF THIS ASSUMED IT WAS. ***
-    # Two rows in the real list share one invented name - two spellings of one site, which is
+    # Two rows in the real list share one invented name - two spellings of one organisation, which is
     # legitimate and is exactly what a replacement is FOR - so `term row 'X'` picked out two rows
     # and the worklist it produced could not be acted on without guessing. Found by a guard written
     # to apply this check's own advice, which refused rather than editing the wrong row. The class

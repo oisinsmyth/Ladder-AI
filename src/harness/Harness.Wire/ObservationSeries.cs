@@ -54,7 +54,7 @@ public sealed record ResultFrame(ScanCount Scan, int PollRound, ushort[] Registe
 /// retained series and the window <b>missed each other by ~268 seconds</b>: <b>zero</b> retained frames
 /// were inside the phase under test. Five signals were nonetheless folded over those 65 head-and-tail
 /// frames and returned verdicts — one <c>Held</c> earned entirely outside the phase, and <b>three
-/// <c>Disagreed</c>: accusations against a site's block built from frames taken more than four minutes
+/// <c>Disagreed</c>: accusations against a production block built from frames taken more than four minutes
 /// before the stimulus meant to make them true.</b> <c>Truncated</c> was <c>true</c> on every one of those
 /// rows and prevented none of them, which is why the flag alone is not the fix.</para>
 ///

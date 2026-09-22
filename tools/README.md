@@ -69,7 +69,7 @@ breath**, because the two halves do not work apart.
 
 `-Arm` refuses any project not listed in **`tools/confirm-roundtrip.allowlist`**:
 
-- **An allowlist, never a denylist.** This engineering PC carries about **nineteen real site
+- **An allowlist, never a denylist.** This engineering PC carries about **nineteen real production
   `.ap20` projects in folders beside the two scratch ones**; a denylist fails open on the one nobody
   thought to list.
 - **The refusal is exit `4`, not a warning**, and it is evaluated **before any binary check, before
@@ -289,10 +289,10 @@ REFUSED BEFORE READING ANYTHING (the term list is tracked, or `--out` is in trac
 2 and 3 nothing is written** — a partial rule set is the worst possible artifact, because it looks
 like a rule set and scrubs some of what it names.
 
-**What it deliberately does NOT do.** It does not decide whether a name identifies a site. The
+**What it deliberately does NOT do.** It does not decide whether a name identifies an organisation. The
 only mechanical filters are a length floor and membership of the already-sanitized Green corpora,
 and AB-1 measured roughly half of its own candidates as conventional names. So a conventional name
-absent from Green *will* be replaced, and a identifying name present in Green *will not*. Measured on
+absent from Green *will* be replaced, and an identifying name present in Green *will not*. Measured on
 the one identifier-bearing path the rules leave alone is Green-present. That is the documented cost
 of removing human adjudication, not a defect to file.
 
@@ -462,7 +462,7 @@ reason why not, rather than a shrug.
 | | defect | consequence | why the artifact did not move |
 |---|---|---|---|
 | **F13** | the vote list is appended to once per **(section, key)**, not per file, so one map declaring a key in `names` *and* `tags` voted twice | rung 3 asks "how many maps agree" and was counting how often one map repeated itself — **one map could outvote two** | 20 duplicate-stem pairs exist, but only 3 keys have competing replacements and **rung 3 decides none of them** |
-| **F11** | the map **section** is in scope at the point the pair is stored and was thrown away | every map key reached `variants_for` as `"block"`, so **no map key could ever get a spaced form** — the only form prose writes a identifying name in | 14 keys gain a class, 4 would gain a spaced variant, and **all four are already in the owner's term list** with a spaced class |
+| **F11** | the map **section** is in scope at the point the pair is stored and was thrown away | every map key reached `variants_for` as `"block"`, so **no map key could ever get a spaced form** — the only form prose writes an identifying name in | 14 keys gain a class, 4 would gain a spaced variant, and **all four are already in the owner's term list** with a spaced class |
 | **F9** | 🔴 `candidates.setdefault(v, key)` — first writer wins, **in silence** | a losing key got the wrong replacement or **no rule at all**, counted in no tally; and a map key could squat a **declared** term's form, which then lost its anchorless `(?i)` rule — **F1 reintroduced through a path neither guard covers** | **5 collisions**, all of them the harmless same-replacement shape |
 | **F4** | `replacements & searchable` — exact, case-sensitive, whole-string set intersection | cannot see a needle matching *inside* a replacement, **which is the case the emitter deliberately creates**: declared terms are emitted anchorless and case-insensitive by design | **0 overlaps**: the artifact really was clean, and is now clean *by the check* rather than by luck |
 
@@ -620,7 +620,7 @@ alike.)*
 🔴 **The last row was 0 of 18 on the first run, and that is the most useful thing this exercise
 produced.** The whole `.git/config` / reflog / `packed-refs` surface could be deleted and every test
 still passed — the branch-name case reaches refs through `for-each-ref` and never touches those
-files, so a wholly untested surface looked covered. The case that now guards it plants a site
+files, so a wholly untested surface looked covered. The case that now guards it plants an organisation
 name in a remote URL, which is how that leak actually arrives.
 
 **A fixture defect worth recording too.** Two cases failed at first against a *correct* tool, because

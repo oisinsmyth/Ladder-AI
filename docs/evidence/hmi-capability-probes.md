@@ -1151,7 +1151,7 @@ Anonymised: 23 type names, 7 folder names.
 
 **Scope:** reference project's **scratch copy**, invented `ZZ_AI_*` names, under
 `docs/13-data-boundary.md`'s write extension. Library type and screen names below are
-**genericized** — the real ones identify a site's plant. Structure, sizes, error text and
+**genericized** — the real ones identify a production plant. Structure, sizes, error text and
 sequence are verbatim.
 
 **Q1 — the load-bearing question — answered YES.** Full analysis in

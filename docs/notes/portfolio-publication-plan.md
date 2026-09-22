@@ -462,7 +462,7 @@ was 49 T2 residuals — measured, not argued.
 🔴 **A TIER CLAIM THAT DOES NOT MATCH ITS CONTENTS.** `gen/_validation/MotorVSDSystem-purpose/spec.md`
 asserts Green-tier, invented-names-only. Measured: **3 of its 10 files carry live vocabulary**, and
 `ir/PlantAutoControl-bench` — which its answer key is a byte copy of — carries **14 distinct needles
-across 2 files, 2 of them declared site terms**. Neither directory is in the builder's `--green`
+across 2 files, 2 of them declared restricted terms**. Neither directory is in the builder's `--green`
 list, so the *tooling* has never believed the claim; only the document does. Nothing leaks, because
 Gate 3 returns T1 0 over exactly this content. The risk is that a false "already sanitised" label is
 what lets content be copied somewhere the scrub does not run. **Open — see item 9.**
@@ -493,7 +493,7 @@ remains. 52 cases.
 
 | refusal | what it caught |
 |---|---|
-| "expected exactly one row" | An invented replacement is **not unique** — two rows share one, being two spellings of a single site. The finding said `term row 'X'` and pointed at both. Findings now carry class and length, which disambiguate and disclose nothing |
+| "expected exactly one row" | An invented replacement is **not unique** — two rows share one, being two spellings of a single organisation. The finding said `term row 'X'` and pointed at both. Findings now carry class and length, which disambiguate and disclose nothing |
 | "the sentinel is not absent" | The absent form I chose occurred **twice in the tree**, because I had committed it in a test fixture an hour earlier. A test string cannot double as production data |
 | variant-collision check | Both discharged rows given the **same** sentinel claimed one written form with two replacements. `claims` is built before dead variants are dropped, so an absent form collides exactly like a present one |
 
@@ -534,7 +534,7 @@ term appears.
 |---|---|---|---|---|---|---|
 | `K5` | modelline | 2 | **0** | 3 | 0 | never a whole token |
 | `K7` | modelline | 2 | **0** | 3 | 0 | never a whole token |
-| `KS` | site | 3 (dotted) | **0** | 4 | **4** | 🔴 **GATES** |
+| `KS` | company | 3 (dotted) | **0** | 4 | **4** | 🔴 **GATES** |
 | `K15` | modelline | 3 | **0** | 14 | 1 | 🔴 **GATES** |
 | `K75` | modelline | 3 | **0** | 2 | 0 | never a whole token |
 | `K150` | modelline | 4 | 11 | 0 | 0 | present in its own right |
@@ -873,7 +873,7 @@ because the canary means nothing unless it was recorded against the unscrubbed r
 🔴 **Mutation testing found a wholly untested surface.** Disabling the entire non-ODB carrier scan
 (`.git/config`, reflogs, `packed-refs`) turned **0 of 18** cases red: the branch-name case reaches
 refs through `for-each-ref` and never touches those files, so the surface *looked* covered and was
-not. A case now plants a identifying name in a remote URL, which is how that leak actually arrives. All
+not. A case now plants an identifying name in a remote URL, which is how that leak actually arrives. All
 six mutations now turn at least one case red.
 
 **A fixture defect worth recording.** Two cases failed at first against a *correct* tool: the helper
@@ -1076,7 +1076,7 @@ Rewrite ~7 min, verification ~30 s.
 Recorded so they meet the next pass rather than evaporating: ~~**F4** the overlap check cannot see a
 needle matching *inside* a replacement (the artifact is clean by luck, not by the check) · **F9**
 variant collisions are first-writer-wins, 5 live instances · **F11** map section class is discarded,
-so site/site keys never get their spaced form · **F13** rung-3 conflict votes are
+so site keys never get their spaced form · **F13** rung-3 conflict votes are
 double-counted~~ — **DISCHARGED 2026-09-18, see Rev 10.**
 · ~~**F16–F19** five vacuous test assertions, and **no test exercises `--scan history`**, the default
 path~~ — **DISCHARGED 2026-09-18, see Rev 9.**
@@ -1094,8 +1094,8 @@ Settled. The plan assumes them and does not re-open them.
 |---|---|---|
 | D1 | **This repository stays private and stays the working repo.** A separate public repo is exported from it. | `Live Runs/` work continues here unchanged. A stray commit here can never reach GitHub. |
 | D2 | **Full history rewritten with `git-filter-repo`**, not squashed. Runs on a **clone**. | All 1,334 commits survive publicly, scrubbed. This repo is never rewritten. |
-| D3 | **Own IP, published on the owner's terms.** | No employer sign-off gate. Site *data* stays out regardless — that is the data boundary, not a rights question. |
-| D4 | **Scrub everything**: job codes, site and site names, real block/type/DB/member names. | Deeper than `docs/13`'s "job codes only", which governs the *private* repo. Public gets no identifiers at all. |
+| D3 | **Own IP, published on the owner's terms.** | No employer sign-off gate. Restricted *data* stays out regardless — that is the data boundary, not a rights question. |
+| D4 | **Scrub everything**: job codes, site and company names, real block/type/DB/member names. | Deeper than `docs/13`'s "job codes only", which governs the *private* repo. Public gets no identifiers at all. |
 | D5 | **Publish all four core areas** — `src/` + tests, `.claude/` + `CLAUDE.md`, the `docs/` suite, and the `ir/` `patterns/` `gen/` `simatic-ml/` corpus. | Effectively "publish the repo, scrubbed". |
 | D6 | **Publish the second tier too** — `CHANGELOG.md`, `AITODO.md`, `agent-tasks/`, `hmi/`, `research/`, `tools/`, `hooks/`, `extract/`. | Nothing withheld for tidiness. |
 | D7 | **CI plus a runnable demo.** | Green badge and a one-command end-to-end run, with no licensed Siemens assembly. |
@@ -1197,7 +1197,7 @@ remediated** — `AB-1` was scoped to the live job, not to these. Concentrated i
 `src/converter/README.md`. **131 tracked files by content** — note that rev 2 first recorded 75, which was the count for a four-term grep; adding the block-name and site terms raises it to 131. *A term list is part of the measurement; quoting a count without it is meaningless.*
 
 **(b) The live job.** Working tree **remediated 2026-08-27** (`AB-1`, 285 sites across 49 files).
-The site *name* is **verified absent from every tracked file and every commit, present and
+The organisation *name* is **verified absent from every tracked file and every commit, present and
 historical — zero occurrences.** The bare job code remains in ~36 tracked files, permitted by
 `docs/13` for the private repo and removed for the public one by D4.
 
@@ -1397,7 +1397,7 @@ The most important phase. **The list is the whole scrub.**
 3. **Drop the 326 identity mappings.** They are no-ops and would inflate any "sites fixed" figure.
 4. **Quarantine the 92 sub-8-character keys and triage the 368 bare words by hand.** These cannot be
    auto-applied. `AB-1` filters at length ≥ 8 for exactly this reason.
-5. **Add what the maps do not carry** — job codes, site and site names.
+5. **Add what the maps do not carry** — job codes, site and company names.
 6. **Emit the `--replace-text` file** in filter-repo syntax: `regex:` with `\b` word boundaries,
    **longest-first**, and an explicit `==>` on every line (the default `***REMOVED***` is not what we
    want). Emit the matching **`--replace-message`** file and the **`--path-rename`** set.

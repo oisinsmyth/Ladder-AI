@@ -18,7 +18,7 @@ requirement. These blocks are not called by the plant program and describe no pl
 - **Source:** the campaign lane brief and `docs/notes/tooling-hammer-plan.md` §1–§3. There is no
   restricted document and no plant behaviour behind any clause. Where a clause states a behaviour, the
   behaviour was **chosen** to exercise a named path through the tooling, and the clause says which.
-- **Data boundary:** Green tier throughout. Nothing here derives from a live run, a site
+- **Data boundary:** Green tier throughout. Nothing here derives from a live run, a restricted
   document, or the sanitization map.
 - **Tag grounding:** these blocks reference **no PLC tag, no global DB member and no other block's
   data at all** — every signal named below is a member of the block's own instance DB, declared in

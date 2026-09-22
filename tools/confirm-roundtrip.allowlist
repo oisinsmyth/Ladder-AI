@@ -6,7 +6,7 @@
 #
 # *** ALLOWLIST, NEVER A DENYLIST (ADR-0011 requirement 1). *** A denylist of real projects is wrong
 # twice over: it fails open on a project nobody thought to list, and it grows silently stale. As of
-# 2026-08-13 this engineering PC carries about NINETEEN real production .ap20 projects in sibling
+# 2026-08-13 this engineering PC carries about Nineteen real production .ap20 projects in sibling
 # folders of the two below, so "the project nobody thought to list" is not hypothetical here.
 #
 # *** THERE IS NO OVERRIDE. *** No -Force, no -AllowAnyProject, no environment variable. Adding a

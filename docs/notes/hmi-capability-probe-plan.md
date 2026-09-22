@@ -169,7 +169,7 @@ mandatory after any delete**, not optional. Full write-up in `openness-hmi-write
   earlier). Cause confirmed as contention: a second Claude Code session is driving `openness-cli`
   against a live engineering job on the same machine, intermittently, all day. Per the protocol the
   correct response is to wait rather than compete — retrying in a loop would add load to live
-  site work and would not succeed anyway.
+  live-job work and would not succeed anyway.
 - **2026-08-08** — **P1 COMPLETE**, run as one chained 13-probe sweep once the machine was quiet
   (chaining matters: the first attach is slow, subsequent ones reuse it — the whole sweep cost about
   what one probe would have cost separately). Headline: **deletion orphans**. Device left with zero

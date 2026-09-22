@@ -398,7 +398,7 @@ docs/16 carries the reasoning + revisit trigger), and the parallel-safe work ide
 **four plan agents → owner approval → four executor agents in isolated worktrees**, zero Portal
 anywhere, shared housekeeping centralized into this consolidation. Transient API errors
 interrupted three runs; all resumed from transcript with no work lost. The auto-mode permission
-classifier twice paused launches pending visible owner sign-off (site-doc access; admitted-
+classifier twice paused launches pending visible owner sign-off (restricted-doc access; admitted-
 pattern edits) — the owner's explicit "I approve of these agents" message resolved both, a
 correct-shaped check worth remembering when orchestrating.
 
@@ -630,7 +630,7 @@ Ruling:
   test, with volatile sidecar UIds normalized out (mirroring the golden-harness `Normalizer`).
 
 Residuals routed: **D-4** (S6/S7 gate timing) was walked through the same day and ruled — see the
-next section. Real-site S7 (vs. test-project001 sandbox) still needs a `docs/13-data-boundary.md`
+next section. Real-production S7 (vs. test-project001 sandbox) still needs a `docs/13-data-boundary.md`
 approval extension when it arrives (horizon flag, unchanged). Recorded to `docs/15`'s step-6 row.
 
 ## Stage-gates structure + S6/S7 gate + fix-wave tally ruled — D-4 (2026-07-18)

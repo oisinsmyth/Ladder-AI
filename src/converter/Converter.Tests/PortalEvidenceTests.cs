@@ -84,7 +84,7 @@ public sealed class PortalEvidenceTests
 
     /// <summary>
     /// A sibling project in the same parent folder must NOT match. A prefix comparison would make one
-    /// lease silently cover its neighbours — and this machine carries about nineteen real site
+    /// lease silently cover its neighbours — and this machine carries about nineteen real production
     /// projects in sibling folders.
     /// </summary>
     [Fact]

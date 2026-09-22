@@ -469,7 +469,7 @@ phase 2 with the copy-layer generator.
 > > `" scratch.ap20"`; `GenProject1.ap20` and `SampleProject.ap20` both fail → exit 3, nothing
 > > contacted. **Ruled and done (`f69d7e6`): replaced with the ALLOWLIST pattern ADR-0011 already
 > > established**, not a rename — a filename suffix is a *convention*, blocking the legitimate project
-> > while doing nothing about the ~19 real site `.ap20` files here, any of which could satisfy it
+> > while doing nothing about the ~19 real production `.ap20` files here, any of which could satisfy it
 > > by rename.
 > >
 > > ⚠️ **AND I OVERSTATED IT — "no project on this machine passes" WAS MY GENERALISATION, NOT A
@@ -525,7 +525,7 @@ phase 2 with the copy-layer generator.
 > > | the committed allowlist | already contains `repo:GenProject1/GenProject1.ap20` |
 > >
 > > *** SO THE SESSION CAN TARGET `GenProject1` AND NEEDS NO OWNER ACTION, NO MACHINE-LOCAL FILE, AND
-> > NO SITE PATH ANYWHERE NEAR THE REPOSITORY. ***
+> > No restricted path ANYWHERE NEAR THE REPOSITORY. ***
 > >
 > > ⚠️ **Two things I have NOT measured, stated as assumptions rather than buried.** The download must
 > > be **`Software`**, not `Hardware` — a software download does not reconfigure the device, and that
@@ -2153,7 +2153,7 @@ name** (the `download-plan` shape), so a recorded invocation carrying an overrid
 rather than silently meaning something else**.
 
   ➜ *** ALLOWLIST, NEVER DENYLIST — AND THE REASON IS A COUNT: THIS MACHINE CARRIES ROUGHLY NINETEEN
-    REAL SITE `.ap20` PROJECTS IN FOLDERS BESIDE THE SCRATCH ONES. *** A denylist would have to be
+    REAL PRODUCTION `.ap20` PROJECTS IN FOLDERS BESIDE THE SCRATCH ONES. *** A denylist would have to be
     complete, and would **silently stop being complete** the next time a job folder arrived.
 
 #### How refusal-before-Portal was PROVED rather than approximated

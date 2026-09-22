@@ -3,7 +3,7 @@
 **Written 2026-08-20. Read-only analysis of one live job's IR corpus and of `src/harness/`. Nothing
 was deployed, imported, compiled or downloaded to produce it.**
 
-*This page describes blocks by KIND only. No site block, tag, equipment or alarm name appears in
+*This page describes blocks by KIND only. No restricted block, tag, equipment or alarm name appears in
 it, deliberately — a few points that could not be made without one were left for the conversation
 that commissioned it.*
 

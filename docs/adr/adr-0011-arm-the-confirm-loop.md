@@ -108,7 +108,7 @@ closed everywhere else — safe, but useless enough that someone would have edit
 Requirement 1 gave two abstract arguments. The implementation supplied the concrete one, and it is
 much stronger:
 
-> *** THIS MACHINE CARRIES ROUGHLY NINETEEN REAL SITE `.ap20` PROJECTS IN FOLDERS BESIDE THE
+> *** THIS MACHINE CARRIES ROUGHLY NINETEEN REAL PRODUCTION `.ap20` PROJECTS IN FOLDERS BESIDE THE
 > SCRATCH ONES. ***
 
 A denylist here is not merely weaker — it is **indefensible**. It would have to be complete, and it
@@ -225,7 +225,7 @@ are still load-bearing as written.
 
 **Confirmed and strengthened:**
 - **Requirement 1** (allowlist) — the abstract argument was right and the concrete one is far
-  stronger: ~19 real production `.ap20` projects sit beside the scratch ones on this machine.
+  stronger: ~19 REAL PRODUCTION `.ap20` PROJECTS sit beside the scratch ones on this machine.
 - **Requirement 2** (exit code, not a warning) — exit **4**.
 - **Requirement 3** (refuse before Portal) — proved by **direct observation** that no process was
   launched, with a controlled positive case, rather than by inspection.

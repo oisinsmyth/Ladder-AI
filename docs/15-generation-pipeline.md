@@ -75,7 +75,7 @@ artifact, the docs that bind it, and stop conditions (missing info → a questio
 |---|-------|-------|---------------------|---------|
 | 1 | `gen-spec-analysis` | Analyse | Functional description → `requirements.md`: numbered register (REQ-nnn), equipment inventory, C-113 memory-test class per sequence | C-113; `13-data-boundary.md` at entry |
 | 2 | `gen-pid-analysis` | Analyse | P&ID / drawings → `equipment-topology.md`: per-instance topology + interlock relations, process language only | C-114/C-116 (chain direction = material flow) — **BUILT 2026-08-05, and it is rung A of the four-rung pipeline below** |
-| 3 | `gen-io-tags` | Analyse | Site IO list + owner's address table → `io-map.md` + proposed tag-table IR | C-001, C-304; addresses never invented (hard rule 3) |
+| 3 | `gen-io-tags` | Analyse | Supplied IO list + owner's address table → `io-map.md` + proposed tag-table IR | C-001, C-304; addresses never invented (hard rule 3) |
 | 4 | `gen-reconcile` | Analyse | Artifacts 1–3 → `rfi.md`: three-way cross-check, gaps, contradictions, undefined edge cases (first scan, restart, E-stop recovery, simultaneous inputs) | `11-review-workflow.md` edge-case list |
 | 5 | `gen-architecture` | Design | Artifacts 1–4 → `architecture.md`: block manifest carved reuse-first (owner-questions A-1), UDT interfaces, DB landscape, enable-chain graph, OB1 order, pattern-tier mapping + freeform %, REQ→block trace | C-109/C-110/C-113/C-114/C-115/C-127, C-30x |
 | 6 | `gen-alarm-design` | Design | Artifacts 1, 5 → `alarms.md`: category words, cause→consequence suppression matrix, texts, severities | C-501–C-507 |

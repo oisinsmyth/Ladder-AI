@@ -28,7 +28,7 @@ points at, by any agent, unattended, with no allowlist entry and no approval ste
 
 ## 🔴 The blast radius, stated plainly because that is this document's job
 
-**This machine carries roughly nineteen real production `.ap20` projects** in folders beside the
+**This machine carries roughly nineteen REAL PRODUCTION `.ap20` PROJECTS** in folders beside the
 scratch ones — the fence's own header said so, and it was the reason the fence existed. Each is
 configured with the address of a controller at a deployment site.
 

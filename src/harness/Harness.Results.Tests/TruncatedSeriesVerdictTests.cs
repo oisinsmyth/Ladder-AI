@@ -13,7 +13,7 @@ namespace Harness.Results.Tests;
 /// index — <b>the retained series and the window missed each other by ~268 seconds.</b> The two signals
 /// that declared an arm window returned the honest <c>NotObserved</c>. The five that did not were folded
 /// over the same 65 head-and-tail frames and returned verdicts: one <c>Held</c> earned entirely outside the
-/// phase, and <b>three <c>Disagreed</c> — accusations against a site's block built from frames taken
+/// phase, and <b>three <c>Disagreed</c> — accusations against a production block built from frames taken
 /// more than four minutes before the stimulus meant to make them true.</b></para>
 ///
 /// <para><b>TWO INDEPENDENT DEFECTS, AND THIS FILE HOLDS BOTH HALVES.</b> The retention was wrong (fixed in

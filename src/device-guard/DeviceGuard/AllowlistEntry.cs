@@ -39,7 +39,7 @@ public sealed record AllowlistEntry(
     // ---- Device identity (the fence the address cannot provide) ----
     //
     // An address does not identify a device. On this project's own network, 10.10.10.10 is the
-    // standard PLC address across MULTIPLE deployment sites, and which physical controller answers
+    // standard PLC address across Multiple deployment sites, and which physical controller answers
     // depends on which VPN tunnel happens to be up — a thing that changes mid-session. So the
     // allowlist keys on what the CPU says it is, and the address is only a routing hint.
 

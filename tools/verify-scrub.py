@@ -123,7 +123,7 @@ def derive_needles(maps_dir, terms_path, green_tokens=frozenset()):
                 # AN IDENTITY MAPPING IS STILL AN IDENTIFIER.
                 # The builder drops the 326 keys where key == value, correctly: there is nothing
                 # to rewrite. But "nothing to rewrite" is not "nothing to leak" - if one of them is
-                # a site's own name that somebody mapped to itself, the builder cannot see it
+                # a an organisation's own name that somebody mapped to itself, the builder cannot see it
                 # and this tool can. This divergence falls straight out of the independence rule and
                 # is one of the few places where the verifier's coverage genuinely exceeds the
                 # rules' rather than merely restating them.
@@ -234,7 +234,7 @@ def token_counts(texts):
 def untokenisable(needles):
     """Needles that no token can ever contain - they hold a character outside the token class.
 
-    A identifying name with a SPACE in it is the live case. Widening the token class to include spaces
+    An identifying name with a SPACE in it is the live case. Widening the token class to include spaces
     is not the fix: tokens would become whole lines and the vocabulary would stop being an index.
     These few are searched against the raw corpus instead, which is affordable precisely because
     there are a handful of them."""

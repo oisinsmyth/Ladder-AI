@@ -1140,7 +1140,7 @@ UnsupportedConstructException: Network (CompileUnit ID=3) has a non-empty Title
 **This is a real, but already-known and already-documented gap** — `tests/golden/README.md`'s
 own "Real gaps found and fixed along the way" list already records it: `BlockSourceParser`
 hard-errors on "a non-empty `Title` (distinct from `Comment`)... design philosophy #10, applied
-retroactively once real data exposed the gap." It just hadn't previously blocked a *real site
+retroactively once real data exposed the gap." It just hadn't previously blocked a *real production
 block's own whole-block round-trip* specifically — every network in `PlantAutoControl` (confirmed
 across all 20, not just the first one hit) carries a real per-network title, an entirely
 different kind of gap from anything instruction-level this session has been closing. Not
@@ -2561,7 +2561,7 @@ against real TIA Portal, not just unit-tested.
 
 Tag names/addresses used for this live verification (`Tag_45`-`Tag_54`, `%IW64`-`%IW78`/
 `%QW64`-`%QW66`) are the real, unmodified `JOB9002` values, not run through `Sanitizer` first — judged
-non-identifying (Siemens auto-generated placeholder-style names, no site business content,
+non-identifying (Siemens auto-generated placeholder-style names, no identifying business content,
 same "structural" category `LogicalAddress` itself already sits in), not a data-boundary exception.
 Flagged explicitly in `src/converter/README.md`'s own gaps list rather than left silent.
 
@@ -2936,7 +2936,7 @@ discipline as every prior live verification) against the sanitized-then-imported
 re-export: **true.**
 
 **This is the actual Layer 1 assertion (`docs/08-testing-strategy.md`) this entire multi-session
-effort existed to prove, now demonstrated end-to-end for `PlantAutoControl` itself** — the real site
+effort existed to prove, now demonstrated end-to-end for `PlantAutoControl` itself** — the real production
 master-control block, its complete real dependency closure (8 FBs + 26 DBs/tag-tables), imported
 into an independent TIA project, compiling clean, and round-tripping losslessly. All three PC-side
 suites green throughout: 287 converter, 101 openness-cli, 11 golden-harness tests.
@@ -3089,7 +3089,7 @@ verification pass: "examine what instructions we are missing... lay out what's n
 
 **Grounding pass**: exported every remaining block across *both* `JOB9002` PLC stations (`JOB9002_PLC`
 and `JOB9001_PLC` — confirmed the same approved site per `docs/13-data-boundary.md`, not a second
-site) not already swept by the `PlantAutoControl` dependency work — 36 blocks, one export per
+organisation) not already swept by the `PlantAutoControl` dependency work — 36 blocks, one export per
 block per the project owner's own explicit instruction ("run it one block at a time"), the
 `IsConsistent` quirk hit repeatedly and cleared the same way as every prior session (block-level
 `compile`). Tallying every `<Part Name="...">` across all ~49 blocks now grounded found 11

@@ -605,7 +605,7 @@ It MUTATES, so:
 - **Junctions are DETECTED AND REFUSED**, not half-resolved (PS 5.1 cannot resolve them), so a
   scratch project behind a junction needs its real path allowlisted.
 - `-IsScratchProject` is refused BY NAME (`download-plan`'s shape). A dry run is unfenced.
-- Allowlist not denylist: this machine carries ~19 real production `.ap20` projects beside the
+- Allowlist not denylist: this machine carries ~19 REAL PRODUCTION `.ap20` PROJECTS beside the
   scratch ones, and a denylist would have to be complete and would stop being complete the next
   time a job folder arrived.
 

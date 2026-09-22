@@ -203,5 +203,5 @@ The redirect is recorded in `docs/18-project-workbench.md` §5 Phase 5 and §4.4
   out entirely rather than blurred**, because a blurred description of one defect is still a
   description of one defect.
 - **The aggregate as a statement about the job.** *"N defects in this plant's blocks would only have
-  been caught on the rig"* is a claim about a site's engineering. It is confined to the tooling
+  been caught on the rig"* is a claim about someone else's engineering. It is confined to the tooling
   question it was asked for — whether to build an interpreter — and is not repeated elsewhere.

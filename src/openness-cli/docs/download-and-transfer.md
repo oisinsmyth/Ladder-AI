@@ -197,7 +197,7 @@ directions**, and neither half was fixable by renaming anything:
   CLAUDE.md "Codename note") and `SampleProject.ap20` could never be the target of a download,
   however deliberately somebody chose one.
 * **It did not stop the dangerous case.** A file-name suffix is a *convention*, and anything can be
-  renamed into one. This machine carries about **nineteen real production `.ap20` projects** beside the
+  renamed into one. This machine carries about **nineteen REAL PRODUCTION `.ap20` PROJECTS** beside the
   scratch ones; a fence any of them could satisfy by rename was not protecting them.
 
 *The suffix was not arbitrary* — the scratch **copies of live jobs** on this machine are named that
@@ -222,7 +222,7 @@ allowlist.** Refusal is **exit 3 (`RefusedByPath`)**, unchanged.
 **Why the second one lives OUTSIDE the working tree rather than being a gitignored companion.** A
 gitignored file is protected by a *pattern*, and a pattern protects the file somebody thought of — on
 2026-08-13 an agent's `.claude/settings.local.json.bak` sat untracked but **unignored**, one
-`git add -A` from committing a site path. A path outside the tree cannot be published by an
+`git add -A` from committing a restricted path. A path outside the tree cannot be published by an
 ignore-rule gap, a `git add -f`, or any tool that walks the repo. It is the same file with the same
 rules, in the one place where a mistake cannot leak it.
 

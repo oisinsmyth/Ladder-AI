@@ -527,7 +527,7 @@ behaviour.
   evidence of what the code does, not of what the plant is meant to do; a behaviour the as-built gets
   *wrong* is indistinguishable here from a behaviour it gets right, and a behaviour the as-built
   omits is invisible. Compounding it, 30% of the behaviours reached this rung through a *second*
-  reverse-derivation (the class references, rung A Q-A01). Needed: the site functional
+  reverse-derivation (the class references, rung A Q-A01). Needed: the supplied functional
   description, or an explicit owner acceptance that this run is validating pipeline mechanics rather
   than plant intent.
 - **Q-B07 — [BLOCKING] How do the filter units' two shutdown-hold conditions combine?** (B-17.) Both

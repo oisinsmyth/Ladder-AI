@@ -248,7 +248,7 @@ tracked here rather than left implicit:
   no move-between-groups).
 - **`DataTypeName` is never sanitized** — treated as structural like `LogicalAddress`. Untested
   whether a tag can ever reference a UDT type name the way a DB/UDT member's `Datatype` attribute
-  can; all 10 real grounding tags are built-in `Word`. If a identifying tag table ever references a
+  can; all 10 real grounding tags are built-in `Word`. If an identifying tag table ever references a
   UDT by name, that name would currently pass through unsanitized — a real gap, not yet hit.
   `Sanitizer.ApplyToTagTable`'s own test (`Sanitize_RenamesTagTableAndTags`) explicitly asserts
   `DataTypeName`/`LogicalAddress` stay untouched, documenting the current behavior rather than

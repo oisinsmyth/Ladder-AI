@@ -64,7 +64,7 @@ public static class Brand
             findings.Add($"H-602: hue {h:0}° is only {Math.Min(dRed, dAmber):0}° from the alarm band "
                        + $"(red 0°, amber 35°; {MinimumSeparationDegrees:0}° required). NOT usable as an accent — "
                        + "an operator who learns to ignore this colour has been trained to ignore red. "
-                       + "Use it desaturated in chrome only, and tell the site why.");
+                       + "Use it desaturated in chrome only, and tell the site owner why.");
         }
 
         // White or black on the brand colour, whichever is legible - and if neither is, that is a

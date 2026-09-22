@@ -1,6 +1,6 @@
 # HMI runtime scripting + live-device debugging — lessons (sanitized)
 
-Captured from a live HMI debugging session on a real site WinCC Unified project. **All
+Captured from a live HMI debugging session on a real production WinCC Unified project. **All
 site/tag/equipment specifics are withheld per `docs/13-data-boundary.md`** — only generalizable,
 invented-vocabulary lessons are recorded here. Relates to **ADR-0007** (HMI engineering scope,
 undecided) and **ADR-0008** (read-only live-device access).

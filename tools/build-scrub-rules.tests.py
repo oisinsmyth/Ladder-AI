@@ -239,7 +239,7 @@ def every_line_carries_an_explicit_arrow(tmp):
     A case named for "every line" must make every line exist. The declared term below therefore
     OCCURS in the corpus, and both branches are asserted present."""
     s = build(tmp, {"m": ONE_MAP},
-              TERMS_HEADER + "| AcmeDeclaredTerm | GenericDeclared | site | global | auto |\n",
+              TERMS_HEADER + "| AcmeDeclaredTerm | GenericDeclared | company | global | auto |\n",
               {"doc.md": "AcmeWidgetUnit and AcmeDeclaredTerm both appear\n"})
     code, out, err = run_head(tmp, s)
     assert_eq(code, EXIT_OK, "exit (%s%s)" % (out, err))
@@ -300,7 +300,7 @@ def identity_mappings_are_dropped_and_counted(tmp):
 
 
 def a_non_standard_section_contributes(tmp):
-    """company/modelLine/identifiers are dropped by the C# loader and carry the site terms."""
+    """company/modelLine/identifiers are dropped by the C# loader and carry the restricted terms."""
     s = build(tmp, {"m": '{"company": {"AcmeHoldings": "GenericHoldings"}, "_purpose": "prose"}'},
               TERMS_HEADER, {"doc.md": "AcmeHoldings\n"})
     code, out, _ = run_head(tmp, s)
@@ -382,7 +382,7 @@ def a_declared_green_present_term_is_emitted_anyway(tmp):
     """The Green test is also a filter for INFERRED names only. A declared term that happens to
     appear in a clean corpus is still a term the owner declared."""
     s = build(tmp, {"m": ONE_MAP},
-              TERMS_HEADER + "| AcmeDeclared | GenericDeclared | site | global | auto |\n",
+              TERMS_HEADER + "| AcmeDeclared | GenericDeclared | company | global | auto |\n",
               {"doc.md": "AcmeDeclared\n", "ir/reference/x.ir": "AcmeDeclared\n"})
     code, out, _ = run_head(tmp, s, "--green", "ir/reference")
     assert_eq(code, EXIT_OK, "exit (%s)" % out)
@@ -605,7 +605,7 @@ def a_declared_needle_INSIDE_a_replacement_GATES(tmp):
     replacement by hand - which is the honest answer rather than a substitution that does not
     work."""
     s = build(tmp, {"m": '{"Names": {"AcmeWidgetUnit": "GenericHolding"}}'},
-              TERMS_HEADER + "| Generic | Scrubbed | site | global | auto |\n",
+              TERMS_HEADER + "| Generic | Scrubbed | company | global | auto |\n",
               {"doc.md": "AcmeWidgetUnit and Generic both appear\n"})
     code, out, _ = run_head(tmp, s)
     assert_eq(code, EXIT_FINDING, "a needle matching inside a replacement must gate (%s)" % out)
@@ -665,7 +665,7 @@ def a_DECLARED_term_wins_a_collision_and_keeps_its_anchorless_rule(tmp):
 
     `AcmeWidget` (map) sorts before `Acme_Widget` (declared) and would have won."""
     s = build(tmp, {"m": '{"Names": {"AcmeWidget": "GenericMap"}}'},
-              TERMS_HEADER + "| Acme_Widget | GenericTerm | site | global | auto |\n",
+              TERMS_HEADER + "| Acme_Widget | GenericTerm | company | global | auto |\n",
               {"doc.md": "see acme-widget here\n"})
     code, out, err = run_head(tmp, s)
     assert_eq(code, EXIT_OK, "exit (%s%s)" % (out, err))
@@ -684,7 +684,7 @@ def a_DECLARED_term_wins_a_collision_and_keeps_its_anchorless_rule(tmp):
 # A key's map SECTION is the only statement anyone makes about what kind of name it is, and
 # load_maps threw it away at the point it was read. Every map key therefore reached variants_for as
 # "block", which is not in SPACED_CLASSES, so NO MAP KEY COULD EVER GET A SPACED FORM - and a
-# spaced form is the only way a site or site name is written in prose.
+# spaced form is the only way a company or site name is written in prose.
 #
 # Measured on the real corpus after the fix: 14 keys gain a section class, 4 of them would gain a
 # spaced variant, and ALL FOUR are already in the owner's term list with a spaced class. So the
@@ -958,7 +958,7 @@ def a_declared_term_that_only_cuts_source_tokens_GATES(tmp):
     `PqValue` - so every edit its rule makes in Prog.cs is to the inside of somebody else's
     identifier, and none of them hides anything. That is the case that must refuse."""
     s = build(tmp, {"m": ONE_MAP},
-              TERMS_HEADER + "| Pq | Scrubbed | site | global | auto |\n",
+              TERMS_HEADER + "| Pq | Scrubbed | company | global | auto |\n",
               {"doc.md": "AcmeWidgetUnit appears here\n",
                "Prog.cs": "class C { int PqValue; }\n"})
     code, out, _ = run_head(tmp, s)
@@ -966,8 +966,8 @@ def a_declared_term_that_only_cuts_source_tokens_GATES(tmp):
     assert_in("cuts identifiers in half", out, "the finding must name the mechanism")
     assert_in("Scrubbed", out, "the finding must name the ROW, by its invented replacement")
     # An invented replacement is NOT unique - the real list has two rows sharing one, being two
-    # spellings of a single site. Class and length disambiguate them while disclosing nothing.
-    assert_in("(site, 2 characters)", out,
+    # spellings of a single organisation. Class and length disambiguate them while disclosing nothing.
+    assert_in("(company, 2 characters)", out,
               "the finding must carry enough to pick the row out when a replacement is shared")
     assert_eq(rules_of(tmp), [], "a refusal must write nothing")
 
@@ -978,7 +978,7 @@ def the_CUT_TOKENS_are_NOT_printed_without_the_flag(tmp):
     that printed the live forms would put them in every terminal, pipeline and pasted note that a
     failing build touches - and this gate fires precisely on the terms nobody has sanitised yet."""
     s = build(tmp, {"m": ONE_MAP},
-              TERMS_HEADER + "| Pq | Scrubbed | site | global | auto |\n",
+              TERMS_HEADER + "| Pq | Scrubbed | company | global | auto |\n",
               {"doc.md": "AcmeWidgetUnit appears here\n",
                "Prog.cs": "class C { int PqValue; }\n"})
     code, out, _ = run_head(tmp, s)
@@ -992,7 +992,7 @@ def the_CUT_TOKENS_ARE_printed_with_the_flag(tmp):
     reads the instruction, runs it, sees no more than before, and concludes the tool is broken -
     or worse, that there is nothing there."""
     s = build(tmp, {"m": ONE_MAP},
-              TERMS_HEADER + "| Pq | Scrubbed | site | global | auto |\n",
+              TERMS_HEADER + "| Pq | Scrubbed | company | global | auto |\n",
               {"doc.md": "AcmeWidgetUnit and PqUnitTag appear\n",
                "Prog.cs": "class C { int PqValue; }\n"})
     code, out, _ = run_head(tmp, s, "--explain-cuts")
@@ -1079,7 +1079,7 @@ def a_dotted_rule_still_RENAMES_a_head_with_no_bare_rule(tmp):
 
     A head with no bare rule is usually deliberate, not missing - the Green test withholds a head
     that appears in already-sanitized content so a conventional name is not rewritten where it
-    stands alone, while the composite is still a identifying tag path. Preserving the head anyway made
+    stands alone, while the composite is still an identifying tag path. Preserving the head anyway made
     49 dotted rules inert and dropped T2 coverage from 79 of 81 needles to 30. Here the head simply
     never occurs alone, so it gets no bare rule; the composite must still be scrubbed."""
     maps = '{"Tags": {"AcmeWidgetUnit.Flag": "GenericWidgetUnit.Flag"}}'
@@ -1205,7 +1205,7 @@ def a_GREEN_head_is_still_renamed_inside_the_composite(tmp):
     """*** THE CASE THAT COST 49 RULES, AND THE FIRST TWO VERSIONS OF THIS CHECK COULD NOT SEE IT.
 
     The Green test withholds a bare rule for a head that appears in already-sanitized content - a
-    conventional name must not be rewritten where it stands alone. The composite is still a site
+    conventional name must not be rewritten where it stands alone. The composite is still a restricted
     tag path and must be scrubbed. So this head is standalone, has NO bare rule, and must STILL be
     renamed inside the dotted form: exactly the combination that preserving heads would break, and
     the one a fixture whose head never appears alone cannot exercise at all."""
@@ -1302,8 +1302,8 @@ def a_token_a_LONGER_rule_rewrites_FIRST_is_not_collateral(tmp):
     is right."""
     maps = '{"Names": {"AcmeWidgetUnit": "GenericWidgetUnit"}}'
     s = build(tmp, {"m": maps},
-              TERMS_HEADER + "| Pq | Scrubbed | site | global | auto |\n"
-                             "| PqV | Scrub2 | site | global | auto |\n",
+              TERMS_HEADER + "| Pq | Scrubbed | company | global | auto |\n"
+                             "| PqV | Scrub2 | company | global | auto |\n",
               {"doc.md": "AcmeWidgetUnit appears here\n",
                "Prog.cs": "class C { int PqValue; string s = \"PqV\"; }\n"})
     code, out, err = run_head(tmp, s)
@@ -1327,7 +1327,7 @@ def a_variants_cell_of_only_ABSENT_forms_emits_no_rule_and_does_not_gate(tmp):
     dropped; a row emitting nothing cannot reach the CUTS check), and a recommendation resting on
     three untested interactions is a recommendation resting on nothing."""
     s = build(tmp, {"m": ONE_MAP},
-              TERMS_HEADER + "| Pq | Scrubbed | site | global | QQ-NO-SCRUBBABLE-FORM-QQ |\n",
+              TERMS_HEADER + "| Pq | Scrubbed | company | global | QQ-NO-SCRUBBABLE-FORM-QQ |\n",
               {"doc.md": "AcmeWidgetUnit appears here\n",
                "Prog.cs": "class C { int PqValue; }\n"})
     code, out, err = run_head(tmp, s)
@@ -1348,7 +1348,7 @@ def a_declared_term_embedded_only_in_JOB_tokens_does_NOT_gate(tmp):
     source. The anchorless rule is doing precisely the job it was given an anchorless form for, and
     a check that refuses here has re-broken A8 to fix its mirror image."""
     s = build(tmp, {"m": ONE_MAP},
-              TERMS_HEADER + "| Pq | Scrubbed | site | global | auto |\n",
+              TERMS_HEADER + "| Pq | Scrubbed | company | global | auto |\n",
               {"doc.md": "AcmeWidgetUnit and PqUnitTag appear here\n"})
     code, out, err = run_head(tmp, s)
     assert_eq(code, EXIT_OK, "embedding in NON-source must not gate (%s%s)" % (out, err))
@@ -1362,7 +1362,7 @@ def a_declared_term_ALSO_whole_in_source_does_NOT_gate(tmp):
     rides along with work that genuinely de-identifies. Gating this would refuse the ordinary case
     of a job code that appears in a test fixture."""
     s = build(tmp, {"m": ONE_MAP},
-              TERMS_HEADER + "| Pq | Scrubbed | site | global | auto |\n",
+              TERMS_HEADER + "| Pq | Scrubbed | company | global | auto |\n",
               {"doc.md": "AcmeWidgetUnit appears here\n",
                "Prog.cs": "class C { int PqValue; string s = \"Pq\"; }\n"})
     code, out, err = run_head(tmp, s)
@@ -1384,7 +1384,7 @@ def an_explicit_variants_cell_discharges_the_cuts_finding(tmp):
     version of this case survived a mutation that disabled the gate outright, proving an escape
     hatch on a door that was already open. Refusing first and passing second is the only shape that
     shows THE CELL is what changed the outcome."""
-    row = "| Pq | Scrubbed | site | global | %s |\n"
+    row = "| Pq | Scrubbed | company | global | %s |\n"
     s = build(tmp, {"m": ONE_MAP}, TERMS_HEADER + row % "auto",
               {"doc.md": "AcmeWidgetUnit and PqExplicitForm appear here\n",
                "Prog.cs": "class C { int PqValue; }\n"})

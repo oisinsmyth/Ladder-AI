@@ -17,7 +17,7 @@ namespace HmiCli.Tests;
 /// project keeps meeting is a green over an incomplete denominator - and a reader that quietly
 /// dropped an item type would produce exactly one.
 ///
-/// 🔴 NO FIXTURE HERE COMES FROM A SITE JOB. Every document under test is built in this file
+/// 🔴 NO FIXTURE HERE COMES FROM A live job. Every document under test is built in this file
 /// from invented names. The real corpus was used to derive the mappings and is cited in the
 /// comments by SHAPE only.
 /// </summary>

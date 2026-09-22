@@ -135,7 +135,7 @@ function Assert-PortalNeverContacted {
 }
 
 # A project file that exists and is definitely not allowlisted. Synthetic on purpose: this machine
-# carries about nineteen REAL private projects that would serve, and none of their names may enter
+# carries about nineteen Private engineering projects that would serve, and none of their names may enter
 # the repository (docs/13 - the boundary is retention, not access).
 function New-NonScratchProject {
     param($Workspace, [string]$Name = 'NotTheScratchProject')

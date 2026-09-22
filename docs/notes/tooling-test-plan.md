@@ -540,7 +540,7 @@ That is worth having and it is not more than that.
 - **It says nothing about the plant blocks.** The materials are artificial by design (`Hx` corpus),
   precisely so the hopper block stays evidence.
 - **It says nothing about a live project.** `tools/confirm-roundtrip.allowlist` admits exactly
-  `GenProject1` and `SampleProject`, and this machine carries ~19 real production `.ap20` projects in
+  `GenProject1` and `SampleProject`, and this machine carries ~19 REAL PRODUCTION `.ap20` PROJECTS in
   sibling folders.
 - ***It does not license a wave duration as a capability figure.*** One rig, one tunnel, ~72 ms
   median round trip.

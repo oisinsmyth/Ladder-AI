@@ -425,7 +425,7 @@ failure class this whole phase is about.
 | A **real** fixture for Y1 | Y1 | ⚠️ **PARTLY — this row was WRONG, corrected 2026-08-23 by running the thing it described.** It said no committed fixture exists, having read only `DefaultTagTable.ir` (whose three `%M` tags *are* below base 1000, and now serve as a live below-base negative control on real data). But **`ir/test-project001/HarnessMirror.ir` is a SECOND tag table declaring 26 tags across `%M1000..%M1073`** — exactly the area. A real committed positive fixture exists, **for the mirror's OWN occupancy.** 🔴 **What remains invented is a FOREIGN occupant, which is the case that matters** — a green committed suite is still not evidence that the derivation reproduces the real 256–323 / 53-tag collision. B1's obligation stands, narrowed to where it actually applies. |
 | `LaneManifest`, `ProgramManifest` | Y3 | ✅ `d3d5ab1`; `BuildStamp.cs:263-274`. |
 | **Portal / the rig / Openness re-approval** | — | **None needed by Y0–Y3.** A Debug `dotnet test` on `openness-cli.sln` remains available (Debug and Release hold independent approvals). |
-| **Data-boundary permission** | Y1 only | ⚠️ Needed **only if a live-job figure is quoted outward.** The committed suite, commit message and plan may say nothing about a site's `%M` occupancy — a band, an owner label or a tag count is job vocabulary. If a count is wanted in the commit, **ask first**. |
+| **Data-boundary permission** | Y1 only | ⚠️ Needed **only if a live-job figure is quoted outward.** The committed suite, commit message and plan may say nothing about a live job's `%M` occupancy — a band, an owner label or a tag count is job vocabulary. If a count is wanted in the commit, **ask first**. |
 
 ---
 

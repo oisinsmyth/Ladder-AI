@@ -59,10 +59,11 @@ what it could not see — on every run, including the ones that pass.
 
 ## What I would show a reviewer first
 
-**[`docs/notes/data-boundary-audit-backlog.md`](docs/notes/data-boundary-audit-backlog.md)** — a
-record of a leak of restricted identifiers into committed source, written while the cause was still
-open. It names its decision-maker, records what was deliberately *not* fixed and why, and opens with
-a rule I still think is right:
+**[`docs/notes/data-boundary-audit-backlog.md`](docs/notes/data-boundary-audit-backlog.md)** — an
+internal audit record, written while the cause was still open: identifiers that reached committed
+source inside the *private* repository, caught by the project's own boundary checks and remediated
+long before anything was published. It names its decision-maker, records what was deliberately *not*
+fixed and why, and opens with a rule I still think is right:
 
 > *A record of a leak must not be a copy of it.*
 
@@ -132,10 +133,11 @@ tooling that requires a specific, expensive, licensed environment to run against
 
 ## A note on the history
 
-This repository was developed privately against private engineering projects. Publishing it meant removing
-every restricted identifier — job codes, site and company names, and the block, tag and DB names taken
-from live plant — from **every commit in the history**, over 1,300 of them, not merely from the
-current files. Deleting them at the tip would have left every one of them one `git log` away.
+This repository was developed privately over more than a year. Publishing it meant removing every
+environment-specific identifier — project codes, site and company names, and the block, tag and DB
+names carried in private working material — from **every commit in the history**, over 1,300 of
+them, not merely from the current files. Deleting them at the tip would have left every one of them
+one `git log` away.
 
 So the history was rewritten with `git-filter-repo`, and **every commit hash changed**. Documentation
 throughout this repo cites commits by their short hash — `80098e7`, `eba7033` and several hundred

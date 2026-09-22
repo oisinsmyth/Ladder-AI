@@ -30,7 +30,7 @@ value landed) had already been proven live the day before, on this same block, v
 verify to one specific, previously-untested link: editing through the *IR layer* itself.
 
 Target, confirmed with the project owner ahead of time: `TimerSample` (`ir/reference/`) — the one
-reference-corpus block with zero real-site lineage (built directly in TIA, not sanitized from
+reference-corpus block with zero real-job lineage (built directly in TIA, not sanitized from
 production logic), lowest possible risk for a first write-path proof.
 
 **Hit a real, pre-existing bug immediately, unrelated to the edit itself**: `to-xml` on the

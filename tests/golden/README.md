@@ -26,7 +26,7 @@ projects):
 `ir/reference/{NodeStatusAlarms,CommsProcessData,AlarmWords,EquipmentStatus,
 PerimeterSafetyAlarms,TimerSample,DB_Timers}.ir` / matching `simatic-ml/reference/*.xml`.
 Structural shapes for the first five were derived from sanitized real production PLC data under
-a private approval — no site or site specifics are recorded anywhere in this repo, and the
+a private approval — no organisation or site specifics are recorded anywhere in this repo, and the
 sanitization mapping (real name -> invented name) is intentionally never committed (`.gitignore`:
 `sanitization/`). Every tag path, block/DB name, member name, and comment in the committed files
 is invented; only structure (wiring topology, instruction types, slice/array addressing, member
@@ -186,7 +186,7 @@ for this purpose, and only the latter has the auto-numbering bug.
 
 **`TimingAndCalls`' own `CALL` target changed mid-pass**: the real Siemens "Scale" instruction
 referenced in `ir/SPEC.md`'s own `CALL` section (`FB MotorVSDSystem`'s dependency) turned out, on live
-compile, to be real *site* content from `JOB9002` (sanitized elsewhere as `AnalogScale`), not a
+compile, to be real *restricted* content from `JOB9002` (sanitized elsewhere as `AnalogScale`), not a
 built-in library instruction — `"The referenced block Scale no longer exists"` in `SampleProject`.
 Replaced with `ScaleValue`, a new, small, self-authored callee FC (`Input`/`Output` interface,
 `IsBareParameter` on every member — the real shape for FC parameters, confirmed by a live rejection

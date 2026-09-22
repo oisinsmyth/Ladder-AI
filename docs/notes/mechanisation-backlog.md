@@ -165,7 +165,7 @@ is exit 2.
 ### M-24. THE BUILDER AND THE VERIFIER READ THE SAME TERM LIST WITH DIFFERENT STRICTNESS ✅ BUILT 2026-09-21
 
 **What happened.** 2026-09-21, adding three terms to `sanitization/scrub-terms.md` with a `class`
-value that does not exist (`process`, `worklane` — the real set is `jobcode, site, site,
+value that does not exist (`process`, `worklane` — the real set is `jobcode, company, site,
 modelline, block, member, pathstem`).
 
 **`build-scrub-rules.py` refused the whole run** — exit 2, `NOTHING EXAMINED`, all three lines
@@ -804,7 +804,7 @@ excellent reasons that are not in question here.
 
 **Why it matters more than a bookkeeping error:** they are opposite kinds of work. *Cannot reach* is a
 **harness** problem and the answer is to build more test infrastructure. *Nothing to reach* is a
-**deliverable** finding and the answer is to write it up for the site — building test
+**deliverable** finding and the answer is to write it up for the site owner — building test
 infrastructure for it is pure waste, and it was about to be built.
 
 **Mechanise:** when a coverage analysis records an assertion as unreachable, it must record **which of
@@ -817,7 +817,7 @@ band. The check exists; nothing routed the unreachable list through it.
 asked explicitly that its own finding be confirmed elsewhere. The confirming lane upheld two of its
 three claims, **refuted the third**, and found that the assertion cited there was implemented under a
 different name **with a genuine defect at one input** — a better finding than the one it was sent to
-check. *A claim that a site's block is missing a feature must survive a party motivated to find it
+check. *A claim that a production block is missing a feature must survive a party motivated to find it
 already present.*
 
 ---

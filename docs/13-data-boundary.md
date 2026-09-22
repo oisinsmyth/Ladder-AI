@@ -11,8 +11,8 @@ Claude Code sends repo content and command output to Anthropic's API. Exported P
 | Tier | Content | AI access |
 |------|---------|-----------|
 | Green | This doc suite, tooling code, IR spec, pattern library, the purpose-built reference project | Yes |
-| Amber | Real project logic with identifying data (identifying names in comments, IP addresses, site names) | Only after sanitization, or with explicit per-project approval |
-| Red — confidentiality | Anything a site contract, NDA or commercial sensitivity would otherwise keep off a shared repo | Never in committed repo content. **Full working access inside `Live Runs/`** (see "Live runs" below) — the restriction there is on *retention*, not on access |
+| Amber | Real project logic with identifying data (company names in comments, IP addresses, site names) | Only after sanitization, or with explicit per-project approval |
+| Red — confidentiality | Anything a contract, NDA or commercial sensitivity would otherwise keep off a shared repo | Never in committed repo content. **Full working access inside `Live Runs/`** (see "Live runs" below) — the restriction there is on *retention*, not on access |
 | Red — safety | Safety program content: F-blocks, F-runtime groups, the safety program | **Never, everywhere, no exception** — `CLAUDE.md` hard rule 2, also enforced in tooling. `Live Runs/` does not change this |
 
 > 🔴 **A DIRECTORY IS GREEN IF AND ONLY IF IT IS LISTED IN `tools/green-claims.txt`. Prose carries
@@ -48,7 +48,7 @@ Two standing exceptions to that rule, both recorded below: the per-project Amber
 ## Per-project approvals (Amber, pending ADR-0003)
 
 - **2026-07-10 — "JOB9002 - Tom White Waste" (scratch copy).** Private engineering project, Amber-tier
-  (identifying identifying name; not sanitized). Explicit per-project approval given by the
+  (identifying name; not sanitized). Explicit per-project approval given by the
   project owner. No sanitization pass applied. Per-project, not blanket — re-confirm before
   using this project for anything beyond what's listed below. The project contains two linked
   PLC stations, `station_1/JOB9001_PLC` and `station_2/JOB9002_PLC` (`PLCToPLCComs`/`LSNTP_Server`
@@ -168,7 +168,7 @@ Two standing exceptions to that rule, both recorded below: the per-project Amber
     `converter sanitize` pass run. Not a blanket waiver of the genericization rule; any other
     pattern (including the `DB_Inputs`/`DB_Outputs`-equivalent buffer-DB pattern started
     2026-07-15) is still evaluated on its own content against the same test — is there anything
-    here that actually identifies the site/site — not assumed exempt by this entry.
+    here that actually identifies the site — not assumed exempt by this entry.
   - **2026-07-15 — extended to mechanical review activity (S4).** Project owner's own explicit
     instruction: finish S4 properly by satisfying its own stated exit criterion (a blind
     comparison between the project owner's independent review and `converter review`'s own
@@ -382,13 +382,13 @@ Two standing exceptions to that rule, both recorded below: the per-project Amber
   sanitized data, under a separate, private approval not detailed here.** The committed content's
   structural shapes (wiring topology, instruction types, slice/array addressing) originate from
   real production PLC data; every tag path, block name, and comment is invented — nothing
-  site- or site-identifying is recorded in this repo. The mapping from real to invented
+  organisation- or site-identifying is recorded in this repo. The mapping from real to invented
   values is intentionally not committed anywhere (`.gitignore`: `sanitization/`) and isn't
   reconstructable from what's here. This entry exists so the corpus's Green-tier claim
   ("purpose-built, contains nothing identifying") has a recorded basis rather than none — see
   `tests/golden/README.md` for what was actually done to it.
 
-- **2026-07-15 — test-project001's own functional design informed by a real supplied spec+functional
+- **2026-07-15 — test-project001's own functional design informed by a real production spec+functional
   description ("Kestrel Shredder Systems"/JOB9003-K150 demo panel — `SpecSheet.xlsx`, `FuncDesc.docx`),
   genericized rather than approved as Amber.** Project owner's own explicit choice, offered
   directly against approving it the way JOB9002 was: keep test-project001 Green throughout rather than
@@ -510,7 +510,7 @@ carve-out is safety, which is a different axis entirely — see "Safety is unaff
 2. **Nothing from a live run is ever written into the knowledge base.** No committed doc, ADR,
    note, skill, pattern, convention rule, test fixture, `CLAUDE.md` edit or Claude Code memory
    file may carry live-run content — including tag names, block names, equipment names, comment
-   text, alarm wording, site/site names, or a paraphrase specific enough to identify any of
+   text, alarm wording, site names, or a paraphrase specific enough to identify any of
    them. This bites hardest where it is least obvious: a "lesson learned" phrased in the job's own
    vocabulary is still live-run content leaking into the repo.
 
@@ -534,7 +534,7 @@ caught by a mechanical grep before it was committed, and none of them by anyone 
 about confidentiality. They are recorded because the *shape* of them is not what the rule above
 leads you to expect.
 
-**None of the four was a identifying name, an alarm text, or a block of copied content.** All four
+**None of the four was an identifying name, an alarm text, or a block of copied content.** All four
 were fragments that felt generic:
 
   - an example in a command's own documentation, using the job's equipment token
@@ -578,7 +578,7 @@ all data provided".
 
 ### Live runs opened
 
-Job codes only. The site/site name, equipment scope and any other job detail stay in the job's
+Job codes only. The site name, equipment scope and any other job detail stay in the job's
 own gitignored folder and are deliberately not restated here — prohibition 2 applies to this
 register like it applies to everything else. Note the difference from the per-project approval
 entries above, which do name their projects: those predate this section and were recorded under
@@ -599,7 +599,7 @@ generic-looking and the benefit obvious.
   its interface UDT. **Route: explicit per-item owner permission**, not sanitization-with-mapping —
   the owner named the two items and instructed their promotion. Copy, not move: the job keeps its
   own versions, which retain the job-specific design history the library copies must not.
-  *Audited before commit, by the dispatching agent rather than the writing one*: zero site,
+  *Audited before commit, by the dispatching agent rather than the writing one*: zero restricted,
   process, equipment, tag or alarm-ID content in any promoted file. The FB was already free of job
   content and was promoted unchanged; the UDT's comments carried job provenance (a deleted
   allocation paragraph, a bit-history narrative, a document reference, a job-specific count and one
@@ -648,5 +648,5 @@ generic-looking and the benefit obvious.
   specific enough to identify.
   ⚠️ **And the aggregate itself is a claim about the job's engineering, not just about our tooling.**
   *"N defects in this plant's blocks would only have been caught on the rig"* is a sentence about a
-  site's equipment. It stays inside the tooling question it was asked for — whether to build an
+  site equipment. It stays inside the tooling question it was asked for — whether to build an
   interpreter — and is not repeated as a statement about the job.

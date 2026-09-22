@@ -105,7 +105,7 @@ def assert_in(needle, haystack, what):
 # inferred map key long enough to be T2, and `Plate` is an identity mapping, which is T3.
 TERMS = ("# terms\n\n| live | invented | class | scope | variants |\n"
          "|---|---|---|---|---|\n"
-         "| Zorbex | JOB4242 | site | global | auto |\n")
+         "| Zorbex | JOB4242 | company | global | auto |\n")
 MAPS = {"m": '{"Names": {"QuadrantWidgetUnit": "GenericWidgetUnit", "Plate": "Plate"}}'}
 
 

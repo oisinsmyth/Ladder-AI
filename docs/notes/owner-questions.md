@@ -8,7 +8,7 @@ equipment, alarm IDs, process detail). Each live run keeps its own open-question
 job folder*, which is gitignored — see `docs/13-data-boundary.md`'s "Live runs" section. A question
 that is genuinely both gets split: the general half here in generic terms, the job-specific half in
 the job folder. Policy questions *about* the live-run regime are project-wide and do belong here —
-the test is whether answering it requires naming anything from a site's plant.
+the test is whether answering it requires naming anything from a production plant.
 
 **Purpose.** This doc exists to consolidate a *large batch* of accumulated questions into one
 priority-ordered list when there are too many for ad hoc handling — it is not a permanently
@@ -226,7 +226,7 @@ instruction, not history (§1.1's own rule).
   2. **Part of the intended assertion set for this lane has no implementing logic to test**, so a
      planned sub-slot cannot be built at all and the campaign's reachable coverage ceiling is
      materially lower than the figure on record. ➜ **The right output is a GAP REPORT, not a slot** —
-     specified-and-unbuilt behaviour is worth more to the site than more Passes, and it costs one
+     specified-and-unbuilt behaviour is worth more to the site owner than more Passes, and it costs one
      document rather than one deployment. ⚠️ **It must be confirmed by someone other than the finding's
      author** (D6), and it is **M-21 recurring**: *"cannot be reached"* recorded where *"there is
      nothing to reach"* is true.

@@ -23,9 +23,9 @@ that quietly accumulated.
 **Found:** a repo-wide sweep on 2026-08-18 matched **82 sites across 15 tracked files** against the
 vocabulary of the live job `JOB9004`. Bare job codes are **not** the issue — `docs/13-data-boundary.md`
 permits those explicitly, and they were deliberately restored the same day. The issue is
-**block, type, DB and member names** specific to that site's plant.
+**block, type, DB and member names** specific to that production plant.
 
-**Where.** The file list is stable and is safe to record, because a path names no site:
+**Where.** The file list is stable and is safe to record, because a path names no organisation:
 
 ```
 CLAUDE.md

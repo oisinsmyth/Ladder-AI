@@ -120,7 +120,7 @@ scripts across a 48-screen reference corpus) and `hmi/sizing-standard.md` (the p
 - **H-105** `[MECHANIZED]` **No accent colour in the PROCESS AREA** — no coloured dividers, no
   decorative fills, nothing tinted that is not carrying state.
   🔴 **AMENDED 2026-08-17.** This rule previously read *"no accent colour as chrome — no branded
-  title bars"*, which forbade site branding outright. That was doctrine applied past its
+  title bars"*, which forbade Site branding outright. That was doctrine applied past its
   purpose: colour is rationed because it is an ALARM channel, and the header is not where alarms
   live. Branding in chrome costs the operator nothing. Branding in the process area costs them the
   channel. The rule now says which is which — see **H-6xx**.
@@ -193,7 +193,7 @@ Command accents are **reserved** and outrank the brand. A site's blue may theme 
 mark the primary command (H-604), but it **never** replaces the green on START, the red on STOP or
 the light blue on RESET — those three are the operator's vocabulary, not the site's.
 
-⚠️ **A site whose brand colour is a green, a red or a light blue therefore collides with the
+⚠️ **An operator whose brand colour is a green, a red or a light blue therefore collides with the
 command set as well as the alarm set.** H-602 already refuses red and amber; this extends the same
 reasoning: a brand accent must be distinguishable from the command accents too, or the operator has
 two meanings for one colour.
@@ -289,10 +289,10 @@ The whole scheme rests on one distinction:
   infer which is which from geometry and must not guess.
 
 - **H-602** `[MECHANIZED]` **The brand colour must be hue-separated from the alarm bands** — at
-  least **40°** from red (0°) and from amber (35°). A site whose colour is red or orange cannot
+  least **40°** from red (0°) and from amber (35°). An operator whose colour is red or orange cannot
   have it as an accent: an operator glancing at a red header learns nothing, but an operator who has
   learned to ignore a red header has been trained to ignore red. In that case the colour is used
-  **desaturated in chrome only, never as an accent**, and the site is told why.
+  **desaturated in chrome only, never as an accent**, and the site owner is told why.
 
 - **H-603** `[MECHANIZED]` **Text on the brand colour meets a 4.5:1 contrast ratio.** A brand colour
   is chosen for a logo on white, not for legibility behind 15 px type at arm's length on a sunlit
@@ -308,7 +308,7 @@ The whole scheme rests on one distinction:
   indistinguishable, which is the whole objection.
 
 - **H-606** `[ADVISORY]` **The logo is a graphic, placed in chrome, sized so it never competes with
-  the process area.** It identifies; it does not decorate. If the site supplies only a logo and
+  the process area.** It identifies; it does not decorate. If the site owner supplies only a logo and
   no stated colour, sample the accent from it rather than the dominant colour — a logo's largest
   area is usually its background.
 
@@ -319,7 +319,7 @@ The whole scheme rests on one distinction:
 
 The owner noted that a colour is sometimes *"not exactly useable, but I put it into the hmi on tia
 and it corrects it into the closest available."* That would matter a great deal here: a brand colour
-silently snapped to a neighbour is a promise to a site that the panel quietly breaks.
+silently snapped to a neighbour is a promise to a site owner that the panel quietly breaks.
 
 **Measured 2026-08-17 and it does not happen on this path.** Twenty swatches were emitted, imported
 and re-exported, including values chosen specifically to move if the panel used the usual 16-bit

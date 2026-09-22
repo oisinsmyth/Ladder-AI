@@ -23,7 +23,7 @@ is *structurally* reviewable — **it is deliberately incomplete and must not be
   | `patterns/chained-permissive-enable/pattern.md`, `motor-dol`, `input-mapping`, `output-mapping` | `31f68b5` |
   | `gen/PlantAutoControl-bench-rerun2/equipment-topology.md`, `plant-behaviours.md`, `equipment-specs/*`, `requirements.md`, `unclaimed-signals.md`, `code-structure.md` | n/a (this run) |
 
-- **Designed WITHOUT:** a P&ID or any material-flow drawing (Q-A03) · a site functional
+- **Designed WITHOUT:** a P&ID or any material-flow drawing (Q-A03) · a supplied functional
   description (Q-B01 — the behaviour source is reverse-derived from as-built code) · an engineering
   standard for any of the three equipment classes (Q-A01 — the references are reverse-derived too) ·
   a tag table export (no tag table exists in `ir/PlantAutoControl-bench/`) · an alarm register (alarms are

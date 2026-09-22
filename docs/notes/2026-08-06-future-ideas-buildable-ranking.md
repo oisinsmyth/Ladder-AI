@@ -101,7 +101,7 @@ it and the token vanishes. Known, deliberate, and recorded as prose in `TypeIr.c
 It takes #1 on failure mode, and the entry argues it better than a summary can: retention is the one
 DB property whose loss is invisible until a power cycle. The block compiles, imports, exports and
 round-trips clean, and the omission surfaces as data that did not survive an outage — on site,
-months later, in a site's plant. Every other item on this list fails where someone can see it.
+months later, in a production plant. Every other item on this list fails where someone can see it.
 This one is *worse than the FI-44 family it belongs to*, by FI-44's own standard: those silent cleans
 were caught by re-running a fixed check; this is caught by an outage.
 

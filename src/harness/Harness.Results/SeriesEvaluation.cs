@@ -72,7 +72,7 @@ public enum ObservationSource
 /// see <see cref="RetentionStride"/> for the resolution. <b>It does NOT mean the end of the index was
 /// dropped</b> (that was the prefix rule, replaced under D1), and on its own it never told a reader which
 /// part of the index a verdict was taken over: it was true on all three of the rows that accused a
-/// site's block on 2026-08-17.
+/// production block on 2026-08-17.
 /// </param>
 public sealed record ObservationWindow(
     ObservationSource Source,
@@ -111,7 +111,7 @@ public sealed record ObservationWindow(
     /// changes. THE FIELD <see cref="SeriesTruncated"/> SHOULD HAVE BEEN ALL ALONG.</b>
     ///
     /// <para><c>seriesTruncated: true</c> was on every row of the measured package, including the three
-    /// that accused a site's block from frames taken four minutes before the stimulus — because it says
+    /// that accused a production block from frames taken four minutes before the stimulus — because it says
     /// only THAT frames were dropped, and the reader's actual question is WHICH ONES. 1 is "every change";
     /// higher is "a uniform sample at this resolution, spanning the whole index".</para>
     /// </summary>
@@ -368,7 +368,7 @@ public static class SeriesEvaluation
                         + " *** THIS IS NOT A DISAGREEMENT AND MUST NOT BE ACTIONED AGAINST THE BLOCK. *** An accusation from ABSENCE "
                         + "requires that the absence be over the right part of the index, and that cannot be shown here. "
                         + "This exact shape — a long index, a sampled series, and no way to say the window was in it — is how three "
-                        + "accusations were built against a site's block on 2026-08-17 from frames taken minutes before the "
+                        + "accusations were built against a production block on 2026-08-17 from frames taken minutes before the "
                         + "stimulus. THE REPAIR: declare `armedBy` on this signal in the binding so the window travels in-band; it "
                         + "needs no latch and no `transient`, and the verdict then becomes decidable in either direction. Or declare "
                         + "the expectation `Latched`, so an occurrence survives sampling entirely.",

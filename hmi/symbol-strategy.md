@@ -386,7 +386,7 @@ If the shipped set proves thin, the ranked answer:
 | candidate | licence for our use | verdict |
 |---|---|---|
 | **WinCC graphics folder** (ships with TIA) | **not stated anywhere** — a grep of all 346 topics for `licen\|copyright\|redistribut\|royalty` found nothing relevant | **evaluate first** — free, installed, unexamined |
-| **Symbol Factory Universal**, $695 perpetual, 5,000+ symbols | *"no RUNTIME royalty fees for RUNTIME applications created using images from this image library"*; may not hand the site the library itself | **recommended purchase** — placing rasterised symbols into a private project is the intended use |
+| **Symbol Factory Universal**, $695 perpetual, 5,000+ symbols | *"no RUNTIME royalty fees for RUNTIME applications created using images from this image library"*; may not hand the site owner the library itself | **recommended purchase** — placing rasterised symbols into a private project is the intended use |
 | **Classic HMI Template Suite** (Siemens entry 91174767 **V2.1**) | *"Sharing the application examples with third parties… is permitted only in combination with your own products"* — permits delivery | **adopt for CHROME** — explicitly supports WinCC Basic and the KTP900, ships at 800×480. **Not equipment symbols.** Note the *current* Template Suite at that entry is Unified-only; the Basic-capable one is the older V2.1 |
 | **Wikimedia ISO 10628-2** | CC BY-SA 4.0 — **copyleft** | reference set only; ShareAlike on a commercial deliverable is a real question I am not qualified to resolve |
 | **Ecava IntegraXor**, $99 | *"deliver your project as a whole, but you must not redistribute or resell any SVG file as it is"* | workable fallback; coverage is thin |

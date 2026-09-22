@@ -51,7 +51,7 @@ conclusions*, and so do their equivalents elsewhere. **Record the token the tool
    valuable lines in this file will be the refusals.
 3. **`elapsed_ms` is a reference figure, never a gate.** Nothing is scheduled against it. Quoting it
    as a capability number would be dishonest — one rig, one tunnel, a ~72 ms median round trip.
-4. **Never log anything from `Live Runs/`** — no site path, tag, block or project name. `target`
+4. **Never log anything from `Live Runs/`** — no restricted path, tag, block or project name. `target`
    for such a run is the literal `live-run-redacted`. The file is committed; docs/13 governs it.
 
 ## WHO APPENDS

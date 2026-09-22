@@ -1380,7 +1380,7 @@ public static class LoopRun
 
         // 🔴 *** THE STRIDE TRAVELS WITH THE DENOMINATORS, because the fold's decision on whether it may
         // convict from an ABSENCE turns on WHICH PART OF THE INDEX was retained — and `Truncated` alone
-        // never answered that. It was true on all three of the rows that accused a site's block on
+        // never answered that. It was true on all three of the rows that accused a production block on
         // 2026-08-17. ***
         var accounting = new SeriesAccounting(
             series.PollsObserved, series.DistinctFrames, series.Frames.Count, series.Truncated)

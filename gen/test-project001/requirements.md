@@ -393,7 +393,7 @@ this artifact; that edit belongs to the pipeline doc's owner, not this artifact.
 ### REQ-038 — Hand control: jog per direction
 - **Text:** Hand control of the pusher exists for testing, with a jog button for each direction.
 - **Class:** mode
-- **Source:** FuncDesc §"Shredder Pusher" — "New request from site is to have hand control of
+- **Source:** FuncDesc §"Shredder Pusher" — "New request from the site owner is to have hand control of
   the pusher for testing. In hand, have a jog button for each direction"
 - **Notes:** `DB_Controls.PusherJogExtendCmd`, `DB_Controls.PusherJogRetractCmd` exist. Relation
   to the three modes (REQ-033) is Q-15.

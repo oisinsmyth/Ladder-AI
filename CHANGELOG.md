@@ -1273,7 +1273,7 @@ results — see `docs/notes/stage-gates.md` (stage-gate status) and `docs/notes/
   both network and block level. Also fixed a stale comment in `Normalizer.IsVolatile` (the
   "Title is always empty" justification predated S1 items 16/17, which disproved it — the
   skip-Title behavior itself was already correct, just documented for the wrong reason).
-- Live proof against `ir/reference/TimerSample.ir` (zero real-site lineage, lowest-risk
+- Live proof against `ir/reference/TimerSample.ir` (zero real-job lineage, lowest-risk
   target): hit a real pre-existing bug immediately — the committed file's sidecar predates a later
   mandatory-type-suffix format change, same class of staleness already fixed for
   `NodeStatusAlarms`/`PerimeterSafetyAlarms` earlier this session. Fixed by regenerating from a
@@ -1526,7 +1526,7 @@ results — see `docs/notes/stage-gates.md` (stage-gate status) and `docs/notes/
   **compiled clean on the first attempt — 0 errors.** Re-exported and confirmed
   `Normalizer.AreSemanticallyEquivalent` = **true**.
 - This is the actual Layer 1 assertion (`docs/08-testing-strategy.md`) S1 exists to prove,
-  demonstrated end-to-end for `PlantAutoControl` itself — the real site master-control block, its
+  demonstrated end-to-end for `PlantAutoControl` itself — the real production master-control block, its
   complete real dependency closure, imported into an independent TIA project, compiling clean, and
   round-tripping losslessly. Commit `a1f46d3`. Full story: `docs/notes/stage-gates.md` ("Phase 2"/
   "Phase 3").

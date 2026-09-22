@@ -1466,7 +1466,7 @@ question, left open on purpose rather than guessed).
 - **Resolved, 2026-07-12 (S1 items 16/17): network- and block-level `Title` built** — see the
   file-shape section above for the full story (a real design correction, not just a new field:
   the `NETWORK` line's own label was repurposed from `Comment` to `Title`). `PlantAutoControl` itself
-  now converts as a whole block, `to-ir → to-xml → to-ir` byte-identical — the first real site
+  now converts as a whole block, `to-ir → to-xml → to-ir` byte-identical — the first real production
   block this whole session to do so. A true TIA-cycle proof (import/compile/re-export/Normalizer)
   for `PlantAutoControl` specifically is still open: it depends on external tags/FBs not present in any
   other TIA project (confirmed live, 2026-07-12 — cross-project import into `SampleProject`

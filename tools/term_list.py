@@ -44,8 +44,8 @@ import os
 
 # Presentational, with one exception that is not: membership of SPACED_CLASSES is the only thing any
 # consumer tests, and it decides whether a multi-word term also gets its spaced form hunted.
-TERM_CLASSES = ("jobcode", "site", "site", "modelline", "block", "member", "pathstem")
-SPACED_CLASSES = ("site", "site", "modelline")
+TERM_CLASSES = ("jobcode", "company", "site", "modelline", "block", "member", "pathstem")
+SPACED_CLASSES = ("company", "site", "modelline")
 
 HEADER_CELLS = ("live", "term", "source")
 
