@@ -21,6 +21,13 @@ import tempfile
 HERE = os.path.dirname(os.path.abspath(__file__))
 SCRIPT = os.path.join(HERE, "check-staged-identifiers.py")
 ORACLE = os.path.join(HERE, "verify-scrub.py")
+# M-24 made term_list.py a SHARED module and verify-scrub.py imports it at module scope.
+# The fixture copies the scripts into a throwaway repo, so the import resolves against
+# THAT tools/ directory and not this one - and this third file was never added when the
+# refactor landed. Every case died in the oracle on ModuleNotFoundError, which the runner
+# reported as an exit-code mismatch rather than as a missing file, so the suite looked
+# like a behaviour regression instead of a fixture that had stopped building itself.
+TERMLIB = os.path.join(HERE, "term_list.py")
 
 EXIT_OK = 0
 EXIT_FOUND = 1
@@ -70,6 +77,7 @@ def build(tmp, maps=None, terms=None, committed=None, ignore_sanitization=True):
     os.makedirs(os.path.join(tmp, "tools"))
     shutil.copy(SCRIPT, os.path.join(tmp, "tools", "check-staged-identifiers.py"))
     shutil.copy(ORACLE, os.path.join(tmp, "tools", "verify-scrub.py"))
+    shutil.copy(TERMLIB, os.path.join(tmp, "tools", "term_list.py"))
     for name, doc in (maps or {}).items():
         write(os.path.join(tmp, "sanitization", name + ".map.json"), doc)
     if terms is not None:
