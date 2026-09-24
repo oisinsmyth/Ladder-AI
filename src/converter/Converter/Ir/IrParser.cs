@@ -263,679 +263,711 @@ public static partial class IrParser
             return new IrNetwork(number, title, Array.Empty<CoilAssignment>(), Comment: comment);
         }
 
-        // Timers are always emitted before coil assignments (IrSerializer) — parsed in the same
-        // order for self-stability. TON/TONR/TOF (S1 items 19/23) share one loop, distinguished
-        // by keyword — TONR's own 4th argument (R) is optional in the grammar's own arity check
-        // but always present in practice (GraphReducer.ReduceTimer requires it whenever Kind is
-        // Tonr), split on top-level commas like WAND/CALL/MUL's own variable-arity argument
-        // lists (safe for the same reason: no Expr ever renders a literal comma). TOF shares
-        // TON's own 3-argument arity exactly (no reset port, confirmed real).
         var timers = new List<TimerBinding>();
-        while (i < lines.Length && (lines[i].StartsWith("  TON(", StringComparison.Ordinal)
-            || lines[i].StartsWith("  TONR(", StringComparison.Ordinal) || lines[i].StartsWith("  TOF(", StringComparison.Ordinal)))
-        {
-            var tonMatch = TonLineRegex().Match(lines[i]);
-            if (!tonMatch.Success)
-            {
-                throw new IrFormatException(
-                    $"Expected '  TON(<path>, IN := <expr>, PT := <expr>)', '  TONR(<path>, IN := <expr>, PT := <expr>, R := <expr>)', " +
-                    $"or '  TOF(<path>, IN := <expr>, PT := <expr>)', got: '{lines[i]}'");
-            }
-
-            var timerKind = tonMatch.Groups["kind"].Value switch
-            {
-                "TONR" => TimerKind.Tonr,
-                "TOF" => TimerKind.Tof,
-                _ => TimerKind.Ton,
-            };
-            var timerArgs = tonMatch.Groups["args"].Value.Split(", ", StringSplitOptions.None);
-            if (timerArgs.Length is not (3 or 4) || !timerArgs[1].StartsWith("IN := ", StringComparison.Ordinal) || !timerArgs[2].StartsWith("PT := ", StringComparison.Ordinal))
-            {
-                throw new IrFormatException($"Expected '<path>, IN := <expr>, PT := <expr>[, R := <expr>]' inside TON/TONR/TOF(...), got: '{lines[i]}'");
-            }
-
-            var timerPath = timerArgs[0];
-            var inExpr = ParseExpr(timerArgs[1]["IN := ".Length..]);
-            var ptExpr = ParseExprTerm(timerArgs[2]["PT := ".Length..]);
-
-            Expr? resetExpr = null;
-            if (timerArgs.Length == 4)
-            {
-                if (timerKind != TimerKind.Tonr)
-                {
-                    throw new IrFormatException($"Only TONR takes a 4th (R) argument — '{lines[i]}' isn't TONR.");
-                }
-
-                if (!timerArgs[3].StartsWith("R := ", StringComparison.Ordinal))
-                {
-                    throw new IrFormatException($"Expected ', R := <expr>' as TONR's 4th argument, got: '{lines[i]}'");
-                }
-
-                resetExpr = ParseExprTerm(timerArgs[3]["R := ".Length..]);
-            }
-
-            timers.Add(new TimerBinding(timerPath, inExpr, ptExpr, timerKind, resetExpr));
-            i++;
-        }
-
-        // COIL/SCOIL/RCOIL (S1 item 15) are parsed in one interleaved loop, in whatever order
-        // they appear (matching how a real network naturally mixes assign/set/reset rungs) —
-        // not three separate sections.
         var assignments = new List<CoilAssignment>();
-        while (i < lines.Length && (lines[i].StartsWith("  COIL ", StringComparison.Ordinal)
-            || lines[i].StartsWith("  SCOIL ", StringComparison.Ordinal)
-            || lines[i].StartsWith("  RCOIL ", StringComparison.Ordinal)))
-        {
-            var coilMatch = CoilLineRegex().Match(lines[i]);
-            if (!coilMatch.Success)
-            {
-                throw new IrFormatException($"Expected '  COIL|SCOIL|RCOIL <tag> := <expr>', got: '{lines[i]}'");
-            }
-
-            var kind = coilMatch.Groups["kind"].Value switch
-            {
-                "COIL" => CoilKind.Assign,
-                "SCOIL" => CoilKind.Set,
-                "RCOIL" => CoilKind.Reset,
-                _ => throw new IrFormatException($"Unexpected coil keyword in '{lines[i]}'"),
-            };
-
-            assignments.Add(new CoilAssignment(coilMatch.Groups["tag"].Value, ParseExpr(coilMatch.Groups["expr"].Value), kind));
-            i++;
-        }
-
-        // Moves are always emitted last (IrSerializer, after Timers/Coils) — parsed in the same
-        // order for self-stability.
         var moves = new List<MoveStatement>();
-        while (i < lines.Length && lines[i].StartsWith("  MOVE(", StringComparison.Ordinal))
-        {
-            var moveMatch = MoveLineRegex().Match(lines[i]);
-            if (!moveMatch.Success)
-            {
-                throw new IrFormatException($"Expected '  MOVE(EN := <expr>, IN := <expr>) => <dest>', got: '{lines[i]}'");
-            }
-
-            var enExpr = ParseExpr(moveMatch.Groups["en"].Value);
-            var inExpr = ParseExprTerm(moveMatch.Groups["in"].Value);
-            moves.Add(new MoveStatement(enExpr, inExpr, moveMatch.Groups["dest"].Value));
-            i++;
-        }
-
-        // WordAnds are always emitted last (IrSerializer, after Timers/Coils/Moves) — parsed in
-        // the same order for self-stability. Variable input count (Cardinality-driven, S1 item
-        // 12), so the argument list is split on top-level commas rather than matched by a single
-        // fixed-arity regex the way TON/MOVE's own fixed argument shapes are — safe because no
-        // Expr ever renders a literal comma (AND/OR/NOT/parens/comparisons never use one).
         var wordAnds = new List<WordAndStatement>();
-        while (i < lines.Length && lines[i].StartsWith("  WAND(", StringComparison.Ordinal))
-        {
-            var wandMatch = WordAndLineRegex().Match(lines[i]);
-            if (!wandMatch.Success)
-            {
-                throw new IrFormatException($"Expected '  WAND(EN := <expr>, IN1 := <expr>, ...) => <dest>', got: '{lines[i]}'");
-            }
-
-            var args = wandMatch.Groups["args"].Value.Split(", ", StringSplitOptions.None);
-            if (args.Length < 2 || !args[0].StartsWith("EN := ", StringComparison.Ordinal))
-            {
-                throw new IrFormatException($"Expected 'EN := <expr>' as WAND's first argument, got: '{lines[i]}'");
-            }
-
-            var wandEnExpr = ParseExpr(args[0]["EN := ".Length..]);
-
-            var inputs = new List<Expr>();
-            for (var k = 1; k < args.Length; k++)
-            {
-                var prefix = $"IN{k} := ";
-                if (!args[k].StartsWith(prefix, StringComparison.Ordinal))
-                {
-                    throw new IrFormatException($"Expected '{prefix}<expr>' as WAND argument {k + 1}, got: '{args[k]}' in '{lines[i]}'");
-                }
-
-                inputs.Add(ParseExprTerm(args[k][prefix.Length..]));
-            }
-
-            wordAnds.Add(new WordAndStatement(wandEnExpr, inputs, wandMatch.Groups["dest"].Value));
-            i++;
-        }
-
-        // Calls are always emitted last (IrSerializer, after Timers/Coils/Moves/WordAnds) —
-        // parsed in the same order for self-stability. Instance is an optional leading positional
-        // argument (no label, same convention as TON's own instance path) — omitted entirely when
-        // the call has no instance (confirmed real, 2026-07-12, S1 item 24: an FC call, unlike
-        // every FB call, carries no instance). EN is always present, even when trivially TRUE
-        // (confirmed real, 2026-07-12, FC PlantAutoControl: all 20 real en's are directly rail-fed).
-        // Disambiguated by checking whether the first argument itself starts with "EN := " — a
-        // reserved prefix no real instance path could ever collide with (instance paths are bare
-        // dotted tag-shaped text). The remaining arguments are a sparse, ordered mix of
-        // "<Param> := <expr>" (Input) and "<Param> => <tag>" (Output) — split on top-level commas
-        // same as WAND's own variable argument list (safe for the same reason: no Expr ever
-        // renders a literal comma).
         var calls = new List<CallStatement>();
-        while (i < lines.Length && lines[i].StartsWith("  CALL ", StringComparison.Ordinal))
-        {
-            var callMatch = CallLineRegex().Match(lines[i]);
-            if (!callMatch.Success)
-            {
-                throw new IrFormatException($"Expected '  CALL <BlockName>([<instance>, ]EN := <expr>, ...)', got: '{lines[i]}'");
-            }
-
-            var blockName = callMatch.Groups["blockname"].Value;
-            var args = callMatch.Groups["args"].Value.Split(", ", StringSplitOptions.None);
-
-            string? instancePath;
-            Expr callEnExpr;
-            int enArgIndex;
-            if (args.Length >= 1 && args[0].StartsWith("EN := ", StringComparison.Ordinal))
-            {
-                instancePath = null;
-                callEnExpr = ParseExpr(args[0]["EN := ".Length..]);
-                enArgIndex = 0;
-            }
-            else if (args.Length >= 2 && args[1].StartsWith("EN := ", StringComparison.Ordinal))
-            {
-                instancePath = args[0];
-                callEnExpr = ParseExpr(args[1]["EN := ".Length..]);
-                enArgIndex = 1;
-            }
-            else
-            {
-                throw new IrFormatException($"Expected '[<instance>, ]EN := <expr>' as CALL's leading argument(s), got: '{lines[i]}'");
-            }
-
-            var arguments = new List<CallArgument>();
-            for (var k = enArgIndex + 1; k < args.Length; k++)
-            {
-                var inputSep = args[k].IndexOf(" := ", StringComparison.Ordinal);
-                var outputSep = args[k].IndexOf(" => ", StringComparison.Ordinal);
-                if (inputSep >= 0 && (outputSep < 0 || inputSep < outputSep))
-                {
-                    var paramName = args[k][..inputSep];
-                    arguments.Add(new CallArgument.InputArg(paramName, ParseExprTerm(args[k][(inputSep + 4)..])));
-                }
-                else if (outputSep >= 0)
-                {
-                    var paramName = args[k][..outputSep];
-                    arguments.Add(new CallArgument.OutputArg(paramName, args[k][(outputSep + 4)..]));
-                }
-                else
-                {
-                    throw new IrFormatException($"Expected '<param> := <expr>' or '<param> => <tag>' as CALL argument {k + 1}, got: '{args[k]}' in '{lines[i]}'");
-                }
-            }
-
-            calls.Add(new CallStatement(blockName, instancePath, callEnExpr, arguments));
-            i++;
-        }
-
-        // Muls are always emitted after Calls (IrSerializer) — parsed in the same order for
-        // self-stability. MUL/ADD (S1 item 19) share one loop, distinguished by keyword — same
-        // XML shape, different Part Name, mirroring TON/TONR's own treatment above. EN's own
-        // value is either an ordinary expression or the reserved word "ENO" (confirmed real,
-        // 2026-07-12, S1 item 18 — see EnSource's own doc comment), parsed via ParseEnSource
-        // rather than ParseExpr directly.
         var muls = new List<MulStatement>();
-        while (i < lines.Length && (lines[i].StartsWith("  MUL(", StringComparison.Ordinal) || lines[i].StartsWith("  ADD(", StringComparison.Ordinal)
-            || lines[i].StartsWith("  SUB(", StringComparison.Ordinal) || lines[i].StartsWith("  DIV(", StringComparison.Ordinal)))
-        {
-            var mulMatch = MulLineRegex().Match(lines[i]);
-            if (!mulMatch.Success)
-            {
-                throw new IrFormatException($"Expected '  MUL(EN := <expr-or-ENO>, IN1 := <expr>, ...) => <dest>' or 'ADD(...)'/'SUB(...)'/'DIV(...)', got: '{lines[i]}'");
-            }
-
-            var mulKind = mulMatch.Groups["kind"].Value switch
-            {
-                "ADD" => MulKind.Add,
-                "SUB" => MulKind.Subtract,
-                "DIV" => MulKind.Divide,
-                _ => MulKind.Multiply,
-            };
-            var args = mulMatch.Groups["args"].Value.Split(", ", StringSplitOptions.None);
-            if (args.Length < 2 || !args[0].StartsWith("EN := ", StringComparison.Ordinal))
-            {
-                throw new IrFormatException($"Expected 'EN := <expr-or-ENO>' as MUL/ADD/SUB/DIV's first argument, got: '{lines[i]}'");
-            }
-
-            var mulEn = ParseEnSource(args[0]["EN := ".Length..]);
-
-            var mulInputs = new List<Expr>();
-            for (var k = 1; k < args.Length; k++)
-            {
-                var prefix = $"IN{k} := ";
-                if (!args[k].StartsWith(prefix, StringComparison.Ordinal))
-                {
-                    throw new IrFormatException($"Expected '{prefix}<expr>' as MUL/ADD/SUB/DIV argument {k + 1}, got: '{args[k]}' in '{lines[i]}'");
-                }
-
-                mulInputs.Add(ParseExprTerm(args[k][prefix.Length..]));
-            }
-
-            muls.Add(new MulStatement(mulEn, mulInputs, mulMatch.Groups["dest"].Value, mulKind));
-            i++;
-        }
-
-        // Converts are always emitted after Muls (IrSerializer) — fixed arity (EN, IN), same
-        // regex-based shape as MOVE's own line, not the split-on-commas approach MUL/WAND/CALL
-        // need for their own variable-arity argument lists.
         var converts = new List<ConvertStatement>();
-        while (i < lines.Length && lines[i].StartsWith("  CONVERT(", StringComparison.Ordinal))
-        {
-            var convertMatch = ConvertLineRegex().Match(lines[i]);
-            if (!convertMatch.Success)
-            {
-                throw new IrFormatException($"Expected '  CONVERT(EN := <expr-or-ENO>, IN := <expr>) => <dest>', got: '{lines[i]}'");
-            }
-
-            var convertEn = ParseEnSource(convertMatch.Groups["en"].Value);
-            var convertIn = ParseExprTerm(convertMatch.Groups["in"].Value);
-            converts.Add(new ConvertStatement(convertEn, convertIn, convertMatch.Groups["dest"].Value));
-            i++;
-        }
-
-        // Swaps are always emitted after Converts (IrSerializer) — same fixed-arity (EN, IN)
-        // regex-based shape as CONVERT's own line, minus a DestType group.
         var swaps = new List<SwapStatement>();
-        while (i < lines.Length && lines[i].StartsWith("  SWAP(", StringComparison.Ordinal))
-        {
-            var swapMatch = SwapLineRegex().Match(lines[i]);
-            if (!swapMatch.Success)
-            {
-                throw new IrFormatException($"Expected '  SWAP(EN := <expr-or-ENO>, IN := <expr>) => <dest>', got: '{lines[i]}'");
-            }
-
-            var swapEn = ParseEnSource(swapMatch.Groups["en"].Value);
-            var swapIn = ParseExprTerm(swapMatch.Groups["in"].Value);
-            swaps.Add(new SwapStatement(swapEn, swapIn, swapMatch.Groups["dest"].Value));
-            i++;
-        }
-
-        // Abs statements are always emitted after Swaps (IrSerializer) — same fixed-arity (EN, IN)
-        // shape as SWAP's own line.
         var absStatements = new List<AbsStatement>();
-        while (i < lines.Length && lines[i].StartsWith("  ABS(", StringComparison.Ordinal))
-        {
-            var absMatch = AbsLineRegex().Match(lines[i]);
-            if (!absMatch.Success)
-            {
-                throw new IrFormatException($"Expected '  ABS(EN := <expr-or-ENO>, IN := <expr>) => <dest>', got: '{lines[i]}'");
-            }
-
-            var absEn = ParseEnSource(absMatch.Groups["en"].Value);
-            var absIn = ParseExprTerm(absMatch.Groups["in"].Value);
-            absStatements.Add(new AbsStatement(absEn, absIn, absMatch.Groups["dest"].Value));
-            i++;
-        }
-
-        // Limits are always emitted after Abs statements (IrSerializer). Three fixed-named
-        // inputs (MN/IN/MX), same top-level-comma-split discipline as WAND/CALL/MUL's own
-        // variable-arity argument lists — safe for the same reason (no Expr ever renders a
-        // literal comma).
         var limits = new List<LimitStatement>();
-        while (i < lines.Length && lines[i].StartsWith("  LIMIT(", StringComparison.Ordinal))
-        {
-            var limitMatch = LimitLineRegex().Match(lines[i]);
-            if (!limitMatch.Success)
-            {
-                throw new IrFormatException($"Expected '  LIMIT(EN := <expr-or-ENO>, MN := <expr>, IN := <expr>, MX := <expr>) => <dest>', got: '{lines[i]}'");
-            }
-
-            var limitArgs = limitMatch.Groups["args"].Value.Split(", ", StringSplitOptions.None);
-            if (limitArgs.Length != 4 || !limitArgs[0].StartsWith("EN := ", StringComparison.Ordinal)
-                || !limitArgs[1].StartsWith("MN := ", StringComparison.Ordinal)
-                || !limitArgs[2].StartsWith("IN := ", StringComparison.Ordinal)
-                || !limitArgs[3].StartsWith("MX := ", StringComparison.Ordinal))
-            {
-                throw new IrFormatException($"Expected 'EN := <expr>, MN := <expr>, IN := <expr>, MX := <expr>' inside LIMIT(...), got: '{lines[i]}'");
-            }
-
-            var limitEn = ParseEnSource(limitArgs[0]["EN := ".Length..]);
-            var limitMin = ParseExprTerm(limitArgs[1]["MN := ".Length..]);
-            var limitIn = ParseExprTerm(limitArgs[2]["IN := ".Length..]);
-            var limitMax = ParseExprTerm(limitArgs[3]["MX := ".Length..]);
-            limits.Add(new LimitStatement(limitEn, limitMin, limitIn, limitMax, limitMatch.Groups["dest"].Value));
-            i++;
-        }
-
-        // T_SUBs are always emitted after Limits (IrSerializer). Two fixed-named inputs (IN1/IN2),
-        // same top-level-comma-split discipline as LIMIT's own.
         var tSubs = new List<TSubStatement>();
-        while (i < lines.Length && lines[i].StartsWith("  T_SUB(", StringComparison.Ordinal))
-        {
-            var tSubMatch = TSubLineRegex().Match(lines[i]);
-            if (!tSubMatch.Success)
-            {
-                throw new IrFormatException($"Expected '  T_SUB(EN := <expr-or-ENO>, IN1 := <expr>, IN2 := <expr>) => <dest>', got: '{lines[i]}'");
-            }
-
-            var tSubArgs = tSubMatch.Groups["args"].Value.Split(", ", StringSplitOptions.None);
-            if (tSubArgs.Length != 3 || !tSubArgs[0].StartsWith("EN := ", StringComparison.Ordinal)
-                || !tSubArgs[1].StartsWith("IN1 := ", StringComparison.Ordinal)
-                || !tSubArgs[2].StartsWith("IN2 := ", StringComparison.Ordinal))
-            {
-                throw new IrFormatException($"Expected 'EN := <expr>, IN1 := <expr>, IN2 := <expr>' inside T_SUB(...), got: '{lines[i]}'");
-            }
-
-            var tSubEn = ParseEnSource(tSubArgs[0]["EN := ".Length..]);
-            var tSubIn1 = ParseExprTerm(tSubArgs[1]["IN1 := ".Length..]);
-            var tSubIn2 = ParseExprTerm(tSubArgs[2]["IN2 := ".Length..]);
-            tSubs.Add(new TSubStatement(tSubEn, tSubIn1, tSubIn2, tSubMatch.Groups["dest"].Value));
-            i++;
-        }
-
-        // T_CONVs are always emitted after T_SUBs (IrSerializer) — same fixed-arity (EN, IN)
-        // shape as CONVERT/SWAP/ABS's own line.
         var tConvs = new List<TConvStatement>();
-        while (i < lines.Length && lines[i].StartsWith("  T_CONV(", StringComparison.Ordinal))
-        {
-            var tConvMatch = TConvLineRegex().Match(lines[i]);
-            if (!tConvMatch.Success)
-            {
-                throw new IrFormatException($"Expected '  T_CONV(EN := <expr-or-ENO>, IN := <expr>) => <dest>', got: '{lines[i]}'");
-            }
-
-            var tConvEn = ParseEnSource(tConvMatch.Groups["en"].Value);
-            var tConvIn = ParseExprTerm(tConvMatch.Groups["in"].Value);
-            tConvs.Add(new TConvStatement(tConvEn, tConvIn, tConvMatch.Groups["dest"].Value));
-            i++;
-        }
-
-        // Calcs are always emitted after T_CONVs (IrSerializer). Cardinality-driven inputs (same
-        // top-level-comma-split discipline as MUL/WAND), plus a trailing quoted Equation string
-        // kept outside the argument-list parens entirely (see IrSerializer's own comment).
         var calcs = new List<CalcStatement>();
-        while (i < lines.Length && lines[i].StartsWith("  CALC(", StringComparison.Ordinal))
-        {
-            var calcMatch = CalcLineRegex().Match(lines[i]);
-            if (!calcMatch.Success)
-            {
-                throw new IrFormatException($"Expected '  CALC(EN := <expr-or-ENO>, IN1 := <expr>, ...) => <dest> \"<equation>\"', got: '{lines[i]}'");
-            }
-
-            var calcArgs = calcMatch.Groups["args"].Value.Split(", ", StringSplitOptions.None);
-            if (calcArgs.Length < 2 || !calcArgs[0].StartsWith("EN := ", StringComparison.Ordinal))
-            {
-                throw new IrFormatException($"Expected 'EN := <expr>' as CALC's first argument, got: '{lines[i]}'");
-            }
-
-            var calcEn = ParseEnSource(calcArgs[0]["EN := ".Length..]);
-
-            var calcInputs = new List<Expr>();
-            for (var k = 1; k < calcArgs.Length; k++)
-            {
-                var prefix = $"IN{k} := ";
-                if (!calcArgs[k].StartsWith(prefix, StringComparison.Ordinal))
-                {
-                    throw new IrFormatException($"Expected '{prefix}<expr>' as CALC argument {k + 1}, got: '{calcArgs[k]}' in '{lines[i]}'");
-                }
-
-                calcInputs.Add(ParseExprTerm(calcArgs[k][prefix.Length..]));
-            }
-
-            var calcEquation = ParseQuotedString(calcMatch.Groups["equation"].Value);
-            calcs.Add(new CalcStatement(calcEn, calcInputs, calcEquation, calcMatch.Groups["dest"].Value));
-            i++;
-        }
-
-        // MOVE_BLK_VARIANTs are always emitted after Calcs (IrSerializer). No trailing "=> dest"
-        // — two named outputs, not one, so everything (inputs and outputs alike) is inside one
-        // top-level-comma-split argument list, disambiguated per-argument by ":=" vs "=>", same
-        // mixing convention CALL's own argument list already established.
         var moveBlkVariants = new List<MoveBlkVariantStatement>();
-        while (i < lines.Length && lines[i].StartsWith("  MOVE_BLK_VARIANT(", StringComparison.Ordinal))
-        {
-            var moveBlkVariantMatch = MoveBlkVariantLineRegex().Match(lines[i]);
-            if (!moveBlkVariantMatch.Success)
-            {
-                throw new IrFormatException(
-                    $"Expected '  MOVE_BLK_VARIANT(EN := <expr-or-ENO>, SRC := <expr>, COUNT := <expr>, SRC_INDEX := <expr>, " +
-                    $"DEST_INDEX := <expr>, Ret_Val => <tag>, DEST => <tag>)', got: '{lines[i]}'");
-            }
-
-            var moveBlkVariantArgs = moveBlkVariantMatch.Groups["args"].Value.Split(", ", StringSplitOptions.None);
-            if (moveBlkVariantArgs.Length != 7
-                || !moveBlkVariantArgs[0].StartsWith("EN := ", StringComparison.Ordinal)
-                || !moveBlkVariantArgs[1].StartsWith("SRC := ", StringComparison.Ordinal)
-                || !moveBlkVariantArgs[2].StartsWith("COUNT := ", StringComparison.Ordinal)
-                || !moveBlkVariantArgs[3].StartsWith("SRC_INDEX := ", StringComparison.Ordinal)
-                || !moveBlkVariantArgs[4].StartsWith("DEST_INDEX := ", StringComparison.Ordinal)
-                || !moveBlkVariantArgs[5].StartsWith("Ret_Val => ", StringComparison.Ordinal)
-                || !moveBlkVariantArgs[6].StartsWith("DEST => ", StringComparison.Ordinal))
-            {
-                throw new IrFormatException(
-                    "Expected 'EN := <expr>, SRC := <expr>, COUNT := <expr>, SRC_INDEX := <expr>, DEST_INDEX := <expr>, " +
-                    $"Ret_Val => <tag>, DEST => <tag>' inside MOVE_BLK_VARIANT(...), got: '{lines[i]}'");
-            }
-
-            var moveBlkVariantEn = ParseEnSource(moveBlkVariantArgs[0]["EN := ".Length..]);
-            var moveBlkVariantSrc = ParseExprTerm(moveBlkVariantArgs[1]["SRC := ".Length..]);
-            var moveBlkVariantCount = ParseExprTerm(moveBlkVariantArgs[2]["COUNT := ".Length..]);
-            var moveBlkVariantSrcIndex = ParseExprTerm(moveBlkVariantArgs[3]["SRC_INDEX := ".Length..]);
-            var moveBlkVariantDestIndex = ParseExprTerm(moveBlkVariantArgs[4]["DEST_INDEX := ".Length..]);
-            var moveBlkVariantRetVal = moveBlkVariantArgs[5]["Ret_Val => ".Length..];
-            var moveBlkVariantDest = moveBlkVariantArgs[6]["DEST => ".Length..];
-            moveBlkVariants.Add(new MoveBlkVariantStatement(
-                moveBlkVariantEn, moveBlkVariantSrc, moveBlkVariantCount, moveBlkVariantSrcIndex, moveBlkVariantDestIndex,
-                moveBlkVariantRetVal, moveBlkVariantDest));
-            i++;
-        }
-
-        // WAITs are always emitted after MOVE_BLK_VARIANTs (IrSerializer). No trailing "=> dest"
-        // — a pure side-effecting delay, no destination at all.
         var waits = new List<WaitStatement>();
-        while (i < lines.Length && lines[i].StartsWith("  WAIT(", StringComparison.Ordinal))
-        {
-            var waitMatch = WaitLineRegex().Match(lines[i]);
-            if (!waitMatch.Success)
-            {
-                throw new IrFormatException($"Expected '  WAIT(EN := <expr-or-ENO>, WT := <expr>)', got: '{lines[i]}'");
-            }
-
-            var waitEn = ParseEnSource(waitMatch.Groups["en"].Value);
-            var waitWt = ParseExprTerm(waitMatch.Groups["wt"].Value);
-            waits.Add(new WaitStatement(waitEn, waitWt));
-            i++;
-        }
-
-        // FillBlockIs are always emitted after WAITs (IrSerializer). Fixed arity (EN, IN, COUNT),
-        // same regex-based shape as MOVE's own line.
         var fillBlockIs = new List<FillBlockIStatement>();
-        while (i < lines.Length && lines[i].StartsWith("  FILLBLOCKI(", StringComparison.Ordinal))
-        {
-            var fillBlockIMatch = FillBlockILineRegex().Match(lines[i]);
-            if (!fillBlockIMatch.Success)
-            {
-                throw new IrFormatException($"Expected '  FILLBLOCKI(EN := <expr-or-ENO>, IN := <expr>, COUNT := <expr>) => <dest>', got: '{lines[i]}'");
-            }
-
-            var fillBlockIEn = ParseEnSource(fillBlockIMatch.Groups["en"].Value);
-            var fillBlockIIn = ParseExprTerm(fillBlockIMatch.Groups["in"].Value);
-            var fillBlockICount = ParseExprTerm(fillBlockIMatch.Groups["count"].Value);
-            fillBlockIs.Add(new FillBlockIStatement(fillBlockIEn, fillBlockIIn, fillBlockICount, fillBlockIMatch.Groups["dest"].Value));
-            i++;
-        }
-
-        // ModbusMasters are always emitted after FillBlockIs (IrSerializer). Instance path is the
-        // first positional argument (no label, same convention as TON/CALL's own). No trailing
-        // "=> dest" — four named outputs, disambiguated per-argument by ":=" vs "=>", same mixing
-        // convention MOVE_BLK_VARIANT already established.
         var modbusMasters = new List<ModbusMasterStatement>();
-        while (i < lines.Length && lines[i].StartsWith("  MODBUS_MASTER(", StringComparison.Ordinal))
-        {
-            var modbusMasterMatch = ModbusMasterLineRegex().Match(lines[i]);
-            if (!modbusMasterMatch.Success)
-            {
-                throw new IrFormatException(
-                    $"Expected '  MODBUS_MASTER(<path>, EN := <expr-or-ENO>, REQ := <expr>, MB_ADDR := <expr>, MODE := <expr>, " +
-                    $"DATA_ADDR := <expr>, DATA_LEN := <expr>, DATA_PTR := <expr>, DONE => <tag>, BUSY => <tag>, ERROR => <tag>, " +
-                    $"STATUS => <tag>)', got: '{lines[i]}'");
-            }
-
-            var modbusMasterArgs = modbusMasterMatch.Groups["args"].Value.Split(", ", StringSplitOptions.None);
-            if (modbusMasterArgs.Length != 12
-                || !modbusMasterArgs[1].StartsWith("EN := ", StringComparison.Ordinal)
-                || !modbusMasterArgs[2].StartsWith("REQ := ", StringComparison.Ordinal)
-                || !modbusMasterArgs[3].StartsWith("MB_ADDR := ", StringComparison.Ordinal)
-                || !modbusMasterArgs[4].StartsWith("MODE := ", StringComparison.Ordinal)
-                || !modbusMasterArgs[5].StartsWith("DATA_ADDR := ", StringComparison.Ordinal)
-                || !modbusMasterArgs[6].StartsWith("DATA_LEN := ", StringComparison.Ordinal)
-                || !modbusMasterArgs[7].StartsWith("DATA_PTR := ", StringComparison.Ordinal)
-                || !modbusMasterArgs[8].StartsWith("DONE => ", StringComparison.Ordinal)
-                || !modbusMasterArgs[9].StartsWith("BUSY => ", StringComparison.Ordinal)
-                || !modbusMasterArgs[10].StartsWith("ERROR => ", StringComparison.Ordinal)
-                || !modbusMasterArgs[11].StartsWith("STATUS => ", StringComparison.Ordinal))
-            {
-                throw new IrFormatException(
-                    "Expected '<path>, EN := <expr>, REQ := <expr>, MB_ADDR := <expr>, MODE := <expr>, DATA_ADDR := <expr>, " +
-                    $"DATA_LEN := <expr>, DATA_PTR := <expr>, DONE => <tag>, BUSY => <tag>, ERROR => <tag>, STATUS => <tag>' " +
-                    $"inside MODBUS_MASTER(...), got: '{lines[i]}'");
-            }
-
-            var modbusMasterPath = modbusMasterArgs[0];
-            var modbusMasterEn = ParseEnSource(modbusMasterArgs[1]["EN := ".Length..]);
-            var modbusMasterReq = ParseExpr(modbusMasterArgs[2]["REQ := ".Length..]);
-            var modbusMasterMbAddr = ParseExprTerm(modbusMasterArgs[3]["MB_ADDR := ".Length..]);
-            var modbusMasterMode = ParseExprTerm(modbusMasterArgs[4]["MODE := ".Length..]);
-            var modbusMasterDataAddr = ParseExprTerm(modbusMasterArgs[5]["DATA_ADDR := ".Length..]);
-            var modbusMasterDataLen = ParseExprTerm(modbusMasterArgs[6]["DATA_LEN := ".Length..]);
-            var modbusMasterDataPtr = ParseExprTerm(modbusMasterArgs[7]["DATA_PTR := ".Length..]);
-            var modbusMasterDone = modbusMasterArgs[8]["DONE => ".Length..];
-            var modbusMasterBusy = modbusMasterArgs[9]["BUSY => ".Length..];
-            var modbusMasterError = modbusMasterArgs[10]["ERROR => ".Length..];
-            var modbusMasterStatus = modbusMasterArgs[11]["STATUS => ".Length..];
-            modbusMasters.Add(new ModbusMasterStatement(
-                modbusMasterEn, modbusMasterPath, modbusMasterReq, modbusMasterMbAddr, modbusMasterMode, modbusMasterDataAddr,
-                modbusMasterDataLen, modbusMasterDataPtr, modbusMasterDone, modbusMasterBusy, modbusMasterError, modbusMasterStatus));
-            i++;
-        }
-
-        // ModbusCommLoads are always emitted after ModbusMasters (IrSerializer). Same shape as
-        // MODBUS_MASTER's own, minus BUSY (three outputs, not four).
         var modbusCommLoads = new List<ModbusCommLoadStatement>();
-        while (i < lines.Length && lines[i].StartsWith("  MODBUS_COMM_LOAD(", StringComparison.Ordinal))
-        {
-            var modbusCommLoadMatch = ModbusCommLoadLineRegex().Match(lines[i]);
-            if (!modbusCommLoadMatch.Success)
-            {
-                throw new IrFormatException(
-                    $"Expected '  MODBUS_COMM_LOAD(<path>, EN := <expr-or-ENO>, REQ := <expr>, PORT := <expr>, BAUD := <expr>, " +
-                    $"PARITY := <expr>, RESP_TO := <expr>, MB_DB := <expr>, DONE => <tag>, ERROR => <tag>, STATUS => <tag>)', " +
-                    $"got: '{lines[i]}'");
-            }
-
-            var modbusCommLoadArgs = modbusCommLoadMatch.Groups["args"].Value.Split(", ", StringSplitOptions.None);
-            if (modbusCommLoadArgs.Length != 11
-                || !modbusCommLoadArgs[1].StartsWith("EN := ", StringComparison.Ordinal)
-                || !modbusCommLoadArgs[2].StartsWith("REQ := ", StringComparison.Ordinal)
-                || !modbusCommLoadArgs[3].StartsWith("PORT := ", StringComparison.Ordinal)
-                || !modbusCommLoadArgs[4].StartsWith("BAUD := ", StringComparison.Ordinal)
-                || !modbusCommLoadArgs[5].StartsWith("PARITY := ", StringComparison.Ordinal)
-                || !modbusCommLoadArgs[6].StartsWith("RESP_TO := ", StringComparison.Ordinal)
-                || !modbusCommLoadArgs[7].StartsWith("MB_DB := ", StringComparison.Ordinal)
-                || !modbusCommLoadArgs[8].StartsWith("DONE => ", StringComparison.Ordinal)
-                || !modbusCommLoadArgs[9].StartsWith("ERROR => ", StringComparison.Ordinal)
-                || !modbusCommLoadArgs[10].StartsWith("STATUS => ", StringComparison.Ordinal))
-            {
-                throw new IrFormatException(
-                    "Expected '<path>, EN := <expr>, REQ := <expr>, PORT := <expr>, BAUD := <expr>, PARITY := <expr>, " +
-                    $"RESP_TO := <expr>, MB_DB := <expr>, DONE => <tag>, ERROR => <tag>, STATUS => <tag>' inside " +
-                    $"MODBUS_COMM_LOAD(...), got: '{lines[i]}'");
-            }
-
-            var modbusCommLoadPath = modbusCommLoadArgs[0];
-            var modbusCommLoadEn = ParseEnSource(modbusCommLoadArgs[1]["EN := ".Length..]);
-            var modbusCommLoadReq = ParseExprTerm(modbusCommLoadArgs[2]["REQ := ".Length..]);
-            var modbusCommLoadPort = ParseExprTerm(modbusCommLoadArgs[3]["PORT := ".Length..]);
-            var modbusCommLoadBaud = ParseExprTerm(modbusCommLoadArgs[4]["BAUD := ".Length..]);
-            var modbusCommLoadParity = ParseExprTerm(modbusCommLoadArgs[5]["PARITY := ".Length..]);
-            var modbusCommLoadRespTo = ParseExprTerm(modbusCommLoadArgs[6]["RESP_TO := ".Length..]);
-            var modbusCommLoadMbDb = ParseExprTerm(modbusCommLoadArgs[7]["MB_DB := ".Length..]);
-            var modbusCommLoadDone = modbusCommLoadArgs[8]["DONE => ".Length..];
-            var modbusCommLoadError = modbusCommLoadArgs[9]["ERROR => ".Length..];
-            var modbusCommLoadStatus = modbusCommLoadArgs[10]["STATUS => ".Length..];
-            modbusCommLoads.Add(new ModbusCommLoadStatement(
-                modbusCommLoadEn, modbusCommLoadPath, modbusCommLoadReq, modbusCommLoadPort, modbusCommLoadBaud, modbusCommLoadParity,
-                modbusCommLoadRespTo, modbusCommLoadMbDb, modbusCommLoadDone, modbusCommLoadError, modbusCommLoadStatus));
-            i++;
-        }
-
-        // Registry-driven fixed-shape instructions are always emitted last (IrSerializer). The
-        // keyword IS the source Part Name (MB_MASTER, MB_COMM_LOAD), so the line is recognized by
-        // asking FixedShapeInstructions rather than by a hardcoded prefix — one table, so adding an
-        // instruction never touches this parser. Arguments are NAME-KEYED, not positional: a port
-        // absent from <Wires> is absent from the line entirely, and a port wired to <OpenCon> reads
-        // `NAME := OPEN` / `NAME => OPEN`. The arrow carries the direction, so this parse needs no
-        // version lookup at all.
         var fixedShapes = new List<FixedShapeStatement>();
-        while (i < lines.Length && FixedShapeLineInstruction(lines[i]) is { } instruction)
+        var order = new List<IrStatementRef>();
+
+        // Statements may appear in ANY kind order: their order is the network's rung order (ir/SPEC.md,
+        // "Statement order within one network"). Each pass of this loop consumes one contiguous run of
+        // each kind in the canonical sequence below; a network that interleaves kinds just takes more
+        // passes. It stops when a whole pass consumes nothing — the next NETWORK header, SIDECAR, or
+        // end of file.
+        while (true)
         {
-            var fixedShapeMatch = FixedShapeLineRegex().Match(lines[i]);
-            if (!fixedShapeMatch.Success)
-            {
-                throw new IrFormatException(
-                    $"Expected '  {instruction}(<instance-path>, EN := <expr-or-ENO>, <PORT> := <expr>|OPEN, " +
-                    $"<PORT> => <tag>|OPEN, ...)', got: '{lines[i]}'");
-            }
+            var passStart = i;
 
-            var fixedShapeArgs = fixedShapeMatch.Groups["args"].Value.Split(", ", StringSplitOptions.None);
-            if (fixedShapeArgs.Length < 2 || !fixedShapeArgs[1].StartsWith("EN := ", StringComparison.Ordinal))
+            // Timers are always emitted before coil assignments (IrSerializer) — parsed in the same
+            // order for self-stability. TON/TONR/TOF (S1 items 19/23) share one loop, distinguished
+            // by keyword — TONR's own 4th argument (R) is optional in the grammar's own arity check
+            // but always present in practice (GraphReducer.ReduceTimer requires it whenever Kind is
+            // Tonr), split on top-level commas like WAND/CALL/MUL's own variable-arity argument
+            // lists (safe for the same reason: no Expr ever renders a literal comma). TOF shares
+            // TON's own 3-argument arity exactly (no reset port, confirmed real).
+            while (i < lines.Length && (lines[i].StartsWith("  TON(", StringComparison.Ordinal)
+                || lines[i].StartsWith("  TONR(", StringComparison.Ordinal) || lines[i].StartsWith("  TOF(", StringComparison.Ordinal)))
             {
-                throw new IrFormatException(
-                    $"Expected '<instance-path>, EN := <expr-or-ENO>, ...' inside {instruction}(...), got: '{lines[i]}'");
-            }
-
-            var fixedShapePath = fixedShapeArgs[0];
-            var fixedShapeEn = ParseEnSource(fixedShapeArgs[1]["EN := ".Length..]);
-            var arguments = new List<FixedShapeArgument>();
-            foreach (var argument in fixedShapeArgs.Skip(2))
-            {
-                var inputSplit = argument.IndexOf(" := ", StringComparison.Ordinal);
-                var outputSplit = argument.IndexOf(" => ", StringComparison.Ordinal);
-                if (inputSplit >= 0 && (outputSplit < 0 || inputSplit < outputSplit))
-                {
-                    var port = argument[..inputSplit];
-                    var value = argument[(inputSplit + 4)..];
-                    arguments.Add(new FixedShapeArgument(port, value == OpenPortSentinel
-                        ? new PortBinding.OpenInput()
-                        : new PortBinding.Value(ParseExprTerm(value))));
-                }
-                else if (outputSplit >= 0)
-                {
-                    var port = argument[..outputSplit];
-                    var target = argument[(outputSplit + 4)..];
-                    arguments.Add(new FixedShapeArgument(port, target == OpenPortSentinel
-                        ? new PortBinding.OpenOutput()
-                        : new PortBinding.Dest(target)));
-                }
-                else
+                var tonMatch = TonLineRegex().Match(lines[i]);
+                if (!tonMatch.Success)
                 {
                     throw new IrFormatException(
-                        $"Expected '<PORT> := <expr>|OPEN' or '<PORT> => <tag>|OPEN' inside {instruction}(...), got: '{argument}'");
+                        $"Expected '  TON(<path>, IN := <expr>, PT := <expr>)', '  TONR(<path>, IN := <expr>, PT := <expr>, R := <expr>)', " +
+                        $"or '  TOF(<path>, IN := <expr>, PT := <expr>)', got: '{lines[i]}'");
                 }
+
+                var timerKind = tonMatch.Groups["kind"].Value switch
+                {
+                    "TONR" => TimerKind.Tonr,
+                    "TOF" => TimerKind.Tof,
+                    _ => TimerKind.Ton,
+                };
+                var timerArgs = tonMatch.Groups["args"].Value.Split(", ", StringSplitOptions.None);
+                if (timerArgs.Length is not (3 or 4) || !timerArgs[1].StartsWith("IN := ", StringComparison.Ordinal) || !timerArgs[2].StartsWith("PT := ", StringComparison.Ordinal))
+                {
+                    throw new IrFormatException($"Expected '<path>, IN := <expr>, PT := <expr>[, R := <expr>]' inside TON/TONR/TOF(...), got: '{lines[i]}'");
+                }
+
+                var timerPath = timerArgs[0];
+                var inExpr = ParseExpr(timerArgs[1]["IN := ".Length..]);
+                var ptExpr = ParseExprTerm(timerArgs[2]["PT := ".Length..]);
+
+                Expr? resetExpr = null;
+                if (timerArgs.Length == 4)
+                {
+                    if (timerKind != TimerKind.Tonr)
+                    {
+                        throw new IrFormatException($"Only TONR takes a 4th (R) argument — '{lines[i]}' isn't TONR.");
+                    }
+
+                    if (!timerArgs[3].StartsWith("R := ", StringComparison.Ordinal))
+                    {
+                        throw new IrFormatException($"Expected ', R := <expr>' as TONR's 4th argument, got: '{lines[i]}'");
+                    }
+
+                    resetExpr = ParseExprTerm(timerArgs[3]["R := ".Length..]);
+                }
+
+                timers.Add(new TimerBinding(timerPath, inExpr, ptExpr, timerKind, resetExpr));
+                order.Add(new IrStatementRef(IrStatementKind.Timer, timers.Count - 1));
+                i++;
             }
 
-            fixedShapes.Add(new FixedShapeStatement(instruction, fixedShapeEn, fixedShapePath, arguments));
-            i++;
+            // COIL/SCOIL/RCOIL (S1 item 15) are parsed in one interleaved loop, in whatever order
+            // they appear (matching how a real network naturally mixes assign/set/reset rungs) —
+            // not three separate sections.
+            while (i < lines.Length && (lines[i].StartsWith("  COIL ", StringComparison.Ordinal)
+                || lines[i].StartsWith("  SCOIL ", StringComparison.Ordinal)
+                || lines[i].StartsWith("  RCOIL ", StringComparison.Ordinal)))
+            {
+                var coilMatch = CoilLineRegex().Match(lines[i]);
+                if (!coilMatch.Success)
+                {
+                    throw new IrFormatException($"Expected '  COIL|SCOIL|RCOIL <tag> := <expr>', got: '{lines[i]}'");
+                }
+
+                var kind = coilMatch.Groups["kind"].Value switch
+                {
+                    "COIL" => CoilKind.Assign,
+                    "SCOIL" => CoilKind.Set,
+                    "RCOIL" => CoilKind.Reset,
+                    _ => throw new IrFormatException($"Unexpected coil keyword in '{lines[i]}'"),
+                };
+
+                assignments.Add(new CoilAssignment(coilMatch.Groups["tag"].Value, ParseExpr(coilMatch.Groups["expr"].Value), kind));
+                order.Add(new IrStatementRef(IrStatementKind.Assignment, assignments.Count - 1));
+                i++;
+            }
+
+            // Moves are always emitted last (IrSerializer, after Timers/Coils) — parsed in the same
+            // order for self-stability.
+            while (i < lines.Length && lines[i].StartsWith("  MOVE(", StringComparison.Ordinal))
+            {
+                var moveMatch = MoveLineRegex().Match(lines[i]);
+                if (!moveMatch.Success)
+                {
+                    throw new IrFormatException($"Expected '  MOVE(EN := <expr>, IN := <expr>) => <dest>', got: '{lines[i]}'");
+                }
+
+                var enExpr = ParseExpr(moveMatch.Groups["en"].Value);
+                var inExpr = ParseExprTerm(moveMatch.Groups["in"].Value);
+                // `=> A, B, C` is a multi-output MOVE (out1, out2, out3).
+                var moveDests = moveMatch.Groups["dest"].Value.Split(", ");
+                moves.Add(new MoveStatement(enExpr, inExpr, moveDests[0]) { AdditionalDestTags = moveDests.Skip(1).ToList() });
+                order.Add(new IrStatementRef(IrStatementKind.Move, moves.Count - 1));
+                i++;
+            }
+
+            // WordAnds are always emitted last (IrSerializer, after Timers/Coils/Moves) — parsed in
+            // the same order for self-stability. Variable input count (Cardinality-driven, S1 item
+            // 12), so the argument list is split on top-level commas rather than matched by a single
+            // fixed-arity regex the way TON/MOVE's own fixed argument shapes are — safe because no
+            // Expr ever renders a literal comma (AND/OR/NOT/parens/comparisons never use one).
+            while (i < lines.Length && lines[i].StartsWith("  WAND(", StringComparison.Ordinal))
+            {
+                var wandMatch = WordAndLineRegex().Match(lines[i]);
+                if (!wandMatch.Success)
+                {
+                    throw new IrFormatException($"Expected '  WAND(EN := <expr>, IN1 := <expr>, ...) => <dest>', got: '{lines[i]}'");
+                }
+
+                var args = wandMatch.Groups["args"].Value.Split(", ", StringSplitOptions.None);
+                if (args.Length < 2 || !args[0].StartsWith("EN := ", StringComparison.Ordinal))
+                {
+                    throw new IrFormatException($"Expected 'EN := <expr>' as WAND's first argument, got: '{lines[i]}'");
+                }
+
+                var wandEnExpr = ParseExpr(args[0]["EN := ".Length..]);
+
+                var inputs = new List<Expr>();
+                for (var k = 1; k < args.Length; k++)
+                {
+                    var prefix = $"IN{k} := ";
+                    if (!args[k].StartsWith(prefix, StringComparison.Ordinal))
+                    {
+                        throw new IrFormatException($"Expected '{prefix}<expr>' as WAND argument {k + 1}, got: '{args[k]}' in '{lines[i]}'");
+                    }
+
+                    inputs.Add(ParseExprTerm(args[k][prefix.Length..]));
+                }
+
+                wordAnds.Add(new WordAndStatement(wandEnExpr, inputs, wandMatch.Groups["dest"].Value));
+                order.Add(new IrStatementRef(IrStatementKind.WordAnd, wordAnds.Count - 1));
+                i++;
+            }
+
+            // Calls are always emitted last (IrSerializer, after Timers/Coils/Moves/WordAnds) —
+            // parsed in the same order for self-stability. Instance is an optional leading positional
+            // argument (no label, same convention as TON's own instance path) — omitted entirely when
+            // the call has no instance (confirmed real, 2026-07-12, S1 item 24: an FC call, unlike
+            // every FB call, carries no instance). EN is always present, even when trivially TRUE
+            // (confirmed real, 2026-07-12, FC PlantAutoControl: all 20 real en's are directly rail-fed).
+            // Disambiguated by checking whether the first argument itself starts with "EN := " — a
+            // reserved prefix no real instance path could ever collide with (instance paths are bare
+            // dotted tag-shaped text). The remaining arguments are a sparse, ordered mix of
+            // "<Param> := <expr>" (Input) and "<Param> => <tag>" (Output) — split on top-level commas
+            // same as WAND's own variable argument list (safe for the same reason: no Expr ever
+            // renders a literal comma).
+            while (i < lines.Length && lines[i].StartsWith("  CALL ", StringComparison.Ordinal))
+            {
+                var callMatch = CallLineRegex().Match(lines[i]);
+                if (!callMatch.Success)
+                {
+                    throw new IrFormatException($"Expected '  CALL <BlockName>([<instance>, ]EN := <expr>, ...)', got: '{lines[i]}'");
+                }
+
+                var blockName = callMatch.Groups["blockname"].Value;
+                var args = callMatch.Groups["args"].Value.Split(", ", StringSplitOptions.None);
+
+                string? instancePath;
+                Expr callEnExpr;
+                int enArgIndex;
+                if (args.Length >= 1 && args[0].StartsWith("EN := ", StringComparison.Ordinal))
+                {
+                    instancePath = null;
+                    callEnExpr = ParseExpr(args[0]["EN := ".Length..]);
+                    enArgIndex = 0;
+                }
+                else if (args.Length >= 2 && args[1].StartsWith("EN := ", StringComparison.Ordinal))
+                {
+                    instancePath = args[0];
+                    callEnExpr = ParseExpr(args[1]["EN := ".Length..]);
+                    enArgIndex = 1;
+                }
+                else
+                {
+                    throw new IrFormatException($"Expected '[<instance>, ]EN := <expr>' as CALL's leading argument(s), got: '{lines[i]}'");
+                }
+
+                var arguments = new List<CallArgument>();
+                for (var k = enArgIndex + 1; k < args.Length; k++)
+                {
+                    var inputSep = args[k].IndexOf(" := ", StringComparison.Ordinal);
+                    var outputSep = args[k].IndexOf(" => ", StringComparison.Ordinal);
+                    if (inputSep >= 0 && (outputSep < 0 || inputSep < outputSep))
+                    {
+                        var paramName = args[k][..inputSep];
+                        arguments.Add(new CallArgument.InputArg(paramName, ParseExprTerm(args[k][(inputSep + 4)..])));
+                    }
+                    else if (outputSep >= 0)
+                    {
+                        var paramName = args[k][..outputSep];
+                        arguments.Add(new CallArgument.OutputArg(paramName, args[k][(outputSep + 4)..]));
+                    }
+                    else
+                    {
+                        throw new IrFormatException($"Expected '<param> := <expr>' or '<param> => <tag>' as CALL argument {k + 1}, got: '{args[k]}' in '{lines[i]}'");
+                    }
+                }
+
+                calls.Add(new CallStatement(blockName, instancePath, callEnExpr, arguments));
+                order.Add(new IrStatementRef(IrStatementKind.Call, calls.Count - 1));
+                i++;
+            }
+
+            // Muls are always emitted after Calls (IrSerializer) — parsed in the same order for
+            // self-stability. MUL/ADD (S1 item 19) share one loop, distinguished by keyword — same
+            // XML shape, different Part Name, mirroring TON/TONR's own treatment above. EN's own
+            // value is either an ordinary expression or the reserved word "ENO" (confirmed real,
+            // 2026-07-12, S1 item 18 — see EnSource's own doc comment), parsed via ParseEnSource
+            // rather than ParseExpr directly.
+            while (i < lines.Length && (lines[i].StartsWith("  MUL(", StringComparison.Ordinal) || lines[i].StartsWith("  ADD(", StringComparison.Ordinal)
+                || lines[i].StartsWith("  SUB(", StringComparison.Ordinal) || lines[i].StartsWith("  DIV(", StringComparison.Ordinal)
+                || lines[i].StartsWith("  MAX(", StringComparison.Ordinal) || lines[i].StartsWith("  MIN(", StringComparison.Ordinal)))
+            {
+                var mulMatch = MulLineRegex().Match(lines[i]);
+                if (!mulMatch.Success)
+                {
+                    throw new IrFormatException($"Expected '  MUL(EN := <expr-or-ENO>, IN1 := <expr>, ...) => <dest>' or 'ADD(...)'/'SUB(...)'/'DIV(...)', got: '{lines[i]}'");
+                }
+
+                var mulKind = mulMatch.Groups["kind"].Value switch
+                {
+                    "ADD" => MulKind.Add,
+                    "SUB" => MulKind.Subtract,
+                    "DIV" => MulKind.Divide,
+                    "MAX" => MulKind.Maximum,
+                    "MIN" => MulKind.Minimum,
+                    _ => MulKind.Multiply,
+                };
+                var args = mulMatch.Groups["args"].Value.Split(", ", StringSplitOptions.None);
+                if (args.Length < 2 || !args[0].StartsWith("EN := ", StringComparison.Ordinal))
+                {
+                    throw new IrFormatException($"Expected 'EN := <expr-or-ENO>' as MUL/ADD/SUB/DIV's first argument, got: '{lines[i]}'");
+                }
+
+                var mulEn = ParseEnSource(args[0]["EN := ".Length..]);
+
+                var mulInputs = new List<Expr>();
+                for (var k = 1; k < args.Length; k++)
+                {
+                    var prefix = $"IN{k} := ";
+                    if (!args[k].StartsWith(prefix, StringComparison.Ordinal))
+                    {
+                        throw new IrFormatException($"Expected '{prefix}<expr>' as MUL/ADD/SUB/DIV argument {k + 1}, got: '{args[k]}' in '{lines[i]}'");
+                    }
+
+                    mulInputs.Add(ParseExprTerm(args[k][prefix.Length..]));
+                }
+
+                muls.Add(new MulStatement(mulEn, mulInputs, mulMatch.Groups["dest"].Value, mulKind));
+                order.Add(new IrStatementRef(IrStatementKind.Mul, muls.Count - 1));
+                i++;
+            }
+
+            // Converts are always emitted after Muls (IrSerializer) — fixed arity (EN, IN), same
+            // regex-based shape as MOVE's own line, not the split-on-commas approach MUL/WAND/CALL
+            // need for their own variable-arity argument lists.
+            while (i < lines.Length && lines[i].StartsWith("  CONVERT(", StringComparison.Ordinal))
+            {
+                var convertMatch = ConvertLineRegex().Match(lines[i]);
+                if (!convertMatch.Success)
+                {
+                    throw new IrFormatException($"Expected '  CONVERT(EN := <expr-or-ENO>, IN := <expr>) => <dest>', got: '{lines[i]}'");
+                }
+
+                var convertEn = ParseEnSource(convertMatch.Groups["en"].Value);
+                var convertIn = ParseExprTerm(convertMatch.Groups["in"].Value);
+                converts.Add(new ConvertStatement(convertEn, convertIn, convertMatch.Groups["dest"].Value));
+                order.Add(new IrStatementRef(IrStatementKind.Convert, converts.Count - 1));
+                i++;
+            }
+
+            // Swaps are always emitted after Converts (IrSerializer) — same fixed-arity (EN, IN)
+            // regex-based shape as CONVERT's own line, minus a DestType group.
+            while (i < lines.Length && lines[i].StartsWith("  SWAP(", StringComparison.Ordinal))
+            {
+                var swapMatch = SwapLineRegex().Match(lines[i]);
+                if (!swapMatch.Success)
+                {
+                    throw new IrFormatException($"Expected '  SWAP(EN := <expr-or-ENO>, IN := <expr>) => <dest>', got: '{lines[i]}'");
+                }
+
+                var swapEn = ParseEnSource(swapMatch.Groups["en"].Value);
+                var swapIn = ParseExprTerm(swapMatch.Groups["in"].Value);
+                swaps.Add(new SwapStatement(swapEn, swapIn, swapMatch.Groups["dest"].Value));
+                order.Add(new IrStatementRef(IrStatementKind.Swap, swaps.Count - 1));
+                i++;
+            }
+
+            // Abs statements are always emitted after Swaps (IrSerializer) — same fixed-arity (EN, IN)
+            // shape as SWAP's own line.
+            while (i < lines.Length && lines[i].StartsWith("  ABS(", StringComparison.Ordinal))
+            {
+                var absMatch = AbsLineRegex().Match(lines[i]);
+                if (!absMatch.Success)
+                {
+                    throw new IrFormatException($"Expected '  ABS(EN := <expr-or-ENO>, IN := <expr>) => <dest>', got: '{lines[i]}'");
+                }
+
+                var absEn = ParseEnSource(absMatch.Groups["en"].Value);
+                var absIn = ParseExprTerm(absMatch.Groups["in"].Value);
+                absStatements.Add(new AbsStatement(absEn, absIn, absMatch.Groups["dest"].Value));
+                order.Add(new IrStatementRef(IrStatementKind.Abs, absStatements.Count - 1));
+                i++;
+            }
+
+            // Limits are always emitted after Abs statements (IrSerializer). Three fixed-named
+            // inputs (MN/IN/MX), same top-level-comma-split discipline as WAND/CALL/MUL's own
+            // variable-arity argument lists — safe for the same reason (no Expr ever renders a
+            // literal comma).
+            while (i < lines.Length && lines[i].StartsWith("  LIMIT(", StringComparison.Ordinal))
+            {
+                var limitMatch = LimitLineRegex().Match(lines[i]);
+                if (!limitMatch.Success)
+                {
+                    throw new IrFormatException($"Expected '  LIMIT(EN := <expr-or-ENO>, MN := <expr>, IN := <expr>, MX := <expr>) => <dest>', got: '{lines[i]}'");
+                }
+
+                var limitArgs = limitMatch.Groups["args"].Value.Split(", ", StringSplitOptions.None);
+                if (limitArgs.Length != 4 || !limitArgs[0].StartsWith("EN := ", StringComparison.Ordinal)
+                    || !limitArgs[1].StartsWith("MN := ", StringComparison.Ordinal)
+                    || !limitArgs[2].StartsWith("IN := ", StringComparison.Ordinal)
+                    || !limitArgs[3].StartsWith("MX := ", StringComparison.Ordinal))
+                {
+                    throw new IrFormatException($"Expected 'EN := <expr>, MN := <expr>, IN := <expr>, MX := <expr>' inside LIMIT(...), got: '{lines[i]}'");
+                }
+
+                var limitEn = ParseEnSource(limitArgs[0]["EN := ".Length..]);
+                var limitMin = ParseExprTerm(limitArgs[1]["MN := ".Length..]);
+                var limitIn = ParseExprTerm(limitArgs[2]["IN := ".Length..]);
+                var limitMax = ParseExprTerm(limitArgs[3]["MX := ".Length..]);
+                limits.Add(new LimitStatement(limitEn, limitMin, limitIn, limitMax, limitMatch.Groups["dest"].Value));
+                order.Add(new IrStatementRef(IrStatementKind.Limit, limits.Count - 1));
+                i++;
+            }
+
+            // T_SUBs are always emitted after Limits (IrSerializer). Two fixed-named inputs (IN1/IN2),
+            // same top-level-comma-split discipline as LIMIT's own.
+            while (i < lines.Length && lines[i].StartsWith("  T_SUB(", StringComparison.Ordinal))
+            {
+                var tSubMatch = TSubLineRegex().Match(lines[i]);
+                if (!tSubMatch.Success)
+                {
+                    throw new IrFormatException($"Expected '  T_SUB(EN := <expr-or-ENO>, IN1 := <expr>, IN2 := <expr>) => <dest>', got: '{lines[i]}'");
+                }
+
+                var tSubArgs = tSubMatch.Groups["args"].Value.Split(", ", StringSplitOptions.None);
+                if (tSubArgs.Length != 3 || !tSubArgs[0].StartsWith("EN := ", StringComparison.Ordinal)
+                    || !tSubArgs[1].StartsWith("IN1 := ", StringComparison.Ordinal)
+                    || !tSubArgs[2].StartsWith("IN2 := ", StringComparison.Ordinal))
+                {
+                    throw new IrFormatException($"Expected 'EN := <expr>, IN1 := <expr>, IN2 := <expr>' inside T_SUB(...), got: '{lines[i]}'");
+                }
+
+                var tSubEn = ParseEnSource(tSubArgs[0]["EN := ".Length..]);
+                var tSubIn1 = ParseExprTerm(tSubArgs[1]["IN1 := ".Length..]);
+                var tSubIn2 = ParseExprTerm(tSubArgs[2]["IN2 := ".Length..]);
+                tSubs.Add(new TSubStatement(tSubEn, tSubIn1, tSubIn2, tSubMatch.Groups["dest"].Value));
+                order.Add(new IrStatementRef(IrStatementKind.TSub, tSubs.Count - 1));
+                i++;
+            }
+
+            // T_CONVs are always emitted after T_SUBs (IrSerializer) — same fixed-arity (EN, IN)
+            // shape as CONVERT/SWAP/ABS's own line.
+            while (i < lines.Length && lines[i].StartsWith("  T_CONV(", StringComparison.Ordinal))
+            {
+                var tConvMatch = TConvLineRegex().Match(lines[i]);
+                if (!tConvMatch.Success)
+                {
+                    throw new IrFormatException($"Expected '  T_CONV(EN := <expr-or-ENO>, IN := <expr>) => <dest>', got: '{lines[i]}'");
+                }
+
+                var tConvEn = ParseEnSource(tConvMatch.Groups["en"].Value);
+                var tConvIn = ParseExprTerm(tConvMatch.Groups["in"].Value);
+                tConvs.Add(new TConvStatement(tConvEn, tConvIn, tConvMatch.Groups["dest"].Value));
+                order.Add(new IrStatementRef(IrStatementKind.TConv, tConvs.Count - 1));
+                i++;
+            }
+
+            // Calcs are always emitted after T_CONVs (IrSerializer). Cardinality-driven inputs (same
+            // top-level-comma-split discipline as MUL/WAND), plus a trailing quoted Equation string
+            // kept outside the argument-list parens entirely (see IrSerializer's own comment).
+            while (i < lines.Length && lines[i].StartsWith("  CALC(", StringComparison.Ordinal))
+            {
+                var calcMatch = CalcLineRegex().Match(lines[i]);
+                if (!calcMatch.Success)
+                {
+                    throw new IrFormatException($"Expected '  CALC(EN := <expr-or-ENO>, IN1 := <expr>, ...) => <dest> \"<equation>\"', got: '{lines[i]}'");
+                }
+
+                var calcArgs = calcMatch.Groups["args"].Value.Split(", ", StringSplitOptions.None);
+                if (calcArgs.Length < 2 || !calcArgs[0].StartsWith("EN := ", StringComparison.Ordinal))
+                {
+                    throw new IrFormatException($"Expected 'EN := <expr>' as CALC's first argument, got: '{lines[i]}'");
+                }
+
+                var calcEn = ParseEnSource(calcArgs[0]["EN := ".Length..]);
+
+                var calcInputs = new List<Expr>();
+                for (var k = 1; k < calcArgs.Length; k++)
+                {
+                    var prefix = $"IN{k} := ";
+                    if (!calcArgs[k].StartsWith(prefix, StringComparison.Ordinal))
+                    {
+                        throw new IrFormatException($"Expected '{prefix}<expr>' as CALC argument {k + 1}, got: '{calcArgs[k]}' in '{lines[i]}'");
+                    }
+
+                    calcInputs.Add(ParseExprTerm(calcArgs[k][prefix.Length..]));
+                }
+
+                var calcEquation = ParseQuotedString(calcMatch.Groups["equation"].Value);
+                calcs.Add(new CalcStatement(calcEn, calcInputs, calcEquation, calcMatch.Groups["dest"].Value));
+                order.Add(new IrStatementRef(IrStatementKind.Calc, calcs.Count - 1));
+                i++;
+            }
+
+            // MOVE_BLK_VARIANTs are always emitted after Calcs (IrSerializer). No trailing "=> dest"
+            // — two named outputs, not one, so everything (inputs and outputs alike) is inside one
+            // top-level-comma-split argument list, disambiguated per-argument by ":=" vs "=>", same
+            // mixing convention CALL's own argument list already established.
+            while (i < lines.Length && lines[i].StartsWith("  MOVE_BLK_VARIANT(", StringComparison.Ordinal))
+            {
+                var moveBlkVariantMatch = MoveBlkVariantLineRegex().Match(lines[i]);
+                if (!moveBlkVariantMatch.Success)
+                {
+                    throw new IrFormatException(
+                        $"Expected '  MOVE_BLK_VARIANT(EN := <expr-or-ENO>, SRC := <expr>, COUNT := <expr>, SRC_INDEX := <expr>, " +
+                        $"DEST_INDEX := <expr>, Ret_Val => <tag>, DEST => <tag>)', got: '{lines[i]}'");
+                }
+
+                var moveBlkVariantArgs = moveBlkVariantMatch.Groups["args"].Value.Split(", ", StringSplitOptions.None);
+                if (moveBlkVariantArgs.Length != 7
+                    || !moveBlkVariantArgs[0].StartsWith("EN := ", StringComparison.Ordinal)
+                    || !moveBlkVariantArgs[1].StartsWith("SRC := ", StringComparison.Ordinal)
+                    || !moveBlkVariantArgs[2].StartsWith("COUNT := ", StringComparison.Ordinal)
+                    || !moveBlkVariantArgs[3].StartsWith("SRC_INDEX := ", StringComparison.Ordinal)
+                    || !moveBlkVariantArgs[4].StartsWith("DEST_INDEX := ", StringComparison.Ordinal)
+                    || !moveBlkVariantArgs[5].StartsWith("Ret_Val => ", StringComparison.Ordinal)
+                    || !moveBlkVariantArgs[6].StartsWith("DEST => ", StringComparison.Ordinal))
+                {
+                    throw new IrFormatException(
+                        "Expected 'EN := <expr>, SRC := <expr>, COUNT := <expr>, SRC_INDEX := <expr>, DEST_INDEX := <expr>, " +
+                        $"Ret_Val => <tag>, DEST => <tag>' inside MOVE_BLK_VARIANT(...), got: '{lines[i]}'");
+                }
+
+                var moveBlkVariantEn = ParseEnSource(moveBlkVariantArgs[0]["EN := ".Length..]);
+                var moveBlkVariantSrc = ParseExprTerm(moveBlkVariantArgs[1]["SRC := ".Length..]);
+                var moveBlkVariantCount = ParseExprTerm(moveBlkVariantArgs[2]["COUNT := ".Length..]);
+                var moveBlkVariantSrcIndex = ParseExprTerm(moveBlkVariantArgs[3]["SRC_INDEX := ".Length..]);
+                var moveBlkVariantDestIndex = ParseExprTerm(moveBlkVariantArgs[4]["DEST_INDEX := ".Length..]);
+                var moveBlkVariantRetVal = moveBlkVariantArgs[5]["Ret_Val => ".Length..];
+                var moveBlkVariantDest = moveBlkVariantArgs[6]["DEST => ".Length..];
+                moveBlkVariants.Add(new MoveBlkVariantStatement(
+                    moveBlkVariantEn, moveBlkVariantSrc, moveBlkVariantCount, moveBlkVariantSrcIndex, moveBlkVariantDestIndex,
+                    moveBlkVariantRetVal, moveBlkVariantDest));
+                order.Add(new IrStatementRef(IrStatementKind.MoveBlkVariant, moveBlkVariants.Count - 1));
+                i++;
+            }
+
+            // WAITs are always emitted after MOVE_BLK_VARIANTs (IrSerializer). No trailing "=> dest"
+            // — a pure side-effecting delay, no destination at all.
+            while (i < lines.Length && lines[i].StartsWith("  WAIT(", StringComparison.Ordinal))
+            {
+                var waitMatch = WaitLineRegex().Match(lines[i]);
+                if (!waitMatch.Success)
+                {
+                    throw new IrFormatException($"Expected '  WAIT(EN := <expr-or-ENO>, WT := <expr>)', got: '{lines[i]}'");
+                }
+
+                var waitEn = ParseEnSource(waitMatch.Groups["en"].Value);
+                var waitWt = ParseExprTerm(waitMatch.Groups["wt"].Value);
+                waits.Add(new WaitStatement(waitEn, waitWt));
+                order.Add(new IrStatementRef(IrStatementKind.Wait, waits.Count - 1));
+                i++;
+            }
+
+            // FillBlockIs are always emitted after WAITs (IrSerializer). Fixed arity (EN, IN, COUNT),
+            // same regex-based shape as MOVE's own line.
+            while (i < lines.Length && lines[i].StartsWith("  FILLBLOCKI(", StringComparison.Ordinal))
+            {
+                var fillBlockIMatch = FillBlockILineRegex().Match(lines[i]);
+                if (!fillBlockIMatch.Success)
+                {
+                    throw new IrFormatException($"Expected '  FILLBLOCKI(EN := <expr-or-ENO>, IN := <expr>, COUNT := <expr>) => <dest>', got: '{lines[i]}'");
+                }
+
+                var fillBlockIEn = ParseEnSource(fillBlockIMatch.Groups["en"].Value);
+                var fillBlockIIn = ParseExprTerm(fillBlockIMatch.Groups["in"].Value);
+                var fillBlockICount = ParseExprTerm(fillBlockIMatch.Groups["count"].Value);
+                fillBlockIs.Add(new FillBlockIStatement(fillBlockIEn, fillBlockIIn, fillBlockICount, fillBlockIMatch.Groups["dest"].Value));
+                order.Add(new IrStatementRef(IrStatementKind.FillBlockI, fillBlockIs.Count - 1));
+                i++;
+            }
+
+            // ModbusMasters are always emitted after FillBlockIs (IrSerializer). Instance path is the
+            // first positional argument (no label, same convention as TON/CALL's own). No trailing
+            // "=> dest" — four named outputs, disambiguated per-argument by ":=" vs "=>", same mixing
+            // convention MOVE_BLK_VARIANT already established.
+            while (i < lines.Length && lines[i].StartsWith("  MODBUS_MASTER(", StringComparison.Ordinal))
+            {
+                var modbusMasterMatch = ModbusMasterLineRegex().Match(lines[i]);
+                if (!modbusMasterMatch.Success)
+                {
+                    throw new IrFormatException(
+                        $"Expected '  MODBUS_MASTER(<path>, EN := <expr-or-ENO>, REQ := <expr>, MB_ADDR := <expr>, MODE := <expr>, " +
+                        $"DATA_ADDR := <expr>, DATA_LEN := <expr>, DATA_PTR := <expr>, DONE => <tag>, BUSY => <tag>, ERROR => <tag>, " +
+                        $"STATUS => <tag>)', got: '{lines[i]}'");
+                }
+
+                var modbusMasterArgs = modbusMasterMatch.Groups["args"].Value.Split(", ", StringSplitOptions.None);
+                if (modbusMasterArgs.Length != 12
+                    || !modbusMasterArgs[1].StartsWith("EN := ", StringComparison.Ordinal)
+                    || !modbusMasterArgs[2].StartsWith("REQ := ", StringComparison.Ordinal)
+                    || !modbusMasterArgs[3].StartsWith("MB_ADDR := ", StringComparison.Ordinal)
+                    || !modbusMasterArgs[4].StartsWith("MODE := ", StringComparison.Ordinal)
+                    || !modbusMasterArgs[5].StartsWith("DATA_ADDR := ", StringComparison.Ordinal)
+                    || !modbusMasterArgs[6].StartsWith("DATA_LEN := ", StringComparison.Ordinal)
+                    || !modbusMasterArgs[7].StartsWith("DATA_PTR := ", StringComparison.Ordinal)
+                    || !modbusMasterArgs[8].StartsWith("DONE => ", StringComparison.Ordinal)
+                    || !modbusMasterArgs[9].StartsWith("BUSY => ", StringComparison.Ordinal)
+                    || !modbusMasterArgs[10].StartsWith("ERROR => ", StringComparison.Ordinal)
+                    || !modbusMasterArgs[11].StartsWith("STATUS => ", StringComparison.Ordinal))
+                {
+                    throw new IrFormatException(
+                        "Expected '<path>, EN := <expr>, REQ := <expr>, MB_ADDR := <expr>, MODE := <expr>, DATA_ADDR := <expr>, " +
+                        $"DATA_LEN := <expr>, DATA_PTR := <expr>, DONE => <tag>, BUSY => <tag>, ERROR => <tag>, STATUS => <tag>' " +
+                        $"inside MODBUS_MASTER(...), got: '{lines[i]}'");
+                }
+
+                var modbusMasterPath = modbusMasterArgs[0];
+                var modbusMasterEn = ParseEnSource(modbusMasterArgs[1]["EN := ".Length..]);
+                var modbusMasterReq = ParseExpr(modbusMasterArgs[2]["REQ := ".Length..]);
+                var modbusMasterMbAddr = ParseExprTerm(modbusMasterArgs[3]["MB_ADDR := ".Length..]);
+                var modbusMasterMode = ParseExprTerm(modbusMasterArgs[4]["MODE := ".Length..]);
+                var modbusMasterDataAddr = ParseExprTerm(modbusMasterArgs[5]["DATA_ADDR := ".Length..]);
+                var modbusMasterDataLen = ParseExprTerm(modbusMasterArgs[6]["DATA_LEN := ".Length..]);
+                var modbusMasterDataPtr = ParseExprTerm(modbusMasterArgs[7]["DATA_PTR := ".Length..]);
+                var modbusMasterDone = modbusMasterArgs[8]["DONE => ".Length..];
+                var modbusMasterBusy = modbusMasterArgs[9]["BUSY => ".Length..];
+                var modbusMasterError = modbusMasterArgs[10]["ERROR => ".Length..];
+                var modbusMasterStatus = modbusMasterArgs[11]["STATUS => ".Length..];
+                modbusMasters.Add(new ModbusMasterStatement(
+                    modbusMasterEn, modbusMasterPath, modbusMasterReq, modbusMasterMbAddr, modbusMasterMode, modbusMasterDataAddr,
+                    modbusMasterDataLen, modbusMasterDataPtr, modbusMasterDone, modbusMasterBusy, modbusMasterError, modbusMasterStatus));
+                order.Add(new IrStatementRef(IrStatementKind.ModbusMaster, modbusMasters.Count - 1));
+                i++;
+            }
+
+            // ModbusCommLoads are always emitted after ModbusMasters (IrSerializer). Same shape as
+            // MODBUS_MASTER's own, minus BUSY (three outputs, not four).
+            while (i < lines.Length && lines[i].StartsWith("  MODBUS_COMM_LOAD(", StringComparison.Ordinal))
+            {
+                var modbusCommLoadMatch = ModbusCommLoadLineRegex().Match(lines[i]);
+                if (!modbusCommLoadMatch.Success)
+                {
+                    throw new IrFormatException(
+                        $"Expected '  MODBUS_COMM_LOAD(<path>, EN := <expr-or-ENO>, REQ := <expr>, PORT := <expr>, BAUD := <expr>, " +
+                        $"PARITY := <expr>, RESP_TO := <expr>, MB_DB := <expr>, DONE => <tag>, ERROR => <tag>, STATUS => <tag>)', " +
+                        $"got: '{lines[i]}'");
+                }
+
+                var modbusCommLoadArgs = modbusCommLoadMatch.Groups["args"].Value.Split(", ", StringSplitOptions.None);
+                if (modbusCommLoadArgs.Length != 11
+                    || !modbusCommLoadArgs[1].StartsWith("EN := ", StringComparison.Ordinal)
+                    || !modbusCommLoadArgs[2].StartsWith("REQ := ", StringComparison.Ordinal)
+                    || !modbusCommLoadArgs[3].StartsWith("PORT := ", StringComparison.Ordinal)
+                    || !modbusCommLoadArgs[4].StartsWith("BAUD := ", StringComparison.Ordinal)
+                    || !modbusCommLoadArgs[5].StartsWith("PARITY := ", StringComparison.Ordinal)
+                    || !modbusCommLoadArgs[6].StartsWith("RESP_TO := ", StringComparison.Ordinal)
+                    || !modbusCommLoadArgs[7].StartsWith("MB_DB := ", StringComparison.Ordinal)
+                    || !modbusCommLoadArgs[8].StartsWith("DONE => ", StringComparison.Ordinal)
+                    || !modbusCommLoadArgs[9].StartsWith("ERROR => ", StringComparison.Ordinal)
+                    || !modbusCommLoadArgs[10].StartsWith("STATUS => ", StringComparison.Ordinal))
+                {
+                    throw new IrFormatException(
+                        "Expected '<path>, EN := <expr>, REQ := <expr>, PORT := <expr>, BAUD := <expr>, PARITY := <expr>, " +
+                        $"RESP_TO := <expr>, MB_DB := <expr>, DONE => <tag>, ERROR => <tag>, STATUS => <tag>' inside " +
+                        $"MODBUS_COMM_LOAD(...), got: '{lines[i]}'");
+                }
+
+                var modbusCommLoadPath = modbusCommLoadArgs[0];
+                var modbusCommLoadEn = ParseEnSource(modbusCommLoadArgs[1]["EN := ".Length..]);
+                var modbusCommLoadReq = ParseExprTerm(modbusCommLoadArgs[2]["REQ := ".Length..]);
+                var modbusCommLoadPort = ParseExprTerm(modbusCommLoadArgs[3]["PORT := ".Length..]);
+                var modbusCommLoadBaud = ParseExprTerm(modbusCommLoadArgs[4]["BAUD := ".Length..]);
+                var modbusCommLoadParity = ParseExprTerm(modbusCommLoadArgs[5]["PARITY := ".Length..]);
+                var modbusCommLoadRespTo = ParseExprTerm(modbusCommLoadArgs[6]["RESP_TO := ".Length..]);
+                var modbusCommLoadMbDb = ParseExprTerm(modbusCommLoadArgs[7]["MB_DB := ".Length..]);
+                var modbusCommLoadDone = modbusCommLoadArgs[8]["DONE => ".Length..];
+                var modbusCommLoadError = modbusCommLoadArgs[9]["ERROR => ".Length..];
+                var modbusCommLoadStatus = modbusCommLoadArgs[10]["STATUS => ".Length..];
+                modbusCommLoads.Add(new ModbusCommLoadStatement(
+                    modbusCommLoadEn, modbusCommLoadPath, modbusCommLoadReq, modbusCommLoadPort, modbusCommLoadBaud, modbusCommLoadParity,
+                    modbusCommLoadRespTo, modbusCommLoadMbDb, modbusCommLoadDone, modbusCommLoadError, modbusCommLoadStatus));
+                order.Add(new IrStatementRef(IrStatementKind.ModbusCommLoad, modbusCommLoads.Count - 1));
+                i++;
+            }
+
+            // Registry-driven fixed-shape instructions are always emitted last (IrSerializer). The
+            // keyword IS the source Part Name (MB_MASTER, MB_COMM_LOAD), so the line is recognized by
+            // asking FixedShapeInstructions rather than by a hardcoded prefix — one table, so adding an
+            // instruction never touches this parser. Arguments are NAME-KEYED, not positional: a port
+            // absent from <Wires> is absent from the line entirely, and a port wired to <OpenCon> reads
+            // `NAME := OPEN` / `NAME => OPEN`. The arrow carries the direction, so this parse needs no
+            // version lookup at all.
+            while (i < lines.Length && FixedShapeLineInstruction(lines[i]) is { } instruction)
+            {
+                var fixedShapeMatch = FixedShapeLineRegex().Match(lines[i]);
+                if (!fixedShapeMatch.Success)
+                {
+                    throw new IrFormatException(
+                        $"Expected '  {instruction}(<instance-path>, EN := <expr-or-ENO>, <PORT> := <expr>|OPEN, " +
+                        $"<PORT> => <tag>|OPEN, ...)', got: '{lines[i]}'");
+                }
+
+                var fixedShapeArgs = fixedShapeMatch.Groups["args"].Value.Split(", ", StringSplitOptions.None);
+                if (fixedShapeArgs.Length < 2 || !fixedShapeArgs[1].StartsWith("EN := ", StringComparison.Ordinal))
+                {
+                    throw new IrFormatException(
+                        $"Expected '<instance-path>, EN := <expr-or-ENO>, ...' inside {instruction}(...), got: '{lines[i]}'");
+                }
+
+                var fixedShapePath = fixedShapeArgs[0];
+                var fixedShapeEn = ParseEnSource(fixedShapeArgs[1]["EN := ".Length..]);
+                var arguments = new List<FixedShapeArgument>();
+                foreach (var argument in fixedShapeArgs.Skip(2))
+                {
+                    var inputSplit = argument.IndexOf(" := ", StringComparison.Ordinal);
+                    var outputSplit = argument.IndexOf(" => ", StringComparison.Ordinal);
+                    if (inputSplit >= 0 && (outputSplit < 0 || inputSplit < outputSplit))
+                    {
+                        var port = argument[..inputSplit];
+                        var value = argument[(inputSplit + 4)..];
+                        arguments.Add(new FixedShapeArgument(port, value == OpenPortSentinel
+                            ? new PortBinding.OpenInput()
+                            : new PortBinding.Value(ParseExprTerm(value))));
+                    }
+                    else if (outputSplit >= 0)
+                    {
+                        var port = argument[..outputSplit];
+                        var target = argument[(outputSplit + 4)..];
+                        arguments.Add(new FixedShapeArgument(port, target == OpenPortSentinel
+                            ? new PortBinding.OpenOutput()
+                            : new PortBinding.Dest(target)));
+                    }
+                    else
+                    {
+                        throw new IrFormatException(
+                            $"Expected '<PORT> := <expr>|OPEN' or '<PORT> => <tag>|OPEN' inside {instruction}(...), got: '{argument}'");
+                    }
+                }
+
+                fixedShapes.Add(new FixedShapeStatement(instruction, fixedShapeEn, fixedShapePath, arguments));
+                order.Add(new IrStatementRef(IrStatementKind.FixedShape, fixedShapes.Count - 1));
+                i++;
+            }
+
+            if (i == passStart)
+            {
+                break;
+            }
         }
 
-        // FI-69: a statement written out of kind-order is consumed by no loop above, so it used to fall
-        // through to the outer network loop and fail with "Expected 'NETWORK <n> \"<title>\"'" — a message
-        // naming a header that is perfectly well-formed. Cost two import passes on a live job before the
-        // rule was recognised. Checked here, once, against the same table for every kind: a new
-        // instruction added above inherits the diagnostic instead of needing its own special case.
-        if (i < lines.Length)
+        // Statements can no longer be "out of order" — any interleaving is the rung order. The one
+        // positional rule left is the network COMMENT, which belongs directly under the NETWORK header.
+        // Without this check a misplaced one falls through to the outer loop and is reported as a
+        // malformed NETWORK header (FI-69's original complaint: a message naming the wrong line).
+        if (i < lines.Length && lines[i].StartsWith("  COMMENT \"", StringComparison.Ordinal))
         {
-            var strayKind = StatementSectionIndexOf(lines[i]);
-            if (strayKind >= 0)
-            {
-                throw OutOfOrderStatement(number, i, lines[i], strayKind, new[]
-                {
-                    comment is null ? 0 : 1, timers.Count, assignments.Count, moves.Count, wordAnds.Count,
-                    calls.Count, muls.Count, converts.Count, swaps.Count, absStatements.Count, limits.Count,
-                    tSubs.Count, tConvs.Count, calcs.Count, moveBlkVariants.Count, waits.Count,
-                    fillBlockIs.Count, modbusMasters.Count, modbusCommLoads.Count, fixedShapes.Count,
-                });
-            }
+            throw new IrFormatException(
+                $"Network {number}, line {i + 1}: a network COMMENT must come directly under the NETWORK header, " +
+                $"before the first statement. Got: '{lines[i]}'");
         }
 
         if (assignments.Count == 0 && timers.Count == 0 && moves.Count == 0 && wordAnds.Count == 0
@@ -949,7 +981,10 @@ public static partial class IrParser
 
         return new IrNetwork(
             number, title, assignments, timers, moves, wordAnds, calls, comment, muls, converts, swaps, absStatements, limits, tSubs, tConvs, calcs,
-            moveBlkVariants, waits, fillBlockIs, modbusMasters, modbusCommLoads, fixedShapes);
+            moveBlkVariants, waits, fillBlockIs, modbusMasters, modbusCommLoads, fixedShapes)
+        {
+            StatementOrder = IrNetwork.ExplicitOrderOrNull(order),
+        };
     }
 
     // The reserved readable-form token for a deliberately unconnected port — see
@@ -969,94 +1004,6 @@ public static partial class IrParser
         }
 
         return null;
-    }
-
-    // The kind-order a network body is parsed in (ir/SPEC.md "Statement-kind ordering within one
-    // network"), in the same sequence as the section loops in ParseNetwork and as IrSerializer emits.
-    // This is the diagnostic's single source of truth: adding a section loop above without adding its
-    // row here trips the arity guard in OutOfOrderStatement rather than silently losing the message.
-    // Derived from the registry, never restated: adding an instruction to FixedShapeInstructions
-    // teaches the out-of-order diagnostic about it too.
-    private static readonly string[] FixedShapePrefixes =
-        FixedShapeInstructions.PartNames.Select(n => $"  {n}(").ToArray();
-
-    private static readonly (string Display, string[] Prefixes)[] StatementSections =
-    {
-        ("COMMENT", new[] { "  COMMENT \"" }),
-        ("TON/TONR/TOF", new[] { "  TON(", "  TONR(", "  TOF(" }),
-        ("COIL/SCOIL/RCOIL", new[] { "  COIL ", "  SCOIL ", "  RCOIL " }),
-        ("MOVE", new[] { "  MOVE(" }),
-        ("WAND", new[] { "  WAND(" }),
-        ("CALL", new[] { "  CALL " }),
-        ("MUL/ADD/SUB/DIV", new[] { "  MUL(", "  ADD(", "  SUB(", "  DIV(" }),
-        ("CONVERT", new[] { "  CONVERT(" }),
-        ("SWAP", new[] { "  SWAP(" }),
-        ("ABS", new[] { "  ABS(" }),
-        ("LIMIT", new[] { "  LIMIT(" }),
-        ("T_SUB", new[] { "  T_SUB(" }),
-        ("T_CONV", new[] { "  T_CONV(" }),
-        ("CALC", new[] { "  CALC(" }),
-        ("MOVE_BLK_VARIANT", new[] { "  MOVE_BLK_VARIANT(" }),
-        ("WAIT", new[] { "  WAIT(" }),
-        ("FILLBLOCKI", new[] { "  FILLBLOCKI(" }),
-        ("MODBUS_MASTER", new[] { "  MODBUS_MASTER(" }),
-        ("MODBUS_COMM_LOAD", new[] { "  MODBUS_COMM_LOAD(" }),
-        ("fixed-shape (MB_COMM_LOAD/MB_MASTER/...)", FixedShapePrefixes),
-    };
-
-    // The index into StatementSections of the kind this line opens, or -1 if the line is not a
-    // statement at all (a blank line, the next NETWORK header, SIDECAR — none of which are this
-    // check's business).
-    private static int StatementSectionIndexOf(string line)
-    {
-        for (var section = 0; section < StatementSections.Length; section++)
-        {
-            foreach (var prefix in StatementSections[section].Prefixes)
-            {
-                if (line.StartsWith(prefix, StringComparison.Ordinal))
-                {
-                    return section;
-                }
-            }
-        }
-
-        return -1;
-    }
-
-    // Names the rule, the kind found, and the kind it has to move above — the three things the old
-    // message left the author to infer. presentCounts is parallel to StatementSections.
-    private static IrFormatException OutOfOrderStatement(
-        int number, int lineIndex, string line, int section, IReadOnlyList<int> presentCounts)
-    {
-        if (presentCounts.Count != StatementSections.Length)
-        {
-            throw new InvalidOperationException(
-                $"IrParser statement-order table is out of step with ParseNetwork: {StatementSections.Length} " +
-                $"sections, {presentCounts.Count} counts. Add the new section's row to StatementSections.");
-        }
-
-        // The section that already consumed lines and ranks after this one is what this statement has to
-        // move above. Sections are consumed in table order, so the first such is also the earliest in text.
-        var blocker = -1;
-        for (var s = section + 1; s < presentCounts.Count; s++)
-        {
-            if (presentCounts[s] > 0)
-            {
-                blocker = s;
-                break;
-            }
-        }
-
-        var found = StatementSections[section].Display;
-        var problem = blocker >= 0
-            ? $"a {found} cannot follow a {StatementSections[blocker].Display} — move it above the first " +
-              $"{StatementSections[blocker].Display} in this network"
-            : $"a {found} is out of order here";
-
-        return new IrFormatException(
-            $"Network {number}, line {lineIndex + 1}: {problem}. Statements within one network are grouped " +
-            $"by kind, one contiguous run each, in this order: {string.Join(", ", StatementSections.Select(s => s.Display))}. " +
-            $"Got: '{line}'");
     }
 
     // The inverse of IrSerializer.SerializeEnSource — "ENO" is the reserved sentinel for the
@@ -1636,6 +1583,8 @@ public static partial class IrParser
             "add" => MulKind.Add,
             "sub" => MulKind.Subtract,
             "div" => MulKind.Divide,
+            "max" => MulKind.Maximum,
+            "min" => MulKind.Minimum,
             _ => throw new IrFormatException($"Unexpected Mul kind '{mulKindText}' in SIDECAR for network {networkNumber}."),
         };
         var en = ParseEnSourceSidecar(lines, ref i, "    ");
@@ -1658,10 +1607,27 @@ public static partial class IrParser
             i++;
         }
 
+        // Optional, MAX/MIN only: the Part's Version, and `eno = enabled` when the source omitted
+        // DisabledENO. Absent lines are the defaults, so every sidecar written before these existed
+        // parses unchanged.
+        string? version = null;
+        if (i < lines.Length && lines[i].StartsWith("    version = ", StringComparison.Ordinal))
+        {
+            version = lines[i]["    version = ".Length..];
+            i++;
+        }
+
+        var enoEnabled = false;
+        if (i < lines.Length && lines[i] == "    eno = enabled")
+        {
+            enoEnabled = true;
+            i++;
+        }
+
         var destAccessUId = int.Parse(RequirePrefixedLine(lines, ref i, "    dest = "));
         var destWireUId = int.Parse(RequirePrefixedLine(lines, ref i, "    destwire = "));
 
-        return new MulStatementSidecar(mulPartUId, en, inputs, destAccessUId, destWireUId, mulKind, srcType);
+        return new MulStatementSidecar(mulPartUId, en, inputs, destAccessUId, destWireUId, mulKind, srcType, version, enoEnabled);
     }
 
     // A Convert's own sidecar shape mirrors ParseMoveSidecar's rail/steps mechanism, except `en`
@@ -2140,7 +2106,24 @@ public static partial class IrParser
         var destAccessUId = int.Parse(RequirePrefixedLine(lines, ref i, "    dest = "));
         var destWireUId = int.Parse(RequirePrefixedLine(lines, ref i, "    destwire = "));
 
-        return new MoveStatementSidecar(movePartUId, railWireUId, steps, inOperand, destAccessUId, destWireUId);
+        // Optional `out <k> = <access> <wire>` lines, k from 2 — a multi-output MOVE's extra outputs.
+        var additionalOutputs = new List<MoveOutputSidecar>();
+        while (i < lines.Length && lines[i].StartsWith($"    out {additionalOutputs.Count + 2} = ", StringComparison.Ordinal))
+        {
+            var fields = lines[i][$"    out {additionalOutputs.Count + 2} = ".Length..].Split(' ');
+            if (fields.Length != 2)
+            {
+                throw new IrFormatException($"Expected '    out <k> = <access-uid> <wire-uid>' in SIDECAR for network {networkNumber}, got: '{lines[i]}'");
+            }
+
+            additionalOutputs.Add(new MoveOutputSidecar(int.Parse(fields[0]), int.Parse(fields[1])));
+            i++;
+        }
+
+        return new MoveStatementSidecar(movePartUId, railWireUId, steps, inOperand, destAccessUId, destWireUId)
+        {
+            AdditionalOutputs = additionalOutputs,
+        };
     }
 
     private static TimerBindingSidecar ParseTimerSidecar(string[] lines, ref int i, int networkNumber)
@@ -2420,7 +2403,7 @@ public static partial class IrParser
     [GeneratedRegex(@"^  (?<kind>TONR|TOF|TON)\((?<args>.+)\)$")]
     private static partial Regex TonLineRegex();
 
-    [GeneratedRegex(@"^  MOVE\(EN := (?<en>.+), IN := (?<in>.+)\) => (?<dest>\S+)$")]
+    [GeneratedRegex(@"^  MOVE\(EN := (?<en>.+), IN := (?<in>.+)\) => (?<dest>\S+(?:, \S+)*)$")]
     private static partial Regex MoveLineRegex();
 
     // Variable input count (Cardinality-driven, S1 item 12) — only the outer "WAND(...) => dest"
@@ -2441,7 +2424,7 @@ public static partial class IrParser
     // separately (ParseNetwork). MUL/ADD (S1 item 19) share this regex, distinguished by keyword;
     // SUB/DIV (2026-07-14, FC Scale) extend the same regex — always exactly 2 args in practice
     // (no Cardinality element in the source), but parsed the same variable-arity way regardless.
-    [GeneratedRegex(@"^  (?<kind>MUL|ADD|SUB|DIV)\((?<args>.+)\) => (?<dest>\S+)$")]
+    [GeneratedRegex(@"^  (?<kind>MUL|ADD|SUB|DIV|MAX|MIN)\((?<args>.+)\) => (?<dest>\S+)$")]
     private static partial Regex MulLineRegex();
 
     // Fixed arity (EN, IN) — same regex-based shape as MOVE's own line.

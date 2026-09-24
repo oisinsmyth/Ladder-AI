@@ -290,7 +290,8 @@ public sealed record PartNode(
     IReadOnlyList<CallParameterNode>? CallParameters = null,
     bool AutomaticSrcType = false,
     string? DestType = null,
-    string? Equation = null);
+    string? Equation = null,
+    bool EnoEnabled = false);
 
 // A wired parameter declared at a Call site — confirmed real, 2026-07-12, `FC PlantAutoControl`: only
 // parameters that are actually wired appear here at all (19 of 20 real Call instances have zero

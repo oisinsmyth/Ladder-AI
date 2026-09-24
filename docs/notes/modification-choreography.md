@@ -18,8 +18,11 @@ reference is worth splitting out" point.)
      never `<rest> AND (X OR Y)` (appending a compound is un-synthesizable). And a chain that needs **two**
      parallel OR-conditions — `(A OR B) AND (C OR D)`, an ordinary two-branch ladder shape — can't be one
      synthesized chain: hoist one into a **named helper bit** (`H := A OR B`) and use `H` in the chain.
-   - **Statement kind-ordering within a network:** statements parse/emit in kind order (timers → coils →
-     moves → arithmetic → calls). Write them in that order or the parser errors.
+   - **Statement order within a network is rung order (2026-09-24):** kinds may interleave, and the
+     written order is the order the rungs are drawn and executed in — so it is scan-significant. Keep
+     an edited network's untouched statements where they were (`ir/SPEC.md`, "Statement order within
+     one network"). Until 2026-09-24 kinds had to be grouped (timers → coils → moves → arithmetic →
+     calls) or the parser errored.
 4. **Re-derive the sidecar (ADR-0005 derive-always) — and its one residual limit.** A synthesizable block
    is committed sidecar-*less* — `to-ir` omits the sidecar and `to-xml` re-derives it on the way back to
    XML (ADR-0005, Accepted, which **retired** the old D-6 "can't add a statement to a stored sidecar"

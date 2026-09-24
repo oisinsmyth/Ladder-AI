@@ -1,0 +1,89 @@
+<FlgNet xmlns="http://www.siemens.com/automation/Openness/SW/NetworkSource/FlgNet/v5">
+  <Parts>
+    <Access Scope="GlobalVariable" UId="21">
+      <Symbol>
+        <Component Name="DemoData" />
+        <Component Name="ValueA" />
+      </Symbol>
+    </Access>
+    <Access Scope="GlobalVariable" UId="22">
+      <Symbol>
+        <Component Name="DemoData" />
+        <Component Name="ValueB" />
+      </Symbol>
+    </Access>
+    <Access Scope="GlobalVariable" UId="23">
+      <Symbol>
+        <Component Name="DemoData" />
+        <Component Name="ValueC" />
+      </Symbol>
+    </Access>
+    <Access Scope="GlobalVariable" UId="24">
+      <Symbol>
+        <Component Name="DemoData" />
+        <Component Name="Highest" />
+      </Symbol>
+    </Access>
+    <Access Scope="GlobalVariable" UId="25">
+      <Symbol>
+        <Component Name="DemoData" />
+        <Component Name="ValueA" />
+      </Symbol>
+    </Access>
+    <Access Scope="LiteralConstant" UId="26">
+      <Constant>
+        <ConstantType>Real</ConstantType>
+        <ConstantValue>5.0</ConstantValue>
+      </Constant>
+    </Access>
+    <Access Scope="GlobalVariable" UId="27">
+      <Symbol>
+        <Component Name="DemoData" />
+        <Component Name="Lowest" />
+      </Symbol>
+    </Access>
+    <Part Name="MAX" Version="1.0" UId="31" DisabledENO="true">
+      <TemplateValue Name="card" Type="Cardinality">3</TemplateValue>
+      <TemplateValue Name="value_type" Type="Type">Real</TemplateValue>
+    </Part>
+    <Part Name="MIN" Version="1.0" UId="32">
+      <TemplateValue Name="card" Type="Cardinality">2</TemplateValue>
+      <TemplateValue Name="value_type" Type="Type">Real</TemplateValue>
+    </Part>
+  </Parts>
+  <Wires>
+    <Wire UId="41">
+      <Powerrail />
+      <NameCon UId="31" Name="en" />
+      <NameCon UId="32" Name="en" />
+    </Wire>
+    <Wire UId="42">
+      <IdentCon UId="21" />
+      <NameCon UId="31" Name="IN1" />
+    </Wire>
+    <Wire UId="43">
+      <IdentCon UId="22" />
+      <NameCon UId="31" Name="IN2" />
+    </Wire>
+    <Wire UId="44">
+      <IdentCon UId="23" />
+      <NameCon UId="31" Name="IN3" />
+    </Wire>
+    <Wire UId="45">
+      <NameCon UId="31" Name="OUT" />
+      <IdentCon UId="24" />
+    </Wire>
+    <Wire UId="46">
+      <IdentCon UId="25" />
+      <NameCon UId="32" Name="IN1" />
+    </Wire>
+    <Wire UId="47">
+      <IdentCon UId="26" />
+      <NameCon UId="32" Name="IN2" />
+    </Wire>
+    <Wire UId="48">
+      <NameCon UId="32" Name="OUT" />
+      <IdentCon UId="27" />
+    </Wire>
+  </Wires>
+</FlgNet>

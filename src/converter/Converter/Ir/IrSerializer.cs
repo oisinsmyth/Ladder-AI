@@ -101,249 +101,296 @@ public static class IrSerializer
             return;
         }
 
-        foreach (var timer in network.Timers)
+        foreach (var statement in network.OrderedStatements())
         {
-            sb.Append("  ").Append(TimerKeywordFor(timer.Kind)).Append('(').Append(timer.InstancePath)
-              .Append(", IN := ").Append(SerializeChain(timer.In))
-              .Append(", PT := ").Append(SerializeExpr(timer.Pt));
-
-            if (timer.Reset is { } reset)
+            switch (statement.Kind)
             {
-                sb.Append(", R := ").Append(SerializeExpr(reset));
-            }
-
-            sb.Append(")\n");
-        }
-
-        foreach (var assignment in network.Assignments)
-        {
-            sb.Append("  ").Append(CoilKeywordFor(assignment.Kind)).Append(' ').Append(assignment.CoilTag)
-              .Append(" := ").Append(SerializeChain(assignment.Condition)).Append('\n');
-        }
-
-        foreach (var move in network.Moves)
-        {
-            sb.Append("  MOVE(EN := ").Append(SerializeChain(move.En))
-              .Append(", IN := ").Append(SerializeExpr(move.In))
-              .Append(") => ").Append(move.DestTag).Append('\n');
-        }
-
-        foreach (var wordAnd in network.WordAnds)
-        {
-            sb.Append("  WAND(EN := ").Append(SerializeChain(wordAnd.En));
-            for (var k = 0; k < wordAnd.Inputs.Count; k++)
-            {
-                sb.Append(", IN").Append(k + 1).Append(" := ").Append(SerializeExpr(wordAnd.Inputs[k]));
-            }
-
-            sb.Append(") => ").Append(wordAnd.DestTag).Append('\n');
-        }
-
-        foreach (var call in network.Calls)
-        {
-            // InstancePath is omitted entirely when absent — confirmed real, 2026-07-12 (S1 item
-            // 24, FB MotorVSDSystem's own call to the stateless FC "Scale"): an FC call has no instance
-            // at all, unlike every FB call, which always does. `EN := ` is a reserved prefix no
-            // real instance path could ever collide with, so the parser disambiguates on it.
-            sb.Append("  CALL ").Append(call.BlockName).Append('(');
-            if (call.InstancePath is not null)
-            {
-                sb.Append(call.InstancePath).Append(", ");
-            }
-
-            sb.Append("EN := ").Append(SerializeChain(call.En));
-
-            foreach (var argument in call.Arguments)
-            {
-                switch (argument)
+                case IrStatementKind.Timer:
                 {
-                    case CallArgument.InputArg input:
-                        sb.Append(", ").Append(input.ParamName).Append(" := ").Append(SerializeExpr(input.Value));
-                        break;
-                    case CallArgument.OutputArg output:
-                        sb.Append(", ").Append(output.ParamName).Append(" => ").Append(output.DestTag);
-                        break;
-                    default:
-                        throw new IrFormatException($"Unsupported call argument kind: {argument.GetType().Name}");
+                    var timer = network.Timers[statement.Index];
+                    sb.Append("  ").Append(TimerKeywordFor(timer.Kind)).Append('(').Append(timer.InstancePath)
+                      .Append(", IN := ").Append(SerializeChain(timer.In))
+                      .Append(", PT := ").Append(SerializeExpr(timer.Pt));
+
+                    if (timer.Reset is { } reset)
+                    {
+                        sb.Append(", R := ").Append(SerializeExpr(reset));
+                    }
+
+                    sb.Append(")\n");
+                    break;
                 }
-            }
 
-            sb.Append(")\n");
-        }
-
-        foreach (var mul in network.Muls)
-        {
-            sb.Append("  ").Append(MulKeywordFor(mul.Kind)).Append("(EN := ").Append(SerializeEnSource(mul.En));
-            for (var k = 0; k < mul.Inputs.Count; k++)
-            {
-                sb.Append(", IN").Append(k + 1).Append(" := ").Append(SerializeExpr(mul.Inputs[k]));
-            }
-
-            sb.Append(") => ").Append(mul.DestTag).Append('\n');
-        }
-
-        foreach (var convert in network.Converts)
-        {
-            sb.Append("  CONVERT(EN := ").Append(SerializeEnSource(convert.En))
-              .Append(", IN := ").Append(SerializeExpr(convert.In))
-              .Append(") => ").Append(convert.DestTag).Append('\n');
-        }
-
-        foreach (var swap in network.Swaps)
-        {
-            sb.Append("  SWAP(EN := ").Append(SerializeEnSource(swap.En))
-              .Append(", IN := ").Append(SerializeExpr(swap.In))
-              .Append(") => ").Append(swap.DestTag).Append('\n');
-        }
-
-        foreach (var abs in network.AbsStatements)
-        {
-            sb.Append("  ABS(EN := ").Append(SerializeEnSource(abs.En))
-              .Append(", IN := ").Append(SerializeExpr(abs.In))
-              .Append(") => ").Append(abs.DestTag).Append('\n');
-        }
-
-        foreach (var limit in network.Limits)
-        {
-            sb.Append("  LIMIT(EN := ").Append(SerializeEnSource(limit.En))
-              .Append(", MN := ").Append(SerializeExpr(limit.Min))
-              .Append(", IN := ").Append(SerializeExpr(limit.In))
-              .Append(", MX := ").Append(SerializeExpr(limit.Max))
-              .Append(") => ").Append(limit.DestTag).Append('\n');
-        }
-
-        foreach (var tSub in network.TSubs)
-        {
-            sb.Append("  T_SUB(EN := ").Append(SerializeEnSource(tSub.En))
-              .Append(", IN1 := ").Append(SerializeExpr(tSub.In1))
-              .Append(", IN2 := ").Append(SerializeExpr(tSub.In2))
-              .Append(") => ").Append(tSub.DestTag).Append('\n');
-        }
-
-        foreach (var tConv in network.TConvs)
-        {
-            sb.Append("  T_CONV(EN := ").Append(SerializeEnSource(tConv.En))
-              .Append(", IN := ").Append(SerializeExpr(tConv.In))
-              .Append(") => ").Append(tConv.DestTag).Append('\n');
-        }
-
-        // Equation trails the destination tag as a quoted string (escaped the same way TITLE/
-        // COMMENT already are) — kept outside the comma-separated argument list entirely so the
-        // equation text (which may itself contain arithmetic operators, though never a comma in
-        // any real instance seen) can never collide with the top-level-comma-split the argument
-        // list itself relies on.
-        foreach (var calc in network.Calcs)
-        {
-            sb.Append("  CALC(EN := ").Append(SerializeEnSource(calc.En));
-            for (var k = 0; k < calc.Inputs.Count; k++)
-            {
-                sb.Append(", IN").Append(k + 1).Append(" := ").Append(SerializeExpr(calc.Inputs[k]));
-            }
-
-            sb.Append(") => ").Append(calc.DestTag).Append(" \"").Append(EscapeString(calc.Equation)).Append("\"\n");
-        }
-
-        // No trailing "=> dest" — MOVE_BLK_VARIANT has two named outputs, not one, so both are
-        // ordinary arguments inside the parens (":=" for inputs, "=>" for outputs), same mixing
-        // convention CALL's own argument list already established.
-        foreach (var moveBlkVariant in network.MoveBlkVariants)
-        {
-            sb.Append("  MOVE_BLK_VARIANT(EN := ").Append(SerializeEnSource(moveBlkVariant.En))
-              .Append(", SRC := ").Append(SerializeExpr(moveBlkVariant.Src))
-              .Append(", COUNT := ").Append(SerializeExpr(moveBlkVariant.Count))
-              .Append(", SRC_INDEX := ").Append(SerializeExpr(moveBlkVariant.SrcIndex))
-              .Append(", DEST_INDEX := ").Append(SerializeExpr(moveBlkVariant.DestIndex))
-              .Append(", Ret_Val => ").Append(moveBlkVariant.RetValTag)
-              .Append(", DEST => ").Append(moveBlkVariant.DestTag)
-              .Append(")\n");
-        }
-
-        // No trailing "=> dest" — WAIT is a pure side-effecting delay, no destination at all.
-        foreach (var wait in network.Waits)
-        {
-            sb.Append("  WAIT(EN := ").Append(SerializeEnSource(wait.En))
-              .Append(", WT := ").Append(SerializeExpr(wait.Wt))
-              .Append(")\n");
-        }
-
-        foreach (var fillBlockI in network.FillBlockIs)
-        {
-            sb.Append("  FILLBLOCKI(EN := ").Append(SerializeEnSource(fillBlockI.En))
-              .Append(", IN := ").Append(SerializeExpr(fillBlockI.In))
-              .Append(", COUNT := ").Append(SerializeExpr(fillBlockI.Count))
-              .Append(") => ").Append(fillBlockI.DestTag).Append('\n');
-        }
-
-        // Instance path is the first positional argument (no label, same convention as TON/CALL's
-        // own). No trailing "=> dest" — four named outputs, not one, mixed in with the inputs
-        // inside the parens (":=" for inputs, "=>" for outputs), same convention MOVE_BLK_VARIANT
-        // already established. FlowCtrl/RtsOnDly/RtsOffDly (Modbus_Comm_Load only) are
-        // sidecar-only, never shown here — see ModbusCommLoadStatementSidecar's own doc comment.
-        foreach (var modbusMaster in network.ModbusMasters)
-        {
-            sb.Append("  MODBUS_MASTER(").Append(modbusMaster.InstancePath)
-              .Append(", EN := ").Append(SerializeEnSource(modbusMaster.En))
-              .Append(", REQ := ").Append(SerializeExpr(modbusMaster.Req))
-              .Append(", MB_ADDR := ").Append(SerializeExpr(modbusMaster.MbAddr))
-              .Append(", MODE := ").Append(SerializeExpr(modbusMaster.Mode))
-              .Append(", DATA_ADDR := ").Append(SerializeExpr(modbusMaster.DataAddr))
-              .Append(", DATA_LEN := ").Append(SerializeExpr(modbusMaster.DataLen))
-              .Append(", DATA_PTR := ").Append(SerializeExpr(modbusMaster.DataPtr))
-              .Append(", DONE => ").Append(modbusMaster.DoneTag)
-              .Append(", BUSY => ").Append(modbusMaster.BusyTag)
-              .Append(", ERROR => ").Append(modbusMaster.ErrorTag)
-              .Append(", STATUS => ").Append(modbusMaster.StatusTag)
-              .Append(")\n");
-        }
-
-        foreach (var modbusCommLoad in network.ModbusCommLoads)
-        {
-            sb.Append("  MODBUS_COMM_LOAD(").Append(modbusCommLoad.InstancePath)
-              .Append(", EN := ").Append(SerializeEnSource(modbusCommLoad.En))
-              .Append(", REQ := ").Append(SerializeExpr(modbusCommLoad.Req))
-              .Append(", PORT := ").Append(SerializeExpr(modbusCommLoad.Port))
-              .Append(", BAUD := ").Append(SerializeExpr(modbusCommLoad.Baud))
-              .Append(", PARITY := ").Append(SerializeExpr(modbusCommLoad.Parity))
-              .Append(", RESP_TO := ").Append(SerializeExpr(modbusCommLoad.RespTo))
-              .Append(", MB_DB := ").Append(SerializeExpr(modbusCommLoad.MbDb))
-              .Append(", DONE => ").Append(modbusCommLoad.DoneTag)
-              .Append(", ERROR => ").Append(modbusCommLoad.ErrorTag)
-              .Append(", STATUS => ").Append(modbusCommLoad.StatusTag)
-              .Append(")\n");
-        }
-
-        // Registry-driven fixed-shape instructions (MB_COMM_LOAD/MB_MASTER as of 2026-08-12).
-        // Same layout as MODBUS_MASTER above — instance path first, then EN, then the template's
-        // own ports in order — except that the port list is data, not code, and a deliberately
-        // unconnected port is SHOWN as `OPEN` rather than hidden in the sidecar. Showing it is the
-        // point: a port an AI cannot see is a port an AI cannot write back.
-        foreach (var fixedShape in network.FixedShapes)
-        {
-            sb.Append("  ").Append(fixedShape.Instruction).Append('(').Append(fixedShape.InstancePath)
-              .Append(", EN := ").Append(SerializeEnSource(fixedShape.En));
-            foreach (var argument in fixedShape.Arguments)
-            {
-                sb.Append(", ").Append(argument.Port);
-                switch (argument.Binding)
+                case IrStatementKind.Assignment:
                 {
-                    case PortBinding.Value value:
-                        sb.Append(" := ").Append(SerializeExpr(value.Expr));
-                        break;
-                    case PortBinding.Dest dest:
-                        sb.Append(" => ").Append(dest.Tag);
-                        break;
-                    case PortBinding.OpenInput:
-                        sb.Append(" := OPEN");
-                        break;
-                    case PortBinding.OpenOutput:
-                        sb.Append(" => OPEN");
-                        break;
-                    default:
-                        throw new IrFormatException($"Unsupported PortBinding kind: {argument.Binding.GetType().Name}");
+                    var assignment = network.Assignments[statement.Index];
+                    sb.Append("  ").Append(CoilKeywordFor(assignment.Kind)).Append(' ').Append(assignment.CoilTag)
+                      .Append(" := ").Append(SerializeChain(assignment.Condition)).Append('\n');
+                    break;
                 }
-            }
 
-            sb.Append(")\n");
+                case IrStatementKind.Move:
+                {
+                    var move = network.Moves[statement.Index];
+                    sb.Append("  MOVE(EN := ").Append(SerializeChain(move.En))
+                      .Append(", IN := ").Append(SerializeExpr(move.In))
+                      .Append(") => ").Append(string.Join(", ", move.DestTags)).Append('\n');
+                    break;
+                }
+
+                case IrStatementKind.WordAnd:
+                {
+                    var wordAnd = network.WordAnds[statement.Index];
+                    sb.Append("  WAND(EN := ").Append(SerializeChain(wordAnd.En));
+                    for (var k = 0; k < wordAnd.Inputs.Count; k++)
+                    {
+                        sb.Append(", IN").Append(k + 1).Append(" := ").Append(SerializeExpr(wordAnd.Inputs[k]));
+                    }
+
+                    sb.Append(") => ").Append(wordAnd.DestTag).Append('\n');
+                    break;
+                }
+
+                case IrStatementKind.Call:
+                {
+                    var call = network.Calls[statement.Index];
+                    // InstancePath is omitted entirely when absent — confirmed real, 2026-07-12 (S1 item
+                    // 24, FB MotorVSDSystem's own call to the stateless FC "Scale"): an FC call has no instance
+                    // at all, unlike every FB call, which always does. `EN := ` is a reserved prefix no
+                    // real instance path could ever collide with, so the parser disambiguates on it.
+                    sb.Append("  CALL ").Append(call.BlockName).Append('(');
+                    if (call.InstancePath is not null)
+                    {
+                        sb.Append(call.InstancePath).Append(", ");
+                    }
+
+                    sb.Append("EN := ").Append(SerializeChain(call.En));
+
+                    foreach (var argument in call.Arguments)
+                    {
+                        switch (argument)
+                        {
+                            case CallArgument.InputArg input:
+                                sb.Append(", ").Append(input.ParamName).Append(" := ").Append(SerializeExpr(input.Value));
+                                break;
+                            case CallArgument.OutputArg output:
+                                sb.Append(", ").Append(output.ParamName).Append(" => ").Append(output.DestTag);
+                                break;
+                            default:
+                                throw new IrFormatException($"Unsupported call argument kind: {argument.GetType().Name}");
+                        }
+                    }
+
+                    sb.Append(")\n");
+                    break;
+                }
+
+                case IrStatementKind.Mul:
+                {
+                    var mul = network.Muls[statement.Index];
+                    sb.Append("  ").Append(MulKeywordFor(mul.Kind)).Append("(EN := ").Append(SerializeEnSource(mul.En));
+                    for (var k = 0; k < mul.Inputs.Count; k++)
+                    {
+                        sb.Append(", IN").Append(k + 1).Append(" := ").Append(SerializeExpr(mul.Inputs[k]));
+                    }
+
+                    sb.Append(") => ").Append(mul.DestTag).Append('\n');
+                    break;
+                }
+
+                case IrStatementKind.Convert:
+                {
+                    var convert = network.Converts[statement.Index];
+                    sb.Append("  CONVERT(EN := ").Append(SerializeEnSource(convert.En))
+                      .Append(", IN := ").Append(SerializeExpr(convert.In))
+                      .Append(") => ").Append(convert.DestTag).Append('\n');
+                    break;
+                }
+
+                case IrStatementKind.Swap:
+                {
+                    var swap = network.Swaps[statement.Index];
+                    sb.Append("  SWAP(EN := ").Append(SerializeEnSource(swap.En))
+                      .Append(", IN := ").Append(SerializeExpr(swap.In))
+                      .Append(") => ").Append(swap.DestTag).Append('\n');
+                    break;
+                }
+
+                case IrStatementKind.Abs:
+                {
+                    var abs = network.AbsStatements[statement.Index];
+                    sb.Append("  ABS(EN := ").Append(SerializeEnSource(abs.En))
+                      .Append(", IN := ").Append(SerializeExpr(abs.In))
+                      .Append(") => ").Append(abs.DestTag).Append('\n');
+                    break;
+                }
+
+                case IrStatementKind.Limit:
+                {
+                    var limit = network.Limits[statement.Index];
+                    sb.Append("  LIMIT(EN := ").Append(SerializeEnSource(limit.En))
+                      .Append(", MN := ").Append(SerializeExpr(limit.Min))
+                      .Append(", IN := ").Append(SerializeExpr(limit.In))
+                      .Append(", MX := ").Append(SerializeExpr(limit.Max))
+                      .Append(") => ").Append(limit.DestTag).Append('\n');
+                    break;
+                }
+
+                case IrStatementKind.TSub:
+                {
+                    var tSub = network.TSubs[statement.Index];
+                    sb.Append("  T_SUB(EN := ").Append(SerializeEnSource(tSub.En))
+                      .Append(", IN1 := ").Append(SerializeExpr(tSub.In1))
+                      .Append(", IN2 := ").Append(SerializeExpr(tSub.In2))
+                      .Append(") => ").Append(tSub.DestTag).Append('\n');
+                    break;
+                }
+
+                case IrStatementKind.TConv:
+                {
+                    var tConv = network.TConvs[statement.Index];
+                    sb.Append("  T_CONV(EN := ").Append(SerializeEnSource(tConv.En))
+                      .Append(", IN := ").Append(SerializeExpr(tConv.In))
+                      .Append(") => ").Append(tConv.DestTag).Append('\n');
+                    break;
+                }
+
+                // Equation trails the destination tag as a quoted string (escaped the same way TITLE/
+                // COMMENT already are) — kept outside the comma-separated argument list entirely so the
+                // equation text (which may itself contain arithmetic operators, though never a comma in
+                // any real instance seen) can never collide with the top-level-comma-split the argument
+                // list itself relies on.
+                case IrStatementKind.Calc:
+                {
+                    var calc = network.Calcs[statement.Index];
+                    sb.Append("  CALC(EN := ").Append(SerializeEnSource(calc.En));
+                    for (var k = 0; k < calc.Inputs.Count; k++)
+                    {
+                        sb.Append(", IN").Append(k + 1).Append(" := ").Append(SerializeExpr(calc.Inputs[k]));
+                    }
+
+                    sb.Append(") => ").Append(calc.DestTag).Append(" \"").Append(EscapeString(calc.Equation)).Append("\"\n");
+                    break;
+                }
+
+                // No trailing "=> dest" — MOVE_BLK_VARIANT has two named outputs, not one, so both are
+                // ordinary arguments inside the parens (":=" for inputs, "=>" for outputs), same mixing
+                // convention CALL's own argument list already established.
+                case IrStatementKind.MoveBlkVariant:
+                {
+                    var moveBlkVariant = network.MoveBlkVariants[statement.Index];
+                    sb.Append("  MOVE_BLK_VARIANT(EN := ").Append(SerializeEnSource(moveBlkVariant.En))
+                      .Append(", SRC := ").Append(SerializeExpr(moveBlkVariant.Src))
+                      .Append(", COUNT := ").Append(SerializeExpr(moveBlkVariant.Count))
+                      .Append(", SRC_INDEX := ").Append(SerializeExpr(moveBlkVariant.SrcIndex))
+                      .Append(", DEST_INDEX := ").Append(SerializeExpr(moveBlkVariant.DestIndex))
+                      .Append(", Ret_Val => ").Append(moveBlkVariant.RetValTag)
+                      .Append(", DEST => ").Append(moveBlkVariant.DestTag)
+                      .Append(")\n");
+                    break;
+                }
+
+                // No trailing "=> dest" — WAIT is a pure side-effecting delay, no destination at all.
+                case IrStatementKind.Wait:
+                {
+                    var wait = network.Waits[statement.Index];
+                    sb.Append("  WAIT(EN := ").Append(SerializeEnSource(wait.En))
+                      .Append(", WT := ").Append(SerializeExpr(wait.Wt))
+                      .Append(")\n");
+                    break;
+                }
+
+                case IrStatementKind.FillBlockI:
+                {
+                    var fillBlockI = network.FillBlockIs[statement.Index];
+                    sb.Append("  FILLBLOCKI(EN := ").Append(SerializeEnSource(fillBlockI.En))
+                      .Append(", IN := ").Append(SerializeExpr(fillBlockI.In))
+                      .Append(", COUNT := ").Append(SerializeExpr(fillBlockI.Count))
+                      .Append(") => ").Append(fillBlockI.DestTag).Append('\n');
+                    break;
+                }
+
+                // Instance path is the first positional argument (no label, same convention as TON/CALL's
+                // own). No trailing "=> dest" — four named outputs, not one, mixed in with the inputs
+                // inside the parens (":=" for inputs, "=>" for outputs), same convention MOVE_BLK_VARIANT
+                // already established. FlowCtrl/RtsOnDly/RtsOffDly (Modbus_Comm_Load only) are
+                // sidecar-only, never shown here — see ModbusCommLoadStatementSidecar's own doc comment.
+                case IrStatementKind.ModbusMaster:
+                {
+                    var modbusMaster = network.ModbusMasters[statement.Index];
+                    sb.Append("  MODBUS_MASTER(").Append(modbusMaster.InstancePath)
+                      .Append(", EN := ").Append(SerializeEnSource(modbusMaster.En))
+                      .Append(", REQ := ").Append(SerializeExpr(modbusMaster.Req))
+                      .Append(", MB_ADDR := ").Append(SerializeExpr(modbusMaster.MbAddr))
+                      .Append(", MODE := ").Append(SerializeExpr(modbusMaster.Mode))
+                      .Append(", DATA_ADDR := ").Append(SerializeExpr(modbusMaster.DataAddr))
+                      .Append(", DATA_LEN := ").Append(SerializeExpr(modbusMaster.DataLen))
+                      .Append(", DATA_PTR := ").Append(SerializeExpr(modbusMaster.DataPtr))
+                      .Append(", DONE => ").Append(modbusMaster.DoneTag)
+                      .Append(", BUSY => ").Append(modbusMaster.BusyTag)
+                      .Append(", ERROR => ").Append(modbusMaster.ErrorTag)
+                      .Append(", STATUS => ").Append(modbusMaster.StatusTag)
+                      .Append(")\n");
+                    break;
+                }
+
+                case IrStatementKind.ModbusCommLoad:
+                {
+                    var modbusCommLoad = network.ModbusCommLoads[statement.Index];
+                    sb.Append("  MODBUS_COMM_LOAD(").Append(modbusCommLoad.InstancePath)
+                      .Append(", EN := ").Append(SerializeEnSource(modbusCommLoad.En))
+                      .Append(", REQ := ").Append(SerializeExpr(modbusCommLoad.Req))
+                      .Append(", PORT := ").Append(SerializeExpr(modbusCommLoad.Port))
+                      .Append(", BAUD := ").Append(SerializeExpr(modbusCommLoad.Baud))
+                      .Append(", PARITY := ").Append(SerializeExpr(modbusCommLoad.Parity))
+                      .Append(", RESP_TO := ").Append(SerializeExpr(modbusCommLoad.RespTo))
+                      .Append(", MB_DB := ").Append(SerializeExpr(modbusCommLoad.MbDb))
+                      .Append(", DONE => ").Append(modbusCommLoad.DoneTag)
+                      .Append(", ERROR => ").Append(modbusCommLoad.ErrorTag)
+                      .Append(", STATUS => ").Append(modbusCommLoad.StatusTag)
+                      .Append(")\n");
+                    break;
+                }
+
+                // Registry-driven fixed-shape instructions (MB_COMM_LOAD/MB_MASTER as of 2026-08-12).
+                // Same layout as MODBUS_MASTER above — instance path first, then EN, then the template's
+                // own ports in order — except that the port list is data, not code, and a deliberately
+                // unconnected port is SHOWN as `OPEN` rather than hidden in the sidecar. Showing it is the
+                // point: a port an AI cannot see is a port an AI cannot write back.
+                case IrStatementKind.FixedShape:
+                {
+                    var fixedShape = network.FixedShapes[statement.Index];
+                    sb.Append("  ").Append(fixedShape.Instruction).Append('(').Append(fixedShape.InstancePath)
+                      .Append(", EN := ").Append(SerializeEnSource(fixedShape.En));
+                    foreach (var argument in fixedShape.Arguments)
+                    {
+                        sb.Append(", ").Append(argument.Port);
+                        switch (argument.Binding)
+                        {
+                            case PortBinding.Value value:
+                                sb.Append(" := ").Append(SerializeExpr(value.Expr));
+                                break;
+                            case PortBinding.Dest dest:
+                                sb.Append(" => ").Append(dest.Tag);
+                                break;
+                            case PortBinding.OpenInput:
+                                sb.Append(" := OPEN");
+                                break;
+                            case PortBinding.OpenOutput:
+                                sb.Append(" => OPEN");
+                                break;
+                            default:
+                                throw new IrFormatException($"Unsupported PortBinding kind: {argument.Binding.GetType().Name}");
+                        }
+                    }
+
+                    sb.Append(")\n");
+                    break;
+                }
+
+                default:
+                    throw new IrFormatException($"Unsupported statement kind: {statement.Kind}");
+            }
         }
     }
 
@@ -507,6 +554,8 @@ public static class IrSerializer
         MulKind.Add => "ADD",
         MulKind.Subtract => "SUB",
         MulKind.Divide => "DIV",
+        MulKind.Maximum => "MAX",
+        MulKind.Minimum => "MIN",
         _ => throw new IrFormatException($"Unsupported Mul kind: {kind}"),
     };
 
@@ -599,6 +648,13 @@ public static class IrSerializer
 
             sb.Append("    dest = ").Append(move.DestAccessUId).Append('\n');
             sb.Append("    destwire = ").Append(move.DestWireUId).Append('\n');
+
+            // out2..outN of a multi-output MOVE — absent for a single-output one, so those are unchanged.
+            for (var k = 0; k < move.AdditionalOutputs.Count; k++)
+            {
+                sb.Append("    out ").Append(k + 2).Append(" = ").Append(move.AdditionalOutputs[k].DestAccessUId)
+                  .Append(' ').Append(move.AdditionalOutputs[k].DestWireUId).Append('\n');
+            }
         }
 
         for (var d = 0; d < sidecar.WordAnds.Count; d++)
@@ -672,6 +728,17 @@ public static class IrSerializer
             if (mul.SrcType is not null)
             {
                 sb.Append("    srctype = ").Append(mul.SrcType).Append('\n');
+            }
+
+            // MAX/MIN only; absent for every other kind, so their sidecars are unchanged.
+            if (mul.Version is not null)
+            {
+                sb.Append("    version = ").Append(mul.Version).Append('\n');
+            }
+
+            if (mul.EnoEnabled)
+            {
+                sb.Append("    eno = enabled\n");
             }
 
             sb.Append("    dest = ").Append(mul.DestAccessUId).Append('\n');
@@ -1104,6 +1171,8 @@ public static class IrSerializer
         MulKind.Add => "add",
         MulKind.Subtract => "sub",
         MulKind.Divide => "div",
+        MulKind.Maximum => "max",
+        MulKind.Minimum => "min",
         _ => throw new IrFormatException($"Unsupported Mul kind: {kind}"),
     };
 

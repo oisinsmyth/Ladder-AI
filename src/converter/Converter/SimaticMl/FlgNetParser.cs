@@ -19,7 +19,7 @@ public static class FlgNetParser
     // one place to add an instruction, so the parser and the reducer can never disagree about
     // which names are supported.
     private static readonly HashSet<string> SupportedPartNames = new HashSet<string>(StringComparer.Ordinal)
-        { "Contact", "Coil", "O", "TON", "TONR", "TOF", "Eq", "Ge", "Lt", "Ne", "Gt", "Le", "Move", "And", "Not", "SCoil", "RCoil", "Mul", "Add", "Sub", "Div", "Convert", "Swap", "Abs", "LIMIT", "T_SUB", "T_CONV", "Calc", "MOVE_BLK_VARIANT", "WAIT", "FillBlockI", "Modbus_Master", "Modbus_Comm_Load" }
+        { "Contact", "Coil", "O", "TON", "TONR", "TOF", "Eq", "Ge", "Lt", "Ne", "Gt", "Le", "Move", "And", "Not", "SCoil", "RCoil", "Mul", "Add", "Sub", "Div", "Convert", "Swap", "Abs", "LIMIT", "MAX", "MIN", "T_SUB", "T_CONV", "Calc", "MOVE_BLK_VARIANT", "WAIT", "FillBlockI", "Modbus_Master", "Modbus_Comm_Load" }
         .Concat(FixedShapeInstructions.PartNames).ToHashSet(StringComparer.Ordinal);
 
     // Eq/Ge confirmed 2026-07-11 (FC ControlDelays); Lt confirmed 2026-07-12 (S1 item 19,
@@ -106,8 +106,8 @@ public static class FlgNetParser
                 }
                 else if (name == "Move")
                 {
-                    ParseMoveFixedShape(child, uid);
-                    parts.Add(new PartNode(uid, name));
+                    var moveOutputs = ParseMoveFixedShape(child, uid);
+                    parts.Add(new PartNode(uid, name, Cardinality: moveOutputs > 1 ? moveOutputs : null));
                 }
                 else if (name == "And")
                 {
@@ -143,6 +143,11 @@ public static class FlgNetParser
                 {
                     var (limitVersion, limitValueType) = ParseLimitFixedShape(child, uid);
                     parts.Add(new PartNode(uid, name, Version: limitVersion, SrcType: limitValueType));
+                }
+                else if (name is "MAX" or "MIN")
+                {
+                    var (maxMinVersion, maxMinCardinality, maxMinValueType, maxMinEnoEnabled) = ParseMaxMinShape(child, name, uid);
+                    parts.Add(new PartNode(uid, name, Cardinality: maxMinCardinality, Version: maxMinVersion, SrcType: maxMinValueType, EnoEnabled: maxMinEnoEnabled));
                 }
                 else if (name == "T_SUB")
                 {
@@ -285,7 +290,12 @@ public static class FlgNetParser
     // else, rather than store a field whose value never varies (same "don't carry a confirmed
     // constant" reasoning as TON's InstanceOfType). A Cardinality other than 1 would presumably
     // be a MOVE_BLK_VARIANT-style multi-element copy — real but unconfirmed, refused.
-    private static void ParseMoveFixedShape(XElement movePart, int uid)
+    //
+    // SUPERSEDED 2026-09-24 by a live-run export: `Card` 3 is a MULTI-OUTPUT MOVE — one `in` copied to
+    // `out1`..`out3`, each wired to its own tag — not a block copy. Any Card of 1 or more is now read
+    // and returned (the output count); a single-output MOVE still carries no Cardinality on its
+    // PartNode, so it writes back exactly as before.
+    private static int ParseMoveFixedShape(XElement movePart, int uid)
     {
         var disabledEno = movePart.Attribute("DisabledENO")?.Value;
         if (disabledEno != "true")
@@ -298,13 +308,14 @@ public static class FlgNetParser
             ?? throw new SimaticMlFormatException($"<Part Name=\"Move\" UId=\"{uid}\"> is missing its <TemplateValue> cardinality element.");
         var name = RequireAttribute(templateValue, "Name");
         var type = RequireAttribute(templateValue, "Type");
-        if (name != "Card" || type != "Cardinality" || templateValue.Value != "1")
+        if (name != "Card" || type != "Cardinality" || !int.TryParse(templateValue.Value, out var outputs) || outputs < 1)
         {
             throw new UnsupportedConstructException(
                 $"<Part Name=\"Move\" UId=\"{uid}\">'s <TemplateValue Name=\"{name}\" Type=\"{type}\">{templateValue.Value}</TemplateValue> " +
-                "— only Name=\"Card\" Type=\"Cardinality\">1 has been observed (a different value would presumably be a " +
-                "MOVE_BLK_VARIANT-style multi-element copy — real but unconfirmed).");
+                "— only Name=\"Card\" Type=\"Cardinality\" with a count of 1 or more (the number of outputs) has been observed.");
         }
+
+        return outputs;
     }
 
     // A bitwise/word AND box instruction (`Part Name="And"`) — confirmed real, 2026-07-12,
@@ -460,6 +471,67 @@ public static class FlgNetParser
         }
 
         return ParseSrcType(part, partName, uid);
+    }
+
+    // A maximum/minimum selector box (`Part Name="MAX"`/`"MIN"`) — confirmed real 2026-09-24 on a
+    // live-run export (one of each, three Real inputs, rail-fed, tag operands):
+    //
+    //   <Part Name="MAX" Version="1.0" UId="33" DisabledENO="true">
+    //     <TemplateValue Name="card" Type="Cardinality">3</TemplateValue>
+    //     <TemplateValue Name="value_type" Type="Type">Real</TemplateValue>
+    //   </Part>
+    //
+    // Two TemplateValue names differ from their nearest relatives and are matched exactly, not
+    // case-folded: `card` is lowercase (Add/Mul/And say `Card`) and the type is `value_type` (LIMIT's
+    // name, never AutomaticTyped). Version is required and carried. DisabledENO="true" is the observed
+    // shape; its ABSENCE is TIA's ENO-enabled form of the same box and is accepted and round-tripped
+    // (PartNode.EnoEnabled); any other value is refused. MAX/MIN take two or more inputs, so a card
+    // below 2 is refused rather than read. Any other child element is refused: nothing else has been seen.
+    private static (string Version, int Cardinality, string ValueType, bool EnoEnabled) ParseMaxMinShape(XElement part, string partName, int uid)
+    {
+        var disabledEno = part.Attribute("DisabledENO")?.Value;
+        if (disabledEno is not (null or "true"))
+        {
+            throw new UnsupportedConstructException(
+                $"<Part Name=\"{partName}\" UId=\"{uid}\"> has DisabledENO=\"{disabledEno}\" — only \"true\" or an absent attribute is understood.");
+        }
+
+        var version = RequireAttribute(part, "Version");
+
+        foreach (var child in part.Elements())
+        {
+            var childName = child.Attribute("Name")?.Value;
+            if (child.Name != Ns + "TemplateValue" || childName is not ("card" or "value_type"))
+            {
+                throw new UnsupportedConstructException(
+                    $"<Part Name=\"{partName}\" UId=\"{uid}\"> has an unexpected <{child.Name.LocalName} Name=\"{childName}\"> — only " +
+                    "<TemplateValue Name=\"card\"> and <TemplateValue Name=\"value_type\"> have been observed.");
+            }
+        }
+
+        var card = part.Elements(Ns + "TemplateValue").SingleOrDefault(t => t.Attribute("Name")?.Value == "card")
+            ?? throw new SimaticMlFormatException($"<Part Name=\"{partName}\" UId=\"{uid}\"> is missing its <TemplateValue Name=\"card\"> element.");
+        if (RequireAttribute(card, "Type") != "Cardinality")
+        {
+            throw new UnsupportedConstructException(
+                $"<Part Name=\"{partName}\" UId=\"{uid}\">'s <TemplateValue Name=\"card\"> is not Type=\"Cardinality\".");
+        }
+
+        if (!int.TryParse(card.Value, out var cardinality) || cardinality < 2)
+        {
+            throw new UnsupportedConstructException(
+                $"<Part Name=\"{partName}\" UId=\"{uid}\">'s cardinality '{card.Value}' is not an integer of 2 or more.");
+        }
+
+        var valueType = part.Elements(Ns + "TemplateValue").SingleOrDefault(t => t.Attribute("Name")?.Value == "value_type")
+            ?? throw new SimaticMlFormatException($"<Part Name=\"{partName}\" UId=\"{uid}\"> is missing its <TemplateValue Name=\"value_type\"> element.");
+        if (RequireAttribute(valueType, "Type") != "Type")
+        {
+            throw new UnsupportedConstructException(
+                $"<Part Name=\"{partName}\" UId=\"{uid}\">'s <TemplateValue Name=\"value_type\"> is not Type=\"Type\".");
+        }
+
+        return (version, cardinality, valueType.Value, disabledEno is null);
     }
 
     // A clamp/limiter box instruction (`Part Name="LIMIT"`) — confirmed real, 2026-07-14, `FB

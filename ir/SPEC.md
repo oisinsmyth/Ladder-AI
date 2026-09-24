@@ -166,85 +166,67 @@ effort" degradation: the explicit form is exactly as lossless and exact as the r
 just more verbose. **[converter-verify]** how often the fallback actually triggers against real
 site-convention logic (ADR-0001 predicts rare, per C-101/C-114).
 
-### Statement-kind ordering within one network (confirmed real, 2026-07-15)
+### Statement order within one network — the order IS the rung order (2026-09-24)
 
-A network mixing multiple statement kinds (`TON`, `COIL`/`SCOIL`/`RCOIL`, `MOVE`, `WAND`, `CALL`,
-`MUL`/`ADD`, `CONVERT`, ...) is **not free-form** — `IrParser.ParseNetwork` requires exactly this
-order, one contiguous run per kind:
+**A network's statements are listed in rung order: the order the rungs are drawn in, top to bottom,
+which is also the order they execute in within one scan.** Kinds may interleave freely:
+
+```
+NETWORK 2 ""
+  COIL Lamp.Green := Pump.Running
+  COIL Lamp.Red := Pump.Fault
+  TON(DryRunDelay, IN := Pump.Running AND NOT Flow.Ok, PT := T#5S)
+  COIL Alarm.DryRun := DryRunDelay.Q
+  COIL Lamp.Amber := Tank.Low
+```
+
+- **`to-ir` writes statements in source order.** Each statement is placed by the source position of
+  the Part that ends it (its coil, its box, its call), so rungs come out in the order TIA draws them,
+  and inside one rung a `TON` sits ahead of the coil its `Q` feeds, a `MOVE` tapped off a rung ahead
+  of the coil at the rung's end, and an ENO-chained `MUL` → `CONVERT` pair is adjacent.
+- **`to-xml` writes rungs in statement order, with or without a sidecar.** Sidecar-less synthesis
+  mints UIds statement by statement and `FlgNetBuilder` orders Parts by UId, so the text order is the
+  order TIA shows. (With a sidecar the source UIds already carried the order; the readable text now
+  carries it too, which is what an edit or a sidecar-less rebuild relies on — ADR-0010.)
+- **A network whose statements happen to be in canonical kind order carries no explicit order at all**
+  and behaves exactly as before. The canonical order — still the order hand-written grouped IR is
+  read in, and the order `IrStatementKind` declares — is:
 
 ```
 COMMENT  →  TON/TONR/TOF  →  COIL/SCOIL/RCOIL  →  MOVE  →  WAND  →  CALL  →
-MUL/ADD/SUB/DIV (index-paired with Convert)  →  CONVERT  →  SWAP  →  ABS  →  LIMIT  →
-T_SUB  →  T_CONV  →  CALC  →  MOVE_BLK_VARIANT  →  WAIT  →  FILLBLOCKI  →
-MODBUS_MASTER  →  MODBUS_COMM_LOAD
+MUL/ADD/SUB/DIV/MAX/MIN  →  CONVERT  →  SWAP  →  ABS  →  LIMIT  →  T_SUB  →  T_CONV  →  CALC  →
+MOVE_BLK_VARIANT  →  WAIT  →  FILLBLOCKI  →  MODBUS_MASTER  →  MODBUS_COMM_LOAD  →  fixed-shape
 ```
 
-The list above is a hand-maintained restatement and can go stale; the source of truth is
-`IrParser.StatementSections`, which is also what the diagnostic below is generated from — so the
-*message* always states the real order even if this paragraph has fallen behind it.
+The one positional rule left is the network `COMMENT`, which must sit directly under the `NETWORK`
+header; a misplaced one is reported as exactly that, naming the line.
 
-A line out of place is a hard parse error naming the rule, the kind found and the kind it has to
-move above:
+**Until 2026-09-24 the order above was mandatory** — one contiguous run per kind, anything else a parse
+error (FI-69 gave that error its message). The readable IR therefore could not say that a timer rung
+sits between two coil rungs: a sidecar-less round trip hoisted every `TON` rung to the top of its
+network, and a reader reasoning about scan order from the text was reading kind order, not execution
+order (`docs/notes/deferred-items.md`, the IR-order finding). Older IR in the grouped layout still
+parses and converts unchanged; a fresh `to-ir` of a block whose source interleaves kinds now differs
+from it only in statement order.
 
-```
-Network 12, line 47: a COIL/SCOIL/RCOIL cannot follow a MOVE — move it above the first MOVE in
-this network. Statements within one network are grouped by kind, one contiguous run each, in this
-order: COMMENT, TON/TONR/TOF, ... Got: '  COIL Status.Valid := RunPermit'
-```
+**Why the order matters — it changes runtime behaviour, silently.** Rungs within a network execute top
+to bottom, so the order determines same-scan freshness: a statement reads another statement's
+*this-scan* result only if the producer is listed **before** the consumer. Get it backwards and there is
+no error — the consumer reads the previous scan's value, a one-scan lag that is invisible for a slow
+signal and a real bug for a fast one. When merging or reordering statements, trace every
+producer/consumer pair against the new order. Across networks there is no such trap: an earlier
+network's output is always fresh to a later one.
 
-**Until FI-69 (2026-08-10) it reported `Expected 'NETWORK <n> "<title>"' at line ...` instead** —
-the parser concluded the network's content had ended early and went looking for the next header, so
-the message named a header that was perfectly well-formed and a line number that pointed at the
-first statement it could not place. If you are reading an older transcript or an older build's
-output, that is this rule, not a malformed header. Any kind entirely absent is fine; present kinds
-must stay in this relative order, one contiguous run each — a second run of a kind already closed
-is the same violation and gets the same message. Within one kind's own contiguous run, multiple statements execute in **listed (textual)
-order**, not an arbitrary order — confirmed by real working content that depends on it (e.g. a
-`MOVE` that resets a counter to 0 listed before the `ADD` that increments it, so a reset and a new
-count on the same scan nets to 1, not 0; two `COIL`s where the second reads the first's own
-same-scan output).
+#### `EN := ENO` pairing in sidecar-less synthesis
 
-**Why this matters beyond parsing — it changes runtime behavior, silently.** This order is not
-just a text-format quirk; it mirrors real top-to-bottom rung-execution order within the compiled
-network, so it determines same-scan data freshness. A statement can only read another statement's
-*this-scan* output if the producer's own kind-position (or same-kind listed position) comes
-**before** the consumer's, in the network's own text. Get this backwards and there is **no error**
-— the consumer just silently reads the producer's *previous-scan* value instead, a one-scan lag
-that can be invisible for a slow-changing signal (an HMI setting, a debounced fault latch) and a
-real bug for a fast one. Concretely: a `TON`'s own `Q` can be read by a same-network `COIL`
-(`TON` precedes `COIL`) — fresh. A `COIL`'s own output **cannot** be read by a same-network `TON`'s
-`IN` condition and be fresh (`COIL` is kind-ordered *after* `TON`) — merging a timer into the same
-network as something that *feeds* its own `IN` will read that thing stale, not fail to compile.
-
-**Practical implication for restructuring existing IR** (found doing exactly this,
-`FB_PusherControl`/`FB_ShredderSequencer`, this session): merging networks for readability/locality
-is safe and encouraged, but requires tracing every cross-reference against this ordering first —
-"does the consumer's kind-position, in the merged network, still come after the producer's" — for
-*every* statement being moved, not just the ones that seem obviously related. Getting this wrong
-doesn't announce itself; it produces a compiling block with a subtly wrong scan-timing relationship
-that only a careful trace (or a real-hardware timing bug, much later) would surface. When
-consolidating, prefer keeping a producer/consumer pair that must stay one-scan-lagged (a genuine
-pre-existing design property, not a mistake) in clearly separate, ordered networks rather than
-forcing them into one and hoping the kind-order happens to line up.
-
-Cross-network, there is no such trap: any earlier network's output is always fresh to any later
-network, regardless of which kinds either contains — this is just ordinary top-to-bottom PLC scan
-order, unaffected by the intra-network kind-ordering rule above.
-
-#### Index-paired `MUL`/`CONVERT` batches (the "HMI Times" idiom)
-
-A network holding several `EN := ENO` unit-conversion pairs (Real-seconds → DInt-milliseconds HMI
-shadows — one `MUL` × 1000 feeding one `CONVERT` per timer preset) renders **kind-grouped, not
-pair-adjacent**: the kind order above puts every `MUL` in one contiguous run, then every `CONVERT`
-in the next. Pairing is **by index within each kind's run** — the *i*-th `CONVERT`'s `EN := ENO`
-is gated by the *i*-th `MUL`, **not** by the textually preceding line (for every `CONVERT` after
-the first, the preceding line is another `CONVERT`). Correctness never depends on reading it
-right: sidecar'd IR carries the exact source Part UId being chained from, and sidecar-less
-synthesis (`--synthesize`) wires by the same index pairing (`SidecarSynthesizer`,
-`network.Muls[i]` ↔ `network.Converts[i]`). A *reader*, though, has only the text order — which is
-why C-126's documented exception for the block-top "HMI Times" network requires the network
-comment to state the one-pair-per-timer scheme (`docs/06-lad-conventions.md`): the comment is what
-keeps the kind-grouped, index-matched rendering readable in one attempt.
+Sidecar'd IR carries the exact Part UId each `EN := ENO` chains from, so reading it never matters
+for correctness. Sidecar-less synthesis pairs **by index**, whatever the statement order: the *i*-th
+ENO-chained `CONVERT` chains from the *i*-th `MUL`-family box (`T_CONV` from `T_SUB` likewise), and an
+ENO-chained `MUL`-family box from the `MUL`-family box before it. In source order each pair is
+adjacent (`MUL`, `CONVERT`, `MUL`, `CONVERT`, …), so the textually preceding line and the index pair
+agree. In the older kind-grouped layout — every `MUL`, then every `CONVERT` — they do not, and the index
+pairing is the rule; C-126's exception for the block-top "HMI Times" network requires its comment to
+state the one-pair-per-timer scheme for exactly that reason (`docs/06-lad-conventions.md`).
 
 ### Readable form (default)
 
@@ -781,6 +763,25 @@ NETWORK 8 "Run enable delay"
     rejected the resulting XML outright ("ENO cannot be deactivated for the 'LIMIT' instruction"),
     which is what surfaced the error — no unit test caught it, since the hand-built fixture was
     self-consistently wrong along with the code. Fixed by re-reading the raw export directly.
+  - **`MAX`/`MIN`** (2026-09-24, a live-run export; ADR-0010 scope item): the maximum/minimum
+    selector boxes. Same en-gated N-input one-output shape as `ADD`, so they are two more kinds of
+    the `MUL` family (`MulKind.Maximum`/`Minimum`) and read like it: `MAX(EN := <expr-or-ENO>, IN1 :=
+    <expr>, IN2 := <expr>[, IN3 := ...]) => <dest>` (and `MIN(...)`), any cardinality ≥ 2, each input
+    a tag or a literal. XML detail, all carried: `Version` (sidecar `version = 1.0`), a **lowercase**
+    `<TemplateValue Name="card">` (Add's is `Card`), `value_type` (LIMIT's name; stored on `SrcType`,
+    sidecar `srctype`), **uppercase** ports `IN1`..`INn`/`OUT` (`en` lowercase). `DisabledENO="true"`
+    is the observed shape; its absence (ENO enabled) is accepted and round-tripped (sidecar `eno =
+    enabled`) — unit-tested, not yet import-proven. Box-to-box wiring (one box's `OUT` straight into
+    another's `IN`) is refused, as for `ADD`/`LIMIT`. Synthesis types `value_type` from the operands
+    (then the destination) and refuses when neither resolves — no safe default. MAX/MIN are **not**
+    ENO producers yet (ungrounded).
+  - **Multi-output `MOVE`** (2026-09-24, same export): `Card` N > 1 on a `Move` is one `in` copied to
+    `out1`..`outN`, each wired to its own tag — not a block copy, as the old refusal guessed. Readable
+    form lists the destinations in port order: `MOVE(EN := <expr>, IN := <expr>) => <dest1>, <dest2>,
+    <dest3>`. Sidecar: `dest`/`destwire` for `out1` as before, then `out <k> = <access-uid>
+    <wire-uid>` per extra output. A single-output `MOVE` is unchanged.
+  - **`ADD` as an ENO producer** (2026-09-24, same export: a `Div` → `Add` → `Sub` chain) — added
+    to `ResolveEnSource`'s allowlist.
   - **`T_SUB`/`T_CONV`** (`FB VibratorCycle`): time-arithmetic variants of `Sub`/`Convert`. `T_SUB`
     is binary (`IN1`/`IN2` -> `OUT`, uppercase) with two independently-typed operands (`date_type`/
     `time_type` TemplateValues, stored on the existing `SrcType`/`TimeType` fields). `T_CONV`

@@ -255,119 +255,118 @@ public static class SidecarSynthesizer
         // magnitude alone. Available from the timer loop on, since a timer IN can carry a comparison too.
         var types = tagTypes ?? TagTypeRegistry.Empty;
 
-        foreach (var timer in network.Timers)
-        {
-            var timerSidecar = BuildTimerSidecar(timer, railWireUId, ref nextUid, accessEntries, constantEntries, localNames, fanoutRegistry, types);
-            timers.Add(timerSidecar);
-            if (timerSidecar.InstanceScope == GlobalVariableScope)
-            {
-                timerPartUIdByInstancePath[timer.InstancePath] = timerSidecar.TonPartUId;
-            }
-            else
-            {
-                latchTimerPartUIdByInstancePath[timer.InstancePath] = timerSidecar.TonPartUId;
-            }
-        }
-
         var assignments = new List<CoilAssignmentSidecar>();
-        foreach (var assignment in network.Assignments)
-        {
-            assignments.Add(BuildAssignment(
-                assignment, railWireUId, timerPartUIdByInstancePath, latchTimerPartUIdByInstancePath,
-                ref nextUid, accessEntries, constantEntries, localNames, fanoutRegistry, types));
-        }
-
         var moves = new List<MoveStatementSidecar>();
-        foreach (var move in network.Moves)
-        {
-            moves.Add(BuildMoveSidecar(move, railWireUId, ref nextUid, accessEntries, constantEntries, localNames, fanoutRegistry, types));
-        }
-
-        // Mul/Convert are synthesized as index-paired siblings, not two independent batches — see
-        // BuildConvertSidecar's own doc comment for why a batched "all Muls, then all Converts"
-        // order would misattribute which Mul an "EN := ENO"-chained Convert belongs to once a
-        // network has more than one such pair (the real, proven MotorStarter "HMI Times" shape
-        // this whole idiom is grounded on has three, interleaved).
         var muls = new List<MulStatementSidecar>();
         var converts = new List<ConvertStatementSidecar>();
-        var pairCount = Math.Max(network.Muls.Count, network.Converts.Count);
-        for (var i = 0; i < pairCount; i++)
-        {
-            int? mulPartUIdForEno = null;
-            if (i < network.Muls.Count)
-            {
-                // A Mul/Add/Sub/Div with `EN := ENO` chains from the immediately-preceding box in
-                // the same network — Mul→Convert (existing) or Mul→Mul (Sub then Div, SignalConditioning).
-                var precedingMulUId = muls.Count > 0 ? muls[^1].MulPartUId : (int?)null;
-                var mulSidecar = BuildMulSidecar(network.Muls[i], precedingMulUId, railWireUId, ref nextUid, accessEntries, constantEntries, localNames, fanoutRegistry, types);
-                muls.Add(mulSidecar);
-                mulPartUIdForEno = mulSidecar.MulPartUId;
-            }
-
-            if (i < network.Converts.Count)
-            {
-                converts.Add(BuildConvertSidecar(
-                    network.Converts[i], mulPartUIdForEno, railWireUId, ref nextUid, accessEntries, constantEntries,
-                    localNames, tagTypes ?? TagTypeRegistry.Empty, fanoutRegistry));
-            }
-        }
-
         var abs = new List<AbsStatementSidecar>();
-        foreach (var absStatement in network.AbsStatements)
-        {
-            abs.Add(BuildAbsSidecar(absStatement, railWireUId, ref nextUid, accessEntries, constantEntries, localNames, types, fanoutRegistry));
-        }
-
         var swaps = new List<SwapStatementSidecar>();
-        foreach (var swap in network.Swaps)
-        {
-            swaps.Add(BuildSwapSidecar(swap, railWireUId, ref nextUid, accessEntries, constantEntries, localNames, types, fanoutRegistry));
-        }
-
         var wordAnds = new List<WordAndStatementSidecar>();
-        foreach (var wordAnd in network.WordAnds)
-        {
-            wordAnds.Add(BuildWordAndSidecar(wordAnd, railWireUId, ref nextUid, accessEntries, constantEntries, localNames, types, fanoutRegistry));
-        }
-
         var calcs = new List<CalcStatementSidecar>();
-        foreach (var calc in network.Calcs)
-        {
-            calcs.Add(BuildCalcSidecar(calc, railWireUId, ref nextUid, accessEntries, constantEntries, localNames, types, fanoutRegistry));
-        }
-
-        // T_SUB → T_CONV ENO chaining, index-paired exactly like Mul → Convert (N3: a T_CONV whose
-        // `EN := ENO` chains from the T_SUB immediately before it).
         var tsubs = new List<TSubStatementSidecar>();
         var tconvs = new List<TConvStatementSidecar>();
-        var timePairCount = Math.Max(network.TSubs.Count, network.TConvs.Count);
-        for (var i = 0; i < timePairCount; i++)
-        {
-            int? tsubPartUIdForEno = null;
-            if (i < network.TSubs.Count)
-            {
-                var tsubSidecar = BuildTSubSidecar(network.TSubs[i], railWireUId, ref nextUid, accessEntries, constantEntries, localNames, types, fanoutRegistry);
-                tsubs.Add(tsubSidecar);
-                tsubPartUIdForEno = tsubSidecar.TSubPartUId;
-            }
-
-            if (i < network.TConvs.Count)
-            {
-                tconvs.Add(BuildTConvSidecar(
-                    network.TConvs[i], tsubPartUIdForEno, railWireUId, ref nextUid, accessEntries, constantEntries, localNames, types, fanoutRegistry));
-            }
-        }
-
         var moveBlkVariants = new List<MoveBlkVariantStatementSidecar>();
-        foreach (var moveBlkVariant in network.MoveBlkVariants)
-        {
-            moveBlkVariants.Add(BuildMoveBlkVariantSidecar(moveBlkVariant, railWireUId, ref nextUid, accessEntries, constantEntries, localNames));
-        }
-
         var calls = new List<CallStatementSidecar>();
-        foreach (var call in network.Calls)
+
+        // UIds are minted statement by statement, and FlgNetBuilder orders the rebuilt Parts (and the
+        // rail's consumers) by UId — so THE ORDER STATEMENTS ARE SYNTHESIZED IN IS THE RUNG ORDER TIA
+        // SHOWS. A network with an explicit statement order (its source interleaved kinds) is walked in
+        // that order; a kind-ordered one in the long-standing synthesis sequence, unchanged.
+        //
+        // ENO pairing is by index whichever order is walked, exactly as before: the i-th ENO-chained
+        // CONVERT chains from the i-th MUL-family box (T_CONV from T_SUB likewise), and an ENO-chained
+        // MUL from the MUL-family box built before it — see BuildConvertSidecar for why a batched
+        // "all Muls, then all Converts" layout needs index pairing. In source order each pair is
+        // adjacent, so the i-th box has always been built by the time its partner needs its UId.
+        foreach (var statement in SynthesisOrder(network))
         {
-            calls.Add(BuildCallSidecar(call, railWireUId, ref nextUid, accessEntries, constantEntries, localNames, callees ?? CalleeInterfaceRegistry.Empty, fanoutRegistry, types));
+            var i = statement.Index;
+            switch (statement.Kind)
+            {
+                case IrStatementKind.Timer:
+                {
+                    var timer = network.Timers[i];
+                    var timerSidecar = BuildTimerSidecar(timer, railWireUId, ref nextUid, accessEntries, constantEntries, localNames, fanoutRegistry, types);
+                    timers.Add(timerSidecar);
+                    if (timerSidecar.InstanceScope == GlobalVariableScope)
+                    {
+                        timerPartUIdByInstancePath[timer.InstancePath] = timerSidecar.TonPartUId;
+                    }
+                    else
+                    {
+                        latchTimerPartUIdByInstancePath[timer.InstancePath] = timerSidecar.TonPartUId;
+                    }
+
+                    break;
+                }
+
+                case IrStatementKind.Assignment:
+                    assignments.Add(BuildAssignment(
+                        network.Assignments[i], railWireUId, timerPartUIdByInstancePath, latchTimerPartUIdByInstancePath,
+                        ref nextUid, accessEntries, constantEntries, localNames, fanoutRegistry, types));
+                    break;
+
+                case IrStatementKind.Move:
+                    moves.Add(BuildMoveSidecar(network.Moves[i], railWireUId, ref nextUid, accessEntries, constantEntries, localNames, fanoutRegistry, types));
+                    break;
+
+                case IrStatementKind.Mul:
+                {
+                    // A Mul/Add/Sub/Div with `EN := ENO` chains from the immediately-preceding box in
+                    // the same network — Mul→Convert (existing) or Mul→Mul (Sub then Div, SignalConditioning).
+                    var precedingMulUId = muls.Count > 0 ? muls[^1].MulPartUId : (int?)null;
+                    muls.Add(BuildMulSidecar(network.Muls[i], precedingMulUId, railWireUId, ref nextUid, accessEntries, constantEntries, localNames, fanoutRegistry, types));
+                    break;
+                }
+
+                case IrStatementKind.Convert:
+                    converts.Add(BuildConvertSidecar(
+                        network.Converts[i], i < muls.Count ? muls[i].MulPartUId : null, railWireUId, ref nextUid, accessEntries, constantEntries,
+                        localNames, tagTypes ?? TagTypeRegistry.Empty, fanoutRegistry));
+                    break;
+
+                case IrStatementKind.Abs:
+                    abs.Add(BuildAbsSidecar(network.AbsStatements[i], railWireUId, ref nextUid, accessEntries, constantEntries, localNames, types, fanoutRegistry));
+                    break;
+
+                case IrStatementKind.Swap:
+                    swaps.Add(BuildSwapSidecar(network.Swaps[i], railWireUId, ref nextUid, accessEntries, constantEntries, localNames, types, fanoutRegistry));
+                    break;
+
+                case IrStatementKind.WordAnd:
+                    wordAnds.Add(BuildWordAndSidecar(network.WordAnds[i], railWireUId, ref nextUid, accessEntries, constantEntries, localNames, types, fanoutRegistry));
+                    break;
+
+                case IrStatementKind.Calc:
+                    calcs.Add(BuildCalcSidecar(network.Calcs[i], railWireUId, ref nextUid, accessEntries, constantEntries, localNames, types, fanoutRegistry));
+                    break;
+
+                // T_SUB → T_CONV ENO chaining, index-paired exactly like Mul → Convert (N3: a T_CONV whose
+                // `EN := ENO` chains from the T_SUB immediately before it).
+                case IrStatementKind.TSub:
+                    tsubs.Add(BuildTSubSidecar(network.TSubs[i], railWireUId, ref nextUid, accessEntries, constantEntries, localNames, types, fanoutRegistry));
+                    break;
+
+                case IrStatementKind.TConv:
+                    tconvs.Add(BuildTConvSidecar(
+                        network.TConvs[i], i < tsubs.Count ? tsubs[i].TSubPartUId : null, railWireUId, ref nextUid, accessEntries, constantEntries,
+                        localNames, types, fanoutRegistry));
+                    break;
+
+                case IrStatementKind.MoveBlkVariant:
+                    moveBlkVariants.Add(BuildMoveBlkVariantSidecar(network.MoveBlkVariants[i], railWireUId, ref nextUid, accessEntries, constantEntries, localNames));
+                    break;
+
+                case IrStatementKind.Call:
+                    calls.Add(BuildCallSidecar(
+                        network.Calls[i], railWireUId, ref nextUid, accessEntries, constantEntries, localNames,
+                        callees ?? CalleeInterfaceRegistry.Empty, fanoutRegistry, types));
+                    break;
+
+                default:
+                    // RequireInScope has already refused every other kind by name.
+                    throw new UnsupportedSynthesisConstructException($"Network {network.Number}: sidecar synthesis does not support {statement.Kind}.");
+            }
         }
 
         return new NetworkSidecar(
@@ -388,6 +387,58 @@ public static class SidecarSynthesizer
             TSubs: tsubs,
             TConvs: tconvs,
             MoveBlkVariants: moveBlkVariants);
+    }
+
+    // The order statements are synthesized — and so the order their rungs appear in once rebuilt. An
+    // explicit statement order is the source's rung order and is followed as written. A kind-ordered
+    // network (StatementOrder null) keeps the sequence synthesis has always used, so nothing that was
+    // already synthesizing changes: timers, coils, moves, then each MUL-family box beside the CONVERT
+    // it pairs with, ABS, SWAP, WAND, CALC, each T_SUB beside its T_CONV, MOVE_BLK_VARIANT, CALL.
+    private static IEnumerable<IrStatementRef> SynthesisOrder(IrNetwork network)
+    {
+        if (network.StatementOrder is not null)
+        {
+            return network.OrderedStatements();
+        }
+
+        var order = new List<IrStatementRef>();
+        void AddAll(IrStatementKind kind)
+        {
+            for (var index = 0; index < network.CountOf(kind); index++)
+            {
+                order.Add(new IrStatementRef(kind, index));
+            }
+        }
+
+        void AddPaired(IrStatementKind first, IrStatementKind second)
+        {
+            var pairs = Math.Max(network.CountOf(first), network.CountOf(second));
+            for (var index = 0; index < pairs; index++)
+            {
+                if (index < network.CountOf(first))
+                {
+                    order.Add(new IrStatementRef(first, index));
+                }
+
+                if (index < network.CountOf(second))
+                {
+                    order.Add(new IrStatementRef(second, index));
+                }
+            }
+        }
+
+        AddAll(IrStatementKind.Timer);
+        AddAll(IrStatementKind.Assignment);
+        AddAll(IrStatementKind.Move);
+        AddPaired(IrStatementKind.Mul, IrStatementKind.Convert);
+        AddAll(IrStatementKind.Abs);
+        AddAll(IrStatementKind.Swap);
+        AddAll(IrStatementKind.WordAnd);
+        AddAll(IrStatementKind.Calc);
+        AddPaired(IrStatementKind.TSub, IrStatementKind.TConv);
+        AddAll(IrStatementKind.MoveBlkVariant);
+        AddAll(IrStatementKind.Call);
+        return order;
     }
 
     // Every non-Assignments/Timers/Moves/Muls/Converts/Calls production list on IrNetwork is out
@@ -1048,7 +1099,18 @@ public static class SidecarSynthesizer
         accessEntries.Add(Access(move.DestTag, destAccessUId, localNames));
         var destWireUId = nextUid++;
 
-        return new MoveStatementSidecar(movePartUId, chainRail, steps, inOperand, destAccessUId, destWireUId);
+        var additionalOutputs = new List<MoveOutputSidecar>();
+        foreach (var extraDest in move.AdditionalDestTags)
+        {
+            var extraAccessUId = nextUid++;
+            accessEntries.Add(Access(extraDest, extraAccessUId, localNames));
+            additionalOutputs.Add(new MoveOutputSidecar(extraAccessUId, nextUid++));
+        }
+
+        return new MoveStatementSidecar(movePartUId, chainRail, steps, inOperand, destAccessUId, destWireUId)
+        {
+            AdditionalOutputs = additionalOutputs,
+        };
     }
 
     // An EnSource — either an ordinary condition chain, or (v2) the reserved "EN := ENO" chained
@@ -1119,6 +1181,19 @@ public static class SidecarSynthesizer
         var destAccessUId = nextUid++;
         accessEntries.Add(Access(mul.DestTag, destAccessUId, localNames));
         var destWireUId = nextUid++;
+
+        // MAX/MIN have no AutomaticTyped form: the real Part always declares `value_type`, so it is
+        // resolved from the operands (then the destination) and REFUSED when neither types — Real, Int
+        // and DInt all occur, so there is no safe default (same stance as ABS). Version "1.0" is the
+        // one observed; DisabledENO="true" the one observed shape.
+        if (mul.Kind is MulKind.Maximum or MulKind.Minimum)
+        {
+            var valueType = operandType ?? tagTypes.Resolve(mul.DestTag)
+                ?? throw new UnsupportedSynthesisConstructException(
+                    $"{(mul.Kind == MulKind.Maximum ? "MAX" : "MIN")} => {mul.DestTag}: no input or destination type resolves, " +
+                    "and its value_type has no safe default. Pass --project so the operand types are known.");
+            return new MulStatementSidecar(mulPartUId, enSidecar, inputs, destAccessUId, destWireUId, mul.Kind, valueType, Version: "1.0");
+        }
 
         return new MulStatementSidecar(mulPartUId, enSidecar, inputs, destAccessUId, destWireUId, mul.Kind, SrcType: null);
     }

@@ -162,7 +162,19 @@ public sealed record CoilAssignment(string CoilTag, Expr Condition, CoilKind Kin
 // TON's PT/a comparison's operands). DestTag is the plain dotted tag path being written — no
 // separate Expr wrapper needed since it's always a bare tag on the write side, never a literal
 // or expression (confirmed real: `out1` always wires straight to an ordinary Access).
-public sealed record MoveStatement(Expr En, Expr In, string DestTag);
+//
+// A multi-output MOVE (`Card` > 1 — confirmed real 2026-09-24 on a live-run export: one `in`, three
+// `out1`..`out3`, each wired to its own tag) keeps `out1` in DestTag and `out2`..`outN` in
+// AdditionalDestTags, so every single-output MOVE is unchanged. Anything that needs "every tag this
+// MOVE writes" must read DestTags, never DestTag alone.
+public sealed record MoveStatement(Expr En, Expr In, string DestTag)
+{
+    public IReadOnlyList<string> AdditionalDestTags { get; init; } = Array.Empty<string>();
+
+    public IReadOnlyList<string> DestTags => AdditionalDestTags.Count == 0
+        ? new[] { DestTag }
+        : new[] { DestTag }.Concat(AdditionalDestTags).ToList();
+}
 
 // A bitwise/word-level AND box instruction (`Part Name="And"`) — confirmed real, 2026-07-12,
 // `FB VSDUpdateComs` (`Word AND 16#89 -> ControlWord`). Genuinely NOT the boolean parallel-branch
@@ -195,12 +207,23 @@ public sealed record WordAndStatement(Expr En, IReadOnlyList<Expr> Inputs, strin
 // still carries a plain `Inputs` list generically, but `PartNode.Cardinality` is left `null` for
 // these two kinds specifically (never regenerated as a `Card` element), unlike Mul/Add's own
 // confirmed-real `Card="2"`.
+//
+// Maximum/Minimum (`Part Name="MAX"`/`"MIN"`) — confirmed real 2026-09-24 on a live-run export: the
+// same en-gated, N-input, one-output box shape as Add, so it joins this family rather than getting a
+// parallel record — and with it the family's reduction, synthesis, fan-out marking and every analysis
+// that already reads `Muls`. What differs is XML detail, all carried or derived per kind: a bare
+// `Version="1.0"`, a LOWERCASE `<TemplateValue Name="card">` (Add's is `Card`), an explicit
+// `<TemplateValue Name="value_type">` (LIMIT's name, never AutomaticTyped), UPPERCASE ports
+// (`IN1`..`INn`, `OUT`; `en` stays lowercase), and `DisabledENO="true"` observed but its absence (ENO
+// enabled) accepted and round-tripped (MulStatementSidecar.EnoEnabled).
 public enum MulKind
 {
     Multiply,
     Add,
     Subtract,
     Divide,
+    Maximum,
+    Minimum,
 }
 
 // A multiply/add box instruction (`Part Name="Mul"`/`"Add"`) — confirmed real, 2026-07-12 (S1
@@ -536,7 +559,150 @@ public sealed record IrNetwork(
         && AbsStatements.Count == 0 && Limits.Count == 0 && TSubs.Count == 0 && TConvs.Count == 0
         && Calcs.Count == 0 && MoveBlkVariants.Count == 0 && Waits.Count == 0 && FillBlockIs.Count == 0
         && ModbusMasters.Count == 0 && ModbusCommLoads.Count == 0 && FixedShapes.Count == 0;
+
+    /// <summary>
+    /// 🔴 <b>The network's statement order — which IS its rung order</b>, when it is not simply the
+    /// canonical kind order (<see cref="IrStatementKind"/>'s declaration order, every kind one
+    /// contiguous run). <c>null</c> means canonical, which is how every hand-written grouped network
+    /// and every network whose source happened to be kind-ordered is represented — so a network that
+    /// needs no interleaving serializes, parses and synthesizes exactly as it always did.
+    ///
+    /// <para>Why it exists: the per-kind lists above cannot say that a TON rung sits BETWEEN two coil
+    /// rungs. Within one LAD network rungs execute top to bottom, so that order is scan-significant,
+    /// and it is what the engineer sees. Before this, the readable IR was always kind-grouped, and a
+    /// sidecar-less <c>to-xml</c> (synthesis mints UIds in statement order, and <c>FlgNetBuilder</c>
+    /// orders parts by UId) rebuilt a network with every timer rung hoisted to the top. Only the
+    /// sidecar's source UIds had been keeping the order — the one place ADR-0010 says a fact the AI
+    /// must be able to change may not live alone.</para>
+    ///
+    /// <para>Within one kind the indices are ascending (a kind's list IS its statements in order);
+    /// <see cref="OrderedStatements"/> enforces that and that every statement appears exactly once.</para>
+    /// </summary>
+    public IReadOnlyList<IrStatementRef>? StatementOrder { get; init; }
+
+    public int CountOf(IrStatementKind kind) => kind switch
+    {
+        IrStatementKind.Timer => Timers.Count,
+        IrStatementKind.Assignment => Assignments.Count,
+        IrStatementKind.Move => Moves.Count,
+        IrStatementKind.WordAnd => WordAnds.Count,
+        IrStatementKind.Call => Calls.Count,
+        IrStatementKind.Mul => Muls.Count,
+        IrStatementKind.Convert => Converts.Count,
+        IrStatementKind.Swap => Swaps.Count,
+        IrStatementKind.Abs => AbsStatements.Count,
+        IrStatementKind.Limit => Limits.Count,
+        IrStatementKind.TSub => TSubs.Count,
+        IrStatementKind.TConv => TConvs.Count,
+        IrStatementKind.Calc => Calcs.Count,
+        IrStatementKind.MoveBlkVariant => MoveBlkVariants.Count,
+        IrStatementKind.Wait => Waits.Count,
+        IrStatementKind.FillBlockI => FillBlockIs.Count,
+        IrStatementKind.ModbusMaster => ModbusMasters.Count,
+        IrStatementKind.ModbusCommLoad => ModbusCommLoads.Count,
+        IrStatementKind.FixedShape => FixedShapes.Count,
+        _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null),
+    };
+
+    /// <summary>
+    /// Every statement of this network, in rung order: <see cref="StatementOrder"/> when set, the
+    /// canonical kind order otherwise. Throws when an explicit order does not cover the lists exactly
+    /// (a statement missing, repeated, or a kind's indices out of sequence) — a stale order is never
+    /// silently patched, because a guessed rung order is a wrong program that compiles.
+    /// </summary>
+    public IReadOnlyList<IrStatementRef> OrderedStatements()
+    {
+        var kinds = Enum.GetValues<IrStatementKind>();
+        if (StatementOrder is null)
+        {
+            var canonical = new List<IrStatementRef>();
+            foreach (var kind in kinds)
+            {
+                for (var index = 0; index < CountOf(kind); index++)
+                {
+                    canonical.Add(new IrStatementRef(kind, index));
+                }
+            }
+
+            return canonical;
+        }
+
+        var next = kinds.ToDictionary(k => k, _ => 0);
+        foreach (var statement in StatementOrder)
+        {
+            if (statement.Index != next[statement.Kind])
+            {
+                throw new IrFormatException(
+                    $"Network {Number}: statement order lists {statement.Kind} #{statement.Index} where #{next[statement.Kind]} was expected — " +
+                    "the order is out of step with the statement lists.");
+            }
+
+            next[statement.Kind]++;
+        }
+
+        foreach (var kind in kinds)
+        {
+            if (next[kind] != CountOf(kind))
+            {
+                throw new IrFormatException(
+                    $"Network {Number}: statement order covers {next[kind]} {kind} statement(s) but the network holds {CountOf(kind)}.");
+            }
+        }
+
+        return StatementOrder;
+    }
+
+    /// <summary>
+    /// <paramref name="order"/> as a <see cref="StatementOrder"/> value: <c>null</c> when it is the
+    /// canonical kind order (so a kind-ordered network keeps its long-standing representation), the
+    /// order itself otherwise.
+    /// </summary>
+    public static IReadOnlyList<IrStatementRef>? ExplicitOrderOrNull(IReadOnlyList<IrStatementRef> order)
+    {
+        for (var s = 1; s < order.Count; s++)
+        {
+            var previous = order[s - 1];
+            var current = order[s];
+            if (current.Kind < previous.Kind || (current.Kind == previous.Kind && current.Index < previous.Index))
+            {
+                return order;
+            }
+        }
+
+        return null;
+    }
 }
+
+/// <summary>
+/// The statement kinds of one network, declared in the CANONICAL kind order — the order a
+/// kind-grouped network is serialized in and the order <see cref="IrNetwork.OrderedStatements"/>
+/// falls back to. The declaration order is load-bearing; do not re-sort it.
+/// </summary>
+public enum IrStatementKind
+{
+    Timer,
+    Assignment,
+    Move,
+    WordAnd,
+    Call,
+    Mul,
+    Convert,
+    Swap,
+    Abs,
+    Limit,
+    TSub,
+    TConv,
+    Calc,
+    MoveBlkVariant,
+    Wait,
+    FillBlockI,
+    ModbusMaster,
+    ModbusCommLoad,
+    FixedShape,
+}
+
+/// <summary>One statement of a network: its kind and its index within that kind's list.</summary>
+public sealed record IrStatementRef(IrStatementKind Kind, int Index);
 
 // RootUId: the source block element's own opaque "ID" attribute (required by Import(),
 // confirmed real 2026-07-10 — separate from any CompileUnit's own ID). Round-trip-only, like
@@ -808,7 +974,14 @@ public sealed record MoveStatementSidecar(
     IReadOnlyList<ChainStepSidecar> Steps,
     OperandSidecar In,
     int DestAccessUId,
-    int DestWireUId);
+    int DestWireUId)
+{
+    // `out2`..`outN` of a multi-output MOVE, in port order — empty for the ordinary single-output box.
+    public IReadOnlyList<MoveOutputSidecar> AdditionalOutputs { get; init; } = Array.Empty<MoveOutputSidecar>();
+}
+
+// One extra output of a multi-output MOVE: the destination Access and the wire from the `outK` port.
+public sealed record MoveOutputSidecar(int DestAccessUId, int DestWireUId);
 
 // One bitwise-And's full round-trip data. RailWireUId/Steps mirror every other production's own
 // chain shape exactly (same TraceChain mechanism). Inputs is positional (Inputs[0] is `in1`,
@@ -915,6 +1088,11 @@ public abstract record EnSourceSidecar
 // Name="SrcType" Type="Type">X</TemplateValue>` (e.g. `"Real"`), the same explicit shape
 // `Convert`'s own SrcType/DestType already use. Exactly one of the two shapes is present in any
 // real instance seen — never both, never neither.
+//
+// Version/EnoEnabled are MAX/MIN only (null/false for the other kinds, which carry neither): the Part's
+// own `Version` attribute, and whether the source OMITTED `DisabledENO` — i.e. the box's ENO is live.
+// Every real MAX/MIN seen so far has `DisabledENO="true"`, so `false` is the default and the absent
+// line; `true` round-trips the other shape rather than silently adding the attribute back.
 public sealed record MulStatementSidecar(
     int MulPartUId,
     EnSourceSidecar En,
@@ -922,7 +1100,9 @@ public sealed record MulStatementSidecar(
     int DestAccessUId,
     int DestWireUId,
     MulKind Kind = MulKind.Multiply,
-    string? SrcType = null);
+    string? SrcType = null,
+    string? Version = null,
+    bool EnoEnabled = false);
 
 // One Convert's full round-trip data. En mirrors every other production's own EnSource.
 // SrcType/DestType mirror a comparison's own SrcType (sidecar-only, not shown in the readable IR

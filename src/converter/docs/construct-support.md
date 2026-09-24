@@ -11,13 +11,18 @@ parameter-interface support long after both shipped — contradicted by its own 
 The authoritative list is code, not prose: `Converter/SimaticMl/FlgNetParser.cs`'s
 `SupportedPartNames` set — re-read it before editing this paragraph.)*
 
-**35 supported part names**, each added against a real export rather than guessed at:
+**37 supported part names**, each added against a real export rather than guessed at:
 
 `Contact`, `Coil`, `SCoil`, `RCoil`, `O` (OR-merge, recursive-chain branches), `Not` (standalone
 boolean inverter), `And` (bitwise word AND — "WAND"); the full IEC comparison family
 `Eq`/`Ne`/`Gt`/`Ge`/`Lt`/`Le`; timers `TON`/`TONR`/`TOF`; `Move` and `MOVE_BLK_VARIANT`; arithmetic
 `Add`/`Sub`/`Mul`/`Div`; `Convert`, `Calc`, `Abs`, `Swap`, `LIMIT`, `T_SUB`, `T_CONV`, `WAIT`,
 `FillBlockI`, `Modbus_Master`, `Modbus_Comm_Load`.
+
+**2026-09-24:** `MAX`/`MIN` added (two more kinds of the ADD/MUL family, `MAX(EN := ..., IN1 := a, IN2 := b) => dest`),
+a multi-output `Move` (`Card` > 1, `MOVE(...) => A, B, C`), `Add` as an ENO producer — and **statement order is
+now rung order**: a network's statements may interleave kinds, `to-ir` writes them in source order and `to-xml`
+writes rungs in that order with or without a sidecar. `ir/SPEC.md`, "Statement order within one network".
 
 Plus the **fixed-shape registry** names (`FixedShapeInstructions`, 2026-08-12), which
 `SupportedPartNames` concatenates rather than restating: `MB_COMM_LOAD` 2.1, `MB_MASTER` 2.2 and

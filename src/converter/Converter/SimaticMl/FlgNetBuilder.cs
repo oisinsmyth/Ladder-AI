@@ -554,11 +554,19 @@ public static class FlgNetBuilder
             BuildStep(sidecar.Steps[i], nextTarget, timersByTonPartUId, parts, emittedPartUIds, wireEndpointsByUId);
         }
 
-        AddPart(parts, emittedPartUIds, new PartNode(sidecar.MovePartUId, "Move"));
+        // Cardinality stays null for the ordinary single-output MOVE, so FlgNetWriter writes its fixed
+        // `Card` 1 exactly as before; a multi-output MOVE carries its real count.
+        var outputCount = 1 + sidecar.AdditionalOutputs.Count;
+        AddPart(parts, emittedPartUIds, new PartNode(sidecar.MovePartUId, "Move", Cardinality: outputCount > 1 ? outputCount : null));
 
         AddOperandWire(wireEndpointsByUId, sidecar.In, sidecar.MovePartUId, "in");
 
         AddProducedWire(wireEndpointsByUId, sidecar.DestWireUId, sidecar.MovePartUId, "out1", sidecar.DestAccessUId);
+        for (var k = 0; k < sidecar.AdditionalOutputs.Count; k++)
+        {
+            var output = sidecar.AdditionalOutputs[k];
+            AddProducedWire(wireEndpointsByUId, output.DestWireUId, sidecar.MovePartUId, $"out{k + 2}", output.DestAccessUId);
+        }
     }
 
     // Builds a bitwise-And Part, its `en`-chain (identical mechanism to BuildMove's own — may
@@ -720,16 +728,26 @@ public static class FlgNetBuilder
         // source) — Cardinality is left null on the PartNode for those two kinds specifically so
         // FlgNetWriter's own `if (part.Cardinality is not null)` correctly omits it.
         var cardinalityElement = RequiresCardinalityElement(sidecar.Kind) ? sidecar.Inputs.Count : (int?)null;
-        AddPart(parts, emittedPartUIds, new PartNode(
-            sidecar.MulPartUId, MulPartNameFor(sidecar.Kind), Cardinality: cardinalityElement,
-            AutomaticSrcType: sidecar.SrcType is null, SrcType: sidecar.SrcType));
-
-        for (var k = 0; k < sidecar.Inputs.Count; k++)
+        var partName = MulPartNameFor(sidecar.Kind);
+        if (partName is "MAX" or "MIN" && (sidecar.SrcType is null || sidecar.Version is null))
         {
-            AddOperandWire(wireEndpointsByUId, sidecar.Inputs[k], sidecar.MulPartUId, $"in{k + 1}");
+            // MAX/MIN have no AutomaticTyped form and always carry a Version — both are required on
+            // the real Part, so a sidecar without them cannot be written faithfully.
+            throw new IrFormatException(
+                $"{partName} UId={sidecar.MulPartUId}: the sidecar carries no value_type/version; both are required to write the Part.");
         }
 
-        AddProducedWire(wireEndpointsByUId, sidecar.DestWireUId, sidecar.MulPartUId, "out", sidecar.DestAccessUId);
+        AddPart(parts, emittedPartUIds, new PartNode(
+            sidecar.MulPartUId, partName, Cardinality: cardinalityElement, Version: sidecar.Version,
+            AutomaticSrcType: sidecar.SrcType is null, SrcType: sidecar.SrcType, EnoEnabled: sidecar.EnoEnabled));
+
+        var (inputPortPrefix, outputPort) = GraphReducer.MulFamilyPorts(partName);
+        for (var k = 0; k < sidecar.Inputs.Count; k++)
+        {
+            AddOperandWire(wireEndpointsByUId, sidecar.Inputs[k], sidecar.MulPartUId, $"{inputPortPrefix}{k + 1}");
+        }
+
+        AddProducedWire(wireEndpointsByUId, sidecar.DestWireUId, sidecar.MulPartUId, outputPort, sidecar.DestAccessUId);
     }
 
     // The inverse of GraphReducer.MulKindFor — MulStatementSidecar carries its own Kind (BuildMul
@@ -742,12 +760,16 @@ public static class FlgNetBuilder
         MulKind.Add => "Add",
         MulKind.Subtract => "Sub",
         MulKind.Divide => "Div",
+        MulKind.Maximum => "MAX",
+        MulKind.Minimum => "MIN",
         _ => throw new IrFormatException($"Unsupported Mul kind: {kind}"),
     };
 
     // Mul/Add carry a real Card element (confirmed real, S1 items 18/19); Sub/Div (2026-07-14,
     // FC Scale) never do — always binary, no real example has shown one.
-    private static bool RequiresCardinalityElement(MulKind kind) => kind is MulKind.Multiply or MulKind.Add;
+    // MAX/MIN carry one too (lowercase `card` — FlgNetWriter names it per Part).
+    private static bool RequiresCardinalityElement(MulKind kind) =>
+        kind is MulKind.Multiply or MulKind.Add or MulKind.Maximum or MulKind.Minimum;
 
     // Builds a Convert Part, its `en` wiring (BuildEnSource), its `in` wire (tag or literal
     // source, same AddOperandWire as a TON's PT), and its `out` wire (same IdentCon-fed wire

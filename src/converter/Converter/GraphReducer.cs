@@ -54,7 +54,7 @@ public static class GraphReducer
         // MulStatement.Kind (derived from the Part Name below). Sub/Div (2026-07-14, FC Scale)
         // reuse the identical reduction too — always-binary, no Cardinality element (see
         // ReduceMulOrAdd's own cardinality-defaulting comment).
-        var mulParts = network.Parts.Where(p => p.Name is "Mul" or "Add" or "Sub" or "Div").ToList();
+        var mulParts = network.Parts.Where(p => p.Name is "Mul" or "Add" or "Sub" or "Div" or "MAX" or "MIN").ToList();
         var convertParts = network.Parts.Where(p => p.Name == "Convert").ToList();
         // Swap (S1 item 25) is structurally identical to Convert minus DestType — confirmed real,
         // 2026-07-12, FB TomraControlSystem.
@@ -510,6 +510,11 @@ public static class GraphReducer
             networkNumber, compileUnitUId, allAccessEntries, assignmentSidecars, allConstantEntries, timerSidecars, moveSidecars, wordAndSidecars,
             callSidecars, mulSidecars, convertSidecars, swapSidecars, absSidecars, limitSidecars, tSubSidecars, tConvSidecars, calcSidecars,
             moveBlkVariantSidecars, waitSidecars, fillBlockISidecars, modbusMasterSidecars, modbusCommLoadSidecars, fixedShapeSidecars);
+        // Rung order: the statements in SOURCE order, not grouped by kind. Must be settled before the
+        // fan-out markers, which are assigned walking the statements in their final order so every
+        // {split} precedes its {recv} in the text the synthesizer later walks.
+        irNetwork = irNetwork with { StatementOrder = IrNetwork.ExplicitOrderOrNull(SourceStatementOrder(network, irNetwork, networkSidecar)) };
+
         // ADR-0006 phase 2: derive per-node fan-out markers ({split N}/{recv N}) from shared part UIds and
         // attach them to the readable Expr trees. Fan-out is recorded per node here — the old per-network
         // SPLIT flag + synthesis heuristic are gone (ADR-0006 phase 3).
@@ -554,22 +559,128 @@ public static class GraphReducer
         // {recv} follows it. The `with` initializer evaluates top-to-bottom and each `.ToList()` forces its
         // chain immediately, so `ctx` is mutated in exactly that order. A box EN is an EnSource — MarkEnSource
         // marks a `Condition` chain and leaves a `PrecedingEno` (ENO-chained, no chain) untouched.
+        //
+        // "Serialization order" is the network's statement order (OrderedStatements): the canonical kind
+        // order when the source was kind-ordered — exactly the sequence this pass always used — and the
+        // source rung order otherwise, since that is the order the text is written and later synthesized in.
         var ctx = new FanoutMarkContext(counts);
+        var timers = net.Timers.ToList();
+        var assignments = net.Assignments.ToList();
+        var moves = net.Moves.ToList();
+        var wordAnds = net.WordAnds.ToList();
+        var calls = net.Calls.ToList();
+        var muls = net.Muls.ToList();
+        var converts = net.Converts.ToList();
+        var swaps = net.Swaps.ToList();
+        var absStatements = net.AbsStatements.ToList();
+        var tSubs = net.TSubs.ToList();
+        var tConvs = net.TConvs.ToList();
+        var calcs = net.Calcs.ToList();
+        foreach (var statement in net.OrderedStatements())
+        {
+            var i = statement.Index;
+            switch (statement.Kind)
+            {
+                case IrStatementKind.Timer:
+                    timers[i] = timers[i] with { In = MarkChain(timers[i].In, sidecar.Timers[i].Steps, ctx) };
+                    break;
+                case IrStatementKind.Assignment:
+                    assignments[i] = assignments[i] with { Condition = MarkChain(assignments[i].Condition, sidecar.Assignments[i].Steps, ctx) };
+                    break;
+                case IrStatementKind.Move:
+                    moves[i] = moves[i] with { En = MarkChain(moves[i].En, sidecar.Moves[i].Steps, ctx) };
+                    break;
+                case IrStatementKind.WordAnd:
+                    wordAnds[i] = wordAnds[i] with { En = MarkChain(wordAnds[i].En, sidecar.WordAnds[i].Steps, ctx) };
+                    break;
+                case IrStatementKind.Call:
+                    calls[i] = calls[i] with { En = MarkChain(calls[i].En, sidecar.Calls[i].Steps, ctx) };
+                    break;
+                case IrStatementKind.Mul:
+                    muls[i] = muls[i] with { En = MarkEnSource(muls[i].En, sidecar.Muls[i].En, ctx) };
+                    break;
+                case IrStatementKind.Convert:
+                    converts[i] = converts[i] with { En = MarkEnSource(converts[i].En, sidecar.Converts[i].En, ctx) };
+                    break;
+                case IrStatementKind.Swap:
+                    swaps[i] = swaps[i] with { En = MarkEnSource(swaps[i].En, sidecar.Swaps[i].En, ctx) };
+                    break;
+                case IrStatementKind.Abs:
+                    absStatements[i] = absStatements[i] with { En = MarkEnSource(absStatements[i].En, sidecar.AbsStatements[i].En, ctx) };
+                    break;
+                case IrStatementKind.TSub:
+                    tSubs[i] = tSubs[i] with { En = MarkEnSource(tSubs[i].En, sidecar.TSubs[i].En, ctx) };
+                    break;
+                case IrStatementKind.TConv:
+                    tConvs[i] = tConvs[i] with { En = MarkEnSource(tConvs[i].En, sidecar.TConvs[i].En, ctx) };
+                    break;
+                case IrStatementKind.Calc:
+                    calcs[i] = calcs[i] with { En = MarkEnSource(calcs[i].En, sidecar.Calcs[i].En, ctx) };
+                    break;
+            }
+        }
+
         return net with
         {
-            Timers = net.Timers.Select((t, i) => t with { In = MarkChain(t.In, sidecar.Timers[i].Steps, ctx) }).ToList(),
-            Assignments = net.Assignments.Select((a, i) => a with { Condition = MarkChain(a.Condition, sidecar.Assignments[i].Steps, ctx) }).ToList(),
-            Moves = net.Moves.Select((m, i) => m with { En = MarkChain(m.En, sidecar.Moves[i].Steps, ctx) }).ToList(),
-            WordAnds = net.WordAnds.Select((w, i) => w with { En = MarkChain(w.En, sidecar.WordAnds[i].Steps, ctx) }).ToList(),
-            Calls = net.Calls.Select((c, i) => c with { En = MarkChain(c.En, sidecar.Calls[i].Steps, ctx) }).ToList(),
-            Muls = net.Muls.Select((x, i) => x with { En = MarkEnSource(x.En, sidecar.Muls[i].En, ctx) }).ToList(),
-            Converts = net.Converts.Select((x, i) => x with { En = MarkEnSource(x.En, sidecar.Converts[i].En, ctx) }).ToList(),
-            Swaps = net.Swaps.Select((x, i) => x with { En = MarkEnSource(x.En, sidecar.Swaps[i].En, ctx) }).ToList(),
-            AbsStatements = net.AbsStatements.Select((x, i) => x with { En = MarkEnSource(x.En, sidecar.AbsStatements[i].En, ctx) }).ToList(),
-            TSubs = net.TSubs.Select((x, i) => x with { En = MarkEnSource(x.En, sidecar.TSubs[i].En, ctx) }).ToList(),
-            TConvs = net.TConvs.Select((x, i) => x with { En = MarkEnSource(x.En, sidecar.TConvs[i].En, ctx) }).ToList(),
-            Calcs = net.Calcs.Select((x, i) => x with { En = MarkEnSource(x.En, sidecar.Calcs[i].En, ctx) }).ToList(),
+            Timers = timers,
+            Assignments = assignments,
+            Moves = moves,
+            WordAnds = wordAnds,
+            Calls = calls,
+            Muls = muls,
+            Converts = converts,
+            Swaps = swaps,
+            AbsStatements = absStatements,
+            TSubs = tSubs,
+            TConvs = tConvs,
+            Calcs = calcs,
         };
+    }
+
+    // The network's statements in SOURCE order — the rung order the engineer drew. Each statement is
+    // placed by the document position of the Part that terminates it (its coil, its box, its call):
+    // TIA writes a network's Parts in flow order, one rung after another, and a rung's terminating
+    // Part sits inside that rung's run, so sorting on it orders the rungs and, within one rung, a TON
+    // ahead of the coil its Q feeds. The sort is stable and each kind's list is already in document
+    // order, so a kind's own statements stay in index order, as IrNetwork.StatementOrder requires.
+    private static IReadOnlyList<IrStatementRef> SourceStatementOrder(FlgNetwork network, IrNetwork irNetwork, NetworkSidecar sidecar)
+    {
+        var position = new Dictionary<int, int>();
+        for (var p = 0; p < network.Parts.Count; p++)
+        {
+            position[network.Parts[p].UId] = p;
+        }
+
+        int AnchorUId(IrStatementRef s) => s.Kind switch
+        {
+            IrStatementKind.Timer => sidecar.Timers[s.Index].TonPartUId,
+            IrStatementKind.Assignment => sidecar.Assignments[s.Index].CoilUId,
+            IrStatementKind.Move => sidecar.Moves[s.Index].MovePartUId,
+            IrStatementKind.WordAnd => sidecar.WordAnds[s.Index].AndPartUId,
+            IrStatementKind.Call => sidecar.Calls[s.Index].CallPartUId,
+            IrStatementKind.Mul => sidecar.Muls[s.Index].MulPartUId,
+            IrStatementKind.Convert => sidecar.Converts[s.Index].ConvertPartUId,
+            IrStatementKind.Swap => sidecar.Swaps[s.Index].SwapPartUId,
+            IrStatementKind.Abs => sidecar.AbsStatements[s.Index].AbsPartUId,
+            IrStatementKind.Limit => sidecar.Limits[s.Index].LimitPartUId,
+            IrStatementKind.TSub => sidecar.TSubs[s.Index].TSubPartUId,
+            IrStatementKind.TConv => sidecar.TConvs[s.Index].TConvPartUId,
+            IrStatementKind.Calc => sidecar.Calcs[s.Index].CalcPartUId,
+            IrStatementKind.MoveBlkVariant => sidecar.MoveBlkVariants[s.Index].MoveBlkVariantPartUId,
+            IrStatementKind.Wait => sidecar.Waits[s.Index].WaitPartUId,
+            IrStatementKind.FillBlockI => sidecar.FillBlockIs[s.Index].FillBlockIPartUId,
+            IrStatementKind.ModbusMaster => sidecar.ModbusMasters[s.Index].ModbusMasterPartUId,
+            IrStatementKind.ModbusCommLoad => sidecar.ModbusCommLoads[s.Index].ModbusCommLoadPartUId,
+            IrStatementKind.FixedShape => sidecar.FixedShapes[s.Index].PartUId,
+            _ => throw new ArgumentOutOfRangeException(nameof(s), s.Kind, null),
+        };
+
+        return irNetwork.OrderedStatements()
+            .Select((statement, canonicalRank) => (statement, canonicalRank))
+            .OrderBy(x => position[AnchorUId(x.statement)])
+            .ThenBy(x => x.canonicalRank)
+            .Select(x => x.statement)
+            .ToList();
     }
 
     private static void CountEnChain(EnSourceSidecar enSidecar, Dictionary<int, int> counts)
@@ -864,8 +975,23 @@ public static class GraphReducer
         visitedWireUIds.Add(destWireUId);
         AddAccessEntry(accessEntries, destTag);
 
-        var statement = new MoveStatement(enExpr, inExpr, destTag.TagPath);
-        var sidecar = new MoveStatementSidecar(move.UId, enRailWireUId, enSteps, inSidecar, destTag.UId, destWireUId);
+        // A multi-output MOVE (Card > 1) writes `out2`..`outN` too, each to its own tag.
+        var additionalDestTags = new List<string>();
+        var additionalOutputs = new List<MoveOutputSidecar>();
+        for (var k = 2; k <= (move.Cardinality ?? 1); k++)
+        {
+            var (extraDest, extraWireUId) = ResolveOperand(wiresByPort, accessByUId, move.UId, networkNumber, $"out{k}");
+            visitedWireUIds.Add(extraWireUId);
+            AddAccessEntry(accessEntries, extraDest);
+            additionalDestTags.Add(extraDest.TagPath);
+            additionalOutputs.Add(new MoveOutputSidecar(extraDest.UId, extraWireUId));
+        }
+
+        var statement = new MoveStatement(enExpr, inExpr, destTag.TagPath) { AdditionalDestTags = additionalDestTags };
+        var sidecar = new MoveStatementSidecar(move.UId, enRailWireUId, enSteps, inSidecar, destTag.UId, destWireUId)
+        {
+            AdditionalOutputs = additionalOutputs,
+        };
 
         return (statement, sidecar, accessEntries, constantEntries);
     }
@@ -1032,7 +1158,8 @@ public static class GraphReducer
             // as Le/Gt's own history. "T_SUB"/"T_CONV" confirmed real 2026-07-14 (Phase 2 Tier 2,
             // `FB VibratorCycle`: a T_SUB->T_CONV->Convert chain, T_SUB and T_CONV each producing
             // the next link's `en` via `eno` directly, same mechanism).
-            && precedingPart.Name is "Mul" or "Convert" or "Sub" or "Div" or "T_SUB" or "T_CONV")
+            // "Add" as a producer grounded 2026-09-24 on a live-run export (a Div->Add->Sub chain).
+            && precedingPart.Name is "Mul" or "Add" or "Convert" or "Sub" or "Div" or "T_SUB" or "T_CONV")
         {
             visitedWireUIds.Add(wire.UId);
             return (new EnSource.PrecedingEno(), new EnSourceSidecar.PrecedingEnoSidecar(precedingPart.UId, wire.UId));
@@ -1075,17 +1202,20 @@ public static class GraphReducer
             throw new NonReducibleNetworkException($"Network {networkNumber}: Mul/Add/Sub/Div UId={mul.UId} has no usable cardinality.");
         }
 
+        // MAX/MIN name their data ports in UPPERCASE (`IN1`..`INn`, `OUT`); the arithmetic boxes in
+        // lowercase. `en` is lowercase on both.
+        var (inputPortPrefix, outputPort) = MulFamilyPorts(mul.Name);
         var inputExprs = new List<Expr>();
         var inputSidecars = new List<OperandSidecar>();
         for (var k = 1; k <= cardinality; k++)
         {
             var (inputExpr, inputSidecar) = ResolveTagOrLiteralOperand(
-                wiresByPort, accessByUId, constantsByUId, mul.UId, $"in{k}", networkNumber, visitedWireUIds, accessEntries, constantEntries);
+                wiresByPort, accessByUId, constantsByUId, mul.UId, $"{inputPortPrefix}{k}", networkNumber, visitedWireUIds, accessEntries, constantEntries);
             inputExprs.Add(inputExpr);
             inputSidecars.Add(inputSidecar);
         }
 
-        var (destTag, destWireUId) = ResolveOperand(wiresByPort, accessByUId, mul.UId, networkNumber, "out");
+        var (destTag, destWireUId) = ResolveOperand(wiresByPort, accessByUId, mul.UId, networkNumber, outputPort);
         visitedWireUIds.Add(destWireUId);
         AddAccessEntry(accessEntries, destTag);
 
@@ -1097,7 +1227,7 @@ public static class GraphReducer
 
         var kind = MulKindFor(mul.Name, networkNumber, mul.UId);
         var statement = new MulStatement(en, inputExprs, destTag.TagPath, kind);
-        var sidecar = new MulStatementSidecar(mul.UId, enSidecar, inputSidecars, destTag.UId, destWireUId, kind, mul.SrcType);
+        var sidecar = new MulStatementSidecar(mul.UId, enSidecar, inputSidecars, destTag.UId, destWireUId, kind, mul.SrcType, mul.Version, mul.EnoEnabled);
 
         return (statement, sidecar, accessEntries, constantEntries);
     }
@@ -1111,8 +1241,13 @@ public static class GraphReducer
         "Add" => MulKind.Add,
         "Sub" => MulKind.Subtract,
         "Div" => MulKind.Divide,
+        "MAX" => MulKind.Maximum,
+        "MIN" => MulKind.Minimum,
         _ => throw new NonReducibleNetworkException($"Network {networkNumber}: UId={uid} has unexpected Part Name '{partName}' for a Mul/Add/Sub/Div statement."),
     };
+
+    internal static (string InputPortPrefix, string OutputPort) MulFamilyPorts(string partName) =>
+        partName is "MAX" or "MIN" ? ("IN", "OUT") : ("in", "out");
 
     // A Convert's `en` is resolved via ResolveEnSource (ordinary condition, confirmed real
     // standalone in FB ShredderControlSystem; or ENO-chained after a Mul, confirmed real in
@@ -1794,7 +1929,7 @@ public static class GraphReducer
             if (accessByUId.TryGetValue(other.UId!.Value, out var access))
             {
                 RequireNotOpenSentinel(access.DottedPath, part.Name, part.UId, port.Name, networkNumber);
-                AddAccessEntry(accessEntries, new SidecarAccessEntry(access.DottedPath, access.UId, access.Scope));
+                AddAccessEntry(accessEntries, SidecarAccessEntryFor(access));
                 arguments.Add(new FixedShapeArgument(port.Name, port.Direction == PortDirection.Output
                     ? new PortBinding.Dest(access.DottedPath)
                     : new PortBinding.Value(new Expr.TagRef(access.DottedPath))));
@@ -1875,7 +2010,7 @@ public static class GraphReducer
 
         if (accessByUId.TryGetValue(identCon.UId!.Value, out var access))
         {
-            AddAccessEntry(accessEntries, new SidecarAccessEntry(access.DottedPath, access.UId, access.Scope));
+            AddAccessEntry(accessEntries, SidecarAccessEntryFor(access));
             return (new Expr.TagRef(access.DottedPath), new OperandSidecar.TagOperand(access.UId, wire.UId));
         }
 
@@ -1965,6 +2100,13 @@ public static class GraphReducer
         visitedWireUIds.Add(wire.UId);
         return new OpenConnectionSidecar(wire.UId, others[0].UId!.Value);
     }
+
+    // The one place a parsed <Access> becomes a sidecar entry, so a VARIABLE array subscript's
+    // nested index scope rides across into the sidecar. Without it, to-ir of an export holding one
+    // produced a sidecar that to-xml then refused ("nothing resolved that index's scope") — the
+    // block could be read into the IR but never written back, the split ADR-0010 forbids.
+    private static SidecarAccessEntry SidecarAccessEntryFor(AccessNode access) =>
+        new(access.DottedPath, access.UId, access.Scope) { IndexScopes = access.IndexScopes };
 
     private static void AddAccessEntry(List<SidecarAccessEntry> entries, SidecarAccessEntry entry)
     {
@@ -2196,7 +2338,7 @@ public static class GraphReducer
             : throw new NonReducibleNetworkException(
                 $"Network {networkNumber}: operand wire {wire.UId} references unknown Access UId={identCon.UId}.");
 
-        return (new SidecarAccessEntry(access.DottedPath, access.UId, access.Scope), wire.UId);
+        return (SidecarAccessEntryFor(access), wire.UId);
     }
 
     private static Dictionary<(int, string), WireNode> BuildPortIndex(IReadOnlyList<WireNode> wires)

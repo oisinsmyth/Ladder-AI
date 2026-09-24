@@ -55,8 +55,9 @@ public static class LiteralFitCheck
         {
             // A MOVE's destination member type — the site the version-register stamp is written at.
             foreach (var move in network.Moves)
+            foreach (var dest in move.DestTags)
             {
-                var finding = Fit(network.Number, move.In, tagTypes.Resolve(move.DestTag), $"MOVE into '{move.DestTag}'");
+                var finding = Fit(network.Number, move.In, tagTypes.Resolve(dest), $"MOVE into '{dest}'");
                 if (finding is not null)
                 {
                     yield return finding;

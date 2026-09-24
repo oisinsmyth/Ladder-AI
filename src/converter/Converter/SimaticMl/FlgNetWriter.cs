@@ -139,7 +139,10 @@ public static class FlgNetWriter
             // ModbusComs) shares the same fixed DisabledENO="true" too. T_SUB/T_CONV/
             // MOVE_BLK_VARIANT/WAIT are confirmed real WITHOUT DisabledENO at all — deliberately
             // excluded from this list.
-            if (part.Name is "Move" or "And" or "Mul" or "Add" or "Sub" or "Div" or "Convert" or "Swap" or "Abs" or "Calc" or "LIMIT" or "FillBlockI")
+            // MAX/MIN (2026-09-24) carry it too unless the source left it off — ENO enabled, the one
+            // family where that shape is accepted and round-tripped (PartNode.EnoEnabled).
+            if (part.Name is "Move" or "And" or "Mul" or "Add" or "Sub" or "Div" or "Convert" or "Swap" or "Abs" or "Calc" or "LIMIT" or "FillBlockI"
+                || (part.Name is "MAX" or "MIN" && !part.EnoEnabled))
             {
                 partElement.Add(new XAttribute("DisabledENO", "true"));
             }
@@ -169,9 +172,10 @@ public static class FlgNetWriter
 
             if (part.Cardinality is not null)
             {
+                // MAX/MIN spell it lowercase — `card` — unlike every other Cardinality-carrying Part.
                 partElement.Add(new XElement(
                     ns + "TemplateValue",
-                    new XAttribute("Name", "Card"),
+                    new XAttribute("Name", part.Name is "MAX" or "MIN" ? "card" : "Card"),
                     new XAttribute("Type", "Cardinality"),
                     part.Cardinality.Value));
             }
@@ -204,7 +208,7 @@ public static class FlgNetWriter
                 // is "src_type" (lowercase, unlike ordinary Convert's "SrcType").
                 var srcTypeAttributeName = part.Name switch
                 {
-                    "LIMIT" => "value_type",
+                    "LIMIT" or "MAX" or "MIN" => "value_type",
                     "T_SUB" => "date_type",
                     "T_CONV" => "src_type",
                     _ => "SrcType",

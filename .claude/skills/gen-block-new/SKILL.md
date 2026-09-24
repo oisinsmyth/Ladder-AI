@@ -153,8 +153,10 @@ minted from a real TIA export — you don't have one). So convert it with **`con
 --synthesize`**, not plain `to-xml`; the synthesizer mints the sidecar for you. These facts cost real
 time on the first run if you don't know them going in:
 
-- **Statement-kind ordering within a network.** The synthesizer emits by kind (timers, then coils,
-  then moves, then arithmetic), not in the order you typed them. For **ENO-chained MUL/ADD→CONVERT
+- **Statement order within a network is rung order (since 2026-09-24).** Kinds may interleave; the
+  order you write statements in is the order the rungs are drawn and executed in, with or without a
+  sidecar (`ir/SPEC.md`, "Statement order within one network"). A network written in plain kind
+  order (timers, coils, moves, arithmetic, ...) still behaves exactly as before. For **ENO-chained MUL/ADD→CONVERT
   pairs** it pairs `mul[i]`↔`convert[i]` by list index and interleaves their execution
   (`mul0→convert0→mul1→convert1…`, each CONVERT enabled by its own MUL's ENO) — so a **single shared
   TEMP across those pairs is safe** (each CONVERT reads it before the next MUL overwrites; this is the

@@ -1168,7 +1168,7 @@ public static class Rules
             // Case (b): a MOVE to Step with no inline `Step = <from>` guard in its EN.
             foreach (var move in network.Moves)
             {
-                if (!HasStepLeaf(move.DestTag))
+                if (!move.DestTags.Any(HasStepLeaf))
                 {
                     continue;
                 }
@@ -2016,7 +2016,7 @@ public static class Rules
             // Shape 1: MOVE(..., IN := <literal>) => <Step register>.
             foreach (var move in network.Moves)
             {
-                if (HasStepLeaf(move.DestTag) && move.In is Expr.Literal lit && TryParseStep(lit.Value, out var target))
+                if (move.DestTags.Any(HasStepLeaf) && move.In is Expr.Literal lit && TryParseStep(lit.Value, out var target))
                 {
                     steps.Add(target);
                 }

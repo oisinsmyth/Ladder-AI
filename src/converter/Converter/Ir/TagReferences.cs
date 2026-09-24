@@ -63,7 +63,12 @@ public static class TagReferences
 
         foreach (var move in network.Moves)
         {
-            yield return move.DestTag;
+            // Every output of a multi-output MOVE, not just out1.
+            foreach (var dest in move.DestTags)
+            {
+                yield return dest;
+            }
+
             foreach (var path in FromExpr(move.En))
             {
                 yield return path;
@@ -681,7 +686,11 @@ public static class TagReferences
 
         foreach (var move in network.Moves)
         {
-            yield return new DirectedTagUsage(move.DestTag, TagDirection.Write, Guard: move.En);
+            foreach (var dest in move.DestTags)
+            {
+                yield return new DirectedTagUsage(dest, TagDirection.Write, Guard: move.En);
+            }
+
             foreach (var u in Reads(move.En)) yield return u;
             foreach (var u in Reads(move.In)) yield return u;
         }

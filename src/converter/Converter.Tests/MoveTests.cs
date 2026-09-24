@@ -223,22 +223,24 @@ public class MoveTests
     }
 
     [Fact]
-    public void SerializeNetworkOnly_TelescopingChain_ProducesCoilThenBothMoveStatements()
+    public void SerializeNetworkOnly_TelescopingChain_ProducesBothMovesThenTheCoil_InSourceOrder()
     {
         var network = LoadFixture("MoveTelescopingChain.xml");
         var reduced = GraphReducer.Reduce(network, networkNumber: 3, title: "Motor status telemetry", compileUnitUId: "5");
 
         var text = IrSerializer.SerializeNetworkOnly(reduced.Network);
 
-        // The telescoping cascade fans StartCmd (node 1) and RunCmd (node 2) out across the coil and moves.
-        // The coil (serialised first) masters both — `{split 1}`/`{split 2}`; each move receives the deepest
-        // node it taps — move1 `{recv 1}`, move2 `{recv 2}` (StartCmd absorbed) — per the ADR-0006 boundary
-        // rule. (No ` SPLIT` header — the legacy per-network flag was removed in phase 3.)
+        // Statements are in SOURCE order (Move 33, Move 34, Coil 35 — each Move taps the rung before the
+        // coil at its end), not kind order: the IR's statement order is the rung order. Until the IR could
+        // express that, this network read COIL first. The telescoping cascade fans StartCmd (node 1) and
+        // RunCmd (node 2) out across the moves and coil; walking in that order, move1 masters StartCmd
+        // `{split 1}`, move2 receives it and masters RunCmd `{split 2}`, and the coil receives the deepest
+        // node it taps `{recv 2}` (StartCmd absorbed) — the ADR-0006 boundary rule, unchanged.
         Assert.Equal(
             "NETWORK 3 \"Motor status telemetry\"\n" +
-            "  COIL Output.Run := StartCmd{split 1} AND RunCmd{split 2}\n" +
-            "  MOVE(EN := StartCmd{recv 1}, IN := 1) => Status.Word1\n" +
-            "  MOVE(EN := StartCmd AND RunCmd{recv 2}, IN := SourceValue) => Status.Word2\n",
+            "  MOVE(EN := StartCmd{split 1}, IN := 1) => Status.Word1\n" +
+            "  MOVE(EN := StartCmd{recv 1} AND RunCmd{split 2}, IN := SourceValue) => Status.Word2\n" +
+            "  COIL Output.Run := StartCmd AND RunCmd{recv 2}\n",
             text);
     }
 
@@ -283,13 +285,16 @@ public class MoveTests
     }
 
     [Fact]
-    public void Parse_MoveUnconfirmedCardinality_ThrowsUnsupportedConstruct()
+    // This test used to refuse Card 2 on the guess that it meant a MOVE_BLK_VARIANT-style block copy. A
+    // real export (2026-09-24) showed Card N is a multi-output MOVE (MultiOutputMoveTests), so what is
+    // still refused is a count that cannot be an output count at all.
+    public void Parse_MoveCardinalityBelowOne_ThrowsUnsupportedConstruct()
     {
         var xml = """
             <FlgNet xmlns="http://www.siemens.com/automation/Openness/SW/NetworkSource/FlgNet/v5">
               <Parts>
                 <Part Name="Move" UId="1" DisabledENO="true">
-                  <TemplateValue Name="Card" Type="Cardinality">2</TemplateValue>
+                  <TemplateValue Name="Card" Type="Cardinality">0</TemplateValue>
                 </Part>
                 <Part Name="Coil" UId="2" />
               </Parts>
@@ -300,6 +305,6 @@ public class MoveTests
         var element = XElement.Parse(xml);
 
         var ex = Assert.Throws<UnsupportedConstructException>(() => FlgNetParser.Parse(element));
-        Assert.Contains("MOVE_BLK_VARIANT", ex.Message);
+        Assert.Contains("1 or more", ex.Message);
     }
 }
