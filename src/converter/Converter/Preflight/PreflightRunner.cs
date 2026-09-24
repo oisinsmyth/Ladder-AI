@@ -118,7 +118,20 @@ public static class PreflightRunner
 
         if (ProjectIndex.HasSidecarSection(text))
         {
-            (block, sidecars) = IrParser.ParseBlock(text);
+            // Same reconciliation to-xml applies, so preflight checks what to-xml will actually emit: a
+            // network whose readable IR was edited away from its stored sidecar is re-derived (an edit is
+            // not a defect, so that is no finding), or — when it cannot be — refused, which is one.
+            IReadOnlyList<NetworkSidecar> stored;
+            (block, stored) = IrParser.ParseBlock(text);
+            try
+            {
+                sidecars = StoredSidecarReconciler.Reconcile(block, stored, callees, tagTypes);
+            }
+            catch (IrFormatException ex)
+            {
+                findings.Add(new PreflightFinding("convert", ex.Message));
+                sidecars = null;
+            }
         }
         else
         {

@@ -24,7 +24,10 @@ namespace Converter;
 /// </summary>
 public static class GraphReducer
 {
-    public static ReducedNetwork Reduce(FlgNetwork network, int networkNumber, string title, string compileUnitUId)
+    // sourceStatementOrder: false reproduces the kind-grouped statement layout every to-ir wrote before
+    // 2026-09-24 — used only to check a stored sidecar against readable IR written in that layout
+    // (StoredSidecarReconciler), never by to-ir itself.
+    public static ReducedNetwork Reduce(FlgNetwork network, int networkNumber, string title, string compileUnitUId, bool sourceStatementOrder = true)
     {
         if (network.AccessNodes.Count == 0 && network.Parts.Count == 0 && network.Wires.Count == 0)
         {
@@ -513,7 +516,10 @@ public static class GraphReducer
         // Rung order: the statements in SOURCE order, not grouped by kind. Must be settled before the
         // fan-out markers, which are assigned walking the statements in their final order so every
         // {split} precedes its {recv} in the text the synthesizer later walks.
-        irNetwork = irNetwork with { StatementOrder = IrNetwork.ExplicitOrderOrNull(SourceStatementOrder(network, irNetwork, networkSidecar)) };
+        if (sourceStatementOrder)
+        {
+            irNetwork = irNetwork with { StatementOrder = IrNetwork.ExplicitOrderOrNull(SourceStatementOrder(network, irNetwork, networkSidecar)) };
+        }
 
         // ADR-0006 phase 2: derive per-node fan-out markers ({split N}/{recv N}) from shared part UIds and
         // attach them to the readable Expr trees. Fan-out is recorded per node here — the old per-network

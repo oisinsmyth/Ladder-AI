@@ -24,6 +24,15 @@ a multi-output `Move` (`Card` > 1, `MOVE(...) => A, B, C`), `Add` as an ENO prod
 now rung order**: a network's statements may interleave kinds, `to-ir` writes them in source order and `to-xml`
 writes rungs in that order with or without a sidecar. `ir/SPEC.md`, "Statement order within one network".
 
+**2026-09-24 — the readable IR is authoritative over a stored SIDECAR (ADR-0010).** `to-xml` uses a stored
+sidecar for a network only while it still describes that network's readable text (built, reduced back, compared).
+An edited network is re-derived from its readable text by synthesis (fresh UIds for that network, a `note:` on
+stderr), or, if it cannot be synthesized, `to-xml` refuses and names the network. Before this an edited operand was
+silently written back as the original (exit 0, `compare` EQUIVALENT to the unedited block). `preflight` applies the
+same reconciliation. Only exception: readable IR in plain canonical kind order states no rung order, so there the
+sidecar's order stands. `ir/SPEC.md`, "Sidecar". Also: a directory argument to `to-ir`/`to-xml` now means the
+`*.xml`/`*.ir` files in it (it used to crash with `UnauthorizedAccessException`).
+
 Plus the **fixed-shape registry** names (`FixedShapeInstructions`, 2026-08-12), which
 `SupportedPartNames` concatenates rather than restating: `MB_COMM_LOAD` 2.1, `MB_MASTER` 2.2 and
 `MB_SERVER` 5.3 — keyed on **(name, version)**, so an unknown version of a known name is refused

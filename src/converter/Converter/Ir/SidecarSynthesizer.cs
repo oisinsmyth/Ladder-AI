@@ -69,6 +69,15 @@ public static class SidecarSynthesizer
         return block.Networks.Select(network => Synthesize(network, localNames, callees, effectiveTypes)).ToList();
     }
 
+    // One network of a block, with the same block context SynthesizeBlock gives every network — used when
+    // a single network's stored sidecar no longer describes its readable text (StoredSidecarReconciler).
+    public static NetworkSidecar SynthesizeNetwork(
+        IrBlock block, int networkIndex, CalleeInterfaceRegistry? callees = null, TagTypeRegistry? tagTypes = null)
+    {
+        var effectiveTypes = (tagTypes ?? TagTypeRegistry.Empty).WithLocalMembers(InterfaceMembers(block));
+        return Synthesize(block.Networks[networkIndex], ComputeLocalNames(block), callees, effectiveTypes);
+    }
+
     private static IEnumerable<DbMember> InterfaceMembers(IrBlock block) =>
         (block.StaticMembers ?? Array.Empty<DbMember>())
             .Concat(block.TempMembers)

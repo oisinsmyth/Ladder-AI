@@ -1426,6 +1426,30 @@ omitting only when semantically equivalent and erroring otherwise (the `Normaliz
 converter for this). A block using an unsynthesizable construct (`Limit`/`Wait`/`FillBlockI`/`Modbus*`) or
 that diverges keeps its stored `SIDECAR`. When present, its content and contract are unchanged, as below.
 
+**🔴 The readable IR is authoritative over a stored sidecar (2026-09-24, ADR-0010).** A stored
+`SIDECAR` is used for a network only while it still *describes* that network's readable text:
+`to-xml` builds the network from the sidecar, reduces it back to IR and compares the two renderings.
+- **Identical** (every unedited network): the sidecar is used as-is, source UIds and all — output is
+  byte-for-byte what it always was.
+- **Different** (an operand, a destination, a condition, a statement, or the rung order was edited in the
+  readable text): that network is **re-derived from its readable text** by the same synthesis a
+  sidecar-less block uses (fresh UIds for that network only; TIA renumbers on import regardless), and a
+  `note: network N: …` line names the first differing line on stderr. The other networks keep their
+  sidecars.
+- **Different and not synthesizable** (e.g. a network holding `LIMIT`): `to-xml` **refuses**, naming the
+  network and the readable/sidecar lines that disagree.
+
+Before this, `FlgNetBuilder` read the readable statements only for their *counts*, so an edited operand
+was silently written back as the original. The output was `to-xml` exit 0 and `compare` EQUIVALENT to the
+unedited block. A count mismatch was refused, but an operand mismatch was not. That outcome is now impossible.
+`preflight` applies the same reconciliation, so it checks what `to-xml` will emit.
+
+The one thing the sidecar still decides is **rung order when the readable IR states none**: a network
+written in plain canonical kind order (see "Statement order within one network") is the layout every
+`to-ir` wrote before rung order was expressible, so it is compared kind-grouped and the sidecar's order
+stands. Consequence: moving statements *into* exact canonical kind order in a sidecar'd network is
+not an edit the converter can see. To force that order, drop the network's sidecar (or the file's).
+
 **Contact fan-out is a readable concern, not a sidecar one (ADR-0006, implemented).** One class of
 "wire identity" the sidecar historically implied — which occurrences of a contact are physically the
 *same* fanned-out part — is *not* derivable from the logic, so it is carried in the readable form via

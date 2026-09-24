@@ -273,7 +273,14 @@ internal static class Program
             positional.Add(rest[i]);
         }
 
-        var files = positional.ToArray();
+        // A directory argument stands for the files in it that this mode reads (*.xml for to-ir, *.ir for
+        // to-xml), non-recursive, in name order. It used to be passed through as a "file" and crash in
+        // File.ReadAllText with UnauthorizedAccessException before anything was converted.
+        var files = positional
+            .SelectMany<string, string>(p => Directory.Exists(p)
+                ? Directory.EnumerateFiles(p, mode == "to-ir" ? "*.xml" : "*.ir").OrderBy(f => f, StringComparer.Ordinal)
+                : new[] { p })
+            .ToArray();
 
         if (synthesize && mode != "to-xml")
         {
@@ -3351,7 +3358,16 @@ internal static class Program
         }
         else
         {
-            (block, sidecars) = IrParser.ParseBlock(irText);
+            // A stored sidecar is used only where it still describes the readable text; a network whose
+            // readable IR was edited is re-derived from it, or the conversion is refused. The readable IR
+            // wins — never silently the sidecar (ADR-0010; StoredSidecarReconciler).
+            IReadOnlyList<NetworkSidecar> stored;
+            (block, stored) = IrParser.ParseBlock(irText);
+            sidecars = StoredSidecarReconciler.Reconcile(
+                block, stored, callees, tagTypes,
+                (number, readable, described) => Console.Error.WriteLine(
+                    $"note: network {number}: the readable IR differs from its stored SIDECAR ('{readable}' vs the " +
+                    $"sidecar's '{described}') — the readable IR wins; that network's sidecar was re-derived from it."));
         }
 
         return BuildBlockXml(block, sidecars);
