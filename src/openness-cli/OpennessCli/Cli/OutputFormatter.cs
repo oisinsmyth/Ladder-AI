@@ -573,7 +573,16 @@ public static class OutputFormatter
             sb.Append(group.Key).Append("  (").Append(group.Count().ToString(CultureInfo.InvariantCulture)).AppendLine(")");
             foreach (var item in group.OrderBy(o => o.Name, StringComparer.Ordinal))
             {
-                sb.Append("    ").Append(item.Name).Append("  [").Append(item.TypeName).AppendLine("]");
+                sb.Append("    ").Append(item.Name).Append("  [").Append(item.TypeName).Append(']');
+                if (item.PlcTag is not null || item.DataType is not null || item.Connection is not null)
+                {
+                    sb.Append("  plcTag=").Append(item.PlcTag ?? "?")
+                      .Append("  dataType=").Append(item.DataType ?? "?")
+                      .Append("  connection=").Append(item.Connection ?? "?")
+                      .Append("  table=").Append(item.TagTable ?? "?");
+                }
+
+                sb.AppendLine();
             }
         }
 
@@ -598,7 +607,16 @@ public static class OutputFormatter
             {
                 total = objects.Count,
                 probeArtifacts = objects.Count(o => o.Name.StartsWith("ZZ_AI_", StringComparison.Ordinal)),
-                objects = objects.Select(o => new { kind = o.Kind, name = o.Name, typeName = o.TypeName }),
+                objects = objects.Select(o => new
+                {
+                    kind = o.Kind,
+                    name = o.Name,
+                    typeName = o.TypeName,
+                    plcTag = o.PlcTag,
+                    dataType = o.DataType,
+                    connection = o.Connection,
+                    tagTable = o.TagTable,
+                }),
             },
             new JsonSerializerOptions { WriteIndented = true });
 

@@ -135,7 +135,10 @@ internal static class Program
             if (parseResult is ParseResult.HmiCreateTagSuccess { Options.Confirm: false } unconfirmedTag)
             {
                 Console.Error.WriteLine(
-                    $"Would create HMI tag '{unconfirmedTag.Options.TagName}' (type {unconfirmedTag.Options.DataType}) in table " +
+                    $"Would create HMI tag '{unconfirmedTag.Options.TagName}' " +
+                    (unconfirmedTag.Options.PlcTag is null
+                        ? $"(internal, type {unconfirmedTag.Options.DataType})"
+                        : $"(bound to PLC tag '{unconfirmedTag.Options.PlcTag}' via '{unconfirmedTag.Options.Connection}')") + " in table " +
                     $"'{unconfirmedTag.Options.TableName}' of project '{unconfirmedTag.Options.ProjectIdentifier}'. " +
                     "Nothing was created, and Portal was not contacted. Re-run with --yes to proceed.");
                 return ExitCodes.NotConfirmed;
@@ -598,7 +601,7 @@ internal static class Program
     private static int RunHmiCreateTag(IOpennessGateway gateway, HmiCreateTagOptions options, int timeoutOpenSeconds)
     {
         gateway.OpenProject(options.ProjectIdentifier, TimeSpan.FromSeconds(timeoutOpenSeconds));
-        Console.WriteLine(gateway.CreateHmiTag(options.TagName, options.TableName, options.DataType));
+        Console.WriteLine(gateway.CreateHmiTag(options.TagName, options.TableName, options.DataType, options.Connection, options.PlcTag));
         return ExitCodes.Success;
     }
 

@@ -200,7 +200,7 @@ public interface IOpennessGateway : IDisposable
     /// Minimal by design — name, table, data type — since an internal tag is enough to test whether
     /// a binding resolves.
     /// </summary>
-    string CreateHmiTag(string tagName, string tableName, string dataType);
+    string CreateHmiTag(string tagName, string tableName, string dataType, string? connection = null, string? plcTag = null);
 
     /// <summary>
     /// Metamodel-driven create/delete/census over any composition on <c>HmiSoftware</c>, resolved by

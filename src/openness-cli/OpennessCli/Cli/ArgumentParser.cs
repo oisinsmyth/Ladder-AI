@@ -333,6 +333,8 @@ public sealed record HmiObjectOptions(
 
 // The one HMI-tag write. Kept separate from screen editing because a tag is device-scoped, not
 // screen-scoped, and creating one is not part of editing a screen.
+// Connection/PlcTag (both or neither): without them the tag is internal; with them it is bound to
+// a PLC tag through that HMI connection, and its data type follows the PLC tag.
 public sealed record HmiCreateTagOptions(
     string ProjectIdentifier,
     string TagName,
@@ -341,7 +343,9 @@ public sealed record HmiCreateTagOptions(
     bool Confirm,
     string? TiaInstallOverride,
     int TimeoutConnectSeconds,
-    int TimeoutOpenSeconds);
+    int TimeoutOpenSeconds,
+    string? Connection = null,
+    string? PlcTag = null);
 
 // The project-level graphic store (2026-08-17, symbol-strategy probe). No --device: Project.Graphics
 // is project-scoped, shared by every HMI device, unlike a screen which belongs to one HmiTarget.
@@ -582,7 +586,8 @@ public static class ArgumentParser
         "    handlers (274 of them in the reference project, against zero script modules), so the structural listing alone describes the skeleton and omits the animal.\n" +
         "  hmi --schema reports the metamodel instead: creatable screen-item types, and every attribute's access mode and create-relevance (Mandatory/Relevant/None).\n" +
         "    WinCC Unified has no screen export, so this is what stands in for a screen XML. Unified only — classic exposes no screen items. Implies --screen * unless one is given.\n" +
-        "  openness-cli hmi-create-tag <project> --name <name> --table <table> [--datatype <t>] --yes\n" +
+        "  openness-cli hmi-create-tag <project> --name <name> --table <table> [--datatype <t> | --connection <hmi connection> --plc-tag <plc tag path>] --yes\n" +
+        "    Without --connection/--plc-tag the tag is internal. With them (both required together) it is bound to that PLC tag and its type follows it.\n" +
         "  openness-cli hmi-compile    <project> [--device <name>] [--json]\n" +
         "  openness-cli hmi-inventory  <project> [--kind <Composition>] [--json]      # read-only census of HMI objects\n" +
         "  openness-cli hmi-new        <project> --kind <Composition> --name <name> [--in <parent>] --yes\n" +
@@ -3166,7 +3171,9 @@ public static class ArgumentParser
         string? projectIdentifier = null;
         string? name = null;
         string? table = null;
-        var dataType = "Bool";
+        string? connection = null;
+        string? plcTag = null;
+        string? dataType = null;
         var confirm = false;
         string? tiaInstall = null;
         var timeoutConnect = DefaultTimeoutConnectSeconds;
@@ -3200,6 +3207,20 @@ public static class ArgumentParser
                     }
 
                     dataType = dt!;
+                    break;
+                case "--connection":
+                    if (!TryTakeValue(args, ref i, "--connection", out connection, out var connErr))
+                    {
+                        return new ParseResult.Failure(connErr);
+                    }
+
+                    break;
+                case "--plc-tag":
+                    if (!TryTakeValue(args, ref i, "--plc-tag", out plcTag, out var plcErr))
+                    {
+                        return new ParseResult.Failure(plcErr);
+                    }
+
                     break;
                 case "--tia-install":
                     if (!TryTakeValue(args, ref i, "--tia-install", out tiaInstall, out var installErr))
@@ -3247,8 +3268,21 @@ public static class ArgumentParser
             return new ParseResult.Failure($"Missing required flag: --table <tag table name>.{Environment.NewLine}{Usage}");
         }
 
+        if ((connection is null) != (plcTag is null))
+        {
+            return new ParseResult.Failure(
+                $"--connection and --plc-tag go together: a PLC-bound tag needs both, an internal tag neither.{Environment.NewLine}{Usage}");
+        }
+
+        // A bound tag takes its type from the PLC tag; an explicit --datatype would contradict it.
+        if (plcTag is not null && dataType is not null)
+        {
+            return new ParseResult.Failure(
+                $"--datatype cannot be combined with --plc-tag: a PLC-bound tag's type follows the PLC tag.{Environment.NewLine}{Usage}");
+        }
+
         return new ParseResult.HmiCreateTagSuccess(new HmiCreateTagOptions(
-            projectIdentifier, name, table, dataType, confirm, tiaInstall, timeoutConnect, timeoutOpen));
+            projectIdentifier, name, table, dataType ?? "Bool", confirm, tiaInstall, timeoutConnect, timeoutOpen, connection, plcTag));
     }
 
     private static bool TryTakePositional(string arg, ref string? projectIdentifier, out string error)

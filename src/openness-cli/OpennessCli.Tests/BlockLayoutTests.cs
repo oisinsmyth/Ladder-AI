@@ -708,7 +708,7 @@ internal sealed class FakeGateway : IOpennessGateway
         IReadOnlyList<(string Target, string Property)> mapClears,
         IReadOnlyList<(string Target, string Property, string EntrySpec)> maps) => throw new NotSupportedException();
 
-    public string CreateHmiTag(string tagName, string tableName, string dataType) => throw new NotSupportedException();
+    public string CreateHmiTag(string tagName, string tableName, string dataType, string? connection = null, string? plcTag = null) => throw new NotSupportedException();
 
     public string CreateHmiObject(string kind, string name, string? parent) => throw new NotSupportedException();
 

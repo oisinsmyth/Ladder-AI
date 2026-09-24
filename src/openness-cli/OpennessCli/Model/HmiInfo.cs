@@ -193,8 +193,18 @@ public sealed record HmiCreateScreenResult(
 /// <summary>
 /// One object in an HMI composition, as reported by `hmi-inventory`. Deliberately minimal — this is
 /// a census, not a description; `hmi --screen` and `--schema` are for detail.
+/// <see cref="PlcTag"/>/<see cref="DataType"/>/<see cref="Connection"/> are read for tags only —
+/// the one detail a census of tags is useless without is what each is wired to. Null = not a tag,
+/// or the attribute could not be read; an internal tag reads as an empty PlcTag.
 /// </summary>
-public sealed record HmiObjectInfo(string Kind, string Name, string TypeName);
+public sealed record HmiObjectInfo(
+    string Kind,
+    string Name,
+    string TypeName,
+    string? PlcTag = null,
+    string? DataType = null,
+    string? Connection = null,
+    string? TagTable = null);
 
 /// <summary>
 /// Result of editing an existing screen. <see cref="Applied"/> records each change in the form it was

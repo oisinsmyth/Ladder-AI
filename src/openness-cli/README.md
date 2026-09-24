@@ -87,7 +87,7 @@ see `docs/notes/stage-gates.md` S1.
 - `Siemens.Engineering.dll`'s location is resolved via `$(TiaOpennessDir)` in `Directory.Build.props`: `TIA_OPENNESS_PATH` env var, else the standard `Portal V20\PublicAPI\V20` install path. Override at build time with `TIA_OPENNESS_PATH` if TIA is installed elsewhere. The CLI's own `--tia-install`/`TIA_OPENNESS_PATH` resolution (`TiaInstallLocator`) mirrors this at runtime, for a clear error message if the environment is misconfigured.
 - Solution: `dotnet build` / `dotnet test` from this directory (`openness-cli.sln`).
 - Confirmed `Siemens.Engineering` object-model shape (from reflecting on the installed DLL, useful when building `export`/`import`/`compile`/`xref`): `docs/notes/openness-api-surface-v20.md`.
-
+
 ## The documents
 
 This file is the index and the invocation contract. The detail lives in `docs/`, split out on
@@ -96,7 +96,7 @@ This file is the index and the invocation contract. The detail lives in `docs/`,
 | document | what you come to it for |
 |---|---|
 | [`docs/core-commands.md`](docs/core-commands.md) | per-command usage for the block and program surface, plus **the three compile scopes** and what a compile does and does not prove |
-| [`docs/hmi.md`](docs/hmi.md) | the read-only HMI walk, the two write probes, the graphics store, and the classic tag-table / text-list document formats |
+| [`docs/hmi.md`](docs/hmi.md) | the read-only HMI walk, the two write probes, the graphics store, the classic tag-table / text-list document formats, and Unified tag bindings (`hmi-inventory --kind Tags`, `hmi-create-tag --plc-tag`) |
 | [`docs/download-and-transfer.md`](docs/download-and-transfer.md) | 🔴 the only path that can move a program onto a controller — `download-plan`, and the `download-probe` findings |
 | [`docs/portal-process.md`](docs/portal-process.md) | 🔴 `portal-close`, kept separate so the one destructive command stays visible |
 
@@ -132,4 +132,4 @@ shell should branch on these rather than on stderr text.
 | 17 | `ChangeAbandoned` | A write command failed and **the project is unchanged** — nothing was saved, and the partial mutation was removed from the open session. Earned by `create-instance-db` when the new instance DB comes back with an invalid block number (FI-63) or its number cannot be read back at all. Its own code because nothing was named wrongly (so not `7`) and because it is a modelled outcome with a known recovery, not an internal fault (so not `5`). The half a caller reads off it: **there is nothing to clean up, and a retry is safe.** Until 2026-08-13 this same condition exited `5` having already *saved* the broken block, so the exit code and the project disagreed about whether anything had happened |
 | 18 | `RollbackIncomplete` | The `17` failure with its cleanup half missing: nothing was saved, so **nothing reached disk**, but the partial mutation could not be removed from the in-memory project model either. A separate code because the caller's response differs — which is this table's rule for when to split one (cf. `11`, which does not). On `17` a retry is immediately safe; on `18` the open Portal session holds a block that exists nowhere on disk, so if that session belongs to a person rather than to this process, close it **without saving** — advice that would be actively wrong on a `17` |
 | 19 | `DuplicateBlockNumber` | The project contains **two or more blocks holding the same number** on one device (2026-08-13). Earned by `sanity-check`, and by `import`/`import-all` when the project holds a collision after the files went in. **Not `9`, and that separation is the whole point:** `9` means "something is inconsistent or a device failed to compile", and the measured project was *perfectly consistent and compiled clean* while holding two blocks at FC 910 — folding this into `9` would put a real defect behind a code whose documented remedy (compile the listed blocks) is exactly what **erased the only signal there was**. Not `7` either: nothing was named wrongly and re-running with a different argument does not fix it. **It outranks every other non-zero verdict here** (`9`, `13`) — those either clear themselves on the next pass or announce themselves again, and a duplicate does neither; both reports are printed in full regardless, so the ranking hides nothing. On the import path it does **not** mean the import failed: the files went in and were saved, and the message says so |
-
+

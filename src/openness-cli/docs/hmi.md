@@ -758,3 +758,27 @@ addressed on the strength of a hypothesis, and a delete is the one irreversible 
 exposes. If the near-match line fires on the next reproduction, the fix follows from evidence; if it
 stays silent, that is evidence too — and the present-set will show whether the screen was there at
 all.
+
+## Unified HMI tags — reading what a tag is wired to, and creating a PLC-bound one (2026-09-24)
+
+```
+openness-cli hmi-inventory  <project> --kind Tags [--json]
+openness-cli hmi-create-tag <project> --name <name> --table <table> --connection <hmi connection> --plc-tag <plc tag path> --yes
+```
+
+`hmi-inventory --kind Tags` now reports, per tag, `plcTag`, `dataType`, `connection` and `table`, read
+from the tag's own attributes. A census of tag NAMES cannot answer "is this alarm trigger wired to
+the PLC": HMI tag names are free-form and routinely differ from the PLC instance they bind (a UDT tag
+`BeltA` bound to `FeedConveyor01.IO`), and an internal tag reads `connection=<Internal tag>` with
+an empty `plcTag`. Match on the binding, never on the name.
+
+`hmi-create-tag` gains `--connection` + `--plc-tag` (both or neither). With them the tag is bound
+through that connection and **takes its type from the PLC tag** — so `--datatype` alongside
+`--plc-tag` is refused as a contradiction. Connection is set before PlcTag. If either refuses, the
+half-made tag is deleted, not saved: a tag named like a PLC signal but bound to nothing is worse than
+no tag. The result line reads back connection, plcTag and `HmiDataType`, so a binding that did not
+take is visible. Array elements bind (`Inputs.Test[0]`), measured on a live Unified runtime.
+
+**Creating a tag does not prove it compiles clean** — run `hmi-compile` after. A pre-existing tag with
+a connection but no PLC tag chosen is a compile ERROR (`The property "PLC tag" is invalid`), and it
+will be in the error list whether or not your new tags are fine; read which object each error names.

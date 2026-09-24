@@ -1815,7 +1815,7 @@ public sealed class OpennessGateway : IOpennessGateway
     /// `Connection` and `PlcTag` set, which is out of scope here — an internal tag is enough to test
     /// whether a binding resolves.
     /// </summary>
-    public string CreateHmiTag(string tagName, string tableName, string dataType)
+    public string CreateHmiTag(string tagName, string tableName, string dataType, string? connection = null, string? plcTag = null)
     {
         if (_project is null)
         {
@@ -1834,6 +1834,41 @@ public sealed class OpennessGateway : IOpennessGateway
         }
 
         var tag = software.Tags.Create(tagName, tableName);
+
+        if (plcTag is not null)
+        {
+            // A bound tag: connection first, then the PLC tag, whose type the HMI tag then takes.
+            // Either refusal leaves a half-made tag behind, so it is deleted rather than saved —
+            // a tag named like a PLC signal but bound to nothing is worse than no tag.
+            try
+            {
+                tag.Connection = connection;
+                tag.PlcTag = plcTag;
+            }
+            catch (Exception ex)
+            {
+                try
+                {
+                    tag.Delete();
+                }
+                catch (Exception)
+                {
+                    // Reported below either way; the unsaved project still holds the refusal.
+                }
+
+                var first = ex.GetBaseException().Message.Split('\n')[0].Trim();
+                throw new InvalidOperationException(
+                    $"HMI tag '{tagName}' could not be bound to PLC tag '{plcTag}' via connection '{connection}': {first}. Nothing was created.", ex);
+            }
+
+            SaveProject();
+
+            var boundPlcTag = TryRead(() => tag.PlcTag) ?? "(unreadable)";
+            var boundConnection = TryRead(() => ReadAttributeText(tag, "Connection")) ?? "(unreadable)";
+            var boundType = TryRead(() => tag.HmiDataType) ?? "(unreadable)";
+            return $"created tag '{tagName}' in table '{tableName}'{(createdTable ? " (table created)" : "")} on {devicePath}; " +
+                   $"bound: connection '{boundConnection}', plcTag '{boundPlcTag}', HmiDataType '{boundType}'";
+        }
 
         // Data-type assignment is attempted, not required. Measured 2026-08-08: setting
         // HmiDataType on a freshly created tag throws
@@ -2092,7 +2127,21 @@ public sealed class OpennessGateway : IOpennessGateway
                     }
 
                     var itemName = TryRead(() => item.GetType().GetProperty("Name")?.GetValue(item) as string) ?? "(unnamed)";
-                    results.Add(new HmiObjectInfo(property.Name, itemName, item.GetType().Name));
+                    if (property.Name == "Tags" && item is IEngineeringObject tag)
+                    {
+                        results.Add(new HmiObjectInfo(
+                            property.Name,
+                            itemName,
+                            item.GetType().Name,
+                            ReadAttributeText(tag, "PlcTag"),
+                            ReadAttributeText(tag, "DataType"),
+                            ReadAttributeText(tag, "Connection"),
+                            ReadAttributeText(tag, "TagTableName")));
+                    }
+                    else
+                    {
+                        results.Add(new HmiObjectInfo(property.Name, itemName, item.GetType().Name));
+                    }
                 }
             }
             catch (Exception)
@@ -3435,6 +3484,26 @@ public sealed class OpennessGateway : IOpennessGateway
         try
         {
             return item.GetAttribute(attribute) as string;
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>An attribute as text whatever its CLR shape: a referenced engineering object reads as
+    /// its Name (a tag's Connection is an object, not a string). Null = absent or refused.</summary>
+    private static string? ReadAttributeText(IEngineeringObject item, string attribute)
+    {
+        try
+        {
+            return item.GetAttribute(attribute) switch
+            {
+                null => null,
+                string text => text,
+                IEngineeringObject reference => reference.GetAttribute("Name") as string ?? reference.ToString(),
+                var value => value.ToString(),
+            };
         }
         catch (Exception)
         {
