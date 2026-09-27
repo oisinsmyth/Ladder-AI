@@ -150,6 +150,21 @@ scratch project): the IR *text* format never carried this flag at all, so a bare
 crossing the `to-ir`/`to-xml` boundary silently reverted to the ordinary shape — fixed with the
 ` BAREPARAM` line-format marker shown in the grammar above.
 
+**An InOut parameter typed as a UDT or a technology object (2026-09-27, a live-run export, in an FB's
+interface and in its instance DBs)** is the same bare shape with TIA's inline expansion of the referenced
+type added: `<Member Name="PID" Datatype="PID_Compact" Version="2.3" Accessibility="Public"><Sections>…`,
+and **no `Remanence`, no `<AttributeList>`** — a reference has no storage or external-access flags of its
+own. It used to fail on the missing `ExternalAccessible`; it now reads as `PID : PID_Compact BAREPARAM
+VERSION 2.3`. The expansion is discarded, for the multi-instance reason (it is the referenced type's own
+declaration; the Normalizer's type-expansion rule already treats it as derived), and nothing is invented
+on the way back. The bare writer now emits `Version` BEFORE `Accessibility`, as TIA does — the Normalizer
+compares attribute order, and the previous order never compared equivalent.
+
+**An anonymous `Struct` with DIRECT `<Member>` children, inside a named UDT's expansion** (same export: a
+settings UDT's `Config`/`CycleTime` structs) is read and kept with the use site's own start values —
+those are the values an engineer edits (`Config : Struct` with `InputUpperLimit : Real = 30.0` nested
+under it) — and written back in the same direct-children form. It used to be refused.
+
 **`Informative`/`InformativeComment`, confirmed real 2026-07-14** (`OB1 Main`'s own system-defined
 Input parameters, `Initial_Call`/`Remanence`) — the same bare shape as `IsBareParameter` above,
 plus `Informative="true"` and a `<Comment><MultiLanguageText Lang="en-US">...</MultiLanguageText>
@@ -782,6 +797,35 @@ NETWORK 8 "Run enable delay"
     <wire-uid>` per extra output. A single-output `MOVE` is unchanged.
   - **`ADD` as an ENO producer** (2026-09-24, same export: a `Div` → `Add` → `Sub` chain) — added
     to `ResolveEnSource`'s allowlist.
+  - **Jump / Label** (2026-09-27, a live-run export; ADR-0010 scope item). A conditional jump —
+    `<Part Name="Jump">`, port `in` from the rung and port `label` from `<Access Scope="Label"><Label
+    Name="X" /></Access>` — is a rung terminal like a coil, so it is a coil kind: **`JMP <Label> :=
+    <condition>`**. The target network declares the label in `<FlgNet><Labels><LabelDeclaration
+    UId><Label Name /></LabelDeclaration></Labels>` ahead of `<Parts>`; readable form is a
+    **`  LABEL <Name>`** line directly under the NETWORK header/COMMENT, before any statement
+    (sidecar: `  label <Name> = <uid>` after `compileunit`). A label-only network is not `[empty]`.
+    The label name is NOT a tag: every tag analysis (`TagReferences`, review rules, `tagstatus`)
+    skips a JMP's target and sees only its condition. `preflight` reports (and gates on) a JMP to a
+    label no network in the block declares, and a label declared twice. Both the sidecar and the
+    synthesis paths write it; the Normalizer keys a Label access by its NAME (previously every label
+    in a network shared one key, so a jump to the wrong label compared equal) and treats a
+    `LabelDeclaration` UId as renumbered bookkeeping. Only `Jump` has been observed; no `JumpN` or
+    `Return` in any export here. Any other child of `<FlgNet>` besides `Labels`/`Parts`/`Wires` is now
+    refused rather than silently ignored — `<Labels>` itself used to be dropped that way.
+  - **`ROUND`** (2026-09-27, same export): Convert's exact shape (en/in/out, `DisabledENO="true"`,
+    `SrcType` + `DestType`, Real → DInt, ENO-chained after a MUL), so a kind of CONVERT: **`ROUND(EN
+    := <expr-or-ENO>, IN := <expr>) => <dest>`** (sidecar `kind = round`). Shares CONVERT's canonical
+    kind position, index pairing and synthesis.
+  - **ENO-chained `MOVE` and `CALL`** (2026-09-27, same export: a cascade of MOVEs, each `en` wired
+    from the previous one's `eno`; a CONVERT whose `eno` enables an FC call). Readable: **`MOVE(EN :=
+    ENO, ...)`** and **`CALL X(EN := ENO, ...)`**, the reserved word every other box already uses;
+    sidecar `en = eno <part> <wire>`. `Move` is now also an accepted ENO producer. Synthesis chains a
+    MOVE from the MOVE built before it, and a CALL from the box built immediately before it, and
+    refuses when there is none. The model's `En` for such a statement is the empty TRUE chain, so an
+    analysis reading a guard sees none — the gating lives in the preceding box.
+  - **A reference to a block CONSTANT** is `Scope="LocalConstant"` with `<Constant Name="X" />` —
+    measured 2026-09-27 on a live-run export (a TON PT fed by a block constant). Synthesis now writes
+    that; it previously wrote LocalVariable, which imported but never compared equivalent.
   - **`T_SUB`/`T_CONV`** (`FB VibratorCycle`): time-arithmetic variants of `Sub`/`Convert`. `T_SUB`
     is binary (`IN1`/`IN2` -> `OUT`, uppercase) with two independently-typed operands (`date_type`/
     `time_type` TemplateValues, stored on the existing `SrcType`/`TimeType` fields). `T_CONV`

@@ -212,6 +212,24 @@ internal static class DbInterfaceMembers
         // (`WriteMember`'s `omitRemanence`, supplied by the block's own CALL/fixed-shape instance
         // names) rather than by flattening the member to a shape that cannot hold its own data.
         var hasExpandedInterface = member.Elements().Any(e => e.Name.LocalName == "Sections");
+
+        // An InOut PARAMETER whose type is a UDT or a technology-object type (PID_Compact) — confirmed
+        // real 2026-09-27 on a live-run export, in both an FB's interface and its instance DBs: TIA
+        // expands the referenced type's interface inline (`<Sections>`) but writes NO `Remanence` and NO
+        // `<AttributeList>` at all — an InOut is a reference, so it has no storage and no external-access
+        // flags of its own. It used to reach the multi-instance branch below and fail on the missing
+        // `ExternalAccessible`. Read as the bare parameter shape (Name/Datatype/Version), discarding the
+        // expansion for the same reason the multi-instance branch does: it is the referenced type's own
+        // declaration, and copying it into the referencing block would make the two free to disagree.
+        // Nothing is invented on the way back — the bare writer emits no AttributeList.
+        if (member.Attribute("Remanence") is null && hasExpandedInterface && !hasAttributeList)
+        {
+            return new DbMember(
+                name, datatype, Retain: false, StartValue: null, Version: version, SetPoint: false,
+                NestedMembers: null, IsBareParameter: true, Comment: ParseOptionalComment(member),
+                Subelements: subelements);
+        }
+
         if (member.Attribute("Remanence") is null && hasExpandedInterface)
         {
             // requireSetPoint: false — a multi-instance's AttributeList carries SetPoint in the real
@@ -431,10 +449,20 @@ internal static class DbInterfaceMembers
         // it now would turn a shape that round-trips into a new hard error for no gain.
         var isRecursableStructuredType = datatypeAttribute != "Struct";
 
+        // 3. an anonymous `Struct` whose fields are DIRECT <Member> children (no <Sections>) — confirmed
+        //    real 2026-09-27 on a live-run export, inside a named UDT's expansion (a PID settings UDT's
+        //    `Config`/`CycleTime`/`ControlParams` structs, with the use site's own start values on the
+        //    fields). This is the same direct-children shape the top-level path already reads as an
+        //    anonymous struct; here it is RECURSED AND KEPT, for FI-75's reason — the values inside are
+        //    the use site's own — and written back in the same direct-children form (DirectStruct).
+        var hasDirectMembers = member.Elements().Any(e => e.Name.LocalName == "Member");
+        var isDirectStruct = hasDirectMembers && datatypeAttribute == "Struct";
+
         var unexpectedChildren = member.Elements()
             .Select(e => e.Name.LocalName)
             .Where(n => n != "StartValue" && n != SubelementElementName)
             .Where(n => !(n == "Sections" && isRecursableStructuredType))
+            .Where(n => !(n == "Member" && isDirectStruct))
             .ToList();
         if (unexpectedChildren.Count > 0)
         {
@@ -450,9 +478,11 @@ internal static class DbInterfaceMembers
         var subelements = ParseSubelements(member, context, name);
 
         var bareSections = member.Elements().FirstOrDefault(e => e.Name.LocalName == "Sections");
-        var nestedMembers = bareSections is not null && isRecursableStructuredType
-            ? ParseNestedMembers(bareSections, context, name)
-            : null;
+        var nestedMembers = isDirectStruct
+            ? member.Elements().Where(e => e.Name.LocalName == "Member").Select(m => ParseBareMember(m, context, name)).ToList()
+            : bareSections is not null && isRecursableStructuredType
+                ? ParseNestedMembers(bareSections, context, name)
+                : null;
 
         return new DbMember(
             name, datatype, Retain: false, string.IsNullOrEmpty(startValue) ? null : startValue,
@@ -803,16 +833,19 @@ internal static class DbInterfaceMembers
             var bareElement = new XElement(
                 Ns + "Member",
                 new XAttribute("Name", member.Name),
-                new XAttribute("Datatype", member.Datatype),
-                new XAttribute("Accessibility", "Public"));
+                new XAttribute("Datatype", member.Datatype));
 
             // Version on the minimal shape too: it is stated by the source, printed by the IR line
             // (`VERSION 5.3`), and was the only thing standing between a correct instance declaration
-            // and a versionless one.
+            // and a versionless one. It precedes Accessibility, as in TIA's own export (measured
+            // 2026-09-27 on an InOut `PID_Compact` parameter: Name, Datatype, Version, Accessibility) —
+            // the Normalizer compares attribute order, so the other order never compares equivalent.
             if (member.Version is not null)
             {
                 bareElement.Add(new XAttribute("Version", member.Version));
             }
+
+            bareElement.Add(new XAttribute("Accessibility", "Public"));
 
             if (member.Informative)
             {
@@ -939,7 +972,16 @@ internal static class DbInterfaceMembers
 
         AddSubelements(element, bare);
 
-        if (bare.NestedMembers is not null)
+        if (bare.NestedMembers is not null && bare.Datatype == "Struct")
+        {
+            // An anonymous Struct in the bare position carries its fields as DIRECT <Member>
+            // children, exactly as TIA writes it (ParseBareMember's case 3).
+            foreach (var nested in bare.NestedMembers)
+            {
+                element.Add(WriteBareMember(nested));
+            }
+        }
+        else if (bare.NestedMembers is not null)
         {
             var noneSection = new XElement(Ns + "Section", new XAttribute("Name", "None"));
             foreach (var nested in bare.NestedMembers)

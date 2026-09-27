@@ -28,6 +28,18 @@ public static class FlgNetWriter
             // `<Constant Name="X" />`, no `<Symbol>` wrapper at all (genuinely different shape
             // from every other Access scope this converter writes) — always single-component, so
             // `access.ComponentPath[0]` is the whole reference.
+            // A jump label reference — `<Label Name>` rather than a <Symbol>, the reverse of
+            // FlgNetParser.ParseAccess's own Label branch.
+            if (access.Scope == "Label")
+            {
+                accessElements.Add((access.UId, new XElement(
+                    ns + "Access",
+                    new XAttribute("Scope", "Label"),
+                    new XAttribute("UId", access.UId),
+                    new XElement(ns + "Label", new XAttribute("Name", access.ComponentPath[0])))));
+                continue;
+            }
+
             if (access.Scope == "LocalConstant")
             {
                 accessElements.Add((access.UId, new XElement(
@@ -141,7 +153,7 @@ public static class FlgNetWriter
             // excluded from this list.
             // MAX/MIN (2026-09-24) carry it too unless the source left it off — ENO enabled, the one
             // family where that shape is accepted and round-tripped (PartNode.EnoEnabled).
-            if (part.Name is "Move" or "And" or "Mul" or "Add" or "Sub" or "Div" or "Convert" or "Swap" or "Abs" or "Calc" or "LIMIT" or "FillBlockI"
+            if (part.Name is "Move" or "And" or "Mul" or "Add" or "Sub" or "Div" or "Convert" or "Round" or "Swap" or "Abs" or "Calc" or "LIMIT" or "FillBlockI"
                 || (part.Name is "MAX" or "MIN" && !part.EnoEnabled))
             {
                 partElement.Add(new XAttribute("DisabledENO", "true"));
@@ -260,7 +272,16 @@ public static class FlgNetWriter
             wiresElement.Add(wireElement);
         }
 
-        return new XElement(ns + "FlgNet", partsElement, wiresElement);
+        if (network.Labels.Count == 0)
+        {
+            return new XElement(ns + "FlgNet", partsElement, wiresElement);
+        }
+
+        var labelsElement = new XElement(ns + "Labels", network.Labels.Select(label => new XElement(
+            ns + "LabelDeclaration",
+            new XAttribute("UId", label.UId),
+            new XElement(ns + "Label", new XAttribute("Name", label.Name)))));
+        return new XElement(ns + "FlgNet", labelsElement, partsElement, wiresElement);
     }
 
     // Instruction Parts must be emitted in TIA's wire-graph FLOW order, not UId order (Gap I): TIA

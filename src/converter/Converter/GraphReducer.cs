@@ -31,8 +31,14 @@ public static class GraphReducer
     {
         if (network.AccessNodes.Count == 0 && network.Parts.Count == 0 && network.Wires.Count == 0)
         {
-            var emptyNetwork = new IrNetwork(networkNumber, title, Array.Empty<CoilAssignment>());
-            var emptySidecar = new NetworkSidecar(networkNumber, compileUnitUId, Array.Empty<SidecarAccessEntry>(), Array.Empty<CoilAssignmentSidecar>());
+            var emptyNetwork = new IrNetwork(networkNumber, title, Array.Empty<CoilAssignment>())
+            {
+                Labels = network.Labels.Select(l => l.Name).ToList(),
+            };
+            var emptySidecar = new NetworkSidecar(networkNumber, compileUnitUId, Array.Empty<SidecarAccessEntry>(), Array.Empty<CoilAssignmentSidecar>())
+            {
+                Labels = network.Labels.Select(l => new LabelDeclarationSidecar(l.Name, l.UId)).ToList(),
+            };
             return new ReducedNetwork(emptyNetwork, emptySidecar);
         }
 
@@ -49,7 +55,7 @@ public static class GraphReducer
         // ports, never a producer — confirmed real, 2026-07-12, FC PlantAutoControl (two independent
         // instances of each). ReduceOneChain resolves all three via the exact same code, tagging
         // the result with CoilAssignment.Kind (derived from the Part Name below).
-        var coils = network.Parts.Where(p => p.Name is "Coil" or "SCoil" or "RCoil").ToList();
+        var coils = network.Parts.Where(p => p.Name is "Coil" or "SCoil" or "RCoil" or "Jump").ToList();
         var moveParts = network.Parts.Where(p => p.Name == "Move").ToList();
         var wordAndParts = network.Parts.Where(p => p.Name == "And").ToList();
         var callParts = network.Parts.Where(p => p.Name == "Call").ToList();
@@ -58,7 +64,7 @@ public static class GraphReducer
         // reuse the identical reduction too — always-binary, no Cardinality element (see
         // ReduceMulOrAdd's own cardinality-defaulting comment).
         var mulParts = network.Parts.Where(p => p.Name is "Mul" or "Add" or "Sub" or "Div" or "MAX" or "MIN").ToList();
-        var convertParts = network.Parts.Where(p => p.Name == "Convert").ToList();
+        var convertParts = network.Parts.Where(p => p.Name is "Convert" or "Round").ToList();
         // Swap (S1 item 25) is structurally identical to Convert minus DestType — confirmed real,
         // 2026-07-12, FB TomraControlSystem.
         var swapParts = network.Parts.Where(p => p.Name == "Swap").ToList();
@@ -516,6 +522,11 @@ public static class GraphReducer
         // Rung order: the statements in SOURCE order, not grouped by kind. Must be settled before the
         // fan-out markers, which are assigned walking the statements in their final order so every
         // {split} precedes its {recv} in the text the synthesizer later walks.
+        // The jump labels this network declares ride along on both halves: the names in the readable IR,
+        // their UIds in the sidecar.
+        irNetwork = irNetwork with { Labels = network.Labels.Select(l => l.Name).ToList() };
+        networkSidecar = networkSidecar with { Labels = network.Labels.Select(l => new LabelDeclarationSidecar(l.Name, l.UId)).ToList() };
+
         if (sourceStatementOrder)
         {
             irNetwork = irNetwork with { StatementOrder = IrNetwork.ExplicitOrderOrNull(SourceStatementOrder(network, irNetwork, networkSidecar)) };
@@ -857,7 +868,9 @@ public static class GraphReducer
         var (condition, steps, railWireUId) = TraceChain(
             network, (coil.UId, "in"), wiresByPort, accessByUId, constantsByUId, networkNumber, visitedWireUIds, accessEntries, constantEntries);
 
-        var (coilTag, coilOperandWireUId) = ResolveOperand(wiresByPort, accessByUId, coil.UId, networkNumber);
+        // A Jump's operand is its target label, on port `label` (a coil's is `operand`).
+        var (coilTag, coilOperandWireUId) = ResolveOperand(
+            wiresByPort, accessByUId, coil.UId, networkNumber, coil.Name == "Jump" ? "label" : "operand");
         visitedWireUIds.Add(coilOperandWireUId);
         AddAccessEntry(accessEntries, coilTag);
 
@@ -875,6 +888,7 @@ public static class GraphReducer
         "Coil" => CoilKind.Assign,
         "SCoil" => CoilKind.Set,
         "RCoil" => CoilKind.Reset,
+        "Jump" => CoilKind.Jump,
         _ => throw new NonReducibleNetworkException($"Network {networkNumber}: UId={uid} has unexpected Part Name '{partName}' for a coil-kind assignment."),
     };
 
@@ -971,8 +985,16 @@ public static class GraphReducer
         var accessEntries = new List<SidecarAccessEntry>();
         var constantEntries = new List<SidecarConstantEntry>();
 
-        var (enExpr, enSteps, enRailWireUId) = TraceChain(
-            network, (move.UId, "en"), wiresByPort, accessByUId, constantsByUId, networkNumber, visitedWireUIds, accessEntries, constantEntries);
+        // A MOVE's `en` is either a rung condition or — a cascade of MOVEs, confirmed real 2026-09-27 —
+        // the preceding box's `eno` (ResolveEnSource decides, exactly as for the box family).
+        var (moveEn, moveEnSidecar) = ResolveEnSource(
+            network, move.UId, wiresByPort, accessByUId, constantsByUId, networkNumber, visitedWireUIds, accessEntries, constantEntries);
+        var moveEnoSource = moveEnSidecar as EnSourceSidecar.PrecedingEnoSidecar;
+        var enExpr = moveEn is EnSource.Condition moveCondition ? moveCondition.Value : new Expr.And(Array.Empty<Expr>());
+        var enSteps = moveEnSidecar is EnSourceSidecar.ConditionSidecar moveConditionSidecar
+            ? moveConditionSidecar.Steps
+            : Array.Empty<ChainStepSidecar>();
+        var enRailWireUId = (moveEnSidecar as EnSourceSidecar.ConditionSidecar)?.RailWireUId;
 
         var (inExpr, inSidecar) = ResolveTagOrLiteralOperand(
             wiresByPort, accessByUId, constantsByUId, move.UId, "in", networkNumber, visitedWireUIds, accessEntries, constantEntries);
@@ -993,10 +1015,15 @@ public static class GraphReducer
             additionalOutputs.Add(new MoveOutputSidecar(extraDest.UId, extraWireUId));
         }
 
-        var statement = new MoveStatement(enExpr, inExpr, destTag.TagPath) { AdditionalDestTags = additionalDestTags };
+        var statement = new MoveStatement(enExpr, inExpr, destTag.TagPath)
+        {
+            AdditionalDestTags = additionalDestTags,
+            EnFromEno = moveEnoSource is not null,
+        };
         var sidecar = new MoveStatementSidecar(move.UId, enRailWireUId, enSteps, inSidecar, destTag.UId, destWireUId)
         {
             AdditionalOutputs = additionalOutputs,
+            EnoSource = moveEnoSource,
         };
 
         return (statement, sidecar, accessEntries, constantEntries);
@@ -1081,8 +1108,15 @@ public static class GraphReducer
         var accessEntries = new List<SidecarAccessEntry>();
         var constantEntries = new List<SidecarConstantEntry>();
 
-        var (enExpr, enSteps, enRailWireUId) = TraceChain(
-            network, (call.UId, "en"), wiresByPort, accessByUId, constantsByUId, networkNumber, visitedWireUIds, accessEntries, constantEntries);
+        // A CALL's `en` is a rung condition or — confirmed real 2026-09-27 — the preceding box's `eno`.
+        var (callEn, callEnSidecar) = ResolveEnSource(
+            network, call.UId, wiresByPort, accessByUId, constantsByUId, networkNumber, visitedWireUIds, accessEntries, constantEntries);
+        var callEnoSource = callEnSidecar as EnSourceSidecar.PrecedingEnoSidecar;
+        var enExpr = callEn is EnSource.Condition callCondition ? callCondition.Value : new Expr.And(Array.Empty<Expr>());
+        IReadOnlyList<ChainStepSidecar> enSteps = callEnSidecar is EnSourceSidecar.ConditionSidecar callConditionSidecar
+            ? callConditionSidecar.Steps
+            : Array.Empty<ChainStepSidecar>();
+        var enRailWireUId = (callEnSidecar as EnSourceSidecar.ConditionSidecar)?.RailWireUId;
 
         var instance = call.Instance;
         var instancePath = instance is not null ? string.Join('.', instance.ComponentPath) : null;
@@ -1111,7 +1145,7 @@ public static class GraphReducer
         var blockName = call.BlockName ?? throw new NonReducibleNetworkException($"Network {networkNumber}: Call UId={call.UId} has no BlockName.");
         var blockType = call.BlockType ?? throw new NonReducibleNetworkException($"Network {networkNumber}: Call UId={call.UId} has no BlockType.");
 
-        var statement = new CallStatement(blockName, instancePath, enExpr, arguments);
+        var statement = new CallStatement(blockName, instancePath, enExpr, arguments) { EnFromEno = callEnoSource is not null };
         var sidecar = new CallStatementSidecar(
             call.UId,
             blockName,
@@ -1121,7 +1155,10 @@ public static class GraphReducer
             instance?.UId,
             instance?.Scope,
             instance?.ComponentPath,
-            argumentSidecars);
+            argumentSidecars)
+        {
+            EnoSource = callEnoSource,
+        };
 
         return (statement, sidecar, accessEntries, constantEntries);
     }
@@ -1165,7 +1202,8 @@ public static class GraphReducer
             // `FB VibratorCycle`: a T_SUB->T_CONV->Convert chain, T_SUB and T_CONV each producing
             // the next link's `en` via `eno` directly, same mechanism).
             // "Add" as a producer grounded 2026-09-24 on a live-run export (a Div->Add->Sub chain).
-            && precedingPart.Name is "Mul" or "Add" or "Convert" or "Sub" or "Div" or "T_SUB" or "T_CONV")
+            // "Move" as a producer grounded 2026-09-27 (a MOVE -> MOVE -> MOVE cascade).
+            && precedingPart.Name is "Mul" or "Add" or "Convert" or "Sub" or "Div" or "T_SUB" or "T_CONV" or "Move")
         {
             visitedWireUIds.Add(wire.UId);
             return (new EnSource.PrecedingEno(), new EnSourceSidecar.PrecedingEnoSidecar(precedingPart.UId, wire.UId));
@@ -1281,7 +1319,8 @@ public static class GraphReducer
         visitedWireUIds.Add(destWireUId);
         AddAccessEntry(accessEntries, destTag);
 
-        var statement = new ConvertStatement(en, inExpr, destTag.TagPath);
+        var convertKind = convert.Name == "Round" ? ConvertKind.Round : ConvertKind.Convert;
+        var statement = new ConvertStatement(en, inExpr, destTag.TagPath) { Kind = convertKind };
         var sidecar = new ConvertStatementSidecar(
             convert.UId,
             enSidecar,
@@ -1289,7 +1328,10 @@ public static class GraphReducer
             convert.SrcType ?? throw new NonReducibleNetworkException($"Network {networkNumber}: Convert UId={convert.UId} has no SrcType."),
             convert.DestType ?? throw new NonReducibleNetworkException($"Network {networkNumber}: Convert UId={convert.UId} has no DestType."),
             destTag.UId,
-            destWireUId);
+            destWireUId)
+        {
+            Kind = convertKind,
+        };
 
         return (statement, sidecar, accessEntries, constantEntries);
     }

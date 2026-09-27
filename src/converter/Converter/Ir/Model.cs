@@ -141,11 +141,19 @@ public sealed record TimerBinding(string InstancePath, Expr In, Expr Pt, TimerKi
 // matches every other IR keyword built so far mirroring its own source Part Name (COIL/TON/
 // MOVE/CALL) — WAND is the one deliberate exception, for a naming collision that doesn't apply
 // here.
+// Jump (2026-09-27, a live-run export): a conditional jump, `<Part Name="Jump">`, is a rung
+// TERMINAL exactly like a coil — `in` fed by the rung, one operand — except that its operand (port
+// `label`) is a jump LABEL (`<Access Scope="Label"><Label Name="X" /></Access>`), not a tag. Modelled
+// as a coil kind so it inherits the coil's reduction, synthesis, fan-out marking and rung order:
+// readable form `JMP <Label> := <condition>`. CoilTag then holds the LABEL NAME, which is not a tag —
+// every analysis that treats CoilTag as a written tag must skip CoilKind.Jump (TagReferences,
+// Review). The jump's target is declared by a network's `LABEL <Name>` line (IrNetwork.Labels).
 public enum CoilKind
 {
     Assign,
     Set,
     Reset,
+    Jump,
 }
 
 public sealed record CoilAssignment(string CoilTag, Expr Condition, CoilKind Kind = CoilKind.Assign);
@@ -170,6 +178,11 @@ public sealed record CoilAssignment(string CoilTag, Expr Condition, CoilKind Kin
 public sealed record MoveStatement(Expr En, Expr In, string DestTag)
 {
     public IReadOnlyList<string> AdditionalDestTags { get; init; } = Array.Empty<string>();
+
+    // `MOVE(EN := ENO, ...)` — the MOVE is enabled by the immediately preceding box's ENO, not by a
+    // rung condition (2026-09-27, a live-run export: a cascade of MOVEs, each `en` wired from the
+    // previous one's `eno`). En is then the empty TRUE chain and carries no condition of its own.
+    public bool EnFromEno { get; init; }
 
     public IReadOnlyList<string> DestTags => AdditionalDestTags.Count == 0
         ? new[] { DestTag }
@@ -249,7 +262,21 @@ public sealed record MulStatement(EnSource En, IReadOnlyList<Expr> Inputs, strin
 // real both standalone (independently rail-fed `en`, `FB ShredderControlSystem`) and as the second half
 // of a `Mul`->`Convert` ENO-chained pair (`FB MotorDOL`/`EquipmentControlSystem`) — both cases reduce
 // identically once `EnSource` is resolved, no special-casing needed beyond that one field.
-public sealed record ConvertStatement(EnSource En, Expr In, string DestTag);
+//
+// ROUND (`Part Name="Round"`, 2026-09-27, a live-run export) has Convert's exact shape — en/in/out,
+// DisabledENO="true", SrcType + DestType TemplateValues (Real -> DInt), ENO-chained after a MUL — so it
+// is a KIND of this statement rather than a parallel record: `ROUND(EN := <expr-or-ENO>, IN := <expr>)
+// => <dest>`. It gets Convert's reduction, synthesis, index pairing and fan-out marking for free.
+public enum ConvertKind
+{
+    Convert,
+    Round,
+}
+
+public sealed record ConvertStatement(EnSource En, Expr In, string DestTag)
+{
+    public ConvertKind Kind { get; init; } = ConvertKind.Convert;
+}
 
 // A byte-swap box instruction (`Part Name="Swap"`) — confirmed real, 2026-07-12 (S1 item 25, `FB
 // TomraControlSystem`, 2 instances). Structurally identical to Convert (`en`-gated via EnSource, a
@@ -474,7 +501,12 @@ public abstract record CallArgument
 // in the readable IR text, since the callee's own .ir file is ADR-0001's source of truth for its
 // interface, not duplicated here) — so the readable form can't derive FB-vs-FC from BlockType
 // directly; instance presence/absence is the only signal it needs anyway.
-public sealed record CallStatement(string BlockName, string? InstancePath, Expr En, IReadOnlyList<CallArgument> Arguments);
+public sealed record CallStatement(string BlockName, string? InstancePath, Expr En, IReadOnlyList<CallArgument> Arguments)
+{
+    // `CALL X(EN := ENO, ...)` — the call is enabled by the immediately preceding box's ENO (2026-09-27,
+    // a live-run export: a CONVERT whose `eno` feeds an FC call's `en`). En is then the empty TRUE chain.
+    public bool EnFromEno { get; init; }
+}
 
 // A network can bundle multiple independent Contact-chain-into-Coil rungs with no shared
 // wiring between them — confirmed against a real export, 2026-07-10 (a 16-independent-rung
@@ -558,7 +590,8 @@ public sealed record IrNetwork(
         && Calls.Count == 0 && Muls.Count == 0 && Converts.Count == 0 && Swaps.Count == 0
         && AbsStatements.Count == 0 && Limits.Count == 0 && TSubs.Count == 0 && TConvs.Count == 0
         && Calcs.Count == 0 && MoveBlkVariants.Count == 0 && Waits.Count == 0 && FillBlockIs.Count == 0
-        && ModbusMasters.Count == 0 && ModbusCommLoads.Count == 0 && FixedShapes.Count == 0;
+        && ModbusMasters.Count == 0 && ModbusCommLoads.Count == 0 && FixedShapes.Count == 0
+        && Labels.Count == 0;
 
     /// <summary>
     /// 🔴 <b>The network's statement order — which IS its rung order</b>, when it is not simply the
@@ -579,6 +612,13 @@ public sealed record IrNetwork(
     /// <see cref="OrderedStatements"/> enforces that and that every statement appears exactly once.</para>
     /// </summary>
     public IReadOnlyList<IrStatementRef>? StatementOrder { get; init; }
+
+    /// <summary>
+    /// The jump labels this network DECLARES (`LABEL <Name>` lines, TIA's network-level
+    /// `<Labels><LabelDeclaration>`) — the targets `JMP` statements elsewhere in the block jump to.
+    /// Empty for nearly every network.
+    /// </summary>
+    public IReadOnlyList<string> Labels { get; init; } = Array.Empty<string>();
 
     public int CountOf(IrStatementKind kind) => kind switch
     {
@@ -978,6 +1018,9 @@ public sealed record MoveStatementSidecar(
 {
     // `out2`..`outN` of a multi-output MOVE, in port order — empty for the ordinary single-output box.
     public IReadOnlyList<MoveOutputSidecar> AdditionalOutputs { get; init; } = Array.Empty<MoveOutputSidecar>();
+
+    // Set for an ENO-chained MOVE: the part whose `eno` feeds this MOVE's `en`, and that wire.
+    public EnSourceSidecar.PrecedingEnoSidecar? EnoSource { get; init; }
 }
 
 // One extra output of a multi-output MOVE: the destination Access and the wire from the `outK` port.
@@ -1051,7 +1094,11 @@ public sealed record CallStatementSidecar(
     int? InstanceUId,
     string? InstanceScope,
     IReadOnlyList<string>? InstanceComponentPath,
-    IReadOnlyList<CallArgumentSidecar> Arguments);
+    IReadOnlyList<CallArgumentSidecar> Arguments)
+{
+    // Set for an ENO-chained CALL: the part whose `eno` feeds this call's `en`, and that wire.
+    public EnSourceSidecar.PrecedingEnoSidecar? EnoSource { get; init; }
+}
 
 // The sidecar counterpart of EnSource (Model) — see its own doc comment for why this is a
 // separate concept from an ordinary chain's RailWireUId/Steps. ConditionSidecar carries exactly
@@ -1115,7 +1162,11 @@ public sealed record ConvertStatementSidecar(
     string SrcType,
     string DestType,
     int DestAccessUId,
-    int DestWireUId);
+    int DestWireUId)
+{
+    // Round vs Convert — the Part Name to write. Absent `kind` line in the sidecar = Convert.
+    public ConvertKind Kind { get; init; } = ConvertKind.Convert;
+}
 
 // One Swap's full round-trip data. Mirrors ConvertStatementSidecar exactly, minus DestType — a
 // byte-swap has only one type (`SrcType`, both real instances `"Word"`), never a second.
@@ -1311,6 +1362,9 @@ public sealed record FixedShapeStatementSidecar(
     IReadOnlyList<string> InstanceComponentPath,
     IReadOnlyList<FixedShapeArgumentSidecar> Arguments);
 
+// A network's jump-label declaration: its name and its `<LabelDeclaration UId>`.
+public sealed record LabelDeclarationSidecar(string Name, int UId);
+
 public sealed record NetworkSidecar(
     int NetworkNumber,
     string CompileUnitUId,
@@ -1337,6 +1391,9 @@ public sealed record NetworkSidecar(
     IReadOnlyList<FixedShapeStatementSidecar>? FixedShapes = null)
 {
     public IReadOnlyList<SidecarConstantEntry> ConstantUIds { get; init; } = ConstantUIds ?? Array.Empty<SidecarConstantEntry>();
+
+    // The network's label declarations (name + UId), in declaration order. Empty for nearly every network.
+    public IReadOnlyList<LabelDeclarationSidecar> Labels { get; init; } = Array.Empty<LabelDeclarationSidecar>();
 
     public IReadOnlyList<TimerBindingSidecar> Timers { get; init; } = Timers ?? Array.Empty<TimerBindingSidecar>();
 

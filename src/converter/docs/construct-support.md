@@ -11,7 +11,7 @@ parameter-interface support long after both shipped — contradicted by its own 
 The authoritative list is code, not prose: `Converter/SimaticMl/FlgNetParser.cs`'s
 `SupportedPartNames` set — re-read it before editing this paragraph.)*
 
-**37 supported part names**, each added against a real export rather than guessed at:
+**39 supported part names**, each added against a real export rather than guessed at:
 
 `Contact`, `Coil`, `SCoil`, `RCoil`, `O` (OR-merge, recursive-chain branches), `Not` (standalone
 boolean inverter), `And` (bitwise word AND — "WAND"); the full IEC comparison family
@@ -32,6 +32,12 @@ silently written back as the original (exit 0, `compare` EQUIVALENT to the unedi
 same reconciliation. Only exception: readable IR in plain canonical kind order states no rung order, so there the
 sidecar's order stands. `ir/SPEC.md`, "Sidecar". Also: a directory argument to `to-ir`/`to-xml` now means the
 `*.xml`/`*.ir` files in it (it used to crash with `UnauthorizedAccessException`).
+
+**2026-09-27 — jumps, ROUND, ENO-chained MOVE/CALL, InOut references.** `Jump` (`JMP <Label> := <cond>`) with network
+`LABEL <Name>` declarations; `Round` (`ROUND(...)`, a CONVERT kind); `MOVE(EN := ENO, ...)` / `CALL X(EN := ENO, ...)`;
+InOut UDT / technology-object parameters (no `Remanence`/`AttributeList`, read as `BAREPARAM`); anonymous structs
+nested directly inside a UDT expansion (start values kept); block-constant references synthesized as `LocalConstant`.
+`preflight` gates on a JMP to an undeclared label. `ir/SPEC.md` has each one.
 
 Plus the **fixed-shape registry** names (`FixedShapeInstructions`, 2026-08-12), which
 `SupportedPartNames` concatenates rather than restating: `MB_COMM_LOAD` 2.1, `MB_MASTER` 2.2 and

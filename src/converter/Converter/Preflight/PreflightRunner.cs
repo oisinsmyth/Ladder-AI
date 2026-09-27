@@ -109,6 +109,40 @@ public static class PreflightRunner
         return new FilePreflight(path, name, findings);
     }
 
+    // Jump labels are block-scoped: a `JMP <Label>` whose label no network in the block declares, or a label
+    // declared twice, is refused by TIA at compile — caught here, offline, instead (2026-09-27).
+    internal static IEnumerable<PreflightFinding> JumpLabelFindings(IrBlock block)
+    {
+        var declaredIn = new Dictionary<string, int>(StringComparer.Ordinal);
+        foreach (var network in block.Networks)
+        {
+            foreach (var label in network.Labels)
+            {
+                if (declaredIn.TryGetValue(label, out var first))
+                {
+                    yield return new PreflightFinding(
+                        "labels", $"network {network.Number}: LABEL {label} is already declared in network {first} — a label may be declared once per block");
+                }
+                else
+                {
+                    declaredIn[label] = network.Number;
+                }
+            }
+        }
+
+        foreach (var network in block.Networks)
+        {
+            foreach (var jump in network.Assignments.Where(a => a.Kind == CoilKind.Jump))
+            {
+                if (!declaredIn.ContainsKey(jump.CoilTag))
+                {
+                    yield return new PreflightFinding(
+                        "labels", $"network {network.Number}: JMP {jump.CoilTag} jumps to a label no network in this block declares");
+                }
+            }
+        }
+    }
+
     private static string PreflightBlock(
         string text, ProjectIndex index, List<PreflightFinding> findings,
         CalleeInterfaceRegistry callees, TagTypeRegistry tagTypes)
@@ -148,6 +182,8 @@ public static class PreflightRunner
                 sidecars = null;
             }
         }
+
+        findings.AddRange(JumpLabelFindings(block));
 
         if (sidecars is not null)
         {

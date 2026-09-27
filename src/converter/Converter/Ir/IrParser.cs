@@ -258,9 +258,23 @@ public static partial class IrParser
             i++;
         }
 
+        // Jump labels this network declares (`LABEL <Name>`), directly under the header/COMMENT.
+        var labels = new List<string>();
+        while (i < lines.Length && lines[i].StartsWith("  LABEL ", StringComparison.Ordinal))
+        {
+            var labelName = lines[i]["  LABEL ".Length..].Trim();
+            if (labelName.Length == 0 || labelName.Any(char.IsWhiteSpace))
+            {
+                throw new IrFormatException($"Network {number}, line {i + 1}: expected '  LABEL <Name>', got: '{lines[i]}'");
+            }
+
+            labels.Add(labelName);
+            i++;
+        }
+
         if (headerMatch.Groups["empty"].Success)
         {
-            return new IrNetwork(number, title, Array.Empty<CoilAssignment>(), Comment: comment);
+            return new IrNetwork(number, title, Array.Empty<CoilAssignment>(), Comment: comment) { Labels = labels };
         }
 
         var timers = new List<TimerBinding>();
@@ -353,7 +367,8 @@ public static partial class IrParser
             // not three separate sections.
             while (i < lines.Length && (lines[i].StartsWith("  COIL ", StringComparison.Ordinal)
                 || lines[i].StartsWith("  SCOIL ", StringComparison.Ordinal)
-                || lines[i].StartsWith("  RCOIL ", StringComparison.Ordinal)))
+                || lines[i].StartsWith("  RCOIL ", StringComparison.Ordinal)
+                || lines[i].StartsWith("  JMP ", StringComparison.Ordinal)))
             {
                 var coilMatch = CoilLineRegex().Match(lines[i]);
                 if (!coilMatch.Success)
@@ -366,6 +381,7 @@ public static partial class IrParser
                     "COIL" => CoilKind.Assign,
                     "SCOIL" => CoilKind.Set,
                     "RCOIL" => CoilKind.Reset,
+                    "JMP" => CoilKind.Jump,
                     _ => throw new IrFormatException($"Unexpected coil keyword in '{lines[i]}'"),
                 };
 
@@ -384,11 +400,17 @@ public static partial class IrParser
                     throw new IrFormatException($"Expected '  MOVE(EN := <expr>, IN := <expr>) => <dest>', got: '{lines[i]}'");
                 }
 
-                var enExpr = ParseExpr(moveMatch.Groups["en"].Value);
+                // `EN := ENO` — enabled by the preceding box's ENO; the chain is the empty TRUE.
+                var moveEnFromEno = moveMatch.Groups["en"].Value.Trim() == "ENO";
+                var enExpr = moveEnFromEno ? new Expr.And(Array.Empty<Expr>()) : ParseExpr(moveMatch.Groups["en"].Value);
                 var inExpr = ParseExprTerm(moveMatch.Groups["in"].Value);
                 // `=> A, B, C` is a multi-output MOVE (out1, out2, out3).
                 var moveDests = moveMatch.Groups["dest"].Value.Split(", ");
-                moves.Add(new MoveStatement(enExpr, inExpr, moveDests[0]) { AdditionalDestTags = moveDests.Skip(1).ToList() });
+                moves.Add(new MoveStatement(enExpr, inExpr, moveDests[0])
+                {
+                    AdditionalDestTags = moveDests.Skip(1).ToList(),
+                    EnFromEno = moveEnFromEno,
+                });
                 order.Add(new IrStatementRef(IrStatementKind.Move, moves.Count - 1));
                 i++;
             }
@@ -460,13 +482,13 @@ public static partial class IrParser
                 if (args.Length >= 1 && args[0].StartsWith("EN := ", StringComparison.Ordinal))
                 {
                     instancePath = null;
-                    callEnExpr = ParseExpr(args[0]["EN := ".Length..]);
+                    callEnExpr = ParseCallEn(args[0]["EN := ".Length..]);
                     enArgIndex = 0;
                 }
                 else if (args.Length >= 2 && args[1].StartsWith("EN := ", StringComparison.Ordinal))
                 {
                     instancePath = args[0];
-                    callEnExpr = ParseExpr(args[1]["EN := ".Length..]);
+                    callEnExpr = ParseCallEn(args[1]["EN := ".Length..]);
                     enArgIndex = 1;
                 }
                 else
@@ -495,7 +517,10 @@ public static partial class IrParser
                     }
                 }
 
-                calls.Add(new CallStatement(blockName, instancePath, callEnExpr, arguments));
+                calls.Add(new CallStatement(blockName, instancePath, callEnExpr, arguments)
+                {
+                    EnFromEno = args[enArgIndex].Trim() == "EN := ENO",
+                });
                 order.Add(new IrStatementRef(IrStatementKind.Call, calls.Count - 1));
                 i++;
             }
@@ -553,17 +578,20 @@ public static partial class IrParser
             // Converts are always emitted after Muls (IrSerializer) — fixed arity (EN, IN), same
             // regex-based shape as MOVE's own line, not the split-on-commas approach MUL/WAND/CALL
             // need for their own variable-arity argument lists.
-            while (i < lines.Length && lines[i].StartsWith("  CONVERT(", StringComparison.Ordinal))
+            while (i < lines.Length && (lines[i].StartsWith("  CONVERT(", StringComparison.Ordinal) || lines[i].StartsWith("  ROUND(", StringComparison.Ordinal)))
             {
                 var convertMatch = ConvertLineRegex().Match(lines[i]);
                 if (!convertMatch.Success)
                 {
-                    throw new IrFormatException($"Expected '  CONVERT(EN := <expr-or-ENO>, IN := <expr>) => <dest>', got: '{lines[i]}'");
+                    throw new IrFormatException($"Expected '  CONVERT(EN := <expr-or-ENO>, IN := <expr>) => <dest>' or ROUND(...), got: '{lines[i]}'");
                 }
 
                 var convertEn = ParseEnSource(convertMatch.Groups["en"].Value);
                 var convertIn = ParseExprTerm(convertMatch.Groups["in"].Value);
-                converts.Add(new ConvertStatement(convertEn, convertIn, convertMatch.Groups["dest"].Value));
+                converts.Add(new ConvertStatement(convertEn, convertIn, convertMatch.Groups["dest"].Value)
+                {
+                    Kind = convertMatch.Groups["kind"].Value == "ROUND" ? ConvertKind.Round : ConvertKind.Convert,
+                });
                 order.Add(new IrStatementRef(IrStatementKind.Convert, converts.Count - 1));
                 i++;
             }
@@ -974,7 +1002,8 @@ public static partial class IrParser
             && calls.Count == 0 && muls.Count == 0 && converts.Count == 0 && swaps.Count == 0
             && absStatements.Count == 0 && limits.Count == 0 && tSubs.Count == 0 && tConvs.Count == 0
             && calcs.Count == 0 && moveBlkVariants.Count == 0 && waits.Count == 0 && fillBlockIs.Count == 0
-            && modbusMasters.Count == 0 && modbusCommLoads.Count == 0 && fixedShapes.Count == 0)
+            && modbusMasters.Count == 0 && modbusCommLoads.Count == 0 && fixedShapes.Count == 0
+            && labels.Count == 0)
         {
             throw new IrFormatException($"Network {number} has no COIL/TON/TONR/MOVE/WAND/CALL/MUL/ADD/CONVERT/SWAP/ABS/LIMIT/T_SUB/T_CONV/CALC/MOVE_BLK_VARIANT/WAIT/FILLBLOCKI/MODBUS_MASTER/MODBUS_COMM_LOAD/fixed-shape statements and isn't marked [empty].");
         }
@@ -984,6 +1013,7 @@ public static partial class IrParser
             moveBlkVariants, waits, fillBlockIs, modbusMasters, modbusCommLoads, fixedShapes)
         {
             StatementOrder = IrNetwork.ExplicitOrderOrNull(order),
+            Labels = labels,
         };
     }
 
@@ -1293,6 +1323,19 @@ public static partial class IrParser
         var compileUnitUId = lines[i]["  compileunit = ".Length..].Trim();
         i++;
 
+        var labelDeclarations = new List<LabelDeclarationSidecar>();
+        while (i < lines.Length && lines[i].StartsWith("  label ", StringComparison.Ordinal))
+        {
+            var fields = lines[i]["  label ".Length..].Split(" = ");
+            if (fields.Length != 2 || !int.TryParse(fields[1], out var labelUId))
+            {
+                throw new IrFormatException($"Expected '  label <name> = <uid>' in SIDECAR for network {number}, got: '{lines[i]}'");
+            }
+
+            labelDeclarations.Add(new LabelDeclarationSidecar(fields[0], labelUId));
+            i++;
+        }
+
         var accessEntries = new List<SidecarAccessEntry>();
         while (i < lines.Length && lines[i].StartsWith("  access ", StringComparison.Ordinal))
         {
@@ -1488,7 +1531,10 @@ public static partial class IrParser
 
         return new NetworkSidecar(
             number, compileUnitUId, accessEntries, assignments, constantEntries, timers, moves, wordAnds, calls, muls, converts, swaps,
-            absStatements, limits, tSubs, tConvs, calcs, moveBlkVariants, waits, fillBlockIs, modbusMasters, modbusCommLoads, fixedShapes);
+            absStatements, limits, tSubs, tConvs, calcs, moveBlkVariants, waits, fillBlockIs, modbusMasters, modbusCommLoads, fixedShapes)
+        {
+            Labels = labelDeclarations,
+        };
     }
 
     // A fixed-shape instruction's own sidecar shape: the instruction identity (name + version,
@@ -1638,6 +1684,13 @@ public static partial class IrParser
         i++; // "  convert <n>" header — index itself isn't needed, position in the list is enough.
 
         var convertPartUId = int.Parse(RequirePrefixedLine(lines, ref i, "    convertuid = "));
+        var kind = ConvertKind.Convert;
+        if (i < lines.Length && lines[i] == "    kind = round")
+        {
+            kind = ConvertKind.Round;
+            i++;
+        }
+
         var en = ParseEnSourceSidecar(lines, ref i, "    ");
 
         var inOperand = ParseOperand(lines, ref i, "    ", "in");
@@ -1648,7 +1701,7 @@ public static partial class IrParser
         var destAccessUId = int.Parse(RequirePrefixedLine(lines, ref i, "    dest = "));
         var destWireUId = int.Parse(RequirePrefixedLine(lines, ref i, "    destwire = "));
 
-        return new ConvertStatementSidecar(convertPartUId, en, inOperand, srcType, destType, destAccessUId, destWireUId);
+        return new ConvertStatementSidecar(convertPartUId, en, inOperand, srcType, destType, destAccessUId, destWireUId) { Kind = kind };
     }
 
     // A Swap's own sidecar shape mirrors ParseConvertSidecar exactly, minus `desttype` — a
@@ -1967,6 +2020,15 @@ public static partial class IrParser
         var blockType = RequirePrefixedLine(lines, ref i, "    blocktype = ");
         var railWireUId = ParseRail(RequirePrefixedLine(lines, ref i, "    rail = "));
 
+        // Optional: an ENO-chained CALL's `en = eno <part> <wire>`.
+        EnSourceSidecar.PrecedingEnoSidecar? callEnoSource = null;
+        if (i < lines.Length && lines[i].StartsWith("    en = eno ", StringComparison.Ordinal))
+        {
+            var enoFields = lines[i]["    en = eno ".Length..].Split(' ');
+            callEnoSource = new EnSourceSidecar.PrecedingEnoSidecar(int.Parse(enoFields[0]), int.Parse(enoFields[1]));
+            i++;
+        }
+
         var steps = new List<ChainStepSidecar>();
         var s = 0;
         while (i < lines.Length && IsStepHeader(lines[i], "    ", $"step {s}"))
@@ -1996,8 +2058,16 @@ public static partial class IrParser
             a++;
         }
 
-        return new CallStatementSidecar(callPartUId, blockName, blockType, railWireUId, steps, instanceUId, instanceScope, instancePath, arguments);
+        return new CallStatementSidecar(callPartUId, blockName, blockType, railWireUId, steps, instanceUId, instanceScope, instancePath, arguments)
+        {
+            EnoSource = callEnoSource,
+        };
     }
+
+    // `EN := ENO` is the reserved ENO-chain word (the empty TRUE chain stands in for the condition);
+    // anything else is an ordinary condition.
+    private static Expr ParseCallEn(string text) =>
+        text.Trim() == "ENO" ? new Expr.And(Array.Empty<Expr>()) : ParseExpr(text);
 
     // The inverse of IrSerializer.SerializeCallArgument — "argument <n> input <name> <type>"
     // followed by the same tag-or-literal operand line ParseOperand already handles, or
@@ -2093,6 +2163,15 @@ public static partial class IrParser
         var movePartUId = int.Parse(RequirePrefixedLine(lines, ref i, "    moveuid = "));
         var railWireUId = ParseRail(RequirePrefixedLine(lines, ref i, "    rail = "));
 
+        // Optional: an ENO-chained MOVE's `en = eno <part> <wire>`.
+        EnSourceSidecar.PrecedingEnoSidecar? enoSource = null;
+        if (i < lines.Length && lines[i].StartsWith("    en = eno ", StringComparison.Ordinal))
+        {
+            var enoFields = lines[i]["    en = eno ".Length..].Split(' ');
+            enoSource = new EnSourceSidecar.PrecedingEnoSidecar(int.Parse(enoFields[0]), int.Parse(enoFields[1]));
+            i++;
+        }
+
         var steps = new List<ChainStepSidecar>();
         var s = 0;
         while (i < lines.Length && IsStepHeader(lines[i], "    ", $"step {s}"))
@@ -2123,6 +2202,7 @@ public static partial class IrParser
         return new MoveStatementSidecar(movePartUId, railWireUId, steps, inOperand, destAccessUId, destWireUId)
         {
             AdditionalOutputs = additionalOutputs,
+            EnoSource = enoSource,
         };
     }
 
@@ -2394,7 +2474,7 @@ public static partial class IrParser
     [GeneratedRegex("^NETWORK (?<number>\\d+) \"(?<title>(?:[^\"\\\\]|\\\\.)*)\"(?<split> SPLIT)?(?<empty> \\[empty\\])?$")]
     private static partial Regex NetworkLineRegex();
 
-    [GeneratedRegex(@"^  (?<kind>COIL|SCOIL|RCOIL) (?<tag>\S+) := (?<expr>.+)$")]
+    [GeneratedRegex(@"^  (?<kind>COIL|SCOIL|RCOIL|JMP) (?<tag>\S+) := (?<expr>.+)$")]
     private static partial Regex CoilLineRegex();
 
     // Variable arity (3 args for TON/TOF, 4 for TONR — S1 items 19/23), same
@@ -2428,7 +2508,7 @@ public static partial class IrParser
     private static partial Regex MulLineRegex();
 
     // Fixed arity (EN, IN) — same regex-based shape as MOVE's own line.
-    [GeneratedRegex(@"^  CONVERT\(EN := (?<en>.+), IN := (?<in>.+)\) => (?<dest>\S+)$")]
+    [GeneratedRegex(@"^  (?<kind>CONVERT|ROUND)\(EN := (?<en>.+), IN := (?<in>.+)\) => (?<dest>\S+)$")]
     private static partial Regex ConvertLineRegex();
 
     // Fixed arity (EN, IN) — same regex-based shape as CONVERT's own line, minus DestType.

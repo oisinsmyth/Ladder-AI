@@ -32,7 +32,12 @@ public static class TagReferences
     {
         foreach (var assignment in network.Assignments)
         {
-            yield return assignment.CoilTag;
+            // A JMP's CoilTag is a jump LABEL, not a tag — only its condition references tags.
+            if (assignment.Kind != CoilKind.Jump)
+            {
+                yield return assignment.CoilTag;
+            }
+
             foreach (var path in FromExpr(assignment.Condition))
             {
                 yield return path;
@@ -669,7 +674,11 @@ public static class TagReferences
     {
         foreach (var assignment in network.Assignments)
         {
-            yield return new DirectedTagUsage(assignment.CoilTag, TagDirection.Write, assignment.Kind, assignment.Condition);
+            if (assignment.Kind != CoilKind.Jump)
+            {
+                yield return new DirectedTagUsage(assignment.CoilTag, TagDirection.Write, assignment.Kind, assignment.Condition);
+            }
+
             foreach (var u in Reads(assignment.Condition)) yield return u;
         }
 

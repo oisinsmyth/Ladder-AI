@@ -1199,7 +1199,7 @@ public static class Rules
     // their destinations are Done/Busy/Error/Status status bits, never a Step register.
     private static IEnumerable<(string Kind, string DestTag)> NonMoveDestWrites(IrNetwork network)
     {
-        foreach (var assignment in network.Assignments)
+        foreach (var assignment in network.Assignments.Where(a => a.Kind != CoilKind.Jump))
         {
             var kind = assignment.Kind switch
             {
@@ -1854,7 +1854,7 @@ public static class Rules
 
         foreach (var network in block.Networks)
         {
-            foreach (var assignment in network.Assignments)
+            foreach (var assignment in network.Assignments.Where(a => a.Kind != CoilKind.Jump))
             {
                 if (!IsTimeoutFaultCoil(assignment, subjectTimerQPaths))
                 {

@@ -96,6 +96,12 @@ public static class IrSerializer
             sb.Append("  COMMENT \"").Append(EscapeString(network.Comment)).Append("\"\n");
         }
 
+        // Jump labels this network declares — directly under the header/COMMENT, before any statement.
+        foreach (var label in network.Labels)
+        {
+            sb.Append("  LABEL ").Append(label).Append('\n');
+        }
+
         if (network.IsEmpty)
         {
             return;
@@ -132,7 +138,7 @@ public static class IrSerializer
                 case IrStatementKind.Move:
                 {
                     var move = network.Moves[statement.Index];
-                    sb.Append("  MOVE(EN := ").Append(SerializeChain(move.En))
+                    sb.Append("  MOVE(EN := ").Append(move.EnFromEno ? "ENO" : SerializeChain(move.En))
                       .Append(", IN := ").Append(SerializeExpr(move.In))
                       .Append(") => ").Append(string.Join(", ", move.DestTags)).Append('\n');
                     break;
@@ -164,7 +170,7 @@ public static class IrSerializer
                         sb.Append(call.InstancePath).Append(", ");
                     }
 
-                    sb.Append("EN := ").Append(SerializeChain(call.En));
+                    sb.Append("EN := ").Append(call.EnFromEno ? "ENO" : SerializeChain(call.En));
 
                     foreach (var argument in call.Arguments)
                     {
@@ -201,7 +207,7 @@ public static class IrSerializer
                 case IrStatementKind.Convert:
                 {
                     var convert = network.Converts[statement.Index];
-                    sb.Append("  CONVERT(EN := ").Append(SerializeEnSource(convert.En))
+                    sb.Append(convert.Kind == ConvertKind.Round ? "  ROUND(EN := " : "  CONVERT(EN := ").Append(SerializeEnSource(convert.En))
                       .Append(", IN := ").Append(SerializeExpr(convert.In))
                       .Append(") => ").Append(convert.DestTag).Append('\n');
                     break;
@@ -533,6 +539,7 @@ public static class IrSerializer
         CoilKind.Assign => "COIL",
         CoilKind.Set => "SCOIL",
         CoilKind.Reset => "RCOIL",
+        CoilKind.Jump => "JMP",
         _ => throw new IrFormatException($"Unsupported coil kind: {kind}"),
     };
 
@@ -563,6 +570,11 @@ public static class IrSerializer
     {
         sb.Append("NETWORK ").Append(sidecar.NetworkNumber).Append('\n');
         sb.Append("  compileunit = ").Append(sidecar.CompileUnitUId).Append('\n');
+        foreach (var label in sidecar.Labels)
+        {
+            sb.Append("  label ").Append(label.Name).Append(" = ").Append(label.UId).Append('\n');
+        }
+
         foreach (var access in sidecar.AccessUIds)
         {
             sb.Append("  access ").Append(access.TagPath).Append(" = ").Append(access.UId).Append(' ').Append(access.Scope);
@@ -638,6 +650,11 @@ public static class IrSerializer
             sb.Append("  move ").Append(m).Append('\n');
             sb.Append("    moveuid = ").Append(move.MovePartUId).Append('\n');
             sb.Append("    rail = ").Append(SerializeRail(move.RailWireUId)).Append('\n');
+            if (move.EnoSource is { } moveEno)
+            {
+                sb.Append("    en = eno ").Append(moveEno.PrecedingPartUId).Append(' ').Append(moveEno.WireUId).Append('\n');
+            }
+
 
             for (var s = 0; s < move.Steps.Count; s++)
             {
@@ -687,6 +704,11 @@ public static class IrSerializer
             sb.Append("    blockname = ").Append(call.BlockName).Append('\n');
             sb.Append("    blocktype = ").Append(call.BlockType).Append('\n');
             sb.Append("    rail = ").Append(SerializeRail(call.RailWireUId)).Append('\n');
+            if (call.EnoSource is { } callEno)
+            {
+                sb.Append("    en = eno ").Append(callEno.PrecedingPartUId).Append(' ').Append(callEno.WireUId).Append('\n');
+            }
+
 
             for (var s = 0; s < call.Steps.Count; s++)
             {
@@ -750,6 +772,11 @@ public static class IrSerializer
             var convert = sidecar.Converts[c2];
             sb.Append("  convert ").Append(c2).Append('\n');
             sb.Append("    convertuid = ").Append(convert.ConvertPartUId).Append('\n');
+            if (convert.Kind == ConvertKind.Round)
+            {
+                sb.Append("    kind = round\n");
+            }
+
             SerializeEnSourceSidecar(sb, "    ", convert.En);
 
             SerializeOperand(sb, "    ", "in", convert.In);

@@ -102,7 +102,7 @@ public static class SidecarSynthesizer
     // the import gate should point it at a block with constants FIRST.
     private static IReadOnlySet<string> ComputeLocalNames(IrBlock block)
     {
-        var names = new HashSet<string>();
+        var names = new BlockLocalNames();
         foreach (var member in (block.StaticMembers ?? Array.Empty<DbMember>())
             .Concat(block.TempMembers)
             .Concat(block.InputMembers ?? Array.Empty<DbMember>())
@@ -113,7 +113,21 @@ public static class SidecarSynthesizer
             names.Add(member.Name);
         }
 
+        foreach (var member in block.ConstantMembers ?? Array.Empty<DbMember>())
+        {
+            names.Constants.Add(member.Name);
+        }
+
         return names;
+    }
+
+    // The block's local names, plus which of them are CONSTANT-section members. A bare reference to one
+    // is `Scope="LocalConstant"` with `<Constant Name="X" />` — measured 2026-09-27 on a live-run export
+    // (a TON PT fed by a block constant), which is the ground truth the CONSTANT comment above says was
+    // missing. Synthesizing it as LocalVariable imported but did not compare equivalent to the source.
+    private sealed class BlockLocalNames : HashSet<string>
+    {
+        public HashSet<string> Constants { get; } = new(StringComparer.Ordinal);
     }
 
     // A tag reference is LocalVariable-scoped when its own first dotted-path component names a
@@ -152,6 +166,11 @@ public static class SidecarSynthesizer
         if (bracket >= 0)
         {
             firstComponent = firstComponent[..bracket];
+        }
+
+        if (localNames is BlockLocalNames block && block.Constants.Contains(tagPath))
+        {
+            return "LocalConstant";
         }
 
         return localNames.Contains(firstComponent) ? LocalVariableScope : GlobalVariableScope;
@@ -233,6 +252,9 @@ public static class SidecarSynthesizer
         var nextUid = 1;
         var railWireUId = nextUid++;
 
+        // The network's jump-label declarations, minted first (TIA numbers them before the parts).
+        var labelDeclarations = network.Labels.Select(name => new LabelDeclarationSidecar(name, nextUid++)).ToList();
+
         // Timers are built before the assignments/chains that read them: a coil fed directly by a
         // same-network timer's Q wires straight from the TON's Q port (a TimerOutputStep, Gap G2),
         // which needs that TON's part UId already minted. Map each *eligible* timer's instance path
@@ -287,9 +309,13 @@ public static class SidecarSynthesizer
         // MUL from the MUL-family box built before it — see BuildConvertSidecar for why a batched
         // "all Muls, then all Converts" layout needs index pairing. In source order each pair is
         // adjacent, so the i-th box has always been built by the time its partner needs its UId.
+        // The most recently built box that has an ENO, for a CALL written `EN := ENO` (the box
+        // immediately before it in statement order — a CONVERT feeding an FC call, the grounded case).
+        int? lastEnoProducerUId = null;
         foreach (var statement in SynthesisOrder(network))
         {
             var i = statement.Index;
+            var boxCountBefore = muls.Count + converts.Count + moves.Count + tsubs.Count + tconvs.Count;
             switch (statement.Kind)
             {
                 case IrStatementKind.Timer:
@@ -316,8 +342,26 @@ public static class SidecarSynthesizer
                     break;
 
                 case IrStatementKind.Move:
-                    moves.Add(BuildMoveSidecar(network.Moves[i], railWireUId, ref nextUid, accessEntries, constantEntries, localNames, fanoutRegistry, types));
+                {
+                    // `EN := ENO` chains from the MOVE built immediately before it (the cascade shape).
+                    var move = network.Moves[i];
+                    if (move.EnFromEno && moves.Count == 0)
+                    {
+                        throw new UnsupportedSynthesisConstructException(
+                            $"Network {network.Number}: 'MOVE(EN := ENO, ...)' has no preceding MOVE in this network to chain from.");
+                    }
+
+                    var moveSidecar = BuildMoveSidecar(move, railWireUId, ref nextUid, accessEntries, constantEntries, localNames, fanoutRegistry, types);
+                    moves.Add(move.EnFromEno
+                        ? moveSidecar with
+                        {
+                            RailWireUId = null,
+                            Steps = Array.Empty<ChainStepSidecar>(),
+                            EnoSource = new EnSourceSidecar.PrecedingEnoSidecar(moves[^1].MovePartUId, nextUid++),
+                        }
+                        : moveSidecar);
                     break;
+                }
 
                 case IrStatementKind.Mul:
                 {
@@ -367,14 +411,45 @@ public static class SidecarSynthesizer
                     break;
 
                 case IrStatementKind.Call:
-                    calls.Add(BuildCallSidecar(
-                        network.Calls[i], railWireUId, ref nextUid, accessEntries, constantEntries, localNames,
-                        callees ?? CalleeInterfaceRegistry.Empty, fanoutRegistry, types));
+                {
+                    var call = network.Calls[i];
+                    if (call.EnFromEno && lastEnoProducerUId is null)
+                    {
+                        throw new UnsupportedSynthesisConstructException(
+                            $"Network {network.Number}: 'CALL {call.BlockName}(EN := ENO, ...)' has no preceding box in this network to chain from.");
+                    }
+
+                    var callSidecar = BuildCallSidecar(
+                        call, railWireUId, ref nextUid, accessEntries, constantEntries, localNames,
+                        callees ?? CalleeInterfaceRegistry.Empty, fanoutRegistry, types);
+                    calls.Add(call.EnFromEno
+                        ? callSidecar with
+                        {
+                            RailWireUId = null,
+                            Steps = Array.Empty<ChainStepSidecar>(),
+                            EnoSource = new EnSourceSidecar.PrecedingEnoSidecar(lastEnoProducerUId!.Value, nextUid++),
+                        }
+                        : callSidecar);
                     break;
+                }
 
                 default:
                     // RequireInScope has already refused every other kind by name.
                     throw new UnsupportedSynthesisConstructException($"Network {network.Number}: sidecar synthesis does not support {statement.Kind}.");
+            }
+
+            // A box built by this statement becomes the ENO source for a following `CALL (EN := ENO)`.
+            if (muls.Count + converts.Count + moves.Count + tsubs.Count + tconvs.Count > boxCountBefore)
+            {
+                lastEnoProducerUId = statement.Kind switch
+                {
+                    IrStatementKind.Mul => muls[^1].MulPartUId,
+                    IrStatementKind.Convert => converts[^1].ConvertPartUId,
+                    IrStatementKind.Move => moves[^1].MovePartUId,
+                    IrStatementKind.TSub => tsubs[^1].TSubPartUId,
+                    IrStatementKind.TConv => tconvs[^1].TConvPartUId,
+                    _ => lastEnoProducerUId,
+                };
             }
         }
 
@@ -395,7 +470,10 @@ public static class SidecarSynthesizer
             Calcs: calcs,
             TSubs: tsubs,
             TConvs: tconvs,
-            MoveBlkVariants: moveBlkVariants);
+            MoveBlkVariants: moveBlkVariants)
+        {
+            Labels = labelDeclarations,
+        };
     }
 
     // The order statements are synthesized — and so the order their rungs appear in once rebuilt. An
@@ -518,7 +596,7 @@ public static class SidecarSynthesizer
         // evidence that coil type, not scope alone, is the signal.
         var directTimer = assignment.Condition is Expr.TagRef tag
             ? TrySplitTimerOutput(tag.Path, timerPartUIdByInstancePath)
-              ?? (assignment.Kind != CoilKind.Assign
+              ?? (assignment.Kind is CoilKind.Set or CoilKind.Reset
                   ? TrySplitTimerOutput(tag.Path, latchTimerPartUIdByInstancePath)
                   : null)
             : null;
@@ -552,7 +630,10 @@ public static class SidecarSynthesizer
 
         var coilUId = nextUid++;
         var coilOperandAccessUId = nextUid++;
-        accessEntries.Add(Access(assignment.CoilTag, coilOperandAccessUId, localNames));
+        // A JMP's operand is its target LABEL — Scope="Label", never a tag scope.
+        accessEntries.Add(assignment.Kind == CoilKind.Jump
+            ? new SidecarAccessEntry(assignment.CoilTag, coilOperandAccessUId, "Label")
+            : Access(assignment.CoilTag, coilOperandAccessUId, localNames));
         var coilOperandWireUId = nextUid++;
 
         return new CoilAssignmentSidecar(chainRail, steps, coilUId, coilOperandAccessUId, coilOperandWireUId);
@@ -1243,7 +1324,10 @@ public static class SidecarSynthesizer
         accessEntries.Add(Access(convert.DestTag, destAccessUId, localNames));
         var destWireUId = nextUid++;
 
-        return new ConvertStatementSidecar(convertPartUId, enSidecar, inOperand, srcType, destType, destAccessUId, destWireUId);
+        return new ConvertStatementSidecar(convertPartUId, enSidecar, inOperand, srcType, destType, destAccessUId, destWireUId)
+        {
+            Kind = convert.Kind,
+        };
     }
 
     // An ABS box — en-gated (EnSource), one tag input, one dest write. SrcType is the input operand's

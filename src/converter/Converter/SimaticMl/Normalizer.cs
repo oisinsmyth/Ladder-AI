@@ -105,6 +105,11 @@ public static class Normalizer
         ["Instance"] = "UId",
         ["OpenCon"] = "UId",
 
+        // A jump-label declaration's UId (2026-09-27). Nothing references it by number — a Jump names
+        // its target through a Label-scope Access carrying the NAME — so the name is the identity and
+        // the UId is renumbered-on-import bookkeeping like every other UId here.
+        ["LabelDeclaration"] = "UId",
+
         // A CompileUnit's own block-scoped ID is volatile too — surfaced 2026-07-18 by the offline
         // synthesis-parity harness (SynthesisParityRunner). A real export numbers CompileUnits with
         // arbitrary block-scoped IDs (e.g. 3, 8); a freshly *synthesized* sidecar mints them from
@@ -256,6 +261,15 @@ public static class Normalizer
                 .FirstOrDefault(e => e.Name.LocalName == "ConstantValue");
             return $"tag:{scope}:lit:{constantType}:" +
                    $"{(constantValue is null ? string.Empty : NumericLiteral.Canonicalize(constantValue))}";
+        }
+
+        // A jump-label reference (2026-09-27): `<Access Scope="Label"><Label Name="X" />`. The NAME is
+        // the identity — without this branch every label in a network shared the key `tag:Label:`,
+        // so a JMP to the wrong label compared EQUAL, the false-pass direction.
+        var label = access.Elements().FirstOrDefault(e => e.Name.LocalName == "Label");
+        if (label is not null)
+        {
+            return $"tag:{scope}:label:{label.Attribute("Name")?.Value}";
         }
 
         // Genuinely nothing to discriminate on. Preserved as the pre-2026-08-27 behaviour rather

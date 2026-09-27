@@ -1,0 +1,74 @@
+<Document>
+  <Engineering version="V20" />
+  <SW.Blocks.InstanceDB ID="0">
+    <AttributeList>
+      <InstanceOfName>DemoLoopFB</InstanceOfName>
+      <InstanceOfType>FB</InstanceOfType>
+      <Interface><Sections xmlns="http://www.siemens.com/automation/Openness/SW/Interface/v5">
+  <Section Name="Input" />
+  <Section Name="Output" />
+  <Section Name="InOut">
+    <Member Name="Loop" Datatype="DemoController" Version="2.3" Accessibility="Public">
+      <Sections>
+        <Section Name="Input">
+          <Member Name="Setpoint" Datatype="Real" />
+          <Member Name="Reset" Datatype="Bool" />
+        </Section>
+        <Section Name="Output">
+          <Member Name="Output" Datatype="Real" />
+        </Section>
+      </Sections>
+    </Member>
+    <Member Name="Link" Datatype="&quot;DemoUdt&quot;" Accessibility="Public">
+      <Sections>
+        <Section Name="None">
+          <Member Name="Ready" Datatype="Bool" />
+        </Section>
+      </Sections>
+    </Member>
+  </Section>
+  <Section Name="Static">
+    <Member Name="Settings" Datatype="&quot;DemoSettings&quot;" Remanence="Retain" Accessibility="Public">
+      <AttributeList>
+        <BooleanAttribute Name="ExternalAccessible" SystemDefined="true">true</BooleanAttribute>
+        <BooleanAttribute Name="ExternalVisible" SystemDefined="true">true</BooleanAttribute>
+        <BooleanAttribute Name="ExternalWritable" SystemDefined="true">true</BooleanAttribute>
+        <BooleanAttribute Name="SetPoint" SystemDefined="true">true</BooleanAttribute>
+      </AttributeList>
+      <Sections>
+        <Section Name="None">
+          <Member Name="Limits" Datatype="Struct">
+            <Member Name="Upper" Datatype="Real">
+              <StartValue>30.0</StartValue>
+            </Member>
+            <Member Name="Lower" Datatype="Real">
+              <StartValue>9.0</StartValue>
+            </Member>
+          </Member>
+          <Member Name="Mode" Datatype="Int">
+            <StartValue>1</StartValue>
+          </Member>
+        </Section>
+      </Sections>
+    </Member>
+  </Section>
+</Sections></Interface>
+      <Name>DemoLoopInstance</Name>
+      <Namespace />
+      <Number>40</Number>
+      <ProgrammingLanguage>DB</ProgrammingLanguage>
+    </AttributeList>
+    <ObjectList>
+      <MultilingualText ID="1" CompositionName="Comment">
+        <ObjectList>
+          <MultilingualTextItem ID="2" CompositionName="Items">
+            <AttributeList>
+              <Culture>en-US</Culture>
+              <Text />
+            </AttributeList>
+          </MultilingualTextItem>
+        </ObjectList>
+      </MultilingualText>
+    </ObjectList>
+  </SW.Blocks.InstanceDB>
+</Document>

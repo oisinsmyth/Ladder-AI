@@ -391,8 +391,14 @@ public class SidecarSynthesizerTests
     // preflight/review rule covers it, and there is no ground truth to diff against — not one real
     // TIA export on this machine both declares a non-empty CONSTANT section and references a member
     // of it. The corpus fixture that declares one never reads it.
+    //
+    // 2026-09-27: THAT GROUND TRUTH NOW EXISTS. A live-run export references a block constant (a TON
+    // PT) and TIA writes it `Scope="LocalConstant"` with `<Constant Name="..." />` — not LocalVariable.
+    // LocalVariable imported but never compared equivalent to the source, so the expectation moves to
+    // the measured scope. The half of this test that mattered — the member is LOCAL, and the external
+    // coil is not dragged local with it — is unchanged.
     [Fact]
-    public void SynthesizeBlock_ReferenceToOwnConstantMember_IsLocalVariableScope()
+    public void SynthesizeBlock_ReferenceToOwnConstantMember_IsLocalConstantScope()
     {
         var network = IrParser.ParseNetworkOnly(
             "NETWORK 1 \"Test\"\n" +
@@ -403,7 +409,7 @@ public class SidecarSynthesizerTests
         var sidecar = SidecarSynthesizer.SynthesizeBlock(block).Single();
 
         Assert.Equal(
-            "LocalVariable",
+            "LocalConstant",
             sidecar.AccessUIds.Single(a => a.TagPath == "HasNoSystemPermissive").Scope);
 
         // And the coil, which is genuinely external, must NOT have been dragged local with it.

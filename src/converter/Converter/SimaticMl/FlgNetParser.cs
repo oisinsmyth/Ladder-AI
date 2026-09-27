@@ -19,7 +19,7 @@ public static class FlgNetParser
     // one place to add an instruction, so the parser and the reducer can never disagree about
     // which names are supported.
     private static readonly HashSet<string> SupportedPartNames = new HashSet<string>(StringComparer.Ordinal)
-        { "Contact", "Coil", "O", "TON", "TONR", "TOF", "Eq", "Ge", "Lt", "Ne", "Gt", "Le", "Move", "And", "Not", "SCoil", "RCoil", "Mul", "Add", "Sub", "Div", "Convert", "Swap", "Abs", "LIMIT", "MAX", "MIN", "T_SUB", "T_CONV", "Calc", "MOVE_BLK_VARIANT", "WAIT", "FillBlockI", "Modbus_Master", "Modbus_Comm_Load" }
+        { "Contact", "Coil", "O", "TON", "TONR", "TOF", "Eq", "Ge", "Lt", "Ne", "Gt", "Le", "Move", "And", "Not", "SCoil", "RCoil", "Mul", "Add", "Sub", "Div", "Convert", "Round", "Swap", "Abs", "LIMIT", "MAX", "MIN", "T_SUB", "T_CONV", "Calc", "Jump", "MOVE_BLK_VARIANT", "WAIT", "FillBlockI", "Modbus_Master", "Modbus_Comm_Load" }
         .Concat(FixedShapeInstructions.PartNames).ToHashSet(StringComparer.Ordinal);
 
     // Eq/Ge confirmed 2026-07-11 (FC ControlDelays); Lt confirmed 2026-07-12 (S1 item 19,
@@ -32,7 +32,7 @@ public static class FlgNetParser
     // LocalConstant confirmed real 2026-07-12 (S1 item 21, FB MotorVSDSystem/AirStar — 4 independent
     // instances) — a genuinely different shape from GlobalVariable/LocalVariable (see ParseAccess's
     // own LocalConstant branch), but the same allowlist gates all three.
-    private static readonly HashSet<string> SupportedAccessScopes = new(StringComparer.Ordinal) { "GlobalVariable", "LocalVariable", "LocalConstant" };
+    private static readonly HashSet<string> SupportedAccessScopes = new(StringComparer.Ordinal) { "GlobalVariable", "LocalVariable", "LocalConstant", "Label" };
 
     // TON's own <Instance> reference uses the same two scopes as an ordinary tag Access —
     // confirmed real, 2026-07-11: LocalVariable (multi-instance, FB MotorDOL) and GlobalVariable
@@ -124,7 +124,7 @@ public static class FlgNetParser
                     var (_, subAutomaticSrcType, subSrcType) = ParseMulFixedShape(child, name, uid, requireCardinality: false);
                     parts.Add(new PartNode(uid, name, AutomaticSrcType: subAutomaticSrcType, SrcType: subSrcType));
                 }
-                else if (name == "Convert")
+                else if (name is "Convert" or "Round")
                 {
                     var (convertSrcType, convertDestType) = ParseConvertFixedShape(child, uid);
                     parts.Add(new PartNode(uid, name, SrcType: convertSrcType, DestType: convertDestType));
@@ -215,7 +215,35 @@ public static class FlgNetParser
 
         var wires = wiresElement.Elements(Ns + "Wire").Select(ParseWire).ToList();
 
-        return new FlgNetwork(accessNodes, parts, wires, constants);
+        // Jump-label declarations. Only the observed shape is read: one <LabelDeclaration UId> holding
+        // one bare <Label Name>. Anything else in <Labels> is refused rather than silently dropped.
+        var labels = new List<LabelDeclarationNode>();
+        if (flgNet.Element(Ns + "Labels") is { } labelsElement)
+        {
+            foreach (var declaration in labelsElement.Elements())
+            {
+                var label = declaration.Element(Ns + "Label");
+                if (declaration.Name != Ns + "LabelDeclaration" || label is null || declaration.Elements().Count() != 1)
+                {
+                    throw new UnsupportedConstructException(
+                        $"<Labels> holds <{declaration.Name.LocalName}> with content other than one <Label Name> — only <LabelDeclaration UId><Label Name /></LabelDeclaration> has been observed.");
+                }
+
+                labels.Add(new LabelDeclarationNode(RequireIntAttribute(declaration, "UId"), RequireAttribute(label, "Name")));
+            }
+        }
+
+        // Every other top-level child is refused: an unknown sibling of <Parts>/<Wires> would otherwise
+        // be dropped without a word, the silent-loss shape this converter keeps paying for.
+        foreach (var child in flgNet.Elements())
+        {
+            if (child.Name.LocalName is not ("Parts" or "Wires" or "Labels"))
+            {
+                throw new UnsupportedConstructException($"<FlgNet> holds an unrecognized <{child.Name.LocalName}> element.");
+            }
+        }
+
+        return new FlgNetwork(accessNodes, parts, wires, constants) { Labels = labels };
     }
 
     // TypedConstant Access — only a top-level PT source, never a Contact/Coil operand (those
@@ -441,7 +469,8 @@ public static class FlgNetParser
                 $"<Part Name=\"Convert\" UId=\"{uid}\"> has DisabledENO=\"{disabledEno ?? "(absent)"}\" — only \"true\" has been observed.");
         }
 
-        var srcType = ParseSrcType(convertPart, "Convert", uid);
+        var partName = RequireAttribute(convertPart, "Name");
+        var srcType = ParseSrcType(convertPart, partName, uid);
 
         var destTypeValue = convertPart.Elements(Ns + "TemplateValue").FirstOrDefault(t => t.Attribute("Name")?.Value == "DestType")
             ?? throw new SimaticMlFormatException($"<Part Name=\"Convert\" UId=\"{uid}\"> is missing its <TemplateValue Name=\"DestType\"> element.");
@@ -863,6 +892,22 @@ public static class FlgNetParser
         if (scope == "LocalConstant")
         {
             return ParseLocalConstantAccess(access);
+        }
+
+        // A jump's target (2026-09-27, a live-run export): `<Access Scope="Label" UId><Label Name="X" />`
+        // wired into a Jump's `label` port. Carried as a one-component path holding the label name.
+        if (scope == "Label")
+        {
+            var labelUId = RequireIntAttribute(access, "UId");
+            var labelElement = access.Element(Ns + "Label")
+                ?? throw new SimaticMlFormatException($"<Access Scope=\"Label\" UId=\"{labelUId}\"> is missing its <Label> element.");
+            if (access.Elements().Count() != 1 || labelElement.HasElements)
+            {
+                throw new UnsupportedConstructException(
+                    $"<Access Scope=\"Label\" UId=\"{labelUId}\"> has content beyond one bare <Label Name=\"...\" /> — not observed.");
+            }
+
+            return new AccessNode(labelUId, "Label", new[] { RequireAttribute(labelElement, "Name") });
         }
 
         var symbol = access.Element(Ns + "Symbol")

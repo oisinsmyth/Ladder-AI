@@ -338,7 +338,13 @@ public sealed record FlgNetwork(
     IReadOnlyList<ConstantAccessNode>? Constants = null)
 {
     public IReadOnlyList<ConstantAccessNode> Constants { get; init; } = Constants ?? Array.Empty<ConstantAccessNode>();
+
+    // The network's `<Labels><LabelDeclaration UId><Label Name /></LabelDeclaration></Labels>` — the
+    // jump targets it declares (2026-09-27, a live-run export). Written before <Parts>, as TIA does.
+    public IReadOnlyList<LabelDeclarationNode> Labels { get; init; } = Array.Empty<LabelDeclarationNode>();
 }
+
+public sealed record LabelDeclarationNode(int UId, string Name);
 
 // CompileUnit "ID" is opaque — confirmed against a real export (2026-07-10) not to follow the
 // same simple sequential-int scheme as FlgNet's own UIds (a real one came back as "D"). Treated

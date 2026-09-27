@@ -379,7 +379,26 @@ public static class FlgNetBuilder
             .Select(entry => new ConstantAccessNode(entry.UId, entry.Value, entry.ConstantType))
             .ToList();
 
-        return new FlgNetwork(accessNodes, parts, wires, constants);
+        return new FlgNetwork(accessNodes, parts, wires, constants) { Labels = BuildLabels(network, sidecar) };
+    }
+
+    // The readable LABEL lines are authoritative for WHICH labels a network declares; the sidecar only
+    // supplies each one's UId. A readable label with no sidecar UId means the sidecar is stale for this
+    // network — refused here, which StoredSidecarReconciler turns into a re-derivation.
+    private static IReadOnlyList<LabelDeclarationNode> BuildLabels(IrNetwork network, NetworkSidecar sidecar)
+    {
+        var uidByName = sidecar.Labels.ToDictionary(l => l.Name, l => l.UId, StringComparer.Ordinal);
+        if (network.Labels.Count != sidecar.Labels.Count)
+        {
+            throw new IrFormatException(
+                $"Network {network.Number}: IR declares {network.Labels.Count} label(s) but the sidecar records {sidecar.Labels.Count}.");
+        }
+
+        return network.Labels
+            .Select(name => uidByName.TryGetValue(name, out var uid)
+                ? new LabelDeclarationNode(uid, name)
+                : throw new IrFormatException($"Network {network.Number}: LABEL {name} has no UId in the sidecar."))
+            .ToList();
     }
 
     private static void AddPart(List<PartNode> parts, HashSet<int> emittedPartUIds, PartNode part)
@@ -559,6 +578,13 @@ public static class FlgNetBuilder
         var outputCount = 1 + sidecar.AdditionalOutputs.Count;
         AddPart(parts, emittedPartUIds, new PartNode(sidecar.MovePartUId, "Move", Cardinality: outputCount > 1 ? outputCount : null));
 
+        // An ENO-chained MOVE: the preceding box's `eno` wired straight into this `en`.
+        if (sidecar.EnoSource is { } eno)
+        {
+            AddEndpoint(wireEndpointsByUId, eno.WireUId, new WireEndpoint(EndpointKind.NameCon, eno.PrecedingPartUId, "eno"));
+            AddEndpoint(wireEndpointsByUId, eno.WireUId, new WireEndpoint(EndpointKind.NameCon, sidecar.MovePartUId, "en"));
+        }
+
         AddOperandWire(wireEndpointsByUId, sidecar.In, sidecar.MovePartUId, "in");
 
         AddProducedWire(wireEndpointsByUId, sidecar.DestWireUId, sidecar.MovePartUId, "out1", sidecar.DestAccessUId);
@@ -623,6 +649,13 @@ public static class FlgNetBuilder
                 : new WireEndpoint(EndpointKind.NameCon, sidecar.CallPartUId, "en");
 
             BuildStep(sidecar.Steps[i], nextTarget, timersByTonPartUId, parts, emittedPartUIds, wireEndpointsByUId);
+        }
+
+        // An ENO-chained CALL: the preceding box's `eno` wired straight into this `en`.
+        if (sidecar.EnoSource is { } eno)
+        {
+            AddEndpoint(wireEndpointsByUId, eno.WireUId, new WireEndpoint(EndpointKind.NameCon, eno.PrecedingPartUId, "eno"));
+            AddEndpoint(wireEndpointsByUId, eno.WireUId, new WireEndpoint(EndpointKind.NameCon, sidecar.CallPartUId, "en"));
         }
 
         // Instance is optional — confirmed real, 2026-07-12 (S1 item 24): an FC call carries no
@@ -783,7 +816,7 @@ public static class FlgNetBuilder
     {
         BuildEnSource(sidecar.En, sidecar.ConvertPartUId, timersByTonPartUId, parts, emittedPartUIds, wireEndpointsByUId);
 
-        AddPart(parts, emittedPartUIds, new PartNode(sidecar.ConvertPartUId, "Convert", SrcType: sidecar.SrcType, DestType: sidecar.DestType));
+        AddPart(parts, emittedPartUIds, new PartNode(sidecar.ConvertPartUId, sidecar.Kind == ConvertKind.Round ? "Round" : "Convert", SrcType: sidecar.SrcType, DestType: sidecar.DestType));
 
         AddOperandWire(wireEndpointsByUId, sidecar.In, sidecar.ConvertPartUId, "in");
 
@@ -1202,7 +1235,9 @@ public static class FlgNetBuilder
         AddPart(parts, emittedPartUIds, new PartNode(sidecar.CoilUId, CoilPartNameFor(assignment.Kind)));
 
         AddEndpoint(wireEndpointsByUId, sidecar.CoilOperandWireUId, new WireEndpoint(EndpointKind.IdentCon, sidecar.CoilOperandAccessUId, null));
-        AddEndpoint(wireEndpointsByUId, sidecar.CoilOperandWireUId, new WireEndpoint(EndpointKind.NameCon, sidecar.CoilUId, "operand"));
+        // A Jump's operand is its target label, on port `label`.
+        AddEndpoint(wireEndpointsByUId, sidecar.CoilOperandWireUId, new WireEndpoint(
+            EndpointKind.NameCon, sidecar.CoilUId, assignment.Kind == CoilKind.Jump ? "label" : "operand"));
     }
 
     // The inverse of GraphReducer.CoilKindFor — derived from the model's own CoilAssignment.Kind
@@ -1213,6 +1248,7 @@ public static class FlgNetBuilder
         CoilKind.Assign => "Coil",
         CoilKind.Set => "SCoil",
         CoilKind.Reset => "RCoil",
+        CoilKind.Jump => "Jump",
         _ => throw new IrFormatException($"Unsupported coil kind: {kind}"),
     };
 

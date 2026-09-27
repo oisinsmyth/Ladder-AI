@@ -1,0 +1,33 @@
+<FlgNet xmlns="http://www.siemens.com/automation/Openness/SW/NetworkSource/FlgNet/v5">
+  <Parts>
+    <Access Scope="GlobalVariable" UId="21">
+      <Symbol>
+        <Component Name="DemoIn" />
+        <Component Name="Bypass" />
+      </Symbol>
+    </Access>
+    <Access Scope="Label" UId="22">
+      <Label Name="SkipAhead" />
+    </Access>
+    <Part Name="Contact" UId="23" />
+    <Part Name="Jump" UId="24" />
+  </Parts>
+  <Wires>
+    <Wire UId="25">
+      <Powerrail />
+      <NameCon UId="23" Name="in" />
+    </Wire>
+    <Wire UId="26">
+      <IdentCon UId="21" />
+      <NameCon UId="23" Name="operand" />
+    </Wire>
+    <Wire UId="27">
+      <NameCon UId="23" Name="out" />
+      <NameCon UId="24" Name="in" />
+    </Wire>
+    <Wire UId="28">
+      <IdentCon UId="22" />
+      <NameCon UId="24" Name="label" />
+    </Wire>
+  </Wires>
+</FlgNet>
