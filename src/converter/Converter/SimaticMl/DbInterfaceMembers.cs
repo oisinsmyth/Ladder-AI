@@ -451,7 +451,7 @@ internal static class DbInterfaceMembers
 
         // 3. an anonymous `Struct` whose fields are DIRECT <Member> children (no <Sections>) — confirmed
         //    real 2026-09-27 on a live-run export, inside a named UDT's expansion (a PID settings UDT's
-        //    `Config`/`CycleTime`/`ControlParams` structs, with the use site's own start values on the
+        //    nested `Config`/`CycleTime` structs, with the use site's own start values on the
         //    fields). This is the same direct-children shape the top-level path already reads as an
         //    anonymous struct; here it is RECURSED AND KEPT, for FI-75's reason — the values inside are
         //    the use site's own — and written back in the same direct-children form (DirectStruct).
