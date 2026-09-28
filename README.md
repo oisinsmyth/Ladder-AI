@@ -53,7 +53,7 @@ what it could not see — on every run, including the ones that pass.
 | **`docs/`** | The design suite — 12 ADRs, a risk register, audits, and a data-boundary regime |
 | **`tools/`** | Mechanical checks, each with its own test suite and a documented negative-test result |
 
-**Scale:** ~5,810 tests across 24 test projects; ~1,000 C# source files; 266 documents.
+**Scale:** ~6,790 tests across 24 test projects, ~5,940 of them run in CI (the rest need TIA Portal); ~1,000 C# source files; 266 documents.
 
 ---
 
