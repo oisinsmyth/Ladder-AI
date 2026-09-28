@@ -59,15 +59,10 @@ what it could not see — on every run, including the ones that pass.
 
 ## What I would show a reviewer first
 
-**[`docs/notes/data-boundary-audit-backlog.md`](docs/notes/data-boundary-audit-backlog.md)** — an
-internal audit record, written while the cause was still open: identifiers that reached committed
-source inside the *private* repository, caught by the project's own boundary checks and remediated
-long before anything was published. It names its decision-maker, records what was deliberately *not*
-fixed and why, and opens with a rule I still think is right:
-
-> *A record of a leak must not be a copy of it.*
-
-It is the most persuasive document here precisely because it is not a success story.
+**The one-command demo** — `python demo/run-demo.py`, with no TIA Portal and no PLC. It takes one
+block through the converter end to end, round-trips the reference corpus, and asserts its own
+result: CI runs it with `--check`, so it fails the build rather than rotting into an example. What
+it prints, and the one result it deliberately does not hide, is under [Running it](#running-it).
 
 **[`tools/README.md`](tools/README.md)** — the de-identification pipeline built to publish this
 repository. Two deliberately independent tools: one emits rewrite rules, one decides whether a
@@ -79,6 +74,16 @@ The verifier carries a self-test: a synthetic object containing every search ter
 same matcher the real corpus goes through. On its first run it reported that **1,505 of 1,719 terms
 could not match anything at all** — a bug in the tool, caught by the tool, on a run that had already
 printed a plausible-looking result. Nothing else would have found it.
+
+**[`docs/notes/data-boundary-audit-backlog.md`](docs/notes/data-boundary-audit-backlog.md)** — an
+internal audit record, written while the cause was still open: identifiers that reached committed
+source inside the *private* repository, caught by the project's own boundary checks and remediated
+long before anything was published. It names its decision-maker, records what was deliberately *not*
+fixed and why, and opens with a rule I still think is right:
+
+> *A record of a leak must not be a copy of it.*
+
+It is the most persuasive document here precisely because it is not a success story.
 
 ---
 
