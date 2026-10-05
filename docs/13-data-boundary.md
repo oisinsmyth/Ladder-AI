@@ -470,6 +470,12 @@ Two standing exceptions to that rule, both recorded below: the per-project Amber
     - ⚠️ **Disposable is not the same as free.** A restore costs the owner an action, and a
       destructive step taken casually is still a step somebody has to undo. Prefer additive work;
       take a note of what a reset would cost before a bulk delete.
+  - **2026-10-05 — JOB9003 logic approved as generation input for live job `JOB9005`.** Project
+    owner's own words in conversation: *"Reuse the K150 logic."* This supersedes the "use of JOB9003
+    logic as generation input" clause above **for JOB9005 only**. The read-only export of the scratch
+    copy lives in `Live Runs/JOB9005/` and is governed by the live-runs section below. The rest of
+    the "still not authorized" list is unchanged: no write to the real JOB9003 project, and no JOB9003
+    content as a committed example.
 
 ## Live runs (`Live Runs/`) — full working access, zero retention
 
@@ -586,6 +592,8 @@ the older Amber process; live runs do not follow it.
 
 - **2026-08-04 — job `JOB9004`.** First live run; owner is reviewing each step. Job identity, scope
   and all content live in `Live Runs/JOB9004/` only. Governed entirely by this section.
+- **2026-10-05 — job `JOB9005`.** Opened by the owner. All content lives in `Live Runs/JOB9005/` only.
+  Reuses JOB9003 logic under the 2026-10-05 entry above.
 
 ### Promotions out of a live run
 
