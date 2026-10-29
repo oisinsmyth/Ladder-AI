@@ -66,7 +66,15 @@ public static class SidecarSynthesizer
         // The block's own interface members type its local operands (a bare TEMP `SignedValue`, a
         // STATIC struct field) — layer them onto the project-wide registry so typed boxes resolve.
         var effectiveTypes = (tagTypes ?? TagTypeRegistry.Empty).WithLocalMembers(InterfaceMembers(block));
-        return block.Networks.Select(network => Synthesize(network, localNames, callees, effectiveTypes)).ToList();
+        return block.Networks.Select(network => Verified(network, Synthesize(network, localNames, callees, effectiveTypes))).ToList();
+    }
+
+    // The block-level entry points refuse a written statement order no drawing can keep (RungOrderCheck),
+    // rather than letting to-xml silently move a rung.
+    private static NetworkSidecar Verified(IrNetwork network, NetworkSidecar sidecar)
+    {
+        RungOrderCheck.Verify(network, sidecar);
+        return sidecar;
     }
 
     // One network of a block, with the same block context SynthesizeBlock gives every network — used when
@@ -75,7 +83,8 @@ public static class SidecarSynthesizer
         IrBlock block, int networkIndex, CalleeInterfaceRegistry? callees = null, TagTypeRegistry? tagTypes = null)
     {
         var effectiveTypes = (tagTypes ?? TagTypeRegistry.Empty).WithLocalMembers(InterfaceMembers(block));
-        return Synthesize(block.Networks[networkIndex], ComputeLocalNames(block), callees, effectiveTypes);
+        var network = block.Networks[networkIndex];
+        return Verified(network, Synthesize(network, ComputeLocalNames(block), callees, effectiveTypes));
     }
 
     private static IEnumerable<DbMember> InterfaceMembers(IrBlock block) =>
@@ -478,9 +487,12 @@ public static class SidecarSynthesizer
 
     // The order statements are synthesized — and so the order their rungs appear in once rebuilt. An
     // explicit statement order is the source's rung order and is followed as written. A kind-ordered
-    // network (StatementOrder null) keeps the sequence synthesis has always used, so nothing that was
-    // already synthesizing changes: timers, coils, moves, then each MUL-family box beside the CONVERT
-    // it pairs with, ABS, SWAP, WAND, CALC, each T_SUB beside its T_CONV, MOVE_BLK_VARIANT, CALL.
+    // network (StatementOrder null) is drawn in the canonical kind order its text is written in
+    // (`IrStatementKind`), so the drawing never contradicts the text: timers, coils, moves, WAND, CALL,
+    // each MUL-family box beside the CONVERT it pairs with, SWAP, ABS, each T_SUB beside its T_CONV,
+    // CALC, MOVE_BLK_VARIANT. The pairs are the one departure: an ENO-chained CONVERT/T_CONV must sit
+    // directly after its box. Until 2026-10-29 CALL came last and WAND/SWAP/CALC sat elsewhere, so a
+    // real network written CALL-then-ADD (the ADD reading the CALL's output) was drawn ADD first.
     private static IEnumerable<IrStatementRef> SynthesisOrder(IrNetwork network)
     {
         if (network.StatementOrder is not null)
@@ -517,14 +529,14 @@ public static class SidecarSynthesizer
         AddAll(IrStatementKind.Timer);
         AddAll(IrStatementKind.Assignment);
         AddAll(IrStatementKind.Move);
-        AddPaired(IrStatementKind.Mul, IrStatementKind.Convert);
-        AddAll(IrStatementKind.Abs);
-        AddAll(IrStatementKind.Swap);
         AddAll(IrStatementKind.WordAnd);
-        AddAll(IrStatementKind.Calc);
-        AddPaired(IrStatementKind.TSub, IrStatementKind.TConv);
-        AddAll(IrStatementKind.MoveBlkVariant);
         AddAll(IrStatementKind.Call);
+        AddPaired(IrStatementKind.Mul, IrStatementKind.Convert);
+        AddAll(IrStatementKind.Swap);
+        AddAll(IrStatementKind.Abs);
+        AddPaired(IrStatementKind.TSub, IrStatementKind.TConv);
+        AddAll(IrStatementKind.Calc);
+        AddAll(IrStatementKind.MoveBlkVariant);
         return order;
     }
 

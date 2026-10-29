@@ -216,6 +216,23 @@ MOVE_BLK_VARIANT  →  WAIT  →  FILLBLOCKI  →  MODBUS_MASTER  →  MODBUS_CO
 The one positional rule left is the network `COMMENT`, which must sit directly under the `NETWORK`
 header; a misplaced one is reported as exactly that, naming the line.
 
+**A rung's statements must be contiguous (2026-10-29).** A rung is one connected graph, and TIA draws
+it contiguously. So these statements form one rung and must be written together:
+- statements joined by `{split N}`/`{recv N}` markers
+- a TON and a coil whose condition its same-network `Q` leads
+- an ENO chain
+
+An independent statement written between them has no drawing that keeps its place. `to-xml` used to
+draw it after the whole rung, silently changing the scan order. Now synthesis of an **explicit-order**
+network refuses it: "the statement order cannot be drawn", naming the statement and the one that
+would be drawn ahead of it. Move the statement above or below the whole rung, or into its own network.
+The check builds the network, reads it back as `to-ir` would, and compares (`Ir/RungOrderCheck.cs`).
+- **Canonical kind order** states no order, so it keeps regrouping as before. That is the legacy
+  grouped layout, whose real order is in its sidecar.
+- **Drawable canonical order:** since the same date, a drawable canonical network is synthesized in its
+  text order, apart from ENO pairs. Synthesis used to draw `CALL` last, so a real network written
+  `CALL` then an `ADD` reading the call's output was drawn `ADD` first.
+
 **Until 2026-09-24 the order above was mandatory** — one contiguous run per kind, anything else a parse
 error (FI-69 gave that error its message). The readable IR therefore could not say that a timer rung
 sits between two coil rungs: a sidecar-less round trip hoisted every `TON` rung to the top of its
