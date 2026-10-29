@@ -372,7 +372,7 @@ public class CallTests
                     <Instance Scope="GlobalVariable" UId="2">
                       <Component Name="Pump1_DB" />
                     </Instance>
-                    <Parameter Name="io0" Section="InOut" Type="Word" />
+                    <Parameter Name="io0" Section="Static" Type="Word" />
                   </CallInfo>
                 </Call>
                 <Part Name="Coil" UId="3" />

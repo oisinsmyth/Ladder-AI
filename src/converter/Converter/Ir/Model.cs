@@ -478,6 +478,11 @@ public abstract record CallArgument
     public sealed record InputArg(string ParamName, Expr Value) : CallArgument;
 
     public sealed record OutputArg(string ParamName, string DestTag) : CallArgument;
+
+    // An InOut parameter (2026-10-29, a live-run FB call passing a PID_Compact instance as `PID`):
+    // always a bare tag, read AND written by the callee. Written `Param <=> Tag` in the readable
+    // form — its own operator, because nothing else at a call site says which way a parameter points.
+    public sealed record InOutArg(string ParamName, string Tag) : CallArgument;
 }
 
 // An FB/FC call (`<Call>`/`<CallInfo Name="<callee>" BlockType="FB"/"FC">`) — confirmed real,
@@ -1061,6 +1066,15 @@ public abstract record CallArgumentSidecar
     public sealed record InputArgSidecar(string ParamName, string Type, OperandSidecar Value) : CallArgumentSidecar;
 
     public sealed record OutputArgSidecar(string ParamName, string Type, int DestAccessUId, int DestWireUId) : CallArgumentSidecar;
+
+    // The real export wires an InOut like an Input — `<IdentCon>` first, then the Call's `<NameCon>` —
+    // so it carries the same access + wire pair as an Output, but is rebuilt in consumer order.
+    public sealed record InOutArgSidecar(string ParamName, string Type, int AccessUId, int WireUId) : CallArgumentSidecar;
+
+    // A Bool Input fed by power flow — a Contact chain wired straight into the parameter (2026-10-29,
+    // `Running` fed by two series contacts) — rather than by a tag or literal. Same rail + steps
+    // shape as Modbus_Master's chain-fed REQ; the readable form is unchanged (`Param := A AND B`).
+    public sealed record ChainInputArgSidecar(string ParamName, string Type, int? RailWireUId, IReadOnlyList<ChainStepSidecar> Steps) : CallArgumentSidecar;
 }
 
 // One Call's full round-trip data. RailWireUId/Steps mirror every other production's own en/IN

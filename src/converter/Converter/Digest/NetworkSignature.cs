@@ -165,6 +165,7 @@ public static class NetworkSignature
     {
         CallArgument.InputArg input => Canon(input.Value),
         CallArgument.OutputArg => "out",
+        CallArgument.InOutArg => "inout",
         _ => "?",
     }));
 

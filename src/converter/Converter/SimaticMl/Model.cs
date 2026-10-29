@@ -297,9 +297,9 @@ public sealed record PartNode(
 // parameters that are actually wired appear here at all (19 of 20 real Call instances have zero
 // — no <Parameter> element at all, not present-but-empty; the one real wired example,
 // `TomraControlSystem`, has 10: 8 Section="Input", 2 Section="Output", all Type="Word"). Section is
-// stored verbatim and validated to be exactly "Input" or "Output" at parse time — an "InOut"
-// section is real in principle (an FB's own interface can have InOut parameters) but unconfirmed
-// on a Call specifically, refused rather than guessed at. Name/Type mirror the source's own
+// stored verbatim and validated to be exactly "Input", "Output" or "InOut" at parse time — "InOut"
+// confirmed real on a Call 2026-10-29 (an FB taking a PID_Compact instance as its `PID`), wired like
+// an Input (IdentCon then NameCon). Anything else is refused rather than guessed at. Name/Type mirror the source's own
 // `<Parameter Name="..." Type="..." />` attributes exactly.
 public sealed record CallParameterNode(string Name, string Section, string Type);
 

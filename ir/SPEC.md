@@ -627,6 +627,23 @@ NETWORK 8 "Run enable delay"
   mirroring `CallWithParametersFedByRail`'s own genericization precedent). **Live-verified against
   real data, 2026-07-12:** see `docs/notes/stage-gates.md` ("S1 item 24") for the full
   `MotorVSDSystem` whole-block result.
+- **`CALL` InOut parameters and chain-fed Bool inputs, built 2026-10-29.** Grounded on a real FB
+  call that passes a PID_Compact instance as an InOut (`<Parameter Section="InOut">`, wired
+  `IdentCon` → the Call's `NameCon`, the same order as an Input), and feeds a Bool Input from two
+  series contacts (the wire into the parameter comes from a Contact's `out`, not an Access).
+  - **InOut** is written `Param <=> Tag`, its own operator, because nothing else at a call site
+    says which way a parameter points. The value is always a bare tag. Tag analysis treats it as
+    both read and written.
+  - **A chain-fed Input** is written like any Input, `Param := A AND B`. The sidecar holds it as a
+    rail + steps chain (the same shape as Modbus_Master's `REQ`). On synthesis, an Input whose value
+    is an AND/OR/NOT/comparison becomes a contact chain, and is refused unless the callee declares
+    that parameter `Bool`. A bare tag or literal stays an ordinary operand.
+  - The callee registry now records InOut members, so `<=>` against a parameter of another section
+    hard-errors, as `:=`/`=>` already did.
+  - **Confirmed** through the true cycle: the real FC was converted, synthesized from the readable
+    IR alone, imported into the scratch project, and compiled with 0 errors. It exported back
+    EQUIVALENT to the original, and a corpus-wide re-convert changed no other block. Tests:
+    `CallInOutAndChainInputTests.cs` (invented-name fixture).
 - **`SWAP` (byte-swap box instruction, `Part Name="Swap"`), built 2026-07-12 (S1 item 25) — the
   last gap in `PlantAutoControl`'s own 8 dependency FBs.** Grounded against real `FB TomraControlSystem` (2
   instances, identical shape): `<Part Name="Swap" UId="N" DisabledENO="true"><TemplateValue

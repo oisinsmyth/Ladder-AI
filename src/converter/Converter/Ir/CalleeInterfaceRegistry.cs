@@ -7,9 +7,8 @@ namespace Converter.Ir;
 // CALL: the readable CALL deliberately omits argument types (ADR-0001 — `Ir/Model.cs`: "the callee's
 // own .ir file is the source of truth for its interface"), so the synthesizer looks the type up here,
 // mirroring what the read side gets from a source `<Parameter Type=…>` element
-// (`GraphReducer.ReduceCall`). Input + Output only in this cut (matching the read side's Input/else-
-// Output shape); InOut is a future extension and is deliberately not registered, so a wired InOut arg
-// resolves as "unknown parameter" and hard-errors rather than being silently mistyped.
+// (`GraphReducer.ReduceCall`). Input, Output and — since 2026-10-29 — InOut, each under its own
+// section so a `:=`/`=>`/`<=>` argument naming a parameter of another section hard-errors.
 public sealed class CalleeInterfaceRegistry
 {
     public sealed record Param(string Type, string Section);
@@ -48,6 +47,11 @@ public sealed class CalleeInterfaceRegistry
             foreach (var member in block.OutputMembers ?? Array.Empty<DbMember>())
             {
                 parms[member.Name] = new Param(NormalizeType(member.Datatype), "Output");
+            }
+
+            foreach (var member in block.InOutMembers)
+            {
+                parms[member.Name] = new Param(NormalizeType(member.Datatype), "InOut");
             }
 
             byBlock[block.Name] = parms;

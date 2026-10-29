@@ -1,0 +1,58 @@
+<FlgNet xmlns="http://www.siemens.com/automation/Openness/SW/NetworkSource/FlgNet/v5">
+  <Parts>
+    <Access Scope="GlobalVariable" UId="21">
+      <Symbol>
+        <Component Name="Pump1" />
+        <Component Name="Running" />
+      </Symbol>
+    </Access>
+    <Access Scope="GlobalVariable" UId="22">
+      <Symbol>
+        <Component Name="LoopEnable" />
+      </Symbol>
+    </Access>
+    <Access Scope="GlobalVariable" UId="23">
+      <Symbol>
+        <Component Name="Loop1Controller" />
+      </Symbol>
+    </Access>
+    <Part Name="Contact" UId="24" />
+    <Part Name="Contact" UId="25" />
+    <Call UId="26">
+      <CallInfo Name="LoopControl" BlockType="FB">
+        <Instance Scope="GlobalVariable" UId="27">
+          <Component Name="Loop1_DB" />
+        </Instance>
+        <Parameter Name="Active" Section="Input" Type="Bool" />
+        <Parameter Name="Ctrl" Section="InOut" Type="Loop_Type" />
+      </CallInfo>
+    </Call>
+  </Parts>
+  <Wires>
+    <Wire UId="30">
+      <Powerrail />
+      <NameCon UId="26" Name="en" />
+      <NameCon UId="24" Name="in" />
+    </Wire>
+    <Wire UId="31">
+      <IdentCon UId="21" />
+      <NameCon UId="24" Name="operand" />
+    </Wire>
+    <Wire UId="32">
+      <NameCon UId="24" Name="out" />
+      <NameCon UId="25" Name="in" />
+    </Wire>
+    <Wire UId="33">
+      <IdentCon UId="22" />
+      <NameCon UId="25" Name="operand" />
+    </Wire>
+    <Wire UId="34">
+      <NameCon UId="25" Name="out" />
+      <NameCon UId="26" Name="Active" />
+    </Wire>
+    <Wire UId="35">
+      <IdentCon UId="23" />
+      <NameCon UId="26" Name="Ctrl" />
+    </Wire>
+  </Wires>
+</FlgNet>

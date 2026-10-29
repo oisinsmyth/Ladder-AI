@@ -1632,7 +1632,8 @@ public static class SidecarSynthesizer
             instanceComponentPath = TagPath.Split(instancePath);
         }
 
-        var arguments = BuildCallArguments(call, callees, ref nextUid, accessEntries, constantEntries, localNames);
+        var arguments = BuildCallArguments(
+            call, callees, sharedRailWireUId, ref nextUid, accessEntries, constantEntries, localNames, fanoutRegistry, tagTypes);
 
         return new CallStatementSidecar(
             callPartUId,
@@ -1653,8 +1654,9 @@ public static class SidecarSynthesizer
     // not semantically load-bearing. Every failure is an explicit hard-error naming the callee +
     // parameter, never a silent guess (hard rule 7).
     private static IReadOnlyList<CallArgumentSidecar> BuildCallArguments(
-        CallStatement call, CalleeInterfaceRegistry callees, ref int nextUid,
-        List<SidecarAccessEntry> accessEntries, List<SidecarConstantEntry> constantEntries, IReadOnlySet<string> localNames)
+        CallStatement call, CalleeInterfaceRegistry callees, int sharedRailWireUId, ref int nextUid,
+        List<SidecarAccessEntry> accessEntries, List<SidecarConstantEntry> constantEntries, IReadOnlySet<string> localNames,
+        Dictionary<int, IReadOnlyList<ChainStepSidecar>> fanoutRegistry, TagTypeRegistry tagTypes)
     {
         if (call.Arguments.Count == 0)
         {
@@ -1675,6 +1677,25 @@ public static class SidecarSynthesizer
         {
             switch (argument)
             {
+                case CallArgument.InputArg input
+                    when input.Value is Expr.And or Expr.Or or Expr.Not or Expr.Compare:
+                {
+                    // A boolean expression into an Input is power flow: a Contact chain wired straight
+                    // into the parameter, as the real export does (2026-10-29), not an operand.
+                    var param = RequireParam(call.BlockName, input.ParamName, "Input", parms);
+                    if (!string.Equals(param.Type, "Bool", StringComparison.OrdinalIgnoreCase))
+                    {
+                        throw new UnsupportedSynthesisConstructException(
+                            $"Network: CALL to '{call.BlockName}' passes an expression to '{input.ParamName}', which is " +
+                            $"{param.Type}; only a Bool parameter can take a contact chain.");
+                    }
+
+                    var (chainRail, chainSteps) = BuildChain(
+                        input.Value, sharedRailWireUId, ref nextUid, accessEntries, constantEntries, localNames, fanoutRegistry, tagTypes);
+                    arguments.Add(new CallArgumentSidecar.ChainInputArgSidecar(input.ParamName, param.Type, chainRail, chainSteps));
+                    break;
+                }
+
                 case CallArgument.InputArg input:
                 {
                     var param = RequireParam(call.BlockName, input.ParamName, "Input", parms);
@@ -1699,6 +1720,16 @@ public static class SidecarSynthesizer
                     break;
                 }
 
+                case CallArgument.InOutArg inOut:
+                {
+                    var param = RequireParam(call.BlockName, inOut.ParamName, "InOut", parms);
+                    var accessUId = nextUid++;
+                    accessEntries.Add(Access(inOut.Tag, accessUId, localNames));
+                    var wireUId = nextUid++;
+                    arguments.Add(new CallArgumentSidecar.InOutArgSidecar(inOut.ParamName, param.Type, accessUId, wireUId));
+                    break;
+                }
+
                 default:
                     throw new UnsupportedSynthesisConstructException($"Unsupported call argument kind: {argument.GetType().Name}");
             }
@@ -1708,7 +1739,8 @@ public static class SidecarSynthesizer
     }
 
     // Resolves a CALL parameter against the callee interface: it must exist and its section must match
-    // the argument shape (an Input `:=` arg must be an Input param, an Output `=>` arg an Output param).
+    // the argument shape (an Input `:=` arg must be an Input param, an Output `=>` arg an Output param,
+    // an InOut `<=>` arg an InOut param).
     private static CalleeInterfaceRegistry.Param RequireParam(
         string blockName, string paramName, string expectedSection,
         IReadOnlyDictionary<string, CalleeInterfaceRegistry.Param> parms)
@@ -1716,8 +1748,8 @@ public static class SidecarSynthesizer
         if (!parms.TryGetValue(paramName, out var param))
         {
             throw new UnsupportedSynthesisConstructException(
-                $"Network: CALL to '{blockName}' names parameter '{paramName}', which is not an Input or Output " +
-                "parameter of the callee (InOut is not supported in synthesis).");
+                $"Network: CALL to '{blockName}' names parameter '{paramName}', which is not an Input, Output or " +
+                "InOut parameter of the callee.");
         }
 
         if (param.Section != expectedSection)

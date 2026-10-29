@@ -1125,12 +1125,28 @@ public static class GraphReducer
         var argumentSidecars = new List<CallArgumentSidecar>();
         foreach (var parameter in call.CallParameters ?? Array.Empty<CallParameterNode>())
         {
-            if (parameter.Section == "Input")
+            if (parameter.Section == "Input" && IsPowerFlowFed(wiresByPort, call.UId, parameter.Name, networkNumber))
+            {
+                var (chainExpr, chainSteps, chainRailWireUId) = TraceChain(
+                    network, (call.UId, parameter.Name), wiresByPort, accessByUId, constantsByUId, networkNumber, visitedWireUIds, accessEntries, constantEntries);
+                arguments.Add(new CallArgument.InputArg(parameter.Name, chainExpr));
+                argumentSidecars.Add(new CallArgumentSidecar.ChainInputArgSidecar(parameter.Name, parameter.Type, chainRailWireUId, chainSteps));
+            }
+            else if (parameter.Section == "Input")
             {
                 var (valueExpr, valueSidecar) = ResolveTagOrLiteralOperand(
                     wiresByPort, accessByUId, constantsByUId, call.UId, parameter.Name, networkNumber, visitedWireUIds, accessEntries, constantEntries);
                 arguments.Add(new CallArgument.InputArg(parameter.Name, valueExpr));
                 argumentSidecars.Add(new CallArgumentSidecar.InputArgSidecar(parameter.Name, parameter.Type, valueSidecar));
+            }
+            else if (parameter.Section == "InOut")
+            {
+                // A bare tag the callee reads and writes, wired like an Input (IdentCon -> NameCon).
+                var (tag, wireUId) = ResolveOperand(wiresByPort, accessByUId, call.UId, networkNumber, parameter.Name);
+                visitedWireUIds.Add(wireUId);
+                AddAccessEntry(accessEntries, tag);
+                arguments.Add(new CallArgument.InOutArg(parameter.Name, tag.TagPath));
+                argumentSidecars.Add(new CallArgumentSidecar.InOutArgSidecar(parameter.Name, parameter.Type, tag.UId, wireUId));
             }
             else
             {
@@ -2369,6 +2385,11 @@ public static class GraphReducer
     // Port defaults to "operand" (every Contact/Coil operand) — Move's write-side target uses
     // "out1" instead (see ReduceMove); the wire shape is otherwise identical, an IdentCon-fed
     // Access, only the read/write direction differs semantically, not structurally.
+    // True when a box input is driven by power flow (the rail, or another part's output — a Contact
+    // chain) rather than by a tag or literal Access, which always arrives as an IdentCon.
+    private static bool IsPowerFlowFed(Dictionary<(int, string), WireNode> wiresByPort, int partUId, string port, int networkNumber) =>
+        !RequireWireAt(wiresByPort, (partUId, port), networkNumber).Endpoints.Any(e => e.Kind == EndpointKind.IdentCon);
+
     private static (SidecarAccessEntry Tag, int WireUId) ResolveOperand(
         Dictionary<(int, string), WireNode> wiresByPort,
         Dictionary<int, AccessNode> accessByUId,

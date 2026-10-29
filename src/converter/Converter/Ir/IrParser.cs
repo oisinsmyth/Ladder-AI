@@ -501,10 +501,21 @@ public static partial class IrParser
                 {
                     var inputSep = args[k].IndexOf(" := ", StringComparison.Ordinal);
                     var outputSep = args[k].IndexOf(" => ", StringComparison.Ordinal);
-                    if (inputSep >= 0 && (outputSep < 0 || inputSep < outputSep))
+                    var inOutSep = args[k].IndexOf(" <=> ", StringComparison.Ordinal);
+                    if (inOutSep >= 0 && (inputSep < 0 || inOutSep < inputSep) && (outputSep < 0 || inOutSep < outputSep))
+                    {
+                        // InOut: a bare tag, `Param <=> Tag`. Checked first; ` <=> ` contains no ` => `.
+                        arguments.Add(new CallArgument.InOutArg(args[k][..inOutSep], args[k][(inOutSep + 5)..]));
+                    }
+                    else if (inputSep >= 0 && (outputSep < 0 || inputSep < outputSep))
                     {
                         var paramName = args[k][..inputSep];
-                        arguments.Add(new CallArgument.InputArg(paramName, ParseExprTerm(args[k][(inputSep + 4)..])));
+                        // A full boolean expression is legal here (a Bool input fed by a contact chain,
+                        // 2026-10-29); a bare `TRUE` stays the literal ParseExprTerm makes of it, since
+                        // ParseExpr would read it as the always-true empty AND.
+                        var valueText = args[k][(inputSep + 4)..];
+                        arguments.Add(new CallArgument.InputArg(
+                            paramName, valueText.Trim() == "TRUE" ? ParseExprTerm(valueText) : ParseExpr(valueText)));
                     }
                     else if (outputSep >= 0)
                     {
@@ -513,7 +524,7 @@ public static partial class IrParser
                     }
                     else
                     {
-                        throw new IrFormatException($"Expected '<param> := <expr>' or '<param> => <tag>' as CALL argument {k + 1}, got: '{args[k]}' in '{lines[i]}'");
+                        throw new IrFormatException($"Expected '<param> := <expr>', '<param> => <tag>' or '<param> <=> <tag>' as CALL argument {k + 1}, got: '{args[k]}' in '{lines[i]}'");
                     }
                 }
 
@@ -2052,7 +2063,10 @@ public static partial class IrParser
 
         var arguments = new List<CallArgumentSidecar>();
         var a = 0;
-        while (i < lines.Length && (lines[i].StartsWith($"    argument {a} input ", StringComparison.Ordinal) || lines[i].StartsWith($"    argument {a} output ", StringComparison.Ordinal)))
+        while (i < lines.Length && (lines[i].StartsWith($"    argument {a} input ", StringComparison.Ordinal)
+                                    || lines[i].StartsWith($"    argument {a} output ", StringComparison.Ordinal)
+                                    || lines[i].StartsWith($"    argument {a} inout ", StringComparison.Ordinal)
+                                    || lines[i].StartsWith($"    argument {a} chaininput ", StringComparison.Ordinal)))
         {
             arguments.Add(ParseCallArgument(lines, ref i, a));
             a++;
@@ -2080,13 +2094,39 @@ public static partial class IrParser
         var line = RequireLine(lines, ref i);
         var inputPrefix = $"    argument {index} input ";
         var outputPrefix = $"    argument {index} output ";
+        var inOutPrefix = $"    argument {index} inout ";
+        var chainInputPrefix = $"    argument {index} chaininput ";
 
         string kind;
         string rest;
+        if (line.StartsWith(chainInputPrefix, StringComparison.Ordinal))
+        {
+            var chainRest = line[chainInputPrefix.Length..];
+            var chainSpace = chainRest.LastIndexOf(' ');
+            if (chainSpace < 0)
+            {
+                throw new IrFormatException($"Expected '<name> <type>' in call argument header, got: '{chainRest}'");
+            }
+
+            var railWireUId = ParseRail(RequirePrefixedLine(lines, ref i, "      rail = "));
+            var steps = new List<ChainStepSidecar>();
+            for (var s = 0; i < lines.Length && IsStepHeader(lines[i], "      ", $"step {s}"); s++)
+            {
+                steps.Add(ParseStep(lines, ref i, "      ", $"step {s}"));
+            }
+
+            return new CallArgumentSidecar.ChainInputArgSidecar(chainRest[..chainSpace], chainRest[(chainSpace + 1)..], railWireUId, steps);
+        }
+
         if (line.StartsWith(inputPrefix, StringComparison.Ordinal))
         {
             kind = "input";
             rest = line[inputPrefix.Length..];
+        }
+        else if (line.StartsWith(inOutPrefix, StringComparison.Ordinal))
+        {
+            kind = "inout";
+            rest = line[inOutPrefix.Length..];
         }
         else if (line.StartsWith(outputPrefix, StringComparison.Ordinal))
         {
@@ -2095,7 +2135,7 @@ public static partial class IrParser
         }
         else
         {
-            throw new IrFormatException($"Expected '    argument {index} input|output <name> <type>', got: '{line}'");
+            throw new IrFormatException($"Expected '    argument {index} input|output|inout <name> <type>', got: '{line}'");
         }
 
         var spaceIndex = rest.LastIndexOf(' ');
@@ -2111,6 +2151,13 @@ public static partial class IrParser
         {
             var value = ParseOperand(lines, ref i, "      ", "value");
             return new CallArgumentSidecar.InputArgSidecar(paramName, type, value);
+        }
+
+        if (kind == "inout")
+        {
+            var accessUId = int.Parse(RequirePrefixedLine(lines, ref i, "      access = "));
+            var wireUId = int.Parse(RequirePrefixedLine(lines, ref i, "      wire = "));
+            return new CallArgumentSidecar.InOutArgSidecar(paramName, type, accessUId, wireUId);
         }
 
         var destAccessUId = int.Parse(RequirePrefixedLine(lines, ref i, "      dest = "));
