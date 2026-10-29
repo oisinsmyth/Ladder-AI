@@ -4162,7 +4162,13 @@ public sealed class OpennessGateway : IOpennessGateway
             var unifiedHit = unifiedDevices.FirstOrDefault(u => u.Software.TagTables.Find(tagTableName) is not null);
             if (unifiedHit.Software is not null)
             {
-                throw new HmiClassicOnlyObjectException("HMI tag table", tagTableName, unifiedHit.Path);
+                // A Unified table has no SimaticML Export; its HmiTagComposition.Export writes its own
+                // file format into a directory. --out names that directory, created if missing.
+                // Openness reads the DirectoryInfo's original path string, and refuses a forward-slash
+                // path as "relative"; FullName is the normalised absolute form.
+                var dir = new DirectoryInfo(Directory.CreateDirectory(outPath).FullName);
+                unifiedHit.Software.TagTables.Find(tagTableName).Tags.Export(dir);
+                return;
             }
 
             // The present-set is the whole classic corpus, NOT the device-narrowed one: a --device
@@ -4289,6 +4295,14 @@ public sealed class OpennessGateway : IOpennessGateway
 
     public HmiClassicImportOutcome ImportHmiTagTables(string? deviceFilter, IReadOnlyList<string> files)
     {
+        // A Unified tag table travels as `<table>.hmi.yml`, the file `export --hmitagtable` writes
+        // for a Unified device. Routed on the file, not the device: a project holding both kinds
+        // would otherwise need --device to say which side a document belongs to.
+        if (files.Count > 0 && files.All(f => f.EndsWith(".hmi.yml", StringComparison.OrdinalIgnoreCase)))
+        {
+            return ImportUnifiedTagTables(deviceFilter, files);
+        }
+
         var (target, devicePath) = ResolveSingleClassicTarget(deviceFilter);
 
         var (containersBefore, membersBefore) = CountClassicTags(target);
@@ -4347,6 +4361,73 @@ public sealed class OpennessGateway : IOpennessGateway
             membersAfter,
             returned,
             presentAfter.Select(p => p.Table.Name).OrderBy(n => n, StringComparer.Ordinal).ToList(),
+            files);
+    }
+
+    // Unified: HmiTagComposition.Import reads `<name>.hmi.yml` from a directory into ONE table, so
+    // the table is named by the file and created first if missing. This is the only Openness route
+    // that carries a tag's array-index multiplexing (`SymbolicAddress: Db.Arr[IndexTag].Member`):
+    // HmiTag has no attribute for it, and set_PlcTag refuses every indexed form (measured
+    // 2026-10-29).
+    private HmiClassicImportOutcome ImportUnifiedTagTables(string? deviceFilter, IReadOnlyList<string> files)
+    {
+        var (_, unifiedDevices) = CollectHmiDevices();
+        var narrowed = deviceFilter is null
+            ? unifiedDevices
+            : unifiedDevices.Where(u => u.Path.IndexOf(deviceFilter, StringComparison.OrdinalIgnoreCase) >= 0).ToList();
+        if (narrowed.Count != 1)
+        {
+            throw new HmiClassicDeviceNotResolvedException(
+                deviceFilter, Array.Empty<string>(), narrowed.Select(u => u.Path).ToList());
+        }
+
+        var (software, devicePath) = narrowed[0];
+        int TagCount() => software.TagTables.Sum(t => t.Tags.Count);
+        var tablesBefore = software.TagTables.Count;
+        var tagsBefore = TagCount();
+        var returned = new List<string>();
+
+        try
+        {
+            foreach (var file in files)
+            {
+                var full = Path.GetFullPath(file);
+                var fileName = Path.GetFileName(full);
+                var tableName = fileName.Substring(0, fileName.Length - ".hmi.yml".Length);
+                try
+                {
+                    var table = software.TagTables.Find(tableName) ?? software.TagTables.Create(tableName);
+                    // Same normalisation as the export: Openness refuses a forward-slash path as relative.
+                    var dir = new DirectoryInfo(new DirectoryInfo(Path.GetDirectoryName(full)!).FullName);
+                    // Import(dir, name) is refused in V20 ("will be available in future versions");
+                    // the one-argument form reads the table's own `<table>.hmi.yml` from the directory.
+                    if (!table.Tags.Import(dir))
+                    {
+                        throw new HmiClassicImportFailedException("HMI tag table", file, "Import() returned false");
+                    }
+
+                    returned.Add(tableName);
+                }
+                catch (Exception ex) when (ex is not HmiClassicImportFailedException)
+                {
+                    throw new HmiClassicImportFailedException("HMI tag table", file, DescribeChain(ex));
+                }
+            }
+        }
+        finally
+        {
+            SaveProject();
+        }
+
+        return new HmiClassicImportOutcome(
+            "HMI tag table",
+            devicePath,
+            tablesBefore,
+            software.TagTables.Count,
+            tagsBefore,
+            TagCount(),
+            returned,
+            software.TagTables.Select(t => t.Name).OrderBy(n => n, StringComparer.Ordinal).ToList(),
             files);
     }
 

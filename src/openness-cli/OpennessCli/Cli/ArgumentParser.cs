@@ -520,6 +520,7 @@ public static class ArgumentParser
         "    check, which would turn a correct refusal into a false finding. Exits 7 if any export failed or was refused; --tagtables is opt-in (a tag table has no .ir counterpart to pair with).\n" +
         "  openness-cli import        <project> (--screen | --hmitags | --textlists [--device <name>] | --group <device>/<path>) [--type | --tagtable] <files...> [--tia-install <path>] [--timeout-connect <s>] [--timeout-open <s>]\n" +
         "    --hmitags imports CLASSIC HMI tag tables into the device's TagFolder; --textlists imports classic text lists into its TextLists composition. Neither takes --group.\n" +
+        "    --hmitags given <table>.hmi.yml files imports UNIFIED tag tables instead (merge + update by tag name; the only route to SymbolicAddress array multiplexing). On a Unified device --hmitagtable exports that file into the --out directory.\n" +
         "    Both report the counts BEFORE and AFTER, read back from the project: an import that created nothing exits 13 rather than 0, and the tag count is what tells replace from merge.\n" +
         "  openness-cli import-all    <project> --group <device>/<path> <dirs-or-files...> [--json] [--dry-run] [--tia-install <path>] [--timeout-connect <s>] [--timeout-open <s>]\n" +
         "    Bulk restore: classifies every file (tag table / PLC data type / block) from its own root element, imports tag tables then types then blocks, and RETRIES failures until a pass\n" +

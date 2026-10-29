@@ -601,9 +601,11 @@ Everything below applies to all three. Three notes specific to the tag-table ver
 - The walk over `HmiTarget.TagFolder` is **recursive** (`TagFolder.Folders` is a
   `TagUserFolderComposition`), matching `export --hmitagtable`. A flat walk would report "not found"
   for a table plainly visible in the project tree.
-- A table on a **Unified** device is refused **by name** (`HmiClassicOnlyObjectException`), not
-  flattened into "not found": the object exists, this route does not reach it, and those are two
-  different corrections.
+- On `hmi-delete-tagtable`, a table on a **Unified** device is refused **by name**
+  (`HmiClassicOnlyObjectException`), not flattened into "not found": the object exists, this route
+  does not reach it, and those are two different corrections. `export --hmitagtable` and
+  `import --hmitags` DO reach a Unified table since 2026-10-29: see "Unified tag tables as YAML"
+  below.
 - **A deleted classic tag table cannot be re-created through the API.** `TagTableComposition` has no
   `Create` — a SimaticML import is the only route back, so `export --hmitagtable` first if the
   content might be wanted again.
@@ -782,3 +784,44 @@ take is visible. Array elements bind (`Inputs.Test[0]`), measured on a live Unif
 **Creating a tag does not prove it compiles clean** — run `hmi-compile` after. A pre-existing tag with
 a connection but no PLC tag chosen is a compile ERROR (`The property "PLC tag" is invalid`), and it
 will be in the error list whether or not your new tags are fine; read which object each error names.
+
+## Unified tag tables as YAML — and the only route to array-index multiplexing (2026-10-29)
+
+```
+openness-cli export <project> --hmitagtable <table> --out <directory>
+openness-cli import <project> --hmitags <dir>/<table>.hmi.yml [--device <name>]
+```
+
+On a Unified device `export --hmitagtable` writes `<table>.hmi.yml` into the `--out` DIRECTORY
+(`HmiTagComposition.Export`), and `import --hmitags` takes those files back: the table is named by
+the file (created if missing), and the import is routed to Unified by the `.hmi.yml` extension.
+
+**Array-index multiplexing exists ONLY in this document.** `HmiTag` has no attribute for it (every
+attribute of a live tag was dumped), and `set_PlcTag` refuses every indexed form tried
+(`Db.Arr[IndexTag].M`, quoted, braced, device-qualified). In the YAML it is one line beside the fixed
+binding:
+
+```yaml
+SimpleTags:
+  SlotLevel:
+    DataType: Real
+    Connection: HMI_Connection_1
+    ControllerDataType: S7PTransReal32Type
+    AcquisitionCycle: T1s
+    AccessMode: SymbolicAccess
+    PlcTag: Presets.Slot[0].Level
+    SymbolicAddress: Presets.Slot[SlotIndex].Level   # SlotIndex = an HMI tag
+    MaxLength: 4
+```
+
+Measured on a live Unified project (V20), each step read back by a re-export:
+
+- **Omit `Address`.** TIA derives it, including the multiplex placeholder
+  (`$0001:TS:<db-rid>.….#{0}.…`). The exported `Address` embeds the DB's internal id, so copying it
+  between projects whose DB numbering differs would be wrong.
+- **Import MERGES.** A file holding one tag added that tag and left the table's other tags alone.
+- **Import UPDATES an existing tag of the same name** (a changed `PlcTag`, a dropped
+  `SymbolicAddress`), so a file of just the tags to change is a safe edit to an existing table.
+- `Import(DirectoryInfo, name)` is refused in V20 (*"will be available in future versions"*); the
+  one-argument `Import(DirectoryInfo)` is what reads `<table>.hmi.yml`.
+- `import` saves the project, as every import here does. Run `hmi-compile` after.
