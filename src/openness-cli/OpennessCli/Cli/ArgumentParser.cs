@@ -160,6 +160,22 @@ public sealed record BlockLayoutCommandOptions(
     int TimeoutConnectSeconds,
     int TimeoutOpenSeconds);
 
+// `ob-cycle`: a cyclic-interrupt OB's cycle time and phase shift, in milliseconds. Same read /
+// --expect / --set ... --yes shape as `block-layout`. A V20 export carries neither value, so this is
+// the only way to see or assert them.
+public sealed record ObCycleCommandOptions(
+    string ProjectIdentifier,
+    string BlockName,
+    string? Device,
+    long? Set,
+    long? Phase,
+    long? Expect,
+    bool Confirm,
+    bool Json,
+    string? TiaInstallOverride,
+    int TimeoutConnectSeconds,
+    int TimeoutOpenSeconds);
+
 // `download-plan`. READ-ONLY AND DRY-RUN ONLY: it reports what a download WOULD comprise and cannot
 // perform one. Note what this record does NOT have — there is no Confirm, because there is no
 // confirmed form. `--yes` is not a flag on this command at all: a gate implies a door behind it, and
@@ -415,6 +431,8 @@ public abstract record ParseResult
 
     public sealed record BlockLayoutSuccess(BlockLayoutCommandOptions Options) : ParseResult;
 
+    public sealed record ObCycleSuccess(ObCycleCommandOptions Options) : ParseResult;
+
     public sealed record DownloadPlanSuccess(DownloadPlanCommandOptions Options) : ParseResult;
 
     public sealed record HardwareIdentifierSuccess(HardwareIdentifierCommandOptions Options) : ParseResult;
@@ -541,6 +559,13 @@ public static class ArgumentParser
         "    a read-back that does not match the request is exit 15, never a success with a note. --yes is required; without it the plan is printed and Portal is never contacted (exit 10).\n" +
         "    UNVERIFIED: whether a later re-import of the same block reverts the layout. The converter emits no MemoryLayout and Normalizer ignores it, so drift-check cannot see either\n" +
         "    direction. Re-assert with --expect after every import until that is settled.\n" +
+        "  openness-cli ob-cycle      <project> --block <name> [--device <name>] [--expect <ms>] [--json]\n" +
+        "    READ-ONLY: a cyclic-interrupt OB's cycle time and phase shift, in MILLISECONDS (Openness's own unit on an S7-1200: TIA's 100 ms reads 100). A V20 export\n" +
+        "    carries NEITHER, so the converter and compare cannot see them;\n" +
+        "    this is the only check. --expect makes the read a GATE on the cycle time: exit 15 if it differs.\n" +
+        "  openness-cli ob-cycle      <project> --block <name> --set <ms> [--phase <ms>] [--device <name>] [--json] --yes\n" +
+        "    Sets the cycle time (and phase shift), saves, RE-RESOLVES the block and reads both back: a mismatch is exit 15. Without --yes nothing is changed and Portal\n" +
+        "    is never contacted (exit 10).\n" +
         "  openness-cli download-plan <project> [--device <name>] [--options Software|SoftwareOnlyChanges|Hardware] [--json]\n" +
         "  openness-cli hw-identifiers <project> [--device <name>] [--all] [--json]\n" +
         "    --all shows EVERY attribute, not only identifier-named ones: the name filter is a guess,\n" +
@@ -665,6 +690,7 @@ public static class ArgumentParser
         ParseResult.CompileAllSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
         ParseResult.DeleteSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
         ParseResult.BlockLayoutSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
+        ParseResult.ObCycleSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
         ParseResult.DownloadPlanSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
         ParseResult.HardwareIdentifierSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
         ParseResult.CreateInstanceDbSuccess s => (s.Options.TiaInstallOverride, s.Options.TimeoutConnectSeconds, s.Options.TimeoutOpenSeconds),
@@ -705,6 +731,7 @@ public static class ArgumentParser
         ParseResult.CompileAllSuccess s => s.Options.ProjectIdentifier,
         ParseResult.DeleteSuccess s => s.Options.ProjectIdentifier,
         ParseResult.BlockLayoutSuccess s => s.Options.ProjectIdentifier,
+        ParseResult.ObCycleSuccess s => s.Options.ProjectIdentifier,
         ParseResult.DownloadPlanSuccess s => s.Options.ProjectIdentifier,
         ParseResult.HardwareIdentifierSuccess s => s.Options.ProjectIdentifier,
         ParseResult.CreateInstanceDbSuccess s => s.Options.ProjectIdentifier,
@@ -750,6 +777,7 @@ public static class ArgumentParser
             "compile-all" => ParseCompileAll(args),
             "delete" => ParseDelete(args),
             "block-layout" => ParseBlockLayout(args),
+            "ob-cycle" => ParseObCycle(args),
             "download-plan" => ParseDownloadPlan(args),
             "hw-identifiers" => ParseHardwareIdentifiers(args),
             "create-instance-db" => ParseCreateInstanceDb(args),
@@ -778,7 +806,7 @@ public static class ArgumentParser
                 var other => other,
             },
             var other => new ParseResult.Failure(
-                $"Unknown subcommand '{other}'. Supported subcommands: list, export, import, compile, delete, block-layout, download-plan, hw-identifiers, create-instance-db, sanity-check, compile-scopes, portal-status, portal-close, library, graphics, hmi, hmi-compile, hmi-delete-screen, hmi-delete-tagtable, hmi-create-screen, hmi-edit-screen, hmi-create-tag, hmi-inventory, hmi-new, hmi-delete, hmi-set.{Environment.NewLine}{Usage}"),
+                $"Unknown subcommand '{other}'. Supported subcommands: list, export, import, compile, delete, block-layout, ob-cycle, download-plan, hw-identifiers, create-instance-db, sanity-check, compile-scopes, portal-status, portal-close, library, graphics, hmi, hmi-compile, hmi-delete-screen, hmi-delete-tagtable, hmi-create-screen, hmi-edit-screen, hmi-create-tag, hmi-inventory, hmi-new, hmi-delete, hmi-set.{Environment.NewLine}{Usage}"),
         };
     }
 
@@ -1800,6 +1828,137 @@ public static class ArgumentParser
 
         return new ParseResult.BlockLayoutSuccess(new BlockLayoutCommandOptions(
             projectIdentifier, block, device, set, expect, confirm, json, tiaInstall, timeoutConnect, timeoutOpen));
+    }
+
+    private static ParseResult ParseObCycle(string[] args)
+    {
+        string? projectIdentifier = null;
+        string? block = null;
+        string? device = null;
+        long? set = null;
+        long? phase = null;
+        long? expect = null;
+        var confirm = false;
+        var json = false;
+        string? tiaInstall = null;
+        var timeoutConnect = DefaultTimeoutConnectSeconds;
+        var timeoutOpen = DefaultTimeoutOpenSeconds;
+
+        for (var i = 1; i < args.Length; i++)
+        {
+            switch (args[i])
+            {
+                case "--block":
+                    if (!TryTakeValue(args, ref i, "--block", out block, out var blockErr))
+                    {
+                        return new ParseResult.Failure(blockErr);
+                    }
+
+                    break;
+                case "--device":
+                    if (!TryTakeValue(args, ref i, "--device", out device, out var deviceErr))
+                    {
+                        return new ParseResult.Failure(deviceErr);
+                    }
+
+                    break;
+                case "--set":
+                case "--phase":
+                case "--expect":
+                    var flag = args[i];
+                    if (!TryTakeValue(args, ref i, flag, out var raw, out var valueErr))
+                    {
+                        return new ParseResult.Failure(valueErr);
+                    }
+
+                    // Milliseconds, a plain non-negative integer - the unit Openness reports (measured:
+                    // a TIA "100 ms" OB reads back 100). No unit suffixes, so nobody can type "100ms"
+                    // and wonder which unit was meant.
+                    if (!long.TryParse(raw, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var ms))
+                    {
+                        return new ParseResult.Failure(
+                            $"Invalid value '{raw}' for {flag}: expected a whole number of MILLISECONDS (100 ms = 100).{Environment.NewLine}{Usage}");
+                    }
+
+                    if (flag == "--set")
+                    {
+                        set = ms;
+                    }
+                    else if (flag == "--phase")
+                    {
+                        phase = ms;
+                    }
+                    else
+                    {
+                        expect = ms;
+                    }
+
+                    break;
+                case "--json":
+                    json = true;
+                    break;
+                case "--yes":
+                    confirm = true;
+                    break;
+                case "--tia-install":
+                    if (!TryTakeValue(args, ref i, "--tia-install", out tiaInstall, out var installErr))
+                    {
+                        return new ParseResult.Failure(installErr);
+                    }
+
+                    break;
+                case "--timeout-connect":
+                    if (!TryTakeIntValue(args, ref i, "--timeout-connect", out timeoutConnect, out var connectErr))
+                    {
+                        return new ParseResult.Failure(connectErr);
+                    }
+
+                    break;
+                case "--timeout-open":
+                    if (!TryTakeIntValue(args, ref i, "--timeout-open", out timeoutOpen, out var openErr))
+                    {
+                        return new ParseResult.Failure(openErr);
+                    }
+
+                    break;
+                default:
+                    if (!TryTakePositional(args[i], ref projectIdentifier, out var posErr))
+                    {
+                        return new ParseResult.Failure(posErr);
+                    }
+
+                    break;
+            }
+        }
+
+        if (projectIdentifier is null)
+        {
+            return new ParseResult.Failure($"Missing required argument: <project>.{Environment.NewLine}{Usage}");
+        }
+
+        if (block is null)
+        {
+            return new ParseResult.Failure($"Missing required flag: --block <name>.{Environment.NewLine}{Usage}");
+        }
+
+        if (set is not null && expect is not null)
+        {
+            return new ParseResult.Failure(
+                $"--set and --expect are mutually exclusive: --set already verifies by reading the cycle time back after saving.{Environment.NewLine}{Usage}");
+        }
+
+        if (phase is not null && set is null)
+        {
+            return new ParseResult.Failure($"--phase is only valid with --set.{Environment.NewLine}{Usage}");
+        }
+
+        if (set == 0)
+        {
+            return new ParseResult.Failure($"--set 0 is not a cycle time.{Environment.NewLine}{Usage}");
+        }
+
+        return new ParseResult.ObCycleSuccess(new ObCycleCommandOptions(
+            projectIdentifier, block, device, set, phase, expect, confirm, json, tiaInstall, timeoutConnect, timeoutOpen));
     }
 
     /// <summary>

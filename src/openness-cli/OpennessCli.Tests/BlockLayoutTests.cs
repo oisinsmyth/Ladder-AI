@@ -473,6 +473,41 @@ internal sealed class FakeGateway : IOpennessGateway
             OverrideReportedRequest ?? requested);
     }
 
+    // ---- ob-cycle ---------------------------------------------------------------------------
+
+    public long CyclicTimeMs { get; set; } = 100;
+
+    public long PhaseShiftMs { get; set; }
+
+    /// <summary>Models a block with no cycle-time attribute (not a cyclic-interrupt OB).</summary>
+    public bool NotCyclic { get; set; }
+
+    public int ObCycleSetCalls { get; private set; }
+
+    public ObCycleResult GetObCycle(string blockName, string? deviceFilter)
+    {
+        if (NotCyclic)
+        {
+            throw new ObCycleUnavailableException(blockName, "read", new[] { "Name", "Number" });
+        }
+
+        return new ObCycleResult(blockName, "PLC_1", CyclicTimeMs, PhaseShiftMs, null, null, null, null);
+    }
+
+    public ObCycleResult SetObCycle(string blockName, string? deviceFilter, long cyclicTimeMs, long? phaseShiftMs)
+    {
+        ObCycleSetCalls++;
+        var (beforeCyclic, beforePhase) = (CyclicTimeMs, PhaseShiftMs);
+        if (!IgnoreSets)
+        {
+            CyclicTimeMs = cyclicTimeMs;
+            PhaseShiftMs = phaseShiftMs ?? PhaseShiftMs;
+        }
+
+        SaveCalls++;
+        return new ObCycleResult(blockName, "PLC_1", CyclicTimeMs, PhaseShiftMs, beforeCyclic, beforePhase, cyclicTimeMs, phaseShiftMs);
+    }
+
     // ---- download-plan ----------------------------------------------------------------------
     //
     // The counter below is the point of this whole section. Every download-plan test asserts it is

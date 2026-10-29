@@ -669,6 +669,33 @@ output is not a TIA export** — it renders five block-level attributes and `Mem
 them, so grepping converter output for it finds nothing, and *nothing is evidence about the converter,
 not about the block*. An absent attribute is "unanswered", never "false".
 
+## `ob-cycle` — a cyclic OB's cycle time (2026-10-29)
+
+Read form: `ob-cycle <project> --block <name> [--expect <ms>] [--device <name>] [--json]`
+Set form: `ob-cycle <project> --block <name> --set <ms> [--phase <ms>] [--device <name>] [--json] --yes`
+
+A cyclic-interrupt OB's cycle time and phase shift, through Openness's dynamic attributes
+`CyclicTime` and `PhaseOffset`. The V20 assembly has no typed property for either. Same shape as
+`block-layout`: the set saves, re-resolves the block and reads both values back; a mismatch, or a
+failed `--expect`, is exit 15; an unconfirmed set is exit 10 before Portal is contacted. A block with
+no such attribute is exit 7, and the message lists every attribute the block *does* expose — that
+list is how the real name `PhaseOffset` (not `PhaseShift`) was found.
+
+All measured on a classic S7-1200 in TIA V20, 2026-10-29, with a probe OB on a scratch project:
+
+- **The unit is MILLISECONDS.** An OB that TIA's properties show as 100 ms reads back
+  `CyclicTime = 100`. Values are whole numbers with no unit suffix.
+- **A V20 export carries NEITHER value.** The probe was set to 250 ms with a 5 ms phase shift,
+  compiled and exported; the XML has `SecondaryType=CyclicInterrupt` and no cycle-time or phase
+  element at all. So the converter has nothing to read or write, `compare` cannot see a change, and
+  this command is the only check. It is not a converter gap: there is nothing in the file to lose.
+- **A new cyclic OB imports at the 100 ms default.** A converter-generated OB, which states no cycle
+  time, came in at 100 ms and phase 0.
+- **RE-IMPORTING AN EXISTING CYCLIC OB REVERTS IT TO THE DEFAULT.** The probe, set to 250 ms, was
+  re-imported from XML and read back 100 ms and phase 0 — silently, with exit 0. It is the same trap
+  as `block-layout`. **After every import of a cyclic OB, re-assert with `--set` if it is not 100 ms,
+  and gate with `--expect`.**
+
 ## `library` — the project-library walk (migrated from CLAUDE.md 2026-08-21)
 
 This command had no section here; what follows was its only documentation.

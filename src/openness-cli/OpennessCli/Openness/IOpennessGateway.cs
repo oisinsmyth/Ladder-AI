@@ -542,6 +542,23 @@ public interface IOpennessGateway : IDisposable
     BlockLayoutResult SetBlockMemoryLayout(string blockName, string? deviceFilter, MemoryLayoutKind requested);
 
     /// <summary>
+    /// READ-ONLY. Reports a cyclic-interrupt OB's cycle time and phase shift (milliseconds). Resolves
+    /// the block like <see cref="GetBlockMemoryLayout"/> (same disambiguation, same safety refusal)
+    /// and does not save.
+    ///
+    /// Exists because a V20 export carries no cycle time, so no other tool can see it. Throws
+    /// <see cref="ObCycleUnavailableException"/> when the block has no such attribute.
+    /// </summary>
+    ObCycleResult GetObCycle(string blockName, string? deviceFilter);
+
+    /// <summary>
+    /// Sets a cyclic-interrupt OB's cycle time (and, when given, its phase shift), saves, and READS
+    /// BOTH BACK from a freshly re-resolved block — the returned values are what the project holds
+    /// afterwards, never an echo of the request.
+    /// </summary>
+    ObCycleResult SetObCycle(string blockName, string? deviceFilter, long cyclicTimeMs, long? phaseShiftMs);
+
+    /// <summary>
     /// READ-ONLY. Works out what a download of one PLC device would comprise, and reports it. Opens
     /// no socket, transfers nothing, and changes nothing in the project.
     ///

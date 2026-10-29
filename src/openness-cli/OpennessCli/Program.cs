@@ -107,6 +107,12 @@ internal static class Program
                 return RefuseUnconfirmedBlockLayout(unconfirmedLayout.Options);
             }
 
+            // Same seam for `ob-cycle --set`: refused from the arguments alone, before any Portal.
+            if (parseResult is ParseResult.ObCycleSuccess { Options: { Set: not null, Confirm: false } } unconfirmedCycle)
+            {
+                return RefuseUnconfirmedObCycle(unconfirmedCycle.Options);
+            }
+
             if (parseResult is ParseResult.HmiNewSuccess { Options.Confirm: false } unconfirmedNew)
             {
                 Console.Error.WriteLine(
@@ -209,6 +215,8 @@ internal static class Program
                     return RunDelete(gateway, delete.Options, timeoutOpenSeconds);
                 case ParseResult.BlockLayoutSuccess blockLayout:
                     return RunBlockLayout(gateway, blockLayout.Options, timeoutOpenSeconds);
+                case ParseResult.ObCycleSuccess obCycle:
+                    return RunObCycle(gateway, obCycle.Options, timeoutOpenSeconds);
                 case ParseResult.DownloadPlanSuccess downloadPlan:
                     return RunDownloadPlan(gateway, downloadPlan.Options, timeoutOpenSeconds);
                 case ParseResult.HardwareIdentifierSuccess hwIdentifiers:
@@ -1488,6 +1496,60 @@ internal static class Program
         return ExitCodes.Success;
     }
 
+    internal static int RefuseUnconfirmedObCycle(ObCycleCommandOptions options)
+    {
+        Console.Error.WriteLine(
+            $"Would set the cycle time of block '{options.BlockName}' to {options.Set} ms" +
+            (options.Phase is { } p ? $" and its phase shift to {p} ms" : "") +
+            $" in project '{options.ProjectIdentifier}'.");
+        Console.Error.WriteLine(
+            "Nothing was changed, and Portal was not contacted. Re-run with --yes to proceed.");
+        return ExitCodes.NotConfirmed;
+    }
+
+    /// <summary>
+    /// `ob-cycle` — read, assert, or set a cyclic-interrupt OB's cycle time and phase shift.
+    /// <c>internal</c> so the verify decisions are testable against a fake gateway, exactly like
+    /// <see cref="RunBlockLayout"/>, and for the same reason: a set whose read-back disagrees with
+    /// the request must FAIL, gated on this invocation's own requested values.
+    /// </summary>
+    internal static int RunObCycle(IOpennessGateway gateway, ObCycleCommandOptions options, int timeoutOpenSeconds)
+    {
+        gateway.OpenProject(options.ProjectIdentifier, TimeSpan.FromSeconds(timeoutOpenSeconds));
+
+        if (options.Set is not { } requested)
+        {
+            var read = gateway.GetObCycle(options.BlockName, options.Device);
+            Console.WriteLine(options.Json
+                ? OutputFormatter.FormatObCycleJson(read)
+                : OutputFormatter.FormatObCycleTable(read));
+
+            if (options.Expect is { } expected && read.CyclicTimeMs != expected)
+            {
+                Console.Error.WriteLine(
+                    $"CYCLE TIME MISMATCH: expected {expected} ms, but '{read.Name}' is {read.CyclicTimeMs} ms.");
+                return ExitCodes.LayoutMismatch;
+            }
+
+            return ExitCodes.Success;
+        }
+
+        var result = gateway.SetObCycle(options.BlockName, options.Device, requested, options.Phase);
+        Console.WriteLine(options.Json
+            ? OutputFormatter.FormatObCycleJson(result)
+            : OutputFormatter.FormatObCycleTable(result));
+
+        if (result.CyclicTimeMs != requested || (options.Phase is { } phase && result.PhaseShiftMs != phase))
+        {
+            Console.Error.WriteLine(
+                $"SET NOT APPLIED: asked for {requested} ms" + (options.Phase is { } ph ? $" / phase {ph} ms" : "") +
+                $", but '{result.Name}' read back as {result.CyclicTimeMs} ms / phase {result.PhaseShiftMs} ms after saving.");
+            return ExitCodes.LayoutMismatch;
+        }
+
+        return ExitCodes.Success;
+    }
+
     /// <summary>
     /// `download-plan` — report what a download WOULD comprise. It cannot download.
     ///
@@ -1901,6 +1963,7 @@ public static class ExitCodes
         // to name a different block. Reporting it as an internal fault would be the audit-F-09
         // defect again.
         Model.BlockMemoryLayoutUnavailableException => CommandError,
+        Model.ObCycleUnavailableException => CommandError,
 
         // The HMI family, added 2026-08-08. Every one of these was falling through to
         // UnexpectedError = 5 and printing a full inner-exception chain, even though each is a

@@ -6090,6 +6090,97 @@ public sealed class OpennessGateway : IOpennessGateway
             before, requested);
     }
 
+    // The attribute names are Openness's own dynamic ones, read off a real V20 cyclic-interrupt OB's
+    // GetAttributeInfos (2026-10-29) - the phase shift TIA's UI shows is `PhaseOffset` here. The
+    // assembly has no typed property for either, and neither appears in a V20 export, so this is the
+    // only route to them.
+    private const string CyclicTimeAttribute = "CyclicTime";
+    private const string PhaseShiftAttribute = "PhaseOffset";
+
+    public ObCycleResult GetObCycle(string blockName, string? deviceFilter)
+    {
+        if (_project is null)
+        {
+            throw new InvalidOperationException($"{nameof(OpenProject)} must be called before {nameof(GetObCycle)}.");
+        }
+
+        var (block, path) = ResolveOneNonSafetyBlock(blockName, deviceFilter);
+        var (cyclic, phase) = ReadObCycle(block, blockName, "read");
+        return new ObCycleResult(block.Name, path, cyclic, phase, null, null, null, null);
+    }
+
+    // Same paranoid read-back as SetBlockMemoryLayout: re-resolve after the save and read the fresh
+    // object, so a cached value cannot answer the question.
+    public ObCycleResult SetObCycle(string blockName, string? deviceFilter, long cyclicTimeMs, long? phaseShiftMs)
+    {
+        if (_project is null)
+        {
+            throw new InvalidOperationException($"{nameof(OpenProject)} must be called before {nameof(SetObCycle)}.");
+        }
+
+        var (block, _) = ResolveOneNonSafetyBlock(blockName, deviceFilter);
+        var (beforeCyclic, beforePhase) = ReadObCycle(block, blockName, "set");
+
+        try
+        {
+            SetNumericAttribute(block, CyclicTimeAttribute, cyclicTimeMs);
+            if (phaseShiftMs is { } phase)
+            {
+                SetNumericAttribute(block, PhaseShiftAttribute, phase);
+            }
+        }
+        catch (Exception ex)
+        {
+            throw new ObCycleUnavailableException(blockName, "set", AttributeNames(block), ex);
+        }
+
+        SaveProject();
+
+        var (reread, rereadPath) = ResolveOneNonSafetyBlock(blockName, deviceFilter);
+        var (afterCyclic, afterPhase) = ReadObCycle(reread, blockName, "read back");
+        return new ObCycleResult(
+            reread.Name, rereadPath, afterCyclic, afterPhase, beforeCyclic, beforePhase, cyclicTimeMs, phaseShiftMs);
+    }
+
+    private static (long CyclicTimeMs, long PhaseShiftMs) ReadObCycle(PlcBlock block, string blockName, string operation)
+    {
+        var names = AttributeNames(block);
+        if (!names.Contains(CyclicTimeAttribute, StringComparer.Ordinal) || !names.Contains(PhaseShiftAttribute, StringComparer.Ordinal))
+        {
+            throw new ObCycleUnavailableException(blockName, operation, names);
+        }
+
+        try
+        {
+            return (Convert.ToInt64(block.GetAttribute(CyclicTimeAttribute)), Convert.ToInt64(block.GetAttribute(PhaseShiftAttribute)));
+        }
+        catch (Exception ex)
+        {
+            throw new ObCycleUnavailableException(blockName, operation, names, ex);
+        }
+    }
+
+    // SetAttribute is strict about the runtime type, so the value is converted to the type the
+    // attribute's own schema declares rather than passed as a long and left to fail.
+    private static void SetNumericAttribute(PlcBlock block, string attribute, long value)
+    {
+        var info = block.GetAttributeInfos().First(i => string.Equals(i.Name, attribute, StringComparison.Ordinal));
+        var targetType = info.SupportedTypes?.FirstOrDefault() ?? typeof(int);
+        block.SetAttribute(attribute, Convert.ChangeType(value, targetType, System.Globalization.CultureInfo.InvariantCulture));
+    }
+
+    private static IReadOnlyList<string> AttributeNames(PlcBlock block)
+    {
+        try
+        {
+            return block.GetAttributeInfos().Select(i => i.Name).OrderBy(n => n, StringComparer.Ordinal).ToList();
+        }
+        catch (Exception)
+        {
+            return Array.Empty<string>();
+        }
+    }
+
     // The resolve-then-refuse-safety preamble that ExportBlock/DeleteBlock/CompileBlock each spell
     // out inline. New code goes through here rather than adding a fourth copy; the three older sites
     // are left as they are, since changing their resolution path is not something this branch can
