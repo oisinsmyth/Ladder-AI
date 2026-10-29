@@ -2612,7 +2612,9 @@ public static partial class IrParser
     // found live, 2026-07-15, hand-authoring FB_PusherControl's own "HMI Times" network for
     // --synthesize: TIA rejected the misparsed result with a garbled tag-path error ('Tag "1000"."0"
     // not defined'), confirming "1000.0" had fallen through to Expr.TagRef instead of Expr.Literal.
-    [GeneratedRegex(@"^-?\d+(\.\d+)?$")]
+    // The optional exponent (2026-10-29): TIA exports an out-of-Real-range sentinel as `1.0E+64`,
+    // and without it the literal fell through to a tag path `"1"."0E+64"` that TIA rejected.
+    [GeneratedRegex(@"^-?\d+(\.\d+)?([eE][+-]?\d+)?$")]
     private static partial Regex NumericLiteralRegex();
 
     // Siemens' own <base>#<value> numeric-literal notation (e.g. "16#89") — only the "16#" (hex)

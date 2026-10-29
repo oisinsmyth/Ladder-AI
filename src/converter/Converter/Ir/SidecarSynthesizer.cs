@@ -1011,6 +1011,7 @@ public static class SidecarSynthesizer
                 // failed to import, by construction.
                 var constantType = typedConstant || IsDurationLiteral(literal.Value)
                     ? null
+                    : IsBeyondRealRange(literal.Value) ? "LReal"
                     : (portType ?? InferLiteralConstantType(literal.Value) ?? throw new UnsupportedSynthesisConstructException(
                         $"Cannot type the literal '{literal.Value}': it is a base-prefixed (bit-string) literal, whose "
                         + "width is a declaration choice its digits cannot express, and the port it feeds has no "
@@ -1055,8 +1056,18 @@ public static class SidecarSynthesizer
     // is not a Real, and a base prefix now short-circuits before that test can misread one.
     private static string? InferLiteralConstantType(string value) =>
         IsBasePrefixedLiteral(value) ? null
-        : value.Contains('.') ? "Real"
+        : IsBeyondRealRange(value) ? "LReal"
+        : value.Contains('.') || value.Contains('e') || value.Contains('E') ? "Real"
         : InferIntegerLiteralType(value);
+
+    // A floating literal no Real can hold (|v| > 3.40282347E+38) is an LReal constant whatever the
+    // port's type: TIA exports `MOVE(IN := 1.0E+64) => <Real>` with ConstantType LReal, and a Real
+    // constant of that value cannot exist. Base-prefixed and integer literals are never floats here.
+    private static bool IsBeyondRealRange(string value) =>
+        !IsBasePrefixedLiteral(value)
+        && (value.Contains('.') || value.Contains('e') || value.Contains('E'))
+        && double.TryParse(value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var d)
+        && Math.Abs(d) > float.MaxValue;
 
     // Siemens' `<base>#<value>` notation, the same shape IrParser.ParseLeaf matches generically by
     // base-number shape rather than hardcoding base 16 (S1 item 12) — so `2#1011` and `8#77` are
