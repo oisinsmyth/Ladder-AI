@@ -594,13 +594,41 @@ public static class SidecarSynthesizer
         // coil qualifies only for a GLOBAL-instance timer; a Set/Reset (latch) coil qualifies for a
         // same-network LOCAL-instance timer too — see the timer-loop comment above for the corpus
         // evidence that coil type, not scope alone, is the signal.
-        var directTimer = assignment.Condition is Expr.TagRef tag
-            ? TrySplitTimerOutput(tag.Path, timerPartUIdByInstancePath)
-              ?? (assignment.Kind is CoilKind.Set or CoilKind.Reset
-                  ? TrySplitTimerOutput(tag.Path, latchTimerPartUIdByInstancePath)
-                  : null)
-            : null;
-        if (directTimer is (int tonPartUId, string port))
+        (int TonPartUId, string Port)? SameNetworkTimerQ(string path) =>
+            TrySplitTimerOutput(path, timerPartUIdByInstancePath)
+            ?? (assignment.Kind is CoilKind.Set or CoilKind.Reset
+                ? TrySplitTimerOutput(path, latchTimerPartUIdByInstancePath)
+                : null);
+
+        var directTimer = assignment.Condition is Expr.TagRef tag ? SameNetworkTimerQ(tag.Path) : null;
+
+        // `Timer.Q AND <leaf/compare>...`: the Q LEADS a series chain (2026-10-29, live-run conveyor
+        // networks, `COIL x := DelayTimer.Q AND Rate <> 0.0`). The real export wires the TON's Q
+        // straight into the first series element (steps: timeroutput, compare), keeping coil and TON in ONE
+        // rung. Built as an Access contact instead, the coil became a rung of its own, and once TIA's
+        // rung-contiguous Part order is applied it could no longer sit between the TON and a later coil
+        // sharing the TON's branches — the round trip moved it below that coil. Only the plain shape is
+        // taken: no fan-out marker anywhere, and every operand after the Q a leaf or a compare.
+        var chainOperands = assignment.Condition is Expr.And ? FlattenAnd(assignment.Condition) : null;
+        var leadingTimer = chainOperands is { Count: >= 2 }
+            && chainOperands[0] is Expr.TagRef { Fanout: null } first
+            && chainOperands.All(o => o.Fanout is null)
+            && chainOperands.Skip(1).All(o => o is Expr.Compare || IsLeaf(o))
+                ? SameNetworkTimerQ(first.Path)
+                : null;
+
+        if (directTimer is null && leadingTimer is (int leadTonPartUId, string leadPort))
+        {
+            chainRail = null; // fed by the timer's Q, never the rail
+            var chainSteps = new List<ChainStepSidecar> { new ChainStepSidecar.TimerOutputStep(leadTonPartUId, leadPort, nextUid++) };
+            for (var idx = 1; idx < chainOperands!.Count; idx++)
+            {
+                chainSteps.Add(BuildStep(chainOperands[idx], idx, sharedRailWireUId, ref nextUid, accessEntries, constantEntries, localNames, fanoutRegistry, tagTypes));
+            }
+
+            steps = chainSteps;
+        }
+        else if (directTimer is (int tonPartUId, string port))
         {
             chainRail = null; // fed by the timer's Q, never the rail
 
@@ -640,9 +668,9 @@ public static class SidecarSynthesizer
     }
 
     // A `<instancePath>.Q` read of a timer built in this same network → (its TON part UId, "Q"), else
-    // null. Only the whole-condition case is handled (a coil reads exactly one timer's Q, TimerSample's
-    // shape); a same-network Q *mid-chain* would need a TimerOutputStep inside BuildChain — not seen in
-    // the corpus (N3's multi-term reads are all cross-network), left for when a real case appears.
+    // null. BuildAssignment wires it for the whole condition (TimerSample's shape) and for a Q LEADING a
+    // series chain (2026-10-29). A same-network Q later in a chain, or inside an OR, still becomes a
+    // contact; no real case of either has been seen.
     private static (int TonPartUId, string Port)? TrySplitTimerOutput(
         string path, IReadOnlyDictionary<string, int> timerPartUIdByInstancePath)
     {

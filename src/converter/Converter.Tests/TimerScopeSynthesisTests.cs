@@ -80,6 +80,42 @@ public class TimerScopeSynthesisTests
     }
 
     [Fact]
+    public void Synthesize_TimerQLeadingASeriesChain_WiresFromTheQ()
+    {
+        // `COIL Out := <sameNetworkTimer>.Q AND <leaf>` (2026-10-29): the real export wires the TON's Q
+        // straight into the next series element (steps: timeroutput, contact), so coil and TON stay one
+        // rung. Built as a Q contact from the rail, the coil became its own rung and moved on a round trip.
+        var network = IrParser.ParseNetworkOnly(
+            "NETWORK 1 \"T\"\n" +
+            "  TON(DB_Timers.T0, IN := Run, PT := T#1S)\n" +
+            "  COIL Out := DB_Timers.T0.Q AND Enable\n");
+
+        var sidecar = SidecarSynthesizer.Synthesize(network);
+        var assignment = Assert.Single(sidecar.Assignments);
+
+        Assert.Null(assignment.RailWireUId);
+        Assert.Equal(2, assignment.Steps.Count);
+        var lead = Assert.IsType<ChainStepSidecar.TimerOutputStep>(assignment.Steps[0]);
+        Assert.Equal(Assert.Single(sidecar.Timers).TonPartUId, lead.TonPartUId);
+        Assert.IsType<ChainStepSidecar.ContactStep>(assignment.Steps[1]);
+    }
+
+    [Fact]
+    public void Synthesize_TimerQNotLeadingTheChain_StaysAContact()
+    {
+        // Only a LEADING Q is wired from the TON; a Q later in the chain keeps today's contact form.
+        var network = IrParser.ParseNetworkOnly(
+            "NETWORK 1 \"T\"\n" +
+            "  TON(DB_Timers.T0, IN := Run, PT := T#1S)\n" +
+            "  COIL Out := Enable AND DB_Timers.T0.Q\n");
+
+        var assignment = Assert.Single(SidecarSynthesizer.Synthesize(network).Assignments);
+
+        Assert.NotNull(assignment.RailWireUId);
+        Assert.All(assignment.Steps, s => Assert.IsType<ChainStepSidecar.ContactStep>(s));
+    }
+
+    [Fact]
     public void Synthesize_CoilFedByOtherNetworkTimerQ_IsOrdinaryContact()
     {
         // A `.Q` with no matching same-network timer (cross-network read) stays an ordinary contact.
